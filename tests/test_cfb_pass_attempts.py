@@ -133,9 +133,12 @@ def test_the_market_is_emitted_and_is_the_one_the_bridge_asks_for():
         "the volume bridge names this column; college now has it")
     # Ordered so an ingest log still reads like a box score.
     assert C.MARKETS.index("pass_att") < C.MARKETS.index("pass_yds")
-    # Targets remain genuinely absent — this feed has no target column,
-    # so receptions is NOT given a false denominator alongside.
-    assert "receptions" not in C.ZERO_WHEN and "targets" not in C.MARKETS
+    # A named target writes the receiver's zero (2026-10-13: the play file
+    # names most of them since 2025), but the target COUNT is never stored —
+    # it is short wherever an incompletion goes unnamed — so receptions is
+    # still NOT given a false denominator for the bridge.
+    assert C.ZERO_WHEN["receptions"] == "targets"
+    assert "targets" in C.COUNTED_ONLY and "targets" not in C.MARKETS
 
 
 if __name__ == "__main__":

@@ -406,20 +406,26 @@ def test_the_zero_needs_the_opportunity_behind_it():
 
 
 def test_the_opportunity_columns_are_named_rather_than_inferred():
-    assert C.ZERO_WHEN == {"rush_yds": "carries", "rec_yds": "receptions",
+    assert C.ZERO_WHEN == {"rush_yds": "carries", "rec_yds": "targets",
                            "pass_yds": "pass_att",
                            "pass_td": "pass_att", "rush_td": "carries",
-                           "rec_td": "receptions",
+                           "rec_td": "targets",
+                           # a receiver thrown at, 2026-10-13 (cfbtargetfit.py)
+                           "receptions": "targets",
                            # the volume markets, 2026-10-05
                            "pass_cmp": "pass_att", "pass_int": "pass_att",
                            "rush_att": "carries"}
-    # EVERY COMPANION IS A MARKET THIS PARSER ACTUALLY WRITES. A name
-    # that is merely plausible — "pass_attempts" for "pass_att" — makes
-    # the rule inert and silently restores the survivorship it exists to
-    # remove, with nothing on screen to say so.
+    # EVERY COMPANION IS A COLUMN THIS PARSER ACTUALLY COUNTS — a market
+    # it writes, or one it counts for this rule alone (COUNTED_ONLY). A
+    # name that is merely plausible — "pass_attempts" for "pass_att" —
+    # makes the rule inert and silently restores the survivorship it
+    # exists to remove, with nothing on screen to say so.
+    slot = C._slot({}, ("g",))
     for market, opportunity in C.ZERO_WHEN.items():
         assert market in C.MARKETS, market
-        assert opportunity in C.MARKETS, opportunity
+        assert opportunity in C.MARKETS or opportunity in C.COUNTED_ONLY, opportunity
+        assert opportunity in slot, f"{opportunity} is never counted"
+    assert not set(C.COUNTED_ONLY) & set(C.MARKETS), "counted-only columns are never written"
 
 
 def test_the_three_touchdown_markets_record_the_games_he_did_not_score():
@@ -445,20 +451,32 @@ def test_the_three_touchdown_markets_record_the_games_he_did_not_score():
     assert _value(out, "Arian Smith", "rec_td") == 0
 
 
-def test_the_markets_with_no_opportunity_column_are_left_alone():
-    """`receptions` would need targets and this feed has none, so a
-    receiver thrown at four times and catching none is ABSENT rather
-    than zero. Pinned so nobody later reads a college receptions AUC as
-    if it covered those player-games.
+def test_a_receiver_thrown_at_who_caught_none_is_a_zero_and_one_never_named_is_absent():
+    """The receiver's blank game, the last of the survivorship gaps.
 
-    ``pass_yds`` USED TO BE HERE and left on 2026-09-07, which is a
-    gap closing rather than a rule loosening: an attempt is a
-    completion, an incompletion or an interception, and the last two
-    are columns this feed does carry (tests/test_cfb_pass_attempts.py).
-    A quarterback's blank game is now on the record. A receiver's still
-    is not, and that is what this test still guards."""
-    assert "receptions" not in C.ZERO_WHEN
-    assert "targets" not in C.MARKETS, "no target column exists to count"
+    Until 2026-10-13 this test pinned the opposite — "`receptions` would
+    need targets and this feed has none, so a receiver thrown at four
+    times and catching none is ABSENT rather than zero" — because the
+    2024 file named the target on 21% of incompletions. The 2025 file
+    names 78% and 2026's 92%, and a NAMED target is a fact in any season:
+    he was thrown at. So that game is now a zero (cfbtargetfit.py: the
+    squared error falls in 2025 and 2026, both receiving markets). What
+    the test still guards is the other half: a player the feed never
+    names is absent, not zero, and no target COUNT is written, because
+    a count is short wherever the feed leaves an incompletion unnamed.
+
+    ``pass_yds`` left this test on 2026-09-07 for the same kind of
+    reason (tests/test_cfb_pass_attempts.py)."""
+    assert C.ZERO_WHEN["receptions"] == "targets"
+    assert "targets" not in C.MARKETS, "a short count is never written"
+    out = _parse([_play(incompletion_player="QB", target_player="Slot WR"),
+                  _play(incompletion_player="QB", target_player="Slot WR"),
+                  _play(incompletion_player="QB")])
+    for market in ("receptions", "rec_yds", "rec_td", "anytime_td"):
+        assert _value(out, "Slot WR", market) == 0, market
+    assert not any(r["market"] == "targets" for r in out["rows"])
+    # Nobody else was named, so nobody else has a receiving row.
+    assert {r["player"] for r in out["rows"] if r["market"] == "receptions"} == {"Slot WR"}
 
 
 # --- the join, which failed to zero rows and said nothing ------------------

@@ -122,6 +122,7 @@ stake". The NFL is not in it.
 | FTN charting (blitz, box, play-action, drops) | Not possible | NFL charting only |
 | PFR advanced passing and receiving | Not possible | NFL pages only |
 | Target depth and depth zones | Not possible | Needs air yards per target; college play-by-play does not carry them reliably |
+| Targets (who a pass was thrown at) | **Partly — 2026-10-13** | The play file names the target on 78% of 2025's incompletions and 92% of 2026's (21% of 2024's, when this table first said "not possible"). A receiver thrown at who caught none is now a 0 on his record instead of a missing game — measured on the board's own population (`python3 cfbtargetfit.py`): squared error down in 2025 and 2026 for catches and yards, the old logs' upward bias mostly gone. A target COUNT is still not stored or shown: it is short wherever the feed leaves an incompletion unnamed |
 | Thin-target receiving over (scout flag) | Not possible | College logs catches, not targets, and this checklist never passes catches off as targets |
 | Expected QB starters from the news feed | Different | College reads the passer the books priced (C4) |
 | Opening lines kept per game | Already | College keeps its line snapshots (lineledger) |

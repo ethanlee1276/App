@@ -262,12 +262,15 @@ def test_the_college_feed_now_records_the_games_he_did_not_score():
     and not one of them was a zero. A ranking measurement needs
     negatives, and `anytime_td` — the one college market with a measured
     ranking — is the one market whose feed already wrote them."""
-    from engine.sources.cfbstats import ALWAYS, MARKETS, ZERO_WHEN
+    from engine.sources.cfbstats import ALWAYS, COUNTED_ONLY, MARKETS, ZERO_WHEN
+    # A receiver's opportunity is a target since 2026-10-13 — a catch, or
+    # an incompletion the feed names him on (cfbtargetfit.py) — counted
+    # by the parser and never written as a market of its own.
     for market, opportunity in (("pass_td", "pass_att"),
                                 ("rush_td", "carries"),
-                                ("rec_td", "receptions")):
+                                ("rec_td", "targets")):
         assert ZERO_WHEN.get(market) == opportunity, market
-        assert opportunity in MARKETS, opportunity
+        assert opportunity in MARKETS or opportunity in COUNTED_ONLY, opportunity
     assert "anytime_td" in ALWAYS, \
         "the market that proved the rule stopped writing its zeros"
 

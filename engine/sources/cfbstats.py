@@ -75,6 +75,17 @@ quantity. The cost is real and is stated where the model uses it: a
 red-zone look that falls incomplete is invisible, so ``rz_rec`` favours
 the receiver who catches what he is thrown.
 
+…BUT A NAMED TARGET IS A FACT, AND SINCE 2025 THE FEED NAMES MOST OF
+THEM (2026-10-13). Share of incompletions naming the intended receiver,
+counted off the mirror's own files: 2022 45%, 2023 38%, 2024 21%, 2025
+78%, 2026 92% (six weeks). A COUNT is still not stored — 2025's file
+cannot be checked against a published total from here, and a short
+count beside a name is the thing the paragraph above refuses. What a
+named target does prove, in any season, is that he was thrown at: so a
+receiver thrown at four times who caught none is now a ZERO on the
+record (`ZERO_WHEN`), not a missing game. Measured with this parser on
+2025 and 2026 (`cfbtargetfit.py`): see `ZERO_WHEN`.
+
 TEAMS ARE KEYED THROUGH THE GAMES WE ALREADY HAVE. The feed names
 schools ("Western Kentucky"), the board keys them by abbreviation, and
 the backfilled schedule keys them ``espn:<id>`` when the teams feed was
@@ -174,12 +185,16 @@ ALWAYS = ("anytime_td",)
 #: exists to prevent.
 #:
 #: WHAT THIS STILL CANNOT SEE, said plainly rather than left implied:
-#: a zero with no opportunity column behind it. ``receptions`` would
-#: need targets and this feed has no target column, so a receiver who
-#: was thrown at four times and caught none is absent, not zero. That
-#: gap is not closable from this feed, and it is the reason a college
-#: receptions AUC should be read as measured on players who caught
-#: something.
+#: a zero with no opportunity column behind it. A receiver who played
+#: and was never thrown at is absent, not zero. Until 2026-10-13 that
+#: paragraph said the same of one thrown at four times who caught none
+#: ("this feed has no target column"); the feed now names the target on
+#: most incompletions (module note), and `targets` below closes that
+#: half of the gap: a named target is the opportunity, so his receiving
+#: zeros are written. The share it still misses is the incompletions
+#: the feed leaves unnamed — 22% in 2025, 8% in 2026, and four in five
+#: in 2024 — so a college receptions AUC is still read as measured on
+#: players who caught something or were named as thrown at.
 #:
 #: ``pass_yds`` USED TO BE IN THAT PARAGRAPH and no longer is. It read
 #: "accumulates from completions with no attempts column", which was
@@ -216,10 +231,18 @@ ALWAYS = ("anytime_td",)
 #: so this is the same rule the yardage markets got, applied to the
 #: three that were missed. It writes no row for a player who never
 #: touched the ball.
-ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "receptions",
+ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "targets",
              "pass_yds": "pass_att",
              "pass_td": "pass_att", "rush_td": "carries",
-             "rec_td": "receptions",
+             "rec_td": "targets",
+             # THE RECEIVER'S BLANK GAME (2026-10-13). His opportunity is
+             # a target — a catch, or an incompletion or interception the
+             # feed names him on — so thrown at and caught nothing is a
+             # zero on the record. Until then the receiving markets keyed
+             # on `receptions`, and the game simply vanished: measured
+             # with this parser on the board's own population
+             # (`cfbtargetfit.py`, the result in its docstring).
+             "receptions": "targets",
              # THE VOLUME MARKETS (Ethan, 2026-10-05: "QB interceptions,
              # QB Pass Attempts, QB Completions" for college too). A
              # passer who threw and completed none, or was not picked
@@ -230,6 +253,13 @@ ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "receptions",
              # way it finds an NFL back's (ingest.NFL_USAGE_MARKETS).
              "pass_cmp": "pass_att", "pass_int": "pass_att",
              "rush_att": "carries"}
+
+#: Opportunity columns the parser COUNTS for `ZERO_WHEN` and never
+#: writes. `targets` is one because a named target proves he was thrown
+#: at in any season, while the count is short wherever the feed leaves
+#: an incompletion unnamed (four in five in 2024) — the module note's
+#: reason no college target count is stored or shown.
+COUNTED_ONLY = ("targets",)
 
 #: Emitted in this order so an ingest log reads the way a box score does.
 MARKETS = ("anytime_td", "carries", "rush_att", "rush_yds", "receptions", "rec_yds",
@@ -342,7 +372,7 @@ def split_pass(scores: dict, completion: str, reception: str) -> tuple:
 def _slot(bag: dict, key: tuple) -> dict:
     return bag.setdefault(key, {
         "carries": 0.0, "rush_att": 0.0, "rush_yds": 0.0, "rush_td": 0.0,
-        "receptions": 0.0, "rec_yds": 0.0, "rec_td": 0.0,
+        "receptions": 0.0, "rec_yds": 0.0, "rec_td": 0.0, "targets": 0.0,
         "pass_att": 0.0, "pass_cmp": 0.0, "pass_int": 0.0, "pass_yds": 0.0, "pass_td": 0.0,
         "rz_car": 0.0, "rz_rec": 0.0, "i5_car": 0.0,
     })
@@ -360,7 +390,7 @@ def _side_of(game: dict, team_name: str):
 
 
 def parse_player_stats(rows, season: int, games: dict,
-                       roster: dict | None = None) -> dict:
+                       roster: dict | None = None, targets: bool = True) -> dict:
     """Per-player-per-game ``player_game_logs`` rows from play rows.
 
     ``games`` maps game id → ``{"period", "home", "away", "home_name",
@@ -370,6 +400,10 @@ def parse_player_stats(rows, season: int, games: dict,
     one the rows carry an empty position and the feed's own spelling,
     and `engine.cfb.tds.role_of` infers a role from the usage mix
     exactly as it does today.
+
+    ``targets=False`` leaves the targets the feed names on incompletions
+    uncounted, which reproduces the logs written before 2026-10-13 — the
+    measurement's other arm (`cfbtargetfit.py`). Nothing else passes it.
 
     Returns ``{"rows", "assets", "games", "players", "skipped"}``. Skip
     counts are returned, not printed: "the backfill ingested 640 of 798"
@@ -429,6 +463,14 @@ def parse_player_stats(rows, season: int, games: dict,
                        if _name(r.get(c))), "")
         if thrown:
             _slot(bag, base + (thrown,))["pass_att"] += 1
+            # …AND WHO IT WAS THROWN AT, where the feed names him: the
+            # opportunity behind a receiver's zero (ZERO_WHEN). A name
+            # equal to the passer's is a trick-play shape this row cannot
+            # resolve, and is left alone.
+            aimed = _name(r.get("target_player")) if targets else ""
+            if aimed and aimed != thrown:
+                ids.setdefault((team, aimed), _name(r.get("target_player_id")))
+                _slot(bag, base + (aimed,))["targets"] += 1
         # THE INTERCEPTION, charged to the man who threw it. One per row,
         # like the attempt it already counts as.
         picked = _name(r.get("interception_thrown_player"))
@@ -472,6 +514,7 @@ def parse_player_stats(rows, season: int, games: dict,
         passer, receiver = split_pass(scores.get(team, {}), comp, recv)
         s = _slot(bag, base + (receiver,))
         s["receptions"] += 1
+        s["targets"] += 1                       # a catch is a target too
         s["rec_yds"] += yds
         if ytg is not None and ytg <= RED_ZONE:
             s["rz_rec"] += 1
@@ -666,8 +709,13 @@ def _stream(url: str, cache_name: str, ttl: int):
     into a list of dicts that is roughly a gigabyte, on a droplet with
     one core and not much more than that — so the reader is handed to
     the parser and consumed once.
+
+    Off the split lines, not a StringIO (2026-10-13): a StringIO that is
+    read holds its text at four bytes a character, the reason the NFL's
+    play-by-play reader peaked at 490 MB a season (engine/sources/nflpbp).
+    Checked identical row for row on 2024, 2025 and 2026.
     """
-    return csv.DictReader(io.StringIO(fetch_text(url, cache_name, ttl=ttl)))
+    return csv.DictReader(fetch_text(url, cache_name, ttl=ttl).splitlines(keepends=True))
 
 
 def fetch_rosters(season: int, ttl: int = 86400 * 30) -> dict:
@@ -699,7 +747,7 @@ def load_season(path, season: int, games: dict,
 
 
 __all__ = ["STATS_URL", "ROSTER_URL", "RED_ZONE", "INSIDE_5", "MARKETS",
-           "ZERO_WHEN",
+           "ZERO_WHEN", "COUNTED_ONLY",
            "QB_COLUMNS", "DataUnavailable", "fetch_season", "fetch_rosters",
            "load_season", "parse_player_stats", "parse_rosters",
            "scored_geometrically", "split_pass"]

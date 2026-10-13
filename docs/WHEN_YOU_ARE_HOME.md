@@ -31,7 +31,8 @@ re-reads the closing line, where our own record points instead. The
 charts read empty for every player the afternoon they shipped (the
 box had already run that day's chores, which fill them); the box now
 fills an empty chart table by itself within minutes (step 52; K shows
-it).
+it). College now counts a receiver thrown at who caught nothing as a
+zero (step 53; M).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -39,14 +40,14 @@ refers to. Paste back what each one prints, with its letter.
 Nothing here changes anything except C (only if email isn't on yet) and
 D's Stripe settings. Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The carry
-and route charts fill the day they are empty, not the next day` (or be
-newer), and the second should print `has today's code`. If it prints
-nothing or "Not a valid commit name", the box hasn't pulled yet: wait
-five minutes and run both again.
+**A. The box has today's code.** The first line should end `College
+receivers thrown at who caught nothing count as zeros` (or be newer),
+and the second should print `has today's code`. If it prints nothing or
+"Not a valid commit name", the box hasn't pulled yet: wait five minutes
+and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 943d72f9 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 63a5fa82 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -146,6 +147,13 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
 * **The last-leg alert on the Alerts bell too?**
 * **Pull a Most Likely pick when its line moves a point against it
   before kickoff?** L's answer first (step 51).
+* **Grade a college receiving bet the way the book does when the play
+  file shows he was thrown at** (step 53)? Today a college receiver with
+  no line in the box score is voided — your 2026-09-14 rule, because a
+  scratch and a receiver who caught nothing looked the same. The play
+  file now tells some of them apart. M prints how many voids were thrown
+  at, and what they would have paid; past grades stay as they are
+  whichever way you choose.
 
 **I. Why the MLB profit calendar stops at September** (step 45 says how
 to read it; read-only, paste all of it):
@@ -199,6 +207,25 @@ If the lost-the-close picks still hit far under their claim and the
 finals sit near the close, that is news, and the fix is a last look
 before kickoff that pulls (or flags) a pick once its line has moved a
 point against it — your call in H.
+
+**M. College receivers thrown at who caught nothing** (step 53; a few
+minutes). The nightly writes this season's; this re-reads last season's
+college player file with the new rule too (player rows only — no
+schedule, no lines), then checks. The first lines should show both
+seasons with thousands of receiver-games on the record as 0; the VOIDS
+lines are for your call in H. Paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 cfbzeros.py --fill
+```
+Any time after, the check alone (read-only):
+```
+cd /srv/qellys && sudo -u qellys python3 cfbzeros.py
+```
+And the measurement, if you want to see it for yourself (read-only,
+about a minute):
+```
+cd /srv/qellys && sudo -u qellys python3 cfbtargetfit.py
+```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -1655,6 +1682,34 @@ first). Paste back anything that prints an error or looks off.
       checked identical on every season 2021-2026, at 214 MB a season
       instead of 490 MB. The nightly read uses it too, inside the 1600 MB
       the service is allowed.
+
+53. **College receivers thrown at who caught nothing are on the record**
+    (2026-10-13, Ethan: "We worked so hard on nfl so ik CFB and mlb and
+    nba and ufc is missing stuff"). M re-reads last season and shows it.
+    * **What was missing:** college box scores list only players with a
+      stat, so a receiver thrown at four times who caught none had no
+      line at all — his history was "games he caught one", which runs
+      high, and a bet on him that night was voided.
+    * **What the data now has:** the college play file names the
+      receiver a pass was thrown at on 78% of 2025's incompletions and
+      92% of 2026's (21% in 2024, which is when the college model
+      decided it had no targets). A named target proves he was thrown
+      at, so that game is now a 0 for catches, yards and touchdowns.
+    * **Measured** (`cfbtargetfit.py`, on the board's own players, with
+      the board's own form): the error falls in both seasons for catches
+      and yards — 2026 catches −1.8%, yards −1.0%; 2025 −0.3% each — and
+      the old upward lean mostly goes (2026 catches +0.13 → 0.00). The
+      touchdown board is unchanged (Brier within 0.0001). The bar was set
+      before the run: both seasons, both markets.
+    * **Not stored:** a target COUNT. The feed leaves some incompletions
+      unnamed (22% in 2025), so a count would be short; nothing shows a
+      college target number.
+    * **The voids:** grading is unchanged — a college receiver with no
+      box-score line is still voided minutes after the final. M counts
+      how many past voids the play file now shows were thrown at, and
+      what they would have paid. Your call in H.
+    * **Lighter:** the college file reader now splits lines like the
+      NFL one (same rows, checked on 2024-2026).
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
