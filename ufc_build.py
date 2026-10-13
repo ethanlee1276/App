@@ -215,7 +215,10 @@ def main() -> None:
                         if close:
                             near.append((who, close))
                     fights.append({"a": da, "b": db, "prices": prices,
-                                   "division": (da or db or {}).get("division", "")})
+                                   "division": (da or db or {}).get("division", ""),
+                                   # The bout's start, so its line history
+                                   # is this bout's and not his last one's.
+                                   "commence": ev.get("commence_time")})
             # §8 — where the card is. One fact per event, recorded by hand
             # because the odds feed carries no venue; it decides cage size
             # and altitude, which reshape every method and distance price.
@@ -266,6 +269,16 @@ def main() -> None:
             wi = by_fight.get(row.get("fight"))
             if wi:
                 row["weigh_in"] = wi
+        # WHERE EACH LINE OPENED (engine/ufc/moves, 2026-10-13): the fight
+        # snapshots this build has written on every paid pull since
+        # 2026-08-10, read for the first time. Evidence on the card — the
+        # grade's movement component stays None until it is measured.
+        try:
+            from engine.ufc import moves as _mv
+            moved = _mv.attach(out, fights)
+            print(f"Line moves: {moved} of {len(fights)} bout(s) have two or more pulls on file")
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  line moves skipped: {exc}")
 
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)

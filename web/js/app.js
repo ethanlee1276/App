@@ -39114,6 +39114,13 @@ function renderSleeperPanel(d, ctx) {
 /* ============================================================
    NBA — Scalpy probability engine
    ============================================================ */
+/* Where a bout's line opened and where it is now (engine/ufc/moves) —
+   the snapshots stored since 2026-08-10, said in one line. Evidence:
+   the card's numbers do not move for it. */
+function ufcLineHTML(t) {
+  return t ? `<div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">${icon('clock')} ${escapeHtml(t)}</div>` : "";
+}
+
 /* Weigh-in state for one bout. "Not recorded" is drawn as its own thing
    on purpose: it and "made weight" are opposite facts, and a page that
    renders them the same way is the reason KILL IF went unenforced. */
@@ -39518,6 +39525,7 @@ async function renderUFC() {
       ${board.length ? `<details class="ufc-shop"><summary>Every market this fight implies (${board.length}) — shop the unpriced ones</summary>
         ${board.map(shopRow).join("")}</details>` : ""}
       ${weighInHTML(p.weigh_in)}
+      ${ufcLineHTML(p.line_note)}
       <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
     </article>`;
   };
@@ -39556,6 +39564,7 @@ async function renderUFC() {
       </div>` : ""}
       <div style="margin-top:10px;color:var(--text-body);font-size:var(--fs-sm)">
         <span style="color:${color};font-weight:700">Passed:</span> ${escapeHtml(m.why || "")}</div>
+      ${ufcLineHTML(m.line_note)}
     </article>`;
   };
 

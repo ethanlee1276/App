@@ -100,7 +100,12 @@ HTML = (WEB / "index.html").read_text()
 #: September"): the month we are in drawn even with nothing settled, and
 #: the line saying whether its bets are waiting on results or none was
 #: placed — +0.28 KB gz (492.892 -> 493.175). Told to Ethan.
-APP_JS_BUDGET_KB = 494
+#: 494 -> 495 on 2026-10-13 by the UFC card's line read (Ethan: "ufc is
+#: missing stuff"): one line on the pick and pass cards saying where the
+#: bout's line opened and where it is now, from the snapshots stored since
+#: 2026-08-10 — +0.05 KB gz (493.983 -> 494.032), the file
+#: having sat 17 bytes under 494. Told to Ethan.
+APP_JS_BUDGET_KB = 495
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).

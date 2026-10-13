@@ -33,7 +33,11 @@ box had already run that day's chores, which fill them); the box now
 fills an empty chart table by itself within minutes (step 52; K shows
 it). College now counts a receiver thrown at who caught nothing as a
 zero (step 53; M). The NBA board, a week before opening night, now reads
-the clubs' current rosters and ESPN's injury board (step 54; N).
+the clubs' current rosters and ESPN's injury board (step 54; N), with a
+check of whether a teammate's number should move when a regular sits
+(step 55; O). Every UFC card now says where its line opened and where it
+is now (step 56; P). The whole picture, sport by sport, is in
+`docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -41,14 +45,14 @@ refers to. Paste back what each one prints, with its letter.
 Nothing here changes anything except C (only if email isn't on yet) and
 D's Stripe settings. Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The NBA
-board knows who plays where and who is hurt` (or be newer), and the
-second should print `has today's code`. If it prints nothing or "Not a
-valid commit name", the box hasn't pulled yet: wait five minutes and run
-both again.
+**A. The box has today's code.** The first line should end `UFC cards
+show where each line opened; NBA vacancy check for the box` (or be
+newer), and the second should print `has today's code`. If it prints
+nothing or "Not a valid commit name", the box hasn't pulled yet: wait
+five minutes and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 197d5be2 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor c77134fe HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -155,6 +159,10 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
   file now tells some of them apart. M prints how many voids were thrown
   at, and what they would have paid; past grades stay as they are
   whichever way you choose.
+* **NBA points + rebounds, points + assists, rebounds + assists?** They
+  come from columns we already store, like PRA, but the odds API bills
+  per market on every game pulled, so each one adds a credit per game
+  per pull (step 54).
 
 **I. Why the MLB profit calendar stops at September** (step 45 says how
 to read it; read-only, paste all of it):
@@ -247,6 +255,34 @@ From opening night on, every NBA build prints what it read (paste it the
 first night):
 ```
 grep -E "Rosters|Injuries|another club now" /srv/qellys/data/logs/nba_build.log
+```
+
+**O. When a regular sits, is the NBA board's number for his teammates
+off?** (step 55; read-only, a few minutes). It replays every stored NBA
+season with the board's own projection and prints, per season, how far
+teammates ran above or below it in games a regular had just started
+missing, against ordinary games. The last lines say whether the bar
+written into the script before its first run is met. Paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 nbavacancy.py
+```
+
+**P. UFC: the line on the card, and what the record says** (step 56;
+read-only). On the next card each fight's card says where its line opened
+and where it is now (the build log says how many bouts had two pulls):
+```
+grep "Line moves" /srv/qellys/data/logs/ufc_build.log
+```
+Then the two questions the NFL record answered in August, asked of the
+UFC picks journaled since then — does our number know anything the price
+doesn't, and did our picks beat the close:
+```
+cd /srv/qellys && sudo -u qellys python3 stakecheck.py --info --sport ufc --include-measurement
+cd /srv/qellys && sudo -u qellys python3 stakecheck.py --clv --sport ufc --include-measurement
+```
+And the first question for every sport in one go (a minute; paste it all):
+```
+cd /srv/qellys && for s in nfl cfb mlb nba wnba nhl; do echo "== $s"; sudo -u qellys python3 stakecheck.py --info --sport $s; done
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -1769,6 +1805,35 @@ first). Paste back anything that prints an error or looks off.
       minutes a vacancy opens and nothing fills it yet, because moving
       the number is a pricing change that has to be measured first.
     * The WNBA board runs the same code; its season is over.
+
+55. **Should a teammate's number move when a regular sits? Measured on
+    the box** (2026-10-13, same ask). O runs it. The books raise a
+    teammate's line the moment a star is ruled out; the NBA minutes model
+    has a slot for the minutes a vacancy opens and nothing has ever
+    filled it, so our number for that teammate does not move. If it runs
+    low in those games, the card leans under on exactly the lines the
+    books just raised — and no hold catches it, because the hold is on
+    the star. `nbavacancy.py` replays every stored season with the
+    board's own projection (player memory held at 1.0, since it was
+    fitted on later bets) and compares teammates' actual minutes and
+    stats with it, per team-game, in games a 24-minute regular had just
+    started missing versus ordinary ones. **The bar, written before the
+    first run:** every season, minutes at least +1.0 above the number
+    and points above it, both with the interval clear of zero. Meeting it
+    earns a candidate rule a held-out test; nothing moves from this run.
+
+56. **Every UFC card says where its line opened** (2026-10-13, same ask).
+    P shows it. The model doc names line movement one of "the two
+    upgrades worth money" in MMA, and the UFC build has stored every
+    book's price on every paid pull since 2026-08-10 — read by nothing
+    until today. Each pick and pass card now carries one line: "Line
+    opened A −150 → −175 · B +130 → +155. The market has moved 3.2 points
+    toward A (2 pulls). Shown, not priced." Only this bout's rows count
+    (not his previous fight's, nothing after the start); one pull is a
+    line, not a move, and says nothing. The grade's movement piece stays
+    empty until P's reads say a move carries something the close does
+    not. The page code grew 0.05 KB gzipped, which took the first-visit
+    budget for `app.js` from 494 to 495 KB (the test file records why).
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
