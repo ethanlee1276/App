@@ -4690,6 +4690,30 @@ def _billing_sweeper() -> None:
         time.sleep(BILLING_SWEEP_S)
 
 
+#: The saved-slip watch (engine/slipwatch): once a minute, the Live tab's
+#: own cadence. A minute with no member's slip open costs one query.
+SLIP_WATCH_S = 60
+
+
+def _slip_watcher() -> None:
+    """Notice a member's saved slip down to its last leg, Live tab open or
+    not, and email the ones who asked (engine/slipwatch.run_once).
+
+    Ethan, 2026-10-13: "add all of them" — the last-leg alert. The gate
+    is the server's own (`server.account_entitled`): the same check a
+    page gets, before anything paid goes out by mail. A failure never
+    stops the site, and is said on the log rather than swallowed.
+    """
+    import server as _srv
+    while True:
+        time.sleep(SLIP_WATCH_S)
+        try:
+            from engine import slipwatch as _sw
+            _sw.run_once(entitled=_srv.account_entitled)
+        except Exception as exc:      # noqa: BLE001 — never let this stop the site
+            print(f"  ⚠️  slip watch: {type(exc).__name__}: {exc}")
+
+
 def _live_ufc_refresher() -> None:
     """Poll the live fight feed fast while a bout is on, slowly otherwise."""
     import json as _json
@@ -10797,6 +10821,10 @@ def main() -> None:
               f"{LIVE_IDLE_S}s otherwise.")
         print(f"  NFL/CFB/NBA/WNBA live scores: same clock, one process, "
               f"keyless — no odds credits.")
+        # Members' saved slips: the last leg noted, and emailed where asked.
+        threading.Thread(target=_slip_watcher, daemon=True, name="slipwatch").start()
+        print(f"  Saved slips: every {SLIP_WATCH_S}s, a slip down to its last leg "
+              f"noted and emailed where a member asked.")
         # And the meme board's clock — coins move in and out in minutes.
         threading.Thread(target=_live_memes_refresher, daemon=True).start()
         print(f"  Meme coins: every {MEMES_LIVE_S}s (discovery ~25s — the "

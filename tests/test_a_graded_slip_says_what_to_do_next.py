@@ -776,7 +776,7 @@ def test_app_js_hooks_the_live_tab_and_my_bets_reads_the_paid_price():
     i = APP.index("function liveSlips(")
     hook = APP[i:APP.index("\n}\n", i)]
     assert 'document.getElementById("live-slips")' in hook and 'b.src === "slip" && b.result === "pending"' in hook
-    assert "S.track(h, { load: mbLoad, save: mbSave, live: () => state.view === \"live\" })" in hook
+    assert "S.track(h, { load: mbLoad, save: mbSave, live: () => state.view === \"live\", buzz })" in hook
     live = APP[APP.index("async function renderLiveBoard("):]
     assert live.index("liveSlips();") < live.index("await fetchAllLive()")
     prof = APP[APP.index("function mbProfit("):]
@@ -873,7 +873,12 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const errs = []; p.on('pageerror', (e) => errs.push(String(e)));
   await p.addInitScript(() => { try { localStorage.setItem('qb.tour', 'done'); } catch (e) {} });
   await p.route('**/api/ask/slip', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(RESP) }));
-  let tracked = null;
+  let tracked = null, mailPost = null;
+  // The last-leg email switch (engine/slipwatch): the account answers, the click posts.
+  await p.route('**/api/account/lastleg', async (route) => {
+    const on = route.request().method() === 'POST' ? (mailPost = JSON.parse(route.request().postData() || '{}')).on : false;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ on: !!on, available: true, email: 'you@example.com' }) });
+  });
   await p.route('**/api/ask/track', async (route) => {
     tracked = JSON.parse(route.request().postData() || '{}');
     const slips = (tracked.slips || []).map((s, i) => ({ id: s.id, slip: TRACK[i % TRACK.length] }));
@@ -912,15 +917,25 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
     await p.waitForSelector('#live-slips .pgr-track-card .pgr-legs', { timeout: 25000 });
     panel = await p.$('#live-slips');
   } catch (e) { errs.push('no tracker panel: ' + e); }
-  let shot = null, settled = null, overflow = null, typing = null;
+  let shot = null, settled = null, overflow = null, typing = null, lastLeg = null, mailText = null;
   if (panel) {
+    try { await p.waitForSelector('#live-slips .pgr-mail', { timeout: 5000 }); } catch (e) { errs.push('no mail switch: ' + e); }
     shot = await p.evaluate(() => ({
       cards: document.querySelectorAll('#live-slips .pgr-track-card').length,
       chance: document.querySelectorAll('#live-slips .pgr-chance').length,
       hedge: document.querySelectorAll('#live-slips .pgr-hedge').length,
+      last: document.querySelectorAll('#live-slips .pgr-now.s-last').length,
+      lastText: (document.querySelector('#live-slips .pgr-now.s-last') || {}).textContent || '',
       settledText: (document.querySelector('#live-slips .pgr-now.s-lost') || {}).textContent || '',
     }));
     settled = await p.evaluate(() => JSON.parse(localStorage.getItem('qb_mybets_v1') || '[]').map((b) => [b.id, b.result, b.settled_by || '']));
+    lastLeg = await p.evaluate(() => JSON.parse(localStorage.getItem('qb_mybets_v1') || '[]').filter((b) => b.last_leg).map((b) => b.id));
+    const sw = await p.$('#live-slips [data-lastleg-mail]');
+    if (sw) {
+      await sw.click();
+      await p.waitForTimeout(250);
+      mailText = await p.textContent('#live-slips .pgr-mail');
+    }
     overflow = await p.evaluate(() => document.scrollingElement.scrollWidth > window.innerWidth + 1);
     const inp = await p.$('#live-slips [data-hedge="odds"]');
     if (inp) {
@@ -930,7 +945,7 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   }
   result[w] = { before, after, saved: bets.filter((x) => x.src === 'slip').map((x) => ({ stake: x.stake, odds: x.odds, legs: (x.legs || []).length, desc: x.desc })),
                 tracked: tracked && (tracked.slips || []).map((s) => ({ id: s.id, legs: s.legs.length, odds: s.total_odds })),
-                shot, settled, overflow, typing, errors: errs };
+                shot, settled, overflow, typing, lastLeg, mailPost, mailText, errors: errs };
   await ctx.close();
 }
 console.log(JSON.stringify(result));
@@ -1007,8 +1022,12 @@ def test_a_slip_is_hedged_saved_and_followed_on_the_live_tab_at_both_widths():
             (w, "the hedge redoes its arithmetic as the price is typed")
         assert got["saved"] and got["saved"][0]["stake"] == 25 and got["saved"][0]["legs"] == 3, (w, got["saved"])
         assert [s["legs"] for s in got["tracked"]] == [3, 2, 2], (w, "every pending saved slip, newest first")
-        assert got["shot"] == {"cards": 3, "chance": 2, "hedge": 1, "settledText": got["shot"]["settledText"]}, (w, got["shot"])
+        assert got["shot"] == {"cards": 3, "chance": 2, "hedge": 1, "last": 1, "lastText": got["shot"]["lastText"],
+                               "settledText": got["shot"]["settledText"]}, (w, got["shot"])
         assert got["shot"]["settledText"].startswith("Settled in My Bets from the box score: Lost."), w
+        assert got["shot"]["lastText"].startswith("Last leg. KC moneyline decides it"), (w, "the one-left slip leads with it")
+        assert got["lastLeg"] == ["1760000000001"], (w, "the mark rides on the entry, once")
+        assert got["mailPost"] == {"on": True} and "to you@example.com" in (got["mailText"] or ""), (w, got["mailText"])
         assert ["1760000000000", "loss", "box"] in got["settled"], (w, got["settled"])
         assert got["typing"] and "Lock it: bet $22.50" in got["typing"], (w, "the Live tab's hedge types too")
         assert got["overflow"] is False and not got["errors"], (w, got["errors"])

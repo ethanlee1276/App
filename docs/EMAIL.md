@@ -147,6 +147,21 @@ correct behaviour rather than a bug.
 
 ---
 
+## The last-leg email — one-to-one, like a reset (2026-10-13)
+
+A member can ask, on the Live tab, to be emailed when a slip they saved
+from the parlay checker is down to the one leg that decides it
+(engine/slipwatch; runbook step 44). It is one-to-one mail — the member
+switched it on, it goes to the address on the account, it carries their
+own ticket — so it needs only `mailer.configured()`, the same bar as a
+password reset, and the site's Gmail can carry it where the digests
+need `bulk_ok()`. It is held three ways: once per slip, ever; 40 a day
+across the whole box; and only to a member entitled at that moment,
+since our live chance and the hedge are the paid half. Every message
+carries the unsubscribe below — a `slip-` token that turns off only that
+email, verified like the digest's and routed by the same page. Nothing
+to set beyond what the resets already need.
+
 ## Rules the code already keeps, and should keep keeping
 
 * **A digest with nothing to say is not sent.** A daily email that

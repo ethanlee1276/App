@@ -785,8 +785,11 @@ def delete_user(conn, user_id: int) -> None:
     # this account's activity and go too — from both sides, which the
     # per-table DELETE below handles for the rows this user owns and the
     # mirror rows (friend_id / to_id) need their own statements.
+    # slip_alerts / slip_alert_optin (engine/slipwatch, 2026-10-13): the
+    # last-leg email's opt-in, its token salt and the alerts noted — a
+    # mailing preference, on the digest's reasoning.
     for table in ("streak_picks", "streak_state", "tf_calls", "digest_optin",
-                  "friend_invites"):
+                  "friend_invites", "slip_alerts", "slip_alert_optin"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?",
                          (int(user_id),))
@@ -926,6 +929,13 @@ def export_user(conn, user_id: int) -> dict:
         if d:
             out["email_digests"] = {"morning": bool(d["morning"]),
                                     "nightly": bool(d["nightly"])}
+    if "slip_alert_optin" in have:
+        # The last-leg email's switch (engine/slipwatch), and nothing of
+        # its link: the same rule as the digests' row above.
+        s = conn.execute("SELECT mail FROM slip_alert_optin WHERE user_id=?",
+                         (int(user_id),)).fetchone()
+        if s:
+            out["last_leg_email"] = bool(s["mail"])
     # The public feed (engine/socialfeed, 2026-10-06): the handle, the
     # bio, every post and comment you wrote, and what you liked and tailed.
     from . import socialfeed as _feed

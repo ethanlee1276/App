@@ -42752,7 +42752,7 @@ function askSlipCard(t) {
 function liveSlips() {
   const h = document.getElementById("live-slips");
   if (h && mbLoad().some((b) => b.src === "slip" && b.result === "pending")) {
-    loadSlip().then((S) => S && S.track(h, { load: mbLoad, save: mbSave, live: () => state.view === "live" }));
+    loadSlip().then((S) => S && S.track(h, { load: mbLoad, save: mbSave, live: () => state.view === "live", buzz }));
   }
 }
 

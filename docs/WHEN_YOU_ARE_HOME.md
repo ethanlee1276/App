@@ -1174,6 +1174,36 @@ first). Paste back anything that prints an error or looks off.
     If the box check in step 39 prints `"mate_card"` or `"qb_card"` on a
     read whose teammate or QB is out that day, it's working.
 
+44. **A saved slip down to its last leg says so, and can email you**
+    (2026-10-13, Ethan: "add all of them"). The box watches every
+    member's saved slips itself — My Bets syncs to the account store, so
+    it has them with the Live tab closed — once a minute (`slip watch`
+    on the launcher's log), grades each one the way the Live tab does,
+    and the first time a ticket is down to the one leg that decides it:
+    * the Live tab's card leads with "Last leg. KC moneyline decides it
+      — the hedge and the cash-out check are below", and the phone
+      buzzes once per slip (the mark rides on the My Bets entry);
+    * a member who ticked "Email me when a saved slip is down to its
+      last leg" (the switch sits above the saved slips on the Live tab)
+      gets one email: the ticket, the leg and where it stands, our
+      chance for the rest, the hedge's lock-it and stake-back numbers,
+      a link to the Live tab, and a one-click unsubscribe that turns off
+      only that email.
+    One email per slip ever, 40 a day for the whole box, only to a member
+    entitled at that moment (the live chance and the hedge are the paid
+    half), and only when mail is set up — the same Resend key or Gmail
+    the password resets use (`sudo ./deploy/setenv.sh`; nothing to add).
+    On a site with no relay the switch isn't offered and the Live tab
+    says so. Box check, after a night with a saved slip open:
+    ```
+    journalctl -u qellys --since "12 hours ago" --no-pager | grep "slip watch"
+    cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A; c = A.connect(); print([tuple(r) for r in c.execute('SELECT user_id, bet_id, fired_at, mailed FROM slip_alerts')])"
+    ```
+    The first prints a line for each minute something fired ("1 saved
+    slip(s) down to the last leg, 1 emailed"; a failed send says so with
+    the error's kind); the second lists every alert noted (`mailed` 1 =
+    the email went). Nothing to set.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

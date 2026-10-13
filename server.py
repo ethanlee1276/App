@@ -789,6 +789,14 @@ def _send_reset(email: str) -> None:
                 error=type(exc).__name__)
 
 
+def account_entitled(conn, who) -> bool:
+    """`Handler._entitled` for a caller with no request in hand: the box's
+    own sweeps (engine/slipwatch), which must apply the same gate before a
+    member's live numbers leave the building in an email. The method reads
+    nothing off the handler, so it runs unbound."""
+    return Handler._entitled(None, conn, who)
+
+
 def board_bytes(name: str):
     """``(body, mtime, etag)`` for a board, or ``(None, None, None)``.
 
@@ -2065,6 +2073,16 @@ class Handler(BaseHTTPRequestHandler):
                 # resets and alerts, never a mailing list (engine/mailer).
                 out["available"] = mailer.bulk_ok()
                 return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "lastleg":
+                # The last-leg email (engine/slipwatch): on or off for this
+                # account, whether a relay exists at all, and the address it
+                # would go to — the member's own, shown back to them. One-
+                # to-one mail, so configured() is the bar, not bulk_ok().
+                from engine import slipwatch as SW
+                out = SW.optin_get(conn, who["id"])
+                out["available"] = _mail_on()
+                out["email"] = who["email"]
+                return self._send(200, json.dumps(out).encode(), ".json")
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         finally:
@@ -2155,7 +2173,8 @@ class Handler(BaseHTTPRequestHandler):
     def _account_post(self, path: str, body: dict):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
-                        "delete", "signout-all", "digest", "forgot", "reset"):
+                        "delete", "signout-all", "digest", "forgot", "reset",
+                        "lastleg"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         if path in self.PASSWORD_PATHS and not self._password_transport_ok():
@@ -2242,6 +2261,16 @@ class Handler(BaseHTTPRequestHandler):
                                    bool(body.get("morning")),
                                    bool(body.get("nightly")))
                 out.pop("token", None)
+                A.touch_session(conn, token)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "lastleg":
+                # One boolean. The unsubscribe token is minted server-side
+                # and never accepted from a client (the digest's rule), and
+                # it never rides in this answer either.
+                from engine import slipwatch as SW
+                out = SW.optin_set(conn, who["id"], bool(body.get("on")))
+                out["available"] = _mail_on()
+                out["email"] = who["email"]
                 A.touch_session(conn, token)
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "password":
@@ -4006,20 +4035,27 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         who had simply clicked twice.
         """
         token = (query.get("t") or [""])[0]
+        # The last-leg email (engine/slipwatch) is its own list with its
+        # own token form; its link turns off that mail and nothing else.
+        slip = str(token or "").startswith("slip-")
         done = False
         try:
-            from engine import accounts as A, digest as DG
+            from engine import accounts as A, digest as DG, slipwatch as SW
             conn = A.connect()
             try:
-                done = DG.unsubscribe(conn, token)
+                done = SW.unsubscribe(conn, token) if slip else DG.unsubscribe(conn, token)
             finally:
                 conn.close()
         except Exception:                                    # noqa: BLE001
             done = False
         title = "Unsubscribed"
-        body = ("You will not get the morning card or the nightly recap any "
-                "more. Nothing else about your account has changed, and you "
-                "can turn them back on any time from the Account page.")
+        body = (("You will not get an email when a saved slip is down to its "
+                 "last leg any more. Nothing else about your account has "
+                 "changed, and you can turn it back on any time from the "
+                 "Live tab.") if slip else
+                ("You will not get the morning card or the nightly recap any "
+                 "more. Nothing else about your account has changed, and you "
+                 "can turn them back on any time from the Account page."))
         page = (self._UNSUB_PAGE % (title, title, body)).encode("utf-8")
         # No-store, and noindex in the markup: this URL carries a bearer
         # token and has no business in a cache or a search index.

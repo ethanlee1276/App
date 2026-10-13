@@ -40,6 +40,12 @@
    board's checks would give it, and a weak, against or unpriced leg lists
    better legs to swap in (slipgrade.replacements).
 
+   AND THE LAST LEG (Ethan, 2026-10-13: "add all of them"): a saved slip
+   down to the one leg that decides it leads its card with a strip and
+   the phone buzzes once (`lastLeg`, the mark kept on the My Bets entry);
+   a member who switches the email on (/api/account/lastleg) is mailed
+   by the box when it happens, Live tab open or not (engine/slipwatch).
+
    The file is chosen in app.js (a real file input inside the attach
    sheet's row, so a phone's picker opens on the tap itself), which then
    hands it here with what it owns as `ctx` — the conversation, saving it,
@@ -622,7 +628,7 @@
      reads, the bet itself unchanged), and left for the reader otherwise. */
   const TRACK_MS = 60000;
   const SETTLED_SHOWN_MS = 12 * 3600 * 1000;
-  const T = { host: null, ctx: null, timer: 0, busy: false, last: 0, cards: {}, err: "" };
+  const T = { host: null, ctx: null, timer: 0, busy: false, last: 0, cards: {}, err: "", mail: null, mailBusy: false };
 
   function tracked(bets) {
     return bets.filter((b) => b && b.src === "slip" && Array.isArray(b.legs) && b.legs.length);
@@ -654,6 +660,36 @@
     });
     if (moved) T.ctx.save(bets);
   }
+  /* THE LAST LEG. One leg left to decide an open ticket (slipgrade.standing
+     says so): the card leads with it, and the phone buzzes once per slip —
+     the mark rides on the My Bets entry, so a reload or another device does
+     not buzz again. The box notices the same moment on its own clock and
+     emails a member who asked (engine/slipwatch). */
+  function isLast(c) {
+    const n = c && c.now;
+    return !!n && n.status === "open" && Number(n.left) === 1;
+  }
+  function lastHTML(c) {
+    if (!isLast(c)) return "";
+    const open = (c.legs || []).find((l) => !((l.live || {}).result));
+    const who = (c.hedge && c.hedge.leg) || (open && legName(open)) || "One leg";
+    return `<div class="pgr-now s-last"><b>Last leg.</b> ${esc(who)} decides it — the hedge and the cash-out check are below.</div>`;
+  }
+  function lastLeg(got, ctx = T.ctx) {
+    const bets = ctx.load();
+    const fresh = [];
+    (got || []).forEach((x) => {
+      const b = bets.find((y) => y && y.id === x.id);
+      if (!b || b.result !== "pending" || b.last_leg || !x.slip || !isLast(x.slip)) return;
+      b.last_leg = new Date().toISOString();
+      fresh.push(b.id);
+    });
+    if (fresh.length) {
+      ctx.save(bets);
+      if (typeof ctx.buzz === "function") ctx.buzz("win");
+    }
+    return fresh;
+  }
   async function refresh() {
     if (T.busy || !T.ctx) return;
     const open = tracked(T.ctx.load()).filter((b) => b.result === "pending")
@@ -671,6 +707,7 @@
         T.err = "";
         body.slips.forEach((x) => { if (x && x.id) T.cards[x.id] = x; });
         settle(body.slips);
+        lastLeg(body.slips);
       } else {
         T.err = res.status === 401 || res.status === 402 ? "locked" : "down";
       }
@@ -704,7 +741,7 @@
     }
     const first = !c.now && c.first_kickoff && kick(c.first_kickoff)
       ? `<div class="pgr-now">Nothing has started · first game ${esc(kick(c.first_kickoff))}</div>` : "";
-    return `<div class="pgr-card pgr-track-card">${head}${done || nowHTML(c.now) || first}${b.result === "pending" ? hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
+    return `<div class="pgr-card pgr-track-card">${head}${done || lastHTML(c) + (nowHTML(c.now) || first)}${b.result === "pending" ? hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
       <ol class="pgr-legs">${(c.legs || []).map(trackLegHTML).join("")}</ol></div>`;
   }
   function draw() {
@@ -723,12 +760,50 @@
     host.innerHTML = `<div class="section-title">Your saved slips
         <span class="sub">— from the parlay checker in Ask, followed leg by leg while the games run</span></div>
       ${note ? `<p class="pgr-foot">${esc(note)}</p>` : ""}
+      ${mailHTML()}
       <div class="pgr-track">${show.map((b) => trackCardHTML(b, T.cards[b.id])).join("")}</div>`;
+  }
+  /* THE EMAIL (engine/slipwatch): the box mails a member when a saved slip
+     reaches its last leg, Live tab open or not. The switch is the account's
+     own (/api/account/lastleg), read once a visit; nothing is offered on a
+     site with no mail relay, and a reader not signed in is told so. */
+  function mailHTML() {
+    const m = T.mail;
+    if (!m) return "";
+    if (!m.signed_in) return `<p class="pgr-foot pgr-mail-note">Sign in and we can email you when a saved slip is down to its last leg.</p>`;
+    if (!m.available) return `<p class="pgr-foot pgr-mail-note">Email for the last leg isn’t switched on for this site yet.</p>`;
+    return `<label class="pgr-mail"><input type="checkbox" data-lastleg-mail${m.on ? " checked" : ""}> Email me when a saved slip is down to its last leg<span>${
+      m.on ? ` · to ${esc(m.email || "your address")}` : ""}</span></label>`;
+  }
+  async function loadMail() {
+    if (T.mail || T.mailBusy) return;
+    T.mailBusy = true;
+    try {
+      const res = await fetch("/api/account/lastleg", { credentials: "same-origin" });
+      if (res.status === 401) T.mail = { signed_in: false };
+      else if (res.ok) T.mail = Object.assign({ signed_in: true }, await res.json());
+    } catch (e) { /* the panel draws without the switch; the next visit asks again */ }
+    T.mailBusy = false;
+    if (T.mail) draw();
+  }
+  async function setMail(on) {
+    if (!T.mail || !T.mail.signed_in) return;
+    T.mail.on = on;
+    try {
+      const res = await fetch("/api/account/lastleg", {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on }),
+      });
+      if (res.ok) Object.assign(T.mail, await res.json());
+      else T.mail.on = !on;
+    } catch (e) { T.mail.on = !on; }
+    draw();
   }
   function track(host, ctx) {
     T.host = host;
     T.ctx = ctx;
     draw();
+    loadMail();
     if (Date.now() - T.last > TRACK_MS - 10000) refresh();
     if (!T.timer) {
       T.timer = setInterval(() => {
@@ -764,7 +839,11 @@
       const btn = e.target && e.target.closest && e.target.closest("[data-save-slip]");
       if (btn) save(btn);
     });
+    document.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t && t.matches && t.matches("[data-lastleg-mail]")) setMail(!!t.checked);
+    });
   }
 
-  window.QBSlip = { send, card, shrink, track, hedgeOut, cashOut, slipKey, entryOf, settleOne };
+  window.QBSlip = { send, card, shrink, track, hedgeOut, cashOut, slipKey, entryOf, settleOne, lastLeg, lastHTML };
 })();
