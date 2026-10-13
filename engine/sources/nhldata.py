@@ -327,6 +327,35 @@ def log_rows(players: list[dict], names: dict, date: str) -> list[dict]:
     return out
 
 
+#: A DAY'S SCORES ARE CACHED HALF AN HOUR, AND A FINAL SHOULD NOT WAIT
+#: THAT LONG (2026-10-13). Ethan: "It should not take a day for all bets to
+#: settle." The settle asks for a date's finals every few minutes, and a
+#: copy read during the third period answered "in play" for thirty minutes
+#: after the horn. When the copy on disk has a game that started in the
+#: last day and is not final, the day is read again, at most this often.
+RECENT_TTL = 120
+RECENT_HOURS = 24
+
+
+def owed_finals(games: list, now=None) -> bool:
+    """A game in this copy that started within RECENT_HOURS and is not
+    final yet."""
+    import datetime as _d
+    now = now or _d.datetime.now(_d.timezone.utc)
+    for g in games:
+        if g.get("final"):
+            continue
+        try:
+            start = _d.datetime.fromisoformat(str(g.get("start") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=_d.timezone.utc)
+        if now - _d.timedelta(hours=RECENT_HOURS) <= start <= now:
+            return True
+    return False
+
+
 def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxscore,
                fetch_day=fetch_score, fetch_person=fetch_player, fetch_pbp=None) -> dict:
     """Store one date's finals and, unless ``scores_only``, every player's
@@ -336,6 +365,9 @@ def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxsc
     result: dict = {"games": 0, "player_logs": 0, "assets": 0, "skipped": []}
     try:
         games = [g for g in parse_score_day(fetch_day(date)) if g["type"] in KEEP_TYPES]
+        if fetch_day is fetch_score and owed_finals(games):
+            games = [g for g in parse_score_day(fetch_score(date, ttl=RECENT_TTL))
+                     if g["type"] in KEEP_TYPES]
     except DataUnavailable as exc:
         result["skipped"].append(f"nhl scores {date}: {exc}")
         return result

@@ -634,6 +634,18 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
                          style_hint=style_hint, today=today)
 
 
+#: A RESULT IS READ FRESH NEAR THE BELL (2026-10-13). A bout's record is
+#: cached six hours — fine for a fight from last month, wrong for tonight's:
+#: the settle reads the card all day, so the copy on disk at the bell was
+#: written before it, says "no winner", and stayed that way for up to six
+#: hours. Worse than slow: once the UTC date turned, an unplayed-looking
+#: bout dated yesterday reads exactly like a draw, which the ledger voids.
+#: A bout from the last RECENT_DAYS with no winner on the cached copy is
+#: read again, at most RESULT_TTL old, before it means anything.
+RESULT_TTL = 300
+RECENT_DAYS = 2
+
+
 def latest_result(name: str, since: _dt.date,
                   today: _dt.date | None = None) -> dict | None:
     """The fighter's most recent COMPLETED fight on/after ``since``.
@@ -665,6 +677,11 @@ def latest_result(name: str, since: _dt.date,
         try:
             comp = parse_competition(
                 _get_json(ref, f"espn_mma_res_{cid}.json", ttl=6 * 3600), aid)
+            d0 = comp.get("date")
+            if (comp["winner"] is None and d0
+                    and today - _dt.timedelta(days=RECENT_DAYS) <= d0 <= today):
+                comp = parse_competition(
+                    _get_json(ref, f"espn_mma_res_{cid}.json", ttl=RESULT_TTL), aid)
         except DataUnavailable:
             continue
         d = comp.get("date")

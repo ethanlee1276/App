@@ -2793,8 +2793,9 @@ def settle_predmarket(conn, fetch=None, today: str | None = None) -> dict:
     the Record page, the oldest from August.
 
     ``fetch(tickers) -> raw market objects`` is injectable; the default is
-    the exchange pull. Only tickets whose event date is past are asked
-    about (an undated ticker is asked about too — unknown is not "fine").
+    the exchange pull. Only tickets whose event date is today or past are
+    asked about (an undated ticker is asked about too — unknown is not
+    "fine").
     A returned market with a yes/no result grades; one the exchange
     cancelled voids; one the exchange no longer lists at all, more than
     PREDMARKET_LOST_DAYS after its event, voids with the note saying so.
@@ -2808,7 +2809,11 @@ def settle_predmarket(conn, fetch=None, today: str | None = None) -> dict:
     asked: dict = {}
     for r in rows:
         when = predmarket_event_date(r["player"]) or r["game_day"] or None
-        if when and when >= today_d.isoformat():
+        # TODAY'S EVENTS ARE ASKED ABOUT TOO (2026-10-13). This skipped
+        # `when >= today`, so a ticket on tonight's game was first asked
+        # about tomorrow. A market still open answers with no result and
+        # grades nothing; the request is one batch either way.
+        if when and when > today_d.isoformat():
             continue                     # the event has not happened
         asked[r["player"]] = when
     out = {"checked": len(asked), "settled": 0, "voided": 0, "error": ""}
@@ -4531,10 +4536,14 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                 else:
                     reason = "player has no log"
             else:
+                # A SUMMED MARKET is on file when its parts are — the
+                # settler reads it that way (DERIVED_MARKETS), so this does.
+                parts = DERIVED_MARKETS.get((b["sport"], b["market"]), (b["market"],))
+                marks = ",".join("?" * len(parts))
                 has = hist_conn.execute(
-                    f"SELECT COUNT(*) FROM player_game_logs WHERE {where} "
-                    f"AND market=?", (*wargs, b["market"])).fetchone()[0]
-                reason = "market not ingested" if not has else "gradeable now"
+                    f"SELECT COUNT(DISTINCT market) FROM player_game_logs WHERE {where} "
+                    f"AND market IN ({marks})", (*wargs, *parts)).fetchone()[0]
+                reason = "market not ingested" if has < len(parts) else "gradeable now"
         out.append({"id": b["id"], "sport": b["sport"], "date": date,
                     "player": b["player"], "market": b["market"],
                     "age_days": age, "reason": reason, **extra})
@@ -5115,6 +5124,42 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
     return rows, actual
 
 
+#: MARKETS THAT ARE A SUM OF STORED ONES, graded off their parts
+#: (2026-10-13). The basketball boards price points + rebounds + assists
+#: (`oddsapi.NBA_ODDS_TO_MARKET`, the WNBA spec's headline market) and add
+#: it up from the logs at build time — but no ingest ever stored a `pra`
+#: row, so a journaled PRA pick found no stat line, `_absent_player_verdict`
+#: does not cover basketball, and the no-show sweep saw the player's other
+#: rows and left him to "the normal settle path". It stayed open for good.
+#: Ethan, 2026-10-13: "It should not take a day for all bets to settle."
+DERIVED_MARKETS = {("nba", "pra"): ("pts", "reb", "ast"),
+                   ("wnba", "pra"): ("pts", "reb", "ast")}
+
+
+def _derived_rows(hist_conn, b, where: str, wargs: list) -> list:
+    """Stat rows for a summed market, one per game, built from its parts:
+    ``[{value, team, game_id}]`` for every game where the player has EVERY
+    part on file. A game missing a part is left out rather than summed
+    short — a partial sum is a wrong number, and an open bet is not."""
+    parts = DERIVED_MARKETS.get((b["sport"], b["market"]))
+    if not parts:
+        return []
+    from .sources.oddsapi import normalize_name
+    target = normalize_name(b["player"] or "")
+    marks = ",".join("?" * len(parts))
+    games: dict = {}
+    for r in hist_conn.execute(
+            f"SELECT player, market, value, team, game_id FROM player_game_logs "
+            f"WHERE {where} AND market IN ({marks})", (*wargs, *parts)):
+        if normalize_name(r["player"]) != target:
+            continue
+        g = games.setdefault(r["game_id"], {"team": r["team"], "game_id": r["game_id"],
+                                            "parts": {}})
+        g["parts"][r["market"]] = float(r["value"] or 0.0)
+    return [{"value": sum(g["parts"].values()), "team": g["team"], "game_id": g["game_id"]}
+            for g in games.values() if set(g["parts"]) == set(parts)]
+
+
 @_audited("settle")
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
@@ -5172,6 +5217,9 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                         f"FROM player_game_logs WHERE {where} AND market=?",
                         (*wargs, b["market"]))
                     if normalize_name(c["player"]) == target]
+        if not rows:
+            # A SUMMED MARKET (DERIVED_MARKETS): its parts, added up.
+            rows = _derived_rows(hist_conn, b, where, wargs)
         if not rows:
             # DATE-SHAPE fallback. A 9pm Eastern first pitch is already
             # tomorrow in UTC, so a slate labelled from a UTC clock can sit

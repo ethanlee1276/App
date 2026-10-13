@@ -20,8 +20,9 @@ Everything from 2026-10-12 and 10-13, in order: the parlay checker in
 Ask (live chances, the hedge, a better number, saved slips on the Live
 tab, our read on a leg no board carries, better legs, the cash-out
 check, the last-leg alert), the subscription check on every open, the
-MLB profit calendar that stopped at September, and a Most Likely profit
-calendar beside the edge one (step 46; nothing to run).
+MLB profit calendar that stopped at September, a Most Likely profit
+calendar beside the edge one (step 46; nothing to run), and bets that
+settle minutes after the final instead of the next day (step 47; J).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -138,6 +139,16 @@ to read it; read-only, paste all of it):
 ```
 cd /srv/qellys && sudo -u qellys python3 mlbprobe.py
 ```
+
+**J. Bets settle minutes after the final** (step 47; read-only). Run it
+the morning after a game night, and again late on a game night about
+half an hour after a game ends. Paste all of it:
+```
+journalctl -u qellys --since "6 hours ago" --no-pager | grep -E "settle:|settled|box scores|UFC:|desk:" | tail -20
+cd /srv/qellys && sudo -u qellys python3 settlecheck.py
+```
+`OWED` should read 0, or only show rows marked "no stat line for him
+yet". `last pass` should be under 6 min.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -1381,6 +1392,49 @@ first). Paste back anything that prints an error or looks off.
       from step 45 counts only edge picks too.
     Nothing to set or run; it arrives with the next pull. To see it: Record
     page, pick a league, tap **Most Likely** above the calendar.
+
+47. **Bets settle minutes after the final, every league** (2026-10-13,
+    Ethan: "bets are taking way too long to settle … It should not take
+    a day for all bets to settle"). Nothing to set; it arrives with the
+    next pull. What held a finished game's bets open, and what changed:
+    * **The settle ran once per board refresh.** That was a sweep of
+      every board, a quarter of an hour or more on a busy night. It now
+      has its own clock (every 5 minutes, whatever the boards are doing).
+      A game going **final on a live scoreboard starts a pass within the
+      minute.**
+    * **Seven NFL markets waited for the next morning's file.** Rush
+      attempts, pass + rush yards, rush + rec yards, kicker points, field
+      goals, tackles + assists, and a quarterback's anytime touchdown.
+      The same-night box score only wrote the older markets. It writes
+      every board market now, kicker and defender lines included. Any
+      open prop starts the pass, not just six markets.
+    * **Points + rebounds + assists (NBA, WNBA) never settled.** The
+      board priced and journaled it, but no feed stored a combined line.
+      It grades off the three stats now, and a game missing one of them
+      stays open rather than grading a short sum. Any PRA bet still open
+      from the WNBA season grades on the next pass.
+    * **The NBA's "is it over" was a 6-hour-old copy, the NHL's 30
+      minutes.** A game that tipped and isn't final in the copy on disk
+      is now asked about again (NBA every 5 minutes, NHL every 2). An NBA
+      box cached before the buzzer is read again, and nothing is stored
+      from a box that says the game is still on.
+    * **Fight picks graded only when the UFC board rebuilt.** They're on
+      the settle clock now. A bout from the last two days with no winner
+      is read fresh first. Before, a copy saved before the bell could
+      read as "no winner" after midnight UTC, which the ledger treats as
+      a draw and voids.
+    * **Desk tickets on tonight's game were first asked about
+      tomorrow.** The exchange is now asked about today's events too,
+      every 15 minutes (was hourly).
+    * **What can still take until morning:** an NFL player missing from
+      the box score entirely. He either sat (void) or played without a
+      stat (graded at zero), and only the official snap file tells those
+      apart. MLB, NBA, WNBA, NHL and college have no such wait.
+    * **Sportsbooks' own results:** there's no way to read them without
+      logging into accounts, which the site never does. Books grade off
+      the same official box scores this pulls, so the answer is the same
+      one, minutes after the final.
+    To check it, run J at the top of this file.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

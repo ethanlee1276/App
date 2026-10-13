@@ -47,22 +47,29 @@ import datetime as _dt
 BOX_SUFFIX = "-box"
 #: How far back a finished game may be to be worth a summary fetch.
 LOOKBACK_DAYS = 10
-#: Markets the settler grades from a stat line — anything else on a bet
-#: is a game market and grades from the score.
-PROP_MARKETS = ("pass_yds", "pass_td", "rush_yds", "rec_yds", "receptions",
-                "anytime_td")
+#: EVERY PROP OPENS THE PASS, not a list of six (2026-10-13). Ethan:
+#: "bets are taking way too long to settle … It should not take a day."
+#: This read `market IN (pass_yds, pass_td, rush_yds, rec_yds, receptions,
+#: anytime_td)` — the board as it stood on 2026-09-15 — so a week whose
+#: open props were attempts, completions, carries, interceptions or any of
+#: the five markets of 2026-10-10 never fetched a box score at all, and
+#: those bets waited for the official file the next morning. A game market
+#: grades from the score and a desk ticket or a fight from elsewhere
+#: (`ledger.GRADED_ELSEWHERE`); everything else on the bet is a prop.
 
 
 def _open_periods(lconn, league: str) -> dict:
     """``{(season, period): n}`` of open props, keyed the way the
     settler keys them: NFL by the week label's season and week, college
     by the bet's own date."""
-    from .ledger import _NFL_WEEK_DATE
-    marks = ",".join("?" * len(PROP_MARKETS))
+    from .ledger import _NFL_WEEK_DATE, GAME_MARKETS, GRADED_ELSEWHERE
+    gm = ",".join("?" * len(GAME_MARKETS))
+    ge = ",".join("?" * len(GRADED_ELSEWHERE))
     out: dict = {}
     for r in lconn.execute(
             f"SELECT date, game_day FROM bets WHERE status='open' AND sport=? "
-            f"AND market IN ({marks})", (league, *PROP_MARKETS)):
+            f"AND market NOT IN ({gm}) AND COALESCE(category, '') NOT IN ({ge})",
+            (league, *GAME_MARKETS, *GRADED_ELSEWHERE)):
         m = _NFL_WEEK_DATE.match(r["date"] or "")
         if league == "nfl" and m:
             key = (int(m.group(1)), f"{int(m.group(2)):03d}")
@@ -152,6 +159,116 @@ def purge_provisional(hconn, league: str, g: dict) -> int:
     return cur.rowcount or 0
 
 
+#: THE MARKETS THE SHARED PARSER DOES NOT WRITE (2026-10-13). The box
+#: parser (`nflpreseason.parse_boxscore`) was built for the offence and the
+#: preseason scan: yards, catches, carries, touchdowns, the quarterback's
+#: line. Seven board markets had no same-night row and waited for the
+#: official file — rush attempts (stored as `carries`), the two yardage
+#: sums of 2026-10-10, a kicker's points and field goals, a defender's
+#: tackles, and a quarterback's anytime touchdown when he never carried or
+#: caught the ball. They are derived here, in settlement only, so the
+#: preseason table the shared parser feeds is untouched.
+#:
+#: THE RULE FOR A SUM: a player in any of the three offensive blocks
+#: played, and a block he is missing from is a zero in it — ESPN lists a
+#: rusher for every carry and a receiver for every catch, so absence from
+#: the rushing block IS zero rushing yards. A player in none of them is not
+#: written: he may have sat, and that is `ledger._absent_player_verdict`'s
+#: question, answered off the official snap file.
+OFFENCE_BLOCKS = ("pass_yds", "pass_td", "pass_att", "rush_yds", "carries",
+                  "rec_yds", "receptions")
+#: The yardage sums, exactly as `nflverse.STAT_SUMS` adds them up.
+YARD_SUMS = {"pass_rush_yds": ("pass_yds", "rush_yds", "rec_yds"),
+             "rush_rec_yds": ("rush_yds", "rec_yds")}
+
+
+def _made(cell) -> float | None:
+    """"2/3" → 2.0, the makes half of a made/attempted cell."""
+    head = str(cell or "").split("/")[0].strip()
+    try:
+        return float(head)
+    except ValueError:
+        return None
+
+
+def _num(cell) -> float | None:
+    try:
+        return float(str(cell).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def special_rows(payload: dict) -> list:
+    """``[{player, team, position, market, value}]`` for the kicking and
+    defensive blocks: a kicker's field goals and points (3 a field goal, 1
+    an extra point, the book's and nflverse's sum), a defender's tackles
+    plus assists (ESPN's TOT, solo and assisted together). Columns are read
+    by label, never by position; a block whose labels are missing gives
+    nothing rather than a wrong number."""
+    from .sources.nflpreseason import _abbr
+    out = []
+    for side in ((payload or {}).get("boxscore") or {}).get("players") or []:
+        team = _abbr(((side.get("team") or {}).get("abbreviation") or ""))
+        for block in side.get("statistics") or []:
+            kind = str(block.get("name") or "").lower()
+            if kind not in ("kicking", "defensive"):
+                continue
+            cols = {str(x).upper(): i for i, x in enumerate(block.get("labels") or [])}
+            for ath in block.get("athletes") or []:
+                who = ath.get("athlete") or {}
+                name = who.get("displayName") or who.get("shortName") or ""
+                stats = ath.get("stats") or []
+                if not name:
+                    continue
+                cell = lambda lab: stats[cols[lab]] if lab in cols and cols[lab] < len(stats) else None  # noqa: E731
+                if kind == "kicking":
+                    fg, xp = _made(cell("FG")), _made(cell("XP"))
+                    pts = _num(cell("PTS"))
+                    if pts is None and fg is not None and xp is not None:
+                        pts = 3 * fg + xp
+                    if fg is not None:
+                        out.append({"player": name, "team": team, "position": "K",
+                                    "market": "fg_made", "value": fg})
+                    if pts is not None:
+                        out.append({"player": name, "team": team, "position": "K",
+                                    "market": "kick_pts", "value": pts})
+                else:
+                    tot = _num(cell("TOT"))
+                    if tot is not None:
+                        out.append({"player": name, "team": team, "position": "DEF",
+                                    "market": "tackles_ast", "value": tot})
+    return out
+
+
+def derived_rows(rows: list) -> list:
+    """The board markets the shared parser leaves out, from its own rows:
+    rush attempts, the yardage sums, and a zero anytime touchdown for a
+    player who played and never carried or caught it. Never a second row
+    for a market a player already has."""
+    have = {(r["player"], r["market"]) for r in rows}
+    by_player: dict = {}
+    for r in rows:
+        by_player.setdefault((r["player"], r["team"]), {})[r["market"]] = r
+    out = []
+
+    def add(seed, market, value):
+        if (seed["player"], market) in have:
+            return
+        have.add((seed["player"], market))
+        out.append({**seed, "market": market, "value": float(value)})
+
+    for (_name, _team), mk in by_player.items():
+        if not any(m in mk for m in OFFENCE_BLOCKS):
+            continue
+        seed = next(iter(mk.values()))
+        if "carries" in mk:
+            add(seed, "rush_att", mk["carries"]["value"])
+        for market, parts in YARD_SUMS.items():
+            add(seed, market, sum(mk[p]["value"] for p in parts if p in mk))
+        add(seed, "anytime_td", 0.0)
+    return out
+
+
 def nfl_rows(payload: dict, g: dict) -> list:
     """The NFL summary → provisional log rows keyed like nflverse's."""
     from .sources.nflpreseason import parse_boxscore
@@ -163,6 +280,10 @@ def nfl_rows(payload: dict, g: dict) -> list:
     rows = parse_boxscore(payload, {"home": g["home"], "away": g["away"],
                                     "season": int(g["season"]), "week": week,
                                     "game_id": g["game_id"]})
+    rows = rows + derived_rows(rows)
+    for r in special_rows(payload):
+        opp = g["away"] if r["team"] == g["home"] else g["home"]
+        rows.append({**r, "opponent": opp, "home": 1 if r["team"] == g["home"] else 0})
     out = []
     for r in rows:
         if r["team"] not in (g["home"], g["away"]):

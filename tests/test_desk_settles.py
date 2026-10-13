@@ -123,7 +123,9 @@ def test_a_future_event_is_not_asked_about_and_a_failed_fetch_changes_nothing():
     assert ledger.settle_predmarket(_world(), fetch=boom, today=TODAY)["checked"] == 0
 
 
-def test_the_intraday_pass_asks_the_exchange_hourly():
+def test_the_intraday_pass_asks_the_exchange_every_quarter_hour():
+    """Pin moved 3600 → 900 on 2026-10-13 (Ethan: "It should not take a
+    day for all bets to settle"): one batched request a pass."""
     src = open(os.path.join(os.path.dirname(__file__), "..", "engine", "maintenance.py"),
                encoding="utf-8").read()
     body = src[src.index("def settle_open("):]
@@ -131,7 +133,24 @@ def test_the_intraday_pass_asks_the_exchange_hourly():
     assert 'state.get("last_desk_ts")' in body and "DESK_EVERY_S" in body
     assert body.index("settle_from_history(lconn, hconn)") < body.index("settle_predmarket(lconn)")
     from engine import maintenance
-    assert maintenance.DESK_EVERY_S == 3600
+    assert maintenance.DESK_EVERY_S == 900
+
+
+def test_a_ticket_on_tonights_game_is_asked_about_tonight():
+    """It was first asked about tomorrow (`when >= today` skipped it), so a
+    contract the exchange finalised at the final whistle waited a day."""
+    L = _world()
+    _ticket(L, "KXMLBGAME-26SEP15NYY-YES", date=TODAY)          # tonight
+    _ticket(L, "KXNFLGAME-26SEP20KC-YES", date="2026-09-10")    # still to come
+    asked = []
+
+    def fetch(tickers):
+        asked.append(list(tickers))
+        return [{"ticker": "KXMLBGAME-26SEP15NYY-YES", "status": "finalized", "result": "yes"}]
+    out = ledger.settle_predmarket(L, fetch=fetch, today=TODAY)
+    assert asked == [["KXMLBGAME-26SEP15NYY-YES"]], asked
+    assert out["settled"] == 1 and _status(L, "KXMLBGAME-26SEP15NYY-YES")[0] == "won"
+    assert _status(L, "KXNFLGAME-26SEP20KC-YES")[0] == "open"
 
 
 if __name__ == "__main__":

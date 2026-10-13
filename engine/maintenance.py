@@ -487,7 +487,11 @@ def _maybe_harvest(day: _dt.date, log, budget_path=None, hconn=None) -> None:
 # query when nothing recent is open, and the results it pulls are the free
 # league feeds, so the shorter clock costs nothing.
 SETTLE_EVERY_S = 300             # 5 minutes between intraday passes
-DESK_EVERY_S = 3600              # the exchange is asked about open tickets hourly
+# The exchange is asked about open tickets every quarter hour — one batched
+# request a pass. It was hourly, and only about events from before today,
+# so a ticket on tonight's game waited for tomorrow (2026-10-13, Ethan: "It
+# should not take a day for all bets to settle").
+DESK_EVERY_S = 900
 # How far back an intraday pass will reach for still-open picks. The daily
 # chores handle anything older (and reach CATCH_UP_DAYS), so this only has
 # to cover "tonight, and last night if the launcher was closed".
@@ -1054,9 +1058,24 @@ def settle_open(log=print, state_path: Path | None = None,
                 settled += len(voided)
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  unplayed-game void skipped: {exc}")
-        # THE DESK, hourly. Its tickets grade against the exchange, not
-        # the history database, and until 2026-09-15 nothing on any
-        # clock asked the exchange (see `ledger.settle_predmarket`).
+        # THE FIGHTS, on the same clock (2026-10-13). `settle_ufc` ran only
+        # inside the UFC board's build, and only on a build with an odds
+        # key — a card's picks graded whenever that board next rebuilt, not
+        # when the bout ended. Its lookups are cached; asking every pass
+        # while a pick is open costs disk reads, not requests.
+        try:
+            if lconn.execute("SELECT 1 FROM bets WHERE status='open' "
+                             "AND sport='ufc' LIMIT 1").fetchone():
+                n_ufc = ledger.settle_ufc(lconn)
+                if n_ufc:
+                    log(f"  UFC: {n_ufc} fight pick(s) graded")
+                settled += n_ufc
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  UFC settle skipped: {exc}")
+        # THE DESK, every quarter hour (DESK_EVERY_S). Its tickets grade
+        # against the exchange, not the history database, and until
+        # 2026-09-15 nothing on any clock asked the exchange (see
+        # `ledger.settle_predmarket`).
         last_desk = state.get("last_desk_ts")
         if not (isinstance(last_desk, (int, float)) and now - last_desk < DESK_EVERY_S):
             try:

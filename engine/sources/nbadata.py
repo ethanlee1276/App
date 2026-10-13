@@ -153,12 +153,61 @@ def log_rows(players: list[dict], date: str, game_id: str) -> list[dict]:
     return out
 
 
+#: THE SEASON FILE IS SIX HOURS OLD BY DESIGN, AND A FINAL IS NOT
+#: (2026-10-13). `fetch_schedule` caches the whole season for six hours —
+#: right for a board that wants tonight's fixtures, wrong for a settle pass
+#: asking whether tonight's games are over: a copy read at 7pm says every
+#: game is scheduled until 1am, so nothing tipped that night could grade
+#: before then. Ethan: "It should not take a day for all bets to settle."
+#: When the copy on disk has a game that tipped in the last day and is not
+#: final, the settle asks the CDN again, at most this often.
+RECENT_TTL = 300
+#: How far back a tip-off still counts as "tonight" for that question.
+RECENT_HOURS = 24
+
+
+def owed_finals(games: list, now=None) -> bool:
+    """Does this copy of a date hold a game that has tipped (within
+    RECENT_HOURS) and is not final yet? Preseason games never count."""
+    import datetime as _d
+    now = now or _d.datetime.now(_d.timezone.utc)
+    for g in games:
+        if g.get("preseason") or g.get("status") == 3:
+            continue
+        try:
+            tip = _d.datetime.fromisoformat(str(g.get("kickoff") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if tip.tzinfo is None:
+            tip = tip.replace(tzinfo=_d.timezone.utc)
+        if now - _d.timedelta(hours=RECENT_HOURS) <= tip <= now:
+            return True
+    return False
+
+
+def day_games(date: str) -> list[dict]:
+    """The date's games off the season file, re-read fresh when a game
+    on it has tipped and the cached copy does not have it final yet."""
+    games = parse_schedule_day(fetch_schedule(), date)
+    if owed_finals(games):
+        games = parse_schedule_day(fetch_schedule(ttl=RECENT_TTL), date)
+    return games
+
+
+def box_is_final(box: dict) -> bool:
+    """The box score's own word on whether the game is over. A box with no
+    status at all is taken as final — the schedule already said so, and an
+    unknown shape must not strand a night."""
+    status = ((box or {}).get("game") or {}).get("gameStatus")
+    return status is None or status == 3
+
+
 def ingest_nba_date(conn, date: str) -> dict:
     """Ingest one date: schedule game rows + boxscore player logs."""
     from .. import db
     result = {"games": 0, "player_logs": 0, "skipped": []}
     try:
-        games = parse_schedule_day(fetch_schedule(), date)
+        games = day_games(date)
     except DataUnavailable as exc:
         result["skipped"].append(f"nba schedule: {exc}")
         return result
@@ -177,7 +226,15 @@ def ingest_nba_date(conn, date: str) -> dict:
         })
         if g["status"] == 3 and g["game_id"]:
             try:
-                players = parse_boxscore(fetch_boxscore(g["game_id"]))
+                box = fetch_boxscore(g["game_id"])
+                if not box_is_final(box):
+                    # A copy cached before the buzzer: ask once more, and
+                    # store nothing from a game the box says is still on.
+                    box = fetch_boxscore(g["game_id"], ttl=0)
+                if not box_is_final(box):
+                    result["skipped"].append(f"nba box {g['game_id']}: not final yet")
+                    continue
+                players = parse_boxscore(box)
                 prows += log_rows(players, date, g["game_id"])
                 # Faces ride the same fetch: one row per player who has an
                 # id, constructed via HEADSHOT (see its comment for how a

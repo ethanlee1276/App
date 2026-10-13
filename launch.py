@@ -4008,25 +4008,132 @@ def _lane_run(lane: str, force_settle: bool = False) -> None:
         st.update(step=None, since=None, done_at=time.time(), proc=None)
 
 
-def _kick_chores(force_settle: bool = False) -> dict:
-    """Start each chores lane on its own thread unless it is still running —
-    in which case it is left to finish and the boards carry on regardless.
-    Returns {lane: "started" | "still running"}."""
-    out = {}
-    for lane, st in _LANES.items():
+#: One lane is started from two places now — the board loop and the settle
+#: clock below — so the "is it running?" look and the start are one step.
+_LANE_LOCK = threading.Lock()
+
+
+def _kick_lane(lane: str, force_settle: bool = False) -> str:
+    """Start one chores lane on its own thread unless it is still running
+    or resting. Returns "started" | "still running" | "resting after a
+    timeout"."""
+    st = _LANES[lane]
+    with _LANE_LOCK:
         th = st.get("thread")
         if th is not None and th.is_alive():
-            out[lane] = "still running"
-            continue
+            return "still running"
         if (st.get("rest_until") or 0) > time.time():
-            out[lane] = "resting after a timeout"
-            continue
+            return "resting after a timeout"
         th = threading.Thread(target=_lane_run, args=(lane, force_settle), daemon=True,
                               name=f"chores-{lane}")
         st["thread"] = th
         th.start()
-        out[lane] = "started"
+        return "started"
+
+
+def _kick_chores(force_settle: bool = False) -> dict:
+    """Start each chores lane on its own thread unless it is still running —
+    in which case it is left to finish and the boards carry on regardless.
+    Returns {lane: "started" | "still running"}."""
+    return {lane: _kick_lane(lane, force_settle) for lane in _LANES}
+
+
+# --- THE SETTLE ON ITS OWN CLOCK ---------------------------------------------
+# Ethan, 2026-10-13: "bets are taking way too long to settle, we should be
+# pulling after game data and checking if bets settled or not … It should
+# not take a day for all bets to settle."
+#
+# The settle lane was kicked at the top of each BOARD cycle: sixty seconds
+# of sleep, then a sweep of every board, which on a busy night runs a
+# quarter of an hour or more. "Every five minutes" (SETTLE_EVERY_S) was
+# really "once a cycle, however long the cycle took". The lane now has a
+# clock of its own, and a game going final on a live scoreboard starts a
+# pass at once — the live boards poll every twelve seconds while anything
+# is on, so the final is known here within the minute it happens.
+#: How often the settle clock looks: at the live boards for a new final,
+#: and at whether the settle lane is due.
+SETTLE_CLOCK_S = 30
+#: A new final starts a pass no sooner than this after the last one a final
+#: started — a slate's early window ends inside ten minutes, and one pass
+#: per final would queue a dozen.
+FINAL_KICK_GAP_S = 90
+#: The live boards whose finals start a pass (web/data/live_{league}.json).
+FINAL_WATCH = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+#: What the clock has seen and owes: the finals already acted on, and
+#: whether a final landed while a pass was running (it may have read the
+#: feeds before the final did, so it runs again once that pass ends).
+_SETTLE_CLOCK: dict = {"seen": None, "owed": False, "last_forced": 0.0, "last_kick": 0.0}
+
+
+def _finals_on_live_boards(root: Path | None = None) -> set:
+    """``{(league, game)}`` for every game a live board shows as final."""
+    out: set = set()
+    base = (root or ROOT) / "web" / "data"
+    for lg in FINAL_WATCH:
+        try:
+            blob = json.loads((base / f"live_{lg}.json").read_text())
+        except (OSError, ValueError):
+            continue
+        for g in blob.get("games") or []:
+            if not isinstance(g, dict) or (g.get("live") or {}).get("state") != "final":
+                continue
+            key = g.get("event_id") or g.get("game_pk") or f"{g.get('away')}@{g.get('home')}"
+            out.add((lg, str(key)))
     return out
+
+
+def _last_settle_pass() -> float:
+    """When the last settle pass started, by its own stamp (the board loop
+    kicks the lane too, and a kick inside the pass's own five minutes only
+    starts a process to be turned away)."""
+    try:
+        from engine.maintenance import STATE_PATH
+        ts = json.loads(Path(STATE_PATH).read_text(encoding="utf-8")).get("last_settle_ts")
+        return float(ts) if isinstance(ts, (int, float)) else 0.0
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _settle_clock_tick(now: float | None = None, finals: set | None = None,
+                       last_pass: float | None = None) -> str:
+    """One look. Returns what it did: "final" (a new final started a forced
+    pass), "owed" (a final waited for a running pass and starts one now),
+    "due" (the lane's own clock), or "" (nothing to do)."""
+    from engine.maintenance import SETTLE_EVERY_S
+    now = time.time() if now is None else now
+    finals = _finals_on_live_boards() if finals is None else finals
+    sc = _SETTLE_CLOCK
+    if sc["seen"] is None:
+        sc["seen"] = set(finals)       # the boot's own pass covers what is already final
+        return ""
+    new = finals - sc["seen"]
+    sc["seen"] |= finals
+    if new or sc["owed"]:
+        if now - sc["last_forced"] < FINAL_KICK_GAP_S:
+            sc["owed"] = True
+            return ""
+        got = _kick_lane("settle", force_settle=True)
+        if got == "started":
+            sc.update(owed=False, last_forced=now, last_kick=now)
+            return "final" if new else "owed"
+        sc["owed"] = got == "still running"
+        return ""
+    last = max(sc["last_kick"], _last_settle_pass() if last_pass is None else last_pass)
+    if now - last >= SETTLE_EVERY_S and _kick_lane("settle") == "started":
+        sc["last_kick"] = now
+        return "due"
+    return ""
+
+
+def _settle_clock() -> None:
+    """The settle lane's own clock — see the block comment above."""
+    while True:
+        time.sleep(SETTLE_CLOCK_S)
+        try:
+            if _settle_clock_tick() == "final":
+                print("  settle: a game went final on the live board — grading now")
+        except Exception as exc:      # noqa: BLE001 — never let this stop the site
+            print(f"  ⚠️  settle clock: {exc}")
 
 
 def _chores_last_s() -> dict:
@@ -10817,6 +10924,11 @@ def main() -> None:
         threading.Thread(target=_live_ufc_refresher, daemon=True).start()
         threading.Thread(target=_live_mlb_refresher, daemon=True).start()
         threading.Thread(target=_live_scores_refresher, daemon=True).start()
+        # The settle's own clock, and a final on any live board grades now.
+        threading.Thread(target=_settle_clock, daemon=True, name="settle-clock").start()
+        print(f"  Settle: every {SETTLE_CLOCK_S}s a look at the live boards — a "
+              f"final grades its bets within the minute, and the lane's own "
+              f"clock runs whatever the boards are doing.")
         print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
               f"{LIVE_IDLE_S}s otherwise.")
         print(f"  NFL/CFB/NBA/WNBA live scores: same clock, one process, "
