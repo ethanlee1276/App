@@ -222,8 +222,19 @@ def _live_prob(bet, market, side, line, current, game, live, progress,
     if market not in lp.HITTER_MARKETS:
         return None
     spot = stat.get("spot")
+    # WHO IS AT THE PLATE, AND WHOSE. His teammate's spot says where the
+    # queue stands; the other side's batter says nothing about it, and
+    # until 2026-10-13 was counted anyway — every hitter's chance read off
+    # the opposition's order for half of each inning. In the field, his
+    # side is due the spot after its own completed trips (the parlay
+    # checker's arithmetic, now shared as liveprops.due_spot).
+    my_side = stat.get("side") or ("home" if is_home else "away")
     at_bat = (progress or {}).get(normalize_name(sit.get("batter", ""))) or {}
-    at_bat_spot = at_bat.get("spot")
+    if at_bat.get("spot") and at_bat.get("side", my_side) == my_side:
+        at_bat_spot = at_bat.get("spot")
+    else:
+        at_bat_spot = lp.due_spot(r.get("pa") for r in (progress or {}).values()
+                                  if isinstance(r, dict) and r.get("side") == my_side and r.get("spot"))
     if not spot or not at_bat_spot:
         return None
     rates = lp.rates_for(market, rec_means.get(name) or {}, spot)

@@ -508,10 +508,11 @@ def _mlb_situation(deep, leg: dict, game: dict, live: dict) -> dict:
         # His own side is due the spot after its last completed trip: the
         # team's plate appearances so far, round the nine (a pinch hitter
         # bats in the spot he took, so his trips count in it too).
-        pas = [(p.get("stats") or {}).get("pa") for p in rows
-               if isinstance(p, dict) and str(p.get("team") or "") == team and p.get("spot")]
-        if pas and all(isinstance(v, (int, float)) for v in pas):
-            out["batter_spot"] = int(sum(pas)) % 9 + 1
+        from .mlb import liveprops as lp
+        due = lp.due_spot((p.get("stats") or {}).get("pa") for p in rows
+                          if isinstance(p, dict) and str(p.get("team") or "") == team and p.get("spot"))
+        if due:
+            out["batter_spot"] = due
     if "on_mound" in me:
         out["on_mound"] = bool(me.get("on_mound"))
     bf = (me.get("stats") or {}).get("bf")

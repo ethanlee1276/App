@@ -169,6 +169,48 @@ def test_situation_rides_along_on_live_rows():
     assert rows[0]["game"]["situation"]["batter"] == "Freddie Freeman"
 
 
+def test_a_hitter_in_the_field_is_read_off_his_own_sides_order():
+    """His team is in the field, so the man at the plate is the OTHER
+    side's. Until 2026-10-13 the tracker took that batter's lineup spot as
+    where our hitter's queue stood, which read every hitter's chance off
+    the opposition's order for half of every inning. His side is due the
+    spot after its own completed trips (liveprops.due_spot, the parlay
+    checker's arithmetic, shared)."""
+    from engine import livepicks as LPK
+    from engine.mlb import liveprops as lp
+    lad = {"mookie betts": 1, "will smith": 2, "freddie freeman": 3, "teo hernandez": 4,
+           "max muncy": 5, "tommy edman": 6, "andy pages": 7, "miguel rojas": 8, "dalton rushing": 9}
+    progress = {n: {"hits": 0.0, "spot": sp, "pa": 3.0 if sp <= 4 else 2.0, "side": "home"}
+                for n, sp in lad.items()}
+    progress["heliot ramos"] = {"hits": 1.0, "spot": 7, "pa": 2.0, "side": "away"}
+    # 22 Dodger trips so far: the next is the fifth spot.
+    assert lp.due_spot(r["pa"] for r in progress.values() if r["side"] == "home") == 5
+    assert lp.due_spot([]) is None and lp.due_spot([3.0, None]) is None, "a missing count is no order"
+    bet = {"player": "Freddie Freeman", "team": "LAD", "market": "hits", "side": "OVER", "line": 1.5}
+    means = {"freddie freeman": {"hits": 1.1}}
+    game = {"home": "LAD", "away": "SF"}
+
+    def chance(half, batter):
+        live = {"state": "live", "home_score": 3, "away_score": 2,
+                "situation": {"inning": 6, "half": half, "outs": 1, "batter": batter}}
+        out = {}
+        p = LPK._live_prob(bet, "hits", "OVER", 1.5, 0.0, game, live, progress, means, set(), out=out)
+        return p, out["opp_left"]
+
+    p, left = chance("Top", "Heliot Ramos")               # Giants batting: Freeman is in the field
+    outs = lp.outs_left(6, "Top", 1, True, 3, 2)
+    assert left == round(lp.remaining_pa(3, 5, outs), 1), "his own side's next spot, not the Giants' batter"
+    assert left != round(lp.remaining_pa(3, 7, outs), 1) and 0 < p < 1
+    p2, left2 = chance("Bottom", "Will Smith")             # his side batting: the man at the plate's spot
+    assert left2 == round(lp.remaining_pa(3, 2, lp.outs_left(6, "Bottom", 1, True, 3, 2)), 1)
+    assert 0 < p2 < 1
+    progress["mookie betts"]["pa"] = None                   # one count missing: no order, no number
+    assert LPK._live_prob(bet, "hits", "OVER", 1.5, 0.0, game,
+                          {"state": "live", "home_score": 3, "away_score": 2,
+                           "situation": {"inning": 6, "half": "Top", "outs": 1, "batter": "Heliot Ramos"}},
+                          progress, means, set()) is None
+
+
 def test_team_bets_track_from_the_live_score():
     """Game totals / team totals / run lines get a live "current" from the
     scoreboard, sportsbook-style. Runs only go up, so totals can clear or

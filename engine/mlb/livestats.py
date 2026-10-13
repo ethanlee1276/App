@@ -137,6 +137,10 @@ def parse_live_stats(boxscore: dict) -> dict[str, dict]:
             if pit.get("battersFaced") is not None:
                 row["bf"] = float(pit.get("battersFaced") or 0)
             if row:
+                # WHICH SIDE HE IS ON, so the tracker can tell whether the
+                # man at the plate is a teammate or the opposition
+                # (livepicks._live_prob, 2026-10-13).
+                row["side"] = side
                 out[normalize_name(name)] = row
     return out
 

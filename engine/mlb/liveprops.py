@@ -117,6 +117,25 @@ def outs_left(inning: int, half: str, outs: int, is_home: bool,
     return float(this_half + 3 * full_innings_after)
 
 
+def due_spot(pas) -> int | None:
+    """The lineup spot a side is due NEXT, from its hitters' completed
+    plate appearances: the team's trips so far, round the nine. A pinch
+    hitter bats in the spot he took, so his trips count in it too.
+
+    This is how a hitter's place in the queue is read while HIS SIDE IS
+    IN THE FIELD — the man at the plate is the other team's, and his spot
+    says nothing about when our hitter is up. (The Live tab counted him
+    anyway until 2026-10-13, so every home hitter's chance was read off
+    the visitors' order for half of every inning; the parlay checker had
+    it right and this is its arithmetic, shared.) None when any hitter's
+    count is missing: a guess at the order is worse than no number.
+    """
+    pas = list(pas)
+    if not pas or any(not isinstance(v, (int, float)) for v in pas):
+        return None
+    return int(sum(pas)) % 9 + 1
+
+
 def remaining_pa(spot: int, at_bat_spot: int, team_outs_left: float) -> float:
     """Expected plate appearances left for the hitter in ``spot``.
 

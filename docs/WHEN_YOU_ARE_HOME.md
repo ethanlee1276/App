@@ -1009,11 +1009,15 @@ first). Paste back anything that prints an error or looks off.
       fighter's line, so a fight leg reads "not on our board". Say if you
       want it added.
     * **The Live tab's own tracked picks** use the same baseball live
-      model, and they have a bug I fixed in the checker. When the other
-      team is batting, they count the batter at the plate as the next man
-      up for our hitter's side. The checker now works out his side's next
-      spot from its own plate appearances. Say yes and I'll fix it in
-      engine/livepicks the same way.
+      model, and they had a bug I had fixed in the checker: when the
+      other team was batting, they counted the batter at the plate as
+      the next man up for our hitter's side, so every hitter's live
+      chance read off the opposition's order for half of each inning.
+      Done 2026-10-13 (Ethan: "add all of them"): the tracker now works
+      out his side's next spot from its own plate appearances, with the
+      checker's arithmetic shared (engine/mlb/liveprops.due_spot). The
+      "PA left" on a tracked hitter follows his own lineup now. Nothing
+      to run.
 
 39. **A leg that isn't on our board gets our own read, and a weak leg
     gets better legs** (2026-10-13, Ethan on "Josh Allen Over 5.5 Carries
