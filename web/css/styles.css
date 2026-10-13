@@ -8213,6 +8213,9 @@ body.has-deck #rail-live { display: none; }
 /* The profit calendar on the Record page (2026-09-05): a Sunday-first
    month grid, a cell per day, green or red by sign and deeper by size. */
 .rc-card { padding: 12px 14px; margin-bottom: 18px; }
+/* The calendar's two books (recCalendarsHTML): Edge bets | Most Likely. */
+.rc-books { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.rc-books .ra-range { min-height: 32px; padding: 5px 12px; font-size: var(--fs-sm); }
 .rc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .rc-h { text-align: center; font-size: var(--fs-xs); color: var(--text-mute); padding: 2px 0; }
 .rc-day { display: flex; flex-direction: column; align-items: center; justify-content: center;

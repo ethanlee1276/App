@@ -4192,25 +4192,33 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         NOT GATED, for the reason `_receipts_csv` gives: every row is
         settled, public, and the evidence the subscription is sold on.
         `sport` narrows to the page's scope; empty means every league.
+        `book` is the calendar tapped (2026-10-13, Ethan: "There should be a
+        profit calendar for both edge bets and most likely bets for all
+        sports"): `edge` (or nothing) for the edge picks, `likely` for the
+        Most Likely half, each pick once; anything else is a 400.
         """
         import re as _re
         date = (q.get("date") or [""])[0][:10]
         sport = (q.get("sport") or [""])[0].lower()[:5]
+        book = (q.get("book") or [""])[0].lower()[:8]
         if not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
             return self._send(400, b'{"error":"date must be YYYY-MM-DD"}', ".json")
         if sport and not _re.fullmatch(r"[a-z]{2,5}", sport):
             return self._send(400, b'{"error":"unknown sport"}', ".json")
+        if book not in ("", "edge", "likely"):
+            return self._send(400, b'{"error":"book is edge or likely"}', ".json")
         try:
             from engine import ledger as L
             conn = L.connect()
             try:
-                rows = L.settled_on(conn, date, sport=sport or None)
+                rows = L.settled_on(conn, date, sport=sport or None,
+                                    categories=L.LIKELY_HALF if book == "likely" else L.EDGE_BOOKS)
             finally:
                 conn.close()
         except Exception:                                    # noqa: BLE001
             return self._send(503, b'{"error":"record unavailable"}', ".json")
         net = round(sum((r.get("pnl_units") or 0) for r in rows), 2)
-        out = {"date": date, "sport": sport, "rows": rows, "net_units": net}
+        out = {"date": date, "sport": sport, "book": book or "edge", "rows": rows, "net_units": net}
         return self._send(200, json.dumps(out).encode(), ".json")
 
     def _record_bets(self, q):

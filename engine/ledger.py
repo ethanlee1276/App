@@ -6755,7 +6755,7 @@ def pnl_curve(conn, sport: str | None = None,
 
 
 def edge_state(conn, sport: str | None = None,
-               since: str | None = None) -> dict:
+               since: str | None = None, category: tuple | None = None) -> dict:
     """Where the edge book stands past its last settled day: the bets still
     ``open`` (waiting on a result), the day of the ``oldest_open``, and the
     day the ``last_placed`` bet belongs to, whatever became of it.
@@ -6766,12 +6766,14 @@ def edge_state(conn, sport: str | None = None,
     the page could not say whether the bets were waiting on results or the
     board had stopped placing them. These three facts say which.
 
-    The curve's own book and stake rule (BOOK, staked), its benched-league
-    rule for the pooled scope and its window, so the two can never
-    disagree. Only rows whose day is a calendar date count: an old NFL row
-    keyed by a week label sorts after every date and is no day at all."""
+    The calendar's own book and stake rule, its benched-league rule for
+    the pooled scope and its window, so the two can never disagree:
+    ``category`` is the book, the edge picks (EDGE_BOOKS, the cells the page
+    draws since 2026-09-30) unless the Most Likely half (LIKELY_HALF) is
+    asked for. Only rows whose day is a calendar date count: an old NFL
+    row keyed by a week label sorts after every date and is no day at all."""
     day = day_expr()
-    books, bargs = books_sql(BOOK)
+    books, bargs = books_sql(EDGE_BOOKS if category is None else category)
     where = (f"{books} AND stake_units > 0 "
              f"AND {day} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'")
     args: list = list(bargs)
@@ -6989,7 +6991,7 @@ def settled_page(conn, sport: str | None = None, kind: str | None = None,
 
 
 def settled_on(conn, date: str, sport: str | None = None,
-               categories: tuple = BOOK) -> list[dict]:
+               categories: tuple | None = None) -> list[dict]:
     """Every settled pick on one slate date — the profit calendar's tap.
 
     Ethan, 2026-09-05: "a profit calendar on record page ... tap a day to
@@ -7002,19 +7004,34 @@ def settled_on(conn, date: str, sport: str | None = None,
     record and never appears here, for the reason it never shares a
     headline. Each row carries the side-aware CLV and process grade the
     receipts carry, so one cell's list reads like the list below it.
+
+    TWO CALENDARS SINCE 2026-10-13 (Ethan: "There should be a profit
+    calendar for both edge bets and most likely bets for all sports").
+    ``categories`` is the book the tapped calendar draws, and the page's
+    endpoint always names it (server._record_day): the edge picks
+    (EDGE_BOOKS, the cells the page has drawn since 2026-09-30) or the Most
+    Likely half (LIKELY_HALF), whose board picks the Most Likely list also
+    holds are one row each, as in its record (`books_sql`). Left out, it is
+    BOOK, the same default `pnl_curve` has, so the ledger's own readouts
+    keep counting one book.
     """
     # THE CELL'S OWN DAY. The cells are `pnl_curve`'s days, and it groups
     # by `day_expr()` — the game day, falling back to `date`. This matched
     # `date` alone, which for the NFL is a week label ("2026-W03"), so a
     # Sunday cell read "131-85 · +2.4u" and its list said "No settled bets
     # on this day" (Ethan's screenshot, 2026-09-28).
-    marks = ",".join("?" * len(categories))
+    cats = BOOK if categories is None else tuple(categories)
+    if BOARD_CATEGORY in cats:
+        books, bargs = books_sql(cats)          # each pick once (see books_sql)
+        where = f"AND {books} AND stake_units > 0"
+    else:
+        marks = ",".join("?" * len(cats))
+        where, bargs = f"AND category IN ({marks}) AND stake_units > 0", list(cats)
     q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
          "pnl_units, hit_prob, closing_line, stake_units, loss_cause, "
          "why_tag, why_note FROM bets "
-         f"WHERE status IN ('won','lost','push') AND {day_expr()}=? "
-         f"AND category IN ({marks}) AND stake_units > 0")
-    args: list = [date, *categories]
+         f"WHERE status IN ('won','lost','push') AND {day_expr()}=? {where}")
+    args: list = [date, *bargs]
     if sport:
         q += " AND sport=?"
         args.append(sport)
@@ -8337,6 +8354,10 @@ LIKELY_BOOKS = ("likely", LIKELY_LIVE_CATEGORY)
 #: about how either book is graded changes; only which rows the top
 #: number counts, and the paper share is said next to it.
 POOLED_BOOKS = BOOK + ("likely", BOARD_CATEGORY)
+#: THE MOST LIKELY HALF, EACH PICK ONCE: the Most Likely list's books and
+#: the one board's picks the list does not hold (`books_sql`). EDGE_BOOKS
+#: and this are POOLED_BOOKS row for row.
+LIKELY_HALF = LIKELY_BOOKS + (BOARD_CATEGORY,)
 #: The edge board on its own — the rows the edge board journals, staked
 #: or paper — for the verdict's side-by-side. BOOK also carries the
 #: staked Most Likely rows, which the Most Likely report counts too, so
@@ -8363,8 +8384,7 @@ def pooled_report(conn, sport: str | None = None,
         # edge tile and Most Likely tile add up to the combined one —
         # Ethan, 2026-10-02: "it feels like all these numbers are not
         # adding up".
-        "likely": performance(conn, sport, category=LIKELY_BOOKS + (BOARD_CATEGORY,),
-                              since=since),
+        "likely": performance(conn, sport, category=LIKELY_HALF, since=since),
         # The edge board's own curve and receipts: since 2026-09-30 it is
         # the HEADLINE (audit P1-1), so its ribbon's form dots and the
         # running P&L must be its own rows, not the pooled journal's.
@@ -9792,8 +9812,36 @@ RECORD_PAGE_ONLY = (
     "predmarket", "shadow_books", "loss_patterns", "hypothesis_lab",
     "edge_now", "edge_trend", "self_tuning", "board_learning", "regrades",
     "prereg", "audit_log", "forecast_heads", "likely_by_sport",
-    "clv_leadtime", "market_words",
+    "clv_leadtime", "market_words", "likely_calendar",
 )
+
+
+#: The fields a calendar cell and its month line read; the curve's running
+#: totals and windows are the edge record's, not the calendar's.
+CALENDAR_FIELDS = ("date", "day_u", "n", "w", "l")
+
+
+def likely_calendar(conn, since: str | None = None) -> dict:
+    """THE MOST LIKELY PROFIT CALENDAR (Ethan, 2026-10-13: "There should be
+    a profit calendar for both edge bets and most likely bets for all
+    sports"). ``{"all": {"days", "state"}, sport: {...}}``: the Most Likely
+    half (LIKELY_HALF, each pick once) by slate day, through `pnl_curve`
+    so its days, stake rule, benched rule and window are the edge
+    calendar's exactly, and the same three facts past its last settled
+    day (`edge_state`). Every league with a record scope, and All bets.
+
+    Page-only (RECORD_PAGE_ONLY): only the Record page draws a calendar,
+    and the slim copy every other page reads stays as it was."""
+    def one(sport):
+        days = [{k: p[k] for k in CALENDAR_FIELDS}
+                for p in pnl_curve(conn, sport, since=since, category=LIKELY_HALF)]
+        return {"days": days,
+                "state": edge_state(conn, sport, since=since, category=LIKELY_HALF)}
+    out = {"all": one(None)}
+    for sp in TRACKED_SPORTS:
+        if not is_benched(sp):
+            out[sp] = one(sp)
+    return out
 
 
 def export_json(conn, path) -> None:
@@ -9876,6 +9924,8 @@ def export_json(conn, path) -> None:
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),
         "edge_state": edge_state(conn, since=since),
+        # The Most Likely calendar, every scope (likely_calendar).
+        "likely_calendar": likely_calendar(conn, since=since),
         "recent": recent_settled(conn, RECENT_LIMIT, since=since),
         "model_eras": era_report(conn),
         "longshots": longshot_report(conn, since=since),

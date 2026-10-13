@@ -17275,6 +17275,10 @@ let _recCalMonth = null;     // "YYYY-MM" in view; null = this month (recCalenda
 let _recCalDay = null;       // the day whose bets are open, or null
 let _recCalScope = "all";    // the sport the page is scoped to, for the day's fetch
 window._recCalSetMonth = (ym) => { _recCalMonth = ym; _recCalDay = null; renderRecord(); };
+let _recCalBook = "edge";    // "edge" or "likely": the calendar in view (recCalendarsHTML)
+window._recCalSetBook = (b) => {
+  _recCalBook = b === "likely" ? "likely" : "edge"; _recCalMonth = null; _recCalDay = null; renderRecord();
+};
 
 /* The months the curve has a settled day in, oldest first. */
 function recCalMonths(curve) {
@@ -17338,7 +17342,9 @@ function recCalMonthHTML(curve, ym, empty) {
    nothing settled says why, from `state` (ledger.edge_state): how many
    bets are still waiting on a result and since when, or the day the last
    one was placed. `now` is for the tests; the page passes nothing. */
-function recCalendarHTML(curve, state, now) {
+function recCalendarHTML(curve, state, now, opts) {
+  const o = opts || {};
+  const ml = o.book === "likely";
   const months = recCalMonths(curve);
   if (!months.length) return "";
   const at = now || new Date();
@@ -17350,7 +17356,7 @@ function recCalendarHTML(curve, state, now) {
   const st = state || {};
   const open = Number(st.open) || 0;
   const empty = ym === cur && !settledHere
-    ? `No edge bet has settled in ${at.toLocaleDateString(undefined, { month: "long" })} yet.${open
+    ? `No ${ml ? "Most Likely pick" : "edge bet"} has settled in ${at.toLocaleDateString(undefined, { month: "long" })} yet.${open
       ? ` ${open} ${open === 1 ? "is" : "are"} still waiting on a result${st.oldest_open ? `, the oldest from ${short(st.oldest_open)}` : ""}.`
       : st.last_placed ? ` The last one was placed ${short(st.last_placed)}.` : ""}`
     : "";
@@ -17362,15 +17368,35 @@ function recCalendarHTML(curve, state, now) {
     arrow(i < months.length - 1 ? months[i + 1] : null, "›", "Later month")}</span>` : "";
   return `
     <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
-      <span class="sub">— units by day, edge book only; tap a day for its bets</span>${nav}</div>
+      <span class="sub">— units by day, ${ml ? "Most Likely picks, each counted once" : "edge book only"}; tap a day for its bets</span>${nav}</div>${o.extra || ""}
     <div class="card rc-card">${recCalMonthHTML(curve, ym, empty)}<div id="rc-day"></div></div>`;
+}
+
+/* BOTH BOOKS, ONE CALENDAR. Ethan, 2026-10-13: "There should be a profit
+   calendar for both edge bets and most likely bets for all sports". A
+   switch picks the book; each keeps its own days, its own month line and
+   its own day list. `likely` is this scope's Most Likely calendar
+   (ledger.likely_calendar: the Most Likely half, each pick once, the
+   numbers its record prints); a record without one keeps the edge
+   calendar alone. Nothing when neither book has a settled day. */
+function recCalendarsHTML(src, likely) {
+  const both = !!(likely && Array.isArray(likely.days));
+  const book = both && _recCalBook === "likely" ? "likely" : "edge";
+  if (!recCalMonths(src.curve).length && !(both && recCalMonths(likely.days).length)) return "";
+  const extra = both ? `<div class="rc-books" role="group" aria-label="Which picks">${
+    [["edge", "Edge bets"], ["likely", "Most Likely"]].map(([k, w]) => `<button type="button" class="ra-range${
+      k === book ? " active" : ""}" data-act="recCalSetBook" data-arg="${k}" aria-pressed="${k === book}">${w}</button>`).join("")}</div>` : "";
+  const html = book === "likely" ? recCalendarHTML(likely.days, likely.state, null, { book, extra })
+    : recCalendarHTML(src.curve, src.edge_state, null, { book, extra });
+  return html || `<div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar</div>${extra}
+    <div class="card rc-card"><p class="rc-foot">No ${book === "likely" ? "Most Likely pick" : "edge bet"} has settled here yet.</p></div>`;
 }
 
 /* A tapped day: its line from the curve at once, its rows from the
    record endpoint, scoped the way the page is. If the endpoint cannot be
    reached (a static host has no /api), the rows this page already holds
    for that day are shown and the panel says that is what they are. */
-async function recCalDayOpen(date, curve, recent) {
+async function recCalDayOpen(date, curve, recent, book) {
   _recCalDay = date;
   const host = document.getElementById("rc-day");
   if (!host) return;
@@ -17385,7 +17411,7 @@ async function recCalDayOpen(date, curve, recent) {
   let rows = null, note = "";
   try {
     const sport = _recCalScope === "all" ? "" : _recCalScope;
-    const r = await fetch(`/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}`);
+    const r = await fetch(`/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}&book=${book === "likely" ? "likely" : "edge"}`);
     if (r.ok) rows = ((await r.json()) || {}).rows || [];
   } catch (e) { rows = null; }
   if (_recCalDay !== date) return;                         // another day was tapped
@@ -21365,7 +21391,8 @@ async function renderRecord() {
      and last the working (is there an edge at all). The book sections
      still lead a sport's numbers (09-01, 09-05) — they sit under the
      verdict on every scope, pooled on "All bets". */
-  const calendar = recCalendarHTML(src.curve, src.edge_state);
+  const likelyCal = (d.likely_calendar || {})[scope];
+  const calendar = recCalendarsHTML(src, likelyCal);
   /* Open / Settled, the way every book's My Bets splits it (research in
      docs/VISUAL_REDESIGN.md). This page is the settled half; the open
      half lives on the Live tab with its progress, and the count here is
@@ -21528,10 +21555,16 @@ async function renderRecord() {
   recBetsMount(host, src.recent || [], o.settled, scope, from);
   // The calendar's days are doors to their bets; a day left open on the
   // last render (a range chip, a month arrow) is reopened.
+  // The Most Likely calendar's taps ask for its own book; the rows this
+  // page holds (`src.recent`) are the edge picks, so it has no fallback.
+  const onLikely = _recCalBook === "likely" && !!(likelyCal && Array.isArray(likelyCal.days));
+  const calCurve = onLikely ? likelyCal.days : src.curve;
+  const calRecent = onLikely ? [] : src.recent || [];
+  const calBook = onLikely ? "likely" : "edge";
   host.querySelectorAll(".rc-day[data-date]").forEach((el) =>
-    el.addEventListener("click", () => recCalDayOpen(el.dataset.date, src.curve, src.recent || [])));
+    el.addEventListener("click", () => recCalDayOpen(el.dataset.date, calCurve, calRecent, calBook)));
   if (_recCalDay && host.querySelector(`.rc-day[data-date="${_recCalDay}"]`))
-    recCalDayOpen(_recCalDay, src.curve, src.recent || []);
+    recCalDayOpen(_recCalDay, calCurve, calRecent, calBook);
 }
 
 /* The five rooms of the Record page.
@@ -50343,6 +50376,7 @@ const ACTS = {
   recSetSplit: (el, a) => window._recSetSplit(a),
   recShowPicks: () => window._recShowPicks(),
   recCalSetMonth: (el, a) => window._recCalSetMonth(a),
+  recCalSetBook: (el, a) => window._recCalSetBook(a),
   zenoCalSetMonth: (el, a) => window._zenoCalSetMonth(a),
   recSetRange: (el, a) => window._recSetRange(a),
   perfSetRange: (el, a) => window._perfSetRange(a),

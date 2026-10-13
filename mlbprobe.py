@@ -66,8 +66,8 @@ def journal_report(ledger_path, history_path, record_path, log_path, today: str,
     from engine import ledger as L
     out = []
     day = L.day_expr()
-    edge = tuple(L.BOOK)
-    likely = ("likely", L.BOARD_CATEGORY)
+    edge = tuple(L.EDGE_BOOKS)      # the edge calendar's own book
+    likely = tuple(L.LIKELY_HALF)   # the Most Likely calendar's (rows, not deduped)
     first = (_dt.date.fromisoformat(today) - _dt.timedelta(days=days - 1)).isoformat()
     try:
         lc = _ro(ledger_path)

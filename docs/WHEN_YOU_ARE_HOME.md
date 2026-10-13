@@ -19,8 +19,9 @@ answered or finished block moved there, word for word.
 Everything from 2026-10-12 and 10-13, in order: the parlay checker in
 Ask (live chances, the hedge, a better number, saved slips on the Live
 tab, our read on a leg no board carries, better legs, the cash-out
-check, the last-leg alert), the subscription check on every open, and
-the MLB profit calendar that stopped at September.
+check, the last-leg alert), the subscription check on every open, the
+MLB profit calendar that stopped at September, and a Most Likely profit
+calendar beside the edge one (step 46; nothing to run).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -1362,6 +1363,24 @@ first). Paste back anything that prints an error or looks off.
         database.
       * Edge rows settle but the calendar still stops: the record file
         isn't being written. The RECORD line says when it last was.
+
+46. **Two profit calendars: Edge bets and Most Likely, every league**
+    (2026-10-13, Ethan: "There should be a profit calendar for both edge
+    bets and most likely bets for all sports"). The Record page's
+    calendar has a switch under its title, **Edge bets | Most Likely**,
+    on every league and on All bets.
+    * **Most Likely** draws the same picks its record counts: the Most
+      Likely list and the one board, each pick once, so a pick on both is
+      one cell entry. Its months, its month line, its empty-month sentence
+      ("No Most Likely pick has settled in October yet...") and its day
+      taps are its own.
+    * **Two fixes on the edge side.** A tapped day's list still included
+      the staked Most Likely bets after the cells moved to edge picks
+      only (2026-09-30), so a cell could read 3-1 over a list of five. It
+      lists only edge picks now. The "still waiting on a result" count
+      from step 45 counts only edge picks too.
+    Nothing to set or run; it arrives with the next pull. To see it: Record
+    page, pick a league, tap **Most Likely** above the calendar.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

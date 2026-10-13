@@ -136,7 +136,9 @@ def test_the_endpoint_is_routed_validated_and_ungated():
     i = SERVER.index("def _record_day(")
     body = SERVER[i:SERVER.index("\n    def ", i + 10)]
     assert 'r"\\d{4}-\\d{2}-\\d{2}"' in body and "400" in body, "a bad date is refused, not queried"
-    assert "L.settled_on(conn, date, sport=sport or None)" in body
+    assert "L.settled_on(conn, date, sport=sport or None," in body
+    assert 'categories=L.LIKELY_HALF if book == "likely" else L.EDGE_BOOKS' in body, "each calendar names its book"
+    assert 'if book not in ("", "edge", "likely"):' in body, "an unknown book is refused, not guessed"
     assert "_entitled" not in body, "settled rows are the evidence the subscription is sold on"
     assert '"net_units"' in body and '"rows"' in body
     assert "conn.close()" in body
@@ -147,11 +149,12 @@ def _node(js):
     node = shutil.which("node")
     if not node:
         return None
-    src = "\n".join(_fn(n) for n in ("escapeHtml", "recCalMonths", "recCalU", "recCalMonthHTML", "recCalendarHTML"))
+    src = "\n".join(_fn(n) for n in ("escapeHtml", "recCalMonths", "recCalU", "recCalMonthHTML", "recCalendarHTML",
+                                       "recCalendarsHTML"))
     prog = f"""
       const toneOf = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
       const icon = (n) => `<i data-icon="${{n}}"></i>`;
-      let _recCalMonth = null, _recCalDay = null;
+      let _recCalMonth = null, _recCalDay = null, _recCalBook = "edge";
       {src}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """
@@ -306,6 +309,130 @@ def test_edge_state_is_the_curves_own_book_and_rides_the_record():
     assert '"edge_state": edge_state(conn, since=since),' in body
 
 
+# --- both books (2026-10-13) ---------------------------------------------------------
+# Ethan: "There should be a profit calendar for both edge bets and most likely
+# bets for all sports".
+def _two_books():
+    conn = L.connect(":memory:")
+    rows = [
+        # ts, sport, date, player, market, side, line, odds, status, category, stake, pnl
+        ("2026-10-01T12:00:00", "mlb", "2026-10-01", "A", "hits", "UNDER", 0.5, -110, "won", "main", 1.0, 0.91),
+        ("2026-10-01T12:00:00", "mlb", "2026-10-01", "B", "hits", "OVER", 0.5, -110, "lost", "likely_live", 0.25, -0.25),
+        ("2026-10-01T12:00:00", "mlb", "2026-10-01", "C", "hits", "OVER", 0.5, -110, "won", "likely", 1.0, 0.91),
+        ("2026-10-01T12:00:00", "mlb", "2026-10-01", "C", "hits", "OVER", 0.5, -110, "won", "board", 1.0, 0.91),
+        ("2026-10-01T12:00:00", "mlb", "2026-10-01", "D", "hits", "OVER", 0.5, -110, "won", "board", 1.0, 0.91),
+        ("2026-10-02T12:00:00", "mlb", "2026-10-02", "E", "hits", "OVER", 0.5, -110, "lost", "board", 1.0, -1.0),
+        ("2026-10-03T12:00:00", "mlb", "2026-10-03", "F", "hits", "OVER", 0.5, -110, "open", "board", 1.0, None),
+        ("2026-10-02T12:00:00", "wnba", "2026-10-02", "G", "pts", "OVER", 20.5, -110, "won", "likely", 1.0, 0.91),
+        ("2026-10-02T12:00:00", "nfl", "2026-10-02", "H", "rec_yds", "OVER", 50.5, -110, "won", "board", 1.0, 0.91),
+    ]
+    for r in rows:
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,odds,status,category,"
+            "stake_units,pnl_units) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", r)
+    conn.commit()
+    return conn
+
+
+def test_the_most_likely_calendar_is_its_record_by_day_each_pick_once():
+    conn = _two_books()
+    cal = L.likely_calendar(conn)
+    mlb = cal["mlb"]
+    assert mlb["days"] == [{"date": "2026-10-01", "day_u": 1.57, "n": 3, "w": 2, "l": 1},
+                           {"date": "2026-10-02", "day_u": -1.0, "n": 1, "w": 0, "l": 1}], mlb["days"]
+    # The board's C is the Most Likely list's C: one pick, at the list's row.
+    perf = L.performance(conn, "mlb", category=L.LIKELY_HALF)
+    assert perf["settled"] == sum(p["n"] for p in mlb["days"]) == 4
+    assert abs(sum(p["day_u"] for p in mlb["days"]) - (0.91 + 0.91 - 0.25 - 1.0)) < 1e-9
+    assert mlb["state"] == {"open": 1, "oldest_open": "2026-10-03", "last_placed": "2026-10-03"}
+    assert set(cal) >= {"all", "nfl", "mlb"} and "wnba" not in cal, "a benched league has no scope"
+    assert [p["date"] for p in cal["all"]["days"]] == ["2026-10-01", "2026-10-02"]
+    assert cal["all"]["days"][1]["n"] == 2, "All bets: MLB's E and the NFL's H; the benched WNBA row stays out"
+    # The edge calendar never takes a Most Likely row, staked or not.
+    assert [p["n"] for p in L.pnl_curve(conn, "mlb", category=L.EDGE_BOOKS)] == [1]
+    assert L.edge_state(conn, "mlb") == {"open": 0, "oldest_open": None, "last_placed": "2026-10-01"}
+    assert "likely_calendar" in L.RECORD_PAGE_ONLY, "only the Record page draws a calendar"
+
+
+def test_a_tapped_day_lists_the_book_its_calendar_draws():
+    conn = _two_books()
+    edge = L.settled_on(conn, "2026-10-01", sport="mlb", categories=L.EDGE_BOOKS)
+    assert [r["player"] for r in edge] == ["A"], "the staked Most Likely row (B) is the other calendar's"
+    # Unnamed, it is the ledger's own book (BOOK), as pnl_curve's default is.
+    assert [r["player"] for r in L.settled_on(conn, "2026-10-01", sport="mlb")] == ["A", "B"]
+    ml = L.settled_on(conn, "2026-10-01", sport="mlb", categories=L.LIKELY_HALF)
+    assert [r["player"] for r in ml] == ["B", "C", "D"], [r["player"] for r in ml]
+    day = L.likely_calendar(conn)["mlb"]["days"][0]
+    assert abs(day["day_u"] - sum(r["pnl_units"] for r in ml)) < 1e-9 and day["n"] == len(ml)
+
+
+def test_the_endpoint_serves_either_book_and_refuses_a_third():
+    import server
+    from engine import ledger as LL
+    real = LL.connect
+    sent = []
+    h = object.__new__(server.Handler)
+    h._send = lambda code, body, ext=".json", headers=None: sent.append((code, json.loads(body)))
+    ready = [_two_books() for _ in range(3)]          # built before the patch: they connect too
+    LL.connect = lambda *a, **k: ready.pop(0)
+    try:
+        h._record_day({"date": ["2026-10-01"], "sport": ["mlb"]})
+        assert sent[-1][0] == 200 and [r["player"] for r in sent[-1][1]["rows"]] == ["A"] and sent[-1][1]["book"] == "edge"
+        h._record_day({"date": ["2026-10-01"], "sport": ["mlb"], "book": ["likely"]})
+        got = sent[-1][1]
+        assert [r["player"] for r in got["rows"]] == ["B", "C", "D"] and got["book"] == "likely"
+        assert got["net_units"] == 1.57
+        h._record_day({"date": ["2026-10-01"], "book": ["zeno"]})
+        assert sent[-1][0] == 400
+    finally:
+        LL.connect = real
+
+
+def test_the_calendar_switches_between_the_two_books():
+    likely = """{days: [{date: "2026-09-05", day_u: 1.8, n: 3, w: 2, l: 1}, {date: "2026-09-20", day_u: -1, n: 1, w: 0, l: 1}],
+                 state: {open: 4, oldest_open: "2026-10-02", last_placed: "2026-10-12"}}"""
+    got = _node(f"""
+      const oct = new Date(2026, 9, 13);
+      const src = {{curve: {CURVE}, edge_state: {{open: 0, last_placed: "2026-09-13"}}}};
+      const L = {likely};
+      const month = (h) => (h.match(/data-month="([^"]+)"/) || [])[1];
+      const foot = (h) => ((h.match(/<p class="rc-foot">([\\s\\S]*?)<\\/p>/) || [])[1] || "").replace(/\\s+/g, " ");
+      const chips = (h) => (h.match(/data-act="recCalSetBook" data-arg="(edge|likely)" aria-pressed="(true|false)"/g) || []);
+      const realDate = Date; Date = class extends realDate {{ constructor(...a) {{ super(...(a.length ? a : [2026, 9, 13])); }} }};
+      const edge = recCalendarsHTML(src, L);
+      _recCalBook = "likely";
+      const ml = recCalendarsHTML(src, L);
+      const mlEmpty = recCalendarsHTML(src, {{days: [], state: {{}}}});
+      const noLikely = recCalendarsHTML(src, undefined);
+      const neither = recCalendarsHTML({{curve: []}}, {{days: [], state: {{}}}});
+      _recCalBook = "edge";
+      const edgeEmpty = recCalendarsHTML({{curve: []}}, L);
+      Date = realDate;
+      return {{
+        edgeChips: chips(edge), edgeSub: /edge book only/.test(edge), edgeMonth: month(edge), edgeFoot: foot(edge),
+        mlChips: chips(ml), mlSub: /Most Likely picks, each counted once/.test(ml), mlMonth: month(ml), mlFoot: foot(ml),
+        mlEmpty: foot(mlEmpty), mlEmptyChips: chips(mlEmpty).length,
+        noLikely: /rc-books/.test(noLikely), noLikelySub: /edge book only/.test(noLikely),
+        neither, edgeEmpty: foot(edgeEmpty),
+      }};""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["edgeChips"] == ['data-act="recCalSetBook" data-arg="edge" aria-pressed="true"',
+                                'data-act="recCalSetBook" data-arg="likely" aria-pressed="false"'], got["edgeChips"]
+    assert got["edgeSub"] and got["edgeMonth"] == "2026-10", "the edge calendar is the default"
+    assert got["edgeFoot"].endswith("The last one was placed Sep 13."), got["edgeFoot"]
+    assert got["mlChips"][1].endswith('aria-pressed="true"') and got["mlSub"] and got["mlMonth"] == "2026-10"
+    assert got["mlFoot"] == ("<b>October 2026</b> · No Most Likely pick has settled in October yet. 4 are still "
+                             "waiting on a result, the oldest from Oct 2."), got["mlFoot"]
+    assert got["mlEmpty"] == "No Most Likely pick has settled here yet." and got["mlEmptyChips"] == 2, \
+        "a book with nothing settled says so, with the switch to the other"
+    assert got["noLikely"] is False and got["noLikelySub"], "an older record keeps the edge calendar alone"
+    assert got["neither"] == "", "nothing settled in either book: no calendar"
+    assert got["edgeEmpty"] == "No edge bet has settled here yet."
+    assert "recCalSetBook: (el, a) => window._recCalSetBook(a)," in APP
+    assert 'window._recCalSetBook = (b) => {' in APP
+
+
 def test_the_record_page_draws_it_first_and_scopes_the_tap():
     """Under the curve when it shipped (09-05); at the top of the room since
     2026-09-08 — Ethan: "Maybe we put the profit calendars at the top of
@@ -313,20 +440,23 @@ def test_the_record_page_draws_it_first_and_scopes_the_tap():
     i = APP.index("async function renderRecord()")
     body = APP[i:APP.index("\nfunction _recordRooms(", i)]
     assert "_recCalScope = scope;" in body
-    assert "const calendar = recCalendarHTML(src.curve, src.edge_state);" in body
+    assert "const calendar = recCalendarsHTML(src, likelyCal);" in body
+    assert "const likelyCal = (d.likely_calendar || {})[scope];" in body
     assert "const receipts = calendar\n" in body, "the calendar no longer leads the room"
     assert 'host.querySelectorAll(".rc-day[data-date]")' in body
-    assert "recCalDayOpen(el.dataset.date, src.curve, src.recent || [])" in body
+    assert "recCalDayOpen(el.dataset.date, calCurve, calRecent, calBook)" in body
+    assert "const calRecent = onLikely ? [] : src.recent || [];" in body, "the page holds edge rows only"
     day = _fn("recCalDayOpen")
     assert 'const sport = _recCalScope === "all" ? "" : _recCalScope;' in day
     assert "/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}" in day
+    assert '&book=${book === "likely" ? "likely" : "edge"}' in day, "a tap asks for the book its calendar draws"
     assert "if (_recCalDay !== date) return;" in day, "a slower fetch never overwrites a later tap"
     assert "rows = (recent || []).filter((b) => b.date === date);" in day, "a static host still shows what it holds"
     assert "${recCalDayBodyHTML(rows)}" in day
     body = _fn("recCalDayBodyHTML")
     assert "rows.map(recSettledRow)" in body, "the same row the receipts draw"
     assert "these are the rows this page already holds" in day
-    for sel in (".rc-grid", ".rc-day.pos.rc-3", ".rc-day.neg.rc-1", ".rc-day.open", ".rc-foot", ".rc-dayhead"):
+    for sel in (".rc-grid", ".rc-day.pos.rc-3", ".rc-day.neg.rc-1", ".rc-day.open", ".rc-foot", ".rc-dayhead", ".rc-books"):
         assert sel in CSS, sel
     assert "min-height: 44px" in CSS[CSS.index(".rc-day {"):CSS.index(".rc-day.blank")], "a thumb-sized cell"
 

@@ -68,7 +68,7 @@ def _report(d, today="2026-10-02", days=4, **paths):
 
 def test_each_day_says_what_was_journaled_and_what_there_is_to_settle_it():
     lines = _report(_files())
-    assert lines[0].startswith("JOURNAL  MLB, 2026-09-29 to 2026-10-02. edge = main + paper + likely_live with a stake")
+    assert lines[0].startswith("JOURNAL  MLB, 2026-09-29 to 2026-10-02. edge = main + paper with a stake")
     assert lines[1] == "  2026-09-29  nothing journaled · finals 0/0 · stat lines 0"
     assert lines[2] == ("  2026-09-30  edge   1 (open 0 · won 1 · lost 0 · push 0 · void 0) · unstaked 0 · "
                         "Most Likely 0 · other 0 · finals 0/0 · stat lines 1")

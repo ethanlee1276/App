@@ -146,7 +146,13 @@ APP_JS_BUDGET_KB = 494
 #: tab's wall recheck and the paywall's lapse banner, after its sentence
 #: moved to the server to pay for part of it (608.80 -> 609.18 KB gz).
 #: Told to Ethan.
-BOOT_BUDGET_KB = 610
+#: 610 -> 611 on 2026-10-13 by the profit calendars (Ethan: "the mlb profit
+#: calander isn't updating, it's stuck on September", then "There should
+#: be a profit calendar for both edge bets and most likely bets for all
+#: sports"): this month drawn with its empty line, then the Edge bets |
+#: Most Likely switch and its styles (609.37 -> 610.10 KB gz; app.js
+#: 492.89 -> 493.60, inside its 494). Told to Ethan.
+BOOT_BUDGET_KB = 611
 
 
 def _gz_trimmed(rel: str) -> int:
