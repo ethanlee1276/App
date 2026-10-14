@@ -130,7 +130,7 @@ CACHE_S = 1800
 
 #: Words for why the board did not carry the prop, keyed on what is true.
 POSITION_MARKETS_NFL = {
-    "QB": ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int", "rush_yds", "pass_rush_yds"),
+    "QB": ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int", "rush_yds", "pass_rush_yds", "rush_att"),
     "RB": ("rush_yds", "rush_att", "receptions", "rec_yds", "rush_rec_yds"),
     "WR": ("rec_yds", "receptions"), "TE": ("receptions", "rec_yds"),
     "K": ("kick_pts", "fg_made"), "DEF": ("tackles_ast",),
@@ -682,7 +682,12 @@ def football(conn, board: dict | None, league: str, leg: dict, who: dict, asof=N
     if not rows:
         return None
     pos = _position(league, who.get("position"), market)
-    if pos == "QB" and market in ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int", "pass_rush_yds"):
+    # His real games only, as the board reads a quarterback
+    # (sources/nflverse.quarterbacked): his runs too, since a relief
+    # appearance's kneel-downs are no read on a starter's carries
+    # (2026-10-14, when his carries went on the board).
+    if pos == "QB" and market in ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int", "pass_rush_yds",
+                                    "rush_yds", "rush_att"):
         real = _qb_real_games(conn, league, who["player"], seasons, before=asof)
         if real:
             rows = [g for g in rows if (g["season"], g["period"]) in real]
@@ -715,9 +720,9 @@ def football(conn, board: dict | None, league: str, leg: dict, who: dict, asof=N
     prior_games = 0.0
     kind = ""
     if not carried and before:
-        from .carry import MIN_PRIOR_GAMES, SEASON_PRIOR_FLOOR, SEASON_PRIOR_GAMES
+        from .carry import MIN_PRIOR_GAMES, SEASON_PRIOR_FLOOR, SEASON_PRIOR_GAMES, prior_measured
         from .form import compute_form
-        k = SEASON_PRIOR_GAMES.get(market)
+        k = SEASON_PRIOR_GAMES.get(market) if prior_measured(market, pos) else None
         last = [float(g["value"]) for g in before if g["season"] == season - 1]
         if k and len(last) >= MIN_PRIOR_GAMES and \
                 compute_form(list(logs), career, None).mean >= SEASON_PRIOR_FLOOR.get(market, 0.0):

@@ -92,7 +92,11 @@ def test_the_build_hands_it_to_the_prop_and_the_page_says_which_anchor():
              logs=[], career_avg=0.0, vs_opponent_avg=None, lines=[])
     assert p.form_prior_kind == ""
     src = open(os.path.join(ROOT, "engine", "sources", "nflverse.py"), encoding="utf-8").read()
-    assert "season_prior = (season_anchor(mine_before, spec.market, logs)" in src
+    # The position rides along since 2026-10-14: the anchor applies only
+    # where it was measured (carry.SEASON_PRIOR_POSITIONS — a
+    # quarterback's carries, measured on backs, keep his own games).
+    assert ("season_prior = (season_anchor(mine_before, spec.market, logs,\n"
+            "                                      spec.position or position_of(spec.market))") in src
     assert 'form_prior_kind="thin" if thin else "season" if season_prior else ""' in src
     assert "if carried is None and thin is None else None" in src, "a carried or thin player keeps his own anchor"
     proj = open(os.path.join(ROOT, "engine", "projection.py"), encoding="utf-8").read()

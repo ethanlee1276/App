@@ -581,17 +581,18 @@ QB_START_ATTEMPTS = 15.0
 QB_MARKETS = (PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT, PASS_RUSH_YDS)
 
 
-def season_anchor(prior_rows: list[dict], market: str, logs=None) -> dict | None:
+def season_anchor(prior_rows: list[dict], market: str, logs=None, position: str = "") -> dict | None:
     """{"anchor", "n", "k"} — his own last season as the form's anchor from
     week 4 (engine/carry.SEASON_PRIOR_GAMES, measured by seasonpriorfit.py):
     his per-game number over last season's regular-season games, read as
     player_game_logs reads a season (a quarterback's real games only). None
     for an unmeasured market, under MIN_PRIOR_GAMES games, or — given his
     ``logs`` this season — a form under SEASON_PRIOR_FLOOR, which the
-    measurement never scored."""
-    from ..carry import MIN_PRIOR_GAMES, SEASON_PRIOR_FLOOR, SEASON_PRIOR_GAMES
+    measurement never scored; and, given his ``position``, one the anchor
+    was not measured at (carry.SEASON_PRIOR_POSITIONS)."""
+    from ..carry import MIN_PRIOR_GAMES, SEASON_PRIOR_FLOOR, SEASON_PRIOR_GAMES, prior_measured
     k = SEASON_PRIOR_GAMES.get(market)
-    if not k:
+    if not k or (position and not prior_measured(market, position)):
         return None
     if logs is not None:
         from ..form import compute_form
@@ -608,7 +609,7 @@ def quarterbacked(row: dict, market: str) -> bool:
     """False for a passing row — or a quarterback's rushing row — from a
     game he did not really play in."""
     qb_row = market in QB_MARKETS or (
-        market == RUSH_YDS and _s(row, "position", "position_group").upper() == "QB")
+        market in (RUSH_YDS, RUSH_ATT) and _s(row, "position", "position_group").upper() == "QB")
     return not qb_row or _f(row, "attempts") >= QB_START_ATTEMPTS
 
 
@@ -810,6 +811,19 @@ POSITION_MARKETS = {
     "DEF": [(TACKLES_AST, "def")],
 }
 POSITION_MARKETS["QB"].append((PASS_RUSH_YDS, "starter"))
+# A QUARTERBACK'S CARRIES (2026-10-14; Ethan, "do 1-11", to "Quarterback
+# carries on the board itself? ... the market measured first, as the other
+# five were"). Measured in marketfit.py, the same harness and bar (ranking
+# AUC less one standard error at 0.60 or more, held out): 0.645 ± 0.027 on
+# 2025 (n 503), 0.632 ± 0.023 on 2024 (n 515) — above a back's carries in
+# the same runs (0.620, 0.586). No new credit: player_rush_attempts is
+# bought for every player on every event pull, and a quarterback's line
+# was arriving and being thrown away. Built from his real games this
+# season only (`quarterbacked`), three or more — no carry-in from last
+# season, no thin-sample build, no last-season anchor (carry
+# .SEASON_PRIOR_POSITIONS): the measurement scored starters three games
+# in, and the anchor was measured on backs.
+POSITION_MARKETS["QB"].append((RUSH_ATT, "starter"))
 POSITION_MARKETS["RB"].append((RUSH_REC_YDS, "rb1"))
 #: How many players a team gets at a position (QB: one, two with backups).
 TAKE = {"K": 1}
@@ -844,14 +858,20 @@ def role_for(position: str, rank: int, default: str) -> str:
 
 def position_of(market: str) -> str:
     """The position whose OWN market this is (its first in the table), else
-    the first that carries it — for a spec that did not say."""
+    the one that lists it nearest its own — for a spec that did not say.
+    Nearest, not first in the table (2026-10-14): a quarterback's carries
+    went on the end of his list, and the table opens with the quarterback,
+    so "the first that carries it" would have turned every carries spec
+    with no position into a quarterback's. A back lists carries second."""
     for pos, markets in POSITION_MARKETS.items():
         if markets[0][0] == market:
             return pos
+    best = None
     for pos, markets in POSITION_MARKETS.items():
-        if any(m == market for m, _r in markets):
-            return pos
-    return ""
+        for i, (m, _r) in enumerate(markets):
+            if m == market and (best is None or i < best[0]):
+                best = (i, pos)
+    return best[1] if best else ""
 
 
 def is_secondary(position: str, market: str) -> bool:
@@ -1215,6 +1235,11 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             continue
         mine, mine_before = stats_of.get(spec.player, []), prior_of.get(spec.player, [])
         logs = player_game_logs(mine, spec.player, spec.market, upto_week)
+        # A QUARTERBACK'S CARRIES stand on his own real games this season,
+        # three or more: the population marketfit measured (2026-10-14).
+        own_games = spec.market == RUSH_ATT and (spec.position or position_of(spec.market)) == "QB"
+        if own_games and len(logs) < MIN_LOGS:
+            continue
         carried = None
         if carry and index and len(logs) < MIN_LOGS:
             carried = _carry.carry_for(index, mine_before, spec.player,
@@ -1233,7 +1258,8 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         # HIS OWN LAST SEASON, FROM WEEK 4 ON (engine/carry
         # .SEASON_PRIOR_GAMES): the form is pulled toward last season's
         # per-game number by n/(n+k), measured market by market.
-        season_prior = (season_anchor(mine_before, spec.market, logs)
+        season_prior = (season_anchor(mine_before, spec.market, logs,
+                                      spec.position or position_of(spec.market))
                         if carried is None and thin is None else None)
         if thin is not None:
             baseline = thin["baseline"]

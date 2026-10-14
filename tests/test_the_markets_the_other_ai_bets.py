@@ -48,7 +48,9 @@ def test_the_book_is_asked_behind_the_guard_and_the_meter_counts_it():
 
 def test_the_slate_builds_the_props_a_quarterback_and_a_back_now_hold():
     qb = [m for m, _r in N.POSITION_MARKETS["QB"]]
-    assert qb == [PASS_YDS, "pass_td", PASS_ATT, PASS_CMP, "pass_int", RUSH_YDS, "pass_rush_yds"]
+    # A quarterback's carries joined the end of his list 2026-10-14 (Ethan,
+    # "do 1-11"), measured first in marketfit as these were.
+    assert qb == [PASS_YDS, "pass_td", PASS_ATT, PASS_CMP, "pass_int", RUSH_YDS, "pass_rush_yds", RUSH_ATT]
     assert RUSH_ATT in [m for m, _r in N.POSITION_MARKETS["RB"]]
     assert N.is_secondary("QB", RUSH_YDS) and N.SECONDARY_FLOOR[RUSH_YDS] == 8.0, \
         "a pocket passer with five yards a game gets no line nobody hangs"
@@ -58,7 +60,7 @@ def test_the_slate_builds_the_props_a_quarterback_and_a_back_now_hold():
     # A quarterback's relief-appearance rows stay out of every market of his.
     starter = {"position": "QB", "attempts": "31"}
     mop_up = {"position": "QB", "attempts": "4"}
-    for m in (PASS_ATT, PASS_CMP, RUSH_YDS):
+    for m in (PASS_ATT, PASS_CMP, RUSH_YDS, RUSH_ATT):
         assert N.quarterbacked(starter, m) and not N.quarterbacked(mop_up, m)
     assert N.quarterbacked({"position": "RB", "attempts": "0"}, RUSH_YDS)
 

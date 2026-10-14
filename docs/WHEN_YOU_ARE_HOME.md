@@ -168,7 +168,9 @@ slip down to its last leg now rings the Alerts bell too: it leads the
 Alerts page and counts on its badge until it settles (step 92; nothing to
 run). The NFL and college matchup check now counts the model's own Matchup
 step when the matchup scan has no lean on a player, as baseball's has all
-along, so those picks can reach Top (step 93; nothing to run). The
+along, so those picks can reach Top (step 93; nothing to run). A
+quarterback's carries are on the NFL board now, measured first as the
+other new markets were (step 94; AV). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -204,13 +206,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Football's matchup check counts the model's own Matchup step when the scan has no lean, as baseball's does`
+**A. The box has today's code.** The first line should end `A quarterback's carries are on the NFL board: measured first in marketfit (0.645 and 0.632 held out), built from his real games only`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 75c867c7 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 5ec994cf HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -301,8 +303,9 @@ the line-move pull, which wait on L and step 30 ("do 1-11"); each is
 struck through here as it is built.
 * **UFC in the parlay checker?** A fight leg reads "not on our board"
   today (step 38b).
-* **Quarterback carries on the board itself?** The market gets measured
-  first, as the other five were (step 39b).
+* ~~**Quarterback carries on the board itself?** The market gets measured
+  first, as the other five were (step 39b).~~ **Answered 2026-10-14: yes**
+  ("do 1-11"). Measured, cleared, built: step 94, AV.
 * ~~**The football matchup check.** Should the model's own matchup step
   count when the scan has no lean on him (step 39b)?~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 93.
@@ -1143,6 +1146,21 @@ graded; "a draw or no contest" means the void was right. NO BOUT WITHIN
 completeness. The last line counts the bug's voids and what they would
 have made or lost. Nothing changes: every grade stays as it is, as you
 said. "ESPN did not answer just now" on a line means run it again later.
+
+**AV. A quarterback's carries are on the NFL board** (step 94; read-only,
+seconds). After the next NFL build with lines hung (the props refresh),
+paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json; from engine.gate import board_source
+b = json.load(open(board_source('web/data/recommendations.json')))
+q = [r for r in b.get('recommendations') or [] if r.get('market') == 'rush_att' and r.get('position') == 'QB']
+print(len(q), 'quarterback carries rows')
+for r in q[:12]: print(r['player'], r.get('side'), r.get('line'), r.get('odds'), r.get('book'), r.get('projection'))"
+```
+A dozen or more rows on a full slate is it working (one per starter a book
+hangs carries on). `0 quarterback carries rows` with lines hung means
+say so.
 
 **AU. Saved slips settle with the Live tab closed** (step 91; read-only,
 seconds). After a night when a slip saved to My Bets from the parlay
@@ -4014,9 +4032,9 @@ first). Paste back anything that prints an error or looks off.
     the pick page draws in the walk from base to final — backs the pick
     when it moved our number 3% or more toward its side, is against it
     3% or more the other way, and says nothing in between. A market the
-    defence never moves has no step and says so: a quarterback's carries
-    show the run defence and keep it out of the number, so they still top
-    out at Strong. Touchdowns read their touchdown matchup as before. The
+    defence never moves says so: a quarterback's carries show the run
+    defence and keep it out of the number, so their step is flat ("not
+    enough to call") and they still top out at Strong. Touchdowns read their touchdown matchup as before. The
     parlay checker's read asks the same question the same way. The Most
     Likely page's explanation now says the football version in football
     (it had only baseball's words for this rule): app.js 494.489 of 495
@@ -4031,6 +4049,40 @@ first). Paste back anything that prints an error or looks off.
     no lean could not be called, and now holds the model's step to it (for
     the over, for the under, and too small to call). New:
     `tests/test_football_matchup_counts_the_models_own_step.py` (8 checks).
+94. **A quarterback's carries are on the NFL board** (2026-10-14, you: "do
+    1-11", to step 39b's "Quarterback carries on the board itself?"). AV
+    checks it. MEASURED FIRST, as the other new markets were, in
+    `marketfit.py`'s own harness and bar (ranking AUC less one standard
+    error at 0.60 or more, on a season held out): 0.645 ± 0.027 on 2025
+    (503 games) and 0.632 ± 0.023 on 2024 (515) — cleared both, and ranked
+    above a back's carries in the same runs (0.620, 0.586). So his carries
+    are one of his markets now: the odds pull has bought a carries line for
+    every player all along (no new credit), and a quarterback's now has a
+    prop to land on, priced through the board's chain to the Edge board
+    and, where it clears the bar, Most Likely, and settled off the same
+    box score (the nightly stores his carries too). BUILT FROM WHAT WAS
+    MEASURED: his real games this season only (a relief appearance's
+    kneel-downs never count), three or more; no carry-in from last season
+    and no last-season anchor, both measured on backs. The team-context
+    step reads his carries as it reads his rushing yards; the run defence
+    is shown and kept out of the number, so the matchup check's model step
+    is flat and his carries top out at Strong. The parlay checker's read
+    of a quarterback's runs now uses his real games too, and no longer
+    says the board doesn't build his carries. Found on the way: the
+    position a spec with none falls back to (`nflverse.position_of`) would
+    have turned every such carries spec into a quarterback's, because the
+    table opens with him; it now takes the position that lists the market
+    nearest its own, which gives every market the answer it had. Three
+    pins changed, told to you:
+    `tests/test_the_markets_the_other_ai_bets.py`'s quarterback list now
+    ends with carries and its relief-game check covers them;
+    `tests/test_an_off_board_leg_gets_our_read.py`'s Josh Allen carries
+    now read "we price other markets of his, not this one" (the fixture's
+    board priced only his passing yards), and the not-built reason is
+    checked on his catches instead; `tests/test_last_season_anchors_the_form.py`
+    pins the anchor call with the position it now hands in.
+    `docs/MARKET_CENSUS.md` regenerated (carries: QB, RB). New:
+    `tests/test_quarterback_carries_are_on_the_board.py` (7 checks).
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

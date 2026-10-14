@@ -73,6 +73,23 @@ cache without them prints "column absent" for those rows rather than a
 number. Nothing here moves a shelf — a figure that clears is wired by
 hand (odds key, POSITION_MARKETS, RANK_AUC), as the volume markets were.
 
+ROUND THREE, 2026-10-14 (Ethan, "do 1-11", to "Quarterback carries on the
+board itself? ... the market measured first, as the other five were"). A
+quarterback's carries (player_rush_attempts, already bought for every
+player) joins the candidates, the harness and the bar unchanged — ranking
+AUC less one standard error at 0.60 or more on the held-out season:
+
+    rush_att    QB   0.645 ± 0.027   n=503   held-out 2025   clears
+    rush_att    QB   0.632 ± 0.023   n=515   held-out 2024   clears
+    rush_att    RB   0.620 ± 0.023   n=638   held-out 2025   (the same run)
+    rush_att    RB   0.586 ± 0.024   n=614   held-out 2024
+
+So his carries went on the board (sources/nflverse.POSITION_MARKETS): his
+real games this season only, three or more, the population scored here.
+(A back's carries read 0.620 here against 0.632 in the 2026-09-27 run
+above, on the same harness: the 2025 file on disk has been refreshed
+since. Compare within one run.)
+
 Reads the nflverse cache only (and the FTN cache when present); writes
 nothing.
 """
@@ -101,7 +118,9 @@ CANDIDATES = [("pass_int", "QB", "count1"), ("pass_td", "QB", "count1"), ("pass_
               ("pass_cmp", "QB", "ou"), ("rush_att", "RB", "ou"), ("rush_yds", "QB", "ou"),
               ("rush_yds", "RB", "ou"), ("receptions", "WR", "ou"), ("rec_yds", "WR", "ou"),
               ("rush_rec_yds", "RB", "ou"), ("pass_rush_yds", "QB", "ou"),
-              ("kick_pts", "K", "ou"), ("fg_made", "K", "ou"), ("tackles_ast", "DEF", "ou")]
+              ("kick_pts", "K", "ou"), ("fg_made", "K", "ou"), ("tackles_ast", "DEF", "ou"),
+              # round three, 2026-10-14: a quarterback's carries
+              ("rush_att", "QB", "ou")]
 ROLE_COL = {"QB": "attempts", "RB": "carries", "WR": "targets", "K": "kick_att", "DEF": "tackles_ast"}
 ROLE_FLOOR = {"QB": 15.0, "RB": 8.0, "WR": 4.0, "K": 2.0, "DEF": 3.0}
 #: The box score's defensive positions, read as one role: a book hangs

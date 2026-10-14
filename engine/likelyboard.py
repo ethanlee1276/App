@@ -92,7 +92,7 @@ RECORD_MISS = 0.08
 #:              read the defence. A lean, where the scan has one, still
 #:              decides; a market whose number the defence never moves (a
 #:              quarterback's carries: defensevs shows it and keeps it out)
-#:              has no step to count, and says so;
+#:              has a flat step, "not enough to call";
 #:   mlb        the MLB scan's read (engine/mlb/scan — platoon split, the
 #:              starter's slugging allowed by hand, expected stats, park,
 #:              the opponent's strikeout rate…); where it has none, the

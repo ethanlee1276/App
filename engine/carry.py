@@ -241,6 +241,21 @@ SEASON_PRIOR_GAMES = {"rec_yds": 6.0, "receptions": 4.0, "rush_yds": 2.0, "rush_
 #: role has shrunk — 3 receiving yards a game after a 50-yard season — was
 #: never in it, and pulling him back to last season's job is a guess the
 #: bar never saw (Jauan Jennings, 3.1 -> 27.2 on the first local build).
+#: ...and only at the positions it was measured on, where seasonpriorfit
+#: scored only some (its MARKETS): a market not named here was measured
+#: on every position that carries it. A quarterback's carries went on the
+#: board 2026-10-14 (sources/nflverse, marketfit's round three) with the
+#: anchor measured on backs alone, so his read this season's real games
+#: only until the anchor is measured on quarterbacks.
+SEASON_PRIOR_POSITIONS = {"rush_att": ("RB",)}
+
+
+def prior_measured(market: str, position: str) -> bool:
+    """Was the season anchor for this market measured at this position?"""
+    allowed = SEASON_PRIOR_POSITIONS.get(market)
+    return allowed is None or str(position or "").upper() in allowed
+
+
 SEASON_PRIOR_FLOOR = {"rec_yds": 15.0, "receptions": 1.5, "rush_yds": 15.0, "rush_att": 5.0,
                       "pass_yds": 120.0, "pass_att": 18.0, "pass_cmp": 12.0, "rush_rec_yds": 30.0}
 

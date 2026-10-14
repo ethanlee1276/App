@@ -31,7 +31,7 @@ always because it was measured and found flat (the module's own notes say which)
 | player_pass_interceptions | Interceptions thrown | pass_int | yes (guarded) | QB | Poisson (engine/passtd.at_least) | Tier 3, 6.0% bar | no — no measured figure | yes | marketfit.py |
 | player_pass_longest_completion | Longest completion | — | no | — | — | — | — | — | — |
 | player_rush_yds | Rushing yards | rush_yds | yes | QB, RB | normal | Tier 2, 3.0% bar | yes — 0.761 (constant, measured) | yes | marketfit.py |
-| player_rush_attempts | Carries | rush_att | yes (guarded) | RB | normal | Tier 1, 2.5% bar | yes — 0.632 (constant, measured) | yes | marketfit.py |
+| player_rush_attempts | Carries | rush_att | yes (guarded) | QB, RB | normal | Tier 1, 2.5% bar | yes — 0.632 (constant, measured) | yes | marketfit.py |
 | player_rush_longest | Longest rush | — | no | — | — | — | — | — | — |
 | player_rush_tds | Rushing touchdowns | — | no | — | — | — | — | — | — |
 | player_receptions | Receptions | receptions | yes | RB, WR, TE | discrete normal | Tier 1, 2.5% bar | yes — 0.770 (constant, measured) | yes | marketfit.py |
@@ -73,7 +73,7 @@ always because it was measured and found flat (the module's own notes say which)
 | pass_int | QB | rate model (engine/passint: picks per attempt × projected attempts) | Poisson (engine/passtd.at_least) | QB ×1.5 on qb_pass_int | — | pace only | — | — | — | — | no — no measured figure |
 | rush_yds | QB, RB | form blend + usage bridge | normal | QB shown (qb_rush_yds), not in the number; RB ×0.72 on rb_rush_yds | measured wind/rain/cold | pace + PROE (rush) | yes | teammate out | dl_out_rb | calibration, form weights, player memory | yes — 0.761 (constant, measured) |
 | pass_rush_yds | QB | form blend | normal | QB no rating | — | pace only | — | — | — | — | yes — 0.683 (constant, measured) |
-| rush_att | RB | form blend | normal | RB shown (rb_rush_att), not in the number | — | pace + PROE (rush) | — | — | — | — | yes — 0.632 (constant, measured) |
+| rush_att | QB, RB | form blend | normal | QB no rating; RB shown (rb_rush_att), not in the number | — | pace + PROE (rush) | — | — | — | — | yes — 0.632 (constant, measured) |
 | receptions | RB, WR, TE | form blend + usage bridge | discrete normal | RB ×0.47 on rb_rec; WR ×0.45 on qb_pass_yds; TE ×0.86 on qb_pass_yds | measured wind/rain/cold (WRTE) | pace + PROE (pass) | yes | QB change, teammate out | cb_out_wr_rec, cb_out_te, slot_out_wr2 | calibration, form weights, player memory | yes — 0.770 (constant, measured) |
 | rec_yds | RB, WR, TE | form blend + usage bridge | normal | RB ×0.39 on rb_rec_yds; WR ×0.57 on qb_pass_yds; TE ×0.79 on qb_pass_yds | measured wind/rain/cold (WRTE) | pace + PROE (pass) | yes | QB change, teammate out | cb_out_wr_yds, cb_out_te, slot_out_wr2, ol_out_wr | calibration, form weights, player memory | yes — 0.733 (constant, measured) |
 | rush_rec_yds | RB | form blend | normal | RB no rating | — | pace only | — | — | — | — | yes — 0.629 (constant, measured) |

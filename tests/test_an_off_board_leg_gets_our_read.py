@@ -130,7 +130,13 @@ def test_josh_allens_carries_get_the_boards_own_model():
     assert 6.0 < row["projection"] < 10.0 and row["proj_std"] > 0, row["projection"]
     assert row["proj_low"] < row["projection"] < row["proj_high"]
     assert row["season_games"] == 5 and row["carried"] == 0
-    assert row["why_off"] == "our board does not build that market for quarterbacks"
+    # The board builds a quarterback's carries since 2026-10-14 (Ethan, "do
+    # 1-11"; marketfit's round three): this one is off it because the
+    # fixture's board priced only his passing yards.
+    assert row["why_off"] == "we price other markets of his, not this one"
+    card0 = SR.game_card(_nfl_board(), "BUF", ALLEN, "nfl")
+    assert SR.why_off(_nfl_board(), "nfl", dict(ALLEN, market="receptions"), {"player": "Josh Allen"}, "QB",
+                      card0) == "our board does not build that market for quarterbacks"
     steps = [s["key"] for s in row["chain"]["steps"]]
     assert {"matchup", "weather", "injury", "player", "lineup"} <= set(steps), steps
     # THE SLIP'S BET is the row's, not the side the model would have taken.
@@ -158,7 +164,7 @@ def test_the_grader_prices_the_read_says_the_facts_and_asks_the_four_checks():
     assert abs(raw - SG.prob_at_line(at["row"], "rush_att", "over", 5.5)) < 1e-9
     assert at["verdict"] == SG.verdict(at["prob"], at["prob"] - SG.implied(-130))
     rd = at["read"]
-    assert rd["why_off"].startswith("our board does not build") and rd["games"] == 5
+    assert rd["why_off"] == "we price other markets of his, not this one" and rd["games"] == 5
     c = at["row"]["read_checks"]
     from engine import likelyboard as LB
     assert set(c["checks"]) == {"model", "matchup", "market", "record"}
@@ -167,7 +173,7 @@ def test_the_grader_prices_the_read_says_the_facts_and_asks_the_four_checks():
     assert rd["would_be"] == c["tier_label"] and rd["passed"] == [k for k in ("model", "matchup", "market", "record")
                                                                  if c["checks"][k] is True]
     facts = {f["k"]: f["t"] for f in SG.why({"nfl": _nfl_board()}, at)}
-    assert facts["Our read"].startswith("Not on our board — our board does not build that market for quarterbacks")
+    assert facts["Our read"].startswith("Not on our board — we price other markets of his, not this one")
     assert facts["Projection"].startswith("We project ") and "against 5.5" in facts["Projection"]
     assert "Cleared 5.5 in" in facts["Recent games"] and facts["This season"].endswith("over 5 games")
     assert "shown, not in our number" in facts["Defense"]
