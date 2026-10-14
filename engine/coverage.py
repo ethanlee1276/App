@@ -503,9 +503,9 @@ def nba(conn) -> SportCoverage:
                     "python3 ingest.py nba --seasons 2024-2026"),
         _odds_layer(),
         _prop_closes_layer(conn, "nba"),
-        Layer("Schedule feed", "the free NBA CDN answers 'is there a slate "
+        Layer("Schedule feed", "ESPN's free scoreboard answers 'is there a slate "
               "tonight' before a single credit is spent", OK,
-              "cdn.nba.com, keyless"),
+              "ESPN, keyless (the league's own CDN answers the box 403 since 2026-10-14)"),
         Layer("Availability / injury report", "§2 says a prop is conditional "
               "until the player's status is confirmed; without a feed every "
               "projection assumes she plays", MISSING,

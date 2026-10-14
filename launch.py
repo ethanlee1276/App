@@ -5311,7 +5311,7 @@ def preflight() -> None:
         ("NFL live scores (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"),
         ("NFL schedules (nflverse)", "https://raw.githubusercontent.com/nflverse/nflverse-data/master/README.md"),
         ("NFL weekly stats/pbp (releases)", "https://github.com/nflverse/nflverse-data/releases"),
-        ("NBA schedule/boxscores (CDN)", "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"),
+        ("NBA schedule/boxscores (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"),
         ("College football (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"),
         ("Polymarket markets (Gamma)", "https://gamma-api.polymarket.com/markets?limit=1"),
         ("Polymarket tape (Data API)", "https://data-api.polymarket.com/trades?limit=1"),

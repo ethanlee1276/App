@@ -5199,14 +5199,25 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
     permanent one: props graded off partial stats self-healed on the next
     pass, game bets never did.
     """
+    # EITHER SPELLING OF THE CLUB (2026-10-14). The basketball history is
+    # ESPN's, which spells six NBA and six WNBA clubs its own way (GS, NY,
+    # LV, WSH...); a bet carries the league's (GSW, NYK, LVA, WAS...), and a
+    # moneyline on the Aces could never meet a game stored under "LV". The
+    # games row is found under any spelling and the sides compared as the
+    # league spells them; `nbacodes.py` rewrote the NBA's rows, the WNBA's
+    # are matched here as they stand.
+    from .divisions import canonical as _canon, spellings as _spellings
+    me = _canon(b["sport"], b["player"])
+    mine = _spellings(b["sport"], b["player"])
+    marks = ",".join("?" * len(mine))
     if b["market"] == "moneyline":
         rows = hist_conn.execute(
             f"SELECT home, away, home_score, away_score, game_id "
-            f"FROM games WHERE {where} AND (home=? OR away=?)",
-            (*wargs, b["player"], b["player"])).fetchall()
+            f"FROM games WHERE {where} AND (home IN ({marks}) OR away IN ({marks}))",
+            (*wargs, *mine, *mine)).fetchall()
 
         def actual(row):
-            pick_home = row["home"] == b["player"]
+            pick_home = _canon(b["sport"], row["home"]) == me
             # Stored as line 0.5 / side OVER: actual 1.0 = pick won.
             return 1.0 if ((row["home_score"] > row["away_score"])
                            == pick_home) else 0.0
@@ -5237,21 +5248,23 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
             # right one.
             away_tok, _, home_tok = str(b["player"] or "").partition("@")
             if away_tok and home_tok:
+                both = sorted(set(_spellings(b["sport"], home_tok)) | set(_spellings(b["sport"], away_tok)))
+                bm = ",".join("?" * len(both))
                 near = hist_conn.execute(
                     f"SELECT home, away, home_score, away_score, game_id "
-                    f"FROM games WHERE {where} AND (home IN (?,?) OR away IN (?,?))",
-                    (*wargs, home_tok, away_tok, home_tok, away_tok)).fetchall()
+                    f"FROM games WHERE {where} AND (home IN ({bm}) OR away IN ({bm}))",
+                    (*wargs, *both, *both)).fetchall()
                 if len({r["game_id"] for r in near}) == 1:
                     rows = near
         return rows, (lambda r: float(r["home_score"]) + float(r["away_score"]))
     # spread / team_total: player = the team; its own margin or score.
     rows = hist_conn.execute(
         f"SELECT home, away, home_score, away_score, game_id "
-        f"FROM games WHERE {where} AND (home=? OR away=?)",
-        (*wargs, b["player"], b["player"])).fetchall()
+        f"FROM games WHERE {where} AND (home IN ({marks}) OR away IN ({marks}))",
+        (*wargs, *mine, *mine)).fetchall()
 
     def actual(row):
-        home_side = row["home"] == b["player"]
+        home_side = _canon(b["sport"], row["home"]) == me
         if b["market"] == "spread":
             return float((row["home_score"] - row["away_score"])
                          if home_side

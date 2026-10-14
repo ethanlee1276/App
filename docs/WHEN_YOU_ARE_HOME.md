@@ -207,7 +207,11 @@ WNBA always have, with the clubs in the league's own codes (step 103; BB).
 On your word ("do the shot chart and futures on espn"), the NBA shot chart
 now reads ESPN's play-by-play and the NBA futures ESPN's schedule, and the
 weekly refit gives each fitter forty-five minutes, not fifteen (step 104;
-BC).
+BC). BC came back clean on a real final (every check `ok`; 1,206 games still
+to play, the count the league publishes before the Cup's last 24). And a
+moneyline, spread or total on a basketball club ESPN spells its own way
+(the WNBA's Aces, Liberty, Sparks, Valkyries, Sun and Mystics) now meets its
+game: grading finds the game under either spelling (step 105; BD).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -245,13 +249,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The NBA shot chart and the NBA futures read ESPN; the weekly refit gets forty-five minutes a fitter`
+**A. The box has today's code.** The first line should end `A game-line bet meets its game under either spelling of the club, the WNBA's included`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 33186015 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 2cb0521d HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1373,6 +1377,19 @@ where the fold puts it. The second should print about 1,230 games (the whole
 regular season, until opening night) in the league's codes. From the next
 nightly, the shot chart fills itself: the last three days' finals and 300
 older games a night, this season's then last season's.
+**Run 2026-10-14: every check `ok` on the 2026-06-13 final (221 shots;
+threes from 23 feet, median 26; rim shots 2.2 feet; corner threes 36%);
+1,206 games still to play; the NBA board reads `preseason`.**
+
+**BD. Game-line bets that waited on a spelling** (step 105; read-only,
+seconds). Run it before this lands and again the morning after:
+```
+cd /srv/qellys && python3 -c "import sqlite3; c = sqlite3.connect('file:data/ledger.db?mode=ro', uri=True); print(c.execute(\"SELECT sport, market, COUNT(*) FROM bets WHERE status='open' AND market IN ('moneyline','spread','total','team_total') AND date < date('now','-2 days') GROUP BY sport, market\").fetchall())"
+```
+It lists game-line bets still open more than two days after their date,
+by league. Any WNBA or NBA row before is a bet on a club ESPN spells its
+own way; after the next settle pass (minutes) they grade off the stored
+final, and the second run should list none of them. Paste both.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4526,6 +4543,20 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_deepfit.py`: the bound's wording (the check, 1 minute to an
     hour, is unchanged). New there: ESPN's fold, a read keeps no summary it
     downloaded, the box check; `nbashotcheck.py`.
+105. **A game-line bet meets its game under either spelling of the club**
+    (2026-10-14; BD checks it). ESPN spells six NBA and six WNBA clubs its
+    own way, the history holds ESPN's, and a moneyline, spread or total
+    looked its game up by the league's code alone — so a bet on the Aces
+    ("LVA") never met a final stored under "LV" and stayed open. The NBA's
+    stored rows were rewritten (BB); now the grading itself finds the game
+    under any spelling (`divisions.spellings`) and compares the sides as the
+    league spells them, so the WNBA's grade as they stand, and any league
+    whose feeds disagree is covered the same way. The WNBA's table of
+    ESPN's spellings lacked Washington ("WSH" for the league's "WAS"); it
+    has it now. Also: the coverage page's NBA schedule line and the doctor's
+    host check name ESPN, not the league's CDN. No pin changed. New:
+    `tests/test_a_game_bet_meets_its_game_under_either_spelling.py` (3
+    checks; all three fail on the old code).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

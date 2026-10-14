@@ -114,7 +114,7 @@ ALIASES = {
             "PHO": "PHX", "BRK": "BKN", "CHO": "CHA", "WSH": "WAS",
             "UTAH": "UTA"},
     "wnba": {"LV": "LVA", "NY": "NYL", "LA": "LAS", "GS": "GSV",
-             "CONN": "CON"},
+             "CONN": "CON", "WSH": "WAS"},
     # ESPN's hockey spellings onto the league's own.
     "nhl": {"LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL",
             "UTAH": "UTA", "WAS": "WSH"},
@@ -125,6 +125,16 @@ def canonical(sport: str, team: str) -> str:
     """The one abbreviation this league's map is keyed on."""
     t = (team or "").strip().upper()
     return ALIASES.get(sport, {}).get(t, t)
+
+
+def spellings(sport: str, team: str) -> list[str]:
+    """Every way this league's feeds spell one club: the code as given, the
+    league's own, and every alias of it ("GSW" -> GS, GSW). A stored game
+    and a bet can each hold any of them (2026-10-14: ESPN's spellings in the
+    history, the league's on every bet)."""
+    t = (team or "").strip()
+    canon = canonical(sport, t)
+    return sorted({t, canon} | {k for k, v in ALIASES.get(sport, {}).items() if v == canon})
 
 
 def group_of(sport: str, team: str) -> tuple[str, str]:
