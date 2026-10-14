@@ -590,6 +590,174 @@ button.cc-sd:hover { border-color: var(--border); }
 .mp-pt { fill: var(--brand); }
 .cc-bars + .mp-velo, .mp-velo + .cc-bars { margin-top: 14px; }
 
+/* THE HIT PAGE (2026-10-14, Ethan's four renders of it, js/chart-mlb.js
+   `page`): his season over his club's park — the logo and the name, his
+   face, his name with his position and number, the season to pick and
+   five numbers on glass — then his recent games, the game's card with its
+   final and every at-bat, the game's summary, and the park with every
+   ball he put in play and the three thirds as tiles with bars. */
+.mb-hero { container-type: inline-size; }
+.mb-hero-in { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas: "top top top" "team face who" "tiles tiles tiles"; align-items: center; gap: 10px 12px;
+  padding: 12px 14px 14px; }
+.mb-hero-top { grid-area: top; display: flex; align-items: center; min-height: 30px; padding-right: 44px; }
+.mb-pick { position: relative; display: inline-flex; align-items: center; }
+.mb-pick select, .mb-pick.one { appearance: none; -webkit-appearance: none; padding: 6px 28px 6px 12px; border-radius: 999px;
+  border: var(--hairline) solid color-mix(in oklab, var(--text) 22%, transparent);
+  background: color-mix(in oklab, var(--bg) 55%, transparent); color: var(--text);
+  font: inherit; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+.mb-pick.one { padding-right: 12px; cursor: default; }
+.mb-pick:not(.one)::after { content: "▾"; position: absolute; right: 11px; top: 50%; transform: translateY(-50%); pointer-events: none;
+  font-size: 11px; color: var(--text-dim); }
+.mb-pick select:hover { border-color: var(--brand); }
+.mb-pick option { background: var(--panel); color: var(--text); }
+.mb-hero-team { grid-area: team; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.mb-hero-face { grid-area: face; display: grid; place-items: center; }
+.mb-hero-face .cc-face { width: 92px; height: 92px; border: 2px solid color-mix(in oklab, var(--ta, var(--brand)) 60%, var(--text));
+  background: color-mix(in oklab, var(--bg) 50%, transparent);
+  box-shadow: 0 10px 28px color-mix(in oklab, var(--bg) 80%, transparent); }
+.mb-hero-face .cc-init { font-size: 30px; }
+.mb-hero-who { grid-area: who; display: flex; flex-direction: column; align-items: flex-end; min-width: 0; text-align: right;
+  line-height: 1.02; }
+.mb-hero-who small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--text-dim); }
+.mb-hero-who b { font-family: var(--font-display); font-size: clamp(22px, 6.6cqi, 40px); font-weight: 800; letter-spacing: .02em;
+  text-transform: uppercase; color: var(--text); overflow-wrap: anywhere; }
+.mb-hero-who span { margin-top: 6px; font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: .1em; color: var(--text-dim);
+  white-space: pre; }
+.mb-hero-tiles { grid-area: tiles; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 2px; }
+.mb-ht { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; padding: 9px 4px 8px;
+  border-radius: var(--radius); border: var(--hairline) solid color-mix(in oklab, var(--text) 18%, transparent);
+  background: color-mix(in oklab, var(--bg) 58%, transparent); }
+.mb-ht b { font-family: var(--font-mono); font-size: clamp(16px, 4.8cqi, 26px); line-height: 1; color: var(--text); }
+.mb-ht span { font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
+.mb-cover { margin: 8px 2px 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
+@container (max-width: 420px) {
+  .mb-hero-in { gap: 8px; padding: 10px 10px 12px; }
+  .mb-hero-face .cc-face { width: 72px; height: 72px; }
+  .mb-hero-team .cc-hero-name b { font-size: 19px; }
+  .mb-hero-tiles { gap: 4px; }
+  .mb-ht span { letter-spacing: .06em; }
+}
+#cc-overlay .mb-hero { margin-top: 0; }
+
+/* his recent games: the window, what he did over it, and a chip a game */
+.mb-recent { margin-top: 2px; }
+.mb-row-h { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin: 4px 0 8px; }
+.mb-last { margin: 0 2px 8px; font-size: var(--fs-sm); color: var(--text-dim); }
+.mb-last span { margin-right: 4px; font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
+.mb-last b { font-family: var(--font-mono); color: var(--text); }
+.mb-chips .cc-chip.mb-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 112px;
+  padding: 8px 10px; text-align: left; }
+.mb-chip-t { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.2; }
+.mb-chips .mb-chip-t small { font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
+.mb-chip-t span { font-size: var(--fs-xs); font-weight: 600; color: var(--text-mute); }
+.mb-chips .mb-chip-t b { margin-top: 3px; font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+.mb-chip-t em { font-style: normal; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em; color: var(--brand); }
+.mb-chip-m { display: grid; place-items: center; }
+.mb-chips .mb-chip.on { box-shadow: inset 0 0 0 1px var(--brand); }
+.mb-chips .mb-chip.on .mb-chip-t b { color: var(--brand); }
+
+/* the game: the day and the opponent, the final, his numbers, every at-bat */
+.mb-game { container-type: inline-size; }
+.mb-game-h { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 10px; }
+.mb-when { font-size: var(--fs-sm); color: var(--text-dim); }
+.mb-when b { color: var(--text); font-weight: 700; }
+.mb-res { padding: 3px 10px; border-radius: 999px; border: var(--hairline) solid var(--border); font-style: normal;
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 800; color: var(--text-dim); }
+.mb-res.w { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.mb-res.l { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.mb-board { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; margin-bottom: 10px;
+  padding: 12px 14px; border-radius: var(--radius); border: var(--hairline) solid var(--border-soft); background: var(--panel); }
+.mb-side { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mb-side.r { justify-content: flex-end; text-align: right; }
+.mb-side span { display: flex; flex-direction: column; line-height: 1; }
+.mb-side b { font-size: var(--fs-sm); letter-spacing: .12em; font-weight: 800; color: var(--text-dim); }
+.mb-side em { margin-top: 4px; font-style: normal; font-family: var(--font-mono); font-size: clamp(26px, 8cqi, 40px); font-weight: 800; color: var(--text); }
+.mb-fin { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.mb-fin small { font-size: var(--fs-2xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 800; color: var(--text-dim); }
+.mb-fin b { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: var(--radius-sm);
+  border: 1.5px solid currentColor; font-family: var(--font-mono); font-size: var(--fs-md); color: var(--text-dim); }
+.mb-fin b.w { color: var(--brand); }
+.mb-fin b.l { color: var(--text-mute); }
+.cc-tile.hot { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, var(--panel)); }
+.cc-tile.hot b { color: var(--brand); }
+.mb-sub-h { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
+.mb-sub { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-xs); letter-spacing: .14em; text-transform: uppercase;
+  font-weight: 800; color: var(--text-dim); }
+.mb-sub-h .cc-tools { margin-left: auto; }
+.mb-c-mph { font-family: var(--font-mono); color: var(--text-dim); }
+.mb-c-pt { color: var(--text); }
+.mb-c-res { display: flex; flex-direction: column; min-width: 0; }
+.mb-rs { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text); }
+.mb-rs.hr { color: var(--brand); }
+.mb-rs.h { color: var(--good); }
+.mb-rs.k { color: var(--bad); }
+.mb-rs.bb { color: var(--text-dim); }
+.mb-c-res small { font-size: var(--fs-2xs); color: var(--text-mute); }
+.cc-c-more { grid-column: 1 / -1; min-width: 0; }
+.mb-seq { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 0 2px 22px; }
+.mb-seq small { flex: 0 0 100%; font-size: var(--fs-2xs); color: var(--text-mute); }
+.mb-pc { padding: 2px 7px; border-radius: 999px; border: var(--hairline) solid var(--border); font-style: normal;
+  font-family: var(--font-mono); font-size: var(--fs-2xs); white-space: nowrap; color: var(--text-dim); }
+.mb-pc.c { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.mb-pc.w { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.mb-pc.x { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.mb-pc.b { border-style: dashed; color: var(--text-mute); }
+.mb-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+.mb-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+  border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text);
+  font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+.mb-btn:hover, .mb-btn[aria-pressed="true"] { border-color: var(--brand); }
+.mb-cap { margin: 0 2px 10px; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
+.mb-stats .mb-cap { margin: 10px 2px 0; }
+.mb-big .cc-tile b { font-size: clamp(22px, 4.4vw, 30px); }
+
+/* the park: his club's own under the drawing, the wall's distances, the
+   thirds' shares in the foul ground and the three tiles with their bars */
+.mb-dist { container-type: inline-size; }
+.mb-park { background: var(--bg); }
+.mb-park .venue-photo { z-index: 0; opacity: .42; }
+.mb-park::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(110% 85% at 50% 42%, transparent 25%, color-mix(in oklab, var(--bg) 82%, transparent) 100%); }
+.mb-park .cc-svg { position: relative; z-index: 2; }
+.mb-park .cc-tip { z-index: 3; }
+.mb-park-svg { max-height: 520px; }
+.mb-park .mb-grass { fill: color-mix(in oklab, var(--good) 26%, var(--bg)); }
+.mb-park .mb-mow { fill-opacity: .06; }
+.mb-park .mb-dirt { fill: color-mix(in oklab, var(--warn) 34%, var(--bg)); }
+.mb-track { fill: color-mix(in oklab, var(--warn) 26%, var(--bg)); }
+.mb-ingrass { fill: color-mix(in oklab, var(--good) 20%, var(--bg)); }
+.mb-chalk line { stroke: color-mix(in oklab, var(--text) 85%, transparent); stroke-width: 1.6; }
+.mb-bag { fill: var(--text); }
+.mb-wl { fill: var(--text); font: 700 12px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
+.mb-fl { fill: var(--text-dim); font: 700 12px var(--font-mono); letter-spacing: .08em; paint-order: stroke; stroke: var(--bg);
+  stroke-width: 3px; stroke-linejoin: round; }
+.mb-fp { fill: var(--text); font: 800 22px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.mb-fw { fill: var(--text-dim); font: 700 11px var(--font-sans); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
+.mb-num { fill: var(--text); font: 700 10px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
+.mb-dot { stroke: color-mix(in oklab, var(--bg) 70%, transparent); stroke-width: .8; }
+.mb-dot.o { fill: color-mix(in oklab, var(--text) 74%, transparent); }
+.mb-dot.faint { opacity: .26; }
+.cc-legend .dt.mb-out { background: color-mix(in oklab, var(--text) 74%, transparent); }
+.mb-legend { justify-content: center; }
+.mb-zones { margin-top: 12px; }
+.mb-zones .cc-sd { align-items: flex-start; gap: 3px; padding: 10px 12px 11px; text-align: left; }
+.mb-zones .cc-sd b { font-size: clamp(20px, 6cqi, 28px); line-height: 1.05; }
+.mb-zones .cc-sd small { font-size: var(--fs-xs); color: var(--text-mute); }
+.mb-zones .mb-zbar { display: block; width: 100%; height: 6px; margin-top: 6px; border-radius: 999px; background: var(--panel-3); overflow: hidden; }
+.mb-zones .mb-zbar i { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
+.mb-zones .center .mb-zbar i { background: var(--good); }
+.mb-zones .oppo .mb-zbar i { background: color-mix(in oklab, var(--text) 62%, transparent); }
+.mb-split { display: grid; gap: 12px; }
+/* The five views fit a phone's width without a scroll. */
+@media (max-width: 440px) {
+  .mb-hero ~ .cc-tabs .cc-tab { padding: 10px 7px; font-size: var(--fs-xs); }
+}
+@container (min-width: 600px) {
+  .mb-split { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); align-items: center; }
+  .mb-split .mb-zones { margin-top: 0; }
+}
+
 /* basketball (2026-10-13, js/chart-hoops.js): the shot chart's half
    court, the basket at the top, every shot where it was taken — dark
    boards, the lines lit, the lane in his colour, a make a lit dot and a

@@ -119,6 +119,13 @@ restarted the box in the middle of its sweep. Both are fixed: the
 backfills read a few games at a time, every background job now goes
 before the web server when memory runs out, and a push waits for the
 board sweep in progress before it restarts the box (step 81; AM). The
+MLB hit page now follows your four renders of it: his season over his
+club's park, with his position and number, the season to pick and five
+numbers; By game with his last 10, 20 or 30 games, the game's final, every
+at-bat with the pitch it ended on and how fast (each at-bat's pitches a tap
+away), the game's summary and where its balls went; Where he hits it over
+the park with his pull, middle and opposite-field shares; and his season
+against any kind of pitch or either hand (step 82; AN). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -149,13 +156,13 @@ write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway). Every command runs on the box (`ssh`
 in first).
 
-**A. The box has today's code.** The first line should end `Most Likely, Edge and search back: the chart backfills read a few games at a time, and a push waits for the board sweep`
+**A. The box has today's code.** The first line should end `The MLB hit page to Ethan's four renders: his season over his park, every at-bat with its pitches, the park and his thirds`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor bdfa4497 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor b23e2791 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -863,6 +870,28 @@ How to read it:
   that sweep ends, 45 minutes at most. That is the new normal, not a
   fault; `cat /srv/qellys/data/cache/sweep.json` shows the sweep it is
   waiting on.
+
+**AN. The hit page in your four renders' layout** (step 82; one
+read-only command, seconds, then your phone). It asks for a hitter's
+chart the way the page does and prints what the new page reads off it:
+his position and number (off his club's roster), how many of his games
+are charted against the games the box scores have him batting in, his
+line with on base and OPS, and how many of his plate appearances carry
+their pitches:
+```
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=spray&sport=mlb&player=Aaron%20Judge" | python3 -c "import json,sys; d=json.load(sys.stdin); g=d.get('games') or []; p=[x for y in g for x in y['pas']]; L=d.get('season_line') or {}; print(d.get('player'), d.get('position'), d.get('jersey'), d.get('team'), d.get('season'), '| charted', len(g), 'of', d.get('logged'), 'games | AVG', L.get('avg'), 'OBP', L.get('obp'), 'OPS', L.get('ops'), '| with pitches', sum(1 for x in p if x.get('ps')), 'of', len(p))"
+```
+Paste the line back. `None None` for the position and number means his
+club's roster on the box does not carry him under that spelling: the page
+then shows neither, never a guess. Charted fewer games than the box scores
+have means the backfill is still reading his season (newest first, a few
+hundred games a night), and the page says so under his numbers until it
+has them all. Then on your phone open any MLB hitter's pick and scroll to
+his chart (or a player page's "His charts"): his season over his park, the
+five tabs, By game with Last 10 / 20 / 30, a game's final and every at-bat
+(tap "View pitch breakdown"), Where he hits it with All balls / Pull /
+Center / Oppo, and the season-stats menu (fastballs, breaking balls,
+offspeed, each hand).
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3244,6 +3273,73 @@ first). Paste back anything that prints an error or looks off.
     function. New: `tests/test_chart_backfills_hold_a_chunk_not_the_night.py`,
     `tests/test_children_go_before_the_server.py`,
     `tests/test_the_deploy_waits_for_the_board_sweep.py`.
+82. **The MLB hit page to your four renders** (2026-10-14, you: "Also
+    here is renders for mlb hit page. Follow these."). AN checks it.
+    THE PAGE (`web/js/chart-mlb.js`, its own layout inside the chart
+    frame): his season over his club's park (the logo, the city and the
+    name, his face, his name with his position and number, the season to
+    pick, and GAMES, AVG, HR, RBI and OPS on glass); the tabs By game |
+    Where he hits it | Batted ball | Direction | Pitch. BY GAME: his
+    recent games in a row with Last 10 / 20 / 30 / All and his line over
+    that stretch; the game's card with the day and the opponent, the
+    final with both clubs' logos and W or L, his H–AB, HR (lit when he
+    hit one), RBI, total bases, BB–K and SLG; AT BATS, the renders'
+    table: the inning, the pitch the at-bat ended on and its speed, what
+    it became and where it went ("Home Run (RF)", gold; a hit green; a
+    strikeout red), exit velocity and distance, filterable and
+    downloadable; "View pitch breakdown" lays every pitch of each at-bat
+    under it in order, coloured by what came of it; the game's summary
+    (pitches seen, fastball share, average and hardest exit velocity,
+    hard hits); and the park with his season's balls faint and this
+    game's numbered as the table numbers them. WHERE HE HITS IT: the
+    park over his club's own stadium art, every ball where it landed (a
+    home run gold, a hit green, an out grey), the wall's distances on it
+    (330, 375, 400: the drawing's wall, not his park's, and the note says
+    so), the share to left, centre and right written in the foul ground
+    (Pulled and Opposite field for a one-sided hitter, the fields'
+    names for a switch-hitter), and Pulled / Up the middle / Opposite
+    field as tiles with bars that filter the park; SEASON STATS with a
+    menu: all pitches, fastballs, breaking balls, offspeed (the pitch
+    each at-bat ended on), or either hand — H–AB with AVG (and our xBA
+    beside it once the table is fitted), HR with its share of plate
+    appearances, RBI with OBP, total bases with SLG (and xSLG), then OPS,
+    BB–K, exit velocity, launch angle, hard hit and sweet spot. The
+    Pitch tab is every pitch he saw by kind: how often he missed it when
+    he swung, how many at-bats ended on it and what he hit when they
+    did, and his line against each hand. LEFT OUT, NOT GUESSED: runs
+    scored and stolen bases (no feed the page reads has them game by
+    game), barrels (the league's table is not published), a club's
+    record on the day (a daily league's table can be a game short), and
+    "Watch at bats" (no video rights). THE DATA (`engine/mlb/charts`):
+    each plate appearance now carries its pitches (`ps`, from the pitch
+    table the chart already stores, his alone); the line has on base
+    the league's way (walks, hit-by-pitches and sacrifice flies counted,
+    a bunt not) and OPS; `logged` is the games the box scores have him
+    batting in that season, so a season still being backfilled says
+    "N of his M games are charted so far" under his numbers; `sides` is
+    the sides he batted from. EVERY LEAGUE'S CHART HEAD: his position
+    and number now come off his club's published roster where the chart
+    itself names neither (`engine/statlogs.roster_meta`, used by
+    `engine/charts.answer`): only his club's roster answers, a name two
+    men carry with no club to tell them apart is no answer, and a
+    jersey 0 is kept. THE FRAME (`web/js/carrychart.js`): a league can
+    lay its own page out under the frame's switch (`page`); the frame
+    keeps its choices across redraws (`data-opt`, `data-tog`), asks for
+    the season its picker names, filters a season's drawing by zone
+    where the league says so, and a table row can carry a line under
+    it. Checked: the chart tests with their browser checks switched on,
+    the new test's browser walk at a phone's width (every control, no
+    error, no sideways scroll), screenshots at phone and desktop on a
+    made-up full season, and the full suite. App 494.475 of 495 KB, first
+    visit 610.983 of 611 (the chart modules load on first use, outside
+    both). Pins changed, told to you, nothing loosened:
+    `tests/test_mlb_hit_tracker_and_pitch_chart.py` pinned the old list's
+    "HR", "1B" and "Hard hit" pills; it pins the new table's "Home Run
+    (LF)", "Single (RF)" and "Four-seam" (the pitcher and the ball's
+    numbers in words are still pinned). `tests/test_mlb_expected_stats_measured_before_use.py`
+    pinned AVG and SLG tiles with xBA and xSLG under them; it pins "AVG ·
+    xBA ." and "SLG · xSLG ." on the new tiles. New:
+    `tests/test_the_mlb_hit_page_follows_the_renders.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -601,7 +601,10 @@
                       "Distance": "scale", "Average fight": "clock", "Round 1": "bolt",
                       "Fit": "scale", "Their rank": "chart", "They allow": "shield", "Staff allows": "shield",
                       "They do": "shield", "Top zone": "target", "Their sample": "list", "Tonight’s starter": "baseball",
-                      "Season": "calendar" };
+                      "Season": "calendar",
+                      /* the hit page's (2026-10-14) */
+                      "OPS": "gauge", "Pitches seen": "search",
+                      "Fastball %": "bolt", "Avg exit velo": "gauge", "Hardest hit": "rising", "Hard hits": "hot" };
   const ico = (k) => {
     const n = (S && TILE_ICON[`${S.sport}:${k}`]) || TILE_ICON[k];
     return typeof icon === "function" && n ? icon(n, 13) : "";
@@ -671,6 +674,7 @@
      widths ride the table as two custom properties, so each league's
      columns are written once, beside the cells that fill them; every row
      is one button, as the carry and target tables' are. */
+  //: A row's `more` is a line under its cells, across the row (an at-bat's pitches).
   function gridHTML(name, cols, rows) {
     const where = (c) => `${c.p ? "" : " cc-wo"}${c.w ? "" : " cc-po"}`;
     const tpl = (k) => cols.filter((c) => c[k]).map((c) => c[k]).join(" ");
@@ -679,7 +683,7 @@
       ${rows.map((r) => `<button type="button" role="listitem" class="cc-row cc-tr${S && S.sel === r.i ? " sel" : ""}" data-i="${r.i}"${r.f == null ? "" : ` data-f="${esc(r.f)}"`} aria-label="${esc(r.said)}">${r.cells.map((x, j) => {
         const [html, more] = Array.isArray(x) ? x : [x, ""];
         return `<span class="${cols[j].c}${more ? ` ${more}` : ""}${where(cols[j])}">${html}</span>`;
-      }).join("")}</button>`).join("")}</div>`;
+      }).join("")}${r.more ? `<span class="cc-c-more">${r.more}</span>` : ""}</button>`).join("")}</div>`;
   }
   //: A cell of two lines: the play, and under it its detail.
   const two = (main, sub) => `<b>${esc(main || "—")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}`;
@@ -1407,6 +1411,18 @@
     const L = d.season_line || {};
     const game = S.view === "game" && !(P && P.only);
     const g = game ? d.games[Math.min(S.gi, d.games.length - 1)] : null;
+    /* A LEAGUE THAT LAYS ITS OWN PAGE OUT (2026-10-14, Ethan's four
+       renders of the MLB hit page): its module draws everything under the
+       switch — its hero, the tabs, the view — and the frame keeps what it
+       does for every chart: the switch, how it is drawn, the side filter,
+       the table's filter, the selection and the tip. */
+    if (P && P.page) {
+      box.innerHTML = (kb ? `<div class="cc-bar">${kb}</div>` : "")
+        + P.page({ d, g, sport, view: S.view, tabs, note, inline: !!C.inline,
+                   ink: inkOf(sport, (g && g.team) || d.team) })
+        + fold("note", "How it’s drawn", note);
+      return settle(box);
+    }
     const items = poolOf(S.kind, g, d);
     const every = [].concat(...(d.games || []).map((x) => poolOf(S.kind, x, d)));
     const sided = (game ? items : every).some((x) => sideOf(S.kind, x));
@@ -1495,6 +1511,9 @@
     // with no team to draw (a fighter's) keeps its title.
     box.innerHTML = (C.inline ? barRow + hero : head + hero + barRow) + tabs + rows + (hero ? "" : title) + main + tail
       + fold("note", "How it’s drawn", note);
+    settle(box);
+  }
+  function settle(box) {
     /* The chosen game's chip is brought to the middle of its row by
        scrolling the ROW. scrollIntoView would also scroll the page to it,
        and a chart drawn halfway down a pick page would pull the reader
@@ -1532,11 +1551,14 @@
     });
     const g = S.view === "game" && S.data && S.data.games ? S.data.games[S.gi] : null;
     const items = playsOf(S.kind, g);
+    // A league whose zones say so (`season`) filters its season's drawing
+    // as well as a game's: a hitter's pull side, middle and opposite field.
+    const Z = zonesOf(S.kind), lit = !!g || !!(Z && Z.season);
     // A league's own marks say their zone (`data-z`): a pitch is drawn
     // under the batter it was thrown to, not counted as him.
     ov.querySelectorAll(".cc-stage .cc-carry").forEach((el) => {
       const z = el.dataset.z != null ? el.dataset.z : sideOf(S.kind, items[+el.dataset.i]);
-      el.classList.toggle("off", !!side && !!g && z !== side);
+      el.classList.toggle("off", !!side && lit && z !== side);
     });
   }
   function applyFilt() {
@@ -1804,6 +1826,13 @@
         S.sel = -1;
         return render();
       }
+      /* A league's own page's choices (its module's `page`): one among
+         buttons (`data-opt`, the value it sets in `data-v`) or a switch
+         (`data-tog`), kept in S so every redraw keeps them. */
+      const opt = hit(e, "[data-opt][data-v]");
+      if (opt) { S.opt = Object.assign({}, S.opt, { [opt.dataset.opt]: opt.dataset.v }); S.sel = -1; return render(); }
+      const tog = hit(e, "[data-tog]");
+      if (tog) { S.opt = Object.assign({}, S.opt, { [tog.dataset.tog]: !(S.opt || {})[tog.dataset.tog] }); return render(); }
       const side = hit(e, "[data-side]");
       if (side) { S.side = side.dataset.side || ""; return applySide(); }
       const info = hit(e, "[data-info]");
@@ -1817,10 +1846,17 @@
       const row = hit(e, ".cc-row, .cc-carry");
       if (row && S.view === "game") return select(+row.dataset.i);
     });
-    // The table's filter: which plays it shows.
+    // The table's filter: which plays it shows. A page's own season
+    // picker asks for that season; its own menus redraw it.
     ov.addEventListener("change", (e) => {
+      const c = use(ov._cc);
+      if (!c) return;
+      const sp = hit(e, "[data-season-pick]");
+      if (sp) return load(c, +sp.value);
+      const o = hit(e, "select[data-opt]");
+      if (o) { S.opt = Object.assign({}, S.opt, { [o.dataset.opt]: o.value }); return render(); }
       const f = hit(e, "[data-filt]");
-      if (!f || !use(ov._cc)) return;
+      if (!f) return;
       S.filt = f.value;
       applyFilt();
     });
@@ -2020,7 +2056,12 @@
      chart being drawn (its selection), and the call that registers it. */
   const plug = { draw: (kind, spec) => { DRAW[kind] = spec; },
                  h: { esc, tile, tableHTML, pct, num1, signed, ord, fold, state: () => S,
-                      grid: gridHTML, two, pills, bars: barList, hero: heroShell, cap } };
+                      grid: gridHTML, two, pills, bars: barList, hero: heroShell, cap,
+                      /* a league's own page (`page`) builds with the frame's parts */
+                      face: (d) => faceHTML(d, S), team: teamOf, ink: inkOf, seasonName,
+                      seg: (Z) => segHTML(kindOf(S.kind, S.sport), Z),
+                      tools: (items, flags, filters) => toolsHTML(S.kind, items, flags, filters),
+                      stats: statsCard, splits: splitsCard } };
   window.QBCarry = { open, close, mount, plug, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,

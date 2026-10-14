@@ -327,7 +327,9 @@ def test_the_page_shows_xba_and_xslg_and_what_the_test_found():
     """)
     if got is None:
         return
-    assert ">AVG<" in got["side"] and "xBA ." in got["side"] and ">SLG<" in got["side"] and "xSLG ." in got["side"]
+    # Beside his own average and slugging, as the hit page's season tiles
+    # read them (2026-10-14: ".282 AVG · xBA .275").
+    assert "AVG · xBA ." in got["side"] and "SLG · xSLG ." in got["side"]
     assert "Launch angle" in got["side"]
     assert "xBA ." in got["tip"] and "xBA" not in got["tipK"]
     assert "not yet been measured as a pick signal" in got["none"]

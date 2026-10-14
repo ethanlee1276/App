@@ -60,6 +60,7 @@ NOT_AB = {"walk", "intent_walk", "hit_by_pitch", "sac_fly", "sac_bunt", "catcher
           "sac_fly_double_play", "sac_bunt_double_play"}
 STRIKEOUTS = {"strikeout", "strikeout_double_play", "strikeout_triple_play"}
 WALKS = {"walk", "intent_walk"}
+SAC_FLIES = {"sac_fly", "sac_fly_double_play"}
 #: The league's hard-hit line and its sweet spot.
 HARD_HIT = 95.0
 SWEET = (8.0, 32.0)
@@ -357,10 +358,19 @@ def _hline(pas: list) -> dict:
     if ab and any("xh" in p for p in ab):
         xs = (sum(p["xh"] if "xh" in p else (1 if p["et"] in HIT_BASES else 0) for p in ab) / len(ab),
               sum(p["xtb"] if "xh" in p else HIT_BASES.get(p["et"], 0) for p in ab) / len(ab))
+    bb = sum(1 for p in pas if p["et"] in WALKS)
+    hbp = sum(1 for p in pas if p["et"] == "hit_by_pitch")
+    sf = sum(1 for p in pas if p["et"] in SAC_FLIES)
+    # On base the league's way: hits, walks and hit-by-pitches over at-bats,
+    # walks, hit-by-pitches and sacrifice flies (a bunt and catcher's
+    # interference are in neither).
+    on = len(ab) + bb + hbp + sf
+    obp = (len(hits) + bb + hbp) / on if on else None
+    slg = tb / len(ab) if ab else None
     return {"n": n, "pa": n, "ab": len(ab), "h": len(hits), "tb": tb,
             "hr": sum(1 for p in hits if p["et"] == "home_run"),
             "xbh": sum(1 for p in hits if p["et"] in ("double", "triple", "home_run")),
-            "bb": sum(1 for p in pas if p["et"] in WALKS), "k": sum(1 for p in pas if p["et"] in STRIKEOUTS),
+            "bb": bb, "k": sum(1 for p in pas if p["et"] in STRIKEOUTS), "hbp": hbp, "sf": sf,
             "rbi": sum(p["rbi"] for p in pas), "bip": len(bip),
             "hard": sum(1 for v in ev if v >= HARD_HIT),
             "ev": round(sum(ev) / len(ev), 1) if ev else None,
@@ -368,8 +378,38 @@ def _hline(pas: list) -> dict:
             "sweet": sum(1 for v in la if SWEET[0] <= v <= SWEET[1]),
             "max_ev": max(ev) if ev else None,
             "avg": round(len(hits) / len(ab), 3) if ab else None,
-            "slg": round(tb / len(ab), 3) if ab else None,
+            "obp": round(obp, 3) if obp is not None else None,
+            "slg": round(slg, 3) if slg is not None else None,
+            "ops": round(obp + slg, 3) if obp is not None and slg is not None else None,
             "xba": round(xs[0], 3) if xs else None, "xslg": round(xs[1], 3) if xs else None}
+
+
+def _sequences(conn, batter_id, game_pks) -> dict:
+    """``{(game_pk, at_bat): [[type, mph, call], ...]}`` — every pitch he saw,
+    in the order it was thrown, off the pitch table's own key a few
+    hundred games at a time (the hit page's at-bats, 2026-10-14: the pitch
+    he hit, its speed, and the whole at-bat a tap away)."""
+    out: dict = {}
+    pks = sorted(set(game_pks))
+    for i in range(0, len(pks), 400):
+        part = pks[i:i + 400]
+        for gpk, ab, t, v, code in conn.execute(
+                f"SELECT game_pk, at_bat, pitch_type, speed, code FROM mlb_pitches WHERE game_pk IN "
+                f"({','.join('?' * len(part))}) AND batter_id=? ORDER BY game_pk, at_bat, n", (*part, batter_id)):
+            out.setdefault((gpk, ab), []).append([t or "", None if v is None else round(v, 1), code or ""])
+    return out
+
+
+def _logged(conn, player: str, season: int) -> int:
+    """How many games the box scores have him batting in this season — what
+    the page sets beside the games the play-by-play has been read for, so
+    a season still being read never passes for his whole season."""
+    try:
+        row = conn.execute("SELECT COUNT(*) FROM player_game_logs WHERE sport='mlb' AND season=? AND player=? "
+                           "AND market='pa' AND value > 0", (int(season), player)).fetchone()
+    except Exception:                                              # noqa: BLE001
+        return 0
+    return int(row[0] or 0) if row else 0
 
 
 def hits_chart(conn, player: str, season: int | None = None) -> dict:
@@ -377,11 +417,13 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
 
     ``{player, sport, seasons, season, team, side, games: [{id, date, opp,
     home, team, line, pas}], season_line, by_type, by_dir, by_hand,
-    x_measured}`` — games newest first, each plate appearance ``{inn, half,
-    ev, et, p, ph, rbi, np, ls, la, d, tr, hd, loc, x, y}`` and, on a ball
+    x_measured, logged, sides}`` — games newest first, each plate appearance
+    ``{inn, half, ev, et, p, ph, rbi, np, ls, la, d, tr, hd, loc, x, y, ps}``
+    (``ps`` every pitch he saw in it, ``[type, mph, call]``) and, on a ball
     with its speed and angle once engine/mlb/xstats has a table, ``xh`` and
-    ``xtb``; ``x_measured`` is engine/mlb/xstatsfit's last verdict, or None.
-    ``{}`` with nothing on file."""
+    ``xtb``; ``x_measured`` is engine/mlb/xstatsfit's last verdict, or None;
+    ``logged`` the games the box scores have him batting in that season;
+    ``sides`` the sides he batted from. ``{}`` with nothing on file."""
     pid, name = _resolve(conn, player, "batter")
     if pid is None:
         return {}
@@ -393,11 +435,13 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     cur = conn.execute("SELECT * FROM mlb_pa WHERE batter_id=? AND season=? ORDER BY date, game_pk, at_bat",
                        (pid, pick))
     cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, x)) for x in cur.fetchall()]
+    seq = _sequences(conn, pid, [r["game_pk"] for r in rows])
     from . import xstats
     model = xstats.load()
     games: dict = {}
     side = ""
-    for r in (dict(zip(cols, x)) for x in cur.fetchall()):
+    for r in rows:
         side = r["bat_side"] or side
         g = games.setdefault(r["game_pk"], {"id": r["game_pk"], "date": r["date"], "opp": r["opponent"],
                                             "home": bool(r["home"]), "team": r["team"], "pas": []})
@@ -406,7 +450,8 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
               "ls": r["launch_speed"], "la": r["launch_angle"], "d": r["distance"],
               "tr": r["trajectory"], "hd": r["hardness"], "loc": r["location"],
               "x": r["coord_x"], "y": r["coord_y"],
-              "dir": direction(r["coord_x"], r["coord_y"], r["bat_side"])}
+              "dir": direction(r["coord_x"], r["coord_y"], r["bat_side"]),
+              "ps": seq.get((r["game_pk"], r["at_bat"]), [])}
         v = xstats.xvals(model, r["launch_speed"], r["launch_angle"])
         if v:
             pa["xh"], pa["xtb"] = round(v[0], 3), round(v[1], 3)
@@ -434,7 +479,9 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     m = measured() if model else None
     return {"player": name, "sport": "mlb", "seasons": seasons, "season": pick, "team": latest.get("team", ""),
             "side": side, "games": out_games, "season_line": _hline(every), "by_type": by_type,
-            "by_dir": by_dir, "by_hand": by_hand,
+            "by_dir": by_dir, "by_hand": by_hand, "logged": _logged(conn, name, pick),
+            # The sides he batted from: a switch-hitter pulls to both fields.
+            "sides": sorted({r["bat_side"] for r in rows if r["bat_side"]}),
             "x_measured": {"hits": m["passed"].get("hits", False), "bases": m["passed"].get("bases", False),
                            "at": str(m.get("at", ""))[:10]} if m else None}
 

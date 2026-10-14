@@ -18,6 +18,13 @@
    catcher's view, coloured by what came of it; his mix, his zones and his
    fastball's speed start by start.
 
+   THE HIT PAGE TO ETHAN'S OWN FOUR RENDERS OF IT (2026-10-14: "Also here
+   is renders for mlb hit page. Follow these."): the hit tracker lays its
+   own page out (`page`, below) — his season over his club's park, By game
+   with his recent games, the game's final and every at-bat with its
+   pitches, Where he hits it over the park with his season against any
+   kind of pitch.
+
    IN THE FRAME OF ETHAN'S NFL RENDERS (2026-10-14): the field dark with
    its mowing rings, the chalk lit and the wall in his team's colour, the
    pull side, the middle and the opposite field as the render's Left |
@@ -50,6 +57,12 @@
   const pitchName = (t) => PITCH[t] || t || "Unknown";
   const avg3 = (v) => (v == null ? "—" : Number(v).toFixed(3).replace(/^0/, ""));
   const innLabel = (inn, half) => (inn ? `${half === "T" ? "▲" : half === "B" ? "▼" : ""}${ord(inn) || `${inn}th`}` : "");
+  //: An inning as a hitter's table says it: his own half, so no arrow.
+  const nth = (n) => {
+    if (!n) return "—";
+    const v = n % 100, s = ["th", "st", "nd", "rd"];
+    return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+  };
   const band = (et) => (et === "home_run" || HITS[et] ? "gain" : /strikeout/.test(et) ? "loss"
     : /walk|hit_by_pitch|catcher/.test(et) ? "short" : "miss");
   function ballWords(p) {
@@ -57,139 +70,450 @@
             p.d != null ? `${Math.round(p.d)} ft` : "", TYPE[p.tr] || ""].filter(Boolean).join(" · ");
   }
   const vsWho = (p) => `vs ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`;
-  //: What a plate appearance became, as a pill: a home run in gold, a hit green, a strikeout red.
-  const hitPill = (et, ev) => [SHORT[et] || ev || "—", et === "home_run" ? "gold" : HITS[et] ? "good"
-    : /strikeout/.test(et) ? "bad" : "mute"];
 
-  /* ---------------- the field ---------------- */
+  /* ---------------- the hit page (2026-10-14) ----------------
+     Ethan, with four renders of this page: "Also here is renders for mlb
+     hit page. Follow these." His season over his club's park — the logo,
+     his name, his position and number, the season to pick and five
+     numbers — then the views as tabs:
+       BY GAME: his recent games in a row (the last 10, 20 or 30, and what
+       he did over them), the game's final, its numbers, every at-bat as
+       the renders' table (the pitch it ended on and how fast, what it
+       became and where it went, how hard and how far) with each at-bat's
+       pitches a tap away, the game's summary, and where its balls went
+       over his season's;
+       WHERE HE HITS IT: every ball he put in play over the park, lit by
+       what it became, the pull side, the middle and the other way with
+       their shares, and his season's numbers against any kind of pitch;
+       BATTED BALL, DIRECTION and PITCH: his season by each, as bars.
+     What the renders show that the record does not carry is left out,
+     not guessed: runs scored and stolen bases (no feed the page reads
+     has them game by game), barrels (the league's table is not
+     published), a club's record on the day (a daily league's table can be
+     a game short) and video of the at-bats. */
+  const FIELDER = { 1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF", 8: "CF", 9: "RF" };
+  const NOT_AB = new Set(["walk", "intent_walk", "hit_by_pitch", "sac_fly", "sac_bunt", "catcher_interf",
+                          "sac_fly_double_play", "sac_bunt_double_play"]);
+  const SAC_FLY = new Set(["sac_fly", "sac_fly_double_play"]);
+  const plays = (gs) => [].concat(...(gs || []).map((g) => g.pas || []));
+  //: The pitch a plate appearance ended on: [type, mph, call], or null.
+  const lastPitch = (p) => (p.ps && p.ps.length ? p.ps[p.ps.length - 1] : null);
+  const when = (iso, o) => {
+    const t = iso ? new Date(`${iso}T12:00:00`) : null;
+    return t && !isNaN(t) ? t.toLocaleDateString("en-US", o) : iso || "";
+  };
+  const mark = (sport, a, n) => (a && typeof teamMarkIn === "function" ? teamMarkIn(sport, a, n) : "");
+  /* HIS LINE OVER ANY STRETCH, the box score's way and the server's
+     (engine/mlb/charts _hline, line for line): ten games, a kind of pitch,
+     a hand. On base is hits, walks and hit-by-pitches over at-bats,
+     walks, hit-by-pitches and sacrifice flies; xBA and xSLG only where
+     the model has read his balls. */
+  function line(pas) {
+    const o = { pa: pas.length, ab: 0, h: 0, tb: 0, hr: 0, bb: 0, k: 0, hbp: 0, sf: 0, rbi: 0, bip: 0, hard: 0,
+                sweet: 0, nla: 0, max: null };
+    let evs = 0, las = 0, xs = 0, xb = 0, any = false;
+    pas.forEach((p) => {
+      const ab = !NOT_AB.has(p.et), h = HITS[p.et] || 0;
+      if (ab) o.ab += 1;
+      if (h) { o.h += 1; o.tb += h; if (p.et === "home_run") o.hr += 1; }
+      if (p.et === "walk" || p.et === "intent_walk") o.bb += 1;
+      if (/^strikeout/.test(p.et)) o.k += 1;
+      if (p.et === "hit_by_pitch") o.hbp += 1;
+      if (SAC_FLY.has(p.et)) o.sf += 1;
+      o.rbi += p.rbi || 0;
+      if (p.ls != null) {
+        o.bip += 1;
+        evs += p.ls;
+        if (p.ls >= 95) o.hard += 1;
+        o.max = o.max == null ? p.ls : Math.max(o.max, p.ls);
+      }
+      if (p.la != null) {
+        o.nla += 1;
+        las += p.la;
+        if (p.la >= 8 && p.la <= 32) o.sweet += 1;
+      }
+      if (ab) {
+        if (p.xh != null) any = true;
+        xs += p.xh != null ? p.xh : (h ? 1 : 0);
+        xb += p.xh != null ? p.xtb : h;
+      }
+    });
+    const on = o.ab + o.bb + o.hbp + o.sf;
+    o.ev = o.bip ? evs / o.bip : null;
+    o.la = o.nla ? las / o.nla : null;
+    o.avg = o.ab ? o.h / o.ab : null;
+    o.obp = on ? (o.h + o.bb + o.hbp) / on : null;
+    o.slg = o.ab ? o.tb / o.ab : null;
+    o.ops = o.obp != null && o.slg != null ? o.obp + o.slg : null;
+    o.xba = any && o.ab ? xs / o.ab : null;
+    o.xslg = any && o.ab ? xb / o.ab : null;
+    return o;
+  }
+  /* What became of an at-bat, the renders' way: "Single (LF)". The
+     fielder is the one the feed names; a home run it names none for is
+     given the field it left over. */
+  function fieldOf(p) {
+    const f = FIELDER[String(p.loc == null ? "" : p.loc).trim()];
+    if (f) return f;
+    if (p.et !== "home_run" || p.x == null || p.y == null) return "";
+    const a = Math.atan2(p.x - 125.42, 198.27 - p.y) * 180 / Math.PI;
+    return a < -15 ? "LF" : a > 15 ? "RF" : "CF";
+  }
+  const result = (p) => `${p.ev || SHORT[p.et] || "—"}${fieldOf(p) ? ` (${fieldOf(p)})` : ""}`;
+  //: Its colour: a home run gold, a hit green, a strikeout red, a walk quiet.
+  const tone = (et) => (et === "home_run" ? "hr" : HITS[et] ? "h" : /^strikeout/.test(et) ? "k"
+    : /walk|hit_by_pitch/.test(et) ? "bb" : "");
+
+  /* ---------------- his season over his park ---------------- */
+  /* The renders' head: his club's logo and name over its park, the season
+     to pick, his face, his name with his position and number, and his
+     season in five numbers. A season the play-by-play is still being read
+     for says how far it has got, so it never passes for his whole year. */
+  function hero(d, sport) {
+    const team = d.team || "", t = Q.h.team(sport, team);
+    const nick = t.nick || (typeof teamNameIn === "function" ? teamNameIn(sport, team) : "") || team;
+    const loc = t.loc || (t.name && t.name !== nick && t.name.endsWith(nick) ? t.name.slice(0, -nick.length).trim() : "");
+    const ink = Q.h.ink(sport, team);
+    const art = team && typeof venuePhotoTag === "function" ? venuePhotoTag(sport, team, t) : "";
+    const words = String(d.player || "").trim().split(/\s+/);
+    const first = words.length > 1 ? words[0] : "", last = words.length > 1 ? words.slice(1).join(" ") : words[0];
+    const tag = [d.position || "", d.jersey ? `#${d.jersey}` : ""].filter(Boolean);
+    const year = Q.h.seasonName(sport, d.season);
+    const pick = d.seasons.length > 1
+      ? `<span class="mb-pick"><select data-season-pick aria-label="Season">${d.seasons.map((y) =>
+        `<option value="${y}"${y === d.season ? " selected" : ""}>${esc(Q.h.seasonName(sport, y))} season</option>`).join("")}</select></span>`
+      : `<span class="mb-pick one">${esc(year)} season</span>`;
+    const L = line(plays(d.games));
+    const tiles = [["Games", d.games.length], ["AVG", avg3(L.avg)], ["HR", L.hr], ["RBI", L.rbi], ["OPS", avg3(L.ops)]];
+    const n = d.games.length, logged = Number(d.logged) || 0;
+    const cover = logged > n
+      ? `<p class="mb-cover">${n} of his ${logged} games this season are charted so far: the rest are read from MLB’s play-by-play a few hundred games a night, newest first.</p>` : "";
+    return `<div class="cc-hero mb-hero"${ink ? ` style="--ta:${ink};--tb:${ink}"` : ""}>${art}
+      <div class="mb-hero-in">
+        <div class="mb-hero-top">${pick}</div>
+        <div class="mb-hero-team"><span class="cc-hero-logo">${mark(sport, team, 60)}</span>
+          <span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b>${esc(nick)}</b></span></div>
+        <div class="mb-hero-face">${Q.h.face(d)}</div>
+        <div class="mb-hero-who">${first ? `<small>${esc(first)}</small>` : ""}<b>${esc(last)}</b>${tag.length
+          ? `<span>${tag.map(esc).join("  ")}</span>` : ""}</div>
+        <div class="mb-hero-tiles">${tiles.map(([k, v]) => `<div class="mb-ht"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("")}</div>
+      </div></div>${cover}`;
+  }
+
+  /* ---------------- the park ---------------- */
   /* The Stats API's hit coordinates, home plate at (125.42, 198.27), y
-     growing toward home; drawn top-down with home at the foot. The grass
-     dark with its mowing rings out from the plate, the chalk lit (a faint
-     wide copy under each line, no filter), the wall in his colour. */
-  const HX = 200, HY = 336, K = 1.45;
+     growing toward home, about 2.5 feet a unit; drawn top-down with home
+     at the foot, 1.45 px a unit. The wall is the drawing's, not his
+     park's: 330 feet down the lines, 375 in the gaps and 400 to centre,
+     and the numbers on it say so. The grass with its mowing rings, the
+     warning track, the infield, the chalk lit; every ball where it
+     landed — a home run gold, a hit green, an out grey. */
+  const HX = 200, HY = 336, K = 1.45, FT = K / 2.5;
   const fx = (x) => HX + (x - 125.42) * K;
   const fy = (y) => HY - (198.27 - y) * K;
   //: A point r out from the plate, `a` degrees off straightaway centre.
   const at = (r, a) => [HX + r * Math.sin(a * Math.PI / 180), HY - r * Math.cos(a * Math.PI / 180)];
   const xy = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
-  function rings() {
-    let s = "";
-    for (let r = 40, k = 0; r < 190; r += 25, k++) {
-      const r2 = Math.min(190, r + 25);
-      s += `<path class="mb-mow${k % 2 ? " alt" : ""}" d="M${xy(at(r, -45))} A${r} ${r} 0 0 1 ${xy(at(r, 45))} L${xy(at(r2, 45))} A${r2} ${r2} 0 0 0 ${xy(at(r2, -45))} Z"/>`;
+  //: The drawing's wall, in feet: 400 to centre, 375 in the gaps, 330 down the lines.
+  const wallFt = (a) => { const u = (a / 45) * (a / 45); return 400 - 110 * u + 40 * u * u; };
+  function arcPts(r, from, to) {
+    const out = [];
+    for (let a = from; a <= to + 0.001; a += 2.5) out.push(at(Math.min(typeof r === "function" ? r(a) : r, wallFt(a) * FT), a));
+    return out;
+  }
+  const poly = (pts) => pts.map((p, i) => `${i ? "L" : "M"}${xy(p)}`).join(" ");
+  function parkSVG(d, g, sport) {
+    const wall = arcPts((a) => wallFt(a) * FT, -45, 45);
+    const track = arcPts((a) => (wallFt(a) - 14) * FT, -45, 45);
+    let s = `<path class="mb-grass" d="M${HX} ${HY} ${poly(wall).replace(/^M/, "L")} Z"/>`;
+    for (let r = 60, k = 0; r < 240; r += 22, k++) {
+      if (k % 2) continue;
+      const a0 = arcPts(r, -45, 45), a1 = arcPts(r + 22, -45, 45).reverse();
+      s += `<path class="mb-mow" d="${poly(a0.concat(a1))} Z"/>`;
     }
-    return s;
+    s += `<path class="mb-track" d="${poly(wall)} ${poly(track.slice().reverse()).replace(/^M/, "L")} Z"/>`;
+    // The infield: the dirt to the grass's lip, the grass inside the
+    // bases, the mound, the bags and the plate.
+    const lip = arcPts(90, -45, 45);
+    s += `<path class="mb-dirt" d="M${HX} ${HY} ${poly(lip).replace(/^M/, "L")} Z"/>`;
+    const base = (deg) => at(52.2, deg), c = [HX, HY - 36.9];
+    const shrink = (p, f) => [c[0] + (p[0] - c[0]) * f, c[1] + (p[1] - c[1]) * f];
+    const sq = [[HX, HY], base(45), [HX, HY - 73.8], base(-45)];
+    s += `<path class="mb-ingrass" d="${poly(sq.map((p) => shrink(p, 0.8)))} Z"/>
+      <circle class="mb-dirt" cx="${HX}" cy="${(HY - 35.1).toFixed(1)}" r="5.4"/>
+      <circle class="mb-dirt" cx="${HX}" cy="${HY}" r="8"/>`;
+    const pole = (p) => `<line x1="${HX}" y1="${HY}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}"/>`;
+    const chalk = pole(wall[0]) + pole(wall[wall.length - 1]);
+    s += `<g class="mb-glow">${chalk}</g><g class="mb-chalk">${chalk}</g>
+      <path class="mb-wall-glow" d="${poly(wall)}"/><path class="mb-wall" d="${poly(wall)}"/>`;
+    [sq[1], sq[2], sq[3]].forEach((p) => {
+      s += `<rect class="mb-bag" x="${(p[0] - 2.2).toFixed(1)}" y="${(p[1] - 2.2).toFixed(1)}" width="4.4" height="4.4" transform="rotate(45 ${xy(p)})"/>`;
+    });
+    s += `<path class="mb-bag" d="M${HX - 2.6} ${HY - 2.4} L${HX + 2.6} ${HY - 2.4} L${HX + 2.6} ${HY} L${HX} ${HY + 2.4} L${HX - 2.6} ${HY} Z"/>`;
+    // The distances on the wall: its own, outside it.
+    [-45, -22.5, 0, 22.5, 45].forEach((a) => {
+      const ft = Math.round(wallFt(a) / 5) * 5, p = at((wallFt(a) + (Math.abs(a) === 45 ? 20 : 16)) * FT, a);
+      s += `<text class="mb-wl" x="${p[0].toFixed(1)}" y="${(p[1] + 4).toFixed(1)}" text-anchor="middle">${ft}</text>`;
+    });
+    s += sideWords(d, g);
+    // His season's balls, by where they went (the filter fades the rest);
+    // in a game's drawing they sit faint under that game's own.
+    const zone = { pull: "", center: "", oppo: "", "": "" };
+    plays(d.games).forEach((p) => {
+      if (p.x == null || p.y == null) return;
+      const kind = p.et === "home_run" ? "hr" : HITS[p.et] ? "h" : "o";
+      zone[p.dir in zone ? p.dir : ""] += `<circle class="mb-ball mb-dot ${kind}${g ? " faint" : ""}" cx="${fx(p.x).toFixed(1)}" cy="${fy(p.y).toFixed(1)}" r="${g ? 2.8 : kind === "hr" ? 4.4 : 3.6}"/>`;
+    });
+    s += Object.entries(zone).map(([z, marks]) => (marks ? `<g class="cc-carry" data-z="${z}">${marks}</g>` : "")).join("");
+    if (g) s += (g.pas || []).map((p, i) => ballMark(p, i)).join("");
+    const n = plays(d.games).filter((p) => p.x != null).length;
+    const label = g ? `This game’s balls in play over his season’s ${n}. Every at-bat is listed above.`
+      : `Where he hit it: ${n} balls in play this season.`;
+    return `<svg class="cc-svg mb-svg mb-park-svg" viewBox="36 62 328 320" role="img" aria-label="${esc(label)}">${s}</svg>`;
   }
-  function fieldSVG() {
-    const poleL = [65, 201], poleR = [335, 201];
-    const chalk = `<line x1="${HX}" y1="${HY}" x2="23" y2="159"/><line x1="${HX}" y1="${HY}" x2="377" y2="159"/>
-      <path d="M${HX} ${HY} L236.8 299.2 L200 262.5 L163.2 299.2 Z"/>`;
-    return `<path class="mb-grass" d="M${HX} ${HY} L${poleL[0]} ${poleL[1]} Q200 7 ${poleR[0]} ${poleR[1]} Z"/>${rings()}
-      <path class="mb-dirt" d="M${HX} ${HY} L136.4 272.4 A90 90 0 0 1 263.6 272.4 Z"/>
-      <g class="mb-glow">${chalk}</g>
-      <path class="mb-base" d="M${HX} ${HY} L236.8 299.2 L200 262.5 L163.2 299.2 Z"/>
-      <line class="mb-foul" x1="${HX}" y1="${HY}" x2="23" y2="159"/><line class="mb-foul" x1="${HX}" y1="${HY}" x2="377" y2="159"/>
-      <path class="mb-wall-glow" d="M${poleL[0]} ${poleL[1]} Q200 7 ${poleR[0]} ${poleR[1]}"/>
-      <path class="mb-wall" d="M${poleL[0]} ${poleL[1]} Q200 7 ${poleR[0]} ${poleR[1]}"/>
-      <text class="cc-lane" x="40" y="352">LF line</text><text class="cc-lane" x="360" y="352" text-anchor="end">RF line</text>`;
-  }
-  function ballMark(p, i, faint) {
+  //: One of the game's balls: its flight from the plate, lit, numbered as its at-bat is in the table.
+  function ballMark(p, i) {
     if (p.x == null || p.y == null) return "";
     const x = fx(p.x), y = fy(p.y), kind = p.et === "home_run" ? "hr" : HITS[p.et] ? "h" : "o";
-    const r = kind === "hr" ? 6 : 4.5;
-    if (faint) return `<circle class="mb-ball ${kind} faint" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r - 1}"/>`;
+    const r = kind === "hr" ? 6 : 5, S = state(), on = S && S.sel === i ? " sel" : "";
+    const c = `${x.toFixed(1)}`, cy = `${y.toFixed(1)}`;
     return `<g class="cc-carry" data-i="${i}" data-z="${p.dir || ""}">
-      <line class="cc-hit" x1="${HX}" y1="${HY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>
-      ${kind === "o" ? "" : `<line class="mb-glow-arc ${kind}" x1="${HX}" y1="${HY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`}
-      <line class="mb-arc ${kind}${sel(i)}" x1="${HX}" y1="${HY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>
-      ${kind === "o" ? "" : `<circle class="mb-halo ${kind}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r + 5}"/>`}
-      <circle class="mb-ball cx-mark ${kind}${sel(i)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}"/></g>`;
+      <line class="cc-hit" x1="${HX}" y1="${HY}" x2="${c}" y2="${cy}"/>
+      ${kind === "o" ? "" : `<line class="mb-glow-arc ${kind}" x1="${HX}" y1="${HY}" x2="${c}" y2="${cy}"/>`}
+      <line class="mb-arc ${kind}${on}" x1="${HX}" y1="${HY}" x2="${c}" y2="${cy}"/>
+      ${kind === "o" ? "" : `<circle class="mb-halo ${kind}" cx="${c}" cy="${cy}" r="${r + 5}"/>`}
+      <circle class="mb-ball cx-mark ${kind}${on}" cx="${c}" cy="${cy}" r="${r}"/>
+      <text class="mb-num" x="${(x + r + 3).toFixed(1)}" y="${(y - r + 1).toFixed(1)}">${i + 1}</text></g>`;
   }
-  const svg = (body, label, h = 360) =>
-    `<svg class="cc-svg mb-svg" viewBox="0 0 400 ${h}" role="img" aria-label="${esc(label)}">${body}</svg>`;
-
-  function sprayGame(g) {
-    const pas = g.pas || [];
-    const marks = pas.map((p, i) => ballMark(p, i, false)).join("");
-    const bip = pas.filter((p) => p.x != null).length;
-    return svg(fieldSVG() + marks, `Hit tracker: ${bip} ball${bip === 1 ? "" : "s"} in play. Every plate appearance is listed below.`);
-  }
-  /* The season: every ball faint, the two lines 15° either side of
-     straightaway centre that split the field in three, and the share he
-     pulled, hit up the middle and went the other way written under each
-     third (under it, so no label ever sits on a ball). */
-  function spraySeason(d) {
-    const every = [];
-    d.games.forEach((g) => (g.pas || []).forEach((p) => every.push(p)));
-    let body = fieldSVG() + `<line class="mb-ray" x1="${HX}" y1="${HY}" x2="142.5" y2="121.6"/><line class="mb-ray" x1="${HX}" y1="${HY}" x2="257.4" y2="121.6"/>`
-      + every.map((p) => ballMark(p, -1, true)).join("");
-    const dirs = d.by_dir || [], tot = dirs.reduce((a, x) => a + x.n, 0);
-    const left = d.side === "L" ? "oppo" : "pull", right = d.side === "L" ? "pull" : "oppo";
-    [[left, 70], ["center", 200], [right, 330]].forEach(([k, x]) => {
-      const row = dirs.find((r) => r.key === k);
-      if (!row || !tot) return;
-      body += `<text class="cc-raylbl" x="${x}" y="380" text-anchor="middle">${pct(row.n / tot)}</text>
-        <text class="cc-raysub" x="${x}" y="397" text-anchor="middle">${esc(DIR[k])}</text>`;
+  /* Each third of the field's share of his balls, written in the foul
+     ground beside it (the renders' "LF 38% Pulled"): by where they
+     landed, 15° either side of straightaway centre. A hitter who bats
+     from one side pulls to one field, and the words say which; a
+     switch-hitter's are just the fields. A game's drawing names the
+     fields and leaves the shares to the tiles beside it. */
+  function sideWords(d, g) {
+    const by = { L: 0, C: 0, R: 0 };
+    plays(d.games).forEach((p) => {
+      if (p.x == null || p.y == null) return;
+      const a = Math.atan2(p.x - 125.42, 198.27 - p.y) * 180 / Math.PI;
+      by[a < -15 ? "L" : a > 15 ? "R" : "C"] += 1;
     });
-    return svg(body, `Hit tracker: ${every.filter((p) => p.x != null).length} balls in play this season.`, 402);
+    const n = by.L + by.C + by.R, one = (d.sides && d.sides.length ? d.sides : [d.side]).length === 1;
+    const lefty = (d.side || (d.sides || [])[0]) === "L";
+    const word = (k) => (k === "C" ? "Up the middle" : !one ? (k === "L" ? "Left field" : "Right field")
+      : (k === "L") === !lefty ? "Pulled" : "Opposite field");
+    if (g || !n) {
+      return `<text class="mb-fl" x="86" y="300" text-anchor="middle">LF</text><text class="mb-fl" x="314" y="300" text-anchor="middle">RF</text>`;
+    }
+    const col = (k, x, y) => `<text class="mb-fl" x="${x}" y="${y}" text-anchor="middle">${k === "L" ? "LF" : "RF"}</text>
+      <text class="mb-fp" x="${x}" y="${y + 24}" text-anchor="middle">${pct(by[k] / n)}</text>
+      <text class="mb-fw" x="${x}" y="${y + 40}" text-anchor="middle">${esc(word(k))}</text>`;
+    return col("L", 86, 290) + col("R", 314, 290)
+      + `<text class="mb-fp" x="${HX}" y="362" text-anchor="middle">${pct(by.C / n)}</text>
+         <text class="mb-fw" x="${HX}" y="377" text-anchor="middle">${esc(word("C"))}</text>`;
   }
-  function sprayLegend() {
-    return `<div class="cc-legend" aria-hidden="true"><span><i class="dt mb-hr"></i>Home run</span>
-      <span><i class="dt c"></i>Hit</span><span><i class="dt m"></i>Out</span></div>`;
+  function parkArt(d, sport) {
+    const team = d.team || "";
+    return team && typeof venuePhotoTag === "function" ? venuePhotoTag(sport, team, Q.h.team(sport, team)) : "";
   }
-  function sprayTiles(L) {
-    const t = [tile("H–AB", `${L.h}-${L.ab}`), tile("Total bases", L.tb), tile("HR", L.hr), tile("RBI", L.rbi),
-               tile("BB–K", `${L.bb}-${L.k}`), tile("Hard hit", L.bip ? `${L.hard}/${L.bip}` : "—", "95+ mph")];
-    return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
-  }
+  const legend = () => `<div class="cc-legend mb-legend" aria-hidden="true"><span><i class="dt mb-hr"></i>Home run</span>
+      <span><i class="dt c"></i>Hit</span><span><i class="dt mb-out"></i>Out</span></div>`;
   /* The render's Left | Middle | Right, for a hitter: where his balls in
-     play went, read off where each landed and which side he stood on. */
+     play went, read off where each landed and which side he stood on —
+     tiles that filter the drawing (the frame's side filter), each with
+     its count, its share and a bar. */
   const sprayZones = {
     label: "Where he hit it",
     list: [["pull", "Pull", "Pulled"], ["center", "Center", "Up the middle"], ["oppo", "Oppo", "Opposite field"]],
     of: (p) => p.dir || "",
     pool: (g) => (g.pas || []).filter((p) => p.x != null),
     noun: ["ball", "balls"],
+    season: true,
   };
-  /* EVERY PLATE APPEARANCE AS THE RENDERS' TABLE: its number, the inning,
-     the pitcher, how hard, how high and how far the ball went, what it
-     became and the runs it drove in. On a phone the inning and the ball's
-     numbers read under the pitcher. */
-  const SPRAY_COLS = [{ h: "#", c: "cc-c-n", p: "18px", w: "26px" },
-                      { h: "Inn", c: "cc-c-q", w: "52px" },
-                      { h: "Pitcher", c: "cc-c-m", p: "minmax(0,1fr)" },
-                      { h: "Pitcher", c: "cc-c-m", w: "minmax(0,1fr)" },
-                      { h: "EV", c: "cc-c-v", w: "52px", r: 1 },
-                      { h: "LA", c: "cc-c-v", w: "44px", r: 1 },
-                      { h: "Dist", c: "cc-c-v", w: "52px", r: 1 },
-                      { h: "Result", c: "cc-c-res", p: "96px", w: "150px" },
-                      { h: "RBI", c: "cc-c-y", w: "40px", r: 1 }];
-  function sprayList(g) {
-    return grid("spray", SPRAY_COLS, (g.pas || []).map((p, i) => {
-      const hard = p.ls != null && p.ls >= 95;
-      const res = [hitPill(p.et, p.ev)].concat(hard ? [["Hard hit", "tag"]] : []);
+  function zoneTiles(d) {
+    const by = { pull: 0, center: 0, oppo: 0 };
+    plays(d.games).forEach((p) => { if (p.dir in by) by[p.dir] += 1; });
+    const n = by.pull + by.center + by.oppo;
+    if (!n) return "";
+    return `<div class="cc-sides mb-zones">${sprayZones.list.map(([k, , name]) => {
+      const share = by[k] / n;
+      return `<button type="button" class="cc-sd mb-z ${k}" data-sd="${k}" data-side="${k}" aria-label="${esc(`${name}: ${by[k]} of ${n} balls in play, ${pct(share)}`)}">
+        <span>${esc(name)}</span><b>${pct(share)}</b><small>${by[k]} ball${by[k] === 1 ? "" : "s"}</small>
+        <i class="mb-zbar" aria-hidden="true"><i style="width:${(100 * share).toFixed(1)}%"></i></i></button>`;
+    }).join("")}</div>`;
+  }
+  const INFO = '<button type="button" class="cc-info" data-info aria-expanded="false" aria-label="How it’s drawn">i</button>';
+  /* THE HIT DISTRIBUTION CARD: the park over his club's own, the filter,
+     the legend and the three thirds. A game's sets the drawing beside its
+     tiles on a wide card (the render's By game), his season's draws the
+     park across the card. */
+  function hitCard(d, g, sport, note, ink) {
+    const fig = `<div class="cc-stage mb-park">${parkArt(d, sport)}${parkSVG(d, g, sport)}${g ? '<div class="cc-tip" hidden></div>' : ""}</div>`;
+    const side = zoneTiles(d) + legend();
+    return `<section class="cc-card cc-dist mb-dist${g ? " mb-dist-g" : ""}"${ink ? ` style="--tm:${ink}"` : ""}>
+      <header class="cc-card-h"><h3 class="cc-card-t">Hit distribution${note ? INFO : ""}</h3>${Q.h.seg(sprayZones)}</header>
+      ${note ? `<div class="cc-pop" hidden>${note}</div>` : ""}
+      ${g ? `<div class="mb-split">${fig}<div class="mb-split-s"><p class="mb-cap">His season’s balls in play, this game’s numbered as its at-bats are.</p>${side}</div></div>`
+        : fig + side}</section>`;
+  }
+
+  /* ---------------- by game ---------------- */
+  /* HIS RECENT GAMES (the renders' row): the last 10, 20 or 30, what he
+     did over them, and each game a chip — the day, the opponent and his
+     logo, his hits and at-bats, a home run in gold. */
+  function recent(d, sport) {
+    const S = state(), n = d.games.length;
+    const opts = [10, 20, 30].filter((w) => w < n).map((w) => [String(w), `Last ${w}`]).concat([["all", `All ${n}`]]);
+    const want = (S.opt && S.opt.win) || "10";
+    const cur = opts.some(([v]) => v === want) ? want : opts[0][0];
+    const win = cur === "all" ? n : Number(cur);
+    const show = Math.max(win, S.gi + 1);
+    const L = line(plays(d.games.slice(0, win)));
+    const span = win === n ? `${Q.h.seasonName(sport, d.season)} season` : `Last ${win} games`;
+    const chips = d.games.slice(0, show).map((x, i) => {
+      const on = i === S.gi, G = x.line || line(x.pas || []), dt = when(x.date, { month: "short", day: "numeric" });
+      return `<button type="button" role="tab" class="cc-chip mb-chip${on ? " on" : ""}" data-gi="${i}" aria-selected="${on}" aria-label="${esc(`${dt} ${x.home === false ? "at" : "vs"} ${x.opp}: ${G.h} for ${G.ab}${G.hr ? `, ${G.hr} home run${G.hr === 1 ? "" : "s"}` : ""}`)}">
+        <span class="mb-chip-t"><small>${esc(dt)}</small><span>${x.home === false ? "@" : "vs"} ${esc(x.opp)}</span><b>${G.h}-${G.ab}</b>${G.hr ? `<em>${G.hr} HR</em>` : ""}</span>
+        <span class="mb-chip-m" aria-hidden="true">${mark(sport, x.opp, 26)}</span></button>`;
+    }).join("");
+    return `<section class="mb-recent">
+      <header class="mb-row-h"><h3 class="cc-card-t">Recent games</h3>${opts.length > 1 ? `<div class="cc-seg mb-win" role="group" aria-label="How many games">${opts.map(([v, w]) =>
+        `<button type="button" data-opt="win" data-v="${v}"${v === cur ? ' class="on"' : ""} aria-pressed="${v === cur}">${esc(w)}</button>`).join("")}</div>` : ""}</header>
+      <p class="mb-last"><span>${esc(span)}</span> <b>${L.h}-${L.ab}</b> · ${avg3(L.avg)} AVG · ${L.hr} HR · ${L.rbi} RBI · ${L.bb} BB · ${L.k} K · ${avg3(L.ops)} OPS</p>
+      <div class="cc-car">
+        <button type="button" class="cc-step" data-step="-1" aria-label="Newer game"${S.gi <= 0 ? " disabled" : ""}>‹</button>
+        <div class="cc-games mb-chips" role="tablist" aria-label="Games">${chips}</div>
+        <button type="button" class="cc-step" data-step="1" aria-label="Older game"${S.gi >= n - 1 ? " disabled" : ""}>›</button></div>
+    </section>`;
+  }
+  /* THE GAME (the renders' card): the day and the opponent, the final
+     with both clubs' logos, his numbers, and every at-bat. */
+  function gameTiles(g) {
+    const L = line(g.pas || []);
+    const t = [tile("H–AB", `${L.h}-${L.ab}`), tile("HR", L.hr), tile("RBI", L.rbi), tile("Total bases", L.tb),
+               tile("BB–K", `${L.bb}-${L.k}`), tile("SLG", avg3(L.slg))];
+    if (L.hr) t[1] = t[1].replace('class="cc-tile"', 'class="cc-tile hot"');
+    return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
+  }
+  function gameCard(d, g, sport) {
+    const sc = Array.isArray(g.score) && g.score.length === 2 && g.score.every((x) => x != null) ? g.score.map(Math.round) : null;
+    const won = sc ? (sc[0] > sc[1] ? "W" : sc[0] < sc[1] ? "L" : "T") : "";
+    const o = Q.h.team(sport, g.opp);
+    const oppName = o.name || (typeof teamNameIn === "function" ? teamNameIn(sport, g.opp) : "") || g.opp;
+    const dt = when(g.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    const S = state(), seq = !!(S && S.opt && S.opt.pbk), pas = g.pas || [];
+    const board = sc ? `<div class="mb-board">
+        <div class="mb-side">${mark(sport, g.team, 44)}<span><b>${esc(g.team)}</b><em>${sc[0]}</em></span></div>
+        <div class="mb-fin"><small>Final</small><b class="${won.toLowerCase()}">${won}</b></div>
+        <div class="mb-side r"><span><b>${esc(g.opp)}</b><em>${sc[1]}</em></span>${mark(sport, g.opp, 44)}</div></div>` : "";
+    const any = pas.some((p) => (p.ps || []).length);
+    return `<section class="cc-card mb-game">
+      <header class="mb-game-h"><span class="mb-when"><b>${esc(dt)}</b> ${g.home === false ? "at" : "vs"} ${esc(oppName)}</span>${sc
+        ? `<em class="mb-res ${won.toLowerCase()}">${won} ${sc[0]}-${sc[1]}</em>` : ""}</header>
+      ${board}${gameTiles(g)}
+      <div class="mb-sub-h"><h4 class="mb-sub">At bats <span class="cc-n">(${pas.length})</span></h4><div class="cc-tools">${Q.h.tools(pas, sprayFlags, SPRAY_FILTERS)}</div></div>
+      ${atBats(g)}
+      ${any ? `<div class="mb-foot"><button type="button" class="mb-btn" data-tog="pbk" aria-pressed="${seq}">${seq ? "Hide the pitches" : "View pitch breakdown"} <span aria-hidden="true">→</span></button></div>` : ""}
+    </section>`;
+  }
+  /* EVERY AT-BAT AS THE RENDERS' TABLE: its number, the inning, the pitch
+     it ended on and how fast, what it became and where, how hard and how
+     far. A phone folds the pitch's speed under its name; a wide card
+     gives it a column. The breakdown adds each at-bat's pitches in order,
+     coloured by what came of each. */
+  const AB_COLS = [{ h: "#", c: "cc-c-n", p: "16px", w: "24px" },
+                   { h: "Inn", c: "cc-c-q", p: "30px", w: "44px" },
+                   { h: "Pitch", c: "cc-c-m", p: "minmax(0,1fr)" },
+                   { h: "Pitch", c: "cc-c-t mb-c-pt", w: "minmax(0,.9fr)" },
+                   { h: "MPH", c: "mb-c-mph", w: "64px" },
+                   { h: "Result", c: "mb-c-res", p: "minmax(0,1.25fr)", w: "minmax(0,1.4fr)" },
+                   { h: "EV", c: "cc-c-v", p: "30px", w: "60px", r: 1 },
+                   { h: "Dist", c: "cc-c-v", p: "44px", w: "64px", r: 1 }];
+  function seqHTML(p) {
+    const ps = p.ps || [];
+    if (!ps.length) return "";
+    return `<span class="mb-seq"><small>${esc(`${vsWho(p)} · ${ps.length} pitch${ps.length === 1 ? "" : "es"}`)}</small>${ps.map((x, j) => {
+      const o = outcome(x[2]), v = x[1] == null ? "" : ` ${Math.round(x[1])}`;
+      return `<em class="mb-pc ${o}" title="${esc(`${pitchName(x[0])}${v ? `,${v} mph` : ""}: ${OUTCOME[o]}`)}">${j + 1} ${esc(x[0] || "?")}${v}</em>`;
+    }).join("")}</span>`;
+  }
+  function atBats(g) {
+    const S = state(), seq = !!(S && S.opt && S.opt.pbk);
+    return grid("ab", AB_COLS, (g.pas || []).map((p, i) => {
+      const lp = lastPitch(p), name = lp ? pitchName(lp[0]) : "—", v = lp && lp[1] != null ? Math.round(lp[1]) : null;
       return {
         i, f: sprayFlags(p),
-        said: [innLabel(p.inn, p.half), vsWho(p), p.ev, ballWords(p), p.rbi ? `${p.rbi} RBI` : "", hard ? "hard hit" : ""]
-          .filter(Boolean).join(", "),
-        cells: [`${i + 1}`, esc(innLabel(p.inn, p.half) || "—"),
-                two(vsWho(p), [innLabel(p.inn, p.half), p.rbi ? `${p.rbi} RBI` : "", ballWords(p)].filter(Boolean).join(" · ")),
-                two(vsWho(p), [p.ev, TYPE[p.tr] || "", p.dir && p.dir !== "center" ? DIR[p.dir] : ""].filter(Boolean).join(" · ")),
-                esc(p.ls == null ? "—" : `${Math.round(p.ls)}`), esc(p.la == null ? "—" : `${Math.round(p.la)}°`),
-                esc(p.d == null ? "—" : `${Math.round(p.d)}`), pills(res), [p.rbi ? `${p.rbi}` : "—", p.rbi ? "gain" : "miss"]],
+        said: [`${nth(p.inn)} inning`, vsWho(p), lp ? `${name}${v == null ? "" : ` at ${v} mph`}` : "", result(p), ballWords(p),
+               p.rbi ? `${p.rbi} RBI` : ""].filter(Boolean).join(", "),
+        cells: [`${i + 1}`, esc(nth(p.inn)), two(name, v == null ? "" : `${v} mph`), esc(name), esc(v == null ? "—" : v),
+                `<b class="mb-rs ${tone(p.et)}">${esc(result(p))}</b>${p.rbi ? `<small>${p.rbi} RBI</small>` : ""}`,
+                esc(p.ls == null ? "—" : Math.round(p.ls)), esc(p.d == null ? "—" : `${Math.round(p.d)} ft`)],
+        more: seq ? seqHTML(p) : "",
       };
     }));
   }
+  /* THE GAME'S SUMMARY (the renders' row under the table): the pitches he
+     saw and how many were fastballs, how hard he hit the ball and the
+     hardest, and the balls at 95 mph or more. */
+  function summaryCard(g) {
+    const pas = g.pas || [], seen = [].concat(...pas.map((p) => p.ps || []));
+    const n = seen.length || pas.reduce((a, p) => a + (p.np || 0), 0);
+    const fast = seen.length ? seen.filter((x) => GROUP[x[0]] === "F").length / seen.length : null;
+    const L = line(pas);
+    const t = [tile("Pitches seen", n || "—"), tile("Fastball %", pct(fast)), tile("Avg exit velo", L.ev == null ? "—" : num1(L.ev), "mph"),
+               tile("Hardest hit", L.max == null ? "—" : num1(L.max), "mph"), tile("Hard hits", L.hard, "95+ mph")];
+    return `<section class="cc-card cc-stats mb-sum"><h3 class="cc-card-t">Game summary</h3><div class="cc-tiles">${t.join("")}</div></section>`;
+  }
+
+  /* ---------------- his season, against any pitch ---------------- */
+  /* THE SEASON'S NUMBERS (the renders' SEASON STATS), against every pitch
+     or one kind (the pitch the at-bat ended on: the one he put in play,
+     struck out or walked on), or one hand. */
+  const VS = [["", "All pitches"], ["F", "Fastballs"], ["B", "Breaking balls"], ["O", "Offspeed"],
+              ["R", "vs right-handers"], ["L", "vs left-handers"]];
+  const inVs = (p, k) => !k || (k === "R" || k === "L" ? p.ph === k : GROUP[(lastPitch(p) || [""])[0]] === k);
+  function seasonStats(d, sport) {
+    const S = state(), all = plays(d.games);
+    const opts = VS.filter(([v]) => !v || all.some((p) => inVs(p, v)));
+    const k = opts.some(([v]) => v === ((S && S.opt && S.opt.vs) || "")) ? ((S && S.opt && S.opt.vs) || "") : "";
+    const L = line(all.filter((p) => inVs(p, k)));
+    const sel = opts.length > 1 ? `<span class="cc-filt"><select data-opt="vs" aria-label="Against which pitches">${opts.map(([v, w]) =>
+      `<option value="${v}"${v === k ? " selected" : ""}>${esc(w)}</option>`).join("")}</select></span>` : "";
+    // Our expected average and slugging ride beside his own (engine/mlb/xstats).
+    const big = [tile("H–AB", `${L.h}-${L.ab}`, `${avg3(L.avg)} AVG${L.xba == null ? "" : ` · xBA ${avg3(L.xba)}`}`),
+                 tile("HR", L.hr, L.pa ? `${(100 * L.hr / L.pa).toFixed(1)}% of PA` : ""),
+                 tile("RBI", L.rbi, `${avg3(L.obp)} OBP`),
+                 tile("Total bases", L.tb, `${avg3(L.slg)} SLG${L.xslg == null ? "" : ` · xSLG ${avg3(L.xslg)}`}`)];
+    const small = [tile("OPS", avg3(L.ops)), tile("BB–K", `${L.bb}-${L.k}`), tile("Exit velocity", L.ev == null ? "—" : `${num1(L.ev)} mph`, "average"),
+                   tile("Launch angle", L.la == null ? "—" : `${num1(L.la)}°`, "average"),
+                   tile("Hard hit", pct(L.bip ? L.hard / L.bip : null), "95+ mph"), tile("Sweet spot", pct(L.nla ? L.sweet / L.nla : null), "8–32°")];
+    const vs = VS.find(([v]) => v === k);
+    const one = { F: "a fastball", B: "a breaking ball", O: "an offspeed pitch" };
+    return `<section class="cc-card cc-stats mb-stats"><header class="cc-card-h"><h3 class="cc-card-t">Season stats (${esc(Q.h.seasonName(sport, d.season))})</h3>${sel}</header>
+      <div class="cc-tiles cc-tiles-2 mb-big">${big.join("")}</div>
+      <div class="cc-tiles cc-tiles-6">${small.join("")}</div>
+      ${k ? `<p class="mb-cap">${esc(one[k] ? `His ${L.pa} plate appearances that ended on ${one[k]}: the pitch he put in play, struck out or walked on.`
+        : `His ${L.pa} plate appearances ${vs[1]}.`)}</p>` : ""}
+    </section>`;
+  }
+
+  /* ---------------- the table's tools, the splits ---------------- */
   const sprayFlags = (p) => [HITS[p.et] ? "h" : "", p.et === "home_run" ? "hr" : "", p.x != null ? "bip" : "",
                              p.ls != null && p.ls >= 95 ? "hard" : "", /strikeout/.test(p.et) ? "k" : "",
                              /walk|hit_by_pitch/.test(p.et) ? "bb" : "", p.rbi ? "rbi" : ""].filter(Boolean).join(" ");
   const SPRAY_FILTERS = [["", "Every plate appearance"], ["h", "Hits"], ["hr", "Home runs"], ["bip", "Balls in play"],
                          ["hard", "Hard hit"], ["k", "Strikeouts"], ["bb", "Walks"], ["rbi", "Drove in a run"]];
-  const sprayCsv = (g) => [["#", "Inning", "Pitcher", "Throws", "Result", "Event", "Exit velocity (mph)", "Launch angle",
-                            "Distance (ft)", "Batted ball", "Direction", "RBI", "Pitches", "xBA"]]
-    .concat((g.pas || []).map((p, i) => [i + 1, innLabel(p.inn, p.half), p.p, p.ph, SHORT[p.et] || "", p.ev,
-      p.ls == null ? "" : p.ls, p.la == null ? "" : p.la, p.d == null ? "" : p.d, TYPE[p.tr] || "", DIR[p.dir] || "",
-      p.rbi || 0, p.np == null ? "" : p.np, p.xh == null ? "" : p.xh]));
+  const sprayCsv = (g) => [["#", "Inning", "Pitcher", "Throws", "Pitch", "Pitch speed (mph)", "Result", "Event",
+                            "Exit velocity (mph)", "Launch angle", "Distance (ft)", "Batted ball", "Direction", "RBI",
+                            "Pitches", "Every pitch", "xBA"]]
+    .concat((g.pas || []).map((p, i) => {
+      const lp = lastPitch(p);
+      return [i + 1, nth(p.inn), p.p, p.ph, lp ? pitchName(lp[0]) : "", lp && lp[1] != null ? lp[1] : "", result(p), p.ev,
+              p.ls == null ? "" : p.ls, p.la == null ? "" : p.la, p.d == null ? "" : p.d, TYPE[p.tr] || "", DIR[p.dir] || "",
+              p.rbi || 0, p.np == null ? "" : p.np,
+              (p.ps || []).map((x) => `${x[0] || "?"}${x[1] == null ? "" : ` ${x[1]}`} ${OUTCOME[outcome(x[2])]}`).join("; "),
+              p.xh == null ? "" : p.xh];
+    }));
   /* Our expected average and slugging (engine/mlb/xstats), and what the
      held-out test (engine/mlb/xstatsfit) said of them, if it has run. */
   function xNote(d) {
@@ -212,49 +536,91 @@
       out.push(tableHTML("By where he hit it", H("Direction"), d.by_dir.map((x) => [x.name, ...C(x)])));
     }
     if (d.by_hand && d.by_hand.length) {
-      out.push(tableHTML("Against right- and left-handers", ["Pitcher", "PA", "H", "HR", "BB", "K", "AVG"],
-        d.by_hand.map((x) => [x.name, x.pa, x.h, x.hr, x.bb, x.k, avg3(x.avg)])));
+      out.push(tableHTML("Against right- and left-handers", ["Pitcher", "PA", "H", "HR", "BB", "K", "AVG", "OPS"],
+        d.by_hand.map((x) => [x.name, x.pa, x.h, x.hr, x.bb, x.k, avg3(x.avg), avg3(x.ops)])));
     }
     return out.join("");
   }
   /* THE OTHER VIEWS: his balls in play by how he hit them and where they
-     went, and his plate appearances against each hand, as bars. */
-  const SPRAY_VIEWS = [["type", "Batted ball", "by_type"], ["dir", "Direction", "by_dir"], ["hand", "Pitcher hand", "by_hand"]];
+     went, and the pitches he saw — each kind, how often he missed it when
+     he swung, and what he did when an at-bat ended on it — with his
+     plate appearances against each hand under them. */
+  const SPRAY_VIEWS = [["type", "Batted ball"], ["dir", "Direction"], ["pitch", "Pitch"]];
   const SPRAY_TITLE = { type: "Balls in play by how he hit them", dir: "Balls in play by direction",
-                        hand: "Plate appearances against each hand" };
+                        pitch: "The pitches he saw" };
+  function pitchesSeen(d) {
+    const by = {};
+    plays(d.games).forEach((p) => (p.ps || []).forEach((x, j, all) => {
+      const t = x[0] || "?", o = by[t] = by[t] || { seen: 0, sw: 0, wh: 0, pa: 0, ab: 0, h: 0, hr: 0 };
+      const oc = outcome(x[2]);
+      o.seen += 1;
+      if (oc === "w") o.wh += 1;
+      if (oc === "w" || oc === "f" || oc === "x") o.sw += 1;
+      if (j === all.length - 1) {
+        o.pa += 1;
+        if (!NOT_AB.has(p.et)) o.ab += 1;
+        if (HITS[p.et]) o.h += 1;
+        if (p.et === "home_run") o.hr += 1;
+      }
+    }));
+    return Object.entries(by).sort((a, b) => b[1].seen - a[1].seen);
+  }
   function sprayBars(d, view) {
-    if (view === "hand") {
-      return bars((d.by_hand || []).map((x) => [x.name, x.pa, `${x.h} H · ${x.hr} HR · ${x.bb} BB · ${x.k} K · AVG ${avg3(x.avg)}`]));
+    if (view === "pitch") {
+      const seen = bars(pitchesSeen(d).map(([t, o]) => [pitchName(t), o.seen,
+        `${o.sw ? pct(o.wh / o.sw) : "—"} of swings missed · ${o.pa} at-bat${o.pa === 1 ? "" : "s"} ended on it · ${o.ab ? avg3(o.h / o.ab) : "—"} AVG${o.hr ? ` · ${o.hr} HR` : ""}`]));
+      const hand = bars((d.by_hand || []).map((x) => [x.name, x.pa, `${x.h} H · ${x.hr} HR · ${x.bb} BB · ${x.k} K · ${avg3(x.avg)} AVG · ${avg3(x.ops)} OPS`]));
+      return (seen ? `<h4 class="cc-bh">Every pitch he saw, by kind</h4>${seen}` : "")
+        + (hand ? `<h4 class="cc-bh">Against right- and left-handers</h4>${hand}` : "");
     }
     return bars(((view === "type" ? d.by_type : d.by_dir) || []).map((x) => [x.name, x.bip || x.n,
       `${x.h} hit${x.h === 1 ? "" : "s"} · ${x.hr} HR · ${pct(x.n ? x.h / x.n : null)} hit rate${x.xba == null ? "" : ` · xBA ${avg3(x.xba)}`}`]));
   }
+  const SPLITS = "Every split · batted ball, direction, pitcher's hand";
+  function viewsOf(d) {
+    return SPRAY_VIEWS.filter(([k]) => (k === "pitch" ? (d.by_hand || []).length || plays(d.games).some((p) => (p.ps || []).length)
+      : (d[k === "type" ? "by_type" : "by_dir"] || []).length));
+  }
+  /* THE PAGE: the hero and the tabs over each view's cards. */
+  function page(c) {
+    const { d, g, sport, view, tabs, note, ink } = c;
+    const top = hero(d, sport) + tabs;
+    if (view === "game" && g) return top + recent(d, sport) + gameCard(d, g, sport) + summaryCard(g) + hitCard(d, g, sport, note, ink);
+    const splits = Q.h.splits(SPLITS, sprayTables(d));
+    if (view === "season") return top + hitCard(d, null, sport, note, ink) + seasonStats(d, sport) + splits;
+    return `${top}<section class="cc-card cc-dist"><header class="cc-card-h"><h3 class="cc-card-t">${esc(SPRAY_TITLE[view] || "")}</h3></header>${sprayBars(d, view)}</section>`
+      + seasonStats(d, sport) + splits;
+  }
 
   Q.draw("spray", {
-    one: "plate appearance", splitsTitle: "Every split · batted ball, direction, pitcher's hand",
+    one: "plate appearance", splitsTitle: SPLITS,
     items: (g) => g.pas || [],
     count: (L) => `${L.pa} plate appearances`,
     chip: (g) => `${g.line.h}-${g.line.ab}${g.line.hr ? `, ${g.line.hr} HR` : ""}`,
     zones: sprayZones,
-    game: (g) => sprayGame(g),
-    season: (d) => spraySeason(d),
-    legend: () => sprayLegend(),
-    gameSide: (g) => sprayTiles(g.line),
-    seasonSide: (d) => {
-      const L = d.season_line;
-      return `${sprayTiles(L)}
-        <div class="cc-tiles cc-tiles-2">${tile("AVG", avg3(L.avg), L.xba == null ? "" : `xBA ${avg3(L.xba)}`)}${tile("SLG", avg3(L.slg), L.xslg == null ? "" : `xSLG ${avg3(L.xslg)}`)}${tile("Exit velocity", L.ev == null ? "—" : `${num1(L.ev)} mph`, "average")}${tile("Launch angle", L.la == null ? "—" : `${num1(L.la)}°`, "average")}${tile("Hard hit", pct(L.bip ? L.hard / L.bip : null))}${tile("Sweet spot", pct(L.bip ? L.sweet / L.bip : null), "8–32°")}</div>`;
-    },
-    list: (g) => sprayList(g),
+    page,
+    // Each part on its own, as the page draws it (and its tests read it).
+    game: (g, d) => parkSVG(d || { games: [g] }, g, "mlb"),
+    season: (d) => parkSVG(d, null, "mlb"),
+    legend: () => legend(),
+    gameSide: (g) => gameTiles(g),
+    seasonSide: (d) => seasonStats(d, d.sport || "mlb"),
+    list: (g) => atBats(g),
     flags: sprayFlags, filters: SPRAY_FILTERS, csv: sprayCsv,
-    views: (d) => SPRAY_VIEWS.filter(([, , k]) => (d[k] || []).length).map(([k, name]) => [k, name]),
+    views: (d) => viewsOf(d),
     barTitle: (v) => SPRAY_TITLE[v],
     bars: (d, v) => sprayBars(d, v),
     splits: (d) => sprayTables(d),
-    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn.${xNote(d)}</p>`,
-    tip: (p) => `<b class="${band(p.et)}">${esc(p.ev)}</b>${p.rbi ? ` · ${p.rbi} RBI` : ""}
-      <span>${esc([innLabel(p.inn, p.half), `off ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`, ballWords(p),
-                   p.xh != null ? `xBA ${avg3(p.xh)}` : ""].filter(Boolean).join(" · "))}</span>`,
+    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not his park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one he put in play, struck out or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. Runs scored, stolen bases and barrels are not shown: the feeds the page reads do not carry the first two game by game, and the league does not publish its barrel table.${xNote(d)}</p>`,
+    // The page's own arithmetic, for its tests.
+    _t: { line, result, nth, wallFt, inVs, pitchesSeen },
+    tip: (p) => {
+      const lp = lastPitch(p);
+      return `<b class="${band(p.et)}">${esc(result(p))}</b>${p.rbi ? ` · ${p.rbi} RBI` : ""}
+      <span>${esc([`${nth(p.inn)} inning`, `off ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`,
+                   lp ? `${pitchName(lp[0])}${lp[1] == null ? "" : ` ${Math.round(lp[1])} mph`}` : "", ballWords(p),
+                   p.xh != null ? `xBA ${avg3(p.xh)}` : ""].filter(Boolean).join(" · "))}</span>`;
+    },
   });
 
   /* ---------------- the strike zone ---------------- */

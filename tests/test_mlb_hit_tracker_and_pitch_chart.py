@@ -318,8 +318,10 @@ def test_the_page_draws_both():
     if got is None:
         return
     assert got["balls"] == 2 and got["hr"] == 1 and got["seasonBalls"] == 3 and got["pulled"]
-    assert ">HR<" in got["list"] and ">1B<" in got["list"] and "vs Tarik Skubal (L)" in got["list"]
-    assert "110 mph · 28° · 431 ft · fly ball" in got["list"] and ">Hard hit<" in got["list"]
+    # The at-bats as the hit page's renders read them (2026-10-14): what it
+    # became and where, the pitch it ended on; the pitcher and the ball in words.
+    assert ">Home Run (LF)<" in got["list"] and ">Single (RF)<" in got["list"] and "vs Tarik Skubal (L)" in got["list"]
+    assert "110 mph · 28° · 431 ft · fly ball" in got["list"] and ">Four-seam<" in got["list"]
     assert ">2-2<" in got["tiles"] and "Total bases" in got["tiles"] and ">5<" in got["tiles"]
     assert "Exit velocity" in got["side"] and "Sweet spot" in got["side"]
     assert "Against right- and left-handers" in got["tables"] and "By where he hit it" in got["tables"]

@@ -165,6 +165,14 @@ def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
         # The site's own photo first; a chart that knows his face from its
         # own record (a fighter's ESPN id) keeps it when the site has none.
         out["face"] = statlogs.face(conn, sport, out["player"]) or out.get("face") or ""
+        # His position and number for the chart's head, off his club's
+        # published roster where the chart's own record names neither.
+        if not out.get("position") or not out.get("jersey"):
+            meta = statlogs.roster_meta(sport, out["player"], out.get("team") or "")
+            if meta.get("position") and not out.get("position"):
+                out["position"] = meta["position"]
+            if meta.get("number") and not out.get("jersey"):
+                out["jersey"] = meta["number"]
     elif not stored(conn, sport):
         out = {"filling": True}
     return out

@@ -389,13 +389,38 @@ def _roster_players(sport: str, data_dir=None) -> list[dict]:
             for pl in players:
                 name = str((pl or {}).get("player") or "").strip()
                 if name:
+                    # A jersey is a string to print: 0 is a number a man
+                    # wears, not a missing one.
+                    num = pl.get("number")
+                    num = pl.get("jersey") if num in (None, "") else num
                     out.append({"player": name, "team": team,
                                 "position": str(pl.get("position") or ""),
-                                "headshot": str(pl.get("headshot") or "")})
+                                "headshot": str(pl.get("headshot") or ""),
+                                "number": "" if num in (None, "") else str(num)})
     except Exception:                                    # noqa: BLE001
         out = []      # no roster published for this league: logs only
     _ROSTER[key] = (now, out)
     return out
+
+
+def roster_meta(sport: str, player: str, team: str = "", data_dir=None) -> dict:
+    """``{"position", "number"}`` off the published roster, or ``{}``.
+
+    For the head of his chart, beside his name (2026-10-14, Ethan's renders
+    of the MLB hit page: "RF #22"). Where the chart knows his team only
+    that club's roster answers, so a namesake on another club, or the
+    man a traded player was last season, is never printed as him; with
+    no team, only a name the league carries once. Never raises: no
+    roster on disk is ``{}``."""
+    from .playersearch import norm
+    want = norm(player)
+    if not want:
+        return {}
+    hits = [r for r in _roster_players(sport, data_dir) if norm(r["player"]) == want
+            and (not team or r["team"] == team)]
+    if len(hits) != 1:
+        return {}
+    return {"position": hits[0]["position"], "number": hits[0].get("number") or ""}
 
 
 def _roster_hits(sport: str, q: str, want: int, seen: set,
