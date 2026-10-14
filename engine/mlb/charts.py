@@ -408,6 +408,9 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     by_hand = [dict(_hline([p for p in every if p["ph"] == h]), key=h, name=label)
                for h, label in (("R", "vs right-handers"), ("L", "vs left-handers"))
                if any(p["ph"] == h for p in every)]
+    # The final over the game's park (the chart's frame, 2026-10-14).
+    from ..carries import scoreboard
+    scoreboard(conn, "mlb", pick, out_games)
     latest = out_games[0] if out_games else {}
     from .xstatsfit import measured
     m = measured() if model else None
@@ -489,6 +492,8 @@ def pitches_chart(conn, player: str, season: int | None = None) -> dict:
         games.append({"id": gpk, "date": g["date"], "opp": opp, "home": home, "team": team, "line": line,
                       "mix": _mix(g["p"]), "p": g["p"], "faced": faced})
     games.sort(key=lambda g: (g["date"], g["id"]), reverse=True)
+    from ..carries import scoreboard
+    scoreboard(conn, "mlb", pick, games)
     every = [p for g in games for p in g["p"]]
     all_pas = [x for v in pas_by.values() for x in v]
     whiff_codes = _whiffs()

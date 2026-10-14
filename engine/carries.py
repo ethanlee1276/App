@@ -609,8 +609,15 @@ def scoreboard(conn, sport: str, season: int, games: list[dict]) -> list[dict]:
 
     ``games`` are a chart's own (``{period, team, opp, home, ...}``); each
     gains ``score: [his team's, the opponent's]`` and, in the NFL,
-    ``rec`` and ``orec`` ("4-1", "3-2-1"). Returns the same list."""
-    if sport not in ("nfl", "cfb") or not games:
+    ``rec`` and ``orec`` ("4-1", "3-2-1"). Returns the same list.
+
+    The daily leagues (2026-10-14, every chart in the same frame) have
+    their finals too: see ``_daily_finals``."""
+    if not games:
+        return games
+    if sport in DAILY:
+        return _daily_finals(conn, sport, games)
+    if sport not in ("nfl", "cfb"):
         return games
     rows = conn.execute(
         "SELECT period, home, away, home_score, away_score FROM games "
@@ -644,6 +651,52 @@ def scoreboard(conn, sport: str, season: int, games: list[dict]) -> list[dict]:
         week = _int(g.get("period"))
         if sport == "nfl" and week:
             g["rec"], g["orec"] = record(me, week), record(opp, week)
+    return games
+
+
+#: The leagues whose games table is keyed by the day (``period`` is the date).
+DAILY = ("nba", "wnba", "mlb", "nhl")
+
+
+def _daily_finals(conn, sport: str, games: list[dict]) -> list[dict]:
+    """A daily league's finals, for its charts' games (``{date, team, opp,
+    ...}``): the games table's row for that day between those two teams,
+    his team's score first, whichever side was home. Never a record: a
+    daily league's table is filled night by night and can be short a game,
+    and a record short of a game is a wrong record.
+
+    Two games between the same teams on one day (a doubleheader) are told
+    apart only by the leg the game names (``leg``; the table keys the
+    second "-G2"); a chart game that names none gets no final, rather than
+    the other game's."""
+    from collections import Counter
+    days = sorted({str(g.get("date") or "") for g in games if g.get("date")})
+    if not days:
+        return games
+    finals: dict = {}
+    for i in range(0, len(days), 400):
+        part = days[i:i + 400]
+        for p, gid, h, a, hs, as_ in conn.execute(
+                f"SELECT period, game_id, home, away, home_score, away_score FROM games WHERE sport=? "
+                f"AND period IN ({','.join('?' * len(part))}) AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                (sport, *part)):
+            finals.setdefault((str(p), frozenset((h, a))), []).append((str(gid or ""), h, float(hs), float(as_)))
+    key = lambda g: (str(g.get("date") or ""), frozenset((g.get("team") or "", g.get("opp") or "")))  # noqa: E731
+    twice = Counter(key(g) for g in games)
+    for g in games:
+        me, opp = g.get("team") or "", g.get("opp") or ""
+        if not me or not opp or me == opp:
+            continue
+        rows = finals.get(key(g), [])
+        if "leg" in g and g["leg"]:
+            leg = int(g["leg"])
+            rows = [r for r in rows if (r[0].endswith(f"-G{leg}") if leg > 1 else "-G" not in r[0])]
+        elif twice[key(g)] > 1:
+            continue
+        if len(rows) != 1:
+            continue
+        _gid, home, hs, as_ = rows[0]
+        g["score"] = [hs, as_] if home == me else [as_, hs]
     return games
 
 

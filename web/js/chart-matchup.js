@@ -13,6 +13,11 @@
    weighted by the share), where the opponent ranks, and every number in
    the table. Nothing on it moves a price, and the note says so.
 
+   In the frame of Ethan's NFL renders (2026-10-14): tonight's game over
+   his team's colours and the opponent's (the frame draws it from the
+   team his own charts name), the zones in a card with how they are read
+   one tap away, the numbers as icon tiles.
+
    No inline handlers: the page's CSP forbids them. */
 (function () {
   "use strict";
@@ -77,7 +82,8 @@
     const F = fmt(d), o = d.overall || {}, t = tone(d, d.fit || 0);
     const best = d.zones.slice().sort((a, b) => b.share - a.share)[0];
     const out = [
-      `<div class="cc-tile mv-fit ${t}"><span class="cc-k">Fit</span><b>${esc(d.fit == null ? "—" : F.d(d.fit))}</b><i>${esc(FIT[d.family] || d.unit)}</i></div>`,
+      // The site's own tile (its icon too), coloured by which way the fit leans.
+      tile("Fit", d.fit == null ? "—" : F.d(d.fit), FIT[d.family] || d.unit).replace('class="cc-tile"', `class="cc-tile mv-fit ${t}"`),
       tile("Their rank", o.rank ? `${nth(o.rank)} of ${o.of}` : "—", "1st is the best for him"),
       tile(d.family === "hitter" ? "Staff allows" : d.family === "goalie" || d.family === "pitcher" ? "They do" : "They allow",
            o.rate == null ? "—" : F.v(o.rate), o.league == null ? "" : `league ${F.v(o.league)}`),
@@ -108,8 +114,9 @@
     one: "zone", items: () => [], chip: () => "", count: (L) => `${L.n}`,
     only: (d, sport) => ({
       top: `<div class="cc-title">${esc(`Tonight: ${opp(d, sport)} · ${d.season_label || d.season}`)}</div>`,
-      fig: `<div class="cc-stage">${zonesSVG(d)}</div>`,
-      side: `${legend()}${tiles(d, sport)}`,
+      // The legend under the drawing, as every chart's is.
+      fig: `<div class="cc-stage">${zonesSVG(d)}</div>${legend()}`,
+      side: tiles(d, sport),
       tail: fold("zones", `Zone by zone · ${d.zones.length}`, table(d)),
     }),
     note: (d) => noteHTML(d, d.sport),

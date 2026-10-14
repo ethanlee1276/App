@@ -188,6 +188,9 @@ def _chart(conn, player: str, season, who: str) -> dict:
     model = _model()
     games = _games(rows, model, who)
     _homes(conn, games)
+    # The final over the game's rink (the chart's frame, 2026-10-14).
+    from ..carries import scoreboard
+    scoreboard(conn, "nhl", pick, games)
     line = _skater_line if who == "shooter" else _goalie_line
     every = []
     for g in games:

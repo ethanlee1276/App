@@ -13,12 +13,18 @@
    drawn at the top of the attacking zone. Expected goals are the site's
    own model (engine/nhl/xg) and are said to be ours where they show.
 
+   IN THE FRAME OF ETHAN'S NFL RENDERS (2026-10-14): the ice dark with its
+   lines lit, a goal a lit gold mark, the slot, the high slot and the point
+   as the render's Left | Middle | Right with their counts, Distance | Shot
+   type | Strength as the route chart's other views, and every shot in the
+   render's table, filtered and downloadable.
+
    No inline handlers: the page's CSP forbids them. */
 (function () {
   "use strict";
   const Q = window.QBCarry && window.QBCarry.plug;
   if (!Q) return;
-  const { esc, tile, tableHTML, pct, num1, state } = Q.h;
+  const { esc, tile, tableHTML, pct, num1, state, grid, two, pills, bars } = Q.h;
   const sel = (i) => { const S = state(); return S && S.sel === i ? " sel" : ""; };
 
   /* ---------------- words ---------------- */
@@ -28,16 +34,35 @@
   const feet = (d) => (d == null ? "" : `${Math.round(d)} ft`);
   const shotType = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1).replace("-", " ") : "Shot");
   const xgWord = (s) => (s.xg == null ? "" : `${num1(s.xg * 100)}% chance (our xG)`);
+  const xg2 = (s) => (s.xg == null ? "—" : Number(s.xg).toFixed(2));
   const svPct = (v) => (v == null ? "—" : Number(v).toFixed(3).replace(/^0/, ""));
+  const how = (s) => [s.reb ? "Rebound" : "", s.rush ? "Off the rush" : ""].filter(Boolean);
+
+  /* ---------------- the zones ----------------
+     The render's Left | Middle | Right, on the ice: the slot (the crease
+     and the twenty feet in front of the net), the high slot and the
+     circles, and the point — the league's own distance bands, the crease
+     folded into the slot. */
+  const ZONE_OF = { crease: "S", slot: "S", high: "H", point: "P" };
+  const zones = {
+    label: "Where on the ice",
+    list: [["S", "Slot", "The slot"], ["H", "High slot", "High slot"], ["P", "Point", "The point"]],
+    of: (s) => ZONE_OF[s.z] || "",
+    noun: ["shot", "shots"],
+  };
 
   /* ---------------- the rink ---------------- */
   /* Feet from centre ice, the net at x = 89: drawn five pixels a foot,
-     the end boards at the top, the blue line (x = 25) at the foot. */
-  const S = 5;
-  const X = (y) => Math.max(3, Math.min(422, 212.5 - S * y));
-  const Y = (x) => Math.max(3, Math.min(377, S * (100 - x)));
+     the end boards at the top, the blue line (x = 25) at the foot. Dark
+     ice, the lines lit (a faint wide copy under each, no filter). */
+  const SC = 5;
+  const X = (y) => Math.max(3, Math.min(422, 212.5 - SC * y));
+  const Y = (x) => Math.max(3, Math.min(377, SC * (100 - x)));
   function rinkSVG() {
     return `<path class="nh-ice" d="M0 380 V140 A140 140 0 0 1 140 0 H285 A140 140 0 0 1 425 140 V380 Z"/>
+      <g class="nh-glow red"><line x1="28.8" y1="55" x2="396.2" y2="55"/>
+        <circle cx="102.5" cy="155" r="75"/><circle cx="322.5" cy="155" r="75"/></g>
+      <line class="nh-blue-glow" x1="0" y1="376" x2="425" y2="376"/>
       <line class="nh-goal" x1="28.8" y1="55" x2="396.2" y2="55"/>
       <path class="nh-crease" d="M182.5 55 A30 30 0 0 0 242.5 55 Z"/>
       <rect class="nh-net" x="197.5" y="38.3" width="30" height="16.7"/>
@@ -53,8 +78,8 @@
     const cls = goalie ? (s.g ? "ga" : "sv") : s.k;
     const shape = s.k === "block" && !goalie
       ? `<path class="nh-mark cx-mark block${sel(i)}" d="M${x - 4} ${y - 4} L${+x + 4} ${+y + 4} M${+x + 4} ${y - 4} L${x - 4} ${+y + 4}"/>`
-      : `<circle class="nh-mark cx-mark ${cls}${sel(i)}" cx="${x}" cy="${y}" r="${s.g ? 7 : 5}"/>`;
-    return `<g class="cc-carry" data-i="${i}"><circle class="nh-hit" cx="${x}" cy="${y}" r="11"/>${shape}</g>`;
+      : `${s.g ? `<circle class="nh-halo ${cls}" cx="${x}" cy="${y}" r="12"/>` : ""}<circle class="nh-mark cx-mark ${cls}${sel(i)}" cx="${x}" cy="${y}" r="${s.g ? 7 : 5}"/>`;
+    return `<g class="cc-carry" data-i="${i}" data-z="${zones.of(s)}"><circle class="nh-hit" cx="${x}" cy="${y}" r="11"/>${shape}</g>`;
   }
   const drawGame = (goalie) => (g) => {
     const shots = g.shots || [];
@@ -110,23 +135,56 @@
          tile("Save %", svPct(L.sv_pct)), xgTile("xGA", L.xga, "expected · our model"), xgTile("GSAx", L.gsax, "saved above xG")];
     return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
   }
+
+  /* EVERY SHOT AS THE RENDERS' TABLE: its number, the period, the shot
+     (its kind and distance, and under it who it was on or who set it up),
+     its expected goals, and how it ended — a skater's from his side, a
+     goalie's from his. On a phone the period and the chance read under
+     the shot. */
+  const COLS = [{ h: "#", c: "cc-c-n", p: "18px", w: "26px" },
+                { h: "Per", c: "cc-c-q", w: "40px" },
+                { h: "Shot", c: "cc-c-m", p: "minmax(0,1fr)" },
+                { h: "Shot", c: "cc-c-m", w: "minmax(0,1fr)" },
+                { h: "Result", c: "cc-c-res", p: "92px", w: "170px" },
+                { h: "Dist", c: "cc-c-v", p: "30px", w: "52px", r: 1 },
+                { h: "xG", c: "cc-c-v", w: "48px", r: 1 }];
   function list(g, goalie) {
-    return `<div class="cc-list" role="list">${(g.shots || []).map((s, i) => {
-      const good = goalie ? !s.g : s.g || s.k === "sog";
-      const b = goalie ? (s.g ? "loss" : "gain") : s.g ? "gain" : s.k === "sog" ? "short" : "miss";
-      const tags = [STR[s.st] || "", s.reb ? "Rebound" : "", s.rush ? "Off the rush" : "",
-                    !goalie && s.a && s.a.length ? `Assists ${s.a.join(", ")}` : "",
-                    goalie && s.by ? `by ${s.by}` : "", !goalie && s.vs && s.k !== "block" ? `on ${s.vs}` : ""].filter(Boolean);
-      return `<button type="button" role="listitem" class="cc-row${sel(i)}" data-i="${i}">
-        <i class="dot ${b}"></i>
-        <span class="cc-r-q">${esc(per(s.p))}</span>
-        <span class="cc-r-dd">${esc(feet(s.d))}</span>
-        <span class="cc-r-h">${esc([shotType(s.t), xgWord(s)].filter(Boolean).join(" · "))}</span>
-        <b class="cc-r-y ${good ? "gain" : b}">${esc(goalie ? (s.g ? "Goal" : "Saved") : KIND[s.k] || s.k)}</b>
-        ${tags.length ? `<span class="cc-r-tags">${tags.map((x) => `<em>${esc(x)}</em>`).join("")}</span>` : ""}
-      </button>`;
-    }).join("")}</div>`;
+    return grid(goalie ? "saves" : "shotmap", COLS, (g.shots || []).map((s, i) => {
+      const word = goalie ? (s.g ? "Goal" : "Saved") : KIND[s.k] || s.k;
+      const tone = goalie ? (s.g ? "bad" : "good") : s.g ? "gold" : s.k === "sog" ? "good" : "mute";
+      const res = [[word, tone]].concat(STR[s.st] ? [[STR[s.st], "tag"]] : []);
+      const who = goalie ? (s.by ? `by ${s.by}` : "")
+        : [s.vs && s.k !== "block" ? `on ${s.vs}` : "", s.a && s.a.length ? `Assists ${s.a.join(", ")}` : ""].filter(Boolean).join(" · ");
+      const xgs = s.xg == null ? "" : `xG ${xg2(s)}`;
+      return {
+        i, f: goalie ? goalieFlags(s) : skaterFlags(s),
+        said: [per(s.p), shotType(s.t), feet(s.d), word, STR[s.st] || "", ...how(s), xgWord(s), who].filter(Boolean).join(", "),
+        cells: [`${i + 1}`, esc(per(s.p) || "—"),
+                two(`${shotType(s.t)}${s.d != null ? ` · ${feet(s.d)}` : ""}`, [per(s.p), xgs, ...how(s), who].filter(Boolean).join(" · ")),
+                two(goalie ? s.by || "—" : shotType(s.t), [goalie ? shotType(s.t) : "", ...how(s), goalie ? "" : who].filter(Boolean).join(" · ")),
+                pills(res), esc(s.d == null ? "—" : `${Math.round(s.d)}`), esc(xg2(s))],
+      };
+    }));
   }
+  const skaterFlags = (s) => [s.g ? "g" : "", s.g || s.k === "sog" ? "on" : "", s.k === "miss" ? "miss" : "",
+                              s.k === "block" ? "blk" : "", s.st === "PP" ? "pp" : "", s.reb ? "reb" : "", s.rush ? "rush" : ""]
+    .filter(Boolean).join(" ");
+  const goalieFlags = (s) => [s.g ? "ga" : "sv", s.st === "PP" ? "pp" : "", s.reb ? "reb" : "", s.rush ? "rush" : ""]
+    .filter(Boolean).join(" ");
+  const FILTERS = {
+    skater: [["", "Every attempt"], ["g", "Goals"], ["on", "On goal"], ["miss", "Missed the net"], ["blk", "Blocked"],
+             ["pp", "Power play"], ["reb", "Rebounds"], ["rush", "Off the rush"]],
+    goalie: [["", "Every shot faced"], ["sv", "Saved"], ["ga", "Goals against"], ["pp", "On the power play"],
+             ["reb", "Rebounds"], ["rush", "Off the rush"]],
+  };
+  const csv = (goalie) => (g) => [goalie
+    ? ["#", "Period", "Shooter", "Shot", "Distance (ft)", "Result", "Strength", "Rebound", "Off the rush", "xG"]
+    : ["#", "Period", "Shot", "Distance (ft)", "Result", "Strength", "Rebound", "Off the rush", "xG", "Goalie", "Assists"]]
+    .concat((g.shots || []).map((s, i) => (goalie
+      ? [i + 1, per(s.p), s.by || "", shotType(s.t), s.d == null ? "" : Math.round(s.d), s.g ? "Goal" : "Saved",
+         s.st || "", s.reb ? 1 : 0, s.rush ? 1 : 0, s.xg == null ? "" : s.xg]
+      : [i + 1, per(s.p), shotType(s.t), s.d == null ? "" : Math.round(s.d), KIND[s.k] || s.k, s.st || "",
+         s.reb ? 1 : 0, s.rush ? 1 : 0, s.xg == null ? "" : s.xg, s.vs || "", (s.a || []).join("; ")])));
   function tables(d, goalie) {
     const head = goalie ? ["Shots", "Goals", "Save %"] : ["Attempts", "On goal", "Goals", "Shooting"];
     const row = (x) => (goalie ? [x.name, x.on, x.goals, pct(x.on ? 1 - x.goals / x.on : null)]
@@ -137,7 +195,17 @@
     if (d.by_strength && d.by_strength.length) out.push(tableHTML("By strength", ["Strength", ...head], d.by_strength.map(row)));
     return out.join("");
   }
-  const note = (goalie) => `<p class="cc-note">Every ${goalie ? "shot on goal he faced" : "shot he took"} from the NHL’s own play-by-play, where it was taken, turned so every shot faces the net at the top (a half turn, so his left stays his left); a shot from beyond the blue line sits on it. ${goalie ? "Green was saved, red went in; an empty net is not his." : "Gold went in, green was on goal, a ring missed the net and a cross was blocked before it got there."} Expected goals (xG) are our own model, fitted on every stored shot by distance, angle, shot type, rebound, rush and strength${goalie ? "; xGA is the expected goals of the shots he faced, GSAx the goals he saved above it (xGA minus the goals against, GA)" : ""}.</p>`;
+  /* THE OTHER VIEWS: his shots, or the shots he faced, by distance, by
+     kind of shot and by strength, as bars. */
+  const VIEWS = [["dist", "Distance", "zones"], ["type", "Shot type", "by_type"], ["str", "Strength", "by_strength"]];
+  const TITLE = { dist: "by distance from the net", type: "by kind of shot", str: "by strength" };
+  function shotBars(d, view, goalie) {
+    const rows = d[(VIEWS.find(([k]) => k === view) || [])[2]] || [];
+    return bars(rows.map((x) => (goalie
+      ? [x.name, x.on, `${x.on - x.goals} saved · ${x.goals} against · ${pct(x.on ? 1 - x.goals / x.on : null)} saved`]
+      : [x.name, x.n, `${x.on} on goal · ${x.goals} goal${x.goals === 1 ? "" : "s"} · ${pct(x.pct)} shooting`])));
+  }
+  const note = (goalie) => `<p class="cc-note">Every ${goalie ? "shot on goal he faced" : "shot he took"} from the NHL’s own play-by-play, where it was taken, turned so every shot faces the net at the top (a half turn, so his left stays his left); a shot from beyond the blue line sits on it. ${goalie ? "Green was saved, red went in; an empty net is not his." : "Gold went in, green was on goal, a ring missed the net and a cross was blocked before it got there."} The slot is the crease and the twenty feet in front of the net, the high slot twenty to thirty-five feet out, the point the rest. Expected goals (xG) are our own model, fitted on every stored shot by distance, angle, shot type, rebound, rush and strength${goalie ? "; xGA is the expected goals of the shots he faced, GSAx the goals he saved above it (xGA minus the goals against, GA)" : ""}.</p>`;
 
   const spec = (goalie) => ({
     one: goalie ? "shot faced" : "shot attempt",
@@ -145,11 +213,17 @@
     items: (g) => g.shots || [],
     count: (L) => (goalie ? `${L.shots.toLocaleString()} shots faced` : `${L.att.toLocaleString()} attempts`),
     chip: (g) => (goalie ? `${g.line.saves}/${g.line.shots} saved` : `${g.line.sog} SOG${g.line.goals ? `, ${g.line.goals} G` : ""}`),
+    zones,
     game: drawGame(goalie),
     season: drawSeason(goalie),
-    gameSide: (g) => `${legend(goalie)}${goalie ? goalieTiles(g.line) : skaterTiles(g.line)}`,
-    seasonSide: (d) => `${legend(goalie)}${goalie ? goalieTiles(d.season_line, true) : skaterTiles(d.season_line, true)}`,
+    legend: () => legend(goalie),
+    gameSide: (g) => (goalie ? goalieTiles(g.line) : skaterTiles(g.line)),
+    seasonSide: (d) => (goalie ? goalieTiles(d.season_line, true) : skaterTiles(d.season_line, true)),
     list: (g) => list(g, goalie),
+    flags: goalie ? goalieFlags : skaterFlags, filters: FILTERS[goalie ? "goalie" : "skater"], csv: csv(goalie),
+    views: (d) => VIEWS.filter(([, , k]) => (d[k] || []).length).map(([k, name]) => [k, name]),
+    barTitle: (v) => `${goalie ? "Shots faced" : "Shot attempts"} ${TITLE[v]}`,
+    bars: (d, v) => shotBars(d, v, goalie),
     splits: (d) => tables(d, goalie),
     note: () => note(goalie),
     tip: (s) => `<b class="${goalie ? (s.g ? "loss" : "gain") : s.g ? "gain" : "miss"}">${esc(goalie ? (s.g ? "Goal" : "Saved") : KIND[s.k] || s.k)}</b>${s.d != null ? ` · ${esc(feet(s.d))}` : ""}

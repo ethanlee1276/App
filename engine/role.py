@@ -457,6 +457,10 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
     if sport == "mlb":
         side = ("pa", "spot", "seen") if lead == "pa" else ("pitches", "bf", "outs", "rest")
         shown = [k for k in shown if k in side]
+    # The final over the game's building (the chart's frame, 2026-10-14),
+    # read while a doubleheader's games still say which leg they were.
+    from .carries import scoreboard
+    scoreboard(conn, sport, pick, games)
     newest = games[::-1]
     position = "" if sport in ("nba", "wnba") else newest[0]["pos"]
     for g in games:

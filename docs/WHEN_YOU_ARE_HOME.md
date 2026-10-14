@@ -102,7 +102,15 @@ records and the final; his charts as chips with their counts; the games in
 a row with arrows; the field drawn dark with every play lit; a Left /
 Middle / Right filter with the counts under the field; the numbers as icon
 tiles; every play as a table that filters and downloads; and the route
-chart's Route type, Depth and Coverage tabs (step 79; AK). The whole picture, sport by sport, is in
+chart's Route type, Depth and Coverage tabs (step 79; AK). Every other
+sport's chart now wears the same frame, each in its own sport's terms: a
+guard's court with the paint, mid-range and threes as the filter, a
+hitter's field (pull, middle, opposite field), a pitcher's zone
+(fastballs, breaking, offspeed), a skater's or a goalie's rink (slot,
+high slot, point), a kicker's range; a final over the building in the
+NBA, MLB and NHL too, a fight over the arena, tonight's matchup over both
+teams' colours; and every play, batter, shot or kick in the same table
+(step 80; AL). The whole picture, sport by sport, is in
 `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -132,13 +140,13 @@ write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway). Every command runs on the box (`ssh`
 in first).
 
-**A. The box has today's code.** The first line should end `Every chart page in the frame of Ethan's renders: the game over its stadium, a lit field, every play as a table`
+**A. The box has today's code.** The first line should end `Every sport's chart page in the frame of the NFL renders: its own surface lit, its own zones, every play as a table`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor fdc0161f HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 89beaba7 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -780,6 +788,29 @@ page; tap `2025` on a receiver who played last season for the `Route
 type`, `Depth` and `Coverage` tabs. Every other league's chart (a QB's
 throws, a kicker, a hitter, a shooter, a skater, a fighter) sits in the
 same frame; a fighter and the matchup view have no stadium.
+
+**AL. Every other sport in the same frame** (step 80; one read-only
+command, seconds, then your phone). It reads a guard's, a hitter's and a
+skater's chart the way the page asks for them and prints each one's
+newest game: the day, the opponent and the final, his team's score
+first:
+```
+for q in "shots&sport=nba&player=Nikola%20Jokic" "spray&sport=mlb&player=Aaron%20Judge" "shotmap&sport=nhl&player=Auston%20Matthews"; do curl -s "http://127.0.0.1:8000/api/players/chart?kind=$q" | python3 -c "import json,sys; d=json.load(sys.stdin); g=(d.get('games') or [{}])[0]; print(d.get('sport'), d.get('player'), g.get('date'), g.get('opp'), g.get('score'))"; done
+```
+Paste back the three lines, e.g. `nba Nikola Jokić 2026-05-14 OKC [119.0,
+107.0]`. `None` for a score means the games table has no final for that
+day between those two teams (or two games that day, a doubleheader, and
+the chart can't say which): the page then shows `VS` or `AT`, never a
+guess, and never a record in these three leagues (their tables fill night
+by night and can be a game short). Then on your phone open any NBA, MLB or
+NHL Most Likely pick and scroll to his chart: the game over the arena or
+park with the final; `Paint / Mid-range / 3PT` (or `Pull / Center /
+Oppo`, `Fastballs / Breaking / Offspeed`, `Slot / High slot / Point`)
+fades the rest and lights that count; `Every shot (N)` (or plate
+appearance, batter, attempt) opens the table with its filter and the
+download; the `Zones`, `Batted ball` or `Distance` tab shows the bars. A
+UFC fighter's `Fight history` opens on the fight over the octagon render,
+the winner's side lit.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3035,6 +3066,74 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_a_target_chart_for_every_college_receiver.py` pinned the
     one `Targets–Rec` tile (`5-5`, `5-3`); they pin the two tiles now. New:
     `tests/test_the_chart_page_follows_ethans_renders.py`.
+80. **Every other sport in the frame of your renders** (2026-10-14, you:
+    "go match it with all the other sports too, but obviously make sense
+    and correlate it with that sport ... we want all these pages to be
+    matching between sports. So it all looks the same in like one put
+    together professional app"). AL checks it. The frame is now one set
+    of parts every league's chart fills (`js/carrychart.js`): the hero,
+    the chips, the tabs, the games row, the drawing's card with its
+    filter and its counts, the icon tiles, the every-play table with its
+    filter and download, the bars for the other views. EACH SPORT'S OWN
+    SURFACE, drawn dark with its lines lit the football field's way (a
+    faint wide copy under each line, no blur filter): a basketball court
+    with its lane in his team's colour, a make a lit dot and a miss a
+    cross (the league's own shot-chart marks); a ballpark with mowing
+    rings, the chalk lit and the wall in his colour; the strike zone lit;
+    a rink with its red and blue lines lit and a goal a lit gold mark; the
+    kicker's field with its mowing stripes, the end zone in his colour and
+    the posts in gold. EACH SPORT'S OWN THIRDS for the render's `Left /
+    Middle / Right`, with the counts under the drawing: the paint (the
+    restricted area and the rest of the lane), mid-range and threes — a
+    free throw has no spot on the floor and is in none; pulled, up the
+    middle, opposite field; a pitcher's fastballs, breaking balls and
+    offspeed (the league's own grouping; a pitchout is none); the slot
+    (crease and twenty feet), the high slot, the point; under 40 yards,
+    the 40s, 50 and longer (an extra point is in none). THE OTHER VIEWS as
+    the route chart's tabs, as bars: a shooter's zones beside the league's
+    percentage (a `+6% vs league` pill), kinds of shot, distance; a
+    hitter's batted balls, direction and the pitcher's hand; a pitcher's
+    mix, where his pitches crossed and his fastball start by start; a
+    skater's or goalie's distance, kind of shot and strength; a kicker's
+    distance beside the league, indoors, weather and pressure; a
+    fighter's methods, rounds and finishes. The season's shot chart shades
+    each zone green where he shoots two points or more better than the
+    league there and red where two or more worse. EVERY PLAY in the same
+    table as the carries and targets: a shot (its kind, the clock, the
+    distance, `Made 3` / `Missed 2` / `Blocked`, the points), a plate
+    appearance (the pitcher, exit velocity, launch angle, distance, `HR` /
+    `1B` / `Hard hit`, RBI), a batter faced (seen from the mound, so a
+    strikeout is green and a hit red), a shot attempt or a shot faced (its
+    kind, `Goal` / `On goal` / `Power play`, distance, our xG), a kick
+    (`Made` / `Missed` / `Blocked`, the weather, the points), his role's
+    numbers beside his season (`Above his avg`), a fight's numbers (his,
+    then his opponent's, who was ahead); each with its filter (makes,
+    threes, in the paint; hits, home runs, hard hit; strikeouts, walks;
+    goals, power play; field goals, from 50+) and a spreadsheet — the
+    game's shots, plate appearances or pitches, a role's whole season game
+    by game, a fighter's whole history. THE HEROES: the final over the
+    building in the NBA, MLB and NHL now too, read off the games table and
+    nothing else (`engine/carries._daily_finals`, added to the shot chart,
+    the hit tracker, the pitch chart, the shot and save maps and the role
+    chart): the row for that day between those two teams, his team's score
+    first; never a record in these leagues (their tables fill night by
+    night and can be a game short); a doubleheader told apart only by the
+    leg the game names, else no final rather than the other game's. A
+    fight is drawn over the site's octagon render, both fighters either
+    side, the winner's side lit and the result between them; tonight's
+    matchup over his team's colours and the opponent's, `Tonight · VS`.
+    Every tile wears its icon, and a name a narrow phone card would cut
+    (`Fight lasted`, `They allow`) drops its icon instead of being cut.
+    One change to the football tables too: a filter with only one choice
+    (`All carries` and nothing else) is no longer shown. Checked in
+    Chromium on the suite's own test data (not the box's): every chart
+    kind in the overlay at phone and desktop width with each of its tabs,
+    the basketball and hockey charts inline on a pick page with tonight's
+    matchup, four of them in the light theme: no script error, no
+    sideways scroll. The modules load only when a chart is opened, so the first
+    visit is unchanged (app 494.486 of 495 KB, first visit 610.995 of 611
+    KB). No pins changed. New:
+    `tests/test_every_sport_in_the_frame_of_the_renders.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

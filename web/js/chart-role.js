@@ -17,12 +17,17 @@
    game picked above it (a bar is a door to its game); the season tab
    lights his last three. A number not on file is a gap, never a zero.
 
+   IN THE FRAME OF ETHAN'S NFL RENDERS (2026-10-14): the game over its
+   building, the legend under the strips, the numbers as icon tiles, and
+   that game's numbers beside his season in the render's table, with his
+   whole season one tap away as a spreadsheet.
+
    No inline handlers: the page's CSP forbids them. */
 (function () {
   "use strict";
   const Q = window.QBCarry && window.QBCarry.plug;
   if (!Q) return;
-  const { esc, tile, tableHTML, pct, num1, ord, state } = Q.h;
+  const { esc, tile, tableHTML, pct, num1, ord, state, grid, two, pills } = Q.h;
   const st = () => state() || {};
   const now = () => st().data || {};
   const sel = (i) => (st().sel === i ? " sel" : "");
@@ -157,19 +162,39 @@
     if (a == null || b == null || Math.abs(a - b) < 1e-9) return "even with his season";
     return better(m, a, b) ? "up on his season" : "down on his season";
   }
+  /* THAT GAME BESIDE HIS SEASON, as the renders' table: each number, his
+     game, his average, his last three and his high, and whether the game
+     ran above or below his season. On a phone the average and the last
+     three read under the number's name. */
+  const COLS = [{ h: "Number", c: "cc-c-m", p: "minmax(0,1fr)" },
+                { h: "Number", c: "cc-c-m", w: "minmax(0,1fr)" },
+                { h: "This game", c: "cc-c-y", p: "62px", w: "84px", r: 1 },
+                { h: "Avg", c: "cc-c-v", w: "70px", r: 1 },
+                { h: "Last 3", c: "cc-c-v", w: "70px", r: 1 },
+                { h: "High", c: "cc-c-v", w: "70px", r: 1 },
+                { h: "Vs his avg", c: "cc-c-res", p: "86px", w: "120px" }];
   function rowList(g, d) {
     const L = d.season_line || {};
-    return `<div class="cc-list" role="list">${d.metrics.map((m, i) => {
+    return grid("role", COLS, d.metrics.map((m, i) => {
       const v = (g.v || {})[m.key], a = (L.avg || {})[m.key];
       const b = v == null || a == null || Math.abs(v - a) < 1e-9 ? "short" : better(m, v, a) ? "gain" : "loss";
-      return `<button type="button" role="listitem" class="cc-row${sel(i)}" data-i="${i}">
-        <i class="dot ${b}"></i>
-        <span class="cc-r-h">${esc(m.name)}</span>
-        <span class="cc-r-dd">avg ${esc(fmt(m, a, d.sport, true))}</span>
-        <b class="cc-r-y ${b}">${esc(fmt(m, v, d.sport))}</b>
-        <span class="cc-r-tags"><em>last 3 ${esc(fmt(m, (L.last3 || {})[m.key], d.sport, true))}</em><em>${esc(m.unit === "spot" ? "highest" : "high")} ${esc(fmt(m, m.unit === "spot" ? (L.low || {})[m.key] : (L.high || {})[m.key], d.sport))}</em></span>
-      </button>`;
-    }).join("")}</div>`;
+      const avg = fmt(m, a, d.sport, true), l3 = fmt(m, (L.last3 || {})[m.key], d.sport, true);
+      const top = fmt(m, m.unit === "spot" ? (L.low || {})[m.key] : (L.high || {})[m.key], d.sport);
+      const pill = v == null ? ["Not on file", "mute"] : b === "gain" ? ["Above his avg", "good"]
+        : b === "loss" ? ["Below his avg", "bad"] : ["Even", "mute"];
+      return {
+        i, said: [m.name, fmt(m, v, d.sport), `his season ${avg}`, `last 3 ${l3}`, `${m.unit === "spot" ? "highest" : "high"} ${top}`, pill[0]].join(", "),
+        cells: [two(m.name, `avg ${avg} · last 3 ${l3}`), two(m.name, m.short !== m.name ? m.short : ""),
+                [esc(fmt(m, v, d.sport)), b], esc(avg), esc(l3), esc(top), pills([pill])],
+      };
+    }));
+  }
+  //: His whole season, a game a row, as a spreadsheet.
+  function seasonCsv(g, d) {
+    const ms = d.metrics || [];
+    return [["Game", "Date", "Opponent", "Home or away", "Started"].concat(ms.map((m) => m.name))]
+      .concat((d.games || []).map((x) => [gameName(x, d), x.date || "", x.opp || "", x.home === true ? "home" : x.home === false ? "away" : "",
+        x.start == null ? "" : x.start ? "yes" : "no"].concat(ms.map((m) => { const v = (x.v || {})[m.key]; return v == null ? "" : v; }))));
   }
   function tables(d) {
     const L = d.season_line || {}, f = (m, v) => fmt(m, v, d.sport, true), out = [];
@@ -215,9 +240,11 @@
     game: (g, d) => strips(d, d.games.length - 1 - d.games.indexOf(g),
       `His role by game, ${gameName(g, d)} lit: ${d.metrics.map((m) => m.name.toLowerCase()).join(", ")}. Every number is listed below.`),
     season: (d) => strips(d, -1, `His role over the season, game by game: ${d.metrics.map((m) => m.name.toLowerCase()).join(", ")}.`),
-    gameSide: (g, d) => `${legend(d)}${gameTiles(g, d)}`,
-    seasonSide: (d) => `${legend(d)}${seasonTiles(d)}`,
+    legend: (g, d) => legend(d),
+    gameSide: (g, d) => gameTiles(g, d),
+    seasonSide: (d) => seasonTiles(d),
     list: (g, d) => rowList(g, d),
+    csv: seasonCsv, file: "game log", fileWhat: "his season, game by game,",
     splits: (d) => tables(d),
     note: (d) => `<p class="cc-note">Each bar is one of his games, the oldest on the left; the dashed line is his average over the season’s games on file. A gap is a game with that number not on file, never a zero. ${NOTE[d.sport] || ""} The chart describes his role; it does not move any price on the site.</p>`,
     tip: (m, g, d) => {

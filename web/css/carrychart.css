@@ -88,6 +88,17 @@
 .cc-hero-score.w em:last-child, .cc-hero-score.l em:first-child { color: var(--text-mute); }
 .cc-hero-mid .cc-hero-fin { color: var(--text-dim); font-weight: 700; }
 .cc-hero-sum b { font-family: var(--font-mono); font-size: clamp(26px, 5vw, 38px); }
+/* A fight over the arena (js/chart-ufc.js): a ring of initials for each
+   fighter where a team has its logo, the result between them in its
+   colour. */
+.uf-ring { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
+  border: 2px solid color-mix(in oklab, var(--text) 40%, transparent); background: color-mix(in oklab, var(--panel) 70%, transparent);
+  font-family: var(--font-headline); font-size: 20px; font-weight: 700; color: var(--text-dim); }
+.uf-ring.me { border-color: var(--brand); color: var(--text); }
+.cc-hero-vs.uf-gain { color: var(--good); }
+.cc-hero-vs.uf-loss { color: var(--bad); }
+.cc-hero-vs.uf-short { color: var(--text-dim); }
+.uf-hero .cc-hero-mid span { white-space: normal; max-width: 180px; }
 .cc-inline .cc-hero { margin-top: 12px; }
 .cc-inline .cc-hero-in { min-height: 140px; }
 @media (max-width: 560px) {
@@ -277,6 +288,8 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-legend .dt.c { background: var(--good); }
 .cc-legend .dt.m { border: 1.5px solid var(--text-mute); }
 .cc-legend .dt.i { background: var(--bad); }
+.cc-legend .sw.nb-hot { height: 11px; width: 16px; background: color-mix(in srgb, var(--good) 45%, transparent); }
+.cc-legend .sw.nb-cold { height: 11px; width: 16px; background: color-mix(in srgb, var(--bad) 45%, transparent); }
 
 /* the numbers: a tile each, its icon over its name (the renders' GAME STATS) */
 .cc-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
@@ -289,6 +302,9 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-k { display: flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
   font-weight: 800; color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cc-k .ic { flex: 0 0 auto; color: var(--brand); }
+/* a name the card would cut (carrychart.js measures it once drawn) */
+.cc-k.tight { letter-spacing: .03em; }
+.cc-k.tight .ic { display: none; }
 .cc-tile b { display: block; margin-top: 6px; font-family: var(--font-mono); font-size: clamp(18px, 3.4vw, 24px); color: var(--text); }
 .cc-tile i { display: block; font-style: normal; font-size: 10px; color: var(--text-faint); letter-spacing: .06em; }
 @media (max-width: 520px) {
@@ -330,7 +346,7 @@ button.cc-sd:hover { border-color: var(--border); }
    six columns; a target folds its route, depth and side into one cell
    over its quarter, and a wide card gives each its own column. */
 .cc-plays { container-type: inline-size; }
-.cc-tools { display: flex; align-items: center; gap: 8px; }
+.cc-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .cc-card > .cc-more .cc-tools { justify-content: flex-end; margin: 10px 0 2px; }
 .cc-dl { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-sm);
   border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text-dim); cursor: pointer; }
@@ -402,6 +418,27 @@ button.cc-sd:hover { border-color: var(--border); }
   .cc-tgts .cc-c-n, .cc-tgts .cc-c-res, .cc-tgts .cc-c-y, .cc-tgts .cc-c-yac { grid-column: auto; grid-row: auto; }
 }
 
+/* EVERY OTHER LEAGUE'S TABLE (2026-10-14, carrychart.js gridHTML): the
+   same rows and cells as the carry and target tables, the columns its
+   module names — a phone's and a wide card's, as two custom properties
+   it sets beside the cells that fill them. A cell only one of the two
+   shows is .cc-po (the phone's) or .cc-wo (the wide card's). Wide from
+   640px, so a narrow tablet keeps the phone's columns rather than
+   squeezing the wide card's. */
+.cc-grid .cc-lh, .cc-grid .cc-tr { grid-template-columns: var(--cc-p); }
+.cc-c-v { font-family: var(--font-mono); text-align: right; color: var(--text-dim); white-space: nowrap; }
+.cc-c-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.cc-grid .cc-c-y { font-size: var(--fs-sm); }
+.cc-grid .cc-c-m b { white-space: nowrap; }
+@container (max-width: 639.98px) {
+  .cc-grid .cc-wo { display: none; }
+}
+@container (min-width: 640px) {
+  .cc-grid .cc-lh, .cc-grid .cc-tr { grid-template-columns: var(--cc-w); gap: 10px; }
+  .cc-grid .cc-po { display: none; }
+  .cc-grid .cc-c-y { font-size: var(--fs-md); }
+}
+
 /* the route chart's other views: the season's targets by each, as bars */
 .cc-bars { display: flex; flex-direction: column; gap: 12px; }
 .cc-brow { display: grid; grid-template-columns: minmax(84px, 150px) minmax(0, 1fr) 72px; grid-template-areas: "n t v" ". x x";
@@ -413,6 +450,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-bv { grid-area: v; font-family: var(--font-mono); text-align: right; color: var(--text); }
 .cc-bv small { margin-left: 6px; font-size: var(--fs-xs); color: var(--text-mute); }
 .cc-bx { grid-area: x; font-size: var(--fs-xs); color: var(--text-mute); }
+.cc-bx .cc-pill { margin-left: 6px; padding: 1px 7px; }
 .cc-bh { margin: 14px 0 10px; font-size: var(--fs-2xs); letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
 .cc-bh:first-child { margin-top: 0; }
 @media (max-width: 520px) {
@@ -481,24 +519,46 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-more[open] > summary::after { content: "−"; }
 .cc-more > summary:hover { color: var(--text); }
 
+/* EVERY LEAGUE'S SURFACE, LIT THE RENDERS' WAY (2026-10-14, Ethan: "go
+   match it with all the other sports too, but obviously make sense and
+   correlate it with that sport"): each drawn dark with its own lines lit
+   — under each, the same line wide and faint, the glow the football field
+   gives its line of scrimmage, with no filter for a phone to rasterise —
+   his team's colour where the sport paints one (a court's lane, a park's
+   wall, an end zone), and every make, hit or goal a lit mark with a soft
+   ring around it. */
+
 /* baseball (2026-10-13, js/chart-mlb.js): the hit tracker's field, top
    down, every ball where it landed; the pitch chart's strike zone from
    behind the catcher, every pitch where it crossed the plate. */
 /* a square drawing on a desktop's wide column: capped, centred by the
    drawing's own aspect */
 .mb-svg, .mp-svg { max-height: 460px; }
-.mb-ray { stroke: var(--text-faint); stroke-width: 1.2; stroke-dasharray: 5 6; }
-.mb-grass { fill: color-mix(in oklab, var(--panel-3) 70%, var(--bg)); }
-.mb-dirt { fill: color-mix(in oklab, var(--warn) 14%, var(--panel-2)); }
-.mb-base { fill: none; stroke: var(--border); stroke-width: 1.2; }
-.mb-foul, .mb-wall { fill: none; stroke: var(--border); stroke-width: 1.4; }
-.mb-wall { stroke: var(--text-mute); stroke-width: 2; }
-.mb-arc { stroke-width: 1.3; opacity: .5; }
+.mb-ray { stroke: color-mix(in oklab, var(--text) 30%, transparent); stroke-width: 1.2; stroke-dasharray: 5 6; }
+.mb-grass { fill: color-mix(in oklab, var(--good) 10%, var(--bg)); }
+.mb-mow { fill: var(--text); fill-opacity: .045; }
+.mb-mow.alt { fill-opacity: .015; }
+.mb-dirt { fill: color-mix(in oklab, var(--warn) 24%, var(--bg)); }
+/* a square drawing's names read at the size the football field's do */
+.mb-svg .cc-lane { font-size: 11px; }
+.mp-svg .cc-lane { font-size: 10px; }
+.mb-glow line, .mb-glow path { fill: none; stroke: var(--text); stroke-width: 7; opacity: .07; stroke-linejoin: round; }
+.mb-base { fill: none; stroke: color-mix(in oklab, var(--text) 50%, transparent); stroke-width: 1.4; }
+.mb-foul { fill: none; stroke: color-mix(in oklab, var(--text) 62%, transparent); stroke-width: 1.6; }
+.mb-wall { fill: none; stroke: color-mix(in oklab, var(--tm, var(--text-mute)) 60%, var(--text)); stroke-width: 2.4; }
+.mb-wall-glow { fill: none; stroke: color-mix(in oklab, var(--tm, var(--text-mute)) 70%, var(--text)); stroke-width: 10; opacity: .16; }
+.mb-arc { stroke-width: 1.4; opacity: .6; }
 .mb-arc.hr { stroke: var(--brand); }
 .mb-arc.h { stroke: var(--good); }
 .mb-arc.o { stroke: var(--text-mute); opacity: .3; }
 .mb-arc.sel { stroke-width: 2.6; opacity: .95; }
-.mb-ball { stroke: var(--panel); stroke-width: 1.2; }
+.mb-glow-arc { stroke-width: 7; opacity: .12; stroke-linecap: round; }
+.mb-glow-arc.hr { stroke: var(--brand); }
+.mb-glow-arc.h { stroke: var(--good); }
+.mb-halo { fill: none; stroke-width: 2; opacity: .3; }
+.mb-halo.hr { stroke: var(--brand); }
+.mb-halo.h { stroke: var(--good); }
+.mb-ball { stroke: var(--bg); stroke-width: 1.2; }
 .mb-ball.hr { fill: var(--brand); }
 .mb-ball.h { fill: var(--good); }
 .mb-ball.o { fill: var(--text-mute); }
@@ -506,9 +566,10 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-ball.sel { stroke: var(--text); stroke-width: 2.4; }
 .cc-legend .dt.mb-hr { background: var(--brand); }
 .mp-zone { fill: none; stroke: var(--text); stroke-width: 2; }
-.mp-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
-.mp-plate { fill: var(--panel-2); stroke: var(--text-mute); stroke-width: 1.4; }
-.mp { stroke: var(--panel); stroke-width: 1; opacity: .9; }
+.mp-zone-glow { fill: none; stroke: var(--brand); stroke-width: 10; opacity: .14; }
+.mp-grid { stroke: color-mix(in oklab, var(--text) 22%, transparent); stroke-width: 1; stroke-dasharray: 4 4; }
+.mp-plate { fill: color-mix(in oklab, var(--text) 10%, var(--panel)); stroke: var(--text-mute); stroke-width: 1.4; }
+.mp { stroke: var(--bg); stroke-width: 1; opacity: .92; }
 .mp.c { fill: var(--warn); }
 .mp.w { fill: var(--bad); }
 .mp.x { fill: var(--good); }
@@ -520,52 +581,75 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-legend .dt.mp-x { background: var(--good); }
 .cc-legend .dt.mp-f { background: var(--text-mute); }
 .cc-legend .dt.mp-b { border: 1.5px solid var(--text-mute); }
-.mp-cell { fill: var(--brand); stroke: var(--border); stroke-width: 1; }
-.mp-lbl { font-size: 13px; }
+.mp-cell { fill: var(--brand); stroke: color-mix(in oklab, var(--text) 16%, transparent); stroke-width: 1; }
+.mp-lbl { font-size: 13px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
 .mp-velo { margin-top: 12px; }
 .mp-velo-h { font: 600 12px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 4px; }
 .mp-line { fill: none; stroke: var(--brand); stroke-width: 2; }
+.mp-line-glow { fill: none; stroke: var(--brand); stroke-width: 8; opacity: .14; stroke-linejoin: round; }
 .mp-pt { fill: var(--brand); }
+.cc-bars + .mp-velo, .mp-velo + .cc-bars { margin-top: 14px; }
 
 /* basketball (2026-10-13, js/chart-hoops.js): the shot chart's half
-   court, the basket at the top, every shot where it was taken. */
+   court, the basket at the top, every shot where it was taken — dark
+   boards, the lines lit, the lane in his colour, a make a lit dot and a
+   miss a cross. */
 .nb-svg { max-height: 460px; }
-.nb-floor { fill: color-mix(in oklab, var(--warn) 9%, var(--panel-2)); }
-.nb-paint { fill: color-mix(in oklab, var(--brand) 9%, transparent); stroke: var(--border); stroke-width: 1.4; }
-.nb-line { fill: none; stroke: var(--border); stroke-width: 1.4; }
-.nb-line.dash { stroke-dasharray: 6 6; }
-.nb-arc { fill: none; stroke: var(--text-mute); stroke-width: 2; }
-.nb-board { stroke: var(--text-mute); stroke-width: 2.4; }
-.nb-rim { fill: none; stroke: var(--brand); stroke-width: 2; }
+.nb-floor { fill: color-mix(in oklab, var(--warn) 8%, var(--bg)); }
+.nb-plank { fill: var(--text); fill-opacity: .03; }
+.nb-plank.alt { fill-opacity: .012; }
+.nb-paint { fill: color-mix(in oklab, color-mix(in oklab, var(--tm, var(--brand)) 65%, var(--text)) 22%, transparent); stroke: color-mix(in oklab, var(--text) 55%, transparent); stroke-width: 1.6; }
+.nb-glow path { fill: none; stroke: var(--text); stroke-width: 7; opacity: .08; }
+.nb-line { fill: none; stroke: color-mix(in oklab, var(--text) 55%, transparent); stroke-width: 1.6; }
+.nb-line.dash { stroke-dasharray: 6 6; opacity: .6; }
+.nb-arc { fill: none; stroke: color-mix(in oklab, var(--text) 70%, transparent); stroke-width: 2.2; }
+.nb-board { stroke: var(--text); stroke-width: 2.6; }
+.nb-rim { fill: none; stroke: var(--brand); stroke-width: 2.2; }
+.nb-rim-glow { fill: none; stroke: var(--brand); stroke-width: 9; opacity: .2; }
 .nb-hit { fill: transparent; cursor: pointer; }
 .nb-shot { stroke-width: 1.4; }
-.nb-shot.m { fill: var(--good); stroke: var(--panel); }
-.nb-shot.x { fill: none; stroke: var(--bad); stroke-width: 2; }
+.nb-shot.m { fill: var(--good); stroke: var(--bg); }
+.nb-shot.x { fill: none; stroke: var(--bad); stroke-width: 2.4; stroke-linecap: round; }
+.nb-halo { fill: none; stroke: var(--good); stroke-width: 2; opacity: .3; }
 .nb-shot.faint { opacity: .5; }
-.nb-shot.faint.x { stroke-width: 1.2; }
+.nb-shot.faint.x { stroke-width: 1.6; }
 .nb-shot.sel { stroke: var(--text); stroke-width: 3; }
+.nb-shot.x.sel { stroke: var(--bad); stroke-width: 4; }
+.nb-zone { stroke: none; }
+.nb-zone path, .nb-zone circle { fill-rule: evenodd; }
+.nb-zone.hot { fill: var(--good); }
+.nb-zone.cold { fill: var(--bad); }
+.nb-zone.even { fill: transparent; }
 .nb-pill rect { fill: var(--panel); stroke: var(--border); stroke-width: 1; opacity: .94; }
 .nb-pct { fill: var(--text); font: 700 15px var(--font-mono); }
+.nb-pct.hot { fill: var(--good); }
+.nb-pct.cold { fill: var(--bad); }
 .nb-att { fill: var(--text-mute); font: 600 10.5px var(--font-mono); }
-.cc-legend .dt.nb-x { border: 1.8px solid var(--bad); }
+.cc-legend .dt.nb-x { width: auto; height: auto; border: 0; color: var(--bad); font-style: normal; font-weight: 800; line-height: 1; }
 
 /* hockey (2026-10-13, js/chart-nhl.js): the attacking zone, the net at
-   the top, every shot where it was taken. */
+   the top, every shot where it was taken — dark ice, the lines lit, a
+   goal a lit gold mark. */
 .nh-svg { max-height: 460px; }
-.nh-ice { fill: color-mix(in oklab, var(--cyan) 5%, var(--panel-2)); stroke: var(--border); stroke-width: 2; }
-.nh-goal { stroke: var(--bad); stroke-width: 1.6; opacity: .7; }
-.nh-crease { fill: color-mix(in oklab, var(--cyan) 22%, transparent); stroke: var(--bad); stroke-width: 1.4; opacity: .9; }
-.nh-net { fill: none; stroke: var(--text-mute); stroke-width: 2; }
-.nh-circle { fill: none; stroke: color-mix(in oklab, var(--bad) 55%, var(--border)); stroke-width: 1.4; }
-.nh-dot { fill: color-mix(in oklab, var(--bad) 60%, var(--border)); }
-.nh-blue { stroke: var(--cyan); stroke-width: 5; opacity: .7; }
+.nh-ice { fill: color-mix(in oklab, var(--cyan) 9%, var(--bg)); stroke: color-mix(in oklab, var(--text) 40%, transparent); stroke-width: 2; }
+.nh-glow line, .nh-glow circle { fill: none; stroke: var(--bad); stroke-width: 8; opacity: .1; }
+.nh-goal { stroke: var(--bad); stroke-width: 1.8; opacity: .85; }
+.nh-crease { fill: color-mix(in oklab, var(--cyan) 30%, transparent); stroke: var(--bad); stroke-width: 1.4; opacity: .95; }
+.nh-net { fill: none; stroke: var(--text); stroke-width: 2; }
+.nh-circle { fill: none; stroke: color-mix(in oklab, var(--bad) 65%, var(--border)); stroke-width: 1.6; }
+.nh-dot { fill: color-mix(in oklab, var(--bad) 70%, var(--border)); }
+.nh-blue { stroke: var(--cyan); stroke-width: 5; opacity: .85; }
+.nh-blue-glow { stroke: var(--cyan); stroke-width: 14; opacity: .14; }
 .nh-hit { fill: transparent; cursor: pointer; }
-.nh-mark { stroke: var(--panel); stroke-width: 1.2; }
+.nh-mark { stroke: var(--bg); stroke-width: 1.2; }
 .nh-mark.goal { fill: var(--brand); }
 .nh-mark.sog, .nh-mark.sv { fill: var(--good); }
 .nh-mark.ga { fill: var(--bad); }
 .nh-mark.miss { fill: none; stroke: var(--text-mute); stroke-width: 1.8; }
 .nh-mark.block { fill: none; stroke: var(--text-mute); stroke-width: 2; }
+.nh-halo { fill: none; stroke-width: 2; opacity: .35; }
+.nh-halo.goal { stroke: var(--brand); }
+.nh-halo.ga { stroke: var(--bad); }
 .nh-mark.faint { opacity: .5; }
 .nh-mark.sel { stroke: var(--text); stroke-width: 3; }
 .nh-pill rect { fill: var(--panel); stroke: var(--border); stroke-width: 1; opacity: .94; }
@@ -598,29 +682,38 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-legend .dt.rl-s { background: var(--good); }
 
 /* the NFL kicker chart (2026-10-14, js/chart-kicks.js): the posts at the
-   top, every field goal at the distance it was kicked from. */
+   top, every field goal at the distance it was kicked from — the render's
+   own field: dark turf, a mowing stripe every five yards, the end zone in
+   his colour, the posts in gold. */
 .kk-svg { max-height: 520px; }
-.kk-field { fill: color-mix(in oklab, var(--good) 7%, var(--panel-2)); }
-.kk-ez { fill: color-mix(in oklab, var(--brand) 10%, transparent); }
-.kk-line { stroke: var(--border); stroke-width: 1.2; }
+.kk-field { fill: color-mix(in oklab, var(--good) 9%, var(--bg)); }
+.kk-mow { fill: var(--text); fill-opacity: .045; }
+.kk-mow.alt { fill-opacity: .015; }
+.kk-ez { fill: color-mix(in oklab, color-mix(in oklab, var(--tm, var(--brand)) 65%, var(--text)) 22%, transparent); }
+.kk-line { stroke: color-mix(in oklab, var(--text) 26%, transparent); stroke-width: 1.2; }
 .kk-yd { fill: var(--text-mute); font: 600 13px var(--font-mono); }
 .kk-post { stroke: var(--brand); stroke-width: 3.2; stroke-linecap: round; }
+.kk-glow line { stroke: var(--brand); stroke-width: 11; stroke-linecap: round; opacity: .18; }
 .kk-hit { fill: transparent; cursor: pointer; }
 .kk-flight { stroke-width: 1.6; fill: none; }
 .kk-flight.made { stroke: var(--good); }
 .kk-flight.missed, .kk-flight.aborted { stroke: var(--bad); stroke-dasharray: 5 4; }
 .kk-flight.faint { opacity: .3; }
-.kk-ball { stroke: var(--panel); stroke-width: 1.4; }
+.kk-trail { stroke: var(--good); stroke-width: 7; opacity: .12; stroke-linecap: round; }
+.kk-halo { fill: none; stroke: var(--good); stroke-width: 2; opacity: .3; }
+.kk-ball { stroke: var(--bg); stroke-width: 1.4; }
 .kk-ball.made { fill: var(--good); }
 .kk-ball.missed, .kk-ball.aborted { fill: none; stroke: var(--bad); stroke-width: 2.2; }
 .kk-ball.blocked { fill: none; stroke: var(--text-mute); stroke-width: 2.4; stroke-linecap: round; }
 .kk-ball.faint { stroke-width: 1; }
 .kk-ball.missed.faint, .kk-ball.aborted.faint, .kk-ball.blocked.faint { stroke-width: 1.8; }
 .kk-ball.sel { stroke: var(--text); stroke-width: 3; }
-.kk-d { fill: var(--text); font: 700 12px var(--font-mono); paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; }
+.kk-d { fill: var(--text); font: 700 12px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
 .kk-pill rect { fill: var(--panel); stroke: var(--border); stroke-width: 1; opacity: .94; }
 .kk-pn { fill: var(--text-mute); font: 600 11px var(--font-mono); }
 .kk-pct { fill: var(--text); font: 700 14px var(--font-mono); }
+.kk-pct.hot { fill: var(--good); }
+.kk-pct.cold { fill: var(--bad); }
 .kk-lg { fill: var(--text-mute); font: 600 10.5px var(--font-mono); }
 .cc-legend .dt.kk-x { border: 1.8px solid var(--bad); }
 .cc-legend .dt.kk-b { width: auto; height: auto; color: var(--text-mute); font-style: normal; font-weight: 700; line-height: 1; }

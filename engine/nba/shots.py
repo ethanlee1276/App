@@ -425,6 +425,9 @@ def chart(conn, player: str, season: int | None = None) -> dict:
     by_dist = _splits(fg, lambda s: next((lab for lo, hi, lab in DIST_BANDS
                                           if s["d"] is not None and lo <= s["d"] < hi + 1), ""),
                       order=[lab for _lo, _hi, lab in DIST_BANDS])
+    # The final over the game's building (the chart's frame, 2026-10-14).
+    from ..carries import scoreboard
+    scoreboard(conn, "nba", pick, out_games)
     latest = out_games[0] if out_games else {}
     return {"player": name, "sport": "nba", "seasons": seasons, "season": pick,
             "season_label": season_label(pick), "team": latest.get("team", ""), "games": out_games,

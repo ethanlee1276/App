@@ -109,26 +109,34 @@
               dist: "Throw distribution", all: "All throws",
               sec: "every throw he made: how far, which side, complete or not, and the sacks he took" },
     spray: { chip: "Hits", title: "Hit tracker", noun: "plate appearances", one: "plate appearance",
-             where: "where he hits it",
+             where: "where he hits it", dist: "Hit distribution", all: "All balls",
              sec: "every ball he put in play: how hard, how high, how far and where it landed" },
     pitches: { chip: "Pitches", title: "Pitch chart", noun: "pitches", one: "pitch", where: "how he attacks",
+               dist: "Pitch locations", all: "All pitches",
                sec: "every pitch he threw: where it crossed the plate, what it was and what the batter did with it" },
     shots: { chip: "Shots", title: "Shot chart", noun: "shots", one: "shot", where: "where he shoots",
+             dist: "Shot distribution", all: "All shots",
              sec: "every shot he took: where from, made or missed, and how" },
     shotmap: { chip: "Shots", title: "Shot map", noun: "shot attempts", one: "shot attempt", where: "where he shoots from",
+               dist: "Shot distribution", all: "All shots",
                sec: "every shot he took: where from, on goal, missed or blocked, and the goals" },
     saves: { chip: "Saves", title: "Save map", noun: "shots faced", one: "shot faced", where: "where he’s beaten",
+             dist: "Shots faced", all: "All shots",
              sec: "every shot on goal he faced: where from, saved or scored" },
     role: { chip: "Role", title: "Role chart", noun: "games", one: "number", where: "his role",
+            dist: "Usage, game by game",
             sec: "how much he’s used, game by game, beside his season" },
     kicks: { chip: "Kicks", title: "Kicker chart", noun: "kicks", one: "kick", where: "his range",
+             dist: "Kick distribution", all: "All kicks",
              sec: "every field goal and extra point he tried: how far, made or missed, and in what weather" },
     fights: { chip: "Fights", title: "Fight history", noun: "fights", one: "number", where: "his fights", by: "By fight",
+              dist: "The fight",
               sec: "every fight on his record: who, how it ended, the round and the time, and both men’s numbers",
               fill: "every fight is read from ESPN’s fight records a few fighters at a time" },
     /* Tonight's opponent beside his chart (2026-10-14, engine/matchview):
        one view, no games row; its chip names the opponent. */
     matchup: { chip: "Matchup", title: "Matchup", noun: "matchup", one: "zone", where: "tonight",
+               dist: "Where he goes · what they allow",
                sec: "tonight’s opponent beside his chart: where he goes, and what they allow there" },
   };
   /* Every league's role chart says what it counts (engine/role). */
@@ -566,8 +574,38 @@
                       "Sacked": "warn", "Catch rate": "glove", "Completion": "check", "Success": "check",
                       "Long": "rising", "10+ yd runs": "bolt", "Stuffed (0 or less)": "octagon", "Drops": "cross",
                       "Contested won": "shield", "Throwaways": "dash", "Deep (20+)": "angle",
-                      "Red zone targets": "target", "Targets a game": "list" };
-  const ico = (k) => (typeof icon === "function" && TILE_ICON[k] ? icon(TILE_ICON[k], 13) : "");
+                      "Red zone targets": "target", "Targets a game": "list",
+                      /* every other league's tiles (2026-10-14), so a guard's or a goalie's numbers wear
+                         icons as a back's do; a label two leagues share in different senses is keyed by
+                         its league ("nfl:FG") */
+                      "Games": "calendar", "Points": "trophy", "FG": "basketball", "3PT": "target", "FT": "dot",
+                      "Assisted": "people", "In the paint": "shield", "Minutes": "clock", "Rebounds": "glove",
+                      "Assists": "people", "Steals": "bolt", "Blocks": "octagon", "Turnovers": "warn",
+                      "H–AB": "baseball", "Total bases": "chart", "HR": "star", "RBI": "people", "BB–K": "scale",
+                      "Hard hit": "hot", "AVG": "gauge", "SLG": "rising", "Exit velocity": "bolt",
+                      "Launch angle": "angle", "Sweet spot": "target", "Pitches": "baseball", "Strikeouts": "target",
+                      "Walks": "dash", "Hits": "glove", "Whiffs": "bolt", "CSW": "check", "Whiff rate": "bolt",
+                      "In the zone": "target", "Batters faced": "people", "Top speed": "gauge",
+                      "On goal": "hockey", "Goals": "star", "Attempts": "target", "Missed": "dash", "Blocked": "octagon",
+                      "xG": "signal", "Shooting": "gauge", "Shots": "hockey", "Saves": "shield", "GA": "warn",
+                      "Save %": "gauge", "GSAx": "signal", "xGA": "signal",
+                      "nfl:FG": "football", "XP": "check", "50+": "bolt", "Conditions": "cloud",
+                      "Snaps": "people", "Target share": "target", "Carry share": "football", "Catches": "glove",
+                      "Catch share": "glove", "Red zone": "hot", "Air yards": "angle", "FGA": "basketball",
+                      "3PA": "target", "FTA": "dot", "PA": "baseball", "Spot": "list", "Seen": "search",
+                      "Batters": "people", "Outs": "check", "Rest": "moon", "Ice time": "clock", "SOG": "hockey",
+                      "PP attempts": "bolt", "Shots faced": "shield", "Last 3": "rising", "Last 5": "rising",
+                      "High": "trophy", "Highest": "trophy", "Role": "people",
+                      "Result": "trophy", "Method": "bolt", "Round": "clock", "Time": "clock", "Fight lasted": "clock",
+                      "Scheduled": "calendar", "Record": "trophy", "Won by finish": "bolt", "Stopped": "octagon",
+                      "Distance": "scale", "Average fight": "clock", "Round 1": "bolt",
+                      "Fit": "scale", "Their rank": "chart", "They allow": "shield", "Staff allows": "shield",
+                      "They do": "shield", "Top zone": "target", "Their sample": "list", "Tonight’s starter": "baseball",
+                      "Season": "calendar" };
+  const ico = (k) => {
+    const n = (S && TILE_ICON[`${S.sport}:${k}`]) || TILE_ICON[k];
+    return typeof icon === "function" && n ? icon(n, 13) : "";
+  };
   function tile(k, v, sub) {
     return `<div class="cc-tile"><span class="cc-k">${ico(k)}${esc(k)}</span><b>${esc(v)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div>`;
   }
@@ -624,6 +662,27 @@
       </button>`;
     }).join("")}</div>`;
   }
+  /* EVERY PLAY AS THE RENDERS' TABLE, in every league (2026-10-14): a
+     league's module names its columns — each a heading, its cell's class,
+     its width on a phone (`p`) and on a wide card (`w`), and none where it
+     is not shown — and hands a row per play: its cells (markup it has
+     already escaped; [markup, class] for a coloured one), the words its
+     label reads the whole play in, and the tokens its filter matches. The
+     widths ride the table as two custom properties, so each league's
+     columns are written once, beside the cells that fill them; every row
+     is one button, as the carry and target tables' are. */
+  function gridHTML(name, cols, rows) {
+    const where = (c) => `${c.p ? "" : " cc-wo"}${c.w ? "" : " cc-po"}`;
+    const tpl = (k) => cols.filter((c) => c[k]).map((c) => c[k]).join(" ");
+    return `<div class="cc-list cc-table cc-grid cc-g-${name}" role="list" style="--cc-p:${tpl("p")};--cc-w:${tpl("w")}">
+      <div class="cc-lh" aria-hidden="true">${cols.map((c) => `<span class="${c.r ? "r" : ""}${where(c)}">${esc(c.h)}</span>`).join("")}</div>
+      ${rows.map((r) => `<button type="button" role="listitem" class="cc-row cc-tr${S && S.sel === r.i ? " sel" : ""}" data-i="${r.i}"${r.f == null ? "" : ` data-f="${esc(r.f)}"`} aria-label="${esc(r.said)}">${r.cells.map((x, j) => {
+        const [html, more] = Array.isArray(x) ? x : [x, ""];
+        return `<span class="${cols[j].c}${more ? ` ${more}` : ""}${where(cols[j])}">${html}</span>`;
+      }).join("")}</button>`).join("")}</div>`;
+  }
+  //: A cell of two lines: the play, and under it its detail.
+  const two = (main, sub) => `<b>${esc(main || "—")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}`;
   function tableHTML(cap, head, rows) {
     return `<div class="cc-tbl-wrap"><table class="cc-tbl"><caption>${esc(cap)}</caption>
       <thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead>
@@ -1071,6 +1130,11 @@
   /* The week and the day between them, and the final where the games
      table has one (engine/carries.scoreboard): his team's score first. */
   function heroMid(g) {
+    // Tonight's opponent (the matchup view): no day, no final yet.
+    if (g.tonight) {
+      return `<div class="cc-hero-mid"><small>Tonight</small><b class="cc-hero-vs">VS</b>${g.label
+        ? `<span>${esc(g.label)}</span>` : ""}</div>`;
+    }
     const when = g.week ? (ROUNDS[g.week] || `Week ${g.week}`) : "";
     const dt = g.date ? new Date(g.date + "T12:00:00") : null;
     const day = dt && !isNaN(dt) ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
@@ -1078,7 +1142,7 @@
     const won = sc ? (sc[0] > sc[1] ? "w" : sc[0] < sc[1] ? "l" : "t") : "";
     return `<div class="cc-hero-mid">${when ? `<small>${esc(when)}</small>` : ""}${day ? `<span>${esc(day)}</span>` : ""}${sc
       ? `<b class="cc-hero-score ${won}"><em>${Math.round(sc[0])}</em><i>–</i><em>${Math.round(sc[1])}</em></b><small class="cc-hero-fin">Final · ${won.toUpperCase()}</small>`
-      : `<b class="cc-hero-vs">${g.home ? "VS" : "AT"}</b>`}</div>`;
+      : `<b class="cc-hero-vs">${g.home === false ? "AT" : "VS"}</b>`}</div>`;
   }
   /* THE GAME OVER ITS STADIUM: his team on the left, the opponent on the
      right, each over its own colour, the home team's building behind
@@ -1088,7 +1152,9 @@
   function heroHTML(g, d, sport, sum) {
     const mine = (g && g.team) || d.team;
     if (!mine || (g && !g.opp)) return "";
-    const home = !g || g.home ? mine : g.opp;
+    // A game the table could not place home or away (a rink's, now and
+    // then) is drawn over his own team's building.
+    const home = !g || g.home !== false ? mine : g.opp;
     const a = inkOf(sport, mine), b = g ? inkOf(sport, g.opp) : a;
     const ink = [a ? `--ta:${a}` : "", b ? `--tb:${b}` : ""].filter(Boolean).join(";");
     const art = typeof venuePhotoTag === "function" ? venuePhotoTag(sport, home, teamOf(sport, home)) : "";
@@ -1097,8 +1163,14 @@
       : `<div class="cc-hero-mid"><small>${esc(seasonName(sport, d.season))}</small><b class="cc-hero-vs">Season</b><span>${n} game${n === 1 ? "" : "s"}</span></div>`;
     const right = g ? heroTeam(sport, g.opp, g.orec, true)
       : `<div class="cc-hero-team r"><span class="cc-hero-name cc-hero-sum"><small>${esc(sum[1])}</small><b>${esc(sum[0])}</b></span></div>`;
-    return `<div class="cc-hero${g ? "" : " season"}"${ink ? ` style="${ink}"` : ""}>${art}
-      <div class="cc-hero-in">${heroTeam(sport, mine, g ? g.rec : "", false)}${mid}${right}</div></div>`;
+    return heroShell(ink, art, heroTeam(sport, mine, g ? g.rec : "", false), mid, right, g ? "" : "season");
+  }
+  /* The frame every hero shares — the building (or the arena) behind, a
+     glow from each side in its own colour, three columns — so a fight's
+     hero (js/chart-ufc.js) is drawn in the same one as a game's. */
+  function heroShell(ink, art, left, mid, right, cls) {
+    return `<div class="cc-hero${cls ? ` ${cls}` : ""}"${ink ? ` style="${ink}"` : ""}>${art}
+      <div class="cc-hero-in">${left}${mid}${right}</div></div>`;
   }
   //: The games, newest first, with an arrow either end (the render's carousel).
   function gamesRow(d, sport, chipOf) {
@@ -1116,33 +1188,53 @@
      guard to right end); a target's or a throw's third. A play the file
      gives no side is counted in the whole and in no side. */
   const SIDE_OF_HOLE = { LE: "L", LT: "L", LG: "L", M: "M", RG: "R", RT: "R", RE: "R" };
-  const SIDE_NAME = { L: "Left side", M: "Middle", R: "Right side" };
+  /* EVERY LEAGUE HAS ITS OWN THIRDS (2026-10-14, Ethan: "go match it with
+     all the other sports too, but obviously make sense and correlate it
+     with that sport"). Football's are the sides of the field; a league's
+     own module names its own in `zones` — a guard's paint, mid-range and
+     threes, a hitter's pull side, middle and opposite field, a pitcher's
+     fastballs, breaking balls and offspeed, a skater's slot, high slot and
+     point, a kicker's distances — each [key, the filter's word, the
+     count's name], how a play is sorted into one, and which plays are
+     counted (a free throw has no spot on the floor). */
+  const FIELD = { label: "Side of the field",
+                  list: [["L", "Left", "Left side"], ["M", "Middle", "Middle"], ["R", "Right", "Right side"]] };
+  const zonesOf = (kind) => (DRAW[kind] && DRAW[kind].zones) || (/^(carries|routes|passes)$/.test(kind) ? FIELD : null);
   function sideOf(kind, x) {
     if (!x) return "";
     if (kind === "carries") return SIDE_OF_HOLE[x.h] || "";
     if (kind === "routes" || (kind === "passes" && x.k === "pass")) return BAND[x.s] ? x.s : "";
-    return "";
+    const Z = DRAW[kind] && DRAW[kind].zones;
+    return Z ? Z.of(x) || "" : "";
   }
   //: A game's plays, in the order its drawing and its table number them.
   const playsOf = (kind, g) => (!g ? [] : kind === "carries" ? g.carries || []
     : kind === "routes" ? g.targets || [] : kind === "passes" ? g.throws || [] : []);
-  function segHTML(K) {
-    return `<div class="cc-seg" role="group" aria-label="Side of the field">${[["", K.all || "All"], ["L", "Left"],
-      ["M", "Middle"], ["R", "Right"]].map(([k, name]) =>
-      `<button type="button" data-side="${k}"${(S.side || "") === k ? ' class="on"' : ""} aria-pressed="${(S.side || "") === k}">${esc(name)}</button>`).join("")}</div>`;
+  //: What the counts under a drawing count: football's plays, or the ones a league's zones name.
+  function poolOf(kind, g, d) {
+    const Z = DRAW[kind] && DRAW[kind].zones;
+    if (!Z) return playsOf(kind, g);
+    return !g ? [] : Z.pool ? Z.pool(g, d) : DRAW[kind].items(g, d);
+  }
+  function segHTML(K, Z) {
+    const zs = (Z || FIELD).list, cur = (S && S.side) || "";
+    return `<div class="cc-seg" role="group" aria-label="${esc((Z || FIELD).label || "Where")}">${[["", K.all || "All"]].concat(zs).map(([k, name]) =>
+      `<button type="button" data-side="${k}"${cur === k ? ' class="on"' : ""} aria-pressed="${cur === k}">${esc(name)}</button>`).join("")}</div>`;
   }
   function sidesHTML(kind, items, K, live) {
-    const by = { L: 0, M: 0, R: 0 };
+    const Z = zonesOf(kind) || FIELD, by = {};
+    Z.list.forEach(([k]) => { by[k] = 0; });
     let n = 0;
     items.forEach((x) => {
       if (kind === "passes" && x.k !== "pass") return;
       n += 1;
       const s = sideOf(kind, x);
-      if (s) by[s] += 1;
+      if (s in by) by[s] += 1;
     });
-    if (!by.L && !by.M && !by.R) return "";
-    return `<div class="cc-sides">${["L", "M", "R"].map((s) => {
-      const inner = `<span>${SIDE_NAME[s]}</span><b>${by[s]} <small>${esc(by[s] === 1 ? K.one : K.noun)}</small></b><i>${n ? Math.round(100 * by[s] / n) : 0}%</i>`;
+    if (!Z.list.some(([k]) => by[k])) return "";
+    const [one, many] = Z.noun || [K.one, K.noun];
+    return `<div class="cc-sides">${Z.list.map(([s, , name]) => {
+      const inner = `<span>${esc(name)}</span><b>${by[s]} <small>${esc(by[s] === 1 ? one : many)}</small></b><i>${n ? Math.round(100 * by[s] / n) : 0}%</i>`;
       return live ? `<button type="button" class="cc-sd" data-sd="${s}" data-side="${s}">${inner}</button>`
         : `<div class="cc-sd" data-sd="${s}">${inner}</div>`;
     }).join("")}</div>`;
@@ -1177,19 +1269,25 @@
   };
   const DL_ICON = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 2.5v8M4.6 7.3 8 10.7l3.4-3.4M3 13.5h10"/></svg>`;
-  function toolsHTML(kind, items, flagsOf) {
+  /* `list` is the league's own filter where it draws its own chart (its
+     module's `filters`), and a chart with no filter keeps the download. */
+  function toolsHTML(kind, items, flagsOf, list) {
     const n = {};
-    items.forEach((x) => flagsOf(x).split(" ").forEach((f) => { if (f) n[f] = (n[f] || 0) + 1; }));
-    const opts = FILTERS[kind].filter(([v]) => !v || n[v]);
-    if (!opts.some(([v]) => v === (S.filt || ""))) S.filt = "";
-    const dl = typeof Blob === "function"
-      ? `<button type="button" class="cc-dl" data-dl="${kind}" aria-label="Download this game’s ${esc(kind === "carries" ? "carries" : "targets")} as a spreadsheet">${DL_ICON}</button>` : "";
-    return `${dl}<span class="cc-filt"><select data-filt aria-label="Which plays to show">${opts.map(([v, name]) =>
-      `<option value="${v}"${v === (S.filt || "") ? " selected" : ""}>${esc(name)}${v ? ` (${n[v]})` : ""}</option>`).join("")}</select></span>`;
+    if (flagsOf) items.forEach((x) => flagsOf(x).split(" ").forEach((f) => { if (f) n[f] = (n[f] || 0) + 1; }));
+    const opts = (list || FILTERS[kind] || []).filter(([v]) => !v || n[v]);
+    if (S && !opts.some(([v]) => v === (S.filt || ""))) S.filt = "";
+    const cur = (S && S.filt) || "", P = DRAW[kind];
+    const what = P ? (P.file || kindOf(kind, S && S.sport).noun) : kind === "carries" ? "carries" : "targets";
+    const dl = typeof Blob === "function" && (!P || P.csv)
+      ? `<button type="button" class="cc-dl" data-dl="${kind}" aria-label="Download ${esc(P && P.fileWhat ? P.fileWhat : `this game’s ${what}`)} as a spreadsheet">${DL_ICON}</button>` : "";
+    const filt = opts.length > 1 ? `<span class="cc-filt"><select data-filt aria-label="Which plays to show">${opts.map(([v, name]) =>
+      `<option value="${v}"${v === cur ? " selected" : ""}>${esc(name)}${v ? ` (${n[v]})` : ""}</option>`).join("")}</select></span>` : "";
+    return dl + filt;
   }
-  function csvOf(kind, g) {
+  function csvOf(kind, g, d) {
     const q = (v) => { const s = String(v == null ? "" : v); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const rows = kind === "carries"
+    const P = DRAW[kind];
+    const rows = P ? P.csv(g, d || (S && S.data) || {}) : kind === "carries"
       ? [["#", "Quarter", "Clock", "Down", "To go", "Yard line", "Hole", "Yards", "Touchdown", "Fumble", "First down", "Scramble"]]
         .concat((g.carries || []).map((c, i) => [i + 1, c.q, c.clk, c.dn, c.ds, spot(c, g), c.h ? HOLE_NAME[c.h] : "", c.y,
           +!!c.td, +!!c.fl, +!!c.fd, +!!c.sc]))
@@ -1203,9 +1301,12 @@
   function download(kind) {
     const d = S && S.data, g = d && d.games && d.games[S.gi];
     if (!g || typeof Blob !== "function" || typeof URL === "undefined" || !URL.createObjectURL) return;
+    const P = DRAW[kind];
+    if (P && !P.csv) return;
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csvOf(kind, g)], { type: "text/csv;charset=utf-8" }));
-    a.download = `${[d.player, kind === "carries" ? "carries" : "targets", d.season, chipLabel(g, d.sport)].join(" ")
+    a.href = URL.createObjectURL(new Blob([csvOf(kind, g, d)], { type: "text/csv;charset=utf-8" }));
+    const what = P ? (P.file || kindOf(kind, d.sport).noun) : kind === "carries" ? "carries" : "targets";
+    a.download = `${[d.player, what, d.sport === "ufc" ? "" : d.season, P && P.fileWhat ? "" : chipLabel(g, d.sport)].join(" ")
       .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase()}.csv`;
     document.body.appendChild(a);
     a.click();
@@ -1226,14 +1327,22 @@
   }
   const BAR_TITLE = { route: "Targets by route", depth: "Targets by depth", cov: "Targets against coverage" };
   function barRows(rows) {
-    const live = rows.filter(([, x]) => x && x.tgt);
+    return barList(rows.filter(([, x]) => x && x.tgt).map(([name, x]) =>
+      [name, x.tgt, `${x.rec}/${x.tgt} caught · ${num1(x.ypt)} yds a target${x.td ? ` · ${x.td} TD` : ""}`]));
+  }
+  /* ONE BAR A ROW, in every league's other views: [name, how many, what
+     came of them, and a pill where a rate is set beside the league's].
+     The bar is the count against the most of any row; the share beside
+     it is of every row's. A row with none is left out. */
+  function barList(rows) {
+    const live = rows.filter((r) => r && r[1] > 0);
     if (!live.length) return "";
-    const total = live.reduce((a, [, x]) => a + x.tgt, 0), most = Math.max(...live.map(([, x]) => x.tgt));
-    return `<div class="cc-bars">${live.map(([name, x]) => `<div class="cc-brow">
+    const total = live.reduce((a, r) => a + r[1], 0), most = Math.max(...live.map((r) => r[1]));
+    return `<div class="cc-bars">${live.map(([name, n, said, pill]) => `<div class="cc-brow">
         <span class="cc-bn">${esc(name)}</span>
-        <span class="cc-bt"><i style="width:${(100 * x.tgt / most).toFixed(1)}%"></i></span>
-        <b class="cc-bv">${x.tgt}<small>${pct(x.tgt / total)}</small></b>
-        <span class="cc-bx">${x.rec}/${x.tgt} caught · ${num1(x.ypt)} yds a target${x.td ? ` · ${x.td} TD` : ""}</span></div>`).join("")}</div>`;
+        <span class="cc-bt"><i style="width:${(100 * n / most).toFixed(1)}%"></i></span>
+        <b class="cc-bv">${n}<small>${pct(n / total)}</small></b>
+        <span class="cc-bx">${esc(said)}${pill ? ` ${pills([pill])}` : ""}</span></div>`).join("")}</div>`;
   }
   function routeBars(d, view) {
     if (view === "depth") return barRows(DEPTH.map(([k, name]) => [name, sumLines(d.by_zone.filter((z) => z.depth === k))]));
@@ -1272,7 +1381,10 @@
        name, the game, and his charts under it — each render's order. */
     const kb = kindBar();
     const bar = C.inline ? kb + seasons : kb;
-    const views = P && P.only ? [] : [["game", K.by || "By game"], ["season", cap(K.where)]].concat(R ? routeViews(d) : []);
+    /* A league's own other views (its module's `views`) sit after its
+       two, as the route chart's Route type | Depth | Coverage do. */
+    const more = P && P.views ? P.views(d) || [] : [];
+    const views = P && P.only ? [] : [["game", K.by || "By game"], ["season", cap(K.where)]].concat(R ? routeViews(d) : more);
     if (views.length && !views.some(([k]) => k === S.view)) S.view = S.view === "game" ? "game" : "season";
     const head = C.inline ? "" : `<header class="cc-head">
         ${faceHTML(d, S)}
@@ -1295,18 +1407,27 @@
     const L = d.season_line || {};
     const game = S.view === "game" && !(P && P.only);
     const g = game ? d.games[Math.min(S.gi, d.games.length - 1)] : null;
-    const items = playsOf(S.kind, g);
-    const every = [].concat(...(d.games || []).map((x) => playsOf(S.kind, x)));
+    const items = poolOf(S.kind, g, d);
+    const every = [].concat(...(d.games || []).map((x) => poolOf(S.kind, x, d)));
     const sided = (game ? items : every).some((x) => sideOf(S.kind, x));
     const count = P && P.only ? ["", "", ""]
       : String(P ? P.count(L, d) || "" : `${R ? L.tgt : L.n} ${K.noun}`).match(/^(\S+)\s*(.*)$/) || ["", "", ""];
-    const hero = P && P.only ? "" : heroHTML(g, d, sport, [count[1], count[2]]);
+    /* The game over its building; a fighter's fight over the arena (his
+       module's own `hero`); tonight's matchup over his team's colours and
+       the opponent's, where the charts he has named his team. */
+    const hero = P && P.hero ? P.hero(g, d, [count[1], count[2]])
+      : P && P.only ? (C.team ? heroHTML({ team: C.team, opp: d.opp, tonight: true, home: true,
+                                           label: String(d.season_label || d.season || "") },
+                                         Object.assign({}, d, { team: C.team }), sport, ["", ""]) : "")
+        : heroHTML(g, d, sport, [count[1], count[2]]);
     /* A pass is drawn in his team's colour (the render's blue routes for
-       a Bill); a run in the three gain colours. */
-    const ink = R || S.kind === "passes" ? inkOf(sport, (g && g.team) || d.team) : "";
+       a Bill), and so is every league's own surface (a guard's paint, a
+       hitter's wall, a kicker's end zone); a run in the three gain
+       colours. */
+    const ink = inkOf(sport, (g && g.team) || d.team || (P && P.only ? C.team : ""));
     const stage = (svg, tip) => `<div class="cc-stage">${svg}${tip ? '<div class="cc-tip" hidden></div>' : ""}</div>`;
     const sides = sided ? sidesHTML(S.kind, game ? items : every, K, game) : "";
-    const seg = game && sided ? segHTML(K) : "";
+    const seg = game && sided ? segHTML(K, zonesOf(S.kind)) : "";
     let rows = "", title = "", dist, stats, tail;
     if (P && P.only) {
       const v = P.only(d, sport);
@@ -1314,11 +1435,15 @@
       dist = distCard(K, "", "", v.fig, "", note, ink);
       stats = statsCard("Tonight’s numbers", v.side);
       tail = v.tail;
+    } else if (P && P.bars && more.some(([k]) => k === S.view)) {
+      dist = distCard(K, P.barTitle ? P.barTitle(S.view, d) : "", "", P.bars(d, S.view), "", "", ink);
+      stats = statsCard(S.kind === "fights" ? "Career" : "Season stats", P.seasonSide(d));
+      tail = splitsCard(P.splitsTitle, P.splits(d));
     } else if (P) {
       const v = plugView(P, d, sport);
       rows = v.rows;
       title = v.title;
-      dist = distCard(K, "", seg, v.fig, sides, note, ink);
+      dist = distCard(K, P.distTitle ? P.distTitle(S.view, d) : "", seg, v.fig, sides + (P.legend ? P.legend(g, d) : ""), note, ink);
       stats = statsCard(S.kind === "fights" ? (game ? "Fight stats" : "Career") : game ? "Game stats" : "Season stats", v.side);
       tail = v.tail;
     } else if (R && BAR_TITLE[S.view]) {
@@ -1380,6 +1505,11 @@
       const a = chip.getBoundingClientRect(), b = row.getBoundingClientRect();
       row.scrollLeft += a.left + a.width / 2 - (b.left + b.width / 2);
     }
+    /* A tile's name a narrow card would cut ("They allow", "Fight
+       lasted" three to a row on a phone) drops its icon and closes its
+       spacing instead: read once, in the same layout as the chip row's
+       measure, so a name is never cut. */
+    box.querySelectorAll(".cc-k").forEach((k) => { if (k.scrollWidth > k.clientWidth + 1) k.classList.add("tight"); });
     applySide();
     applyFilt();
   }
@@ -1402,9 +1532,11 @@
     });
     const g = S.view === "game" && S.data && S.data.games ? S.data.games[S.gi] : null;
     const items = playsOf(S.kind, g);
+    // A league's own marks say their zone (`data-z`): a pitch is drawn
+    // under the batter it was thrown to, not counted as him.
     ov.querySelectorAll(".cc-stage .cc-carry").forEach((el) => {
-      const it = items[+el.dataset.i];
-      el.classList.toggle("off", !!side && !!g && sideOf(S.kind, it) !== side);
+      const z = el.dataset.z != null ? el.dataset.z : sideOf(S.kind, items[+el.dataset.i]);
+      el.classList.toggle("off", !!side && !!g && z !== side);
     });
   }
   function applyFilt() {
@@ -1444,7 +1576,8 @@
              title: `<div class="cc-title">${esc(P.gameTitle ? P.gameTitle(g, d) : gameTitle(g, sport, seasonName(sport, d.season)))}</div>`,
              fig: `<div class="cc-stage">${P.game(g, d)}<div class="cc-tip" hidden></div></div>`,
              side: P.gameSide(g, d),
-             tail: playsCard(P.listTitle ? P.listTitle(g, d) : `Every ${P.one}`, P.listTitle ? null : P.items(g, d).length, "", P.list(g, d)) };
+             tail: playsCard(P.listTitle ? P.listTitle(g, d) : `Every ${P.one}`, P.listTitle ? null : P.items(g, d).length,
+                             P.flags || P.csv ? toolsHTML(S.kind, P.items(g, d), P.flags, P.filters) : "", P.list(g, d)) };
   }
 
   /* ---------------- selection and the tip ---------------- */
@@ -1617,6 +1750,10 @@
       c.kinds = shown.length ? shown.map((x) => x.k) : [c.cand[0]];
       c.counts = {};
       shown.forEach((x) => { c.counts[x.k] = x.v; });
+      // His team, from his own charts: tonight's matchup does not name it,
+      // and its hero sets his colours beside the opponent's.
+      const own = got.find((x) => x.d && x.d.team);
+      c.team = own ? own.d.team : "";
       const want = MEM.get(c.key);
       const kind = c.kinds.includes(want) ? want : c.kinds[0];
       c.S = fresh(c.S.sport, kind, c.S.player, c.S);
@@ -1882,7 +2019,8 @@
   /* What a league's own module draws with: the page's helpers and the
      chart being drawn (its selection), and the call that registers it. */
   const plug = { draw: (kind, spec) => { DRAW[kind] = spec; },
-                 h: { esc, tile, tableHTML, pct, num1, signed, ord, fold, state: () => S } };
+                 h: { esc, tile, tableHTML, pct, num1, signed, ord, fold, state: () => S,
+                      grid: gridHTML, two, pills, bars: barList, hero: heroShell, cap } };
   window.QBCarry = { open, close, mount, plug, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,
@@ -1891,5 +2029,6 @@
                                          KIND, DRAW, passGameChart, passSeasonChart, passTiles, passList,
                                          passTables, passChip, kindOf, cfbTargetGame, cfbTargetSeason,
                                          cfbTargetTiles, cfbTargetNote, heroHTML, sideOf, sidesHTML, carryResult,
-                                         carryFlags, targetFlags, csvOf, routeViews, routeBars, descOf } };
+                                         carryFlags, targetFlags, csvOf, routeViews, routeBars, descOf,
+                                         gridHTML, barList, segHTML, poolOf, zonesOf, toolsHTML, heroShell } };
 })();

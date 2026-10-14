@@ -15,16 +15,25 @@
    The season view puts each distance band's make rate beside the
    league's.
 
+   IN THE FRAME OF ETHAN'S NFL RENDERS (2026-10-14): the render's own
+   field — dark turf with its mowing stripes, the lines lit, the end zone
+   in his team's colour and the posts in gold — his range in three (under
+   40, the 40s, 50 and longer) as the render's Left | Middle | Right with
+   their counts, Distance | Indoors | Weather | Pressure as the route
+   chart's other views, and every kick in the render's table, filtered
+   and downloadable.
+
    No inline handlers: the page's CSP forbids them. */
 (function () {
   "use strict";
   const Q = window.QBCarry && window.QBCarry.plug;
   if (!Q) return;
-  const { esc, tile, tableHTML, pct, num1, state } = Q.h;
+  const { esc, tile, tableHTML, pct, num1, state, grid, two, pills, bars } = Q.h;
   const sel = (i) => { const S = state(); return S && S.sel === i ? " sel" : ""; };
 
   /* ---------------- words ---------------- */
   const RESULT = { made: "Made", missed: "Missed", blocked: "Blocked", aborted: "Aborted (never got off)" };
+  const PILL = { made: ["Made", "good"], missed: ["Missed", "bad"], blocked: ["Blocked", "bad"], aborted: ["Aborted", "bad"] };
   const quarter = (q) => (!q ? "" : q <= 4 ? `Q${q}` : "OT");
   const when = (k) => [quarter(k.q), k.clk].filter(Boolean).join(" ");
   const what = (k) => (k.k === "xp" ? "Extra point" : `${k.d == null ? "?" : k.d}-yd field goal`);
@@ -38,38 +47,58 @@
       .filter(Boolean).join(", ");
   }
   const band = (r) => (r === "made" ? "gain" : r === "blocked" ? "short" : "loss");
+  const points = (k) => (k.r !== "made" ? 0 : k.k === "xp" ? 1 : 3);
+
+  /* ---------------- the zones ----------------
+     The render's Left | Middle | Right, for a kicker: his range in three —
+     inside 40 yards, the 40s, and 50 and longer. An extra point is in none
+     of them and is not counted under the field. */
+  const zones = {
+    label: "How far",
+    list: [["S", "Under 40", "Under 40 yds"], ["M", "40–49", "40–49 yds"], ["L", "50+", "50+ yds"]],
+    of: (k) => (k.k !== "fg" || k.d == null ? "" : k.d < 40 ? "S" : k.d < 50 ? "M" : "L"),
+    pool: (g) => (g.kicks || []).filter((k) => k.k === "fg"),
+  };
 
   /* ---------------- the field ---------------- */
   /* The posts at the top, the field running down from them: a kick d
      yards out sits d yards below the crossbar. The column on the right
-     carries the distances, or the season's bands. */
+     carries the distances, or the season's bands. Drawn as the render's
+     field: dark turf, a mowing stripe every five yards, the lines lit,
+     the end zone in his colour and the posts in gold. */
   const L = 10, R = 290, MID = 150, TOP = 30, YD = 6.5, MAXD = 66;
   const Y = (d) => TOP + Math.max(0, Math.min(MAXD, d == null ? MAXD : d)) * YD;
   function fieldSVG(rightLabels) {
-    let s = `<rect class="kk-field" x="${L}" y="${TOP}" width="${R - L}" height="${(MAXD * YD).toFixed(0)}"/>
-      <rect class="kk-ez" x="${L}" y="${TOP}" width="${R - L}" height="${10 * YD}"/>`;
+    let s = `<rect class="kk-field" x="${L}" y="${TOP}" width="${R - L}" height="${(MAXD * YD).toFixed(0)}"/>`;
+    for (let d = 10, k = 0; d < MAXD; d += 5, k++) {
+      s += `<rect class="kk-mow${k % 2 ? " alt" : ""}" x="${L}" y="${Y(d)}" width="${R - L}" height="${(Math.min(5, MAXD - d) * YD).toFixed(1)}"/>`;
+    }
+    s += `<rect class="kk-ez" x="${L}" y="${TOP}" width="${R - L}" height="${10 * YD}"/>`;
     for (const d of [20, 30, 40, 50, 60]) {
       s += `<line class="kk-line" x1="${L}" x2="${R}" y1="${Y(d)}" y2="${Y(d)}"/>`;
       if (rightLabels) s += `<text class="kk-yd" x="${R + 10}" y="${Y(d) + 4}">${d} yd</text>`;
     }
-    s += `<line class="kk-post" x1="${MID - 16}" x2="${MID + 16}" y1="${TOP}" y2="${TOP}"/>
-      <line class="kk-post" x1="${MID - 16}" x2="${MID - 16}" y1="${TOP}" y2="4"/>
-      <line class="kk-post" x1="${MID + 16}" x2="${MID + 16}" y1="${TOP}" y2="4"/>
-      <line class="kk-post" x1="${MID}" x2="${MID}" y1="${TOP}" y2="${TOP + 12}"/>`;
+    const posts = `<line x1="${MID - 16}" x2="${MID + 16}" y1="${TOP}" y2="${TOP}"/>
+      <line x1="${MID - 16}" x2="${MID - 16}" y1="${TOP}" y2="4"/>
+      <line x1="${MID + 16}" x2="${MID + 16}" y1="${TOP}" y2="4"/>
+      <line x1="${MID}" x2="${MID}" y1="${TOP}" y2="${TOP + 12}"/>`;
+    s += `<g class="kk-glow">${posts}</g>${posts.replace(/<line /g, '<line class="kk-post" ')}`;
     return s;
   }
   const H = TOP + MAXD * YD + 12;
   const svg = (body, label) =>
     `<svg class="cc-svg kk-svg" viewBox="0 0 420 ${H.toFixed(0)}" role="img" aria-label="${esc(label)}">${body}</svg>`;
-  /* One field goal: its ball at its distance, its flight to the posts. */
+  /* One field goal: its ball at its distance, its flight to the posts (a
+     made one lit — a faint wide copy under it, no filter). */
   function kickMark(k, x, i, faint) {
     const y = Y(k.d).toFixed(1), cls = `${k.r}${faint ? " faint" : ""}`;
-    const flight = k.r === "blocked" ? "" : `<line class="kk-flight ${cls}" x1="${x.toFixed(1)}" y1="${y}" x2="${MID}" y2="${TOP + 2}"/>`;
+    const line = `x1="${x.toFixed(1)}" y1="${y}" x2="${MID}" y2="${TOP + 2}"`;
+    const flight = k.r === "blocked" ? "" : `${!faint && k.r === "made" ? `<line class="kk-trail" ${line}/>` : ""}<line class="kk-flight ${cls}" ${line}/>`;
     const ball = k.r === "blocked"
       ? `<path class="kk-ball cx-mark blocked${faint ? " faint" : ""}${sel(i)}" d="M${(x - 6).toFixed(1)} ${(+y - 6).toFixed(1)}l12 12m0 -12l-12 12"/>`
-      : `<circle class="kk-ball cx-mark ${cls}${sel(i)}" cx="${x.toFixed(1)}" cy="${y}" r="${faint ? 4.5 : 7}"/>`;
+      : `${!faint && k.r === "made" ? `<circle class="kk-halo" cx="${x.toFixed(1)}" cy="${y}" r="12"/>` : ""}<circle class="kk-ball cx-mark ${cls}${sel(i)}" cx="${x.toFixed(1)}" cy="${y}" r="${faint ? 4.5 : 7}"/>`;
     if (faint) return flight + ball.replace(" cx-mark", "");
-    return `<g class="cc-carry" data-i="${i}"><circle class="kk-hit" cx="${x.toFixed(1)}" cy="${y}" r="16"/>${flight}${ball}
+    return `<g class="cc-carry" data-i="${i}" data-z="${zones.of(k)}"><circle class="kk-hit" cx="${x.toFixed(1)}" cy="${y}" r="16"/>${flight}${ball}
       <text class="kk-d" x="${(x + 11).toFixed(1)}" y="${(+y + 4).toFixed(1)}">${k.d == null ? "" : k.d}</text></g>`;
   }
   function kickGame(g) {
@@ -88,9 +117,10 @@
     const MIDS = { u30: 24, "30s": 34.5, "40s": 44.5, "50": 55 };
     (d.by_band || []).forEach((b) => {
       const y = Y(MIDS[b.key] || 40);
+      const t = b.pct == null || b.league == null ? "" : b.pct - b.league >= 0.02 ? " hot" : b.pct - b.league <= -0.02 ? " cold" : "";
       body += `<g class="kk-pill"><rect x="${R + 6}" y="${(y - 25).toFixed(1)}" width="118" height="50" rx="9"/>
         <text class="kk-pn" x="${R + 14}" y="${(y - 9).toFixed(1)}">${esc(b.name)}</text>
-        <text class="kk-pct" x="${R + 14}" y="${(y + 8).toFixed(1)}">${b.fgm}/${b.fga} · ${pct(b.pct)}</text>
+        <text class="kk-pct${t}" x="${R + 14}" y="${(y + 8).toFixed(1)}">${b.fgm}/${b.fga} · ${pct(b.pct)}</text>
         <text class="kk-lg" x="${R + 14}" y="${(y + 20).toFixed(1)}">league ${pct(b.league)}</text></g>`;
     });
     return svg(body, `Kicker chart: ${every.length} field goals this season by distance, with each band's rate.`);
@@ -101,9 +131,13 @@
   }
 
   /* ---------------- the numbers ---------------- */
+  //: The game's weather in a tile's few characters ("12 mph · 41°F"); the table spells it out.
   function conditions(g) {
     const k = (g.kicks || [])[0];
-    return k ? (weather(k) || (k.roof ? "outdoors" : "—")) : "—";
+    if (!k) return "—";
+    if (k.roof === "dome" || k.roof === "closed") return k.roof === "dome" ? "Dome" : "Roof shut";
+    const w = [k.wind != null ? `${Math.round(k.wind)} mph` : "", k.temp != null ? `${Math.round(k.temp)}°F` : ""].filter(Boolean).join(" · ");
+    return w || (k.roof ? "Outdoors" : "—");
   }
   function gameTiles(g) {
     const l = g.line;
@@ -119,18 +153,38 @@
       tile("Points", num1(n ? l.pts / n : null), "a game"), tile("Long", l.long == null ? "—" : l.long, "made"),
       tile("50+", `${l.fg50}/${l.fga50}`), tile("Blocked", l.blocked)].join("")}</div>`;
   }
+  /* EVERY KICK AS THE RENDERS' TABLE: its number, the quarter and clock,
+     the kick and the score when he lined up, the distance, the weather,
+     how it ended and the points. On a phone the clock, the score and the
+     weather read under the kick. */
+  const COLS = [{ h: "#", c: "cc-c-n", p: "18px", w: "26px" },
+                { h: "Qtr", c: "cc-c-q", w: "70px" },
+                { h: "Kick", c: "cc-c-m", p: "minmax(0,1fr)" },
+                { h: "Kick", c: "cc-c-m", w: "minmax(0,1fr)" },
+                { h: "Conditions", c: "cc-c-t", w: "140px" },
+                { h: "Result", c: "cc-c-res", p: "84px", w: "120px" },
+                { h: "Pts", c: "cc-c-y", p: "30px", w: "40px", r: 1 }];
   function kickList(g) {
-    return `<div class="cc-list" role="list">${(g.kicks || []).map((k, i) => {
-      const b = band(k.r), tg = [score(k) ? `${score(k)}` : "", weather(k)].filter(Boolean);
-      return `<button type="button" role="listitem" class="cc-row${sel(i)}" data-i="${i}">
-        <i class="dot ${b}"></i>
-        <span class="cc-r-q">${esc(when(k))}</span>
-        <span class="cc-r-h">${esc(what(k))}</span>
-        <b class="cc-r-y ${b}">${esc(RESULT[k.r] || k.r)}</b>
-        ${tg.length ? `<span class="cc-r-tags">${tg.map((x) => `<em>${esc(x)}</em>`).join("")}</span>` : ""}
-      </button>`;
-    }).join("")}</div>`;
+    return grid("kicks", COLS, (g.kicks || []).map((k, i) => ({
+      i, f: flags(k),
+      said: [when(k), what(k), RESULT[k.r] || k.r, score(k), weather(k)].filter(Boolean).join(", "),
+      cells: [`${i + 1}`, esc(when(k) || "—"),
+              two(what(k), [when(k), score(k), weather(k)].filter(Boolean).join(" · ")),
+              two(what(k), score(k) ? `${score(k)} when he lined up` : ""),
+              esc(weather(k) || (k.roof ? "outdoors" : "—")), pills([PILL[k.r] || [k.r, "mute"]]),
+              [points(k) ? `+${points(k)}` : "—", points(k) ? "gain" : "miss"]],
+    })));
   }
+  const flags = (k) => [k.k === "xp" ? "xp" : "fg", k.r === "made" ? "made" : "miss",
+                        k.k === "fg" && k.d != null && k.d >= 50 ? "50" : "", k.r === "blocked" ? "blk" : ""]
+    .filter(Boolean).join(" ");
+  const FILTERS = [["", "Every kick"], ["fg", "Field goals"], ["xp", "Extra points"], ["made", "Made"],
+                   ["miss", "Missed or blocked"], ["50", "From 50 or longer"]];
+  const csv = (g) => [["#", "Quarter", "Clock", "Kick", "Distance (yds)", "Result", "Score when he lined up", "Wind (mph)",
+                       "Temperature (F)", "Roof", "Points"]]
+    .concat((g.kicks || []).map((k, i) => [i + 1, quarter(k.q), k.clk || "", k.k === "xp" ? "Extra point" : "Field goal",
+      k.d == null ? "" : k.d, RESULT[k.r] || k.r, k.sd == null ? "" : k.sd, k.wind == null ? "" : k.wind,
+      k.temp == null ? "" : k.temp, k.roof || "", points(k)]));
   const rows = (xs, lg) => xs.map((x) => (lg ? [x.name, x.fga, x.fgm, pct(x.pct), pct(x.league)] : [x.name, x.fga, x.fgm, pct(x.pct)]));
   function tables(d) {
     const out = [];
@@ -140,17 +194,39 @@
     if ((d.by_moment || []).length) out.push(tableHTML("When it mattered", ["Moment", "FGA", "Made", "FG%"], rows(d.by_moment)));
     return out.join("");
   }
+  /* THE OTHER VIEWS: his field goals by distance beside the league's
+     rate, indoors and out, in the weather and when it mattered, as bars. */
+  const VIEWS = [["dist", "Distance", "by_band"], ["place", "Indoors", "by_place"], ["weather", "Weather", "by_weather"],
+                 ["moment", "Pressure", "by_moment"]];
+  const TITLE = { dist: "Field goals by distance, beside the league", place: "Field goals indoors and outdoors",
+                  weather: "Field goals in the weather", moment: "Field goals when it mattered" };
+  function vsLeague(x) {
+    if (x.pct == null || x.league == null) return null;
+    const pts = Math.round(Math.abs(x.pct - x.league) * 100);
+    return pts >= 2 ? [`${x.pct > x.league ? "+" : "−"}${pts}% vs league`, x.pct > x.league ? "good" : "bad"] : null;
+  }
+  function kickBars(d, view) {
+    const key = (VIEWS.find(([k]) => k === view) || [])[2];
+    return bars((d[key] || []).map((x) => [x.name, x.fga,
+      `${x.fgm} of ${x.fga} made · ${pct(x.pct)}${x.league == null ? "" : ` · league ${pct(x.league)}`}`, vsLeague(x)]));
+  }
 
   Q.draw("kicks", {
     one: "kick", splitsTitle: "Every split · distance beside the league, indoors, weather, late and close",
     items: (g) => g.kicks || [],
     count: (l) => `${l.fga} field goal${l.fga === 1 ? "" : "s"}`,
     chip: (g) => `${g.line.fgm}/${g.line.fga} FG`,
+    zones,
     game: (g) => kickGame(g),
     season: (d) => kickSeason(d),
-    gameSide: (g) => `${legend()}${gameTiles(g)}`,
-    seasonSide: (d) => `${legend()}${seasonTiles(d)}`,
+    legend: () => legend(),
+    gameSide: (g) => gameTiles(g),
+    seasonSide: (d) => seasonTiles(d),
     list: (g) => kickList(g),
+    flags, filters: FILTERS, csv,
+    views: (d) => VIEWS.filter(([, , k]) => (d[k] || []).length).map(([k, name]) => [k, name]),
+    barTitle: (v) => TITLE[v],
+    bars: (d, v) => kickBars(d, v),
     splits: (d) => tables(d),
     note: () => `<p class="cc-note">Each ball is a field goal at the distance it was kicked from, the posts at the top; its line runs to the posts, green made, red dashes missed, and a cross is a kick that was blocked. The NFL’s play-by-play records how far, not where across the field or where between the uprights it went, so kicks are set side by side in the order he tried them. Extra points are listed and counted in his points, not drawn. The league’s rate in each distance band is every field goal of that season on file. Wind and temperature are the play-by-play’s readings for the game (none under a roof).</p>`,
     tip: (k) => `<b class="${band(k.r)}">${esc(what(k))} · ${esc(RESULT[k.r] || k.r)}</b>

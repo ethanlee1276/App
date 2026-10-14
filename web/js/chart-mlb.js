@@ -18,12 +18,21 @@
    catcher's view, coloured by what came of it; his mix, his zones and his
    fastball's speed start by start.
 
+   IN THE FRAME OF ETHAN'S NFL RENDERS (2026-10-14): the field dark with
+   its mowing rings, the chalk lit and the wall in his team's colour, the
+   pull side, the middle and the opposite field as the render's Left |
+   Middle | Right with their counts; a pitcher's fastballs, breaking balls
+   and offspeed the same way over the zone; Batted ball | Direction |
+   Pitcher hand and Pitch mix | Zones | Velocity as the route chart's other
+   views; and every plate appearance, or every batter faced, in the
+   render's table, filtered and downloadable.
+
    No inline handlers: the page's CSP forbids them. */
 (function () {
   "use strict";
   const Q = window.QBCarry && window.QBCarry.plug;
   if (!Q) return;
-  const { esc, tile, tableHTML, pct, num1, ord, state } = Q.h;
+  const { esc, tile, tableHTML, pct, num1, ord, state, grid, two, pills, bars } = Q.h;
   const sel = (i) => { const S = state(); return S && S.sel === i ? " sel" : ""; };
 
   /* ---------------- words ---------------- */
@@ -47,19 +56,40 @@
     return [p.ls != null ? `${Math.round(p.ls)} mph` : "", p.la != null ? `${Math.round(p.la)}°` : "",
             p.d != null ? `${Math.round(p.d)} ft` : "", TYPE[p.tr] || ""].filter(Boolean).join(" · ");
   }
+  const vsWho = (p) => `vs ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`;
+  //: What a plate appearance became, as a pill: a home run in gold, a hit green, a strikeout red.
+  const hitPill = (et, ev) => [SHORT[et] || ev || "—", et === "home_run" ? "gold" : HITS[et] ? "good"
+    : /strikeout/.test(et) ? "bad" : "mute"];
 
   /* ---------------- the field ---------------- */
   /* The Stats API's hit coordinates, home plate at (125.42, 198.27), y
-     growing toward home; drawn top-down with home at the foot. */
+     growing toward home; drawn top-down with home at the foot. The grass
+     dark with its mowing rings out from the plate, the chalk lit (a faint
+     wide copy under each line, no filter), the wall in his colour. */
   const HX = 200, HY = 336, K = 1.45;
   const fx = (x) => HX + (x - 125.42) * K;
   const fy = (y) => HY - (198.27 - y) * K;
+  //: A point r out from the plate, `a` degrees off straightaway centre.
+  const at = (r, a) => [HX + r * Math.sin(a * Math.PI / 180), HY - r * Math.cos(a * Math.PI / 180)];
+  const xy = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
+  function rings() {
+    let s = "";
+    for (let r = 40, k = 0; r < 190; r += 25, k++) {
+      const r2 = Math.min(190, r + 25);
+      s += `<path class="mb-mow${k % 2 ? " alt" : ""}" d="M${xy(at(r, -45))} A${r} ${r} 0 0 1 ${xy(at(r, 45))} L${xy(at(r2, 45))} A${r2} ${r2} 0 0 0 ${xy(at(r2, -45))} Z"/>`;
+    }
+    return s;
+  }
   function fieldSVG() {
     const poleL = [65, 201], poleR = [335, 201];
-    return `<path class="mb-grass" d="M${HX} ${HY} L${poleL[0]} ${poleL[1]} Q200 7 ${poleR[0]} ${poleR[1]} Z"/>
+    const chalk = `<line x1="${HX}" y1="${HY}" x2="23" y2="159"/><line x1="${HX}" y1="${HY}" x2="377" y2="159"/>
+      <path d="M${HX} ${HY} L236.8 299.2 L200 262.5 L163.2 299.2 Z"/>`;
+    return `<path class="mb-grass" d="M${HX} ${HY} L${poleL[0]} ${poleL[1]} Q200 7 ${poleR[0]} ${poleR[1]} Z"/>${rings()}
       <path class="mb-dirt" d="M${HX} ${HY} L136.4 272.4 A90 90 0 0 1 263.6 272.4 Z"/>
+      <g class="mb-glow">${chalk}</g>
       <path class="mb-base" d="M${HX} ${HY} L236.8 299.2 L200 262.5 L163.2 299.2 Z"/>
       <line class="mb-foul" x1="${HX}" y1="${HY}" x2="23" y2="159"/><line class="mb-foul" x1="${HX}" y1="${HY}" x2="377" y2="159"/>
+      <path class="mb-wall-glow" d="M${poleL[0]} ${poleL[1]} Q200 7 ${poleR[0]} ${poleR[1]}"/>
       <path class="mb-wall" d="M${poleL[0]} ${poleL[1]} Q200 7 ${poleR[0]} ${poleR[1]}"/>
       <text class="cc-lane" x="40" y="352">LF line</text><text class="cc-lane" x="360" y="352" text-anchor="end">RF line</text>`;
   }
@@ -68,9 +98,11 @@
     const x = fx(p.x), y = fy(p.y), kind = p.et === "home_run" ? "hr" : HITS[p.et] ? "h" : "o";
     const r = kind === "hr" ? 6 : 4.5;
     if (faint) return `<circle class="mb-ball ${kind} faint" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r - 1}"/>`;
-    return `<g class="cc-carry" data-i="${i}">
+    return `<g class="cc-carry" data-i="${i}" data-z="${p.dir || ""}">
       <line class="cc-hit" x1="${HX}" y1="${HY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>
+      ${kind === "o" ? "" : `<line class="mb-glow-arc ${kind}" x1="${HX}" y1="${HY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`}
       <line class="mb-arc ${kind}${sel(i)}" x1="${HX}" y1="${HY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>
+      ${kind === "o" ? "" : `<circle class="mb-halo ${kind}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r + 5}"/>`}
       <circle class="mb-ball cx-mark ${kind}${sel(i)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}"/></g>`;
   }
   const svg = (body, label, h = 360) =>
@@ -110,21 +142,54 @@
                tile("BB–K", `${L.bb}-${L.k}`), tile("Hard hit", L.bip ? `${L.hard}/${L.bip}` : "—", "95+ mph")];
     return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
   }
+  /* The render's Left | Middle | Right, for a hitter: where his balls in
+     play went, read off where each landed and which side he stood on. */
+  const sprayZones = {
+    label: "Where he hit it",
+    list: [["pull", "Pull", "Pulled"], ["center", "Center", "Up the middle"], ["oppo", "Oppo", "Opposite field"]],
+    of: (p) => p.dir || "",
+    pool: (g) => (g.pas || []).filter((p) => p.x != null),
+    noun: ["ball", "balls"],
+  };
+  /* EVERY PLATE APPEARANCE AS THE RENDERS' TABLE: its number, the inning,
+     the pitcher, how hard, how high and how far the ball went, what it
+     became and the runs it drove in. On a phone the inning and the ball's
+     numbers read under the pitcher. */
+  const SPRAY_COLS = [{ h: "#", c: "cc-c-n", p: "18px", w: "26px" },
+                      { h: "Inn", c: "cc-c-q", w: "52px" },
+                      { h: "Pitcher", c: "cc-c-m", p: "minmax(0,1fr)" },
+                      { h: "Pitcher", c: "cc-c-m", w: "minmax(0,1fr)" },
+                      { h: "EV", c: "cc-c-v", w: "52px", r: 1 },
+                      { h: "LA", c: "cc-c-v", w: "44px", r: 1 },
+                      { h: "Dist", c: "cc-c-v", w: "52px", r: 1 },
+                      { h: "Result", c: "cc-c-res", p: "96px", w: "150px" },
+                      { h: "RBI", c: "cc-c-y", w: "40px", r: 1 }];
   function sprayList(g) {
-    return `<div class="cc-list" role="list">${(g.pas || []).map((p, i) => {
-      const b = band(p.et);
-      const tags = [p.rbi ? `${p.rbi} RBI` : "", p.ls != null && p.ls >= 95 ? "Hard hit" : "",
-                    p.dir && p.dir !== "center" ? DIR[p.dir] : ""].filter(Boolean);
-      return `<button type="button" role="listitem" class="cc-row${sel(i)}" data-i="${i}">
-        <i class="dot ${b}"></i>
-        <span class="cc-r-q">${esc(innLabel(p.inn, p.half))}</span>
-        <span class="cc-r-dd">${esc(`vs ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`)}</span>
-        <span class="cc-r-h">${esc(ballWords(p) || p.ev)}</span>
-        <b class="cc-r-y ${b}">${esc(SHORT[p.et] || p.ev)}</b>
-        ${tags.length ? `<span class="cc-r-tags">${tags.map((x) => `<em>${esc(x)}</em>`).join("")}</span>` : ""}
-      </button>`;
-    }).join("")}</div>`;
+    return grid("spray", SPRAY_COLS, (g.pas || []).map((p, i) => {
+      const hard = p.ls != null && p.ls >= 95;
+      const res = [hitPill(p.et, p.ev)].concat(hard ? [["Hard hit", "tag"]] : []);
+      return {
+        i, f: sprayFlags(p),
+        said: [innLabel(p.inn, p.half), vsWho(p), p.ev, ballWords(p), p.rbi ? `${p.rbi} RBI` : "", hard ? "hard hit" : ""]
+          .filter(Boolean).join(", "),
+        cells: [`${i + 1}`, esc(innLabel(p.inn, p.half) || "—"),
+                two(vsWho(p), [innLabel(p.inn, p.half), p.rbi ? `${p.rbi} RBI` : "", ballWords(p)].filter(Boolean).join(" · ")),
+                two(vsWho(p), [p.ev, TYPE[p.tr] || "", p.dir && p.dir !== "center" ? DIR[p.dir] : ""].filter(Boolean).join(" · ")),
+                esc(p.ls == null ? "—" : `${Math.round(p.ls)}`), esc(p.la == null ? "—" : `${Math.round(p.la)}°`),
+                esc(p.d == null ? "—" : `${Math.round(p.d)}`), pills(res), [p.rbi ? `${p.rbi}` : "—", p.rbi ? "gain" : "miss"]],
+      };
+    }));
   }
+  const sprayFlags = (p) => [HITS[p.et] ? "h" : "", p.et === "home_run" ? "hr" : "", p.x != null ? "bip" : "",
+                             p.ls != null && p.ls >= 95 ? "hard" : "", /strikeout/.test(p.et) ? "k" : "",
+                             /walk|hit_by_pitch/.test(p.et) ? "bb" : "", p.rbi ? "rbi" : ""].filter(Boolean).join(" ");
+  const SPRAY_FILTERS = [["", "Every plate appearance"], ["h", "Hits"], ["hr", "Home runs"], ["bip", "Balls in play"],
+                         ["hard", "Hard hit"], ["k", "Strikeouts"], ["bb", "Walks"], ["rbi", "Drove in a run"]];
+  const sprayCsv = (g) => [["#", "Inning", "Pitcher", "Throws", "Result", "Event", "Exit velocity (mph)", "Launch angle",
+                            "Distance (ft)", "Batted ball", "Direction", "RBI", "Pitches", "xBA"]]
+    .concat((g.pas || []).map((p, i) => [i + 1, innLabel(p.inn, p.half), p.p, p.ph, SHORT[p.et] || "", p.ev,
+      p.ls == null ? "" : p.ls, p.la == null ? "" : p.la, p.d == null ? "" : p.d, TYPE[p.tr] || "", DIR[p.dir] || "",
+      p.rbi || 0, p.np == null ? "" : p.np, p.xh == null ? "" : p.xh]));
   /* Our expected average and slugging (engine/mlb/xstats), and what the
      held-out test (engine/mlb/xstatsfit) said of them, if it has run. */
   function xNote(d) {
@@ -152,21 +217,39 @@
     }
     return out.join("");
   }
+  /* THE OTHER VIEWS: his balls in play by how he hit them and where they
+     went, and his plate appearances against each hand, as bars. */
+  const SPRAY_VIEWS = [["type", "Batted ball", "by_type"], ["dir", "Direction", "by_dir"], ["hand", "Pitcher hand", "by_hand"]];
+  const SPRAY_TITLE = { type: "Balls in play by how he hit them", dir: "Balls in play by direction",
+                        hand: "Plate appearances against each hand" };
+  function sprayBars(d, view) {
+    if (view === "hand") {
+      return bars((d.by_hand || []).map((x) => [x.name, x.pa, `${x.h} H · ${x.hr} HR · ${x.bb} BB · ${x.k} K · AVG ${avg3(x.avg)}`]));
+    }
+    return bars(((view === "type" ? d.by_type : d.by_dir) || []).map((x) => [x.name, x.bip || x.n,
+      `${x.h} hit${x.h === 1 ? "" : "s"} · ${x.hr} HR · ${pct(x.n ? x.h / x.n : null)} hit rate${x.xba == null ? "" : ` · xBA ${avg3(x.xba)}`}`]));
+  }
 
   Q.draw("spray", {
     one: "plate appearance", splitsTitle: "Every split · batted ball, direction, pitcher's hand",
     items: (g) => g.pas || [],
     count: (L) => `${L.pa} plate appearances`,
     chip: (g) => `${g.line.h}-${g.line.ab}${g.line.hr ? `, ${g.line.hr} HR` : ""}`,
+    zones: sprayZones,
     game: (g) => sprayGame(g),
     season: (d) => spraySeason(d),
-    gameSide: (g) => `${sprayLegend()}${sprayTiles(g.line)}`,
+    legend: () => sprayLegend(),
+    gameSide: (g) => sprayTiles(g.line),
     seasonSide: (d) => {
       const L = d.season_line;
-      return `${sprayLegend()}${sprayTiles(L)}
+      return `${sprayTiles(L)}
         <div class="cc-tiles cc-tiles-2">${tile("AVG", avg3(L.avg), L.xba == null ? "" : `xBA ${avg3(L.xba)}`)}${tile("SLG", avg3(L.slg), L.xslg == null ? "" : `xSLG ${avg3(L.xslg)}`)}${tile("Exit velocity", L.ev == null ? "—" : `${num1(L.ev)} mph`, "average")}${tile("Launch angle", L.la == null ? "—" : `${num1(L.la)}°`, "average")}${tile("Hard hit", pct(L.bip ? L.hard / L.bip : null))}${tile("Sweet spot", pct(L.bip ? L.sweet / L.bip : null), "8–32°")}</div>`;
     },
     list: (g) => sprayList(g),
+    flags: sprayFlags, filters: SPRAY_FILTERS, csv: sprayCsv,
+    views: (d) => SPRAY_VIEWS.filter(([, , k]) => (d[k] || []).length).map(([k, name]) => [k, name]),
+    barTitle: (v) => SPRAY_TITLE[v],
+    bars: (d, v) => sprayBars(d, v),
     splits: (d) => sprayTables(d),
     note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn.${xNote(d)}</p>`,
     tip: (p) => `<b class="${band(p.et)}">${esc(p.ev)}</b>${p.rbi ? ` · ${p.rbi} RBI` : ""}
@@ -176,7 +259,8 @@
 
   /* ---------------- the strike zone ---------------- */
   /* Feet across the plate (pX, from the catcher's view) and up from the
-     ground (pZ), to the drawing: 62 px a foot, the ground at the foot. */
+     ground (pZ), to the drawing: 62 px a foot, the ground at the foot. The
+     zone lit, as the render lights its line of scrimmage. */
   const ZX = 150, ZG = 310, F = 62;
   const zx = (px) => ZX + px * F, zy = (pz) => ZG - pz * F;
   const HALF_PLATE = 17 / 24;                 // 17 inches, half of it, in feet
@@ -184,6 +268,18 @@
   const WHIFF = new Set(["S", "W", "M", "Q"]), FOUL = new Set(["F", "T", "L", "O", "R"]), PLAY = new Set(["X", "D", "E"]);
   const outcome = (code) => (code === "C" ? "c" : WHIFF.has(code) ? "w" : PLAY.has(code) ? "x" : FOUL.has(code) ? "f" : "b");
   const OUTCOME = { c: "Called strike", w: "Whiff", x: "In play", f: "Foul", b: "Ball" };
+  /* The render's Left | Middle | Right, for a pitcher: his fastballs, his
+     breaking balls and his offspeed (the league's own grouping of its
+     pitch types; a pitchout is none of them). */
+  const GROUP = { FF: "F", SI: "F", FC: "F", FA: "F", SL: "B", ST: "B", SV: "B", CU: "B", KC: "B", CS: "B",
+                  CH: "O", FS: "O", FO: "O", SC: "O", EP: "O", KN: "O" };
+  const pitchZones = {
+    label: "Which pitches",
+    list: [["F", "Fastballs", "Fastballs"], ["B", "Breaking", "Breaking"], ["O", "Offspeed", "Offspeed"]],
+    of: (p) => GROUP[p[0]] || "",
+    pool: (g) => g.p || [],
+    noun: ["pitch", "pitches"],
+  };
   function zoneBox(ps) {
     const tops = ps.map((p) => p[6]).filter((v) => v != null), bots = ps.map((p) => p[7]).filter((v) => v != null);
     const top = tops.length ? tops.reduce((a, b) => a + b, 0) / tops.length : 3.4;
@@ -192,29 +288,30 @@
   }
   function zoneSVG(z) {
     const w = (z.x1 - z.x0) / 3, h = (z.y1 - z.y0) / 3;
-    let grid = "";
+    let grid9 = "";
     for (let i = 1; i < 3; i++) {
-      grid += `<line class="mp-grid" x1="${(z.x0 + w * i).toFixed(1)}" y1="${z.y0.toFixed(1)}" x2="${(z.x0 + w * i).toFixed(1)}" y2="${z.y1.toFixed(1)}"/>
+      grid9 += `<line class="mp-grid" x1="${(z.x0 + w * i).toFixed(1)}" y1="${z.y0.toFixed(1)}" x2="${(z.x0 + w * i).toFixed(1)}" y2="${z.y1.toFixed(1)}"/>
         <line class="mp-grid" x1="${z.x0.toFixed(1)}" y1="${(z.y0 + h * i).toFixed(1)}" x2="${z.x1.toFixed(1)}" y2="${(z.y0 + h * i).toFixed(1)}"/>`;
     }
     const plate = `M${zx(-HALF_PLATE).toFixed(1)} 314 L${zx(HALF_PLATE).toFixed(1)} 314 L${zx(HALF_PLATE).toFixed(1)} 320 L${ZX} 326 L${zx(-HALF_PLATE).toFixed(1)} 320 Z`;
-    return `<rect class="mp-zone" x="${z.x0.toFixed(1)}" y="${z.y0.toFixed(1)}" width="${(z.x1 - z.x0).toFixed(1)}" height="${(z.y1 - z.y0).toFixed(1)}"/>
-      ${grid}<path class="mp-plate" d="${plate}"/>
+    const box = `x="${z.x0.toFixed(1)}" y="${z.y0.toFixed(1)}" width="${(z.x1 - z.x0).toFixed(1)}" height="${(z.y1 - z.y0).toFixed(1)}"`;
+    return `<rect class="mp-zone-glow" ${box}/><rect class="mp-zone" ${box}/>
+      ${grid9}<path class="mp-plate" d="${plate}"/>
       <text class="cc-lane" x="8" y="20">Catcher’s view</text>`;
   }
   const zsvg = (body, label) =>
     `<svg class="cc-svg mp-svg" viewBox="0 0 300 330" role="img" aria-label="${esc(label)}">${body}</svg>`;
   function pitchGame(g) {
     const ps = g.p || [], faced = g.faced || [];
-    const at = {};
-    faced.forEach((x, i) => { at[x.ab] = i; });
+    const ix = {};
+    faced.forEach((x, i) => { ix[x.ab] = i; });
     const z = zoneBox(ps);
     let dots = "";
     ps.forEach((p) => {
       if (p[2] == null || p[3] == null) return;
-      const i = at[p[9]] == null ? -1 : at[p[9]];
+      const i = ix[p[9]] == null ? -1 : ix[p[9]];
       const x = Math.max(4, Math.min(296, zx(p[2]))), y = Math.max(4, Math.min(306, zy(p[3])));
-      dots += `<g class="cc-carry" data-i="${i}"><circle class="mp cx-mark ${outcome(p[4])}${sel(i)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/></g>`;
+      dots += `<g class="cc-carry" data-i="${i}" data-z="${pitchZones.of(p)}"><circle class="mp cx-mark ${outcome(p[4])}${sel(i)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/></g>`;
     });
     return zsvg(zoneSVG(z) + dots, `Pitch chart: ${ps.length} pitches. Every batter he faced is listed below.`);
   }
@@ -257,6 +354,7 @@
     const pts = v.map((x, i) => `${X(i).toFixed(1)},${Y(x.avg).toFixed(1)}`).join(" ");
     return `<div class="mp-velo"><div class="mp-velo-h">${esc(pitchName(d.velo_type))} speed, start by start</div>
       <svg class="cc-svg" viewBox="0 0 300 96" role="img" aria-label="${esc(`${pitchName(d.velo_type)} average speed by start, ${num1(v[0].avg)} to ${num1(v[v.length - 1].avg)} mph`)}">
+        <polyline class="mp-line-glow" points="${pts}"/>
         <polyline class="mp-line" points="${pts}"/>
         ${v.map((x, i) => `<circle class="mp-pt" cx="${X(i).toFixed(1)}" cy="${Y(x.avg).toFixed(1)}" r="3"/>`).join("")}
         <text class="cc-lane" x="4" y="12">${num1(hi - 0.5)}</text><text class="cc-lane" x="4" y="92">${num1(lo + 0.5)}</text>
@@ -278,28 +376,86 @@
     return mix && mix.length ? tableHTML(cap, ["Pitch", "Thrown", "Share", "mph", "Whiff", "CSW"],
       mix.map((m) => [pitchName(m.type), m.n, pct(m.share), num1(m.velo), pct(m.whiff), pct(m.csw)])) : "";
   }
+  /* EVERY BATTER HE FACED AS THE RENDERS' TABLE: the inning, the batter
+     and the side he hit from, the pitches it took, and how it ended — seen
+     from the mound, so a strikeout is green and a hit red. */
+  const FACED_COLS = [{ h: "#", c: "cc-c-n", p: "18px", w: "26px" },
+                      { h: "Inn", c: "cc-c-q", w: "52px" },
+                      { h: "Batter", c: "cc-c-m", p: "minmax(0,1fr)" },
+                      { h: "Batter", c: "cc-c-m", w: "minmax(0,1fr)" },
+                      { h: "Pitches", c: "cc-c-v", w: "64px", r: 1 },
+                      { h: "Result", c: "cc-c-res", p: "96px", w: "160px" }];
+  const mound = (et, ev) => {
+    const b = band(et);
+    return [SHORT[et] || ev || "—", b === "loss" ? "good" : b === "gain" || b === "short" ? "bad" : "mute"];
+  };
+  const batter = (x) => `${x.b || "?"}${x.bs ? ` (${x.bs})` : ""}`;
   function facedList(g) {
-    return `<div class="cc-list" role="list">${(g.faced || []).map((x, i) => {
-      const b = band(x.et), tags = [x.rbi ? `${x.rbi} RBI` : ""].filter(Boolean);
-      return `<button type="button" role="listitem" class="cc-row${sel(i)}" data-i="${i}">
-        <i class="dot ${b === "loss" ? "gain" : b === "gain" ? "loss" : b}"></i>
-        <span class="cc-r-q">${esc(innLabel(x.inn, x.half))}</span>
-        <span class="cc-r-dd">${esc(`${x.b || "?"}${x.bs ? ` (${x.bs})` : ""}`)}</span>
-        <span class="cc-r-h">${esc(`${x.np} pitch${x.np === 1 ? "" : "es"}`)}</span>
-        <b class="cc-r-y">${esc(SHORT[x.et] || x.ev)}</b>
-        ${tags.length ? `<span class="cc-r-tags">${tags.map((t) => `<em>${esc(t)}</em>`).join("")}</span>` : ""}
-      </button>`;
-    }).join("")}</div>`;
+    return grid("faced", FACED_COLS, (g.faced || []).map((x, i) => {
+      const res = [mound(x.et, x.ev)].concat(x.rbi ? [[`${x.rbi} RBI`, "bad"]] : []);
+      return {
+        i, f: facedFlags(x),
+        said: [innLabel(x.inn, x.half), batter(x), `${x.np} pitch${x.np === 1 ? "" : "es"}`, x.ev, x.rbi ? `${x.rbi} RBI` : ""]
+          .filter(Boolean).join(", "),
+        cells: [`${i + 1}`, esc(innLabel(x.inn, x.half) || "—"),
+                two(batter(x), [innLabel(x.inn, x.half), `${x.np} pitch${x.np === 1 ? "" : "es"}`].filter(Boolean).join(" · ")),
+                two(batter(x), x.ev || ""), esc(x.np == null ? "—" : `${x.np}`), pills(res)],
+      };
+    }));
   }
+  const facedFlags = (x) => [/strikeout/.test(x.et) ? "k" : "", /walk|hit_by_pitch/.test(x.et) ? "bb" : "",
+                             HITS[x.et] ? "h" : "", x.et === "home_run" ? "hr" : "",
+                             band(x.et) === "miss" ? "out" : "", x.rbi ? "rbi" : ""].filter(Boolean).join(" ");
+  const FACED_FILTERS = [["", "Every batter"], ["k", "Strikeouts"], ["out", "Outs in play"], ["bb", "Walks"],
+                         ["h", "Hits"], ["hr", "Home runs"], ["rbi", "Runs driven in"]];
+  //: The spreadsheet is every pitch, with the batter it was thrown to.
+  function pitchCsv(g) {
+    const by = {};
+    (g.faced || []).forEach((x) => { by[x.ab] = x; });
+    return [["#", "Inning", "Batter", "Bats", "Pitch", "Speed (mph)", "Result", "Zone", "Across the plate (ft)", "Height (ft)"]]
+      .concat((g.p || []).map((p, i) => {
+        const x = by[p[9]] || {};
+        return [i + 1, p[8] || "", x.b || "", p[10] || x.bs || "", pitchName(p[0]), p[1] == null ? "" : p[1],
+                OUTCOME[outcome(p[4])], p[5] == null ? "" : p[5], p[2] == null ? "" : p[2], p[3] == null ? "" : p[3]];
+      }));
+  }
+  /* THE OTHER VIEWS: his mix, where in and around the zone his pitches
+     went (grouped as a scout reads it), and his fastball start by start. */
+  const AREAS = [["Heart of the zone", [5]], ["Up in the zone", [1, 2, 3]], ["Down in the zone", [7, 8, 9]],
+                 ["In or away, mid-height", [4, 6]], ["Above the zone", [11, 12]], ["Below the zone", [13, 14]]];
+  function pitchBars(d, view) {
+    if (view === "mix") {
+      return bars((d.mix || []).map((m) => [pitchName(m.type), m.n,
+        `${num1(m.velo)} mph · whiff ${pct(m.whiff)} · CSW ${pct(m.csw)}`]));
+    }
+    if (view === "zones") {
+      const by = {};
+      (d.zones || []).forEach((r) => { by[r.zone] = r; });
+      return bars(AREAS.map(([name, ks]) => {
+        const rs = ks.map((k) => by[k]).filter(Boolean);
+        const n = rs.reduce((a, r) => a + (r.n || 0), 0), wh = rs.reduce((a, r) => a + (r.whiffs || 0), 0);
+        const sw = rs.reduce((a, r) => a + (r.swings || 0), 0);
+        return [name, n, `${wh} whiff${wh === 1 ? "" : "s"} · ${sw ? pct(wh / sw) : "—"} of swings missed`];
+      }));
+    }
+    return velo(d) + bars((d.velo || []).slice().reverse().map((v) => {
+      const t = v.date ? new Date(`${v.date}T12:00:00`) : null;
+      const day = t && !isNaN(t) ? t.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : v.date;
+      return [`${day} vs ${v.opp}`, v.n, `${num1(v.avg)} mph average`];
+    }));
+  }
+  const PITCH_TITLE = { mix: "Pitches by type", zones: "Pitches by where they crossed", velo: "His fastball, start by start" };
 
   Q.draw("pitches", {
     one: "batter faced", splitsTitle: "Every split · pitch mix",
     items: (g) => g.faced || [],
     count: (L) => `${L.pitches.toLocaleString()} pitches`,
     chip: (g) => `${g.line.k} K · ${g.line.pitches}p`,
+    zones: pitchZones,
     game: (g) => pitchGame(g),
     season: (d) => pitchSeason(d),
-    gameSide: (g) => `${pitchLegend()}${pitchTiles(g.line)}${mixTable(g.mix, "This game’s mix")}`,
+    legend: (g) => (g ? pitchLegend() : `<div class="cc-legend" aria-hidden="true"><span><i class="sw cell"></i>Share of his pitches</span></div>`),
+    gameSide: (g) => `${pitchTiles(g.line)}${mixTable(g.mix, "This game’s mix")}`,
     seasonSide: (d) => {
       const L = d.season_line;
       return `${pitchTiles(L)}
@@ -307,8 +463,13 @@
         ${velo(d)}`;
     },
     list: (g) => facedList(g),
+    flags: facedFlags, filters: FACED_FILTERS, csv: pitchCsv,
+    views: (d) => [["mix", "Pitch mix", (d.mix || []).length], ["zones", "Zones", (d.zones || []).some((r) => r.n)],
+                   ["velo", "Velocity", (d.velo || []).length > 1]].filter((v) => v[2]).map(([k, name]) => [k, name]),
+    barTitle: (v, d) => (v === "velo" ? `His ${pitchName(d.velo_type).toLowerCase()}, start by start` : PITCH_TITLE[v]),
+    bars: (d, v) => pitchBars(d, v),
     splits: (d) => mixTable(d.mix, "His pitch mix"),
-    note: () => `<p class="cc-note">Each dot is a pitch where it crossed the plate, seen from behind the catcher (MLB’s Stats API: feet from the middle of the plate and up from the ground); the box is his average strike zone in those games, split in nine. Called strike and whiff are the umpire’s call and the swing as the feed records them; CSW is called strikes plus whiffs over every pitch, the whiff rate is misses over swings (a foul tip is contact). The season view shades the zone’s nine boxes and the four corners outside it by the share of his pitches there. Speed is the release speed; mph is his average for that pitch.</p>`,
+    note: () => `<p class="cc-note">Each dot is a pitch where it crossed the plate, seen from behind the catcher (MLB’s Stats API: feet from the middle of the plate and up from the ground); the box is his average strike zone in those games, split in nine. Called strike and whiff are the umpire’s call and the swing as the feed records them; CSW is called strikes plus whiffs over every pitch, the whiff rate is misses over swings (a foul tip is contact). Fastballs are his four-seamers, sinkers and cutters; breaking balls his sliders, sweepers and curves; offspeed his changeups, splitters and the rest. The season view shades the zone’s nine boxes and the four corners outside it by the share of his pitches there. Speed is the release speed; mph is his average for that pitch.</p>`,
     tip: (x) => `<b>${esc(x.ev)}</b>${x.rbi ? ` · ${x.rbi} RBI` : ""}
       <span>${esc([innLabel(x.inn, x.half), `${x.b || "?"}${x.bs ? ` (${x.bs})` : ""}`, `${x.np} pitch${x.np === 1 ? "" : "es"}`].join(" · "))}</span>`,
   });
