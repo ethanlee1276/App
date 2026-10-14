@@ -134,21 +134,40 @@ def _mlb_fixtures(season: int) -> list[Fixture]:
     return out
 
 
-def _nba_fixtures(season: int) -> list[Fixture]:
-    from .sources.nbadata import fetch_schedule
-    try:
-        sched = fetch_schedule()
-    except Exception:
-        return []
+#: How long an NBA future day's scoreboard is kept: the schedule moves
+#: rarely, and the futures rebuild once a day.
+NBA_FIXTURE_TTL = 24 * 3600
+
+
+def _nba_fixtures(season: int, today: _dt.date | None = None) -> list[Fixture]:
+    """Every regular-season NBA game still to play, off ESPN's scoreboard a
+    day at a time from today (2026-10-14: the league's own season file
+    answers the box 403, runbook step 103). Stops at the first day of the
+    postseason or the season window's end; a day that cannot be read is
+    skipped, as college's range is. Clubs in the league's own codes."""
+    from .divisions import canonical
+    from .seasons import window
+    from .sources import espnhoops
+    from .sources.fetch import DataUnavailable
+    today = today or _dt.date.today()
+    start, end = (_dt.date.fromisoformat(d) for d in window("nba", season))
+    day = max(start, today)
     out = []
-    for day in (sched.get("leagueSchedule", {}) or {}).get("gameDates", []) or []:
-        for g in day.get("games", []) or []:
-            if int(g.get("gameStatus", 1) or 1) == 3:       # 3 = final
+    while day <= end:
+        try:
+            games = espnhoops.load_day(day.isoformat(), ttl=None if day == today else NBA_FIXTURE_TTL,
+                                       league="nba")
+        except (DataUnavailable, ValueError):
+            games = []
+        if any(g.get("season_type") == 3 for g in games):
+            break
+        for g in games:
+            if g.get("completed") or g.get("season_type") != 2:
                 continue
-            home = (g.get("homeTeam", {}) or {}).get("teamTricode", "")
-            away = (g.get("awayTeam", {}) or {}).get("teamTricode", "")
+            home, away = canonical("nba", g.get("home", "")), canonical("nba", g.get("away", ""))
             if home and away:
                 out.append(Fixture(home, away))
+        day += _dt.timedelta(days=1)
     return out
 
 

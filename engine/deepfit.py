@@ -52,7 +52,13 @@ MIN_LOG_ROWS = 2_000
 
 #: A fitter that has not finished in this long has found something
 #: pathological. Bounded so a weekly job cannot become a permanent one.
-TIMEOUT_S = 900
+#: Forty-five minutes since 2026-10-14: the NBA's temperature fit, on
+#: twice the history it had (last season's box scores read again with
+#: steals, blocks and turnovers), ran past the old fifteen and was skipped;
+#: run by hand without a limit on the box it took 17 minutes, niced, beside
+#: the board sweep. The refit is a detached child, outside the chores'
+#: hour, so the longer bound costs the site nothing.
+TIMEOUT_S = 2700
 
 
 def sports_with_history(db: str = "data/history.db") -> list[str]:

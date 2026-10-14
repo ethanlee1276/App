@@ -12,11 +12,18 @@ the way the nba_api project documents the league's CDN feed:
     the paint, mid-range, the corner three, above the break) from the
     feed's own area word or from where it was taken; an assist only on a
     make; nothing that is not a shot;
-  * THE GAMES: the season file's finals (never the preseason or the
-    All-Star Game); last season by the league's own numbering, newest
-    first; a stored game is never read again; five misses in a row on
-    last season say the CDN no longer has it; a read keeps no file it
-    wrote;
+  * ESPN'S FOLD (`fold_espn`, 2026-10-14: the league's CDN answers the
+    box 403 for every file, so the shots come from ESPN's game summary):
+    a shooting play is a field goal or a free throw by the points it
+    attempts, made by `scoringPlay`, the shooter the first participant and
+    the second the assist on a make or the block on a miss; the spot in
+    the CDN's units off ESPN's feet, a free throw off the floor; the clubs
+    in the league's codes; nothing that is not a shot, and no play's
+    written text;
+  * THE GAMES: the history's own NBA finals under ESPN's ids, this season's
+    and last, newest first (pins changed 2026-10-14 and told to Ethan:
+    they held the CDN's season file and its numbering of last season); a
+    stored game is never read again; a read keeps no file it wrote;
   * THE CHART: his points the box score's way (2s, 3s and free throws),
     each zone beside the league's percentage there, the quarter and
     distance splits, his box score that night off the logs, the season
@@ -146,49 +153,136 @@ def test_the_zones_read_off_the_floor():
     assert [k for k, _n in NS.ZONES] == ["ra", "paint", "mid", "corner3", "above3"]
 
 
+# --- ESPN's fold --------------------------------------------------------------------
+def _summary(gid="401810001", home=("7", "DEN"), away=("18", "NY"), plays=None):
+    """ESPN's summary of a final, in the shape `sources/espnplays` recorded."""
+    def ath(i, name):
+        return {"athlete": {"id": str(i), "displayName": name}, "stats": []}
+    return {"header": {"id": gid, "competitions": [{"competitors": [
+                {"homeAway": "home", "team": {"id": home[0], "abbreviation": home[1]}},
+                {"homeAway": "away", "team": {"id": away[0], "abbreviation": away[1]}}]}]},
+            "boxscore": {"players": [
+                {"team": {"id": home[0], "abbreviation": home[1]}, "statistics": [{"athletes": [
+                    ath(JOKIC, "Nikola Jokić"), ath(MURRAY, "Jamal Murray")]}]},
+                {"team": {"id": away[0], "abbreviation": away[1]}, "statistics": [{"athletes": [
+                    ath(BRUNSON, "Jalen Brunson")]}]}]},
+            "plays": plays if plays is not None else _plays()}
+
+
+def _play(seq, team, who, pts, made, x=None, y=None, kind="Jump Shot", per=1, clock="11:30"):
+    p = {"id": f"9{seq}", "sequenceNumber": str(seq), "period": {"number": per}, "clock": {"displayValue": clock},
+         "team": {"id": team}, "participants": [{"athlete": {"id": str(w)}} for w in who],
+         "type": {"id": "1", "text": kind}, "shootingPlay": True, "scoringPlay": made,
+         "scoreValue": pts if made else 0, "pointsAttempted": pts,
+         "text": "ESPN PROSE NEVER STORED", "shortDescription": "NOR THIS"}
+    p["coordinate"] = {"x": x, "y": y} if x is not None else {"x": -214748340, "y": -214748365}
+    return p
+
+
+def _plays():
+    return [
+        {"id": "1", "sequenceNumber": "1", "type": {"text": "Jumpball"}, "shootingPlay": False,
+         "team": {"id": "7"}, "participants": [{"athlete": {"id": str(JOKIC)}}]},
+        _play(4, "7", (JOKIC, MURRAY), 2, True, x=25, y=2, kind="Driving Layup Shot"),     # 2 ft, assisted
+        _play(7, "7", (JOKIC,), 3, False, x=3, y=3),                                      # corner three
+        _play(9, "7", (JOKIC, BRUNSON), 2, False, x=30, y=17, per=2),                      # blocked, mid-range
+        _play(12, "7", (JOKIC,), 3, True, x=25, y=26, per=3, clock="7:04"),               # above the break
+        _play(13, "7", (JOKIC,), 1, True, kind="Free Throw - 1 of 2", per=3, clock="7:04"),
+        _play(14, "7", (JOKIC,), 1, False, kind="Free Throw - 2 of 2", per=3, clock="7:04"),
+        _play(20, "18", (BRUNSON,), 2, True, x=21, y=10, per=4),                         # in the paint
+        _play(21, "99", (BRUNSON,), 2, True, x=25, y=1),                                  # no club in this game
+        _play(22, "7", (), 2, True, x=25, y=1)]                                           # nobody shot it
+
+
+def test_espns_summary_folds_into_the_same_rows():
+    rows = NS.fold_espn(_summary(), "2025-11-02")
+    by = {r["action"]: r for r in rows}
+    assert sorted(by) == [4, 7, 9, 12, 13, 14, 20], "shots and free throws only; no club, no shooter, no row"
+    lay, corner, blk, top, ft1, ft2, brun = (by[i] for i in (4, 7, 9, 12, 13, 14, 20))
+    assert (lay["kind"], lay["made"], lay["distance"], lay["zone"], lay["assist"]) == \
+        ("2pt", 1, 2.0, "ra", "Jamal Murray")
+    assert (lay["x"], lay["y"]) == (0.0, 20.0), "ESPN's feet into the CDN's tenths from the basket"
+    assert (corner["kind"], corner["made"], corner["zone"], corner["assist"]) == ("3pt", 0, "corner3", "")
+    assert blk["blocked"] == 1 and blk["zone"] == "mid" and blk["assist"] == "" and blk["period"] == 2
+    assert top["zone"] == "above3" and top["distance"] == 26.0 and top["clock"] == "7:04"
+    assert (ft1["kind"], ft1["made"], ft1["x"], ft1["distance"], ft1["zone"]) == ("ft", 1, None, None, "")
+    assert ft2["made"] == 0 and ft2["blocked"] == 0
+    assert brun["team"] == "NYK" and brun["opponent"] == "DEN" and brun["home"] == 0 and brun["zone"] == "paint"
+    assert lay["team"] == "DEN" and lay["home"] == 1 and lay["player"] == "Nikola Jokić"
+    assert lay["game_id"] == "401810001" and lay["season"] == 2025 and lay["shot"] == "Driving Layup Shot"
+    assert not any("PROSE" in str(v) or "NOR THIS" in str(v) for r in rows for v in r.values())
+    assert NS.fold_espn({"plays": _plays()}, "2025-11-02") == [], "no header, no rows: whose game is it?"
+    conn = D.connect(":memory:")
+    D.upsert_nba_shots(conn, rows)
+    assert NS.chart(conn, "Jalen Brunson")["games"][0]["opp"] == "DEN"
+
+
+def test_the_box_check_holds_a_real_game_to_the_leagues_shape():
+    """`nbashotcheck.py` (read-only): where ESPN puts the basket was taken on
+    trust, so the box reads one real final and holds the fold to the
+    league's shape — a wrong basket reads CHECK, never a quiet chart."""
+    import nbashotcheck as K
+    lines = K.report(_summary(), "401810001", "2025-11-02")
+    assert lines[0].startswith("NBA SHOT CHECK  game 401810001 on 2025-11-02: 10 plays, 9 shooting")
+    assert any("a free throw's coordinate" in l for l in lines)
+    assert not any("PROSE" in l or "NOR THIS" in l for l in lines), "no play's text"
+    # The basket a few feet off: the threes read short and the rim shots long.
+    keep = NS.ESPN_HOOP
+    NS.ESPN_HOOP = (25.0, 8.0)
+    try:
+        bad = K.report(_summary(), "401810001", "2025-11-02")
+    finally:
+        NS.ESPN_HOOP = keep
+    assert any(l.startswith("  CHECK median dunk or layup") for l in bad), bad
+    assert "no shooting plays" in K.report({"plays": []}, "1", "2025-11-02")[-1]
+    src = (ROOT / "nbashotcheck.py").read_text(encoding="utf-8")
+    assert "upsert" not in src and "commit" not in src, "it reads; it never stores"
+
+
 # --- the games --------------------------------------------------------------------
+def _finals(conn, games):
+    D.upsert_games(conn, [{"sport": "nba", "season": s, "period": d, "game_id": g, "home": "DEN", "away": "NYK",
+                           "home_score": sc, "away_score": 100.0 if sc else None, "date": d}
+                          for g, s, d, sc in games])
+
+
 def test_the_games_this_season_and_last():
-    sched = {"leagueSchedule": {"gameDates": [{"games": [
-        {"gameId": "0012600001", "gameDateEst": "2026-10-10T00:00:00Z", "gameStatus": 3},   # preseason
-        {"gameId": "0022600001", "gameDateEst": "2026-10-20T00:00:00Z", "gameStatus": 3},
-        {"gameId": "0022600002", "gameDateEst": "2026-10-21T00:00:00Z", "gameStatus": 2},   # still on
-        {"gameId": "0032600001", "gameDateEst": "2027-02-14T00:00:00Z", "gameStatus": 3},   # All-Star
-        {"gameId": "0022600003", "gameDateEst": "2026-10-22T00:00:00Z", "gameStatus": 3}]}]}}
-    assert NS.schedule_finals(sched, "2026-10-22") == [{"game_id": "0022600001", "date": "2026-10-20"}]
-    ids = NS.season_ids(2025)
-    assert len(ids) == 1230 and ids[0]["game_id"] == "0022501230" and ids[-1]["game_id"] == "0022500001"
+    conn = D.connect(":memory:")
+    _finals(conn, [("401900001", 2026, "2026-10-20", 110.0), ("401900002", 2026, "2026-10-21", None),
+                   ("401800050", 2025, "2026-04-12", 99.0), ("401700001", 2024, "2025-04-13", 101.0),
+                   ("NYK@DEN", 2026, "2026-10-19", 104.0)])
+    got = NS.espn_finals(conn, "2025-10-01", "2026-10-22")
+    assert got == [{"game_id": "401900001", "date": "2026-10-20"}, {"game_id": "401800050", "date": "2026-04-12"}]
 
 
-def test_a_game_is_read_once_and_last_season_by_number():
+def test_a_game_is_read_once_and_last_season_and_this_newest_first():
     conn = D.connect(":memory:")
     asked = []
 
     def read(gid):
         asked.append(gid)
-        return (_pbp(gid), _box(gid)) if gid != "0022500003" else (None, None)
-    games = [{"game_id": g, "date": ""} for g in ("0022500001", "0022500002", "0022500003")]
-    out = NS.ingest_games(conn, games, read=read, workers=1)
-    assert out["games"] == 2 and out["failed"] == 1 and out["shots"] == 18
-    assert NS.ingest_games(conn, games, read=read, workers=1)["games"] == 0
-    assert sorted(asked) == ["0022500001", "0022500002", "0022500003", "0022500003"]
-    # The backfill: this season's finals first, then last season's by
-    # number, newest first, a budget at a time.
-    from engine.sources import nbadata as N
-    keep = N.fetch_schedule
-    N.fetch_schedule = lambda ttl=0: {"leagueSchedule": {"gameDates": [{"games": [
-        {"gameId": "0022600001", "gameDateEst": "2026-10-20T00:00:00Z", "gameStatus": 3}]}]}}
-    try:
-        asked.clear()
-        got = NS.backfill(conn, dt.date(2026, 10, 23), budget=8, read=read)
-    finally:
-        N.fetch_schedule = keep
-    assert asked[0] == "0022600001" and asked[1:4] == ["0022501230", "0022501229", "0022501228"]
-    assert got["games"] == 8 and got["last_season"] == "" and got["left"] > 1000
-    # Five misses in a row on last season: the CDN no longer has it.
+        return _summary(gid) if gid != "401900003" else None
+    games = [{"game_id": g, "date": "2025-11-02"} for g in ("401900001", "401900002", "401900003")]
+    out = NS.ingest_games(conn, games, read=read, workers=1, espn=True)
+    assert out["games"] == 2 and out["failed"] == 1 and out["shots"] == 14
+    assert NS.ingest_games(conn, games, read=read, workers=1, espn=True)["games"] == 0
+    assert sorted(asked) == ["401900001", "401900002", "401900003", "401900003"]
+    # The backfill: the history's finals, this season's then last season's,
+    # newest first, a budget at a time, a stored game skipped.
     conn2 = D.connect(":memory:")
+    _finals(conn2, [("401900010", 2026, "2026-10-21", 110.0), ("401800020", 2025, "2026-04-12", 99.0),
+                    ("401800010", 2025, "2026-03-01", 98.0), ("401700001", 2024, "2025-04-13", 101.0)])
     asked.clear()
-    got = NS.backfill(conn2, dt.date(2026, 10, 13), budget=50, read=lambda gid: asked.append(gid) or (None, None))
-    assert len(asked) == 5 and got["last_season"] == "not on the CDN" and got["games"] == 0
+    got = NS.backfill(conn2, dt.date(2026, 10, 23), budget=2, read=read)
+    assert asked == ["401900010", "401800020"] and got["games"] == 2 and got["left"] == 1
+    asked.clear()
+    got = NS.backfill(conn2, dt.date(2026, 10, 23), budget=5, read=read)
+    assert asked == ["401800010"] and got["left"] == 0, "two seasons, never the one before"
+    recent = D.connect(":memory:")
+    _finals(recent, [("401900030", 2026, "2026-10-21", 110.0), ("401900031", 2026, "2026-10-15", 100.0)])
+    asked.clear()
+    NS.ingest_recent(recent, dt.date(2026, 10, 22), read=read)
+    assert asked == ["401900030"], "the last three days' finals"
 
 
 def test_a_read_keeps_no_file_it_wrote():
@@ -214,6 +308,25 @@ def test_a_read_keeps_no_file_it_wrote():
         assert "nba_pbp_" in M.PRUNABLE_CACHE_PREFIXES
     finally:
         F.CACHE_DIR, N.fetch_playbyplay, N.fetch_boxscore = keep
+        shutil.rmtree(tmp, ignore_errors=True)
+    # ESPN's summary the same way: one the results ingest kept stays.
+    from engine.sources import espnhoops
+    tmp = Path(tempfile.mkdtemp())
+    keep = (F.CACHE_DIR, espnhoops.fetch_summary)
+
+    def summ(gid, ttl=0, league="wnba"):
+        (tmp / f"espn_nba_box_{gid}.json").write_text("{}")
+        return _summary(gid)
+    try:
+        F.CACHE_DIR, espnhoops.fetch_summary = tmp, summ
+        assert NS.read_espn("401900001")["header"]["id"] == "401900001"
+        assert not list(tmp.glob("*401900001*")), "the summary it wrote is gone"
+        (tmp / "espn_nba_box_401900002.json").write_text("{}")
+        NS.read_espn("401900002")
+        assert (tmp / "espn_nba_box_401900002.json").exists(), "the results ingest's copy stays"
+        assert "espn_nba_" in M.PRUNABLE_CACHE_PREFIXES
+    finally:
+        F.CACHE_DIR, espnhoops.fetch_summary = keep
         shutil.rmtree(tmp, ignore_errors=True)
 
 

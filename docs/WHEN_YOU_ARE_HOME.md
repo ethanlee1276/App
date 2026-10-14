@@ -204,6 +204,10 @@ NBA feed answers the box 403 Forbidden for every file, so the NBA board had
 read "unreachable" with no games six days before opening night: the
 schedule and the nightly results now come from ESPN, as the history and the
 WNBA always have, with the clubs in the league's own codes (step 103; BB).
+On your word ("do the shot chart and futures on espn"), the NBA shot chart
+now reads ESPN's play-by-play and the NBA futures ESPN's schedule, and the
+weekly refit gives each fitter forty-five minutes, not fifteen (step 104;
+BC).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -241,13 +245,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The settle pass no longer locks the boards out of the journal; the NBA reads ESPN now the league's feed refuses the box; NBA steals, blocks and turnovers count the defence`
+**A. The box has today's code.** The first line should end `The NBA shot chart and the NBA futures read ESPN; the weekly refit gets forty-five minutes a fitter`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor e07d4330 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 33186015 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -686,8 +690,8 @@ season's share of pitches in each part of the zone.
 
 **X. The shot chart** (step 66; read-only except the first line, which
 reads one game). **2026-10-14: `NO SHOTS` — the league's CDN answers the box
-403 for every file (step 103), so the shot chart has no feed on the box
-until it is rebuilt on ESPN's play-by-play. Not built yet; nothing to run.** The sandbox I build in cannot reach the NBA's site, so
+403 for every file (step 103). The chart now reads ESPN's play-by-play
+(step 104); BC replaces this block's first command.** The sandbox I build in cannot reach the NBA's site, so
 the play-by-play's field names come from the nba_api project's
 documentation of it; the first command reads one real game the way the
 chart does and prints a shot's fields and the first stored row, so we
@@ -914,8 +918,11 @@ books haven't priced yet shows none, as before.
 
 **AI. The NBA's self-tuning on its own model** (2026-10-14: the first
 command's temperature fit ran past its 15-minute limit and was skipped, on
-twice the history it had before; the by-hand run without the limit is in my
-reply that night) (step 77; rewrites the
+twice the history it had before. Run by hand without a limit it took 17
+minutes and wrote the NBA's temperatures, the new markets' among them
+(PRA, the three combos, blocks and turnovers moved; steals were already
+calibrated); the weekly refit now allows 45 minutes a fitter, step 104)
+(step 77; rewrites the
 NBA's fitted temperature, player-memory and rank files, the ones
 Wednesday's refit writes anyway, and never touches the record; perhaps
 ten minutes at low priority). Nothing has to run: Wednesday's refit
@@ -1344,6 +1351,28 @@ nothing; `--apply` rewrites them to the league's codes (GSW, NYK, NOP, SAS,
 UTA, WAS), which the odds, the rosters and every NBA bet use; the last run
 should say there is nothing to do. Only `history.db`, only the NBA, only
 those four columns; no stat, score or bet changes. Paste all of it.
+**Run 2026-10-14: 160,671 values rewritten, and the second run found
+nothing to do.** The NBA row still read `unreachable` then only because
+that board was built at 18:24, before the code landed; the first line alone
+again, after the next NBA build, should say otherwise.
+
+**BC. The NBA shot chart and futures on ESPN** (step 104; read-only,
+about two minutes; the second reads ESPN's schedule a day at a time, the
+first time it is asked). After this lands:
+```
+cd /srv/qellys && sudo -u qellys python3 nbashotcheck.py
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import futuresdata as FD; fx = FD._nba_fixtures(2026); print(len(fx), 'NBA regular-season games still to play;', [(f.away, f.home) for f in fx[:3]])"
+```
+The first reads the newest stored NBA final off ESPN the way the nightly
+will and prints a shot's field names, three shots' spots and what the fold
+makes of them, then six checks against the league's own shape (threes from
+22 feet out, dunks and layups at the rim, the corner's share of threes,
+assists on makes, blocks on misses). Every line `ok` means the chart is
+drawn true; a `CHECK` line is the one I need: it means ESPN's basket is not
+where the fold puts it. The second should print about 1,230 games (the whole
+regular season, until opening night) in the league's codes. From the next
+nightly, the shot chart fills itself: the last three days' finals and 300
+older games a night, this season's then last season's.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4465,6 +4494,38 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_maintenance.py` stubs ESPN's NBA ingest beside the CDN's.
     New: `tests/test_the_nba_reads_espn_when_its_own_feed_says_no.py`
     (5 checks), `nbacodes.py`.
+104. **The NBA shot chart and the NBA futures read ESPN** (2026-10-14, you:
+    "do the shot chart and futures on espn"; BC checks it). THE SHOT CHART
+    read the league's play-by-play, which answers the box 403 (X printed
+    `NO SHOTS`), so it never stored a shot. NOW `engine/nba/shots.fold_espn`
+    reads ESPN's game summary — the one the results ingest already
+    downloads for every final — off the play fields an earlier probe on
+    the box recorded: a shooting play is a field goal or a free throw by
+    the points it attempts, made when it scores, the shooter its first
+    participant and the second the assist on a make or the block on a
+    miss; the spot from ESPN's feet into the units the page already draws,
+    the clubs in the league's codes. A play's written text is never read.
+    The games come from the history's own NBA finals (this season's and
+    last, newest first), so no schedule file is needed; a summary the read
+    downloaded itself is not kept. Where ESPN puts the basket was taken on
+    trust from that probe; `nbashotcheck.py` (BC) holds a real game to the
+    league's shape before you trust a chart. THE FUTURES read the league's
+    season file for the NBA's games still to play (also 403); they now walk
+    ESPN's scoreboard a day at a time from today, keep the regular season's
+    unplayed games in the league's codes, stop at the first playoff day,
+    and keep each future day a day. THE WEEKLY REFIT gives each fitter 45
+    minutes, not 15: the NBA's temperature fit took 17 on the box tonight
+    (AI), and the refit is a detached child outside the chores' hour. Pins
+    changed, told to you, in
+    `tests/test_a_shot_chart_for_every_nba_player.py`: the checks that held
+    the CDN's season file and its numbering of last season (and that five
+    misses in a row on it meant the season was gone) now hold the history's
+    finals on ESPN's ids; the CDN's two schedule helpers they pinned are
+    removed, unused. `tests/test_futuresdata.py`: the NBA's unplayed games
+    now come from ESPN's scoreboard (and the postseason ends the walk).
+    `tests/test_deepfit.py`: the bound's wording (the check, 1 minute to an
+    hour, is unchanged). New there: ESPN's fold, a read keeps no summary it
+    downloaded, the box check; `nbashotcheck.py`.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

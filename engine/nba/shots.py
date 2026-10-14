@@ -31,12 +31,14 @@ above the break), taken from the feed's `area` where an action carries
 one and otherwise read off where the shot was taken; the league's
 percentage in each zone is every stored shot of that season.
 
-WHERE THE GAMES COME FROM. This season's finals are on the CDN's season
-file. Last season's are not (it holds one season), so its regular season
-is read by the league's own numbering: 1,230 games, "002" + the season's
-two digits + 00001 to 01230. The nightly reads the last few days' finals
-and the backfill older ones, a budget a night; neither keeps a copy of a
-play-by-play in data/cache once its shots are stored.
+WHERE THE GAMES COME FROM, SINCE 2026-10-14. The CDN answers the box 403
+for every file (runbook step 103), so the box never stored a shot off it.
+The shots now come from ESPN's game summary (`fold_espn`, below), the one
+the results ingest already reads for every final, and the games from the
+history's own finals — this season's and last, newest first. The nightly
+reads the last few days' finals and the backfill older ones, a budget a
+night; neither keeps a summary in data/cache that it downloaded itself.
+The CDN's fold is kept for the day the league's feed answers again.
 """
 
 from __future__ import annotations
@@ -64,8 +66,6 @@ AREA = {"restricted area": "ra", "in the paint (non-ra)": "paint", "mid-range": 
 #: line, and how far up from the baseline the corner three runs.
 RA_R, LANE_HALF, FT_LINE, CORNER_TOP = 40.0, 80.0, 142.5, 92.5
 
-#: A regular season, numbered by the league.
-REGULAR_GAMES = 1230
 #: Games read per night by the backfill (two files each).
 BACKFILL_PER_NIGHT = 300
 #: Distance bands for the splits, in feet.
@@ -170,28 +170,122 @@ def fold(pbp: dict, box: dict, date: str = "") -> list[dict]:
     return out
 
 
-# --- the games ------------------------------------------------------------------
-def schedule_finals(sched: dict, before: str) -> list[dict]:
-    """``[{game_id, date}]`` — every final on the CDN's season file before a
-    date: the regular season, the play-in, the Cup final and the playoffs;
-    never the preseason or the All-Star Game."""
+# --- ESPN's play-by-play (2026-10-14) ---------------------------------------------
+# THE LEAGUE'S CDN ANSWERS THE BOX 403 (runbook step 103), for this file and
+# every other, so the box never stored a shot off it. ESPN's game summary —
+# the one the results ingest already downloads for every final — carries
+# the game's plays, in the shape `sources/espnplays` recorded off a real
+# finished basketball game:
+#
+#     play: id, sequenceNumber, period{number}, clock{displayValue},
+#           team{id}, participants[{athlete{id}}], type{id, text},
+#           scoringPlay, shootingPlay, scoreValue, pointsAttempted,
+#           coordinate{x, y}, ...
+#
+# A shot is a `shootingPlay`; a free throw attempts one point, a field goal
+# two or three; `scoringPlay` says it went in. The shooter is the first
+# participant; on a make a second is the assist, on a miss the block. The
+# floor is in feet, ESPN_HOOP is the basket, and the rows keep the CDN's
+# units (tenths of a foot from the basket) so the zones and the page read
+# both the same. The runbook's box check prints a real game's numbers
+# before any of this is trusted. A play's written text is never read.
+ESPN_HOOP = (25.0, 0.0)
+#: ESPN puts a free throw (and any play with no spot) far off the floor.
+ESPN_FLOOR = 100.0
+
+
+def _espn_spot(play: dict):
+    """``(x, y)`` in the CDN's units, or ``(None, None)`` off the floor."""
+    c = play.get("coordinate") or {}
+    x, y = _num(c.get("x")), _num(c.get("y"))
+    if x is None or y is None or abs(x) > ESPN_FLOOR or abs(y) > ESPN_FLOOR:
+        return None, None
+    return round((x - ESPN_HOOP[0]) * 10, 1), round((y - ESPN_HOOP[1]) * 10, 1)
+
+
+def fold_espn(summary: dict, date: str, game_id: str = "") -> list[dict]:
+    """One ESPN final's shots and free throws as `nba_shots` rows. Nothing
+    when the summary cannot say whose game it is."""
+    from .. import divisions
+    from ..seasons import season_of
+    comp = (((summary or {}).get("header") or {}).get("competitions") or [{}])[0]
+    gid = str(((summary or {}).get("header") or {}).get("id") or comp.get("id") or game_id or "")
+    club, side = {}, {}
+    for c in comp.get("competitors") or []:
+        t = c.get("team") or {}
+        tid, ab = str(t.get("id") or ""), divisions.canonical("nba", str(t.get("abbreviation") or ""))
+        if tid and ab:
+            club[tid] = ab
+            side[c.get("homeAway")] = ab
+    home, away = side.get("home", ""), side.get("away", "")
+    if not gid or not date or not home or not away:
+        return []
+    names = {}
+    for block in ((summary.get("boxscore") or {}).get("players")) or []:
+        for group in block.get("statistics") or []:
+            for ath in group.get("athletes") or []:
+                a = ath.get("athlete") or {}
+                if a.get("id") and a.get("displayName"):
+                    names[str(a["id"])] = str(a["displayName"])
+    season = season_of("nba", date)
     out = []
-    for day in ((sched or {}).get("leagueSchedule") or {}).get("gameDates") or []:
-        for g in day.get("games") or []:
-            gid = str(g.get("gameId") or "")
-            date = str(g.get("gameDateEst") or "")[:10]
-            if not gid or gid[:3] in ("001", "003") or g.get("gameStatus") != 3 or not date or date >= before:
-                continue
-            out.append({"game_id": gid, "date": date})
-    return out
+    for p in summary.get("plays") or []:
+        if not p.get("shootingPlay"):
+            continue
+        pts = _int(p.get("pointsAttempted"))
+        team = club.get(str((p.get("team") or {}).get("id") or ""), "")
+        who = [str(((q or {}).get("athlete") or {}).get("id") or "") for q in p.get("participants") or []]
+        if pts not in (1, 2, 3) or team not in (home, away) or not who or not who[0]:
+            continue
+        kind = {1: "ft", 2: "2pt", 3: "3pt"}[pts]
+        made = bool(p.get("scoringPlay"))
+        x, y = _espn_spot(p) if kind != "ft" else (None, None)
+        dist = round(math.hypot(x, y) / 10, 1) if x is not None else None
+        out.append({"game_id": gid, "action": _int(p.get("sequenceNumber")) or _int(p.get("id")),
+                    "season": season, "date": date, "person_id": _int(who[0]),
+                    "player": names.get(who[0], ""), "team": team,
+                    "opponent": away if team == home else home, "home": 1 if team == home else 0,
+                    "period": _int((p.get("period") or {}).get("number")),
+                    "clock": str((p.get("clock") or {}).get("displayValue") or ""),
+                    "kind": kind, "made": 1 if made else 0,
+                    "shot": str((p.get("type") or {}).get("text") or ""), "descriptor": "",
+                    "distance": dist, "x": x, "y": y,
+                    "zone": zone(kind, x, y, dist) if kind != "ft" else "", "area": "",
+                    "assist": names.get(who[1], "") if made and len(who) > 1 else "",
+                    "blocked": 1 if not made and kind != "ft" and len(who) > 1 and who[1] else 0,
+                    "quals": ""})
+    return [r for r in out if r["player"] and r["person_id"]]
 
 
-def season_ids(season: int) -> list[dict]:
-    """A past regular season by the league's own numbering, newest first."""
-    yy = f"{int(season) % 100:02d}"
-    return [{"game_id": f"002{yy}{n:05d}", "date": ""} for n in range(REGULAR_GAMES, 0, -1)]
+def read_espn(game_id: str):
+    """ESPN's summary of one final, or None — read without keeping a file
+    this read wrote; one the results ingest already holds stays."""
+    from ..sources import espnhoops, fetch as F
+    name = f"espn_nba_box_{game_id}.json"
+    had = F._cache_path(name).exists()
+    try:
+        return espnhoops.fetch_summary(str(game_id), league="nba")
+    except Exception:                                              # noqa: BLE001
+        return None
+    finally:
+        if not had:
+            try:
+                F._cache_path(name).unlink()
+            except OSError:
+                pass
 
 
+def espn_finals(conn, since: str, before: str) -> list[dict]:
+    """``[{game_id, date}]``, newest first: every NBA final the history holds
+    from ``since`` up to ``before`` under ESPN's own game id — the results
+    ingest's rows, so the games list needs no schedule file at all."""
+    return [{"game_id": str(g), "date": str(d)[:10]} for g, d in conn.execute(
+        "SELECT game_id, period FROM games WHERE sport='nba' AND home_score IS NOT NULL "
+        "AND period >= ? AND period < ? ORDER BY period DESC, game_id", (since, before))
+        if str(g).isdigit()]
+
+
+# --- the games ------------------------------------------------------------------
 def stored(conn, season: int | None = None) -> set:
     """The games already folded (a final's shots never change)."""
     q, args = "SELECT DISTINCT game_id FROM nba_shots", ()
@@ -231,11 +325,13 @@ def read_once(game_id: str) -> tuple:
 CHUNK = 8
 
 
-def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CHUNK) -> dict:
+def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CHUNK,
+                 espn: bool = False) -> dict:
     """Fold and store every game in ``games`` not already stored, ``chunk``
     at a time, each chunk written before the next is read. A chunk none of
     whose games could be read ends the run; the rest wait for the next.
-    ``{"games", "shots", "failed"}``."""
+    ``espn`` reads ESPN's summaries (`read_espn`, `fold_espn`) instead of
+    the CDN's pair. ``{"games", "shots", "failed"}``."""
     from concurrent.futures import ThreadPoolExecutor
     from .. import db
     have = stored(conn)
@@ -243,17 +339,22 @@ def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CH
     out = {"games": 0, "shots": 0, "failed": 0}
     if not todo:
         return out
-    read = read or read_once
+    read = read or (read_espn if espn else read_once)
     step = max(1, int(chunk))
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         for i in range(0, len(todo), step):
             part = todo[i:i + step]
             pairs = list(pool.map(lambda g: read(str(g["game_id"])), part))
+            if espn:
+                pairs = [(s, s) for s in pairs]
             if not any(pbp and box for pbp, box in pairs):
                 out["failed"] += len(part)
                 break
             for g, (pbp, box) in zip(part, pairs):
-                rows = fold(pbp, box, g.get("date") or "") if pbp and box else []
+                if espn:
+                    rows = fold_espn(pbp, g.get("date") or "", str(g["game_id"])) if pbp else []
+                else:
+                    rows = fold(pbp, box, g.get("date") or "") if pbp and box else []
                 if not rows:
                     out["failed"] += 1
                     continue
@@ -264,49 +365,29 @@ def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CH
 
 
 def ingest_recent(conn, today, days: int = 3, read=None) -> dict:
-    """The last few days' finals, off the season file the results ingest
-    just read."""
+    """The last few days' finals, as the results ingest just stored them,
+    off ESPN's summaries (the league's CDN answers the box 403)."""
     import datetime as _dt
-    from ..sources import nbadata as N
     first = (today - _dt.timedelta(days=days)).isoformat()
-    games = [g for g in schedule_finals(N.fetch_schedule(), today.isoformat()) if g["date"] >= first]
-    return ingest_games(conn, games, read=read)
+    return ingest_games(conn, espn_finals(conn, first, today.isoformat()), read=read, espn=True)
 
 
 def backfill(conn, today, budget: int = BACKFILL_PER_NIGHT, read=None) -> dict:
     """This season's finals, then last season's, newest first, ``budget``
-    games at a time. Last season's are asked for by number; five misses in
-    a row on its newest say the CDN no longer has that season, and it is
-    left for the night."""
-    from ..seasons import season_of
-    from ..sources import nbadata as N
+    games at a time, off ESPN's summaries of the games the history already
+    holds (the history backfill read every one of them)."""
+    from ..seasons import window, season_of
     cur = season_of("nba", today.isoformat())
     have = stored(conn)
-    todo = []
-    try:
-        todo = [g for g in sorted(schedule_finals(N.fetch_schedule(), today.isoformat()),
-                                  key=lambda g: g["date"], reverse=True) if g["game_id"] not in have]
-    except Exception:                                              # noqa: BLE001
-        todo = []
+    first = window("nba", cur - 1)[0]
+    todo = [g for g in espn_finals(conn, first, today.isoformat()) if g["game_id"] not in have]
     out = {"games": 0, "shots": 0, "failed": 0, "left": 0, "last_season": ""}
     take = todo[:budget]
     if take:
-        got = ingest_games(conn, take, read=read)
+        got = ingest_games(conn, take, read=read, espn=True)
         for k in ("games", "shots", "failed"):
             out[k] += got[k]
-    room = budget - len(take)
-    past = [g for g in season_ids(cur - 1) if g["game_id"] not in have]
-    if room > 0 and past:
-        probe = ingest_games(conn, past[:5], read=read)
-        for k in ("games", "shots", "failed"):
-            out[k] += probe[k]
-        if probe["games"]:
-            got = ingest_games(conn, past[5:room], read=read)
-            for k in ("games", "shots", "failed"):
-                out[k] += got[k]
-        else:
-            out["last_season"] = "not on the CDN"
-    out["left"] = max(0, len(todo) + len(past) - out["games"] - out["failed"])
+    out["left"] = max(0, len(todo) - out["games"] - out["failed"])
     return out
 
 

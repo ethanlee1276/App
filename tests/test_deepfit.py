@@ -128,9 +128,10 @@ def test_a_failing_fitter_is_reported_not_swallowed():
 
 
 def test_the_run_is_time_bounded():
-    """A fitter that has not finished in fifteen minutes has found
-    something pathological; a weekly job must not become a permanent
-    one."""
+    """A fitter that has not finished in its bound (forty-five minutes since
+    2026-10-14, when the NBA's temperature fit needed seventeen on the box)
+    has found something pathological; a weekly job must not become a
+    permanent one."""
     assert 60 <= D.TIMEOUT_S <= 3600
     src = open(os.path.join(ROOT, "engine", "deepfit.py"),
                encoding="utf-8").read()

@@ -121,6 +121,9 @@ def parse_scoreboard(payload: dict) -> list[dict]:
             # as a game it is the form a player carries into opening night
             # (NBA readiness, 2026-09-24) — ingest_day leaves it out.
             "preseason": ((ev.get("season") or {}).get("type") == 1),
+            # …and the type itself (2 regular season, 3 postseason): the
+            # NBA's futures simulate only the regular season still to play.
+            "season_type": (ev.get("season") or {}).get("type"),
             "home": home["abbr"], "away": away["abbr"],
             "home_name": home["name"], "away_name": away["name"],
             # UNCHANGED, and deliberately: settlement reads these and a

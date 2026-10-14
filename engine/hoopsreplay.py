@@ -66,7 +66,7 @@ MAX_PER_MARKET = 20000
 
 #: The fitters' walk prices up to this many of a market's most recent
 #: player-games — a season and a bit of the NBA's. Each deep fitter has
-#: fifteen minutes per sport on the droplet (`deepfit.TIMEOUT_S`) for all
+#: forty-five minutes per sport on the droplet (`deepfit.TIMEOUT_S`) for all
 #: eleven markets; the player memory walks each twice, and the temperature
 #: fit costs more than its walk (timed 2026-10-14: about 4 s to walk and
 #: 15 s to fit 38,000 games of one market here).

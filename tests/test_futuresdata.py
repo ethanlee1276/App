@@ -117,20 +117,37 @@ def test_mlb_skips_finals_and_postponements():
 
 
 def test_nba_skips_finished_games():
-    from engine.sources import nbadata
-    sched = {"leagueSchedule": {"gameDates": [{"games": [
-        {"gameStatus": 3, "homeTeam": {"teamTricode": "BOS"},
-         "awayTeam": {"teamTricode": "NYK"}},
-        {"gameStatus": 1, "homeTeam": {"teamTricode": "LAL"},
-         "awayTeam": {"teamTricode": "GSW"}},
-    ]}]}}
-    orig = nbadata.fetch_schedule
-    nbadata.fetch_schedule = lambda *a, **k: sched
+    """ESPN's scoreboard a day at a time since 2026-10-14 (the league's own
+    season file answers the box 403; pin followed the feed, told to Ethan):
+    a final and a preseason game are not still to play, the clubs come out
+    in the league's codes, and the first day of the postseason ends the
+    walk — a playoff game is never simulated as a regular-season one."""
+    import datetime as dt
+    from engine.sources import espnhoops
+
+    def ev(home, away, kind=2, state="pre"):
+        def side(abbr, where):
+            return {"homeAway": where, "score": "0", "team": {"abbreviation": abbr, "displayName": abbr}}
+        return {"id": home + away, "date": "", "season": {"type": kind},
+                "competitions": [{"competitors": [side(home, "home"), side(away, "away")],
+                                  "status": {"type": {"state": state, "completed": state == "post"}}}]}
+    boards = {"20261020": [ev("BOS", "NY", state="post"), ev("GS", "LAL"), ev("SA", "DAL", kind=1)],
+              "20261021": [ev("UTAH", "WSH")],
+              "20261022": [ev("MIA", "ORL", kind=3)],
+              "20261023": [ev("PHX", "DEN")]}
+    asked = []
+
+    def board(date, ttl=None, league="wnba"):
+        asked.append(date)
+        return {"events": boards.get(date.replace("-", ""), [])}
+    orig = espnhoops.fetch_scoreboard
+    espnhoops.fetch_scoreboard = board
     try:
-        fx = FD._nba_fixtures(2026)
+        fx = FD._nba_fixtures(2026, today=dt.date(2026, 10, 20))
     finally:
-        nbadata.fetch_schedule = orig
-    assert [(f.home, f.away) for f in fx] == [("LAL", "GSW")]
+        espnhoops.fetch_scoreboard = orig
+    assert [(f.home, f.away) for f in fx] == [("GSW", "LAL"), ("UTA", "WAS")]
+    assert asked == ["2026-10-20", "2026-10-21", "2026-10-22"], "the postseason ends the walk"
 
 
 def test_nfl_takes_the_regular_season_only_and_only_unplayed():
@@ -223,7 +240,7 @@ def test_project_runs_the_season_and_carries_the_caveat_through():
 
 def test_the_model_half_never_touches_the_meter():
     """Ratings, records and fixtures come from keyless sources — statsapi,
-    the NBA's CDN, nflverse, ESPN — so the projection itself can be rebuilt
+    ESPN (the NBA's too, since 2026-10-14), nflverse — so the projection itself can be rebuilt
     as often as anyone likes for nothing.
 
     This test used to assert that oddsapi was not importable from this
