@@ -183,12 +183,21 @@ def _status_of(comp: dict) -> dict:
     st = comp.get("status") or {}
     t = st.get("type") or {}
     state = str(t.get("state") or "").lower()
+    # HOW IT ENDED, once it has (2026-10-14): the parlay checker settles a
+    # method, distance or round leg off it (engine/slipfight), read the way
+    # the dossiers read a past fight (espnmma.method_from_status). None
+    # before the end and wherever the feed does not say.
+    method = None
+    if state == "post":
+        from ..sources.espnmma import method_from_status
+        method = method_from_status(st)
     return {
         "state": state,                       # pre / in / post
         "live": state == "in",
         "detail": str(t.get("shortDetail") or t.get("detail") or ""),
         "round": st.get("period") or st.get("round") or 0,
         "clock": str(st.get("displayClock") or st.get("clock") or ""),
+        "method": method,
     }
 
 

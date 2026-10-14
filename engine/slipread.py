@@ -1412,6 +1412,7 @@ def main(argv=None) -> int:
         got = AB.board_at(path) if path else None
         if got:
             boards[league] = got
+    boards = SG.with_fights(boards)
     leg = {"sport": sport, "player": player, "team": "", "market": market, "side": side.lower(),
            "line": float(line), "odds": odds, "game": "", "text": ""}
     at = SG.price_leg(boards, leg)

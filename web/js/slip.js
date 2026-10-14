@@ -98,9 +98,13 @@
     outs: "Outs", sog: "Shots on Goal", points: "Points", goals: "Goals", assists: "Assists",
     blocks: "Blocks", saves: "Saves",
   };
+  /* A UFC leg (engine/slipfight): a fighter's method, or the bout's distance and rounds. */
+  const FIGHT = { win_ko: "by KO/TKO", win_sub: "by submission", win_dec: "by decision",
+    win_finish: "inside the distance" };
   const VERDICT = { strong: "Strong", fair: "Fair", weak: "Weak", against: "Against", unpriced: "Not on our board" };
   const FOUND = { likely: "On our Most Likely board", prop: "Our projection", scorer: "Our scorer model",
-    game: "Our game line", read: "Our read — not on our board", game_read: "Our read — not on our board" };
+    game: "Our game line", read: "Our read — not on our board", game_read: "Our read — not on our board",
+    fight: "Our UFC model" };
 
   /* ---- the picture ------------------------------------------------------ */
   /* createImageBitmap reads the file without an <img>; where it is missing,
@@ -205,6 +209,11 @@
       return `${l.player} ${l.side === "no" ? "not " : ""}to score`;
     }
     if (l.market === "other") return l.text || l.player || "Leg";
+    if (FIGHT[l.market]) return `${l.team || l.player} ${FIGHT[l.market]}`;
+    const bout = l.game || l.team || "The fight";
+    if (l.market === "fight_distance") return `${bout} ${l.side === "no" ? "does not go" : "goes"} the distance`;
+    if (l.market === "fight_rounds") return `${bout} · ${side} ${num(l.line)} rounds`;
+    if (l.market === "fight_round") return `${bout} · ends in round ${num(l.line)}`;
     return `${l.player} ${side} ${num(l.line)} ${MARKET[l.market] || l.market}`;
   }
 
@@ -213,7 +222,7 @@
     const meta = [];
     if (l.prob != null) meta.push(`ours <b>${pct(l.prob)}</b>`);
     if (l.needs != null) meta.push(`needs ${pct(l.needs)}${l.odds ? ` at ${esc(price(l.odds))}` : ""}`);
-    if (l.game && l.market !== "total") meta.push(esc(l.game));
+    if (l.game && l.market !== "total" && !/^fight_/.test(l.market)) meta.push(esc(l.game));
     const st = (l.live && l.live.state) || "";
     if (l.kickoff && st !== "live" && st !== "final" && kick(l.kickoff)) meta.push(esc(kick(l.kickoff)));
     const where = l.found && l.prob != null ? `${FOUND[l.found] || ""}${l.tier ? ` · ${esc(l.tier)}` : ""}${

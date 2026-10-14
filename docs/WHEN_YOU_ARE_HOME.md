@@ -175,7 +175,10 @@ college leg no board carries now sees who plays around him, as the
 college board's own number does: college's depth order with who is out,
 and the quarterback change. A ruled-out college player with initials in
 his name ("D.J.") now counts as out on the college board too; before,
-his teammates' numbers never moved (step 95; AW). The
+his teammates' numbers never moved (step 95; AW). UFC fights are in the
+parlay checker now: who wins, how, the distance and the rounds, each
+read off the card's own model, two legs on one fight priced together,
+and a saved fight slip settled off the live fight feed (step 96; AX). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -211,13 +214,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The parlay checker's college read sees who plays around him, by college's own measurement`
+**A. The box has today's code.** The first line should end `UFC fights in the parlay checker: every leg read off the card's own model, legs on one fight priced together, settled off the live feed`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor c16a7ae1 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 81b59c99 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -306,8 +309,9 @@ not built (the full list by sport is `docs/ALL_SPORTS_GAPS_2026-10-13.md`).
 On 2026-10-14 you said yes to every call below but the NFL price rule and
 the line-move pull, which wait on L and step 30 ("do 1-11"); each is
 struck through here as it is built.
-* **UFC in the parlay checker?** A fight leg reads "not on our board"
-  today (step 38b).
+* ~~**UFC in the parlay checker?** A fight leg reads "not on our board"
+  today (step 38b).~~ **Answered 2026-10-14: yes** ("do 1-11"). Built:
+  step 96, AX.
 * ~~**Quarterback carries on the board itself?** The market gets measured
   first, as the other five were (step 39b).~~ **Answered 2026-10-14: yes**
   ("do 1-11"). Measured, cleared, built: step 94, AV.
@@ -1193,6 +1197,31 @@ A count near the number of teams on the board is it working; each
 "out on the order" line is a ranked player the injury lists rule out,
 whose teammates' reads now take college's step. `0 college team(s)`
 on a game day means say so.
+
+**AX. UFC fights in the parlay checker** (step 96; read-only, seconds).
+When a card is up (the week of a UFC event), paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import slipgrade as SG, slipfight as SF
+b = SG.with_fights({}).get('ufc') or {}
+print(b.get('event_date') or 'no card', len(SF.bouts(b)), 'bout(s)')
+for r in SF.bouts(b):
+    a, c = SF.corners(r)
+    p = SG.price_leg({'ufc': b}, {'sport': 'ufc', 'player': '', 'team': a, 'game': r['fight'], 'market': 'moneyline', 'side': 'team', 'line': 0.0, 'odds': 0, 'text': ''})
+    print(r['fight'], '|', a, 'wins', 'no number: ' + str(r.get('why'))[:60] if p['prob'] is None else round(p['prob'], 3))"
+```
+One line per bout on the card, each with our number or the board's reason
+for having none. Then, the morning after the event, paste this too:
+```
+cd /srv/qellys && python3 -c "
+import json; b = json.load(open('web/data/ufc_live.json'))
+for x in b.get('bouts') or []:
+    s = x['status']; print(s['state'], s.get('method'), s.get('round'), s.get('clock'), ' vs '.join(f['name'] + ('*' if f['winner'] else '') for f in x['fighters']))"
+```
+Each finished bout should print `post` with KO/TKO, SUB or DEC and a
+winner starred. `post None` on every finished bout means the feed does not
+say how a fight ended: moneylines still settle, and method, distance and
+round legs wait for you to settle them; say so.
 
 **AU. Saved slips settle with the Live tab closed** (step 91; read-only,
 seconds). After a night when a slip saved to My Bets from the parlay
@@ -2207,7 +2236,8 @@ first). Paste back anything that prints an error or looks off.
 38b. **Your calls from step 38.**
     * **UFC in the checker?** Its board stores only our picks, not every
       fighter's line, so a fight leg reads "not on our board". Say if you
-      want it added.
+      want it added. (Added 2026-10-14: step 96. The card's pass list
+      carries every bout the model priced, so the checker reads them all.)
     * **The Live tab's own tracked picks** use the same baseball live
       model, and they had a bug I had fixed in the checker: when the
       other team was batting, they counted the batter at the plate as
@@ -4140,6 +4170,36 @@ first). Paste back anything that prints an error or looks off.
     had the same bug fixed on 10-12. New:
     `tests/test_the_college_read_sees_who_plays_around_him.py` (9
     checks). No test changed.
+
+96. **UFC fights in the parlay checker** (2026-10-14, you: "do 1-11", to
+    H's "UFC in the parlay checker?"). AX checks it. A fight leg used to
+    read "not on our board". Now every bout the UFC model priced, picks
+    and passes alike, gives the checker a number on:
+    * **who wins**: the board's own chance, the model held toward the
+      market as every UFC price is;
+    * **how**: KO/TKO, submission, decision, or inside the distance, in
+      the model's own split of each fighter's wins;
+    * **the distance and the rounds**: goes the distance, over or under a
+      number of rounds, and the round it ends in, in the shape the round
+      prices already use (step 76).
+    How and when are fair numbers the board shows to shop and never
+    stakes, and the leg says so. **Two legs on one fight are priced
+    together**, off the same outcomes, never as two separate games: "A
+    wins" with "A by decision" is just the decision, "A wins" with "B
+    wins" (or "goes the distance" with "A by KO") cannot both happen and
+    the card says so, and the 2,000-night replay draws one ending a night.
+    A bout the board passed on before pricing (no dossier, no fight data,
+    no two-sided price) gets no number, with that reason; a round leg
+    needs the round prices. **A saved fight slip settles off the live
+    fight feed**, on the Live tab and by the box's slip watch: a winner
+    settles a fighter's moneyline, and the live feed now also records how
+    a bout ended where ESPN's scoreboard says so (KO/TKO, submission or
+    decision; AX checks it) for the method, distance and round legs. A bout the feed shows with no winner (a draw, a no
+    contest) settles nothing; your book settles those. The reader in Ask
+    now knows UFC slips (the sport and seven fight markets). New:
+    `engine/slipfight.py`;
+    `tests/test_ufc_fights_in_the_parlay_checker.py` (14 checks). No test
+    changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

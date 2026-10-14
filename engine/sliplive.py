@@ -391,6 +391,10 @@ def live_state(leg: dict, fast_dir=None, now: float | None = None) -> dict | Non
     the league has no fast loop, the loop has stopped, or the game is not
     on it."""
     league = leg.get("league") or leg.get("sport") or ""
+    if league == "ufc":
+        # A fight, off the live fight feed (engine/slipfight).
+        from .slipfight import live_state as _fight
+        return _fight(leg, fast_dir, now)
     if league not in FAST_LEAGUES and league != "mlb":
         return None
     now = time.time() if now is None else now
@@ -614,6 +618,8 @@ class Live:
 
     def prices(self, leg: dict, board: dict | None = None) -> dict | None:
         league = leg.get("league") or ""
+        if (league or leg.get("sport")) == "ufc":
+            return None                  # no book's price index for a fight
         if leg.get("market") not in GAME_MARKETS and not self.priced.get(league):
             return None
         try:

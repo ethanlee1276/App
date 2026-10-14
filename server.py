@@ -4563,6 +4563,7 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             if got:
                 boards[league] = got
                 prices[league] = AB.prices_at(path)
+        boards = SG.with_fights(boards)
         try:
             slip = SG.read_slip(image, str(body.get("media_type") or "").lower().strip())
         except SG.SlipUnreadable as exc:
@@ -4636,6 +4637,7 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             if got:
                 boards[league] = got
                 prices[league] = AB.prices_at(path)
+        boards = SG.with_fights(boards)
         live = SL.Live(prices)
         out = []
         for s in raw:

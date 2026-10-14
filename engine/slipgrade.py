@@ -84,6 +84,9 @@ MARKETS = (
     "hits", "total_bases", "home_runs", "strikeouts", "outs",
     # hockey
     "sog", "points", "goals", "assists", "blocks", "anytime_goal", "saves",
+    # UFC (engine/slipfight): the fight's distance and rounds, a fighter's
+    # method or finish; his moneyline is the game market below
+    "fight_distance", "fight_rounds", "fight_round", "win_ko", "win_sub", "win_dec", "win_finish",
     # game lines
     "moneyline", "spread", "total",
     "other",
@@ -101,10 +104,18 @@ MARKET_WORDS = {
     "tov": "turnovers", "hits": "hits", "total_bases": "total bases",
     "home_runs": "home runs", "strikeouts": "strikeouts", "outs": "outs", "sog": "shots on goal",
     "points": "points", "goals": "goals", "assists": "assists", "blocks": "blocks", "saves": "saves",
+    "fight_distance": "goes the distance", "fight_rounds": "rounds", "fight_round": "ends in round",
+    "win_ko": "by KO/TKO", "win_sub": "by submission", "win_dec": "by decision",
+    "win_finish": "inside the distance",
 }
 GAME_MARKETS = ("moneyline", "spread", "total")
 SCORER_MARKETS = ("anytime_td", "anytime_goal")
-SPORTS = ("nfl", "cfb", "nba", "wnba", "mlb", "nhl", "other")
+FIGHT_MARKETS = ("fight_distance", "fight_rounds", "fight_round", "win_ko", "win_sub", "win_dec", "win_finish")
+SPORTS = ("nfl", "cfb", "nba", "wnba", "mlb", "nhl", "ufc", "other")
+#: The UFC card (ufc_build.py), read beside the leagues' boards for a fight
+#: leg (engine/slipfight) — not one of askbot.BOARD_FILES, which are the
+#: leagues' prop and game boards Ask reads.
+FIGHT_BOARD = "ufc.json"
 SIDES = ("over", "under", "yes", "no", "team")
 
 #: What a slip may carry. More legs than this is not a parlay anyone
@@ -157,20 +168,27 @@ SCHEMA = {
 SYSTEM = """You read sportsbook bet slips from screenshots. Report only what the picture shows.
 
 For every leg of the ticket give:
-- sport: nfl, cfb (college football), nba, wnba, mlb, nhl, or other.
-- player: the player's full name as printed, or "" for a game line.
-- team: for a moneyline or spread, the team picked; otherwise the player's team if printed, else "".
-- game: the matchup as printed, e.g. "BUF @ LA", or "".
+- sport: nfl, cfb (college football), nba, wnba, mlb, nhl, ufc (a UFC or any MMA fight), or other.
+- player: the player's full name as printed, or "" for a game line or any fight leg.
+- team: for a moneyline or spread, the team picked; for a fight leg naming a fighter, that fighter's
+  full name; otherwise the player's team if printed, else "".
+- game: the matchup as printed, e.g. "BUF @ LA" or "Jones vs Miocic", or "".
 - market: one key from the list. Football: pass_yds, pass_td, pass_att, pass_cmp, pass_int, rush_yds,
   rush_att, rec_yds, receptions, rush_rec_yds, pass_rush_yds, anytime_td, kick_pts, fg_made, tackles_ast.
   Basketball: pts, reb, ast, pra (points+rebounds+assists), pts_reb (points+rebounds), pts_ast
   (points+assists), reb_ast (rebounds+assists), fg3m (made threes), stl (steals), blk (blocks),
   tov (turnovers). Baseball: hits,
   total_bases, home_runs, strikeouts (a pitcher's), outs. Hockey: sog (shots on goal), points, goals,
-  assists, blocks, anytime_goal, saves. Game lines: moneyline, spread, total. Anything else: other.
-- side: over or under for a number; yes for an anytime scorer; team for a moneyline or spread.
+  assists, blocks, anytime_goal, saves. Game lines: moneyline, spread, total. UFC: moneyline (a fighter
+  to win), fight_distance (the fight goes the distance), fight_rounds (total rounds), fight_round (the
+  fight ends in one round), win_ko (a fighter by KO/TKO), win_sub (by submission), win_dec (by
+  decision), win_finish (inside the distance, by KO or submission). Anything else: other.
+- side: over or under for a number; yes for an anytime scorer; team for a moneyline or spread. A
+  fight: yes for win_ko, win_sub, win_dec, win_finish and fight_round; yes or no for fight_distance
+  (no: it does not go the distance); over or under for fight_rounds.
 - line: the number. "6+ receptions" is over 5.5; "To score" is 0.5; a spread is the picked team's
-  number (-3.5); a moneyline is 0.
+  number (-3.5); a moneyline is 0. Fight rounds: the number (1.5); fight_round: the round (2); any other
+  fight leg: 0.
 - odds: the leg's American price if the slip prints one, else 0.
 - text: the leg exactly as printed.
 
@@ -239,9 +257,22 @@ def clean_slip(raw) -> dict:
         sport = str(leg.get("sport") or "other")
         line = _num(leg.get("line"), float("nan"))
         player, team = _text(leg.get("player"), 60), _text(leg.get("team"), 60)
+        fight = sport == "ufc" or market in FIGHT_MARKETS
+        game = _text(leg.get("game"), 60 if fight else 40)
+        if fight and player and not team:
+            team, player = player, ""    # the fighter is the side picked, as a team is
         ok = (market in MARKETS and side in SIDES and sport in SPORTS and math.isfinite(line)
-              and abs(line) < 1000 and (player or team or market == "total"))
-        if market in GAME_MARKETS:
+              and abs(line) < 1000 and (player or team or market == "total" or (market in FIGHT_MARKETS and game)))
+        if market in FIGHT_MARKETS:
+            if market in ("win_ko", "win_sub", "win_dec", "win_finish"):
+                ok = ok and bool(team) and side == "yes"
+            elif market == "fight_distance":
+                ok = ok and side in ("yes", "no")
+            elif market == "fight_rounds":
+                ok = ok and side in ("over", "under") and line > 0
+            else:
+                ok = ok and side == "yes" and float(line).is_integer() and 1 <= line <= 5
+        elif market in GAME_MARKETS:
             ok = ok and not player and (side == "team" if market != "total" else side in ("over", "under"))
         elif market in SCORER_MARKETS:
             ok = ok and bool(player) and side in ("yes", "no")
@@ -250,7 +281,7 @@ def clean_slip(raw) -> dict:
         if not ok:
             dropped += 1
             continue
-        legs.append({"sport": sport, "player": player, "team": team, "game": _text(leg.get("game"), 40),
+        legs.append({"sport": sport, "player": player, "team": team, "game": game,
                      "market": market, "side": side, "line": line, "odds": _odds(leg.get("odds")),
                      "text": _text(leg.get("text"), 120)})
     return {"is_bet_slip": bool(raw.get("is_bet_slip")) and bool(legs), "book": _text(raw.get("book"), 40),
@@ -336,6 +367,17 @@ def to_decimal(odds) -> float | None:
 def _key(name) -> str:
     from .teammates import _norm
     return _norm(name)
+
+
+def with_fights(boards: dict) -> dict:
+    """``boards`` with the UFC card beside them (FIGHT_BOARD) for a fight
+    leg: the full copy through gate.full_board_file, parsed once per write
+    of it (askbot.board_at). Unchanged where there is none."""
+    from . import askbot as AB
+    from . import gate as GATE_
+    path = GATE_.full_board_file(FIGHT_BOARD)
+    got = AB.board_at(path) if path else None
+    return dict(boards, ufc=got) if got else boards
 
 
 def _boards_in_order(boards: dict, sport: str) -> list:
@@ -565,6 +607,8 @@ def price_leg(boards: dict, leg: dict, read: bool = True) -> dict:
     from . import likely
     out = dict(leg)
     out.update(prob=None, needs=implied(leg["odds"]), league="", found="", row=None)
+    if leg["sport"] == "ufc" or leg["market"] in FIGHT_MARKETS:
+        return _price_fight(boards, leg, out)
     for league, board in _boards_in_order(boards, leg["sport"]):
         got = None
         if leg["market"] in GAME_MARKETS:
@@ -640,6 +684,30 @@ def price_leg(boards: dict, leg: dict, read: bool = True) -> dict:
     return out
 
 
+def _price_fight(boards: dict, leg: dict, out: dict) -> dict:
+    """A UFC leg off the card's own model (engine/slipfight, Ethan
+    2026-10-14: "do 1-11"): our chance from the bout's outcomes, the card's
+    facts, and those outcomes kept on the row so the other legs on the same
+    bout are priced with it. A bout the card does not carry is not on our
+    board, as any leg is; a market the card has no number for (a spread, a
+    stat) is unpriced."""
+    from . import slipfight as SF
+    got = SF.price(boards.get("ufc"), leg) if (leg["market"] == "moneyline"
+                                               or leg["market"] in FIGHT_MARKETS) else None
+    row = (got or {}).get("row") or {}
+    if got is not None:
+        out.update(prob=got["prob"], league="ufc", found="fight", row=row,
+                   needs=out["needs"] or implied(row.get("odds")))
+        out["game"] = row.get("fight") or out["game"]
+        out["team"] = row.get("team") or out["team"]
+    out["opponent"] = str(row.get("opponent") or "")
+    out["projection"] = None
+    out["tier"] = ""
+    out["edge"] = (out["prob"] - out["needs"]) if (out["prob"] is not None and out["needs"] is not None) else None
+    out["verdict"] = verdict(out["prob"], out["edge"])
+    return out
+
+
 def _read_summary(r: dict) -> dict:
     """What the card says about an off-board read beside its number: why
     the board did not carry it, the tier the four checks would earn, how
@@ -709,15 +777,32 @@ def joint(legs: list[dict]) -> tuple[float | None, list[dict]]:
     correlation (relate → joint_two / joint_three; four or more share the
     group's average). Unpriced legs are left out of this number."""
     from . import parlays as P
+    from . import slipfight as SF
     priced = [l for l in legs if l.get("prob") is not None]
     if not priced:
         return None, []
     groups: dict = {}
     for l in priced:
+        bout = SF.bout_of(l)
+        if bout:
+            groups.setdefault(("bout", bout), []).append(l)
+            continue
         k = _game_of(l)
         groups.setdefault(k if any(k[0]) else ("solo", id(l)), []).append(l)
     total, notes, impossible = 1.0, [], False
-    for group in groups.values():
+    for key, group in groups.items():
+        if key[0] == "bout":
+            # ONE FIGHT'S LEGS TOGETHER (engine/slipfight): the share of the
+            # bout's outcomes every one of them wins on, exactly.
+            p = SF.together(group)
+            for i in range(len(group)):
+                for j in range(i + 1, len(group)):
+                    if SF.together([group[i], group[j]]) == 0.0:
+                        notes.append({"legs": [_name(group[i]), _name(group[j])], "kind": "kill",
+                                      "exclusive": True, "why": "the same fight: these two cannot both happen"})
+            total *= p if p is not None else math.prod(float(l["prob"]) for l in group)
+            impossible = impossible or p == 0.0
+            continue
         ps = [max(1e-6, min(1 - 1e-6, float(l["prob"]))) for l in group]
         rhos = []
         for i in range(len(group)):
@@ -997,6 +1082,12 @@ def why(boards: dict, leg: dict) -> list[dict]:
             out.append({"k": k, "t": t[:260]})
 
     is_read = leg.get("found") == "read"
+    if leg.get("found") == "fight":
+        # A UFC leg (engine/slipfight): the card's own facts, the reason
+        # where it has no number among them.
+        for k, t in (leg.get("row") or {}).get("facts") or []:
+            add(k, t)
+        return _keep(out)
     if leg.get("found") == "game_read":
         row = leg.get("row") or {}
         for k, t in row.get("facts") or []:
@@ -1166,7 +1257,9 @@ WHY_RANK = {"Our read": 0, "Would be": 0, "Projection": 0, "Game": 0, "Red zone"
             "Incentive": 4,
             # A side or a total read off the board (engine/slipgame).
             "Ratings": 1, "Starters": 1, "The market": 0, "Held to the market": 1, "Form": 1,
-            "Head to head": 2, "Totals": 1, "Conditions": 2}
+            "Head to head": 2, "Totals": 1, "Conditions": 2,
+            # A UFC leg off the card (engine/slipfight).
+            "How it ends": 1, "Rounds": 1, "The board": 1, "Fair number": 2, "Style": 2, "Line": 2}
 
 
 def _keep(facts: list[dict]) -> list[dict]:
@@ -1236,17 +1329,33 @@ def simulate(legs: list[dict], nights: int = SIM_NIGHTS, seed: int | None = None
         return None
     # Games, as `joint` groups them; a stand-in carries no opinion of ours
     # and plays alone, as it does there.
+    import bisect
+    import itertools
+    from . import slipfight as SF
     groups: dict = {}
     for i, (l, _) in enumerate(entries):
+        bout = SF.bout_of(l) if l.get("prob") is not None else ""
+        if bout:
+            groups.setdefault(("bout", bout), []).append(i)
+            continue
         k = _game_of(l) if l.get("prob") is not None else None
         groups.setdefault(k if k and any(k[0]) else ("solo", i), []).append(i)
     lam = [0.0] * n
     game_of = [0] * n
-    for gi, idx in enumerate(groups.values()):
-        for i, v in zip(idx, _loadings([entries[i][0] for i in idx])):
-            lam[i] = v
+    # A fight's legs draw one ending a night off the bout's own outcomes
+    # (engine/slipfight), and each wins on the endings it wins on.
+    ends: dict = {}
+    wins: dict = {}
+    for gi, (key, idx) in enumerate(groups.items()):
         for i in idx:
             game_of[i] = gi
+        if key[0] == "bout":
+            ends[gi] = list(itertools.accumulate((entries[idx[0]][0].get("row") or {}).get("outcomes") or [0.0]))
+            for i in idx:
+                wins[i] = set((entries[i][0].get("row") or {}).get("wins") or [])
+            continue
+        for i, v in zip(idx, _loadings([entries[i][0] for i in idx])):
+            lam[i] = v
     rest = [math.sqrt(max(0.0, 1.0 - v * v)) for v in lam]
     if seed is None:
         key = "|".join(sorted(f"{_name(l)}@{l.get('odds')}" for l, _ in entries))
@@ -1258,7 +1367,9 @@ def simulate(legs: list[dict], nights: int = SIM_NIGHTS, seed: int | None = None
     hits = [0] * n
     for _ in range(nights):
         shared = [rng.gauss(0.0, 1.0) for _ in groups]
-        won = [lam[i] * shared[game_of[i]] + rest[i] * rng.gauss(0.0, 1.0) > cut[i] for i in range(n)]
+        drawn = {gi: bisect.bisect_right(c, rng.random() * c[-1]) for gi, c in ends.items()}
+        won = [(drawn[game_of[i]] in wins[i]) if i in wins else
+               lam[i] * shared[game_of[i]] + rest[i] * rng.gauss(0.0, 1.0) > cut[i] for i in range(n)]
         k = sum(won)
         dist[k] += 1
         for i in range(n):
@@ -1281,6 +1392,9 @@ def _name(leg: dict) -> str:
                                            f" {leg['side']} {leg['line']:g}" if leg["market"] == "total" else "")
     if leg["market"] in SCORER_MARKETS:
         return f"{leg['player']} to score"
+    if leg["market"] in FIGHT_MARKETS:
+        from .slipfight import name as _fight_name
+        return _fight_name(leg)
     return f"{leg['player']} {leg['side']} {leg['line']:g} {MARKET_WORDS.get(leg['market'], leg['market'])}"
 
 
@@ -1445,11 +1559,26 @@ def pairs(legs: list[dict]) -> list[dict]:
     what makes the ticket's chance more or less than its legs multiplied.
     The pairs it would never build are named in `notes`."""
     from . import parlays as P
+    from . import slipfight as SF
     priced = [l for l in legs if l.get("prob") is not None]
     out = []
     for i in range(len(priced)):
         for j in range(i + 1, len(priced)):
             a, b = priced[i], priced[j]
+            ba, bb = SF.bout_of(a), SF.bout_of(b)
+            if ba or bb:
+                # One fight: how far apart its two legs sit, off the bout's
+                # own outcomes (a pair that cannot both win is in `notes`).
+                both = SF.together([a, b]) if ba == bb else None
+                pa, pb = float(a["prob"]), float(b["prob"])
+                den = math.sqrt(pa * (1 - pa) * pb * (1 - pb))
+                if both and den > 0:
+                    rho = (both - pa * pb) / den
+                    if abs(rho) >= PAIR_RHO:
+                        out.append({"legs": [_name(a), _name(b)], "rho": round(rho, 2),
+                                    "why": "the same fight, priced off one set of endings: " + (
+                                        "they win together" if rho > 0 else "one winning makes the other less likely")})
+                continue
             ka, kb = _game_of(a), _game_of(b)
             if not any(ka[0]) or ka != kb:
                 continue
@@ -1526,7 +1655,8 @@ def better_number(leg: dict, index: dict | None, boards: dict | None = None) -> 
     better number.
     """
     market, side = leg.get("market"), str(leg.get("side") or "").lower()
-    if market in GAME_MARKETS or market in SCORER_MARKETS or market == "other" or side not in ("over", "under"):
+    if market in GAME_MARKETS or market in SCORER_MARKETS or market in FIGHT_MARKETS or market == "other" \
+            or side not in ("over", "under"):
         return None
     from . import sliplive as SL
     e = (index or {}).get((SL._key(leg.get("player")), market))
@@ -1726,6 +1856,12 @@ def _other_name(leg: dict) -> str:
         return f"{'Under' if side == 'over' else 'Over'} {leg['line']:g}"
     if m in SCORER_MARKETS:
         return f"{leg.get('player')} not to score"
+    if m == "fight_distance":
+        return "the fight does not go the distance" if side != "no" else "the fight goes the distance"
+    if m == "fight_rounds":
+        return f"{'Under' if side == 'over' else 'Over'} {leg['line']:g} rounds"
+    if m in FIGHT_MARKETS:
+        return "the other side"
     flip = "Under" if side == "over" else "Over"
     return f"{leg.get('player')} {flip} {leg['line']:g} {MARKET_WORDS.get(m, m)}"
 
@@ -1865,7 +2001,10 @@ def alerts(legs: list[dict]) -> list[str]:
 
 
 def _kickoff(boards: dict, leg: dict) -> str:
-    """"YYYY-MM-DD HH:MM" for the leg's game, off its board's schedule."""
+    """"YYYY-MM-DD HH:MM" for the leg's game, off its board's schedule; a
+    fight's card date."""
+    if leg.get("found") == "fight":
+        return str((leg.get("row") or {}).get("event_date") or "")[:10]
     board = boards.get(leg.get("league") or "") or {}
     r = leg.get("row") or {}
     teams = ({r.get("home"), r.get("away")} - {None, ""}) or \

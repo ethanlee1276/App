@@ -330,7 +330,8 @@ def boards_and_live():
         if got:
             boards[league] = got
             prices[league] = AB.prices_at(path)
-    return boards, SL.Live(prices)
+    from . import slipgrade as SG
+    return SG.with_fights(boards), SL.Live(prices)
 
 
 def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, entitled=None,
