@@ -275,7 +275,7 @@ def test_the_page_draws_college_targets_straight_upfield():
     assert "92%" in got["note"] and "78%" in got["note"] and "interception" in got["note"]
     assert "By field position" in got["tables"] and "How far past the line" not in got["tables"]
     assert got["title"] == "Target chart" and got["nflTitle"] == "Route chart"
-    assert got["kinds"] == [["routes", "carries"], ["carries", "routes"], ["routes", "carries"]], \
+    assert got["kinds"] == [["routes", "carries", "role"], ["carries", "routes", "role"], ["routes", "carries", "role"]], \
         "a college receiver leads with his targets, a back with his carries"
 
 

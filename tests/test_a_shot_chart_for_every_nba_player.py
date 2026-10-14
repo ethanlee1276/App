@@ -368,7 +368,7 @@ def test_the_page_draws_the_court():
     assert "Assisted" in got["side"] and "a game" in got["side"]
     assert "By zone, beside the league" in got["tables"] and "By quarter" in got["tables"]
     assert got["chip"] == "10 pts · 4-6" and got["count"] == "6 shots" and "Made 3" in got["tip"]
-    assert got["kinds"] == [["shots"], ["shots"], []] and got["title"] == "Shot chart"
+    assert got["kinds"] == [["shots", "role"], ["shots", "role"], []] and got["title"] == "Shot chart"
     assert got["label"].startswith("2025-26 vs NYK")
 
 

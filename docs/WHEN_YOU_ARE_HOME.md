@@ -57,7 +57,11 @@ crossed the plate and what came of it) (step 65; W). A basketball pick
 draws his shot chart: every shot he took on the half court, made or
 missed, each zone beside the league's percentage (step 66; X). A hockey
 pick draws the skater's shot map or the goalie's save map, off the shots
-the box already stores for the xG model (step 67; Y). The whole picture, sport by
+the box already stores for the xG model (step 67; Y). Every player pick in
+every league now has a Role chart beside his own: how much he is used,
+game by game (snaps, targets, carries and his share of his team's;
+minutes and starts; plate appearances and his spot in the order, or a
+pitcher's pitch count and rest; ice time and shots) (step 68; Z). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -67,13 +71,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A hockey pick draws his shot map or his save map`
+**A. The box has today's code.** The first line should end `Every player pick draws his role: how much he is used, game by game`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 28d6877f HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 12fa02ad HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -472,6 +476,24 @@ Then on your phone: NHL, Most Likely, tap a skater's pick (shots on goal,
 points, goals, assists): his Shot map, every attempt in the attacking
 zone, gold a goal, green on goal, a ring missed, a cross blocked. A
 goalie's saves or goals against draw his Save map: green saved, red in.
+
+**Z. The role chart** (step 68; read-only, seconds). Nothing to fill: it
+reads the box scores every board already reads. Each line names the
+league, the player, the number his role is read by and how many games
+it counts; any regular who played this season will do (change a name
+that prints `None`). The last command lists five new name indexes the
+box built on its own the first time it opened the database after
+pulling (a second or two each); all five should print:
+```
+for q in "nfl&player=Ja%27Marr%20Chase" "cfb&player=Jeremiah%20Smith" "nba&player=Jalen%20Brunson" "wnba&player=Caitlin%20Clark" "mlb&player=Aaron%20Judge" "nhl&player=Auston%20Matthews"; do curl -s "http://127.0.0.1:8000/api/players/chart?kind=role&sport=$q" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('sport'), d.get('player'), d.get('lead'), [m['key'] for m in d.get('metrics', [])], (d.get('season_line') or {}).get('n'))"; done
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print([r[0] for r in c.execute(\"SELECT name FROM sqlite_master WHERE type='index' AND name IN ('nhl_shots_shooter','nhl_shots_goalie','mlb_pa_batter_name','mlb_pa_pitcher_name','nba_shots_name')\")])"
+```
+Then on your phone: any league, Most Likely, tap any player's pick. His
+own chart is drawn first; the Role chip beside it switches to his role:
+one strip per number, every game in order from the left, his season's
+average dashed across it, the game you picked lit (tap any bar for that
+game); the season tab lights his last three and adds the splits (his
+last 3 and 5 beside his season, home and away, started or not).
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2293,6 +2315,42 @@ first). Paste back anything that prints an error or looks off.
     board already counts it. Every hockey leg in the parlay checker gets
     its door. No pins changed. New:
     `tests/test_a_shot_map_and_save_map_for_hockey.py`.
+68. **Every player pick draws his role: how much he is used, game by
+    game** (2026-10-14, you: "Yes do all of them"). Z checks it. Nothing
+    new to fetch: the box scores every board reads carry most of a role,
+    and where the play-by-play the other charts store adds what a box
+    score lacks it is read too. NFL: snap share, targets, carries,
+    attempts, red-zone looks and air yards, with his share of his team's
+    targets and carries that game (a share is of his own club's that
+    game, so a trade takes it with him); a passer leads with his
+    attempts. College: carries, catches, attempts, red-zone touches and
+    his shares. NBA: minutes, starts, and the shots, threes and free
+    throws he tried (the shot chart's play-by-play); WNBA: minutes and
+    starts. MLB: a hitter's plate appearances, his spot in the order
+    (where he came up among his side's first nine; off the bench he has
+    none) and pitches seen; a pitcher's pitch count, batters faced,
+    whether he started (he faced the first batter) and his days of rest.
+    NHL: a skater's ice time, shots on goal, every attempt and those on
+    the power play; a goalie's shots faced and his starts. A number not
+    on file is a gap on the chart, never a zero. The chart describes his
+    role; nothing on it moves a price. It is offered after his own chart
+    (the carries, the targets, the throws, the hits, the pitches, the
+    shots), never ahead of it, on every player pick in every league, and
+    a WNBA pick and a college quarterback's passing pick, which had no
+    chart, now have this one. The drawing loads as its own small file
+    (js/chart-role.js). ALSO: the hockey, baseball and basketball charts
+    now find a player by an index on his name instead of reading every
+    stored shot or plate appearance (five indexes; the box builds them
+    by itself, a second or two each). Pins changed, told to you: my own
+    chart tests from yesterday (`tests/test_the_pick_page_draws_his_chart.py`,
+    `tests/test_a_passing_chart_for_every_passer.py`,
+    `tests/test_a_target_chart_for_every_college_receiver.py`,
+    `tests/test_mlb_hit_tracker_and_pitch_chart.py`,
+    `tests/test_a_shot_chart_for_every_nba_player.py`,
+    `tests/test_a_shot_map_and_save_map_for_hockey.py`) list each bet's
+    charts with the role chart at the end, and the lead rule with it
+    sorted last; nothing loosened. New:
+    `tests/test_a_role_chart_for_every_player.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

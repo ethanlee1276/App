@@ -335,7 +335,7 @@ def test_the_page_draws_every_throw_and_lists_every_dropback():
     assert "Next Gen Stats, 2026" in got["side"] and "2.94s to throw" in got["side"] and "Deep (20+)" in got["side"]
     assert "spiked ball counts as an incomplete attempt" in got["note"] and "FTN" in got["note"]
     assert "Sacked, −8 yds" in got["tip"]
-    assert got["kinds"] == [["passes", "carries"]] * 3, "a quarterback's own chart is his throws"
+    assert got["kinds"] == [["passes", "carries", "role"]] * 3, "a quarterback's own chart is his throws"
     assert got["chipName"] == "Passes" and got["title"] == "Passing chart"
 
 
@@ -347,7 +347,8 @@ def test_every_door_reaches_it():
     i = SLIP_JS.index("function chartsHTML(")
     assert "/rush|rec|anytime|pass/.test(m)" in SLIP_JS[i:i + 400], "a passing leg carries his charts' door"
     assert '`/api/players/chart?kind=${kind}&sport=`' in CC_JS
-    assert 'cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes"] : ["carries", "routes"]) : null' in CC_JS
+    # His role chart (2026-10-14) is asked for after his own charts.
+    assert 'cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes", "role"] : ["carries", "routes", "role"]) : null' in CC_JS
     for cls in (".rc-sack", ".rc-sack.sel"):
         assert cls in CC_CSS, cls
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"

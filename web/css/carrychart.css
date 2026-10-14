@@ -346,3 +346,24 @@
 .cc-legend .dt.nh-sv { background: var(--good); }
 .cc-legend .dt.nh-ga { background: var(--bad); }
 .cc-legend .dt.nh-block { width: auto; height: auto; color: var(--text-mute); font-style: normal; font-weight: 700; line-height: 1; }
+
+/* every league's role chart (2026-10-14, js/chart-role.js): one strip per
+   number, every game in order from the left, his average dashed across. */
+.rl-svg { max-height: 640px; }
+.rl-hit { fill: transparent; cursor: pointer; }
+.rl-name { fill: var(--text); font: 700 14px var(--font-mono); }
+.rl-avg { fill: var(--text-mute); font: 600 12px var(--font-mono); }
+.rl-base { stroke: var(--border); stroke-width: 1; }
+.rl-bar { fill: color-mix(in oklab, var(--text-mute) 55%, transparent); cursor: pointer; }
+.rl-bar.on { fill: var(--brand); }
+.rl-bar.sel { stroke: var(--text); stroke-width: 2; }
+.rl-val { fill: var(--text-mute); font: 600 11px var(--font-mono); paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; }
+.rl-val.on { fill: var(--text); font-weight: 700; }
+.rl-mean { stroke: var(--text-dim); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.rl-x { fill: var(--text-mute); font: 600 11px var(--font-mono); }
+.rl-x.on { fill: var(--text); font-weight: 700; }
+.rl-start { fill: none; stroke: var(--text-mute); stroke-width: 1.2; }
+.rl-start.s { fill: var(--good); stroke: var(--good); }
+.cc-legend .dt.rl-k { background: var(--brand); border-radius: 2px; }
+.cc-legend .dt.rl-m { width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--text-dim); background: none; }
+.cc-legend .dt.rl-s { background: var(--good); }

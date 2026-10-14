@@ -59,6 +59,19 @@ def _nhl_saves(conn, sport, player, season):
     return H.save_map(conn, player, season)
 
 
+def _role(conn, sport, player, season):
+    from . import role
+    return role.chart(conn, sport, player, season)
+
+
+def _logged(conn, sport):
+    """Has the league any box score stored at all?"""
+    try:
+        return bool(conn.execute("SELECT 1 FROM player_game_logs WHERE sport=? LIMIT 1", (sport,)).fetchone())
+    except Exception:                                              # noqa: BLE001
+        return True
+
+
 def _any_row(table):
     """A league table with no sport column: has it any rows at all?"""
     def stored(conn, sport):
@@ -95,6 +108,9 @@ KINDS = {
     # (engine/nhl/charts).
     "shotmap": (("nhl",), _nhl_shotmap, _any_row("nhl_shots")),
     "saves": (("nhl",), _nhl_saves, _any_row("nhl_shots")),
+    # Every league's (2026-10-14): how much he is used, game by game, off
+    # the box scores the boards already read (engine/role).
+    "role": (("nfl", "cfb", "nba", "wnba", "mlb", "nhl"), _role, _logged),
 }
 
 

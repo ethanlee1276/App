@@ -328,7 +328,7 @@ def test_the_page_draws_both():
     assert "Aaron Judge (R)" in got["plist"] and "4 pitches" in got["plist"] and ">BB<" in got["plist"]
     assert "This game’s mix" in got["pside"] and "Four-seam" in got["pside"]
     assert got["pchip"] == "0 K · 8p" and "His pitch mix" in got["pmix"]
-    assert got["kinds"] == [["pitches"], ["pitches"], ["spray"], ["spray"], ["spray"]]
+    assert got["kinds"] == [["pitches", "role"], ["pitches", "role"], ["spray", "role"], ["spray", "role"], ["spray", "role"]]
     assert got["titles"] == ["Hit tracker", "Pitch chart"]
 
 

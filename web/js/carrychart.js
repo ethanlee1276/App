@@ -116,7 +116,17 @@
                sec: "every shot he took: where from, on goal, missed or blocked, and the goals" },
     saves: { chip: "Saves", title: "Save map", noun: "shots faced", one: "shot faced", where: "where he’s beaten",
              sec: "every shot on goal he faced: where from, saved or scored" },
+    role: { chip: "Role", title: "Role chart", noun: "games", one: "number", where: "his role",
+            sec: "how much he’s used, game by game, beside his season" },
   };
+  /* Every league's role chart says what it counts (engine/role). */
+  Object.entries({
+    nfl: "his snaps, targets and carries game by game, and his share of his team’s",
+    cfb: "his carries, catches and attempts game by game, and his share of his team’s",
+    nba: "his minutes, starts and shots, game by game", wnba: "her minutes and starts, game by game",
+    mlb: "his plate appearances and spot in the order, or his pitch count and rest, game by game",
+    nhl: "his ice time and shots, or the shots he faced, game by game",
+  }).forEach(([lg, sec]) => { KIND[`role@${lg}`] = Object.assign({}, KIND.role, { sec }); });
   /* A league whose file says less than the NFL's gets its own names for
      the same chart: college targets have no air yards, no side of the
      field and no route, so they are a target chart, not a route chart. */
@@ -130,7 +140,7 @@
      is drawn (a football page never downloads baseball's drawing): the
      module registers its parts through `QBCarry.plug`. Listeners, not
      handler properties: the page's CSP forbids inline handlers. */
-  const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops", shotmap: "nhl", saves: "nhl" };
+  const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops", shotmap: "nhl", saves: "nhl", role: "role" };
   const plugs = {};
   function need(kind) {
     const f = PLUG[kind];
@@ -1059,18 +1069,18 @@
   function plugView(P, d, sport) {
     if (S.view === "season") {
       const n = d.games.length;
-      return { top: `<div class="cc-title">${esc(`${seasonName(sport, d.season)} season · ${P.count(d.season_line)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
+      return { top: `<div class="cc-title">${esc(`${seasonName(sport, d.season)} season · ${P.count(d.season_line, d)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
                fig: `<div class="cc-stage">${P.season(d)}</div>`,
                side: P.seasonSide(d),
                tail: fold("splits", P.splitsTitle, P.splits(d)) };
     }
     const g = d.games[Math.min(S.gi, d.games.length - 1)];
     return { top: `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
-                `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(P.chip(x))}</small></button>`).join("")}</div>
+                `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(P.chip(x, d))}</small></button>`).join("")}</div>
               <div class="cc-title">${esc(gameTitle(g, sport, seasonName(sport, d.season)))}</div>`,
              fig: `<div class="cc-stage">${P.game(g, d)}<div class="cc-tip" hidden></div></div>`,
              side: P.gameSide(g, d),
-             tail: fold("list", `Every ${P.one}, in order · ${P.items(g).length}`, P.list(g, d)) };
+             tail: fold("list", P.listTitle ? P.listTitle(g, d) : `Every ${P.one}, in order · ${P.items(g, d).length}`, P.list(g, d)) };
   }
 
   /* ---------------- selection and the tip ---------------- */
@@ -1094,7 +1104,7 @@
     const d = S.data, g = d && d.games[S.gi];
     const P = DRAW[S.kind];
     if (P) {
-      const t = g && P.items(g)[i];
+      const t = g && P.items(g, d)[i];
       if (!t || S.view !== "game") { el.hidden = true; return; }
       el.innerHTML = P.tip(t, g, d);
       el.hidden = false;
@@ -1231,8 +1241,9 @@
     const seq = ++c.seq;
     Promise.all(c.cand.map((k) => ask(k, S.sport, S.player, null, true))).then((ds) => {
       if (seq !== c.seq || c.root._cc !== c) return;
+      // His role (games played) never leads a chart of what he did in them.
       const got = c.cand.map((k, i) => ({ k, d: ds[i], v: vol(k, ds[i]) })).filter((x) => x.v > 0)
-        .sort((a, b) => b.v - a.v);
+        .sort((a, b) => (a.k === "role") - (b.k === "role") || b.v - a.v);
       const lead = got[0];
       const shown = got.filter((x) => x === lead || (x.v >= SECOND_MIN && x.d.season === lead.d.season));
       c.kinds = shown.length ? shown.map((x) => x.k) : [c.cand[0]];
@@ -1318,7 +1329,7 @@
     const auto = kind === "auto", lg = String(sport || "nfl").toLowerCase();
     const k0 = KIND[kind] ? kind : "carries", K = kindOf(k0, lg);
     ov._cc = use({ root: ov, inline: false, seq: 0, kinds: null, key: "",
-                   cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes"] : ["carries", "routes"]) : null,
+                   cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes", "role"] : ["carries", "routes", "role"]) : null,
                    S: { sport: lg, kind: k0, player, data: null,
                         view: "game", gi: 0, sel: -1, hint: face || "" } });
     ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${auto ? "Charts" : K.title} — ${player}`)}">
@@ -1357,28 +1368,35 @@
     const m = String(mkt || ""), p = String(pos || "").toUpperCase();
     const runs = /rush|anytime/.test(m), catches = /rec|anytime/.test(m);
     const wide = p === "WR" || p === "TE";
+    /* HIS ROLE beside every league's own chart (2026-10-14): how much he
+       is used, game by game (engine/role). Offered after the chart of
+       what he did with it, never ahead of it (probe), and only where a
+       player bet has a chart at all. */
+    const role = (ks) => ks.concat("role");
     /* Baseball's chart is the bet's side of the ball: a pitcher's
        strikeouts or outs draw every pitch he threw, a hitter's bet every
        ball he put in play (engine/mlb/charts). */
-    if (sport === "mlb") return /^(strikeouts|outs)$|pitcher|earned_runs|_allowed/.test(m) ? ["pitches"] : m ? ["spray"] : [];
+    if (sport === "mlb") return m ? role(/^(strikeouts|outs)$|pitcher|earned_runs|_allowed/.test(m) ? ["pitches"] : ["spray"]) : [];
     /* A basketball player's chart is his shots, whatever the bet: his
        points, threes and the combos are made there, and his rebounds and
-       assists ride the same minutes (engine/nba/shots). */
-    if (sport === "nba") return m ? ["shots"] : [];
+       assists ride the same minutes (engine/nba/shots). The WNBA has no
+       play file stored: her role. */
+    if (sport === "nba") return m ? role(["shots"]) : [];
+    if (sport === "wnba") return m ? ["role"] : [];
     /* Hockey's is the bet's side of the puck: a goalie's saves or goals
        against draw every shot he faced, a skater's bet every shot he took
        (engine/nhl/charts). */
-    if (sport === "nhl") return /save|goals_against|goalie/.test(m) ? ["saves"] : m ? ["shotmap"] : [];
+    if (sport === "nhl") return m ? role(/save|goals_against|goalie/.test(m) ? ["saves"] : ["shotmap"]) : [];
     if (sport !== "nfl" && sport !== "cfb") return [];
     /* A quarterback's own chart is his throws, whatever the bet; his runs
        are the other (2026-10-13). A passing bet with no position on the
        row asks for both too, and the numbers decide. College has no
-       passing chart: a college quarterback has his runs. */
-    if (sport === "cfb" && p === "QB") return runs ? ["carries"] : [];
-    if (sport === "nfl" && (p === "QB" || (!p && /^pass/.test(m)))) return ["passes", "carries"];
-    if (!runs && !catches) return [];
+       passing chart: a college quarterback has his runs and his role. */
+    if (sport === "cfb" && p === "QB") return runs ? role(["carries"]) : ["role"];
+    if (sport === "nfl" && (p === "QB" || (!p && /^pass/.test(m)))) return role(["passes", "carries"]);
+    if (!runs && !catches) return sport === "cfb" && /^pass/.test(m) ? ["role"] : [];
     const back = p === "RB" || p === "FB" || p === "HB";
-    return wide || (!back && !runs) ? ["routes", "carries"] : ["carries", "routes"];
+    return role(wide || (!back && !runs) ? ["routes", "carries"] : ["carries", "routes"]);
   }
   function kindBar() {
     if (!C || !C.kinds || C.kinds.length < 2) return "";

@@ -174,7 +174,8 @@ def test_a_bet_asks_for_every_chart_he_could_have():
       };""")
     if got is None:
         return
-    both, rb = ["routes", "carries"], ["carries", "routes"]
+    # His role chart follows his own (2026-10-14): never ahead of them.
+    both, rb = ["routes", "carries", "role"], ["carries", "routes", "role"]
     # Every skill player in the NFL is asked for both, whatever the bet:
     # a back's receptions over no longer draws only his routes.
     for key in ("rbRec", "rbRush", "rbAtt", "rbTd", "rbRr", "noPosTd"):
@@ -183,7 +184,7 @@ def test_a_bet_asks_for_every_chart_he_could_have():
         assert got[key] == both, (key, got[key])
     # A quarterback's own chart is his throws, whatever the bet; his runs
     # are the other (the passing chart, 2026-10-13).
-    qb = ["passes", "carries"]
+    qb = ["passes", "carries", "role"]
     for key in ("qbRun", "qbTd", "qbPass", "qbRush", "noPosPass", "noPosInt"):
         assert got[key] == qb, (key, got[key])
     assert got["kick"] == []
@@ -191,9 +192,9 @@ def test_a_bet_asks_for_every_chart_he_could_have():
     # College has its targets since 2025 (the college target chart,
     # 2026-10-13): a college player is asked for both, as an NFL one is;
     # a college quarterback has no passing chart, so his runs.
-    assert got["cfbRbRush"] == got["cfbRbTd"] == ["carries", "routes"]
-    assert got["cfbQbTd"] == ["carries"]
-    assert got["cfbWrTd"] == got["cfbTeTd"] == got["cfbWrRec"] == got["cfbWrRush"] == ["routes", "carries"]
+    assert got["cfbRbRush"] == got["cfbRbTd"] == ["carries", "routes", "role"]
+    assert got["cfbQbTd"] == ["carries", "role"]
+    assert got["cfbWrTd"] == got["cfbTeTd"] == got["cfbWrRec"] == got["cfbWrRush"] == ["routes", "carries", "role"]
     assert got["tally"] == ["5-88", "1 for −2", "3-0"], "a game he lost yards in reads as one"
 
 
@@ -204,7 +205,10 @@ def test_his_own_chart_leads_by_what_he_does_more_of():
     i = CC_JS.index("  function probe(c) {")
     body = CC_JS[i:CC_JS.index("\n  }\n", i)]
     assert "Promise.all(c.cand.map((k) => ask(k," in body, "both of his charts asked for at once"
-    assert ".sort((a, b) => b.v - a.v)" in body, "the one he does more of leads"
+    # His role chart (games played, 2026-10-14) sorts after every chart
+    # of what he did in them; among those, the one he does more of leads.
+    assert '.sort((a, b) => (a.k === "role") - (b.k === "role") || b.v - a.v)' in body, \
+        "the one he does more of leads"
     assert "x.v >= SECOND_MIN && x.d.season === lead.d.season" in body
     assert "const SECOND_MIN = 3;" in CC_JS
     assert 'const vol = (kind, d) => (d && d.games && d.games.length\n    ? Number((d.season_line || {})[kind === "routes" ? "tgt" : "n"]) || 0 : 0);' in CC_JS
