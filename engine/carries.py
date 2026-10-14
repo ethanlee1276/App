@@ -330,7 +330,7 @@ def fetch_ngs_rushing(ttl: int = 6 * 3600) -> list[dict]:
 #: The tables a player's charts are drawn from, keyed (sport, season,
 #: period, game_id, play_id) with a `date`: the only names `nfl_behind`
 #: and `stored` will put in a query.
-CHART_TABLES = ("carries", "targets", "passes")
+CHART_TABLES = ("carries", "targets", "passes", "kicks")
 
 
 def nfl_behind(conn, season: int, today, table: str = "carries") -> bool:
@@ -342,7 +342,8 @@ def nfl_behind(conn, season: int, today, table: str = "carries") -> bool:
     overnight and the fetch layer caches it for a day, so this costs one
     download a night at most and stops the night the file has the game.
     ``table="targets"`` asks the same of the route chart's passes, and
-    ``table="passes"`` of the passing chart's throws."""
+    ``table="passes"`` of the passing chart's throws, and ``table="kicks"``
+    of the kicker chart's."""
     if table not in CHART_TABLES:
         raise ValueError(f"not a chart table: {table!r}")
     try:

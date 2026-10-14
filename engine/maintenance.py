@@ -2167,18 +2167,19 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         # nflverse has the game (engine/carries.nfl_behind, on each table).
         _carries_behind = False
         try:
-            from . import carries as _cr, db as _cdb, passes as _ps, targets as _tg
+            from . import carries as _cr, db as _cdb, kicks as _kk, passes as _ps, targets as _tg
             _cconn = _cdb.connect()
             _cseason = today.year if today.month >= 8 else today.year - 1
             _carries_behind = (_cr.nfl_behind(_cconn, _cseason, today)
                                or _tg.nfl_behind(_cconn, _cseason, today)
-                               or _ps.nfl_behind(_cconn, _cseason, today))
+                               or _ps.nfl_behind(_cconn, _cseason, today)
+                               or _kk.nfl_behind(_cconn, _cseason, today))
         except Exception:                                       # noqa: BLE001
             _carries_behind = False
         if today.weekday() == 1 or _units_behind or _carries_behind:
             try:
                 from . import db as _pdb
-                from . import carries as _carries, passes as _passes, targets as _targets
+                from . import carries as _carries, kicks as _kicks, passes as _passes, targets as _targets
                 from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
                                              xfp_player_rows)
                 from .sources.nflunits import Units, UNIT_COLS
@@ -2189,16 +2190,19 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 units = Units()
                 runs = _carries.NflCarries(season)
                 catches = _targets.NflTargets(season)
-                # …and every throw for the passing chart (2026-10-13).
+                # …and every throw for the passing chart (2026-10-13), and
+                # every kick for the kicker chart (2026-10-14).
                 throws = _passes.NflPasses(season)
+                kicked = _kicks.NflKicks(season)
 
                 def _each(r):
                     units.add(r)
                     runs.add(r)
                     catches.add(r)
                     throws.add(r)
-                agg = aggregate_pbp(load_pbp_rows(season, columns=tuple(UNIT_COLS) + _carries.PBP_COLS
-                                                  + _passes.PBP_COLS + _targets.PBP_COLS), also=_each)
+                    kicked.add(r)
+                agg = aggregate_pbp(load_pbp_rows(season, columns=tuple(UNIT_COLS) + _carries.PBP_COLS + _passes.PBP_COLS
+                                                  + _kicks.PBP_COLS + _targets.PBP_COLS), also=_each)
                 _pc = _pdb.connect()
                 n = _pdb.upsert_player_logs(_pc, xfp_player_rows(agg, season))
                 n_u = _pdb.upsert_team_units(_pc, units.rows(season))
@@ -2210,9 +2214,10 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 n_t = _pdb.upsert_targets(_pc, catches.rows(names, _targets.routes_for(season),
                                                             _targets.charting_for(season)))
                 n_p = _pdb.upsert_passes(_pc, throws.rows(names, _passes.charting_for(season)))
-                if n or n_u or n_c or n_t or n_p:
+                n_k = _pdb.upsert_kicks(_pc, kicked.rows(names))
+                if n or n_u or n_c or n_t or n_p or n_k:
                     log(f"  nfl pbp: {n:,} xFP/red-zone rows, {n_u:,} unit rows, "
-                        f"{n_c:,} carries, {n_t:,} targets, {n_p:,} throws refreshed")
+                        f"{n_c:,} carries, {n_t:,} targets, {n_p:,} throws, {n_k:,} kicks refreshed")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
 
@@ -2263,6 +2268,15 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 log(f"  nfl throws {past}: {_ps2.backfill_nfl(_qc, past):,} rows (once)")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  passing chart refresh failed: {exc}")
+        # …AND THE KICKER CHART'S: LAST SEASON's kicks once (2026-10-14).
+        try:
+            from . import db as _kdb, kicks as _kk2
+            _kc = _kdb.connect()
+            season = today.year if today.month >= 8 else today.year - 1
+            for past in _kk2.missing_seasons(_kc, (season - 1,)):
+                log(f"  nfl kicks {past}: {_kk2.backfill_nfl(_kc, past):,} rows (once)")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  kicker chart refresh failed: {exc}")
 
     # The DEEP fitters, weekly. `engine.journalfit` already refits every
     # sport off the journal on every settle pass — that is the universal

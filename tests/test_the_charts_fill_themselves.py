@@ -86,6 +86,18 @@ def _one_throw(conn, season=2026):
     D.upsert_passes(conn, fold.rows(NAMES, {}))
 
 
+def _one_kick(conn, season=2026):
+    """One field goal, so the kicker chart's table has a row (2026-10-14)."""
+    from engine import kicks as KK
+    fold = KK.NflKicks(season)
+    fold.add({"play_type": "field_goal", "season": str(season), "season_type": "REG", "week": "5",
+              "home_team": "LA", "away_team": "BUF", "posteam": "BUF", "defteam": "LA",
+              "game_date": f"{season}-10-12", "field_goal_attempt": "1", "field_goal_result": "made",
+              "kick_distance": "40", "kicker_player_id": "00-0036000", "kicker_player_name": "T.Bass",
+              "play_id": "77"})
+    D.upsert_kicks(conn, fold.rows({}))
+
+
 def _one_carry(conn, season=2026):
     fold = CR.NflCarries(season)
     fold.add(_run(season=str(season)))
@@ -107,18 +119,20 @@ def test_a_season_played_with_no_chart_rows_is_owed_and_nothing_else_is():
     _game(conn, "cfb", 2026, "401752000")
     _game(conn, "cfb", 2025, "401700000", score=None, date="2025-09-01")   # never finished
     # The passing chart's table and the college target chart's rows
-    # (2026-10-13) are owed like the others.
+    # (2026-10-13), and the kicker chart's (2026-10-14), are owed like the
+    # others.
     assert CF.owed(conn, TODAY) == [("nfl", 2026, "carries"), ("nfl", 2026, "targets"),
-                                    ("nfl", 2026, "passes"), ("cfb", 2026, "carries"),
-                                    ("cfb", 2026, "targets"),
+                                    ("nfl", 2026, "passes"), ("nfl", 2026, "kicks"),
+                                    ("cfb", 2026, "carries"), ("cfb", 2026, "targets"),
                                     ("nfl", 2025, "carries"), ("nfl", 2025, "targets"),
-                                    ("nfl", 2025, "passes")]
+                                    ("nfl", 2025, "passes"), ("nfl", 2025, "kicks")]
     _one_carry(conn)
     _one_target(conn, 2025)
     _one_throw(conn, 2025)
     assert CF.owed(conn, TODAY) == [("nfl", 2026, "targets"), ("nfl", 2026, "passes"),
-                                    ("cfb", 2026, "carries"), ("cfb", 2026, "targets"),
-                                    ("nfl", 2025, "carries")], \
+                                    ("nfl", 2026, "kicks"), ("cfb", 2026, "carries"),
+                                    ("cfb", 2026, "targets"), ("nfl", 2025, "carries"),
+                                    ("nfl", 2025, "kicks")], \
         "a table with rows is never owed"
     # January is still last autumn's season: 2026 and 2025, not 2027.
     assert CF.season_of(dt.date(2027, 1, 20)) == 2026 and CF.season_of(dt.date(2026, 7, 31)) == 2025
@@ -205,11 +219,11 @@ def test_the_cycle_starts_the_fill_once_and_tries_again_only_after_a_while():
         got = M.fill_charts_if_owed(logs.append, today=TODAY, now=1000.0, conn=conn,
                                     state_path=state, spawn=spawn)
         assert started == ["engine.chartfill"]
-        assert got[0] == ("charts: NFL 2026 carries, NFL 2026 targets, NFL 2026 passes empty — filling now, "
-                          "not with tomorrow's chores")
+        assert got[0] == ("charts: NFL 2026 carries, NFL 2026 targets, NFL 2026 passes, NFL 2026 kicks empty — "
+                          "filling now, not with tomorrow's chores")
         assert json.loads(state.read_text())["started"] == 1000.0
         assert json.loads(state.read_text())["owed"] == [["nfl", 2026, "carries"], ["nfl", 2026, "targets"],
-                                                         ["nfl", 2026, "passes"]]
+                                                         ["nfl", 2026, "passes"], ["nfl", 2026, "kicks"]]
         assert any("pid 4242" in ln for ln in logs)
         # The next cycle, a minute on, while the child reads: not again.
         assert M.fill_charts_if_owed(logs.append, today=TODAY, now=1060.0, conn=conn,
@@ -223,6 +237,7 @@ def test_the_cycle_starts_the_fill_once_and_tries_again_only_after_a_while():
         _one_carry(conn)
         _one_target(conn)
         _one_throw(conn)
+        _one_kick(conn)
         state.unlink()
         assert M.fill_charts_if_owed(logs.append, today=TODAY, now=10 ** 9, conn=conn,
                                      state_path=state, spawn=spawn) == []
@@ -326,8 +341,11 @@ def test_an_owed_nfl_season_is_read_once_for_both_charts():
         assert [s for s, _ in reads] == [2026], "one read of the season feeds every chart"
         cols = reads[0][1]
         assert set(CR.PBP_COLS) <= set(cols) and set(TG.PBP_COLS) <= set(cols) and set(PS.PBP_COLS) <= set(cols)
-        # The fixture's pass names no passer, so it is a target and no throw.
-        assert lines == ["NFL 2026: 1 carries, 1 targets, 0 throws, no route charting published for it yet",
+        from engine import kicks as KK
+        assert set(KK.PBP_COLS) <= set(cols), "the kicks ride the same read (2026-10-14)"
+        # The fixture's pass names no passer, so it is a target and no throw;
+        # nobody kicked.
+        assert lines == ["NFL 2026: 1 carries, 1 targets, 0 throws, 0 kicks, no route charting published for it yet",
                          "NGS rushing: 0 rows", "NGS receiving: 0 rows", "NGS passing: 0 rows",
                          "CFB 2026: 7 carries, 0 targets"]
         assert CR.chart(conn, "nfl", "Josh Allen")["games"][0]["carries"][0]["y"] == 8.0

@@ -34,6 +34,11 @@ def _passes(conn, sport, player, season):
     return passes.chart(conn, player, season)
 
 
+def _kicks(conn, sport, player, season):
+    from . import kicks
+    return kicks.chart(conn, player, season)
+
+
 def _spray(conn, sport, player, season):
     from .mlb import charts as M
     return M.hits_chart(conn, player, season)
@@ -95,6 +100,9 @@ KINDS = {
     "carries": (("nfl", "cfb"), _carries, _rows_in("carries")),
     "routes": (("nfl", "cfb"), _routes, _rows_in("targets")),
     "passes": (("nfl",), _passes, _rows_in("passes")),
+    # The kicker's (2026-10-14): every field goal and extra point he tried,
+    # off the same play-by-play read (engine/kicks).
+    "kicks": (("nfl",), _kicks, _rows_in("kicks")),
     # Baseball's pair (2026-10-13, Ethan: "Can we do a hit tracker for
     # mlb?"): every ball a hitter put in play, and every pitch a pitcher
     # threw (engine/mlb/charts).

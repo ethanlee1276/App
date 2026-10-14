@@ -48,9 +48,10 @@ import datetime as _dt
 import sys
 
 #: The chart tables, and the leagues each one draws. The passing chart
-#: (`passes`, 2026-10-13) rides the NFL read the other two make.
-TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("cfb", "carries"),
-          ("cfb", "targets"))
+#: (`passes`, 2026-10-13) and the kicker chart (`kicks`, 2026-10-14) ride
+#: the NFL read the other two make.
+TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("nfl", "kicks"),
+          ("cfb", "carries"), ("cfb", "targets"))
 #: Baseball's chart tables are keyed by game, not by league: one row per
 #: plate appearance and one per pitch, written together, so the pitches
 #: answer for both.
@@ -128,7 +129,7 @@ def owed(conn, today=None) -> list:
 def fill(conn, want, log=print) -> list:
     """Do the reads for ``want`` (`owed`'s list). Returns the lines it
     logged. One failed read is a line, not the end of the others."""
-    from . import carries as CR, db, passes as PS, targets as TG
+    from . import carries as CR, db, kicks as KK, passes as PS, targets as TG
     from .sources.nflpbp import load_pbp_rows
     out = []
 
@@ -139,17 +140,19 @@ def fill(conn, want, log=print) -> list:
     nfl = sorted({s for sp, s, _t in want if sp == "nfl"}, reverse=True)
     for s in nfl:
         try:
-            runs, catches, throws = CR.NflCarries(s), TG.NflTargets(s), PS.NflPasses(s)
-            for r in load_pbp_rows(s, columns=CR.PBP_COLS + TG.PBP_COLS + PS.PBP_COLS):
+            runs, catches, throws, kicked = CR.NflCarries(s), TG.NflTargets(s), PS.NflPasses(s), KK.NflKicks(s)
+            for r in load_pbp_rows(s, columns=CR.PBP_COLS + TG.PBP_COLS + PS.PBP_COLS + KK.PBP_COLS):
                 runs.add(r)
                 catches.add(r)
                 throws.add(r)
+                kicked.add(r)
             names = CR.nfl_names(s)
             n_c = db.upsert_carries(conn, runs.rows(names))
             routes = TG.routes_for(s)
             n_t = db.upsert_targets(conn, catches.rows(names, routes, TG.charting_for(s)))
             n_p = db.upsert_passes(conn, throws.rows(names, PS.charting_for(s)))
-            say(f"NFL {s}: {n_c:,} carries, {n_t:,} targets, {n_p:,} throws"
+            n_k = db.upsert_kicks(conn, kicked.rows(names))
+            say(f"NFL {s}: {n_c:,} carries, {n_t:,} targets, {n_p:,} throws, {n_k:,} kicks"
                 + (f", the league's route charting on {len(routes):,} plays" if routes
                    else ", no route charting published for it yet"))
         except Exception as exc:                                   # noqa: BLE001

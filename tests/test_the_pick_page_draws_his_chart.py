@@ -187,7 +187,8 @@ def test_a_bet_asks_for_every_chart_he_could_have():
     qb = ["passes", "carries", "role"]
     for key in ("qbRun", "qbTd", "qbPass", "qbRush", "noPosPass", "noPosInt"):
         assert got[key] == qb, (key, got[key])
-    assert got["kick"] == []
+    # A kicker's bet draws every kick he tried (the kicker chart, 2026-10-14).
+    assert got["kick"] == ["kicks"]
     # College has no route chart; its receivers' few carries are not theirs.
     # College has its targets since 2025 (the college target chart,
     # 2026-10-13): a college player is asked for both, as an NFL one is;

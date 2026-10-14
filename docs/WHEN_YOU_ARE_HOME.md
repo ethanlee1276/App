@@ -61,7 +61,10 @@ the box already stores for the xG model (step 67; Y). Every player pick in
 every league now has a Role chart beside his own: how much he is used,
 game by game (snaps, targets, carries and his share of his team's;
 minutes and starts; plate appearances and his spot in the order, or a
-pitcher's pitch count and rest; ice time and shots) (step 68; Z). The whole picture, sport by
+pitcher's pitch count and rest; ice time and shots) (step 68; Z). A
+kicker's pick draws every field goal and extra point he tried, by
+distance, made or missed, in what weather, each distance band beside the
+league's rate (step 69; AA). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -71,13 +74,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Every player pick draws his role: how much he is used, game by game`
+**A. The box has today's code.** The first line should end `A kicker's pick draws every kick he tried: the kicker chart`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 12fa02ad HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 9981e402 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -494,6 +497,25 @@ one strip per number, every game in order from the left, his season's
 average dashed across it, the game you picked lit (tap any bar for that
 game); the season tab lights his last three and adds the splits (his
 last 3 and 5 beside his season, home and away, started or not).
+
+**AA. The kicker chart** (step 69; read-only, seconds). Nothing to run:
+the box sees the new `kicks` table empty and reads this season's kicks
+from the NFL play-by-play within minutes of pulling (the same read the
+carry, route and passing charts make), last season's with the nightly.
+The fill's log says `NFL 2026: … carries, … targets, … throws, … kicks`.
+The first command counts what is stored per season; the second is what
+the page asks for (any kicker will do):
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute('SELECT season, kind, COUNT(*) FROM kicks GROUP BY season, kind').fetchall())"
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=kicks&sport=nfl&player=Brandon%20Aubrey" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('player'), d.get('season_line'), [(b['name'], b['fgm'], b['fga'], b['league']) for b in d.get('by_band', [])])"
+sudo -u qellys tail -5 /srv/qellys/data/cache/weekly_chartfill.log
+```
+`{"filling": true}` means it is still reading: wait ten minutes. Then on
+your phone: NFL, any kicker's pick (kicking points, field goals made):
+his Kicker chart, the posts at the top and each field goal at the
+distance it was kicked from, green made, red dashes missed, a cross
+blocked; the season tab puts each distance band's rate beside the
+league's.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2351,6 +2373,30 @@ first). Paste back anything that prints an error or looks off.
     charts with the role chart at the end, and the lead rule with it
     sorted last; nothing loosened. New:
     `tests/test_a_role_chart_for_every_player.py`.
+69. **A kicker's pick draws every kick he tried: the kicker chart**
+    (2026-10-14, you: "Yes do all of them"). AA checks it. The NFL
+    play-by-play the other football charts already read every night
+    carries every field goal and extra point: the kicker, the distance,
+    made, missed or blocked, the quarter, the clock, the score, and the
+    game's roof, temperature and wind. A new table, `kicks`, keeps them,
+    filled by the same read (this season's within minutes of pulling,
+    last season's once). It does not record where across the field or
+    between the uprights a kick went, so the chart places each field goal
+    by its distance only, side by side in the order he tried them, and
+    says so. A kicking pick (kicking points, field goals made) draws it:
+    a game's field goals with every kick listed (an extra point that
+    never got off is listed and counted as not made), or the season with
+    each distance band's rate beside the league's; splits indoors and
+    outdoors, in wind (10 mph or more) and cold (under 40°F) outdoors,
+    in the fourth quarter, and with the game within three points. The
+    parlay checker's kicking legs get a "Kick chart" door. Nothing on it
+    moves a price. Pins changed, told to you: my own
+    `tests/test_the_charts_fill_themselves.py` owes the kicks table like
+    the others (and fills one kick for "filled"); my own
+    `tests/test_the_pick_page_draws_his_chart.py` and
+    `tests/test_a_role_chart_for_every_player.py` give a kicking bet the
+    kicker chart (it had none). New:
+    `tests/test_a_kicker_chart_for_every_kicker.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

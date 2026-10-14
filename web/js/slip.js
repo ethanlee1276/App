@@ -251,7 +251,8 @@
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
     if (!l.player) return "";
-    const door = lg === "nfl" && /rush|rec|anytime|pass/.test(m) ? ["auto", "His charts"]
+    const door = lg === "nfl" && /^(kick_pts|fg_made)$|kicking/.test(m) ? ["kicks", "Kick chart"]
+      : lg === "nfl" && /rush|rec|anytime|pass/.test(m) ? ["auto", "His charts"]
       : lg === "cfb" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"]
         : lg === "mlb" ? (/^(strikeouts|outs)$/.test(m) ? ["pitches", "Pitch chart"] : ["spray", "Hit tracker"])
           : lg === "nba" ? ["shots", "Shot chart"]

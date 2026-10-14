@@ -365,6 +365,18 @@ CREATE TABLE IF NOT EXISTS passes (
     PRIMARY KEY (sport, season, period, game_id, play_id)
 );
 CREATE INDEX IF NOT EXISTS passes_player ON passes (sport, player, season);
+-- KICKS (2026-10-14, Ethan's list: "Yes do all of them"). Every field
+-- goal and extra point off the same NFL play-by-play read: the distance,
+-- made, missed, blocked or aborted, the quarter, the clock, the score and
+-- the game's roof, surface, temperature and wind. engine/kicks.py.
+CREATE TABLE IF NOT EXISTS kicks (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, play_id TEXT,
+    date TEXT, player TEXT, player_id TEXT, team TEXT, opponent TEXT, home INTEGER,
+    position TEXT, jersey TEXT, qtr INTEGER, clock TEXT, kind TEXT, distance INTEGER,
+    result TEXT, score_diff INTEGER, roof TEXT, surface TEXT, temp REAL, wind REAL,
+    PRIMARY KEY (sport, season, period, game_id, play_id)
+);
+CREATE INDEX IF NOT EXISTS kicks_player ON kicks (sport, player, season);
 -- MLB PLATE APPEARANCES AND PITCHES (2026-10-13, Ethan: "Can we do a hit
 -- tracker for mlb?"). One row per completed plate appearance off the
 -- Stats API play-by-play, with the ball in play where there was one (exit
@@ -1047,6 +1059,9 @@ PASS_COLS = ["sport", "season", "period", "game_id", "play_id", "date", "player"
              "yardline_100", "kind", "air_yards", "side", "complete", "yards", "yac", "td",
              "interception", "first_down", "receiver", "receiver_id", "hit", "fumble_lost", "cp",
              "charting"]
+KICK_COLS = ["sport", "season", "period", "game_id", "play_id", "date", "player", "player_id",
+             "team", "opponent", "home", "position", "jersey", "qtr", "clock", "kind", "distance",
+             "result", "score_diff", "roof", "surface", "temp", "wind"]
 NGS_PASS_COLS = ["season", "week", "season_type", "player_id", "player", "team", "attempts",
                  "completions", "yards", "tds", "ints", "time_to_throw", "cpoe", "aggressiveness",
                  "intended_air", "completed_air", "air_to_sticks", "max_air"]
@@ -1055,6 +1070,11 @@ NGS_PASS_COLS = ["season", "week", "season_type", "player_id", "player", "team",
 def upsert_passes(conn, rows: list[dict]) -> int:
     """Every throw on the passing chart (engine/passes.py)."""
     return _upsert(conn, "passes", PASS_COLS, rows)
+
+
+def upsert_kicks(conn, rows: list[dict]) -> int:
+    """Every field goal and extra point on the kicker chart (engine/kicks.py)."""
+    return _upsert(conn, "kicks", KICK_COLS, rows)
 
 
 def upsert_ngs_passing(conn, rows: list[dict]) -> int:

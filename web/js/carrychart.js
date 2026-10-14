@@ -118,6 +118,8 @@
              sec: "every shot on goal he faced: where from, saved or scored" },
     role: { chip: "Role", title: "Role chart", noun: "games", one: "number", where: "his role",
             sec: "how much he’s used, game by game, beside his season" },
+    kicks: { chip: "Kicks", title: "Kicker chart", noun: "kicks", one: "kick", where: "his range",
+             sec: "every field goal and extra point he tried: how far, made or missed, and in what weather" },
   };
   /* Every league's role chart says what it counts (engine/role). */
   Object.entries({
@@ -140,7 +142,8 @@
      is drawn (a football page never downloads baseball's drawing): the
      module registers its parts through `QBCarry.plug`. Listeners, not
      handler properties: the page's CSP forbids inline handlers. */
-  const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops", shotmap: "nhl", saves: "nhl", role: "role" };
+  const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops", shotmap: "nhl", saves: "nhl", role: "role",
+                 kicks: "kicks" };
   const plugs = {};
   function need(kind) {
     const f = PLUG[kind];
@@ -1392,6 +1395,8 @@
        are the other (2026-10-13). A passing bet with no position on the
        row asks for both too, and the numbers decide. College has no
        passing chart: a college quarterback has his runs and his role. */
+    /* A kicker's chart is every kick he tried (engine/kicks), 2026-10-14. */
+    if (sport === "nfl" && (p === "K" || /^(kick_pts|fg_made)$|kicking|field_goal/.test(m))) return ["kicks"];
     if (sport === "cfb" && p === "QB") return runs ? role(["carries"]) : ["role"];
     if (sport === "nfl" && (p === "QB" || (!p && /^pass/.test(m)))) return role(["passes", "carries"]);
     if (!runs && !catches) return sport === "cfb" && /^pass/.test(m) ? ["role"] : [];

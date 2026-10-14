@@ -367,3 +367,31 @@
 .cc-legend .dt.rl-k { background: var(--brand); border-radius: 2px; }
 .cc-legend .dt.rl-m { width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--text-dim); background: none; }
 .cc-legend .dt.rl-s { background: var(--good); }
+
+/* the NFL kicker chart (2026-10-14, js/chart-kicks.js): the posts at the
+   top, every field goal at the distance it was kicked from. */
+.kk-svg { max-height: 520px; }
+.kk-field { fill: color-mix(in oklab, var(--good) 7%, var(--panel-2)); }
+.kk-ez { fill: color-mix(in oklab, var(--brand) 10%, transparent); }
+.kk-line { stroke: var(--border); stroke-width: 1.2; }
+.kk-yd { fill: var(--text-mute); font: 600 13px var(--font-mono); }
+.kk-post { stroke: var(--brand); stroke-width: 3.2; stroke-linecap: round; }
+.kk-hit { fill: transparent; cursor: pointer; }
+.kk-flight { stroke-width: 1.6; fill: none; }
+.kk-flight.made { stroke: var(--good); }
+.kk-flight.missed, .kk-flight.aborted { stroke: var(--bad); stroke-dasharray: 5 4; }
+.kk-flight.faint { opacity: .3; }
+.kk-ball { stroke: var(--panel); stroke-width: 1.4; }
+.kk-ball.made { fill: var(--good); }
+.kk-ball.missed, .kk-ball.aborted { fill: none; stroke: var(--bad); stroke-width: 2.2; }
+.kk-ball.blocked { fill: none; stroke: var(--text-mute); stroke-width: 2.4; stroke-linecap: round; }
+.kk-ball.faint { stroke-width: 1; }
+.kk-ball.missed.faint, .kk-ball.aborted.faint, .kk-ball.blocked.faint { stroke-width: 1.8; }
+.kk-ball.sel { stroke: var(--text); stroke-width: 3; }
+.kk-d { fill: var(--text); font: 700 12px var(--font-mono); paint-order: stroke; stroke: var(--panel-2); stroke-width: 3px; stroke-linejoin: round; }
+.kk-pill rect { fill: var(--panel); stroke: var(--border); stroke-width: 1; opacity: .94; }
+.kk-pn { fill: var(--text-mute); font: 600 11px var(--font-mono); }
+.kk-pct { fill: var(--text); font: 700 14px var(--font-mono); }
+.kk-lg { fill: var(--text-mute); font: 600 10.5px var(--font-mono); }
+.cc-legend .dt.kk-x { border: 1.8px solid var(--bad); }
+.cc-legend .dt.kk-b { width: auto; height: auto; color: var(--text-mute); font-style: normal; font-weight: 700; line-height: 1; }
