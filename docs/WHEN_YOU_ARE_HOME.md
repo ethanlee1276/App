@@ -14,7 +14,7 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### Start here — updated 2026-10-14 (Ethan, on the 13th and again on the 14th: "save all code for when I'm home")
+### Start here — updated 2026-10-14 (Ethan, on the 13th and twice on the 14th: "save all codes and ideas and shit for me to run when I'm home")
 
 Everything from 2026-10-12 to 10-14, in order: the parlay checker in
 Ask (live chances, the hedge, a better number, saved slips on the Live
@@ -166,7 +166,9 @@ the defence measurement); AI once AG's first has finished (the NBA's fits
 on its own model, about ten minutes: the fits for the three counts read
 the games AG adds, and AI's second command is AG's third, so run that one
 once, there); and X's first command (the shot chart's field names,
-checked against a real game while there is time to fix them). C and D are
+checked against a real game while there is time to fix them). I is the
+one a fix is waiting on: the MLB profit calendar stays stuck at September
+until I see what it prints. C and D are
 the only two that need you to switch something on (email, Stripe).
 Everything else is a read-only check: any order, any night; paste what it
 prints.
@@ -183,13 +185,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Savant's pitch-type board refreshes every six hours, and a bad answer never replaces the last good copy`
+**A. The box has today's code.** The first line should end `Everything to run when you're home, and every idea waiting on a yes, in one place`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 253a41b8 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor bb196fa5 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -272,7 +274,9 @@ was written, each game, and how many player lines it has:
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/data/live_nhl_box.json')); print(d['generated_at'], [(g['away']+'@'+g['home'], g['state'], len(g['players'])) for g in d['games']])"
 ```
 
-**H. Your calls.** Answer any time; nothing breaks while they wait.
+**H. Your calls, and the ideas waiting on a yes.** Answer any time;
+nothing breaks while they wait. Calls first, then ideas I've offered and
+not built (the full list by sport is `docs/ALL_SPORTS_GAPS_2026-10-13.md`).
 * **UFC in the parlay checker?** A fight leg reads "not on our board"
   today (step 38b).
 * **Quarterback carries on the board itself?** The market gets measured
@@ -289,6 +293,23 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
 * **The last-leg alert on the Alerts bell too?**
 * **Pull a Most Likely pick when its line moves a point against it
   before kickoff?** L's answer first (step 51).
+* **The NFL price rule** (step 30): stake only the NFL Most Likely picks
+  whose chance covers what the price needs, as college has since 10-09?
+  Step 30's read-only check (`lossaudit.py --sport nfl`) shows first
+  whether the covered picks do better than the rest.
+* **A Pick of the Day for the UFC card?** Every other league that names
+  one now records it (steps 85 and 86); UFC names none.
+* **Saved slips settled by the server?** A slip saved to My Bets settles
+  while someone has the Live tab open; the server's five-minute pass
+  could settle it instead (step 47).
+* **Past UFC voids from the midnight bug** step 47 fixed (a result saved
+  before the fight could read as a draw after midnight UTC, which voided
+  the pick). Want a read-only list of the past voids that look like it?
+  Their grades stay as they are.
+* **MLB's terms.** MLB's stats feed allows non-commercial use only, and
+  the site is paid. That already covers the stats and headshots we show;
+  the hit page's at-bat video links and action photos (step 84) make it
+  more visible. Keep them, or drop those two?
 * ~~**Grade a college receiving bet the way the book does when the play
   file shows he was thrown at** (step 53)?~~ **Answered 2026-10-13: yes**
   ("Also add both from my calls, the CFB and nba things"). Built: step 59,
@@ -307,6 +328,19 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
   would let all four be measured (and shelved only if they clear the
   floor), but it also lets the weekly calibration fit PRA, which moves
   PRA's numbers on the Edge board — so it is yours to say.
+
+*Ideas, not built.* Say yes to any; each is measured before it moves a
+number, as everything else was.
+* **MLB, for next season** (measure over the winter; the NFL stays
+  first). RBI, runs, hits + runs + RBI, walks and stolen bases: all five
+  are in the game log the box already pulls every night, and each would
+  cost odds credits. From Savant, the site we already read: sprint speed
+  and catcher pop time for stolen bases, team defence for hits allowed,
+  bat speed and squared-up rate (2024 on). Travel and rest, from the
+  schedule and ballparks we already hold.
+* **Chart the MLB season sooner.** The box fills 400 games a night on
+  purpose; with memory capped now (step 81) it could fill more, at the
+  risk of MLB slowing our requests.
 
 **I. Why the MLB profit calendar stops at September** (step 45 says how
 to read it; read-only, paste all of it):

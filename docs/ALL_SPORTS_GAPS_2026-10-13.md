@@ -19,6 +19,14 @@ The rule for all of it is the one the NFL work followed: a new piece of
 data is shown first, measured second, and only then allowed to move a
 number. Nothing below changes a price without a measurement behind it.
 
+**Brought up to date 2026-10-14** (Ethan: "save all codes and ideas"):
+the rows built since the 13th say so, with their runbook step; a fifth
+kind of line, **Idea**, is something offered and not built, waiting on a
+yes in block H of `docs/WHEN_YOU_ARE_HOME.md`. One row was wrong: MLB's
+defence, catcher pop time and travel were "not possible"; Savant publishes
+the first two on the site we already read, and travel comes from our own
+schedule.
+
 ---
 
 ## College football
@@ -45,8 +53,8 @@ and what is still open.
 | A teammate's card says who is out, and his share of the team's stat in the games that player sat | **Built today**: evidence only, from our own logs (`engine/nba/onoff`) |
 | Should a teammate's NUMBER move when a regular sits? | **Box run** (O, `nbavacancy.py`). The minutes model has an empty slot for the minutes a vacancy opens; the books raise teammates' lines when a star sits; if our number runs low in those games, our card leans under on exactly those lines. The bar is written in the script before the first run |
 | Points + rebounds, points + assists, rebounds + assists markets | **Built today** (step 60, S), your call answered. Priced, graded and named like PRA; 16 credits an NBA event instead of 13; the WNBA's request is unchanged |
-| Most Likely for PRA and the three combos | **Your call** (H). The walk that earns a market its shelf reads stored rows, and none is stored for a sum, so none of the four has ever been measured. Teaching it to add the parts up also lets the weekly calibration fit PRA, which moves PRA's Edge numbers |
-| Steals, blocks, turnovers | **Parked**: the box scores we ingest do not carry them yet (minutes, points, rebounds, assists, threes); the ingest would need the columns first |
+| Most Likely for PRA and the three combos | **Built 2026-10-14** (steps 75 and 77; AG, AI), your call answered ("Ya do the self tuneung"). The walk adds the parts up, so all four are measured, and each is shelved only if it clears the floor; the calibration and player-memory fits read them too |
+| Steals, blocks, turnovers | **Built 2026-10-14** (step 75, AG): the ingest stores them, the board prices them (three more credits an NBA event), read only from games whose box score stored them |
 | The grade's "freshness" piece tops out at 0.9 because "there is no availability feed" | **Parked**: there is one now. Leave the cap until the injury board has a few weeks of record behind it |
 | Confirmed starting lineups, referee assignments | **Not possible**: no feed we can reach publishes them |
 
@@ -58,8 +66,11 @@ and what is still open.
 | Line movement's predictive value (`movecheck.py`) | **Parked**: movement adjusts the MLB grade today on a signal that has not been measured (MLB_MODEL #80). Spring is the time to measure it |
 | Pitch-level reads: velocity drop, shelved pitch, arsenal vs a hitter's weakness by pitch type | **Parked**: built and journaled as evidence (`velo_delta`, `arsenal`); priced only when `stakecheck --info` says so |
 | Alternate-line ladders | **Parked**: the odds feed carries MLB main lines; ladders cost credits |
-| Defence (OAA), catcher pop time, travel fatigue | **Not possible yet**: no free feed we can reach |
-| Public bet percentages | **Not possible**: no source |
+| MLB's own expected stats, barrels, runs and steals, the park, every at-bat's video, his action photo on the hit page | **Built 2026-10-14** (step 84, AP); Savant's three files refresh every six hours and keep their last good copy (step 87, AR) |
+| RBI, runs, hits + runs + RBI, walks, stolen bases | **Idea, for the winter** (H). All five are in the MLB game log the box already pulls every night (we keep five of its fields). Each costs odds credits and is measured before it is posted. MLB is down to the World Series, so they pay off next season |
+| Sprint speed and catcher pop time (stolen bases), team defence (hits allowed), bat speed and squared-up rate (2024 on) | **Idea, for the winter** (H). Savant publishes all of them on the site we already read. Corrected 2026-10-14: this row said no free feed had defence or pop time |
+| Travel and rest | **Idea, for the winter** (H): worked out from the schedule and ballparks we already hold; no new source |
+| Public bet percentages | **Not possible**: no free feed, and scraping is off the table |
 
 ## UFC
 
@@ -68,7 +79,8 @@ and what is still open.
 | Where each fight's line opened and where it is now | **Built today** (step 56, P). The build has stored every book's price on every paid pull since 2026-08-10, and nothing read it. Every pick and pass card now says it, and which way it moved for the pick. Evidence only: the grade's movement piece stays empty until it is measured |
 | Does our UFC number know anything the price does not? Did our picks beat the close? | **Box run** (P). The same information test and closing-line read the NFL record has had since August, on the UFC picks journaled since then |
 | Method props (KO, submission, decision) at real prices | **Parked**: the odds feed carries only the moneyline for MMA. The card already shows our fair price for every method to shop by hand |
-| Round props and "goes the distance" | **Parked**: needs finish times per fight, which ufcstats fight pages carry and our dossiers do not yet. A box-side pull could add them |
+| Round props and "goes the distance" | **Built 2026-10-14** (step 76, AH): over and under 1.5 and 2.5 rounds and the round it ends in, off the finish times on file, as fair numbers to shop by hand (the odds feed carries only the moneyline) |
+| A Pick of the Day for the fight card | **Your call** (H). Every other league that names a pick now records it (steps 85 and 86); UFC has none, and its Record page has no section for one |
 | Camp reports, referee assignments | **Not possible**: no structured source |
 
 ## Every sport
@@ -80,5 +92,6 @@ and what is still open.
 
 ---
 
-The lettered blocks (M, N, O, P) are at the top of
-`docs/WHEN_YOU_ARE_HOME.md`; the numbered steps (53 to 56) explain each.
+The lettered blocks (M, N, O, P, and AG to AR since) are at the top of
+`docs/WHEN_YOU_ARE_HOME.md`; the numbered steps (53 to 56, then 75 to
+87) explain each, and block H holds every call and idea waiting on you.
