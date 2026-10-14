@@ -194,7 +194,17 @@ prices no longer touch the board's budget, on your call ("make it so it
 doesn't run through our budget"): the board's daily ceiling skips them,
 and an upload spends only credits the month can spare, what is left past
 the reserve once the rest of the month is paid for at the last week's
-pace (step 100; AZ). The
+pace (step 100; AZ). From your first evening home: the box's builds had
+been skipping their bet journal ("database is locked") whenever the settle
+pass ran, because the settle held the journal's lock from its first line
+to its last; it now holds it a bet at a time (step 101; BA). On your word,
+the NBA's steals, blocks and turnovers now count tonight's defence, as
+points, rebounds, assists and threes do (step 102). And the league's own
+NBA feed answers the box 403 Forbidden for every file, so the NBA board had
+read "unreachable" with no games six days before opening night: the
+schedule and the nightly results now come from ESPN, as the history and the
+WNBA always have, with the clubs in the league's own codes (step 103; BB).
+The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -231,13 +241,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Fresh slip prices spend only the month's spare credits and never the board's daily ceiling; the MLB hit page drops its at-bat video links`
+**A. The box has today's code.** The first line should end `The settle pass no longer locks the boards out of the journal; the NBA reads ESPN now the league's feed refuses the box; NBA steals, blocks and turnovers count the defence`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 0cee6b30 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor e07d4330 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -357,6 +367,9 @@ struck through here as it is built.
   end of the billing period" (the default, kept: they keep what they paid
   for) or "Immediately". The site handles either (step 37). Later that
   day: "that's fine".
+* ~~**Count tonight's defence in the NBA's steals, blocks and turnovers?**
+  AG's measurement passed for all three on 2026-10-14.~~ **Answered
+  2026-10-14: "yes count the defence for those three".** Built: step 102.
 * ~~**The last-leg alert on the Alerts bell too?**~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 92.
 * **Pull a Most Likely pick when its line moves a point against it
@@ -425,6 +438,12 @@ to read it; read-only, paste all of it):
 ```
 cd /srv/qellys && sudo -u qellys python3 mlbprobe.py
 ```
+**Answered 2026-10-14 from your paste: the calendar is right.** No MLB edge
+bet has been made since 2026-09-30: the postseason slates are one or two
+games, 60 to 69 props, and none clears the edge bars (the build's census:
+tier edge bar 26, longshot board 19, credibility 7–9, price net 2–5, held
+by rules 3–4, no real price 9). Every October day shows Most Likely rows
+journaled and nothing open from before today. No bar is moved for it.
 
 **J. Bets settle minutes after the final** (step 47; read-only). Run it
 the morning after a game night, and again late on a game night about
@@ -666,7 +685,9 @@ in play or ball, his pitch mix with speed, whiff rate and CSW, and the
 season's share of pitches in each part of the zone.
 
 **X. The shot chart** (step 66; read-only except the first line, which
-reads one game). The sandbox I build in cannot reach the NBA's site, so
+reads one game). **2026-10-14: `NO SHOTS` — the league's CDN answers the box
+403 for every file (step 103), so the shot chart has no feed on the box
+until it is rebuilt on ESPN's play-by-play. Not built yet; nothing to run.** The sandbox I build in cannot reach the NBA's site, so
 the play-by-play's field names come from the nba_api project's
 documentation of it; the first command reads one real game the way the
 chart does and prints a shot's fields and the first stored row, so we
@@ -891,7 +912,10 @@ the distance, `Under/Over 1.5 rounds`, `Under/Over 2.5 rounds` and `Ends
 in round 1/2/3`, each with our fair price and `shop it`. A fight the
 books haven't priced yet shows none, as before.
 
-**AI. The NBA's self-tuning on its own model** (step 77; rewrites the
+**AI. The NBA's self-tuning on its own model** (2026-10-14: the first
+command's temperature fit ran past its 15-minute limit and was skipped, on
+twice the history it had before; the by-hand run without the limit is in my
+reply that night) (step 77; rewrites the
 NBA's fitted temperature, player-memory and rank files, the ones
 Wednesday's refit writes anyway, and never touches the record; perhaps
 ten minutes at low priority). Nothing has to run: Wednesday's refit
@@ -1292,6 +1316,34 @@ settling them; on your phone, My Bets shows the slip Won, Lost or Push
 without the Live tab ever opened, and the Live tab says "Settled in My Bets
 from the box score". "could not be written" on a line means that minute's
 write waited on the database and is tried again the next minute.
+
+**BA. The boards journal while the settle pass runs** (step 101;
+read-only, seconds). A day after this lands, paste all of it:
+```
+cd /srv/qellys && grep -h "journal skipped" data/logs/*.log | sort | uniq -c
+journalctl -u qellys --since "24 hours ago" --no-pager | grep -c "database is locked"
+```
+The first should print nothing (it was four MLB and two college journals
+skipped across the last two runs of each board), the second a number far
+below the 198 of the three days before. A line left is the one I need.
+
+**BB. The NBA board reads ESPN** (step 103; the first and third lines are
+read-only, the last rewrites team codes in the history database only).
+After this lands:
+```
+cd /srv/qellys && sudo -u qellys python3 launch.py --boards | grep -E "NBA|board "
+cd /srv/qellys && sudo -u qellys python3 nbacodes.py
+cd /srv/qellys && sudo -u qellys python3 nbacodes.py --apply
+cd /srv/qellys && sudo -u qellys python3 nbacodes.py
+```
+The NBA row should no longer say `unreachable`: before the 20th it reads
+`preseason` or `no games today`, and from opening night the slate's games.
+`nbacodes.py` first counts the NBA's stored games and logs still under
+ESPN's spelling of six clubs (GS, NY, NO, SA, UTAH, WSH) and changes
+nothing; `--apply` rewrites them to the league's codes (GSW, NYK, NOP, SAS,
+UTA, WAS), which the odds, the rosters and every NBA bet use; the last run
+should say there is nothing to do. Only `history.db`, only the NBA, only
+those four columns; no stat, score or bet changes. Paste all of it.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4364,6 +4416,55 @@ first). Paste back anything that prints an error or looks off.
     upload, not each game alone; the spare arithmetic; that it errs toward
     nothing; and the board's ceiling never counting a slip pull, on
     2026-09-10's baseball numbers (19 checks).
+101. **The settle pass no longer locks the boards out of the journal**
+    (2026-10-14, your first evening home; BA checks it). FOUND on the box:
+    the MLB build's last run printed "Bet journal skipped: database is
+    locked" while the settle chore ran; the last two runs of every board
+    held four MLB and two college journals skipped; the service log held
+    198 lock errors in three days. A skipped journal is a pick the record
+    may never see if its game starts before the next build. TWO CAUSES,
+    both fixed: (1) the audit trail's label (`ledger.audit_reason`, which
+    names why each graded row changed) was written into a shared table at
+    the top of every labelled block and held uncommitted, so the whole
+    settle pass held the journal's write lock from its first line to its
+    last; the label is now each connection's own (a temporary table and
+    trigger), which locks nothing, and still lands on exactly that
+    connection's rows; (2) the settle loop committed once, after the last
+    bet; it now commits each bet before reading the next. No pin changed.
+    New: `tests/test_the_settle_pass_never_locks_the_journal.py` (3 checks;
+    two of them fail on the old code with the box's own error).
+102. **NBA steals, blocks and turnovers count tonight's defence** (2026-10-14,
+    you: "yes count the defence for those three", on AG's measurement:
+    steals +1.40 ± 0.15, blocks +0.96 ± 0.15, turnovers +1.28 ± 0.14, each
+    clear of two standard errors). `hoopsdvp.TRANSFER["nba"]` now reads
+    them at the measured share, capped at the defence's whole lean as the
+    other four are (steals 1.0, blocks 0.96, turnovers 1.0), so each pick's
+    walk shows a Matchup step and the card says it is read in. The WNBA's
+    three stay shown, not read: its logs have held them only since
+    2026-10-13. Pins changed, told to you:
+    `tests/test_nba_prices_steals_blocks_turnovers.py` held that the model
+    left the three out (two checks, now that the NBA reads them and the
+    WNBA does not); `tests/test_hoops_matchup_read.py` held the NBA's list
+    of read markets (widened by the three).
+103. **The NBA reads ESPN now the league's feed refuses the box** (2026-10-14;
+    BB checks it). FOUND from your paste: cdn.nba.com answered the box 403
+    Forbidden for the schedule and the play-by-play, whatever the
+    User-Agent, and ESPN 200; so the NBA board read "unreachable" with no
+    games, and the nightly results that settle NBA picks had nothing to
+    read. NOW the board's schedule and the nightly results and the settle
+    pass's NBA results read ESPN (`engine/sources/nbaespn`, a binding over
+    the module the WNBA and the NBA history already use), with the clubs in
+    the league's own codes: ESPN spells six its own way, and a moneyline on
+    "GSW" could never meet a game stored under "GS". New rows are stored
+    that way; `nbacodes.py` rewrites the ones already there (BB). The
+    preseason still reaches the build marked and is dropped before
+    anything is priced. NOT YET MOVED: the shot chart's play-by-play and
+    the NBA futures' season schedule, both on the same CDN (X says so).
+    Pins changed, told to you: `tests/test_hoops_offseason.py` checked the
+    lookback imported the CDN's schedule (now ESPN's);
+    `tests/test_maintenance.py` stubs ESPN's NBA ingest beside the CDN's.
+    New: `tests/test_the_nba_reads_espn_when_its_own_feed_says_no.py`
+    (5 checks), `nbacodes.py`.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

@@ -36,8 +36,8 @@ MARKETS = {"pts": "points", "reb": "rebounds", "ast": "assists", "fg3m": "threes
            # Steals, blocks and turnovers (2026-10-14, `hoops.COUNTS`). What a
            # defence concedes in each is what its OPPONENTS record against it:
            # a steal is a ball it gave up, a block one of its shots sent back,
-           # a turnover one its defence forced. Shown under the pick until
-           # `hoopsdvpfit.py` measures how much reaches one player (TRANSFER).
+           # a turnover one its defence forced. Read into the NBA's
+           # projection since 2026-10-14 (TRANSFER); the WNBA's only shown.
            "stl": "steals", "blk": "blocks", "tov": "turnovers"}
 
 #: How the card says those three: "BOS give up 8.1 steals a game", never
@@ -70,6 +70,13 @@ SEASON_MIN_GAMES = 5
 #:                   assists +1.13 ± 0.12  threes +1.13 ± 0.16
 #:     WNBA 2021-26  points +0.79 ± 0.23   rebounds +0.78 ± 0.16
 #:                   assists +1.28 ± 0.27  threes +0.89 ± 0.23
+#:     NBA 2024-25   steals +1.40 ± 0.15   blocks +0.96 ± 0.15
+#:     (2026-10-14)  turnovers +1.28 ± 0.14
+#:
+#: The three counts were measured once last season's box scores were read
+#: again with them (runbook AG) and read in on Ethan's word the same night:
+#: "yes count the defence for those three". The WNBA's logs hold them only
+#: from 2026-10-13, so its three stay shown, not read, until measured.
 #:
 #: Every one clears two standard errors. Capped at 1.0 — the whole lean,
 #: never more: a slope over 1 is the shrink doing its job (the factor is
@@ -77,7 +84,8 @@ SEASON_MIN_GAMES = 5
 #: reading more than a defence's whole lean into one player is a claim
 #: the fit cannot make.
 TRANSFER = {
-    "nba": {"pts": 1.0, "reb": 1.0, "ast": 1.0, "fg3m": 1.0},
+    "nba": {"pts": 1.0, "reb": 1.0, "ast": 1.0, "fg3m": 1.0,
+            "stl": 1.0, "blk": 0.96, "tov": 1.0},
     "wnba": {"pts": 0.79, "reb": 0.78, "ast": 1.0, "fg3m": 0.89},
 }
 

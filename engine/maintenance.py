@@ -926,8 +926,10 @@ def _hoops_ingesters():
     the whole settle pass down with it.
     """
     nba = wnba = None
+    # ESPN for the NBA too since 2026-10-14: the league's CDN answers the
+    # box 403 Forbidden (`sources/nbaespn`).
     try:
-        from .sources.nbadata import ingest_nba_date as nba
+        from .sources.nbaespn import ingest_day as nba
     except Exception:  # noqa: BLE001
         nba = None
     try:
@@ -1845,7 +1847,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  nfl schedule refresh failed: {exc}")
 
-    # NBA results — final boxscores from the free CDN, one date at a time
+    # NBA results — final box scores from ESPN (the league's own CDN answers
+    # the box 403 since 2026-10-14, `sources/nbaespn`), one date at a time
     # over its OWN derived window (an NBA gap and an MLB gap are different
     # sizes). This is what settles NBA picks and the NBA stale-line flags.
     # Skipped July–September: no games exist.
@@ -1853,7 +1856,7 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
     if (today.month >= 10 or today.month <= 6) and nstart <= yesterday:
         try:
             from . import db as _ndb
-            from .sources.nbadata import ingest_nba_date
+            from .sources.nbaespn import ingest_day as ingest_nba_date
             nconn = _ndb.connect()
             tot_g = tot_l = 0
             d = nstart
@@ -1861,7 +1864,7 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 res = ingest_nba_date(nconn, d.isoformat())
                 tot_g += res["games"]
                 tot_l += res["player_logs"]
-                if any("schedule" in s for s in res.get("skipped", [])):
+                if any("schedule" in s or "scoreboard" in s for s in res.get("skipped", [])):
                     # The schedule host is down — every later date would
                     # fail identically, so say it once and stop.
                     log(f"  ⚠️  {res['skipped'][0]}")

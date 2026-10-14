@@ -117,8 +117,8 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # THE WALK FROM BASE TO FINAL (engine/chain), as the NFL's and MLB's
     # projections publish it: the pick page draws it, and the one board's
     # matchup check reads its measured Matchup step (engine/likelyboard).
-    # A market the defences' lean was never measured to reach (the combos,
-    # steals, blocks, turnovers) has no Matchup step at all, so the board
+    # A market the defences' lean was never measured to reach (the combos;
+    # the WNBA's steals, blocks, turnovers) has no Matchup step at all, so the board
     # says the model has none rather than "moved our number +0%".
     from .. import chain as _chain
     from ..hoopsdvp import TRANSFER as _TRANSFER

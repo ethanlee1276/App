@@ -28,6 +28,7 @@ confident nonsense. Mapping by name costs nothing and cannot drift.
 from __future__ import annotations
 
 from .fetch import DEFAULT_AGENT, fetch_json, DataUnavailable
+from .. import divisions as _divisions
 
 ROOT = "https://site.api.espn.com/apis/site/v2/sports"
 
@@ -285,9 +286,17 @@ def ingest_day(conn, date: str, league: str = "wnba",
         return result
 
     grows, prows = [], []
+    # THE NBA'S CLUBS IN THE LEAGUE'S OWN CODES (2026-10-14). The NBA's
+    # nightly results moved here from the league's CDN, which spoke GSW,
+    # NYK, NOP, SAS, UTA and WAS — the codes its odds, rosters and bets
+    # use; ESPN says GS, NY, NO, SA, UTAH and WSH, and a moneyline on the
+    # Warriors could never meet a games row filed under "GS". The WNBA's
+    # rows are left as they have always been stored.
+    club = ((lambda t: _divisions.canonical("nba", t)) if league == "nba" else (lambda t: t))
     for g in games:
         if g.get("preseason"):
             continue                # never a result, never a player's form
+        g = dict(g, home=club(g["home"]), away=club(g["away"]))
         grows.append({
             "sport": league, "season": _season_of(date, league), "period": date,
             "game_id": g["game_id"], "home": g["home"], "away": g["away"],
@@ -304,6 +313,7 @@ def ingest_day(conn, date: str, league: str = "wnba",
             continue
         opp = {g["home"]: g["away"], g["away"]: g["home"]}
         for row in parse_summary(summary):
+            row = dict(row, team=club(row["team"]))
             # Identity once per player per game, not once per market — the
             # same person appears in this loop for points, rebounds and
             # assists, and an id does not vary between them.
@@ -368,5 +378,8 @@ def parse_schedule_day(_schedule: dict, date: str,
              "live_away_score": g.get("live_away_score"),
              "state": g.get("state", "scheduled"),
              "period": g.get("period"), "clock": g.get("clock", ""),
-             "completed": g.get("completed", False)}
+             "completed": g.get("completed", False),
+             # ESPN's season type, carried so the build can drop the
+             # preseason before anything is priced (as the CDN rows did).
+             "preseason": bool(g.get("preseason"))}
             for g in games]

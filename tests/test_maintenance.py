@@ -67,6 +67,12 @@ def _no_feeds(monkeypatch):
     monkeypatch.setattr(nbadata, "ingest_nba_date",
                         lambda conn, day, **kw: {"games": 0, "player_logs": 0,
                                                  "skipped": []})
+    # …and ESPN's, which the NBA's nightly results read since 2026-10-14
+    # (the league's CDN answers the box 403): the stub follows the feed.
+    from engine.sources import nbaespn
+    monkeypatch.setattr(nbaespn, "ingest_day",
+                        lambda conn, day, **kw: {"games": 0, "player_logs": 0,
+                                                 "skipped": []})
     monkeypatch.setattr(facesfill, "fill", lambda conn, sport: (0, 0, 0))
     # The carry chart's feeds (2026-10-13): the NGS rushing file and the
     # one-time reads of last season's play-by-play and college play file,

@@ -262,24 +262,57 @@ def _install_audit(conn) -> None:
             column_exists_or_raise(exc)
 
 
+#: THE LABEL IS THE CONNECTION'S OWN (2026-10-14). It used to be a row in
+#: the shared `config` table, written at the top of the block and left
+#: uncommitted so no other writer could see it — which made every labelled
+#: block hold the journal's write lock from its first line to its last.
+#: The settle pass is one such block, minutes long on the box, and every
+#: board build that came to journal its picks in that time waited out the
+#: 30-second busy timeout and gave up: "Bet journal skipped: database is
+#: locked", 198 lock errors in three days, four of the last two runs of
+#: every board's journal skipped. Now the label sits in a TEMP table (each
+#: connection has its own, and writing it locks nothing in the journal),
+#: and a TEMP trigger copies it onto this connection's audit rows. The
+#: main trigger still reads `config` for a write nobody labelled, so a
+#: hand-typed UPDATE on the box reads NULL exactly as before.
+_AUDIT_CTX_SQL = """
+CREATE TEMP TABLE IF NOT EXISTS audit_ctx (reason TEXT);
+CREATE TEMP TRIGGER IF NOT EXISTS audit_ctx_label AFTER INSERT ON main.bets_audit
+WHEN (SELECT reason FROM audit_ctx LIMIT 1) IS NOT NULL
+BEGIN
+  UPDATE bets_audit SET reason = (SELECT reason FROM audit_ctx LIMIT 1) WHERE seq = NEW.seq;
+END;
+"""
+
+
+def _set_audit_ctx(conn, reason) -> None:
+    conn.execute("DELETE FROM audit_ctx")
+    if reason is not None:
+        conn.execute("INSERT INTO audit_ctx (reason) VALUES (?)", (reason,))
+    # Committed at once: the temp write opened a transaction, and one left
+    # open would pin a read snapshot that turns this connection's next
+    # journal write into an instant "database is locked".
+    conn.commit()
+
+
 @_contextlib.contextmanager
 def audit_reason(conn, reason: str):
     """Label every journal write inside the block with `reason`.
 
-    Nests: the outer label comes back when the inner block ends. Cleared
-    and committed on the way out so a label never outlives its block and
-    lands on somebody else's write. A read-only connection (or none) just
-    runs the block unlabelled."""
+    Nests: the outer label comes back when the inner block ends. The label
+    is this connection's alone (see _AUDIT_CTX_SQL), so it never lands on
+    another writer's row and never holds the journal's lock; the block's
+    own writes are committed on the way out, as they always were. A
+    connection without the audit table (or none) just runs the block
+    unlabelled."""
     prev = None
     ok = conn is not None
     if ok:
         try:
-            row = conn.execute(
-                "SELECT value FROM config WHERE key='audit_reason'").fetchone()
+            conn.executescript(_AUDIT_CTX_SQL)
+            row = conn.execute("SELECT reason FROM audit_ctx LIMIT 1").fetchone()
             prev = row[0] if row else None
-            conn.execute("INSERT INTO config (key, value) VALUES ('audit_reason', ?) "
-                         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                         (reason,))
+            _set_audit_ctx(conn, reason)
         except sqlite3.Error:
             ok = False
     try:
@@ -287,12 +320,8 @@ def audit_reason(conn, reason: str):
     finally:
         if ok:
             try:
-                if prev is None:
-                    conn.execute("DELETE FROM config WHERE key='audit_reason'")
-                else:
-                    conn.execute("UPDATE config SET value=? WHERE key='audit_reason'",
-                                 (prev,))
                 conn.commit()
+                _set_audit_ctx(conn, prev)
             except sqlite3.Error:
                 pass
 
@@ -5295,6 +5324,15 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     # The snapshot closes are read for these bets only (see _wanted_rows).
     _want = {(normalize_name(b["player"]), b["market"]) for b in _open_rows}
     for b in _open_rows:
+        # ONE BET AT A TIME, COMMITTED (2026-10-14). The pass used to commit
+        # once, after the last bet, so its first grade held the journal's
+        # write lock through every later bet's reads — the snapshot files
+        # included — and every board that came to journal its picks in the
+        # meantime gave up after 30 seconds ("Bet journal skipped:
+        # database is locked"). Each bet's grade stands on its own, so
+        # each is committed before the next is read.
+        if conn.in_transaction:
+            conn.commit()
         where, wargs = _hist_where(b)
         if b["market"] in GAME_MARKETS:
             rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
@@ -5545,7 +5583,10 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     if cur.rowcount:
         print(f"  reopened {cur.rowcount} desk ticket(s) a no-show sweep "
               f"had wrongly voided — the exchange grades those")
+    conn.commit()                       # …and the sweep below reads unlocked
     for b in conn.execute(q, args).fetchall():
+        if conn.in_transaction:
+            conn.commit()
         # Team-level markets never void via the no-show rule — teams play.
         if b["market"] in GAME_MARKETS or not b["date"]:
             continue

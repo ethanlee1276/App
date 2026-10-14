@@ -104,7 +104,9 @@ def test_the_helper_imports_the_feed_it_needs():
     import inspect
     src = inspect.getsource(nba_build._recent_slate)
     assert "from engine.sources.wnbaespn import" in src
-    assert "from engine.sources.nbadata import" in src
+    # The NBA's is ESPN's since 2026-10-14 (the league's CDN answers the
+    # box 403); pin followed the feed, told to Ethan.
+    assert "from engine.sources.nbaespn import" in src
 
 
 def test_the_window_spans_a_break_rather_than_a_single_day():

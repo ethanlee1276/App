@@ -14,9 +14,11 @@ new market costs odds credits." Both NBA ingests have stored them since
   * each is priced as a count (exact, never tighter than Poisson), from a
     stated prior the build's fit measures from the league's own logs, and
     held to the high-hold bar threes are;
-  * the model has no matchup step for them, and the card under the pick
-    says what tonight's opponent gives up in each — in words that fit —
-    and that the model leaves it out until it is measured;
+  * the card under the pick says what tonight's opponent gives up in each,
+    in words that fit; the NBA's projection reads it at the share measured
+    on the box (2026-10-14, Ethan: "yes count the defence for those three"
+    — pin changed that night and told to him: it held that the model left
+    them out), the WNBA's still shows it and leaves it out;
   * a journaled pick settles off its own row; every reader knows the three
     by name; the replay and the ranking walk measure them, and the walk now
     adds PRA and the combos up from their parts, so those can be ranked too.
@@ -153,9 +155,15 @@ def test_his_rate_reads_only_the_games_that_carry_the_count():
     assert thin["w"] == pipeline.CLAMP_W_THIN and full["w"] == pipeline.CLAMP_W_DEFAULT, (thin, full)
 
 
-def test_the_model_has_no_matchup_step_for_them_and_the_board_says_so():
-    steps = {s["key"] for s in pipeline.project(_prop("blk", [1.0] * 12))["chain"]["steps"]}
-    assert "matchup" not in steps and {"player", "environment", "rest"} <= steps
+def test_the_nbas_counts_carry_a_matchup_step_the_wnbas_do_not_and_the_board_says_so():
+    """Pin changed 2026-10-14 and told to Ethan: this held that the NBA's
+    three had no Matchup step; on his yes the defence is read into them."""
+    from engine.hoops import WNBA
+    for m in COUNTS:
+        steps = {s["key"] for s in pipeline.project(_prop(m, [1.0] * 12))["chain"]["steps"]}
+        assert "matchup" in steps and {"player", "environment", "rest"} <= steps, m
+        wn = {s["key"] for s in pipeline.project(_prop(m, [1.0] * 12), WNBA)["chain"]["steps"]}
+        assert "matchup" not in wn, m
     pts = {s["key"] for s in pipeline.project(_prop("pts", [20.0] * 12, line=19.5))["chain"]["steps"]}
     assert "matchup" in pts, "a measured market keeps its step"
     from engine import likelyboard as LB
@@ -181,16 +189,27 @@ def _dvp_rows():
     return rows
 
 
-def test_the_card_says_what_the_opponent_gives_up_in_words_that_fit_and_that_it_is_not_read():
+def test_the_card_says_what_the_opponent_gives_up_in_words_that_fit_and_the_nba_reads_it():
     rating = hoopsdvp.ratings(_dvp_rows())
     stl = hoopsdvp.matchup_card("PHX", rating, "stl")
     assert stl["rank"] == 1 and stl["stat"] == "steals given up"
     assert stl["text"].startswith("PHX give up 10.0 steals a game, the 1st-most of 4")
-    assert "not measured yet" in stl["note"] and "leaves it out" in stl["note"]
+    assert "Read into the projection" in stl["note"]
     tov = hoopsdvp.matchup_card("DEN", rating, "tov")
     assert tov["stat"] == "turnovers forced" and tov["text"].startswith("DEN force 15.0 turnovers a game")
     assert hoopsdvp.matchup_card("BOS", rating, "blk")["stat"] == "shots blocked"
-    assert hoopsdvp.projection_mult("nba", rating, "PHX", "stl") == (1.0, "")
+    # The NBA's measured shares (hoopsdvpfit on the box, 2026-10-14), each
+    # capped at the defence's whole lean; the WNBA's three are not read.
+    assert {m: hoopsdvp.TRANSFER["nba"][m] for m in ("stl", "blk", "tov")} == {"stl": 1.0, "blk": 0.96, "tov": 1.0}
+    assert not any(m in hoopsdvp.TRANSFER["wnba"] for m in ("stl", "blk", "tov"))
+    mult, note = hoopsdvp.projection_mult("nba", rating, "PHX", "stl")
+    f = rating["PHX"]["stl"]["factor"]
+    assert f > 1 and mult == round(1.0 + (f - 1.0), 4) and note.startswith("Matchup: PHX give up 10.0 steals a game")
+    assert "the whole defence's lean reaches one player" in note
+    bmult, bnote = hoopsdvp.projection_mult("nba", rating, "DEN", "tov")
+    assert bmult > 1 and "DEN force 15.0 turnovers a game" in bnote
+    assert hoopsdvp.projection_mult("wnba", rating, "PHX", "stl") == (1.0, "")
+    assert "not measured yet" in hoopsdvp.matchup_card("PHX", rating, "stl", sport="wnba")["note"]
     assert "Read into the projection" in hoopsdvp.matchup_card(
         "PHX", hoopsdvp.ratings([(r[0], r[1], r[2], "pts", r[4] * 10) for r in _dvp_rows()]), "pts")["note"]
     build = (ROOT / "nba_build.py").read_text(encoding="utf-8")

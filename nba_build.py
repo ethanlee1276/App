@@ -432,7 +432,7 @@ def diagnose(league: str, date: str) -> None:
     if league == "wnba":
         from engine.sources.wnbaespn import fetch_schedule, parse_schedule_day
     else:
-        from engine.sources.nbadata import fetch_schedule, parse_schedule_day
+        from engine.sources.nbaespn import fetch_schedule, parse_schedule_day
 
     L = league.upper()
     print(f"\n{L} prop diagnosis for {date}")
@@ -541,7 +541,7 @@ def _recent_slate(args, tune) -> tuple[int, bool]:
             from engine.sources.wnbaespn import (fetch_schedule,
                                                  parse_schedule_day)
         else:
-            from engine.sources.nbadata import (fetch_schedule,
+            from engine.sources.nbaespn import (fetch_schedule,
                                                 parse_schedule_day)
     except Exception:                                      # noqa: BLE001
         return 0, False
@@ -642,6 +642,8 @@ def main() -> None:
             print(describe(_fit_report))
     except Exception as exc:  # noqa: BLE001 — a failed fit must not stop a build
         print(f"⚠️  Tuning fit unavailable — using inherited numbers.\n   {exc}")
+    # ESPN FOR BOTH LEAGUES (the NBA since 2026-10-14: the league's own CDN
+    # answers the box 403 Forbidden for every file — `engine/sources/nbaespn`).
     if args.league == "wnba":
         # ESPN, not the WNBA CDN. The CDN path was written by analogy with
         # the NBA's and never returned JSON on a real machine; this is the
@@ -649,7 +651,7 @@ def main() -> None:
         # college football board here.
         from engine.sources.wnbaespn import fetch_schedule, parse_schedule_day
     else:
-        from engine.sources.nbadata import fetch_schedule, parse_schedule_day
+        from engine.sources.nbaespn import fetch_schedule, parse_schedule_day
 
     out: dict = {"generated_at": datetime.datetime.now()
                  .isoformat(timespec="seconds"), "date": args.date,
