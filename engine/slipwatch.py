@@ -108,6 +108,13 @@ def ensure_tables(conn) -> None:
         salt        TEXT NOT NULL,
         created_at  INTEGER NOT NULL DEFAULT 0
     )""")
+    # The leg that decides it, as the alert named it (2026-10-14): the
+    # Alerts bell says which leg without grading the slip again.
+    try:
+        conn.execute("ALTER TABLE slip_alerts ADD COLUMN leg TEXT")
+    except sqlite3.OperationalError as exc:
+        if "duplicate column" not in str(exc).lower():
+            raise
     conn.commit()
 
 
@@ -167,14 +174,17 @@ def unsubscribe(conn, token: str) -> bool:
 
 # --- the slips ------------------------------------------------------------------
 
-def pending_slips(conn, limit: int = MAX_SLIPS_PER_USER) -> list[dict]:
+def pending_slips(conn, limit: int = MAX_SLIPS_PER_USER, user_id: int | None = None) -> list[dict]:
     """Every member's open saved slips as ``{user_id, email, bet}`` rows —
     the newest ``limit`` per member — read from the synced My Bets
-    section. A bet logged by hand (no legs, src not "slip") is not one."""
+    section; one member's alone with ``user_id``. A bet logged by hand
+    (no legs, src not "slip") is not one."""
     out = []
+    one = "" if user_id is None else " AND d.user_id = ?"
     rows = conn.execute(
         "SELECT d.user_id, u.email, d.payload FROM user_data d "
-        "JOIN users u ON u.id = d.user_id WHERE d.section = 'mybets'").fetchall()
+        "JOIN users u ON u.id = d.user_id WHERE d.section = 'mybets'" + one,
+        () if user_id is None else (int(user_id),)).fetchall()
     for r in rows:
         try:
             data = json.loads(r["payload"])
@@ -369,8 +379,8 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
             continue
         if noted(conn, r["user_id"], bid) or not last_leg(card):
             continue
-        conn.execute("INSERT OR IGNORE INTO slip_alerts (user_id, bet_id, fired_at, mailed) "
-                     "VALUES (?,?,?,0)", (r["user_id"], bid, t))
+        conn.execute("INSERT OR IGNORE INTO slip_alerts (user_id, bet_id, fired_at, mailed, leg) "
+                     "VALUES (?,?,?,0,?)", (r["user_id"], bid, t, leg_name(card)[:120]))
         conn.commit()
         out["noted"] += 1
         if not (mail_on and entitled is not None and optin_get(conn, r["user_id"])["on"]):
@@ -407,6 +417,46 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
     if out["settled"]:
         log(f"  slip watch: {out['settled']} saved slip(s) settled in My Bets off the box score")
     return out
+
+
+#: What the bell's row tells the member to do next.
+BELL_NEXT = "the hedge and the cash-out check are on the Live tab"
+
+
+def bell_rows(conn, user_id: int) -> list[dict]:
+    """The member's last-leg alerts as rows for the Alerts bell, newest
+    first (Ethan, 2026-10-14: "do 1-11", the call "the last-leg alert on
+    the Alerts bell too?").
+
+    Each is an alert this watch noted (`slip_alerts`, once per slip) on a
+    slip still pending in My Bets: one settled or deleted has done its
+    work and leaves the bell. The row has the shape of a feed event the
+    Alerts page already draws (`ts` in the feed's own clock and format,
+    `player`, `label`, `why`), so the page draws it and the bell counts it
+    with no new code on the phone. Nothing here is graded again."""
+    ensure_tables(conn)
+    fired = conn.execute("SELECT bet_id, fired_at, leg FROM slip_alerts WHERE user_id=?",
+                         (int(user_id),)).fetchall()
+    if not fired:
+        return []
+    open_ = {str(r["bet"]["id"])[:40]: r["bet"]
+             for r in pending_slips(conn, limit=10 ** 6, user_id=user_id)}
+    out = []
+    for f in fired:
+        bet = open_.get(str(f["bet_id"]))
+        if bet is None:
+            continue
+        book = " ".join(str(bet.get("book") or "").split())[:40]
+        desc = " ".join(str(bet.get("desc") or "Your saved slip").split())[:160]
+        leg = " ".join(str(f["leg"] or "").split())
+        out.append({
+            "id": f"slip-{f['bet_id']}", "kind": "last_leg",
+            "ts": _dt.datetime.fromtimestamp(float(f["fired_at"])).isoformat(timespec="seconds"),
+            "player": "Last leg",
+            "label": desc + (f" ({book})" if book and book != "Other" else ""),
+            "why": [f"{leg} decides it" if leg else "one leg decides it", BELL_NEXT],
+        })
+    return sorted(out, key=lambda r: r["ts"], reverse=True)
 
 
 def run_once(entitled=None, log=print) -> dict:
@@ -469,6 +519,13 @@ def open_leg(card: dict) -> dict | None:
     return None
 
 
+def leg_name(card: dict) -> str:
+    """The leg that decides it, as the hedge names it, or ""."""
+    from . import slipgrade as SG
+    leg = open_leg(card or {})
+    return ((card or {}).get("hedge") or {}).get("leg") or (SG._name(leg) if leg else "")
+
+
 def where(leg: dict) -> str:
     """Where the leg stands, in words: the score and the clock and his
     number so far, or when it kicks off — the Live tab's own line."""
@@ -505,7 +562,7 @@ def message(bet: dict, card: dict, link: str, site: str) -> tuple[str, str, str]
     now = card.get("now") or {}
     hd = card.get("hedge") or {}
     leg = open_leg(card) or {}
-    name = hd.get("leg") or (SG._name(leg) if leg else "the last leg")
+    name = leg_name(card) or "the last leg"
     # The member's own words, one line each and bounded: a header never
     # takes a newline, and a subject is not a place for a paragraph.
     book = " ".join(str(bet.get("book") or "").split())[:40]

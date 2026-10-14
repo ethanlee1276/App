@@ -2570,7 +2570,7 @@ class Handler(BaseHTTPRequestHandler):
     # pointer rule doing its work), so a free account can receive a
     # friend's pointer and see the locked state behind it, which is
     # exactly what the same pick's permalink would show them.
-    def _alerts_feed(self, conn, who) -> list:
+    def _alerts_feed(self, conn, who, paid=None) -> list:
         """The feed this caller may read, and no more of it.
 
         feed.json is a PAID file — every entry names a pick — so an
@@ -2581,7 +2581,7 @@ class Handler(BaseHTTPRequestHandler):
         from engine import gate
         path = WEB / "data" / "feed.json"
         if gate.enabled():
-            if not self._entitled(conn, who):
+            if not (self._entitled(conn, who) if paid is None else paid):
                 return []
             path = gate.board_source(path)
         try:
@@ -2601,9 +2601,18 @@ class Handler(BaseHTTPRequestHandler):
             if path != "me":
                 return self._send(404, b'{"error":"unknown alerts endpoint"}',
                                   ".json")
+            from engine import gate
+            from engine import slipwatch as SW
             watches = AL.list_watches(conn, who["id"])
-            events = self._alerts_feed(conn, who)
+            paid = not gate.enabled() or self._entitled(conn, who)
+            events = self._alerts_feed(conn, who, paid=paid)
             since = AL.seen_ts(conn, who["id"])
+            # THE LAST LEG RINGS THE BELL TOO (Ethan, 2026-10-14, "do
+            # 1-11"): a saved slip the box found down to its last leg
+            # (engine/slipwatch) leads the member's own rows and counts on
+            # the badge until it settles. Behind the same wall as the Live
+            # tab that follows it.
+            slips = SW.bell_rows(conn, who["id"]) if paid else []
             out = {
                 "watches": watches,
                 "kinds": list(AL.KINDS),
@@ -2611,9 +2620,10 @@ class Handler(BaseHTTPRequestHandler):
                 "edge_range": [AL.EDGE_MIN, AL.EDGE_MAX],
                 # Everything of theirs in the window, and how much of it
                 # is new — the page shows the first and badges the second.
-                "fired": AL.fired(events, watches),
-                "unseen": len(AL.fired(events, watches, since=since)),
-                "newest": AL.newest_ts(events),
+                "fired": slips + AL.fired(events, watches),
+                "unseen": len(AL.fired(events, watches, since=since))
+                + sum(1 for s in slips if s["ts"] > since),
+                "newest": max([AL.newest_ts(events)] + [s["ts"] for s in slips]),
                 "feed_n": len(events),
             }
             return self._send(200, json.dumps(out).encode(), ".json")

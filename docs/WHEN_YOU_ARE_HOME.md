@@ -163,7 +163,10 @@ any league (step 89; AQ). A read-only list now says which UFC picks voided
 in the past look like the midnight bug step 47 fixed, and what each would
 have graded; every grade stays as it is (step 90; AT). A slip saved to My
 Bets now settles off the box score with the Live tab closed: the box writes
-the result itself, by the Live tab's own rules (step 91; AU). The
+the result itself, by the Live tab's own rules (step 91; AU). A saved
+slip down to its last leg now rings the Alerts bell too: it leads the
+Alerts page and counts on its badge until it settles (step 92; nothing to
+run). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -199,13 +202,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Saved slips settle in My Bets with the Live tab closed: the box's slip watch writes the result by the page's own rules, under one lock with the page's sync`
+**A. The box has today's code.** The first line should end `A saved slip down to its last leg rings the Alerts bell too: it leads the Alerts page and counts on the badge until it settles`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor f2e43721 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor c803cf0c HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -310,7 +313,8 @@ struck through here as it is built.
   Stripe → Settings → Billing → Customer portal → Cancellations: "At the
   end of the billing period" (the default, kept: they keep what they paid
   for) or "Immediately". The site handles either (step 37).
-* **The last-leg alert on the Alerts bell too?**
+* ~~**The last-leg alert on the Alerts bell too?**~~ **Answered
+  2026-10-14: yes** ("do 1-11"). Built: step 92.
 * **Pull a Most Likely pick when its line moves a point against it
   before kickoff?** L's answer first (step 51).
 * **The NFL price rule** (step 30): stake only the NFL Most Likely picks
@@ -3974,6 +3978,27 @@ first). Paste back anything that prints an error or looks off.
     alerted then settled, the phone's next sync adopting it, the lock
     keeping both writers' changes, the sync taking the lock, the runbook).
     No page change; app.js unchanged.
+92. **A saved slip down to its last leg rings the Alerts bell too**
+    (2026-10-14, you: "do 1-11", to "the last-leg alert on the Alerts bell
+    too?"). Nothing to run. Until now the box's notice of a slip's last
+    leg (step 44) showed on the Live tab, with a buzz, and by email to a
+    member who asked. Now the Alerts page leads with it — "Last leg · 2-leg
+    parlay: LA moneyline + KC moneyline (DraftKings)", "KC moneyline
+    decides it · the hedge and the cash-out check are on the Live tab" —
+    and the Alerts badge counts it until it is seen. It leaves the page
+    when the slip settles or is deleted. The box keeps the leg's name with
+    the alert it notes, so the bell never grades the slip again; an alert
+    noted before today says "one leg decides it". Behind the same wall as
+    the Live tab that follows saved slips, and one member's slip rings
+    only that member's bell. THE PHONE GETS NO NEW CODE: `/api/alerts/me`
+    hands the row over in the shape the Alerts page already draws, so
+    app.js stays 494.479 of 495 KB and the first visit 610.987 of 611 (13
+    bytes from the line). No pin changed. New:
+    `tests/test_the_last_leg_rings_the_alerts_bell.py` (9 checks: it leads
+    the list and counts on the badge, seen clears the count and keeps the
+    row, a settled or deleted slip leaves, the wall, one member's bell
+    only, an old alert with no leg, the old table gaining the column, the
+    page's own code reading the row, the runbook).
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
