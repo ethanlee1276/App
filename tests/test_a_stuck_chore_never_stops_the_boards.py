@@ -244,7 +244,10 @@ def test_on_the_box_a_lane_is_a_niced_child_that_is_killed_at_its_ceiling():
         launch.CHORE_TIMEOUT_S.update(saved[3])
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     body = src[src.index("def _lane_child("):src.index("def _lane_run(")]
-    assert "os.nice(10)" in body and "start_new_session=True" in body and "os.killpg" in body
+    # Niced through engine/childproc since 2026-10-14, which also puts the
+    # child first in line for the OOM killer (tests/test_children_go_before_the_server).
+    assert "below_server()" in body and "preexec_fn=nicer" in body
+    assert "start_new_session=True" in body and "os.killpg" in body
 
 
 def test_the_child_runs_its_steps_says_what_it_did_and_cleans_up():

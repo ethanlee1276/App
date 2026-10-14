@@ -22602,13 +22602,16 @@ function renderScanner() {
   // early on null data so this is not reachable through it today, but the
   // stake input re-calls this function directly and one unguarded
   // dereference in a render is what the prop page just paid for.
-  const scan = (state.data || {}).market_scan || {};
+  // Read once, guarded: opened before the board answered (a cold open)
+  // `d.odds_status` below threw (tests/test_cold_open.py).
+  const d = state.data || {};
+  const scan = d.market_scan || {};
   const arbs = scan.arbs || [], middles = scan.middles || [], lows = scan.low_holds || [];
 
   // The scanner feeds on price DISAGREEMENT, which mostly appears when one
   // book moves before the others. On cached prices (one frozen frame per
   // budget pull) empty sections are the norm, not a bug — say so up front.
-  const os = state.data.odds_status || {};
+  const os = d.odds_status || {};
   const freshness = os.source === "cache"
     ? `<div class="ls-note">Prices are from the last budgeted pull (cached — no
        API spend). Arbs and middles come from catching books mid-move, so a
@@ -22618,9 +22621,9 @@ function renderScanner() {
 
   // Sharp money: anchor picks (priced off the sharp book's fair value) and
   // steam moves (several books re-pricing together = pro money footprint).
-  const anchors = (state.data.game_bets || []).filter((b) =>
+  const anchors = (d.game_bets || []).filter((b) =>
     (b.reasons || []).join(" ").toLowerCase().includes("sharp"));
-  const steam = (state.data.recommendations || [])
+  const steam = (d.recommendations || [])
     .filter((r) => r.line_move && r.line_move.steam)
     .map((r) => ({ r, m: r.line_move }));
 
@@ -22633,7 +22636,7 @@ function renderScanner() {
   // With seven books on every prop, hundreds of quotes sit a point below
   // consensus. The board shows the biggest gaps and says how many exist.
   const staleNote = () => {
-    const st = (state.data.market_scan && state.data.market_scan.stale) || [];
+    const st = (d.market_scan && d.market_scan.stale) || [];
     const total = st.length ? (st[0].total_found || st.length) : 0;
     return total > st.length
       ? `showing the ${st.length} biggest gaps of ${total} found · ` : "";
@@ -22651,8 +22654,8 @@ function renderScanner() {
       needs no model: it’s the books disagreeing with each other. Arbitrage and middle
       prices move fast; verify at the book before betting. Books limit accounts that
       only arb — mix it into normal betting.</p>`;
-  const stale = (state.data.market_scan && state.data.market_scan.stale) || [];
-  const longs = (state.data.market_scan && state.data.market_scan.longshots) || [];
+  const stale = (d.market_scan && d.market_scan.stale) || [];
+  const longs = (d.market_scan && d.market_scan.longshots) || [];
   /* v5: A QUIET BOARD IS ONE CARD. Six sections each drawing their own
      "nothing here" row made the page a list of apologies; when all six
      are empty it rests like the deck — one line behind the paused dot,
@@ -22676,7 +22679,7 @@ function renderScanner() {
       + "measured on 30,448 harvested quotes, taking these beat the closing consensus "
       + "64.8% of the time for +1.49 points of CLV (z=11.6). Verify the price is still "
       + "up before betting; that is the whole game here",
-      (state.data.market_scan && state.data.market_scan.stale) || [], staleRow,
+      (d.market_scan && d.market_scan.stale) || [], staleRow,
       "No book is currently out of line with the field. This fills in as books "
       + "update at different speeds — most often right after lineups post.")
     + scanSection("Priced against you — plus-money props",
@@ -22684,7 +22687,7 @@ function renderScanner() {
       + "results: backing plus-money props cost -16.7% per unit against -6.5% for short "
       + "prices — the books shade big payouts 2.6x harder. No forecast is involved and "
       + "none helps; this is what the PRICE costs before anyone has a view on the player",
-      (state.data.market_scan && state.data.market_scan.longshots) || [],
+      (d.market_scan && d.market_scan.longshots) || [],
       (t) => `<div class="hd-row hd-scan">${scanMark(t)}<div class="hd-what"><b>${escapeHtml(t.bet)}</b>
           <span>${escapeHtml(t.book)} ${american(t.odds)} · implied ${(t.implied * 100).toFixed(1)}%${
             t.grade ? ` · graded ${escapeHtml(t.grade)}` : ""}</span></div>

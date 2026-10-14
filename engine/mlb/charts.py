@@ -209,8 +209,21 @@ def stored(conn, season: int | None = None) -> set:
         return set()
 
 
-def ingest_games(conn, games: list, fetch=None, workers: int = 4) -> dict:
-    """Fold and store every game in ``games`` not already stored.
+#: Games read, folded and stored at a time. A parsed play-by-play is about
+#: 2 MB in memory, and this read the WHOLE budget before storing one: a
+#: night's 400 games were most of a gigabyte in one child, inside a service
+#: capped at 1,600 MB that the web server and the board builds share
+#: (Ethan, 2026-10-14: no Most Likely, no Edge, no search). Eight at a time
+#: holds ~16 MB and keeps the four workers busy.
+CHUNK = 8
+
+
+def ingest_games(conn, games: list, fetch=None, workers: int = 4, chunk: int = CHUNK) -> dict:
+    """Fold and store every game in ``games`` not already stored, ``chunk``
+    games at a time: each one read, folded and written before the next are
+    read, so memory holds one chunk, never the night. A chunk none of whose
+    games could be read ends the run — a host refusing us is not asked again
+    and again — and the games after it are left for the next run.
     Returns ``{"games", "pas", "pitches", "failed"}``."""
     from .. import db
     from .sources import pbp as P
@@ -219,20 +232,25 @@ def ingest_games(conn, games: list, fetch=None, workers: int = 4) -> dict:
     have = stored(conn)
     todo = [g for g in games if int(g["game_pk"]) not in have]
     out = {"games": 0, "pas": 0, "pitches": 0, "failed": 0}
-    if not todo:
-        return out
-    payloads = fetch_many(fetch, [(g["game_pk"],) for g in todo], workers=workers)
-    for g, payload in zip(todo, payloads):
-        if not payload:
-            out["failed"] += 1
-            continue
-        pas, pitches = fold(payload, g)
-        if not pitches:
-            out["failed"] += 1
-            continue
-        out["pas"] += db.upsert_mlb_pa(conn, pas)
-        out["pitches"] += db.upsert_mlb_pitches(conn, pitches)
-        out["games"] += 1
+    step = max(1, int(chunk))
+    for i in range(0, len(todo), step):
+        part = todo[i:i + step]
+        payloads = fetch_many(fetch, [(g["game_pk"],) for g in part], workers=workers)
+        if not any(payloads):
+            out["failed"] += len(part)
+            break
+        for g, payload in zip(part, payloads):
+            if not payload:
+                out["failed"] += 1
+                continue
+            pas, pitches = fold(payload, g)
+            if not pitches:
+                out["failed"] += 1
+                continue
+            out["pas"] += db.upsert_mlb_pa(conn, pas)
+            out["pitches"] += db.upsert_mlb_pitches(conn, pitches)
+            out["games"] += 1
+        payloads = None
     return out
 
 

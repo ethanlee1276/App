@@ -534,7 +534,10 @@ def test_builds_run_niced_below_the_serving_process():
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     at = src.index("def _run_build")
     body = src[at:src.index("\ndef ", at + 10)]
-    assert "os.nice(10)" in body and "preexec_fn=nicer" in body
+    # Through engine/childproc since 2026-10-14: niced as before (CHILD_NICE,
+    # pinned in tests/test_children_go_before_the_server), and first in line
+    # for the OOM killer.
+    assert "below_server()" in body and "preexec_fn=nicer" in body
 
 
 if __name__ == "__main__":

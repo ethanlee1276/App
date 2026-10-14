@@ -119,7 +119,10 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
         # hitching for ten minutes is the one everybody does. Same
         # doctrine as the droplet's background fitters after the
         # 2026-08-31 CPU-starvation cascade.
-        nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+        # And first in line for the kernel's OOM killer (engine/childproc):
+        # a build that outgrows the service's cap dies, never the server.
+        from engine.childproc import below_server
+        nicer = below_server()
         proc = subprocess.run([sys.executable, *args], cwd=str(ROOT),
                               capture_output=True, text=True,
                               timeout=timeout, preexec_fn=nicer)
@@ -3751,6 +3754,65 @@ def _restart_when_idle(max_wait: float = RESTART_MAX_WAIT_S, poll: float = 15.0,
         sleep(poll)
 
 
+#: THE SWEEP, AS THE BOX'S UPDATER SEES IT (deploy/autoupdate.py). The
+#: updater is root on a five-minute timer and restarted this unit the
+#: moment a push landed — so a run of pushes, most under an hour apart,
+#: killed every sweep part-way, its builds with it, and the boards at the
+#: end of the order never finished. Past an hour old a board's picks
+#: come off the page (app.js `picksWithheld`): Ethan, 2026-10-14, "There's
+#: no most likely bets. There's no edge bets." Now this file says whether a
+#: sweep is running and since when; the updater holds a restart until it
+#: ends (or up to its own ceiling), and leaves `restart_wanted.json` while
+#: it waits, which stops this loop starting another. In data/cache, never
+#: web/data: it is for the updater, not the public.
+SWEEP_STATE_NAME = "sweep.json"
+RESTART_WANT_NAME = "restart_wanted.json"
+#: A restart request nobody acted on stops holding the sweeps back after
+#: this — a broken updater must not freeze the boards behind it.
+RESTART_WANT_TTL_S = 50 * 60
+
+
+def _note_sweep(running: bool) -> None:
+    """data/cache/sweep.json: is a board sweep running, since when, and on
+    which commit. Never raises — it is for the updater, not the boards."""
+    try:
+        path = ROOT / "data" / "cache" / SWEEP_STATE_NAME
+        path.parent.mkdir(parents=True, exist_ok=True)
+        now = time.time()
+        started = now
+        if not running:
+            try:
+                started = json.loads(path.read_text(encoding="utf-8")).get("started") or now
+            except (OSError, ValueError, AttributeError):
+                started = now
+        state = {"handshake": 1, "pid": os.getpid(), "running": bool(running),
+                 "started": round(float(started), 1), "finished": None if running else round(now, 1),
+                 "commit": _running_commit()}
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(state), encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception:                                  # noqa: BLE001
+        pass
+
+
+def _restart_wanted(now: float | None = None) -> str:
+    """The commit the updater is waiting to restart this process into, or
+    "" — none asked, the code already running, or a request older than
+    RESTART_WANT_TTL_S. Never raises."""
+    try:
+        want = json.loads((ROOT / "data" / "cache" / RESTART_WANT_NAME).read_text(encoding="utf-8"))
+        commit = str(want.get("commit") or "").strip()
+        since = float(want.get("since") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return ""
+    mine = (_running_commit() or "").strip()
+    if not commit or (mine and (commit.startswith(mine) or mine.startswith(commit))):
+        return ""
+    if (time.time() if now is None else now) - since > RESTART_WANT_TTL_S:
+        return ""
+    return commit
+
+
 #: THE LOOP'S WATCHDOG. No board step finishing for this long means the
 #: board loop is wedged — every build has a 10-minute ceiling and every
 #: in-process step a network timeout, so a healthy sweep lands a step
@@ -3978,7 +4040,9 @@ def _lane_child(lane: str, force_settle: bool, st: dict) -> None:
         except OSError:
             pass
     arg = "settle-forced" if (lane == "settle" and force_settle) else lane
-    nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+    # Niced, and first in line for the OOM killer (engine/childproc).
+    from engine.childproc import below_server
+    nicer = below_server()
     proc = subprocess.Popen(_chore_cmd(arg), cwd=str(ROOT), preexec_fn=nicer, start_new_session=True)
     st["proc"] = proc
     st.pop("killed", None)
@@ -4269,11 +4333,17 @@ def _background_refresher(interval: int) -> None:
                 # New code is waiting for this gap (see _restart_when_idle):
                 # starting a sweep now would only make it wait again.
                 _swept = "skipped — restarting into new code"
+            elif _restart_wanted():
+                # The box's updater has pulled new code and is waiting for
+                # this gap to restart into it (SWEEP_STATE_NAME): the same.
+                _swept = "skipped — the updater restarts into new code"
             elif _BUILD_LOCK.acquire(blocking=False):
                 try:
+                    _note_sweep(True)
                     refresh_all(quiet=True)
                     _swept = "ran"
                 finally:
+                    _note_sweep(False)
                     _BUILD_LOCK.release()
             else:
                 # AND THE HEARTBEAT HAS TO SAY SO. A skipped cycle used
@@ -10903,7 +10973,12 @@ def main() -> None:
         global _WARMING
         try:
             with _BUILD_LOCK:
-                refresh_all()
+                # The updater holds a restart while this runs (_note_sweep).
+                _note_sweep(True)
+                try:
+                    refresh_all()
+                finally:
+                    _note_sweep(False)
         except Exception as exc:                          # noqa: BLE001
             # A failed build must not cost the settle, the maintenance
             # pass, or the running site. The boards simply stay as they

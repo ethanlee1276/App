@@ -61,12 +61,16 @@ def test_the_two_that_were_caught_stay_guarded():
             ("noMarketHeading", "const d = state.data || {};"),
             ("noMarketExplainer", "const d = state.data || {};"),
             ("findGameRow", "const d = state.data || {};"),
-            ("renderScanner", "(state.data || {}).market_scan")):
+            # Read once since 2026-10-14: its `state.data.odds_status`
+            # threw on a cold open while `market_scan` alone was guarded.
+            ("renderScanner", "const d = state.data || {};")):
         i = APP.index(f"function {name}(")
         body = APP[i:APP.index("\n}", i)]
         assert needle in body, (
             f"{name} dereferences state.data unguarded again — it is "
             "reachable before the board answers")
+    i = APP.index("function renderScanner(")
+    assert "state.data." not in APP[i:APP.index("\n}", i)], "renderScanner reads the board past its guard"
 
 
 def test_the_prop_page_reaches_a_game_row_only_through_the_guarded_lookup():

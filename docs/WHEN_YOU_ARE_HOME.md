@@ -110,14 +110,23 @@ hitter's field (pull, middle, opposite field), a pitcher's zone
 high slot, point), a kicker's range; a final over the building in the
 NBA, MLB and NHL too, a fight over the arena, tonight's matchup over both
 teams' colours; and every play, batter, shot or kick in the same table
-(step 80; AL). The whole picture, sport by sport, is in
-`docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+(step 80; AL). On the 14th the site came up with no Most Likely picks,
+no Edge picks and no players in search: the box had stopped finishing
+its board builds (the page takes a board's picks off past an hour old)
+and stopped answering searches. Two chart backfills from the 13th each
+held most of a gigabyte in a service capped at 1.6 GB, and every push
+restarted the box in the middle of its sweep. Both are fixed: the
+backfills read a few games at a time, every background job now goes
+before the web server when memory runs out, and a push waits for the
+board sweep in progress before it restarts the box (step 81; AM). The
+whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
 
-**If you only do a few, do these, in this order.** A and B first: is
-today's code there, and is the box well. Then the four that matter before
+**If you only do a few, do these, in this order.** AM first if the
+boards are still empty an hour after the fix lands (it reads why). Then A
+and B: is today's code there, and is the box well. Then the four that matter before
 the NBA's opening night on the 20th: N (the club rosters and the injury
 board, read on the box; seconds); AG's first two commands (last season's
 steals, blocks and turnovers, about half an hour at low priority, then
@@ -140,13 +149,13 @@ write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway). Every command runs on the box (`ssh`
 in first).
 
-**A. The box has today's code.** The first line should end `Every sport's chart page in the frame of the NFL renders: its own surface lit, its own zones, every play as a table`
+**A. The box has today's code.** The first line should end `Most Likely, Edge and search back: the chart backfills read a few games at a time, and a push waits for the board sweep`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 89beaba7 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor bdfa4497 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -811,6 +820,49 @@ appearance, batter, attempt) opens the table with its filter and the
 download; the `Zones`, `Batted ball` or `Distance` tab shows the bars. A
 UFC fighter's `Fight history` opens on the fight over the octagon render,
 the winner's side lit.
+
+**AM. The site came up empty on the 14th** (step 81; read-only, about a
+minute; paste all of it). Nothing to run for the fix itself: the box pulls
+it, and this first restart happens at once (the app running now is too old
+to say whether it is mid-sweep). Run this if the boards are still empty an
+hour after A shows the fix, or whenever you are on the box, so we know what
+the last two days actually did to it:
+```
+git -C /srv/qellys log --oneline -1; cat /srv/qellys/data/autoupdate.json; echo
+systemctl show qellys -p ActiveState -p NRestarts -p ExecMainStartTimestamp -p MemoryCurrent
+free -m; swapon --show; df -h /srv | tail -1
+journalctl -k --since "2 days ago" --no-pager | grep -iE "oom-kill|out of memory|killed process" | tail -12
+journalctl -u qellys --since "2 days ago" --no-pager | grep -iE "killed by signal|out of memory|database is locked|build failed|mlb charts|nba shots|charts:|watchdog|auto-update" | tail -30
+python3 -c "import json,time; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); print(round((time.time()-d['at_epoch'])/60), 'min since the last cycle;', d.get('swept'), '; cycle', d.get('cycle_s'), 's; running', d.get('commit'), ';', d.get('disk_free_gb'), 'GB free')"
+for f in recommendations cfb mlb_recommendations nba wnba nhl ufc; do printf "%-20s %s\n" $f "$(stat -c %y /srv/qellys/web/data/$f.json 2>/dev/null | cut -c1-16)"; done
+for u in "/api/players/search?q=allen&sport=nfl&scope=sport" "/api/recommendations" "/api/nba/recommendations"; do curl -s -o /dev/null -w "%{http_code} %{size_download}B %{time_total}s  $u\n" "http://127.0.0.1:8000$u"; done
+ps -eo pid,ni,rss,etime,args --sort=-rss | head -6
+```
+How to read it:
+* The kernel lines (`oom-kill`, `Killed process ... python3`) are the
+  memory wall. Before the fix they would name a python child near a
+  gigabyte, from late on the 13th on. None after the fix landed is the
+  fix working.
+* The qellys lines: `killed by signal 9 ... out of memory` is a chores
+  child the kernel stopped; `mlb charts` and `nba shots` lines are the
+  backfills, which still read 400 and 300 games a night, now eight at a
+  time. Paste any `database is locked` or `build failed` line.
+* The heartbeat should say a few minutes since the last cycle and `ran`,
+  and every board's time should be within the last hour. Past an hour old
+  the page takes that board's picks off (the stale bar at the top says
+  so) until the next build lands.
+* Search should answer `200` with a few hundred bytes in well under a
+  second. A `502` or `000` is the app not answering.
+* In `ps`, the web server (`launch.py --bind`) is the one at NI 0; builds
+  and chores run at NI 10, and each of them now also marks itself first
+  for the kernel to stop (oom_score_adj 500), so if memory runs out again
+  a child goes, not the site.
+* From the next push on, `autoupdate.json` can say `the restart waits for
+  the board sweep in progress (N min in; waited M of 45 min)`: the new
+  page is already served, and the box restarts into the new code when
+  that sweep ends, 45 minutes at most. That is the new normal, not a
+  fault; `cat /srv/qellys/data/cache/sweep.json` shows the sweep it is
+  waiting on.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3134,6 +3186,64 @@ first). Paste back anything that prints an error or looks off.
     visit is unchanged (app 494.486 of 495 KB, first visit 610.995 of 611
     KB). No pins changed. New:
     `tests/test_every_sport_in_the_frame_of_the_renders.py`.
+81. **The site came up empty** (2026-10-14, you: "we are no longer
+    showing players. There's no most likely bets. There's no edge bets.
+    There's no players showing up in the search page ... make sure all
+    our new pushes are being pushed correctly"). AM checks it. WHAT
+    HAPPENED, as far as the code shows it from here (the box itself is
+    AM's to tell): the page takes a board's picks off once the board is an
+    hour old, and search and every paid board are the app answering, so
+    the box had stopped finishing its board builds and stopped answering.
+    Two things from the 13th did that. THE MEMORY: the baseball and
+    basketball chart backfills (steps 65 and 66) read every game of a
+    night's budget into memory before storing one (400 baseball
+    play-by-plays at about 2 MB each once parsed; 300 basketball games
+    with their box scores), most of a gigabyte each, inside the 1,600 MB
+    the whole service shares with the web server and the builds. The
+    chart filler starts them every two hours while a chart table is
+    empty, and the daily chores every night, so the box kept walking into
+    its memory wall, where the kernel either swaps everything and the
+    site crawls (2026-08-17, three hours) or kills (2026-10-07, ten
+    kills). THE RESTARTS: every push restarted the box at once, killing
+    the board sweep and every build in it; thirty pushes between 17:00 on
+    the 13th and 11:30 on the 14th (UTC), most under an hour apart, so
+    the boards late in the sweep's order never finished. THE FIXES. (1)
+    Both backfills read, fold and store eight games at a time
+    (`CHUNK`), so a run holds about 16 MB, not the night; a chunk where
+    nothing could be read ends the run and leaves the rest for the next,
+    so a host refusing us is not asked again forty times. Same nightly
+    budgets. (2) Every child the app starts (the board builds, the chores
+    lanes, the chart filler, the fitters) now marks itself first for the
+    kernel's OOM killer (`engine/childproc`: oom_score_adj 500, raised by
+    the child itself, no privilege needed) and is niced as before, so if
+    memory runs out again a child goes, never the web server that answers
+    search and the boards. (3) A push no longer restarts the box
+    mid-sweep. The app says whether a board sweep is running
+    (`data/cache/sweep.json`); while one is, the updater pulls (the new
+    page is served at once) but holds the restart and leaves
+    `data/cache/restart_wanted.json`, which stops the app starting
+    another sweep, so the restart lands when that sweep ends: never more
+    than 45 minutes after the pull, never held for a sweep whose process
+    is gone or that has run past 50 minutes, and at once for an app too
+    old to say (so this push's own restart is immediate, as before). The
+    app ignores a request older than 50 minutes, so a broken updater
+    cannot freeze the boards. Also: the Line Shopping view read
+    `state.data.odds_status` before checking there was a board, and threw
+    when opened before the board loaded; it reads the board once,
+    guarded. Checked: the 22 opt-in browser tests (the site in Chromium,
+    every view tapped before the board answers at phone width, every
+    chart) and the full suite. First visit 610.983 of 611 KB, app 494.475
+    of 495. Pins changed, told to you, nothing loosened:
+    `tests/test_a_stuck_chore_never_stops_the_boards.py` and
+    `tests/test_show_boards.py` pinned the old one-line niceness
+    (`os.nice(10)`) at two of the three places children start; they pin
+    the helper now, and the new test pins the niceness and the OOM score
+    in a real child. `tests/test_cold_open.py` pinned Line Shopping's old
+    partial guard (`(state.data || {}).market_scan`); it pins the
+    read-once guard and now also fails on any bare `state.data.` in that
+    function. New: `tests/test_chart_backfills_hold_a_chunk_not_the_night.py`,
+    `tests/test_children_go_before_the_server.py`,
+    `tests/test_the_deploy_waits_for_the_board_sweep.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

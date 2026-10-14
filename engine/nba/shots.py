@@ -225,8 +225,16 @@ def read_once(game_id: str) -> tuple:
                     pass
 
 
-def ingest_games(conn, games: list, read=None, workers: int = 4) -> dict:
-    """Fold and store every game in ``games`` not already stored.
+#: Games read, folded and stored at a time (engine/mlb/charts.CHUNK has the
+#: why): a play-by-play and its box score are a few MB parsed, and the
+#: night's 300 held at once were most of a gigabyte in a 1,600 MB service.
+CHUNK = 8
+
+
+def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CHUNK) -> dict:
+    """Fold and store every game in ``games`` not already stored, ``chunk``
+    at a time, each chunk written before the next is read. A chunk none of
+    whose games could be read ends the run; the rest wait for the next.
     ``{"games", "shots", "failed"}``."""
     from concurrent.futures import ThreadPoolExecutor
     from .. import db
@@ -236,15 +244,22 @@ def ingest_games(conn, games: list, read=None, workers: int = 4) -> dict:
     if not todo:
         return out
     read = read or read_once
+    step = max(1, int(chunk))
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        pairs = list(pool.map(lambda g: read(str(g["game_id"])), todo))
-    for g, (pbp, box) in zip(todo, pairs):
-        rows = fold(pbp, box, g.get("date") or "") if pbp and box else []
-        if not rows:
-            out["failed"] += 1
-            continue
-        out["shots"] += db.upsert_nba_shots(conn, rows)
-        out["games"] += 1
+        for i in range(0, len(todo), step):
+            part = todo[i:i + step]
+            pairs = list(pool.map(lambda g: read(str(g["game_id"])), part))
+            if not any(pbp and box for pbp, box in pairs):
+                out["failed"] += len(part)
+                break
+            for g, (pbp, box) in zip(part, pairs):
+                rows = fold(pbp, box, g.get("date") or "") if pbp and box else []
+                if not rows:
+                    out["failed"] += 1
+                    continue
+                out["shots"] += db.upsert_nba_shots(conn, rows)
+                out["games"] += 1
+            pairs = None
     return out
 
 

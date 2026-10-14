@@ -1412,7 +1412,9 @@ def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
     # -u: a child the kernel kills keeps its last lines in its log (a
     # buffered one left weekly_lab.log empty on the box, 2026-10-07).
     cmd = [sys.executable, "-u", "-m", module, *args]
-    nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+    # Niced, and first in line for the OOM killer (engine/childproc).
+    from .childproc import below_server
+    nicer = below_server()
     path = _child_log_path(module)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

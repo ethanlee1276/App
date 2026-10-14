@@ -48,6 +48,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 
 def _git(repo, *args):
@@ -197,6 +198,122 @@ def _trim(repo, clear=False) -> str:
     return f" · trimmed: {'; '.join(said)}" if said else ""
 
 
+#: THE RESTART WAITS FOR THE BOARD SWEEP IN PROGRESS (2026-10-14). This
+#: restarted the unit the moment a push landed, and a restart kills the
+#: sweep and every build in it. Thirty pushes between one evening and the
+#: next noon, most under an hour apart, meant the boards late in the
+#: sweep's order were never rebuilt; past an hour old the page takes a
+#: board's picks off (web/js/app.js `picksWithheld`), and Ethan found every
+#: board empty. Now the app says whether a sweep is running
+#: (data/cache/sweep.json, written by launch.py `_note_sweep`); while one
+#: is, the new code is pulled and served as files (the page, the trimmed
+#: shell) but the restart waits, and data/cache/restart_wanted.json tells
+#: the app to start no new sweep, so the wait ends at the sweep's end. An
+#: app too old to say restarts at once, as before.
+SWEEP_STATE = ("data", "cache", "sweep.json")
+RESTART_WANT = ("data", "cache", "restart_wanted.json")
+#: The longest new code waits for a restart, counted from the first run
+#: that pulled it. Past it the unit restarts mid-sweep, as it always did.
+RESTART_WAIT_MAX_S = 45 * 60
+#: A sweep said to be running for longer than this is stuck, or its writer
+#: died without saying so: not waited on.
+SWEEP_STALE_S = 50 * 60
+
+
+def _read_json(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return got if isinstance(got, dict) else None
+
+
+def _pid_alive(pid) -> bool:
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _same_commit(a, b) -> bool:
+    """Two short hashes of one commit: the app's and git's abbreviations
+    may differ in length, never in their common prefix."""
+    a, b = str(a or "").strip(), str(b or "").strip()
+    return bool(a and b) and (a.startswith(b) or b.startswith(a))
+
+
+def _sweep_running(repo, now):
+    """``(seconds the board sweep in progress has run, the commit the app
+    is serving)``; the seconds are None when a restart need not wait —
+    no sweep running, an app too old to say, a writer that is gone, or a
+    sweep past SWEEP_STALE_S."""
+    st = _read_json(os.path.join(repo, *SWEEP_STATE))
+    if not st or st.get("handshake") != 1:
+        return None, ""
+    serving = str(st.get("commit") or "")
+    if not st.get("running") or not _pid_alive(st.get("pid")):
+        return None, serving
+    try:
+        ran = now - float(st.get("started"))
+    except (TypeError, ValueError):
+        return None, serving
+    if ran < 0 or ran > SWEEP_STALE_S:
+        return None, serving
+    return ran, serving
+
+
+def _restart_or_wait(repo, service, before, after, wanted, stray, trim):
+    """Restart into ``after`` now, or leave a request and wait for the
+    sweep in progress. Records what it did. Never raises."""
+    now = time.time()
+    want_path = os.path.join(repo, *RESTART_WANT)
+    try:
+        since = float((wanted or {}).get("since") or now)
+    except (TypeError, ValueError):
+        since = now
+    try:
+        ran, _serving = _sweep_running(repo, now)
+    except Exception:                                          # noqa: BLE001
+        ran = None
+    pulled = f"pulled {before}..{after}" if before != after else f"{after}, pulled earlier,"
+    if ran is not None and now - since < RESTART_WAIT_MAX_S:
+        try:
+            os.makedirs(os.path.dirname(want_path), exist_ok=True)
+            tmp = want_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump({"commit": after, "since": round(since), "at": round(now)}, fh)
+            os.replace(tmp, want_path)
+            os.chmod(want_path, 0o644)
+            _record(repo, True, f"{pulled} — the restart waits for the board sweep in progress "
+                                f"({ran / 60:.0f} min in; waited {(now - since) / 60:.0f} of "
+                                f"{RESTART_WAIT_MAX_S // 60} min)" + stray + trim)
+            return
+        except OSError:
+            pass                       # cannot leave the request: restart now
+    waited = f" after waiting {(now - since) / 60:.0f} min for the board sweep" if now - since >= 60 else ""
+    try:
+        subprocess.run(("systemctl", "restart", service), check=True, timeout=120)
+        try:
+            os.remove(want_path)
+        except OSError:
+            pass
+        _record(repo, True, f"{pulled} and restarted {service}{waited}" + stray + trim)
+    except Exception as exc:                                  # noqa: BLE001
+        _record(repo, False, f"{pulled} but the restart failed: {exc}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default="/srv/qellys")
@@ -257,19 +374,28 @@ def main() -> int:
         return 0
     _, after = _git(repo, "rev-parse", "--short", "HEAD")
     trim = _trim(repo)
-    if after == before:
+    # New code pulled by an earlier run may still be waiting for its
+    # restart (`_restart_or_wait`): this run finishes that wait, unless the
+    # app is already serving it (it restarted on its own meanwhile).
+    want_path = os.path.join(repo, *RESTART_WANT)
+    wanted = _read_json(want_path)
+    if wanted and after == before:
+        try:
+            serving = _sweep_running(repo, time.time())[1]
+        except Exception:                                      # noqa: BLE001
+            serving = ""
+        if _same_commit(serving, after):
+            try:
+                os.remove(want_path)
+            except OSError:
+                pass
+            wanted = None
+    if after == before and not wanted:
         _record(repo, True, "up to date" + stray + trim)
         return 0
     # Restart AFTER recording would report a restart that hasn't happened;
     # record what was done, with the restart's own result on the line.
-    try:
-        subprocess.run(("systemctl", "restart", args.service),
-                       check=True, timeout=120)
-        _record(repo, True, f"pulled {before}..{after} and restarted "
-                            f"{args.service}" + stray + trim)
-    except Exception as exc:                                  # noqa: BLE001
-        _record(repo, False, f"pulled {before}..{after} but the restart "
-                             f"failed: {exc}")
+    _restart_or_wait(repo, args.service, before, after, wanted, stray, trim)
     return 0
 
 
