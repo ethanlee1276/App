@@ -197,7 +197,13 @@ def games_info(schedule: dict) -> list[dict]:
 def play_ids(payload: dict) -> dict:
     """``{at_bat: play id}``: the id MLB's play-by-play gives the pitch each
     plate appearance ended on — the key its video of that pitch is filed
-    under at Baseball Savant. "" for one whose last pitch carries none."""
+    under at Baseball Savant. "" for one whose last pitch carries none.
+
+    KEPT ON FILE, NEVER SHOWN (2026-10-14). The hit page linked each
+    at-bat's video by it until Ethan, on MLB's non-commercial terms: "drop
+    the video link". The fold still writes it with the rest of the row,
+    which costs nothing; the chart no longer serves it and nothing reads
+    it back."""
     out = {}
     for play in (payload or {}).get("allPlays") or []:
         ab = _int((play.get("about") or {}).get("atBatIndex"))
@@ -515,53 +521,12 @@ def fill_bat(conn, season: int, budget: int = BAT_PER_NIGHT, fetch=None, today=N
     return out
 
 
-# --- the video of each at-bat --------------------------------------------------------
-#: Games read again a night for the ids of their at-bats' pitches, newest
-#: first, over a season's last month: a game read before the ids were kept
-#: has none, and the newest at-bats are the ones anyone will watch.
-PLAY_IDS_PER_NIGHT = 60
-PLAY_IDS_DAYS = 30
-
-
-def fill_play_ids(conn, season: int, budget: int = PLAY_IDS_PER_NIGHT, fetch=None) -> dict:
-    """Each at-bat's video id for the season's games of its last month
-    that were read before the ids were kept (every one NULL), newest first,
-    each game read once (`read_once`). A game the feed gives no id is
-    written "" so it is not read again. Returns ``{"games", "pas", "left"}``."""
-    import datetime as _dt
-    fetch = fetch or read_once
-    last = conn.execute("SELECT MAX(date) FROM mlb_pa WHERE season=?", (int(season),)).fetchone()[0]
-    out = {"games": 0, "pas": 0, "left": 0}
-    if not last:
-        return out
-    since = (_dt.date.fromisoformat(str(last)[:10]) - _dt.timedelta(days=PLAY_IDS_DAYS)).isoformat()
-    todo = [int(r[0]) for r in conn.execute(
-        "SELECT game_pk FROM mlb_pa WHERE season=? AND date>=? GROUP BY game_pk HAVING COUNT(play_id)=0 "
-        "ORDER BY MAX(date) DESC, game_pk DESC", (int(season), since))]
-    out["left"] = max(0, len(todo) - max(0, int(budget)))
-    for pk in todo[:max(0, int(budget))]:
-        try:
-            ids = play_ids(fetch(pk))
-        except Exception:                                          # noqa: BLE001
-            continue
-        if not ids:
-            continue
-        cur = conn.executemany("UPDATE mlb_pa SET play_id=? WHERE game_pk=? AND at_bat=?",
-                               [(ids.get(ab, ""), pk, ab) for (ab,) in conn.execute(
-                                   "SELECT at_bat FROM mlb_pa WHERE game_pk=?", (pk,)).fetchall()])
-        conn.commit()
-        out["games"] += 1
-        out["pas"] += max(0, cur.rowcount)
-    return out
-
-
 def fill_page(conn, today=None) -> dict:
     """The hit page's other numbers, a night's worth (Ethan, 2026-10-14: "do
     the first 7 page items"): the parks, records and series of any season
     read before they were kept (`fill_info`), every hitter's runs and
     stolen bases, this season's first (`fill_bat`, one budget across the
-    seasons), the video ids of the season's last month of at-bats
-    (`fill_play_ids`), and MLB's own expected stats and barrel rates off
+    seasons), and MLB's own expected stats and barrel rates off
     Baseball Savant (`savant.fetch_page_boards`; last season's once, as it
     no longer changes). Each part on its own: one that fails is a line in
     what this returns, never the end of the others."""
@@ -588,10 +553,6 @@ def fill_page(conn, today=None) -> dict:
     except Exception as exc:                                       # noqa: BLE001
         bat["failed"] = str(exc)
     out["bat"] = bat
-    try:
-        out["play_ids"] = fill_play_ids(conn, season)
-    except Exception as exc:                                       # noqa: BLE001
-        out["play_ids"] = f"failed: {exc}"
     boards: dict = {}
     try:
         boards[season] = savant.fetch_page_boards(season)
@@ -621,13 +582,6 @@ def page_lines(got: dict) -> list[str]:
                            + (f", {b['left']:,} left for the next nights" if b["left"] else ""))
         else:
             out.append(f"  ⚠️  mlb hit page runs and steals: {b}")
-    p = got.get("play_ids")
-    if isinstance(p, dict):
-        if p["games"] or p["left"]:
-            out.append(f"  mlb hit page: video ids for {p['games']} game(s), {p['pas']:,} at-bat(s)"
-                       + (f", {p['left']} left" if p["left"] else ""))
-    elif p:
-        out.append(f"  ⚠️  mlb hit page video ids: {p}")
     for s, b in sorted((got.get("savant") or {}).items(), key=lambda kv: str(kv[0]), reverse=True):
         if isinstance(b, dict):
             out.append(f"  mlb hit page {s}: Baseball Savant expected stats {b.get('expected')}, "
@@ -902,9 +856,7 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     ``sides`` the sides he batted from. ``{}`` with nothing on file.
 
     And what the renders showed that the page first left out (2026-10-14):
-    a plate appearance's ``br`` (1, a barrel by MLB's rule) and ``vid``
-    (the id of the pitch it ended on, which MLB files its video under); a
-    game's ``venue``, ``score``, ``dh``, ``rec``/``orec`` (`_standing`),
+    a plate appearance's ``br`` (1, a barrel by MLB's rule); a game's ``venue``, ``score``, ``dh``, ``rec``/``orec`` (`_standing`),
     ``series``/``sgame`` and ``r``/``sb``/``cs`` (his game log's); and the
     chart's ``action`` (his action photo), ``rs`` (the season's runs,
     stolen bases and times caught, or None until every game has them) and
@@ -940,12 +892,9 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
         v = xstats.xvals(model, r["launch_speed"], r["launch_angle"])
         if v:
             pa["xh"], pa["xtb"] = round(v[0], 3), round(v[1], 3)
-        # A barrel by MLB's own rule, off MLB's own speed and angle; the
-        # id of the pitch it ended on, which MLB files its video under.
+        # A barrel by MLB's own rule, off MLB's own speed and angle.
         if barrel(r["launch_speed"], r["launch_angle"]):
             pa["br"] = 1
-        if r.get("play_id"):
-            pa["vid"] = r["play_id"]
         g["pas"].append(pa)
     out_games = []
     for g in sorted(games.values(), key=lambda g: (g["date"], g["id"]), reverse=True):

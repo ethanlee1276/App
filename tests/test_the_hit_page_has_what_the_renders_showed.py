@@ -8,7 +8,8 @@ where it could come from: "And yes do the first 7 page items" —
   3. the ballpark ("@ Dodger Stadium") and a View Game button;
   4. barrels: per ball by MLB's published rule, and his season's rate;
   5. MLB's own expected average and slugging beside ours;
-  6. the video of each at-bat, on Baseball Savant;
+  6. the video of each at-bat, on Baseball Savant — dropped the same day
+     (Ethan, on MLB's non-commercial terms: "drop the video link");
   7. his action photo in place of his headshot.
 
 What is pinned, offline, on the hit tracker's fixture games and on
@@ -30,9 +31,10 @@ databases, schedules, game logs and Savant boards built here:
     a game he only ran in counted;
   * BARRELS (`barrel`): MLB's window, 98 mph at 26-30 degrees widening to
     8-50 at 116;
-  * THE VIDEO (`play_ids`, `fill_play_ids`): the id of the pitch each
-    plate appearance ended on, kept by the fold, and read again for the
-    season's last month of games read before it was kept — once;
+  * THE VIDEO, DROPPED (`play_ids`): the id of the pitch each plate
+    appearance ended on is still kept by the fold, which costs nothing,
+    and never served, linked or read again (pins changed 2026-10-14 and
+    told to Ethan: these checks held the links in place);
   * MLB'S OWN NUMBERS (engine/mlb/sources/savant): the page's own copy of
     Savant's boards, every hitter by MLB's id, read from the file and
     never the wire; and the model's two boards no longer frozen on the
@@ -50,6 +52,7 @@ Run directly: `python3 tests/test_the_hit_page_has_what_the_renders_showed.py`
 """
 import datetime as dt
 import importlib.util
+import inspect
 import json
 import os
 import re
@@ -315,7 +318,7 @@ def _with_ids(payload, ids):
     return out
 
 
-def test_each_plate_appearance_keeps_the_id_of_the_pitch_it_ended_on():
+def test_the_fold_keeps_each_at_bats_video_id_and_the_chart_never_serves_it():
     pay = _with_ids(F.PAYLOAD, {1: "aaaa", 3: "bbbb"})
     assert MC.play_ids(pay) == {0: "", 1: "aaaa-2", 2: "", 3: "bbbb-1", 4: "", 5: ""}
     pas, _ = MC.fold(pay, F.GAME)
@@ -324,33 +327,16 @@ def test_each_plate_appearance_keeps_the_id_of_the_pitch_it_ended_on():
     conn = D.connect(":memory:")
     D.upsert_mlb_pa(conn, pas)
     d = MC.hits_chart(conn, "Aaron Judge")
-    assert [p.get("vid") for p in d["games"][0]["pas"]] == ["aaaa-2", "bbbb-1"]
-    assert "vid" not in {k for p in MC.hits_chart(F._conn(), "Juan Soto")["games"][0]["pas"] for k in p}
+    assert not any("vid" in p for g in d["games"] for p in g["pas"]), "the video id reached the page"
 
 
-def test_the_last_months_games_read_before_the_ids_were_kept_are_read_again_once():
-    conn = F._conn()
-    D.upsert_mlb_pa(conn, [{"game_pk": 760000, "at_bat": 0, "season": 2026, "date": "2026-08-01",
-                            "batter_id": JUDGE, "batter": "Aaron Judge", "team": "NYY", "opponent": "BOS",
-                            "home": 1, "event": "Single", "event_type": "single", "rbi": 0, "pitches": 1}])
-    conn.execute("UPDATE mlb_pa SET play_id=NULL")
-    conn.commit()
-    read = []
-
-    def fetch(pk):
-        read.append(pk)
-        return _with_ids(F.PAYLOAD, {1: "cccc"}) if pk == 776001 else {"allPlays": [
-            {"about": {"atBatIndex": 0}, "playEvents": [{"isPitch": True, "pitchNumber": 1}]}]}
-
-    got = MC.fill_play_ids(conn, 2026, fetch=fetch)
-    assert sorted(read) == [775900, 776001], "the last month only, newest first; August's game is left"
-    assert read[0] == 776001 and got["games"] == 2 and got["left"] == 0
-    ids = dict(conn.execute("SELECT at_bat, play_id FROM mlb_pa WHERE game_pk=776001").fetchall())
-    assert ids == {0: "", 1: "cccc-2", 2: "", 3: ""}
-    assert conn.execute("SELECT play_id FROM mlb_pa WHERE game_pk=775900").fetchone()[0] == "", \
-        "a game the feed gives no id is written '' and never read again"
-    assert MC.fill_play_ids(conn, 2026, fetch=fetch)["games"] == 0 and len(read) == 2
-    assert MC.fill_play_ids(D.connect(":memory:"), 2026, fetch=fetch) == {"games": 0, "pas": 0, "left": 0}
+def test_nothing_reads_the_video_ids_again():
+    """The nightly re-read of the last month's games for their video ids
+    (`fill_play_ids`, sixty games a night off MLB's feed) went with the
+    links: no call is made for a number nothing shows."""
+    assert not hasattr(MC, "fill_play_ids") and not hasattr(MC, "PLAY_IDS_PER_NIGHT")
+    assert "play_ids" not in inspect.getsource(MC.fill_page)
+    assert "video" not in inspect.getsource(MC.page_lines)
 
 
 def test_an_old_database_gains_the_column():
@@ -482,7 +468,7 @@ def test_the_chart_fill_reads_the_pages_numbers_the_hour_the_code_lands():
     old = MC.fill_page
     MC.fill_page = lambda c, today=None: called.append(c) or {
         "info": {2026: 12}, "bat": {2026: {"hitters": 3, "games": 40, "failed": 0, "left": 5}},
-        "play_ids": {"games": 2, "pas": 9, "left": 0}, "savant": {2026: {"expected": 600, "barrels": 610}}}
+        "savant": {2026: {"expected": 600, "barrels": 610}}}
     try:
         lines = CF.fill(conn, CF.owed(conn, TODAY), log=lambda *_: None)
     finally:
@@ -490,7 +476,6 @@ def test_the_chart_fill_reads_the_pages_numbers_the_hour_the_code_lands():
     assert called == [conn]
     assert lines == ["mlb hit page 2026: 12 games' park, final and records",
                      "mlb hit page 2026: runs and steals for 3 hitter(s), 40 game(s), 5 left for the next nights",
-                     "mlb hit page: video ids for 2 game(s), 9 at-bat(s)",
                      "mlb hit page 2026: Baseball Savant expected stats 600, barrels 610"], lines
     D.upsert_mlb_games(conn, MC.games_info(SCHEDULE))
     assert CF.owed(conn, TODAY) == [], "a season with its games stored is the nightly's from here"
@@ -499,23 +484,22 @@ def test_the_chart_fill_reads_the_pages_numbers_the_hour_the_code_lands():
 def test_one_failing_part_never_stops_the_others():
     conn = F._conn()
     D.upsert_mlb_games(conn, MC.games_info(SCHEDULE))
-    olds = (MC.fill_info, MC.fill_bat, MC.fill_play_ids, savant.fetch_page_boards)
+    olds = (MC.fill_info, MC.fill_bat, savant.fetch_page_boards)
 
     def boom(*a, **k):
         raise RuntimeError("down")
 
     MC.fill_info = boom
     MC.fill_bat = lambda c, s, budget=0, today=None: {"hitters": 2, "games": 7, "failed": 0, "left": 0}
-    MC.fill_play_ids = boom
     savant.fetch_page_boards = lambda y: {"expected": 3, "barrels": 3}
     d, old_dir = _savant_dir()
     try:
         got = MC.fill_page(conn, today=TODAY)
     finally:
-        MC.fill_info, MC.fill_bat, MC.fill_play_ids, savant.fetch_page_boards = olds
+        MC.fill_info, MC.fill_bat, savant.fetch_page_boards = olds
         savant.CACHE_DIR = old_dir
         shutil.rmtree(d, ignore_errors=True)
-    assert got["info"].startswith("failed") and got["play_ids"].startswith("failed")
+    assert got["info"].startswith("failed") and "play_ids" not in got
     assert got["bat"] == {2026: {"hitters": 2, "games": 7, "failed": 0, "left": 0}}
     assert got["savant"] == {2026: {"expected": 3, "barrels": 3}, 2025: {"expected": 3, "barrels": 3}}, \
         "last season's boards once, when they are not on file"
@@ -542,7 +526,7 @@ def test_the_box_check_says_each_piece_in_a_line():
     assert "3. parks: 2 of 2 games have one" in text and "https://www.mlb.com/gameday/776001" in text
     assert "4. barrels 2026: 1 of 3 balls in play by MLB's rule (33.3%" in text
     assert "5. Baseball Savant 2026:" in text
-    assert "6. video 2026: 4 of 5 plate appearances" in text and "sporty-videos?playId=" in text
+    assert "6. video: dropped 2026-10-14" in text and "sporty-videos" not in text
     assert lines[-1].startswith("7. action photo: https://img.mlbstatic.com/") and lines[-1].endswith("→ 200 image/jpeg")
     # A database the app has not yet given the new tables says so, part by part.
     old = sqlite3.connect(":memory:")
@@ -592,7 +576,7 @@ def test_the_page_draws_each_piece_where_it_is_on_file():
       const bare = Object.assign({{}}, reg, {{ r: undefined, sb: undefined }});
       return {{
         tiles: X.gameTiles(post), bare: X.gameTiles(bare), head: X.gameHead(post, "mlb"), regHead: X.gameHead(reg, "mlb"),
-        board: X.scoreBoard(reg, "mlb"), postBoard: X.scoreBoard(post, "mlb"), watch: X.watch(post), plain: X.watch(reg),
+        board: X.scoreBoard(reg, "mlb"), postBoard: X.scoreBoard(post, "mlb"), watch: typeof X.watch,
         side: SP.seasonSide(d), list: SP.list(post, d), csv: SP.csv(post, d), own: X.mlbOwn(d),
         noOwn: X.mlbOwn(Object.assign({{}}, d, {{ savant: null }})), where: X.where({{ dh: 2, venue: "Fenway Park" }}),
         sums: [X.sumOf([{{ r: 1 }}, {{ r: 2 }}], "r"), X.sumOf([{{ r: 1 }}, {{}}], "r"), X.sumOf([], "r")],
@@ -619,15 +603,15 @@ def test_the_page_draws_each_piece_where_it_is_on_file():
     assert "MLB’s own · Baseball Savant · as of Oct 13" in got["own"]
     assert "<b>.318</b> xBA" in got["own"] and "<b>.689</b> xSLG" in got["own"] and "<b>20.0%</b> barrels of 450 balls" in got["own"]
     assert got["noOwn"] == "" and "MLB’s own" in got["side"]
-    # 6. Every at-bat's video, numbered as the table numbers it, and the game's every pitch.
-    vid = "5a1b2c3d-0000-4000-8000-00000000000" + "1"                     # his at-bat 1's, as _rich() keeps it
-    assert f'href="https://baseballsavant.mlb.com/sporty-videos?playId={vid}"' in got["watch"]
-    assert got["watch"].count('class="mb-vchip') == 2 and "<b>1</b>" in got["watch"] and "<b>2</b>" in got["watch"]
-    assert 'href="https://baseballsavant.mlb.com/gamefeed?gamePk=776001"' in got["watch"] and "Every pitch" in got["watch"]
-    assert "mb-vchip" not in got["plain"] and "Watch at-bats" in got["plain"] and "gamePk=775900" in got["plain"]
+    # 6. The video of each at-bat is gone (2026-10-14: "drop the video link"),
+    # the export's column with it; MLB's page of the game stays.
+    assert got["watch"] == "undefined", "the at-bats' video links are back"
+    for k in ("head", "list", "tiles", "side"):
+        assert "sporty-videos" not in got[k] and "gamefeed" not in got[k], k
     assert "<a " not in got["list"], "a link is never put inside a row's button"
-    assert got["csv"][0][-2:] == ["Barrel", "Video"] and got["csv"][1][-2] == "yes"
-    assert got["csv"][1][-1].startswith("https://baseballsavant.mlb.com/sporty-videos?playId=")
+    assert got["csv"][0][-1] == "Barrel" and got["csv"][1][-1] == "yes"
+    assert not any("sporty-videos" in str(c) for row in got["csv"] for c in row)
+    assert "sporty-videos" not in MLB_JS and "gamefeed" not in MLB_JS
 
 
 def test_the_photo_steps_aside_for_the_headshot_when_it_fails():
@@ -652,9 +636,10 @@ def test_the_photo_steps_aside_for_the_headshot_when_it_fails():
 
 def test_the_styles_are_tokens_and_the_handlers_are_listeners():
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"
-    for sel in (".mb-hero-face .cc-act.on", ".mb-rec", ".mb-watch", ".mb-vchip", ".mb-own", ".mb-big.mb-big6",
+    for sel in (".mb-hero-face .cc-act.on", ".mb-rec", ".mb-own", ".mb-big.mb-big6",
                 ".mb-at", ".mb-brl"):
         assert sel in CC_CSS, sel
+    assert ".mb-watch" not in CC_CSS and ".mb-vchip" not in CC_CSS, "the video chips' styles outlived them"
     assert "onclick" not in MLB_JS and "onerror" not in MLB_JS and not re.search(r"on(error|load)\s*=", MLB_JS)
 
 
@@ -701,11 +686,11 @@ def test_in_a_browser_the_photo_the_links_and_the_tiles():
                 else:
                     page.wait_for_function("!document.querySelector('.mb-hero-face .cc-act')", timeout=3000)
                     assert page.evaluate("getComputedStyle(document.querySelector('.mb-hero-face .cc-face')).display") != "none"
-                # The game: the park, the series, MLB's page, the runs and steals, the videos.
+                # The game: the park, the series, MLB's page, the runs and steals; no video.
                 head = page.evaluate("document.querySelector('.mb-game-h').textContent.replace(/\\s+/g, ' ')")
                 assert "@ Yankee Stadium · Division Series, Game 3" in head and "View game" in head
                 assert page.evaluate("document.querySelector('.mb-game-h a.mb-ext').href") == "https://www.mlb.com/gameday/776001"
-                assert page.evaluate("document.querySelectorAll('.mb-watch a.mb-vchip').length") == 2
+                assert page.evaluate("document.querySelectorAll('a[href*=\"sporty-videos\"], a[href*=\"gamefeed\"]').length") == 0
                 assert page.evaluate("document.querySelectorAll('button a, a button').length") == 0
                 tiles = page.evaluate("[...document.querySelectorAll('.mb-game .cc-tile .cc-k')].map((k) => k.textContent)")
                 assert "R" in tiles and "SB" in tiles, tiles

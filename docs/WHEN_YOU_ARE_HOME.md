@@ -138,8 +138,8 @@ out, each off MLB's own record: his runs and stolen bases game by game,
 each club's record on the day, the park with a View game button to
 MLB.com, barrels (MLB's own rule) beside his barrel rate, MLB's own
 expected average and slugging from Baseball Savant beside ours, a link to
-the video of every at-bat on Savant, and his action photo in place of his
-headshot; the box fills them by itself, within hours (step 84; AP). The
+the video of every at-bat on Savant (dropped the same day, step 99), and
+his action photo in place of his headshot; the box fills them by itself, within hours (step 84; AP). The
 Pick of the Day is now recorded in every league that makes one: the
 college and NBA builds had been recording the day's pick before choosing
 it, so college's BET picks were shown and never scored; every league's
@@ -187,7 +187,14 @@ picks; on the way, the card's own picks stopped quoting Pinnacle's price
 pick on the second (step 97; AY). An uploaded slip whose price on a
 leg is over an hour old now buys a fresh one for just that slip's markets,
 one call per game, inside a small daily credit cap you can move (step 98;
-AZ). The
+AZ). The hit page no longer links each at-bat's video or the game's every
+pitch on Baseball Savant, on your call ("drop the video link"); his action
+photo and View game ↗ (MLB.com) stay (step 99; AP). And the slip's fresh
+prices no longer touch the board's budget, on your call ("make it so it
+doesn't run through our budget"): the board's daily ceiling skips them,
+and an upload spends only credits the month can spare, what is left past
+the reserve once the rest of the month is paid for at the last week's
+pace (step 100; AZ). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -224,13 +231,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `An uploaded slip buys a fresh price for a leg whose own is over an hour old, one call per game, inside a small daily credit cap`
+**A. The box has today's code.** The first line should end `Fresh slip prices spend only the month's spare credits and never the board's daily ceiling; the MLB hit page drops its at-bat video links`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 9a6fb8e0 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 0cee6b30 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -341,11 +348,15 @@ struck through here as it is built.
   daily budget the board uses, so you'd pick a daily cap (step 36,
   round three).~~ **Answered 2026-10-14: yes** ("do 1-11"). Built: step
   98, AZ. The cap starts at 20 credits a day; AZ says how to move it.
+  Later that day, on the build: "make it so it doesn't run through our
+  budget". Built: step 100 — the board's ceiling no longer counts them,
+  and they spend only the month's spare credits.
 * ~~**Cancel at the end of the month, or at once?**~~ **Answered
   2026-10-14** ("do 1-11"): it stays your Stripe setting, never code.
   Stripe → Settings → Billing → Customer portal → Cancellations: "At the
   end of the billing period" (the default, kept: they keep what they paid
-  for) or "Immediately". The site handles either (step 37).
+  for) or "Immediately". The site handles either (step 37). Later that
+  day: "that's fine".
 * ~~**The last-leg alert on the Alerts bell too?**~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 92.
 * **Pull a Most Likely pick when its line moves a point against it
@@ -370,7 +381,8 @@ struck through here as it is built.
   the site is paid. That already covers the stats and headshots we show;
   the hit page's at-bat video links and action photos (step 84) make it
   more visible. Keep them, or drop those two?~~ **Answered 2026-10-14:
-  keep them** ("do 1-11"). Say "drop" and both go.
+  keep them** ("do 1-11"); later that day, **"drop the video link"**.
+  Built: step 99 — the video links are gone; the action photo stays.
 * ~~**Grade a college receiving bet the way the book does when the play
   file shows he was thrown at** (step 53)?~~ **Answered 2026-10-13: yes**
   ("Also add both from my calls, the CFB and nba things"). Built: step 59,
@@ -1043,8 +1055,7 @@ pasting back.
 seconds, then your phone). Nothing to run for them: within a couple of
 hours of the push the box's chart fill reads this season's parks, finals
 and records off MLB's schedule (one request), up to 350 hitters' game logs
-for their runs and steals, the video ids of the last month's at-bats (60
-games) and Baseball Savant's two boards; the nightly chores do the rest a
+for their runs and steals and Baseball Savant's two boards; the nightly chores do the rest a
 night at a time, every hitter within two or three nights. One line for
 each of the seven, in your order:
 ```
@@ -1067,10 +1078,8 @@ Paste it all back. How to read it:
    rate. Far off that, paste it.
 5. `Baseball Savant`: expected stats and barrel rates for some six
    hundred hitters, as of today. "no file yet" is the fill not having run.
-6. `video`: most plate appearances of the last month should carry an id,
-   and the example link should open that at-bat's video on Savant. "0 of"
-   means MLB's play-by-play gives no ids: paste it; each game card then
-   links to the game's whole Savant feed instead.
+6. `video`: reads "dropped 2026-10-14" (step 99): the page links no
+   video, and nothing is read for it.
 7. `action photo`: `200 image/jpeg` is MLB's photo there. `not there:
    HTTP Error 404` means the page shows his headshot instead (it falls
    back by itself); paste it.
@@ -1087,8 +1096,7 @@ photo in the hero (or his headshot, where MLB has none); By game, under
 the date, the park ("@ Yankee Stadium"; in October the series and the
 game of it) and View game ↗ (MLB.com); in the regular season each club's
 record under its score; R and SB among the game's tiles; a Barrel tag on
-an at-bat that was one; the Watch row under the at-bats, each numbered
-chip that at-bat's video, and Every pitch ↗ the game's on Savant; and on
+an at-bat that was one; no video links under the at-bats (step 99); and on
 Where he hits it, Runs and Stolen bases among the six big numbers, Barrel
 % beside hard hit, and the line "MLB's own · Baseball Savant · as of"
 with his xBA, xSLG and barrel rate.
@@ -1252,17 +1260,20 @@ its price (the second fighter wore the first fighter's book), from the
 prices stored on every paid pull since 2026-08-10. Their grades stay as
 they are; whether the Record page says anything about them is yours.
 
-**AZ. Fresh prices for an uploaded slip** (step 98; read-only, seconds).
+**AZ. Fresh prices for an uploaded slip** (steps 98 and 100; read-only, seconds).
 After a slip is uploaded with a leg whose game is today (yours will do),
 paste all of it:
 ```
 journalctl -u qellys --since "24 hours ago" --no-pager | grep "slip odds" | tail -10
-cd /srv/qellys && sudo -u qellys python3 -c "from engine import slipodds as SO; print(SO.spent_today(), 'of', SO.daily_cap(), 'fresh-price credits spent today')"
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import slipodds as SO; print(SO.spent_today(), 'of', SO.daily_cap(), 'fresh-price credits spent today;', SO.spare_credits(), 'spare this month')"
 ```
 Each upload that bought prints a line: how many legs got a fresh price, on
 how many games, the credits, and the day's total against the cap; "held
-(cap)" means the day's allowance was used up, "held (reserve)" that the
-month's credits are near the floor the board keeps. The cap starts at 20
+(cap)" means the day's allowance was used up, "held (spare)" that the
+month has no credits to spare (step 100: what is left past the reserve
+once the rest of the month is paid for at the last week's pace). "0 spare
+this month" late in a busy month is the guard working, not a fault; the
+board never pays for these either way. The cap starts at 20
 credits a day. To move it (40 here; 0 turns fresh pulls off), then restart
 so the site reads it:
 ```
@@ -3849,7 +3860,7 @@ first). Paste back anything that prints an error or looks off.
        Savant, and Every pitch ↗ the game's whole Savant feed — which is
        all a game read before today gets, except the last month's, read
        again for their ids 60 games a night, once. Links out; nothing of
-       MLB's is copied or hosted.
+       MLB's is copied or hosted. Dropped the same day (step 99).
     7. HIS ACTION PHOTO, off the same MLB photo server as his headshot,
        in the headshot's place once it loads; a man with none keeps his
        headshot (no default image is asked for, so a missing photo fails
@@ -4078,8 +4089,9 @@ first). Paste back anything that prints an error or looks off.
     one line; the fresh read finds the bout nearest the card; a copy on
     disk is never taken for ESPN's answer; the runbook names the command).
     No pin changed. Your two calls answered without code are in H: MLB's
-    at-bat video links and action photos stay, and when a cancellation
-    takes effect stays your Stripe portal's setting.
+    at-bat video links and action photos stay (the video links went later
+    that day, step 99), and when a cancellation takes effect stays your
+    Stripe portal's setting.
 91. **Saved slips settle in My Bets with the Live tab closed** (2026-10-14,
     you: "do 1-11", to "saved slips settled by the server?"). AU checks
     it. BEFORE: a slip saved from the parlay checker settled only while
@@ -4307,7 +4319,51 @@ first). Paste back anything that prints an error or looks off.
     steps in order with the old live-price object named; it names the new
     one, the order unchanged. New: `engine/slipodds.py`;
     `tests/test_an_uploaded_slip_buys_a_fresh_price_inside_its_cap.py` (15
-    checks).
+    checks). **The budget changed the same day: step 100.**
+99. **The hit page links no at-bat video** (2026-10-14, you: "drop the
+    video link", to H's MLB terms). AP's item 6 says so. MLB's stats feed
+    allows non-commercial use only and the site is paid; the links made
+    that more visible. Gone: the numbered chip per at-bat that opened its
+    video on Baseball Savant, Every pitch ↗ / Watch at-bats ↗ (the game's
+    Savant feed), the export's Video column, and the nightly re-read of
+    the last month's games for their video ids (60 games a night off MLB's
+    feed, for a number nothing shows now). Kept: his action photo, View
+    game ↗ to MLB.com, and the id of the pitch each at-bat ended on, which
+    the fold already reads with the pitch (it costs nothing, is never
+    served, and keeps the door open if you ever license the video).
+    `hitpagecheck.py`'s item 6 now prints "dropped". Pins changed, told to
+    you, all in `tests/test_the_hit_page_has_what_the_renders_showed.py`:
+    the check that the chart served each at-bat's video id now checks it
+    never does; the check that the last month's games were read again for
+    their ids is replaced by one that nothing reads them; the chart fill's
+    report and its one-part-fails check lost their video line; the box
+    check's item 6 expects "dropped"; the page check's section 6 now
+    checks no Savant video or feed link is drawn anywhere and the export
+    ends at Barrel; the styles check now checks the chips' styles are gone;
+    the opt-in browser check expects no video link.
+100. **Fresh slip prices never touch the board's budget** (2026-10-14, you:
+    "make it so it doesn't run through our budget", on step 98). AZ checks
+    it. BEFORE: a fresh slip pull was counted against its league's daily
+    ceiling, the one that paces the board's own pulls, so a busy afternoon
+    of uploads could hold that league's next board pull. NOW: the ceiling
+    skips them by name (`oddsbudget.SLIP_KINDS`, beside the harvest's), and
+    an upload spends only SPARE credits (`oddsbudget.spare_credits`): the
+    month's balance, less the reserve, less the rest of the month at the
+    last seven full days' pace (every credit, the slip pulls' own
+    included, today counted as a whole day). It errs toward nothing: no
+    ledger, or one begun today, spares nothing, and a busy week spares
+    less. The 20-credit daily cap stays on top. A game past either keeps
+    our last pull's price, and the card says "fresh pulls only use spare
+    odds credits, and this month has none to spare". Every credit is still
+    written to the ledger, and a report of a league's spend still counts
+    it. Pins changed, told to you, in
+    `tests/test_an_uploaded_slip_buys_a_fresh_price_inside_its_cap.py`:
+    the check that the board's ceiling counted these calls is turned
+    round, and "near the reserve, nothing is bought" became "with nothing
+    to spare, nothing is bought". New there: the spare covers the whole
+    upload, not each game alone; the spare arithmetic; that it errs toward
+    nothing; and the board's ceiling never counting a slip pull, on
+    2026-09-10's baseball numbers (19 checks).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

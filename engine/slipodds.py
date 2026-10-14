@@ -17,13 +17,16 @@ game, so a four-leg ticket over two games is about three or four. The
 prices come back in the shape the card already draws (`sliplive`), each
 stamped with the moment it was pulled.
 
-THE BUDGET. The same daily budget the board uses: every call is journalled
-under its league (`oddsapi._classify` names it "slip_event"), where the
-board's daily ceiling counts it. On top of that, its own cap,
-QB_SLIP_ODDS_DAILY_CAP credits a day across every upload (DEFAULT_DAILY_CAP
-when unset, 0 turns it off), and never into the month's reserve
-(`oddsbudget.RESERVE`). A game it cannot afford keeps the board's price,
-and the card says so.
+THE BUDGET. Never the board's. Ethan, the same day, on the first build
+(which counted these credits against the board's daily ceiling): "make it
+so it doesn't run through our budget". Every call is journalled under its
+league as its own kind ("slip_event", `oddsapi._classify`), which the
+board's ceiling skips (`oddsbudget.SLIP_KINDS`), and an upload spends only
+spare credits (`oddsbudget.spare_credits`): what the month has left past
+the reserve and past the rest of the month at the last week's pace. On top
+of that, its own cap, QB_SLIP_ODDS_DAILY_CAP credits a day across every
+upload (DEFAULT_DAILY_CAP when unset, 0 turns it off). A game it cannot
+afford keeps the board's price, and the card says so.
 """
 
 from __future__ import annotations
@@ -261,10 +264,14 @@ def _fetch(event_id: str, keys: list[str], league: str) -> dict:
     return payload
 
 
-def _affordable(cost: int) -> bool:
-    """Would ``cost`` stay clear of the month's reserve?"""
+def spare_credits() -> int:
+    """The month's spare credits (`oddsbudget.spare_credits`); 0 when the
+    budget cannot be read."""
     from . import oddsbudget as OB
-    return OB.pool_remaining() - OB.RESERVE >= cost
+    try:
+        return int(OB.spare_credits())
+    except Exception:                                          # noqa: BLE001
+        return 0
 
 
 def _plural(n: int, word: str) -> str:
@@ -274,18 +281,18 @@ def _plural(n: int, word: str) -> str:
 class FreshLive(SL.Live):
     """`sliplive.Live` that buys a fresh price for a leg whose own is old,
     once per upload, inside the cap. ``fetch``, ``events``, ``spent``,
-    ``cap`` and ``affordable`` are the paid call, the events list, today's
-    spend, the cap and the reserve check — the network and the ledger in
-    production, fixtures in a test."""
+    ``cap`` and ``spare`` are the paid call, the events list, today's
+    spend, the cap and the month's spare credits — the network and the
+    ledger in production, fixtures in a test."""
 
     def __init__(self, indexes=None, fast_dir=None, now=None, fetch=None, events=None,
-                 spent=None, cap=None, affordable=None):
+                 spent=None, cap=None, spare=None):
         super().__init__(indexes, fast_dir, now)
         self.fetch = fetch or _fetch
         self.events = events or _events
         self.spent = spent if spent is not None else spent_today
         self.cap = daily_cap() if cap is None else int(cap)
-        self.affordable = affordable or _affordable
+        self.spare = spare or spare_credits
         self.fresh: dict = {}
 
     def _wants(self, leg: dict, boards: dict, now: float):
@@ -332,7 +339,7 @@ class FreshLive(SL.Live):
             g["legs"].append(leg)
         if not games:
             return
-        spent, cap = self.spent(), self.cap
+        spent, cap, spare = self.spent(), self.cap, self.spare()
         stamp = _iso(now)
         got = held = credits = pulled = 0
         why = ""
@@ -342,9 +349,9 @@ class FreshLive(SL.Live):
                 held += len(g["legs"])
                 why = why or "cap"
                 continue
-            if not self.affordable(cost):
+            if credits + cost > spare:
                 held += len(g["legs"])
-                why = why or "reserve"
+                why = why or "spare"
                 continue
             try:
                 payload = self.fetch(event_id, g["keys"], league)
@@ -365,7 +372,7 @@ class FreshLive(SL.Live):
                          f"{credits} credit(s) ({spent + credits} of {cap} today)"
                          + (f"; {held} held ({why})" if held else "") + "\n")
         say = {"cap": "today's fresh pulls are used up",
-               "reserve": "fresh pulls are paused to keep the month's odds credits",
+               "spare": "fresh pulls only use spare odds credits, and this month has none to spare",
                "error": "a fresh pull could not be made just now"}.get(why, "")
         note = f"Prices pulled just now for {_plural(got, 'leg')}." if got else ""
         if held:

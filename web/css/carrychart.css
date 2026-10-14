@@ -743,20 +743,6 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-btn:hover, .mb-btn[aria-pressed="true"] { border-color: var(--brand); }
 a.mb-btn { text-decoration: none; }
 .mb-btn.mb-ext span { color: var(--text-mute); }
-/* the at-bats to watch, numbered as the table numbers them, and the
-   game's every pitch on Baseball Savant */
-.mb-watch { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.mb-watch-h { margin-right: 2px; font-size: var(--fs-2xs); letter-spacing: .14em; text-transform: uppercase; font-weight: 800;
-  color: var(--text-mute); }
-.mb-vchip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px;
-  border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text-dim); text-decoration: none;
-  font-size: var(--fs-xs); font-weight: 700; }
-.mb-vchip b { font-family: var(--font-mono); color: var(--text); }
-.mb-vchip span { font-size: 10px; color: var(--brand); }
-.mb-vchip:hover { border-color: var(--brand); color: var(--text); }
-.mb-vchip.hr { border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
-.mb-vchip.h { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
-.mb-watch .mb-ext { margin-left: auto; }
 /* MLB's own expected stats and barrel rate, beside ours */
 .mb-own { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 10px 2px 0; font-size: var(--fs-sm);
   color: var(--text-dim); }

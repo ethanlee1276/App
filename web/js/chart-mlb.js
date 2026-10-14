@@ -93,9 +93,11 @@
      finals stored agrees with it), the park and a button to MLB's own page
      of the game, barrels (MLB's published rule, on MLB's own exit velocity
      and launch angle) beside MLB's own barrel rate, MLB's own expected
-     average and slugging beside ours (Baseball Savant), every at-bat's
-     video on Baseball Savant, and his action photo in place of his
-     headshot. A number not on file yet is left out, never guessed. */
+     average and slugging beside ours (Baseball Savant), and his action
+     photo in place of his headshot. A number not on file yet is left out,
+     never guessed. Every at-bat's video on Baseball Savant was the seventh,
+     and is gone (Ethan, 2026-10-14, on MLB's non-commercial terms: "drop
+     the video link"). */
   const FIELDER = { 1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF", 8: "CF", 9: "RF" };
   const NOT_AB = new Set(["walk", "intent_walk", "hit_by_pitch", "sac_fly", "sac_bunt", "catcher_interf",
                           "sac_fly_double_play", "sac_bunt_double_play"]);
@@ -108,12 +110,8 @@
     return t && !isNaN(t) ? t.toLocaleDateString("en-US", o) : iso || "";
   };
   const mark = (sport, a, n) => (a && typeof teamMarkIn === "function" ? teamMarkIn(sport, a, n) : "");
-  /* MLB'S OWN PAGES, opened beside ours: the game on MLB.com, every pitch
-     of it on Baseball Savant, and one at-bat's video there by the id of
-     the pitch it ended on (engine/mlb/charts.play_ids). */
+  /* MLB'S OWN PAGE OF THE GAME, opened beside ours on MLB.com. */
   const GAMEDAY = (pk) => `https://www.mlb.com/gameday/${encodeURIComponent(pk)}`;
-  const SAVANT_GAME = (pk) => `https://baseballsavant.mlb.com/gamefeed?gamePk=${encodeURIComponent(pk)}`;
-  const SAVANT_PLAY = (id) => `https://baseballsavant.mlb.com/sporty-videos?playId=${encodeURIComponent(id)}`;
   const ext = (href, html, cls, said) => `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener noreferrer"${said
     ? ` aria-label="${esc(said)}"` : ""}>${html}</a>`;
   const ARROW = '<span aria-hidden="true">↗</span>';
@@ -431,19 +429,6 @@
     return [g.venue ? `@ ${g.venue}` : "", g.dh ? `Game ${g.dh} of a doubleheader` : "",
             g.series ? `${g.series}${g.sgame ? `, Game ${g.sgame}` : ""}` : ""].filter(Boolean).join(" · ");
   }
-  /* THE AT-BATS TO WATCH: each at-bat MLB has the video of, numbered as
-     the table numbers it, on Baseball Savant; and the game's every pitch
-     there, which is every at-bat's video for a game read before the ids
-     were kept. A row of the table is a button, and a link is never put
-     inside a button, so they sit under it. */
-  function watch(g) {
-    if (!g.id) return "";
-    const pas = g.pas || [];
-    const one = pas.map((p, i) => (p.vid ? ext(SAVANT_PLAY(p.vid), `<b>${i + 1}</b> ${esc(SHORT[p.et] || p.ev || "")} <span aria-hidden="true">▶</span>`,
-      `mb-vchip ${tone(p.et)}`, `Watch at-bat ${i + 1}, ${result(p)}, on Baseball Savant`) : "")).filter(Boolean);
-    return `<div class="mb-watch">${one.length ? `<span class="mb-watch-h">Watch</span>${one.join("")}` : ""}
-      ${ext(SAVANT_GAME(g.id), `${one.length ? "Every pitch" : "Watch at-bats"} ${ARROW}`, "mb-btn mb-ext", "Every pitch of this game, with its video, on Baseball Savant")}</div>`;
-  }
   /* The game's head: the day, the opponent and where it was played, the
      result, and the button to MLB's own page of the game. */
   const scoreOf = (g) => (Array.isArray(g.score) && g.score.length === 2 && g.score.every((x) => x != null) ? g.score.map(Math.round) : null);
@@ -477,7 +462,6 @@
       ${scoreBoard(g, sport)}${gameTiles(g)}
       <div class="mb-sub-h"><h4 class="mb-sub">At bats <span class="cc-n">(${pas.length})</span></h4><div class="cc-tools">${Q.h.tools(pas, sprayFlags, SPRAY_FILTERS)}</div></div>
       ${atBats(g)}
-      ${watch(g)}
       ${any ? `<div class="mb-foot"><button type="button" class="mb-btn" data-tog="pbk" aria-pressed="${seq}">${seq ? "Hide the pitches" : "View pitch breakdown"} <span aria-hidden="true">→</span></button></div>` : ""}
     </section>`;
   }
@@ -591,14 +575,14 @@
                          ["hard", "Hard hit"], ["k", "Strikeouts"], ["bb", "Walks"], ["rbi", "Drove in a run"]];
   const sprayCsv = (g) => [["#", "Inning", "Pitcher", "Throws", "Pitch", "Pitch speed (mph)", "Result", "Event",
                             "Exit velocity (mph)", "Launch angle", "Distance (ft)", "Batted ball", "Direction", "RBI",
-                            "Pitches", "Every pitch", "xBA", "Barrel", "Video"]]
+                            "Pitches", "Every pitch", "xBA", "Barrel"]]
     .concat((g.pas || []).map((p, i) => {
       const lp = lastPitch(p);
       return [i + 1, nth(p.inn), p.p, p.ph, lp ? pitchName(lp[0]) : "", lp && lp[1] != null ? lp[1] : "", result(p), p.ev,
               p.ls == null ? "" : p.ls, p.la == null ? "" : p.la, p.d == null ? "" : p.d, TYPE[p.tr] || "", DIR[p.dir] || "",
               p.rbi || 0, p.np == null ? "" : p.np,
               (p.ps || []).map((x) => `${x[0] || "?"}${x[1] == null ? "" : ` ${x[1]}`} ${OUTCOME[outcome(x[2])]}`).join("; "),
-              p.xh == null ? "" : p.xh, p.br ? "yes" : "", p.vid ? SAVANT_PLAY(p.vid) : ""];
+              p.xh == null ? "" : p.xh, p.br ? "yes" : ""];
     }));
   /* Our expected average and slugging (engine/mlb/xstats), and what the
      held-out test (engine/mlb/xstatsfit) said of them, if it has run. */
@@ -697,10 +681,10 @@
     barTitle: (v) => SPRAY_TITLE[v],
     bars: (d, v) => sprayBars(d, v),
     splits: (d) => sprayTables(d),
-    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not his park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one he put in play, struck out or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. A barrel is MLB’s own rule on MLB’s own numbers: a ball hit 98 mph or harder at 26 to 30 degrees, the window widening with every mph past that until at 116 mph it runs from 8 to 50; the barrel rate is barrels over balls in play. Runs and stolen bases are his own game log’s, game by game; the season’s are shown only when every game on the chart has them. A club’s record is the one through that game, from MLB’s schedule, and shown only where our own count of the season’s finals agrees with it. MLB’s own expected average, slugging and barrel rate are Baseball Savant’s, as of the day shown. The video of an at-bat, and every pitch of a game, open on Baseball Savant; the game on MLB.com.${xNote(d)}</p>`,
+    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not his park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one he put in play, struck out or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. A barrel is MLB’s own rule on MLB’s own numbers: a ball hit 98 mph or harder at 26 to 30 degrees, the window widening with every mph past that until at 116 mph it runs from 8 to 50; the barrel rate is barrels over balls in play. Runs and stolen bases are his own game log’s, game by game; the season’s are shown only when every game on the chart has them. A club’s record is the one through that game, from MLB’s schedule, and shown only where our own count of the season’s finals agrees with it. MLB’s own expected average, slugging and barrel rate are Baseball Savant’s, as of the day shown. The game opens on MLB.com.${xNote(d)}</p>`,
     // The page's own arithmetic, for its tests.
-    _t: { line, result, nth, wallFt, inVs, pitchesSeen, where, sumOf, gameTiles, gameHead, scoreBoard, watch, mlbOwn,
-          SAVANT_PLAY, SAVANT_GAME, GAMEDAY },
+    _t: { line, result, nth, wallFt, inVs, pitchesSeen, where, sumOf, gameTiles, gameHead, scoreBoard, mlbOwn,
+          GAMEDAY },
     tip: (p) => {
       const lp = lastPitch(p);
       return `<b class="${band(p.et)}">${esc(result(p))}</b>${p.rbi ? ` · ${p.rbi} RBI` : ""}

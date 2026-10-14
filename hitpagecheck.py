@@ -5,8 +5,9 @@
 
 Ethan, 2026-10-14: "And yes do the first 7 page items" — his runs and
 stolen bases, each club's record on the day, the park and a View Game
-button, barrels, MLB's own expected stats, the video of each at-bat and
-his action photo (engine/mlb/charts, js/chart-mlb.js). One line or two
+button, barrels, MLB's own expected stats, the video of each at-bat (since
+dropped: Ethan, 2026-10-14, "drop the video link") and his action photo
+(engine/mlb/charts, js/chart-mlb.js). One line or two
 for each, in that order, off the database and the files the nightly and
 the chart fill write; the last line asks MLB's photo server whether one
 hitter's action photo is there (one HEAD request; `--no-probe` skips
@@ -160,20 +161,9 @@ def _savant(conn, today, season, seasons, probe):
 
 
 def _video(conn, today, season, seasons, probe):
-    from engine.mlb import charts as MC
-    out = []
-    for s in seasons[:1]:
-        last = _one(conn, "SELECT MAX(date) FROM mlb_pa WHERE season=?", (s,))
-        since = (_dt.date.fromisoformat(str(last)[:10]) - _dt.timedelta(days=MC.PLAY_IDS_DAYS)).isoformat() if last else ""
-        n = _one(conn, "SELECT COUNT(*) FROM mlb_pa WHERE season=? AND date>=?", (s, since)) or 0
-        ids = _one(conn, "SELECT COUNT(*) FROM mlb_pa WHERE season=? AND date>=? AND play_id != ''", (s, since)) or 0
-        unread = _one(conn, "SELECT COUNT(DISTINCT game_pk) FROM mlb_pa WHERE season=? AND date>=? AND play_id IS NULL",
-                      (s, since)) or 0
-        one = _one(conn, "SELECT play_id FROM mlb_pa WHERE season=? AND play_id != '' ORDER BY date DESC LIMIT 1", (s,))
-        out.append(f"6. video {s}: {ids:,} of {n:,} plate appearances since {since} carry MLB's video id, "
-                   f"{unread:,} games still to read again"
-                   + (f"; e.g. https://baseballsavant.mlb.com/sporty-videos?playId={one}" if one else ""))
-    return out
+    """The page links no at-bat video any more; said, so the numbering of
+    the seven stays the one Ethan listed."""
+    return ["6. video: dropped 2026-10-14 (MLB's non-commercial terms) — the page links none"]
 
 
 def _photo(conn, today, season, seasons, probe):

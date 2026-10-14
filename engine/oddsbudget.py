@@ -282,6 +282,16 @@ CREDIT_COST = {"live_event": 8, "live_board": 8, "live_events": 1,
 #: silently disabling another's.
 HARVEST_KINDS = frozenset({"hist_event", "hist_events", "hist_board"})
 
+#: THE SLIP LANE IS NOT THE BOARD'S EITHER. An uploaded parlay slip buys a
+#: fresh price for its own legs (`slipodds`, "slip_event") — and the first
+#: build counted those credits against the league's daily ceiling, so a
+#: busy afternoon of uploads could refuse that league's next board pull.
+#: Ethan, 2026-10-14: "make it so it doesn't run through our budget". So
+#: the ceiling skips the lane, and the lane spends only what the month can
+#: spare (`spare_credits`) under its own small daily cap. The ledger still
+#: writes every credit; a report about a league's spend still counts them.
+SLIP_KINDS = frozenset({"slip_event"})
+
 
 def log_spend(kind: str, sport: str = "", credits: int | None = None,
               detail: str = "", path: Path | str | None = None) -> None:
@@ -746,6 +756,42 @@ def daily_allowance(state: BudgetState | None = None,
     state = state or load()
     spendable = max(0, state.remaining - RESERVE) * LIVE_SHARE
     return int(spendable / days_left_in_month(today))
+
+
+#: The full days whose spend `spare_credits` takes as the month's pace.
+SPARE_DAYS = 7
+
+
+def spare_credits(today: _dt.date | None = None, days: int = SPARE_DAYS,
+                  path: Path | str | None = None,
+                  state_path: Path | str | None = None) -> int:
+    """Credits the month can spare: what the ring has left, less RESERVE,
+    less what the rest of the month will spend at the last ``days`` full
+    days' pace (every lane's credits, the slip lane's own included).
+
+    Only a lane that must never cost the board anything asks this — the
+    slip lane (SLIP_KINDS). Whatever it buys comes out of credits the
+    month would otherwise end with, so the board's pace to month end is
+    the same with it or without it.
+
+    Errs toward nothing. Today is left out of the pace (half a day would
+    understate it), and the rest of the month counts today as a whole day.
+    A ledger younger than ``days`` is averaged over the days it covers; no
+    ledger, or none before today, is no pace to judge by, and spares
+    nothing.
+    """
+    today = today or _dt.date.today()
+    rows = read_spend(path)
+    first = min((str(r.get("iso", ""))[:10] for r in rows if r.get("iso")), default="")
+    window = [(today - _dt.timedelta(days=i)).isoformat() for i in range(1, max(1, days) + 1)]
+    covered = [d for d in window if first and d >= first]
+    if not covered:
+        return 0
+    by_day = spend_by_day(rows)
+    spent = sum(cell[1] for d in covered for cell in by_day.get(d, {}).values())
+    pace = spent / len(covered)
+    left = pool_remaining(state_path) - RESERVE - pace * days_left_in_month(today)
+    return max(0, int(left))
 
 
 def refresh_credits(requests_per_refresh: int,
@@ -1388,8 +1434,9 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                  per_refresh)
     # METERED AGAINST THE LANES THIS CEILING PACES — see HARVEST_KINDS
     # for the sixty-five hours of empty baseball boards that came of
-    # metering it against every credit the league spent.
-    already = spent_today(now, sport=sport, exclude=HARVEST_KINDS)
+    # metering it against every credit the league spent, and SLIP_KINDS
+    # for the uploads that were never the board's to pay for.
+    already = spent_today(now, sport=sport, exclude=HARVEST_KINDS | SLIP_KINDS)
     # …and the close is not refused by the day's ceiling either: the
     # ceiling paces ORDINARY refreshes, and this is the one pull whose
     # value does not come back tomorrow.
