@@ -96,7 +96,13 @@ combos and the three counts included, and a count with none in a
 player's window no longer stops the whole NBA slate (step 77; AI). The
 "Sorry — part of this page failed to draw" line that came up on every
 Most Likely pick was the browser's resize notice, not a failure, and no
-longer shows (step 78; AJ). The whole picture, sport by sport, is in
+longer shows (step 78; AJ). Every chart page now follows your two renders:
+the game over the home team's stadium with both teams' logos, colours,
+records and the final; his charts as chips with their counts; the games in
+a row with arrows; the field drawn dark with every play lit; a Left /
+Middle / Right filter with the counts under the field; the numbers as icon
+tiles; every play as a table that filters and downloads; and the route
+chart's Route type, Depth and Coverage tabs (step 79; AK). The whole picture, sport by sport, is in
 `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -126,13 +132,13 @@ write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway). Every command runs on the box (`ssh`
 in first).
 
-**A. The box has today's code.** The first line should end `The browser's resize notice no longer puts the apology on every pick`
+**A. The box has today's code.** The first line should end `Every chart page in the frame of Ethan's renders: the game over its stadium, a lit field, every play as a table`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor fdbc2525 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor fdc0161f HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -751,6 +757,29 @@ draw` line should not come up. If it comes up once more, close the site
 and open it again (the phone can hold the old copy for one visit); if it
 still shows after that, screenshot it with the words in brackets — a
 real failure still gets the line, and that is the one to send.
+
+**AK. Your charts in the renders' frame** (step 79; one read-only command,
+seconds, then your phone and a desktop). The command reads one back's
+chart the way the page asks for it and prints his newest game's week, the
+opponent, the final (his team's score first) and both teams' records:
+```
+curl -s "http://127.0.0.1:8000/api/players/carries?sport=nfl&player=James%20Cook" | python3 -c "import json,sys; d=json.load(sys.stdin); g=(d.get('games') or [{}])[0]; print(g.get('week'), g.get('opp'), g.get('score'), g.get('rec'), g.get('orec'))"
+```
+Paste back the line, e.g. `5 ATL [27.0, 20.0] 4-1 2-3`. `None None None`
+at the end means the games table has no final for that game yet (the
+league's schedule file fills the scores after the game): the page then
+shows `VS` or `AT` instead of a score, never a guess. Then on your phone:
+open any NFL Most Likely pick on a back or a receiver and scroll to his
+chart. Check: the game over the home team's stadium with both logos, the
+final and both records; the ‹ › arrows step through his games; Left /
+Middle / Right fades the other sides' plays and lights that side's count;
+`Every carry (N)` / `Every target (N)` opens a table — change `All carries`
+to `5+ yards`, then tap the download button (a spreadsheet of that game's
+plays). On a desktop, a player page's `His charts` button opens the full
+page; tap `2025` on a receiver who played last season for the `Route
+type`, `Depth` and `Coverage` tabs. Every other league's chart (a QB's
+throws, a kicker, a hitter, a shooter, a skater, a fighter) sits in the
+same frame; a fighter and the matchup view have no stadium.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2953,6 +2982,59 @@ first). Paste back anything that prints an error or looks off.
     grows by 28 bytes: the first visit is 610.995 of 611 KB, under the
     budget, no bump. No pins changed. New:
     `tests/test_a_resize_notice_is_not_a_broken_page.py`.
+79. **Every chart page in the frame of your renders** (2026-10-14, you,
+    with two renders of the carry and route pages: "I like how it has the
+    stadium art behind the team logos. And I like how much better the
+    charts and shit look in this page look. So follow these renders for
+    how our pages should look"). AK checks it. One frame now holds every
+    chart, in every league, on a pick page and in the full page alike:
+    THE GAME OVER ITS STADIUM — his team left, the opponent right, each
+    over its own colour, the home team's building behind (the render
+    every game card uses), the week and the day, the final with his
+    team's score first, both records under the names. The final and the
+    records are read off the games table and nothing else
+    (`engine/carries.scoreboard`, added to the carry, route, passing and
+    kicker charts): a record counts regular-season finals only, so a
+    playoff game carries the season's record, as the league's pages do; a
+    college game shows its final and never a record, because the college
+    table keeps FBS games only and a record short of a game is a wrong
+    one; a game with no final shows `VS`/`AT`. The render's kickoff time
+    is not there: the games table does not keep kickoff times, so a past
+    game shows its final instead. HIS CHARTS as chips with their counts,
+    the views as tabs (the route chart adds `Route type` and `Coverage`
+    for a season the league charted — through 2025 — and `Depth` for
+    every NFL season), the games in a row with ‹ › arrows. THE DRAWING in
+    a card: the field dark, its mowing stripes, the sidelines and hash
+    marks, the line of scrimmage in gold, the holes or thirds named under
+    the field, every play lit by a faint wide copy of its line (no blur
+    filter, which has crashed iPhones on this site before), a back's runs
+    from a mark in the backfield; a route in his team's colour (the
+    render's blue for a Bill) with the run after the catch in gold. A
+    `Left / Middle / Right` filter fades the other sides' plays, and the
+    counts under the field say how many went each way and what share
+    (a run's side is its hole as the play-by-play splits it). The "i"
+    opens how the chart is drawn. THE NUMBERS as tiles with the site's
+    icons; the route chart's `Targets–Rec` tile is now two, `Targets` and
+    `Receptions`, as in the render. EVERY PLAY as a table: number,
+    quarter, yard line with the down under it, the hole and the yards, or
+    the route, depth, side, yards and the yards after; a result pill that
+    says no more than the file does (`Touchdown`, `1st down`, `Fumble
+    lost`, `Loss`, `No gain`, `Gain` — never "tackle", which the file does
+    not record); a filter (5+ yards, losses, first downs, touchdowns,
+    scrambles; catches, incompletions, interceptions) and a download of
+    the game's plays as a spreadsheet. Each row still reads the whole play
+    in words to a screen reader. Kept from before, on purpose: the X
+    stays top right (the status-bar fix of step 57), and on a pick page
+    the table and the splits stay folded so the page stays readable.
+    Checked in Chromium at phone and desktop width, dark and light, every
+    chart kind in every league, the comment-stripped copy the box serves
+    included: no script error, no sideways scroll. The module loads only
+    when a chart is opened, so the first visit is unchanged (app 494.486
+    of 495 KB, first visit 610.995 of 611 KB). Pins changed, told to you,
+    nothing loosened: `tests/test_a_route_chart_for_every_receiver.py` and
+    `tests/test_a_target_chart_for_every_college_receiver.py` pinned the
+    one `Targets–Rec` tile (`5-5`, `5-3`); they pin the two tiles now. New:
+    `tests/test_the_chart_page_follows_ethans_renders.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

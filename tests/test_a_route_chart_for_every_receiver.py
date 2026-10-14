@@ -425,7 +425,9 @@ def test_the_page_draws_every_target_and_lists_it():
     assert ">Inc<" in got["list4"] and ">INT<" in got["list4"] and ">Drop<" in got["list4"]
     assert ">Contested<" in got["list4"] and ">Not catchable<" in got["list4"]
     assert "Shallow cross · 5 air yds, left" in got["plist"] and "Zone · Cover 3" in got["plist"]
-    assert ">5-5<" in got["tiles"] and ">88<" in got["tiles"] and ">44<" in got["tiles"]
+    # Targets and receptions are two tiles since Ethan's renders (2026-10-14).
+    assert "Targets</span><b>5</b>" in got["tiles"] and "Receptions</span><b>5</b>" in got["tiles"]
+    assert ">88<" in got["tiles"] and ">44<" in got["tiles"]
     assert "Separation" in got["tiles"] and "4.5" in got["tiles"]
     assert "Separation" not in got["tilesNo"] and "1st downs" in got["tilesNo"], "never an estimate in its place"
     assert "Each line is the throw" in got["noteNow"]

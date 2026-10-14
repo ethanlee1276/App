@@ -331,6 +331,8 @@ def chart(conn, player: str, season: int | None = None) -> dict:
         out_games.append({"id": g["id"], "period": period, "week": week, "date": g["date"], "opp": g["opp"],
                           "home": g["home"], "team": g["team"], "line": _line(ts), "ngs": ngs.get(week),
                           "throws": ts})
+    from .carries import scoreboard
+    scoreboard(conn, "nfl", pick, out_games)
     thrown = [t for t in every if t["k"] == "pass"]
     by_zone = []
     for key, label, _lo, _hi in DEPTHS:

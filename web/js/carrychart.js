@@ -101,9 +101,12 @@
      where its rows are read from (for "still being filled"), the season
      tab and the section's line on a pick page. */
   const KIND = {
-    carries: { chip: "Carries", title: "Carry chart", noun: "carries", one: "carry", where: "where he runs" },
-    routes: { chip: "Targets", title: "Route chart", noun: "targets", one: "target", where: "where he’s thrown to" },
+    carries: { chip: "Carries", title: "Carry chart", noun: "carries", one: "carry", where: "where he runs",
+               dist: "Carry distribution", all: "All runs" },
+    routes: { chip: "Targets", title: "Route chart", noun: "targets", one: "target", where: "where he’s thrown to",
+              dist: "Target distribution", all: "All routes" },
     passes: { chip: "Passes", title: "Passing chart", noun: "throws", one: "throw", where: "where he throws",
+              dist: "Throw distribution", all: "All throws",
               sec: "every throw he made: how far, which side, complete or not, and the sacks he took" },
     spray: { chip: "Hits", title: "Hit tracker", noun: "plate appearances", one: "plate appearance",
              where: "where he hits it",
@@ -140,7 +143,7 @@
      the same chart: college targets have no air yards, no side of the
      field and no route, so they are a target chart, not a route chart. */
   KIND["routes@cfb"] = { chip: "Targets", title: "Target chart", noun: "targets", one: "target",
-                         where: "every target",
+                         where: "every target", dist: "Target distribution",
                          sec: "every pass thrown his way that the play file names: caught or not, the yards, the down and where on the field" };
   const kindOf = (kind, sport) => KIND[`${kind}@${sport}`] || KIND[kind] || KIND.carries;
   //: The charts drawn by registered parts (`plugView`), by kind.
@@ -306,51 +309,80 @@
     : /^(nba|nhl)$/.test(sport) ? `${y}-${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
 
   /* ---------------- the field ---------------- */
+  /* Drawn the way Ethan's renders draw it (2026-10-14): a dark turf with
+     its mowing stripes every five yards, brighter toward the line; the
+     sidelines and the hash marks in perspective; the yard numbers both
+     sides, the line of scrimmage in gold, and the lanes or thirds named
+     under the field, clear of the plays. No gradient or filter of the
+     SVG's own: a page can hold two charts, and an id one of them defines
+     would paint the other's only while the first is on screen. */
+  const P1 = (p) => `${p[0].toFixed(1)}`, P2 = (p) => `${p[1].toFixed(1)}`;
+  //: Where the names under the field sit: below its near edge.
+  const UNDER = BOT + 24;
   function fieldSVG(ymax, laneLabels, ticks) {
-    const lines = [];
-    for (let y = YMIN; y <= ymax; y += 5) {
-      if (y === 0) continue;
-      const a = proj(-SIDE, y, ymax), b = proj(SIDE, y, ymax);
-      lines.push(`<line class="cc-yd${y % 10 ? " minor" : ""}" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}"
-        x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>`);
-      if (y > 0 && y % 10 === 0) {
-        lines.push(`<text class="cc-ydl" x="${(a[0] - 8).toFixed(1)}" y="${(a[1] + 5).toFixed(1)}" text-anchor="end">+${y}</text>
-          <text class="cc-ydl" x="${(b[0] + 8).toFixed(1)}" y="${(b[1] + 5).toFixed(1)}">+${y}</text>`);
+    const L = (x, y) => proj(x, y, ymax);
+    const tl = L(-SIDE, ymax), tr = L(SIDE, ymax), bl = L(-SIDE, YMIN), br = L(SIDE, YMIN);
+    const out = [`<polygon class="cc-turf" points="${pt(bl)} ${pt(br)} ${pt(tr)} ${pt(tl)}"/>`];
+    for (let y = YMIN, k = 0; y < ymax; y += 5, k++) {
+      const y1 = Math.min(ymax, y + 5), near = 1 - (y - YMIN) / (ymax - YMIN);
+      out.push(`<polygon class="cc-mow${k % 2 ? " alt" : ""}" points="${pt(L(-SIDE, y))} ${pt(L(SIDE, y))} ${pt(L(SIDE, y1))} ${pt(L(-SIDE, y1))}" style="fill-opacity:${(0.02 + 0.07 * near).toFixed(3)}"/>`);
+    }
+    let hash = "";
+    for (let y = YMIN + 1; y < ymax; y++) {
+      if (y % 5 === 0) continue;
+      for (const [a, b] of [[-SIDE, -SIDE + 1.1], [SIDE - 1.1, SIDE], [-3.9, -2.7], [2.7, 3.9]]) {
+        hash += `M${pt(L(a, y))} L${pt(L(b, y))}`;
       }
     }
-    const tl = proj(-SIDE, ymax, ymax), tr = proj(SIDE, ymax, ymax);
-    const bl = proj(-SIDE, YMIN, ymax), br = proj(SIDE, YMIN, ymax);
-    const l0 = proj(-SIDE, 0, ymax), r0 = proj(SIDE, 0, ymax);
-    const lanes = (laneLabels || []).map(([x, t]) => {
-      const p = proj(x, -9.2, ymax);
-      return `<text class="cc-lane" x="${p[0].toFixed(1)}" y="${p[1].toFixed(1)}" text-anchor="middle">${esc(t)}</text>`;
-    }).join("");
-    const tk = (ticks || []).map(([x, t]) => {
-      const p = proj(x, -9.2, ymax);
-      return `<text class="cc-lane" x="${p[0].toFixed(1)}" y="${p[1].toFixed(1)}">${esc(t)}</text>`;
-    }).join("");
-    return `<polygon class="cc-turf" points="${pt(bl)} ${pt(br)} ${pt(tr)} ${pt(tl)}"/>
-      ${lines.join("")}
-      <line class="cc-los" x1="${l0[0].toFixed(1)}" y1="${l0[1].toFixed(1)}" x2="${r0[0].toFixed(1)}" y2="${r0[1].toFixed(1)}"/>
-      <text class="cc-losl" x="${(l0[0] - 8).toFixed(1)}" y="${(l0[1] + 4).toFixed(1)}" text-anchor="end">LOS</text>
-      <text class="cc-losl" x="${(r0[0] + 8).toFixed(1)}" y="${(r0[1] + 4).toFixed(1)}">LOS</text>
-      ${lanes}${tk}`;
+    out.push(`<path class="cc-hash" d="${hash}"/>`);
+    for (let y = YMIN + 5; y <= ymax; y += 5) {
+      if (y === 0) continue;
+      const a = L(-SIDE, y), b = L(SIDE, y);
+      out.push(`<line class="cc-yd${y % 10 ? " minor" : ""}" x1="${P1(a)}" y1="${P2(a)}" x2="${P1(b)}" y2="${P2(b)}"/>`);
+      if (y > 0 && y % 10 === 0) {
+        out.push(`<text class="cc-ydl" x="${(a[0] - 10).toFixed(1)}" y="${(a[1] + 5).toFixed(1)}" text-anchor="end">+${y}</text>
+          <text class="cc-ydl" x="${(b[0] + 10).toFixed(1)}" y="${(b[1] + 5).toFixed(1)}">+${y}</text>`);
+      }
+    }
+    out.push(`<path class="cc-sl" d="M${pt(bl)} L${pt(tl)} M${pt(br)} L${pt(tr)} M${pt(bl)} L${pt(br)}"/>
+      <text class="cc-ydl" x="${(bl[0] - 10).toFixed(1)}" y="${(bl[1] + 5).toFixed(1)}" text-anchor="end">−10</text>
+      <text class="cc-ydl" x="${(br[0] + 10).toFixed(1)}" y="${(br[1] + 5).toFixed(1)}">−10</text>`);
+    const l0 = L(-SIDE, 0), r0 = L(SIDE, 0);
+    out.push(`<line class="cc-los-h" x1="${P1(l0)}" y1="${P2(l0)}" x2="${P1(r0)}" y2="${P2(r0)}"/>
+      <line class="cc-los" x1="${P1(l0)}" y1="${P2(l0)}" x2="${P1(r0)}" y2="${P2(r0)}"/>
+      <text class="cc-losl" x="${(l0[0] - 10).toFixed(1)}" y="${(l0[1] + 5).toFixed(1)}" text-anchor="end">LOS</text>
+      <text class="cc-losl" x="${(r0[0] + 10).toFixed(1)}" y="${(r0[1] + 5).toFixed(1)}">LOS</text>`);
+    (laneLabels || []).forEach(([x, t]) => {
+      out.push(`<text class="cc-lane" x="${P1(L(x, YMIN))}" y="${UNDER}" text-anchor="middle">${esc(t)}</text>`);
+    });
+    (ticks || []).forEach(([x, t]) => {
+      out.push(`<text class="cc-lane" x="${P1(L(x, YMIN))}" y="${UNDER}">${esc(t)}</text>`);
+    });
+    return out.join("");
   }
 
   /* One carry's line and its marks. `i` is the carry's index in the
-     list under the chart, so a tap on either finds the other. */
+     list under the chart, so a tap on either finds the other. Under the
+     line, the same path wide and faint: the glow the renders give every
+     run, without a filter for a phone to rasterise. */
   function runSVG(i, pts, c, ymax, extra) {
     const end = proj(pts[pts.length - 1][0], pts[pts.length - 1][1], ymax);
     const cls = `cc-run ${c.band}${extra || ""}${S && S.sel === i ? " sel" : ""}`;
-    const delay = Math.min(i * 45, 900);
-    let marks = "";
+    const delay = Math.min(i * 45, 900), d = pathD(pts, ymax);
+    let marks = `<circle class="cc-end ${c.band}" cx="${P1(end)}" cy="${P2(end)}" r="2.6"/>`;
     if (c.td) marks += `<circle class="cc-td" cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="6"/>`;
     if (c.fl) marks += `<g class="cc-fum"><circle cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="6"/>
       <path d="M${(end[0] - 3).toFixed(1)} ${(end[1] - 3).toFixed(1)} l6 6 m0 -6 l-6 6"/></g>`;
     return `<g class="cc-carry" data-i="${i}">
-      <path class="cc-hit" d="${pathD(pts, ymax)}"/>
-      <path class="${cls}" d="${pathD(pts, ymax)}" pathLength="1" style="animation-delay:${delay}ms"/>
+      <path class="cc-hit" d="${d}"/>
+      <path class="cc-halo ${c.band}${extra || ""}" d="${d}" pathLength="1" style="animation-delay:${delay}ms"/>
+      <path class="${cls}" d="${d}" pathLength="1" style="animation-delay:${delay}ms"/>
       ${marks}</g>`;
+  }
+  //: Where a back's run starts: behind the line, in the backfield.
+  function originMark(ymax) {
+    const p = proj(0, POCKET, ymax);
+    return `<circle class="cc-origin" cx="${P1(p)}" cy="${P2(p)}" r="5.5"/>`;
   }
 
   function gameChart(g, sport, holes) {
@@ -365,7 +397,7 @@
         body += runSVG(i, pts, c, ymax, c.h ? "" : " nohole");
         if (c.y > ymax) body += longTag(hx, ymax, c.y);
       });
-      return svgWrap(fieldSVG(ymax, HOLES.map((h) => [LANE[h], h])) + body, g, sport, cs.length);
+      return svgWrap(fieldSVG(ymax, HOLES.map((h) => [LANE[h], h])) + originMark(ymax) + body, g, sport, cs.length);
     }
     const n = cs.length;
     const ticks = [];
@@ -453,7 +485,9 @@
     if (t.c) {
       const ey = clampY(cy + yacOf(t), ymax);
       if (Math.abs(ey - cy) > 0.3) {
-        after = `<path class="rc-yac" d="${pathD([[cx, cy], [cx, ey]], ymax)}" pathLength="1" style="animation-delay:${delay + 420}ms"/>`;
+        const yd = pathD([[cx, cy], [cx, ey]], ymax);
+        after = `<path class="rc-halo yac" d="${yd}" pathLength="1" style="animation-delay:${delay + 420}ms"/>
+          <path class="rc-yac" d="${yd}" pathLength="1" style="animation-delay:${delay + 420}ms"/>`;
         end = proj(cx, ey, ymax);
       }
       marks += `<circle class="rc-catch" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3.4"/>`;
@@ -463,9 +497,11 @@
       marks += `<circle class="rc-miss" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="4"/>`;
     }
     if (t.td) marks += `<circle class="cc-td" cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="7"/>`;
+    const d = pathD(pts, ymax);
     return `<g class="cc-carry" data-i="${i}">
-      <path class="cc-hit" d="${pathD(pts, ymax)}"/>
-      <path class="${cls}" d="${pathD(pts, ymax)}" pathLength="1" style="animation-delay:${delay}ms"/>
+      <path class="cc-hit" d="${d}"/>
+      ${t.c && !t.int ? `<path class="rc-halo" d="${d}" pathLength="1" style="animation-delay:${delay}ms"/>` : ""}
+      <path class="${cls}" d="${d}" pathLength="1" style="animation-delay:${delay}ms"/>
       ${after}${marks}</g>`;
   }
   const THIRDS = [[-17, "Left"], [0, "Middle"], [17, "Right"]];
@@ -521,8 +557,19 @@
   }
 
   /* ---------------- the page ---------------- */
+  /* Every number tile wears one of the site's own line icons (app.js
+     `icon`), by its label, as the renders' "GAME STATS" row does. */
+  const TILE_ICON = { "Carries": "football", "Targets": "target", "Receptions": "glove", "Yards": "rising",
+                      "Yds/carry": "gauge", "Yds/target": "gauge", "Yds/catch": "gauge", "Yds/att": "gauge",
+                      "TD": "star", "TD–INT": "star", "RYOE": "signal", "1st downs": "chev", "YAC": "bolt",
+                      "aDOT": "angle", "Separation": "scale", "Cmp/Att": "target", "Throw time": "clock",
+                      "Sacked": "warn", "Catch rate": "glove", "Completion": "check", "Success": "check",
+                      "Long": "rising", "10+ yd runs": "bolt", "Stuffed (0 or less)": "octagon", "Drops": "cross",
+                      "Contested won": "shield", "Throwaways": "dash", "Deep (20+)": "angle",
+                      "Red zone targets": "target", "Targets a game": "list" };
+  const ico = (k) => (typeof icon === "function" && TILE_ICON[k] ? icon(TILE_ICON[k], 13) : "");
   function tile(k, v, sub) {
-    return `<div class="cc-tile"><span class="cc-k">${esc(k)}</span><b>${esc(v)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div>`;
+    return `<div class="cc-tile"><span class="cc-k">${ico(k)}${esc(k)}</span><b>${esc(v)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div>`;
   }
   /* RYOE where the league published it (running backs, 10+ carries);
      first downs where it did not — never an estimate in its place. */
@@ -540,17 +587,40 @@
       <span><i class="sw gain"></i>5+ yds / TD</span><span><i class="mk td"></i>Touchdown</span>
       <span><i class="mk fum"></i>${f}</span>${anyNoHole ? `<span><i class="sw nohole"></i>Hole not recorded</span>` : ""}</div>`;
   }
+  /* EVERY CARRY AS A TABLE (the render's "EVERY CARRY (16)"): its number,
+     the quarter and clock, the yard line with the down under it, the
+     hole, the yards and how it ended. A row is one button, so a tap on
+     it finds its line on the field; its label reads the whole play in
+     words, the way the cells read it at a glance. `data-f` is what the
+     table's filter matches. A run that ended short of a first down is a
+     gain, no gain or a loss, never "tackle": the play-by-play does not
+     say how it ended beyond the yards. */
+  function carryResult(c, sport) {
+    const out = [];
+    if (c.td) out.push(["Touchdown", "good"]);
+    if (c.fl) out.push([sport === "nfl" ? "Fumble lost" : "Fumbled", "bad"]);
+    if (c.fd && !c.td) out.push(["1st down", "gold"]);
+    if (!out.length) out.push(c.y < 0 ? ["Loss", "bad"] : c.y === 0 ? ["No gain", "mute"] : ["Gain", "mute"]);
+    return out;
+  }
+  const carryFlags = (c) => [c.y >= 5 ? "big" : "", c.y < 0 ? "loss" : "", c.fd || c.td ? "fd" : "", c.td ? "td" : "",
+                             c.sc ? "sc" : "", c.fl ? "fum" : ""].filter(Boolean).join(" ");
+  const pills = (xs) => xs.map(([w, k]) => `<em class="cc-pill ${k}">${esc(w)}</em>`).join("");
   function listHTML(g, sport) {
-    return `<div class="cc-list" role="list">${(g.carries || []).map((c, i) => {
-      const tags = [c.sc ? "Scramble" : "", c.td ? "TD" : "", c.fl ? (sport === "nfl" ? "Fumble lost" : "Fumbled") : "",
-                    c.fd && !c.td ? "1st down" : ""].filter(Boolean);
-      return `<button type="button" role="listitem" class="cc-row${S && S.sel === i ? " sel" : ""}" data-i="${i}">
-        <i class="dot ${c.band}"></i>
-        <span class="cc-r-q">${esc(qLabel(c))}</span>
-        <span class="cc-r-dd">${esc([downDist(c), spot(c, g)].filter(Boolean).join(" · "))}</span>
-        <span class="cc-r-h">${esc(c.h ? HOLE_NAME[c.h] : (sport === "nfl" ? "Hole not recorded" : ""))}</span>
-        <b class="cc-r-y ${c.band}">${signed(c.y)}</b>
-        ${tags.length ? `<span class="cc-r-tags">${tags.map((t) => `<em>${esc(t)}</em>`).join("")}</span>` : ""}
+    return `<div class="cc-list cc-table cc-runs" role="list">
+      <div class="cc-lh" aria-hidden="true"><span>#</span><span>Qtr</span><span>Yard line</span><span>Dir</span><span class="r">Yards</span><span>Result</span></div>
+      ${(g.carries || []).map((c, i) => {
+      const res = carryResult(c, sport).concat(c.sc ? [["Scramble", "tag"]] : []);
+      const hole = c.h ? HOLE_NAME[c.h] : (sport === "nfl" ? "Hole not recorded" : "");
+      const said = [qLabel(c), [downDist(c), spot(c, g)].filter(Boolean).join(" · "), hole, `${signed(c.y)} yds`,
+                    ...res.map(([w]) => w)].filter(Boolean).join(", ");
+      return `<button type="button" role="listitem" class="cc-row cc-tr${S && S.sel === i ? " sel" : ""}" data-i="${i}" data-f="${carryFlags(c)}" aria-label="${esc(said)}">
+        <span class="cc-c-n">${i + 1}</span>
+        <span class="cc-c-q">${esc(qLabel(c) || "—")}</span>
+        <span class="cc-c-yl">${esc(spot(c, g) || "—")}<small>${esc(downDist(c))}</small></span>
+        <span class="cc-c-dir">${c.h ? `<span class="lg">${esc(hole)}</span><span class="sh">${esc(c.h)}</span>` : "—"}</span>
+        <b class="cc-c-y ${c.band}">${signed(c.y)}</b>
+        <span class="cc-c-res">${pills(res)}</span>
       </button>`;
     }).join("")}</div>`;
   }
@@ -597,13 +667,13 @@
 
   /* ---------------- the route chart's page ---------------- */
   function routeTiles(line, ngs) {
-    const t = [tile("Targets–Rec", `${line.tgt}-${line.rec}`), tile("Yards", Math.round(line.yds)), tile("TD", line.td),
-               tile("YAC", Math.round(line.yac)), tile("aDOT", num1(line.adot))];
+    const t = [tile("Targets", line.tgt), tile("Receptions", line.rec), tile("Yards", Math.round(line.yds)),
+               tile("TD", line.td), tile("YAC", Math.round(line.yac)), tile("aDOT", num1(line.adot))];
     // Separation where the league published it (5+ targets in a game);
     // first downs where it did not — never an estimate in its place.
     if (ngs && ngs.separation != null) t.push(tile("Separation", `${num1(ngs.separation)}`, "NGS · yds"));
     else t.push(tile("1st downs", line.first));
-    return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
+    return `<div class="cc-tiles cc-tiles-7">${t.join("")}</div>`;
   }
   function routeLegend(charted, season) {
     if (season) {
@@ -626,21 +696,44 @@
   function covWords(t) {
     return [t.cov ? (t.cov === "man" ? "Man" : "Zone") : "", t.sh].filter(Boolean).join(" · ");
   }
+  /* EVERY TARGET AS A TABLE (the render's "EVERY TARGET (8)"): its
+     number, the quarter, the route the league charted, how far past the
+     line, which third, caught or not, the yards and the yards after. A
+     college target has no depth or side on file, so its table has
+     neither column. On a phone the route, depth and side read as one
+     cell over the quarter and the yard line. */
+  const targetFlags = (t) => [t.int ? "int" : t.c ? "c" : "inc", t.fd || t.td ? "fd" : "", t.td ? "td" : ""]
+    .filter(Boolean).join(" ");
   function routeList(g) {
-    return `<div class="cc-list" role="list">${(g.targets || []).map((t, i) => {
-      const res = t.int ? "INT" : t.c ? signed(t.y) : "Inc";
-      const band = t.int ? "loss" : t.c ? "gain" : "miss";
+    const ts = g.targets || [];
+    const air = ts.some((t) => t.ay != null || BAND[t.s]), routed = ts.some((t) => t.rt);
+    return `<div class="cc-list cc-table cc-tgts${air ? "" : " noair"}" role="list">
+      <div class="cc-lh" aria-hidden="true"><span>#</span><span>Qtr</span><span>${air ? (routed ? "Route" : "Down") : "Yard line"}</span>${air
+        ? '<span class="r">Depth</span><span>Side</span>' : ""}<span>Result</span><span class="r">Yds</span><span class="r">YAC</span></div>
+      ${ts.map((t, i) => {
       const yac = t.c ? Math.round(yacOf(t)) : 0;
-      const tags = [t.td ? "TD" : "", t.fd && !t.td ? "1st down" : "",
+      const band = t.int ? "loss" : t.c ? "gain" : "miss";
+      const res = [t.int ? ["INT", "bad"] : t.c ? ["Catch", "good"] : ["Inc", "mute"]]
+        .concat(t.td ? [["TD", "good"]] : [], t.fd && !t.td ? [["1st down", "gold"]] : [],
+                (t.fl || []).filter((w) => FTN_TAG[w]).map((w) => [FTN_TAG[w], "tag"]));
+      const how = [ROUTE_NAME[t.rt] || "", airWords(t)].filter(Boolean).join(" · ") || zoneWord(t);
+      const where = [downDist(t), spot(t, g)].filter(Boolean).join(" · ");
+      const said = [qLabel(t), where, how, covWords(t), t.int ? "intercepted" : t.c ? `caught, ${signed(t.y)} yds` : "incomplete",
                     t.c && yac ? `${yac} yd${Math.abs(yac) === 1 ? "" : "s"} after catch` : "",
-                    ...(t.fl || []).map((w) => FTN_TAG[w] || ""), covWords(t)].filter(Boolean);
-      return `<button type="button" role="listitem" class="cc-row${S && S.sel === i ? " sel" : ""}" data-i="${i}">
-        <i class="dot ${band}"></i>
-        <span class="cc-r-q">${esc(qLabel(t))}</span>
-        <span class="cc-r-dd">${esc([downDist(t), spot(t, g)].filter(Boolean).join(" · "))}</span>
-        <span class="cc-r-h">${esc([ROUTE_NAME[t.rt] || "", airWords(t)].filter(Boolean).join(" · ") || zoneWord(t))}</span>
-        <b class="cc-r-y ${band}">${esc(res)}</b>
-        ${tags.length ? `<span class="cc-r-tags">${tags.map((x) => `<em>${esc(x)}</em>`).join("")}</span>` : ""}
+                    ...res.slice(1).map(([w]) => w)].filter(Boolean).join(", ");
+      const depth = t.ay == null ? "—" : `${Math.round(t.ay)}`;
+      return `<button type="button" role="listitem" class="cc-row cc-tr${S && S.sel === i ? " sel" : ""}" data-i="${i}" data-f="${targetFlags(t)}" aria-label="${esc(said)}">
+        <span class="cc-c-n">${i + 1}</span>
+        <span class="cc-c-q">${esc(qLabel(t) || "—")}</span>
+        <span class="cc-c-rt">${!air
+          ? `${esc(spot(t, g) || "—")}<small>${esc([downDist(t), zoneWord(t)].filter(Boolean).join(" · "))}</small>`
+          : routed ? `${esc(ROUTE_NAME[t.rt] || t.rt || "—")}<small>${esc(covWords(t) || where)}</small>`
+            : `${esc(downDist(t) || "—")}<small>${esc(spot(t, g))}</small>`}</span>
+        ${air ? `<span class="cc-c-dp">${esc(depth)}</span><span class="cc-c-sd">${esc(cap(SIDE_WORD[t.s]) || "—")}</span>` : ""}
+        <span class="cc-c-res">${pills(res)}</span>
+        <b class="cc-c-y ${band}">${t.c ? signed(t.y) : "—"}</b>
+        <span class="cc-c-yac">${t.c ? yac : "—"}</span>
+        <span class="cc-c-m"><b>${esc(how || where || "—")}</b><small>${esc([qLabel(t), how ? where : ""].filter(Boolean).join(" · "))}</small></span>
       </button>`;
     }).join("")}</div>`;
   }
@@ -757,10 +850,10 @@
     return svgWrap(fieldSVG(ymax, [], [[-22, "Misses"], [15, "Longest"]]) + body, null, "cfb", n, "targets");
   }
   function cfbTargetTiles(line) {
-    const t = [tile("Targets–Rec", `${line.tgt}-${line.rec}`), tile("Yards", Math.round(line.yds)), tile("TD", line.td),
-               tile("Yds/catch", line.rec ? num1(line.yds / line.rec) : "—"), tile("Catch rate", pct(line.catch)),
-               tile("1st downs", line.first)];
-    return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
+    const t = [tile("Targets", line.tgt), tile("Receptions", line.rec), tile("Yards", Math.round(line.yds)),
+               tile("TD", line.td), tile("Yds/catch", line.rec ? num1(line.yds / line.rec) : "—"),
+               tile("Catch rate", pct(line.catch)), tile("1st downs", line.first)];
+    return `<div class="cc-tiles cc-tiles-7">${t.join("")}</div>`;
   }
   const redZone = (d) => (d.by_field || []).filter((z) => z.zone === "rz" || z.zone === "gl").reduce((a, z) => a + z.tgt, 0);
   function cfbTargetLegend() {
@@ -947,6 +1040,209 @@
       <span>${esc([qLabel(t), downDist(t), spot(t, g), passWords(t)].filter(Boolean).join(" · "))}</span>`,
   };
 
+  /* ---------------- the page's frame (2026-10-14) ----------------
+     Ethan, with two renders of this page (a back's carries, a receiver's
+     targets): "I like how it has the stadium art behind the team logos.
+     And I like how much better the charts and shit look in this page
+     look. So follow these renders for how our pages should look." Every
+     chart now sits in that frame: the game over its stadium with both
+     teams' logos and colours, his charts as chips with their counts, the
+     views as tabs, the games in a row with arrows, the drawing in a card
+     with its side-of-the-field filter and counts, the numbers as icon
+     tiles, and every play in a table that filters and downloads. */
+  const HEX = /^#[0-9a-fA-F]{3,8}$/;
+  function teamOf(sport, a) {
+    const T = typeof teamsIn === "function" && a ? teamsIn(sport) : null;
+    return (T && T[a]) || {};
+  }
+  //: A team's colour, only as the team data spells one (it goes in a style).
+  const inkOf = (sport, a) => { const p = teamOf(sport, a).primary; return HEX.test(p || "") ? p : ""; };
+  const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
+  //: One side of the game: the logo, the city over the name, the record.
+  function heroTeam(sport, a, rec, right) {
+    const t = teamOf(sport, a);
+    const nick = t.nick || teamNameIn(sport, a) || a;
+    const loc = t.loc || (t.name && t.name !== nick && t.name.endsWith(nick) ? t.name.slice(0, -nick.length).trim() : "");
+    const mark = `<span class="cc-hero-logo">${teamMarkIn(sport, a, 56)}</span>`;
+    const words = `<span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b>${esc(nick)}</b>${rec
+      ? `<i>${esc(rec)}</i>` : ""}</span>`;
+    return `<div class="cc-hero-team${right ? " r" : ""}">${right ? words + mark : mark + words}</div>`;
+  }
+  /* The week and the day between them, and the final where the games
+     table has one (engine/carries.scoreboard): his team's score first. */
+  function heroMid(g) {
+    const when = g.week ? (ROUNDS[g.week] || `Week ${g.week}`) : "";
+    const dt = g.date ? new Date(g.date + "T12:00:00") : null;
+    const day = dt && !isNaN(dt) ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+    const sc = Array.isArray(g.score) && g.score.length === 2 && g.score.every((x) => x != null) ? g.score : null;
+    const won = sc ? (sc[0] > sc[1] ? "w" : sc[0] < sc[1] ? "l" : "t") : "";
+    return `<div class="cc-hero-mid">${when ? `<small>${esc(when)}</small>` : ""}${day ? `<span>${esc(day)}</span>` : ""}${sc
+      ? `<b class="cc-hero-score ${won}"><em>${Math.round(sc[0])}</em><i>–</i><em>${Math.round(sc[1])}</em></b><small class="cc-hero-fin">Final · ${won.toUpperCase()}</small>`
+      : `<b class="cc-hero-vs">${g.home ? "VS" : "AT"}</b>`}</div>`;
+  }
+  /* THE GAME OVER ITS STADIUM: his team on the left, the opponent on the
+     right, each over its own colour, the home team's building behind
+     (the family render every game card uses, venuePhotoTag). A season's
+     view has his team and the season's count. A fighter has no team and
+     no building: his chart opens on its title instead. */
+  function heroHTML(g, d, sport, sum) {
+    const mine = (g && g.team) || d.team;
+    if (!mine || (g && !g.opp)) return "";
+    const home = !g || g.home ? mine : g.opp;
+    const a = inkOf(sport, mine), b = g ? inkOf(sport, g.opp) : a;
+    const ink = [a ? `--ta:${a}` : "", b ? `--tb:${b}` : ""].filter(Boolean).join(";");
+    const art = typeof venuePhotoTag === "function" ? venuePhotoTag(sport, home, teamOf(sport, home)) : "";
+    const n = d.games.length;
+    const mid = g ? heroMid(g)
+      : `<div class="cc-hero-mid"><small>${esc(seasonName(sport, d.season))}</small><b class="cc-hero-vs">Season</b><span>${n} game${n === 1 ? "" : "s"}</span></div>`;
+    const right = g ? heroTeam(sport, g.opp, g.orec, true)
+      : `<div class="cc-hero-team r"><span class="cc-hero-name cc-hero-sum"><small>${esc(sum[1])}</small><b>${esc(sum[0])}</b></span></div>`;
+    return `<div class="cc-hero${g ? "" : " season"}"${ink ? ` style="${ink}"` : ""}>${art}
+      <div class="cc-hero-in">${heroTeam(sport, mine, g ? g.rec : "", false)}${mid}${right}</div></div>`;
+  }
+  //: The games, newest first, with an arrow either end (the render's carousel).
+  function gamesRow(d, sport, chipOf) {
+    const n = d.games.length;
+    return `<div class="cc-car">
+      <button type="button" class="cc-step" data-step="-1" aria-label="Newer game"${S.gi <= 0 ? " disabled" : ""}>‹</button>
+      <div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
+        `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}"><b>${esc(chipLabel(x, sport))}</b><small>${esc(chipOf(x))}</small></button>`).join("")}</div>
+      <button type="button" class="cc-step" data-step="1" aria-label="Older game"${S.gi >= n - 1 ? " disabled" : ""}>›</button></div>`;
+  }
+
+  /* WHICH SIDE OF THE FIELD (the render's "All Runs | Left | Middle |
+     Right" and the counts under its field): a run's hole, as the
+     play-by-play splits it (left end to left guard, the middle, right
+     guard to right end); a target's or a throw's third. A play the file
+     gives no side is counted in the whole and in no side. */
+  const SIDE_OF_HOLE = { LE: "L", LT: "L", LG: "L", M: "M", RG: "R", RT: "R", RE: "R" };
+  const SIDE_NAME = { L: "Left side", M: "Middle", R: "Right side" };
+  function sideOf(kind, x) {
+    if (!x) return "";
+    if (kind === "carries") return SIDE_OF_HOLE[x.h] || "";
+    if (kind === "routes" || (kind === "passes" && x.k === "pass")) return BAND[x.s] ? x.s : "";
+    return "";
+  }
+  //: A game's plays, in the order its drawing and its table number them.
+  const playsOf = (kind, g) => (!g ? [] : kind === "carries" ? g.carries || []
+    : kind === "routes" ? g.targets || [] : kind === "passes" ? g.throws || [] : []);
+  function segHTML(K) {
+    return `<div class="cc-seg" role="group" aria-label="Side of the field">${[["", K.all || "All"], ["L", "Left"],
+      ["M", "Middle"], ["R", "Right"]].map(([k, name]) =>
+      `<button type="button" data-side="${k}"${(S.side || "") === k ? ' class="on"' : ""} aria-pressed="${(S.side || "") === k}">${esc(name)}</button>`).join("")}</div>`;
+  }
+  function sidesHTML(kind, items, K, live) {
+    const by = { L: 0, M: 0, R: 0 };
+    let n = 0;
+    items.forEach((x) => {
+      if (kind === "passes" && x.k !== "pass") return;
+      n += 1;
+      const s = sideOf(kind, x);
+      if (s) by[s] += 1;
+    });
+    if (!by.L && !by.M && !by.R) return "";
+    return `<div class="cc-sides">${["L", "M", "R"].map((s) => {
+      const inner = `<span>${SIDE_NAME[s]}</span><b>${by[s]} <small>${esc(by[s] === 1 ? K.one : K.noun)}</small></b><i>${n ? Math.round(100 * by[s] / n) : 0}%</i>`;
+      return live ? `<button type="button" class="cc-sd" data-sd="${s}" data-side="${s}">${inner}</button>`
+        : `<div class="cc-sd" data-sd="${s}">${inner}</div>`;
+    }).join("")}</div>`;
+  }
+
+  /* THE CARDS: the drawing (its name, an "i" that opens how it is drawn,
+     the side filter), the numbers, and every play. */
+  function distCard(K, title, seg, fig, after, note, ink) {
+    return `<section class="cc-card cc-dist"${ink ? ` style="--tm:${ink}"` : ""}><header class="cc-card-h"><h3 class="cc-card-t">${esc(title || K.dist || K.title)}${note
+      ? '<button type="button" class="cc-info" data-info aria-expanded="false" aria-label="How it’s drawn">i</button>' : ""}</h3>${seg}</header>
+      ${note ? `<div class="cc-pop" hidden>${note}</div>` : ""}${fig}${after}</section>`;
+  }
+  const statsCard = (title, html) => (html ? `<section class="cc-card cc-stats"><h3 class="cc-card-t">${esc(title)}</h3>${html}</section>` : "");
+  function playsCard(title, n, tools, body) {
+    if (C && C.inline) {
+      return `<section class="cc-card cc-plays">${fold("list", n == null ? title : `${title} (${n})`,
+        (tools ? `<div class="cc-tools">${tools}</div>` : "") + body)}</section>`;
+    }
+    return `<section class="cc-card cc-plays"><header class="cc-card-h"><h3 class="cc-card-t">${esc(title)}${n == null ? ""
+      : ` <span class="cc-n">(${n})</span>`}</h3>${tools ? `<div class="cc-tools">${tools}</div>` : ""}</header>${body}</section>`;
+  }
+  const splitsCard = (title, html) => (html ? `<section class="cc-card cc-splits">${fold("splits", title, html)}</section>` : "");
+
+  /* THE TABLE'S FILTER AND ITS DOWNLOAD: which plays show (each choice
+     with its count, and only the ones this game has), and the game's
+     plays as a spreadsheet. */
+  const FILTERS = {
+    carries: [["", "All carries"], ["big", "5+ yards"], ["loss", "Losses"], ["fd", "First downs"], ["td", "Touchdowns"],
+              ["sc", "Scrambles"], ["fum", "Fumbles"]],
+    routes: [["", "All targets"], ["c", "Catches"], ["inc", "Incomplete"], ["int", "Interceptions"], ["fd", "First downs"],
+             ["td", "Touchdowns"]],
+  };
+  const DL_ICON = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 2.5v8M4.6 7.3 8 10.7l3.4-3.4M3 13.5h10"/></svg>`;
+  function toolsHTML(kind, items, flagsOf) {
+    const n = {};
+    items.forEach((x) => flagsOf(x).split(" ").forEach((f) => { if (f) n[f] = (n[f] || 0) + 1; }));
+    const opts = FILTERS[kind].filter(([v]) => !v || n[v]);
+    if (!opts.some(([v]) => v === (S.filt || ""))) S.filt = "";
+    const dl = typeof Blob === "function"
+      ? `<button type="button" class="cc-dl" data-dl="${kind}" aria-label="Download this game’s ${esc(kind === "carries" ? "carries" : "targets")} as a spreadsheet">${DL_ICON}</button>` : "";
+    return `${dl}<span class="cc-filt"><select data-filt aria-label="Which plays to show">${opts.map(([v, name]) =>
+      `<option value="${v}"${v === (S.filt || "") ? " selected" : ""}>${esc(name)}${v ? ` (${n[v]})` : ""}</option>`).join("")}</select></span>`;
+  }
+  function csvOf(kind, g) {
+    const q = (v) => { const s = String(v == null ? "" : v); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const rows = kind === "carries"
+      ? [["#", "Quarter", "Clock", "Down", "To go", "Yard line", "Hole", "Yards", "Touchdown", "Fumble", "First down", "Scramble"]]
+        .concat((g.carries || []).map((c, i) => [i + 1, c.q, c.clk, c.dn, c.ds, spot(c, g), c.h ? HOLE_NAME[c.h] : "", c.y,
+          +!!c.td, +!!c.fl, +!!c.fd, +!!c.sc]))
+      : [["#", "Quarter", "Clock", "Down", "To go", "Yard line", "Route", "Air yards", "Side", "Caught", "Yards",
+          "After the catch", "Touchdown", "Interception", "First down", "Coverage", "Shell"]]
+        .concat((g.targets || []).map((t, i) => [i + 1, t.q, t.clk, t.dn, t.ds, spot(t, g), ROUTE_NAME[t.rt] || t.rt || "",
+          t.ay, SIDE_WORD[t.s] || "", +!!t.c, t.c ? t.y : 0, t.c ? Math.round(yacOf(t)) : "", +!!t.td, +!!t.int, +!!t.fd,
+          t.cov || "", t.sh || ""]));
+    return rows.map((r) => r.map(q).join(",")).join("\r\n") + "\r\n";
+  }
+  function download(kind) {
+    const d = S && S.data, g = d && d.games && d.games[S.gi];
+    if (!g || typeof Blob !== "function" || typeof URL === "undefined" || !URL.createObjectURL) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csvOf(kind, g)], { type: "text/csv;charset=utf-8" }));
+    a.download = `${[d.player, kind === "carries" ? "carries" : "targets", d.season, chipLabel(g, d.sport)].join(" ")
+      .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  /* THE ROUTE CHART'S OTHER VIEWS (the render's "Route Type | Depth |
+     Coverage" tabs): the season's targets by each, as bars — the route
+     and the coverage only for a season the league has charted. */
+  function routeViews(d) {
+    if (d.air === false) return [];
+    const v = [];
+    if ((d.by_route || []).length) v.push(["route", "Route type"]);
+    v.push(["depth", "Depth"]);
+    if ((d.by_cov || []).length || (d.by_shell || []).length) v.push(["cov", "Coverage"]);
+    return v;
+  }
+  const BAR_TITLE = { route: "Targets by route", depth: "Targets by depth", cov: "Targets against coverage" };
+  function barRows(rows) {
+    const live = rows.filter(([, x]) => x && x.tgt);
+    if (!live.length) return "";
+    const total = live.reduce((a, [, x]) => a + x.tgt, 0), most = Math.max(...live.map(([, x]) => x.tgt));
+    return `<div class="cc-bars">${live.map(([name, x]) => `<div class="cc-brow">
+        <span class="cc-bn">${esc(name)}</span>
+        <span class="cc-bt"><i style="width:${(100 * x.tgt / most).toFixed(1)}%"></i></span>
+        <b class="cc-bv">${x.tgt}<small>${pct(x.tgt / total)}</small></b>
+        <span class="cc-bx">${x.rec}/${x.tgt} caught · ${num1(x.ypt)} yds a target${x.td ? ` · ${x.td} TD` : ""}</span></div>`).join("")}</div>`;
+  }
+  function routeBars(d, view) {
+    if (view === "depth") return barRows(DEPTH.map(([k, name]) => [name, sumLines(d.by_zone.filter((z) => z.depth === k))]));
+    if (view === "route") return barRows((d.by_route || []).map((x) => [ROUTE_NAME[x.route] || x.route, x]));
+    const man = barRows((d.by_cov || []).map((x) => [x.coverage === "man" ? "Man" : "Zone", x]));
+    const shell = barRows((d.by_shell || []).map((x) => [x.shell, x]));
+    return (man ? `<h4 class="cc-bh">Man or zone</h4>${man}` : "") + (shell ? `<h4 class="cc-bh">Coverage shell</h4>${shell}` : "");
+  }
+
   function render() {
     const ov = C && C.root;
     if (!ov || !S) return;
@@ -971,86 +1267,109 @@
     const seasons = d.seasons.length > 1 ? `<div class="cc-seasons" role="group" aria-label="Season">${d.seasons.map((y) =>
       `<button type="button" class="cc-chip${y === d.season ? " on" : ""}" data-season="${y}" aria-pressed="${y === d.season}">${esc(seasonName(sport, y))}</button>`).join("")}</div>` : "";
     /* On a pick page the page above already says who he is, so the chart
-       opens on its switches instead of a second header with his face. */
-    /* His two charts' switch: on a pick page beside the seasons, in the
-       overlay (a door that asked for his chart) under his name. */
+       opens on its switches (his charts, the seasons) and then the game;
+       the overlay (a door that asked for his chart) opens on his face and
+       name, the game, and his charts under it — each render's order. */
     const kb = kindBar();
     const bar = C.inline ? kb + seasons : kb;
-    const head = (C.inline ? "" : `<header class="cc-head">
+    const views = P && P.only ? [] : [["game", K.by || "By game"], ["season", cap(K.where)]].concat(R ? routeViews(d) : []);
+    if (views.length && !views.some(([k]) => k === S.view)) S.view = S.view === "game" ? "game" : "season";
+    const head = C.inline ? "" : `<header class="cc-head">
         ${faceHTML(d, S)}
         <div class="cc-who">
-          <span class="cc-eyebrow">${esc(K.title)}</span>
+          <span class="cc-eyebrow">${esc(d.position && S.kind !== "fights" ? `${d.position} ${K.chip}` : K.title)}</span>
           <h2 class="cc-name">${esc(d.player)}</h2>
           <span class="cc-sub">${[d.jersey ? `#${esc(d.jersey)}` : "", esc(d.position || ""), d.team
             ? `${teamMarkIn(sport, d.team, 16)} ${esc(teamNameIn(sport, d.team))}` : ""].filter(Boolean).join(" · ")}</span>
         </div>
         ${seasons}
-      </header>`) + (bar ? `<div class="cc-bar">${bar}</div>` : "") + (P && P.only ? "" : `
-      <div class="cc-tabs" role="tablist">
-        <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">${esc(K.by || "By game")}</button>
-        <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${esc(seasonName(sport, d.season))} · ${esc(K.where)}</button>
-      </div>`);
-    /* Four parts in every view: what sits above the drawing (the games,
-       the title), the drawing, what reads it (the legend, the numbers)
-       and the long tail. The overlay stacks them as it always has; a
-       pick page's card, when it is wide, sets the drawing and its
-       numbers side by side (.cc-split) so the field is not drawn a
-       screen tall across a desktop. */
-    let top, fig, side, tail;
-    if (P) {
-      ({ top, fig, side, tail } = plugView(P, d, sport));
+      </header>
+      <p class="cc-desc">${esc(cap(descOf(S.kind, sport)))}.</p>`;
+    const tabs = views.length ? `<div class="cc-tabs" role="tablist">${views.map(([k, name]) =>
+      `<button type="button" role="tab" class="cc-tab${S.view === k ? " on" : ""}" data-view="${k}" aria-selected="${S.view === k}">${esc(name)}</button>`).join("")}</div>` : "";
+    /* The parts every view fills: the games row, the drawing's card, the
+       numbers' card and the long tail. A pick page's card, when it is
+       wide, sets the drawing beside its numbers (.cc-split) so the field
+       is not drawn a screen tall across a desktop. */
+    const note = P ? P.note(d) : R ? (d.air === false ? cfbTargetNote(d) : routeNote(d)) : noteHTML(d);
+    const L = d.season_line || {};
+    const game = S.view === "game" && !(P && P.only);
+    const g = game ? d.games[Math.min(S.gi, d.games.length - 1)] : null;
+    const items = playsOf(S.kind, g);
+    const every = [].concat(...(d.games || []).map((x) => playsOf(S.kind, x)));
+    const sided = (game ? items : every).some((x) => sideOf(S.kind, x));
+    const count = P && P.only ? ["", "", ""]
+      : String(P ? P.count(L, d) || "" : `${R ? L.tgt : L.n} ${K.noun}`).match(/^(\S+)\s*(.*)$/) || ["", "", ""];
+    const hero = P && P.only ? "" : heroHTML(g, d, sport, [count[1], count[2]]);
+    /* A pass is drawn in his team's colour (the render's blue routes for
+       a Bill); a run in the three gain colours. */
+    const ink = R || S.kind === "passes" ? inkOf(sport, (g && g.team) || d.team) : "";
+    const stage = (svg, tip) => `<div class="cc-stage">${svg}${tip ? '<div class="cc-tip" hidden></div>' : ""}</div>`;
+    const sides = sided ? sidesHTML(S.kind, game ? items : every, K, game) : "";
+    const seg = game && sided ? segHTML(K) : "";
+    let rows = "", title = "", dist, stats, tail;
+    if (P && P.only) {
+      const v = P.only(d, sport);
+      title = v.top;
+      dist = distCard(K, "", "", v.fig, "", note, ink);
+      stats = statsCard("Tonight’s numbers", v.side);
+      tail = v.tail;
+    } else if (P) {
+      const v = plugView(P, d, sport);
+      rows = v.rows;
+      title = v.title;
+      dist = distCard(K, "", seg, v.fig, sides, note, ink);
+      stats = statsCard(S.kind === "fights" ? (game ? "Fight stats" : "Career") : game ? "Game stats" : "Season stats", v.side);
+      tail = v.tail;
+    } else if (R && BAR_TITLE[S.view]) {
+      dist = distCard(K, BAR_TITLE[S.view], "", routeBars(d, S.view), "", "", ink);
+      stats = statsCard("Season stats", routeTiles(L, d.ngs));
+      tail = splitsCard("Every split · depth, side, route, coverage, down", routeTables(d));
     } else if (S.view === "season" && R && d.air === false) {
-      const L = d.season_line;
-      top = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
-      fig = `<div class="cc-stage">${cfbTargetSeason(d)}</div>`;
-      side = `${cfbTargetLegend()}
-        ${cfbTargetTiles(L)}
-        <div class="cc-tiles cc-tiles-2">${tile("Yds/target", num1(L.ypt))}${tile("Targets a game", num1(L.tgt / d.games.length))}${tile("Red zone targets", redZone(d))}${tile("Long", L.long == null ? "—" : Math.round(L.long))}</div>`;
-      tail = fold("splits", "Every split · down, field position", routeTables(d));
+      title = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
+      dist = distCard(K, "", "", stage(cfbTargetSeason(d)), cfbTargetLegend(), note, ink);
+      stats = statsCard("Season stats", `${cfbTargetTiles(L)}
+        <div class="cc-tiles cc-tiles-2">${tile("Yds/target", num1(L.ypt))}${tile("Targets a game", num1(L.tgt / d.games.length))}${tile("Red zone targets", redZone(d))}${tile("Long", L.long == null ? "—" : Math.round(L.long))}</div>`);
+      tail = splitsCard("Every split · down, field position", routeTables(d));
     } else if (S.view === "season" && R) {
-      const L = d.season_line;
-      top = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
-      fig = `<div class="cc-stage">${routeSeasonChart(d)}</div>`;
-      side = `${routeLegend(d.routes, true)}
-        ${routeTiles(L, d.ngs)}
+      title = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
+      dist = distCard(K, "", "", stage(routeSeasonChart(d)), sides + routeLegend(d.routes, true), note, ink);
+      stats = statsCard("Season stats", `${routeTiles(L, d.ngs)}
         <div class="cc-tiles cc-tiles-2">${tile("Catch rate", pct(L.catch))}${tile("Yds/target", num1(L.ypt))}${tile("Contested won", `${L.contested_won}/${L.contested}`)}${tile("Drops", L.drops)}</div>
-        ${routeNgs(d)}`;
-      tail = fold("splits", "Every split · depth, side, route, coverage, down", routeTables(d));
+        ${routeNgs(d)}`);
+      tail = splitsCard("Every split · depth, side, route, coverage, down", routeTables(d));
     } else if (S.view === "season") {
-      const any = d.games.some((g) => g.carries.some((c) => !c.h)) && d.holes;
-      top = `<div class="cc-title">${esc(`${d.season} season · ${d.season_line.n} carries in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
-      fig = `<div class="cc-stage">${seasonChart(d)}</div>`;
-      side = `${legendHTML(sport, any)}
-        ${tilesFor(d.season_line, (d.ngs || {}).ryoe)}
-        <div class="cc-tiles cc-tiles-2">${tile("Success", pct(d.season_line.success))}${tile("Stuffed (0 or less)", pct(d.season_line.stuffed))}${tile("10+ yd runs", d.season_line.explosive)}${tile("Long", d.season_line.long == null ? "—" : Math.round(d.season_line.long))}</div>
-        ${ngsLine(d)}`;
-      tail = fold("splits", `Every split · ${d.holes ? "hole, " : ""}down, field position`, seasonTables(d));
+      const any = d.games.some((x) => x.carries.some((c) => !c.h)) && d.holes;
+      title = `<div class="cc-title">${esc(`${d.season} season · ${L.n} carries in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
+      dist = distCard(K, "", "", stage(seasonChart(d)), sides + legendHTML(sport, any), note, ink);
+      stats = statsCard("Season stats", `${tilesFor(L, (d.ngs || {}).ryoe)}
+        <div class="cc-tiles cc-tiles-2">${tile("Success", pct(L.success))}${tile("Stuffed (0 or less)", pct(L.stuffed))}${tile("10+ yd runs", L.explosive)}${tile("Long", L.long == null ? "—" : Math.round(L.long))}</div>
+        ${ngsLine(d)}`);
+      tail = splitsCard(`Every split · ${d.holes ? "hole, " : ""}down, field position`, seasonTables(d));
     } else {
-      const g = d.games[Math.min(S.gi, d.games.length - 1)];
-      top = `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
-          `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(tally(R ? x.line.rec : x.line.n, x.line.yds))}</small></button>`).join("")}</div>
-        <div class="cc-title">${esc(gameTitle(g, sport, d.season))}</div>`;
+      rows = gamesRow(d, sport, (x) => tally(R ? x.line.rec : x.line.n, x.line.yds));
+      title = `<div class="cc-title">${esc(gameTitle(g, sport, d.season))}</div>`;
       if (R && d.air === false) {
-        fig = `<div class="cc-stage">${cfbTargetGame(g)}<div class="cc-tip" hidden></div></div>`;
-        side = `${cfbTargetLegend()}
-          ${cfbTargetTiles(g.line)}`;
-        tail = fold("list", `Every target, in order · ${g.targets.length}`, routeList(g));
+        dist = distCard(K, "", "", stage(cfbTargetGame(g), true), cfbTargetLegend(), note, ink);
+        stats = statsCard("Game stats", cfbTargetTiles(g.line));
+        tail = playsCard("Every target", g.targets.length, toolsHTML("routes", g.targets, targetFlags), routeList(g));
       } else if (R) {
-        fig = `<div class="cc-stage">${routeGameChart(g)}<div class="cc-tip" hidden></div></div>`;
-        side = `${routeLegend(g.targets.some((t) => t.rt), false)}
-          ${routeTiles(g.line, g.ngs)}`;
-        tail = fold("list", `Every target, in order · ${g.targets.length}`, routeList(g));
+        dist = distCard(K, "", seg, stage(routeGameChart(g), true), sides + routeLegend(g.targets.some((t) => t.rt), false), note, ink);
+        stats = statsCard("Game stats", routeTiles(g.line, g.ngs));
+        tail = playsCard("Every target", g.targets.length, toolsHTML("routes", g.targets, targetFlags), routeList(g));
       } else {
         const any = d.holes && g.carries.some((c) => !c.h);
-        fig = `<div class="cc-stage">${gameChart(g, sport, d.holes)}<div class="cc-tip" hidden></div></div>`;
-        side = `${legendHTML(sport, any)}
-          ${tilesFor(g.line, g.ryoe)}`;
-        tail = fold("list", `Every carry, in order · ${g.carries.length}`, listHTML(g, sport));
+        dist = distCard(K, "", seg, stage(gameChart(g, sport, d.holes), true), sides + legendHTML(sport, any), note, ink);
+        stats = statsCard("Game stats", tilesFor(g.line, g.ryoe));
+        tail = playsCard("Every carry", g.carries.length, toolsHTML("carries", g.carries, carryFlags), listHTML(g, sport));
       }
     }
-    const main = top + (C.inline ? `<div class="cc-split"><div class="cc-fig">${fig}</div><div class="cc-side">${side}</div></div>` : fig + side) + tail;
-    box.innerHTML = head + main + fold("note", "How it’s drawn",
-      P ? P.note(d) : R ? (d.air === false ? cfbTargetNote(d) : routeNote(d)) : noteHTML(d));
+    const barRow = bar ? `<div class="cc-bar">${bar}</div>` : "";
+    const main = C.inline ? `<div class="cc-split"><div class="cc-fig">${dist}</div><div class="cc-side">${stats}</div></div>` : dist + stats;
+    // The game over its stadium says what the title line said; a chart
+    // with no team to draw (a fighter's) keeps its title.
+    box.innerHTML = (C.inline ? barRow + hero : head + hero + barRow) + tabs + rows + (hero ? "" : title) + main + tail
+      + fold("note", "How it’s drawn", note);
     /* The chosen game's chip is brought to the middle of its row by
        scrolling the ROW. scrollIntoView would also scroll the page to it,
        and a chart drawn halfway down a pick page would pull the reader
@@ -1061,6 +1380,38 @@
       const a = chip.getBoundingClientRect(), b = row.getBoundingClientRect();
       row.scrollLeft += a.left + a.width / 2 - (b.left + b.width / 2);
     }
+    applySide();
+    applyFilt();
+  }
+
+  /* The side filter: the other sides' plays fade on the field, the
+     chosen side's count lights; the table's filter: the rows that do not
+     match go. Both are read off S, so a redraw keeps them. */
+  function applySide() {
+    const ov = C && C.root;
+    if (!ov || !S) return;
+    const side = S.side || "";
+    ov.querySelectorAll(".cc-seg [data-side]").forEach((b) => {
+      const on = (b.dataset.side || "") === side;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    ov.querySelectorAll(".cc-sd").forEach((x) => {
+      x.classList.toggle("on", !!side && x.dataset.sd === side);
+      if (x.tagName === "BUTTON") x.dataset.side = side === x.dataset.sd ? "" : x.dataset.sd;
+    });
+    const g = S.view === "game" && S.data && S.data.games ? S.data.games[S.gi] : null;
+    const items = playsOf(S.kind, g);
+    ov.querySelectorAll(".cc-stage .cc-carry").forEach((el) => {
+      const it = items[+el.dataset.i];
+      el.classList.toggle("off", !!side && !!g && sideOf(S.kind, it) !== side);
+    });
+  }
+  function applyFilt() {
+    const ov = C && C.root;
+    if (!ov || !S) return;
+    const f = S.filt || "";
+    ov.querySelectorAll(".cc-row[data-f]").forEach((r) => { r.hidden = !!f && !r.dataset.f.split(" ").includes(f); });
   }
 
   /* ON A PICK PAGE THE LONG TAIL FOLDS: every carry or target in order,
@@ -1079,22 +1430,21 @@
      chip with the game's own tally), the game's drawing with its tip,
      its numbers and every play in order. */
   function plugView(P, d, sport) {
-    if (P.only) return P.only(d, sport);
     if (S.view === "season") {
       const n = d.games.length;
-      return { top: `<div class="cc-title">${esc(P.seasonTitle ? P.seasonTitle(d)
+      return { rows: "",
+               title: `<div class="cc-title">${esc(P.seasonTitle ? P.seasonTitle(d)
                  : `${seasonName(sport, d.season)} season · ${P.count(d.season_line, d)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
                fig: `<div class="cc-stage">${P.season(d)}</div>`,
                side: P.seasonSide(d),
-               tail: fold("splits", P.splitsTitle, P.splits(d)) };
+               tail: splitsCard(P.splitsTitle, P.splits(d)) };
     }
     const g = d.games[Math.min(S.gi, d.games.length - 1)];
-    return { top: `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
-                `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(P.chip(x, d))}</small></button>`).join("")}</div>
-              <div class="cc-title">${esc(P.gameTitle ? P.gameTitle(g, d) : gameTitle(g, sport, seasonName(sport, d.season)))}</div>`,
+    return { rows: gamesRow(d, sport, (x) => P.chip(x, d)),
+             title: `<div class="cc-title">${esc(P.gameTitle ? P.gameTitle(g, d) : gameTitle(g, sport, seasonName(sport, d.season)))}</div>`,
              fig: `<div class="cc-stage">${P.game(g, d)}<div class="cc-tip" hidden></div></div>`,
              side: P.gameSide(g, d),
-             tail: fold("list", P.listTitle ? P.listTitle(g, d) : `Every ${P.one}, in order · ${P.items(g, d).length}`, P.list(g, d)) };
+             tail: playsCard(P.listTitle ? P.listTitle(g, d) : `Every ${P.one}`, P.listTitle ? null : P.items(g, d).length, "", P.list(g, d)) };
   }
 
   /* ---------------- selection and the tip ---------------- */
@@ -1310,8 +1660,32 @@
       if (v) { S.view = v.dataset.view; S.sel = -1; return render(); }
       const gi = hit(e, "[data-gi]");
       if (gi) { S.gi = +gi.dataset.gi; S.sel = -1; return render(); }
+      // The games row's arrows: the next game either way, never past the ends.
+      const step = hit(e, "[data-step]");
+      if (step && S.data && S.data.games) {
+        S.gi = Math.max(0, Math.min(S.data.games.length - 1, S.gi + Number(step.dataset.step)));
+        S.sel = -1;
+        return render();
+      }
+      const side = hit(e, "[data-side]");
+      if (side) { S.side = side.dataset.side || ""; return applySide(); }
+      const info = hit(e, "[data-info]");
+      if (info) {
+        const pop = info.closest(".cc-card") && info.closest(".cc-card").querySelector(".cc-pop");
+        if (pop) { pop.hidden = !pop.hidden; info.setAttribute("aria-expanded", String(!pop.hidden)); }
+        return;
+      }
+      const dl = hit(e, "[data-dl]");
+      if (dl) return download(dl.dataset.dl);
       const row = hit(e, ".cc-row, .cc-carry");
       if (row && S.view === "game") return select(+row.dataset.i);
+    });
+    // The table's filter: which plays it shows.
+    ov.addEventListener("change", (e) => {
+      const f = hit(e, "[data-filt]");
+      if (!f || !use(ov._cc)) return;
+      S.filt = f.value;
+      applyFilt();
     });
     ov.addEventListener("pointerover", (e) => {
       const g = hit(e, ".cc-carry");
@@ -1443,14 +1817,18 @@
     return `<div class="cc-kinds" role="group" aria-label="Which chart">${C.kinds.map((k) =>
       `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc(kindOf(k, S.sport).chip)}${k === "matchup" ? `<small>vs ${esc(S.opp || "")}</small>` : n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}</div>`;
   }
+  //: What a chart shows, in a line: the pick page's section heading, the overlay's line under his name.
+  function descOf(kind, sport) {
+    const K = kindOf(kind, sport);
+    if (K.sec) return K.sec;
+    return kind === "routes" ? "every pass thrown to him: how far, which side, caught or not, and the yards after"
+      : sport === "cfb" ? "every run he made: how far it went, and when in the game"
+        : "every run he made: the hole, how far it went, and where on the field";
+  }
   //: The section's own heading, kept short of the page's "why?" fold.
   function secHTML(c) {
     const R = c.S.kind === "routes", K = kindOf(c.S.kind, c.S.sport);
-    if (K.sec) return `${esc(K.title)} <span class="sub">— ${esc(K.sec)}.</span>`;
-    return `${R ? "Route chart" : "Carry chart"} <span class="sub">— ${R
-      ? "every pass thrown to him: how far, which side, caught or not, and the yards after"
-      : c.S.sport === "cfb" ? "every run he made: how far it went, and when in the game"
-        : "every run he made: the hole, how far it went, and where on the field"}.</span>`;
+    return `${esc(K.sec ? K.title : R ? "Route chart" : "Carry chart")} <span class="sub">— ${esc(descOf(c.S.kind, c.S.sport))}.</span>`;
   }
   const waitHTML = () => `<div class="cc-empty">Loading ${esc(S.player)}’s ${esc(kindOf(S.kind, S.sport).noun)}…</div>`;
   //: A chart's state; a switch keeps the view, the face and tonight's opponent.
@@ -1512,5 +1890,6 @@
                                          faceHTML, faceStep, inits, kindsFor, doorKinds, tally,
                                          KIND, DRAW, passGameChart, passSeasonChart, passTiles, passList,
                                          passTables, passChip, kindOf, cfbTargetGame, cfbTargetSeason,
-                                         cfbTargetTiles, cfbTargetNote } };
+                                         cfbTargetTiles, cfbTargetNote, heroHTML, sideOf, sidesHTML, carryResult,
+                                         carryFlags, targetFlags, csvOf, routeViews, routeBars, descOf } };
 })();

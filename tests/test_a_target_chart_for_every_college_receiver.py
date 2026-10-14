@@ -270,7 +270,9 @@ def test_the_page_draws_college_targets_straight_upfield():
     assert got["catches"] == 2 and got["misses"] == 1 and got["tds"] == 1 and got["marks"] == 3 and got["aria"]
     assert got["seasonMarks"] == 5 and got["avg"], "54 yards on three catches: 18.0 a catch over the season"
     assert got["rows"] == 3 and ">Inc<" in got["list"] and ">+14<" in got["list"] and "Red zone" in got["list"]
-    assert ">5-3<" in got["tiles"] and "Yds/catch" in got["tiles"] and "Catch rate" in got["tiles"]
+    # Targets and receptions are two tiles since Ethan's renders (2026-10-14).
+    assert "Targets</span><b>5</b>" in got["tiles"] and "Receptions</span><b>3</b>" in got["tiles"]
+    assert "Yds/catch" in got["tiles"] and "Catch rate" in got["tiles"]
     assert "aDOT" not in got["tiles"], "no air yards in the college file, so no depth of target"
     assert "92%" in got["note"] and "78%" in got["note"] and "interception" in got["note"]
     assert "By field position" in got["tables"] and "How far past the line" not in got["tables"]

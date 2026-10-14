@@ -498,6 +498,8 @@ def chart(conn, player: str, season: int | None = None, sport: str = "nfl") -> d
         out_games.append({"id": g["id"], "period": period, "week": week, "date": g["date"], "opp": g["opp"],
                           "home": g["home"], "team": g["team"], "line": _line(ts), "ngs": ngs.get(week),
                           "targets": ts})
+    from .carries import scoreboard
+    scoreboard(conn, sport, pick, out_games)
     by_zone = []
     for key, label, _lo, _hi in DEPTHS:
         for side in ("L", "M", "R"):

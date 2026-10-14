@@ -549,6 +549,7 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
                           "opp": g["opp"], "home": g["home"], "team": g["team"],
                           "line": _line(cs), "ryoe": row and row.get("ryoe"),
                           "xyds": row and row.get("expected_yards"), "carries": cs})
+    scoreboard(conn, sport, pick, out_games)
     holes = sport == "nfl"
     by_hole = []
     if holes:
@@ -589,6 +590,61 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
         "by_hole": by_hole, "by_zone": by_zone, "by_down": by_down, "kinds": kinds,
         "ngs": ngs.get(0) or {},
     }
+
+
+#: The NFL's regular season, in weeks: a record is a regular-season one.
+REG_WEEKS = 18
+
+
+def scoreboard(conn, sport: str, season: int, games: list[dict]) -> list[dict]:
+    """Each chart game's final and, in the NFL, both teams' records
+    through it — for the game drawn over its stadium at the top of every
+    football chart (Ethan, 2026-10-14, with two renders of the page).
+
+    Read off the games table and nothing else. A game it holds no final
+    for shows none, and a college record is never given: the college
+    table keeps the FBS games only, so a win over an FCS school is not in
+    it, and a record short of a game is a wrong record. A playoff game
+    carries the regular season's record, as the league's own pages do.
+
+    ``games`` are a chart's own (``{period, team, opp, home, ...}``); each
+    gains ``score: [his team's, the opponent's]`` and, in the NFL,
+    ``rec`` and ``orec`` ("4-1", "3-2-1"). Returns the same list."""
+    if sport not in ("nfl", "cfb") or not games:
+        return games
+    rows = conn.execute(
+        "SELECT period, home, away, home_score, away_score FROM games "
+        "WHERE sport=? AND season=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
+        (sport, int(season))).fetchall()
+    finals = {(str(p), h, a): (float(hs), float(as_)) for p, h, a, hs, as_ in rows}
+    tally: dict = {}
+    if sport == "nfl":
+        for (p, h, a), (hs, as_) in finals.items():
+            wk = _int(p)
+            if not wk or wk > REG_WEEKS:
+                continue
+            for team, mine, theirs in ((h, hs, as_), (a, as_, hs)):
+                tally.setdefault(team, []).append((wk, (mine > theirs) - (mine < theirs)))
+
+    def record(team, week):
+        got = [r for wk, r in tally.get(team, []) if wk <= min(week, REG_WEEKS)]
+        if not got:
+            return ""
+        w, l, t = got.count(1), got.count(-1), got.count(0)
+        return f"{w}-{l}" + (f"-{t}" if t else "")
+
+    for g in games:
+        me, opp = g.get("team") or "", g.get("opp") or ""
+        home, away = (me, opp) if g.get("home") else (opp, me)
+        final = finals.get((str(g.get("period") or ""), home, away))
+        if not final:
+            continue
+        hs, as_ = final
+        g["score"] = [hs, as_] if g.get("home") else [as_, hs]
+        week = _int(g.get("period"))
+        if sport == "nfl" and week:
+            g["rec"], g["orec"] = record(me, week), record(opp, week)
+    return games
 
 
 def _ngs_for(conn, sport: str, season: int, ids: set) -> dict:

@@ -231,6 +231,8 @@ def chart(conn, player: str, season: int | None = None) -> dict:
         every.extend(ks)
         out_games.append({"id": g["id"], "period": period, "week": _int(period), "date": g["date"],
                           "opp": g["opp"], "home": g["home"], "team": g["team"], "line": _line(ks), "kicks": ks})
+    from .carries import scoreboard
+    scoreboard(conn, "nfl", pick, out_games)
     league = _league(conn, pick)
     by_band = [dict(x, league=league.get(x["key"])) for x in
                _split(every, lambda k: band(k["d"]), [(k, n) for _lo, _hi, k, n in BANDS])]
