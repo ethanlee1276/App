@@ -726,6 +726,8 @@ def _classify(url: str, cache_name: str) -> tuple[str, str, int, str]:
     hist = "/historical/" in url
     if "events" in cache_name and "event_" not in cache_name:
         kind, cost = ("hist_events" if hist else "live_events"), (10 if hist else 1)
+    elif cache_name.startswith(f"odds_{SLIP_LANE}_"):
+        kind, cost = "slip_event", per
     elif "board" in cache_name:
         kind, cost = ("hist_board" if hist else "live_board"), per * (5 if hist else 1)
     else:
@@ -1209,7 +1211,7 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
                      markets: list[str] | None = None,
                      books: list[str] | None = None,
                      ttl: int = 300, sport: str = "nfl",
-                     cache_only: bool = False) -> tuple[dict, Quota]:
+                     cache_only: bool = False, lane: str = "") -> tuple[dict, Quota]:
     key = _key_for(api_key, cache_only)
     cfg = SPORT_CONFIG[sport]
     asked = list(markets or cfg["markets"])
@@ -1248,7 +1250,7 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
     # long, the filename is not, and the request is what has to be
     # distinguished rather than described.
     try:
-        return _request(url, event_cache_name(event_id, markets, books, sport),
+        return _request(url, event_cache_name(event_id, markets, books, sport, lane),
                         ttl=ttl, cache_only=cache_only)
     except OddsAPIError as exc:
         # ONE BAD KEY COSTS ONE CALL, NEVER THE EVENT. Every market goes
@@ -1278,12 +1280,18 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
         REJECTED_MARKETS.update(bad)
         kept = [m for m in markets if m not in bad]
         return fetch_event_odds(event_id, api_key, markets=kept, books=books,
-                                ttl=ttl, sport=sport, cache_only=cache_only)
+                                ttl=ttl, sport=sport, cache_only=cache_only, lane=lane)
+
+
+#: The parlay checker's own pulls (engine/slipodds, 2026-10-14): a slip's
+#: markets on one game, cached apart from the board's and journalled as
+#: their own kind ("slip_event"), so their daily cap can be counted.
+SLIP_LANE = "slip"
 
 
 def event_cache_name(event_id: str, markets: list[str] | None = None,
                      books: list[str] | None = None,
-                     sport: str = "nfl") -> str:
+                     sport: str = "nfl", lane: str = "") -> str:
     """The cache filename one event-odds request writes and reads.
 
     ONE DEFINITION, because a second reader now needs it.
@@ -1296,7 +1304,8 @@ def event_cache_name(event_id: str, markets: list[str] | None = None,
     books = books or DEFAULT_BOOKS
     spec = ",".join(sorted(markets)) + "|" + ",".join(sorted(books))
     tag = hashlib.md5(spec.encode()).hexdigest()[:8]
-    return f"odds_event_{sport}_{event_id}_{tag}.json"
+    head = f"odds_{lane}_event" if lane else "odds_event"
+    return f"{head}_{sport}_{event_id}_{tag}.json"
 
 
 def newest_event_cache(event_id: str, sport: str = "nfl"):

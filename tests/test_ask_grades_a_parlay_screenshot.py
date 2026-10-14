@@ -964,7 +964,11 @@ def test_the_server_gates_and_counts_it_as_a_question_before_the_picture_is_read
     assert "max_size 1MB" in caddy, "Caddy refuses a larger body before the server sees it"
     body = _method("_ask_slip")
     order = ["self._rate_limited(RATE_ASK_PER_MIN", "self._entitled(conn, who)", "SG.decode_image(",
-             "AB.configured()", "AB.over_limit(me)", "SG.read_slip(", "SG.grade(slip, boards, live=SL.Live(prices))",
+             # (Pin updated 2026-10-14, "do 1-11": the upload's live object is
+             # engine/slipodds.FreshLive, which may buy an old leg a fresh
+             # price; it was sliplive.Live. The order held is the same.)
+             "AB.configured()", "AB.over_limit(me)", "SG.read_slip(",
+             "SG.grade(slip, boards, live=SO.FreshLive(prices))",
              "AB.count_question(me)", "AB.sign_turn(text)"]
     # The last count is the graded one; an unreadable slip is counted on its own path below.
     at = [body.rindex(x) if x == "AB.count_question(me)" else body.index(x) for x in order]

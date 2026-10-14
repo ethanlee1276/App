@@ -117,6 +117,7 @@
 .pgr-now.s-won { border: var(--hairline) solid var(--good); }
 .pgr-now.s-last { border: 2px solid var(--gold); color: var(--text); }
 .pgr-alerts { border: var(--hairline) solid var(--warn); }
+.pgr-fresh { margin: 0; font-size: var(--fs-xs); color: var(--text-mute); }
 .pgr-alerts ul, .pgr-pairs ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
 .pgr-shop small { display: block; margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
 .pgr-better b.pos { color: var(--good); }

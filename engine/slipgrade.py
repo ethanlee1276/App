@@ -2044,6 +2044,11 @@ def grade(slip: dict, boards: dict, live=None, brief: bool = False) -> dict:
     — because it runs every minute a Live tab is open, not once."""
     from . import proplive as PL
     legs = [price_leg(boards, l) for l in slip.get("legs") or []]
+    # A FRESH PRICE FOR AN OLD ONE, on an upload only (engine/slipodds): the
+    # live object sees every priced leg once, before any is asked about.
+    prepare = getattr(live, "prepare", None)
+    if callable(prepare):
+        prepare(legs, boards)
     for l in legs:
         l["why"] = [] if brief else why(boards, l)
         l["kickoff"] = _kickoff(boards, l)
@@ -2125,6 +2130,8 @@ def grade(slip: dict, boards: dict, live=None, brief: bool = False) -> dict:
         "weakest": _name(weakest) if weakest and len(priced) > 1 else "",
         "swap": _swap(boards, weakest, legs) if weakest and len(priced) > 1 and not brief else None,
         "sim": sim,
+        # What the upload's fresh pull did, when one was asked for.
+        "fresh": getattr(live, "report", None),
     }
 
 

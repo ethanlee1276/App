@@ -218,9 +218,11 @@ def leg_prices(leg: dict, index: dict | None, board: dict | None = None) -> dict
                 theirs[book] = other
     books = sorted(({"book": b, "odds": o} for b, o in bettable.items()),
                    key=lambda x: (-_decimal(x["odds"]), x["book"]))
+    # An entry pulled for this slip alone (engine/slipodds) carries its own
+    # stamp; the board's entries share the pull's.
     out = {"books": books[:MAX_BOOKS], "n": len(books),
            "fair": round(statistics.median(fairs), 4) if fairs else None,
-           "as_of": _board_stamp(board, game=False), "any": bool(e["quotes"])}
+           "as_of": e.get("as_of") or _board_stamp(board, game=False), "any": bool(e["quotes"])}
     if theirs:
         # THE OTHER SIDE AT THE SAME NUMBER, best price first — what a
         # hedge on this leg would be placed at (slipgrade.hedge).
@@ -606,6 +608,10 @@ class Live:
     loader keeps (askbot.prices_at) and the live loop's directory; a test
     builds one from fixtures."""
 
+    #: What a fresh pull for this slip did (engine/slipodds.FreshLive), for
+    #: the card; None when nothing was pulled or asked for.
+    report = None
+
     def __init__(self, indexes: dict | None = None, fast_dir=None, now: float | None = None):
         self.indexes = indexes or {}
         self.fast_dir = fast_dir
@@ -615,6 +621,11 @@ class Live:
         # down; its props get no price line rather than that alarm.
         self.priced = {lg: any(e.get("quotes") for e in (idx or {}).values())
                        for lg, idx in self.indexes.items()}
+
+    def prepare(self, legs: list, boards: dict) -> None:
+        """Called once with every priced leg before any is asked about. The
+        latest pull is all this class reads, so there is nothing to do;
+        engine/slipodds.FreshLive buys a fresh price here on an upload."""
 
     def prices(self, leg: dict, board: dict | None = None) -> dict | None:
         league = leg.get("league") or ""

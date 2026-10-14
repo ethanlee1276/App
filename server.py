@@ -4580,9 +4580,12 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(503, b'{"error":"ask unavailable"}', ".json")
         # The live line (engine/sliplive): every book's price at each leg's
         # number from the latest pull, and the live loop's own score and box
-        # score for a game under way. Nothing new is bought.
-        from engine import sliplive as SL
-        card = SG.grade(slip, boards, live=SL.Live(prices))
+        # score for a game under way. A leg whose price is over an hour old
+        # gets a fresh one (engine/slipodds, 2026-10-14: Ethan's "do 1-11"),
+        # one call per game for just the slip's markets, inside the day's
+        # cap; past the cap it keeps the latest pull's, and the card says so.
+        from engine import slipodds as SO
+        card = SG.grade(slip, boards, live=SO.FreshLive(prices))
         text = SG.summary(card)
         try:
             AB.count_question(me)

@@ -507,6 +507,12 @@
     return `<div class="pgr-alerts"><b>Read this first</b><ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
   }
 
+  /* What the upload's fresh price pull did (engine/slipodds): which legs
+     were priced just now, and why any kept our last pull's price. */
+  function freshHTML(f) {
+    return f && f.note ? `<p class="pgr-fresh">${esc(f.note)}</p>` : "";
+  }
+
   /* The ticket at each book quoting every leg (slipgrade.shop). */
   function shopHTML(sh) {
     if (!sh || !Array.isArray(sh.books) || !sh.books.length) return "";
@@ -576,7 +582,7 @@
       <div class="pgr-top"><div class="pgr-grade g-${letterCls}" aria-label="Grade ${esc(g)}">${esc(g.replace("*", ""))}${
         g.indexOf("*") >= 0 ? "<sup>*</sup>" : ""}</div>
         <div class="pgr-sum"><b>${head}</b>${lines.map((x) => `<span>${x}</span>`).join("")}</div></div>
-      ${nowHTML(s.now)}${alertsHTML(s.alerts)}${shopHTML(s.shop)}${betterHTML(s.better)}${hedgeHTML(s.hedge)}${cashoutHTML(s.cashout)}
+      ${nowHTML(s.now)}${alertsHTML(s.alerts)}${freshHTML(s.fresh)}${shopHTML(s.shop)}${betterHTML(s.better)}${hedgeHTML(s.hedge)}${cashoutHTML(s.cashout)}
       ${simHTML(s.sim, s.n_legs)}
       <ol class="pgr-legs">${s.legs.map(legHTML).join("")}</ol>
       ${pairsHTML(s.pairs)}${notes}${swap}

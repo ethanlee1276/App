@@ -184,7 +184,10 @@ each fighter's moneyline against Pinnacle's fair, by every league's bars,
 shown under the UFC banner and recorded and graded like the card's own
 picks; on the way, the card's own picks stopped quoting Pinnacle's price
 (no US book takes it) and stopped naming the first fighter's book on a
-pick on the second (step 97; AY). The
+pick on the second (step 97; AY). An uploaded slip whose price on a
+leg is over an hour old now buys a fresh one for just that slip's markets,
+one call per game, inside a small daily credit cap you can move (step 98;
+AZ). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -217,16 +220,17 @@ the rows already there) and its rank fit (the store Wednesday's chores
 write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway), and AP's fill if you start it (the hit
 page's tables, the rows tonight's chores write anyway), and AR's probe (it
-downloads any Savant file over six hours old, as the next MLB build would).
+downloads any Savant file over six hours old, as the next MLB build would),
+and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The UFC card names a Pick of the Day off the fights Pinnacle priced, and its own picks quote a price you can bet under the fighter's own book`
+**A. The box has today's code.** The first line should end `An uploaded slip buys a fresh price for a leg whose own is over an hour old, one call per game, inside a small daily credit cap`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 30eddcc0 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 9a6fb8e0 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -332,10 +336,11 @@ struck through here as it is built.
   log against his measured role (recent opportunities × season
   efficiency); college's have nothing like it. It would be measured on
   college games first, as everything else was (step 95).
-* **A fresh odds pull of a slip's own markets** when our price is old.
+* ~~**A fresh odds pull of a slip's own markets** when our price is old.
   A 4-leg ticket over two games costs about 3–4 credits, from the same
   daily budget the board uses, so you'd pick a daily cap (step 36,
-  round three).
+  round three).~~ **Answered 2026-10-14: yes** ("do 1-11"). Built: step
+  98, AZ. The cap starts at 20 credits a day; AZ says how to move it.
 * ~~**Cancel at the end of the month, or at once?**~~ **Answered
   2026-10-14** ("do 1-11"): it stays your Stripe setting, never code.
   Stripe → Settings → Billing → Customer portal → Cancellations: "At the
@@ -1247,6 +1252,24 @@ its price (the second fighter wore the first fighter's book), from the
 prices stored on every paid pull since 2026-08-10. Their grades stay as
 they are; whether the Record page says anything about them is yours.
 
+**AZ. Fresh prices for an uploaded slip** (step 98; read-only, seconds).
+After a slip is uploaded with a leg whose game is today (yours will do),
+paste all of it:
+```
+journalctl -u qellys --since "24 hours ago" --no-pager | grep "slip odds" | tail -10
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import slipodds as SO; print(SO.spent_today(), 'of', SO.daily_cap(), 'fresh-price credits spent today')"
+```
+Each upload that bought prints a line: how many legs got a fresh price, on
+how many games, the credits, and the day's total against the cap; "held
+(cap)" means the day's allowance was used up, "held (reserve)" that the
+month's credits are near the floor the board keeps. The cap starts at 20
+credits a day. To move it (40 here; 0 turns fresh pulls off), then restart
+so the site reads it:
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_SLIP_ODDS_DAILY_CAP 40
+sudo systemctl restart qellys
+```
+
 **AU. Saved slips settle with the Live tab closed** (step 91; read-only,
 seconds). After a night when a slip saved to My Bets from the parlay
 checker has had its games end, paste all of it:
@@ -2123,7 +2146,7 @@ first). Paste back anything that prints an error or looks off.
         return;
       * legs that move together or pull apart, from the parlay engine;
       * alerts first: a Questionable player, or a prop no book is pricing.
-    * **Your call, not built:** a fresh Odds API pull of just the slip's
+    * **Your call, built 2026-10-14 (step 98):** a fresh Odds API pull of just the slip's
       markets, for when our price is old. It costs one credit per market
       per game per upload; a 4-leg ticket over two games is about 3–4
       credits. It draws on the same daily budget that prices the board,
@@ -4261,6 +4284,30 @@ first). Paste back anything that prints an error or looks off.
     of the UFC page's comment slots were folded away to pay for most of
     it); app.js stays inside its 495. New: `ufcbooks.py`;
     `tests/test_the_fight_card_names_a_pick_of_the_day.py` (16 checks).
+98. **An uploaded slip buys a fresh price when ours is old** (2026-10-14,
+    you: "do 1-11", to H's "A fresh odds pull of a slip's own markets").
+    AZ checks it. On an upload only (the Live tab's minute-by-minute read
+    of a saved slip and the box's slip watch never buy), a leg whose game
+    has not started and whose price is over an hour old, or that has no
+    price of ours at all, gets a fresh one: one Odds API call per game,
+    asking for just the markets the slip's legs on that game need (the
+    alternate ladder too when the slip's number is not the main line), so
+    a 4-leg ticket over two games is about 3–4 credits. Football, college,
+    baseball, basketball and hockey; a fight leg reads the UFC card as
+    before. The leg's price line then reads "pulled just now", and the card
+    says which legs were priced fresh. **The budget**: every call is
+    journalled under its league as its own kind ("slip_event"), so the
+    board's daily ceiling counts it — the same daily budget the board uses
+    — and on top of that the slip pulls have their own cap,
+    `QB_SLIP_ODDS_DAILY_CAP`, 20 credits a day until you move it (AZ; 0
+    turns them off), and never dip into the month's reserve the board
+    keeps. Past the cap, near the reserve, or when a call fails, the leg
+    keeps our last pull's price and the card says why. Pin changed, told to
+    you: `tests/test_ask_grades_a_parlay_screenshot.py` held the upload's
+    steps in order with the old live-price object named; it names the new
+    one, the order unchanged. New: `engine/slipodds.py`;
+    `tests/test_an_uploaded_slip_buys_a_fresh_price_inside_its_cap.py` (15
+    checks).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
