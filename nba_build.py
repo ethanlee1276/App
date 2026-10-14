@@ -744,6 +744,9 @@ def main() -> None:
                             "and tested — it goes live with the schedule.")
 
     picks_result = None
+    # The slate's game lines for the Pick of the Day (`potd.game_lines`),
+    # filled once the odds are on the slate; empty on a night with none.
+    potd_lines: list = []
     if games:
         played_yday = {t for g in yesterday
                        for t in (g["home"], g["away"])}
@@ -1175,6 +1178,18 @@ def main() -> None:
         except Exception as exc:
             print(f"⚠️  shared-schema layer skipped: {exc}")
 
+        # THE GAME LINES PINNACLE QUOTED, for the Pick of the Day. This
+        # board prices no game market and its Most Likely board carries
+        # none (none is measured for basketball), and the day's pick is game
+        # lines only — so without these the league could never name one.
+        # Off the slate's own prices; the pick's bars all still hold
+        # (`potd.game_lines`).
+        try:
+            from engine import potd as _potd_gl
+            potd_lines = _potd_gl.game_lines(slate.games, args.date, out.get("games"))
+        except Exception as exc:                          # noqa: BLE001
+            print(f"⚠️  Pick of the Day game lines skipped: {exc}")
+
         # THE LIKELIHOOD BOARD, for hoops. Same maker and same one bar
         # as every other league's (likely.admissible), and the same
         # earned-per-market rule: rows appear only for markets
@@ -1345,7 +1360,7 @@ def main() -> None:
     # hook, whose money split the against-the-money note reads.
     from engine import lineopen as _lo
     print(_lo.attach_to_board(out, args.league))
-    _pn = _potd.attach(out, args.league)
+    _pn = _potd.attach(out, args.league, lines=potd_lines)
     if _pn:
         print(_pn)
     if _tn:
@@ -1364,8 +1379,10 @@ def main() -> None:
     # so a swap made there would never reach the page — which is how
     # the MLB card spent 2026-09-15 showing a below-bar lean while the
     # record held a pick made that morning.
+    # THE GAME LINES BESIDE THE BOARD: a pick named from one is found there
+    # when a later build re-points the card at the day's lock.
     out["pick_of_the_day"] = _led.relock_potd(
-        out.get("pick_of_the_day") or {}, out.get("most_likely") or [])
+        out.get("pick_of_the_day") or {}, (out.get("most_likely") or []) + potd_lines)
     # HOW CURRENT THE STATS THE MODEL READ ARE (engine/freshness), on the
     # board for the page's banner and the build's self-check.
     from engine import freshness as _fresh

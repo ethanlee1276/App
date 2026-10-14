@@ -699,12 +699,41 @@ The picks of those four weeks were never journaled and are not
 reconstructed: a record written after the games would be a record of
 nothing anyone could have bet.
 
-**WHAT THE FIX DOES NOT DO.** The basketball and hockey boards hand the
-selector player props only — no game market is measured for either league
-(`likely.GAME_RANK_MEASURED`), and the NBA build prices no game lines at
-all — so neither can name a pick yet. The card now says so ("no game line
-on this board") instead of "nothing on the board is in the band at a real
-price". UFC has no Pick of the Day.
+**THE OTHER HALF: BASKETBALL AND HOCKEY HAD NOTHING TO NAME.** Their
+boards hand the selector player props only — no game market is measured
+for either league (`likely.GAME_RANK_MEASURED`), so `likely.from_game_bet`
+keeps every game line off their Most Likely boards by Ethan's own rule
+(2026-09-02: a market with no figure stays off), and the NBA build prices
+no game lines at all. With the day's pick game markets only (§3f),
+neither league could name one, whatever the prices.
+
+That rule is about RANKING, and this pick does not rank on our model:
+`shortfall` asks a sharp- or exchange-witnessed row for no ranking figure
+at all (§3h), because its fair is Pinnacle's, not ours. So
+`potd.game_lines` hands the selector the game lines the odds pull already
+hangs on the slate — one row per side of every moneyline, spread and
+total Pinnacle quoted two ways at the line the soft book posts, at the
+best soft price for that side and the book posting it — and the NBA, WNBA
+and NHL builds pass them to `attach` (`LINE_LEAGUES`). Ethan, 2026-09-16:
+"the selector should see the full game list so no prop or game is left
+unscanned."
+
+**NOTHING IS WAIVED.** The rows answer every bar a sharp-anchored pick
+answers: today's game, not under way (the board's own live state), a real
+book, the band, the 50% floor, 2% EV and the ceiling on a gap too big to
+trust. They are never seated on the Most Likely board, which holds
+measured markets; the build hands them to the relock beside it, so a pick
+named from one is found there when a later build re-points the card at
+the day's lock. `model_prob` is empty — no model of ours priced them, and
+the card prints no "our number" — and the journal records the fair the
+card printed as the claim. Football and baseball do not get the lines:
+their Most Likely boards carry measured game rows, and a row that board
+refused on the merits must not reach the pick by another door.
+
+**UFC HAS NO PICK OF THE DAY**, and the Record page no longer pretends it
+does: the record carries a book for every league whose build names one
+(`ledger.POTD_LEAGUES`), empty or not, and the page draws the section
+only for those. The fight card is its own page with its own book.
 
 ## 4. Why our own model is not allowed to be the evidence
 

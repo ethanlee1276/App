@@ -198,6 +198,10 @@ def test_an_empty_book_draws_nothing_pooled_and_says_so_in_a_league():
     case empty too.)"""
     for rep in (None, {}, {"settled": 0, "open": 0}):
         assert _run_section(rep, "") == "", rep
+    # The record carries an entry for every league that names a pick
+    # (`ledger.POTD_LEAGUES`); a league with none (UFC) draws nothing.
+    assert _run_section(None, "nfl") == ""
+    for rep in ({}, {"settled": 0, "open": 0}):
         got = _run_section(rep, "nfl")
         assert "Pick of the Day" in got and "Nothing settled yet." in got, rep
         assert "riding" not in got and "settled pick" not in got, rep

@@ -1897,6 +1897,14 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
 #: has the problem the journal would have had without this column.
 POTD_CATEGORY = "potd"
 
+#: EVERY LEAGUE WHOSE BUILD NAMES A PICK OF THE DAY. The record carries
+#: each one's book, an empty one included, so the Record page says
+#: "Nothing settled yet" under that league rather than leaving the section
+#: out (Ethan, 2026-10-14: "we only show the pick of the day record for nfl
+#: and mlb but no other sport"). UFC is absent on purpose: the fight card
+#: makes no Pick of the Day, and an empty section would claim one exists.
+POTD_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+
 #: How many settled Picks of the Day the Record page gets as receipts.
 #: One a day per sport, so this is about a fortnight across six books —
 #: enough to read the run, short of a wall of names.
@@ -1979,6 +1987,12 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
     # settle.
     row_date = date if sport == "nfl" \
         else str(pick.get("game_date") or "").strip() or date
+    # THE CLAIM IT WAS MADE ON. A game line no model of ours priced
+    # (`potd.game_lines`) carries no `model_prob`; its claim is the fair the
+    # card printed, and the book's claimed-against-actual reads that.
+    claim = pick.get("model_prob")
+    if claim is None:
+        claim = pick.get("fair_prob")
     cur = _insert_bet(conn,
         "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
         "side, line, book, odds, projection, hit_prob, edge, confidence, "
@@ -1987,8 +2001,8 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
         (game_day_for(pick, date), now, sport, row_date, player, market,
          side, float(line), pick.get("book", ""), odds,
-         pick.get("projection"), pick.get("model_prob"),
-         None if pick.get("implied_prob") is None
+         pick.get("projection"), claim,
+         None if pick.get("implied_prob") is None or pick.get("model_prob") is None
          else round(float(pick["model_prob"]) - float(pick["implied_prob"]), 4),
          None, "Pick of the Day", POTD_STAKE, 0.0,
          _lead_min(pick, _kickoff_map(payload)), POTD_CATEGORY,
@@ -10119,11 +10133,12 @@ def export_json(conn, path) -> None:
         # picks are still made and still graded; the page just does not
         # carry them. See `off_record_sql`.
         "potd": performance(conn, category=POTD_CATEGORY, since=since),
+        # EVERY LEAGUE THAT NAMES ONE, an empty book included (`POTD_LEAGUES`).
         "potd_by_sport": {
             sp: rep for sp, rep in
             ((sp, performance(conn, sp, POTD_CATEGORY, since=since))
              for sp in TRACKED_SPORTS if not is_benched(sp))
-            if rep.get("settled") or rep.get("open")},
+            if rep.get("settled") or rep.get("open") or sp in POTD_LEAGUES},
         # The receipts under it: every settled pick, newest first, so the
         # section can show the run rather than only its total.
         "potd_recent": recent_settled(conn, POTD_RECENT_LIMIT,

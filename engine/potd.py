@@ -1472,8 +1472,118 @@ def previous_card(sport: str, built_dir=None) -> dict | None:
         return None
 
 
+#: The leagues whose builds hand `attach` their game lines (`game_lines`):
+#: the ones whose Most Likely board carries no game market at all.
+LINE_LEAGUES = ("nba", "wnba", "nhl")
+
+
+def _field(game, key, default=None):
+    """One field of a slate game, whether it is an object or a dict."""
+    if isinstance(game, dict):
+        return game.get(key, default)
+    return getattr(game, key, default)
+
+
+def game_lines(games, date: str, board_games=None) -> list:
+    """THE GAME LINES PINNACLE QUOTED, as rows the selector can name — for
+    a league whose Most Likely board carries no game market.
+
+    Ethan, 2026-10-14: "we only show the pick of the day record for nfl
+    and mlb but no other sport. Fix that". The basketball and hockey
+    boards hand `attach` player props only: no game market is measured for
+    either league, so `likely.from_game_bet` keeps every game line off
+    their Most Likely boards (by Ethan's own rule, 2026-09-02: a market
+    with no figure stays off), and the day's pick is game markets only
+    (§3f). Two leagues that could never name a pick, whatever the prices.
+
+    THE BOARD'S RULE IS ABOUT RANKING; THIS PICK DOES NOT RANK ON OUR
+    MODEL. `shortfall` asks a row priced against an exchange or a sharp
+    book for no ranking figure at all — its fair is Pinnacle's, not ours —
+    so the measurement the board waits for says nothing about these rows.
+    And Ethan, 2026-09-16: "the selector should see the full game list so
+    no prop or game is left unscanned."
+
+    WHAT A ROW IS: one side of one game market Pinnacle quoted two ways AT
+    THE LINE the soft book posts (a fair at 221.5 says nothing about a bet
+    at 222), at the best soft price for that side and the book posting it,
+    against Pinnacle's de-vigged fair — the slate's own fields, which the
+    odds pull already sets on every game (`oddsapi.apply_odds_to_slate`),
+    so no request of its own. NOTHING IS WAIVED: today's game, not under
+    way, a real book, the band, the 50% floor, 2% EV and the ceiling on a
+    gap too big to trust all hold. Nothing here is our model's opinion, so
+    `model_prob` is empty and the card prints no "our number".
+
+    ``board_games`` is the board's own games list, whose `live` block is
+    where a game's state lives once the build has read the scoreboard.
+    """
+    from .odds import devig_two_way
+    states = {}
+    for gd in board_games or []:
+        if isinstance(gd, dict) and isinstance(gd.get("live"), dict):
+            states[(gd.get("home"), gd.get("away"))] = gd["live"].get("state") or ""
+    day = str(date or "")[:10]
+    out: list = []
+    for g in games or []:
+        home, away = _field(g, "home") or "", _field(g, "away") or ""
+        if not home or not away:
+            continue
+        own = _field(g, "live")
+        state = states.get((home, away)) or (
+            own.get("state") if isinstance(own, dict) else getattr(own, "state", "")) or ""
+        base = {"kind": "game", "home": home, "away": away, "matchup": f"{away} @ {home}",
+                "game_date": day, "date": day, "kickoff": _field(g, "kickoff") or "",
+                "live": state == "live", "started": state in ("live", "final"),
+                "sharp_anchored": True, "prob_source": "sharp", "model_prob": None,
+                "implied_prob": None, "bettable": True, "injury_status": "",
+                "from_game_lines": True}
+
+        def side(market, label, player, team, opp, side_, line, odds, book, fair):
+            try:
+                odds = int(odds)
+            except (TypeError, ValueError):
+                return
+            if not odds or not str(book or "").strip():
+                return
+            out.append({**base, "market": market, "bet_type": market,
+                        "market_label": label, "player": player, "pick_label": player,
+                        "headline": player, "team": team, "opponent": opp, "pick": team,
+                        "side": side_, "line": line, "odds": odds, "book": str(book),
+                        "sharp_fair": round(fair, 4)})
+
+        def pair(a, b):
+            try:
+                a, b = int(a or 0), int(b or 0)
+            except (TypeError, ValueError):
+                return None
+            return devig_two_way(a, b) if a and b else None
+
+        fair = pair(_field(g, "sharp_home_ml"), _field(g, "sharp_away_ml"))
+        if fair:
+            side("moneyline", "Moneyline", f"{home} ML", home, away, "", None,
+                 _field(g, "home_ml"), _field(g, "home_ml_book"), fair[0])
+            side("moneyline", "Moneyline", f"{away} ML", away, home, "", None,
+                 _field(g, "away_ml"), _field(g, "away_ml_book"), fair[1])
+        spread, sharp = _field(g, "spread"), _field(g, "sharp_spread")
+        fair = pair(_field(g, "sharp_spread_home_odds"), _field(g, "sharp_spread_away_odds"))
+        if fair and spread is not None and sharp is not None and float(spread) == float(sharp):
+            line = float(spread)
+            side("spread", "Spread", f"{home} {line:+g}", home, away, f"{line:+g}", line,
+                 _field(g, "spread_home_odds"), _field(g, "home_spread_book"), fair[0])
+            side("spread", "Spread", f"{away} {-line:+g}", away, home, f"{-line:+g}", -line,
+                 _field(g, "spread_away_odds"), _field(g, "away_spread_book"), fair[1])
+        total, sharp = _field(g, "total"), _field(g, "sharp_total")
+        fair = pair(_field(g, "sharp_total_over_odds"), _field(g, "sharp_total_under_odds"))
+        if fair and total is not None and sharp is not None and float(total) == float(sharp):
+            line = float(total)
+            side("total", "Total", f"Over {line:g}", home, away, "Over", line,
+                 _field(g, "total_over_odds"), _field(g, "total_over_book"), fair[0])
+            side("total", "Total", f"Under {line:g}", home, away, "Under", line,
+                 _field(g, "total_under_odds"), _field(g, "total_under_book"), fair[1])
+    return out
+
+
 def attach(result: dict, sport: str, now=None, cut=None,
-           prev: dict | None = None, built_dir=None) -> str:
+           prev: dict | None = None, built_dir=None, lines=None) -> str:
     """Put the day's pick on a finished board. Returns a build-log line.
 
     ONE HOOK, CALLED FROM EVERY BUILD, for the reason
@@ -1529,6 +1639,17 @@ def attach(result: dict, sport: str, now=None, cut=None,
     try:
         seated = result.get("most_likely") or []
         pool = list(seated) + [r for r in (cut or []) if isinstance(r, dict)]
+        # THE GAME LINES (`game_lines`), for a league whose board carries
+        # none. Selected over and NEVER SEATED on the Most Likely board —
+        # the seating below walks `cut` only — because that board holds
+        # measured markets and these are not; the build hands them to the
+        # relock beside it instead. A line the board already holds is the
+        # board's row.
+        if lines:
+            from .ledger import potd_row_key
+            held = {potd_row_key(r) for r in pool}
+            pool += [r for r in lines
+                     if isinstance(r, dict) and potd_row_key(r) not in held]
         # THE DAY'S JUDGEMENT, NOT THE LAST BUILD'S. `carry` refuses to
         # let a pool that has lost its started games overwrite a reading
         # taken when more of the slate was open — see its docstring for

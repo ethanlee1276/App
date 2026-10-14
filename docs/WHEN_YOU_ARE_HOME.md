@@ -144,7 +144,9 @@ Pick of the Day is now recorded in every league that makes one: the
 college and NBA builds had been recording the day's pick before choosing
 it, so college's BET picks were shown and never scored; every league's
 Record page now has its Pick of the Day section, and a board with no game
-line says so on its card (step 85; AQ). The
+line says so on its card (step 85; AQ). The NBA and NHL can now name a Pick
+of the Day too, off the moneylines, spreads and totals Pinnacle quoted,
+judged by the same bars as every other league's (step 86; AQ). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -176,13 +178,13 @@ Wednesday's refit writes anyway), and AP's fill if you start it (the hit
 page's tables, the rows tonight's chores write anyway). Every command runs
 on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Every league's Pick of the Day reaches its record: college and basketball recorded theirs before making it`
+**A. The box has today's code.** The first line should end `Basketball and hockey name a Pick of the Day: the game lines Pinnacle quoted, judged by the same bars`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor c0b17fbb HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 8872d963 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -986,25 +988,30 @@ Where he hits it, Runs and Stolen bases among the six big numbers, Barrel
 % beside hard hit, and the line "MLB's own · Baseball Savant · as of"
 with his xBA, xSLG and barrel rate.
 
-**AQ. Every league's Pick of the Day reaches its record** (step 85; one
-read-only command, seconds). Nothing to run for the fix itself: from the
-first build on this code, each league's first qualifying pick of the day
-is recorded, as the NFL's and MLB's always were. Run this after the next
-college or NBA build whose card says BET (college plays Thursday to
-Saturday):
+**AQ. Every league's Pick of the Day reaches its record** (steps 85 and
+86; one read-only command, seconds). Nothing to run for either change:
+from the first build on this code, each league's first qualifying pick of
+the day is recorded, as the NFL's and MLB's always were, and the NBA and
+NHL boards can name one off their game lines. Run this after the next
+college, NBA or NHL build whose card says BET (college plays Thursday to
+Saturday, the NHL most nights, the NBA from the 20th):
 ```
 cd /srv/qellys && sudo -u qellys python3 potdcheck.py
 ```
 Two lines a league. `journal:` is what the record holds (how many, how
 many riding, W-L-P, the first and last day); `card:` is what the board
 shows now. On a BET card the line should end `recorded today`. `NOT
-RECORDED` on a card older than one build is the line I need. On the NBA
-and NHL, `NO BET — No pick today: no game line on this board` is expected
-for now (step 85 says why). The last line lists the leagues record.json
-carries a Pick of the Day record for; a league joins it as soon as its
-first pick is recorded. Then on your phone, Record → each league: the
-Pick of the Day section is under every league now, reading "Nothing
-settled yet." until its first pick grades.
+RECORDED` on a card older than one build is the line I need. An NBA or
+NHL pick reads like any other (`BET BOS ML at -130 DraftKings (sharp fair
+58%)`); `NO BET — No pick today: no game line on this board` there now
+means the build had no odds pull with Pinnacle's prices on it (a quiet
+cycle, or before the odds were bought), and anything else after `NO BET`
+is the bar the best line missed. The last line lists the leagues
+record.json carries a Pick of the Day record for: every one that names a
+pick (NFL, college, MLB, NBA, NHL), empty or not; never UFC, which names
+none. Then on your phone, Record → each of those leagues: the Pick of the
+Day section is there, reading "Nothing settled yet." until its first pick
+grades; UFC's page has none.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3640,6 +3647,41 @@ first). Paste back anything that prints an error or looks off.
     bench, the export, every build's order, the box check, the page),
     `potdcheck.py`, and §3k of `docs/PICK_OF_THE_DAY.md`. App 494.485 of
     495 KB and first visit 610.994 of 611 (10 and 11 bytes more).
+86. **Basketball and hockey name a Pick of the Day** (2026-10-14, the
+    same ask: step 85 made every league's pick reach the record, and the
+    NBA and NHL had none to record). AQ checks it. WHY THEY HAD NONE: the
+    day's pick is game markets only (your call, 2026-09-15), and their
+    Most Likely boards carry no game market — none is measured for either
+    league, and by your rule of 2026-09-02 a market with no figure stays
+    off that board; the NBA build prices no game lines at all. That rule
+    is about ranking, and the pick does not rank on our model: a row
+    priced against Pinnacle answers to Pinnacle's fair, which needs no
+    figure of ours. So `potd.game_lines` hands the selector the game lines
+    the odds pull already hangs on each game (no new credits): every side
+    of every moneyline, spread and total Pinnacle quoted two ways at the
+    line a soft book posts, at the best soft price and the book posting
+    it. NOTHING IS WAIVED: today's game, not under way, a real book, the
+    band, the 50% floor, 2% EV and the ceiling on a gap too big to trust.
+    The rows are never put on the Most Likely board; the build hands them
+    to the relock beside it, so a pick named from one stays the day's pick
+    when a later build likes another game. The card prints no "our
+    number" on them (none of our models priced them), and the record keeps
+    the fair the card printed as its claim. The NBA build drops preseason
+    games before any of this, so its first pick can come on the 20th.
+    Football and baseball do not get the lines: their Most Likely boards
+    carry measured game rows, and a row that board turned down on the
+    merits must not reach the pick by another door. UFC still names no
+    Pick of the Day — the fight card is its own page with its own book —
+    and the Record page no longer gives it an empty section: the record
+    now carries a book for every league that names a pick, empty or not
+    (`ledger.POTD_LEAGUES`), and the page draws only those. No pin
+    loosened; the empty-section test changed again to match (an entry
+    draws "Nothing settled yet", none draws nothing). New:
+    `tests/test_basketball_and_hockey_name_their_pick_from_game_lines.py`
+    (15 checks: the rows, the line rule, the live state, the selection,
+    the bars, the lock, the journal, the grade off a final — a basketball
+    game id included — the wiring, the record and the page). App 494.479
+    of 495 KB and first visit 610.987 of 611.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -923,6 +923,15 @@ def main() -> None:
 
     conn = connect()
     out, slate = build(args.date, games, conn, attach_odds=attach)
+    # THE GAME LINES PINNACLE QUOTED, for the Pick of the Day: this league's
+    # Most Likely board carries no game market (none is measured for
+    # hockey) and the day's pick is game lines only (`potd.game_lines`).
+    try:
+        from engine import potd as _potd_gl
+        potd_lines = _potd_gl.game_lines(slate.games if slate else [], args.date, out.get("games"))
+    except Exception as exc:                                # noqa: BLE001
+        potd_lines = []
+        print(f"⚠️  Pick of the Day game lines skipped: {exc}")
     if out.get("lines"):
         try:
             save_lines(out["lines"], date=args.date)
@@ -966,7 +975,8 @@ def main() -> None:
             ("exchange fair", lambda: __import__("engine.exchangefair", fromlist=["x"]).attach_to_board(out, SPORT)),
             ("crowd prices", lambda: __import__("engine.crowd", fromlist=["x"]).attach_to_board(out, SPORT)),
             ("opening lines", lambda: __import__("engine.lineopen", fromlist=["x"]).attach_to_board(out, SPORT)),
-            ("pick of the day", lambda: __import__("engine.potd", fromlist=["x"]).attach(out, SPORT))):
+            ("pick of the day", lambda: __import__("engine.potd", fromlist=["x"]).attach(
+                out, SPORT, lines=potd_lines))):
         try:
             msg = fn()
             if msg:
@@ -980,7 +990,10 @@ def main() -> None:
             print(f"⚠️  NHL journal skipped: {exc}")
     try:
         from engine import ledger
-        out["pick_of_the_day"] = ledger.relock_potd(out.get("pick_of_the_day") or {}, out.get("most_likely") or [])
+        # The game lines beside the board, where a pick named from one is
+        # found again when a later build re-points the card at the lock.
+        out["pick_of_the_day"] = ledger.relock_potd(out.get("pick_of_the_day") or {},
+                                                    (out.get("most_likely") or []) + potd_lines)
     except Exception as exc:                                # noqa: BLE001
         print(f"⚠️  Pick of the Day relock skipped: {exc}")
     try:

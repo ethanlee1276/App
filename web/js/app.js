@@ -21263,14 +21263,15 @@ function recPotdClaims(days, scope) {
 }
 
 function recPotdSection(rep, scope, recent) {
-  /* EVERY LEAGUE GETS ITS SECTION, an empty one included (Ethan,
-     2026-10-14: "we only show the pick of the day record for nfl and mlb
-     but no other sport"). A league whose book is empty says "Nothing
-     settled yet" under the same heading, rather than the heading being
-     missing — which read as no such book. Pooled, nothing still draws
+  /* EVERY LEAGUE THAT NAMES ONE GETS ITS SECTION, an empty one included
+     (Ethan, 2026-10-14: "we only show the pick of the day record for nfl
+     and mlb but no other sport"). The record carries an entry for each
+     such league (`ledger.POTD_LEAGUES`), so an empty book says "Nothing
+     settled yet" under the same heading rather than the heading going
+     missing — which read as no such book. A league with no entry (UFC
+     makes no Pick of the Day) draws nothing; pooled, nothing still draws
      nothing. */
-  rep = rep || {};
-  if (!scope && !rep.settled && !rep.open) return "";
+  if (!rep || (!scope && !rep.settled && !rep.open)) return "";
   const where = scope ? ((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports";
   const n = rep.settled || 0;
   const units = Number(rep.net_units || 0);
