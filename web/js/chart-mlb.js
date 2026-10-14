@@ -556,7 +556,7 @@
     const big = rs ? [hits, tile("Runs", rs.r), hr, rbi, tile("Stolen bases", rs.sb, rs.cs ? `${rs.cs} caught` : ""), tb]
       : [hits, hr, rbi, tb];
     // A barrel is MLB's own rule on each ball he put in play.
-    const small = [tile("OPS", avg3(L.ops)), tile("BB–K", `${L.bb}-${L.k}`), tile("Exit velocity", L.ev == null ? "—" : `${num1(L.ev)} mph`, "average"),
+    const small = [tile("OPS", avg3(L.ops)), tile("BB–K", `${L.bb}-${L.k}`), tile("Exit velocity", L.ev == null ? "—" : num1(L.ev), "mph · average"),
                    tile("Launch angle", L.la == null ? "—" : `${num1(L.la)}°`, "average"),
                    tile("Hard hit", pct(L.bip ? L.hard / L.bip : null), "95+ mph"),
                    tile("Barrel %", pct(L.bip ? L.brl / L.bip : null), `${L.brl} barrel${L.brl === 1 ? "" : "s"}`),

@@ -171,13 +171,13 @@ Wednesday's refit writes anyway), and AP's fill if you start it (the hit
 page's tables, the rows tonight's chores write anyway). Every command runs
 on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The hit page draws the seven things it left out: runs and steals, the record on the day, the park and View game, barrels, MLB's own xBA, every at-bat's video, his action photo`
+**A. The box has today's code.** The first line should end `The hit page's season exit velocity stays on one line: the mph under the number`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 2d499a00 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 9bbdad2f HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
