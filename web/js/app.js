@@ -3037,7 +3037,19 @@ addEventListener("error", (e) => {
   // Ours, not an image that 404'd or a frame we embed: `e.message` is
   // only populated for script errors, and a resource error has a target
   // with a tag name instead.
-  if (e && e.message && !(e.target && e.target.tagName)) crashNote(e.message);
+  //
+  // NOR THE BROWSER'S RESIZE NOTICE. Ethan, 2026-10-14, a screenshot of
+  // this banner over a Most Likely pick: "Every time I click on a player
+  // page, for the most likely bets, it shows this" — "(ResizeObserver loop
+  // completed with undelivered notifications.)". That is not a throw. The
+  // spec has the browser report it when one frame's resize notices spill
+  // over into the next, and they are delivered there: nothing failed to
+  // draw. Safari raises it while a page's charts and tables settle, and
+  // an apology for it is the false alarm that teaches people to ignore
+  // the real one (Chrome's older wording: "ResizeObserver loop limit
+  // exceeded").
+  if (e && e.message && !(e.target && e.target.tagName)
+      && !/ResizeObserver loop/.test(e.message)) crashNote(e.message);
 });
 addEventListener("unhandledrejection", (e) => {
   const r = e && e.reason;

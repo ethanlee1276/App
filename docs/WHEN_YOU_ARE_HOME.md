@@ -94,7 +94,9 @@ Likely ranking walk, used to price past games through the football
 chain; they walk the board's minutes × rate projection now, PRA, the
 combos and the three counts included, and a count with none in a
 player's window no longer stops the whole NBA slate (step 77; AI). The
-whole picture, sport by sport, is in
+"Sorry — part of this page failed to draw" line that came up on every
+Most Likely pick was the browser's resize notice, not a failure, and no
+longer shows (step 78; AJ). The whole picture, sport by sport, is in
 `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -124,13 +126,13 @@ write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway). Every command runs on the box (`ssh`
 in first).
 
-**A. The box has today's code.** The first line should end `What to run first when you're home, and the runbook's stale lines brought up to date`
+**A. The box has today's code.** The first line should end `The browser's resize notice no longer puts the apology on every pick`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 31c44c58 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor fdbc2525 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -741,6 +743,14 @@ second prints each NBA market's ranking number, now on the board's own
 model: `on the board` or `UNDER the floor — stays off the board`. The
 third lists the NBA temperatures on file, PRA and the new markets among
 them where the logs hold enough games.
+
+**AJ. No apology on the pick page** (step 78; nothing to run, your phone
+only). Open any Most Likely pick, from Home and from the Most Likely
+page, and scroll it: the red-edged `Sorry — part of this page failed to
+draw` line should not come up. If it comes up once more, close the site
+and open it again (the phone can hold the old copy for one visit); if it
+still shows after that, screenshot it with the words in brackets — a
+real failure still gets the line, and that is the one to send.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2925,6 +2935,24 @@ first). Paste back anything that prints an error or looks off.
     rows only"; every basketball walk reads the summed entries now, with
     his minutes beside them and a game missing a part kept as empty
     rather than dropped). New: `tests/test_nba_self_tunes_on_its_own_model.py`.
+78. **No apology on the pick page** (2026-10-14, you, with a screenshot:
+    "Every time I click on a player page, for the most likely bets, it
+    shows this"). AJ checks it. The line in brackets said what it was:
+    `ResizeObserver loop completed with undelivered notifications.` That
+    is the browser's notice, not an error in the page: when the sizes the
+    page watches (its charts, its tables, the header) settle across two
+    frames instead of one, the browser says so and delivers the rest a
+    frame later. Nothing failed to draw. Safari raises it while a pick
+    page settles; the page's own error catcher, which puts up the apology
+    whenever a script throws, read it as a throw. It lets that notice go
+    now (both wordings, Safari's and Chrome's older one), and every real
+    throw still gets the line — checked in Chromium both ways. The
+    page's own size watchers were checked too: none changes a size while
+    the browser is delivering, so there was nothing of ours to fix behind
+    it, and Chromium did not raise it on these pages in my checks. The served copy
+    grows by 28 bytes: the first visit is 610.995 of 611 KB, under the
+    budget, no bump. No pins changed. New:
+    `tests/test_a_resize_notice_is_not_a_broken_page.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
