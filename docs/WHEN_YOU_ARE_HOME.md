@@ -14,9 +14,9 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### Start here — 2026-10-13 (Ethan: "save all code for when I'm home")
+### Start here — updated 2026-10-14 (Ethan, on the 13th and again on the 14th: "save all code for when I'm home")
 
-Everything from 2026-10-12 and 10-13, in order: the parlay checker in
+Everything from 2026-10-12 to 10-14, in order: the parlay checker in
 Ask (live chances, the hedge, a better number, saved slips on the Live
 tab, our read on a leg no board carries, better legs, the cash-out
 check, the last-leg alert), the subscription check on every open, the
@@ -100,6 +100,20 @@ All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
 
+**If you only do a few, do these, in this order.** A and B first: is
+today's code there, and is the box well. Then the four that matter before
+the NBA's opening night on the 20th: N (the club rosters and the injury
+board, read on the box; seconds); AG's first two commands (last season's
+steals, blocks and turnovers, about half an hour at low priority, then
+the defence measurement); AI once AG's first has finished (the NBA's fits
+on its own model, about ten minutes: the fits for the three counts read
+the games AG adds, and AI's second command is AG's third, so run that one
+once, there); and X's first command (the shot chart's field names,
+checked against a real game while there is time to fix them). C and D are
+the only two that need you to switch something on (email, Stripe).
+Everything else is a read-only check: any order, any night; paste what it
+prints.
+
 Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings, Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write), AD's two model files (the table
@@ -110,13 +124,13 @@ write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway). Every command runs on the box (`ssh`
 in first).
 
-**A. The box has today's code.** The first line should end `The NBA's self-tuning fits learn on the board's own model, PRA and the new markets included`
+**A. The box has today's code.** The first line should end `What to run first when you're home, and the runbook's stale lines brought up to date`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor fb371eee HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 31c44c58 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -223,7 +237,10 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
 * ~~**NBA points + rebounds, points + assists, rebounds + assists?**~~
   **Answered 2026-10-13: yes.** Built: step 60, S — three more credits on
   every NBA game pulled; the WNBA's request is unchanged.
-* **Let the measurement read summed markets** (step 60)? The weekly walk
+* ~~**Let the measurement read summed markets** (step 60)?~~ **Answered
+  2026-10-14: yes** ("Ya do the self tuneung"). Built: the ranking walk in
+  step 75 (AG), the calibration and player-memory fits in step 77 (AI). What
+  was asked: the weekly walk
   that earns a market its Most Likely shelf reads stored stat rows, and no
   row is stored for a sum, so PRA has never been measured — and neither
   can the three new combos be. They are on the Edge board and in the
@@ -385,8 +402,9 @@ cd /srv/qellys && sudo -u qellys python3 cfbzeros.py
 ```
 
 **S. The NBA prices points + rebounds, points + assists and rebounds +
-assists** (step 60; read-only, seconds). The first line should list eight
-markets, the second print `16 13`:
+assists** (step 60; read-only, seconds). The first line should list
+eleven markets (eight when this was written; steals, blocks and turnovers
+joined on the 14th, step 75), the second print `19 13`:
 ```
 cd /srv/qellys && sudo -u qellys python3 -c "from engine.sources.oddsapi import SPORT_CONFIG as C; from engine.oddsbudget import EVENT_CREDITS as E; print(sorted(C['nba']['markets'].values())); print(E['nba'], E['wnba'])"
 ```
@@ -676,8 +694,9 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py nba --seasons 2025
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 hoopsdvpfit.py nba
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'nba')]"
 ```
-Paste back all three. In the second, the `steals`, `blocks` and
-`turnovers` lines say `the defence reaches the player: about 0.62 of its
+Paste back all three (or the first two, if you go on to AI: AI's second
+command is this third one, and it belongs after AI's refit). In the
+second, the `steals`, `blocks` and `turnovers` lines say `the defence reaches the player: about 0.62 of its
 lean` (a pass; it moves nothing until you say so) or `noise for one
 player`. In the third, each market reads `on the board` or `UNDER the
 floor — stays off the board`; a market off the board prices on the Edge
@@ -705,8 +724,10 @@ books haven't priced yet shows none, as before.
 NBA's fitted temperature, player-memory and rank files, the ones
 Wednesday's refit writes anyway, and never touches the record; perhaps
 ten minutes at low priority). Nothing has to run: Wednesday's refit
-(the next is Oct 21) does all of it by itself. These run it now, before
-opening night:
+(the next is Oct 21, the day after the NBA opener) does all of it by
+itself. These run it now, before opening night — after AG's first
+command, because the fits for steals, blocks and turnovers read the games
+it adds:
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine.deepfit import refit_sport; [print(l) for l in refit_sport('nba')]"
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'nba')]"
@@ -2820,7 +2841,8 @@ first). Paste back anything that prints an error or looks off.
     calibration, form and player-memory fits still read stored rows, so no
     price moves. Your call: those three fits list PRA too and have never
     found a row for it either; switching them on would move PRA's prices,
-    so they are left as they were. Fixed on the way: the replay divided by
+    so they are left as they were. **Answered 2026-10-14: yes** ("Ya do
+    the self tuneung"): step 77, AI. Fixed on the way: the replay divided by
     zero on a game with no stored count before it; it skips it now, the
     three-game floor every prop has. Budgets: the first visit is 610.97
     of 611 KB (no bump). Pins changed, told to you, nothing loosened:
