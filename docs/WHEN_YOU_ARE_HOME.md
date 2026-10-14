@@ -211,7 +211,13 @@ BC). BC came back clean on a real final (every check `ok`; 1,206 games still
 to play, the count the league publishes before the Cup's last 24). And a
 moneyline, spread or total on a basketball club ESPN spells its own way
 (the WNBA's Aces, Liberty, Sparks, Valkyries, Sun and Mystics) now meets its
-game: grading finds the game under either spelling (step 105; BD).
+game: grading finds the game under either spelling (step 105; BD). BD came
+back empty: no game-line bet was waiting. On your word ("do all of the
+ideas"), the usage step for college was measured first, on four seasons of
+college games, and it made no market's number better (receiving yards worse
+in all four), so the college board is unchanged (step 106; BE re-runs it on
+the box if you want it confirmed there). The other two ideas wait on L and
+step 30's check, as planned.
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -249,13 +255,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A game-line bet meets its game under either spelling of the club, the WNBA's included`
+**A. The box has today's code.** The first line should end `College's usage step, measured on four seasons: no market clears the bar, so the college board is unchanged`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 2cb0521d HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 5cb8a49f HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -357,10 +363,12 @@ struck through here as it is built.
   **Answered 2026-10-14: yes** ("do 1-11"). Built: step 95, AW. The
   lineup and the QB change are wired; the usage step isn't, because the
   college board's own number has none (next line).
-* **A usage step for college?** The NFL's board and read weigh a thin
+* ~~**A usage step for college?** The NFL's board and read weigh a thin
   log against his measured role (recent opportunities × season
   efficiency); college's have nothing like it. It would be measured on
-  college games first, as everything else was (step 95).
+  college games first, as everything else was (step 95).~~ **Answered
+  2026-10-14: "do all of the ideas".** Measured first: it fails the bar
+  in every market, so nothing was built (step 106, BE).
 * ~~**A fresh odds pull of a slip's own markets** when our price is old.
   A 4-leg ticket over two games costs about 3–4 credits, from the same
   daily budget the board uses, so you'd pick a daily cap (step 36,
@@ -381,11 +389,13 @@ struck through here as it is built.
 * ~~**The last-leg alert on the Alerts bell too?**~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 92.
 * **Pull a Most Likely pick when its line moves a point against it
-  before kickoff?** L's answer first (step 51).
+  before kickoff?** L's answer first (step 51). **2026-10-14: yes** ("do
+  all of the ideas"), built once L's paste is in.
 * **The NFL price rule** (step 30): stake only the NFL Most Likely picks
   whose chance covers what the price needs, as college has since 10-09?
   Step 30's read-only check (`lossaudit.py --sport nfl`) shows first
-  whether the covered picks do better than the rest.
+  whether the covered picks do better than the rest. **2026-10-14: yes**
+  ("do all of the ideas"), built once step 30's paste is in.
 * ~~**A Pick of the Day for the UFC card?** Every other league that names
   one now records it (steps 85 and 86); UFC names none.~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 97, AY.
@@ -1390,6 +1400,20 @@ It lists game-line bets still open more than two days after their date,
 by league. Any WNBA or NBA row before is a bet on a club ESPN spells its
 own way; after the next settle pass (minutes) they grade off the stored
 final, and the second run should list none of them. Paste both.
+**Run 2026-10-14, before it landed: `[]` — no game-line bet waiting.** The
+NFL board's "FAILED" note from 18:39 that evening was its build running
+into the 600-second limit while the hand-run fits held the box; the next
+build was clean, and nothing in the code changed for it.
+
+**BE. College's usage step, re-run on the box** (step 106; read-only,
+about a minute; optional). The measurement ran here on the same college
+play files the box downloads; on the box it uses the box's own fitted
+form curves, the one input that can differ:
+```
+cd /srv/qellys && sudo -u qellys python3 cfbbridgefit.py
+```
+The last line should read `passes the bar: none`. If it names a market,
+paste all of it: that market would then be built, the way the NFL's is.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4557,6 +4581,25 @@ first). Paste back anything that prints an error or looks off.
     host check name ESPN, not the league's CDN. No pin changed. New:
     `tests/test_a_game_bet_meets_its_game_under_either_spelling.py` (3
     checks; all three fail on the old code).
+106. **College's usage step, measured: it fails, so nothing changed**
+    (2026-10-14, "do all of the ideas"; BE re-runs it). The NFL's number
+    weighs a thin log against his measured role, his last four games'
+    opportunities times this season's efficiency, by n/(n+4). College's
+    number is his form alone. `cfbbridgefit.py` replays college's number
+    as the board builds it (his last twenty games under the school, this
+    season's then last season's) beside the same number with the role
+    blended in, over 2022-2025's college games. College's play file has
+    no target count, so a receiver's volume is his catches and his
+    efficiency yards a catch; carries and attempts are exact. The bar,
+    set before the run: every season better. None was: rushing yards
+    -0.21% pooled (two seasons worse), passing yards -0.02%, completions
+    +0.21% but 2022 -1.65%, receiving yards -0.49% and worse in all four.
+    The likely reason: college's form already reads twenty games, so the
+    role gets a sixth of the weight and adds noise there. The board is
+    unchanged; nothing in `engine/` reads the new script. New:
+    `tests/test_the_college_usage_bridge_is_measured_first.py` (3 checks:
+    the role is the NFL's rule on college's columns, the bar takes every
+    season, the replay blends what the board would). No pin changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
