@@ -234,30 +234,23 @@
   }
 
   /* HIS CHARTS, ONE TAP FROM THE LEG (Ethan, 2026-10-13: "I feel like
-     there is more then one place we can route the route checker on"). A
-     football leg the charts speak to — rushing, receiving, an anytime
-     touchdown — carries a door to his charts; app.js opens it (.cc-open)
-     wherever it is drawn. A leg does not know his position, so an NFL
-     door asks for "his chart" (kind auto): both are fetched and the one
-     he does more of leads — a back's carries even on a receptions leg
-     (Ethan: "we are showing only receptions for RBs and only carries for
-     WR and TE"). A quarterback's throws are his (the passing chart), and
-     college has its carries and, from 2025, the targets its play file
-     names, so its door asks for his chart the same way. A baseball leg
-     opens the bet's side of the ball: a pitcher's pitch chart on his
-     strikeouts or outs, a hitter's hit tracker on anything else; a
-     basketball leg his shot chart; a hockey goalie's saves his save map,
-     a skater's leg his shot map. */
+     there is more then one place we can route the route checker on",
+     then "make sure they are all routed correctly like nfl"). Every
+     player's leg, in every league with a chart, carries the same door;
+     app.js opens it (.cc-open) wherever it is drawn. A leg does not know
+     his position, so the door asks for "his charts" (kind auto) and hands
+     over the bet and tonight's opponent: js/carrychart.js asks for every
+     chart the bet points to and his own leads — a back's carries even on
+     a receptions leg (Ethan: "we are showing only receptions for RBs and
+     only carries for WR and TE"), a quarterback's throws, a kicker's
+     kicks, a pitcher's pitches on his strikeouts or outs and a hitter's
+     balls in play on anything else, a basketball player's shots, a
+     goalie's saves and a skater's shots — with his role beside it and the
+     matchup last, the pick page's own order. */
   function chartsHTML(l) {
-    const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
-    if (!l.player) return "";
-    const door = lg === "nfl" && /^(kick_pts|fg_made)$|kicking/.test(m) ? ["kicks", "Kick chart"]
-      : lg === "nfl" && /rush|rec|anytime|pass/.test(m) ? ["auto", "His charts"]
-      : lg === "cfb" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"]
-        : lg === "mlb" ? (/^(strikeouts|outs)$/.test(m) ? ["pitches", "Pitch chart"] : ["spray", "Hit tracker"])
-          : lg === "nba" ? ["shots", "Shot chart"]
-            : lg === "nhl" ? (/save|goals_against/.test(m) ? ["saves", "Save map"] : ["shotmap", "Shot map"]) : null;
-    return door ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${door[0]}">${door[1]}</button></div>` : "";
+    const lg = String(l.sport || "").toLowerCase();
+    return l.player && /^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)
+      ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="auto" data-mkt="${esc(l.market || "")}" data-opp="${esc(l.opponent || "")}">His charts</button></div>` : "";
   }
 
   /* AN OFF-BOARD READ (engine/slipread, Ethan 2026-10-13: "We can't just not

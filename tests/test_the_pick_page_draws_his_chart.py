@@ -263,8 +263,8 @@ def test_the_styles():
 # --- the parlay checker -------------------------------------------------------
 def test_a_football_leg_in_the_parlay_checker_carries_his_chart_doors():
     leg = lambda sport, market, player="Puka Nacua": {  # noqa: E731
-        "sport": sport, "player": player, "team": "LA", "market": market, "side": "over", "line": 5.5,
-        "verdict": "strong", "prob": 0.7, "needs": 0.55}
+        "sport": sport, "player": player, "team": "LA", "opponent": "SF", "market": market, "side": "over",
+        "line": 5.5, "verdict": "strong", "prob": 0.7, "needs": 0.55}
     slip = {"n_legs": 6, "grade": "B", "legs": [
         leg("nfl", "receptions"), leg("nfl", "anytime_td", "Kyren Williams"), leg("cfb", "rush_yds", "Nate Frazier"),
         leg("cfb", "receptions", "College Receiver"), leg("nba", "reb", "Josh Hart"),
@@ -280,11 +280,16 @@ def test_a_football_leg_in_the_parlay_checker_carries_his_chart_doors():
     out = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1200:]
     html = out.stdout
-    doors = re.findall(r'class="pgr-chart cc-open" data-carry="([^"]*)" data-lg="(\w+)" data-kind="(\w+)">([^<]+)<', html)
-    assert doors == [("Puka Nacua", "nfl", "auto", "His charts"), ("Kyren Williams", "nfl", "auto", "His charts"),
-                     ("Nate Frazier", "cfb", "auto", "His charts"), ("College Receiver", "cfb", "auto", "His charts"),
-                     ("Josh Hart", "nba", "shots", "Shot chart"),
-                     ("&lt;img src=x&gt;", "nfl", "auto", "His charts")], doors
+    # Every league's leg the same door since 2026-10-14 ("routed correctly
+    # like nfl"), handing over its bet and tonight's opponent.
+    doors = re.findall(r'class="pgr-chart cc-open" data-carry="([^"]*)" data-lg="(\w+)" data-kind="(\w+)" '
+                       r'data-mkt="([^"]*)" data-opp="([^"]*)">([^<]+)<', html)
+    assert doors == [("Puka Nacua", "nfl", "auto", "receptions", "SF", "His charts"),
+                     ("Kyren Williams", "nfl", "auto", "anytime_td", "SF", "His charts"),
+                     ("Nate Frazier", "cfb", "auto", "rush_yds", "SF", "His charts"),
+                     ("College Receiver", "cfb", "auto", "receptions", "SF", "His charts"),
+                     ("Josh Hart", "nba", "auto", "reb", "SF", "His charts"),
+                     ("&lt;img src=x&gt;", "nfl", "auto", "receptions", "SF", "His charts")], doors
     assert "<img src=x>" not in html
 
 
@@ -297,7 +302,8 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8"><style>{css}</style><
   window.ASKED = [];
   window.fetch = async (q) => {{
     window.ASKED.push(q);
-    const kind = q.includes("/routes") ? "routes" : "carries";
+    // Routes and carries answer; every other chart (his role, a matchup) has nothing here.
+    const kind = q.includes("/routes") ? "routes" : q.includes("/carries") ? "carries" : "other";
     const who = new URL(q, "http://x").searchParams.get("player");
     return {{ ok: true, json: async () => ((window.DATA || {{}})[kind] || {{}})[who] || {{}} }};
   }};

@@ -335,8 +335,12 @@ def test_the_page_draws_both():
 def test_every_door_and_the_module():
     i = APP_JS.index("function chartSlot(")
     assert "return r && r.player ?" in APP_JS[i:i + 500], "every baseball bet leaves a slot"
+    # Every leg's door asks for his charts with its bet (2026-10-14): a
+    # pitcher's strikeouts or outs draw his pitches, anything else a
+    # hitter's balls in play (kindsFor, pinned above).
     i = SLIP_JS.index("function chartsHTML(")
-    assert '["pitches", "Pitch chart"] : ["spray", "Hit tracker"]' in SLIP_JS[i:i + 700]
+    assert '/^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)' in SLIP_JS[i:i + 400]
+    assert 'data-kind="auto" data-mkt="${esc(l.market || "")}"' in SLIP_JS[i:i + 600]
     assert 'const PLUG = { spray: "mlb", pitches: "mlb"' in CC_JS
     assert "el.src = `js/chart-${f}.js`;" in CC_JS and 'el.addEventListener("load"' in CC_JS
     assert "window.QBCarry.plug" in MLB_JS and 'Q.draw("spray"' in MLB_JS and 'Q.draw("pitches"' in MLB_JS

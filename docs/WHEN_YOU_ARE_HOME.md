@@ -74,7 +74,10 @@ fit number; context only (step 71; AC). Every hitter's chart now
 carries our own expected average and slugging (xBA, xSLG), from how hard
 and at what angle each ball left the bat, and a test on games the table
 never saw decides whether they are ever more than context (step 72; AD).
-The whole picture, sport by sport, is in
+Every league's charts now open the way the NFL's do: the player page and
+every parlay leg carry one "His charts" button, in every league, opening
+his own chart first with his role beside it and tonight's matchup (step
+73; AE). The whole picture, sport by sport, is in
 `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -85,13 +88,13 @@ D's Stripe settings, Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write) and AD's two model files (the table
 the chores would fit anyway, and the test's verdict). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Our own expected average and slugging on every hitter's chart, measured before any use`
+**A. The box has today's code.** The first line should end `Every league's charts open the way the NFL's do: one door on the player page and every parlay leg`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 653332e2 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 1a8cef83 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -600,6 +603,18 @@ written on the chart and is your call from there; it moves no price by
 itself. Then on your phone: MLB, any hitter's pick, the hit tracker's
 season tab: xBA under his AVG, xSLG under his SLG, and a ball's tooltip
 ends with its xBA; the note under the chart says what the test found.
+
+**AE. Every league's charts open the same way** (step 73; nothing to run).
+On your phone, in each league (NFL, college, NBA, WNBA, NHL, MLB): search
+any player, and under the head-to-head is one button, `His charts`. Tap
+it: his own chart leads (a back's carries, a receiver's targets, a
+passer's throws, a kicker's kicks, a hitter's balls in play, a pitcher's
+pitches, a basketball player's shots, a skater's shots, a goalie's saves;
+the WNBA has his role only, as on its pick page), with `Role` beside it,
+and `Matchup vs` tonight's opponent when he has a priced bet tonight. In
+Ask's parlay checker, every player's leg carries the same button, in
+every league. The Most Likely pick page is unchanged: it already drew his
+chart in place, in every league.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2580,6 +2595,43 @@ first). Paste back anything that prints an error or looks off.
     that loads with the chart). New:
     `tests/test_mlb_expected_stats_measured_before_use.py`; no pin
     changed.
+73. **Every league's charts open the way the NFL's do: one door on the
+    player page and every parlay leg** (2026-10-14, you: "make sure they
+    are all routed correctly like nfl"). AE walks it. Three doors lead to
+    a player's charts. The pick page (every Most Likely row, Edge pick,
+    Live bet and game-page read) already drew his chart in place in every
+    league. The player page had buttons only for an NFL or college
+    runner's carries and an NFL receiver's routes; it now has one `His
+    charts` button in every league with a chart, handing over the face it
+    shows, the bet, his position and tonight's opponent. The parlay
+    checker's football legs asked for all his charts while a baseball,
+    basketball or hockey leg opened one chart with no Role and no Matchup
+    beside it, and a WNBA leg had none; every player's leg now carries the
+    same door with its bet and opponent. Behind every door the chart
+    module picks the charts exactly as the pick page does (the bet and
+    position point to them; with neither, every chart the league has is
+    asked for and the ones he has are drawn), his own leads, his role
+    after it, the matchup last where the opponent is named. A fighter
+    keeps his Fight history button on the card. The first visit's budget
+    went down slightly (no bump). Pins changed, told to you, nothing
+    loosened: `tests/test_a_carry_chart_for_every_runner.py`,
+    `tests/test_a_route_chart_for_every_receiver.py` and
+    `tests/test_the_chart_shows_his_face.py` read the player page's one
+    door (it was two football buttons) and the loader handing over the
+    bet, position and opponent with the face;
+    `tests/test_a_kicker_chart_for_every_kicker.py`,
+    `tests/test_a_passing_chart_for_every_passer.py`,
+    `tests/test_a_shot_chart_for_every_nba_player.py`,
+    `tests/test_a_shot_map_and_save_map_for_hockey.py` and
+    `tests/test_mlb_hit_tracker_and_pitch_chart.py` read the parlay leg's
+    one door with its bet (each named its own chart and label), and the
+    passer's test reads the league lists the door falls back to;
+    `tests/test_the_pick_page_draws_his_chart.py` reads the doors' bet and
+    opponent (its basketball leg says `His charts`, it said `Shot chart`).
+    That file's opt-in browser test had been failing since the Role chart
+    went in (its stand-in server answered a Role request with carries); it
+    now answers routes and carries only, and passes. New:
+    `tests/test_every_chart_is_routed_like_nfl.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

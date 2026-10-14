@@ -15902,33 +15902,34 @@ function profileHTML(player, opts) {
             ? ` <b>${priced.get(t).line}</b>` : ""}</button>`).join("")}
     </div>` : "";
   const lg = (rows[0] && rows[0].sport) || state.sport;
-  const vsTail = vsBlockHTML(player, lg, (rows[0] && rows[0].opponent) || "") + carryDoor(player, lg, tabs, rows[0] && rows[0].headshot);
+  const r0 = rows[0] || {};
+  const vsTail = vsBlockHTML(player, lg, r0.opponent || "") + chartDoor(player, lg, priced.get(mkt) || r0);
   return priced.has(mkt)
     ? pricedProfileHTML(priced.get(mkt), chips, vsTail, deep)
     : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail);
 }
 
-/* THE CARRY CHART (Ethan, 2026-10-13: "a carry chart exactly in the
-   screenshot for every player"): every run, by game and for the season,
-   NFL and college, for anyone with a rushing log. AND THE ROUTE CHART
-   (the same day: "We can add route charts for wr and shit too"): every
-   pass thrown to him, NFL only — the college play file names the target
-   but has no air yards and no side of the field. Both drawn by
-   js/carrychart.js, loaded on the first tap. The door carries the face
-   this page is showing, so the chart has one even where its own lookup
-   finds none. */
-function carryDoor(player, lg, tabs, face) {
-  const runs = (lg === "nfl" || lg === "cfb") && tabs.some((t) => /rush|carr/i.test(t));
-  const catches = lg === "nfl" && tabs.some((t) => /recei|recep|target/i.test(t));
-  if (!runs && !catches) return "";
-  return `<div class="prof-vs prof-charts">${runs ? ccDoor(player, lg, "carries", "Carry chart", face) : ""}${catches ? ccDoor(player, lg, "routes", "Route chart", face) : ""}</div>`;
+/* HIS CHARTS FROM THE PLAYER PAGE, in every league (Ethan, 2026-10-13:
+   "a carry chart exactly in the screenshot for every player", then
+   "make sure they are all routed correctly like nfl"). One door, as the
+   parlay checker's: js/carrychart.js asks for every chart his bet and
+   position point to (a back's carries, a receiver's targets, a passer's
+   throws, a kicker's kicks, a hitter's balls in play or a pitcher's
+   pitches, a basketball player's shots, a skater's shots or a goalie's
+   saves), draws the one he does most, his role beside it and tonight's
+   matchup where the page names the opponent. Loaded on the first tap; the
+   door carries the face this page is showing, so the chart has one even
+   where its own lookup finds none. */
+function chartDoor(player, lg, r) {
+  return /^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg) ? `<div class="prof-vs prof-charts">${ccDoor(player, lg, "auto", "His charts", r.headshot, r)}</div>` : "";
 }
-//: One door to one of his charts, wherever a player or a fighter is drawn.
-const ccDoor = (player, lg, kind, label, face) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}"${face ? ` data-face="${escapeAttr(face)}"` : ""}>${label}</button>`;
+//: One door to his charts, wherever a player or a fighter is drawn; a
+//: row hands over the bet, his position and tonight's opponent.
+const ccDoor = (player, lg, kind, label, face, r) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}"${face ? ` data-face="${escapeAttr(face)}"` : ""}${r ? ` data-mkt="${escapeAttr(r.market || "")}" data-pos="${escapeAttr(r.position || "")}" data-opp="${escapeAttr(r.opponent || "")}"` : ""}>${label}</button>`;
 let _ccLoad = null;
 document.addEventListener("click", (e) => {
-  const b = e.target.closest && e.target.closest(".cc-open");
-  if (b) ccLoad().then((m) => m && m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind, b.dataset.face));
+  const b = e.target.closest && e.target.closest(".cc-open"), d = b && b.dataset;
+  if (b) ccLoad().then((m) => m && m.open(d.carry, d.lg, d.kind, d.face, d.mkt, d.pos, d.opp));
 });
 /* The module and its styles, once, for a door and a pick page alike. It
    answers when BOTH have arrived: a chart drawn before its stylesheet is

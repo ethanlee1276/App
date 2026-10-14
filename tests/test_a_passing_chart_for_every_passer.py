@@ -345,10 +345,14 @@ def test_every_door_reaches_it():
     # module's kindsFor picks his charts (pinned above for a passer).
     assert "return r && r.player ?" in APP_JS[i:i + 400], "a passing bet's pick page draws his chart"
     i = SLIP_JS.index("function chartsHTML(")
-    assert "/rush|rec|anytime|pass/.test(m)" in SLIP_JS[i:i + 400], "a passing leg carries his charts' door"
+    assert 'data-kind="auto" data-mkt="${esc(l.market || "")}"' in SLIP_JS[i:i + 600], \
+        "a passing leg carries his charts' door, with its bet"
     assert '`/api/players/chart?kind=${kind}&sport=`' in CC_JS
-    # His role chart (2026-10-14) is asked for after his own charts.
-    assert 'cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes", "role"] : ["carries", "routes", "role"]) : null' in CC_JS
+    # A door's charts are the bet's (kindsFor, a passer's throws first, as
+    # pinned above), or the league's every chart; his role is asked for
+    # after his own charts.
+    assert "const hint = kindsFor(lg, mkt, pos);" in CC_JS and "const D = auto ? doorKinds(lg, mkt, pos, opp)" in CC_JS
+    assert 'nfl: ["carries", "routes", "passes", "kicks", "role"], cfb: ["carries", "routes", "role"]' in CC_JS
     for cls in (".rc-sack", ".rc-sack.sel"):
         assert cls in CC_CSS, cls
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"

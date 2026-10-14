@@ -1332,7 +1332,19 @@
     ov.addEventListener("error", faceEvent, true);
   }
 
-  function open(player, sport, kind, face) {
+  /* Every chart a league has, for a door that knows neither his position
+     nor a bet the charts read (a player page's head, a leg the parlay
+     checker priced): probe asks for each and draws what he has. */
+  const ALL = { nfl: ["carries", "routes", "passes", "kicks", "role"], cfb: ["carries", "routes", "role"],
+                nba: ["shots", "role"], wnba: ["role"], nhl: ["shotmap", "saves", "role"],
+                mlb: ["spray", "pitches", "role"], ufc: ["fights"] };
+  function doorKinds(lg, mkt, pos, opp) {
+    const hint = kindsFor(lg, mkt, pos);
+    const cand = (hint.length ? hint : ALL[lg] || ALL.nfl).slice();
+    if (opp && cand.some((k) => MATCHED.has(k))) cand.push("matchup");
+    return { cand, fam: hint[0] || "" };
+  }
+  function open(player, sport, kind, face, mkt, pos, opp) {
     if (!player) return;
     let ov = document.getElementById("cc-overlay");
     if (!ov) {
@@ -1341,15 +1353,18 @@
       document.body.appendChild(ov);
       bind(ov);
     }
-    /* "auto" is a door that does not know his position (the parlay
-       checker's legs): both of his charts are asked for and his own
-       leads, as on a pick page (probe). */
+    /* "auto" is a door to HIS charts, in every league (a player page, a
+       parlay leg): the ones his bet and position point to, as on a pick
+       page (kindsFor), or every one the league has; each is asked for,
+       his own leads (probe), his role after it, and tonight's matchup
+       last wherever the door names the opponent. The matchup's family is
+       the bet's chart, or the server's choice by what he does most. */
     const auto = kind === "auto", lg = String(sport || "nfl").toLowerCase();
-    const k0 = KIND[kind] ? kind : "carries", K = kindOf(k0, lg);
-    ov._cc = use({ root: ov, inline: false, seq: 0, kinds: null, key: "",
-                   cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes", "role"] : ["carries", "routes", "role"]) : null,
-                   S: { sport: lg, kind: k0, player, data: null,
-                        view: "game", gi: 0, sel: -1, hint: face || "" } });
+    const D = auto ? doorKinds(lg, mkt, pos, opp) : { cand: null, fam: "" }, cand = D.cand;
+    const k0 = KIND[kind] ? kind : cand ? cand[0] : "carries", K = kindOf(k0, lg);
+    ov._cc = use({ root: ov, inline: false, seq: 0, kinds: null, key: "", cand,
+                   S: { sport: lg, kind: k0, player, data: null, view: "game", gi: 0, sel: -1,
+                        hint: face || "", opp: opp || "", fam: D.fam } });
     ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${auto ? "Charts" : K.title} — ${player}`)}">
       <button class="cc-x" type="button" aria-label="Close">×</button>
       <div class="cc-body"><div class="cc-empty">Loading ${esc(player)}’s ${esc(K.noun)}…</div></div></div>`;
@@ -1494,7 +1509,7 @@
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,
                                          routeTiles, routeTables, routeNote, routeLegend,
-                                         faceHTML, faceStep, inits, kindsFor, tally,
+                                         faceHTML, faceStep, inits, kindsFor, doorKinds, tally,
                                          KIND, DRAW, passGameChart, passSeasonChart, passTiles, passList,
                                          passTables, passChip, kindOf, cfbTargetGame, cfbTargetSeason,
                                          cfbTargetTiles, cfbTargetNote } };

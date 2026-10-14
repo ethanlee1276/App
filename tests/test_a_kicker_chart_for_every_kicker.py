@@ -234,8 +234,11 @@ def test_the_page_draws_every_field_goal():
 
 
 def test_every_door_and_the_module():
+    # A kicking leg's door asks for his charts with its bet (2026-10-14);
+    # kindsFor sends a kicking bet to his kicks (pinned above).
     i = SLIP_JS.index("function chartsHTML(")
-    assert 'lg === "nfl" && /^(kick_pts|fg_made)$|kicking/.test(m) ? ["kicks", "Kick chart"]' in SLIP_JS[i:i + 600]
+    assert 'data-kind="auto" data-mkt="${esc(l.market || "")}"' in SLIP_JS[i:i + 600]
+    assert 'nfl: ["carries", "routes", "passes", "kicks", "role"]' in CC_JS, "a door with no bet still finds his kicks"
     assert 'kicks: "kicks"' in CC_JS and 'Q.draw("kicks"' in KK_JS
     assert "onclick" not in KK_JS and "onerror" not in KK_JS and not re.search(r"on(error|load)\s*=", KK_JS)
     for cls in (".kk-svg", ".kk-post", ".kk-flight.missed", ".kk-ball.made", ".kk-pill rect", ".dt.kk-x"):

@@ -492,16 +492,20 @@ def test_the_page_draws_every_carry_through_its_hole_and_lists_it():
 
 
 def test_the_chart_loads_on_first_use_and_runs_under_the_pages_csp():
-    assert "function carryDoor(" in APP_JS
-    assert re.search(r'\(lg === "nfl" \|\| lg === "cfb"\) && tabs\.some\(\(t\) => /rush\|carr/i\.test\(t\)\)', APP_JS), \
-        "the door is football's, for a player with a rushing log"
-    assert "+ carryDoor(player, lg, tabs, rows[0] && rows[0].headshot)" in APP_JS, \
-        "every profile card variant carries it beside the head-to-head, with the face it shows"
+    # Since 2026-10-14 the player page has one door to his charts in every
+    # league with one ("routed correctly like nfl"); a runner's carries
+    # lead it through the chart module's kindsFor (pinned in
+    # test_the_pick_page_draws_his_chart).
+    i = APP_JS.index("function chartDoor(")
+    assert '/^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)' in APP_JS[i:i + 300], "every charted league, football's first"
+    assert 'ccDoor(player, lg, "auto", "His charts", r.headshot, r)' in APP_JS[i:i + 300]
+    assert "+ chartDoor(player, lg, priced.get(mkt) || r0)" in APP_JS, \
+        "every profile card variant carries it beside the head-to-head, with the row it shows (face, bet, position)"
     i = APP_JS.index('e.target.closest(".cc-open")')
     loader = APP_JS[i:i + 900]
     assert 'css.href = "css/carrychart.css";' in loader and 'el.src = "js/carrychart.js";' in loader
-    assert "m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind, b.dataset.face)" in loader, \
-        "the door says which chart, and hands over the face"
+    assert "m.open(d.carry, d.lg, d.kind, d.face, d.mkt, d.pos, d.opp)" in loader, \
+        "the door says which charts, and hands over the face, the bet, his position and tonight's opponent"
     assert "onclick" not in CC_JS and "onerror" not in CC_JS, "no inline handlers under the page's CSP"
     assert "/api/players/carries?sport=" in CC_JS
     for cls in (".cc-run", ".cc-run.loss", ".cc-run.short", ".cc-run.gain", ".cc-td", ".cc-fum", ".cc-los",

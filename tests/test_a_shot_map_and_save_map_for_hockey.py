@@ -210,9 +210,12 @@ def test_the_page_draws_the_rink():
 
 
 def test_every_door_and_the_module():
+    # Every leg's door asks for his charts with its bet (2026-10-14): a
+    # goalie's saves draw his save map, a skater's leg his shot map
+    # (kindsFor, pinned above).
     i = SLIP_JS.index("function chartsHTML(")
-    assert 'lg === "nhl" ? (/save|goals_against/.test(m) ? ["saves", "Save map"] : ["shotmap", "Shot map"])' \
-        in SLIP_JS[i:i + 900]
+    assert '/^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)' in SLIP_JS[i:i + 400]
+    assert 'data-kind="auto" data-mkt="${esc(l.market || "")}"' in SLIP_JS[i:i + 600]
     assert 'shotmap: "nhl", saves: "nhl"' in CC_JS and 'Q.draw("shotmap"' in NHL_JS and 'Q.draw("saves"' in NHL_JS
     assert "onclick" not in NHL_JS and "onerror" not in NHL_JS and not re.search(r"on(error|load)\s*=", NHL_JS)
     for cls in (".nh-svg", ".nh-ice", ".nh-crease", ".nh-mark.goal", ".nh-mark.ga", ".nh-pill rect", ".dt.nh-sv"):

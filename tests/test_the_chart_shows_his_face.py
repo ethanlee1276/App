@@ -351,10 +351,11 @@ def test_the_css_hides_the_initials_once_a_photo_is_in():
 
 
 def test_the_door_hands_over_the_face_and_no_handler_is_inline():
-    assert "carryDoor(player, lg, tabs, rows[0] && rows[0].headshot)" in APP_JS
+    assert "chartDoor(player, lg, priced.get(mkt) || r0)" in APP_JS
+    assert 'ccDoor(player, lg, "auto", "His charts", r.headshot, r)' in APP_JS, "the face the page shows"
     assert '${face ? ` data-face="${escapeAttr(face)}"` : ""}' in APP_JS
-    assert "m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind, b.dataset.face)" in APP_JS
-    assert "function open(player, sport, kind, face)" in CC_JS and 'hint: face || ""' in CC_JS
+    assert "m.open(d.carry, d.lg, d.kind, d.face, d.mkt, d.pos, d.opp)" in APP_JS
+    assert "function open(player, sport, kind, face, mkt, pos, opp)" in CC_JS and 'hint: face || ""' in CC_JS
     assert 'ov.addEventListener("load", faceEvent, true);' in CC_JS
     assert 'ov.addEventListener("error", faceEvent, true);' in CC_JS
     assert not re.search(r"\bon(error|load)\s*=", CC_JS), "the page's CSP allows no inline handler"
