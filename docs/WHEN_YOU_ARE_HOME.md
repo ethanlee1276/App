@@ -133,6 +133,13 @@ again when a request drops (a deploy's restart, a phone's connection)
 and offers Try again if it still cannot get it; the server keeps a built
 chart for fifteen minutes and no longer stops mid-request to ask MLB's
 servers for his photo (step 83; AO). The
+hit page now draws the seven things your renders showed that it had left
+out, each off MLB's own record: his runs and stolen bases game by game,
+each club's record on the day, the park with a View game button to
+MLB.com, barrels (MLB's own rule) beside his barrel rate, MLB's own
+expected average and slugging from Baseball Savant beside ours, a link to
+the video of every at-bat on Savant, and his action photo in place of his
+headshot; the box fills them by itself, within hours (step 84; AP). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -160,16 +167,17 @@ the chores would fit anyway, and the test's verdict) and AG's backfill
 (last season's NBA box scores read again, adding the three stats beside
 the rows already there) and its rank fit (the store Wednesday's chores
 write anyway), and AI's refit (the NBA's fitted model files, the ones
-Wednesday's refit writes anyway). Every command runs on the box (`ssh`
-in first).
+Wednesday's refit writes anyway), and AP's fill if you start it (the hit
+page's tables, the rows tonight's chores write anyway). Every command runs
+on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The hit tracker is drawn before you scroll to it: asked for as the pick opens, kept on the server, asked again when a request drops`
+**A. The box has today's code.** The first line should end `The hit page draws the seven things it left out: runs and steals, the record on the day, the park and View game, barrels, MLB's own xBA, every at-bat's video, his action photo`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 3cd30959 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 2d499a00 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -918,6 +926,60 @@ scroll down to the hit tracker: it should already be drawn, with Hits,
 Role and Matchup on the switch. If one ever reads "didn't load", the Try
 again under it asks for it again, and the line it printed is worth
 pasting back.
+
+**AP. The hit page's seven new pieces** (step 84; one read-only command,
+seconds, then your phone). Nothing to run for them: within a couple of
+hours of the push the box's chart fill reads this season's parks, finals
+and records off MLB's schedule (one request), up to 350 hitters' game logs
+for their runs and steals, the video ids of the last month's at-bats (60
+games) and Baseball Savant's two boards; the nightly chores do the rest a
+night at a time, every hitter within two or three nights. One line for
+each of the seven, in your order:
+```
+cd /srv/qellys && sudo -u qellys python3 hitpagecheck.py
+```
+Paste it all back. How to read it:
+1. `runs and steals`: hitters with every game on file, of the hitters the
+   hit tracker has; it climbs to nearly all of them within three nights.
+   "asked and not carried" are games neither of his MLB game logs lists:
+   a handful at most.
+2. `records`: which way MLB's schedule states a past game's record (after
+   the game, or the day before it) and how many our own count of the
+   finals agrees with. Only those show; most club-games under "after" or
+   "before" is right. Most under "neither" means no record shows (never a
+   wrong one), and that line is the one I need. The NYY lines should read
+   like the standings did on those days.
+3. `parks`: every game should have one; the link opens MLB's own page of
+   the latest October game.
+4. `barrels`: about 7 to 8 per cent of balls in play is MLB's own league
+   rate. Far off that, paste it.
+5. `Baseball Savant`: expected stats and barrel rates for some six
+   hundred hitters, as of today. "no file yet" is the fill not having run.
+6. `video`: most plate appearances of the last month should carry an id,
+   and the example link should open that at-bat's video on Savant. "0 of"
+   means MLB's play-by-play gives no ids: paste it; each game card then
+   links to the game's whole Savant feed instead.
+7. `action photo`: `200 image/jpeg` is MLB's photo there. `not there:
+   HTTP Error 404` means the page shows his headshot instead (it falls
+   back by itself); paste it.
+
+A part that says `not there yet` is the app not yet restarted on this
+code (A first). If 1, 2 or 5 are still empty two hours after A shows the
+code, start the fill yourself (it writes only the rows tonight's chores
+would; a few minutes, at low priority):
+```
+cd /srv/qellys && sudo -u qellys nice -n 10 python3 -m engine.chartfill
+```
+Then on your phone open any MLB hitter's pick and his chart: his action
+photo in the hero (or his headshot, where MLB has none); By game, under
+the date, the park ("@ Yankee Stadium"; in October the series and the
+game of it) and View game ↗ (MLB.com); in the regular season each club's
+record under its score; R and SB among the game's tiles; a Barrel tag on
+an at-bat that was one; the Watch row under the at-bats, each numbered
+chip that at-bat's video, and Every pitch ↗ the game's on Savant; and on
+Where he hits it, Runs and Stolen bases among the six big numbers, Barrel
+% beside hard hit, and the line "MLB's own · Baseball Savant · as of"
+with his xBA, xSLG and barrel rate.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3439,6 +3501,87 @@ first). Paste back anything that prints an error or looks off.
     the stand-ins take the new `offline` one, and the first now also
     fails unless the page's lookup asks for the cached rosters only. New:
     `tests/test_the_hit_tracker_is_there_when_you_get_to_it.py`.
+84. **The hit page draws the seven things it left out** (2026-10-14, you,
+    after asking what data the page was missing and where it could come
+    from: "And yes do the first 7 page items"). AP checks it. Each one off
+    MLB's own record, and drawn only where it is on file:
+    1. RUNS AND STOLEN BASES, game by game, off his own MLB game log (the
+       one the nightly slate build already reads for every hitter in a
+       lineup), keyed by MLB's own game id — no name or date to match, a
+       doubleheader's two games each their own. A new table,
+       `mlb_bat_games`, filled by `engine/mlb/charts.fill_bat`: the
+       hitters the hit tracker has a game for that the table does not,
+       350 a night, the latest first; his postseason log too when a
+       playoff game is missing (the plain log leaves them out); a game
+       neither log lists written down as asked after three days, so it is
+       not asked about every night. The game's tiles gain R and SB, the
+       season's six big numbers gain Runs and Stolen bases — the season's
+       only once every game on the chart has its own (a total short of a
+       game is a wrong total), and then over every game in his log, a
+       game he only pinch-ran in included.
+    2. THE RECORD ON THE DAY, under each club's score in the regular
+       season, off MLB's schedule. A new table, `mlb_games`: every final's
+       park, score, both clubs' records as the schedule gives them, a
+       doubleheader's game number and October's series, filled from the
+       schedule the nightly backfill already reads (no request of its
+       own); a season read before the table was kept, once (2025: one
+       request). A record shows only where our own count of the season's
+       finals agrees with the league's figure, the record after the game
+       or the day before — which also proves no game of that club's is
+       missing up to then — and is shown as the record through the game.
+       In October the card names the series and the game of it instead.
+    3. THE PARK AND VIEW GAME: "@ Yankee Stadium" under the date, and a
+       View game ↗ button to the game on MLB.com (mlb.com/gameday/<id>).
+    4. BARRELS by MLB's published rule (98 mph at 26 to 30 degrees, the
+       window widening with every mph to 8 to 50 degrees at 116), on MLB's
+       own exit velocity and launch angle: a Barrel tag on an at-bat, a
+       Barrels tile on the game's summary, Barrel % on the season's.
+    5. MLB'S OWN xBA, xSLG AND BARREL RATE, from Baseball Savant, beside
+       ours, with the day they were read. The page's own copy of Savant's
+       two boards: every hitter with a ball in play (the model's copies
+       keep only qualified hitters), keyed by MLB's own player id, fetched
+       once a night and read from the file, never the wire, on a request.
+    6. THE VIDEO OF EACH AT-BAT: the fold now keeps the id of the pitch
+       each plate appearance ended on (the key MLB files that pitch's
+       video under); a numbered chip per at-bat opens it on Baseball
+       Savant, and Every pitch ↗ the game's whole Savant feed — which is
+       all a game read before today gets, except the last month's, read
+       again for their ids 60 games a night, once. Links out; nothing of
+       MLB's is copied or hosted.
+    7. HIS ACTION PHOTO, off the same MLB photo server as his headshot,
+       in the headshot's place once it loads; a man with none keeps his
+       headshot (no default image is asked for, so a missing photo fails
+       and falls back).
+    THE FILLS: the nightly chores read all of it after the backfill
+    (`charts.fill_page`; each part on its own, one failing never stops the
+    others), and the chart fill starts the same the hour the code lands
+    (`engine/chartfill`: a season with plate appearances and no games
+    table rows is owed). A FINDING ON THE WAY, FIXED: the model's two
+    Savant boards (expected stats and barrels, read by the HR model)
+    returned the cached file whenever one existed, and the fetch layer
+    writes the file under the same name — so after the first download
+    they were never asked for again, and their six-hour refresh never ran
+    (the bug the NFL roster files once had; `tests/test_roster_freshness.py`).
+    They now go through the fetch layer, which keeps a fresh copy, asks
+    again for an older one and falls back to the old file when Savant
+    does not answer. That changes no setting of the model; it lets it
+    read this season's numbers again. The pitch-arsenal board has the same
+    pattern and is NOT changed here (it rewrites a bad download in a way
+    that needs care): left as a separate item. Checked: the new test's 23
+    checks and its browser walk (the photo and its fallback, every link,
+    the tiles, no sideways scroll at a phone's width), the hit page's and
+    the hit tracker's tests and browser walk, the chart fill's and the
+    full suite. App 494.475 of 495 KB and first visit 610.983 of 611,
+    unchanged (app.js untouched; the chart modules load on first use).
+    A pin changed, told to you, nothing loosened:
+    `tests/test_the_mlb_hit_page_follows_the_renders.py`'s
+    `test_nothing_the_record_does_not_hold` pinned that runs, stolen
+    bases, barrels and a club's record were never drawn, because nothing
+    on file carried them; it now pins that each is drawn only where the
+    record holds it (none on its fixture, which has no game log, schedule
+    row or Savant file) and that barrels are, and the note's new words.
+    New: `tests/test_the_hit_page_has_what_the_renders_showed.py`,
+    `hitpagecheck.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

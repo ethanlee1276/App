@@ -18,7 +18,7 @@ from __future__ import annotations
 import csv
 import io
 
-from ...sources.fetch import fetch_text, load_local_csv, CACHE_DIR, DataUnavailable
+from ...sources.fetch import fetch_text, CACHE_DIR, DataUnavailable
 from ..models import StatcastProfile
 
 SAVANT_EXPECTED = (
@@ -135,10 +135,15 @@ def parse_barrels(rows: list[dict]) -> dict[str, dict]:
 
 
 def load_barrels(year: int, kind: str = "batter") -> dict[str, dict]:
-    """Fetch (or read a cached) barrels board for a season."""
-    local = CACHE_DIR / f"savant_barrels_{kind}_{year}.csv"
-    if local.exists():
-        return parse_barrels(load_local_csv(local))
+    """Fetch (or read a cached) barrels board for a season.
+
+    THROUGH `fetch_text`, ALWAYS (2026-10-14). This read the cached file
+    whenever one existed, and `fetch_text` writes the file under the same
+    name — so after the first download the board was never asked for
+    again, and its `ttl` was dead: every hitter's barrel rate stayed what
+    it was the day the file landed. `fetch_text` serves a copy younger than
+    the ttl, asks again for an older one, and falls back to the old copy
+    when Savant does not answer, which is what a supplied file needs too."""
     url = SAVANT_BARRELS.format(type=kind, year=year)
     text = fetch_text(url, f"savant_barrels_{kind}_{year}.csv", ttl=6 * 3600)
     return parse_barrels(_read_csv_text(text))
@@ -152,13 +157,107 @@ def _read_csv_text(text: str) -> list[dict]:
 
 
 def load_expected_stats(year: int, kind: str = "batter") -> dict[str, StatcastProfile]:
-    """Fetch (or read a cached) expected-stats board for a season."""
-    local = CACHE_DIR / f"savant_expected_{kind}_{year}.csv"
-    if local.exists():
-        return parse_expected_stats(load_local_csv(local))
+    """Fetch (or read a cached) expected-stats board for a season — through
+    `fetch_text` always, for the reason `load_barrels` gives."""
     url = SAVANT_EXPECTED.format(type=kind, year=year)
     text = fetch_text(url, f"savant_expected_{kind}_{year}.csv", ttl=6 * 3600)
     return parse_expected_stats(_read_csv_text(text))
+
+
+# --- the hit page's own copy: every hitter, by MLB's own id --------------------------
+#
+# Ethan, 2026-10-14 ("do the first 7 page items"): MLB's own expected
+# average and slugging, and its barrel rate, beside ours on the hit page.
+# The two boards above are the model's, and they keep only qualified
+# hitters (`min=q`, `min=50`), keyed by name; a part-timer the page is
+# opened for is in neither. So the page reads its own copy of each — every
+# hitter with a ball in play, keyed by the player id both Savant and the
+# Stats API use — fetched once a night by the chart chores
+# (`fetch_page_boards`) and read from the file on a request (`page_board`),
+# never from the wire. The model's boards are not changed by any of this.
+SAVANT_EXPECTED_ALL = SAVANT_EXPECTED.replace("min=q", "min=1")
+SAVANT_BARRELS_ALL = SAVANT_BARRELS.replace("min=50", "min=1")
+#: A day, less a few hours: the nightly asks again every night.
+PAGE_TTL = 20 * 3600
+
+
+def page_names(year: int) -> tuple[str, str]:
+    return (f"savant_expected_batter_{int(year)}_all.csv", f"savant_barrels_batter_{int(year)}_all.csv")
+
+
+def fetch_page_boards(year: int) -> dict:
+    """Fetch the hit page's two boards for a season (a copy under a day old
+    is kept). ``{"expected": rows, "barrels": rows}``, or the error's words
+    in a board's place."""
+    out = {}
+    for key, tmpl, name in zip(("expected", "barrels"), (SAVANT_EXPECTED_ALL, SAVANT_BARRELS_ALL),
+                               page_names(year)):
+        try:
+            out[key] = len(_read_csv_text(fetch_text(tmpl.format(type="batter", year=int(year)), name,
+                                                     ttl=PAGE_TTL)))
+        except DataUnavailable as exc:
+            out[key] = str(exc)[:160]
+    return out
+
+
+def _pid(row: dict):
+    v = _f(row, "player_id")
+    return int(v) if v is not None and v > 0 else None
+
+
+def parse_page(expected: list[dict], barrels: list[dict]) -> dict:
+    """``{player id: {xba, xslg, ba, slg, brl_pct, brl, bbe}}`` off the two
+    boards' rows: Savant's own numbers, as it prints them (a barrel rate in
+    percent becomes a share)."""
+    out: dict = {}
+    for r in expected or []:
+        pid = _pid(r)
+        if pid is None:
+            continue
+        out.setdefault(pid, {}).update({k: v for k, v in (("xba", _f(r, "est_ba")), ("xslg", _f(r, "est_slg")),
+                                                          ("ba", _f(r, "ba")), ("slg", _f(r, "slg")))
+                                        if v is not None})
+    for r in barrels or []:
+        pid = _pid(r)
+        if pid is None:
+            continue
+        brl = _f(r, "barrels")
+        bbe = _f(r, "attempts")
+        got = {"brl_pct": _pct(r, "brl_percent"), "brl": int(brl) if brl is not None else None,
+               "bbe": int(bbe) if bbe is not None else None}
+        out.setdefault(pid, {}).update({k: v for k, v in got.items() if v is not None})
+    return {k: v for k, v in out.items() if v}
+
+
+#: ``{year: ((the two files' mtimes), board)}`` — read again only when a file changes.
+_PAGE: dict = {}
+
+
+def page_board(year: int) -> dict:
+    """The hit page's Savant numbers for a season off the files the nightly
+    fetched, each player's with ``at`` (the day the newer file was
+    fetched); ``{}`` with neither file. Never the network."""
+    import datetime as _dt
+    paths = [CACHE_DIR / n for n in page_names(year)]
+    try:
+        stamps = tuple(p.stat().st_mtime if p.exists() else None for p in paths)
+    except OSError:
+        return {}
+    if not any(stamps):
+        return {}
+    hit = _PAGE.get(int(year))
+    if hit and hit[0] == stamps:
+        return hit[1]
+    rows = []
+    for p in paths:
+        try:
+            rows.append(_read_csv_text(p.read_text(encoding="utf-8", errors="replace")) if p.exists() else [])
+        except OSError:
+            rows.append([])
+    at = _dt.date.fromtimestamp(max(t for t in stamps if t)).isoformat()
+    board = {pid: dict(v, at=at) for pid, v in parse_page(rows[0], rows[1]).items()}
+    _PAGE[int(year)] = (stamps, board)
+    return board
 
 
 def attach_statcast(props, year: int) -> int:

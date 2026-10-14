@@ -411,7 +411,7 @@ CREATE TABLE IF NOT EXISTS mlb_pa (
     pitch_hand TEXT, team TEXT, opponent TEXT, home INTEGER, inning INTEGER, half TEXT,
     event TEXT, event_type TEXT, rbi INTEGER, pitches INTEGER, launch_speed REAL,
     launch_angle REAL, distance REAL, trajectory TEXT, hardness TEXT, location TEXT,
-    coord_x REAL, coord_y REAL,
+    coord_x REAL, coord_y REAL, play_id TEXT,
     PRIMARY KEY (game_pk, at_bat)
 );
 CREATE INDEX IF NOT EXISTS mlb_pa_batter ON mlb_pa (batter_id, season);
@@ -428,6 +428,31 @@ CREATE TABLE IF NOT EXISTS mlb_pitches (
     PRIMARY KEY (game_pk, at_bat, n)
 );
 CREATE INDEX IF NOT EXISTS mlb_pitches_pitcher ON mlb_pitches (pitcher_id, season);
+-- ONE ROW PER MLB GAME, off the league's own schedule (2026-10-14, Ethan:
+-- "do the first 7 page items"): the park it was played in, both clubs'
+-- records as the schedule gives them, the final and, in October, the
+-- series and the game of it. The hit page's game card reads it by game id
+-- (engine/mlb/charts); the nightly fills it from the season schedule the
+-- backfill already reads, so it costs no request of its own.
+CREATE TABLE IF NOT EXISTS mlb_games (
+    game_pk INTEGER PRIMARY KEY, season INTEGER, date TEXT, game_type TEXT, game_number INTEGER,
+    home TEXT, away TEXT, home_score INTEGER, away_score INTEGER,
+    home_w INTEGER, home_l INTEGER, away_w INTEGER, away_l INTEGER,
+    venue TEXT, series TEXT, series_game INTEGER
+);
+CREATE INDEX IF NOT EXISTS mlb_games_season ON mlb_games (season);
+-- HIS RUNS AND STOLEN BASES, GAME BY GAME (the same day): off MLB's own
+-- game log for the hitter, which keys each game by its id, so a row joins
+-- the hit page's game exactly (no name, no date, no doubleheader leg to
+-- match). Filled by engine/mlb/charts.fill_bat from the log the nightly
+-- slate build already reads for every hitter in a lineup; a hitter the
+-- play-by-play has a game for that this table does not is read again.
+CREATE TABLE IF NOT EXISTS mlb_bat_games (
+    game_pk INTEGER, batter_id INTEGER, season INTEGER, date TEXT,
+    runs INTEGER, sb INTEGER, cs INTEGER,
+    PRIMARY KEY (game_pk, batter_id)
+);
+CREATE INDEX IF NOT EXISTS mlb_bat_games_batter ON mlb_bat_games (batter_id, season);
 -- NBA SHOTS (2026-10-13, the shot chart): one row per field-goal attempt
 -- and per free throw off the league's own play-by-play — where it was
 -- taken (the legacy court coordinates, tenths of a foot from the basket),
@@ -769,6 +794,15 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
             conn.commit()
         except sqlite3.OperationalError as exc:
             column_exists_or_raise(exc)
+    # The id of the pitch a plate appearance ended on, in MLB's own
+    # play-by-play (2026-10-14): the key MLB files that pitch's video under,
+    # for the hit page's Watch links. Nullable — a game read before it has
+    # none, and its card links to the game's whole video feed instead.
+    try:
+        conn.execute("ALTER TABLE mlb_pa ADD COLUMN play_id TEXT")
+        conn.commit()
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # The assists on a goal (2026-10-03, the power-play role): who set up
     # each power-play goal is half of who is on the top unit.
     for col in ("assist1", "assist2"):
@@ -1120,6 +1154,18 @@ def upsert_mlb_pitches(conn, rows: list[dict]) -> int:
     """Every pitch on the pitch chart (engine/mlb/charts.py)."""
     from .mlb.charts import PITCH_COLS
     return _upsert(conn, "mlb_pitches", PITCH_COLS, rows)
+
+
+def upsert_mlb_games(conn, rows: list[dict]) -> int:
+    """Every game's park, records and series (engine/mlb/charts.games_info)."""
+    from .mlb.charts import GAME_INFO_COLS
+    return _upsert(conn, "mlb_games", GAME_INFO_COLS, rows)
+
+
+def upsert_mlb_bat_games(conn, rows: list[dict]) -> int:
+    """A hitter's runs and stolen bases by game (engine/mlb/charts.bat_rows)."""
+    from .mlb.charts import BAT_COLS
+    return _upsert(conn, "mlb_bat_games", BAT_COLS, rows)
 
 
 def upsert_nba_shots(conn, rows: list[dict]) -> int:

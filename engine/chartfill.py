@@ -56,6 +56,11 @@ TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("nfl", "ki
 #: plate appearance and one per pitch, written together, so the pitches
 #: answer for both.
 MLB_TABLE = "mlb_pitches"
+#: The hit page's games (its parks, finals, records and series; 2026-10-14):
+#: a box whose hit tracker was read before the table was kept has none, and
+#: `fill` reads them — with the rest of the page's numbers (engine/mlb/
+#: charts.fill_page) — the hour the code lands, not the next night.
+MLB_PAGE = "mlb_games"
 #: And basketball's shot chart, one row per shot, keyed by season.
 NBA_TABLE = "nba_shots"
 
@@ -108,6 +113,9 @@ def owed(conn, today=None) -> list:
                               "LIMIT 1", (s,)).fetchone()
         if played and not conn.execute(f"SELECT 1 FROM {MLB_TABLE} WHERE season=? LIMIT 1", (s,)).fetchone():
             out.append(("mlb", s, MLB_TABLE))
+        elif (played and conn.execute("SELECT 1 FROM mlb_pa WHERE season=? LIMIT 1", (s,)).fetchone()
+              and not conn.execute(f"SELECT 1 FROM {MLB_PAGE} WHERE season=? LIMIT 1", (s,)).fetchone()):
+            out.append(("mlb", s, MLB_PAGE))
     except Exception:                                              # noqa: BLE001
         pass
     # Basketball, this season and last: the NBA's own season label (the
@@ -175,7 +183,7 @@ def fill(conn, want, log=print) -> list:
                 + ("" if s >= TG.CFB_FROM else " (college targets are drawn from 2025)"))
         except Exception as exc:                                   # noqa: BLE001
             say(f"CFB {s}: not read — {exc}")
-    for s in sorted({s for sp, s, _t in want if sp == "mlb"}, reverse=True):
+    for s in sorted({s for sp, s, t in want if sp == "mlb" and t == MLB_TABLE}, reverse=True):
         try:
             from .mlb import charts as MC
             through = min(_dt.date.today() - _dt.timedelta(days=1), _dt.date(s, 12, 31))
@@ -186,6 +194,13 @@ def fill(conn, want, log=print) -> list:
                 + (f"; {got['failed']:,} not read" if got.get("failed") else ""))
         except Exception as exc:                                   # noqa: BLE001
             say(f"MLB {s}: not read — {exc}")
+    if any(sp == "mlb" and t == MLB_PAGE for sp, _s, t in want):
+        try:
+            from .mlb import charts as MC
+            for line in MC.page_lines(MC.fill_page(conn)):
+                say(line.strip())
+        except Exception as exc:                                   # noqa: BLE001
+            say(f"MLB hit page: not read — {exc}")
     if any(sp == "nba" for sp, _s, _t in want):
         try:
             from .nba import shots as NS

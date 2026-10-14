@@ -1803,6 +1803,14 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 if _xm["n"] >= _xs.MIN_BALLS:
                     _xs.save(_xm)
                     log(f"  mlb expected stats: refitted on {_xm['n']:,} balls in play")
+            # THE HIT PAGE'S OTHER NUMBERS (2026-10-14, Ethan: "do the first
+            # 7 page items"): every hitter's runs and stolen bases off his own
+            # game log, the parks and records of a season read before they
+            # were kept, the newest at-bats' video ids and MLB's own expected
+            # stats and barrel rates (Baseball Savant). The parks and records
+            # of this season came with the backfill's schedule above.
+            for _line in _mlbc.page_lines(_mlbc.fill_page(_mc, today=today)):
+                log(_line)
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  mlb charts failed: {exc}")
 

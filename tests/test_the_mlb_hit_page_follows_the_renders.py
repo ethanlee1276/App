@@ -32,8 +32,11 @@ databases built here:
     number; the at-bats table, the park with the wall's own distances and
     its thirds, the game's numbered balls over his season's, the season
     tiles with xBA and xSLG beside AVG and SLG, the Pitch view;
-  * NOTHING THE RECORD DOES NOT HOLD: no runs scored, no stolen bases, no
-    barrels, no club records on the day;
+  * NOTHING THE RECORD DOES NOT HOLD: runs scored, stolen bases, a club's
+    record on the day and MLB's own numbers drawn only where the record
+    holds them (until 2026-10-14 none of them was on file, and this pinned
+    that none was drawn; tests/test_the_hit_page_has_what_the_renders_
+    showed.py pins them now that they are), and barrels by MLB's own rule;
   * IN A BROWSER (opt-in, QB_BROWSER_TESTS=1): every control, at a phone's
     width, with no error and no sideways scroll.
 
@@ -287,14 +290,30 @@ def test_the_page_draws_the_renders():
 
 
 def test_nothing_the_record_does_not_hold():
-    tiles = re.findall(r'tile\("([^"]+)"', MLB_JS)
-    for label in tiles:
-        assert not re.match(r"^(R|SB|Runs|Stolen bases|Barrels?|Barrel %)$", label), label
-    assert "Barrel" not in "".join(re.findall(r'\["[^"]*", "([^"]*)"\]', MLB_JS)), "no barrel view"
-    page = MLB_JS[MLB_JS.index("function gameCard("):MLB_JS.index("const AB_COLS")]
-    assert ".rec" not in page and "orec" not in page, "a club's record on the day is not printed"
+    """THE PIN, CHANGED ON 2026-10-14 (Ethan: "do the first 7 page items").
+    It held that runs, stolen bases, barrels and a club's record on the day
+    were never drawn, because nothing on file carried them. Now each is
+    drawn where the record holds it and only there: this fixture's games
+    have no game log, no schedule row and no Savant board, so none of
+    those is drawn; barrels are, by MLB's own rule on the speed and angle
+    every ball carries."""
+    d = MC.hits_chart(F._conn(), "Aaron Judge")
+    assert d["rs"] is None and d["savant"] is None
+    assert not any(k in g for g in d["games"] for k in ("r", "sb", "rec", "orec", "venue", "series"))
+    got = _node(f"""
+      const d = {json.dumps(d)}, SP = T.DRAW.spray, X = SP._t, g = d.games[0];
+      return {{ tiles: SP.gameSide(g, d), side: SP.seasonSide(d), board: X.scoreBoard(g, "mlb"),
+               head: X.gameHead(g, "mlb"), own: X.mlbOwn(d) }};""")
+    if got is not None:
+        for label in (">R<", ">SB<", ">Runs<", ">Stolen bases<"):
+            assert label not in got["tiles"] + got["side"], label
+        assert "mb-rec" not in got["board"], "a club's record on the day is not printed without one"
+        assert "mb-at" not in got["head"] and got["own"] == ""
+        assert ">Barrel %<" in got["side"], "a barrel is MLB's rule on the speed and angle every ball carries"
     note = MLB_JS[MLB_JS.index("note: (d) =>"):MLB_JS.index("// The page's own arithmetic")]
-    assert "Runs scored, stolen bases and barrels are not shown" in note
+    assert "Runs scored, stolen bases and barrels are not shown" not in note
+    assert "A barrel is MLB’s own rule on MLB’s own numbers" in note
+    assert "shown only where our own count of the season’s finals agrees with it" in note
     assert "The wall is the drawing’s, not his park’s" in note
 
 

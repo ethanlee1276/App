@@ -1678,9 +1678,20 @@
       ? `<img src="${esc(url)}" alt="" decoding="async">` : ""}</span>`;
   }
   /* A photo loaded: the initials step aside. One failed: the next one,
-     and when there is none, the initials alone. */
+     and when there is none, the initials alone. An action photo in front
+     of the face (`.cc-act`, js/chart-mlb.js's hero) is shown once it has
+     loaded and gone for good when it fails, and the chart keeps which
+     (`act`), so a redraw neither flashes the headshot nor asks again. */
   function faceStep(type, img, st) {
-    if (!st || !st.faces || !img || img.tagName !== "IMG" || !img.closest(".cc-face")) return;
+    if (!st || !img || img.tagName !== "IMG") return;
+    const act = img.closest(".cc-act");
+    if (act) {
+      st.act = type === "load";
+      if (st.act) act.classList.add("on");
+      else act.remove();
+      return;
+    }
+    if (!st.faces || !img.closest(".cc-face")) return;
     if (type === "load") {
       st.faceOk = true;
       img.parentNode.classList.add("on");

@@ -636,6 +636,15 @@ button.cc-sd:hover { border-color: var(--border); }
   background: color-mix(in oklab, var(--bg) 50%, transparent);
   box-shadow: 0 10px 28px color-mix(in oklab, var(--bg) 80%, transparent); }
 .mb-hero-face .cc-init { font-size: 30px; }
+/* his action photo (MLB's own) in the face's place once it has loaded:
+   wide, as the photo is, and his headshot gone from beside it */
+.mb-hero-face .cc-act { display: none; }
+.mb-hero-face .cc-act.on { display: block; position: relative; width: 148px; height: 104px; overflow: hidden;
+  border-radius: var(--radius); border: 2px solid color-mix(in oklab, var(--ta, var(--brand)) 60%, var(--text));
+  background: color-mix(in oklab, var(--bg) 50%, transparent);
+  box-shadow: 0 10px 28px color-mix(in oklab, var(--bg) 80%, transparent); }
+.mb-hero-face .cc-act img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
+.mb-hero-face .cc-act.on + .cc-face { display: none; }
 .mb-hero-who { grid-area: who; display: flex; flex-direction: column; align-items: flex-end; min-width: 0; text-align: right;
   line-height: 1.02; }
 .mb-hero-who small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--text-dim); }
@@ -653,6 +662,7 @@ button.cc-sd:hover { border-color: var(--border); }
 @container (max-width: 420px) {
   .mb-hero-in { gap: 8px; padding: 10px 10px 12px; }
   .mb-hero-face .cc-face { width: 72px; height: 72px; }
+  .mb-hero-face .cc-act.on { width: 104px; height: 76px; }
   .mb-hero-team .cc-hero-name b { font-size: 19px; }
   .mb-hero-tiles { gap: 4px; }
   .mb-ht span { letter-spacing: .06em; }
@@ -679,8 +689,10 @@ button.cc-sd:hover { border-color: var(--border); }
 /* the game: the day and the opponent, the final, his numbers, every at-bat */
 .mb-game { container-type: inline-size; }
 .mb-game-h { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 10px; }
-.mb-when { font-size: var(--fs-sm); color: var(--text-dim); }
+.mb-when { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--text-dim); }
 .mb-when b { color: var(--text); font-weight: 700; }
+.mb-when .mb-at { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em; color: var(--text-mute); }
+.mb-game-r { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .mb-res { padding: 3px 10px; border-radius: 999px; border: var(--hairline) solid var(--border); font-style: normal;
   font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 800; color: var(--text-dim); }
 .mb-res.w { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); background: color-mix(in srgb, var(--good) 12%, transparent); }
@@ -692,6 +704,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-side span { display: flex; flex-direction: column; line-height: 1; }
 .mb-side b { font-size: var(--fs-sm); letter-spacing: .12em; font-weight: 800; color: var(--text-dim); }
 .mb-side em { margin-top: 4px; font-style: normal; font-family: var(--font-mono); font-size: clamp(26px, 8cqi, 40px); font-weight: 800; color: var(--text); }
+.mb-side .mb-rec { margin-top: 5px; font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; color: var(--text-mute); }
 .mb-fin { display: flex; flex-direction: column; align-items: center; gap: 5px; }
 .mb-fin small { font-size: var(--fs-2xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 800; color: var(--text-dim); }
 .mb-fin b { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: var(--radius-sm);
@@ -713,6 +726,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-rs.k { color: var(--bad); }
 .mb-rs.bb { color: var(--text-dim); }
 .mb-c-res small { font-size: var(--fs-2xs); color: var(--text-mute); }
+.mb-c-res small.mb-brl { color: var(--brand); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .cc-c-more { grid-column: 1 / -1; min-width: 0; }
 .mb-seq { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 0 2px 22px; }
 .mb-seq small { flex: 0 0 100%; font-size: var(--fs-2xs); color: var(--text-mute); }
@@ -727,9 +741,33 @@ button.cc-sd:hover { border-color: var(--border); }
   border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text);
   font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
 .mb-btn:hover, .mb-btn[aria-pressed="true"] { border-color: var(--brand); }
+a.mb-btn { text-decoration: none; }
+.mb-btn.mb-ext span { color: var(--text-mute); }
+/* the at-bats to watch, numbered as the table numbers them, and the
+   game's every pitch on Baseball Savant */
+.mb-watch { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.mb-watch-h { margin-right: 2px; font-size: var(--fs-2xs); letter-spacing: .14em; text-transform: uppercase; font-weight: 800;
+  color: var(--text-mute); }
+.mb-vchip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px;
+  border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text-dim); text-decoration: none;
+  font-size: var(--fs-xs); font-weight: 700; }
+.mb-vchip b { font-family: var(--font-mono); color: var(--text); }
+.mb-vchip span { font-size: 10px; color: var(--brand); }
+.mb-vchip:hover { border-color: var(--brand); color: var(--text); }
+.mb-vchip.hr { border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
+.mb-vchip.h { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.mb-watch .mb-ext { margin-left: auto; }
+/* MLB's own expected stats and barrel rate, beside ours */
+.mb-own { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 10px 2px 0; font-size: var(--fs-sm);
+  color: var(--text-dim); }
+.mb-own span { flex: 0 0 100%; font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800;
+  color: var(--text-mute); }
+.mb-own b { font-family: var(--font-mono); color: var(--text); }
 .mb-cap { margin: 0 2px 10px; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
 .mb-stats .mb-cap { margin: 10px 2px 0; }
 .mb-big .cc-tile b { font-size: clamp(22px, 4.4vw, 30px); }
+/* his six counting numbers, runs and stolen bases among them, three across */
+.mb-big.mb-big6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* the park: his club's own under the drawing, the wall's distances, the
    thirds' shares in the foul ground and the three tiles with their bars */

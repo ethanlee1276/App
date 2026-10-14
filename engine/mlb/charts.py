@@ -80,10 +80,33 @@ IN_PLAY = {"X", "D", "E"}
 PA_COLS = ["game_pk", "at_bat", "season", "date", "batter_id", "batter", "bat_side", "pitcher_id",
            "pitcher", "pitch_hand", "team", "opponent", "home", "inning", "half", "event",
            "event_type", "rbi", "pitches", "launch_speed", "launch_angle", "distance",
-           "trajectory", "hardness", "location", "coord_x", "coord_y"]
+           "trajectory", "hardness", "location", "coord_x", "coord_y", "play_id"]
 PITCH_COLS = ["game_pk", "at_bat", "n", "season", "date", "pitcher_id", "batter_id", "bat_side",
               "inning", "pitch_type", "speed", "spin", "px", "pz", "sz_top", "sz_bot", "zone",
               "code", "balls", "strikes"]
+#: One row a game off the league's schedule (`games_info`): its park, its
+#: final, both clubs' records as the schedule gives them and, in October,
+#: the series and the game of it.
+GAME_INFO_COLS = ["game_pk", "season", "date", "game_type", "game_number", "home", "away", "home_score",
+                  "away_score", "home_w", "home_l", "away_w", "away_l", "venue", "series", "series_game"]
+#: One row a hitter a game off his own MLB game log (`bat_rows`).
+BAT_COLS = ["game_pk", "batter_id", "season", "date", "runs", "sb", "cs"]
+
+#: MLB's barrel, as the league publishes it: a ball hit 98 mph or harder
+#: at a launch angle of 26 to 30 degrees, the window widening with every
+#: mph past 98 until, at 116 mph, it runs from 8 to 50 degrees. The
+#: published window in four lines (the form the public Statcast tools
+#: write it in): the angle never above 50, the speed never under 98, and
+#: the two bounds of the window as the speed grows.
+BARREL_MIN_MPH = 98.0
+
+
+def barrel(ev, la) -> bool:
+    """Whether a ball was a barrel by MLB's published rule, off its exit
+    velocity (mph) and launch angle (degrees); False without both."""
+    if ev is None or la is None:
+        return False
+    return la <= 50 and ev >= BARREL_MIN_MPH and ev * 1.5 - la >= 117 and ev + la >= 124
 
 
 def _whiffs() -> set:
@@ -130,6 +153,67 @@ def finals(schedule: dict) -> list[dict]:
     return out
 
 
+def games_info(schedule: dict) -> list[dict]:
+    """``mlb_games`` rows: every final regular-season or postseason game in
+    a schedule payload with its park, its final, both clubs' records as
+    the schedule states them, and in October its series and the game of
+    it (Ethan, 2026-10-14: "do the first 7 page items" — the park, the
+    View Game button and the club's record on the day). The same games
+    `finals` reads, off the same payload, so it costs no request."""
+    from .sources.mlbstats import TEAM_ID_ABBR
+    out = []
+    for day in (schedule or {}).get("dates") or []:
+        for g in day.get("games") or []:
+            st = g.get("status") or {}
+            if st.get("abstractGameState") != "Final" or (st.get("codedGameState") or "") in DEAD:
+                continue
+            kind = g.get("gameType") or "R"
+            if kind not in GAME_TYPES or not g.get("gamePk"):
+                continue
+            teams = g.get("teams") or {}
+            side = {}
+            for k in ("home", "away"):
+                t = teams.get(k) or {}
+                team = t.get("team") or {}
+                rec = t.get("leagueRecord") or {}
+                side[k] = (TEAM_ID_ABBR.get(team.get("id"), team.get("abbreviation", "")) or "",
+                           _int(t.get("score")), _int(rec.get("wins")), _int(rec.get("losses")))
+            if not side["home"][0] or not side["away"][0]:
+                continue
+            date = (g.get("officialDate") or g.get("gameDate", ""))[:10]
+            post = kind != "R"
+            out.append({"game_pk": int(g["gamePk"]), "season": _int(g.get("season")) or _int(date[:4]),
+                        "date": date, "game_type": kind, "game_number": _int(g.get("gameNumber")) or 1,
+                        "home": side["home"][0], "away": side["away"][0],
+                        "home_score": side["home"][1], "away_score": side["away"][1],
+                        "home_w": side["home"][2], "home_l": side["home"][3],
+                        "away_w": side["away"][2], "away_l": side["away"][3],
+                        "venue": str((g.get("venue") or {}).get("name") or "").strip(),
+                        "series": str(g.get("seriesDescription") or "").strip() if post else "",
+                        "series_game": _int(g.get("seriesGameNumber")) if post else None})
+    return out
+
+
+def play_ids(payload: dict) -> dict:
+    """``{at_bat: play id}``: the id MLB's play-by-play gives the pitch each
+    plate appearance ended on — the key its video of that pitch is filed
+    under at Baseball Savant. "" for one whose last pitch carries none."""
+    out = {}
+    for play in (payload or {}).get("allPlays") or []:
+        ab = _int((play.get("about") or {}).get("atBatIndex"))
+        if ab is None:
+            continue
+        last = ""
+        for ev in play.get("playEvents") or []:
+            is_pitch = ev.get("isPitch")
+            if is_pitch is None:
+                is_pitch = (ev.get("details") or {}).get("isPitch")
+            if is_pitch:
+                last = str(ev.get("playId") or "").strip()
+        out[ab] = last
+    return out
+
+
 def fold(payload: dict, game: dict) -> tuple[list, list]:
     """``(plate appearances, pitches)`` for one final game, as table rows.
 
@@ -138,6 +222,7 @@ def fold(payload: dict, game: dict) -> tuple[list, list]:
     pas, pitches = [], []
     pk, date = int(game["game_pk"]), str(game["date"])
     season = int(date[:4])
+    vids = play_ids(payload)
     for play in (payload or {}).get("allPlays") or []:
         about = play.get("about") or {}
         matchup = play.get("matchup") or {}
@@ -195,7 +280,10 @@ def fold(payload: dict, game: dict) -> tuple[list, list]:
             "launch_speed": _num(hd.get("launchSpeed")), "launch_angle": _num(hd.get("launchAngle")),
             "distance": _num(hd.get("totalDistance")), "trajectory": str(hd.get("trajectory") or ""),
             "hardness": str(hd.get("hardness") or ""), "location": str(hd.get("location") or ""),
-            "coord_x": _num(co.get("coordX")), "coord_y": _num(co.get("coordY"))})
+            "coord_x": _num(co.get("coordX")), "coord_y": _num(co.get("coordY")),
+            # "" when the feed gave his last pitch no id: read, and none to
+            # link (NULL is a game read before the ids were kept).
+            "play_id": vids.get(ab, "")})
     return pas, pitches
 
 
@@ -258,9 +346,15 @@ def ingest_games(conn, games: list, fetch=None, workers: int = 4, chunk: int = C
 
 def ingest_range(conn, start: str, end: str, fetch=None) -> dict:
     """Every final in ``start..end`` (the nightly's own date range) not yet
-    stored. The schedule is the cached one the results ingest just read."""
+    stored, and every game's park, records and series off the same
+    schedule. The schedule is the cached one the results ingest just read."""
+    from .. import db
     from .sources.mlbstats import fetch_schedule
-    return ingest_games(conn, finals(fetch_schedule(start, end)), fetch=fetch)
+    sched = fetch_schedule(start, end)
+    info = db.upsert_mlb_games(conn, games_info(sched))
+    out = ingest_games(conn, finals(sched), fetch=fetch)
+    out["info"] = info
+    return out
 
 
 #: Games read per night by the season backfill: a season of ~2,430 finals
@@ -293,12 +387,253 @@ def backfill(conn, season: int, through: str, budget: int = BACKFILL_PER_NIGHT, 
     """The season's finals not yet stored, newest first, ``budget`` at a
     time: the games a page is likeliest to be asked about come first. Each
     is read without keeping its file (`read_once`)."""
+    from .. import db
     from .sources.mlbstats import fetch_schedule
-    games = finals(fetch_schedule(f"{int(season)}-03-01", through))
+    sched = fetch_schedule(f"{int(season)}-03-01", through)
+    # Every final's park, records and series, the season's whole schedule
+    # every night: a record is only shown when it agrees with a count of
+    # the finals stored (`_standing`), and that count needs them all.
+    info = db.upsert_mlb_games(conn, games_info(sched))
+    games = finals(sched)
+    sched = None
     have = stored(conn, season)
     todo = sorted((g for g in games if g["game_pk"] not in have), key=lambda g: g["date"], reverse=True)
     out = ingest_games(conn, todo[:max(0, int(budget))], fetch=fetch or read_once)
     out["left"] = max(0, len(todo) - out["games"] - out["failed"])
+    out["info"] = info
+    return out
+
+
+def fill_info(conn, fetch=None) -> dict:
+    """``{season: games stored}`` for every season the hit tracker has plate
+    appearances for and the games table has no game of — a season read
+    before the table was kept: its whole schedule, one request, once."""
+    from .. import db
+    from ..sources.fetch import DataUnavailable
+    from .sources.mlbstats import fetch_schedule
+    fetch = fetch or fetch_schedule
+    have = {int(s) for (s,) in conn.execute("SELECT DISTINCT season FROM mlb_games") if s is not None}
+    want = {int(s) for (s,) in conn.execute("SELECT DISTINCT season FROM mlb_pa") if s is not None}
+    out = {}
+    for season in sorted(want - have, reverse=True):
+        try:
+            out[season] = db.upsert_mlb_games(conn, games_info(fetch(f"{season}-03-01", f"{season}-11-30")))
+        except DataUnavailable:
+            out[season] = None
+    return out
+
+
+# --- his runs and stolen bases, game by game ----------------------------------------
+def bat_rows(doc: dict, batter_id) -> list[dict]:
+    """``mlb_bat_games`` rows off one hitter's MLB game log (the Stats API's
+    `stats=gameLog`, hitting — the log the nightly slate build already
+    reads for every hitter in a lineup): each game by its own id, with
+    the runs he scored, the bases he stole and the times he was caught."""
+    blocks = (doc or {}).get("stats") or []
+    splits = ((blocks[0] or {}).get("splits") or []) if blocks else []
+    out = []
+    for sp in splits:
+        pk = _int((sp.get("game") or {}).get("gamePk"))
+        st = sp.get("stat")
+        if not pk or not isinstance(st, dict):
+            continue
+        date = str(sp.get("date") or "")[:10]
+        out.append({"game_pk": pk, "batter_id": int(batter_id), "season": _int(sp.get("season")) or _int(date[:4]),
+                    "date": date, "runs": _int(st.get("runs")), "sb": _int(st.get("stolenBases")),
+                    "cs": _int(st.get("caughtStealing"))})
+    return out
+
+
+def bat_owed(conn, season: int) -> list[int]:
+    """The hitters with a game in the plate-appearance table that the runs
+    table has no row for, the one with the latest such game first."""
+    rows = conn.execute(
+        "SELECT p.batter_id, MAX(p.date) AS last FROM mlb_pa p LEFT JOIN mlb_bat_games b "
+        "ON b.game_pk = p.game_pk AND b.batter_id = p.batter_id "
+        "WHERE p.season = ? AND b.game_pk IS NULL AND p.batter_id IS NOT NULL "
+        "GROUP BY p.batter_id ORDER BY last DESC, p.batter_id", (int(season),)).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+#: Hitters' game logs read a night for their runs and stolen bases: a
+#: season's six or seven hundred hitters in two nights, then each night's
+#: own (the ones who played, most already read by the slate build).
+BAT_PER_NIGHT = 350
+#: A game neither of his logs carries is asked about for this many days,
+#: then written down as asked (NULL), so it is not asked about every night.
+BAT_GIVE_UP_DAYS = 3
+
+
+def fill_bat(conn, season: int, budget: int = BAT_PER_NIGHT, fetch=None, today=None) -> dict:
+    """Read the game logs of the hitters `bat_owed` names, a budget a night,
+    and store every game in them. His regular-season log first; when a
+    game of his is still missing (a playoff game, which the plain log
+    leaves out), the postseason's too.
+    Returns ``{"hitters", "games", "failed", "left"}``."""
+    import datetime as _dt
+    from .. import db
+    from .sources.mlbstats import fetch_many
+    from .sources.statslogs import fetch_game_log
+    fetch = fetch or fetch_game_log
+    today = today or _dt.date.today()
+    cut = (today - _dt.timedelta(days=BAT_GIVE_UP_DAYS)).isoformat()
+    owed = bat_owed(conn, season)
+    todo = owed[:max(0, int(budget))]
+    out = {"hitters": 0, "games": 0, "failed": 0, "left": max(0, len(owed) - len(todo))}
+    # FINALS ONLY. A game log read while a game is on carries tonight's
+    # line as it stands, and a row once stored is never asked about again:
+    # a game is kept only once the schedule has it final (the games table)
+    # or the play-by-play has been read for it (it reads finals only).
+    finished = {int(pk) for (pk,) in conn.execute("SELECT game_pk FROM mlb_games WHERE season=?", (int(season),))}
+    for i in range(0, len(todo), 16):
+        part = todo[i:i + 16]
+        docs = fetch_many(fetch, [(pid, "hitting", int(season)) for pid in part])
+        if not any(docs):
+            out["failed"] += len(part)
+            break
+        for pid, doc in zip(part, docs):
+            if not doc:
+                out["failed"] += 1
+                continue
+            rows = bat_rows(doc, pid)
+            games = {pk: d for pk, d in conn.execute(
+                "SELECT DISTINCT game_pk, date FROM mlb_pa WHERE batter_id=? AND season=?", (pid, int(season)))}
+            if set(games) - {r["game_pk"] for r in rows}:
+                try:
+                    rows += bat_rows(fetch(pid, "hitting", int(season), "P"), pid)
+                except Exception:                                  # noqa: BLE001
+                    pass
+            rows = [r for r in rows if r["game_pk"] in finished or r["game_pk"] in games]
+            got = {r["game_pk"] for r in rows}
+            # Asked long enough: written down as asked, with nothing.
+            rows += [{"game_pk": pk, "batter_id": pid, "season": int(season), "date": d,
+                      "runs": None, "sb": None, "cs": None}
+                     for pk, d in games.items() if pk not in got and str(d or "") < cut]
+            out["games"] += db.upsert_mlb_bat_games(conn, rows)
+            out["hitters"] += 1
+        docs = None
+    return out
+
+
+# --- the video of each at-bat --------------------------------------------------------
+#: Games read again a night for the ids of their at-bats' pitches, newest
+#: first, over a season's last month: a game read before the ids were kept
+#: has none, and the newest at-bats are the ones anyone will watch.
+PLAY_IDS_PER_NIGHT = 60
+PLAY_IDS_DAYS = 30
+
+
+def fill_play_ids(conn, season: int, budget: int = PLAY_IDS_PER_NIGHT, fetch=None) -> dict:
+    """Each at-bat's video id for the season's games of its last month
+    that were read before the ids were kept (every one NULL), newest first,
+    each game read once (`read_once`). A game the feed gives no id is
+    written "" so it is not read again. Returns ``{"games", "pas", "left"}``."""
+    import datetime as _dt
+    fetch = fetch or read_once
+    last = conn.execute("SELECT MAX(date) FROM mlb_pa WHERE season=?", (int(season),)).fetchone()[0]
+    out = {"games": 0, "pas": 0, "left": 0}
+    if not last:
+        return out
+    since = (_dt.date.fromisoformat(str(last)[:10]) - _dt.timedelta(days=PLAY_IDS_DAYS)).isoformat()
+    todo = [int(r[0]) for r in conn.execute(
+        "SELECT game_pk FROM mlb_pa WHERE season=? AND date>=? GROUP BY game_pk HAVING COUNT(play_id)=0 "
+        "ORDER BY MAX(date) DESC, game_pk DESC", (int(season), since))]
+    out["left"] = max(0, len(todo) - max(0, int(budget)))
+    for pk in todo[:max(0, int(budget))]:
+        try:
+            ids = play_ids(fetch(pk))
+        except Exception:                                          # noqa: BLE001
+            continue
+        if not ids:
+            continue
+        cur = conn.executemany("UPDATE mlb_pa SET play_id=? WHERE game_pk=? AND at_bat=?",
+                               [(ids.get(ab, ""), pk, ab) for (ab,) in conn.execute(
+                                   "SELECT at_bat FROM mlb_pa WHERE game_pk=?", (pk,)).fetchall()])
+        conn.commit()
+        out["games"] += 1
+        out["pas"] += max(0, cur.rowcount)
+    return out
+
+
+def fill_page(conn, today=None) -> dict:
+    """The hit page's other numbers, a night's worth (Ethan, 2026-10-14: "do
+    the first 7 page items"): the parks, records and series of any season
+    read before they were kept (`fill_info`), every hitter's runs and
+    stolen bases, this season's first (`fill_bat`, one budget across the
+    seasons), the video ids of the season's last month of at-bats
+    (`fill_play_ids`), and MLB's own expected stats and barrel rates off
+    Baseball Savant (`savant.fetch_page_boards`; last season's once, as it
+    no longer changes). Each part on its own: one that fails is a line in
+    what this returns, never the end of the others."""
+    import datetime as _dt
+    from .sources import savant
+    today = today or _dt.date.today()
+    season = today.year if today.month >= 3 else today.year - 1
+    out: dict = {}
+    try:
+        out["info"] = fill_info(conn)
+    except Exception as exc:                                       # noqa: BLE001
+        out["info"] = f"failed: {exc}"
+    bat: dict = {}
+    try:
+        budget = BAT_PER_NIGHT
+        for s in sorted({int(x) for (x,) in conn.execute("SELECT DISTINCT season FROM mlb_pa") if x is not None},
+                        reverse=True):
+            if budget <= 0:
+                break
+            got = bat[s] = fill_bat(conn, s, budget=budget, today=today)
+            if got["failed"] and not got["hitters"]:
+                break                                              # the host is refusing us
+            budget -= got["hitters"] + got["failed"]
+    except Exception as exc:                                       # noqa: BLE001
+        bat["failed"] = str(exc)
+    out["bat"] = bat
+    try:
+        out["play_ids"] = fill_play_ids(conn, season)
+    except Exception as exc:                                       # noqa: BLE001
+        out["play_ids"] = f"failed: {exc}"
+    boards: dict = {}
+    try:
+        boards[season] = savant.fetch_page_boards(season)
+        if not all((savant.CACHE_DIR / n).exists() for n in savant.page_names(season - 1)):
+            boards[season - 1] = savant.fetch_page_boards(season - 1)
+    except Exception as exc:                                       # noqa: BLE001
+        boards["failed"] = str(exc)
+    out["savant"] = boards
+    return out
+
+
+def page_lines(got: dict) -> list[str]:
+    """`fill_page`'s answer as the chores' log lines."""
+    out = []
+    info = got.get("info")
+    if isinstance(info, dict):
+        for s, n in sorted(info.items(), reverse=True):
+            out.append(f"  mlb hit page {s}: " + (f"{n:,} games' park, final and records" if n is not None
+                                                 else "the schedule did not answer"))
+    elif info:
+        out.append(f"  ⚠️  mlb hit page parks: {info}")
+    for s, b in sorted((got.get("bat") or {}).items(), key=lambda kv: str(kv[0]), reverse=True):
+        if isinstance(b, dict):
+            if b["hitters"] or b["failed"] or b["left"]:
+                out.append(f"  mlb hit page {s}: runs and steals for {b['hitters']:,} hitter(s), "
+                           f"{b['games']:,} game(s)" + (f", {b['failed']} unread" if b["failed"] else "")
+                           + (f", {b['left']:,} left for the next nights" if b["left"] else ""))
+        else:
+            out.append(f"  ⚠️  mlb hit page runs and steals: {b}")
+    p = got.get("play_ids")
+    if isinstance(p, dict):
+        if p["games"] or p["left"]:
+            out.append(f"  mlb hit page: video ids for {p['games']} game(s), {p['pas']:,} at-bat(s)"
+                       + (f", {p['left']} left" if p["left"] else ""))
+    elif p:
+        out.append(f"  ⚠️  mlb hit page video ids: {p}")
+    for s, b in sorted((got.get("savant") or {}).items(), key=lambda kv: str(kv[0]), reverse=True):
+        if isinstance(b, dict):
+            out.append(f"  mlb hit page {s}: Baseball Savant expected stats {b.get('expected')}, "
+                       f"barrels {b.get('barrels')}")
+        else:
+            out.append(f"  ⚠️  mlb hit page Savant: {b}")
     return out
 
 
@@ -413,7 +748,7 @@ def _hline(pas: list) -> dict:
             "xbh": sum(1 for p in hits if p["et"] in ("double", "triple", "home_run")),
             "bb": bb, "k": sum(1 for p in pas if p["et"] in STRIKEOUTS), "hbp": hbp, "sf": sf,
             "rbi": sum(p["rbi"] for p in pas), "bip": len(bip),
-            "hard": sum(1 for v in ev if v >= HARD_HIT),
+            "hard": sum(1 for v in ev if v >= HARD_HIT), "brl": sum(1 for p in pas if p.get("br")),
             "ev": round(sum(ev) / len(ev), 1) if ev else None,
             "la": round(sum(la) / len(la), 1) if la else None,
             "sweet": sum(1 for v in la if SWEET[0] <= v <= SWEET[1]),
@@ -441,6 +776,106 @@ def _sequences(conn, batter_id, game_pks) -> dict:
     return out
 
 
+def _standing(conn, season: int) -> dict:
+    """``{game_pk: (home's record, away's record)}`` through each of a
+    season's regular-season finals, as the schedule states them — each
+    given only where OUR OWN COUNT of the finals stored agrees with it.
+
+    The schedule hands every final both clubs' records. Whether a past
+    game's record is the one after it or the one that day before it is
+    the league's to say, and a daily league's table can be a game short;
+    so a record is counted here too, game by game in the order they were
+    played (a doubleheader's first before its second), and given only
+    when the league's figure is our count through that game or before it
+    — which also proves no game of that club's was missing up to then. It
+    is shown as the record through that game, as the league's own pages
+    show a final. A record that does not agree is not shown: never a
+    wrong one."""
+    try:
+        rows = conn.execute(
+            "SELECT game_pk, home, away, home_score, away_score, home_w, home_l, away_w, away_l FROM mlb_games "
+            "WHERE season=? AND game_type='R' ORDER BY date, game_number, game_pk", (int(season),)).fetchall()
+    except Exception:                                              # noqa: BLE001
+        return {}
+    tally: dict = {}
+    out: dict = {}
+    for pk, h, a, hs, as_, hw, hl, aw, al in rows:
+        if hs is None or as_ is None:
+            continue
+        before = {t: tally.get(t, (0, 0)) for t in (h, a)}
+        for t, mine, theirs in ((h, hs, as_), (a, as_, hs)):
+            w, l = before[t]
+            tally[t] = (w + (mine > theirs), l + (mine < theirs))
+        recs = []
+        for t, lw, ll in ((h, hw, hl), (a, aw, al)):
+            league = (lw, ll)
+            ok = None not in league and league in (tally[t], before[t])
+            recs.append(f"{tally[t][0]}-{tally[t][1]}" if ok else "")
+        out[int(pk)] = tuple(recs)
+    return out
+
+
+def _game_info(conn, season: int, games: list) -> None:
+    """Each of a chart's games gains, off the league's own schedule
+    (``mlb_games``, by the game's own id): ``venue`` (the park), ``score``
+    (his club's runs first), ``dh`` (2 for a doubleheader's second game),
+    and in the regular season ``rec``/``orec`` (`_standing`), in October
+    ``series``/``sgame``. A row whose clubs are not the chart's is not
+    used."""
+    pks = sorted({int(g["id"]) for g in games})
+    info: dict = {}
+    try:
+        for i in range(0, len(pks), 400):
+            part = pks[i:i + 400]
+            cur = conn.execute(f"SELECT * FROM mlb_games WHERE game_pk IN ({','.join('?' * len(part))})", part)
+            cols = [d[0] for d in cur.description]
+            for row in cur.fetchall():
+                r = dict(zip(cols, row))
+                info[int(r["game_pk"])] = r
+    except Exception:                                              # noqa: BLE001
+        return
+    if not info:
+        return
+    recs = _standing(conn, season) if any(r["game_type"] == "R" for r in info.values()) else {}
+    for g in games:
+        r = info.get(int(g["id"]))
+        if not r:
+            continue
+        mine, theirs = ("home", "away") if g.get("home") else ("away", "home")
+        if r[mine] != g.get("team") or r[theirs] != g.get("opp"):
+            continue
+        if r["venue"]:
+            g["venue"] = r["venue"]
+        if (r["game_number"] or 1) > 1:
+            g["dh"] = int(r["game_number"])
+        if r[f"{mine}_score"] is not None and r[f"{theirs}_score"] is not None:
+            g["score"] = [int(r[f"{mine}_score"]), int(r[f"{theirs}_score"])]
+        if r["game_type"] == "R":
+            hr, ar = recs.get(int(g["id"]), ("", ""))
+            me, them = (hr, ar) if mine == "home" else (ar, hr)
+            if me:
+                g["rec"] = me
+            if them:
+                g["orec"] = them
+        else:
+            if r["series"]:
+                g["series"] = r["series"]
+            if r["series_game"]:
+                g["sgame"] = int(r["series_game"])
+
+
+def _bat_of(conn, batter_id, season: int) -> dict:
+    """``{game_pk: (runs, sb, cs)}`` for a hitter's season off his own game
+    log (``mlb_bat_games``); a game asked about and not carried is
+    ``(None, None, None)``."""
+    try:
+        return {int(pk): (r, sb, cs) for pk, r, sb, cs in conn.execute(
+            "SELECT game_pk, runs, sb, cs FROM mlb_bat_games WHERE batter_id=? AND season=?",
+            (batter_id, int(season)))}
+    except Exception:                                              # noqa: BLE001
+        return {}
+
+
 def _logged(conn, player: str, season: int) -> int:
     """How many games the box scores have him batting in this season — what
     the page sets beside the games the play-by-play has been read for, so
@@ -464,7 +899,16 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     with its speed and angle once engine/mlb/xstats has a table, ``xh`` and
     ``xtb``; ``x_measured`` is engine/mlb/xstatsfit's last verdict, or None;
     ``logged`` the games the box scores have him batting in that season;
-    ``sides`` the sides he batted from. ``{}`` with nothing on file."""
+    ``sides`` the sides he batted from. ``{}`` with nothing on file.
+
+    And what the renders showed that the page first left out (2026-10-14):
+    a plate appearance's ``br`` (1, a barrel by MLB's rule) and ``vid``
+    (the id of the pitch it ended on, which MLB files its video under); a
+    game's ``venue``, ``score``, ``dh``, ``rec``/``orec`` (`_standing`),
+    ``series``/``sgame`` and ``r``/``sb``/``cs`` (his game log's); and the
+    chart's ``action`` (his action photo), ``rs`` (the season's runs,
+    stolen bases and times caught, or None until every game has them) and
+    ``savant`` (MLB's own expected stats and barrel rate, or None)."""
     pid, name = _resolve(conn, player, "batter")
     if pid is None:
         return {}
@@ -496,6 +940,12 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
         v = xstats.xvals(model, r["launch_speed"], r["launch_angle"])
         if v:
             pa["xh"], pa["xtb"] = round(v[0], 3), round(v[1], 3)
+        # A barrel by MLB's own rule, off MLB's own speed and angle; the
+        # id of the pitch it ended on, which MLB files its video under.
+        if barrel(r["launch_speed"], r["launch_angle"]):
+            pa["br"] = 1
+        if r.get("play_id"):
+            pa["vid"] = r["play_id"]
         g["pas"].append(pa)
     out_games = []
     for g in sorted(games.values(), key=lambda g: (g["date"], g["id"]), reverse=True):
@@ -512,14 +962,34 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     by_hand = [dict(_hline([p for p in every if p["ph"] == h]), key=h, name=label)
                for h, label in (("R", "vs right-handers"), ("L", "vs left-handers"))
                if any(p["ph"] == h for p in every)]
-    # The final over the game's park (the chart's frame, 2026-10-14).
+    # The final over the game's park (the chart's frame, 2026-10-14) off the
+    # games table; then the park, the records, the series and the final
+    # again off the league's schedule, by the game's own id, over it — a
+    # game the schedule has no row for keeps the games table's.
     from ..carries import scoreboard
     scoreboard(conn, "mlb", pick, out_games)
+    _game_info(conn, pick, out_games)
+    # His runs and stolen bases, game by game, off his own game log; the
+    # season's only when every game on the chart has its own (a total
+    # short of a game is a wrong total) — and then over every game in his
+    # log, a game he only ran in included.
+    bat = _bat_of(conn, pid, pick)
+    for g in out_games:
+        b = bat.get(int(g["id"]))
+        if b and b[0] is not None:
+            g["r"], g["sb"], g["cs"] = int(b[0]), int(b[1] or 0), int(b[2] or 0)
+    known = [b for b in bat.values() if b[0] is not None]
+    rs = ({"r": sum(int(b[0]) for b in known), "sb": sum(int(b[1] or 0) for b in known),
+           "cs": sum(int(b[2] or 0) for b in known)}
+          if out_games and all("r" in g for g in out_games) and len(known) == len(bat) else None)
     latest = out_games[0] if out_games else {}
     from .xstatsfit import measured
+    from .sources.mlbstats import action_url
+    from .sources import savant
     m = measured() if model else None
+    own = savant.page_board(pick).get(int(pid))
     return {"player": name, "sport": "mlb", "seasons": seasons, "season": pick, "team": latest.get("team", ""),
-            "face": _face(pid),
+            "face": _face(pid), "action": action_url(pid), "rs": rs, "savant": own or None,
             "side": side, "games": out_games, "season_line": _hline(every), "by_type": by_type,
             "by_dir": by_dir, "by_hand": by_hand, "logged": _logged(conn, name, pick),
             # The sides he batted from: a switch-hitter pulls to both fields.

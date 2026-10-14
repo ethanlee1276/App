@@ -62,6 +62,24 @@ def headshot_url(person_id) -> str:
         return ""
     return HEADSHOT.format(pid=pid) if pid > 0 else ""
 
+#: His action photo, off the same CDN and the same id (2026-10-14, Ethan:
+#: the hit page's head shows him at the plate, not his headshot): the
+#: wide shot MLB's own player pages lead with. CONSTRUCTED the way the
+#: headshot is, and written to cost nothing when wrong: no default image
+#: is asked for, so a man with none answers 404 and the page falls back to
+#: his headshot (js/chart-mlb.js). `w_480` is the drawing's width twice.
+ACTION_PHOTO = ("https://img.mlbstatic.com/mlb-photos/image/upload/"
+                "w_480,q_auto:best/v1/people/{pid}/action/hero/current")
+
+
+def action_url(person_id) -> str:
+    """MLB's action photo for a Stats API person id, or ""."""
+    try:
+        pid = int(person_id)
+    except (TypeError, ValueError):
+        return ""
+    return ACTION_PHOTO.format(pid=pid) if pid > 0 else ""
+
 # MLB Stats API team id -> our abbreviation.
 TEAM_ID_ABBR = {
     108: "LAA", 109: "ARI", 110: "BAL", 111: "BOS", 112: "CHC", 113: "CIN",

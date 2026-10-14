@@ -86,11 +86,16 @@
        what it became, the pull side, the middle and the other way with
        their shares, and his season's numbers against any kind of pitch;
        BATTED BALL, DIRECTION and PITCH: his season by each, as bars.
-     What the renders show that the record does not carry is left out,
-     not guessed: runs scored and stolen bases (no feed the page reads
-     has them game by game), barrels (the league's table is not
-     published), a club's record on the day (a daily league's table can be
-     a game short) and video of the at-bats. */
+     THE SEVEN THINGS THE RENDERS SHOWED THAT IT DID NOT (Ethan, the same
+     day: "do the first 7 page items"), each off MLB's own record: his runs
+     and stolen bases game by game (his own game log), both clubs' records
+     on the day (the league's schedule, shown only where a count of the
+     finals stored agrees with it), the park and a button to MLB's own page
+     of the game, barrels (MLB's published rule, on MLB's own exit velocity
+     and launch angle) beside MLB's own barrel rate, MLB's own expected
+     average and slugging beside ours (Baseball Savant), every at-bat's
+     video on Baseball Savant, and his action photo in place of his
+     headshot. A number not on file yet is left out, never guessed. */
   const FIELDER = { 1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF", 8: "CF", 9: "RF" };
   const NOT_AB = new Set(["walk", "intent_walk", "hit_by_pitch", "sac_fly", "sac_bunt", "catcher_interf",
                           "sac_fly_double_play", "sac_bunt_double_play"]);
@@ -103,6 +108,18 @@
     return t && !isNaN(t) ? t.toLocaleDateString("en-US", o) : iso || "";
   };
   const mark = (sport, a, n) => (a && typeof teamMarkIn === "function" ? teamMarkIn(sport, a, n) : "");
+  /* MLB'S OWN PAGES, opened beside ours: the game on MLB.com, every pitch
+     of it on Baseball Savant, and one at-bat's video there by the id of
+     the pitch it ended on (engine/mlb/charts.play_ids). */
+  const GAMEDAY = (pk) => `https://www.mlb.com/gameday/${encodeURIComponent(pk)}`;
+  const SAVANT_GAME = (pk) => `https://baseballsavant.mlb.com/gamefeed?gamePk=${encodeURIComponent(pk)}`;
+  const SAVANT_PLAY = (id) => `https://baseballsavant.mlb.com/sporty-videos?playId=${encodeURIComponent(id)}`;
+  const ext = (href, html, cls, said) => `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener noreferrer"${said
+    ? ` aria-label="${esc(said)}"` : ""}>${html}</a>`;
+  const ARROW = '<span aria-hidden="true">↗</span>';
+  /* A count over games that every one of them has: his runs or his stolen
+     bases over a stretch, or null when a game of it has none on file. */
+  const sumOf = (gs, k) => (gs.length && gs.every((g) => g[k] != null) ? gs.reduce((a, g) => a + g[k], 0) : null);
   /* HIS LINE OVER ANY STRETCH, the box score's way and the server's
      (engine/mlb/charts _hline, line for line): ten games, a kind of pitch,
      a hand. On base is hits, walks and hit-by-pitches over at-bats,
@@ -110,7 +127,7 @@
      the model has read his balls. */
   function line(pas) {
     const o = { pa: pas.length, ab: 0, h: 0, tb: 0, hr: 0, bb: 0, k: 0, hbp: 0, sf: 0, rbi: 0, bip: 0, hard: 0,
-                sweet: 0, nla: 0, max: null };
+                sweet: 0, nla: 0, max: null, brl: 0 };
     let evs = 0, las = 0, xs = 0, xb = 0, any = false;
     pas.forEach((p) => {
       const ab = !NOT_AB.has(p.et), h = HITS[p.et] || 0;
@@ -121,6 +138,7 @@
       if (p.et === "hit_by_pitch") o.hbp += 1;
       if (SAC_FLY.has(p.et)) o.sf += 1;
       o.rbi += p.rbi || 0;
+      if (p.br) o.brl += 1;
       if (p.ls != null) {
         o.bip += 1;
         evs += p.ls;
@@ -170,7 +188,12 @@
      season in five numbers. A season the play-by-play is still being read
      for says how far it has got, so it never passes for his whole year. */
   function hero(d, sport) {
-    const team = d.team || "", t = Q.h.team(sport, team);
+    const S = state(), team = d.team || "", t = Q.h.team(sport, team);
+    /* HIS ACTION PHOTO (MLB's own) in front of his headshot: it takes the
+       headshot's place once it has loaded, and a man with none keeps his
+       headshot (js/carrychart.js faceStep keeps which in the chart). */
+    const act = d.action && !(S && S.act === false)
+      ? `<span class="cc-act${S && S.act ? " on" : ""}"><img src="${esc(d.action)}" alt="" decoding="async"></span>` : "";
     const nick = t.nick || (typeof teamNameIn === "function" ? teamNameIn(sport, team) : "") || team;
     const loc = t.loc || (t.name && t.name !== nick && t.name.endsWith(nick) ? t.name.slice(0, -nick.length).trim() : "");
     const ink = Q.h.ink(sport, team);
@@ -193,7 +216,7 @@
         <div class="mb-hero-top">${pick}</div>
         <div class="mb-hero-team"><span class="cc-hero-logo">${mark(sport, team, 60)}</span>
           <span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b>${esc(nick)}</b></span></div>
-        <div class="mb-hero-face">${Q.h.face(d)}</div>
+        <div class="mb-hero-face${act ? " has-act" : ""}">${act}${Q.h.face(d)}</div>
         <div class="mb-hero-who">${first ? `<small>${esc(first)}</small>` : ""}<b>${esc(last)}</b>${tag.length
           ? `<span>${tag.map(esc).join("  ")}</span>` : ""}</div>
         <div class="mb-hero-tiles">${tiles.map(([k, v]) => `<div class="mb-ht"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("")}</div>
@@ -370,6 +393,8 @@
     const show = Math.max(win, S.gi + 1);
     const L = line(plays(d.games.slice(0, win)));
     const span = win === n ? `${Q.h.seasonName(sport, d.season)} season` : `Last ${win} games`;
+    const rs = win === n && d.rs ? d.rs : { r: sumOf(d.games.slice(0, win), "r"), sb: sumOf(d.games.slice(0, win), "sb") };
+    const ran = rs.r != null ? ` · ${rs.r} R · ${rs.sb} SB` : "";
     const chips = d.games.slice(0, show).map((x, i) => {
       const on = i === S.gi, G = x.line || line(x.pas || []), dt = when(x.date, { month: "short", day: "numeric" });
       return `<button type="button" role="tab" class="cc-chip mb-chip${on ? " on" : ""}" data-gi="${i}" aria-selected="${on}" aria-label="${esc(`${dt} ${x.home === false ? "at" : "vs"} ${x.opp}: ${G.h} for ${G.ab}${G.hr ? `, ${G.hr} home run${G.hr === 1 ? "" : "s"}` : ""}`)}">
@@ -379,7 +404,7 @@
     return `<section class="mb-recent">
       <header class="mb-row-h"><h3 class="cc-card-t">Recent games</h3>${opts.length > 1 ? `<div class="cc-seg mb-win" role="group" aria-label="How many games">${opts.map(([v, w]) =>
         `<button type="button" data-opt="win" data-v="${v}"${v === cur ? ' class="on"' : ""} aria-pressed="${v === cur}">${esc(w)}</button>`).join("")}</div>` : ""}</header>
-      <p class="mb-last"><span>${esc(span)}</span> <b>${L.h}-${L.ab}</b> · ${avg3(L.avg)} AVG · ${L.hr} HR · ${L.rbi} RBI · ${L.bb} BB · ${L.k} K · ${avg3(L.ops)} OPS</p>
+      <p class="mb-last"><span>${esc(span)}</span> <b>${L.h}-${L.ab}</b> · ${avg3(L.avg)} AVG · ${L.hr} HR · ${L.rbi} RBI${ran} · ${L.bb} BB · ${L.k} K · ${avg3(L.ops)} OPS</p>
       <div class="cc-car">
         <button type="button" class="cc-step" data-step="-1" aria-label="Newer game"${S.gi <= 0 ? " disabled" : ""}>‹</button>
         <div class="cc-games mb-chips" role="tablist" aria-label="Games">${chips}</div>
@@ -388,31 +413,71 @@
   }
   /* THE GAME (the renders' card): the day and the opponent, the final
      with both clubs' logos, his numbers, and every at-bat. */
+  /* His numbers in the game; his runs and stolen bases beside them once
+     his game log has the game (MLB's own, by the game's id). */
   function gameTiles(g) {
-    const L = line(g.pas || []);
-    const t = [tile("H–AB", `${L.h}-${L.ab}`), tile("HR", L.hr), tile("RBI", L.rbi), tile("Total bases", L.tb),
-               tile("BB–K", `${L.bb}-${L.k}`), tile("SLG", avg3(L.slg))];
-    if (L.hr) t[1] = t[1].replace('class="cc-tile"', 'class="cc-tile hot"');
-    return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
+    const L = line(g.pas || []), ran = g.r != null;
+    const hr = tile("HR", L.hr), t = ran
+      ? [tile("H–AB", `${L.h}-${L.ab}`), tile("R", g.r), hr, tile("RBI", L.rbi), tile("Total bases", L.tb),
+         tile("SB", g.sb, g.cs ? `${g.cs} caught` : ""), tile("BB–K", `${L.bb}-${L.k}`), tile("SLG", avg3(L.slg))]
+      : [tile("H–AB", `${L.h}-${L.ab}`), hr, tile("RBI", L.rbi), tile("Total bases", L.tb),
+         tile("BB–K", `${L.bb}-${L.k}`), tile("SLG", avg3(L.slg))];
+    if (L.hr) t[t.indexOf(hr)] = hr.replace('class="cc-tile"', 'class="cc-tile hot"');
+    return `<div class="cc-tiles ${ran ? "cc-tiles-2" : "cc-tiles-6"}">${t.join("")}</div>`;
   }
-  function gameCard(d, g, sport) {
-    const sc = Array.isArray(g.score) && g.score.length === 2 && g.score.every((x) => x != null) ? g.score.map(Math.round) : null;
-    const won = sc ? (sc[0] > sc[1] ? "W" : sc[0] < sc[1] ? "L" : "T") : "";
+  /* The game's place: the park, a doubleheader's second game, the series
+     and the game of it in October. */
+  function where(g) {
+    return [g.venue ? `@ ${g.venue}` : "", g.dh ? `Game ${g.dh} of a doubleheader` : "",
+            g.series ? `${g.series}${g.sgame ? `, Game ${g.sgame}` : ""}` : ""].filter(Boolean).join(" · ");
+  }
+  /* THE AT-BATS TO WATCH: each at-bat MLB has the video of, numbered as
+     the table numbers it, on Baseball Savant; and the game's every pitch
+     there, which is every at-bat's video for a game read before the ids
+     were kept. A row of the table is a button, and a link is never put
+     inside a button, so they sit under it. */
+  function watch(g) {
+    if (!g.id) return "";
+    const pas = g.pas || [];
+    const one = pas.map((p, i) => (p.vid ? ext(SAVANT_PLAY(p.vid), `<b>${i + 1}</b> ${esc(SHORT[p.et] || p.ev || "")} <span aria-hidden="true">▶</span>`,
+      `mb-vchip ${tone(p.et)}`, `Watch at-bat ${i + 1}, ${result(p)}, on Baseball Savant`) : "")).filter(Boolean);
+    return `<div class="mb-watch">${one.length ? `<span class="mb-watch-h">Watch</span>${one.join("")}` : ""}
+      ${ext(SAVANT_GAME(g.id), `${one.length ? "Every pitch" : "Watch at-bats"} ${ARROW}`, "mb-btn mb-ext", "Every pitch of this game, with its video, on Baseball Savant")}</div>`;
+  }
+  /* The game's head: the day, the opponent and where it was played, the
+     result, and the button to MLB's own page of the game. */
+  const scoreOf = (g) => (Array.isArray(g.score) && g.score.length === 2 && g.score.every((x) => x != null) ? g.score.map(Math.round) : null);
+  const wonOf = (sc) => (sc ? (sc[0] > sc[1] ? "W" : sc[0] < sc[1] ? "L" : "T") : "");
+  function gameHead(g, sport) {
+    const sc = scoreOf(g), won = wonOf(sc);
     const o = Q.h.team(sport, g.opp);
     const oppName = o.name || (typeof teamNameIn === "function" ? teamNameIn(sport, g.opp) : "") || g.opp;
-    const dt = when(g.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-    const S = state(), seq = !!(S && S.opt && S.opt.pbk), pas = g.pas || [];
-    const board = sc ? `<div class="mb-board">
-        <div class="mb-side">${mark(sport, g.team, 44)}<span><b>${esc(g.team)}</b><em>${sc[0]}</em></span></div>
+    const dt = when(g.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }), at = where(g);
+    return `<header class="mb-game-h"><span class="mb-when"><b>${esc(dt)}</b> ${g.home === false ? "at" : "vs"} ${esc(oppName)}${at
+        ? `<small class="mb-at">${esc(at)}</small>` : ""}</span><span class="mb-game-r">${sc
+        ? `<em class="mb-res ${won.toLowerCase()}">${won} ${sc[0]}-${sc[1]}</em>` : ""}${g.id
+        ? ext(GAMEDAY(g.id), `View game ${ARROW}`, "mb-btn mb-ext", "View the game on MLB.com") : ""}</span></header>`;
+  }
+  /* The final with both clubs' logos and, in the regular season, each
+     club's record through the game as the league's schedule gives it. */
+  function scoreBoard(g, sport) {
+    const sc = scoreOf(g), won = wonOf(sc);
+    if (!sc) return "";
+    const rec = (r) => (r ? `<small class="mb-rec">${esc(r)}</small>` : "");
+    return `<div class="mb-board">
+        <div class="mb-side">${mark(sport, g.team, 44)}<span><b>${esc(g.team)}</b><em>${sc[0]}</em>${rec(g.rec)}</span></div>
         <div class="mb-fin"><small>Final</small><b class="${won.toLowerCase()}">${won}</b></div>
-        <div class="mb-side r"><span><b>${esc(g.opp)}</b><em>${sc[1]}</em></span>${mark(sport, g.opp, 44)}</div></div>` : "";
+        <div class="mb-side r"><span><b>${esc(g.opp)}</b><em>${sc[1]}</em>${rec(g.orec)}</span>${mark(sport, g.opp, 44)}</div></div>`;
+  }
+  function gameCard(d, g, sport) {
+    const S = state(), seq = !!(S && S.opt && S.opt.pbk), pas = g.pas || [];
     const any = pas.some((p) => (p.ps || []).length);
     return `<section class="cc-card mb-game">
-      <header class="mb-game-h"><span class="mb-when"><b>${esc(dt)}</b> ${g.home === false ? "at" : "vs"} ${esc(oppName)}</span>${sc
-        ? `<em class="mb-res ${won.toLowerCase()}">${won} ${sc[0]}-${sc[1]}</em>` : ""}</header>
-      ${board}${gameTiles(g)}
+      ${gameHead(g, sport)}
+      ${scoreBoard(g, sport)}${gameTiles(g)}
       <div class="mb-sub-h"><h4 class="mb-sub">At bats <span class="cc-n">(${pas.length})</span></h4><div class="cc-tools">${Q.h.tools(pas, sprayFlags, SPRAY_FILTERS)}</div></div>
       ${atBats(g)}
+      ${watch(g)}
       ${any ? `<div class="mb-foot"><button type="button" class="mb-btn" data-tog="pbk" aria-pressed="${seq}">${seq ? "Hide the pitches" : "View pitch breakdown"} <span aria-hidden="true">→</span></button></div>` : ""}
     </section>`;
   }
@@ -444,9 +509,10 @@
       return {
         i, f: sprayFlags(p),
         said: [`${nth(p.inn)} inning`, vsWho(p), lp ? `${name}${v == null ? "" : ` at ${v} mph`}` : "", result(p), ballWords(p),
-               p.rbi ? `${p.rbi} RBI` : ""].filter(Boolean).join(", "),
+               p.br ? "a barrel" : "", p.rbi ? `${p.rbi} RBI` : ""].filter(Boolean).join(", "),
         cells: [`${i + 1}`, esc(nth(p.inn)), two(name, v == null ? "" : `${v} mph`), esc(name), esc(v == null ? "—" : v),
-                `<b class="mb-rs ${tone(p.et)}">${esc(result(p))}</b>${p.rbi ? `<small>${p.rbi} RBI</small>` : ""}`,
+                `<b class="mb-rs ${tone(p.et)}">${esc(result(p))}</b>${p.rbi ? `<small>${p.rbi} RBI</small>` : ""}${p.br
+                  ? '<small class="mb-brl">Barrel</small>' : ""}`,
                 esc(p.ls == null ? "—" : Math.round(p.ls)), esc(p.d == null ? "—" : `${Math.round(p.d)} ft`)],
         more: seq ? seqHTML(p) : "",
       };
@@ -461,8 +527,9 @@
     const fast = seen.length ? seen.filter((x) => GROUP[x[0]] === "F").length / seen.length : null;
     const L = line(pas);
     const t = [tile("Pitches seen", n || "—"), tile("Fastball %", pct(fast)), tile("Avg exit velo", L.ev == null ? "—" : num1(L.ev), "mph"),
-               tile("Hardest hit", L.max == null ? "—" : num1(L.max), "mph"), tile("Hard hits", L.hard, "95+ mph")];
-    return `<section class="cc-card cc-stats mb-sum"><h3 class="cc-card-t">Game summary</h3><div class="cc-tiles">${t.join("")}</div></section>`;
+               tile("Hardest hit", L.max == null ? "—" : num1(L.max), "mph"), tile("Hard hits", L.hard, "95+ mph"),
+               tile("Barrels", L.brl, "MLB’s rule")];
+    return `<section class="cc-card cc-stats mb-sum"><h3 class="cc-card-t">Game summary</h3><div class="cc-tiles cc-tiles-6">${t.join("")}</div></section>`;
   }
 
   /* ---------------- his season, against any pitch ---------------- */
@@ -480,21 +547,40 @@
     const sel = opts.length > 1 ? `<span class="cc-filt"><select data-opt="vs" aria-label="Against which pitches">${opts.map(([v, w]) =>
       `<option value="${v}"${v === k ? " selected" : ""}>${esc(w)}</option>`).join("")}</select></span>` : "";
     // Our expected average and slugging ride beside his own (engine/mlb/xstats).
-    const big = [tile("H–AB", `${L.h}-${L.ab}`, `${avg3(L.avg)} AVG${L.xba == null ? "" : ` · xBA ${avg3(L.xba)}`}`),
-                 tile("HR", L.hr, L.pa ? `${(100 * L.hr / L.pa).toFixed(1)}% of PA` : ""),
-                 tile("RBI", L.rbi, `${avg3(L.obp)} OBP`),
-                 tile("Total bases", L.tb, `${avg3(L.slg)} SLG${L.xslg == null ? "" : ` · xSLG ${avg3(L.xslg)}`}`)];
+    // His runs and stolen bases are the season's own (his game log's), so
+    // they stand only over every pitch, and only once every game has them.
+    const rs = !k && d.rs ? d.rs : null;
+    const hits = tile("H–AB", `${L.h}-${L.ab}`, `${avg3(L.avg)} AVG${L.xba == null ? "" : ` · xBA ${avg3(L.xba)}`}`);
+    const hr = tile("HR", L.hr, L.pa ? `${(100 * L.hr / L.pa).toFixed(1)}% of PA` : ""), rbi = tile("RBI", L.rbi, `${avg3(L.obp)} OBP`);
+    const tb = tile("Total bases", L.tb, `${avg3(L.slg)} SLG${L.xslg == null ? "" : ` · xSLG ${avg3(L.xslg)}`}`);
+    const big = rs ? [hits, tile("Runs", rs.r), hr, rbi, tile("Stolen bases", rs.sb, rs.cs ? `${rs.cs} caught` : ""), tb]
+      : [hits, hr, rbi, tb];
+    // A barrel is MLB's own rule on each ball he put in play.
     const small = [tile("OPS", avg3(L.ops)), tile("BB–K", `${L.bb}-${L.k}`), tile("Exit velocity", L.ev == null ? "—" : `${num1(L.ev)} mph`, "average"),
                    tile("Launch angle", L.la == null ? "—" : `${num1(L.la)}°`, "average"),
-                   tile("Hard hit", pct(L.bip ? L.hard / L.bip : null), "95+ mph"), tile("Sweet spot", pct(L.nla ? L.sweet / L.nla : null), "8–32°")];
+                   tile("Hard hit", pct(L.bip ? L.hard / L.bip : null), "95+ mph"),
+                   tile("Barrel %", pct(L.bip ? L.brl / L.bip : null), `${L.brl} barrel${L.brl === 1 ? "" : "s"}`),
+                   tile("Sweet spot", pct(L.nla ? L.sweet / L.nla : null), "8–32°")];
     const vs = VS.find(([v]) => v === k);
     const one = { F: "a fastball", B: "a breaking ball", O: "an offspeed pitch" };
     return `<section class="cc-card cc-stats mb-stats"><header class="cc-card-h"><h3 class="cc-card-t">Season stats (${esc(Q.h.seasonName(sport, d.season))})</h3>${sel}</header>
-      <div class="cc-tiles cc-tiles-2 mb-big">${big.join("")}</div>
-      <div class="cc-tiles cc-tiles-6">${small.join("")}</div>
+      <div class="cc-tiles cc-tiles-2 mb-big${rs ? " mb-big6" : ""}">${big.join("")}</div>
+      <div class="cc-tiles cc-tiles-7">${small.join("")}</div>
+      ${k ? "" : mlbOwn(d)}
       ${k ? `<p class="mb-cap">${esc(one[k] ? `His ${L.pa} plate appearances that ended on ${one[k]}: the pitch he put in play, struck out or walked on.`
         : `His ${L.pa} plate appearances ${vs[1]}.`)}</p>` : ""}
     </section>`;
+  }
+  /* MLB'S OWN NUMBERS BESIDE OURS (Baseball Savant): its expected average
+     and slugging and its barrel rate, as of the day the box last read
+     them, over the games Savant's season board counts. */
+  function mlbOwn(d) {
+    const o = d.savant;
+    if (!o || (o.xba == null && o.xslg == null && o.brl_pct == null)) return "";
+    const at = o.at ? when(o.at, { month: "short", day: "numeric" }) : "";
+    const bits = [o.xba != null ? `<b>${avg3(o.xba)}</b> xBA` : "", o.xslg != null ? `<b>${avg3(o.xslg)}</b> xSLG` : "",
+                  o.brl_pct != null ? `<b>${(100 * o.brl_pct).toFixed(1)}%</b> barrels${o.bbe ? ` of ${o.bbe} balls` : ""}` : ""].filter(Boolean);
+    return `<p class="mb-own"><span>MLB’s own · Baseball Savant${at ? ` · as of ${esc(at)}` : ""}</span>${bits.join(" · ")}</p>`;
   }
 
   /* ---------------- the table's tools, the splits ---------------- */
@@ -505,14 +591,14 @@
                          ["hard", "Hard hit"], ["k", "Strikeouts"], ["bb", "Walks"], ["rbi", "Drove in a run"]];
   const sprayCsv = (g) => [["#", "Inning", "Pitcher", "Throws", "Pitch", "Pitch speed (mph)", "Result", "Event",
                             "Exit velocity (mph)", "Launch angle", "Distance (ft)", "Batted ball", "Direction", "RBI",
-                            "Pitches", "Every pitch", "xBA"]]
+                            "Pitches", "Every pitch", "xBA", "Barrel", "Video"]]
     .concat((g.pas || []).map((p, i) => {
       const lp = lastPitch(p);
       return [i + 1, nth(p.inn), p.p, p.ph, lp ? pitchName(lp[0]) : "", lp && lp[1] != null ? lp[1] : "", result(p), p.ev,
               p.ls == null ? "" : p.ls, p.la == null ? "" : p.la, p.d == null ? "" : p.d, TYPE[p.tr] || "", DIR[p.dir] || "",
               p.rbi || 0, p.np == null ? "" : p.np,
               (p.ps || []).map((x) => `${x[0] || "?"}${x[1] == null ? "" : ` ${x[1]}`} ${OUTCOME[outcome(x[2])]}`).join("; "),
-              p.xh == null ? "" : p.xh];
+              p.xh == null ? "" : p.xh, p.br ? "yes" : "", p.vid ? SAVANT_PLAY(p.vid) : ""];
     }));
   /* Our expected average and slugging (engine/mlb/xstats), and what the
      held-out test (engine/mlb/xstatsfit) said of them, if it has run. */
@@ -611,9 +697,10 @@
     barTitle: (v) => SPRAY_TITLE[v],
     bars: (d, v) => sprayBars(d, v),
     splits: (d) => sprayTables(d),
-    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not his park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one he put in play, struck out or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. Runs scored, stolen bases and barrels are not shown: the feeds the page reads do not carry the first two game by game, and the league does not publish its barrel table.${xNote(d)}</p>`,
+    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not his park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one he put in play, struck out or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. A barrel is MLB’s own rule on MLB’s own numbers: a ball hit 98 mph or harder at 26 to 30 degrees, the window widening with every mph past that until at 116 mph it runs from 8 to 50; the barrel rate is barrels over balls in play. Runs and stolen bases are his own game log’s, game by game; the season’s are shown only when every game on the chart has them. A club’s record is the one through that game, from MLB’s schedule, and shown only where our own count of the season’s finals agrees with it. MLB’s own expected average, slugging and barrel rate are Baseball Savant’s, as of the day shown. The video of an at-bat, and every pitch of a game, open on Baseball Savant; the game on MLB.com.${xNote(d)}</p>`,
     // The page's own arithmetic, for its tests.
-    _t: { line, result, nth, wallFt, inVs, pitchesSeen },
+    _t: { line, result, nth, wallFt, inVs, pitchesSeen, where, sumOf, gameTiles, gameHead, scoreBoard, watch, mlbOwn,
+          SAVANT_PLAY, SAVANT_GAME, GAMEDAY },
     tip: (p) => {
       const lp = lastPitch(p);
       return `<b class="${band(p.et)}">${esc(result(p))}</b>${p.rbi ? ` · ${p.rbi} RBI` : ""}
