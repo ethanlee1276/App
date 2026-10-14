@@ -2001,6 +2001,43 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
     return cur.rowcount or 0
 
 
+def journal_potd(card: dict, conn=None,
+                 path: str | None = "web/data/record.json") -> str:
+    """Journal the day's pick ONCE THE CARD EXISTS; the build-log line.
+
+    Ethan, 2026-10-14: "we only show the pick of the day record for nfl
+    and mlb but no other sport." The college and basketball builds called
+    `log_pick_of_the_day` inside their journal blocks, which run BEFORE
+    `potd.attach` puts the card on the board — so they journaled an
+    absent card on every build since the feature shipped (2026-09-15),
+    and the college card's BET picks were shown and never scored. The
+    NFL and MLB builds journal after the attach; that is the order this
+    is called in: attach, relock (`relock_potd`), publish, then this.
+
+    THE RECORD IS EXPORTED WHEN A ROW IS WRITTEN, because those two
+    builds have already run `settle_and_export` by now and the pick would
+    otherwise wait a whole cycle to read as riding. Never raises: a busy
+    journal costs the log a warning line, never the build its board.
+    """
+    own = conn is None
+    try:
+        if own:
+            conn = connect()
+        if not log_pick_of_the_day(conn, card or {}):
+            return ""
+        if path:
+            export_json(conn, path)
+        return "Pick of the Day: recorded."
+    except Exception as exc:                                  # noqa: BLE001
+        return f"⚠️  Pick of the Day journal skipped: {exc}"
+    finally:
+        if own and conn is not None:
+            try:
+                conn.close()
+            except Exception:                                 # noqa: BLE001
+                pass
+
+
 def is_game_row(row: dict) -> bool:
     """Is this a whole-game bet rather than one player's line?
 

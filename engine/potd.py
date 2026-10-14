@@ -1345,9 +1345,17 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
     elif near is not None:
         out["pick"] = _card(near, below=shortfall(near))
     else:
+        # NO GAME LINE AT ALL IS ITS OWN REASON. The basketball and hockey
+        # boards hand this nothing but player props, and "nothing in the
+        # band at a real price" described a board that had no candidate of
+        # the only kind this pick takes (Ethan, 2026-10-14, asking why no
+        # league but the NFL and MLB had a record).
+        from .ledger import is_game_row
         out["pick"] = None
         out["note"] = ("No pick today: " + (
             "the board had no rows" if not rows
+            else "no game line on this board — the day’s pick is a "
+                 "moneyline, spread or total" if not any(map(is_game_row, rows))
             else "nothing on the board is in the band at a real price"))
     # ONE EXIT, so the call cannot be attached to two of the three
     # outcomes and forgotten on the third — which is how a page ends up

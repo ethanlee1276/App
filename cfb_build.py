@@ -2621,14 +2621,9 @@ def main() -> None:
         _lb_n = _lb.journal(lconn, out, "cfb", args.date)
         if _lb_n:
             print(f"Most Likely board: {_lb_n} row(s) journaled on paper.")
-        # AND THE PICK OF THE DAY, to its own book. Refuses a row the
-        # selector flagged below its bar, refuses a second pick on a day
-        # that already has one, and refuses a game under way — see
-        # `ledger.log_pick_of_the_day`.
-        potd_n = ledger.log_pick_of_the_day(
-            lconn, out.get("pick_of_the_day") or {})
-        if potd_n:
-            print("Pick of the Day: recorded.")
+        # NOT THE PICK OF THE DAY: it is not on the board yet. It is
+        # journaled after `potd.attach` and `_write` — see the call under
+        # `_write(out, args.out)` below and `ledger.journal_potd`.
         # The stale-line flags to the shadow book, as the NFL's and
         # MLB's go — flat 0.1u, category 'stale', settled from the same
         # college game logs as the props. This is the sample
@@ -2682,6 +2677,16 @@ def main() -> None:
     # writer; two calls to `relock_potd` is two places for the rule to
     # live and one of them to drift.
     _write(out, args.out)
+    # AND THE PICK OF THE DAY, to its own book — HERE, once it exists.
+    # The journal block above runs before `potd.attach`, and journaling
+    # the card there recorded nothing on every build from 2026-09-15 to
+    # 2026-10-14 while the page showed college picks. `_write` has
+    # re-pointed the card at today's lock; `ledger.journal_potd` refuses
+    # a below-bar lean, a second pick in a day and a game under way.
+    from engine import ledger as _ledger
+    _jn = _ledger.journal_potd(out.get("pick_of_the_day") or {})
+    if _jn:
+        print(_jn)
     conn.close()
     _sharp_picks = sum(1 for b in sharp_bets if b.get("recommended"))
     print(f"CFB {args.date}: {len(games)} game(s), {len(priced)} priced → "

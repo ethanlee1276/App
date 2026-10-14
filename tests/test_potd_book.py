@@ -198,11 +198,23 @@ def test_the_book_never_bleeds_into_the_headline_record():
 # --- the wiring --------------------------------------------------------------
 def test_every_sport_that_builds_a_likelihood_board_also_picks_a_day():
     """One hook, called from each build, so the bar cannot drift between
-    leagues — the lesson `livepicks.attach_tracker` was written for."""
+    leagues — the lesson `livepicks.attach_tracker` was written for.
+
+    AND THE RECORD IS WRITTEN AFTER THE HOOK. This used to ask only that
+    `ledger.log_pick_of_the_day(` appear in each file, and it did — in the
+    college and basketball builds above `_potd.attach(`, journaling an
+    absent card on every build from 2026-09-15 to 2026-10-14 while this
+    passed (pin updated that day; the order is held in full by
+    tests/test_every_league_records_its_pick_of_the_day.py)."""
+    import re
     for fn in ("nfl_build.py", "cfb_build.py", "mlb_build.py", "nba_build.py"):
         src = (ROOT / fn).read_text()
         assert "_potd.attach(" in src, f"{fn} publishes no Pick of the Day"
-        assert "ledger.log_pick_of_the_day(" in src, f"{fn} records no Pick of the Day"
+        calls = [m.start() for m in re.finditer(
+            r"ledger\.log_pick_of_the_day\(|\.journal_potd\(", src)]
+        assert calls, f"{fn} records no Pick of the Day"
+        assert min(calls) > src.index("_potd.attach("), \
+            f"{fn} records the Pick of the Day before it exists"
 
 
 def test_the_hook_survives_a_board_that_cannot_produce_one():

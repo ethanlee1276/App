@@ -189,9 +189,18 @@ def test_the_card_is_drawn_and_drawn_first():
 
 
 # --- the record section ------------------------------------------------------
-def test_a_book_with_nothing_in_it_draws_nothing():
+def test_an_empty_book_draws_nothing_pooled_and_says_so_in_a_league():
+    """POOLED, an empty book draws nothing. SCOPED TO A LEAGUE it draws
+    its section saying nothing has settled — Ethan, 2026-10-14: "we only
+    show the pick of the day record for nfl and mlb but no other sport".
+    A missing heading read as no such book. (Pin updated that day: this
+    test, `test_a_book_with_nothing_in_it_draws_nothing`, held the scoped
+    case empty too.)"""
     for rep in (None, {}, {"settled": 0, "open": 0}):
-        assert _run_section(rep, "nfl") == "", rep
+        assert _run_section(rep, "") == "", rep
+        got = _run_section(rep, "nfl")
+        assert "Pick of the Day" in got and "Nothing settled yet." in got, rep
+        assert "riding" not in got and "settled pick" not in got, rep
 
 
 def test_the_record_reads_as_a_record():

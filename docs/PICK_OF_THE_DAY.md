@@ -670,6 +670,42 @@ pipeline added tomorrow gets it for free, and
 MLB pipeline rather than testing the pricer in isolation — which is the
 test that would have caught this.
 
+### 3k. College and basketball recorded nothing, and the cause was order
+
+**Ethan, 2026-10-14:** *"we only show the pick of the day record for nfl
+and mlb but no other sport."* The Record page draws each league's book
+from the `potd` rows the journal holds, and only two leagues had any.
+
+| build | attaches the card | journals the card | recorded |
+|---|---|---|---|
+| `nfl_build.py`, `mlb_build.py` | then | after | yes |
+| `cfb_build.py`, `nba_build.py` (NBA and WNBA) | after | **before** | **never** |
+| `nhl_build.py` | in its hook loop | after, in `journal()` | when it has a pick |
+
+The college and basketball journal blocks run before the after-hooks that
+call `potd.attach`, and `log_pick_of_the_day` read `out["pick_of_the_day"]`
+there — a key no code had written yet. Every build from 2026-09-15 to the
+fix journaled an absent card, so the college card led its page with BET on
+picks that were shown and never scored. `tests/test_potd_book.py` asked
+only that both calls appear in each file, and they did.
+
+**THE FIX IS ONE DOOR, CALLED LAST.** `ledger.journal_potd` journals the
+card after the attach, the relock and the publish — the order the NFL and
+MLB builds always had — and exports the record when it writes, so the pick
+reads as riding on the next page load rather than a cycle later.
+`tests/test_every_league_records_its_pick_of_the_day.py` replays both
+orders on the same board and holds every build's order on its source.
+The picks of those four weeks were never journaled and are not
+reconstructed: a record written after the games would be a record of
+nothing anyone could have bet.
+
+**WHAT THE FIX DOES NOT DO.** The basketball and hockey boards hand the
+selector player props only — no game market is measured for either league
+(`likely.GAME_RANK_MEASURED`), and the NBA build prices no game lines at
+all — so neither can name a pick yet. The card now says so ("no game line
+on this board") instead of "nothing on the board is in the band at a real
+price". UFC has no Pick of the Day.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against

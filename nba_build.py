@@ -1270,14 +1270,9 @@ def main() -> None:
             _lb_n = _lb.journal(lconn, out, args.league, args.date)
             if _lb_n:
                 print(f"Most Likely board: {_lb_n} row(s) journaled on paper.")
-            # AND THE PICK OF THE DAY, to its own book. Refuses a row the
-            # selector flagged below its bar, refuses a second pick on a day
-            # that already has one, and refuses a game under way — see
-            # `ledger.log_pick_of_the_day`.
-            potd_n = ledger.log_pick_of_the_day(
-                lconn, out.get("pick_of_the_day") or {})
-            if potd_n:
-                print("Pick of the Day: recorded.")
+            # NOT THE PICK OF THE DAY: it is not on the board yet. It is
+            # journaled after `potd.attach`, the relock and the publish —
+            # see `ledger.journal_potd` at the end of this build.
             if ml:
                 print(f"Most likely: {ml} row(s) journaled.")
             settled = ledger.settle_and_export(lconn, connect(), sport=args.league,
@@ -1384,6 +1379,14 @@ def main() -> None:
         print(lightboard.report(gate.board_source(p), _lfull))
     except Exception as _lexc:                                # noqa: BLE001
         print(f"⚠️  Light board skipped: {_lexc}")
+    # AND THE PICK OF THE DAY, to its own book — HERE, once it exists and
+    # the relock above has re-pointed it at today's lock. The journal
+    # block runs before `potd.attach`, so journaling it there recorded
+    # nothing on every build from 2026-09-15 to 2026-10-14. Under the
+    # league that made it (a WNBA pick goes to the bench's book).
+    _jn = _led.journal_potd(out.get("pick_of_the_day") or {})
+    if _jn:
+        print(_jn)
     if picks_result:
         c = picks_result["counts"]
         print(f"NBA {args.date}: {c['props_analyzed']} props → "

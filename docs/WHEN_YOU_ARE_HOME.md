@@ -140,6 +140,11 @@ MLB.com, barrels (MLB's own rule) beside his barrel rate, MLB's own
 expected average and slugging from Baseball Savant beside ours, a link to
 the video of every at-bat on Savant, and his action photo in place of his
 headshot; the box fills them by itself, within hours (step 84; AP). The
+Pick of the Day is now recorded in every league that makes one: the
+college and NBA builds had been recording the day's pick before choosing
+it, so college's BET picks were shown and never scored; every league's
+Record page now has its Pick of the Day section, and a board with no game
+line says so on its card (step 85; AQ). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -171,13 +176,13 @@ Wednesday's refit writes anyway), and AP's fill if you start it (the hit
 page's tables, the rows tonight's chores write anyway). Every command runs
 on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The hit page's season exit velocity stays on one line: the mph under the number`
+**A. The box has today's code.** The first line should end `Every league's Pick of the Day reaches its record: college and basketball recorded theirs before making it`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 9bbdad2f HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor c0b17fbb HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -980,6 +985,26 @@ chip that at-bat's video, and Every pitch ↗ the game's on Savant; and on
 Where he hits it, Runs and Stolen bases among the six big numbers, Barrel
 % beside hard hit, and the line "MLB's own · Baseball Savant · as of"
 with his xBA, xSLG and barrel rate.
+
+**AQ. Every league's Pick of the Day reaches its record** (step 85; one
+read-only command, seconds). Nothing to run for the fix itself: from the
+first build on this code, each league's first qualifying pick of the day
+is recorded, as the NFL's and MLB's always were. Run this after the next
+college or NBA build whose card says BET (college plays Thursday to
+Saturday):
+```
+cd /srv/qellys && sudo -u qellys python3 potdcheck.py
+```
+Two lines a league. `journal:` is what the record holds (how many, how
+many riding, W-L-P, the first and last day); `card:` is what the board
+shows now. On a BET card the line should end `recorded today`. `NOT
+RECORDED` on a card older than one build is the line I need. On the NBA
+and NHL, `NO BET — No pick today: no game line on this board` is expected
+for now (step 85 says why). The last line lists the leagues record.json
+carries a Pick of the Day record for; a league joins it as soon as its
+first pick is recorded. Then on your phone, Record → each league: the
+Pick of the Day section is under every league now, reading "Nothing
+settled yet." until its first pick grades.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3582,6 +3607,39 @@ first). Paste back anything that prints an error or looks off.
     row or Savant file) and that barrels are, and the note's new words.
     New: `tests/test_the_hit_page_has_what_the_renders_showed.py`,
     `hitpagecheck.py`.
+85. **Every league's Pick of the Day reaches its record** (2026-10-14,
+    you: "we only show the pick of the day record for nfl and mlb but no
+    other sport. Fix that"). AQ checks it. THE CAUSE WAS ORDER: the
+    college and NBA/WNBA builds called `ledger.log_pick_of_the_day` inside
+    their journal blocks, which run before `potd.attach` puts the card on
+    the board, so every build journaled an absent card — nothing — from
+    2026-09-15 to today, while the college card led its page with BET. The
+    NFL and MLB builds journal after the attach, which is why theirs were
+    the only records (hockey's journals after its hook too). Now one door,
+    `ledger.journal_potd`, is called in both builds after the attach, the
+    relock and the publish, and exports the record when it writes, so the
+    pick reads as riding at once. The four weeks of college picks were
+    never recorded and are not reconstructed: a record written after the
+    games is not a record. STILL MISSING, said plainly: the NBA and NHL
+    boards hand the selector player props only (no game market is
+    measured for either league, and the NBA build prices no game lines at
+    all), and UFC has no Pick of the Day, so those three cannot name a
+    pick yet; their card now says "no game line on this board" instead of
+    "nothing on the board is in the band at a real price". The Record page
+    draws the Pick of the Day section under every league, "Nothing settled
+    yet." until its first pick grades (the pooled view still draws nothing
+    while it is empty). Two pins changed, told to you, both stronger:
+    `tests/test_potd_card.py`'s `test_a_book_with_nothing_in_it_draws_nothing`
+    (now `test_an_empty_book_draws_nothing_pooled_and_says_so_in_a_league`)
+    held a league's empty section blank; `tests/test_potd_book.py`'s
+    `test_every_sport_that_builds_a_likelihood_board_also_picks_a_day`
+    asked only that both calls appear in each build (they did, in the
+    wrong order) and now asks that the record is written after the card
+    exists. New: `tests/test_every_league_records_its_pick_of_the_day.py`
+    (12 checks: both orders replayed on one board, the lock, a lean, the
+    bench, the export, every build's order, the box check, the page),
+    `potdcheck.py`, and §3k of `docs/PICK_OF_THE_DAY.md`. App 494.485 of
+    495 KB and first visit 610.994 of 611 (10 and 11 bytes more).
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
