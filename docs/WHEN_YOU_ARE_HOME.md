@@ -77,7 +77,12 @@ never saw decides whether they are ever more than context (step 72; AD).
 Every league's charts now open the way the NFL's do: the player page and
 every parlay leg carry one "His charts" button, in every league, opening
 his own chart first with his role beside it and tonight's matchup (step
-73; AE). The whole picture, sport by sport, is in
+73; AE). The Most Likely picks now carry the same kinds of information in
+every league: a matchup card on baseball and hockey picks (as NFL,
+college and NBA picks had), and on basketball picks the projection's
+walk, the teammate-out card and each past game's opponent. Basketball's
+matchup check now reads the defence read its projection already used
+(step 74; AF). The whole picture, sport by sport, is in
 `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -88,13 +93,13 @@ D's Stripe settings, Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write) and AD's two model files (the table
 the chores would fit anyway, and the test's verdict). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Every league's charts open the way the NFL's do: one door on the player page and every parlay leg`
+**A. The box has today's code.** The first line should end `Every league's Most Likely pick carries the same kinds of information`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 1a8cef83 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor c1a44a87 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -615,6 +620,27 @@ and `Matchup vs` tonight's opponent when he has a priced bet tonight. In
 Ask's parlay checker, every player's leg carries the same button, in
 every league. The Most Likely pick page is unchanged: it already drew his
 chart in place, in every league.
+
+**AF. Every league's Most Likely pick carries the same information**
+(step 74; read-only, seconds). Nothing to run for the builds: each
+league's next build writes the new fields. The first command counts, on
+each served board, the Most Likely picks that carry a matchup card, a
+teammate card and the projection walk; the second is the baseball build's
+own line about its cards:
+```
+cd /srv/qellys && for f in recommendations cfb mlb_recommendations nba wnba nhl; do python3 -c "import json,sys; f=sys.argv[1]; d=json.load(open('web/data/'+f+'.json')); ml=d.get('most_likely') or []; print(f, len(ml), 'picks |', sum(1 for r in ml if r.get('matchup_card')), 'matchup |', sum(1 for r in ml if r.get('mate_card')), 'teammate |', d.get('likely_board',{}).get('matchup_source'))" $f 2>/dev/null || echo "$f: no board"; done
+journalctl -u qellys --since "3 hours ago" --no-pager | grep -E "Matchup cards:" | tail -3
+```
+The baseball card reads the season's stored plate appearances, which the
+hit tracker's nightly backlog is still filling (block W): a club needs
+five games on file before it is ranked, so the cards fill in as the
+backlog does, and a pick without one simply has none. Then on your
+phone: MLB and NHL, any player pick: a `Matchup vs` box on the card and
+on its page, saying what tonight's opponent allows a game, its rank, and
+what the model did with it; NBA (from opening night) and WNBA: the
+`Teammate out` box when a rotation player is ruled out, the `How this
+number was built` walk on the pick page, and each past game named by its
+opponent.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2632,6 +2658,50 @@ first). Paste back anything that prints an error or looks off.
     went in (its stand-in server answered a Role request with carries); it
     now answers routes and carries only, and passes. New:
     `tests/test_every_chart_is_routed_like_nfl.py`.
+74. **Every league's Most Likely pick carries the same kinds of
+    information** (2026-10-14, you: "make sure all sports have the same
+    most likely screens with same type of info and info is being used how
+    it should be"). AF checks it. The card and the pick page were already
+    one renderer for every league; what differed was what each league's
+    rows carried, so the work is all on the boards (the first visit's
+    budget went down slightly, no bump). BASEBALL now has the matchup card
+    NFL, college and NBA picks had (engine/mlb/matchupcard): for a hitter's
+    hits, total bases or home runs, what tonight's whole staff allows a
+    game; for a pitcher's strikeouts, how often tonight's lineup strikes
+    out; each beside the league's rate and its rank among the clubs, off
+    the season's stored plate appearances, and under it what the model's
+    own matchup step did (the starter's hand and what he allows to this
+    side, the bullpen, the lineup's strikeout rate), or that the learned
+    model sets that weight. The staff line is context and moves nothing.
+    HOCKEY has one too (engine/nhl/matchupcard): the shots or goals
+    tonight's opponent allows a game (or the shots it takes, for blocked
+    shots and a goalie's saves), ranked, off the model's own team
+    profiles, saying how far the model's opponent factor moved the number
+    and that it is a written prior, not a measured effect. BASKETBALL (NBA
+    and WNBA): the projection now publishes its walk (rate × minutes, then
+    player memory, the scoring environment, rest and the measured defence
+    step), so the pick page draws `How this number was built` as NFL and
+    MLB picks do; the one board's matchup check reads that measured defence
+    step, as baseball's reads its own, where it said `no matchup read for
+    this sport yet` while the projection already read the defence (the
+    defence read cleared two standard errors in every NBA and WNBA market,
+    2026-09-27). This is the one change that moves a pick: an NBA or WNBA
+    pick whose measured matchup step backs its side by 3% or more can now
+    be a Top pick, the same rule baseball already has. A teammate ruled out
+    tonight is the `Teammate out` card every league draws, said once (it
+    was a bullet), and each past game names its opponent and home or away
+    (the history query skipped both columns). The `vs this opponent`
+    average stays empty for basketball, as the WNBA spec pins. Wording:
+    the board's line for a model-read matchup no longer says `the opposing
+    pitcher` (it is now any league's), and the teammate section's subtitle
+    says `a teammate` rather than `someone at his position`. Pins changed,
+    told to you, nothing loosened:
+    `tests/test_one_most_likely_board.py` reads basketball's matchup
+    source as the model's measured step (it pinned `none` and `no matchup
+    read for this sport yet`, now tested on a sport with no read), and
+    `tests/test_nba_knows_who_plays_where_and_who_is_hurt.py` finds the
+    teammate news on the teammate card (it read the bullets) and checks it
+    is said once. New: `tests/test_every_league_reads_the_same_on_most_likely.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

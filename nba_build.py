@@ -98,7 +98,7 @@ def player_history(conn, teams: set[str], sport: str = "nba",
     from engine import divisions
     from engine.sources.oddsapi import normalize_name
     hist: dict = {}
-    q = ("SELECT player, team, position, period, market, value "
+    q = ("SELECT player, team, position, period, market, value, opponent, home "
          "FROM player_game_logs WHERE sport=? AND team IN (%s)"
          % ",".join("?" * len(teams)))
     args: list = [sport, *teams]
@@ -117,15 +117,21 @@ def player_history(conn, teams: set[str], sport: str = "nba",
                     moved.add(r["player"])
                 continue
         p = hist.setdefault(r["player"], {"team": r["team"], "starter": None,
-                                          "by_week": {}})
+                                          "by_week": {}, "faced": {}})
         wk = p["by_week"].setdefault(r["period"], {})
         wk[r["market"]] = float(r["value"])
+        # WHO HE PLAYED, AND WHERE: the pick page labels each past game
+        # "vs BOS" as every other league's does, and reads his games
+        # against tonight's opponent.
+        p["faced"].setdefault(r["period"], (r["opponent"] or "", 1 if r["home"] in (1, True, "1") else 0))
         if p["starter"] is None and r["market"] == "min":
             p["starter"] = r["position"] == "S"
     for p in hist.values():
         weeks = sorted(p["by_week"], reverse=True)[:20]
         p["minutes"] = [p["by_week"][w].get("min", 0.0) for w in weeks]
         p["dates"] = weeks                      # ISO dates, newest first
+        p["opps"] = [p["faced"].get(w, ("", 1))[0] for w in weeks]
+        p["homes"] = [p["faced"].get(w, ("", 1))[1] for w in weeks]
         for stat in ("pts", "reb", "ast", "fg3m"):
             p[stat] = [p["by_week"][w].get(stat, 0.0) for w in weeks]
         # PRA is the WNBA spec's headline tier-1 market and it needs no new
@@ -254,9 +260,11 @@ def _team_rows(hist: dict, team: str, since: str) -> list[dict]:
             for m, v in stats.items()]
 
 
-def lineup_note(player: str, market: str, team: str, gone: dict, hist: dict,
-                cache: dict | None = None) -> str:
-    """What a teammate's absence means for this prop, said on its card.
+def lineup_card(player: str, market: str, team: str, gone: dict, hist: dict,
+                cache: dict | None = None) -> dict | None:
+    """What a teammate's absence means for this prop, as the teammate card
+    every league's pick draws (the NFL's engine/teammates shape: ``{team,
+    out, headline, applied, note}``), or None with nobody out.
 
     EVIDENCE ONLY. The minutes model has a slot for the minutes a vacancy
     opens (`project_minutes(vacancy_minutes=...)`) and nothing fills it:
@@ -267,13 +275,15 @@ def lineup_note(player: str, market: str, team: str, gone: dict, hist: dict,
     from engine.nba import onoff
     away = [(n, m) for n, m in (gone or {}).get(team, []) if n != player]
     if not away:
-        return ""
+        return None
     names = ", ".join(f"{n} ({m:.0f} min a game)" for n, m in away[:3])
-    note = (f"Out tonight: {names}. Those minutes go to the rest of the rotation; "
-            f"our minutes model does not move for it, and the book's line may already have.")
+    card = {"team": team, "out": [n for n, _m in away[:3]], "applied": 1.0,
+            "headline": f"Out tonight: {names}",
+            "note": ("Shown for you. Those minutes go to the rest of the rotation; our minutes "
+                     "model does not move for it, and the book's line may already have.")}
     stat = market if market in onoff.STATS else None
     if stat is None:
-        return note
+        return card
     big = away[0][0]
     key = (team, big, stat)
     cache = {} if cache is None else cache
@@ -285,10 +295,19 @@ def lineup_note(player: str, market: str, team: str, gone: dict, hist: dict,
     if res.get("enough") and b:
         label = {"pts": "points", "min": "minutes", "reb": "rebounds", "ast": "assists",
                  "fg3m": "threes"}[stat]
-        note += (f" In the {res['n_out']} games {big} missed, {player} took "
-                 f"{b['without']:.0%} of the team's {label}, against {b['with']:.0%} "
-                 f"with {big} on the floor ({b['n_without']} and {b['n_with']} games).")
-    return note
+        card["note"] += (f" In the {res['n_out']} games {big} missed, {player} took "
+                         f"{b['without']:.0%} of the team's {label}, against {b['with']:.0%} "
+                         f"with {big} on the floor ({b['n_without']} and {b['n_with']} games).")
+    return card
+
+
+def lineup_note(player: str, market: str, team: str, gone: dict, hist: dict,
+                cache: dict | None = None) -> str:
+    """The teammate card as one sentence, for the Edge card's context."""
+    c = lineup_card(player, market, team, gone, hist, cache)
+    if not c:
+        return ""
+    return f"{c['headline']}. {c['note'].replace('Shown for you. ', '')}"
 
 
 def _ctx_layoff(dates, game_date: str):
@@ -953,6 +972,10 @@ def main() -> None:
                 "restriction": _status.lower() in OUT_STATUSES,
                 "lineup_note": lineup_note(prop.player, prop.market, h["team"], gone,
                                            hist, _onoff_cache),
+                "mate_card": lineup_card(prop.player, prop.market, h["team"], gone,
+                                         hist, _onoff_cache),
+                # Each game's opponent and home or away, for the pick page.
+                "opps": h.get("opps") or [], "homes": h.get("homes") or [],
                 "player": prop.player, "team": h["team"],
                 "opponent": next((g["away"] if g["home"] == h["team"]
                                   else g["home"] for g in games
@@ -1169,9 +1192,9 @@ def main() -> None:
         except Exception as exc:                          # noqa: BLE001
             print(f"⚠️  likelihood board skipped: {exc}")
         # THE ONE MOST LIKELY BOARD, as the NFL's (engine/likelyboard) —
-        # the same cards on every sport's page. Basketball shows a matchup
-        # card now (engine/hoopsdvp) but no MEASURED matchup read yet, so
-        # its picks still top out at Strong and the check says why.
+        # the same cards on every sport's page. Basketball's matchup check
+        # reads the projection's measured Matchup step (engine/hoopsdvp,
+        # published on each row's chain), as baseball's reads its own.
         from engine import likelyboard as _lb
         print(f"  {_lb.attach(out, args.league)}")
 

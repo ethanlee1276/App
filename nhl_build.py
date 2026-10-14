@@ -126,6 +126,7 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     and the false-edge filter. Its verdict rides on the row as
     ``edge_hunter``; Win-First's grade rides beside it, never blended."""
     from engine.nhl import edgehunter as EH
+    from engine.nhl import matchupcard as NMC
     from engine.betting import temper_edge
     from engine.odds import devig_two_way, expected_value
     scorer = prop.market == "anytime_goal"
@@ -248,6 +249,10 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "grade": "Play" if pick else "Pass", "has_market": True,
         "recent_values": vals[:12], "trend": trend, "trend_delta": delta,
         "recommended": pick, "warnings": warnings,
+        # THE MATCHUP UNDER THE PICK (engine/nhl/matchupcard, 2026-10-14):
+        # what tonight's opponent allows (or takes) a game, ranked, and how
+        # far the model's opponent factor moved this number.
+        "matchup_card": NMC.card(prop.market, opponent, teams or {}, proj),
         "headline": f"{prop.player} {side} {line:g} {label}",
         "summary": (f"Model {win:.0%} vs market {fair:.0%} after the market haircut — "
                     f"{edge:+.1%} at {odds:+d}, fair {EH.fair_odds(win) or 0:+d}. "

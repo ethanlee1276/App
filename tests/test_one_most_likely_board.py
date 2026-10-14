@@ -285,10 +285,14 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     """Ethan, 2026-09-26: "we need to make sure that every other sport that
     has the Qellys' top picks is getting the same remodel". The board is
     built on every sport's build; what the matchup check reads is the
-    sport's own — the scan in football, the projection's Matchup step in
-    baseball, nothing yet in basketball (whose picks top out at Strong,
-    and the check says why)."""
-    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "scan+model", "nhl": "scan"}
+    sport's own — the scan in football and hockey, the scan or the
+    projection's Matchup step in baseball, and in basketball the
+    projection's Matchup step: what tonight's defence allows at the share
+    measured to reach one player (engine/hoopsdvp; 2026-10-14, it said
+    "no read yet" while the projection read the defence). A sport with no
+    read says so, and its picks top out at Strong."""
+    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "scan+model", "nhl": "scan",
+                                "nba": "model", "wnba": "model"}
     def rec(player, market, mult, why="opp starter K% +12%"):
         return {"player": player, "market": market,
                 "chain": {"base": 1.0, "steps": [{"key": "park", "mult": 1.02},
@@ -312,10 +316,22 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     under = B.build({"games": [], "recommendations": [rec("Cole", "strikeouts", 0.92)],
                      "most_likely": [ml("Cole", "strikeouts", "under")]}, record={}, sport="mlb")
     assert under["rows"][0]["checks"]["matchup"] is True
-    # Basketball: no read, said, and nothing above Strong.
-    hoops = B.build({"games": [], "most_likely": [ml("Brunson", "points", "over")]}, record={}, sport="nba")
-    r = hoops["rows"][0]
-    assert hoops["matchup_source"] == "none" and r["checks"]["matchup"] is None
+    # Basketball: the projection's measured Matchup step backs a pick, and
+    # a pick with no step is said and stays under Top.
+    hoops = B.build({"games": [], "recommendations": [rec("Brunson", "pts", 1.06, "BOS allow 118 a game"),
+                                                      rec("Hart", "reb", 1.01)],
+                     "most_likely": [ml("Brunson", "pts", "over"), ml("Hart", "reb", "over"),
+                                     ml("Bridges", "pts", "over")]}, record={}, sport="nba")
+    hb = {r["player"]: r for r in hoops["rows"]}
+    assert hoops["matchup_source"] == "model"
+    assert hb["Brunson"]["checks"]["matchup"] is True and "+6%" in hb["Brunson"]["check_notes"]["matchup"]
+    assert hb["Hart"]["checks"]["matchup"] is None and "not enough to call" in hb["Hart"]["check_notes"]["matchup"]
+    assert hb["Bridges"]["checks"]["matchup"] is None and hb["Bridges"]["tier"] != "top"
+    assert hb["Bridges"]["check_notes"]["matchup"] == "the model has no matchup step for this market"
+    # A sport with no read at all: said, and nothing above Strong.
+    none = B.build({"games": [], "most_likely": [ml("Somebody", "points", "over")]}, record={}, sport="ufc")
+    r = none["rows"][0]
+    assert none["matchup_source"] == "none" and r["checks"]["matchup"] is None
     assert r["check_notes"]["matchup"] == "no matchup read for this sport yet" and r["tier"] == "strong"
     # The builds attach and journal it.
     for build, sport in (("mlb_build.py", "'mlb'"), ("nba_build.py", "args.league"), ("cfb_build.py", "'cfb'")):

@@ -566,6 +566,21 @@ def main() -> None:
         print(f"⚠️  team form skipped: {exc}")
     _stg.stop(_tk)
 
+    # THE MATCHUP UNDER EVERY PICK (engine/mlb/matchupcard, 2026-10-14):
+    # what tonight's opposing staff allows a game in the pick's stat, or how
+    # often the opposing lineup strikes out, ranked among the clubs, with
+    # what the model's own matchup step did — the card every league's pick
+    # draws, off the season's stored plate appearances.
+    _tk = _stg.start("matchup cards")
+    try:
+        from engine.db import connect as _mc_connect
+        from engine.mlb import matchupcard as _mcard
+        _nmc = _mcard.attach(_mc_connect(), result["recommendations"], int(str(args.date)[:4]))
+        print(f"Matchup cards: {_nmc} of {len(result['recommendations'])} pick(s)")
+    except Exception as exc:
+        print(f"⚠️  matchup cards skipped: {exc}")
+    _stg.stop(_tk)
+
     # §10 drawdown circuit-breaker (docs/MLB_MODEL.md): after a 10u
     # peak-to-trough drawdown on the settled journal, every stake is halved
     # until the peak is recovered. Applied before journaling so the ledger

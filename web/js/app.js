@@ -10837,7 +10837,7 @@ function obCardHTML(r, rank, opts = {}) {
    MATCHUP_SOURCE), said where the checks are explained. */
 function obMatchupWords() {
   const src = ((state.data || {}).likely_board || {}).matchup_source;
-  if (src === "model") return "our model’s matchup step — the opposing pitcher and the lineup around him — moved the number toward this side";
+  if (src === "model") return "our model’s matchup step — what tonight’s defence allows, at its measured weight — moved the number toward this side";
   if (src === "scan+model") return "the matchup scan backs this side — his split against this hand, what the starter allows to his side, the park and the wind — or, where it has no read, our model’s matchup step moved the number toward it";
   if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";
   return "the offence-against-defence read backs this side";
@@ -13331,9 +13331,9 @@ function renderPropPage() {
       <div class="card">${vs}</div>` : ""; })()}
 
     ${r.mate_card ? `<div class="section-title minor">${mateCardHTML(r.mate_card, 1)}
-        <span class="sub">— ${({ "Teammate out": "someone at his position is ruled out, and what the model did with it",
-          "Teammate back": "someone at his position is back; his games without him count for less",
-          "Teammate questionable": "someone at his position may not play, and what the model does if he sits" })[mateCardHTML(r.mate_card, 1)]}.</span></div>
+        <span class="sub">— ${({ "Teammate out": "a teammate is ruled out, and what the model did with it",
+          "Teammate back": "a teammate is back; his games without him count for less",
+          "Teammate questionable": "a teammate may not play, and what the model does if he sits" })[mateCardHTML(r.mate_card, 1)]}.</span></div>
       ${mateCardHTML(r.mate_card)}` : ""}
 
     ${r.qb_card ? `<div class="section-title minor">Quarterback

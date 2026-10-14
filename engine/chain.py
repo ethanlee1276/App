@@ -52,6 +52,9 @@ STEP_LABELS = {
     "ump": "Plate umpire",
     "rare": "Rare-event damping",
     "coherence": "Kept possible with his other lines",
+    "environment": "Scoring environment",
+    "rest": "Rest and layoff",
+    "power_play": "Power play",
 }
 
 #: Where the multiplying starts.

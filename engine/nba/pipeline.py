@@ -101,6 +101,16 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # that reaches one player. 1.0 when no rating reached this prop.
     dvp_m = float(prop.get("dvp_mult") or 1.0)
     proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m, 2)
+    # THE WALK FROM BASE TO FINAL (engine/chain), as the NFL's and MLB's
+    # projections publish it: the pick page draws it, and the one board's
+    # matchup check reads its measured Matchup step (engine/likelyboard).
+    from .. import chain as _chain
+    chain = _chain.build(rate * proj_min, "rate", [
+        _chain.step("player", pmult, "the record's earned correction for this player" if pmult != 1.0 else ""),
+        _chain.step("environment", env_m, env_note or ""),
+        _chain.step("rest", lay_m, lay_note or ""),
+        _chain.step("matchup", dvp_m, prop.get("dvp_note") or ""),
+    ], proj, rate_per_min=round(rate, 4), minutes=proj_min)
     context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note"),
                                  prop.get("lineup_note")) if n]
     from ..exitfit import exits as _exits, RECENT as _RECENT
@@ -123,7 +133,7 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
 
     return {"projection": proj, "proj_min": proj_min, "base": base, "grade": grade,
             "stability": stability, "context": context_notes, "early_exits": early_exits,
-            "minutes": minutes, "spread": spread}
+            "minutes": minutes, "spread": spread, "chain": chain}
 
 
 def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
@@ -264,6 +274,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                     "touching this player → automatic void"),
         "clamp_note": clamp_note,
         "context": context_notes,
+        "chain": pj.get("chain"),
     }
     # "Below 70: no bet, no leans" — but only where a league's tuning says
     # the grade is the authority. The NBA board predates this grade and is
@@ -575,9 +586,12 @@ def shared_recommendations(props: list[dict],
         if r.get("clamp_note"):
             reasons.append(r["clamp_note"])
         # A teammate ruled out tonight, and what the logs show when he sat
-        # (nba_build.lineup_note) — evidence on the card the page draws.
-        if prop.get("lineup_note"):
+        # (nba_build.lineup_card): the teammate card every league's pick
+        # draws, said once — a bullet only where no card came with it.
+        if prop.get("lineup_note") and not prop.get("mate_card"):
             reasons.append(prop["lineup_note"])
+        opps = list(prop.get("opps") or [])
+        homes = list(prop.get("homes") or [])
         out.append({
             "player": r["player"], "team": r.get("team", ""),
             "opponent": r.get("opponent", ""),
@@ -629,12 +643,15 @@ def shared_recommendations(props: list[dict],
                 float(r.get("w", 0.0) or 0.0), tune),
             "logs": [{"week": i + 1,
                       "date": dates[i] if i < len(dates) else "",
-                      "opponent": "", "value": v, "home": 1}
+                      "opponent": opps[i] if i < len(opps) else "", "value": v,
+                      "home": homes[i] if i < len(homes) else 1}
                      for i, v in enumerate(vals[:20])],
             "form": {"last1": _avg(vals, 1), "last3": _avg(vals, 3),
                      "last5": _avg(vals, 5), "last10": _avg(vals, 10),
                      "season": _avg(vals), "career": _avg(vals),
                      "vs_opponent": None},
+            "mate_card": prop.get("mate_card"),
+            "chain": r.get("chain"),
         })
     # Shared ordering: recommended first, then confidence, then edge.
     out.sort(key=lambda x: (x["recommended"], x["confidence"], x["edge"]),

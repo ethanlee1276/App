@@ -345,10 +345,12 @@ def test_the_build_places_movers_names_the_team_on_every_prop_and_holds_the_list
             assert r["injury_status"] == "Out" and not r["recommended"]
     assert not any(r.get("player") in ("Lv Wing", "Hurt Guard")
                    for r in board.get("most_likely") or [])
-    # The out guard's teammates are told on their cards; he is not told
-    # about himself, and the other club hears nothing.
+    # The out guard's teammates are told on their cards — the teammate card
+    # every league's pick draws, since 2026-10-14 — he is not told about
+    # himself, and the other club hears nothing.
     told = {r["player"] for r in recs
-            if any("Out tonight: Hurt Guard" in x for x in r.get("reasons") or [])}
+            if "Out tonight: Hurt Guard" in ((r.get("mate_card") or {}).get("headline") or "")}
+    assert not any("Out tonight" in x for r in recs for x in r.get("reasons") or []), "said once, on the card"
     assert told and told <= {"Lv Star", "Lv Wing"}, told
     assert "Ny Guard" not in told and "Hurt Guard" not in told
 
