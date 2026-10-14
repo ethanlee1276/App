@@ -246,14 +246,16 @@
      names, so its door asks for his chart the same way. A baseball leg
      opens the bet's side of the ball: a pitcher's pitch chart on his
      strikeouts or outs, a hitter's hit tracker on anything else; a
-     basketball leg his shot chart. */
+     basketball leg his shot chart; a hockey goalie's saves his save map,
+     a skater's leg his shot map. */
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
     if (!l.player) return "";
     const door = lg === "nfl" && /rush|rec|anytime|pass/.test(m) ? ["auto", "His charts"]
       : lg === "cfb" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"]
         : lg === "mlb" ? (/^(strikeouts|outs)$/.test(m) ? ["pitches", "Pitch chart"] : ["spray", "Hit tracker"])
-          : lg === "nba" ? ["shots", "Shot chart"] : null;
+          : lg === "nba" ? ["shots", "Shot chart"]
+            : lg === "nhl" ? (/save|goals_against/.test(m) ? ["saves", "Save map"] : ["shotmap", "Shot map"]) : null;
     return door ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${door[0]}">${door[1]}</button></div>` : "";
   }
 

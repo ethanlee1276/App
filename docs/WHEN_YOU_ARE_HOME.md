@@ -55,7 +55,9 @@ draws the hitter's hit tracker (every ball he put in play, where it
 landed and how hard) or the pitcher's pitch chart (every pitch, where it
 crossed the plate and what came of it) (step 65; W). A basketball pick
 draws his shot chart: every shot he took on the half court, made or
-missed, each zone beside the league's percentage (step 66; X). The whole picture, sport by
+missed, each zone beside the league's percentage (step 66; X). A hockey
+pick draws the skater's shot map or the goalie's save map, off the shots
+the box already stores for the xG model (step 67; Y). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -65,13 +67,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A basketball pick draws his shot chart`
+**A. The box has today's code.** The first line should end `A hockey pick draws his shot map or his save map`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 279e359b HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 28d6877f HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -455,6 +457,21 @@ Shot chart is drawn after Form: one game's shots on the court, green in,
 red rings missed, with every shot and free throw listed (the assist, the
 block, fast break); the season tab puts each zone's percentage on the
 floor and the splits put it beside the league's.
+
+**Y. The shot map and the save map** (step 67; read-only, seconds).
+Nothing to fill: they read the shots the xG model already stores. The
+second line's last word should be `True` (our xG model is on disk, so
+every shot carries its expected goals and the goalie his goals saved
+above expected); `False` means the nightly xG fit has not run, and the
+maps draw without those numbers:
+```
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=shotmap&sport=nhl&player=Auston%20Matthews" | head -c 300; echo
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=saves&sport=nhl&player=Igor%20Shesterkin" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('season_label'), d.get('season_line'), d.get('xg_model'))"
+```
+Then on your phone: NHL, Most Likely, tap a skater's pick (shots on goal,
+points, goals, assists): his Shot map, every attempt in the attacking
+zone, gold a goal, green on goal, a ring missed, a cross blocked. A
+goalie's saves or goals against draw his Save map: green saved, red in.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2260,6 +2277,22 @@ first). Paste back anything that prints an error or looks off.
     and `tests/test_a_passing_chart_for_every_passer.py` read the new slot
     rule; the maintenance test stubs the shot reads. New:
     `tests/test_a_shot_chart_for_every_nba_player.py`.
+67. **A hockey pick draws his shot map or his save map** (2026-10-13, you:
+    "Yes do all of them"). Y checks it. Nothing new to fetch: the xG work
+    already stores every attempt of every game (where from, what it
+    became, the shooter, the goalie in net, the shot type, the strength,
+    rebound or rush). Each attempt is turned to face the net at the top
+    (a half turn, so his left stays his left). A skater's pick draws his
+    Shot map: a game's attempts with each one listed (the goalie it went
+    at, the assists on a goal, power play, rebound, rush, and our xG
+    model's chance for it), or the season with his shooting percentage at
+    each distance on the ice; splits by distance, kind of shot and
+    strength. A goalie's saves or goals against draw his Save map: every
+    shot on goal he faced (never an empty net), saved or in, his save
+    percentage by distance, and goals saved above expected the way the
+    board already counts it. Every hockey leg in the parlay checker gets
+    its door. No pins changed. New:
+    `tests/test_a_shot_map_and_save_map_for_hockey.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

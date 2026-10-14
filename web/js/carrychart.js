@@ -112,6 +112,10 @@
                sec: "every pitch he threw: where it crossed the plate, what it was and what the batter did with it" },
     shots: { chip: "Shots", title: "Shot chart", noun: "shots", one: "shot", where: "where he shoots",
              sec: "every shot he took: where from, made or missed, and how" },
+    shotmap: { chip: "Shots", title: "Shot map", noun: "shot attempts", one: "shot attempt", where: "where he shoots from",
+               sec: "every shot he took: where from, on goal, missed or blocked, and the goals" },
+    saves: { chip: "Saves", title: "Save map", noun: "shots faced", one: "shot faced", where: "where he’s beaten",
+             sec: "every shot on goal he faced: where from, saved or scored" },
   };
   /* A league whose file says less than the NFL's gets its own names for
      the same chart: college targets have no air yards, no side of the
@@ -126,7 +130,7 @@
      is drawn (a football page never downloads baseball's drawing): the
      module registers its parts through `QBCarry.plug`. Listeners, not
      handler properties: the page's CSP forbids inline handlers. */
-  const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops" };
+  const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops", shotmap: "nhl", saves: "nhl" };
   const plugs = {};
   function need(kind) {
     const f = PLUG[kind];
@@ -276,8 +280,8 @@
   //: in read "1--2"; it says "1 for −2".
   const tally = (n, yds) => { const y = Math.round(yds); return y < 0 ? `${n} for −${-y}` : `${n}-${y}`; };
   const num1 = (v) => (v == null ? "—" : Number(v).toFixed(1));
-  //: A season that spans two years is named for both: the NBA's 2025 is "2025-26".
-  const seasonName = (sport, y) => (sport === "nba" ? `${y}-${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
+  //: A season that spans two years is named for both: the NBA's and the NHL's 2025 is "2025-26".
+  const seasonName = (sport, y) => (/^(nba|nhl)$/.test(sport) ? `${y}-${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
 
   /* ---------------- the field ---------------- */
   function fieldSVG(ymax, laneLabels, ticks) {
@@ -1361,6 +1365,10 @@
        points, threes and the combos are made there, and his rebounds and
        assists ride the same minutes (engine/nba/shots). */
     if (sport === "nba") return m ? ["shots"] : [];
+    /* Hockey's is the bet's side of the puck: a goalie's saves or goals
+       against draw every shot he faced, a skater's bet every shot he took
+       (engine/nhl/charts). */
+    if (sport === "nhl") return /save|goals_against|goalie/.test(m) ? ["saves"] : m ? ["shotmap"] : [];
     if (sport !== "nfl" && sport !== "cfb") return [];
     /* A quarterback's own chart is his throws, whatever the bet; his runs
        are the other (2026-10-13). A passing bet with no position on the

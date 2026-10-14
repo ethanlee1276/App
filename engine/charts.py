@@ -49,6 +49,16 @@ def _nba_shots(conn, sport, player, season):
     return N.chart(conn, player, season)
 
 
+def _nhl_shotmap(conn, sport, player, season):
+    from .nhl import charts as H
+    return H.shot_map(conn, player, season)
+
+
+def _nhl_saves(conn, sport, player, season):
+    from .nhl import charts as H
+    return H.save_map(conn, player, season)
+
+
 def _any_row(table):
     """A league table with no sport column: has it any rows at all?"""
     def stored(conn, sport):
@@ -80,6 +90,11 @@ KINDS = {
     # Basketball's (2026-10-13): every shot he took, where from, made or
     # missed, off the league's own play-by-play (engine/nba/shots).
     "shots": (("nba",), _nba_shots, _any_row("nba_shots")),
+    # Hockey's pair (2026-10-13): a skater's every attempt and a goalie's
+    # every shot faced, off the shots the xG model already stores
+    # (engine/nhl/charts).
+    "shotmap": (("nhl",), _nhl_shotmap, _any_row("nhl_shots")),
+    "saves": (("nhl",), _nhl_saves, _any_row("nhl_shots")),
 }
 
 
