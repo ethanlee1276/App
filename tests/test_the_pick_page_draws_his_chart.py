@@ -205,7 +205,8 @@ def test_his_own_chart_leads_by_what_he_does_more_of():
     missing; the second chart needs a real share of the same season."""
     i = CC_JS.index("  function probe(c) {")
     body = CC_JS[i:CC_JS.index("\n  }\n", i)]
-    assert "Promise.all(c.cand.map((k) => ask(k," in body, "both of his charts asked for at once"
+    assert "Promise.all(c.cand.map((k, i) => ask(k, S.sport, S.player, null, true)" in body, \
+        "both of his charts asked for at once"
     # His role chart (games played, 2026-10-14) sorts after every chart
     # of what he did in them; among those, the one he does more of leads.
     # Tonight's matchup (2026-10-14, engine/matchview) sorts after his role.
@@ -218,7 +219,11 @@ def test_his_own_chart_leads_by_what_he_does_more_of():
     assert "const SECOND_MIN = 3;" in CC_JS
     assert ('const vol = (kind, d) => (d && ((d.games && d.games.length) || (kind === "matchup" && (d.zones || []).length))'
             '\n    ? Number((d.season_line || {})[kind === "routes" ? "tgt" : "n"]) || 0 : 0);') in CC_JS
-    assert "if (typeof IntersectionObserver !== \"function\") return probe(c);" in CC_JS
+    # The first chart on a page is asked for as the page opens (2026-10-14,
+    # Ethan: "basically be loaded already when you scroll down"); one
+    # further down a list as it nears the screen.
+    assert ('if (page.querySelector(".cc-slot") === el || typeof IntersectionObserver !== "function") '
+            'return probe(c);') in CC_JS
     assert "if (k && k.root === e.target && !k.seq) probe(k);" in CC_JS
     # A door that does not know his position opens on "his chart" too.
     assert 'if (auto) probe(ov._cc); else load(ov._cc, null);' in CC_JS
@@ -231,7 +236,8 @@ def test_a_pick_pages_chart_is_quiet_and_cheap():
         "an overlay opened on one named chart asks every time, as it always has"
     assert "const CACHE_MS = 10 * 60 * 1000;" in CC_JS and "if (data && !data.filling) CACHE.set(q" in CC_JS, \
         "a chart still being filled is never kept"
-    assert 'rootMargin: "800px 0px"' in CC_JS and "io.observe(el);" in CC_JS, "asked for as it nears the screen"
+    assert 'rootMargin: "1600px 0px"' in CC_JS and "io.observe(el);" in CC_JS, \
+        "a slot further down a list is asked for as it nears the screen"
     assert ".scrollIntoView(" not in CC_JS, "a chart halfway down a pick page never pulls the page to it"
     assert "row.scrollLeft +=" in CC_JS, "the chosen game's chip is centred by scrolling its own row"
     # A tap answers only from inside the chart: the page around it carries

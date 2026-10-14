@@ -45,6 +45,7 @@ kept in the process for a few hours (they change once a night).
 
 from __future__ import annotations
 
+import threading
 import time
 
 #: Pseudo-plays an opponent's rate in a zone is shrunk toward the league's by.
@@ -59,6 +60,8 @@ MIN_N = {"routes": 20, "passes": 90, "carries": 60, "runs": 90, "catches": 60, "
 #: League-wide sums are kept this long in one process.
 TTL = 3 * 3600
 _MEMO: dict = {}
+_BUILDS: dict = {}
+_BUILD_LOCK = threading.Lock()
 
 #: What each family's two sides say, for the page.
 SPEC = {
@@ -155,7 +158,13 @@ def _path(conn) -> str:
 
 def _memo(conn, key, build):
     """A league-wide table, kept a few hours per database file (never for
-    an in-memory one, which a test opens fresh each time)."""
+    an in-memory one, which a test opens fresh each time).
+
+    BUILT ONCE HOWEVER MANY ASK (2026-10-14). A cold baseball table is two
+    joins over a season of pitches — two seconds on a full season here,
+    more on the box — and every pick page opened in that window asked for
+    its own copy. One request builds; the others wait for it and read the
+    table it kept."""
     path = _path(conn)
     if not path:
         return build()
@@ -163,9 +172,15 @@ def _memo(conn, key, build):
     hit = _MEMO.get(k)
     if hit and time.time() - hit[0] < TTL:
         return hit[1]
-    val = build()
-    _MEMO[k] = (time.time(), val)
-    return val
+    with _BUILD_LOCK:
+        lock = _BUILDS.setdefault(k, threading.Lock())
+    with lock:
+        hit = _MEMO.get(k)
+        if hit and time.time() - hit[0] < TTL:
+            return hit[1]
+        val = build()
+        _MEMO[k] = (time.time(), val)
+        return val
 
 
 def _add(table: dict, team, zone, n=1, tot=0.0):

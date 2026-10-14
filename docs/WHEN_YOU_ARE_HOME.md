@@ -125,7 +125,14 @@ numbers; By game with his last 10, 20 or 30 games, the game's final, every
 at-bat with the pitch it ended on and how fast (each at-bat's pitches a tap
 away), the game's summary and where its balls went; Where he hits it over
 the park with his pull, middle and opposite-field shares; and his season
-against any kind of pitch or either hand (step 82; AN). The
+against any kind of pitch or either hand (step 82; AN). The hit
+tracker on a pick page is now drawn before you scroll down to it: the
+page asks for it the moment the pick opens, draws it without waiting on
+the Role and Matchup chips (they join the switch when they land), asks
+again when a request drops (a deploy's restart, a phone's connection)
+and offers Try again if it still cannot get it; the server keeps a built
+chart for fifteen minutes and no longer stops mid-request to ask MLB's
+servers for his photo (step 83; AO). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -156,13 +163,13 @@ write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway). Every command runs on the box (`ssh`
 in first).
 
-**A. The box has today's code.** The first line should end `The MLB hit page to Ethan's four renders: his season over his park, every at-bat with its pitches, the park and his thirds`
+**A. The box has today's code.** The first line should end `The hit tracker is drawn before you scroll to it: asked for as the pick opens, kept on the server, asked again when a request drops`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor b23e2791 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 3cd30959 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -892,6 +899,25 @@ five tabs, By game with Last 10 / 20 / 30, a game's final and every at-bat
 (tap "View pitch breakdown"), Where he hits it with All balls / Pull /
 Center / Oppo, and the season-stats menu (fastballs, breaking balls,
 offspeed, each hand).
+
+**AO. The hit tracker is there before you scroll to it** (step 83; one
+read-only command, seconds, then your phone). It asks for a hitter's
+three charts the way a pick page does, twice, and prints how long each
+took, and then the photo his chart carries:
+```
+B="http://127.0.0.1:8000/api/players/chart?sport=mlb&player=Aaron%20Judge"; for k in "kind=spray" "kind=role" "kind=matchup&opp=DET&fam=spray" "kind=spray" "kind=role" "kind=matchup&opp=DET&fam=spray"; do curl -s -o /dev/null -w "$k %{http_code} %{time_total}s %{size_download}B\n" "$B&$k"; done; curl -s "$B&kind=spray" | python3 -c "import json,sys; print('face:', json.load(sys.stdin).get('face'))"
+```
+Paste all seven lines back. Each should read 200. The second three are
+the server's kept answers: a few thousandths of a second each. The first
+three are built: a fraction of a second, the matchup up to a few seconds
+if the box restarted in the last few minutes (its league table is built
+once after each restart, and the hit tracker no longer waits for it).
+The face line should be an `img.mlbstatic.com` address. Then on your
+phone open any MLB hitter's pick, stay at the top for a second, and
+scroll down to the hit tracker: it should already be drawn, with Hits,
+Role and Matchup on the switch. If one ever reads "didn't load", the Try
+again under it asks for it again, and the line it printed is worth
+pasting back.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3340,6 +3366,79 @@ first). Paste back anything that prints an error or looks off.
     pinned AVG and SLG tiles with xBA and xSLG under them; it pins "AVG ·
     xBA ." and "SLG · xSLG ." on the new tiles. New:
     `tests/test_the_mlb_hit_page_follows_the_renders.py`.
+83. **The hit tracker is there before you scroll to it** (2026-10-14,
+    you, with a pick page reading "The hit tracker didn't load. Try
+    again in a moment.": "Also we are running into issues where the hit
+    tracker won't load or takes forever too load. It should be snappy
+    and basically be loaded already when you scroll down too go view
+    it"). AO checks it. WHAT WAS SLOW, measured on a full-size season
+    here: the hit tracker itself builds in about 40 ms, and every
+    request for it then stopped to ask MLB's servers for the league's
+    rosters to find his photo — 357 of a 413 ms request where they
+    cannot be reached, and on the box, whenever the six-hour roster
+    file had aged out, one request (or thirty-one while MLB ignores the
+    one-call version), each allowed thirty seconds, inside the reader's
+    request and once for every chart the page asked for at once. A name
+    the book prints without its accent read every plate appearance on
+    file (350 ms, every time). The page asked for nothing until you had
+    scrolled within a screen of the chart, then waited for his role
+    chart and tonight's matchup (a cold matchup is a league table, 1.4
+    seconds) before drawing the one that leads, and loaded the
+    baseball drawing only after the data. And one dropped request — a
+    deploy restarting the box, a phone's connection — left "didn't
+    load" for the rest of the visit, with no way to ask again. THE
+    SERVER: a built chart is kept fifteen minutes as the bytes the
+    endpoint sends (`engine/charts.answer_json`, per database file,
+    32 MB at most, the oldest read out first); however many readers
+    ask for one chart at once, one request builds it and the rest wait
+    for that build; "still being filled" and "nothing on file" are
+    never kept. His photo is read off the rosters the box last saved,
+    whatever their age, and never asked for mid-request
+    (`mlbstats.cached_active_rosters`, used by `rosters.face_map`); the
+    board build still refreshes those files every sweep. A baseball
+    chart carries his photo off his own MLB id. The folded names are
+    read once in ten minutes off their own index (25 ms) instead of
+    every plate appearance on every request; the matchup's league
+    tables are built once however many ask. THE PAGE
+    (`web/js/carrychart.js`): the first chart on a page — a pick page's
+    — is asked for the moment the page is drawn, its drawing fetched
+    beside its data; one further down a list (a search's players) as it
+    comes within two screens. His own chart is drawn the moment it
+    arrives, with places kept on the switch for Role and Matchup, which
+    join it as they land without the chart being drawn again. A request
+    that drops, a 5xx or one with no answer in 25 seconds is asked again
+    0.8, 2.5 and 5 seconds later (Caddy already holds a request for six
+    seconds while the app restarts); a refusal is not. Two asks for one
+    chart at once are one request. One that still fails says "didn't
+    load" with a Try again button; a chart whose drawing did not arrive
+    says so rather than drawing as another chart. While it loads, its
+    shape shimmers where it will sit, so nothing under it jumps.
+    MEASURED on the real site against a full season here, the chart
+    3,000 px down the page, nothing scrolled, a phone-speed connection
+    (1.6 Mbps, 150 ms) and the server just restarted: before, nothing
+    was asked for until the reader scrolled down to it, and it then took
+    3.4 seconds to appear; now it is asked for as the page opens and is
+    already drawn when the reader gets there (10 ms after scrolling to
+    it). On the server: the hit tracker builds in 40 to 120 ms and is
+    sent from its kept copy in about 2 ms; Role 150 ms; Matchup 1.4
+    seconds once after each restart (its league table), a millisecond
+    after that. Checked: the new test's browser walk (the chart drawn before his
+    role arrives with nothing scrolled, Role and Matchup joining the
+    switch without a redraw, a dropped matchup asked again, a slot
+    further down left alone until it nears the screen, and Try again
+    after nothing came back), the hit page's browser walk, the chart
+    tests and the full suite. App 494.475 of 495 KB and first visit
+    610.983 of 611, unchanged (app.js untouched; the chart module loads
+    on first use). Pins changed, told to you, nothing loosened:
+    `tests/test_the_pick_page_draws_his_chart.py` pinned the charts
+    asked for "as it nears the screen" (`rootMargin: "800px 0px"`, and
+    no other way in); it pins the first chart on a page asked for at
+    once and a slot further down at two screens (`1600px`), and the new
+    shape of the ask that sends his charts together. `tests/test_statlogs.py`
+    swapped in a stand-in for the face lookup that took two arguments;
+    the stand-ins take the new `offline` one, and the first now also
+    fails unless the page's lookup asks for the cached rosters only. New:
+    `tests/test_the_hit_tracker_is_there_when_you_get_to_it.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

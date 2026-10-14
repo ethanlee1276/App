@@ -41,6 +41,7 @@ printed beside his name as if it were the league's).
 from __future__ import annotations
 
 import math
+import time
 
 from ..carries import _fold
 
@@ -316,10 +317,50 @@ def _resolve(conn, player: str, role: str) -> tuple:
     if not want:
         return None, ""
     hits = {}
-    for pid, name in conn.execute(f"SELECT DISTINCT {col}_id, {col} FROM mlb_pa"):
-        if _fold(name) == want:
+    for stored in _folded(conn, col).get(want) or ():
+        for pid, name in conn.execute(f"SELECT DISTINCT {col}_id, {col} FROM mlb_pa WHERE {col}=?", (stored,)):
             hits[pid] = name
     return next(iter(hits.items())) if len(hits) == 1 else (None, "")
+
+
+#: Every stored spelling, folded, per database file and role.
+_FOLDED: dict = {}
+FOLDED_TTL = 10 * 60
+
+
+def _folded(conn, col: str) -> dict:
+    """``{folded name: [stored spellings]}`` for every batter or pitcher on
+    file, kept ten minutes per database file (never for one in memory).
+
+    THE SPELLING THE BOARD USES IS NOT ALWAYS THE ONE STORED: "Julio
+    Rodriguez" asks for "Julio Rodríguez", and every name a book prints
+    without its accent fell through to a read of every plate appearance on
+    file — 350 ms on a full season's table, on every request for his chart
+    (2026-10-14, Ethan: "the hit tracker won't load or takes forever too
+    load"). Now the names alone, off their own index (25 ms), once in ten
+    minutes; a man first stored inside them waits that long to be found by
+    another spelling, as he would for the night's ingest anyway."""
+    try:
+        path = str(conn.execute("PRAGMA database_list").fetchone()[2] or "")
+    except Exception:                                              # noqa: BLE001
+        path = ""
+    hit = _FOLDED.get((path, col)) if path else None
+    if hit and time.time() - hit[0] < FOLDED_TTL:
+        return hit[1]
+    out: dict = {}
+    for (name,) in conn.execute(f"SELECT DISTINCT {col} FROM mlb_pa"):
+        out.setdefault(_fold(name), []).append(name)
+    if path:
+        _FOLDED[(path, col)] = (time.time(), out)
+    return out
+
+
+def _face(pid) -> str:
+    """His photo off his own person id: the chart knows exactly who he is,
+    and a page that has no face for his spelling keeps this one
+    (engine/charts.answer)."""
+    from .sources.mlbstats import headshot_url
+    return headshot_url(pid)
 
 
 def spray_angle(x, y) -> float | None:
@@ -478,6 +519,7 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     from .xstatsfit import measured
     m = measured() if model else None
     return {"player": name, "sport": "mlb", "seasons": seasons, "season": pick, "team": latest.get("team", ""),
+            "face": _face(pid),
             "side": side, "games": out_games, "season_line": _hline(every), "by_type": by_type,
             "by_dir": by_dir, "by_hand": by_hand, "logged": _logged(conn, name, pick),
             # The sides he batted from: a switch-hitter pulls to both fields.
@@ -577,6 +619,7 @@ def pitches_chart(conn, player: str, season: int | None = None) -> dict:
             velo.append({"date": g["date"], "opp": g["opp"], "avg": round(sum(vs) / len(vs), 1), "n": len(vs)})
     latest = games[0] if games else {}
     return {"player": name, "sport": "mlb", "seasons": seasons, "season": pick, "team": latest.get("team", ""),
+            "face": _face(pid),
             "hand": hand, "games": games, "season_line": _pline(every, all_pas), "mix": mix,
             "zones": zones, "velo": velo, "velo_type": main}
 

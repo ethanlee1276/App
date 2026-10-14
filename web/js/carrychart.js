@@ -1707,9 +1707,38 @@
       ? `&opp=${encodeURIComponent(S.opp || "")}&fam=${encodeURIComponent(S.fam || "")}` : ""}`;
     const hit = cached && CACHE.get(q);
     if (hit && Date.now() - hit.t < CACHE_MS) return Promise.resolve(hit.data);
-    return fetch(q).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((data) => {
+    if (cached && FLIGHT.has(q)) return FLIGHT.get(q);
+    const p = get(q, 0).then((data) => {
+      FLIGHT.delete(q);
       if (data && !data.filling) CACHE.set(q, { t: Date.now(), data });
       return data;
+    });
+    if (cached) FLIGHT.set(q, p);
+    return p;
+  }
+  /* ASKED AGAIN WHEN THE WIRE FAILS, NOT WHEN THE SERVER ANSWERS (Ethan,
+     2026-10-14, a pick page reading "The hit tracker didn't load. Try
+     again in a moment."). A deploy restarts the server in a few seconds
+     and a phone drops a request now and then; either one used to leave
+     the chart dead for the rest of the visit. A refusal (4xx) is an
+     answer and is drawn as one; a dropped request, a 5xx or one with no
+     reply in ASK_MS is tried again RETRY_MS later, three times, before
+     the chart says it did not load — with a button that asks again. */
+  const RETRY_MS = [800, 2500, 5000];
+  const ASK_MS = 25000;
+  //: Requests on their way, by address: a chart asked for twice at once is asked once.
+  const FLIGHT = new Map();
+  function get(q, n) {
+    const ctl = typeof AbortController === "function" ? new AbortController() : null;
+    const t = ctl ? setTimeout(() => ctl.abort(), ASK_MS) : 0;
+    return fetch(q, ctl ? { signal: ctl.signal } : {}).then((r) => {
+      clearTimeout(t);
+      if (r.ok) return r.json();
+      if (r.status < 500 && r.status !== 408 && r.status !== 429) return null;
+      throw new Error(`HTTP ${r.status}`);
+    }).catch(() => {
+      clearTimeout(t);
+      return n < RETRY_MS.length ? new Promise((ok) => setTimeout(ok, RETRY_MS[n])).then(() => get(q, n + 1)) : null;
     });
   }
   //: How much of his season a chart holds: carries, or passes thrown to him
@@ -1726,26 +1755,31 @@
   function load(c, season) {
     use(c);
     const seq = ++c.seq;
+    c.last = season;
     ask(S.kind, S.sport, S.player, season, !!c.cand).then((data) => land(c, seq, data));
   }
   function land(c, seq, data) {
     if (seq !== c.seq || c.root._cc !== c) return;
     use(c);
-    if (data === null) {
-      const box = c.root.querySelector(".cc-body");
-      if (box) box.innerHTML = `<div class="cc-empty">The ${esc(kindOf(S.kind, S.sport).title.toLowerCase())} didn’t load. Try again in a moment.</div>`;
-      return;
-    }
+    if (data === null) return fail(c);
     S.data = data;
     S.gi = 0;
     S.sel = -1;
     if (c.counts && vol(S.kind, data)) c.counts[S.kind] = vol(S.kind, data);
     if (!PLUG[S.kind] || DRAW[S.kind]) return render();
-    need(S.kind).then(() => {
+    need(S.kind).then((ok) => {
       if (seq !== c.seq || c.root._cc !== c) return;
       use(c);
+      // Its drawing did not arrive: say so, never draw it as another chart.
+      if (!ok && !DRAW[S.kind]) return fail(c);
       render();
     });
+  }
+  //: A chart that could not be had after its retries, and the way to ask again.
+  function fail(c) {
+    const box = c.root.querySelector(".cc-body");
+    if (box) box.innerHTML = `${kindBar()}<div class="cc-empty cc-fail">The ${esc(kindOf(S.kind, S.sport).title.toLowerCase())} didn’t load.
+      <button type="button" class="btn cc-retry" data-retry>Try again</button></div>`;
   }
   /* HIS OWN CHART FIRST, MEASURED ON HIS OWN SEASON (Ethan, 2026-10-13,
      the same day: "we are showing only receptions for RBs and only
@@ -1760,9 +1794,15 @@
      bet's own chart says so. */
   function probe(c) {
     use(c);
-    const seq = ++c.seq;
-    Promise.all(c.cand.map((k) => ask(k, S.sport, S.player, null, true))).then((ds) => {
-      if (seq !== c.seq || c.root._cc !== c) return;
+    const seq = ++c.seq, run = c.run = (c.run || 0) + 1;
+    // Each chart's drawing is fetched beside its data, not after it.
+    c.cand.forEach((k) => need(k));
+    const ds = c.cand.map(() => undefined), wait = LATE[MEM.get(c.key)];
+    let drawn = false;
+    /* Which of his charts leads, and which the switch offers, from what
+       has come in; `pend` keeps a place on the switch for his role and
+       tonight's matchup while they are still on their way. */
+    const choose = (pend) => {
       // His role (games played) never leads a chart of what he did in them.
       const got = c.cand.map((k, i) => ({ k, d: ds[i], v: vol(k, ds[i]) })).filter((x) => x.v > 0)
         .sort((a, b) => (LATE[a.k] || 0) - (LATE[b.k] || 0) || b.v - a.v);
@@ -1772,18 +1812,56 @@
       c.kinds = shown.length ? shown.map((x) => x.k) : [c.cand[0]];
       c.counts = {};
       shown.forEach((x) => { c.counts[x.k] = x.v; });
+      c.pend = pend ? c.cand.filter((k, i) => LATE[k] && ds[i] === undefined) : [];
       // His team, from his own charts: tonight's matchup does not name it,
       // and its hero sets his colours beside the opponent's.
       const own = got.find((x) => x.d && x.d.team);
       c.team = own ? own.d.team : "";
+    };
+    /* HIS OWN CHART DRAWS THE MOMENT IT IS IN (2026-10-14). His role and
+       tonight's matchup never lead (LATE), so the page no longer waits on
+       the slower two to draw the one that does: they join the switch as
+       they land. A reader who switched to one of them on this pick earlier
+       in the visit waits for it, as before. */
+    const step = () => {
+      if (run !== c.run || c.root._cc !== c) return;
+      const all = ds.every((x) => x !== undefined);
+      if (drawn) {
+        if (!all) return;
+        const keep = c.counts && c.counts[c.S.kind];
+        choose(false);
+        if (keep && c.kinds.includes(c.S.kind)) c.counts[c.S.kind] = keep;
+        return rebar(c);
+      }
+      const own = c.cand.every((k, i) => LATE[k] || ds[i] !== undefined);
+      if (!all && !(own && !wait && c.cand.some((k, i) => !LATE[k] && vol(k, ds[i]) > 0))) return;
+      drawn = true;
+      choose(!all);
+      // Nothing came back at all: Try again asks for every one of them again.
+      if (ds.every((x) => x === null)) c.kinds = null;
       const want = MEM.get(c.key);
-      const kind = c.kinds.includes(want) ? want : c.kinds[0];
+      const kind = c.kinds && c.kinds.includes(want) ? want : c.kinds ? c.kinds[0] : c.cand[0];
       c.S = fresh(c.S.sport, kind, c.S.player, c.S);
       use(c);
       const sec = c.root.querySelector(".cc-sec");
       if (sec) sec.innerHTML = secHTML(c);
       land(c, seq, ds[c.cand.indexOf(kind)]);
-    });
+    };
+    return Promise.all(c.cand.map((k, i) => ask(k, S.sport, S.player, null, true).then((d) => { ds[i] = d; step(); })));
+  }
+  /* The switch redrawn where it stands, once the charts still on their
+     way have landed: the chart under it is not drawn again, so the game
+     the reader picked and the folds they opened stay as they were. */
+  function rebar(c) {
+    if (c.root._cc !== c) return;
+    use(c);
+    const box = c.root.querySelector(".cc-body"), at = box && box.querySelector(".cc-kinds");
+    if (!at) return;
+    const html = kindBar();
+    if (html) { at.outerHTML = html; return; }
+    const bar = at.parentElement;
+    at.remove();
+    if (bar && bar.classList.contains("cc-bar") && !bar.children.length) bar.remove();
   }
 
   function close() {
@@ -1813,6 +1891,8 @@
       if (!c.inline && (e.target === ov || hit(e, ".cc-x"))) return close();
       const k = hit(e, "[data-ck]");
       if (k) return pick(c, k.dataset.ck);
+      // A chart that did not load asks again: all of his, or the one that failed.
+      if (hit(e, "[data-retry]")) return c.cand && !c.kinds ? probe(c) : load(c, c.last == null ? null : c.last);
       const s = hit(e, "[data-season]");
       if (s) return load(c, +s.dataset.season);
       const v = hit(e, "[data-view]");
@@ -1985,10 +2065,12 @@
   //: The charts whose zones the matchup view reads tonight's opponent on.
   const MATCHED = new Set(["carries", "routes", "passes", "shots", "shotmap", "saves", "spray", "pitches"]);
   function kindBar() {
-    if (!C || !C.kinds || C.kinds.length < 2) return "";
+    const pend = (C && C.pend) || [];
+    if (!C || !C.kinds || C.kinds.length + pend.length < 2) return "";
     const n = C.counts || {};
     return `<div class="cc-kinds" role="group" aria-label="Which chart">${C.kinds.map((k) =>
-      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc(kindOf(k, S.sport).chip)}${k === "matchup" ? `<small>vs ${esc(S.opp || "")}</small>` : n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}</div>`;
+      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc(kindOf(k, S.sport).chip)}${k === "matchup" ? `<small>vs ${esc(S.opp || "")}</small>` : n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}${pend.map((k) =>
+      `<span class="cc-chip cc-pend" aria-hidden="true">${esc(kindOf(k, S.sport).chip)}</span>`).join("")}</div>`;
   }
   //: What a chart shows, in a line: the pick page's section heading, the overlay's line under his name.
   function descOf(kind, sport) {
@@ -2003,7 +2085,11 @@
     const R = c.S.kind === "routes", K = kindOf(c.S.kind, c.S.sport);
     return `${esc(K.sec ? K.title : R ? "Route chart" : "Carry chart")} <span class="sub">— ${esc(descOf(c.S.kind, c.S.sport))}.</span>`;
   }
-  const waitHTML = () => `<div class="cc-empty">Loading ${esc(S.player)}’s ${esc(kindOf(S.kind, S.sport).noun)}…</div>`;
+  /* While his chart is on its way: the line that says whose, over its
+     shape in the site's shimmer, so the page under it does not jump when
+     it lands. */
+  const waitHTML = () => `<div class="cc-wait" role="status"><div class="cc-empty">Loading ${esc(S.player)}’s ${esc(kindOf(S.kind, S.sport).noun)}…</div>
+    <i class="cc-sk cc-sk-hero"></i><span class="cc-sk-row"><i class="cc-sk"></i><i class="cc-sk"></i><i class="cc-sk"></i></span><i class="cc-sk cc-sk-fig"></i></div>`;
   //: A chart's state; a switch keeps the view, the face and tonight's opponent.
   const fresh = (sport, kind, player, from) => ({ sport, kind, player, data: null, view: from ? from.view : "game", gi: 0,
                                                  sel: -1, hint: from ? from.hint : "", opp: from ? from.opp : "",
@@ -2023,9 +2109,20 @@
   /* The slot names the player, the league, the market and his position.
      Drawn once per slot: a page redrawn around it hands the same element
      back (app.js keeps it), so the game he picked and the folds he opened
-     survive the minute's refresh. The data is asked for as the chart
-     comes within a screen or so of view — a pick page read only at its
-     top costs the server nothing. */
+     survive the minute's refresh.
+
+     ASKED FOR AS THE PAGE OPENS (Ethan, 2026-10-14: "It should be snappy
+     and basically be loaded already when you scroll down too go view
+     it"). It used to be asked for only once the reader had scrolled to
+     within a screen of it, so a reader who scrolled down to it met it
+     loading. The first chart on a page — a pick page's only one, a
+     search's top player's — is now asked for the moment the page is
+     drawn, its drawing fetched beside its data, and it is drawn before
+     the reader gets there; a slot further down a list of players is
+     still asked for as it comes within two screens, so a long list does
+     not ask for every player's at once. The server keeps a built chart
+     (engine/charts.answer_json), so a page opened again costs it
+     nothing. */
   function mount(el) {
     if (!el || !el.dataset || el.dataset.on) return;
     el.dataset.on = "1";
@@ -2042,13 +2139,14 @@
     el.innerHTML = `<div class="section-title minor cc-sec">${secHTML(c)}</div>
       <div class="card cc-inline"><div class="cc-body">${kindBar()}${waitHTML()}</div></div>`;
     bind(el);
-    if (typeof IntersectionObserver !== "function") return probe(c);
+    const page = el.closest(".view") || document;
+    if (page.querySelector(".cc-slot") === el || typeof IntersectionObserver !== "function") return probe(c);
     io = io || new IntersectionObserver((es) => es.forEach((e) => {
       if (!e.isIntersecting) return;
       io.unobserve(e.target);
       const k = e.target._cc;
       if (k && k.root === e.target && !k.seq) probe(k);
-    }), { rootMargin: "800px 0px" });
+    }), { rootMargin: "1600px 0px" });
     io.observe(el);
   }
 
@@ -2062,7 +2160,7 @@
                       seg: (Z) => segHTML(kindOf(S.kind, S.sport), Z),
                       tools: (items, flags, filters) => toolsHTML(S.kind, items, flags, filters),
                       stats: statsCard, splits: splitsCard } };
-  window.QBCarry = { open, close, mount, plug, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
+  window.QBCarry = { open, close, mount, plug, _t: { ask, RETRY_MS, proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,
                                          routeTiles, routeTables, routeNote, routeLegend,

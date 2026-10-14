@@ -493,6 +493,25 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-inline .cc-empty { padding: 18px 6px; }
 .cc-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .cc-kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+/* His chart on its way (2026-10-14): whose, over its shape in the site's
+   shimmer (styles.css's --skeleton), so nothing under it jumps when it
+   lands; a chart still coming keeps its place on the switch; one that
+   could not be had says so with a way to ask again. */
+.cc-wait { display: grid; gap: 10px; }
+.cc-wait .cc-empty { padding: 6px 6px 2px; }
+.cc-sk { display: block; border-radius: var(--radius); background: var(--skeleton); background-size: 220% 100%;
+  animation: shimmer 1.3s ease-in-out infinite; }
+.cc-sk-hero { height: 150px; }
+.cc-sk-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cc-sk-row .cc-sk { height: 58px; }
+.cc-sk-fig { height: 300px; }
+.cc-chip.cc-pend { color: var(--text-mute); border-style: dashed; cursor: default; background: var(--skeleton);
+  background-size: 220% 100%; animation: shimmer 1.3s ease-in-out infinite; }
+.cc-chip.cc-pend:hover { border-color: var(--border); }
+.cc-fail { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .cc-sk, .cc-chip.cc-pend { animation: none; }
+}
 /* In the overlay a door opened on "his chart" (the parlay checker), the
    switch sits under the game. */
 .cc-hero + .cc-bar { margin-top: 12px; }

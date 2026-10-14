@@ -3296,15 +3296,14 @@ class Handler(BaseHTTPRequestHandler):
         fam = (q.get("fam") or [""])[0].lower()[:12]
         if not charts.known(kind, sport):
             return self._send(400, b'{"error":"no such chart for that league"}', ".json")
-        out: dict = {}
+        body = b"{}"
         if player and os.path.exists(str(_hdb.DEFAULT_DB)):
-            conn = _hdb.connect(str(_hdb.DEFAULT_DB))
-            try:
-                out = charts.answer(conn, kind, sport, player, int(season) if season.isdigit() else None,
-                                    opp=opp, fam=fam)
-            finally:
-                conn.close()
-        return self._send(200, json.dumps(out).encode(), ".json")
+            # Kept fifteen minutes and built once however many ask
+            # (charts.answer_json, 2026-10-14: "the hit tracker won't load
+            # or takes forever too load").
+            body = charts.answer_json(_hdb.DEFAULT_DB, kind, sport, player,
+                                      int(season) if season.isdigit() else None, opp=opp, fam=fam)
+        return self._send(200, body, ".json")
 
     def _players_fantasy(self, q):
         """The full fantasy dossier — engine/ffprofile.py's page, served.

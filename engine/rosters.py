@@ -624,7 +624,11 @@ def face_map(conn, sport: str, now: float | None = None) -> dict:
     hit = _FACE_MEMO.get(sport)
     if hit and now - hit[0] < _FACE_TTL:
         return hit[1]
-    got = _faces(conn, sport)
+    # OFF THE CACHED ROSTERS, NEVER THE WIRE (2026-10-14): this answers a
+    # page's request — a chart's face, the search — and a lookup that could
+    # stop to ask statsapi for up to thirty-one rosters is what had the pick
+    # page's hit tracker taking forever (`mlbstats.cached_active_rosters`).
+    got = _faces(conn, sport, offline=True)
     # Never cache an empty answer for six hours: a feed that was briefly
     # unreachable would otherwise cost the page its faces until restart.
     if got:
@@ -632,8 +636,11 @@ def face_map(conn, sport: str, now: float | None = None) -> dict:
     return got
 
 
-def _faces(conn, sport: str) -> dict:
+def _faces(conn, sport: str, offline: bool = False) -> dict:
     """``{normalised name: headshot URL}`` for one sport, or ``{}``.
+
+    ``offline`` reads MLB's rosters off the files the last fetch cached,
+    whatever their age, and never asks (`face_map`, which answers pages).
 
     Ethan, 2026-08-13: "we are not showing player headshots or logos on
     the roster page either." The logos were a markup problem; the faces
@@ -666,7 +673,8 @@ def _faces(conn, sport: str) -> dict:
     if sport == "mlb":
         try:
             from .mlb.sources import mlbstats
-            for players in (mlbstats.fetch_active_rosters() or {}).values():
+            feed = mlbstats.cached_active_rosters() if offline else mlbstats.fetch_active_rosters()
+            for players in (feed or {}).values():
                 for p in players or []:
                     url = mlbstats.headshot_url(p.get("person_id"))
                     if url and p.get("name"):

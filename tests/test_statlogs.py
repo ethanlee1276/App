@@ -272,7 +272,9 @@ def test_the_face_map_is_not_rebuilt_per_search_result():
     RO._FACE_MEMO.clear()
     built = []
 
-    def fake_faces(conn, sport):
+    def fake_faces(conn, sport, offline=False):
+        # A page's lookup never goes to the wire (2026-10-14).
+        assert offline, "face_map reads the cached rosters only"
         built.append(sport)
         return {"x": "y"}
 
@@ -293,7 +295,7 @@ def test_an_empty_face_map_is_not_cached_for_six_hours():
     import time
     import engine.rosters as RO
     RO._FACE_MEMO.clear()
-    real, RO._faces = RO._faces, lambda conn, sport: {}
+    real, RO._faces = RO._faces, lambda conn, sport, offline=False: {}
     try:
         now = time.time()
         RO.face_map(None, "mlb", now)

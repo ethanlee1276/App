@@ -747,6 +747,36 @@ def fetch_active_rosters(ttl: int = 21600) -> dict:
     return out
 
 
+def cached_active_rosters() -> dict:
+    """`fetch_active_rosters`' answer off the files it last cached, whatever
+    their age — and never a request.
+
+    FOR A PAGE'S REQUEST PATH. Ethan, 2026-10-14, on the pick page's hit
+    tracker: "the hit tracker won't load or takes forever too load". Every
+    chart's face was looked up through `fetch_active_rosters`, which asks
+    statsapi whenever its six-hour cache has aged out — one request, or
+    thirty-one while the hydrate is being ignored (`_rosters_per_team`),
+    each allowed thirty seconds, inside the reader's request and once for
+    every chart the page asked for at the same moment. Where statsapi is
+    out of reach that was 357 of a hit tracker's 413 ms, on every request.
+
+    The board build refreshes these files every sweep
+    (`rosters.identity_map`), so a page reading them is at most a sweep
+    behind — and a photo is built from a person id that does not change.
+    """
+    data = _read_cached_json(CACHE_DIR / "mlb_active_rosters.json")
+    out = _parse_hydrated((data.get("teams") or []) if isinstance(data, dict) else [])
+    if out:
+        return out
+    for tid, ab in TEAM_ID_ABBR.items():
+        blob = _read_cached_json(CACHE_DIR / f"mlb_roster_{tid}.json")
+        entries = (blob.get("roster") or []) if isinstance(blob, dict) else []
+        players = [p for p in (_roster_entry(e) for e in entries) if p["name"]]
+        if players:
+            out[ab] = players
+    return out
+
+
 def _parse_hydrated(teams: list[dict]) -> dict:
     """Rosters out of the hydrated /teams response, or {} if unhydrated."""
     out: dict[str, list] = {}

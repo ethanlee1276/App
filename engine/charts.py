@@ -18,6 +18,11 @@ has a row yet — the charts being filled is not the same as none for him.
 
 from __future__ import annotations
 
+import json
+import threading
+import time
+from collections import OrderedDict
+
 
 def _carries(conn, sport, player, season):
     from . import carries
@@ -176,3 +181,87 @@ def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
     elif not stored(conn, sport):
         out = {"filling": True}
     return out
+
+
+# --- the answers, kept ------------------------------------------------------------
+#: A built chart is kept this long, as the bytes the endpoint sends.
+ANSWER_TTL = 15 * 60
+#: ...and the kept answers stay under this many bytes, oldest read out first.
+ANSWER_CAP = 32 * 1024 * 1024
+_KEPT: "OrderedDict[tuple, tuple]" = OrderedDict()
+_BYTES = [0]
+_LOCK = threading.Lock()
+_BUILDING: dict = {}
+
+
+def answer_json(db_path, kind: str, sport: str, player: str, season: int | None = None,
+                opp: str = "", fam: str = "") -> bytes:
+    """`answer`, encoded — the one built in the last fifteen minutes when
+    there is one, and one build however many ask for it at once.
+
+    Ethan, 2026-10-14, with a pick page that read "The hit tracker didn't
+    load. Try again in a moment.": "It should be snappy and basically be
+    loaded already when you scroll down too go view it." A chart changes
+    when a game is ingested, a few times a day; it was rebuilt from the
+    database on every ask — every reader, every pick page opened again,
+    and three at a time from one page (his chart, his role and tonight's
+    matchup). Kept, a second reader's chart is a dictionary lookup.
+
+    One build at a time per answer: a reader whose chart is being built
+    by another request waits for that build rather than starting a second
+    one beside it. What is kept is only a chart — never "still being
+    filled" (the league's rows are arriving) and never ``{}`` (nothing on
+    file for him yet), both of which can change within the minute. The
+    database is opened only when a build is needed."""
+    told = kind in TOLD_OPP
+    key = (str(db_path), kind, sport, player, season, opp if told else "", fam if told else "")
+    mine = False
+    for _ in range(2):
+        with _LOCK:
+            hit = _KEPT.get(key)
+            if hit and time.time() < hit[0]:
+                _KEPT.move_to_end(key)
+                return hit[1]
+            ev = _BUILDING.get(key)
+            if ev is None:
+                ev = _BUILDING[key] = threading.Event()
+                mine = True
+                break
+        ev.wait(60)
+    try:
+        from . import db as _db
+        conn = _db.connect(str(db_path))
+        try:
+            out = answer(conn, kind, sport, player, season, opp=opp, fam=fam)
+        finally:
+            conn.close()
+        body = json.dumps(out).encode()
+        if out and not out.get("filling"):
+            _keep(key, body)
+        return body
+    finally:
+        if mine:
+            with _LOCK:
+                _BUILDING.pop(key, None)
+            ev.set()
+
+
+def _keep(key: tuple, body: bytes) -> None:
+    with _LOCK:
+        old = _KEPT.pop(key, None)
+        if old:
+            _BYTES[0] -= len(old[1])
+        if len(body) > ANSWER_CAP // 8:
+            return                       # one answer never crowds out the rest
+        _KEPT[key] = (time.time() + ANSWER_TTL, body)
+        _BYTES[0] += len(body)
+        while _BYTES[0] > ANSWER_CAP and _KEPT:
+            _, (_, b) = _KEPT.popitem(last=False)
+            _BYTES[0] -= len(b)
+
+
+def forget() -> None:
+    """Every kept answer dropped (a test's fresh database, a rebuilt table)."""
+    with _LOCK:
+        _KEPT.clear()
+        _BYTES[0] = 0
