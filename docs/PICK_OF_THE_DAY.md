@@ -735,6 +735,24 @@ does: the record carries a book for every league whose build names one
 (`ledger.POTD_LEAGUES`), empty or not, and the page draws the section
 only for those. The fight card is its own page with its own book.
 
+### 3l. A stale price is never the day's pick
+
+Found reviewing the game lines the same day, before the first basketball
+or hockey pick could be recorded (a recorded pick is never taken back).
+The odds pull dates every game price: past `oddsapi.MAX_GAME_PRICE_AGE`
+(six hours) a game is still shown, marked `price_stale`, and never
+recommended, and the NFL pipeline and the college build keep that on
+their cards. The selector never asked, in any league, and the game lines
+read the prices and not the mark, so a cached payload up to two days old
+could have named the day's pick and put it on the record.
+
+`disqualify` now refuses a price past the bar by either sign, its
+`price_stale` mark or its `price_age_s` read by the odds pull's own rule
+(`potd.STALE_PRICE`, "the price is older than the freshness bar"). The
+game lines carry both, the Most Likely game rows already carried the age,
+and a row with no age is a price the build just fetched. The game lines
+also date a row by the game's own date where the slate game has one.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against

@@ -577,7 +577,8 @@ def test_every_hard_reason_is_one_the_module_can_actually_give():
                    implied_prob=None, prob_source=None),
               _row(book="proxy"), _row(book="Pinnacle"),
               _row(odds="x"), _row(odds=-400),
-              _row(injury_status="out"), _row(live=True)):
+              _row(injury_status="out"), _row(live=True),
+              _row(price_age_s=7 * 3600)):
         produced.add(potd.disqualify(r))
     assert produced == set(potd.HARD_REASONS), produced ^ set(potd.HARD_REASONS)
 

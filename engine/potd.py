@@ -372,6 +372,14 @@ STAKE_UNITS = 1.0
 #: slate was open", the answer that loses the day's pick.
 STARTED = "the game has already started"
 
+#: A PRICE PAST THE FRESHNESS BAR IS SHOWN, NEVER RECOMMENDED — the odds
+#: pull's rule (`oddsapi.MAX_GAME_PRICE_AGE`, six hours; a payload between
+#: that and the show ceiling is marked `price_stale`), and this is the
+#: strongest recommendation on the site. The selector never asked
+#: (review, 2026-10-14): a game row priced off a cached payload up to two
+#: days old could have been named the day's pick.
+STALE_PRICE = "the price is older than the freshness bar"
+
 HARD_REASONS = (
     "no fair probability to price against",
     "no real market price",
@@ -379,7 +387,24 @@ HARD_REASONS = (
     "the payout is outside the even-money band",
     "the player is carrying an injury designation",
     STARTED,
+    STALE_PRICE,
 )
+
+
+def _price_is_stale(row: dict) -> bool:
+    """Is this row's price past the freshness bar? Its own mark, or its
+    age read by the same rule the odds pull marks with. No age is a price
+    the build just fetched, as `oddsapi.price_is_current` reads it."""
+    if row.get("price_stale"):
+        return True
+    age = row.get("price_age_s")
+    if age is None:
+        return False
+    from .sources.oddsapi import price_is_current
+    try:
+        return not price_is_current(float(age))
+    except (TypeError, ValueError):
+        return False
 
 
 def implied(odds) -> float | None:
@@ -722,6 +747,8 @@ def disqualify(row: dict, now=None, today=None) -> str:
     from .odds import is_sharp_book
     if is_sharp_book(book):
         return "no real market price"
+    if _price_is_stale(row):
+        return STALE_PRICE
     odds = row.get("odds")
     if implied(odds) is None:
         return "price a book could not have posted"
@@ -1515,6 +1542,15 @@ def game_lines(games, date: str, board_games=None) -> list:
 
     ``board_games`` is the board's own games list, whose `live` block is
     where a game's state lives once the build has read the scoreboard.
+
+    THE PRICE'S AGE RIDES ALONG (review, 2026-10-14). The odds pull marks a
+    game priced off a payload past its freshness bar `price_stale` — shown,
+    never recommended — and the first cut of this read the prices and not
+    the mark, so the day's pick could have been named at a number up to two
+    days old. The rows carry `price_age_s` and `price_stale`, and
+    `disqualify` refuses a stale one. And THE GAME'S OWN DATE, where the
+    slate game has one: the build's date is right for a one-day slate and
+    proves nothing about a game from another day.
     """
     from .odds import devig_two_way
     states = {}
@@ -1530,11 +1566,14 @@ def game_lines(games, date: str, board_games=None) -> list:
         own = _field(g, "live")
         state = states.get((home, away)) or (
             own.get("state") if isinstance(own, dict) else getattr(own, "state", "")) or ""
+        played = str(_field(g, "date") or "")[:10] or day
         base = {"kind": "game", "home": home, "away": away, "matchup": f"{away} @ {home}",
-                "game_date": day, "date": day, "kickoff": _field(g, "kickoff") or "",
+                "game_date": played, "date": played, "kickoff": _field(g, "kickoff") or "",
                 "live": state == "live", "started": state in ("live", "final"),
                 "sharp_anchored": True, "prob_source": "sharp", "model_prob": None,
                 "implied_prob": None, "bettable": True, "injury_status": "",
+                "price_age_s": _field(g, "price_age_s"),
+                "price_stale": bool(_field(g, "price_stale", False)),
                 "from_game_lines": True}
 
         def side(market, label, player, team, opp, side_, line, odds, book, fair):
