@@ -166,7 +166,9 @@ Bets now settles off the box score with the Live tab closed: the box writes
 the result itself, by the Live tab's own rules (step 91; AU). A saved
 slip down to its last leg now rings the Alerts bell too: it leads the
 Alerts page and counts on its badge until it settles (step 92; nothing to
-run). The
+run). The NFL and college matchup check now counts the model's own Matchup
+step when the matchup scan has no lean on a player, as baseball's has all
+along, so those picks can reach Top (step 93; nothing to run). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -202,13 +204,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A saved slip down to its last leg rings the Alerts bell too: it leads the Alerts page and counts on the badge until it settles`
+**A. The box has today's code.** The first line should end `Football's matchup check counts the model's own Matchup step when the scan has no lean, as baseball's does`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor c803cf0c HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 75c867c7 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -301,8 +303,9 @@ struck through here as it is built.
   today (step 38b).
 * **Quarterback carries on the board itself?** The market gets measured
   first, as the other five were (step 39b).
-* **The football matchup check.** Should the model's own matchup step
-  count when the scan has no lean on him (step 39b)?
+* ~~**The football matchup check.** Should the model's own matchup step
+  count when the scan has no lean on him (step 39b)?~~ **Answered
+  2026-10-14: yes** ("do 1-11"). Built: step 93.
 * **College in the off-board read's lineup and usage steps** (step 43).
 * **A fresh odds pull of a slip's own markets** when our price is old.
   A 4-leg ticket over two games costs about 3–4 credits, from the same
@@ -3999,6 +4002,35 @@ first). Paste back anything that prints an error or looks off.
     row, a settled or deleted slip leaves, the wall, one member's bell
     only, an old alert with no leg, the old table gaining the column, the
     page's own code reading the row, the runbook).
+93. **The football matchup check counts the model's own Matchup step**
+    (2026-10-14, you: "do 1-11", to step 39b's call). Nothing to run;
+    the next NFL and college builds use it. BEFORE: on the one Most
+    Likely board only the matchup scan's lean on a player counted, so a
+    pick the scan reads nothing on (a quarterback's runs, most backups and
+    secondary roles) could never pass the matchup check and topped out at
+    Strong, even when the model had read the defence. NOW football reads
+    it the way baseball always has: the scan's lean decides where it has
+    one; where it has none, the projection's own Matchup step — the one
+    the pick page draws in the walk from base to final — backs the pick
+    when it moved our number 3% or more toward its side, is against it
+    3% or more the other way, and says nothing in between. A market the
+    defence never moves has no step and says so: a quarterback's carries
+    show the run defence and keep it out of the number, so they still top
+    out at Strong. Touchdowns read their touchdown matchup as before. The
+    parlay checker's read asks the same question the same way. The Most
+    Likely page's explanation now says the football version in football
+    (it had only baseball's words for this rule): app.js 494.489 of 495
+    KB and the first visit 610.998 of 611, 11 bytes more. More picks can
+    be Top from now on; the Record page's split by tier keeps each pick's
+    tier as it was posted. Two pins changed, told to you:
+    `tests/test_one_most_likely_board.py`'s
+    `test_every_sport_gets_the_board_with_its_own_matchup_read` pinned
+    every sport's source and now has NFL and college at "scan+model";
+    `tests/test_an_off_board_leg_gets_our_read.py`'s
+    `test_the_matchup_check_reads_the_scans_lean_on_him` said a leg with
+    no lean could not be called, and now holds the model's step to it (for
+    the over, for the under, and too small to call). New:
+    `tests/test_football_matchup_counts_the_models_own_step.py` (8 checks).
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

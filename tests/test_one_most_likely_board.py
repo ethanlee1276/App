@@ -285,13 +285,14 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     """Ethan, 2026-09-26: "we need to make sure that every other sport that
     has the Qellys' top picks is getting the same remodel". The board is
     built on every sport's build; what the matchup check reads is the
-    sport's own — the scan in football and hockey, the scan or the
-    projection's Matchup step in baseball, and in basketball the
+    sport's own — the scan in hockey, the scan or the projection's
+    Matchup step in baseball and (Ethan, 2026-10-14, "do 1-11") football,
+    and in basketball the
     projection's Matchup step: what tonight's defence allows at the share
     measured to reach one player (engine/hoopsdvp; 2026-10-14, it said
     "no read yet" while the projection read the defence). A sport with no
     read says so, and its picks top out at Strong."""
-    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "scan+model", "nhl": "scan",
+    assert B.MATCHUP_SOURCE == {"nfl": "scan+model", "cfb": "scan+model", "mlb": "scan+model", "nhl": "scan",
                                 "nba": "model", "wnba": "model"}
     def rec(player, market, mult, why="opp starter K% +12%"):
         return {"player": player, "market": market,

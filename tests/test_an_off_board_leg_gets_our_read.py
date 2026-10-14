@@ -293,7 +293,13 @@ def test_the_matchup_check_reads_the_scans_lean_on_him():
     c2 = SR.checks(dict(row, side="under"), board, "nfl", 0.62)
     assert c2["checks"]["matchup"] is False, "the lean says over"
     nolean = SR.checks(row, _nfl_board(), "nfl", 0.62)
-    assert nolean["checks"]["matchup"] is None, "no scan read: the board's own rule, cannot say"
+    # No scan read: the board's own rule now reads the projection's own
+    # Matchup step (Ethan, 2026-10-14, "do 1-11"), here -6% for this game:
+    # against the over, with the under, and a step too small says nothing.
+    assert nolean["checks"]["matchup"] is False and "matchup moved our number -6%" in nolean["notes"]["matchup"]
+    assert SR.checks(dict(row, side="under"), _nfl_board(), "nfl", 0.62)["checks"]["matchup"] is True
+    flat = dict(row, chain={"steps": [{"key": "matchup", "mult": 1.01}]})
+    assert SR.checks(flat, _nfl_board(), "nfl", 0.62)["checks"]["matchup"] is None, "not enough to call"
     rec = {("rush_yds", "over", 0.60): {"n": 40, "hits": 30, "claimed": 24.8}}
     SR._record = lambda league: rec
     try:

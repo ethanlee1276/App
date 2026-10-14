@@ -80,7 +80,19 @@ RECORD_MISS = 0.08
 #: one the matchup backs, in every sport:
 #:   nfl, cfb   the game scan's lean on this player and market, and for a
 #:              scorer his touchdown matchup of 8 (college's defence ranks
-#:              read as among 32 — tdscenarios.rank32);
+#:              read as among 32 — tdscenarios.rank32); where the scan has
+#:              no lean on him, the projection's own Matchup step (the
+#:              measured defence-vs-position transfer, engine/defensevs),
+#:              when it moved the number at least MODEL_MATCHUP_STEP
+#:              toward this side — Ethan, 2026-10-14 ("do 1-11": the
+#:              football matchup check should count the model's own
+#:              matchup step when the scan has no lean). Until then a
+#:              quarterback's runs and most backup roles, which the scan
+#:              reads nothing on, topped out at Strong while the model had
+#:              read the defence. A lean, where the scan has one, still
+#:              decides; a market whose number the defence never moves (a
+#:              quarterback's carries: defensevs shows it and keeps it out)
+#:              has no step to count, and says so;
 #:   mlb        the MLB scan's read (engine/mlb/scan — platoon split, the
 #:              starter's slugging allowed by hand, expected stats, park,
 #:              the opponent's strikeout rate…); where it has none, the
@@ -93,7 +105,7 @@ RECORD_MISS = 0.08
 #:              — published on the row's chain since 2026-10-14; until then
 #:              this check said "no matchup read for this sport yet" while
 #:              the projection read the defence.
-MATCHUP_SOURCE = {"nfl": "scan", "cfb": "scan", "mlb": "scan+model",
+MATCHUP_SOURCE = {"nfl": "scan+model", "cfb": "scan+model", "mlb": "scan+model",
                   # Hockey's read (engine/nhl/scan, 2026-10-03): the opposing
                   # starter, shots allowed, expected goals, rest, ice time.
                   "nhl": "scan", "nba": "model", "wnba": "model"}

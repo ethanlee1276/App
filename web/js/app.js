@@ -10850,7 +10850,7 @@ function obCardHTML(r, rank, opts = {}) {
 function obMatchupWords() {
   const src = ((state.data || {}).likely_board || {}).matchup_source;
   if (src === "model") return "our model’s matchup step — what tonight’s defence allows, at its measured weight — moved the number toward this side";
-  if (src === "scan+model") return "the matchup scan backs this side — his split against this hand, what the starter allows to his side, the park and the wind — or, where it has no read, our model’s matchup step moved the number toward it";
+  if (src === "scan+model") return `${state.sport === "mlb" ? "the matchup scan backs this side — his split against this hand, what the starter allows to his side, the park and the wind —" : "the offence-against-defence read backs this side"} or, where it has no read, our model’s matchup step moved the number toward it`;
   if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";
   return "the offence-against-defence read backs this side";
 }
