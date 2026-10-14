@@ -53,6 +53,7 @@ at once.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import json
@@ -719,6 +720,34 @@ def get_sections(conn, user_id: int) -> dict:
         except ValueError:
             continue
     return out
+
+
+@contextlib.contextmanager
+def one_writer(conn):
+    """A read and the write it decides, under one write lock.
+
+    TWO WRITERS SHARE A MEMBER'S MY BETS (2026-10-14). The page's sync
+    reads the stored sections, merges its own in (server.merge_sections)
+    and writes the union; the box's slip watch reads the same row, marks a
+    saved slip settled and writes it back (engine/slipwatch). Each is a
+    read, then a write built on what it read, so without one lock the
+    later writer's copy is built on a read taken before the other's write
+    and loses it: a settle the sync never saw, or a bet the phone had just
+    added. BEGIN IMMEDIATE takes SQLite's write lock before the read, so
+    the second writer waits (the connection's busy timeout) and then reads
+    the first one's result. Works across the server's threads and any
+    other process on the file alike."""
+    if conn.in_transaction:
+        conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield conn
+    except BaseException:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+    if conn.in_transaction:
+        conn.commit()
 
 
 def save_sections(conn, user_id: int, sections: dict) -> None:

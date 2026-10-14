@@ -161,7 +161,9 @@ basketball or hockey pick went on the record found one hole, now closed:
 the day's pick could have been named off a price over six hours old, in
 any league (step 89; AQ). A read-only list now says which UFC picks voided
 in the past look like the midnight bug step 47 fixed, and what each would
-have graded; every grade stays as it is (step 90; AT). The
+have graded; every grade stays as it is (step 90; AT). A slip saved to My
+Bets now settles off the box score with the Live tab closed: the box writes
+the result itself, by the Live tab's own rules (step 91; AU). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -197,13 +199,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A read-only list of past UFC voids that look like the midnight bug, with what each would have graded; every grade stays as it is`
+**A. The box has today's code.** The first line should end `Saved slips settle in My Bets with the Live tab closed: the box's slip watch writes the result by the page's own rules, under one lock with the page's sync`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor c19f58fb HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor f2e43721 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -317,9 +319,11 @@ struck through here as it is built.
   whether the covered picks do better than the rest.
 * **A Pick of the Day for the UFC card?** Every other league that names
   one now records it (steps 85 and 86); UFC names none.
-* **Saved slips settled by the server?** A slip saved to My Bets settles
+* ~~**Saved slips settled by the server?** A slip saved to My Bets settles
   while someone has the Live tab open; the server's five-minute pass
-  could settle it instead (step 47).
+  could settle it instead (step 47).~~ **Answered 2026-10-14: yes** ("do
+  1-11"). Built: step 91, AU — the box's once-a-minute slip watch settles
+  them.
 * ~~**Past UFC voids from the midnight bug** step 47 fixed (a result saved
   before the fight could read as a draw after midnight UTC, which voided
   the pick)?~~ **Answered 2026-10-14: yes** ("do 1-11"). Built: step 90,
@@ -1132,6 +1136,18 @@ graded; "a draw or no contest" means the void was right. NO BOUT WITHIN
 completeness. The last line counts the bug's voids and what they would
 have made or lost. Nothing changes: every grade stays as it is, as you
 said. "ESPN did not answer just now" on a line means run it again later.
+
+**AU. Saved slips settle with the Live tab closed** (step 91; read-only,
+seconds). After a night when a slip saved to My Bets from the parlay
+checker has had its games end, paste all of it:
+```
+journalctl -u qellys --since "24 hours ago" --no-pager | grep "slip watch" | tail -12
+```
+A line "N saved slip(s) settled in My Bets off the box score" is the box
+settling them; on your phone, My Bets shows the slip Won, Lost or Push
+without the Live tab ever opened, and the Live tab says "Settled in My Bets
+from the box score". "could not be written" on a line means that minute's
+write waited on the database and is tried again the next minute.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3929,6 +3945,35 @@ first). Paste back anything that prints an error or looks off.
     No pin changed. Your two calls answered without code are in H: MLB's
     at-bat video links and action photos stay, and when a cancellation
     takes effect stays your Stripe portal's setting.
+91. **Saved slips settle in My Bets with the Live tab closed** (2026-10-14,
+    you: "do 1-11", to "saved slips settled by the server?"). AU checks
+    it. BEFORE: a slip saved from the parlay checker settled only while
+    somebody had the Live tab open, which graded it once a minute and wrote
+    the result into My Bets. NOW the box's own slip watch, the once-a-minute
+    pass that already noticed a slip's last leg (step 44), grades every open
+    saved slip the same way and writes the result itself, by the Live tab's
+    own rules: lost, won, every leg pushed, or won with a leg pushed and paid
+    at the ticket's price without it when every pushed leg's price is known.
+    A win with a pushed leg whose price isn't known stays for the member to
+    set, as the Live tab leaves it. Only a saved slip still pending is ever
+    written, matched by its id; a bet logged by hand, a settled one, and
+    every other field are never touched. The phone takes the settled slip on
+    its next sync: the merge never lets a pending copy un-settle a graded
+    bet. ONE LOCK: the page's sync reads My Bets, merges and writes; the box
+    now writes the same row; each takes SQLite's write lock before it reads
+    (`accounts.one_writer`), so neither can build on a copy read before the
+    other's write (without it the test loses the phone's new bet). A pin
+    extended, told to you, not loosened:
+    `tests/test_a_saved_slip_on_its_last_leg_says_so.py` pinned the sweep's
+    counts exactly (slips, noted, mailed, failed) in two places; both now
+    include the new `settled` count. New:
+    `tests/test_saved_slips_settle_on_the_server.py` (9 checks: each way a
+    ticket settles, the page's own `settleOne` run under Node on the same
+    tickets and agreeing on every one, settled with the Live tab closed,
+    a pushed leg paid without it or left, an open slip kept open and still
+    alerted then settled, the phone's next sync adopting it, the lock
+    keeping both writers' changes, the sync taking the lock, the runbook).
+    No page change; app.js unchanged.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -36,17 +36,33 @@ NOT PUSH — the site has none, and engine/alerts says why. The Live tab
 draws the same alert from its own read and buzzes once (web/js/slip.js
 `lastLeg`); this is the half that works with the phone in a pocket.
 
-The box's sweep never writes a member's bets: the page settles them.
+THE BOX SETTLES THEM TOO (2026-10-14, Ethan: "do 1-11", the call "saved
+slips settled by the server?"). A saved slip used to settle only while
+somebody had the Live tab open: the page graded it once a minute and wrote
+the result into My Bets. The same pass here now writes it, Live tab open or
+not, by the page's own rules (`settled`, web/js/slip.js `settleOne`): lost,
+won, every leg pushed, or won with a leg pushed and paid at the price
+without it when every pushed leg's price is known. Won with a pushed leg
+whose price is not known stays for the member to set, as the page leaves
+it. The write is one member's stored My Bets row, a pending saved slip
+matched by its id and nothing else touched, under accounts.one_writer —
+the page's sync takes the same lock, so neither builds on a copy read
+before the other's write. The page adopts it on its next sync: the merge
+never lets a pending copy un-settle a graded bet (server._merge_mybets).
+
 The clock, the boards, the live reader, the sender and the gate are all
 handed in, so a test runs on a temp database and never touches the box.
 """
 
 from __future__ import annotations
 
+import datetime as _dt
 import hmac
 import json
+import math
 import re
 import secrets
+import sqlite3
 import threading
 import time
 
@@ -188,6 +204,97 @@ def last_leg(card: dict) -> bool:
     return now.get("status") == "open" and int(now.get("left") or 0) == 1
 
 
+def _dec(o) -> float | None:
+    """American odds as a decimal price, the page's `dec`: None for no price."""
+    try:
+        a = float(o)
+    except (TypeError, ValueError):
+        return None
+    if not a or not math.isfinite(a):
+        return None
+    return 1 + a / 100 if a > 0 else 1 + 100 / abs(a)
+
+
+def _american(d: float) -> int:
+    """A decimal price as American odds, the page's `american` (its
+    Math.round: halves up)."""
+    if not d > 1:
+        return 0
+    if d >= 2:
+        return int(math.floor((d - 1) * 100 + 0.5))
+    return -int(math.floor(100 / (d - 1) + 0.5))
+
+
+def settled(bet: dict, card: dict) -> dict | None:
+    """What the Live tab writes on a ticket the box score has settled
+    (web/js/slip.js `settleOne`), field for field, or None while it is
+    open — and None for a win with a pushed leg whose price is not known,
+    which the page leaves for the member to set ("set the price your book
+    paid"). The bet itself is never changed: a leg pushed is paid at the
+    ticket's price without it, as `paid_odds`, which My Bets' profit reads."""
+    if str(bet.get("result") or "pending") != "pending":
+        return None
+    n = (card or {}).get("now") or {}
+    if n.get("status") == "lost":
+        return {"result": "loss"}
+    if n.get("status") != "won":
+        return None
+    if not n.get("push"):
+        return {"result": "win"}
+    if not n.get("won"):
+        return {"result": "push"}
+    pushed = [_dec(l.get("odds")) for l in card.get("legs") or []
+              if (l.get("live") or {}).get("result") == "push"]
+    whole = _dec(bet.get("odds"))
+    if not whole or not pushed or not all(pushed):
+        return None
+    return {"result": "win", "paid_odds": _american(whole / math.prod(pushed))}
+
+
+def _stamp(t: float) -> str:
+    """The page's `new Date().toISOString()`: UTC, milliseconds, a Z."""
+    return _dt.datetime.fromtimestamp(t, _dt.timezone.utc).isoformat(
+        timespec="milliseconds").replace("+00:00", "Z")
+
+
+def write_settles(conn, user_id: int, done: dict, at: str) -> int:
+    """Settle saved slips in one member's stored My Bets: each entry a
+    saved slip still pending whose id is in ``done`` takes those fields and
+    the page's own marks (`settled_by` "box", `settled_at`); nothing else
+    in the row is touched, and a book that would outgrow the store's cap
+    is left as it is. One read and one write under accounts.one_writer.
+    Returns how many were settled."""
+    from . import accounts as A
+    n = 0
+    with A.one_writer(conn):
+        row = conn.execute("SELECT payload FROM user_data WHERE user_id=? AND section='mybets'",
+                           (int(user_id),)).fetchone()
+        try:
+            data = json.loads(row["payload"]) if row is not None else None
+        except ValueError:
+            data = None
+        bets = data.get("rows") if isinstance(data, dict) else None
+        if not isinstance(bets, list):
+            return 0
+        for b in bets:
+            if not (isinstance(b, dict) and b.get("src") == "slip"
+                    and str(b.get("result") or "pending") == "pending"):
+                continue
+            got = done.get(str(b.get("id")))
+            if got is None:
+                continue
+            b.update(got)
+            b["settled_by"] = "box"
+            b["settled_at"] = at
+            n += 1
+        blob = json.dumps(data)
+        if not n or len(blob) > A.MAX_SECTION_BYTES:
+            return 0
+        conn.execute("UPDATE user_data SET payload=? WHERE user_id=? AND section='mybets'",
+                     (blob, int(user_id)))
+    return n
+
+
 def budget_ok(now: float | None = None) -> bool:
     """Take one send from today's allowance, or say there is none left."""
     t = time.time() if now is None else now
@@ -219,7 +326,9 @@ def boards_and_live():
 def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, entitled=None,
           mail_on=None, now: float | None = None, site: str = "", log=print) -> dict:
     """One pass over every member's open saved slips. Returns the counts:
-    slips read, alerts newly noted, emails sent, emails that failed.
+    slips read, alerts newly noted, emails sent, emails that failed, slips
+    settled in My Bets. Every open slip is graded every pass, an alerted
+    one too: it is open until the box score settles it.
 
     ``send(to, subject, text, html)`` delivers (engine.mailer.send);
     ``entitled(conn, who)`` is the site's own gate (server.account_entitled)
@@ -231,7 +340,7 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
     conn.execute("DELETE FROM slip_alerts WHERE fired_at < ?", (t - KEEP_DAYS * 86400,))
     conn.commit()
     rows = pending_slips(conn) if rows is None else rows
-    out = {"slips": len(rows), "noted": 0, "mailed": 0, "failed": 0}
+    out = {"slips": len(rows), "noted": 0, "mailed": 0, "failed": 0, "settled": 0}
     if not rows:
         return out
     if mail_on is None:
@@ -240,11 +349,10 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
     if send is None:
         from . import mailer
         send = mailer.send
+    settles: dict = {}
     for r in rows:
         bet = r["bet"]
         bid = str(bet["id"])[:40]
-        if noted(conn, r["user_id"], bid):
-            continue
         slip = SG.clean_slip({"legs": bet.get("legs"), "stake": bet.get("stake"),
                               "total_odds": bet.get("odds"), "book": bet.get("book"),
                               "is_bet_slip": True})
@@ -255,7 +363,11 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
         except Exception as exc:                                   # noqa: BLE001
             log(f"  slip watch: a saved slip could not be read ({type(exc).__name__}: {exc})")
             continue
-        if not last_leg(card):
+        done = settled(bet, card)
+        if done is not None:
+            settles.setdefault(r["user_id"], {})[str(bet["id"])] = done
+            continue
+        if noted(conn, r["user_id"], bid) or not last_leg(card):
             continue
         conn.execute("INSERT OR IGNORE INTO slip_alerts (user_id, bet_id, fired_at, mailed) "
                      "VALUES (?,?,?,0)", (r["user_id"], bid, t))
@@ -284,8 +396,16 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
                      (r["user_id"], bid))
         conn.commit()
         out["mailed"] += 1
+    for uid, done in settles.items():
+        try:
+            out["settled"] += write_settles(conn, uid, done, _stamp(t))
+        except sqlite3.Error as exc:
+            log(f"  slip watch: a member's My Bets could not be written ({type(exc).__name__}); "
+                f"settled next minute")
     if out["noted"]:
         log(f"  slip watch: {out['noted']} saved slip(s) down to the last leg, {out['mailed']} emailed")
+    if out["settled"]:
+        log(f"  slip watch: {out['settled']} saved slip(s) settled in My Bets off the box score")
     return out
 
 
@@ -298,7 +418,7 @@ def run_once(entitled=None, log=print) -> dict:
         ensure_tables(conn)
         rows = pending_slips(conn)
         if not rows:
-            return {"slips": 0, "noted": 0, "mailed": 0, "failed": 0}
+            return {"slips": 0, "noted": 0, "mailed": 0, "failed": 0, "settled": 0}
         boards, live = boards_and_live()
         return sweep(conn, boards, live, rows=rows, entitled=entitled, site=A.site_url(), log=log)
     finally:

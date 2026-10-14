@@ -2250,9 +2250,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(sections, dict):
                     return self._send(400, b'{"error":"sections must be an object"}',
                                       ".json")
-                stored = A.get_sections(conn, who["id"])
-                merged = merge_sections(stored, sections)
-                A.save_sections(conn, who["id"], merged)
+                # One lock for the read and the write it decides: the
+                # box's slip watch writes a settled slip into this same
+                # My Bets row (engine/accounts.one_writer says why).
+                with A.one_writer(conn):
+                    stored = A.get_sections(conn, who["id"])
+                    merged = merge_sections(stored, sections)
+                    A.save_sections(conn, who["id"], merged)
                 A.touch_session(conn, token)
                 return self._send(200, json.dumps(
                     {"email": who["email"], "sections": merged}).encode(),

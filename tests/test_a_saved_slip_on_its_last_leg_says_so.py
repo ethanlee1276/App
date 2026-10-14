@@ -84,7 +84,7 @@ def test_the_box_notices_a_slip_down_to_its_last_leg_once_and_mails_who_asked():
             ("b@example.com", "1760000000001")], "open saved slips only, newest first, by hand and settled left out"
         out = SW.sweep(conn, T.GAMES, _live(), send=lambda *a: sent.append(a), entitled=lambda c, w: True,
                        mail_on=True, now=NOW, site=SITE)
-        assert out == {"slips": 3, "noted": 2, "mailed": 1, "failed": 0}, out
+        assert out == {"slips": 3, "noted": 2, "mailed": 1, "failed": 0, "settled": 0}, out
         assert [s[0] for s in sent] == ["a@example.com"]
         assert [tuple(r) for r in conn.execute(
             "SELECT user_id, bet_id, mailed FROM slip_alerts ORDER BY user_id")] == \
@@ -297,7 +297,8 @@ def test_the_launcher_runs_it_on_its_own_clock_through_the_servers_gate():
         raise AssertionError("a board was read with no slip open")
     A.DB_PATH, SW.boards_and_live = fresh, never
     try:
-        assert SW.run_once(entitled=lambda c, w: True) == {"slips": 0, "noted": 0, "mailed": 0, "failed": 0}
+        assert SW.run_once(entitled=lambda c, w: True) == {"slips": 0, "noted": 0, "mailed": 0, "failed": 0,
+                                                           "settled": 0}
     finally:
         A.DB_PATH, SW.boards_and_live = saved_db, saved_bl
     # And a sweep with a slip open goes through the real boards (stubbed here) and the gate handed in.
