@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import time
+from datetime import date, datetime
 
 from ...sources.fetch import fetch_text, CACHE_DIR, DataUnavailable
 from ..models import StatcastProfile
@@ -143,9 +146,12 @@ def load_barrels(year: int, kind: str = "batter") -> dict[str, dict]:
     again, and its `ttl` was dead: every hitter's barrel rate stayed what
     it was the day the file landed. `fetch_text` serves a copy younger than
     the ttl, asks again for an older one, and falls back to the old copy
-    when Savant does not answer, which is what a supplied file needs too."""
+    when Savant does not answer, which is what a supplied file needs too.
+    An answer with no hitters in it never replaces a copy that has them
+    (`_refresh_text`)."""
     url = SAVANT_BARRELS.format(type=kind, year=year)
-    text = fetch_text(url, f"savant_barrels_{kind}_{year}.csv", ttl=6 * 3600)
+    text = _refresh_text(url, f"savant_barrels_{kind}_{year}.csv", 6 * 3600,
+                         lambda t: parse_barrels(_read_csv_text(t)))
     return parse_barrels(_read_csv_text(text))
 
 
@@ -156,11 +162,69 @@ def _read_csv_text(text: str) -> list[dict]:
     return list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
 
 
+def _held(path):
+    """``(text, mtime)`` of a cached file, or None when there is none."""
+    try:
+        mtime = path.stat().st_mtime
+        return path.read_text(encoding="utf-8", errors="replace"), mtime
+    except OSError:
+        return None
+
+
+def _put_back(path, kept) -> None:
+    """Write the last good copy back over a worse answer, beside then
+    swapped in as `fetch_text` writes, WITH ITS OWN DOWNLOAD TIME: its age
+    stays true, so the next read asks Savant again rather than trusting a
+    copy the last request failed to replace."""
+    text, mtime = kept
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+        os.utime(path, (mtime, mtime))
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _refresh_text(url: str, name: str, ttl: int, players) -> str:
+    """`fetch_text`, except that an answer in which ``players`` finds no
+    one never replaces a cached copy in which it finds someone.
+
+    THE REFRESH'S OWN RISK (2026-10-14). Reading through `fetch_text`
+    always is what lets these boards refresh, and `fetch_text` writes
+    whatever comes back over the cached file: an error page, an empty
+    body, the header with no rows. Served for the whole ttl, any of them
+    reads as a season with no hitters. So the copy held before the request
+    is put back, with its own download time, and returned."""
+    path = CACHE_DIR / name
+    kept = _held(path)
+    text = fetch_text(url, name, ttl=ttl)
+    if kept is not None and text != kept[0] and not _finds(players, text) and _finds(players, kept[0]):
+        _put_back(path, kept)
+        return kept[0]
+    return text
+
+
+def _finds(players, text: str) -> bool:
+    """Does ``players`` find anyone in ``text``? An answer the CSV reader
+    cannot read at all (a line past its 128 KB field limit, as a minified
+    error page can be) has no one in it."""
+    try:
+        return bool(players(text))
+    except csv.Error:
+        return False
+
+
 def load_expected_stats(year: int, kind: str = "batter") -> dict[str, StatcastProfile]:
     """Fetch (or read a cached) expected-stats board for a season — through
-    `fetch_text` always, for the reason `load_barrels` gives."""
+    `fetch_text` always, and never replaced by an answer with no hitters,
+    for the reasons `load_barrels` gives."""
     url = SAVANT_EXPECTED.format(type=kind, year=year)
-    text = fetch_text(url, f"savant_expected_{kind}_{year}.csv", ttl=6 * 3600)
+    text = _refresh_text(url, f"savant_expected_{kind}_{year}.csv", 6 * 3600,
+                         lambda t: parse_expected_stats(_read_csv_text(t)))
     return parse_expected_stats(_read_csv_text(text))
 
 
@@ -193,8 +257,9 @@ def fetch_page_boards(year: int) -> dict:
     for key, tmpl, name in zip(("expected", "barrels"), (SAVANT_EXPECTED_ALL, SAVANT_BARRELS_ALL),
                                page_names(year)):
         try:
-            out[key] = len(_read_csv_text(fetch_text(tmpl.format(type="batter", year=int(year)), name,
-                                                     ttl=PAGE_TTL)))
+            out[key] = len(_read_csv_text(_refresh_text(
+                tmpl.format(type="batter", year=int(year)), name, PAGE_TTL,
+                lambda t: any(_pid(r) is not None for r in _read_csv_text(t)))))
         except DataUnavailable as exc:
             out[key] = str(exc)[:160]
     return out
@@ -408,36 +473,83 @@ def load_arsenal(year: int, kind: str = "batter",
     return {}
 
 
+#: How old a season's arsenal file may be before Savant is asked again:
+#: the six hours the barrels and expected-stats boards use.
+ARSENAL_TTL = 6 * 3600
+#: A finished season's board no longer changes; it is asked again weekly.
+PAST_SEASON_TTL = 7 * 24 * 3600
+
+
+def _arsenal_ttl(year: int) -> int:
+    return ARSENAL_TTL if int(year) >= date.today().year else PAST_SEASON_TTL
+
+
+def _parsed_arsenal(text: str) -> dict:
+    """`parse_arsenal` of a text, or {} when the CSV reader cannot read it."""
+    try:
+        return parse_arsenal(_read_csv_text(text))
+    except csv.Error:
+        return {}
+
+
+def _good_copy(path):
+    """``(text, mtime)`` of the cached file when it is the arsenal CSV,
+    else None. A cached file that is not the CSV is deleted: a poisoned
+    cache is worse than none, because it is served for the whole TTL and
+    looks exactly like an empty season."""
+    kept = _held(path)
+    if kept is None or _looks_like_arsenal(kept[0]):
+        return kept
+    path.unlink(missing_ok=True)
+    return None
+
+
 def _arsenal_board(year: int, kind: str) -> dict:
     """The first URL form whose CSV has hitters in it, parsed; {} when
     every form answered with the header alone. Raises DataUnavailable only
-    when no form came back as the CSV at all."""
+    when no form came back as the CSV at all.
+
+    THROUGH `fetch_text`, ALWAYS (2026-10-14), as `load_barrels` reads.
+    This read the cached file whenever one existed, so after the first
+    download Savant was never asked again: every hitter's line against
+    each pitch type stayed what it was the day the file landed. A file
+    younger than the TTL is still served without a request; an older one
+    is asked for again, and served as it is when Savant does not answer.
+
+    A REFRESH NEVER COSTS THE LAST GOOD COPY. `fetch_text` writes whatever
+    comes back over the cached file, and two answers here are worse than
+    the copy they replace: a page that is not the CSV (an error page, a
+    maintenance notice), and the header with no rows (what the "ALL" form
+    answers). Either would have dropped every hitter until a good answer
+    came, or sent the board back a season. So the copy held before the
+    request is put back whenever the answer has no hitters and the old
+    copy has some, or the answer is not the CSV at all.
+    """
     tried, got_csv = [], False
+    ttl = _arsenal_ttl(year)
     for suffix, tmpl in ARSENAL_FORMS:
         name = f"savant_arsenal_{kind}_{year}{suffix}.csv"
         local = CACHE_DIR / name
-        text = None
-        if local.exists():
-            text = local.read_text(encoding="utf-8", errors="replace")
-            if not _looks_like_arsenal(text):
-                # A poisoned cache is worse than none: it is served for the
-                # whole TTL and looks exactly like an empty season.
-                local.unlink(missing_ok=True)
-                text = None
+        kept = _good_copy(local)
         url = tmpl.format(type=kind, year=year)
-        if text is None:
-            try:
-                text = fetch_text(url, name, ttl=6 * 3600)
-            except DataUnavailable as exc:
-                tried.append(str(exc)[:160])
-                continue
-            if not _looks_like_arsenal(text):
-                (CACHE_DIR / name).unlink(missing_ok=True)
-                tried.append(f"{url} did not return the arsenal CSV — got {len(text or '')} bytes "
-                             f"starting {(text or '')[:60]!r}")
-                continue
+        try:
+            text = fetch_text(url, name, ttl=ttl)
+        except DataUnavailable as exc:
+            tried.append(str(exc)[:160])
+            continue
+        fresh = _looks_like_arsenal(text)
+        board = _parsed_arsenal(text) if fresh else {}
+        if kept is not None and text != kept[0] and not board:
+            old = _parsed_arsenal(kept[0])
+            if old or not fresh:
+                _put_back(local, kept)
+                text, fresh, board = kept[0], True, old
+        if not fresh:
+            local.unlink(missing_ok=True)
+            tried.append(f"{url} did not return the arsenal CSV — got {len(text or '')} bytes "
+                         f"starting {(text or '')[:60]!r}")
+            continue
         got_csv = True
-        board = parse_arsenal(_read_csv_text(text))
         if board:
             return board
         tried.append(f"{url} came back with the header and no rows")
@@ -445,6 +557,26 @@ def _arsenal_board(year: int, kind: str) -> dict:
         return {}
     raise DataUnavailable("; ".join(tried) + ". The cache has been cleared, so a retry "
                           "will re-fetch rather than re-read this.")
+
+
+def cache_report(year: int, now: float | None = None) -> list[str]:
+    """One line per cached Savant file for a season: its rows, when it was
+    downloaded and how long ago, and its header. What the probe prints, so
+    a refresh can be seen happening on the box."""
+    now = time.time() if now is None else now
+    out = []
+    for f in sorted(CACHE_DIR.glob(f"savant_*_{year}*.csv")):
+        try:
+            got = f.stat().st_mtime
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as exc:
+            out.append(f"{f.name}: unreadable — {exc}")
+            continue
+        at = datetime.fromtimestamp(got).astimezone()
+        out.append(f"{f.name}: {max(len(lines) - 1, 0)} row(s), fetched "
+                   f"{at:%Y-%m-%d %H:%M %Z} ({max(now - got, 0) / 3600:.1f} h ago); "
+                   f"header {lines[0][:100] if lines else '(empty)'}")
+    return out
 
 
 if __name__ == "__main__":
@@ -463,7 +595,5 @@ if __name__ == "__main__":
             print(f"{board}: FETCH FAILED — {exc}")
         except Exception as exc:  # noqa: BLE001
             print(f"{board}: PARSE FAILED — {type(exc).__name__}: {exc}")
-    for f in sorted(CACHE_DIR.glob(f"savant_*_{year}*.csv")):
-        lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
-        print(f"{f.name}: {max(len(lines) - 1, 0)} row(s); header "
-              f"{lines[0][:100] if lines else '(empty)'}")
+    for line in cache_report(year):
+        print(line)

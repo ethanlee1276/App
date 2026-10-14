@@ -146,7 +146,11 @@ it, so college's BET picks were shown and never scored; every league's
 Record page now has its Pick of the Day section, and a board with no game
 line says so on its card (step 85; AQ). The NBA and NHL can now name a Pick
 of the Day too, off the moneylines, spreads and totals Pinnacle quoted,
-judged by the same bars as every other league's (step 86; AQ). The
+judged by the same bars as every other league's (step 86; AQ). Savant's
+pitch-type board, which had never changed after its first download, now
+refreshes every six hours like the barrels and expected-stats boards, and
+none of Savant's files can be replaced by an error page or an empty answer
+(step 87; AR). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -175,16 +179,17 @@ the chores would fit anyway, and the test's verdict) and AG's backfill
 the rows already there) and its rank fit (the store Wednesday's chores
 write anyway), and AI's refit (the NBA's fitted model files, the ones
 Wednesday's refit writes anyway), and AP's fill if you start it (the hit
-page's tables, the rows tonight's chores write anyway). Every command runs
-on the box (`ssh` in first).
+page's tables, the rows tonight's chores write anyway), and AR's probe (it
+downloads any Savant file over six hours old, as the next MLB build would).
+Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Basketball and hockey name a Pick of the Day: the game lines Pinnacle quoted, judged by the same bars`
+**A. The box has today's code.** The first line should end `Savant's pitch-type board refreshes every six hours, and a bad answer never replaces the last good copy`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 8872d963 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 253a41b8 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1012,6 +1017,26 @@ pick (NFL, college, MLB, NBA, NHL), empty or not; never UFC, which names
 none. Then on your phone, Record → each of those leagues: the Pick of the
 Day section is there, reading "Nothing settled yet." until its first pick
 grades; UFC's page has none.
+
+**AR. Savant's pitch-type board is current** (step 87; one command,
+seconds). Nothing to run for the change itself: every MLB build asks
+Savant again for a file over six hours old. This shows it:
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.mlb.sources.savant 2026 2>&1 | grep -v "e\.g\."
+```
+The first three lines should each say `parsed N player profile(s)`, the
+pitch-type one (`pitch_arsenal_batter`) a few hundred. Then one line per
+Savant file on the box: its rows, when it was downloaded and how long ago.
+`savant_arsenal_batter_2026_alt.csv` is the pitch-type board in use: a few
+thousand rows, fetched within the last six hours (before this it never
+changed after its first download). `savant_arsenal_batter_2026.csv` with 0
+rows and an old date is the empty form from September, asked for only
+when the others fail; leave it. The barrels and expected files should be
+under six hours old too, and the two ending `_all` (the hit page's copies,
+fetched nightly) under a day. A file still dated weeks back, or `FETCH
+FAILED`, is the line I need: paste it. After the next MLB build,
+`grep -E "Pitch mix" data/logs/mlb_build.log | tail -1` should say
+`arsenal board: N hitter(s) (2026)` with no error after it.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3599,7 +3624,8 @@ first). Paste back anything that prints an error or looks off.
     does not answer. That changes no setting of the model; it lets it
     read this season's numbers again. The pitch-arsenal board has the same
     pattern and is NOT changed here (it rewrites a bad download in a way
-    that needs care): left as a separate item. Checked: the new test's 23
+    that needs care): left as a separate item. Done in step 87.
+    Checked: the new test's 23
     checks and its browser walk (the photo and its fallback, every link,
     the tiles, no sideways scroll at a phone's width), the hit page's and
     the hit tracker's tests and browser walk, the chart fill's and the
@@ -3682,6 +3708,42 @@ first). Paste back anything that prints an error or looks off.
     the bars, the lock, the journal, the grade off a final — a basketball
     game id included — the wiring, the record and the page). App 494.479
     of 495 KB and first visit 610.987 of 611.
+87. **Savant's pitch-type board refreshes, and no bad answer replaces a
+    good copy** (2026-10-14, you: "Also fix the savants pitch type file
+    thing"). AR checks it. THE BUG, step 84's left-over item:
+    `savant._arsenal_board` read the cached file whenever one existed and
+    asked Savant only when there was none, and the fetch layer saves under
+    that very name, so after its first download the board never changed:
+    every hitter's whiff rate, wOBA and hard-hit rate against each pitch
+    type stayed what it was that day. THE CARE IT NEEDED: the fetch layer
+    writes whatever comes back over the cached file, and two answers here
+    are worse than the copy they replace, an error page and the header
+    with no rows (what the "ALL" form answers; step of 2026-09-26). Either
+    would have cleared every hitter's pitch-type read, or sent the board
+    back a season. Now the file goes through the fetch layer always: under
+    six hours old it is served with no request; older, Savant is asked
+    again, and when the answer has no hitters, or is not the CSV at all,
+    the copy held before the request is put back with its own download
+    time, so the next build asks again rather than trusting it for six more
+    hours; when Savant does not answer, the old copy is served. A finished
+    season's board is asked for weekly. THE SAME GUARD NOW COVERS THE OTHER
+    SAVANT FILES: the barrels and expected-stats boards that step 84 set
+    refreshing would have taken an error page over their good copy just
+    the same (the home-run model reading no hitters for six hours), and the
+    hit page's two nightly copies for a day; an answer with no hitters never
+    replaces a copy that has them. No model setting changed. The probe now
+    prints when each file was downloaded and how long ago. New:
+    `tests/test_the_arsenal_board_is_asked_again.py` (15 checks, through
+    the real fetch layer with Savant faked: a fresh file served with no
+    request; an old one asked again and its new rows read; an error page, a
+    header-only answer, an answer too broken for the CSV reader (it used to
+    raise out of the loader) and no answer at all each leaving the old rows
+    with their old date; the kept copy asked again on the next build; a poisoned
+    file cleared; the next form still tried when no copy has hitters; the
+    weekly season; last season's fallback; the barrels, expected and
+    hit-page copies; the probe). The existing arsenal tests pass unchanged;
+    no pin changed. App 494.479 of 495 KB and first visit 610.987 of 611,
+    unchanged (no page file touched).
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
