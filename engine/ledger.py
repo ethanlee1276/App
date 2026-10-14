@@ -1901,9 +1901,11 @@ POTD_CATEGORY = "potd"
 #: each one's book, an empty one included, so the Record page says
 #: "Nothing settled yet" under that league rather than leaving the section
 #: out (Ethan, 2026-10-14: "we only show the pick of the day record for nfl
-#: and mlb but no other sport"). UFC is absent on purpose: the fight card
-#: makes no Pick of the Day, and an empty section would claim one exists.
-POTD_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+#: and mlb but no other sport"). The fight card joined 2026-10-14 ("do
+#: 1-11", to "A Pick of the Day for the UFC card?": yes), its pick named
+#: off the fights Pinnacle priced (`potd.fight_lines`) and settled by
+#: `settle_ufc` like every other fight row.
+POTD_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
 
 #: How many settled Picks of the Day the Record page gets as receipts.
 #: One a day per sport, so this is about a fortnight across six books —

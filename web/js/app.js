@@ -21268,9 +21268,9 @@ function recPotdSection(rep, scope, recent) {
      and mlb but no other sport"). The record carries an entry for each
      such league (`ledger.POTD_LEAGUES`), so an empty book says "Nothing
      settled yet" under the same heading rather than the heading going
-     missing — which read as no such book. A league with no entry (UFC
-     makes no Pick of the Day) draws nothing; pooled, nothing still draws
-     nothing. */
+     missing — which read as no such book. A league with no entry (the
+     WNBA, on the bench) draws nothing; pooled, nothing still draws
+     nothing. The fight card names one since 2026-10-14. */
   if (!rep || (!scope && !rep.settled && !rep.open)) return "";
   const where = scope ? ((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports";
   const n = rep.settled || 0;
@@ -39593,8 +39593,8 @@ async function renderUFC() {
             and arenas use 30, which the model already prices. Drawn to
             scale, so an Apex card is visibly tighter than an arena card.
             The prose stays underneath it — the drawing is the glance,
-            the sentence is the reason. */""}
-      ${(p.environment && ((p.environment.cage || {}).known || (p.environment.altitude || {}).known))
+            the sentence is the reason. */
+        (p.environment && ((p.environment.cage || {}).known || (p.environment.altitude || {}).known))
         ? `<div class="ufc-overhead">${octagon({
              venue: p.environment.venue || "",
              rounds: p.rounds, title_fight: p.title_fight,
@@ -39661,17 +39661,23 @@ async function renderUFC() {
   // variant, no dependence on the card's identity. The six rotation
   // files stay in variants/ as the ingest tool's contract and are not
   // shown here.
+  //
+  // The button: the fights are the reason for the page and they sit under
+  // three screens of context on a phone. A jump rather than a link: they
+  // are on this page, and pretending otherwise would be a lie about where
+  // the reader is going.
+  //
+  // Under the banner, the card's Pick of the Day (engine/potd.fight_lines,
+  // 2026-10-14): a fighter's moneyline against Pinnacle's fair, on a BET
+  // day only — `potdHeroHTML` draws nothing on any other.
   host.innerHTML = `
     <div class="ufc-hero">
       <img class="ufc-banner" alt="" loading="lazy"
         src="${venueSrc("img/venues/ufc-hero.jpg")}" data-onerr="remove"/>
-      ${/* The fights are the reason for the page and they sit under three
-            screens of context on a phone. A jump rather than a link: they
-            are on this page, and pretending otherwise would be a lie about
-            where the reader is going. */""}
       <button type="button" class="btn ufc-hero-cta" data-ufc-jump="1">
         View upcoming fights ${icon("rising", 13)}</button>
     </div>
+    ${potdHeroHTML(d)}
     <div class="stat-cards">
       ${statCardHTML("calendar", "Card", escapeHtml(d.event_date || "—"),
                      `${c.fights || 0} bout${(c.fights || 0) === 1 ? "" : "s"}`)}

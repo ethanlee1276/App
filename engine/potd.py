@@ -895,6 +895,13 @@ def shortfall(row: dict, min_ev=None, min_fair=None) -> str:
             return "this market has never been measured"
         if float(auc) < MIN_RANK_AUC:
             return "this market ranks no better than a coin flip"
+    # THE FIGHT CARD'S OWN READ ON THIS FIGHTER (`fight_lines`, 2026-10-14).
+    # Never the evidence: the fair is Pinnacle's. But a page that leads with
+    # one fighter while the card under it picks his opponent, or refuses him
+    # on a red flag, says two things at once, so the card's read can only
+    # take a fighter away, never put one forward.
+    if row.get("card_veto"):
+        return str(row["card_veto"])
     # `bettable` is `calibrate.is_reliable` — whether this market's
     # probabilities have earned the right to be bet rather than read.
     # A showcase pick is a bet.
@@ -1470,6 +1477,11 @@ def carry(card: dict, prev: dict | None) -> dict:
     return card
 
 
+#: Boards that name a Pick of the Day but are not league boards the player
+#: routes search (`routes.BOARD_FILES`): the fight card, since 2026-10-14.
+CARD_FILES = {"ufc": "ufc.json"}
+
+
 def previous_card(sport: str, built_dir=None) -> dict | None:
     """The card this sport published last build, or None.
 
@@ -1485,7 +1497,8 @@ def previous_card(sport: str, built_dir=None) -> dict | None:
     import json
     import os
     from .routes import BOARD_FILES, ROOT
-    name = BOARD_FILES.get(str(sport or "").lower())
+    name = (BOARD_FILES.get(str(sport or "").lower())
+            or CARD_FILES.get(str(sport or "").lower()))
     if not name:
         return None
     path = os.path.join(str(built_dir or os.path.join(str(ROOT), "data",
@@ -1621,6 +1634,111 @@ def game_lines(games, date: str, board_games=None) -> list:
     return out
 
 
+def _american(price) -> int:
+    """An American price as an int, or 0 for a missing or unreadable one."""
+    try:
+        return int(float(price))
+    except (TypeError, ValueError):
+        return 0
+
+
+def fight_lines(bouts, now=None) -> list:
+    """THE FIGHTS PINNACLE PRICED, as rows the selector can name: the UFC
+    card's Pick of the Day. Ethan, 2026-10-14, "do 1-11", to "A Pick of the
+    Day for the UFC card? Every other league that names one now records it;
+    UFC names none": yes.
+
+    ``bouts`` is the build's own list, one per bout on the card: ``{"a",
+    "b", "commence", "books": {book: (a_odds, b_odds)}, "price_age_s",
+    "card_pick", "a_flags", "b_flags"}``. The books are every book's pair
+    off the payload the build already bought (`ufc_build.all_h2h`), so this
+    makes no request of its own.
+
+    `game_lines`' RULE, ON THE ONE MARKET A FIGHT HAS. Each fighter's
+    moneyline where Pinnacle quoted the fight two ways, at the best price a
+    book you can bet is posting and the book posting it, against Pinnacle's
+    de-vigged fair. Nothing is waived: the bout is today, not started,
+    priced at a real book inside the freshness bar, in the band, at least
+    the confidence floor by Pinnacle's fair and 2% EV against it.
+
+    THE BOUT'S DAY IS ITS START ON THE EASTERN CLOCK, as every league's
+    day is: the odds feed dates a bout by its UTC start, and a main card at
+    10 PM Eastern is the next day in UTC. STARTED IS THE LISTED START: once
+    it has passed, the fighter is never the pick, however late the walkout.
+
+    THE CARD'S OWN MODEL IS NEVER THE EVIDENCE — `model_prob` is empty and
+    the card prints no "our number" — but it can take a fighter away. A
+    fighter the card's model picks against (``card_pick`` is his opponent),
+    or one carrying a red flag the card's gate will not bet through, gets
+    ``card_veto``, which `shortfall` refuses on.
+    """
+    import datetime as _dt
+    from .odds import devig_two_way, is_sharp_book
+    from .sources.oddsapi import price_is_current
+    when = now or _dt.datetime.now(_dt.timezone.utc)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=_dt.timezone.utc)
+    out: list = []
+    for bout in bouts or []:
+        if not isinstance(bout, dict):
+            continue
+        a, b = str(bout.get("a") or "").strip(), str(bout.get("b") or "").strip()
+        try:
+            start = _dt.datetime.fromisoformat(
+                str(bout.get("commence") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if not a or not b:
+            continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=_dt.timezone.utc)
+        fair, best = None, {}
+        for book, pair in (bout.get("books") or {}).items():
+            prices = list(pair or ()) + [None, None]
+            ao, bo = _american(prices[0]), _american(prices[1])
+            if is_sharp_book(str(book)):
+                if fair is None and ao and bo:
+                    fair = devig_two_way(ao, bo)
+                continue
+            for me, price in ((a, ao), (b, bo)):
+                if price and (me not in best or price > best[me][0]):
+                    best[me] = (price, str(book))
+        if not fair:
+            continue
+        age = bout.get("price_age_s")
+        day = slate_day(start)
+        base = {"kind": "game", "home": a, "away": b, "matchup": f"{a} vs {b}",
+                "fight": f"{a} vs {b}", "game_date": day, "date": day,
+                "kickoff": start.astimezone(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "live": False, "started": start <= when,
+                "sharp_anchored": True, "prob_source": "sharp", "model_prob": None,
+                "implied_prob": None, "bettable": True, "injury_status": "",
+                "price_age_s": age,
+                "price_stale": age is not None and not price_is_current(age),
+                "from_fight_lines": True}
+        card = str(bout.get("card_pick") or "").strip()
+        for me, them, flags, p in ((a, b, bout.get("a_flags"), fair[0]),
+                                   (b, a, bout.get("b_flags"), fair[1])):
+            if me not in best:
+                continue
+            odds, book = best[me]
+            flags = [str(f) for f in (flags or []) if str(f).strip()]
+            veto = (f"the card’s own model picks {them}" if card == them
+                    else f"a red flag on {me}: {flags[0]}" if flags else "")
+            out.append({**base, "market": "moneyline", "bet_type": "moneyline",
+                        "market_label": "Moneyline", "player": f"{me} ML",
+                        "pick_label": f"{me} ML", "headline": f"{me} ML",
+                        "team": me, "opponent": them, "pick": me, "side": "",
+                        "line": None, "odds": odds, "book": book,
+                        "sharp_fair": round(p, 4), "card_veto": veto})
+    return out
+
+
+def _board_date(result: dict) -> str:
+    """The board's own date: `date`, or the fight card's `event_date`."""
+    return str(result.get("date") or result.get("event_date") or "")
+
+
 def attach(result: dict, sport: str, now=None, cut=None,
            prev: dict | None = None, built_dir=None, lines=None) -> str:
     """Put the day's pick on a finished board. Returns a build-log line.
@@ -1694,7 +1812,7 @@ def attach(result: dict, sport: str, now=None, cut=None,
         # taken when more of the slate was open — see its docstring for
         # the college Saturday that prompted it.
         result["pick_of_the_day"] = carry(
-            build(pool, sport, str(result.get("date") or ""), now=now),
+            build(pool, sport, _board_date(result), now=now),
             prev if prev is not None else previous_card(sport, built_dir))
     except Exception as exc:                                  # noqa: BLE001
         result["pick_of_the_day_error"] = str(exc)
@@ -1716,7 +1834,7 @@ def attach(result: dict, sport: str, now=None, cut=None,
         # meets a card without them either crashes or silently skips. So
         # the empty-pool card IS the template — one call, the simplest
         # path `build` has, and the error is laid over it.
-        day = str(result.get("date") or "")
+        day = _board_date(result)
         try:
             card = build([], sport, day, now=now)
         except Exception:                                     # noqa: BLE001

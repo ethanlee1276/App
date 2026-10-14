@@ -253,13 +253,16 @@ def test_football_and_baseball_keep_their_boards_own_bars():
 
 
 # --- the record page -------------------------------------------------------------------
-def test_every_league_that_names_a_pick_has_a_book_and_ufc_has_none():
+def test_every_league_that_names_a_pick_has_a_book():
+    """(Pin updated 2026-10-14, "do 1-11": this was
+    `test_every_league_that_names_a_pick_has_a_book_and_ufc_has_none`, and
+    asserted the fight card had no book. It names a pick now —
+    `potd.fight_lines` — so it has one, empty until its first pick.)"""
     conn = _conn()
     path = Path(tempfile.mkdtemp()) / "record.json"
     ledger.export_json(conn, path)
     by = json.loads(path.read_text(encoding="utf-8"))["potd_by_sport"]
-    assert {"nfl", "cfb", "mlb", "nba", "nhl"} <= set(by), sorted(by)
-    assert "ufc" not in by, "the fight card makes no Pick of the Day"
+    assert {"nfl", "cfb", "mlb", "nba", "nhl", "ufc"} <= set(by), sorted(by)
     assert "wnba" not in by, "the bench reached the record page"
     assert all(not v["settled"] and not v["open"] for v in by.values())
 
@@ -267,7 +270,7 @@ def test_every_league_that_names_a_pick_has_a_book_and_ufc_has_none():
 def test_the_section_follows_the_book():
     from test_potd_card import _run_section
     assert "Nothing settled yet." in _run_section({"settled": 0, "open": 0}, "nba")
-    assert _run_section(None, "ufc") == "", "a league with no book drew its section"
+    assert _run_section(None, "wnba") == "", "a league with no book drew its section"
 
 
 if __name__ == "__main__":

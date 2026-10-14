@@ -121,9 +121,23 @@ def select_card(events: list[dict],
 
 
 def best_h2h(payload: dict, name_a: str, name_b: str) -> dict:
-    """Best price per fighter across books from an event-odds payload."""
+    """Best price per fighter across the books you can bet, from an
+    event-odds payload, and the book posting each.
+
+    TWO FIXES, 2026-10-14, found building the card's Pick of the Day. THE
+    SHARP REFERENCE IS SKIPPED, as `oddsapi.best_h2h_books` skips it for
+    every other league: Pinnacle takes no US action, so its price was never
+    one to take, and it could win "best" and be the price the card showed
+    and the journal recorded. AND EACH FIGHTER CARRIES HIS OWN BOOK
+    (``a_book``, ``b_book``): ``book`` is the first fighter's, so a pick on
+    the second fighter was labelled with a book that was not posting his
+    price. ``book`` stays as it was for every older reader.
+    """
+    from engine.odds import is_sharp_book
     best: dict = {}
     for bm in payload.get("bookmakers", []) or []:
+        if is_sharp_book(str(bm.get("key") or bm.get("title") or "")):
+            continue
         for mkt in bm.get("markets", []) or []:
             if mkt.get("key") != "h2h":
                 continue
@@ -136,9 +150,27 @@ def best_h2h(payload: dict, name_a: str, name_b: str) -> dict:
     out = {"fighter_a": name_a, "fighter_b": name_b}
     if name_a in best:
         out["a_odds"], out["book"] = best[name_a]
+        out["a_book"] = best[name_a][1]
     if name_b in best:
-        out["b_odds"] = best[name_b][0]
+        out["b_odds"], out["b_book"] = best[name_b]
         out.setdefault("book", best[name_b][1])
+    return out
+
+
+def potd_bouts(bouts: list[dict], board: dict) -> list[dict]:
+    """The card's bouts as `potd.fight_lines` reads them: every book's
+    pair, the price's age, and the card's own read on each fight — the
+    fighter its model picks, and each fighter's red flags (the dossier's,
+    plus a missed weight) — matched to the bout by its label."""
+    rows = {r.get("fight"): r for r in list(board.get("picks") or [])
+            + list(board.get("pass_list") or []) if isinstance(r, dict)}
+    out = []
+    for b in bouts:
+        row = rows.get(f"{b['a']} vs {b['b']}") or {}
+        briefs = list(row.get("fighters") or []) + [{}, {}]
+        out.append(dict(b, card_pick=row.get("pick") if row.get("kind") == "pick" else "",
+                        a_flags=list(briefs[0].get("red_flags") or []),
+                        b_flags=list(briefs[1].get("red_flags") or [])))
     return out
 
 
@@ -182,6 +214,7 @@ def main() -> None:
 
     fights, event_label = [], ""
     near: list = []      # (name on the card, closest dossier we hold)
+    bouts: list = []     # every book's pair per bout, for the Pick of the Day
     if args.odds or args.cached_odds:
         from engine.sources import oddsapi
         from engine.sources.oddsapi import normalize_name
@@ -199,6 +232,7 @@ def main() -> None:
                             ev["id"], key, markets=["h2h"], sport="ufc",
                             cache_only=args.cached_odds and not args.odds)
                         prices = best_h2h(payload, a, b)
+                        books = all_h2h(payload, a, b)
                         # The store UFC never had (§4). Only on a LIVE
                         # pull: a cached payload is a re-read of a price
                         # already recorded, and appending it again would
@@ -206,7 +240,13 @@ def main() -> None:
                         if args.odds:
                             snaps.append({"a": a, "b": b,
                                           "commence": ev.get("commence_time"),
-                                          "books": all_h2h(payload, a, b)})
+                                          "books": books})
+                        # THE PICK OF THE DAY reads every book's pair and
+                        # how old the payload is (`potd.fight_lines`).
+                        bouts.append({"a": a, "b": b, "commence": ev.get("commence_time"),
+                                      "books": books,
+                                      "price_age_s": oddsapi.event_cache_age(
+                                          ev["id"], ["h2h"], None, "ufc")})
                     except oddsapi.OddsAPIError:
                         prices = {"fighter_a": a, "fighter_b": b}
                     da, na = _lookup(dossiers, a)
@@ -295,9 +335,24 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  line moves skipped: {exc}")
 
+    # THE PICK OF THE DAY (engine/potd; Ethan, 2026-10-14, "do 1-11", to
+    # "A Pick of the Day for the UFC card?": yes). The fights Pinnacle
+    # priced, judged by every league's bars (`potd.fight_lines`), then the
+    # day's lock put back before the file is written — the order the
+    # basketball builds use: attach, relock, publish, journal.
+    from engine import potd as _potd
+    from engine import ledger as _led
+    potd_lines = _potd.fight_lines(potd_bouts(bouts, out)) if fights else []
+    print(_potd.attach(out, "ufc", lines=potd_lines))
+    out["pick_of_the_day"] = _led.relock_potd(out.get("pick_of_the_day") or {}, potd_lines)
+
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)
+    # And to its own book, once the card exists (`ledger.journal_potd`).
+    _jn = _led.journal_potd(out.get("pick_of_the_day") or {})
+    if _jn:
+        print(_jn)
 
     # Learning engine: journal the card's picks at their real prices and
     # settle any open ones whose fights have since happened (ESPN MMA

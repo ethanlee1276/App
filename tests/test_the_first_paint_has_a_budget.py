@@ -157,7 +157,13 @@ APP_JS_BUDGET_KB = 495
 #: sports"): this month drawn with its empty line, then the Edge bets |
 #: Most Likely switch and its styles (609.37 -> 610.10 KB gz; app.js
 #: 492.89 -> 493.60, inside its 494). Told to Ethan.
-BOOT_BUDGET_KB = 611
+#: 611 -> 612 on 2026-10-14 by the fight card's Pick of the Day (Ethan, "do
+#: 1-11", to "A Pick of the Day for the UFC card?": yes): the card drawn
+#: under the UFC banner on a BET day, after two of the UFC page's empty
+#: comment slots were folded away to pay for most of it (610.998 -> 611.007
+#: KB gz, the boot path having sat 2 bytes under 611; app.js 494.489 ->
+#: 494.498, inside its 495). Told to Ethan.
+BOOT_BUDGET_KB = 612
 
 
 def _gz_trimmed(rel: str) -> int:

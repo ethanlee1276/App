@@ -730,10 +730,10 @@ card printed as the claim. Football and baseball do not get the lines:
 their Most Likely boards carry measured game rows, and a row that board
 refused on the merits must not reach the pick by another door.
 
-**UFC HAS NO PICK OF THE DAY**, and the Record page no longer pretends it
-does: the record carries a book for every league whose build names one
-(`ledger.POTD_LEAGUES`), empty or not, and the page draws the section
-only for those. The fight card is its own page with its own book.
+**UFC had no Pick of the Day** until §3m, and the Record page stopped
+pretending it did: the record carries a book for every league whose build
+names one (`ledger.POTD_LEAGUES`), empty or not, and the page draws the
+section only for those.
 
 ### 3l. A stale price is never the day's pick
 
@@ -752,6 +752,40 @@ could have named the day's pick and put it on the record.
 game lines carry both, the Most Likely game rows already carried the age,
 and a row with no age is a price the build just fetched. The game lines
 also date a row by the game's own date where the slate game has one.
+
+### 3m. The fight card names one too
+
+Ethan, 2026-10-14, "do 1-11", to "A Pick of the Day for the UFC card?":
+yes. The basketball and hockey answer (§3k's game lines), on the one
+market a fight has. `potd.fight_lines` reads every book's pair on each
+bout off the payload the UFC build already bought (`ufc_build.all_h2h`, no
+request of its own) and makes one row per fighter: his best price at a
+book you can bet, against Pinnacle's de-vigged pair, with the payload's
+age. Nothing is waived, and two things are particular to fights:
+
+* THE BOUT'S DAY IS ITS START ON THE EASTERN CLOCK. The odds feed dates a
+  bout by its UTC start, and a 10 PM Eastern main event is the next day
+  in UTC; the pick is named on the Eastern day, as every league's is. Once
+  a bout's listed start has passed it is `started`, however late the
+  walkout runs.
+* THE CARD'S OWN MODEL CAN TAKE A FIGHTER AWAY, NEVER PUT ONE FORWARD.
+  Our number is not the evidence (§4) and is not consulted for the
+  selection. But a page that leads with one fighter while the card under
+  it picks his opponent, or refuses him on a red flag, says two things at
+  once. Such a row carries `card_veto`, and `shortfall` refuses it with
+  that reason: shown below the bar on a day nothing else qualifies, never
+  named.
+
+The UFC build attaches, relocks, publishes and then journals, in the
+basketball builds' order; `log_pick_of_the_day` writes the fighter under
+the key the card's own UFC picks use (fighter, moneyline, OVER 0.5), so
+`ledger.settle_ufc` grades it off the same ESPN results. The card shows
+under the UFC page's banner on a BET day.
+
+On the way, two faults in the card's own prices (`ufc_build.best_h2h`):
+Pinnacle's price could be the "best" one, and a pick on the second fighter
+wore the first fighter's book. Both fixed; `ufcbooks.py` lists the past
+rows each touched, read-only, their grades untouched.
 
 ## 4. Why our own model is not allowed to be the evidence
 

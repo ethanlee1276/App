@@ -179,6 +179,12 @@ his teammates' numbers never moved (step 95; AW). UFC fights are in the
 parlay checker now: who wins, how, the distance and the rounds, each
 read off the card's own model, two legs on one fight priced together,
 and a saved fight slip settled off the live fight feed (step 96; AX). The
+UFC card names a Pick of the Day now, the way basketball and hockey do:
+each fighter's moneyline against Pinnacle's fair, by every league's bars,
+shown under the UFC banner and recorded and graded like the card's own
+picks; on the way, the card's own picks stopped quoting Pinnacle's price
+(no US book takes it) and stopped naming the first fighter's book on a
+pick on the second (step 97; AY). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -214,13 +220,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `UFC fights in the parlay checker: every leg read off the card's own model, legs on one fight priced together, settled off the live feed`
+**A. The box has today's code.** The first line should end `The UFC card names a Pick of the Day off the fights Pinnacle priced, and its own picks quote a price you can bet under the fighter's own book`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 81b59c99 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 30eddcc0 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -343,8 +349,9 @@ struck through here as it is built.
   whose chance covers what the price needs, as college has since 10-09?
   Step 30's read-only check (`lossaudit.py --sport nfl`) shows first
   whether the covered picks do better than the rest.
-* **A Pick of the Day for the UFC card?** Every other league that names
-  one now records it (steps 85 and 86); UFC names none.
+* ~~**A Pick of the Day for the UFC card?** Every other league that names
+  one now records it (steps 85 and 86); UFC names none.~~ **Answered
+  2026-10-14: yes** ("do 1-11"). Built: step 97, AY.
 * ~~**Saved slips settled by the server?** A slip saved to My Bets settles
   while someone has the Live tab open; the server's five-minute pass
   could settle it instead (step 47).~~ **Answered 2026-10-14: yes** ("do
@@ -1222,6 +1229,23 @@ Each finished bout should print `post` with KO/TKO, SUB or DEC and a
 winner starred. `post None` on every finished bout means the feed does not
 say how a fight ended: moneylines still settle, and method, distance and
 round legs wait for you to settle them; say so.
+
+**AY. The UFC card's Pick of the Day** (step 97; read-only, seconds). On
+the day of a card, from the morning on, paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 potdcheck.py | grep -E -A1 "^ufc|^record.json"
+cd /srv/qellys && sudo -u qellys python3 ufcbooks.py
+```
+The first two lines are the card's: its book (`none ever` until the first
+pick is recorded) and what the card says, `BET <fighter> ML at <price>
+<book> (sharp fair N%) — recorded today`, or `NO BET — <why>` naming the
+bar no fight cleared. A BET marked `NOT RECORDED` that is still there after
+the next build means say so. The `record.json` line should list `ufc`. The
+second command lists every past UFC row recorded at Pinnacle's price (no
+US book takes it) and every one recorded under a book that was not posting
+its price (the second fighter wore the first fighter's book), from the
+prices stored on every paid pull since 2026-08-10. Their grades stay as
+they are; whether the Record page says anything about them is yours.
 
 **AU. Saved slips settle with the Live tab closed** (step 91; read-only,
 seconds). After a night when a slip saved to My Bets from the parlay
@@ -3898,7 +3922,8 @@ first). Paste back anything that prints an error or looks off.
     Pick of the Day — the fight card is its own page with its own book —
     and the Record page no longer gives it an empty section: the record
     now carries a book for every league that names a pick, empty or not
-    (`ledger.POTD_LEAGUES`), and the page draws only those. No pin
+    (`ledger.POTD_LEAGUES`), and the page draws only those. (Since step 97
+    the fight card names one too.) No pin
     loosened; the empty-section test changed again to match (an entry
     draws "Nothing settled yet", none draws nothing). New:
     `tests/test_basketball_and_hockey_name_their_pick_from_game_lines.py`
@@ -4200,6 +4225,42 @@ first). Paste back anything that prints an error or looks off.
     `engine/slipfight.py`;
     `tests/test_ufc_fights_in_the_parlay_checker.py` (14 checks). No test
     changed.
+97. **The UFC card names a Pick of the Day** (2026-10-14, you: "do 1-11",
+    to H's "A Pick of the Day for the UFC card?"). AY checks it. The way
+    basketball and hockey name theirs (step 86), off the prices and not
+    our model: each fighter's moneyline where Pinnacle priced the fight
+    two ways, at the best price a book you can bet is posting, against
+    Pinnacle's de-vigged fair, judged by every league's bars (the bout is
+    today on the Eastern clock and not under way, a real book, a price
+    under six hours old, the band, the confidence floor, 2% EV, the
+    ceiling on a gap too big to trust). Once a bout's listed start has
+    passed, its fighters are never the pick. **The card's own model can
+    take a fighter away, never put one forward**: a fighter the card picks
+    against, or one carrying a red flag the card will not bet through (a
+    missed weight, a flag on his dossier), is shown below the bar with that
+    reason and never named. The pick shows under the UFC banner on a day it
+    says BET (nothing on a NO BET day), is recorded once a day as every
+    league's is, and grades off the same ESPN results the card's own picks
+    do; the Record page has a UFC Pick of the Day section ("Nothing settled
+    yet" until the first one grades). **Two faults fixed on the way, in the
+    card's own prices**: Pinnacle's price could be the "best" one, so a
+    pick could show and be recorded at a price no US book offers; and a
+    pick on the second fighter wore the first fighter's book. The card now
+    shops only books you can bet, and each fighter carries his own book.
+    That moves the UFC model's market number a little (it reads the best
+    prices you can bet, Pinnacle left out), so a close fight's pick or pass
+    can differ from before. `ufcbooks.py` (AY) lists every past UFC row
+    each fault touched, read-only; their grades stay as they are. Pins
+    changed, told to you: `tests/test_basketball_and_hockey_name_their_pick_from_game_lines.py`
+    held UFC with no Pick of the Day book (it has one now; the no-book
+    example is the WNBA's, on the bench), and
+    `tests/test_every_league_records_its_pick_of_the_day.py` and
+    `tests/test_potd_card.py` used UFC as the league with no section (now
+    the WNBA; the UFC section is checked too). The first-visit budget went
+    from 611 to 612 KB for the card on the UFC page (611.007 KB, after two
+    of the UFC page's comment slots were folded away to pay for most of
+    it); app.js stays inside its 495. New: `ufcbooks.py`;
+    `tests/test_the_fight_card_names_a_pick_of_the_day.py` (16 checks).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

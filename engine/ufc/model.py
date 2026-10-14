@@ -406,6 +406,12 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
 
     red = list(fighter.get("red_flags", []))
     thin = markets.thin_data_fight(a, b, prices)
+    # THE BOOK POSTING EACH FIGHTER'S PRICE (`ufc_build.best_h2h`, 2026-10-14):
+    # `book` is the first fighter's, which mislabelled every pick on the
+    # second. Prices built before the fix carry only `book`.
+    def _book_for(name):
+        return prices.get("a_book" if name == name_a else "b_book") or prices.get("book", "")
+    side_book = _book_for(side)
 
     # §3.8 — the translation step. The distribution prices every market the
     # fight implies, not just the famous one. Books derive method props
@@ -420,7 +426,8 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
         board.append(markets.price_market(
             row, book_odds,
             haircut_p=p_final if is_ml_side else None,
-            thin_data=thin, book=prices.get("book", "")))
+            thin_data=thin, book=(_book_for(row["selection"]) if row["market"] == "moneyline"
+                                  else prices.get("book", ""))))
 
     # §2/§8 — the triangle's gate: a method bet is a HOW purchased on a
     # WHO, and only worth buying when the sharp moneyline already
@@ -473,7 +480,7 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
     _e_min = expected_minutes(1.0 - joint["distance"], _rounds, _tilt)
 
     card = {
-        **base, "pick": side, "odds": odds, "book": prices.get("book", ""),
+        **base, "pick": side, "odds": odds, "book": side_book,
         "e_minutes": _e_min, "scheduled_rounds": _rounds,
         "hazard_tilt": _tilt,
         "p_model": round(p_m, 4), "p_market": round(p_mkt, 4),

@@ -246,14 +246,16 @@ def test_the_box_check_tells_a_recorded_pick_from_a_shown_one():
 # --- the record page ------------------------------------------------------------
 def test_every_league_scope_draws_its_section_even_when_empty():
     """The record carries a book, empty or not, for every league that
-    names a pick (`ledger.POTD_LEAGUES`); UFC makes none and has none."""
+    names a pick (`ledger.POTD_LEAGUES`), the fight card's included since
+    2026-10-14; a league with no book (the WNBA, on the bench) draws none.
+    (Pin updated that day: the last check held UFC as a league with none.)"""
     from test_potd_card import _run_section
     empty = {"settled": 0, "open": 0, "wins": 0, "losses": 0}
-    for scope in ("cfb", "nba", "nhl"):
+    for scope in ("cfb", "nba", "nhl", "ufc"):
         got = _run_section(empty, scope)
         assert "Pick of the Day" in got and "Nothing settled yet." in got, (scope, got)
         assert scope.upper() in got, (scope, got)
-    assert _run_section(None, "ufc") == "", "a league that names no pick drew a section"
+    assert _run_section(None, "wnba") == "", "a league with no book drew a section"
     assert _run_section(empty, "") == "", "an empty pooled book drew a section"
 
 
