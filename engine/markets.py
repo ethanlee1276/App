@@ -58,7 +58,7 @@ SHARED = {
 EXTRA = {
     "targets": "Targets", "carries": "Carries",
     "first_3_innings": "First 3 Innings",
-    "stl": "Steals", "blk": "Blocks", "min": "Minutes",
+    "min": "Minutes",
 }
 
 #: Where two boards spell one shared id differently, this is the

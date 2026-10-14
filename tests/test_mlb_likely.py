@@ -334,7 +334,8 @@ def test_a_likely_card_never_prints_vs_nobody():
 def test_hoops_shelves_exist_for_both_leagues():
     for sport in ("nba", "wnba"):
         keys = [s["key"] for s in boards.shelves(sport)]
-        assert keys == ["scoring", "glass", "threes"], (sport, keys)
+        # "counts" since 2026-10-14: steals, blocks and turnovers.
+        assert keys == ["scoring", "glass", "threes", "counts"], (sport, keys)
 
 
 def test_a_wnba_measurement_lights_only_the_wnba_shelf():

@@ -424,6 +424,8 @@ FAMILY = {
     "pts": "score", "pra": "score", "ast": "assist", "reb": "board",
     "pts_reb": "score", "pts_ast": "score", "reb_ast": "board",
     "fg3m": "three", "stl": "stops", "blk": "stops",
+    # A turnover competes with nothing else a slip carries (2026-10-14).
+    "tov": "giveaway",
     # Hockey: shots, the scoring chain (a goal is a point for up to three
     # skaters), blocks and the goalie's saves.
     "sog": "nhlshot", "points": "nhlpoint", "assists": "nhlpoint",
@@ -441,7 +443,7 @@ TIER = {
     "anytime_td": 3, "pass_td": 3, "pass_int": 3,
     "pass_rush_yds": 2, "rush_rec_yds": 2, "kick_pts": 1, "tackles_ast": 1, "fg_made": 3,
     "strikeouts": 1, "outs": 1, "total_bases": 2, "hits": 2, "home_runs": 3,
-    "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3,
+    "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3, "tov": 3,
     "pts_reb": 1, "pts_ast": 1, "reb_ast": 1,
     "sog": 1, "saves": 1, "blocks": 2, "points": 2, "assists": 2, "goals": 3, "anytime_goal": 3,
     # Sides and totals are the most modelable markets on the board and the
@@ -457,7 +459,7 @@ HITTER_FAMILIES = {"bat"}
 # slates carry a `volatility` field, but a leg missing it must not slip
 # through — the whole point of the ban is that these are the legs that turn a
 # process into a lottery ticket.
-EXTREME_MARKETS = {"anytime_td", "home_runs", "fg3m", "stl", "blk", "goals", "anytime_goal"}
+EXTREME_MARKETS = {"anytime_td", "home_runs", "fg3m", "stl", "blk", "tov", "goals", "anytime_goal"}
 HOCKEY_SCORING = {"nhlpoint", "nhlgoal"}
 
 

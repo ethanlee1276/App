@@ -76,7 +76,11 @@ SPORT_MARKETS = {
     # engine/nba/pipeline.MARKET_LABELS for the same dedupe-by-label
     # reason the anytime_td comment gives.
     "nba": (("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists"),
-            ("fg3m", "3-Pointers Made")),
+            ("fg3m", "3-Pointers Made"),
+            # Stored since 2026-10-13 and priced since 2026-10-14
+            # (`hoops.COUNTS`); a game ingested before then has no row and
+            # shows none, never a zero.
+            ("stl", "Steals"), ("blk", "Blocks"), ("tov", "Turnovers")),
     "wnba": (("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists"),
              ("fg3m", "3-Pointers Made")),
     # College football joined 2026-08-24, off ESPN's own box scores —

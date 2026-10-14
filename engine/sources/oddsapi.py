@@ -570,6 +570,17 @@ NBA_ODDS_TO_MARKET = {**WNBA_ODDS_TO_MARKET,
                       "player_points_rebounds": "pts_reb",
                       "player_points_assists": "pts_ast",
                       "player_rebounds_assists": "reb_ast"}
+#: STEALS, BLOCKS AND TURNOVERS (Ethan, 2026-10-14: "Do 1-7 and the ones
+#: we download but don't use" — the box scores have carried them since
+#: 2026-10-13 and no board priced them; `hoops.COUNTS`). Three more
+#: credits on every NBA event pulled; the WNBA's request is unchanged.
+#: Main lines only, like the combos. New keys, so they ride behind the
+#: drop-and-retry guard and go first if an unnamed refusal comes back.
+HOOPS_COUNT_ODDS_TO_MARKET = {"player_steals": "stl", "player_blocks": "blk",
+                              "player_turnovers": "tov"}
+NBA_ODDS_TO_MARKET = {**NBA_ODDS_TO_MARKET, **HOOPS_COUNT_ODDS_TO_MARKET}
+UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(HOOPS_COUNT_ODDS_TO_MARKET)
+NEWEST_ODDS_KEYS = NEWEST_ODDS_KEYS | frozenset(HOOPS_COUNT_ODDS_TO_MARKET)
 NBA_TEAM_ABBR = {
     "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
     "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI",

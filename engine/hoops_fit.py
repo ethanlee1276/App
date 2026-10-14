@@ -31,7 +31,7 @@ import math
 from dataclasses import replace
 
 from . import teamrates
-from .hoops import LEAGUES, LeagueTuning
+from .hoops import LEAGUES, SUMS as _SUMS, LeagueTuning
 
 # Below these, a fit is noise dressed as a measurement and the inherited
 # number is the better answer. A season is ~44 WNBA games a team; 200
@@ -41,12 +41,11 @@ MIN_GAMES = 200
 MIN_STAT_ROWS = 400
 
 # The stats whose spread the prop model reads.
-STATS = ("pts", "reb", "ast", "pra", "pts_reb", "pts_ast", "reb_ast", "fg3m", "stl", "blk")
+STATS = ("pts", "reb", "ast", "pra", "pts_reb", "pts_ast", "reb_ast", "fg3m", "stl", "blk", "tov")
 
 #: The summed markets and their parts: PRA, and the NBA's two-stat combos
-#: (`hoops.COMBOS`). A league with no line in one simply measures it unused.
-SUMS = {"pra": ("pts", "reb", "ast"),
-        "pts_reb": ("pts", "reb"), "pts_ast": ("pts", "ast"), "reb_ast": ("reb", "ast")}
+#: (`hoops.SUMS`). A league with no line in one simply measures it unused.
+SUMS = _SUMS
 
 
 def _sd(values: list[float]) -> float | None:

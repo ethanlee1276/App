@@ -109,11 +109,12 @@ def thin_data_fight(a: dict, b: dict, prices: dict | None = None) -> bool:
 def implied_markets(joint: dict, name_a: str, name_b: str) -> list[dict]:
     """Every market the outcome distribution can price.
 
-    Round and exact-round markets are deliberately absent: pricing them
-    needs a round-by-round hazard the dossiers have no data for (finish
-    TIMES are not tracked), and asserting one would put an invented shape
-    into the highest-vig markets on the board. §9 calls those tier 3 and
-    rare anyway.
+    Round and exact-round markets are not here: pricing them needs WHEN a
+    finish lands, which the distribution does not hold, and asserting a
+    shape would put an invented one into the highest-vig markets on the
+    board. Since 2026-10-14 `engine/ufc/rounds` prices them off the finish
+    times `ufc_fights` stores, after this board is built — fair numbers to
+    shop, tier 3, never staked.
     """
     p_a = joint["a_ko"] + joint["a_sub"] + joint["a_dec"]
     p_b = joint["b_ko"] + joint["b_sub"] + joint["b_dec"]

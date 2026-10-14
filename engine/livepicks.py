@@ -107,6 +107,7 @@ TRACKER_LABELS = {
     "points": "Points", "rebounds": "Rebounds", "assists": "Assists",
     "threes": "3-Pointers", "pra": "Pts + Reb + Ast",
     "pts_reb": "Pts + Reb", "pts_ast": "Pts + Ast", "reb_ast": "Reb + Ast",
+    "stl": "Steals", "blk": "Blocks", "tov": "Turnovers",
 }
 
 

@@ -1,4 +1,4 @@
-"""What each basketball defence gives up, per game, in the four prop stats.
+"""What each basketball defence gives up, per game, in the prop stats.
 
 The NFL has had its defence-versus-position read since 2026-09-23 (engine/
 defensevs), college and MLB theirs since; basketball had one number — a
@@ -31,8 +31,26 @@ team's defence reads a little worse than it is. Said on the card.
 """
 from __future__ import annotations
 
-#: The four stats every basketball prop board prices, and their words.
-MARKETS = {"pts": "points", "reb": "rebounds", "ast": "assists", "fg3m": "threes"}
+#: The stats every basketball prop board prices, and their words.
+MARKETS = {"pts": "points", "reb": "rebounds", "ast": "assists", "fg3m": "threes",
+           # Steals, blocks and turnovers (2026-10-14, `hoops.COUNTS`). What a
+           # defence concedes in each is what its OPPONENTS record against it:
+           # a steal is a ball it gave up, a block one of its shots sent back,
+           # a turnover one its defence forced. Shown under the pick until
+           # `hoopsdvpfit.py` measures how much reaches one player (TRANSFER).
+           "stl": "steals", "blk": "blocks", "tov": "turnovers"}
+
+#: How the card says those three: "BOS give up 8.1 steals a game", never
+#: "allow 8.1 steals". ``(verb phrase, the card's stat words)``.
+SAID = {"stl": ("give up {pg} steals", "steals given up"),
+        "blk": ("have {pg} shots blocked", "shots blocked"),
+        "tov": ("force {pg} turnovers", "turnovers forced")}
+
+
+def said(market: str, pg: float) -> str:
+    """"allow 112.4 points", or the three's own words."""
+    words = SAID.get(market)
+    return words[0].format(pg=f"{pg:.1f}") if words else f"allow {pg:.1f} {MARKETS[market]}"
 
 #: Games of evidence worth as much as the league's average (the shrink).
 SHRINK_GAMES = 8
@@ -75,7 +93,7 @@ def projection_mult(sport: str, rating: dict, opponent: str, market: str) -> tup
     mult = round(1.0 + t * (float(r["factor"]) - 1.0), 4)
     if abs(mult - 1.0) < 0.005:
         return 1.0, ""
-    return mult, (f"Matchup: {opponent} allow {r['pg']:.1f} {MARKETS[market]} a game "
+    return mult, (f"Matchup: {opponent} {said(market, r['pg'])} a game "
                   f"({_ord(r['rank'])}-most of {r['of']}) — {(mult - 1) * 100:+.0f}% on his projection "
                   f"(measured: {'the whole' if t >= 1 else f'{t:.0%} of the'} defence's lean reaches one player)")
 
@@ -152,21 +170,25 @@ def board_ratings(conn, sport: str, date: str) -> tuple[dict, bool]:
     return ratings(load(conn, sport, season - 1)), True
 
 
-def matchup_card(team: str, rating: dict, market: str, last_season: bool = False) -> dict | None:
+def matchup_card(team: str, rating: dict, market: str, last_season: bool = False,
+                 sport: str = "nba") -> dict | None:
     """What goes under a basketball pick: the defence, what it allows in
-    this stat a game, where that ranks — and, until measured, that the
-    model does not read it."""
+    this stat a game, where that ranks — and whether the model reads it:
+    only where `TRANSFER` holds a measured share for this league."""
     r = ((rating or {}).get(team) or {}).get(market)
     if not r or market not in MARKETS:
         return None
-    words = f"{MARKETS[market]} allowed"
+    words = (SAID.get(market) or ("", f"{MARKETS[market]} allowed"))[1]
     when = "last season" if last_season else f"over {r['games']} game{'s' if r['games'] != 1 else ''}"
+    read = bool((TRANSFER.get(str(sport or "").lower()) or {}).get(market))
     card = {"opponent": team, "stat": words, "per_game": r["pg"], "league": r["league"],
             "rank": r["rank"], "of": r["of"], "games": r["games"],
-            "text": (f"{team} allow {r['pg']:.1f} {MARKETS[market]} a game, the "
+            "text": (f"{team} {said(market, r['pg'])} a game, the "
                      f"{_ord(r['rank'])}-most of {r['of']} (league {r['league']:.1f}), {when}"),
             "note": ("Read into the projection — measured on our basketball logs, the defence's lean "
-                     "reaches one player (hoopsdvp.TRANSFER). Per game, not per possession.")}
+                     "reaches one player (hoopsdvp.TRANSFER). Per game, not per possession." if read else
+                     "Shown for you. How much of this reaches one player is not measured yet "
+                     "(hoopsdvpfit.py), so the model leaves it out. Per game, not per possession.")}
     if last_season:
         card["last_season"] = True
     return card
@@ -176,7 +198,7 @@ def _ord(n: int) -> str:
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
 
 
-def attach(rows, rating: dict, last_season: bool = False) -> int:
+def attach(rows, rating: dict, last_season: bool = False, sport: str = "nba") -> int:
     """Hang ``matchup_card`` on every pick row whose opponent and stat have a
     rating. Returns how many carry one. Never raises on a strange row."""
     n = 0
@@ -184,7 +206,7 @@ def attach(rows, rating: dict, last_season: bool = False) -> int:
         if not isinstance(r, dict) or r.get("matchup_card"):
             continue
         card = matchup_card(str(r.get("opponent") or ""), rating, str(r.get("market") or ""),
-                            last_season)
+                            last_season, sport)
         if card:
             r["matchup_card"] = card
             n += 1

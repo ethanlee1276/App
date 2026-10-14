@@ -79,7 +79,7 @@ MARKETS = (
     "rec_yds", "receptions", "rush_rec_yds", "pass_rush_yds", "anytime_td",
     "kick_pts", "fg_made", "tackles_ast",
     # basketball (NBA, WNBA)
-    "pts", "reb", "ast", "pra", "pts_reb", "pts_ast", "reb_ast", "fg3m",
+    "pts", "reb", "ast", "pra", "pts_reb", "pts_ast", "reb_ast", "fg3m", "stl", "blk", "tov",
     # baseball
     "hits", "total_bases", "home_runs", "strikeouts", "outs",
     # hockey
@@ -97,7 +97,8 @@ MARKET_WORDS = {
     "rush_rec_yds": "rush + rec yards", "pass_rush_yds": "pass + rush yards", "kick_pts": "kicking points",
     "fg_made": "field goals", "tackles_ast": "tackles + assists", "pts": "points", "reb": "rebounds",
     "ast": "assists", "pra": "pts + reb + ast", "pts_reb": "pts + reb", "pts_ast": "pts + ast",
-    "reb_ast": "reb + ast", "fg3m": "threes", "hits": "hits", "total_bases": "total bases",
+    "reb_ast": "reb + ast", "fg3m": "threes", "stl": "steals", "blk": "blocks",
+    "tov": "turnovers", "hits": "hits", "total_bases": "total bases",
     "home_runs": "home runs", "strikeouts": "strikeouts", "outs": "outs", "sog": "shots on goal",
     "points": "points", "goals": "goals", "assists": "assists", "blocks": "blocks", "saves": "saves",
 }
@@ -163,7 +164,8 @@ For every leg of the ticket give:
 - market: one key from the list. Football: pass_yds, pass_td, pass_att, pass_cmp, pass_int, rush_yds,
   rush_att, rec_yds, receptions, rush_rec_yds, pass_rush_yds, anytime_td, kick_pts, fg_made, tackles_ast.
   Basketball: pts, reb, ast, pra (points+rebounds+assists), pts_reb (points+rebounds), pts_ast
-  (points+assists), reb_ast (rebounds+assists), fg3m (made threes). Baseball: hits,
+  (points+assists), reb_ast (rebounds+assists), fg3m (made threes), stl (steals), blk (blocks),
+  tov (turnovers). Baseball: hits,
   total_bases, home_runs, strikeouts (a pitcher's), outs. Hockey: sog (shots on goal), points, goals,
   assists, blocks, anytime_goal, saves. Game lines: moneyline, spread, total. Anything else: other.
 - side: over or under for a number; yes for an anytime scorer; team for a moneyline or spread.

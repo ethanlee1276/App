@@ -269,6 +269,21 @@ def main() -> None:
             wi = by_fight.get(row.get("fight"))
             if wi:
                 row["weigh_in"] = wi
+        # ROUND PRICES (engine/ufc/rounds, 2026-10-14): over/under rounds
+        # and the round it ends in, on every fight the model priced, off
+        # the finish times `ufc_fights` stores — fair numbers to shop, never
+        # staked, and none at all until enough finishes are on file.
+        try:
+            from engine import db as _hdb
+            from engine.ufc import rounds as _rounds
+            _rc = _hdb.connect()
+            try:
+                n_rounds = _rounds.attach(out, _rc)
+            finally:
+                _rc.close()
+            print(f"Round prices: {n_rounds} priced fight(s) carry them")
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  round prices skipped: {exc}")
         # WHERE EACH LINE OPENED (engine/ufc/moves, 2026-10-13): the fight
         # snapshots this build has written on every paid pull since
         # 2026-08-10, read for the first time. Evidence on the card — the

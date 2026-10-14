@@ -56,11 +56,25 @@ class Entries(list):
 
 
 def load_entries(conn, sport: str, market: str, min_games: int = 8,
-                 seasons: list[int] | None = None) -> Entries:
+                 seasons: list[int] | None = None, sums: bool = False) -> Entries:
     """The one door the fitters and the rank walk load a market's
     entries through. Interceptions come paired with attempts and with
-    the defences' timeline; everything else is `db.entries_for_market`."""
+    the defences' timeline; everything else is `db.entries_for_market`.
+
+    ``sums``: a basketball market that is a sum of stored ones (PRA, the
+    two-stat combos — `hoops.SUMS`) is added up from its parts game by
+    game. No ingest stores a sum, so without it the walk found no rows
+    and those markets could never earn a Most Likely shelf. The rank walk
+    asks for it (2026-10-14); the price fitters do not, so no fit that
+    moves a price starts on the strength of this door."""
     from . import db as _db
+    if sums and sport in ("nba", "wnba"):
+        from .hoops import SUMS
+        if market in SUMS:
+            got = Entries(_db.entries_for_sum(conn, sport, SUMS[market], min_games=min_games,
+                                              seasons=seasons))
+            got.aux = {}
+            return got
     companion = COMPANION.get(market)
     if companion:
         got = Entries(_db.entries_with_companion(conn, sport, market, companion,

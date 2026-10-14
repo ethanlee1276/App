@@ -1375,6 +1375,38 @@ def entries_for_market(conn, sport: str, market: str,
             for name, vals in grouped.items() if len(vals) >= min_games]
 
 
+def entries_for_sum(conn, sport: str, parts, min_games: int = 8,
+                    seasons: list[int] | None = None) -> list[dict]:
+    """`entries_for_market`'s shape for a market no ingest stores because it
+    is a SUM of ones that are (basketball's PRA and two-stat combos,
+    `hoops.SUMS`): each game's parts added up, and only the games where
+    every part is on file — a partial sum is a wrong number."""
+    parts = tuple(parts)
+    q = ("SELECT player, season, period, game_id, team, opponent, home, market, value "
+         "FROM player_game_logs WHERE sport=? AND market IN (%s)" % ",".join("?" * len(parts)))
+    args: list = [sport, *parts]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    games: dict = {}
+    for row in conn.execute(q, args):
+        g = games.setdefault(row["player"], {}).setdefault(
+            (int(row["season"] or 0), str(row["period"]), str(row["game_id"] or "")),
+            {"team": str(row["team"] or ""), "opp": str(row["opponent"] or ""),
+             "home": int(row["home"] or 0), "got": {}})
+        g["got"][str(row["market"])] = float(row["value"] or 0.0)
+    out = []
+    for name, by_game in games.items():
+        keys = sorted(k for k, g in by_game.items() if all(p in g["got"] for p in parts))
+        if len(keys) < min_games:
+            continue
+        out.append({"name": name,
+                    "values": [round(sum(by_game[k]["got"][p] for p in parts), 1) for k in keys],
+                    "dates": [k[1] for k in keys], "teams": [by_game[k]["team"] for k in keys],
+                    "opps": [by_game[k]["opp"] for k in keys], "homes": [by_game[k]["home"] for k in keys]})
+    return out
+
+
 def entries_with_companion(conn, sport: str, market: str, companion: str,
                            min_games: int = 8, seasons: list[int] | None = None) -> list[dict]:
     """`entries_for_market`'s shape with a second stat of THE SAME GAMES

@@ -8,7 +8,9 @@ P(cross the line), computed from the right shape for the stat:
 * rebounds / assists — NEGATIVE BINOMIAL, exact CDF. NBA counting stats
   are overdispersed (variance > mean); Poisson systematically understates
   the tails, and on a .5 line the difference IS the edge;
-* threes — wide (CV ~0.5) and computed exactly for low counts.
+* threes — wide (CV ~0.5) and computed exactly for low counts;
+* steals, blocks, turnovers — the same exact count, never tighter than
+  Poisson (`hoops.COUNTS`, 2026-10-14).
 
 Then the two pieces of discipline that keep the model honest:
 
@@ -34,8 +36,8 @@ from ..hoops import NBA, LeagueTuning
 
 SD_CV = {"pts": 0.30, "reb": 0.40, "ast": 0.43, "pra": 0.24,
          "pts_reb": 0.26, "pts_ast": 0.27, "reb_ast": 0.32,    # hoops.COMBOS
-         "fg3m": 0.50, "stl": 0.90, "blk": 0.90}
-DISCRETE = {"reb", "ast", "fg3m", "stl", "blk"}
+         "fg3m": 0.50, "stl": 0.90, "blk": 0.90, "tov": 0.60}
+DISCRETE = {"reb", "ast", "fg3m", "stl", "blk", "tov"}
 
 # RE-TUNED 2026-07-29 (same audit as the NFL/MLB tier re-tune): the old
 # pairing (w=0.28, gate 3.0pts over break-even) was mathematically closed —

@@ -77,9 +77,16 @@ MIN_PAIRS = 2_000
 #: "There is no money lines or pitchers props or game totals ... we need
 #: to scan ALL props available." Measured like the rest; the shelf opens
 #: only if the walk clears the floor on 2,000 pairs.
+#: BASKETBALL'S SUMS AND COUNTS joined 2026-10-14. PRA was on this table
+#: from the start and the walk never once measured it: no ingest stores a
+#: sum, so `load_entries` found no rows and the shelf could never open —
+#: nor for the NBA's two-stat combos bought on 10-13. The walk adds the
+#: parts up now (`load_entries(sums=True)`). Steals, blocks and turnovers
+#: are stored rows and walk as they are. Each opens only above the floor
+#: on 2,000 pairs, as every market before them.
 MARKETS = {
     "mlb": ("hits", "total_bases", "home_runs", "strikeouts", "outs"),
-    "nba": ("pts", "reb", "ast", "fg3m", "pra"),
+    "nba": ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast", "stl", "blk", "tov"),
     "wnba": ("pts", "reb", "ast", "fg3m", "pra"),
     # THE VOLUME MARKETS joined 2026-10-05 (engine/cfb/props.MARKETS says
     # why); the walk measures them on this box's logs and the shelf opens
@@ -241,7 +248,7 @@ def measure(conn, sport: str, markets=None, log=print,
                 with _cal.disabled():
                     pairs = _nhl_bt.walk(conn, market, players=_nhl_players).pairs
             else:
-                entries = load_entries(conn, sport, market)
+                entries = load_entries(conn, sport, market, sums=True)
                 if not entries:
                     lines.append(f"rank fit {key}: no ingested logs")
                     continue

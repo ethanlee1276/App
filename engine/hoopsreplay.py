@@ -31,9 +31,11 @@ Standard library only; reads the tables the ingest already fills.
 from __future__ import annotations
 
 from .backtest import SettledProp, evaluate, BacktestReport
+from .hoops import COMBOS, COUNTS, carried
 
-#: The markets the basketball boards price.
-MARKETS = ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast")
+#: The markets the basketball boards price — steals, blocks and turnovers
+#: since 2026-10-14 (`hoops.COUNTS`).
+MARKETS = ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast", "stl", "blk", "tov")
 
 #: The live build keeps a player's last twenty games; so does the replay.
 WINDOW = 20
@@ -78,8 +80,7 @@ def histories(conn, sport: str, seasons: list | None = None) -> dict:
             g = by_day[day]
             if "pts" in g and "reb" in g and "ast" in g:
                 g["pra"] = round(g["pts"] + g["reb"] + g["ast"], 1)
-                for combo, (a, b) in (("pts_reb", ("pts", "reb")), ("pts_ast", ("pts", "ast")),
-                                      ("reb_ast", ("reb", "ast"))):
+                for combo, (a, b) in COMBOS.items():
                     g[combo] = round(g[a] + g[b], 1)
             rows.append((day, bool(g.pop("_s")), g))
         out[player] = rows
@@ -122,6 +123,14 @@ def settled_props(hist: dict, market: str, sport: str = "nba",
     for day, player, i in todo:
         rows = hist[player]
         prior = rows[max(0, i - WINDOW):i][::-1]         # newest first
+        if market in COUNTS:
+            # Only the run of his newest games whose box stored the count:
+            # a game ingested before 2026-10-13 has no row, not a zero —
+            # and under three of them is no rate, the floor every prop has.
+            prior = prior[:carried([g for _, _, g in prior], market)]
+            if len(prior) < 3:
+                counts["skipped"] += 1
+                continue
         minutes = [g.get("min", 0.0) for _, _, g in prior]
         values = [g.get(market, 0.0) for _, _, g in prior]
         actual = float(rows[i][2][market])

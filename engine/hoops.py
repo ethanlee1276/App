@@ -62,7 +62,14 @@ class LeagueTuning:
         # at the single-stat CVs above, parts correlated 0.2, gives PRA
         # 0.247, P+R 0.26, P+A 0.27 and R+A 0.32.
         "pts_reb": 0.26, "pts_ast": 0.27, "reb_ast": 0.32,
-        "fg3m": 0.55, "stl": 0.70, "blk": 0.80})
+        "fg3m": 0.55, "stl": 0.70, "blk": 0.80,
+        # Turnovers (2026-10-14, see COUNTS): a starting value, measured by
+        # `hoops_fit` like the rest. A count close to Poisson, at the mean
+        # of a typical line (about three, where a Poisson CV is 0.58),
+        # a little overdispersed. Steals and blocks sit below their
+        # Poisson CVs; the pricer never prices a count tighter than
+        # Poisson (`prob.p_over_negbin`), so a low one costs nothing.
+        "tov": 0.60})
     max_picks_per_slate: int = 4
     max_picks_per_game: int = 2
     thin_sample: int = 10
@@ -128,6 +135,34 @@ class LeagueTuning:
 #: every event the odds pull buys (`oddsbudget.EVENT_CREDITS`), and the
 #: call was for the NBA's.
 COMBOS = {"pts_reb": ("pts", "reb"), "pts_ast": ("pts", "ast"), "reb_ast": ("reb", "ast")}
+
+#: STEALS, BLOCKS AND TURNOVERS (Ethan, 2026-10-14: "Do 1-7 and the ones
+#: we download but don't use"). Both NBA ingests have stored them since
+#: 2026-10-13 (`nbadata.NBA_MARKETS`, `espnhoops.STAT_MAP`), and no board
+#: priced them. The NBA only, as the combos: each is another market on
+#: every event the odds pull buys, and the WNBA's season is over.
+COUNTS = ("stl", "blk", "tov")
+
+#: The summed markets and their parts: PRA, and the NBA's two-stat combos.
+SUMS = {"pra": ("pts", "reb", "ast"), **COMBOS}
+
+
+def carried(games, stat: str) -> int:
+    """How many of ``games`` — newest first, each a ``{market: value}``
+    dict — lead the list carrying ``stat``.
+
+    A MISSING ROW IS NOT A ZERO. A game ingested before 2026-10-13 has no
+    steals, blocks or turnovers row at all, and reading it as a night
+    with none would price every player's under at a certainty. So a count
+    reads only the run of his newest games whose box stored it, and the
+    run is a prefix of the same list his minutes, dates and opponents are
+    read from, so the n-th value still lines up with the n-th game."""
+    n = 0
+    for g in games:
+        if not isinstance(g, dict) or stat not in g:
+            break
+        n += 1
+    return n
 
 NBA = LeagueTuning(
     key="nba", name="NBA",

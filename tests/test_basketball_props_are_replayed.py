@@ -29,6 +29,9 @@ def _db(players=12, games=30, seed=7):
     c.execute("CREATE TABLE player_game_logs (sport, season, player, team, "
               "position, period, market, value, game_id, opponent, home)")
     rnd = random.Random(seed)
+    # Steals, blocks and turnovers (2026-10-14) draw from their own stream,
+    # so the five markets before them keep the numbers they always had.
+    crnd = random.Random(seed + 1)
     d0 = dt.date(2025, 11, 1)
     for p in range(players):
         rate, mins = rnd.uniform(0.3, 0.8), rnd.uniform(18, 36)
@@ -43,6 +46,11 @@ def _db(players=12, games=30, seed=7):
                           "('nba', 2026, ?, 'BOS', ?, ?, ?, ?, ?, 'NYK', 1)",
                           (f"P{p}", "S" if mins > 28 else "B", day, mk,
                            max(0.0, round(v, 1)), f"g{g}"))
+            for mk, per in (("stl", 0.04), ("blk", 0.03), ("tov", 0.07)):
+                c.execute("INSERT INTO player_game_logs VALUES "
+                          "('nba', 2026, ?, 'BOS', ?, ?, ?, ?, ?, 'NYK', 1)",
+                          (f"P{p}", "S" if mins > 28 else "B", day, mk,
+                           float(max(0, round(crnd.gauss(per * m, 1.0)))), f"g{g}"))
     return c
 
 

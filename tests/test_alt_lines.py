@@ -105,8 +105,10 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
             == B.credits_per_event("mlb") == B.EVENT_CREDITS["mlb"] == 11)
     # Thirteen for both hoops leagues until 2026-10-13, when the NBA bought
     # points + rebounds, points + assists and rebounds + assists (Ethan:
-    # "add both from my calls"); the WNBA kept its five.
-    for sport, price in (("nba", 16), ("wnba", 13)):
+    # "add both from my calls"); nineteen since 2026-10-14, with steals,
+    # blocks and turnovers ("the ones we download but don't use"). The
+    # WNBA kept its five.
+    for sport, price in (("nba", 19), ("wnba", 13)):
         hoops = oa.SPORT_CONFIG[sport]
         assert (len(hoops["markets"]) + len(hoops["alternates"]) + 3
                 == B.credits_per_event(sport) == B.EVENT_CREDITS[sport] == price), sport

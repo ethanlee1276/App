@@ -91,7 +91,8 @@ FOOTBALL_LOGS = {
 }
 HOOPS_LOGS = {"pts": (("pts",),), "reb": (("reb",),), "ast": (("ast",),), "fg3m": (("fg3m",),),
               "pra": (("pts", "reb", "ast"),), "pts_reb": (("pts", "reb"),),
-              "pts_ast": (("pts", "ast"),), "reb_ast": (("reb", "ast"),)}
+              "pts_ast": (("pts", "ast"),), "reb_ast": (("reb", "ast"),),
+              "stl": (("stl",),), "blk": (("blk",),), "tov": (("tov",),)}
 HOCKEY_MARKETS = ("sog", "points", "goals", "assists", "blocks", "saves", "anytime_goal")
 BASEBALL_LOGS = {"hits": (("hits",),), "total_bases": (("total_bases",),), "home_runs": (("home_runs",),),
                  "strikeouts": (("strikeouts",),), "outs": (("outs",),)}
@@ -885,7 +886,7 @@ def hoops(conn, board: dict | None, league: str, leg: dict, who: dict) -> dict |
         rating, last = _cached(("hdvp", league, date[:10], _stamp(conn)),
                                lambda: HD.board_ratings(conn, league, date[:10] or _today()))
         dvp_m, dvp_note = HD.projection_mult(league, rating, opponent, market) if market in HD.MARKETS else (1.0, "")
-        dvp_card = HD.matchup_card(opponent, rating, market, last) if market in HD.MARKETS else None
+        dvp_card = HD.matchup_card(opponent, rating, market, last, league) if market in HD.MARKETS else None
     except Exception:                                              # noqa: BLE001
         pass
     days_off = None

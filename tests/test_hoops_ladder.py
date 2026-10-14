@@ -51,12 +51,13 @@ def test_both_leagues_ask_for_five_ladders_behind_the_guard():
     assert set(oa.HOOPS_ALT_ODDS_TO_MARKET.values()) == {"pts", "reb", "ast", "fg3m", "pra"}
     assert set(oa.HOOPS_ALT_ODDS_TO_MARKET.values()) == set(oa.WNBA_ODDS_TO_MARKET.values()), \
         "a ladder for every market the board can rank, and no other"
-    # The NBA's two-stat combos (2026-10-13) are main lines only: their
-    # ladders were not part of the call that bought them, and no Most
-    # Likely shelf can rank a summed market yet (the log walk reads stored
-    # rows, and none is stored for a sum).
+    # The NBA's two-stat combos (2026-10-13) and its steals, blocks and
+    # turnovers (2026-10-14) are main lines only: their ladders were not
+    # part of the calls that bought them. (The rank walk adds a sum up from
+    # its parts since 2026-10-14, so a combo can earn its shelf on its main
+    # line alone.)
     assert set(oa.NBA_ODDS_TO_MARKET.values()) - set(oa.HOOPS_ALT_ODDS_TO_MARKET.values()) \
-        == {"pts_reb", "pts_ast", "reb_ast"}
+        == {"pts_reb", "pts_ast", "reb_ast", "stl", "blk", "tov"}
     assert all(k.endswith("_alternate") for k in oa.HOOPS_ALT_ODDS_TO_MARKET)
     assert set(oa.HOOPS_ALT_ODDS_TO_MARKET) <= oa.UNPROVEN_MARKETS
 

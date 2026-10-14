@@ -53,12 +53,15 @@ def test_the_nba_buys_the_three_and_the_wnba_does_not():
         {"player_points_rebounds": "pts_reb", "player_points_assists": "pts_ast",
          "player_rebounds_assists": "reb_ast"}
     assert set(oa.SPORT_CONFIG["wnba"]["markets"].values()) == {"pts", "reb", "ast", "fg3m", "pra"}
-    assert (oddsbudget.EVENT_CREDITS["nba"], oddsbudget.EVENT_CREDITS["wnba"]) == (16, 13), \
+    # 16 -> 19 on 2026-10-14: steals, blocks and turnovers joined the NBA's
+    # request (tests/test_nba_prices_steals_blocks_turnovers.py).
+    assert (oddsbudget.EVENT_CREDITS["nba"], oddsbudget.EVENT_CREDITS["wnba"]) == (19, 13), \
         "three more markets is three more credits on every NBA event pulled"
 
 
 def test_the_build_prices_them_for_the_nba_only():
-    assert nba_build.slate_markets("nba") == nba_build.SLATE_MARKETS + tuple(COMBOS)
+    # The three counts follow the combos since 2026-10-14 (hoops.COUNTS).
+    assert nba_build.slate_markets("nba") == nba_build.SLATE_MARKETS + tuple(COMBOS) + hoops.COUNTS
     assert nba_build.slate_markets("wnba") == nba_build.SLATE_MARKETS
     src = (ROOT / "nba_build.py").read_text(encoding="utf-8")
     assert "for stat in slate_markets(args.league):" in src

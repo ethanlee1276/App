@@ -29,8 +29,8 @@ that end inside the distance, roughly half end in round one and the
 share decays by round. The dossiers hold no finish times, so this is a
 structural prior, labeled as one — good enough to derive E[minutes],
 the "quiet workhorse of the entire prop menu", and NEVER used to price
-the tier-3 round markets (`markets.implied_markets` still refuses
-those, correctly). Two script-driven bends: the Cardio Split shifts
+the tier-3 round markets: those come off the finish times `ufc_fights`
+stores (`engine/ufc/rounds`, 2026-10-14), or not at all. Two script-driven bends: the Cardio Split shifts
 hazard late (the finish arrives when the tank empties), and the Sub
 Hunt flattens it (submissions accumulate position first).
 

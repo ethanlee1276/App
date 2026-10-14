@@ -24161,7 +24161,7 @@ const MB_PROP_WORDS = [
   [/\b(rebounds?|reb|rebs)\b/i, "rebounds"],
   [/\b(assists?|ast)\b/i, "assists"],
   [/\b(yds|yards)\b/i, "yards"],
-  [/\b(shots on goal|saves|goals|sacks|tackles|blocks|steals)\b/i, "other props"],
+  [/\b(shots on goal|saves|goals|sacks|tackles|blocks|steals|turnovers)\b/i, "other props"],
 ];
 
 /* What market a logged bet is, read from its description. {market,
@@ -39524,12 +39524,18 @@ async function renderUFC() {
       <span class="sr-e ${c.priced ? (c.edge >= c.required_edge ? "pos" : "") : "mute"}">${
         c.priced ? `${c.edge >= 0 ? "+" : ""}${(c.edge * 100).toFixed(1)}%` : "shop it"}</span>
     </div>`;
+  /* Every market the fight implies — on a pass too: the round prices
+     (engine/ufc/rounds) are fair numbers to shop whether or not we bet. */
+  const shopList = (p) => {
+    const b = (p.market_board || []).filter((c) => c.priced || c.fair_odds);
+    return b.length ? `<details class="ufc-shop"><summary>Every market this fight implies (${b.length}) — shop the unpriced ones</summary>
+        ${b.map(shopRow).join("")}</details>` : "";
+  };
 
   const pickCard = (p) => {
     const best = p.best_market || {};
     const shown = best.odds != null ? best.odds : p.odds;
     const title = p.selection || `${p.pick} ML`;
-    const board = (p.market_board || []).filter((c) => c.priced || c.fair_odds);
     return `
     <article class="card fight-hero" style="--grade-color:var(--good);${fightArtStyle(p)}">
       ${fightEyebrowHTML(p)}
@@ -39574,8 +39580,7 @@ async function renderUFC() {
         ? `<div style="margin-top:6px;color:var(--text-mute);font-size:var(--fs-sm)">${icon('stadium')} ${
             escapeHtml([(p.environment.cage || {}).note, (p.environment.altitude || {}).note]
               .filter(Boolean).join(" · "))}</div>` : ""}
-      ${board.length ? `<details class="ufc-shop"><summary>Every market this fight implies (${board.length}) — shop the unpriced ones</summary>
-        ${board.map(shopRow).join("")}</details>` : ""}
+      ${shopList(p)}
       ${weighInHTML(p.weigh_in)}
       ${ufcLineHTML(p.line_note)}
       <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
@@ -39616,6 +39621,7 @@ async function renderUFC() {
       </div>` : ""}
       <div style="margin-top:10px;color:var(--text-body);font-size:var(--fs-sm)">
         <span style="color:${color};font-weight:700">Passed:</span> ${escapeHtml(m.why || "")}</div>
+      ${shopList(m)}
       ${ufcLineHTML(m.line_note)}
     </article>`;
   };

@@ -344,6 +344,9 @@ HOOPS_SHELVES = (
     ("threes", "Three-pointers", ("fg3m",),
      "Makes from deep — the highest-variance market on this board, "
      "and labelled by its own measurement rather than the shelf above."),
+    ("counts", "Steals, blocks & turnovers", ("stl", "blk", "tov"),
+     "The low counts: one more steal, block or turnover decides the bet, "
+     "so they shelve apart from the volume markets."),
 )
 
 #: Sports with a likelihood board, and each one's shelf spec. A sport

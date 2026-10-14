@@ -82,7 +82,13 @@ every league: a matchup card on baseball and hockey picks (as NFL,
 college and NBA picks had), and on basketball picks the projection's
 walk, the teammate-out card and each past game's opponent. Basketball's
 matchup check now reads the defence read its projection already used
-(step 74; AF). The whole picture, sport by sport, is in
+(step 74; AF). The NBA board now prices steals, blocks and turnovers,
+read only from the games whose box score stored them (three more odds
+credits on every NBA event), and the Most Likely ranking can now measure
+them, PRA and the two-stat combos (step 75; AG). Every UFC fight the
+model prices now carries round prices off the finish times on file:
+over and under 1.5 and 2.5 rounds and the round it ends in, fair numbers
+to shop by hand (step 76; AH). The whole picture, sport by sport, is in
 `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -90,16 +96,19 @@ refers to. Paste back what each one prints, with its letter.
 
 Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings, Q's photo fill (photo addresses only — the same
-thing tomorrow's chores would write) and AD's two model files (the table
-the chores would fit anyway, and the test's verdict). Every command runs on the box (`ssh` in first).
+thing tomorrow's chores would write), AD's two model files (the table
+the chores would fit anyway, and the test's verdict) and AG's backfill
+(last season's NBA box scores read again, adding the three stats beside
+the rows already there) and its rank fit (the store Wednesday's chores
+write anyway). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Every league's Most Likely pick carries the same kinds of information`
+**A. The box has today's code.** The first line should end `Steals, blocks and turnovers on the NBA board; round prices on every UFC fight`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor c1a44a87 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor a4faa884 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -641,6 +650,48 @@ what the model did with it; NBA (from opening night) and WNBA: the
 `Teammate out` box when a rotation player is ruled out, the `How this
 number was built` walk on the pick page, and each past game named by its
 opponent.
+
+**AG. Steals, blocks and turnovers on the NBA board** (step 75; the first
+command reads last season's NBA box scores again to add the three stats,
+at low priority, perhaps half an hour; the second only reads; the third
+writes the rank store Wednesday's chores write anyway). The box has only
+stored the three since 2026-10-13, so the first gives opening night's
+picks last season's games of each instead of none; it prints the games
+and rows it wrote. The second measures how much of tonight's defence
+reaches one player in each of the three (the matchup card shows the
+defence and says the model leaves it out until this says otherwise). The
+third runs the Most Likely ranking walk on the NBA's markets now instead
+of on Wednesday — the three, PRA and the two-stat combos included — and
+prints each one's number and whether it opens a shelf:
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py nba --seasons 2025 --refresh
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 hoopsdvpfit.py nba
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'nba')]"
+```
+Paste back all three. In the second, the `steals`, `blocks` and
+`turnovers` lines say `the defence reaches the player: about 0.62 of its
+lean` (a pass; it moves nothing until you say so) or `noise for one
+player`. In the third, each market reads `on the board` or `UNDER the
+floor — stays off the board`; a market off the board prices on the Edge
+board only. From opening night, the NBA build's log prints `Steals,
+blocks, turnovers: N prop(s) not built` while a player's newest box
+scores lack them (small once the first command has run), and the odds
+pull asks for the three on every NBA event: 19 credits an event, was 16.
+
+**AH. Round prices on every UFC fight** (step 76; read-only, seconds).
+Nothing to run for the build: the next UFC build hangs them on every
+fight the model prices. The first command counts the stored finishes the
+round shape reads, by scheduled rounds (a fight carries round prices only
+once its length has 120); the second is the build's own line:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; from engine.ufc import rounds as R; c=db.connect(); print({n: len(R.league(c, n)) for n in (3, 5)}, 'need', R.MIN_LEAGUE)"
+journalctl -u qellys --since "6 hours ago" --no-pager | grep -E "Round prices:" | tail -3
+```
+Then on your phone: UFC, any fight the model priced (a pick or a near
+miss), open `Every market this fight implies`: under the moneyline and
+the distance, `Under/Over 1.5 rounds`, `Under/Over 2.5 rounds` and `Ends
+in round 1/2/3`, each with our fair price and `shop it`. A fight the
+books haven't priced yet shows none, as before.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2702,6 +2753,82 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_nba_knows_who_plays_where_and_who_is_hurt.py` finds the
     teammate news on the teammate card (it read the bullets) and checks it
     is said once. New: `tests/test_every_league_reads_the_same_on_most_likely.py`.
+75. **Steals, blocks and turnovers on the NBA board** (2026-10-14, you:
+    "Do 1-7 and the ones we download but don't use"). AG runs it. Both NBA
+    ingests have stored the three since 2026-10-13; nothing priced them.
+    THE ODDS: the NBA request asks for `player_steals`, `player_blocks`
+    and `player_turnovers` on every event, main lines only, behind the
+    drop-and-retry guard every new key gets: 19 credits an event, was 16.
+    The WNBA's request is unchanged (its season is over, and the call was
+    the NBA's). A MISSING ROW IS NOT A ZERO: a game ingested before
+    2026-10-13 has no row for them, and reading it as a night with none
+    would price every under at a certainty. So each reads only the run of
+    his newest games whose box stored it, and a player with fewer than
+    three such games gets no prop (the build prints how many), one with
+    fewer than ten is pulled toward the book's price as hard as any thin
+    sample; AG's first command fills last season. PRICING: as counts, the way rebounds are
+    (exact, never tighter than Poisson); turnovers' spread starts from a
+    stated prior (0.60) and the build's own fit measures all three from
+    the league's logs, as every stat's. They clear the high-hold bar
+    threes already clear (4 points over break-even, not 2): low counts
+    where one more decides the bet, hung at a heavier hold. THE MATCHUP:
+    the defence read was never measured to reach one player in these, so
+    the model has no matchup step for them and the board says so (it no
+    longer prints `matchup moved our number +0%`, here or for the combos).
+    The card under the pick still says what tonight's opponent gives up —
+    steals given up, shots blocked, turnovers forced, ranked — and that
+    the model leaves it out; AG's second command measures it, on the same
+    bar as the other four (400 games, two standard errors). A journaled
+    pick settles off its own box-score row; the live tracker, the parlay
+    checker (tier 3, and kept out of compounding tickets, as threes are),
+    the slip grader and the slip reader, the player page's stat chips,
+    Ask and the replay all know the three, and Most Likely shelves them as
+    `Steals, blocks & turnovers` once each is measured to rank. PRA AND
+    THE COMBOS ON MOST LIKELY, found on the way: the ranking walk reads
+    stored rows and no ingest stores a sum, so PRA (on the walk's list
+    from the start) and the combos bought on 10-13 were never measured and
+    could never reach Most Likely. The walk now adds each game's parts up
+    (only games where every part is on file), for ranking only: the
+    calibration, form and player-memory fits still read stored rows, so no
+    price moves. Your call: those three fits list PRA too and have never
+    found a row for it either; switching them on would move PRA's prices,
+    so they are left as they were. Fixed on the way: the replay divided by
+    zero on a game with no stored count before it; it skips it now, the
+    three-game floor every prop has. Budgets: the first visit is 610.97
+    of 611 KB (no bump). Pins changed, told to you, nothing loosened:
+    `tests/test_nba_prices_the_two_stat_combos.py` (the NBA's credits 16
+    to 19, and its slate list ends with the three),
+    `tests/test_alt_lines.py` (19 an NBA event), `tests/test_hoops_ladder.py`
+    and `tests/test_wnba.py` (the NBA's markets beyond the WNBA's now
+    include the three), `tests/test_mlb_likely.py` (a fourth basketball
+    shelf, `counts`), `tests/test_basketball_props_are_replayed.py` (its
+    stand-in logs gain the three, from their own random stream so the
+    other markets' numbers are unchanged, and "every market is priced and
+    graded" still holds for all eleven). New:
+    `tests/test_nba_prices_steals_blocks_turnovers.py`.
+76. **Round prices on every UFC fight the model prices** (2026-10-14, the
+    same call: "UFC finish times … would be our own fair prices to shop
+    by hand"). AH checks it. Whether a fight goes the distance was already
+    priced, off the method model; rounds were refused, because pricing
+    them needs when a finish lands and the dossiers hold no finish times
+    (the script's written hazard is never to price a round). Since
+    2026-10-14 `ufc_fights` holds how and when each fighter's recent bouts
+    ended, so `engine/ufc/rounds` prices them: when a finish lands, given
+    a finish, is the spread of finish times over every stored bout
+    scheduled for the same rounds (each bout once), leaned toward the two
+    fighters' own inside-the-distance fights, each worth one fight against
+    ten fights' worth of the league; times the method model's chance of a
+    finish, so the rounds always agree with the distance price. Over and
+    under 1.5 and 2.5 rounds (3.5 and 4.5 too in a five-rounder) and the
+    round it ends in. Fewer than 120 stored finishes at a fight's length
+    and it carries none, never the written prior; three rounds is assumed
+    where the feed names none, as the card's duration read says. Not
+    measured against results, and said on the read: fair numbers to shop,
+    tier 3, never staked, never journaled, never a fight's best market;
+    a number under 1% or over 99% is left off. They ride on the fight's
+    own `Every market this fight implies` list, which a passed fight's
+    card now draws too (only picks drew it). No pins changed. New:
+    `tests/test_ufc_round_prices_from_finish_times.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

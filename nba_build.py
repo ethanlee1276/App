@@ -34,10 +34,11 @@ SLATE_MARKETS = ("pts", "reb", "ast", "fg3m", "pra")
 def slate_markets(league: str) -> tuple:
     """The markets this league's board prices: the five above, and for the
     NBA the three two-stat combos (`hoops.COMBOS`; Ethan's call,
-    2026-10-13). The WNBA keeps its five — its odds request is its own
-    (`oddsapi.SPORT_CONFIG`), and the call was the NBA's."""
-    from engine.hoops import COMBOS
-    return SLATE_MARKETS + (tuple(COMBOS) if league == "nba" else ())
+    2026-10-13) and steals, blocks and turnovers (`hoops.COUNTS`,
+    2026-10-14). The WNBA keeps its five — its odds request is its own
+    (`oddsapi.SPORT_CONFIG`), and both calls were the NBA's."""
+    from engine.hoops import COMBOS, COUNTS
+    return SLATE_MARKETS + (tuple(COMBOS) + COUNTS if league == "nba" else ())
 
 
 class _Game:
@@ -141,9 +142,17 @@ def player_history(conn, teams: set[str], sport: str = "nba",
         p["pra"] = [round(p["pts"][i] + p["reb"][i] + p["ast"][i], 1)
                     for i in range(len(weeks))]
         # The two-stat combos, the same way and for the same reason.
-        from engine.hoops import COMBOS
+        from engine.hoops import COMBOS, COUNTS, carried
         for combo, (a, b) in COMBOS.items():
             p[combo] = [round(p[a][i] + p[b][i], 1) for i in range(len(weeks))]
+        # Steals, blocks and turnovers: only his newest games whose box
+        # stored them (`hoops.carried` — a missing row is not a zero), so
+        # the list can be shorter than his minutes and lines up with them
+        # game for game from the newest.
+        if sport == "nba":
+            games = [p["by_week"][w] for w in weeks]
+            for stat in COUNTS:
+                p[stat] = [games[i][stat] for i in range(carried(games, stat))]
     return hist
 
 
@@ -793,10 +802,20 @@ def main() -> None:
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"],
                               g.get("home_name", ""), g.get("away_name", ""))
                         for g in games], [])
+        thin_counts = 0
         for player, h in hist.items():
             if len(h["minutes"]) >= 3:
                 for stat in slate_markets(args.league):
+                    # A count his newest three boxes did not store has no
+                    # rate to price (`hoops.carried`): no prop, counted.
+                    if len(h.get(stat) or ()) < 3:
+                        thin_counts += 1
+                        continue
                     slate.props.append(_Prop(player, stat, h["team"]))
+        if thin_counts:
+            print(f"Steals, blocks, turnovers: {thin_counts} prop(s) not built — fewer than 3 of the "
+                  f"player's newest games stored them. Last season's: "
+                  f"python3 ingest.py {args.league} --seasons 2025 --refresh")
 
         # Every prop on this board is projected from stored game logs, so an
         # empty history produces an empty board that looks exactly like a
@@ -1105,7 +1124,7 @@ def main() -> None:
             try:
                 from engine import hoopsdvp as _dvp
                 _dvp_rt, _dvp_last = _dvp.board_ratings(conn, args.league, args.date)
-                _dvp_n = _dvp.attach(recs, _dvp_rt, _dvp_last)
+                _dvp_n = _dvp.attach(recs, _dvp_rt, _dvp_last, args.league)
                 print(f"Matchup cards: {_dvp_n} of {len(recs)} pick(s)"
                       f"{' (last season — too few games this season yet)' if _dvp_last else ''}.")
             except Exception as exc:                         # noqa: BLE001

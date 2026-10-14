@@ -26,7 +26,14 @@ CLAMP_W_THIN = 0.15
 
 MARKET_LABELS = {"pts": "Points", "reb": "Rebounds", "ast": "Assists",
                  "fg3m": "3-Pointers Made", "pra": "Pts+Reb+Ast",
-                 "pts_reb": "Pts+Reb", "pts_ast": "Pts+Ast", "reb_ast": "Reb+Ast"}
+                 "pts_reb": "Pts+Reb", "pts_ast": "Pts+Ast", "reb_ast": "Reb+Ast",
+                 "stl": "Steals", "blk": "Blocks", "tov": "Turnovers"}
+
+#: Markets held to the high-hold bar whatever their hold reads: threes,
+#: and since 2026-10-14 steals, blocks and turnovers (`hoops.COUNTS`) —
+#: low counts where one more decides the bet, which the books hang at a
+#: heavier hold than the volume markets.
+HIGH_HOLD_MARKETS = ("fg3m", "stl", "blk", "tov")
 
 
 def _rate_per_min(minutes: list[float], values: list[float]) -> float | None:
@@ -104,12 +111,17 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # THE WALK FROM BASE TO FINAL (engine/chain), as the NFL's and MLB's
     # projections publish it: the pick page draws it, and the one board's
     # matchup check reads its measured Matchup step (engine/likelyboard).
+    # A market the defences' lean was never measured to reach (the combos,
+    # steals, blocks, turnovers) has no Matchup step at all, so the board
+    # says the model has none rather than "moved our number +0%".
     from .. import chain as _chain
+    from ..hoopsdvp import TRANSFER as _TRANSFER
+    read_matchup = bool((_TRANSFER.get(tune.key) or {}).get(stat)) or dvp_m != 1.0
     chain = _chain.build(rate * proj_min, "rate", [
         _chain.step("player", pmult, "the record's earned correction for this player" if pmult != 1.0 else ""),
         _chain.step("environment", env_m, env_note or ""),
         _chain.step("rest", lay_m, lay_note or ""),
-        _chain.step("matchup", dvp_m, prop.get("dvp_note") or ""),
+        _chain.step("matchup", dvp_m, prop.get("dvp_note") or "") if read_matchup else None,
     ], proj, rate_per_min=round(rate, 4), minutes=proj_min)
     context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note"),
                                  prop.get("lineup_note")) if n]
@@ -172,7 +184,10 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         side, p_model, p_market, odds = ("UNDER", 1 - p_model_over,
                                          mkt_under, under_odds)
 
-    w = CLAMP_W_THIN if len(minutes) < tune.thin_sample else \
+    # A count read off fewer stored games than his minutes (`hoops.carried`)
+    # is a thin sample on the count's own evidence, whatever his minutes say.
+    n_games = min(len(minutes), len(prop.get("values") or minutes))
+    w = CLAMP_W_THIN if n_games < tune.thin_sample else \
         float(prop.get("clamp_w", CLAMP_W_DEFAULT))
     p_final, clamp_note = humility_clamp(p_model, p_market, w)
     if p_final is None:
@@ -180,7 +195,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                 "market": label}
 
     fails = approval_gate(p_final, odds, hold, grade,
-                          high_hold_market=stat == "fg3m",
+                          high_hold_market=stat in HIGH_HOLD_MARKETS,
                           stat=stat, tune=tune)
     # The other two self-tuning gates, in parity with every engine: a
     # market whose calibration fit ran to its boundary closed itself, and
@@ -223,7 +238,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         fails = fails + ([f"listed {_status} — not expected to play"]
                          if prop.get("restriction") else
                          [f"listed {_status} — held until the lineup confirms"])
-    need = required_edge(stat, hold, tune, high_hold_market=stat == "fg3m")
+    need = required_edge(stat, hold, tune, high_hold_market=stat in HIGH_HOLD_MARKETS)
     # §7 — the star tax. Marquee overs must clear an extra point of
     # required edge (the public's shade is already in the price); a
     # marquee under says the subsidy out loud on its card.
