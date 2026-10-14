@@ -256,6 +256,30 @@ def save(fits: dict[str, FormFit], path=None) -> Path:
     return p
 
 
+def retire(sport: str, path=None) -> list[str]:
+    """Remove every stored dial for ``sport`` and return the keys removed.
+
+    For a board whose projection has no recency dial (basketball —
+    formfit.py's NO_DIAL says why). A dial fitted on another model and
+    listed on the Record page as this board's learning is a claim nothing
+    behind the board backs; the rank store retires a measurement it can
+    no longer stand behind the same way."""
+    p = Path(path if path is not None else DEFAULT_PATH)
+    try:
+        stored = json.loads(p.read_text()) if p.is_file() else {}
+    except (ValueError, OSError):
+        return []
+    if not isinstance(stored, dict):
+        return []
+    gone = sorted(k for k in stored if str(k).partition(":")[0] == sport)
+    if gone:
+        for k in gone:
+            stored.pop(k, None)
+        p.write_text(json.dumps(stored, indent=1))
+        _cache.clear()
+    return gone
+
+
 _cache: dict = {}
 
 

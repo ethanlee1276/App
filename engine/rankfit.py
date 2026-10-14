@@ -81,9 +81,15 @@ MIN_PAIRS = 2_000
 #: from the start and the walk never once measured it: no ingest stores a
 #: sum, so `load_entries` found no rows and the shelf could never open —
 #: nor for the NBA's two-stat combos bought on 10-13. The walk adds the
-#: parts up now (`load_entries(sums=True)`). Steals, blocks and turnovers
-#: are stored rows and walk as they are. Each opens only above the floor
-#: on 2,000 pairs, as every market before them.
+#: parts up now (`db.hoops_entries`). Steals, blocks and turnovers are
+#: stored rows and walk as they are. Each opens only above the floor on
+#: 2,000 pairs, as every market before them.
+#:
+#: AND BASKETBALL WALKS ITS OWN MODEL, the same day — the reason hockey
+#: does (below): `logwalk.walk` used to hand the NBA and the WNBA to the
+#: football chain, so every basketball AUC in this store measured a model
+#: no basketball board runs. It walks the board's minutes × rate
+#: projection now (`hoopsreplay.walk`), against the same floor.
 MARKETS = {
     "mlb": ("hits", "total_bases", "home_runs", "strikeouts", "outs"),
     "nba": ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast", "stl", "blk", "tov"),
@@ -248,7 +254,7 @@ def measure(conn, sport: str, markets=None, log=print,
                 with _cal.disabled():
                     pairs = _nhl_bt.walk(conn, market, players=_nhl_players).pairs
             else:
-                entries = load_entries(conn, sport, market, sums=True)
+                entries = load_entries(conn, sport, market)
                 if not entries:
                     lines.append(f"rank fit {key}: no ingested logs")
                     continue

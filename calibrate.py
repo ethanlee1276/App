@@ -45,7 +45,17 @@ SPORT_MARKETS = {
     # here the moment game logs are ingested. It was never wired up, which
     # is why `--learning` showed zeros for both: `--sport` validates
     # against this dict, so nba was not even a legal value to type.
-    "nba": ["pts", "reb", "ast", "fg3m", "pra"],
+    #
+    # ON THE BOARD'S OWN MODEL since 2026-10-14 (Ethan: "Ya do the self
+    # tuneung"). The walk used to price basketball through the football
+    # chain, so the correction stored here was measured on a model no
+    # basketball board runs; `logwalk.walk` hands it to the board's
+    # minutes × rate projection now (engine/hoopsreplay.walk), and PRA,
+    # the two-stat combos and steals, blocks and turnovers are walked from
+    # the parts and rows the ingest stores (`db.hoops_entries`). The WNBA
+    # board prices the first five only.
+    "nba": ["pts", "reb", "ast", "fg3m", "pra",
+            "pts_reb", "pts_ast", "reb_ast", "stl", "blk", "tov"],
     "wnba": ["pts", "reb", "ast", "fg3m", "pra"],
     # COLLEGE JOINED 2026-09-04, and the line it replaces was true when
     # it was written: college was priced at game level only, with no

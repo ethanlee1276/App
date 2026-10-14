@@ -1375,35 +1375,52 @@ def entries_for_market(conn, sport: str, market: str,
             for name, vals in grouped.items() if len(vals) >= min_games]
 
 
-def entries_for_sum(conn, sport: str, parts, min_games: int = 8,
-                    seasons: list[int] | None = None) -> list[dict]:
-    """`entries_for_market`'s shape for a market no ingest stores because it
-    is a SUM of ones that are (basketball's PRA and two-stat combos,
-    `hoops.SUMS`): each game's parts added up, and only the games where
-    every part is on file — a partial sum is a wrong number."""
-    parts = tuple(parts)
-    q = ("SELECT player, season, period, game_id, team, opponent, home, market, value "
-         "FROM player_game_logs WHERE sport=? AND market IN (%s)" % ",".join("?" * len(parts)))
-    args: list = [sport, *parts]
+def hoops_entries(conn, sport: str, market: str, min_games: int = 8,
+                  seasons: list[int] | None = None) -> list[dict]:
+    """A basketball market's walk entries, in the shape the board's own
+    projection reads (`engine.nba.pipeline.project`): beside each game's
+    value, his minutes and whether he started — minutes × a per-minute
+    rate cannot be walked from the values alone. Oldest first, every game
+    he has a box row for, his zero-minute nights included: the live
+    window (`nba_build.player_history`) keeps them, so the walk does.
+
+    ``values[i]`` is None where that game's box stored no row for the
+    market, or for any part of a sum (`hoops.SUMS`: PRA and the two-stat
+    combos, which no ingest stores). A missing row is not a zero
+    (`hoops.carried`), and a partial sum is a wrong number.
+
+    Replaced `entries_for_sum` (2026-10-14), which summed the parts but
+    dropped the minutes the board's model is built on."""
+    from .hoops import SUMS
+    parts = tuple(SUMS.get(market, (market,)))
+    want = ("min",) + tuple(p for p in parts if p != "min")
+    q = ("SELECT player, season, period, team, opponent, home, position, market, value "
+         "FROM player_game_logs WHERE sport=? AND market IN (%s)" % ",".join("?" * len(want)))
+    args: list = [sport, *want]
     if seasons:
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += list(seasons)
     games: dict = {}
     for row in conn.execute(q, args):
         g = games.setdefault(row["player"], {}).setdefault(
-            (int(row["season"] or 0), str(row["period"]), str(row["game_id"] or "")),
-            {"team": str(row["team"] or ""), "opp": str(row["opponent"] or ""),
-             "home": int(row["home"] or 0), "got": {}})
+            str(row["period"]), {"team": str(row["team"] or ""), "opp": str(row["opponent"] or ""),
+                                 "home": int(row["home"] or 0), "starter": False, "got": {}})
         g["got"][str(row["market"])] = float(row["value"] or 0.0)
+        if row["market"] == "min":
+            g["starter"] = row["position"] == "S"
     out = []
-    for name, by_game in games.items():
-        keys = sorted(k for k, g in by_game.items() if all(p in g["got"] for p in parts))
-        if len(keys) < min_games:
+    for name, by_day in games.items():
+        days = sorted(by_day)
+        vals = [round(sum(by_day[d]["got"][p] for p in parts), 1)
+                if all(p in by_day[d]["got"] for p in parts) else None for d in days]
+        if sum(v is not None for v in vals) < min_games:
             continue
-        out.append({"name": name,
-                    "values": [round(sum(by_game[k]["got"][p] for p in parts), 1) for k in keys],
-                    "dates": [k[1] for k in keys], "teams": [by_game[k]["team"] for k in keys],
-                    "opps": [by_game[k]["opp"] for k in keys], "homes": [by_game[k]["home"] for k in keys]})
+        out.append({"name": name, "values": vals, "dates": days,
+                    "minutes": [by_day[d]["got"].get("min", 0.0) for d in days],
+                    "starters": [by_day[d]["starter"] for d in days],
+                    "teams": [by_day[d]["team"] for d in days],
+                    "opps": [by_day[d]["opp"] for d in days],
+                    "homes": [by_day[d]["home"] for d in days]})
     return out
 
 

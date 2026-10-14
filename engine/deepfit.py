@@ -102,6 +102,14 @@ def refit_sport(sport: str, db: str = "data/history.db") -> list[str]:
                     or ["no output"])[-1]
             lines.append(f"⚠️  {sport} {label} failed: {tail}")
             continue
+        # A fit the sport's board has nothing for (formfit.NO_DIAL: the
+        # basketball projection has no recency dial) says so, not "nothing
+        # adopted" as if the record had been asked and said no.
+        declined = [ln.split(": not fitted — ", 1)[1].strip() for ln in (r.stdout or "").splitlines()
+                    if ": not fitted — " in ln]
+        if declined:
+            lines.append(f"deep refit: {sport} {label} — not fitted: {declined[0]}")
+            continue
         # ADOPTIONS ONLY. These CLIs print a paragraph per market; a
         # nightly log that reprints all of it teaches you to skip the
         # nightly log. What matters is which markets MOVED.

@@ -1,9 +1,10 @@
 """The fitter every sport shares: learn from the bet journal itself.
 
 The deep fitters (calibrate.py, formfit.py, playerfit.py) walk the history
-DB through a sport's own engine — the strongest possible fit, and only MLB
-and the generic-engine sports have that harness. The hoops and college
-models price through their own machinery, and UFC has no game logs at all.
+DB through a sport's own engine — the strongest possible fit, and only MLB,
+the generic-engine sports and (since 2026-10-14, `hoopsreplay.walk`) the
+basketball boards have that harness. College prices through its own
+machinery in places, and UFC has no game logs at all.
 What EVERY sport has is the journal: settled bets carrying the claimed
 probability, the projection, and what actually happened. This module fits
 what the journal can honestly support, per sport and market:

@@ -55,26 +55,47 @@ class Entries(list):
     aux: dict = {}
 
 
+#: The leagues that walk the basketball board's own model
+#: (engine/hoopsreplay.walk) rather than the football chain below.
+HOOPS = ("nba", "wnba")
+
+_TUNE: dict = {}
+
+
+def _hoops_tune(conn, sport: str):
+    """The league's tuning as the live build fits it
+    (`hoops_fit.fitted_tuning` over every stored season — the spreads
+    `p_over` prices with), once per connection and sport rather than once
+    per market; the inherited numbers if the fit fails, as the build does."""
+    key = (id(conn), sport, getattr(conn, "total_changes", 0))
+    if _TUNE.get("key") != key or _TUNE.get("conn") is not conn:
+        from .hoops import for_league
+        try:
+            from .hoops_fit import fitted_tuning
+            tune = fitted_tuning(conn, sport)[0]
+        except Exception:                                    # noqa: BLE001
+            tune = for_league(sport)
+        _TUNE.clear()
+        _TUNE.update(key=key, conn=conn, tune=tune)
+    return _TUNE["tune"]
+
+
 def load_entries(conn, sport: str, market: str, min_games: int = 8,
-                 seasons: list[int] | None = None, sums: bool = False) -> Entries:
+                 seasons: list[int] | None = None) -> Entries:
     """The one door the fitters and the rank walk load a market's
     entries through. Interceptions come paired with attempts and with
     the defences' timeline; everything else is `db.entries_for_market`.
 
-    ``sums``: a basketball market that is a sum of stored ones (PRA, the
-    two-stat combos — `hoops.SUMS`) is added up from its parts game by
-    game. No ingest stores a sum, so without it the walk found no rows
-    and those markets could never earn a Most Likely shelf. The rank walk
-    asks for it (2026-10-14); the price fitters do not, so no fit that
-    moves a price starts on the strength of this door."""
+    BASKETBALL (2026-10-14) loads `db.hoops_entries` — each game's minutes
+    and starter flag beside its value, PRA and the combos added up from
+    their parts — and the league's fitted tuning rides along as ``tune``,
+    because its walk is the board's own minutes × rate model
+    (`hoopsreplay.walk`), not the football chain."""
     from . import db as _db
-    if sums and sport in ("nba", "wnba"):
-        from .hoops import SUMS
-        if market in SUMS:
-            got = Entries(_db.entries_for_sum(conn, sport, SUMS[market], min_games=min_games,
-                                              seasons=seasons))
-            got.aux = {}
-            return got
+    if sport in HOOPS:
+        got = Entries(_db.hoops_entries(conn, sport, market, min_games=min_games, seasons=seasons))
+        got.aux = {"tune": _hoops_tune(conn, sport)} if got else {}
+        return got
     companion = COMPANION.get(market)
     if companion:
         got = Entries(_db.entries_with_companion(conn, sport, market, companion,
@@ -258,10 +279,14 @@ def walk(sport: str, entries: list[dict], market: str,
     """One door for every fitter, whichever sport it is fitting.
 
     MLB walks through its own engine (park/ump/Statcast context lives
-    there); everything else walks through the generic one. The fitters
-    (formfit, playerfit, calibrate) call this instead of choosing a
-    harness themselves, so adding a sport's harness is one branch here
-    rather than an edit in three fitters."""
+    there), and since 2026-10-14 the NBA and the WNBA through theirs —
+    the board's minutes × rate projection (`hoopsreplay.walk`), so the
+    temperature, the player memory and the rank store are measured on the
+    model they correct, not on the football chain below, which has no
+    minutes model at all. Everything else walks through the generic one.
+    The fitters (formfit, playerfit, calibrate) call this instead of
+    choosing a harness themselves, so adding a sport's harness is one
+    branch here rather than an edit in three fitters."""
     if sport == "mlb":
         from .mlb.backtest import backtest_from_logs as mlb_bt
         return mlb_bt(entries, market,
@@ -270,6 +295,9 @@ def walk(sport: str, entries: list[dict], market: str,
     # What `load_entries` loaded beside the entries rides along unasked.
     for k, v in (getattr(entries, "aux", None) or {}).items():
         hooks.setdefault(k, v)
+    if sport in HOOPS:
+        from .hoopsreplay import walk as hoops_walk
+        return hoops_walk(entries, market, sport=sport, min_history=min_history, **hooks)
     return backtest_from_logs(entries, market, sport=sport,
                               min_history=4 if min_history is None else min_history,
                               **hooks)

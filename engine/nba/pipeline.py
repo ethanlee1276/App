@@ -92,8 +92,14 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # Player memory (engine/playerfit.py): the record's earned correction
     # for players this model persistently misreads — same store, same
     # restraints (shrinkage, ±15% clamp, causal adoption) as every sport.
+    # A ``player_mult`` on the prop stands in for the store: the fitter's
+    # walk (engine/hoopsreplay.walk) passes 1.0 to measure the model
+    # without memory, and each game's causal correction to measure it with.
     from ..playerfit import mult_for as pf_mult
-    pmult = pf_mult(tune.key, stat, prop["player"])
+    pmult = prop.get("player_mult")
+    if pmult is None:
+        pmult = pf_mult(tune.key, stat, prop["player"])
+    pmult = float(pmult)
     # The WNBA script's context layer (engine/nba/context.py): tonight's
     # scoring environment scales volume (§1.2, damped — the total prices
     # pace AND efficiency), and a first game after a long team layoff

@@ -293,13 +293,17 @@ def test_the_ranking_walk_measures_the_counts_and_adds_the_sums_up():
                                   "player": "Guard One", "team": "BOS", "opponent": "NYK", "position": "S",
                                   "home": 1, "market": "pts", "value": 40.0}])
     conn.commit()
-    got = logwalk.load_entries(conn, "nba", "pra", sums=True)
-    assert len(got) == 1 and got[0]["values"] == [29.0] * 10 and len(got[0]["dates"]) == 10
-    assert logwalk.load_entries(conn, "nba", "pts_reb", sums=True)[0]["values"] == [25.0] * 10
-    assert logwalk.load_entries(conn, "nba", "pra") == [], "the price fitters read stored rows only, as before"
-    assert logwalk.load_entries(conn, "nba", "stl")[0]["values"] == [1.0] * 10
+    # Since the same day every basketball walk reads these entries — the
+    # rank walk and the price fitters alike (tests/test_nba_self_tunes_on_
+    # its_own_model) — with his minutes beside each game, and a game whose
+    # box lacks a part kept as None rather than dropped, as his window does.
+    got = logwalk.load_entries(conn, "nba", "pra")
+    assert len(got) == 1 and got[0]["values"] == [29.0] * 10 + [None] and len(got[0]["dates"]) == 11
+    assert got[0]["minutes"] == [32.0] * 10 + [0.0]
+    assert logwalk.load_entries(conn, "nba", "pts_reb")[0]["values"] == [25.0] * 10 + [None]
+    assert logwalk.load_entries(conn, "nba", "stl")[0]["values"] == [1.0] * 10, "that box has no steals row"
     src = (ROOT / "engine" / "rankfit.py").read_text(encoding="utf-8")
-    assert "load_entries(conn, sport, market, sums=True)" in src
+    assert "load_entries(conn, sport, market)" in src
 
 
 def test_the_call_is_in_the_runbook():

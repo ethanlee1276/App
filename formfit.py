@@ -45,6 +45,13 @@ SPORT_MARKETS = {
     # here the moment game logs are ingested. It was never wired up, which
     # is why `--learning` showed zeros for both: `--sport` validates
     # against this dict, so nba was not even a legal value to type.
+    #
+    # NOT FITTED HERE since 2026-10-14, and kept listed on purpose: the
+    # basketball board's projection is minutes × a per-minute rate over
+    # his last twenty games, with no blend of windows for a dial to turn,
+    # so `main` declines both (see NO_DIAL). The keys stay because
+    # `deepfit.sports_with_history` counts sports from this table, and the
+    # memory and the temperatures after this fit are real for both.
     "nba": ["pts", "reb", "ast", "fg3m", "pra"],
     "wnba": ["pts", "reb", "ast", "fg3m", "pra"],
     # COLLEGE, ADDED 2026-09-04, and the comment it replaces was true
@@ -136,6 +143,13 @@ SPORT_MARKETS = {
 }
 
 
+#: Sports whose board has no recency dial for this fit to turn, and why.
+_HOOPS_NO_DIAL = ("the basketball board's projection is minutes × a per-minute rate over "
+                  "his last twenty games, with no blend of windows for a recency dial to "
+                  "turn; its memory and temperatures walk that model (engine/hoopsreplay.walk)")
+NO_DIAL = {"nba": _HOOPS_NO_DIAL, "wnba": _HOOPS_NO_DIAL}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Fit the recency dial from real outcomes.")
@@ -160,8 +174,17 @@ def main() -> None:
                   f"{m['reading']}  (n={m['samples']:,})")
         return
 
-    conn = _db.connect(args.db)
     sport = args.sport
+    if sport in NO_DIAL:
+        # deepfit.refit_sport reports this line (": not fitted — ") as the reason.
+        print(f"{sport}: not fitted — {NO_DIAL[sport]}")
+        gone = ff.retire(sport, ff.DEFAULT_PATH)
+        if gone:
+            print(f"Retired {len(gone)} stored {sport} dial(s) fitted on the football chain, "
+                  f"which this board never read: {', '.join(gone)}")
+        return
+
+    conn = _db.connect(args.db)
     markets = [args.market] if args.market else SPORT_MARKETS[sport]
     min_games = (args.min_history or (8 if sport == "mlb" else 4)) + 2
 

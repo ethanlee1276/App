@@ -88,7 +88,13 @@ credits on every NBA event), and the Most Likely ranking can now measure
 them, PRA and the two-stat combos (step 75; AG). Every UFC fight the
 model prices now carries round prices off the finish times on file:
 over and under 1.5 and 2.5 rounds and the round it ends in, fair numbers
-to shop by hand (step 76; AH). The whole picture, sport by sport, is in
+to shop by hand (step 76; AH). The NBA's self-tuning now learns on the
+board's own model: its calibration and player-memory fits, and the Most
+Likely ranking walk, used to price past games through the football
+chain; they walk the board's minutes × rate projection now, PRA, the
+combos and the three counts included, and a count with none in a
+player's window no longer stops the whole NBA slate (step 77; AI). The
+whole picture, sport by sport, is in
 `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -100,15 +106,17 @@ thing tomorrow's chores would write), AD's two model files (the table
 the chores would fit anyway, and the test's verdict) and AG's backfill
 (last season's NBA box scores read again, adding the three stats beside
 the rows already there) and its rank fit (the store Wednesday's chores
-write anyway). Every command runs on the box (`ssh` in first).
+write anyway), and AI's refit (the NBA's fitted model files, the ones
+Wednesday's refit writes anyway). Every command runs on the box (`ssh`
+in first).
 
-**A. The box has today's code.** The first line should end `Steals, blocks and turnovers on the NBA board; round prices on every UFC fight`
+**A. The box has today's code.** The first line should end `The NBA's self-tuning fits learn on the board's own model, PRA and the new markets included`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor a4faa884 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor fb371eee HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -692,6 +700,26 @@ miss), open `Every market this fight implies`: under the moneyline and
 the distance, `Under/Over 1.5 rounds`, `Under/Over 2.5 rounds` and `Ends
 in round 1/2/3`, each with our fair price and `shop it`. A fight the
 books haven't priced yet shows none, as before.
+
+**AI. The NBA's self-tuning on its own model** (step 77; rewrites the
+NBA's fitted temperature, player-memory and rank files, the ones
+Wednesday's refit writes anyway, and never touches the record; perhaps
+ten minutes at low priority). Nothing has to run: Wednesday's refit
+(the next is Oct 21) does all of it by itself. These run it now, before
+opening night:
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine.deepfit import refit_sport; [print(l) for l in refit_sport('nba')]"
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'nba')]"
+cd /srv/qellys && sudo -u qellys python3 calibrate.py --show | grep nba
+```
+Paste back all three. The first prints three lines: `recency dial — not
+fitted: …` (this board has no dial to fit; any NBA dial stored off the
+football chain is retired), then the player memory and the temperatures,
+each `nothing adopted` or `N market(s) moved` with the markets named. The
+second prints each NBA market's ranking number, now on the board's own
+model: `on the board` or `UNDER the floor — stays off the board`. The
+third lists the NBA temperatures on file, PRA and the new markets among
+them where the logs hold enough games.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2829,6 +2857,52 @@ first). Paste back anything that prints an error or looks off.
     own `Every market this fight implies` list, which a passed fight's
     card now draws too (only picks drew it). No pins changed. New:
     `tests/test_ufc_round_prices_from_finish_times.py`.
+77. **The NBA's self-tuning learns on the board's own model** (2026-10-14,
+    you: "Ya do the self tuneung", to step 75's call). AI runs it now;
+    Wednesday's refit does it by itself. WHAT WAS WRONG, found on the way:
+    the deep fits (temperatures, player memory, recency dial) and the Most
+    Likely ranking walk all replay a sport's past games through one door
+    (`logwalk.walk`), and that door handed the NBA and the WNBA to the
+    FOOTBALL chain, a form blend with no minutes in it. The NBA board then
+    applied what those fits learned (its temperatures, its player
+    corrections) to its own minutes × rate projection: corrections
+    measured on one model, applied to another. The door hands basketball
+    to the board's own model now (`engine/hoopsreplay.walk`): each past
+    game priced off the twenty before it exactly as the live build hands
+    them to the board (his minutes, his starts, the nights he sat, a count
+    read only where its box stored it), with the league's fitted spreads,
+    at the naive line, -110 both ways, and no gate in the way, so a fit
+    learns from every game the model projected. It walks a market's most
+    recent 30,000 games, to stay inside the box's fifteen minutes a fit.
+    PRA, the three combos and steals, blocks and turnovers are fitted with
+    the rest now; the WNBA board prices five and fits five, the same way.
+    THE RECENCY DIAL declines basketball: the board's projection has no
+    blend of windows to turn, so formfit.py prints `not fitted` for both
+    leagues and retires any NBA or WNBA dial it stored off the football
+    chain (none reached the board, but the Record page listed them as its
+    learning), and the weekly log says `not fitted` rather than `nothing
+    adopted`. WHAT MOVES: at the next refit every NBA temperature and
+    player correction is refit on the board's model, each under its own
+    bar (200 games and a held-out test for a temperature; a causal Brier
+    gain on 200 games for the memory), so NBA prices move then, PRA's
+    among them, and the Record page's NBA learning rows describe the
+    board. The ranking numbers that open Most Likely shelves are measured
+    on the board's model against the same 0.60 floor, so a shelf can open
+    or close on the first run. A CRASH, FOUND BY THIS WALK AND FIXED: a
+    player with none of a count in every game his window holds (a guard's
+    blocks over the few games whose box carried them, a centre's threes)
+    projects zero, and pricing zero divided by zero; nothing above it
+    caught that, so the first such prop a book offered would have stopped
+    the whole NBA slate. It prices zero now, and the board refuses the
+    prop with the reason it gives any number too far from the book's. The
+    Lab's replay of a count now keeps all twenty games' minutes, as the
+    build does (it kept only the games that carried the count). No page
+    code changed. Pins changed, told to you, nothing loosened:
+    `tests/test_nba_prices_steals_blocks_turnovers.py` (its ranking test
+    pinned the old `sums=True` door and "the price fitters read stored
+    rows only"; every basketball walk reads the summed entries now, with
+    his minutes beside them and a game missing a part kept as empty
+    rather than dropped). New: `tests/test_nba_self_tunes_on_its_own_model.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

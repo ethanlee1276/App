@@ -86,7 +86,18 @@ def _negbin_pmf(k: int, r: float, p: float) -> float:
 
 def p_over_negbin(mean: float, line: float, cv: float) -> float:
     """Exact P(X > line) under negative binomial with SD = cv × mean.
-    Falls back to Poisson-like shape when the target variance ≤ mean."""
+    Falls back to Poisson-like shape when the target variance ≤ mean.
+
+    A mean of zero is a man who recorded none of the stat in any game
+    his window holds — a guard's blocks over the few games whose box
+    carried them, a centre's threes — and no count above zero is possible
+    under it. The arithmetic below divides by zero there, and nothing
+    above `evaluate_prop` catches it, so one such prop would have stopped
+    the whole slate (found 2026-10-14 by the fitters' walk, before any
+    did). Zero is the limit the formula runs to; the humility clamp then
+    refuses the disagreement."""
+    if mean <= 0:
+        return 0.0
     var = (cv * mean) ** 2
     if var <= mean + 1e-9:
         var = mean * 1.0001
