@@ -39,6 +39,11 @@ def _kicks(conn, sport, player, season):
     return kicks.chart(conn, player, season)
 
 
+def _ufc_fights(conn, sport, player, season):
+    from .ufc import history
+    return history.chart(conn, player, season)
+
+
 def _spray(conn, sport, player, season):
     from .mlb import charts as M
     return M.hits_chart(conn, player, season)
@@ -119,6 +124,9 @@ KINDS = {
     # Every league's (2026-10-14): how much he is used, game by game, off
     # the box scores the boards already read (engine/role).
     "role": (("nfl", "cfb", "nba", "wnba", "mlb", "nhl"), _role, _logged),
+    # A fighter's (2026-10-14): every bout on his record, how and when it
+    # ended (engine/ufc/history).
+    "fights": (("ufc",), _ufc_fights, _any_row("ufc_fights")),
 }
 
 
@@ -134,7 +142,9 @@ def answer(conn, kind: str, sport: str, player: str, season: int | None = None) 
     out = build(conn, sport, player, season) or {}
     if out:
         out["kind"] = kind
-        out["face"] = statlogs.face(conn, sport, out["player"])
+        # The site's own photo first; a chart that knows his face from its
+        # own record (a fighter's ESPN id) keeps it when the site has none.
+        out["face"] = statlogs.face(conn, sport, out["player"]) or out.get("face") or ""
     elif not stored(conn, sport):
         out = {"filling": True}
     return out

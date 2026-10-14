@@ -377,6 +377,21 @@ CREATE TABLE IF NOT EXISTS kicks (
     PRIMARY KEY (sport, season, period, game_id, play_id)
 );
 CREATE INDEX IF NOT EXISTS kicks_player ON kicks (sport, player, season);
+-- UFC FIGHT HISTORY (2026-10-14, Ethan's list: "Yes do all of them"). Every
+-- bout a fighter on the card has had, off the ESPN records his dossier is
+-- drafted from: the opponent, the result, how and when it ended, the
+-- rounds scheduled and both men's numbers. Its own table so a dossier a
+-- human reviewed is never re-drafted to add it. engine/ufc/history.py.
+CREATE TABLE IF NOT EXISTS ufc_fights (
+    fighter TEXT, fighter_id TEXT, comp_id TEXT, event_id TEXT, date TEXT, opp TEXT, opp_id TEXT,
+    result TEXT, method TEXT, rnd INTEGER, clock TEXT, secs REAL, rounds INTEGER, division TEXT,
+    ssl INTEGER, ssa INTEGER, tdl INTEGER, tda INTEGER, kd INTEGER, sm INTEGER,
+    o_ssl INTEGER, o_ssa INTEGER, o_tdl INTEGER, o_tda INTEGER, o_kd INTEGER, o_sm INTEGER,
+    PRIMARY KEY (fighter, comp_id)
+);
+CREATE TABLE IF NOT EXISTS ufc_fighters_read (
+    fighter TEXT PRIMARY KEY, fighter_id TEXT, fetched TEXT, fights INTEGER
+);
 -- MLB PLATE APPEARANCES AND PITCHES (2026-10-13, Ethan: "Can we do a hit
 -- tracker for mlb?"). One row per completed plate appearance off the
 -- Stats API play-by-play, with the ball in play where there was one (exit
@@ -1075,6 +1090,12 @@ def upsert_passes(conn, rows: list[dict]) -> int:
 def upsert_kicks(conn, rows: list[dict]) -> int:
     """Every field goal and extra point on the kicker chart (engine/kicks.py)."""
     return _upsert(conn, "kicks", KICK_COLS, rows)
+
+
+def upsert_ufc_fights(conn, rows: list[dict]) -> int:
+    """Every bout on a fighter's history (engine/ufc/history.py)."""
+    from .ufc.history import COLS
+    return _upsert(conn, "ufc_fights", COLS, rows)
 
 
 def upsert_ngs_passing(conn, rows: list[dict]) -> int:

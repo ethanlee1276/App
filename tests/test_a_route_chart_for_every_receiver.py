@@ -439,7 +439,7 @@ def test_the_page_draws_every_target_and_lists_it():
 def test_the_door_and_the_styles():
     assert re.search(r'const catches = lg === "nfl" && tabs\.some\(\(t\) => /recei\|recep\|target/i\.test\(t\)\);',
                      APP_JS), "the door is the NFL's, for a player with a receiving log"
-    assert 'door("routes", "Route chart")' in APP_JS and 'data-kind="${kind}"' in APP_JS
+    assert 'ccDoor(player, lg, "routes", "Route chart", face)' in APP_JS and 'data-kind="${kind}"' in APP_JS
     assert "/api/players/routes" in CC_JS and 'S.kind === "routes"' in CC_JS
     for cls in (".rc-route", ".rc-throw", ".rc-route.miss", ".rc-yac", ".rc-catch", ".rc-miss", ".rc-int",
                 ".rc-cell", ".rc-dot.c", ".rc-lbl", ".cc-tiles-6"):

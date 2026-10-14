@@ -1514,6 +1514,31 @@ def _ufc_card_pending(quiet: bool = False) -> bool:
     return bool(card)
 
 
+def _auto_fight_history(quiet: bool = False) -> None:
+    """Every fight the upcoming card's fighters have had, a few fighters a
+    tick, for the fight history chart (engine/ufc/history; Ethan,
+    2026-10-13: "Yes do all of them"). Off the same cached ESPN records the
+    dossiers are drafted from; it never touches a dossier."""
+    try:
+        import ufc_dossiers as UD
+        from engine import db as _db
+        from engine.ufc import history as _hist
+        _label, names = UD.card_fighters()
+        if not names:
+            return
+        conn = _db.connect()
+        try:
+            res = _hist.fill(conn, names)
+        finally:
+            conn.close()
+        if not quiet and res["read"]:
+            print(f"  UFC  fight history: {res['read']} fighter(s) read, {res['fights']} fights"
+                  + (f", {res['left']} still to read" if res["left"] else ""))
+    except Exception as exc:  # noqa: BLE001 — never let this stop the card
+        if not quiet:
+            print(f"  UFC  fight history: unavailable ({exc})")
+
+
 def refresh_ufc(quiet: bool = False) -> bool:
     """UFC card (Scalpy MMA) — a real member of the paid-pull rotation.
 
@@ -1530,6 +1555,7 @@ def refresh_ufc(quiet: bool = False) -> bool:
     """
     _auto_dossiers(quiet)
     _auto_weighins(quiet)
+    _auto_fight_history(quiet)
     args = ["ufc_build.py", "--out", UFC_OUT]
     # NOTHING TO BUY, NOTHING TO SPEND. The events list is free and is
     # where the card comes from; between cards it is empty, and a paid

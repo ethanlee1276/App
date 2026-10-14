@@ -395,3 +395,41 @@
 .kk-lg { fill: var(--text-mute); font: 600 10.5px var(--font-mono); }
 .cc-legend .dt.kk-x { border: 1.8px solid var(--bad); }
 .cc-legend .dt.kk-b { width: auto; height: auto; color: var(--text-mute); font-style: normal; font-weight: 700; line-height: 1; }
+
+/* a fighter's fight history (2026-10-14, js/chart-ufc.js): the fight's
+   clock, both men's numbers, and every fight's length on one clock. */
+/* Words and bars, not a field: drawn no wider than reads well on a desktop. */
+.uf-svg { max-width: 540px; margin: 0 auto; }
+.uf-track { fill: var(--panel-3); stroke: var(--border); stroke-width: 1; }
+.uf-fill.gain { fill: var(--good); }
+.uf-fill.loss { fill: var(--bad); }
+.uf-fill.short { fill: var(--text-mute); }
+.uf-tick { stroke: var(--text-mute); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.uf-r { fill: var(--text-mute); font: 600 12px var(--font-mono); }
+.uf-end { stroke: var(--panel); stroke-width: 2; }
+.uf-end.gain { fill: var(--good); }
+.uf-end.loss { fill: var(--bad); }
+.uf-end.short { fill: var(--text-mute); }
+.uf-endl { fill: var(--text); font: 700 13px var(--font-mono); }
+.uf-who { fill: var(--text-mute); font: 600 12px var(--font-mono); }
+.uf-sn { fill: var(--text-dim); font: 600 12px var(--font-mono); }
+.uf-hit { fill: transparent; cursor: pointer; }
+.uf-bar.me { fill: var(--brand); }
+.uf-bar.opp { fill: color-mix(in oklab, var(--text-mute) 60%, transparent); }
+.uf-bar.sel { stroke: var(--text); stroke-width: 2; }
+.uf-v { fill: var(--text); font: 700 12px var(--font-mono); }
+.uf-none { fill: var(--text-mute); font: 600 12px var(--font-mono); }
+.uf-res { font: 800 15px var(--font-mono); }
+.uf-res.gain { fill: var(--good); }
+.uf-res.loss { fill: var(--bad); }
+.uf-res.short { fill: var(--text-mute); }
+.uf-opp { fill: var(--text-dim); font: 600 11px var(--font-mono); }
+.uf-m { fill: var(--text); font: 700 11px var(--font-mono); }
+.cc-legend .dt.uf-d { background: var(--text-mute); }
+/* The fight's clock is at the top of its drawing: the tip sits under it. */
+.cc-stage:has(.uf-svg) .cc-tip { top: auto; bottom: 10px; }
+/* That fight's numbers: the stat, his, then his opponent's, one line. */
+.cc-row.uf-row { grid-template-columns: 12px minmax(0, 1fr) auto auto; }
+.uf-row .cc-r-h { grid-column: auto; grid-row: auto; color: var(--text); white-space: normal; }
+.uf-row .cc-r-y { grid-column: auto; grid-row: auto; }
+.uf-o { font-family: var(--font-mono); color: var(--text-mute); text-align: right; min-width: 64px; }

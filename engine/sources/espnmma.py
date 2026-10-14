@@ -523,47 +523,19 @@ def _gym_of(bio_raw: dict) -> str:
     return ""
 
 
-def fetch_dossier(name: str, today: _dt.date | None = None,
-                  window: int = WINDOW, log=None,
-                  style_hint: str | None = None) -> dict | None:
-    """name → drafted dossier via ESPN, or None when the fighter isn't
-    findable. ~50 small cached requests per new fighter."""
+def fight_log(aid: str, today: _dt.date, window: int = WINDOW, log=None,
+              names: bool = False) -> tuple[dict, list, int]:
+    """One fighter's fights off ESPN: ``(own_rows, fights, total)``.
+
+    ``own_rows`` is his per-fight stat rows by event id; ``fights`` the
+    last ``window`` bouts he has had (never an upcoming one), newest
+    first, each ``{event_id, comp_id, date, winner, method, duration_s,
+    rounds, division_text, period, clock, opp_id, opp_name, opp_row,
+    own_row}``; ``total`` every bout in his eventlog that has happened.
+    ``names`` reads each opponent's name too (one more cached request a
+    fight): the fight history wants it, the dossier does not. Shared by
+    `fetch_dossier` and engine/ufc/history, so the two read one record."""
     log = log or (lambda *_: None)
-    today = today or _dt.date.today()
-    aid = find_athlete_id(name)
-    if not aid:
-        return None
-
-    bio_raw = _get_json(f"{CORE}/athletes/{aid}", f"espn_mma_ath_{aid}.json")
-    dob = None
-    try:
-        dob = _dt.datetime.fromisoformat(
-            (bio_raw.get("dateOfBirth") or "").replace("Z", "+00:00")).date()
-    except ValueError:
-        pass
-    age = bio_raw.get("age")
-    if age is None and dob:
-        age = (today.year - dob.year
-               - ((today.month, today.day) < (dob.month, dob.day)))
-    bio = {"age": age, "weight_lbs": bio_raw.get("weight"),
-           "gender": bio_raw.get("gender", "")}
-    # Gym/association where the payload names one. Absent on many
-    # fighters, which is why nothing downstream requires it — but stored
-    # on every draft, so a camp CHANGE becomes visible by diffing our own
-    # history rather than needing a news source.
-    gym_name = _gym_of(bio_raw)
-
-    record = (0, 0, 0)
-    try:
-        rec_raw = _get_json(f"{CORE}/athletes/{aid}/records",
-                            f"espn_mma_rec_{aid}.json")
-        summary = (rec_raw.get("items") or [{}])[0].get("summary", "")
-        m = re.match(r"(\d+)-(\d+)-(\d+)", summary)
-        if m:
-            record = tuple(int(x) for x in m.groups())
-    except DataUnavailable:
-        pass
-
     own_rows = parse_stat_rows(
         _get_json(V3_STATS.format(id=aid), f"espn_mma_stats_{aid}.json"))
 
@@ -607,7 +579,7 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
         m = re.search(r"/events/(\d+)/", ref)
         if m:
             eid = m.group(1)
-        opp_row = None
+        opp_row, opp_name = None, ""
         if comp.get("opp_id"):
             try:
                 opp_rows = parse_stat_rows(_get_json(
@@ -616,15 +588,72 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
                 opp_row = opp_rows.get(eid or "")
             except DataUnavailable:
                 pass
+            if names:
+                try:
+                    who = _get_json(f"{CORE}/athletes/{comp['opp_id']}",
+                                    f"espn_mma_ath_{comp['opp_id']}.json")
+                    opp_name = str(who.get("displayName") or who.get("fullName") or "")
+                except DataUnavailable:
+                    pass
         fights.append({
-            "event_id": eid or "", "date": comp["date"],
+            "event_id": eid or "", "comp_id": comp.get("comp_id") or cid, "date": comp["date"],
             "winner": comp["winner"], "method": method,
             "duration_s": fight_duration_s(status, method, comp["rounds"]),
             "rounds": comp["rounds"],
             "division_text": comp["division_text"], "opp_row": opp_row,
+            "period": (status or {}).get("period") if isinstance((status or {}).get("period"), int) else None,
+            "clock": _clock_seconds(status) if status else None,
+            "opp_id": comp.get("opp_id") or "", "opp_name": opp_name,
+            "own_row": own_rows.get(eid or ""),
         })
-        log(f"    {name}: fight {len(fights)}/{min(window, len(comp_refs))} …")
+        log(len(fights), min(window, len(comp_refs)))
+    fights.sort(key=lambda f: f["date"] or _dt.date.min, reverse=True)
+    return own_rows, fights, total_fights
 
+
+def fetch_dossier(name: str, today: _dt.date | None = None,
+                  window: int = WINDOW, log=None,
+                  style_hint: str | None = None) -> dict | None:
+    """name → drafted dossier via ESPN, or None when the fighter isn't
+    findable. ~50 small cached requests per new fighter."""
+    log = log or (lambda *_: None)
+    today = today or _dt.date.today()
+    aid = find_athlete_id(name)
+    if not aid:
+        return None
+
+    bio_raw = _get_json(f"{CORE}/athletes/{aid}", f"espn_mma_ath_{aid}.json")
+    dob = None
+    try:
+        dob = _dt.datetime.fromisoformat(
+            (bio_raw.get("dateOfBirth") or "").replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    age = bio_raw.get("age")
+    if age is None and dob:
+        age = (today.year - dob.year
+               - ((today.month, today.day) < (dob.month, dob.day)))
+    bio = {"age": age, "weight_lbs": bio_raw.get("weight"),
+           "gender": bio_raw.get("gender", "")}
+    # Gym/association where the payload names one. Absent on many
+    # fighters, which is why nothing downstream requires it — but stored
+    # on every draft, so a camp CHANGE becomes visible by diffing our own
+    # history rather than needing a news source.
+    gym_name = _gym_of(bio_raw)
+
+    record = (0, 0, 0)
+    try:
+        rec_raw = _get_json(f"{CORE}/athletes/{aid}/records",
+                            f"espn_mma_rec_{aid}.json")
+        summary = (rec_raw.get("items") or [{}])[0].get("summary", "")
+        m = re.match(r"(\d+)-(\d+)-(\d+)", summary)
+        if m:
+            record = tuple(int(x) for x in m.groups())
+    except DataUnavailable:
+        pass
+
+    own_rows, fights, total_fights = fight_log(aid, today, window, log=lambda i, n: log(
+        f"    {name}: fight {i}/{n} …"))
     if not fights:
         return None
     fights.sort(key=lambda f: f["date"] or _dt.date.min, reverse=True)

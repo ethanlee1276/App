@@ -64,8 +64,10 @@ minutes and starts; plate appearances and his spot in the order, or a
 pitcher's pitch count and rest; ice time and shots) (step 68; Z). A
 kicker's pick draws every field goal and extra point he tried, by
 distance, made or missed, in what weather, each distance band beside the
-league's rate (step 69; AA). The whole picture, sport by
-sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+league's rate (step 69; AA). Every fighter on the UFC card now has a
+Fight history button: each fight on his record, who, how it ended, the
+round and the time in it, and both men's numbers (step 70; AB). The
+whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -74,13 +76,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A kicker's pick draws every kick he tried: the kicker chart`
+**A. The box has today's code.** The first line should end `Every UFC fighter's fight history: how and when each fight ended`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 9981e402 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor e857a7d2 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -516,6 +518,29 @@ his Kicker chart, the posts at the top and each field goal at the
 distance it was kicked from, green made, red dashes missed, a cross
 blocked; the season tab puts each distance band's rate beside the
 league's.
+
+**AB. The fight history** (step 70; read-only, seconds). Nothing to run:
+whenever a card is coming up, the box's UFC tick reads four of its
+fighters' records at a time off ESPN (the same cached records the
+dossiers are drafted from) into a new `ufc_fights` table, and the log
+says `UFC  fight history: 4 fighter(s) read, … fights, … still to read`.
+Between cards nothing is read. The first command counts fighters and
+fights stored; the second is the log's last lines about it; the third
+asks for the chart of the fighter read most recently:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(tuple(c.execute('SELECT COUNT(DISTINCT fighter), COUNT(*) FROM ufc_fights').fetchone()), tuple(c.execute('SELECT COUNT(*), SUM(fights = 0) FROM ufc_fighters_read').fetchone()))"
+journalctl -u qellys --since "6 hours ago" --no-pager | grep "fight history" | tail -5
+f=$(cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; r=db.connect().execute('SELECT fighter FROM ufc_fighters_read WHERE fights > 0 ORDER BY fetched DESC LIMIT 1').fetchone(); print(r[0] if r else '')"); echo "$f"; curl -s "http://127.0.0.1:8000/api/players/chart?kind=fights&sport=ufc&player=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$f")" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('player'), d.get('season_line'), [(g['opp'], g['result'], g['method'], g['rnd'], g['clock']) for g in d.get('games', [])[:3]])"
+```
+Until a card's fighters have been read, the first prints `(0, 0) (0,
+None)` and the third a blank name and `None None []`. The second number
+in the first command's second pair is how many fighters ESPN could not
+find (each is tried again after three days). Then on your phone: UFC,
+any fight, "Fight history" under either fighter: By fight draws the
+fight's clock filled to where it ended (green won, red lost, grey a
+draw or no contest) and both men's numbers side by side; Career draws
+every fight's length on one clock, with how he wins and loses, three
+rounds and five, and when his fights end.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2397,6 +2422,34 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_a_role_chart_for_every_player.py` give a kicking bet the
     kicker chart (it had none). New:
     `tests/test_a_kicker_chart_for_every_kicker.py`.
+70. **Every UFC fighter's fight history: how and when each fight ended**
+    (2026-10-14, you: "Yes do all of them"). AB checks it. The ESPN
+    records each fighter's dossier is drafted from carry every bout he
+    has had: the opponent, won, lost or neither (a draw or no contest),
+    how it ended (KO/TKO, submission or decision), the round and the time
+    in it, the rounds scheduled, the division, and both men's numbers
+    where ESPN tracked the bout (significant strikes and takedowns landed
+    and tried, knockdowns, submission attempts). A new table,
+    `ufc_fights`, keeps his last fifteen; the UFC tick reads the upcoming
+    card's fighters four at a time and again after three days, and a
+    fighter ESPN cannot find is remembered rather than asked for every
+    tick. It is its own table on purpose: a dossier you reviewed (a red
+    flag kept or deleted) is never re-drafted to add a history. Every
+    fighter block on the UFC page (both corners of a fight, and a
+    searched fighter's card) has a "Fight history" button: By fight draws
+    the rounds he was scheduled for, filled to where it ended, with both
+    men's numbers side by side; Career draws every fight's length on one
+    25-minute clock, with his record, finishes won and lost, how often he
+    goes the distance, first-round finishes, the average fight, by method,
+    three rounds and five, and when his fights end. His photo is ESPN's
+    headshot for the fighter where the site has none. Nothing on it moves
+    a price. Two constants nothing read came out of app.js to pay for the
+    button (the first visit sits 42 bytes inside its 611 KB budget, no
+    bump). One pin changed, told to you: my own
+    `tests/test_a_route_chart_for_every_receiver.py` looks for the route
+    chart's button by the name of the one helper every chart button is
+    now drawn by (`ccDoor`), as strictly as before; nothing loosened. New:
+    `tests/test_a_fight_history_for_every_fighter.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

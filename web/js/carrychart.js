@@ -120,6 +120,9 @@
             sec: "how much he’s used, game by game, beside his season" },
     kicks: { chip: "Kicks", title: "Kicker chart", noun: "kicks", one: "kick", where: "his range",
              sec: "every field goal and extra point he tried: how far, made or missed, and in what weather" },
+    fights: { chip: "Fights", title: "Fight history", noun: "fights", one: "number", where: "his fights", by: "By fight",
+              sec: "every fight on his record: who, how it ended, the round and the time, and both men’s numbers",
+              fill: "every fight is read from ESPN’s fight records a few fighters at a time" },
   };
   /* Every league's role chart says what it counts (engine/role). */
   Object.entries({
@@ -143,7 +146,7 @@
      module registers its parts through `QBCarry.plug`. Listeners, not
      handler properties: the page's CSP forbids inline handlers. */
   const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops", shotmap: "nhl", saves: "nhl", role: "role",
-                 kicks: "kicks" };
+                 kicks: "kicks", fights: "ufc" };
   const plugs = {};
   function need(kind) {
     const f = PLUG[kind];
@@ -294,7 +297,9 @@
   const tally = (n, yds) => { const y = Math.round(yds); return y < 0 ? `${n} for −${-y}` : `${n}-${y}`; };
   const num1 = (v) => (v == null ? "—" : Number(v).toFixed(1));
   //: A season that spans two years is named for both: the NBA's and the NHL's 2025 is "2025-26".
-  const seasonName = (sport, y) => (/^(nba|nhl)$/.test(sport) ? `${y}-${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
+  //: A fighter has no seasons: his record is his career.
+  const seasonName = (sport, y) => (sport === "ufc" ? "Career"
+    : /^(nba|nhl)$/.test(sport) ? `${y}-${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
 
   /* ---------------- the field ---------------- */
   function fieldSVG(ymax, laneLabels, ticks) {
@@ -951,7 +956,7 @@
          switch stays above it on a pick page, so the other chart is a
          tap away. */
       box.innerHTML = kindBar() + (d && d.filling
-        ? `<div class="cc-empty">${esc(K.title)}s are still being filled: every ${esc(K.one)} is read from the ${S.sport === "cfb" ? "college" : "league’s"} play-by-play, which takes a few minutes. Check back shortly.</div>`
+        ? `<div class="cc-empty">${esc(K.title)}s are still being filled: ${esc(K.fill || `every ${K.one} is read from the ${S.sport === "cfb" ? "college" : "league’s"} play-by-play`)}, which takes a few minutes. Check back shortly.</div>`
         : R
           ? `<div class="cc-empty">No targets on file for ${esc(S.player)}.</div>`
           : P ? `<div class="cc-empty">No ${esc(K.noun)} on file for ${esc(S.player)}.</div>`
@@ -978,7 +983,7 @@
         ${seasons}
       </header>`) + (bar ? `<div class="cc-bar">${bar}</div>` : "") + `
       <div class="cc-tabs" role="tablist">
-        <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">By game</button>
+        <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">${esc(K.by || "By game")}</button>
         <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${esc(seasonName(sport, d.season))} · ${esc(K.where)}</button>
       </div>`;
     /* Four parts in every view: what sits above the drawing (the games,
@@ -1072,7 +1077,8 @@
   function plugView(P, d, sport) {
     if (S.view === "season") {
       const n = d.games.length;
-      return { top: `<div class="cc-title">${esc(`${seasonName(sport, d.season)} season · ${P.count(d.season_line, d)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
+      return { top: `<div class="cc-title">${esc(P.seasonTitle ? P.seasonTitle(d)
+                 : `${seasonName(sport, d.season)} season · ${P.count(d.season_line, d)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
                fig: `<div class="cc-stage">${P.season(d)}</div>`,
                side: P.seasonSide(d),
                tail: fold("splits", P.splitsTitle, P.splits(d)) };
@@ -1080,7 +1086,7 @@
     const g = d.games[Math.min(S.gi, d.games.length - 1)];
     return { top: `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
                 `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(P.chip(x, d))}</small></button>`).join("")}</div>
-              <div class="cc-title">${esc(gameTitle(g, sport, seasonName(sport, d.season)))}</div>`,
+              <div class="cc-title">${esc(P.gameTitle ? P.gameTitle(g, d) : gameTitle(g, sport, seasonName(sport, d.season)))}</div>`,
              fig: `<div class="cc-stage">${P.game(g, d)}<div class="cc-tip" hidden></div></div>`,
              side: P.gameSide(g, d),
              tail: fold("list", P.listTitle ? P.listTitle(g, d) : `Every ${P.one}, in order · ${P.items(g, d).length}`, P.list(g, d)) };
@@ -1386,6 +1392,8 @@
        play file stored: her role. */
     if (sport === "nba") return m ? role(["shots"]) : [];
     if (sport === "wnba") return m ? ["role"] : [];
+    /* A fighter's chart is every fight on his record (engine/ufc/history). */
+    if (sport === "ufc") return ["fights"];
     /* Hockey's is the bet's side of the puck: a goalie's saves or goals
        against draw every shot he faced, a skater's bet every shot he took
        (engine/nhl/charts). */

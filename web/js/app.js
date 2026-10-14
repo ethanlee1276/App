@@ -15921,9 +15921,10 @@ function carryDoor(player, lg, tabs, face) {
   const runs = (lg === "nfl" || lg === "cfb") && tabs.some((t) => /rush|carr/i.test(t));
   const catches = lg === "nfl" && tabs.some((t) => /recei|recep|target/i.test(t));
   if (!runs && !catches) return "";
-  const door = (kind, label) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}"${face ? ` data-face="${escapeAttr(face)}"` : ""}>${label}</button>`;
-  return `<div class="prof-vs prof-charts">${runs ? door("carries", "Carry chart") : ""}${catches ? door("routes", "Route chart") : ""}</div>`;
+  return `<div class="prof-vs prof-charts">${runs ? ccDoor(player, lg, "carries", "Carry chart", face) : ""}${catches ? ccDoor(player, lg, "routes", "Route chart", face) : ""}</div>`;
 }
+//: One door to one of his charts, wherever a player or a fighter is drawn.
+const ccDoor = (player, lg, kind, label, face) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}"${face ? ` data-face="${escapeAttr(face)}"` : ""}>${label}</button>`;
 let _ccLoad = null;
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest(".cc-open");
@@ -24124,7 +24125,6 @@ function mbByBook(bets) {
    says it is missing rather than implying it was measured. */
 const MB_HEALTH_MIN = 5;
 const MB_HEALTH_W = { clv: 40, conc: 20, mix: 15, stakes: 13, vol: 12 };
-const MB_GAME_MARKETS = ["moneyline", "spread", "total", "team total"];
 /* The same four signals ledger.HEALTH_BLIND_SPOTS names, said to the
    reader about their own log. */
 const MB_HEALTH_BLIND = [
@@ -36391,8 +36391,7 @@ const MOCK_ROSTER_CAP = { QB: 2, TE: 2, RB: 6, WR: 7 };
 //: drafts reach further than that and everyone has seen it. The decay
 //: still makes a deep pick rare — the fourteenth candidate carries about
 //: 0.4% of the top one's weight — so this widens the tail without
-//: flattening the order.
-const MOCK_DECAY = Array.from({ length: 14 }, (_, i) => Math.exp(-i / 2.5));
+//: flattening the order. (Read at quarter-slot resolution: MOCK_DECAY_FINE.)
 const MOCK_TOPK = 14;
 
 /* How far this build moves a position up (+) or down (−) the market
@@ -39396,6 +39395,7 @@ function fighterColHTML(f) {
     <div class="fc-stats">${stats}</div>
     <div class="fc-cover">stats for ${covered || 0}${career ? ` of ${career}` : ""} fights</div>
     ${flags ? `<div style="margin-top:5px">${flags}</div>` : ""}
+    ${ccDoor(f.name, "ufc", "fights", "Fight history")}
   </div>`;
 }
 
