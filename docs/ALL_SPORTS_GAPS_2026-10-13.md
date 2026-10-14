@@ -80,6 +80,7 @@ and what is still open.
 | Does our UFC number know anything the price does not? Did our picks beat the close? | **Box run** (P). The same information test and closing-line read the NFL record has had since August, on the UFC picks journaled since then |
 | Method props (KO, submission, decision) at real prices | **Parked**: the odds feed carries only the moneyline for MMA. The card already shows our fair price for every method to shop by hand |
 | Round props and "goes the distance" | **Built 2026-10-14** (step 76, AH): over and under 1.5 and 2.5 rounds and the round it ends in, off the finish times on file, as fair numbers to shop by hand (the odds feed carries only the moneyline) |
+| Past voids that look like the midnight bug (a result saved before the bell read as a draw after midnight UTC) | **Built 2026-10-14** (step 90, AT), your call answered: a read-only list of every UFC void, each fight read again from ESPN, and what the ones that look like the bug would have graded. No grade changes |
 | A Pick of the Day for the fight card | **Your call** (H). Every other league that names a pick now records it (steps 85 and 86); UFC has none, and its Record page has no section for one |
 | Camp reports, referee assignments | **Not possible**: no structured source |
 
@@ -92,6 +93,6 @@ and what is still open.
 
 ---
 
-The lettered blocks (M, N, O, P, and AG to AR since) are at the top of
+The lettered blocks (M, N, O, P, and AG to AT since) are at the top of
 `docs/WHEN_YOU_ARE_HOME.md`; the numbered steps (53 to 56, then 75 to
-87) explain each, and block H holds every call and idea waiting on you.
+90) explain each, and block H holds every call and idea waiting on you.

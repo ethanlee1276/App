@@ -159,7 +159,9 @@ through a restart, and a push of only the runbook no longer restarts the
 site (step 88; AS). Checking the day's-pick code before the first
 basketball or hockey pick went on the record found one hole, now closed:
 the day's pick could have been named off a price over six hours old, in
-any league (step 89; AQ). The
+any league (step 89; AQ). A read-only list now says which UFC picks voided
+in the past look like the midnight bug step 47 fixed, and what each would
+have graded; every grade stays as it is (step 90; AT). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -195,13 +197,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The day's pick never takes a stale price: the game lines carry their price's age, and the selector refuses one past the freshness bar in every league`
+**A. The box has today's code.** The first line should end `A read-only list of past UFC voids that look like the midnight bug, with what each would have graded; every grade stays as it is`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 89eb0669 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor c19f58fb HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -287,6 +289,9 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
 **H. Your calls, and the ideas waiting on a yes.** Answer any time;
 nothing breaks while they wait. Calls first, then ideas I've offered and
 not built (the full list by sport is `docs/ALL_SPORTS_GAPS_2026-10-13.md`).
+On 2026-10-14 you said yes to every call below but the NFL price rule and
+the line-move pull, which wait on L and step 30 ("do 1-11"); each is
+struck through here as it is built.
 * **UFC in the parlay checker?** A fight leg reads "not on our board"
   today (step 38b).
 * **Quarterback carries on the board itself?** The market gets measured
@@ -298,8 +303,11 @@ not built (the full list by sport is `docs/ALL_SPORTS_GAPS_2026-10-13.md`).
   A 4-leg ticket over two games costs about 3–4 credits, from the same
   daily budget the board uses, so you'd pick a daily cap (step 36,
   round three).
-* **Cancel at the end of the month, or at once?** Stripe's portal
-  setting (step 37). The site handles either.
+* ~~**Cancel at the end of the month, or at once?**~~ **Answered
+  2026-10-14** ("do 1-11"): it stays your Stripe setting, never code.
+  Stripe → Settings → Billing → Customer portal → Cancellations: "At the
+  end of the billing period" (the default, kept: they keep what they paid
+  for) or "Immediately". The site handles either (step 37).
 * **The last-leg alert on the Alerts bell too?**
 * **Pull a Most Likely pick when its line moves a point against it
   before kickoff?** L's answer first (step 51).
@@ -312,14 +320,15 @@ not built (the full list by sport is `docs/ALL_SPORTS_GAPS_2026-10-13.md`).
 * **Saved slips settled by the server?** A slip saved to My Bets settles
   while someone has the Live tab open; the server's five-minute pass
   could settle it instead (step 47).
-* **Past UFC voids from the midnight bug** step 47 fixed (a result saved
+* ~~**Past UFC voids from the midnight bug** step 47 fixed (a result saved
   before the fight could read as a draw after midnight UTC, which voided
-  the pick). Want a read-only list of the past voids that look like it?
-  Their grades stay as they are.
-* **MLB's terms.** MLB's stats feed allows non-commercial use only, and
+  the pick)?~~ **Answered 2026-10-14: yes** ("do 1-11"). Built: step 90,
+  AT. Their grades stay as they are.
+* ~~**MLB's terms.** MLB's stats feed allows non-commercial use only, and
   the site is paid. That already covers the stats and headshots we show;
   the hit page's at-bat video links and action photos (step 84) make it
-  more visible. Keep them, or drop those two?
+  more visible. Keep them, or drop those two?~~ **Answered 2026-10-14:
+  keep them** ("do 1-11"). Say "drop" and both go.
 * ~~**Grade a college receiving bet the way the book does when the play
   file shows he was thrown at** (step 53)?~~ **Answered 2026-10-13: yes**
   ("Also add both from my calls, the CFB and nba things"). Built: step 59,
@@ -1108,6 +1117,21 @@ work from. After a push of only docs or tests, the `running commit` line
 says the newer commit on disk changes only docs and tests, and
 `cat /srv/qellys/data/autoupdate.json` says `no restart`; any other push
 restarts as before.
+
+**AT. Past UFC voids that look like the midnight bug** (step 90;
+read-only, about a minute: it asks ESPN about each voided fight). Paste
+all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 ufcvoids.py
+```
+Every UFC pick the ledger voided, in two groups. NO WINNER is how the bug
+voided: each fight is read again from ESPN now, and "LOOKS LIKE THE BUG"
+marks one ESPN now shows somebody won, with what our pick would have
+graded; "a draw or no contest" means the void was right. NO BOUT WITHIN
+10 DAYS is another kind of void (no result found at all), listed for
+completeness. The last line counts the bug's voids and what they would
+have made or lost. Nothing changes: every grade stays as it is, as you
+said. "ESPN did not answer just now" on a line means run it again later.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3882,6 +3906,29 @@ first). Paste back anything that prints an error or looks off.
     game from another day is dated by its own date). §3l of
     `docs/PICK_OF_THE_DAY.md`. App 494.479 of 495 KB and first visit
     610.987 of 611, unchanged.
+90. **Past UFC voids that look like the midnight bug, listed** (2026-10-14,
+    you: "do 1-11", to a read-only list of the past voids with their
+    grades left as they are). AT runs it. THE BUG, fixed in step 47: a
+    fight's result was read from a copy of ESPN's bout kept for six hours;
+    a copy saved before the bell says no winner, and after midnight UTC a
+    bout dated the day before with no winner reads as a draw, which voids.
+    `ufcvoids.py` lists every voided UFC pick, the ones voided as no winner
+    (the bug's way) apart from the ones voided ten days on with no bout
+    found (not the bug), each with when the audit trail saw it turn void.
+    It reads each bout again from ESPN, fresh: a copy on disk is never
+    taken as ESPN's answer now, since it may be the very copy the void came
+    from. It says whether ESPN now shows a winner and, if so, what the pick
+    would have graded and for how many units. It opens the ledger
+    read-only and changes no grade. New:
+    `tests/test_past_ufc_voids_are_listed_never_regraded.py` (9 checks:
+    the two groups; the would-be grades and their total; a real draw and an
+    unanswered read are never called the bug; the void's time off the
+    audit trail; the ledger byte for byte unchanged; one failing read is
+    one line; the fresh read finds the bout nearest the card; a copy on
+    disk is never taken for ESPN's answer; the runbook names the command).
+    No pin changed. Your two calls answered without code are in H: MLB's
+    at-bat video links and action photos stay, and when a cancellation
+    takes effect stays your Stripe portal's setting.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
