@@ -12,8 +12,9 @@ that box, and weakening the sandbox so a public web process can rewrite
 its own code is the wrong trade. The thing that already safely rewrites
 this checkout is the deploy, run by root — so the auto-update is the
 same shape: a root oneshot on a timer, pull --ff-only, restart the
-service only when the code actually moved. The app keeps every line of
-its hardening.
+service only when code the site runs actually moved (a push of only docs
+or tests is pulled with no restart: NO_RESTART below). The app keeps every
+line of its hardening.
 
 Every run writes data/autoupdate.json — timestamp, ok, commit, note —
 because the last updater's failures were invisible by design ("offline
@@ -220,6 +221,32 @@ RESTART_WAIT_MAX_S = 45 * 60
 SWEEP_STALE_S = 50 * 60
 
 
+#: A PULL THAT CHANGES NOTHING THE SITE RUNS IS NOT RESTARTED INTO
+#: (2026-10-14). Every pull restarted the unit, the runbook's included, and
+#: a restart costs the boards their sweep: the restart waits for the one in
+#: progress, then the new process rebuilds from the NFL down. Ethan's Status
+#: page that afternoon, after four pushes in ninety minutes, two of them
+#: docs: every board but the NFL's red. Nothing under these paths is loaded
+#: by the running site at start (what docs/ holds that it reads at all, it
+#: reads when asked), so the pull alone delivers them. launch.py NO_RESTART
+#: is the same rule, for `--boards`.
+NO_RESTART = ("docs/", "tests/", "audit/")
+
+
+def _runs_nothing(path) -> bool:
+    path = str(path or "").strip()
+    return bool(path) and (path.startswith(NO_RESTART)
+                           or ("/" not in path and path.lower().endswith(".md")))
+
+
+def _needs_restart(repo, before, after) -> bool:
+    """Do the commits from ``before`` to ``after`` touch anything the site
+    runs? True whenever git cannot say, or names no path at all."""
+    ok, out = _git(repo, "diff", "--name-only", before, after)
+    paths = [p for p in out.splitlines() if p.strip()] if ok else None
+    return not paths or not all(_runs_nothing(p) for p in paths)
+
+
 def _read_json(path):
     try:
         with open(path, encoding="utf-8") as fh:
@@ -392,6 +419,12 @@ def main() -> int:
             wanted = None
     if after == before and not wanted:
         _record(repo, True, "up to date" + stray + trim)
+        return 0
+    # Code pulled earlier and still waiting (`wanted`) restarts whatever
+    # this pull carried; on its own, a docs-only pull does not.
+    if not wanted and not _needs_restart(repo, before, after):
+        _record(repo, True, f"pulled {before}..{after} — docs and tests only, nothing the "
+                            "site runs: no restart" + stray + trim)
         return 0
     # Restart AFTER recording would report a restart that hasn't happened;
     # record what was done, with the restart's own result on the line.

@@ -150,7 +150,13 @@ judged by the same bars as every other league's (step 86; AQ). Savant's
 pitch-type board, which had never changed after its first download, now
 refreshes every six hours like the barrels and expected-stats boards, and
 none of Savant's files can be replaced by an error page or an empty answer
-(step 87; AR). The
+(step 87; AR). The Status page that showed every board but the NFL's red on
+the 14th was a false alarm: a rebuild of every board takes about half an
+hour on the box, and the page's "stale" line had fallen to 8 to 16 minutes,
+because each restart's skipped cycles were timed as cycles and the timing
+was forgotten at every deploy. It now reads the box's real cycle, keeps it
+through a restart, and a push of only the runbook no longer restarts the
+site (step 88; AS). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -158,7 +164,8 @@ refers to. Paste back what each one prints, with its letter.
 
 **If you only do a few, do these, in this order.** AM first if the
 boards are still empty an hour after the fix lands (it reads why). Then A
-and B: is today's code there, and is the box well. Then the four that matter before
+and B: is today's code there, and is the box well; AS beside them says how
+long a sweep takes and where its minutes go. Then the four that matter before
 the NBA's opening night on the 20th: N (the club rosters and the injury
 board, read on the box; seconds); AG's first two commands (last season's
 steals, blocks and turnovers, about half an hour at low priority, then
@@ -185,13 +192,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Everything to run when you're home, and every idea waiting on a yes, in one place`
+**A. The box has today's code.** The first line should end `Boards stop reading stale after every deploy: skipped cycles are not timed, the timing survives a restart, and a docs push no longer restarts the site`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor bb196fa5 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 864c1e62 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -341,6 +348,11 @@ number, as everything else was.
 * **Chart the MLB season sooner.** The box fills 400 games a night on
   purpose; with memory capped now (step 81) it could fill more, at the
   risk of MLB slowing our requests.
+* **Fresher boards.** A sweep of every board takes about half an hour on
+  the box, so a board is normally up to that old (step 88). Once AS shows
+  where the minutes go, the slowest builds can be trimmed, or a league
+  with no game for a day rebuilt less often, which leaves more of each
+  sweep to the leagues playing.
 
 **I. Why the MLB profit calendar stops at September** (step 45 says how
 to read it; read-only, paste all of it):
@@ -1071,6 +1083,26 @@ fetched nightly) under a day. A file still dated weeks back, or `FETCH
 FAILED`, is the line I need: paste it. After the next MLB build,
 `grep -E "Pitch mix" data/logs/mlb_build.log | tail -1` should say
 `arsenal board: N hitter(s) (2026)` with no error after it.
+
+**AS. The Status page tells the truth after a deploy** (step 88; one
+read-only command, seconds). Nothing to run for the fix. The first hour
+after this update lands is the last time the page can call boards stale
+that are not: the box times its first two sweeps fresh (from then on it
+keeps the timing through every restart). After that hour, on your phone,
+Status: the line at the top should read "Everything is running and every
+board is current" unless one really is behind, and "How this is measured"
+should say a full rebuild takes about 30 min. Then this, and paste all of
+it:
+```
+cd /srv/qellys && sudo -u qellys python3 launch.py --boards
+```
+`typical refresh cycle` is the box's sweep in seconds (about 1,500 to
+2,400). `where the last cycle's time went` lists each build's seconds,
+slowest first: that is the list the "Fresher boards" idea in H would
+work from. After a push of only docs or tests, the `running commit` line
+says the newer commit on disk changes only docs and tests, and
+`cat /srv/qellys/data/autoupdate.json` says `no restart`; any other push
+restarts as before.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -3778,6 +3810,46 @@ first). Paste back anything that prints an error or looks off.
     hit-page copies; the probe). The existing arsenal tests pass unchanged;
     no pin changed. App 494.479 of 495 KB and first visit 610.987 of 611,
     unchanged (no page file touched).
+88. **The Status page stops calling half-hour-old boards stale** (2026-10-14,
+    you, with a screenshot at 12:42: "Also everything is stale" — the NFL
+    3 minutes old, then MLB 25, NBA and WNBA 22, NHL 20, college 36, all
+    red). AS checks it. THOSE AGES WERE NORMAL: the box rebuilds every board
+    in one sweep, NFL first, and a sweep takes about half an hour, so a board
+    is up to that old before its turn comes (the screenshot's times are one
+    sweep from 16:06 to 16:30 UTC and the next reaching the NFL at 16:39).
+    The page calls a board late past twice the box's median cycle plus a
+    minute, and that median was wrong in two ways. A SKIPPED CYCLE WAS
+    TIMED: after every restart the startup build holds the build lock for
+    about thirty minutes, and the refresher, waking every minute, skipped
+    and still timed itself at a fraction of a second; thirty of those in a
+    median of twenty put the line at its 8-minute floor, and it took hours
+    of real sweeps to recover. And THE TIMING DIED WITH THE PROCESS: every
+    deploy started from nothing, and until two sweeps were timed the page
+    used a 16-minute floor. Four pushes that afternoon kept it there. The
+    same median told the page, and the box's daily check, how long a
+    heartbeat may be silent before the loop counts as dead, so the
+    page could also say "The refresh loop is not running" while it ran.
+    Now only a cycle that swept (or failed trying) is timed, the startup
+    build is timed as the sweep it is, and the heartbeat carries the
+    timings (`cycles_s`) so the next process starts from them. AND A DOCS
+    PUSH NO LONGER RESTARTS THE SITE: every pull restarted it, the
+    runbook's included, and a restart costs the boards a sweep. A pull
+    that changes only `docs/`, `tests/`, `audit/` or a Markdown file at the
+    top is pulled with no restart (nothing there is loaded when the site
+    starts; what `docs/` holds that it reads at all, it reads when asked);
+    code waiting from an earlier pull still restarts, and `--boards` says
+    a docs-only gap is not a failed restart. ONCE, NOT AGAIN: the first
+    hour after this lands, the page can still read red while the box times
+    its first two sweeps. No model or board changed, and no page file
+    (app 494.479 of 495 KB, first visit 610.987 of 611). New:
+    `tests/test_a_deploy_does_not_make_every_board_read_stale.py` (16
+    checks: the refresher run for real with a held lock, a pending restart
+    and the updater's request, the startup sweep, the seed from a
+    heartbeat and the ones it refuses, the heartbeat written and read back,
+    the updater on real git repositories for docs, tests, top-level
+    Markdown, code, Markdown inside `deploy/`, and code still waiting under
+    a docs pull, and the two copies of the rule held equal). No pin
+    changed.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

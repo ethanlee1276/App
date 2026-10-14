@@ -3560,6 +3560,27 @@ def _git(*args, timeout: int = 60):
         return False, str(exc)
 
 
+#: Paths the running site never loads at start: a pull that changes only
+#: these is not restarted into (deploy/autoupdate.py NO_RESTART, the same
+#: rule; tests/test_a_deploy_does_not_make_every_board_read_stale.py
+#: holds the two equal). What under docs/ is read at all is read when asked.
+NO_RESTART = ("docs/", "tests/", "audit/")
+
+
+def _runs_nothing(path: str) -> bool:
+    path = str(path or "").strip()
+    return bool(path) and (path.startswith(NO_RESTART)
+                           or ("/" not in path and path.lower().endswith(".md")))
+
+
+def _restart_needed_for(a: str, b: str) -> bool:
+    """Do the commits from ``a`` to ``b`` touch anything the site runs?
+    True when git cannot say."""
+    ok, out = _git("diff", "--name-only", a, b)
+    paths = [p for p in out.splitlines() if p.strip()] if ok else None
+    return not paths or not all(_runs_nothing(p) for p in paths)
+
+
 #: The commit the RUNNING PROCESS came from, resolved once and kept.
 #: Deliberately not re-read each heartbeat: after a pull that failed to
 #: restart, `git rev-parse` names code that is on disk but not in memory
@@ -3893,6 +3914,39 @@ def _cycle_p50() -> float | None:
     xs = sorted(_CYCLE_S)
     n = len(xs)
     return round(xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2, 1)
+
+
+#: How old the last process's heartbeat may be for its cycle timings to
+#: seed this one's. A deploy's restart is minutes; a box that was off for
+#: a day may have come back to a different load.
+CYCLE_SEED_MAX_AGE_S = 24 * 3600
+
+
+def _seed_cycles(path=None, now=None) -> int:
+    """Start from the last process's measured cycles (the heartbeat's
+    `cycles_s`). Returns how many were seeded; never raises.
+
+    THE TIMING OUTLIVES THE RESTART (2026-10-14). Ethan's Status page at
+    12:42: MLB, NBA, WNBA, NHL and college 20 to 36 minutes old, all red,
+    on a box whose sweep takes about half an hour. `_CYCLE_S` lived only in
+    memory, so every deploy started it again from nothing, `cycle_p50_s`
+    read None until two sweeps had been timed (an hour here), and the page
+    fell back to its 16-minute floor meanwhile. Four pushes that afternoon
+    kept it there."""
+    if _CYCLE_S:
+        return 0
+    try:
+        p = Path(path) if path else ROOT / "web" / "data" / "heartbeat.json"
+        hb = json.loads(p.read_text(encoding="utf-8"))
+        now = time.time() if now is None else now
+        if now - float(hb.get("at_epoch") or 0) > CYCLE_SEED_MAX_AGE_S:
+            return 0
+        xs = [round(float(x), 1) for x in (hb.get("cycles_s") or [])
+              if isinstance(x, (int, float)) and not isinstance(x, bool) and 0 < x < 6 * 3600]
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 0
+    _CYCLE_S[:] = xs[:_CYCLE_KEEP]
+    return len(_CYCLE_S)
 
 
 # --- THE CHORES, IN THEIR OWN PROCESSES ----------------------------------------
@@ -4293,6 +4347,7 @@ def _background_refresher(interval: int) -> None:
     until the next deploy restarts the unit (found 2026-08-18 when the
     injuries page wore a nine-day-old "Active" on a man with a broken
     wrist). `_auto_updater` above has carried the same guard all along."""
+    _seed_cycles()
     while True:
         time.sleep(interval)
         _cycle_started = time.time()
@@ -4367,7 +4422,18 @@ def _background_refresher(interval: int) -> None:
         # still tells us how long this box takes to get that far, and a
         # run of short failing cycles must not make the page believe the
         # machine got fast.
-        _note_cycle(time.time() - _cycle_started)
+        #
+        # BUT A SKIPPED CYCLE IS NOT A CYCLE (2026-10-14). After every
+        # restart the startup build holds the lock for about half an hour,
+        # and this loop, waking each minute, skipped and still timed
+        # itself: a fraction of a second, thirty times over, into a median
+        # of twenty. The page's "stale" line follows that median, so it fell
+        # to its 8-minute floor on a box whose sweep takes thirty, and every
+        # board but the newest read red until hours of real sweeps had
+        # pushed the skips out. A skip rebuilt nothing and says nothing
+        # about what a rebuild costs.
+        if not _swept.startswith("skipped"):
+            _note_cycle(time.time() - _cycle_started)
         # Proof of life, written whether the cycle succeeded or not: the
         # heartbeat answers "is the LOOP alive", which file mtimes cannot —
         # a failing build and a dead thread both leave boards old, and only
@@ -4707,6 +4773,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             "cycle_s": _CYCLE_S[0] if _CYCLE_S else None,
             "cycle_p50_s": _cycle_p50(),
             "cycles_timed": len(_CYCLE_S),
+            # The timings themselves, so the next process starts from them
+            # rather than from nothing (`_seed_cycles`).
+            "cycles_s": list(_CYCLE_S),
             # Per board, so "did CFB rebuild, and when" stops being a
             # question only a journal forensic can answer. See _BOARD_RUNS.
             "boards": dict(_BOARD_RUNS),
@@ -6535,8 +6604,13 @@ def show_boards() -> None:
                 pass                # no state file — not a timer box
             line = f"  running commit {served} · auto-update {word}" + extra
             if ok and disk and disk != served:
-                line += (f"\n    <-- {disk} is on disk but not running: "
-                         f"the loop never restarted into it")
+                if _restart_needed_for(served, disk):
+                    line += (f"\n    <-- {disk} is on disk but not running: "
+                             f"the loop never restarted into it")
+                else:
+                    # A docs-only pull is not restarted into (NO_RESTART).
+                    line += (f"\n    ({disk} on disk changes only docs and tests: "
+                             f"nothing to restart into)")
             print(line)
         runs = beat.get("boards") or {}
         if runs:
@@ -10975,10 +11049,16 @@ def main() -> None:
             with _BUILD_LOCK:
                 # The updater holds a restart while this runs (_note_sweep).
                 _note_sweep(True)
+                _swept_from = time.time()
                 try:
                     refresh_all()
                 finally:
                     _note_sweep(False)
+                # The startup build is a sweep too, and the first one this
+                # process can time: the refresher's skips while it ran are
+                # no longer counted, so this is what gives a fresh process a
+                # measured cycle half an hour sooner.
+                _note_cycle(time.time() - _swept_from)
         except Exception as exc:                          # noqa: BLE001
             # A failed build must not cost the settle, the maintenance
             # pass, or the running site. The boards simply stay as they
