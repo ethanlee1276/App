@@ -57,8 +57,15 @@ runs the build's own lineup steps — a teammate at his position ruled out
 (engine/teammates: the depth order off the database, the absences off the
 board's injury lists), his quarterback out or benched (engine/qbchange,
 off the card the board published) — and his measured volume role
-(engine/nflusage), three inputs it priced without before. What it still
-cannot see, said so nobody takes it for more: the role-based injury
+(engine/nflusage), three inputs it priced without before. COLLEGE
+(2026-10-14) runs the two the college board's own number runs: college's
+depth order (engine/cfb/lineup, ranked on catches over the team's games
+before tonight) with the same injury lists on it, and the QB-change card
+the college board published, both priced by college's own measurement
+(x1.00 wherever college's fit adopted nothing). The college board hands
+its projection no usage role (the bridge was built and measured on NFL
+games, engine/nflusage), so a college read takes none either. What it
+still cannot see, said so nobody takes it for more: the role-based injury
 effects the build reads off the weekly report (an elite corner out) and
 the depth chart's starter-or-backup flag. The live board prices no team
 tendency (pace, pass rate); that layer is the backtest's.
@@ -535,7 +542,7 @@ def _qb_real_games(conn, sport: str, player: str, seasons: list[int], before=Non
         if float(r[2] or 0.0) >= QB_START_ATTEMPTS and (cut is None or _pkey(r[0], r[1]) < cut)}
 
 
-# ---- who plays around him, and how much he is used (NFL) ---------------------------
+# ---- who plays around him, and how much he is used (NFL; college's lineup) ----------
 def _nfl_week(conn, season: int, asof=None) -> int:
     """The week the read is made for: a replay's own, else the one after
     the last week stored — tonight's."""
@@ -604,7 +611,7 @@ def _team_outs(board: dict | None, card: dict | None, team: str) -> tuple[set, s
     for i in scan.get("injuries") or []:
         if isinstance(i, dict) and str(i.get("team") or team).upper() == str(team).upper():
             take(i.get("player"), i.get("status"))
-    for name in scan.get("pulled") or []:
+    for name in list(scan.get("pulled") or []) + list((card or {}).get("pulled_players") or []):
         take(name if isinstance(name, str) else (name or {}).get("player"), "PULLED")
     b = board or {}
     for r in list(b.get("recommendations") or []) + list((b.get("likely_board") or {}).get("rows") or []):
@@ -638,15 +645,51 @@ def _lineup(conn, board: dict | None, card: dict | None, season: int, team: str,
     return lu
 
 
-def _qb_changes(card: dict | None, team: str, opponent: str) -> dict:
+def _cfb_lineup(conn, board: dict | None, card: dict | None, season: int, team: str, opponent: str,
+                asof=None) -> dict:
+    """College's own lineup, as engine/cfb/lineup.attach puts it on a
+    college game for the build: the depth order off college's logs (ranked
+    on catches, plus carries for a back, over the team's games before
+    tonight — the order college's multipliers were measured on) and who is
+    out off the board's injury lists, marked "cfb" so engine/teammates
+    reads college's own table. A college game's period is its date, so a
+    replay (``asof``) sees the order as of its date, and no report."""
+    import datetime as _dt
+    from .cfb import lineup as CL
+    teams = tuple(t for t in (team, opponent) if t)
+    if not teams:
+        return {}
+    day = (str(asof[1])[:10] if asof else
+           str((card or {}).get("date") or "")[:10] or _dt.date.today().isoformat())
+    depth = _cached(("depth", "cfb", int(season), tuple(sorted(teams)), day, _stamp(conn)),
+                    lambda: {k: v for k, v in CL.depth(conn, int(season), teams, day).items()
+                             if k in ("order", "last")})
+    lu = {}
+    for t in teams:
+        out, maybe = _team_outs(board, card, t) if not asof else (set(), set())
+        lu[t] = {"order": {pos: depth["order"].get(f"{t}|{pos}") or [] for pos in CL.GROUPS},
+                 "out": sorted(out), "maybe": sorted(maybe), "last": depth["last"].get(t, 0),
+                 "basis": CL.BASIS}
+    return lu
+
+
+def _qb_changes(card: dict | None, team: str, opponent: str, league: str = "nfl") -> dict:
     """{team: change} off the card's QB-change cards (engine/qbchange.card,
     published on every game whose starter is out or benched) — what
-    qbchange.effect reads: the tier, the replacement, the starter."""
+    qbchange.effect reads: the tier, the replacement, the starter. A
+    college card (engine/cfb/qbchange.card) is marked college's, so the
+    step prices it by college's own measurement; its "unmeasured" tier is
+    the replacement nobody could rate, which prices nothing."""
     out = {}
     for c in (card or {}).get("qb_cards") or []:
         if isinstance(c, dict) and c.get("team") in (team, opponent) and c.get("tier") and c.get("starter") \
                 and c.get("status"):
-            out[c["team"]] = dict(c)
+            ch = dict(c)
+            if league == "cfb":
+                ch["league"] = "cfb"
+                if ch["tier"] == "unmeasured":
+                    ch["tier"] = None
+            out[c["team"]] = ch
     return out
 
 
@@ -739,17 +782,22 @@ def football(conn, board: dict | None, league: str, leg: dict, who: dict, asof=N
                     defense=DefenseProfile(team=opponent or "OPP", ratings=(ratings or {}).get(opponent) or {}))
     game = _football_game(card, team, opponent)
     usage = None
-    if league == "nfl":
+    if league in ("nfl", "cfb"):
         # WHO PLAYS AROUND HIM AND HOW MUCH HE IS USED, as the board prices
         # them: the depth order with the board's injury lists on it
         # (engine/teammates), the card's QB change (engine/qbchange), his
         # measured volume role (engine/nflusage) — the same steps
-        # build_projection runs for a board prop. A failure here leaves
-        # the read as it was before these landed, and says so.
+        # build_projection runs for a board prop. College (2026-10-14):
+        # college's own order and measurement, and no usage role, which
+        # the college board's number has none of either. A failure here
+        # leaves the read as it was before these landed, and says so.
         try:
-            game.lineup = _lineup(conn, board, card, season, team, opponent, asof)
-            game.qb_changes = _qb_changes(card, team, opponent)
-            usage = _usage_role(conn, season, who["player"], team, market, asof)
+            if league == "nfl":
+                game.lineup = _lineup(conn, board, card, season, team, opponent, asof)
+                usage = _usage_role(conn, season, who["player"], team, market, asof)
+            else:
+                game.lineup = _cfb_lineup(conn, board, card, season, team, opponent, asof)
+            game.qb_changes = _qb_changes(card, team, opponent, league)
         except Exception as exc:                                   # noqa: BLE001
             print(f"slip read: lineup and usage skipped for {who['player']} "
                   f"({type(exc).__name__}: {exc})", file=sys.stderr)

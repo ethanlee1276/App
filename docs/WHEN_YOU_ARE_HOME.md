@@ -170,7 +170,12 @@ run). The NFL and college matchup check now counts the model's own Matchup
 step when the matchup scan has no lean on a player, as baseball's has all
 along, so those picks can reach Top (step 93; nothing to run). A
 quarterback's carries are on the NFL board now, measured first as the
-other new markets were (step 94; AV). The
+other new markets were (step 94; AV). The parlay checker's read of a
+college leg no board carries now sees who plays around him, as the
+college board's own number does: college's depth order with who is out,
+and the quarterback change. A ruled-out college player with initials in
+his name ("D.J.") now counts as out on the college board too; before,
+his teammates' numbers never moved (step 95; AW). The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -206,13 +211,13 @@ page's tables, the rows tonight's chores write anyway), and AR's probe (it
 downloads any Savant file over six hours old, as the next MLB build would).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A quarterback's carries are on the NFL board: measured first in marketfit (0.645 and 0.632 held out), built from his real games only`
+**A. The box has today's code.** The first line should end `The parlay checker's college read sees who plays around him, by college's own measurement`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 5ec994cf HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor c16a7ae1 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -309,7 +314,14 @@ struck through here as it is built.
 * ~~**The football matchup check.** Should the model's own matchup step
   count when the scan has no lean on him (step 39b)?~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 93.
-* **College in the off-board read's lineup and usage steps** (step 43).
+* ~~**College in the off-board read's lineup and usage steps** (step 43).~~
+  **Answered 2026-10-14: yes** ("do 1-11"). Built: step 95, AW. The
+  lineup and the QB change are wired; the usage step isn't, because the
+  college board's own number has none (next line).
+* **A usage step for college?** The NFL's board and read weigh a thin
+  log against his measured role (recent opportunities × season
+  efficiency); college's have nothing like it. It would be measured on
+  college games first, as everything else was (step 95).
 * **A fresh odds pull of a slip's own markets** when our price is old.
   A 4-leg ticket over two games costs about 3–4 credits, from the same
   daily budget the board uses, so you'd pick a daily cap (step 36,
@@ -1161,6 +1173,26 @@ for r in q[:12]: print(r['player'], r.get('side'), r.get('line'), r.get('odds'),
 A dozen or more rows on a full slate is it working (one per starter a book
 hangs carries on). `0 quarterback carries rows` with lines hung means
 say so.
+
+**AW. The parlay checker's college read sees who plays around him**
+(step 95; read-only, seconds). On a college game day, after the board
+has built, paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json; from engine.gate import board_source; from engine import slipread as SR
+from engine.teammates import _norm
+b = json.load(open(board_source('web/data/cfb.json'))); c = SR._connect(); s = SR._seasons(c, 'cfb')[0]; n = 0
+for g in b.get('games') or []:
+    for t, x in SR._cfb_lineup(c, b, g, s, g.get('home'), g.get('away')).items():
+        n += any(x['order'].values())
+        out = [o[0] for r in x['order'].values() for o in r if _norm(o[0]) in x['out']]
+        if out: print(t, 'out on the order:', ', '.join(out))
+print(n, 'college team(s) with a depth order, season', s)"
+```
+A count near the number of teams on the board is it working; each
+"out on the order" line is a ranked player the injury lists rule out,
+whose teammates' reads now take college's step. `0 college team(s)`
+on a game day means say so.
 
 **AU. Saved slips settle with the Live tab closed** (step 91; read-only,
 seconds). After a night when a slip saved to My Bets from the parlay
@@ -2337,8 +2369,8 @@ first). Paste back anything that prints an error or looks off.
       same as on the board.
     The replay in step 41 sees the depth order and the role as of each
     week; no injury report is kept for past games, so nobody is ever out
-    in a replay. College isn't wired yet (its lineup step is measured
-    separately); say if you want it next. Nothing to set, nothing to run.
+    in a replay. College wasn't wired then (its lineup step is measured
+    separately); it is now, step 95. Nothing to set, nothing to run.
     If the box check in step 39 prints `"mate_card"` or `"qb_card"` on a
     read whose teammate or QB is out that day, it's working.
 
@@ -4083,6 +4115,32 @@ first). Paste back anything that prints an error or looks off.
     pins the anchor call with the position it now hands in.
     `docs/MARKET_CENSUS.md` regenerated (carries: QB, RB). New:
     `tests/test_quarterback_carries_are_on_the_board.py` (7 checks).
+95. **The parlay checker's college read sees who plays around him**
+    (2026-10-14, you: "do 1-11", to H's "College in the off-board read's
+    lineup and usage steps"). AW checks it. A college leg no board
+    carries now runs the two steps the college board's own number runs
+    before it prices a prop (`engine/cfb/lineup.attach`, step 43's NFL
+    steps in college's own terms):
+    * **A teammate at his position ruled out**: college's depth order,
+      ranked on catches (plus carries for a back) over the team's games
+      before that night, with the board's injury lists and every book's
+      pulled list on it.
+    * **His quarterback out or benched**: the QB-change card the college
+      board published on the game.
+    Both are priced by college's own measurement (the store
+    `engine.cfb.lineup` saves), never the NFL's table, and where
+    college's fit adopted nothing the card says so and the number
+    doesn't move. A replay sees the order as of its date and no
+    report. **The usage step isn't wired for college,** and won't be
+    until it's measured: the college board's own number has no usage
+    step either (H has the idea). **Found on the way, fixed on the board
+    too:** the college build keyed its out list differently from the step
+    that reads it, so a ruled-out player written with initials ("D.J.")
+    never counted as out and his teammates' numbers never moved; the NFL
+    had the same bug fixed on 10-12. New:
+    `tests/test_the_college_read_sees_who_plays_around_him.py` (9
+    checks). No test changed.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -363,8 +363,13 @@ def qb_mult(market: str, position: str, tier) -> float:
 
 # --- the board: stamp tonight's games -------------------------------------------
 def _norm(name: str) -> str:
-    from ..sources.oddsapi import normalize_name
-    return normalize_name(str(name or ""))
+    """The lineup step's own key (engine/teammates._norm: normalize_name
+    with a run of initials closed up). Until 2026-10-14 this was bare
+    normalize_name, so a ruled-out "D.J." went on the out list as "d j"
+    while the step that reads it looked for "dj", and his teammates were
+    never moved — the NFL's own bug of 2026-10-12, here for college."""
+    from ..teammates import _norm as _key
+    return _key(str(name or ""))
 
 
 def depth(conn, season: int, teams, before_day: str) -> dict:
