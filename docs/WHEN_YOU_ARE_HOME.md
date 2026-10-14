@@ -70,23 +70,28 @@ round and the time in it, and both men's numbers (step 70; AB). Every
 player pick in the NFL, college, NBA, NHL and MLB now has a Matchup chip
 beside his own chart: his chart's zones, how much of his volume goes to
 each, what tonight's opponent allows there against the league, and one
-fit number; context only (step 71; AC). The whole picture, sport by
-sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+fit number; context only (step 71; AC). Every hitter's chart now
+carries our own expected average and slugging (xBA, xSLG), from how hard
+and at what angle each ball left the bat, and a test on games the table
+never saw decides whether they are ever more than context (step 72; AD).
+The whole picture, sport by sport, is in
+`docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
 
 Nothing here changes anything except C (only if email isn't on yet),
-D's Stripe settings and Q's photo fill (photo addresses only — the same
-thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
+D's Stripe settings, Q's photo fill (photo addresses only — the same
+thing tomorrow's chores would write) and AD's two model files (the table
+the chores would fit anyway, and the test's verdict). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Tonight's opponent beside every player's chart: the matchup view`
+**A. The box has today's code.** The first line should end `Our own expected average and slugging on every hitter's chart, measured before any use`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 2e58a84b HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 653332e2 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -570,6 +575,31 @@ is better for him and red where it is worse. Under it: the fit, the
 opponent's rank (1st is the best for him), what they allow overall, his
 top zone and the sample. A hitter's left side is tonight's starter's
 pitches when the MLB board names a probable, the staff's otherwise.
+
+**AD. Our own expected stats, and the test that decides what they are
+for** (step 72; a few minutes at low priority; writes two model files and
+nothing else). The first line shows the table the chores fit each night
+after reading the finals (none until the first night after pulling); the
+second fits it now instead, the same file the chores would write, and
+prints how many balls it was fitted on; the third runs the test on every
+stored plate appearance and saves its verdict (add `--dry-run` to print
+without saving); the fourth asks for a hitter's chart and prints his
+average, expected average, slugging, expected slugging and the verdict
+the chart now reads:
+```
+ls -la /srv/qellys/data/models/mlb_xstats.json
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; from engine.mlb import xstats as x; m=x.fit_from_db(db.connect()); print(m['n'], x.save(m) if m['n'] >= x.MIN_BALLS else 'too few balls to fit')"
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.mlb.xstatsfit
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=spray&sport=mlb&player=Aaron%20Judge" | python3 -c "import json,sys; d=json.load(sys.stdin); L=d.get('season_line') or {}; print(d.get('player'), d.get('season'), L.get('avg'), L.get('xba'), L.get('slg'), L.get('xslg'), d.get('x_measured'))"
+```
+The third prints the balls the table was fitted on, the three slices'
+dates and sizes, then for HITS and BASES the actual, expected and league
+scores on the last slice with each half's gain against the bar and
+`PASSES the bar` or `does not pass`. Paste all of it back: a pass is
+written on the chart and is your call from there; it moves no price by
+itself. Then on your phone: MLB, any hitter's pick, the hit tracker's
+season tab: xBA under his AVG, xSLG under his SLG, and a ball's tooltip
+ends with its xBA; the note under the chart says what the test found.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2518,6 +2548,38 @@ first). Paste back anything that prints an error or looks off.
     volume helper counting a matchup's zones, and the fold helper handing
     back its html when no chart is drawing; nothing loosened. New:
     `tests/test_a_matchup_view_for_every_player.py`.
+72. **Our own expected average and slugging on every hitter's chart,
+    measured before any use** (2026-10-14, you, on the list: "MLB
+    expected stats ... I'd test it before it touches a pick"). AD runs
+    the test. The box already stores every ball in play with its exit
+    velocity and launch angle (the hit tracker's table). Each night, after
+    reading the finals, it now fits a table on all of them
+    (engine/mlb/xstats, built the way the hockey xG model is): a ball's
+    chance of being a hit and the bases it was worth, by how hard and at
+    what angle it left the bat, each cell pulled toward its speed band's
+    and each band toward the league's, so a rare kind of ball reads near
+    the usual. The hit tracker shows it: each ball's xBA in its tooltip,
+    the season's xBA and xSLG under his AVG and SLG (SLG is a new tile, as
+    is Launch angle beside Exit velocity), and an xBA column in the
+    batted-ball and direction tables. Why ours when the board already
+    reads Savant's season xSLG: Savant's is one season total, there when
+    Savant answers; ours is per ball and per stretch of games, and there
+    when Savant is not. THE TEST, written before any run
+    (engine/mlb/xstatsfit): the stored dates in order; the table fitted
+    on the first 60% and nothing later; each predictor's pull toward the
+    league picked on the next 15% and nowhere else; the last 25% scored.
+    For every hitter-game there with 20 or more at bats earlier that
+    season, his actual average and slugging to date against his expected
+    ones to date, on whether he got a hit (log loss) and his total bases
+    (squared error). The expected passes only if it beats the actual by
+    0.001 of log loss (hits) or 0.5% of the error (bases) in both halves
+    of that last 25%, with 2,000 hitter-games or more in each. A pass
+    moves nothing: the chart says so, and wiring it into a price is your
+    call after. Until AD runs, the chart says it has not been measured.
+    The first visit is unchanged (the drawing is in the baseball module
+    that loads with the chart). New:
+    `tests/test_mlb_expected_stats_measured_before_use.py`; no pin
+    changed.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

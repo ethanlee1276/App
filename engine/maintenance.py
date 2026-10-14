@@ -1791,6 +1791,16 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             back = _mlbc.backfill(_mc, today.year, yesterday.isoformat())
             if back["games"] or back["failed"]:
                 log(f"  mlb charts {today.year}: {back['games']} more game(s) read, {back['left']} left")
+            # THE EXPECTED STATS TABLE (engine/mlb/xstats), refitted on every
+            # stored ball in play when new ones came in, or when there is no
+            # table yet. Drawn on the hit tracker as context; whether it sees
+            # a hitter's next game is engine/mlb/xstatsfit's question.
+            from .mlb import xstats as _xs
+            if back["games"] or (start <= yesterday and got["games"]) or _xs.load() is None:
+                _xm = _xs.fit_from_db(_mc)
+                if _xm["n"] >= _xs.MIN_BALLS:
+                    _xs.save(_xm)
+                    log(f"  mlb expected stats: refitted on {_xm['n']:,} balls in play")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  mlb charts failed: {exc}")
 

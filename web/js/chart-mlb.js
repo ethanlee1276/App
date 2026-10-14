@@ -125,16 +125,26 @@
       </button>`;
     }).join("")}</div>`;
   }
+  /* Our expected average and slugging (engine/mlb/xstats), and what the
+     held-out test (engine/mlb/xstatsfit) said of them, if it has run. */
+  function xNote(d) {
+    if (!d || !d.season_line || d.season_line.xba == null) return "";
+    const m = d.x_measured;
+    const said = !m ? "It has not yet been measured as a pick signal"
+      : m.hits || m.bases ? `Measured on games it never saw${m.at ? ` (${m.at})` : ""}, it read a hitter’s next game better than his own ${m.hits && m.bases ? "average and slugging" : m.hits ? "average" : "slugging"} did; it is still context`
+      : `Measured on games it never saw${m.at ? ` (${m.at})` : ""}, it did not read a hitter’s next game better than his own average and slugging did`;
+    return ` xBA and xSLG are ours: each ball’s chance of a hit and the bases it was worth, from how hard and at what angle it left the bat, over every ball in play we have stored; a strikeout counts nothing, and an at bat with no reading counts what it was. ${said}, so nothing here moves a price.`;
+  }
   function sprayTables(d) {
     const out = [];
-    const C = (x) => [x.bip || x.n, x.h, x.hr, pct(x.n ? x.h / x.n : null)];
+    const xs = d.season_line && d.season_line.xba != null;
+    const C = (x) => [x.bip || x.n, x.h, x.hr, pct(x.n ? x.h / x.n : null)].concat(xs ? [avg3(x.xba)] : []);
+    const H = (first) => [first, "In play", "Hits", "HR", "Hit rate"].concat(xs ? ["xBA"] : []);
     if (d.by_type && d.by_type.length) {
-      out.push(tableHTML("By how he hit it", ["Batted ball", "In play", "Hits", "HR", "Hit rate"],
-        d.by_type.map((x) => [x.name, ...C(x)])));
+      out.push(tableHTML("By how he hit it", H("Batted ball"), d.by_type.map((x) => [x.name, ...C(x)])));
     }
     if (d.by_dir && d.by_dir.length) {
-      out.push(tableHTML("By where he hit it", ["Direction", "In play", "Hits", "HR", "Hit rate"],
-        d.by_dir.map((x) => [x.name, ...C(x)])));
+      out.push(tableHTML("By where he hit it", H("Direction"), d.by_dir.map((x) => [x.name, ...C(x)])));
     }
     if (d.by_hand && d.by_hand.length) {
       out.push(tableHTML("Against right- and left-handers", ["Pitcher", "PA", "H", "HR", "BB", "K", "AVG"],
@@ -154,13 +164,14 @@
     seasonSide: (d) => {
       const L = d.season_line;
       return `${sprayLegend()}${sprayTiles(L)}
-        <div class="cc-tiles cc-tiles-2">${tile("AVG", avg3(L.avg))}${tile("Exit velocity", L.ev == null ? "—" : `${num1(L.ev)} mph`, "average")}${tile("Hard hit", pct(L.bip ? L.hard / L.bip : null))}${tile("Sweet spot", pct(L.bip ? L.sweet / L.bip : null), "8–32°")}</div>`;
+        <div class="cc-tiles cc-tiles-2">${tile("AVG", avg3(L.avg), L.xba == null ? "" : `xBA ${avg3(L.xba)}`)}${tile("SLG", avg3(L.slg), L.xslg == null ? "" : `xSLG ${avg3(L.xslg)}`)}${tile("Exit velocity", L.ev == null ? "—" : `${num1(L.ev)} mph`, "average")}${tile("Launch angle", L.la == null ? "—" : `${num1(L.la)}°`, "average")}${tile("Hard hit", pct(L.bip ? L.hard / L.bip : null))}${tile("Sweet spot", pct(L.bip ? L.sweet / L.bip : null), "8–32°")}</div>`;
     },
     list: (g) => sprayList(g),
     splits: (d) => sprayTables(d),
-    note: () => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn.</p>`,
+    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn.${xNote(d)}</p>`,
     tip: (p) => `<b class="${band(p.et)}">${esc(p.ev)}</b>${p.rbi ? ` · ${p.rbi} RBI` : ""}
-      <span>${esc([innLabel(p.inn, p.half), `off ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`, ballWords(p)].filter(Boolean).join(" · "))}</span>`,
+      <span>${esc([innLabel(p.inn, p.half), `off ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`, ballWords(p),
+                   p.xh != null ? `xBA ${avg3(p.xh)}` : ""].filter(Boolean).join(" · "))}</span>`,
   });
 
   /* ---------------- the strike zone ---------------- */

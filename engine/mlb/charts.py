@@ -332,7 +332,14 @@ def _hline(pas: list) -> dict:
     bip = [p for p in pas if p["ls"] is not None]
     ev = [p["ls"] for p in bip]
     la = [p["la"] for p in pas if p["la"] is not None]
-    return {"n": n, "pa": n, "ab": len(ab), "h": len(hits), "tb": sum(HIT_BASES[p["et"]] for p in hits),
+    tb = sum(HIT_BASES[p["et"]] for p in hits)
+    # Expected hits and bases (engine/mlb/xstats) where a ball carries them;
+    # every other at bat counts what it was, a strikeout nothing.
+    xs = None
+    if ab and any("xh" in p for p in ab):
+        xs = (sum(p["xh"] if "xh" in p else (1 if p["et"] in HIT_BASES else 0) for p in ab) / len(ab),
+              sum(p["xtb"] if "xh" in p else HIT_BASES.get(p["et"], 0) for p in ab) / len(ab))
+    return {"n": n, "pa": n, "ab": len(ab), "h": len(hits), "tb": tb,
             "hr": sum(1 for p in hits if p["et"] == "home_run"),
             "xbh": sum(1 for p in hits if p["et"] in ("double", "triple", "home_run")),
             "bb": sum(1 for p in pas if p["et"] in WALKS), "k": sum(1 for p in pas if p["et"] in STRIKEOUTS),
@@ -342,16 +349,21 @@ def _hline(pas: list) -> dict:
             "la": round(sum(la) / len(la), 1) if la else None,
             "sweet": sum(1 for v in la if SWEET[0] <= v <= SWEET[1]),
             "max_ev": max(ev) if ev else None,
-            "avg": round(len(hits) / len(ab), 3) if ab else None}
+            "avg": round(len(hits) / len(ab), 3) if ab else None,
+            "slg": round(tb / len(ab), 3) if ab else None,
+            "xba": round(xs[0], 3) if xs else None, "xslg": round(xs[1], 3) if xs else None}
 
 
 def hits_chart(conn, player: str, season: int | None = None) -> dict:
     """Everything the hit tracker draws for one batter-season.
 
     ``{player, sport, seasons, season, team, side, games: [{id, date, opp,
-    home, team, line, pas}], season_line, by_type, by_dir, by_hand}`` —
-    games newest first, each plate appearance ``{inn, half, ev, et, p, ph,
-    rbi, np, ls, la, d, tr, hd, loc, x, y}``. ``{}`` with nothing on file."""
+    home, team, line, pas}], season_line, by_type, by_dir, by_hand,
+    x_measured}`` — games newest first, each plate appearance ``{inn, half,
+    ev, et, p, ph, rbi, np, ls, la, d, tr, hd, loc, x, y}`` and, on a ball
+    with its speed and angle once engine/mlb/xstats has a table, ``xh`` and
+    ``xtb``; ``x_measured`` is engine/mlb/xstatsfit's last verdict, or None.
+    ``{}`` with nothing on file."""
     pid, name = _resolve(conn, player, "batter")
     if pid is None:
         return {}
@@ -363,18 +375,24 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     cur = conn.execute("SELECT * FROM mlb_pa WHERE batter_id=? AND season=? ORDER BY date, game_pk, at_bat",
                        (pid, pick))
     cols = [d[0] for d in cur.description]
+    from . import xstats
+    model = xstats.load()
     games: dict = {}
     side = ""
     for r in (dict(zip(cols, x)) for x in cur.fetchall()):
         side = r["bat_side"] or side
         g = games.setdefault(r["game_pk"], {"id": r["game_pk"], "date": r["date"], "opp": r["opponent"],
                                             "home": bool(r["home"]), "team": r["team"], "pas": []})
-        g["pas"].append({"inn": r["inning"], "half": r["half"], "ev": r["event"], "et": r["event_type"],
-                         "p": r["pitcher"], "ph": r["pitch_hand"], "rbi": r["rbi"], "np": r["pitches"],
-                         "ls": r["launch_speed"], "la": r["launch_angle"], "d": r["distance"],
-                         "tr": r["trajectory"], "hd": r["hardness"], "loc": r["location"],
-                         "x": r["coord_x"], "y": r["coord_y"],
-                         "dir": direction(r["coord_x"], r["coord_y"], r["bat_side"])})
+        pa = {"inn": r["inning"], "half": r["half"], "ev": r["event"], "et": r["event_type"],
+              "p": r["pitcher"], "ph": r["pitch_hand"], "rbi": r["rbi"], "np": r["pitches"],
+              "ls": r["launch_speed"], "la": r["launch_angle"], "d": r["distance"],
+              "tr": r["trajectory"], "hd": r["hardness"], "loc": r["location"],
+              "x": r["coord_x"], "y": r["coord_y"],
+              "dir": direction(r["coord_x"], r["coord_y"], r["bat_side"])}
+        v = xstats.xvals(model, r["launch_speed"], r["launch_angle"])
+        if v:
+            pa["xh"], pa["xtb"] = round(v[0], 3), round(v[1], 3)
+        g["pas"].append(pa)
     out_games = []
     for g in sorted(games.values(), key=lambda g: (g["date"], g["id"]), reverse=True):
         g["line"] = _hline(g["pas"])
@@ -391,9 +409,13 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
                for h, label in (("R", "vs right-handers"), ("L", "vs left-handers"))
                if any(p["ph"] == h for p in every)]
     latest = out_games[0] if out_games else {}
+    from .xstatsfit import measured
+    m = measured() if model else None
     return {"player": name, "sport": "mlb", "seasons": seasons, "season": pick, "team": latest.get("team", ""),
             "side": side, "games": out_games, "season_line": _hline(every), "by_type": by_type,
-            "by_dir": by_dir, "by_hand": by_hand}
+            "by_dir": by_dir, "by_hand": by_hand,
+            "x_measured": {"hits": m["passed"].get("hits", False), "bases": m["passed"].get("bases", False),
+                           "at": str(m.get("at", ""))[:10]} if m else None}
 
 
 def _pline(ps: list, pas: list) -> dict:
