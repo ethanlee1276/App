@@ -15961,7 +15961,7 @@ function ccLoad() {
    routed everywhere a pick opens without touching this file. */
 function chartSlot(r) {
   const lg = (r && r.sport) || state.sport, m = String((r && r.market) || "");
-  return r && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}"></div>` : "";
+  return r && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}" data-opp="${escapeAttr(r.opponent || "")}"></div>` : "";
 }
 function mountCharts(root) {
   const els = root.querySelectorAll(".cc-slot:not([data-on])");

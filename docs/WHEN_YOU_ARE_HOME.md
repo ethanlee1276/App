@@ -66,8 +66,12 @@ kicker's pick draws every field goal and extra point he tried, by
 distance, made or missed, in what weather, each distance band beside the
 league's rate (step 69; AA). Every fighter on the UFC card now has a
 Fight history button: each fight on his record, who, how it ended, the
-round and the time in it, and both men's numbers (step 70; AB). The
-whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+round and the time in it, and both men's numbers (step 70; AB). Every
+player pick in the NFL, college, NBA, NHL and MLB now has a Matchup chip
+beside his own chart: his chart's zones, how much of his volume goes to
+each, what tonight's opponent allows there against the league, and one
+fit number; context only (step 71; AC). The whole picture, sport by
+sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -76,13 +80,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Every UFC fighter's fight history: how and when each fight ended`
+**A. The box has today's code.** The first line should end `Tonight's opponent beside every player's chart: the matchup view`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor e857a7d2 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 2e58a84b HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -541,6 +545,31 @@ fight's clock filled to where it ended (green won, red lost, grey a
 draw or no contest) and both men's numbers side by side; Career draws
 every fight's length on one clock, with how he wins and loses, three
 rounds and five, and when his fights end.
+
+**AC. The matchup view** (step 71; read-only, seconds). Nothing to fill:
+it reads the chart tables the box already keeps. Each line names the
+league, the player, which of his charts it read (routes, carries, passes,
+shots, skater, goalie, hitter, pitcher), the opponent as the table spells
+it, the season, the fit and the opponent's rank; any regular against any
+opponent will do (change a name that prints `None`). The first ask in each
+league builds that league's sums (a second or two, baseball's a few) and
+keeps them three hours. The last command lists the six new indexes the
+box builds on its own the first time it opens the database after pulling:
+```
+for q in "nfl&player=Ja%27Marr%20Chase&opp=PIT" "nfl&player=Derrick%20Henry&opp=CLE" "cfb&player=Jeremiah%20Smith&opp=Penn%20State" "nba&player=Jalen%20Brunson&opp=BOS" "nhl&player=Auston%20Matthews&opp=MTL&fam=shotmap" "nhl&player=Igor%20Shesterkin&opp=TOR&fam=saves" "mlb&player=Aaron%20Judge&opp=TOR&fam=spray"; do curl -s "http://127.0.0.1:8000/api/players/chart?kind=matchup&sport=$q" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('sport'), d.get('player'), d.get('family'), d.get('opp'), d.get('season'), d.get('fit'), (d.get('overall') or {}).get('rank'), d.get('starter', ''))"; done
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print([r[0] for r in c.execute(\"SELECT name FROM sqlite_master WHERE type='index' AND name IN ('carries_season','targets_season','passes_season','nba_shots_opp','nhl_shots_season','mlb_pa_season')\")])"
+```
+Then on your phone: any league, Most Likely, tap a player's pick. Beside
+his own chart and his Role is a chip that reads `Matchup vs` and tonight's
+opponent: a row for each zone of his chart (depth and side for a receiver
+or a passer, the hole for a back, field position in college, the shot
+zone in the NBA, the distance from the net in hockey, the strike zone in
+baseball), the share of his volume there on the left, and on the right
+what tonight's opponent allows there against the league, green where it
+is better for him and red where it is worse. Under it: the fit, the
+opponent's rank (1st is the best for him), what they allow overall, his
+top zone and the sample. A hitter's left side is tonight's starter's
+pitches when the MLB board names a probable, the staff's otherwise.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2450,6 +2479,45 @@ first). Paste back anything that prints an error or looks off.
     chart's button by the name of the one helper every chart button is
     now drawn by (`ccDoor`), as strictly as before; nothing loosened. New:
     `tests/test_a_fight_history_for_every_fighter.py`.
+71. **Tonight's opponent beside every player's chart: the matchup view**
+    (2026-10-14, you: "Yes do all of them" and "All sports screens should
+    basically be identical"). AC checks it. One picture in every league:
+    the zones of his own chart, a row each, with the share of his volume
+    there and what tonight's opponent allows there against the league,
+    then the fit (that difference weighted by his share), the opponent's
+    overall rate and its rank. NFL: a receiver's targets by depth and side
+    against what the defence allows his position group (tight ends against
+    what it allows tight ends), a back's carries by hole, a passer's
+    throws by depth and side; which of these is his own chart decides, not
+    the bet. College: field position (the college play file has no hole
+    and no depth or side). NBA: the shot zones and the field-goal
+    percentage the defence allows. NHL: a skater's shots by distance and
+    the goals a shot the opponent's goalies allow; a goalie against where
+    tonight's opponent shoots from and how well, with his own save
+    percentage in each band. MLB: a hitter's own slugging in each part of
+    the strike zone against where tonight's starter (the board's
+    probable) or the staff pitches; a pitcher's pitches against the
+    opposing lineup's slugging. Every opponent rate is pulled toward the
+    league's by a few dozen plays, so a zone seen a handful of times reads
+    near the league, and an opponent with less than about three games
+    this season is read on last season's, which the chart says. A pick
+    names its opponent and the page passes it to the chart (one attribute
+    on the chart's slot; the first visit stays inside its budget, no
+    bump). CONTEXT ONLY: on the 2022-2025 NFL seasons, a defence's
+    allowances by side, depth and run gap did not improve the picks on
+    their own (scanfit), and the other leagues' are not measured, so
+    nothing on it moves a price, and the note under it says so. Six
+    indexes on the chart tables make the league-wide sums quick; the box
+    builds them by itself after pulling. The drawing loads as its own
+    small file (js/chart-matchup.js). Pins changed, told to you: my own
+    `tests/test_the_pick_page_draws_his_chart.py` and
+    `tests/test_a_role_chart_for_every_player.py` read the lead rule as
+    "his role, then tonight's matchup, sort after every chart of what he
+    did" (it was the role alone), the second-chart rule with the matchup
+    exempt from "the same season" (it says which season it reads), the
+    volume helper counting a matchup's zones, and the fold helper handing
+    back its html when no chart is drawing; nothing loosened. New:
+    `tests/test_a_matchup_view_for_every_player.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -433,3 +433,22 @@
 .uf-row .cc-r-h { grid-column: auto; grid-row: auto; color: var(--text); white-space: normal; }
 .uf-row .cc-r-y { grid-column: auto; grid-row: auto; }
 .uf-o { font-family: var(--font-mono); color: var(--text-mute); text-align: right; min-width: 64px; }
+
+/* tonight's opponent beside his chart (js/chart-matchup.js): a row a zone */
+.mv-svg { max-width: 560px; margin: 0 auto; }
+.mv-h { fill: var(--text-mute); font: 600 10.5px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+.mv-mid { stroke: var(--border); stroke-width: 1; }
+.mv-z { fill: var(--text-dim); font: 600 11px var(--font-mono); }
+.mv-row.hot .mv-z { fill: var(--text); font-weight: 800; }
+.mv-track { fill: var(--panel-3); }
+.mv-share { fill: var(--brand); }
+.mv-pct { fill: var(--text-dim); font: 600 10.5px var(--font-mono); }
+.mv-diff { fill: var(--text-mute); }
+.mv-diff.gain { fill: var(--good); }
+.mv-diff.loss { fill: var(--bad); }
+.mv-v { fill: var(--text); font: 700 11.5px var(--font-mono); }
+.mv-v.gain { fill: var(--good); }
+.mv-v.loss { fill: var(--bad); }
+.cc-legend .sw.mv-sw { height: 8px; background: var(--brand); }
+.mv-fit.gain b { color: var(--good); }
+.mv-fit.loss b { color: var(--bad); }

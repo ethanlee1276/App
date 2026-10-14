@@ -74,6 +74,18 @@ def _role(conn, sport, player, season):
     return role.chart(conn, sport, player, season)
 
 
+def _matchup(conn, sport, player, season, opp="", fam=""):
+    from . import matchview
+    return matchview.chart(conn, sport, player, opp, season, hint=fam)
+
+
+def _matchup_stored(conn, sport):
+    """The league's own chart table (the matchup reads it)."""
+    if sport in ("nfl", "cfb"):
+        return _rows_in("targets" if sport == "nfl" else "carries")(conn, sport)
+    return _any_row({"nba": "nba_shots", "nhl": "nhl_shots", "mlb": "mlb_pa"}[sport])(conn, sport)
+
+
 def _logged(conn, sport):
     """Has the league any box score stored at all?"""
     try:
@@ -127,7 +139,13 @@ KINDS = {
     # A fighter's (2026-10-14): every bout on his record, how and when it
     # ended (engine/ufc/history).
     "fights": (("ufc",), _ufc_fights, _any_row("ufc_fights")),
+    # Tonight's opponent beside his chart (2026-10-14): the zones of his own
+    # chart, what the opponent allows in each against the league, and the
+    # fit (engine/matchview). The one kind that is told the opponent.
+    "matchup": (("nfl", "cfb", "nba", "nhl", "mlb"), _matchup, _matchup_stored),
 }
+#: The kinds that also take tonight's opponent and the chart a page leads with.
+TOLD_OPP = ("matchup",)
 
 
 def known(kind: str, sport: str) -> bool:
@@ -135,11 +153,13 @@ def known(kind: str, sport: str) -> bool:
     return bool(spec) and sport in spec[0]
 
 
-def answer(conn, kind: str, sport: str, player: str, season: int | None = None) -> dict:
+def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
+           opp: str = "", fam: str = "") -> dict:
     """The chart a page draws, as every chart's endpoint answers it."""
     from . import statlogs
     _leagues, build, stored = KINDS[kind]
-    out = build(conn, sport, player, season) or {}
+    out = (build(conn, sport, player, season, opp, fam) if kind in TOLD_OPP
+           else build(conn, sport, player, season)) or {}
     if out:
         out["kind"] = kind
         # The site's own photo first; a chart that knows his face from its

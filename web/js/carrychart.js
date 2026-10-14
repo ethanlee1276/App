@@ -123,6 +123,10 @@
     fights: { chip: "Fights", title: "Fight history", noun: "fights", one: "number", where: "his fights", by: "By fight",
               sec: "every fight on his record: who, how it ended, the round and the time, and both men’s numbers",
               fill: "every fight is read from ESPN’s fight records a few fighters at a time" },
+    /* Tonight's opponent beside his chart (2026-10-14, engine/matchview):
+       one view, no games row; its chip names the opponent. */
+    matchup: { chip: "Matchup", title: "Matchup", noun: "matchup", one: "zone", where: "tonight",
+               sec: "tonight’s opponent beside his chart: where he goes, and what they allow there" },
   };
   /* Every league's role chart says what it counts (engine/role). */
   Object.entries({
@@ -146,7 +150,7 @@
      module registers its parts through `QBCarry.plug`. Listeners, not
      handler properties: the page's CSP forbids inline handlers. */
   const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops", shotmap: "nhl", saves: "nhl", role: "role",
-                 kicks: "kicks", fights: "ufc" };
+                 kicks: "kicks", fights: "ufc", matchup: "matchup" };
   const plugs = {};
   function need(kind) {
     const f = PLUG[kind];
@@ -950,7 +954,7 @@
     const box = ov.querySelector(".cc-body");
     const R = S.kind === "routes";
     const K = kindOf(S.kind, S.sport), P = DRAW[S.kind];
-    if (!d || !d.games || !d.games.length) {
+    if (!d || (P && P.only ? !(d.zones || []).length : !d.games || !d.games.length)) {
       /* No one in the league has a row yet: the charts are being filled
          (engine/chartfill), which is not the same as none for him. The
          switch stays above it on a pick page, so the other chart is a
@@ -981,11 +985,11 @@
             ? `${teamMarkIn(sport, d.team, 16)} ${esc(teamNameIn(sport, d.team))}` : ""].filter(Boolean).join(" · ")}</span>
         </div>
         ${seasons}
-      </header>`) + (bar ? `<div class="cc-bar">${bar}</div>` : "") + `
+      </header>`) + (bar ? `<div class="cc-bar">${bar}</div>` : "") + (P && P.only ? "" : `
       <div class="cc-tabs" role="tablist">
         <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">${esc(K.by || "By game")}</button>
         <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${esc(seasonName(sport, d.season))} · ${esc(K.where)}</button>
-      </div>`;
+      </div>`);
     /* Four parts in every view: what sits above the drawing (the games,
        the title), the drawing, what reads it (the legend, the numbers)
        and the long tail. The overlay stacks them as it always has; a
@@ -1065,7 +1069,7 @@
      chart and nothing else, so it shows them open, as before. A fold
      the reader opened stays open while he moves between games. */
   function fold(key, title, html) {
-    if (!C.inline || !html) return html;
+    if (!C || !C.inline || !html) return html;
     return `<details class="cc-more" data-fold="${key}"${S.open && S.open[key] ? " open" : ""}>
       <summary>${esc(title)}</summary>${html}</details>`;
   }
@@ -1075,6 +1079,7 @@
      chip with the game's own tally), the game's drawing with its tip,
      its numbers and every play in order. */
   function plugView(P, d, sport) {
+    if (P.only) return P.only(d, sport);
     if (S.view === "season") {
       const n = d.games.length;
       return { top: `<div class="cc-title">${esc(P.seasonTitle ? P.seasonTitle(d)
@@ -1193,7 +1198,8 @@
   function ask(kind, sport, player, season, cached) {
     const api = kind === "routes" ? "/api/players/routes?sport="
       : kind === "carries" ? "/api/players/carries?sport=" : `/api/players/chart?kind=${kind}&sport=`;
-    const q = `${api}${encodeURIComponent(sport)}&player=${encodeURIComponent(player)}${season ? `&season=${season}` : ""}`;
+    const q = `${api}${encodeURIComponent(sport)}&player=${encodeURIComponent(player)}${season ? `&season=${season}` : ""}${kind === "matchup"
+      ? `&opp=${encodeURIComponent(S.opp || "")}&fam=${encodeURIComponent(S.fam || "")}` : ""}`;
     const hit = cached && CACHE.get(q);
     if (hit && Date.now() - hit.t < CACHE_MS) return Promise.resolve(hit.data);
     return fetch(q).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((data) => {
@@ -1204,8 +1210,10 @@
   //: How much of his season a chart holds: carries, or passes thrown to him
   //: (every other chart's server answer counts its own in `season_line.n`:
   //: a passer's attempts).
-  const vol = (kind, d) => (d && d.games && d.games.length
+  const vol = (kind, d) => (d && ((d.games && d.games.length) || (kind === "matchup" && (d.zones || []).length))
     ? Number((d.season_line || {})[kind === "routes" ? "tgt" : "n"]) || 0 : 0);
+  //: Never the chart a pick leads with: his role, then tonight's matchup.
+  const LATE = { role: 1, matchup: 2 };
   //: A second chart is offered when he has this many in the same season.
   const SECOND_MIN = 3;
   /* Only the newest request a chart made is drawn, and none once the
@@ -1252,15 +1260,16 @@
       if (seq !== c.seq || c.root._cc !== c) return;
       // His role (games played) never leads a chart of what he did in them.
       const got = c.cand.map((k, i) => ({ k, d: ds[i], v: vol(k, ds[i]) })).filter((x) => x.v > 0)
-        .sort((a, b) => (a.k === "role") - (b.k === "role") || b.v - a.v);
+        .sort((a, b) => (LATE[a.k] || 0) - (LATE[b.k] || 0) || b.v - a.v);
       const lead = got[0];
-      const shown = got.filter((x) => x === lead || (x.v >= SECOND_MIN && x.d.season === lead.d.season));
+      // Tonight's matchup is offered whatever season it reads: it says which.
+      const shown = got.filter((x) => x === lead || (x.v >= SECOND_MIN && (x.k === "matchup" || x.d.season === lead.d.season)));
       c.kinds = shown.length ? shown.map((x) => x.k) : [c.cand[0]];
       c.counts = {};
       shown.forEach((x) => { c.counts[x.k] = x.v; });
       const want = MEM.get(c.key);
       const kind = c.kinds.includes(want) ? want : c.kinds[0];
-      c.S = Object.assign(fresh(c.S.sport, kind, c.S.player), { view: c.S.view, hint: c.S.hint });
+      c.S = fresh(c.S.sport, kind, c.S.player, c.S);
       use(c);
       const sec = c.root.querySelector(".cc-sec");
       if (sec) sec.innerHTML = secHTML(c);
@@ -1411,11 +1420,13 @@
     const back = p === "RB" || p === "FB" || p === "HB";
     return role(wide || (!back && !runs) ? ["routes", "carries"] : ["carries", "routes"]);
   }
+  //: The charts whose zones the matchup view reads tonight's opponent on.
+  const MATCHED = new Set(["carries", "routes", "passes", "shots", "shotmap", "saves", "spray", "pitches"]);
   function kindBar() {
     if (!C || !C.kinds || C.kinds.length < 2) return "";
     const n = C.counts || {};
     return `<div class="cc-kinds" role="group" aria-label="Which chart">${C.kinds.map((k) =>
-      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc(kindOf(k, S.sport).chip)}${n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}</div>`;
+      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc(kindOf(k, S.sport).chip)}${k === "matchup" ? `<small>vs ${esc(S.opp || "")}</small>` : n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}</div>`;
   }
   //: The section's own heading, kept short of the page's "why?" fold.
   function secHTML(c) {
@@ -1427,12 +1438,15 @@
         : "every run he made: the hole, how far it went, and where on the field"}.</span>`;
   }
   const waitHTML = () => `<div class="cc-empty">Loading ${esc(S.player)}’s ${esc(kindOf(S.kind, S.sport).noun)}…</div>`;
-  const fresh = (sport, kind, player) => ({ sport, kind, player, data: null, view: "game", gi: 0, sel: -1, hint: "" });
+  //: A chart's state; a switch keeps the view, the face and tonight's opponent.
+  const fresh = (sport, kind, player, from) => ({ sport, kind, player, data: null, view: from ? from.view : "game", gi: 0,
+                                                 sel: -1, hint: from ? from.hint : "", opp: from ? from.opp : "",
+                                                 fam: from ? from.fam : "" });
 
   function pick(c, kind) {
     if (!c.kinds || !c.kinds.includes(kind) || kind === c.S.kind) return;
     if (c.key) MEM.set(c.key, kind);
-    c.S = Object.assign(fresh(c.S.sport, kind, c.S.player), { view: c.S.view, hint: c.S.hint });
+    c.S = fresh(c.S.sport, kind, c.S.player, c.S);
     use(c);
     const sec = c.root.querySelector(".cc-sec");
     if (sec) sec.innerHTML = secHTML(c);
@@ -1452,8 +1466,12 @@
     const d = el.dataset, sport = String(d.lg || "nfl").toLowerCase();
     const kinds = kindsFor(sport, d.mkt, d.pos);
     if (!kinds.length || !d.cc) { el.hidden = true; return; }
+    /* Tonight's opponent beside his chart, wherever the pick names one and
+       his chart has zones to read it on (not a kick or a role alone). */
+    if (d.opp && kinds.some((k) => MATCHED.has(k))) kinds.push("matchup");
     const key = [sport, d.cc, d.mkt].join("|");
-    const c = { root: el, inline: true, seq: 0, cand: kinds, kinds: null, key, S: fresh(sport, kinds[0], d.cc) };
+    const c = { root: el, inline: true, seq: 0, cand: kinds, kinds: null, key,
+                S: fresh(sport, kinds[0], d.cc, { view: "game", hint: "", opp: d.opp || "", fam: kinds[0] }) };
     el._cc = use(c);
     el.innerHTML = `<div class="section-title minor cc-sec">${secHTML(c)}</div>
       <div class="card cc-inline"><div class="cc-body">${kindBar()}${waitHTML()}</div></div>`;
@@ -1471,7 +1489,7 @@
   /* What a league's own module draws with: the page's helpers and the
      chart being drawn (its selection), and the call that registers it. */
   const plug = { draw: (kind, spec) => { DRAW[kind] = spec; },
-                 h: { esc, tile, tableHTML, pct, num1, signed, ord, state: () => S } };
+                 h: { esc, tile, tableHTML, pct, num1, signed, ord, fold, state: () => S } };
   window.QBCarry = { open, close, mount, plug, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,

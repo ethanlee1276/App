@@ -330,7 +330,10 @@ def test_the_page_draws_his_role():
 
 def test_the_module_its_styles_and_the_lead():
     assert 'role: "role"' in CC_JS and 'Q.draw("role"' in ROLE_JS
-    assert '(a.k === "role") - (b.k === "role") || b.v - a.v' in CC_JS, "his role never leads"
+    # His role sorts after every chart of what he did (2026-10-14: tonight's
+    # matchup after it, engine/matchview).
+    assert "const LATE = { role: 1, matchup: 2 };" in CC_JS, "his role never leads"
+    assert "(LATE[a.k] || 0) - (LATE[b.k] || 0) || b.v - a.v" in CC_JS, "his role never leads"
     assert 'P.listTitle ? P.listTitle(g, d)' in CC_JS and 'P.chip(x, d)' in CC_JS
     assert "onclick" not in ROLE_JS and "onerror" not in ROLE_JS and not re.search(r"on(error|load)\s*=", ROLE_JS)
     for cls in (".rl-svg", ".rl-bar.on", ".rl-mean", ".rl-val", ".rl-start.s", ".dt.rl-m"):

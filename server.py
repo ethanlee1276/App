@@ -3290,13 +3290,18 @@ class Handler(BaseHTTPRequestHandler):
         sport = (q.get("sport") or [""])[0].lower()[:8]
         player = (q.get("player") or [""])[0][:60]
         season = (q.get("season") or [""])[0][:4]
+        # Tonight's opponent and the chart the page leads with, for the
+        # matchup view (a college opponent is a school's name).
+        opp = (q.get("opp") or [""])[0][:40]
+        fam = (q.get("fam") or [""])[0].lower()[:12]
         if not charts.known(kind, sport):
             return self._send(400, b'{"error":"no such chart for that league"}', ".json")
         out: dict = {}
         if player and os.path.exists(str(_hdb.DEFAULT_DB)):
             conn = _hdb.connect(str(_hdb.DEFAULT_DB))
             try:
-                out = charts.answer(conn, kind, sport, player, int(season) if season.isdigit() else None)
+                out = charts.answer(conn, kind, sport, player, int(season) if season.isdigit() else None,
+                                    opp=opp, fam=fam)
             finally:
                 conn.close()
         return self._send(200, json.dumps(out).encode(), ".json")

@@ -300,6 +300,8 @@ CREATE INDEX IF NOT EXISTS nhl_shots_date ON nhl_shots (date);
 -- of three seasons read to find his (2026-10-14).
 CREATE INDEX IF NOT EXISTS nhl_shots_shooter ON nhl_shots (shooter, season);
 CREATE INDEX IF NOT EXISTS nhl_shots_goalie ON nhl_shots (goalie, season);
+-- The matchup view's league-wide sums (engine/matchview), one season at a time.
+CREATE INDEX IF NOT EXISTS nhl_shots_season ON nhl_shots (season, kind);
 -- CARRIES (2026-10-13, Ethan, with the NFL's carry chart for Josh Allen at
 -- the Rams: "a carry chart exactly in the screenshot for every player").
 -- One row per run: the hole it hit (NFL play-by-play's run_location and
@@ -316,6 +318,7 @@ CREATE TABLE IF NOT EXISTS carries (
     PRIMARY KEY (sport, season, period, game_id, play_id)
 );
 CREATE INDEX IF NOT EXISTS carries_player ON carries (sport, player, season);
+CREATE INDEX IF NOT EXISTS carries_season ON carries (sport, season);
 -- THE LEAGUE'S RUSHING TRACKING NUMBERS as nflverse publishes them
 -- (nextgen_stats/ngs_rushing): one row per player-week, week 0 the season
 -- line, running backs past the league's ten-carry minimum. Read by the
@@ -346,6 +349,7 @@ CREATE TABLE IF NOT EXISTS targets (
     PRIMARY KEY (sport, season, period, game_id, play_id)
 );
 CREATE INDEX IF NOT EXISTS targets_player ON targets (sport, player, season);
+CREATE INDEX IF NOT EXISTS targets_season ON targets (sport, season);
 -- PASSES (2026-10-13, Ethan: "Yes do all of them"): the quarterback's
 -- chart, the route chart turned round. One row per dropback that ended in
 -- a throw, a spike or a sack (`kind`), off the same NFL play-by-play: air
@@ -365,6 +369,7 @@ CREATE TABLE IF NOT EXISTS passes (
     PRIMARY KEY (sport, season, period, game_id, play_id)
 );
 CREATE INDEX IF NOT EXISTS passes_player ON passes (sport, player, season);
+CREATE INDEX IF NOT EXISTS passes_season ON passes (sport, season);
 -- KICKS (2026-10-14, Ethan's list: "Yes do all of them"). Every field
 -- goal and extra point off the same NFL play-by-play read: the distance,
 -- made, missed, blocked or aborted, the quarter, the clock, the score and
@@ -414,6 +419,7 @@ CREATE INDEX IF NOT EXISTS mlb_pa_pitcher ON mlb_pa (pitcher_id, season);
 -- A chart finds a hitter or a pitcher by the name the page sends.
 CREATE INDEX IF NOT EXISTS mlb_pa_batter_name ON mlb_pa (batter);
 CREATE INDEX IF NOT EXISTS mlb_pa_pitcher_name ON mlb_pa (pitcher);
+CREATE INDEX IF NOT EXISTS mlb_pa_season ON mlb_pa (season);
 CREATE TABLE IF NOT EXISTS mlb_pitches (
     game_pk INTEGER, at_bat INTEGER, n INTEGER, season INTEGER, date TEXT,
     pitcher_id INTEGER, batter_id INTEGER, bat_side TEXT, inning INTEGER,
@@ -438,6 +444,7 @@ CREATE TABLE IF NOT EXISTS nba_shots (
 CREATE INDEX IF NOT EXISTS nba_shots_player ON nba_shots (person_id, season);
 CREATE INDEX IF NOT EXISTS nba_shots_name ON nba_shots (player);
 CREATE INDEX IF NOT EXISTS nba_shots_league ON nba_shots (season, zone, made);
+CREATE INDEX IF NOT EXISTS nba_shots_opp ON nba_shots (season, opponent, zone, made);
 -- THE LEAGUE'S PASSING TRACKING NUMBERS (nextgen_stats/ngs_passing): one
 -- row per player-week, week 0 the season line, passers past the league's
 -- minimum — time to throw, completion % above expectation, aggressiveness

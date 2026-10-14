@@ -208,11 +208,16 @@ def test_his_own_chart_leads_by_what_he_does_more_of():
     assert "Promise.all(c.cand.map((k) => ask(k," in body, "both of his charts asked for at once"
     # His role chart (games played, 2026-10-14) sorts after every chart
     # of what he did in them; among those, the one he does more of leads.
-    assert '.sort((a, b) => (a.k === "role") - (b.k === "role") || b.v - a.v)' in body, \
+    # Tonight's matchup (2026-10-14, engine/matchview) sorts after his role.
+    assert '.sort((a, b) => (LATE[a.k] || 0) - (LATE[b.k] || 0) || b.v - a.v)' in body, \
         "the one he does more of leads"
-    assert "x.v >= SECOND_MIN && x.d.season === lead.d.season" in body
+    assert "const LATE = { role: 1, matchup: 2 };" in CC_JS
+    # The matchup says which season it reads; every other second chart is
+    # his same season.
+    assert 'x.v >= SECOND_MIN && (x.k === "matchup" || x.d.season === lead.d.season)' in body
     assert "const SECOND_MIN = 3;" in CC_JS
-    assert 'const vol = (kind, d) => (d && d.games && d.games.length\n    ? Number((d.season_line || {})[kind === "routes" ? "tgt" : "n"]) || 0 : 0);' in CC_JS
+    assert ('const vol = (kind, d) => (d && ((d.games && d.games.length) || (kind === "matchup" && (d.zones || []).length))'
+            '\n    ? Number((d.season_line || {})[kind === "routes" ? "tgt" : "n"]) || 0 : 0);') in CC_JS
     assert "if (typeof IntersectionObserver !== \"function\") return probe(c);" in CC_JS
     assert "if (k && k.root === e.target && !k.seq) probe(k);" in CC_JS
     # A door that does not know his position opens on "his chart" too.
@@ -235,7 +240,9 @@ def test_a_pick_pages_chart_is_quiet_and_cheap():
     # The long tail folds on a pick page and nowhere else.
     i = CC_JS.index("  function fold(")
     fold = CC_JS[i:CC_JS.index("\n  }\n", i)]
-    assert "if (!C.inline || !html) return html;" in fold
+    # (2026-10-14: with no chart drawing at all, a module's part asking
+    # for a fold gets its html back, as the overlay does.)
+    assert "if (!C || !C.inline || !html) return html;" in fold
     for key in ('fold("list"', 'fold("splits"', 'fold("note"'):
         assert key in CC_JS, key
     assert "onclick" not in CC_JS and "onerror" not in CC_JS, "no inline handlers under the page's CSP"
