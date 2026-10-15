@@ -558,7 +558,6 @@ button.cc-sd:hover { border-color: var(--border); }
 /* a square drawing on a desktop's wide column: capped, centred by the
    drawing's own aspect */
 .mb-svg, .mp-svg { max-height: 460px; }
-.mb-ray { stroke: color-mix(in oklab, var(--text) 30%, transparent); stroke-width: 1.2; stroke-dasharray: 5 6; }
 .mb-grass { fill: color-mix(in oklab, var(--good) 10%, var(--bg)); }
 .mb-mow { fill: var(--text); fill-opacity: .045; }
 .mb-mow.alt { fill-opacity: .015; }
@@ -567,8 +566,6 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-svg .cc-lane { font-size: 11px; }
 .mp-svg .cc-lane { font-size: 10px; }
 .mb-glow line, .mb-glow path { fill: none; stroke: var(--text); stroke-width: 7; opacity: .07; stroke-linejoin: round; }
-.mb-base { fill: none; stroke: color-mix(in oklab, var(--text) 50%, transparent); stroke-width: 1.4; }
-.mb-foul { fill: none; stroke: color-mix(in oklab, var(--text) 62%, transparent); stroke-width: 1.6; }
 .mb-wall { fill: none; stroke: color-mix(in oklab, var(--tm, var(--text-mute)) 60%, var(--text)); stroke-width: 2.4; }
 .mb-wall-glow { fill: none; stroke: color-mix(in oklab, var(--tm, var(--text-mute)) 70%, var(--text)); stroke-width: 10; opacity: .16; }
 .mb-arc { stroke-width: 1.4; opacity: .6; }
