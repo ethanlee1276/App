@@ -269,6 +269,9 @@ nothing on the site changes unless it passes and you say yes (step 115).
 And every check below that can run on any day now runs as one command, BL,
 read-only, about half an hour (step 116). Your BL paste found the NHL's
 picks not reaching the record at all; fixed in step 117 (BA re-checks it).
+It also found the NFL, MLB and college builds running out their 600 seconds
+all day; the settle each one runs at its end is faster now, and BM times one
+NFL build by hand to show where the rest goes (step 118).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -307,13 +310,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `NHL picks reach the record again: a skater's forward line no longer overwrites his betting line`
+**A. The box has today's code.** The first line should end `The settle pass parses only the snapshot lines its bets ask about, and the NFL build's trace keeps the clock`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 214b3fc1 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 38d01450 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1682,6 +1685,18 @@ Monday; BK on Tuesday; N's and S's second lines from the NBA's opening
 night; AX's second and AY around a UFC card); and what only your hands can
 do (C's email setup if it says off, D's three Stripe settings, F, AE, AJ,
 and the phone halves of the rest).
+
+**BM. Where the NFL build's minutes go** (step 118; one build by hand, at
+low priority, up to 15 minutes). Best Friday morning, with no game on. It
+builds and journals exactly what the loop's next NFL build would, and writes
+its board to /tmp instead of the site:
+```
+cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1500 python3 nfl_build.py 2026 6 --out /tmp/nfl_probe.json --injuries --depth --carry --cached-odds --memtrace 2>&1 | tail -40
+```
+Paste the end: `Memory by stage` and `Seconds by stage`. The slowest stage is
+marked. `journal` is the journal, the settle and the record's export (the
+stage the 600-second limit was cutting); `pipeline` is the model; `odds` the
+prices. Whichever is slowest is the next fix.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -5352,6 +5367,38 @@ first). Paste back anything that prints an error or looks off.
     line of the build writing a slot into `line`). No pin changed. After
     the box pulls this, BA's first command should stop printing the NHL
     line, and AQ's NHL card should read `BET …` or `NO BET — <a bar>`.
+118. **The builds' settle reads only what it needs, and the NFL build keeps
+    the clock** (2026-10-15, found in your BL paste: the NFL build ran past
+    the loop's 600 seconds ten times in seven hours on a game day, MLB's and
+    college's too; the last cycle's settle step took 502 of its 504 seconds,
+    with a second settle running beside it; the self-check said the Record
+    page's export was behind, 2,664 settled shown against 2,905). WHAT THE
+    PASTE SHOWS: the NFL board itself was written (21:03) before the build
+    was killed (21:06), so the limit was cutting the journal, the settle
+    and the record's export at its end. Every build settles its league at
+    the end, and one settle pass reads the odds snapshot file (millions of
+    lines; 2.7 million and 444 MB on 10-08, more each day) up to three
+    times, parsing every line each time and keeping only the open bets'
+    players after. NOW `linemoves.stream_wanted` reads a line's market and
+    player off its text first and parses only the lines an open bet asks
+    about; a line it can't judge from the text (an escaped name, another
+    separator) is parsed, and the old filter still runs on what comes
+    back, so the closes are exactly the old ones. Measured here on 3
+    million lines: 9.6 s to 4.5 s a read, the same answer. The box's
+    shared core is slower, so its saving is larger in seconds; how much of
+    the 600 it buys back is what BM shows. THE CLOCK: the NFL build's
+    `--memtrace` (memory per stage) now prints seconds per stage too, with
+    the journal-and-settle as its own stage. ONE TEST PIN CHANGED, told to
+    you: `tests/test_history_stream.py`'s "the settle path streams" pinned
+    the old line (`_wanted_rows(stream_history(), want)`); it now pins the
+    new one and adds that the filtered read is the one used when bets are
+    named. Nothing removed. New: `tests/test_settling_reads_only_the_lines_it_needs.py`
+    (5 checks: the same answer as the old read, compact and escaped lines
+    included; only the wanted lines parsed; an escaped or compact line
+    parsed rather than skipped; the three settle readers answering as
+    before; no bets named still reads everything). `tests/test_memtrace.py`
+    gained two (the clock names the slowest stage; the settle has its own
+    mark).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

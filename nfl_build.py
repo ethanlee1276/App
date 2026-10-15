@@ -182,6 +182,9 @@ def _journal_game_bets(payload: dict) -> None:
 #: refresh loop's seconds. Off by default; it costs two file reads a stage
 #: and nobody needs it on a healthy box.
 _MEM: list = []
+#: The clock beside it: (stage, seconds since the first mark). Kept apart
+#: from `_MEM` so the memory report's three columns stay as they are.
+_SECS: list = []
 
 
 def _rss_mb() -> float:
@@ -240,6 +243,11 @@ def _mem(stage: str, on: bool = True) -> None:
         _MEM.append((stage, _rss_mb(), _peak_mb()))
     except Exception:                                        # noqa: BLE001
         pass
+    try:
+        import time as _time
+        _SECS.append((stage, _time.monotonic()))
+    except Exception:                                        # noqa: BLE001
+        pass
 
 
 def _mem_report() -> None:
@@ -279,6 +287,22 @@ def _mem_report() -> None:
     if held[0] != worst[0] and held[3] > 0:
         print(f"  ({held[0]} holds the most afterwards, +{held[3]:.0f} MB "
               f"resident — a smaller problem than a spike, but a lasting one)")
+    _secs_report()
+
+
+def _secs_report() -> None:
+    """THE CLOCK, PER STAGE (2026-10-15). The loop gives a build 600
+    seconds; on Ethan's BL paste the NFL build ran past them ten times in
+    seven hours, and the memory table could not say where the time went.
+    Seconds each stage took, the slowest marked."""
+    if len(_SECS) < 2:
+        return
+    steps = [(stage, b - a) for (_s, a), (stage, b) in zip(_SECS, _SECS[1:])]
+    slow = max(steps, key=lambda r: r[1])
+    print("\nSeconds by stage")
+    for stage, secs in steps:
+        print(f"  {stage:<28} {secs:7.1f}s" + ("   <-- the slowest" if stage == slow[0] else ""))
+    print(f"  total {_SECS[-1][1] - _SECS[0][1]:.0f}s; the loop allows 600")
 
 
 def _with_board_cache(sport: str = "nfl") -> bool:
@@ -1611,6 +1635,10 @@ def main() -> None:
             st_logged = ledger.log_stale_flags(
                 lconn, {"sport": "nfl", "date": result.get("date", ""),
                         "market_scan": result.get("market_scan") or {}})
+            # The settle and the record's export get their own mark: they
+            # read every odds snapshot the open bets ask about, and this is
+            # the stage the 600-second limit was cutting (2026-10-15).
+            _mem("journal", args.memtrace)
             settled = ledger.settle_and_export(lconn, hist_connect(), sport="nfl")
             if logged or st_logged or settled:
                 print(f"Journal: {logged} new pick(s) + {st_logged} stale "

@@ -346,6 +346,58 @@ def stream_history(path: str | Path | None = None):
                 continue
 
 
+def stream_wanted(want, path: str | Path | None = None):
+    """The snapshots of these ``{(normalized player, market)}`` only, one
+    at a time, parsing a line only when its text says it may be wanted.
+
+    THE SETTLE PASS READ THE WHOLE FILE UP TO THREE TIMES, AND PARSED EVERY
+    LINE EACH TIME. `stream_history` hands every line to `json.loads` and
+    `ledger._wanted_rows` throws nearly all of them away after. On
+    2026-10-15 the box's settle step took 502 of a cycle's 504 seconds,
+    a second settle ran beside it, and every board build (each settles
+    at its end) ran out its 600 seconds: the NFL's ten times in seven
+    hours on a game day. A line's market and player are read off its text
+    first (two `str.find`s), and only a line an open bet asks about is
+    parsed. A line not in the plain shape is parsed, so nothing wanted is
+    ever lost; the caller's own filter still runs on what comes back, so
+    the answer is exactly the old one."""
+    from .sources.oddsapi import normalize_name
+    path = Path(path) if path else HISTORY_PATH
+    if not path.exists():
+        return
+    markets = {m for _p, m in want}
+    people = {n for n, _m in want}
+    names: dict = {}
+    # `record_snapshots`' own `json.dumps` shape. Inline rather than a
+    # helper: a call per field per line was half the read's time. A field
+    # not found, or one holding an escape, is not judged from the text.
+    mtag, ptag, slash = '"market": "', '"player": "', "\\"
+    with path.open(encoding="utf-8") as fh:
+        for raw in fh:
+            i = raw.find(mtag)
+            if i >= 0:
+                i += 11
+                m = raw[i:raw.find('"', i)]
+                if m not in markets and slash not in m:
+                    continue
+            i = raw.find(ptag)
+            if i >= 0:
+                i += 11
+                who = raw[i:raw.find('"', i)]
+                n = names.get(who)
+                if n is None:
+                    n = names[who] = normalize_name(who) if slash not in who else None
+                if n is not None and n not in people:
+                    continue
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                yield json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+
 def load_history(path: str | Path | None = None) -> list[dict]:
     """Every snapshot, as a list. Prefer `stream_history` where the caller
     filters it down — see the note there about a gigabyte."""

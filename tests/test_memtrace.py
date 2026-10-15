@@ -43,6 +43,7 @@ BUILD = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
 
 def _fresh():
     NB._MEM.clear()
+    NB._SECS.clear()
 
 
 # --- the readings -----------------------------------------------------------
@@ -180,6 +181,26 @@ def test_a_reading_that_raises_never_costs_the_build():
     finally:
         NB._rss_mb = real
     assert True
+
+
+def test_the_clock_names_the_slowest_stage():
+    """2026-10-15: the NFL build ran past the loop's 600 seconds ten times
+    in seven hours, and the memory table could not say where the time went.
+    The trace now keeps the clock too."""
+    _fresh()
+    NB._SECS.extend([("start", 0.0), ("odds", 40.0), ("pipeline", 260.0), ("journal", 290.0),
+                     ("write + journal", 700.0)])
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        NB._secs_report()
+    out = buf.getvalue()
+    assert "write + journal" in out and "410.0s   <-- the slowest" in out, out
+    assert "total 700s; the loop allows 600" in out, out
+
+
+def test_the_settle_has_its_own_mark():
+    i = BUILD.index('_mem("journal", args.memtrace)')
+    assert i < BUILD.index('settled = ledger.settle_and_export(lconn, hist_connect(), sport="nfl")', i)
 
 
 # --- the wiring -------------------------------------------------------------

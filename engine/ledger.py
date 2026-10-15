@@ -3696,6 +3696,15 @@ def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
     return plan
 
 
+def _snapshot_stream(want):
+    """The snapshot file for these bets: every row when ``want`` is None,
+    else only the lines whose text names a wanted market and player
+    (`linemoves.stream_wanted`, which says why: the settle pass parsed the
+    whole file up to three times a pass, and the builds ran out of time)."""
+    from .linemoves import stream_history, stream_wanted
+    return stream_history() if want is None else stream_wanted(want)
+
+
 def _wanted_rows(rows, want):
     """Only the snapshots of the bets being settled.
 
@@ -3746,8 +3755,8 @@ def _snapshot_closes(want=None) -> dict:
         # The real saving here would be to stop holding whole rows in
         # `grouped` and keep only the fields the reduce needs. That is a
         # change to the settling path and wants its own measurement.
-        from .linemoves import stream_history, closing_lines_by_date
-        return closing_lines_by_date(_wanted_rows(stream_history(), want))
+        from .linemoves import closing_lines_by_date
+        return closing_lines_by_date(_wanted_rows(_snapshot_stream(want), want))
     except Exception as exc:     # noqa: BLE001
         # NEVER LET CLV BOOKKEEPING BLOCK SETTLING — and never let it fail
         # in silence either. `{}` here is indistinguishable from "no
@@ -3821,14 +3830,14 @@ def _snapshot_close_odds(markets=None, want=None) -> dict:
     try:
         # Streamed, with the same small honest saving `_snapshot_closes`
         # above measures — `closing_odds_by_date` groups the same way.
-        from .linemoves import stream_history, closing_odds_by_date
+        from .linemoves import closing_odds_by_date
         if markets:
             # Only the markets the caller will ask about (the close repair,
             # one sport at a time): the box OOM-killed the all-sport run at
             # 1.37 GB on 2026-10-06.
-            return closing_odds_by_date(r for r in _wanted_rows(stream_history(), want)
+            return closing_odds_by_date(r for r in _wanted_rows(_snapshot_stream(want), want)
                                         if r.get("market") in markets)
-        return closing_odds_by_date(_wanted_rows(stream_history(), want))
+        return closing_odds_by_date(_wanted_rows(_snapshot_stream(want), want))
     except Exception:            # never let CLV bookkeeping block settling
         return {}
 
