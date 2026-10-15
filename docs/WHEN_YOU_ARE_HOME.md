@@ -262,7 +262,10 @@ drive and the at-bat now run on the photographs themselves, on the cards'
 clock: the field render cuts to each snap through a camera measured off its
 own painted yard lines, the ballpark throws each pitch from the pitcher's
 hand to the plate where it crossed, and a ball in play flies on to where it
-landed (step 114; BJ covers it).
+landed (step 114; BJ covers it). The last idea waiting in H, trusting the
+price more where our chance runs far above it, is built as a read-only
+check with its bar written before it runs: BK runs it on the record, and
+nothing on the site changes unless it passes and you say yes (step 115).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -300,13 +303,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The drive and the at-bat on your renders: the field photo's measured camera, one clock with the cards`
+**A. The box has today's code.** The first line should end `Trust the price more where our chance runs far above it: the read-only check, its bar written first`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 2a20dbbf HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 8c142d8c HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -454,7 +457,8 @@ struck through here as it is built.
   part of the way toward the price's de-vigged chance would have been
   closer to what happened, with the bar set before the run (every held-out
   week no worse, the pooled log loss better). Nothing changes unless it
-  clears; your call.
+  clears; your call. **Built as that check, 2026-10-15** (step 115; BK
+  runs it): your answer waits on BK's paste.
 * ~~**A Pick of the Day for the UFC card?** Every other league that names
   one now records it (steps 85 and 86); UFC names none.~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 97, AY.
@@ -1605,6 +1609,23 @@ reads `located 0` until its next pass); `located` far under `pitches` on a
 live game is the one I need. Then open a football game and a baseball game
 from the Live tab, on the phone and on the computer, and press Replay:
 nothing to run, just tell me how it looks.
+
+**BK. Trust the price more where our chance runs far above it?** (step
+115; read-only, a minute or two: it reads the odds snapshot file once, at
+low priority). Any time, game or no game:
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py 2>&1 | tail -150
+```
+Paste all of it. The first lines say how many settled picks had the
+market's chance at the moment they were posted, and where it came from
+(`journaled` with the pick, rebuilt from our `snapshots`, or `none`). Then
+each book and league on its own: a `VERDICT` line (PASSES, FAILS or NOT
+YET, and why), the log loss as shown against with the rule (lower is
+closer), each week scored with the `w` and `T` the weeks before it chose,
+and how the picks did by how far our chance ran above the market. The one
+to read first is `=== The one board · NFL`. A PASS changes nothing by
+itself: I bring it to you with the `w` and `T` it chose, and the board
+moves only on your yes. A FAIL or NOT YET leaves the board as it is.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -5165,6 +5186,44 @@ first). Paste back anything that prints an error or looks off.
     already asks the files for what this draws): open a football game and a
     baseball game from the Live tab, on the phone and the computer, and tell
     me how it looks.
+115. **Trust the price more where our chance runs far above it? The check,
+    its bar written first** (2026-10-15, the last idea waiting in H, from
+    step 109's pastes: on the one board the picks whose chance ran furthest
+    above the price were the furthest wrong, claimed 65%, hit 53%, 367 NFL
+    picks; BK). `pricetrust.py`, read-only: it opens the ledger read-only
+    and streams our odds snapshots, and writes nothing. THE QUESTION: would
+    giving back part of the gap between our chance and the market's
+    de-vigged chance, where ours ran above it, have been closer to what
+    happened? THE RULE, one family: shown = ours − w × max(0, ours − market
+    − T), w from 0 to 1 in tenths, T 0, 5, 10 or 15 points; w 0 is "change
+    nothing". THE MARKET'S CHANCE is the one at the moment the pick was
+    posted: the field's de-vigged fair journaled with the pick where there
+    is one (the Edge book's rows), otherwise rebuilt from our own snapshots
+    (each book's last quote at the pick's own line in the six hours before
+    it was posted, never after it and never in play, both sides quoted, the
+    median of at least three books, by the same function that journals the
+    field's fair), otherwise none, and the pick is counted and left out.
+    Never the close, never the price we took with a vig guessed off it. HOW:
+    each book and league on its own, week by week; every week with 60
+    settled picks before it is scored with the w and T those earlier weeks
+    chose. THE BAR, written in the script before any run, as H put it:
+    PASSES when every held-out week's log loss is no worse with the rule and
+    the pooled log loss is better; NOT YET under three held-out weeks or 100
+    held-out picks; otherwise FAILS. Tried on made-up seasons the size of the
+    NFL board (about 180 picks a week, five held-out weeks): where the market
+    is right and our extra chance is pure overclaim, it passes about three
+    runs in four (30 of 40; the test's 20, 16); where our chance is right,
+    one in twenty to forty (1 of 40; the test's 20, 1). Where the
+    truth is half way between the two, it mostly fails: "every week no
+    worse" is strict, so a FAIL means not shown, not disproved. A PASS
+    changes nothing by itself; it comes to you with the w and T it chose.
+    New: `tests/test_pricetrust_judges_on_weeks_it_never_saw.py` (16 checks:
+    a planted overclaim found on weeks that chose nothing, those pass rates,
+    honest chances choosing no change, each week chosen only on the weeks
+    before it, the rule never raising a chance, quotes after the pick or in
+    play or over six hours old never used, an under read as the other side,
+    three books or none, an accented name, a thin book refusing to judge,
+    nothing written, the bar in the script's own words). No pin changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
