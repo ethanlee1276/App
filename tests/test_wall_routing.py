@@ -132,7 +132,12 @@ def test_the_pages_that_stay_open_are_named_once():
                           # reader is signed out, so behind the wall like
                           # sign-up; it shows no pick. #wall-back verified
                           # visible on it in a browser with the wall on.
-                          "reset"}, open_
+                          "reset",
+                          # The Toolbox (2026-10-15): calculators on prices
+                          # the reader types, and sport tools that read only
+                          # the board the reader already has. #wall-back
+                          # verified visible on it with body.walled set.
+                          "tools"}, open_
 
 
 def test_every_open_page_is_a_real_view():

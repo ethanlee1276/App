@@ -1341,6 +1341,7 @@ class Handler(BaseHTTPRequestHandler):
                 or parsed.path.startswith("/api/feed/")
                 or parsed.path.startswith("/api/alerts/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
+                or parsed.path in ("/api/mybets/closes", "/api/mybets/closes/")
                 or parsed.path in ("/api/draftplan", "/api/draftplan/")):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -1360,6 +1361,8 @@ class Handler(BaseHTTPRequestHandler):
                     parsed.path[len("/api/alerts/"):].strip("/"), body)
             if parsed.path.startswith("/api/parlay/check"):
                 return self._parlay_check(body)
+            if parsed.path.startswith("/api/mybets/closes"):
+                return self._mybets_closes(body)
             if parsed.path.startswith("/api/draftplan"):
                 return self._draft_plan(body)
             if parsed.path.startswith("/api/feed/"):
@@ -3199,6 +3202,23 @@ class Handler(BaseHTTPRequestHandler):
                           for k, v in l.items() if isinstance(k, str)})
         return self._send(200, json.dumps(check_ticket(sport, clean)).encode(),
                           ".json")
+
+    def _mybets_closes(self, body: dict):
+        """Our close on the bets a reader logged, for My Bets' report card
+        (engine/reportcard). Ungated like the Record's settled list: it
+        answers only from settled picks, whose closes the Record already
+        prints. The page sends only when the reader asks it to."""
+        from engine import ledger as L
+        from engine import reportcard
+        try:
+            conn = L.connect()
+            try:
+                out = reportcard.closes(conn, body.get("bets"))
+            finally:
+                conn.close()
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the record could not be read"}', ".json")
+        return self._send(200, json.dumps({"closes": out}).encode(), ".json")
 
     def _players_versus(self, q):
         """A player's history against one opponent — the head-to-head.

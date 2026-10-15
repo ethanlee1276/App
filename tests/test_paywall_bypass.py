@@ -778,8 +778,14 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     # does, and it carries no model output — a form and two messages. Back
     # link confirmed by rendering #reset and #reset/<token> with the wall
     # on: #wall-back shows, and the token route lands on #reset.
+    # "tools" added 2026-10-15: the Toolbox. Its calculators are arithmetic
+    # on prices the reader types; its sport tools read the board the reader
+    # already has, so a walled reader's sealed board shows the college meter
+    # as a membership line, never a number. Back link confirmed by rendering
+    # #tools with body.walled set: #wall-back visible, five calculators drawn.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
-                      "signup", "streak", "messages", "zeno", "feed", "reset"}, (
+                      "signup", "streak", "messages", "zeno", "feed", "reset",
+                      "tools"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

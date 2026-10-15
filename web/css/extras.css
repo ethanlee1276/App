@@ -1,0 +1,94 @@
+/* The Toolbox and My Bets' report card (js/extras.js), loaded with it. */
+.xt-sec { margin: 18px 0 10px; font-family: var(--font-headline); font-size: var(--fs-lg); letter-spacing: .01em; color: var(--text); }
+.xt-sec:first-child { margin-top: 4px; }
+.xt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; align-items: start; }
+.xt-card, .xt-rc { display: grid; gap: 10px; align-content: start; padding: 14px; border-radius: var(--radius);
+  background: var(--panel); border: var(--hairline) solid var(--border-soft); min-width: 0; }
+.xt-wide { grid-column: 1 / -1; }
+.xt-card-h h3 { margin: 0; font-size: var(--fs-md); color: var(--text); }
+.xt-card-h p { margin: 3px 0 0; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.xt-in { display: flex; flex-wrap: wrap; gap: 8px; }
+.xt-leg { display: flex; gap: 6px; flex: 1 1 100%; }
+.xt-leg .xt-f { flex: 1 1 0; }
+.xt-f { display: grid; gap: 3px; flex: 1 1 120px; min-width: 0; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 600; }
+.xt-f input, .xt-f select { width: 100%; min-width: 0; padding: 8px 10px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border); background: var(--panel-2); color: var(--text);
+  font: inherit; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.xt-f input:focus, .xt-f select:focus { outline: none; border-color: var(--brand); }
+.xt-out { min-height: 1.4em; }
+.xt-hint { margin: 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.xt-note { margin: 8px 0 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.xt-note b.pos, .xt-tbl .pos, .xt-up-n .pos { color: var(--good); }
+.xt-note b.neg, .xt-tbl .neg, .xt-up-n .neg { color: var(--bad); }
+.xt-fine { margin: 6px 0 0; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.xt-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.xt-stat { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2); min-width: 0; }
+.xt-stat span { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.xt-stat b { color: var(--text); font-family: var(--font-mono); font-size: var(--fs-md); overflow-wrap: anywhere; }
+.xt-stat.good b { color: var(--good); }
+.xt-stat.warn b { color: var(--warn); }
+.xt-stat.bad b { color: var(--bad); }
+.xt-tbl { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: var(--fs-sm); }
+.xt-tbl th { padding: 4px 6px; text-align: right; color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; border-bottom: var(--hairline) solid var(--border); }
+.xt-tbl td { padding: 6px; text-align: right; font-family: var(--font-mono); color: var(--text-dim);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.xt-tbl th:first-child, .xt-tbl td:first-child { text-align: left; font-family: var(--font-sans); color: var(--text); }
+.xt-tbl td b { color: var(--text); }
+.xt-tbl small { display: block; color: var(--text-mute); font-size: var(--fs-2xs); font-family: var(--font-sans); }
+.xt-btn { justify-self: start; padding: 8px 14px; border-radius: 999px; border: var(--hairline) solid var(--brand);
+  background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.xt-btn:hover { color: var(--brand); }
+.xt-btn[disabled] { opacity: .55; cursor: default; }
+
+/* The upset meter: ours as the fill, the market's as the tick. */
+.xt-ups { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 8px; }
+.xt-up { display: grid; gap: 6px; padding: 10px; border-radius: var(--radius-sm); background: var(--panel-2);
+  border-left: 3px solid var(--text-faint); }
+.xt-up.t-alert { border-left-color: var(--good); }
+.xt-up.t-live { border-left-color: var(--gold); }
+.xt-up-t { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.xt-up-t > div { display: grid; min-width: 0; flex: 1; }
+.xt-up-t b { color: var(--text); overflow-wrap: anywhere; }
+.xt-up-t span { color: var(--text-mute); font-size: var(--fs-xs); }
+.xt-pill { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-style: normal; font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; color: var(--text-mute); border: var(--hairline) solid currentColor; }
+.xt-pill.t-alert { color: var(--good); }
+.xt-pill.t-live { color: var(--gold); }
+.xt-meter { position: relative; height: 6px; border-radius: 3px; background: var(--panel-3); }
+.xt-meter i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--text-faint);
+  transition: width var(--dur-slow) var(--ease-out); }
+.t-alert .xt-meter i { background: var(--good); }
+.t-live .xt-meter i { background: var(--gold); }
+.xt-meter u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); }
+.xt-up-n { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-xs); color: var(--text-mute); }
+.xt-up-n b { color: var(--text); font-family: var(--font-mono); }
+.xt-up-n > span:last-child { margin-left: auto; font-family: var(--font-mono); font-weight: 700; }
+
+/* The report card. */
+.xt-rc { margin: 0 0 14px; }
+.xt-rc-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.xt-rc-top .xt-stats { flex: 1 1 260px; }
+.xt-ring { display: grid; place-items: center; align-content: center; width: 96px; height: 96px; border-radius: 50%;
+  border: 4px solid var(--text-faint); flex-shrink: 0; }
+.xt-ring.good { border-color: var(--good); }
+.xt-ring.bad { border-color: var(--bad); }
+.xt-ring b { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
+.xt-ring span { font-size: var(--fs-2xs); color: var(--text-mute); text-transform: uppercase; letter-spacing: .05em; }
+.xt-verdict { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text-dim);
+  font-size: var(--fs-sm); border-left: 3px solid var(--text-faint); }
+.xt-verdict.good { border-left-color: var(--good); }
+.xt-verdict.bad { border-left-color: var(--bad); }
+.xt-splits { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.xt-split h4, .xt-sub { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 700; color: var(--gold);
+  letter-spacing: .05em; text-transform: uppercase; }
+.xt-rc-msg { color: var(--text-dim); font-size: var(--fs-sm); }
+@media (max-width: 480px) {
+  .xt-card, .xt-rc { padding: 12px; }
+  .xt-tbl { font-size: var(--fs-xs); }
+  .xt-ring { width: 80px; height: 80px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xt-meter i, .xt-btn { transition: none; }
+}

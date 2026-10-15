@@ -105,7 +105,12 @@ HTML = (WEB / "index.html").read_text()
 #: bout's line opened and where it is now, from the snapshots stored since
 #: 2026-08-10 — +0.05 KB gz (493.983 -> 494.032), the file
 #: having sat 17 bytes under 494. Told to Ethan.
-APP_JS_BUDGET_KB = 495
+#: 495 -> 496 on 2026-10-15 by the Toolbox and the report card (Ethan, of
+#: sixteen ideas: "do every one for every sport"): the loader, the page's
+#: door and the report card's slot in My Bets. The tools themselves load on
+#: first use (js/extras.js, css/extras.css) — +0.31 KB gz (494.883 ->
+#: 495.197). Told to Ethan.
+APP_JS_BUDGET_KB = 496
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -163,7 +168,9 @@ APP_JS_BUDGET_KB = 495
 #: comment slots were folded away to pay for most of it (610.998 -> 611.007
 #: KB gz, the boot path having sat 2 bytes under 611; app.js 494.489 ->
 #: 494.498, inside its 495). Told to Ethan.
-BOOT_BUDGET_KB = 612
+#: 612 -> 613 on 2026-10-15 by the Toolbox: the app.js bump above plus its
+#: sidebar row and page section (611.803 -> 612.246 KB gz). Told to Ethan.
+BOOT_BUDGET_KB = 613
 
 
 def _gz_trimmed(rel: str) -> int:

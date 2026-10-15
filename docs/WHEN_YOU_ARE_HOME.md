@@ -271,7 +271,10 @@ read-only, about half an hour (step 116). Your BL paste found the NHL's
 picks not reaching the record at all; fixed in step 117 (BA re-checks it).
 It also found the NFL, MLB and college builds running out their 600 seconds
 all day; the settle each one runs at its end is faster now, and BM times one
-NFL build by hand to show where the rest goes (step 118).
+NFL build by hand to show where the rest goes (step 118). The sixteen ideas
+are being built, a slice at a time: first a Toolbox page (five calculators
+for every sport, and college football's upset meter) and a report card in
+My Bets (step 119; BN checks the close lookup answers).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -310,13 +313,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The settle pass parses only the snapshot lines its bets ask about, and the NFL build's trace keeps the clock`
+**A. The box has today's code.** The first line should end `The Toolbox: five calculators and the college upset meter, and a report card in My Bets`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 38d01450 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 4f0c0465 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1697,6 +1700,13 @@ Paste the end: `Memory by stage` and `Seconds by stage`. The slowest stage is
 marked. `journal` is the journal, the settle and the record's export (the
 stage the 600-second limit was cutting); `pipeline` is the model; `odds` the
 prices. Whichever is slowest is the next fix.
+
+**BN. The report card's close lookup answers** (step 119; read-only, a
+second). It asks for our close on one made-up bet and should print
+`{"closes": {}}` (or one close, if it happens to match a settled pick):
+```
+curl -s -X POST http://127.0.0.1:8000/api/mybets/closes -H 'Content-Type: application/json' -d '{"bets":[{"id":"t","sport":"nfl","date":"2026-10-12","desc":"Jared Goff Over 255.5 passing yards"}]}'; echo
+```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -5399,6 +5409,45 @@ first). Paste back anything that prints an error or looks off.
     before; no bets named still reads everything). `tests/test_memtrace.py`
     gained two (the clock names the slowest stage; the settle has its own
     mark).
+119. **The Toolbox, the college upset meter and My Bets' report card**
+    (2026-10-15, the first slice of your "do every one for every sport").
+    NONE OF IT CHANGES A PICK. A new page, Toolbox (sidebar under My Book,
+    the phone's More sheet, the Features page), free like the Streak: an
+    odds converter (American, decimal or a percent), no-vig and hold for up
+    to four sides (both the even split and the power method), a parlay of
+    up to six legs (what it pays, what the prices say it hits, and its value
+    at your own chances; it says same-game legs are not independent), Kelly
+    at a fraction, and break-even and value. Above them, each sport's own
+    tools; college's is the UPSET METER: every underdog on the board, ranked
+    by our chance he wins outright, beside the market's chance with the hold
+    taken out. It is the board's own published moneyline number (college
+    game cards are shown and never staked), it leaves out a sharp book's
+    card and a game under way, and it says "context, not a pick". MY BETS
+    now leads with a REPORT CARD once a bet is graded: your hit rate against
+    what your prices needed (the sum of each price's own break-even, so
+    beating it means beating the book, not a coin), whether that is still
+    inside ordinary luck, by sport, kind (props, game lines, parlays) and
+    price band, and your closing-line value — from the closes you log, and,
+    if you press "Look up our closes", ours: the page sends the sport, date
+    and description of your settled bets without a close (never the stake
+    or the book) to a new endpoint, `/api/mybets/closes`
+    (`engine/reportcard.py`), which answers only from SETTLED picks of ours
+    with a closing price, and only when exactly one pick fits (player or
+    team, side, number, and the market's name when two are left). The page
+    is `js/extras.js` and `css/extras.css`, loaded the first time the
+    Toolbox or the report card opens. SIZE, told to you: app.js's budget
+    495 -> 496 KB and the first paint's 612 -> 613 KB (+0.31 and +0.44 KB
+    gz: the loader, the page's door and section, the card's slot). New:
+    `tests/test_the_toolbox_and_the_report_card.py` (8 checks: the odds
+    arithmetic; every calculator drawing its numbers; the meter reading the
+    board's own number and leaving out sharp and in-play cards; the report
+    card against the prices taken, with its luck band and both kinds of
+    close; our close only from one settled pick; the lookup bounded; the
+    page reaching all of it; the module keeping the house rules). TWO
+    LISTS GREW, told to you: `tests/test_paywall_bypass.py` and
+    `tests/test_wall_routing.py` name every page open behind the paywall,
+    and the Toolbox joins them (its back link checked in a browser with the
+    wall on); nothing was loosened.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

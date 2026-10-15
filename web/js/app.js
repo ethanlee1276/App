@@ -2652,7 +2652,8 @@ const FEATURES = [
     ["Book report card", "Which books are early, which are late, and which move first — facts about books, with no pick attached.", null]]],
 
   ["Your account", "Your money, your picks, your people",
-   [["My Bets", "Log your own tickets and track them to settlement, graded by the same rules the house journal uses.", "mybets"],
+   [["My Bets", "Log your own tickets and track them to settlement, graded by the same rules the house journal uses — with a report card: your hit rate against what your prices needed, and your closing-line value.", "mybets"],
+    ["Toolbox", "Odds, no-vig and hold, parlay, Kelly and break-even calculators, and each sport’s own tools — the college upset meter first.", "tools"],
     ["Bankroll", "Size your units, set your limits, and see what is at risk.", "bankroll"],
     ["Alerts", "Line moves, injuries and the desk — conditions you set, fired when they happen.", "alerts"],
     ["Social", "Parlays, takes and polls under one profile for the whole site. Follow, like, comment, and tap the whale to tail a parlay at your book.", "feed"],
@@ -4217,6 +4218,7 @@ const OFFSCREEN_PAGES = [
   ["likely", () => renderLikely(), true],
   ["trending", () => renderTrending()],
   ["players", () => renderPlayers()],
+  ["tools-body", () => renderTools()],
 ];
 const _stalePages = new Map();     // host id -> its renderer
 let _staleIdle = null;
@@ -25101,6 +25103,7 @@ function renderMyBets() {
     ${form}
     ${ribbon}
     ${mbMonthHTML(bets, today)}
+    ${st.settled ? `<div id="mb-report"></div>` : ""}
     ${(() => {
       if (st.settled < 3) return "";
       const takes = mbTakeaways(bets);
@@ -25204,6 +25207,7 @@ function renderMyBets() {
       browser data erases it, so Export now and then if you want a backup.</p>`;
   sweepRings(host);
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
+  if (st.settled) loadExtras().then((X) => X && X.reportCard(document.getElementById("mb-report")));
 }
 
 /* Weather — the Zeno sidebar's page (Ethan, 2026-08-12), built from
@@ -41427,7 +41431,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -41479,7 +41483,7 @@ const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "pr
 // entitlement), so the wall was hiding a page that leaks nothing and
 // exists to pull people in.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
-                   "signup", "reset", "streak", "messages",
+                   "signup", "reset", "streak", "messages", "tools",
                    // The feed is open: a paid leg is locked by the server
                    // for a reader who has not paid (engine/socialfeed).
                    "feed",
@@ -41756,6 +41760,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "fantasy") renderFantasy();
   if (name === "memes") renderMemes();
   if (name === "mybets") renderMyBets();
+  if (name === "tools") renderTools();
   // Awaited, unlike its neighbours: this screen's entire content depends
   // on the server's answer to "who is this", and drawing before it lands
   // shows the sign-in form to somebody who is already signed in.
@@ -42923,6 +42928,26 @@ function askTurnHTML(t, live = false) {
   }
   return `<div class="ask-row ${who}">${who === "me" ? "" : askAva(live)}<div class="ask-turn ${who}${t.slip ? " has-slip" : ""}">${
     t.slip ? askSlipCard(t) : askBodyHTML(t.text)}${askSourcesHTML(t)}</div></div>`;
+}
+
+/* THE TOOLBOX (Ethan, 2026-10-15: "do every one for every sport"): the
+   calculators, each sport's own tools and My Bets' report card, in
+   js/extras.js and css/extras.css, loaded the first time one is opened. */
+let _xLoading = null;
+function loadExtras() {
+  if (window.QBExtras) return Promise.resolve(window.QBExtras);
+  return _xLoading || (_xLoading = new Promise((resolve) => {
+    const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "css/extras.css";
+    document.head.appendChild(css);
+    const s = document.createElement("script"); s.src = "js/extras.js";
+    s.onload = () => resolve(window.QBExtras || null);
+    s.onerror = () => { _xLoading = null; resolve(null); };
+    document.head.appendChild(s);
+  }));
+}
+function renderTools() {
+  const h = document.getElementById("tools-body");
+  if (h) loadExtras().then((X) => X && X.tools(h));
 }
 
 /* A GRADED PARLAY (Ethan, 2026-10-12: "users can upload a screenshot of
@@ -49298,7 +49323,7 @@ const MORE_GROUPS = [
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
                 "sport:memes"]],
-  ["My Book", ["sport:mybets", "view:alerts", "view:streak", "view:bankroll"]],
+  ["My Book", ["sport:mybets", "view:tools", "view:alerts", "view:streak", "view:bankroll"]],
   // Record is the tab bar's Results; listing it here too was one of
   // the repeats Ethan photographed (2026-09-22).
   ["Proof", ["sport:lab", "sport:methodology", "sport:status",

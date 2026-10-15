@@ -1,0 +1,473 @@
+/* Qellys Book — the Toolbox, and My Bets' report card.
+   ==========================================================================
+   Ethan, 2026-10-15, after a brainstorm of sixteen things the site could
+   grow next: "do every one for every sport. i want every feature and idea
+   u listed done and finished and pushed to the site."
+
+   THE RULE EVERY TOOL HERE KEEPS: none of them changes a pick. A tool
+   that shows our number shows the number the board already published, and
+   anything that would move a number is measured first, somewhere else,
+   before it is allowed to. What lives here is arithmetic on prices the
+   reader types, the board's own published fields laid out a new way, and
+   the reader's own log read back to them.
+
+   LOADED ON FIRST USE (app.js loadExtras), like js/social.js and
+   js/slip.js. It runs in the page's global scope beside app.js and uses
+   its helpers (escapeHtml, teamMark, state, mbLoad …) by name, only when
+   drawing; the math below uses nothing outside this file, so the tests
+   run it alone in Node.
+
+   ONE LISTENER PER EVENT for the whole page, on `data-xc` (a calculator's
+   inputs: redo its numbers as the reader types) and `data-xt` (a button).
+   Every card is redrawn wholesale, so nothing is bound to an element a
+   redraw would orphan, and nothing in the markup is code. */
+(function () {
+  "use strict";
+
+  // ---- odds math --------------------------------------------------------
+  /* American odds to the decimal multiplier, or null for anything that is
+     not a price (|odds| under 100, blank, text). */
+  function dec(a) {
+    const n = Number(String(a == null ? "" : a).replace("−", "-").replace(/[\s+]/g, ""));
+    if (!Number.isFinite(n) || Math.abs(n) < 100) return null;
+    return n > 0 ? 1 + n / 100 : 1 + 100 / Math.abs(n);
+  }
+  const implied = (a) => { const d = dec(a); return d ? 1 / d : null; };
+  /* A chance (0..1) to the American price that pays it fairly. */
+  function toAm(p) {
+    if (!(p > 0 && p < 1)) return null;
+    return p >= 0.5 ? -Math.round((100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p);
+  }
+  /* A decimal multiplier to American. */
+  function decToAm(d) {
+    if (!(d > 1)) return null;
+    return d >= 2 ? Math.round((d - 1) * 100) : -Math.round(100 / (d - 1));
+  }
+  const amTxt = (n) => (n == null ? "—" : n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "EV");
+  const pctTxt = (p, d = 1) => (p == null || !Number.isFinite(p) ? "—" : `${(p * 100).toFixed(d)}%`);
+  const ptsTxt = (p) => (p == null ? "—" : `${p >= 0 ? "+" : "−"}${Math.abs(p * 100).toFixed(1)}`);
+  const money = (v) => `$${Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+
+  /* Every side of one market, its hold, and the fair chance of each side
+     with the hold taken out — multiplicative (each side shrunk by the same
+     share) and power (the exponent that makes them sum to one, which leans
+     more of the hold onto the long side). Null if any side is not a price
+     or there are fewer than two. */
+  function noVig(prices) {
+    const ps = (prices || []).map(implied);
+    if (ps.length < 2 || ps.some((p) => p == null)) return null;
+    const sum = ps.reduce((a, b) => a + b, 0);
+    const mult = ps.map((p) => p / sum);
+    let lo = 0.5, hi = 3;
+    for (let i = 0; i < 80; i++) {
+      const k = (lo + hi) / 2;
+      if (ps.reduce((a, p) => a + Math.pow(p, k), 0) > 1) lo = k; else hi = k;
+    }
+    const k = (lo + hi) / 2;
+    const power = ps.map((p) => Math.pow(p, k));
+    return { implied: ps, overround: sum, hold: 1 - 1 / sum, mult, power };
+  }
+
+  /* A parlay of up to twelve legs: what it pays, what the prices say it
+     hits, and — where the reader gave a chance for every leg — what they
+     think it hits and its value. Legs are treated as independent; the card
+     says so, because same-game legs are not. */
+  function parlay(legs) {
+    const ok = (legs || []).filter((l) => dec(l.odds));
+    if (ok.length < 2) return null;
+    const d = ok.reduce((a, l) => a * dec(l.odds), 1);
+    const priced = ok.reduce((a, l) => a * implied(l.odds), 1);
+    const mine = ok.every((l) => l.p > 0 && l.p < 1) ? ok.reduce((a, l) => a * l.p, 1) : null;
+    return { legs: ok.length, dec: d, american: decToAm(d), priced, mine,
+             ev: mine == null ? null : mine * d - 1 };
+  }
+
+  /* Kelly's stake for a chance at a price: the fraction of the bankroll,
+     full and at the fraction asked for, and zero for a bet with no edge. */
+  function kelly(p, odds, frac, roll) {
+    const d = dec(odds);
+    if (!d || !(p > 0 && p < 1)) return null;
+    const b = d - 1;
+    const full = (b * p - (1 - p)) / b;
+    const f = Math.max(0, full) * (frac > 0 ? frac : 1);
+    return { full, stake: f, dollars: roll > 0 ? roll * f : null, ev: p * d - 1, need: 1 / d };
+  }
+
+  // ---- the college upset meter ------------------------------------------
+  /* Tonight's college underdogs, from the moneyline cards the board
+     already publishes: the dog is the side the market's fair price makes
+     less likely; ours is the board's own chance for that side; the gap is
+     ours minus the market's. A sharp-anchored card is the sharp book's
+     number, not ours, and a game under way has no pre-game read — both are
+     left out. Ranked by our chance, so the top is the likeliest upset. */
+  function upsets(rows) {
+    const out = [], seen = new Set();
+    for (const b of rows || []) {
+      if (!b || b.market !== "moneyline" || b.sharp_anchored || b.started || b.live) continue;
+      const wp = Number(b.win_prob);
+      const fair = noVig([b.home_odds, b.away_odds]);
+      if (!fair || !(wp > 0 && wp < 1) || !b.home || !b.away) continue;
+      const key = `${b.away}@${b.home}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const [fh, fa] = fair.mult;
+      if (Math.abs(fh - fa) < 1e-9) continue;
+      const home = b.pick_is_home ? wp : 1 - wp;
+      const dogHome = fh < fa;
+      const ours = dogHome ? home : 1 - home, mkt = dogHome ? fh : fa;
+      out.push({ dog: dogHome ? b.home : b.away, fav: dogHome ? b.away : b.home, home: b.home, away: b.away,
+                 dogHome, ours, market: mkt, gap: ours - mkt, price: Number(dogHome ? b.home_odds : b.away_odds),
+                 kickoff: b.kickoff || "", date: b.date || "" });
+    }
+    return out.sort((a, b) => b.ours - a.ours || b.gap - a.gap);
+  }
+  /* The meter's word: our chance and our gap over the market, both. */
+  function upsetTier(r) {
+    if (r.ours >= 0.4 && r.gap >= 0.05) return ["alert", "Upset alert"];
+    if (r.ours >= 0.33) return ["live", "Live dog"];
+    return ["long", "Long shot"];
+  }
+
+  // ---- the report card --------------------------------------------------
+  const BANDS = [["Big favourites", "−200 or shorter", (a) => a <= -200],
+                 ["Favourites", "−199 to −101", (a) => a > -200 && a <= -101],
+                 ["Near even", "−100 to +149", (a) => a > -101 && a < 150],
+                 ["Underdogs", "+150 to +399", (a) => a >= 150 && a < 400],
+                 ["Long shots", "+400 and longer", (a) => a >= 400]];
+  const MIN_SAY = 20;
+
+  function oddsNum(a) {
+    const n = Number(String(a == null ? "" : a).replace("−", "-"));
+    return Number.isFinite(n) ? n : null;
+  }
+  /* The kind of bet, from the log's own words: a ticket of several legs,
+     a player prop, or a game line. */
+  function kind(b) {
+    if (b.src === "slip" && Array.isArray(b.legs) && b.legs.length > 1) return "Parlays";
+    const d = String(b.desc || "");
+    if (/ \+ |\bparlay\b|\bsgp\b|same game/i.test(d)) return "Parlays";
+    if (typeof mbMarket === "function") {
+      const m = mbMarket(d);
+      if (m) return m.prop ? "Player props" : "Game lines";
+    }
+    return /\b(over|under|o\d|u\d)/i.test(d) && /[a-z]{3,} [a-z]{3,}/i.test(d) ? "Player props" : "Game lines";
+  }
+
+  /* Wins against what the prices needed. Expected wins are the sum of
+     each bet's implied chance (vig in: the break-even the price set), so
+     beating it means beating the book's own number, not a coin. The
+     spread is the binomial's, so the verdict says when a run is still
+     inside ordinary luck. */
+  function tally(rows) {
+    const dec_ = rows.filter((b) => b.result === "win" || b.result === "loss");
+    const n = dec_.length;
+    if (!n) return { n: 0 };
+    const wins = dec_.filter((b) => b.result === "win").length;
+    const ps = dec_.map((b) => implied(b.odds));
+    const exp = ps.reduce((a, p) => a + p, 0);
+    const sd = Math.sqrt(ps.reduce((a, p) => a + p * (1 - p), 0));
+    return { n, wins, hit: wins / n, need: exp / n, exp, z: sd > 0 ? (wins - exp) / sd : 0 };
+  }
+  function verdict(t) {
+    if (!t.n) return ["", "Nothing settled yet."];
+    if (t.n < MIN_SAY) return ["", `${t.n} settled — too few to tell skill from a run. The card firms up past ${MIN_SAY}.`];
+    if (t.z >= 2) return ["good", "Well above what your prices needed — more than two standard deviations. Keep logging: it holds up or it doesn’t."];
+    if (t.z >= 1) return ["good", "Above what your prices needed, but inside the range a good run reaches by luck."];
+    if (t.z > -1) return ["", "About what your prices needed — the book’s number has been right about you so far."];
+    if (t.z > -2) return ["bad", "Below what your prices needed, though still inside the range a cold run reaches."];
+    return ["bad", "Well below what your prices needed — more than two standard deviations. Worth a look at what you bet and where."];
+  }
+  /* Closing-line value in implied points: the close's chance minus the
+     chance your price implied. Positive is a better price than the
+     market settled on. */
+  function clv(odds, close) {
+    const a = implied(odds), c = implied(close);
+    return a == null || c == null ? null : c - a;
+  }
+  function report(bets, ours) {
+    const settled = (bets || []).filter((b) => b && ["win", "loss", "push"].includes(b.result) && implied(b.odds) != null);
+    const all = tally(settled);
+    const group = (keyOf) => {
+      const m = new Map();
+      for (const b of settled) {
+        const k = keyOf(b);
+        if (!k) continue;
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push(b);
+      }
+      return [...m.entries()].map(([k, rows]) => ({ key: k, ...tally(rows) })).filter((g) => g.n);
+    };
+    const bands = BANDS.map(([name, range, test]) => ({ key: name, range,
+      ...tally(settled.filter((b) => test(oddsNum(b.odds)))) })).filter((g) => g.n);
+    const closes = [];
+    for (const b of settled) {
+      const mine = b.close != null && b.close !== "" ? clv(b.odds, b.close) : null;
+      const theirs = ours && ours[b.id] ? clv(b.odds, ours[b.id].close) : null;
+      if (mine != null) closes.push({ id: b.id, v: mine, from: "yours" });
+      else if (theirs != null) closes.push({ id: b.id, v: theirs, from: "ours", pick: ours[b.id] });
+    }
+    const beat = closes.filter((c) => c.v > 0).length;
+    return { all, verdict: verdict(all), bands,
+             sports: group((b) => String(b.sport || "").toUpperCase() || "Other"),
+             kinds: group(kind),
+             clv: { n: closes.length, beat, avg: closes.length ? closes.reduce((a, c) => a + c.v, 0) / closes.length : null,
+                    ours: closes.filter((c) => c.from === "ours").length, rows: closes },
+             asked: settled.filter((b) => b.sport && b.date && b.desc && (b.close == null || b.close === "")).length };
+  }
+
+  // ---- drawing ------------------------------------------------------------
+  const esc = (s) => (typeof escapeHtml === "function" ? escapeHtml(String(s == null ? "" : s))
+    : String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])));
+  const mark = (abbr, sport) => (typeof teamMark === "function" ? teamMark(abbr, 26, null, sport) : "");
+  const sportNow = () => (typeof state !== "undefined" && state ? state.sport : "") || "";
+  const board = () => (typeof state !== "undefined" && state && state.data) || null;
+
+  /* A calculator card: its title, its one-line purpose, its inputs and the
+     box its numbers land in. */
+  function calcCard(id, title, sub, inputs) {
+    return `<section class="xt-card" data-calc="${id}">
+      <header class="xt-card-h"><h3>${title}</h3><p>${sub}</p></header>
+      <div class="xt-in">${inputs}</div>
+      <div class="xt-out" aria-live="polite"></div>
+    </section>`;
+  }
+  const field = (label, name, value, extra = "") =>
+    `<label class="xt-f"><span>${label}</span><input data-xc="${name}" inputmode="decimal" value="${esc(value)}" ${extra}></label>`;
+
+  function calculatorsHTML() {
+    const roll = (typeof state !== "undefined" && state && state.bankroll) || 1000;
+    return `<div class="xt-grid">
+      ${calcCard("conv", "Odds converter", "One price, every way it is written.",
+        field("Price", "conv-in", "-110", 'placeholder="−110, 2.50 or 45%"'))}
+      ${calcCard("vig", "No-vig and hold", "Every side of one market. What the book keeps, and each side’s fair chance with it taken out.",
+        `${field("Side 1", "vig-1", "-115")}${field("Side 2", "vig-2", "-105")}${field("Side 3", "vig-3", "", 'placeholder="optional"')}${field("Side 4", "vig-4", "", 'placeholder="optional"')}`)}
+      ${calcCard("parlay", "Parlay", "Up to six legs. What it pays and what the prices say it hits; add your own chances to see its value.",
+        [1, 2, 3, 4, 5, 6].map((i) => `<div class="xt-leg">${field(`Leg ${i}`, `pl-o${i}`, i < 3 ? "-110" : "", i > 2 ? 'placeholder="odds"' : "")}${field("Your %", `pl-p${i}`, "", 'placeholder="—"')}</div>`).join(""))}
+      ${calcCard("kelly", "Kelly stake", "How much of a bankroll a bet earns at your chance — usually less than it feels like, and sometimes nothing.",
+        `${field("Your chance %", "ky-p", "55")}${field("Price", "ky-o", "-110")}${field("Bankroll $", "ky-r", String(roll))}
+         <label class="xt-f"><span>Fraction</span><select data-xc="ky-f"><option value="1">Full</option><option value="0.5">Half</option><option value="0.25" selected>Quarter</option><option value="0.1">Tenth</option></select></label>`)}
+      ${calcCard("ev", "Break-even and value", "What a price needs to hit, and what it is worth at your chance.",
+        `${field("Price", "ev-o", "+150")}${field("Your chance %", "ev-p", "42")}${field("Stake $", "ev-s", "100")}`)}
+    </div>`;
+  }
+
+  const val = (box, k) => {
+    const el = box.querySelector(`[data-xc="${k}"]`);
+    return el ? String(el.value || "").trim() : "";
+  };
+  const num = (s) => { const n = Number(String(s).replace("−", "-").replace(/[%$,\s]/g, "")); return Number.isFinite(n) && String(s).trim() !== "" ? n : null; };
+  const stat = (k, v, tone = "") => `<div class="xt-stat${tone ? ` ${tone}` : ""}"><span>${k}</span><b>${v}</b></div>`;
+
+  /* Each calculator's numbers, from its own inputs. */
+  const CALC = {
+    conv(box) {
+      const raw = val(box, "conv-in");
+      const s = raw.replace("−", "-");
+      let d = null;
+      if (/%$/.test(s)) { const p = num(s) / 100; if (p > 0 && p < 1) d = 1 / p; }
+      else if (/^[+-]?\d{3,}$/.test(s)) d = dec(s);
+      else { const n = num(s); if (n != null && n > 1 && n < 100) d = n; else if (n != null) d = dec(n); }
+      if (!d) return `<p class="xt-hint">Type an American price (−110, +250), a decimal (2.50) or a chance (45%).</p>`;
+      const am = decToAm(d);
+      return `<div class="xt-stats">${stat("American", amTxt(am))}${stat("Decimal", d.toFixed(3))}${stat("Implied chance", pctTxt(1 / d))}
+        ${stat("$100 returns", money(100 * d))}</div>`;
+    },
+    vig(box) {
+      const prices = [1, 2, 3, 4].map((i) => val(box, `vig-${i}`)).filter((s) => s !== "");
+      const r = noVig(prices);
+      if (!r) return `<p class="xt-hint">Type at least two sides as American prices.</p>`;
+      const tone = r.hold <= 0 ? "good" : r.hold <= 0.03 ? "good" : r.hold <= 0.06 ? "warn" : "bad";
+      const word = r.hold <= 0 ? "Under 100% — the sides disagree enough to lock a margin across books."
+        : r.hold <= 0.03 ? "A low-hold market: cheap to bet." : r.hold <= 0.06 ? "Ordinary main-line juice."
+        : "Prop-level juice: you need a real edge just to break even.";
+      return `<div class="xt-stats">${stat("Adds up to", pctTxt(r.overround))}${stat("Book’s hold", pctTxt(r.hold, 2), tone)}</div>
+        <p class="xt-note">${word}</p>
+        <table class="xt-tbl"><thead><tr><th>Side</th><th>Price</th><th>Implied</th><th>Fair</th><th>Fair price</th></tr></thead><tbody>
+        ${prices.map((p, i) => `<tr><td>${i + 1}</td><td>${amTxt(Math.round(num(p)))}</td><td>${pctTxt(r.implied[i])}</td>
+          <td><b>${pctTxt(r.mult[i])}</b><small>${pctTxt(r.power[i])} power</small></td><td>${amTxt(toAm(r.mult[i]))}</td></tr>`).join("")}
+        </tbody></table>`;
+    },
+    parlay(box) {
+      const legs = [1, 2, 3, 4, 5, 6].map((i) => ({ odds: val(box, `pl-o${i}`), p: (num(val(box, `pl-p${i}`)) || 0) / 100 }))
+        .filter((l) => l.odds !== "");
+      const r = parlay(legs);
+      if (!r) return `<p class="xt-hint">Type at least two legs’ prices.</p>`;
+      const noVigEach = r.priced / Math.pow(1.0476, r.legs);
+      return `<div class="xt-stats">${stat("Pays", amTxt(r.american))}${stat("$10 returns", money(10 * r.dec))}
+          ${stat("Prices say it hits", pctTxt(r.priced))}${r.mine == null ? "" : stat("You say it hits", pctTxt(r.mine), r.ev >= 0 ? "good" : "bad")}</div>
+        ${r.ev == null
+          ? `<p class="xt-note">With a standard two-way hold taken out of each leg it is worth about ${pctTxt(noVigEach)} — the hold compounds on every leg you add. Add your own chances to see its value.</p>`
+          : `<p class="xt-note">At your chances the ticket is worth <b class="${r.ev >= 0 ? "pos" : "neg"}">${ptsTxt(r.ev)}%</b> per dollar.</p>`}
+        <p class="xt-fine">Legs are treated as independent. Two legs from one game are not — a quarterback’s yards and his receiver’s move together — which is why books price same-game parlays on their own.</p>`;
+    },
+    kelly(box) {
+      const r = kelly((num(val(box, "ky-p")) || 0) / 100, val(box, "ky-o"), Number(val(box, "ky-f")) || 0.25, num(val(box, "ky-r")) || 0);
+      if (!r) return `<p class="xt-hint">Type your chance (1–99%) and a price.</p>`;
+      if (r.full <= 0) {
+        return `<p class="xt-note"><b class="neg">No bet.</b> This price needs ${pctTxt(r.need)} and you give it ${pctTxt((num(val(box, "ky-p")) || 0) / 100)}. Kelly’s stake for a bet with no edge is zero.</p>`;
+      }
+      return `<div class="xt-stats">${stat("Value", `${ptsTxt(r.ev)}%`, "good")}${stat("Full Kelly", pctTxt(r.full, 2))}
+        ${stat("Your stake", pctTxt(r.stake, 2))}${r.dollars == null ? "" : stat("In dollars", money(r.dollars))}</div>
+        <p class="xt-fine">Full Kelly assumes your chance is exactly right, and it never is — a quarter to a tenth keeps most of the growth and far less of the swing.</p>`;
+    },
+    ev(box) {
+      const d = dec(val(box, "ev-o"));
+      if (!d) return `<p class="xt-hint">Type a price.</p>`;
+      const p = (num(val(box, "ev-p")) || 0) / 100, s = num(val(box, "ev-s")) || 100;
+      const ev = p > 0 && p < 1 ? p * d - 1 : null;
+      return `<div class="xt-stats">${stat("Needs to hit", pctTxt(1 / d))}${stat("Wins", money(s * (d - 1)))}
+        ${ev == null ? "" : stat("Worth", `${ev >= 0 ? "+" : "−"}${money(s * Math.abs(ev))}`, ev >= 0 ? "good" : "bad")}</div>
+        ${ev == null ? "" : `<p class="xt-note">At ${pctTxt(p)} the bet ${ev >= 0 ? "earns" : "loses"} ${pctTxt(Math.abs(ev))} of the stake on average${ev >= 0 ? "" : " — the price wants more than you give it"}.</p>`}`;
+    },
+  };
+  function calc(box) {
+    const f = CALC[box.dataset.calc];
+    const out = box.querySelector(".xt-out");
+    if (f && out) out.innerHTML = f(box);
+  }
+
+  /* The college upset meter, from the college board in hand. */
+  function upsetsHTML(d) {
+    const rows = upsets((d && d.game_bets) || []);
+    const head = `<header class="xt-card-h"><h3>Upset meter</h3><p>Every college underdog on the board, ranked by
+      our chance he wins outright, beside the chance the market’s price gives him with the hold taken out.</p></header>`;
+    if (!rows.length) {
+      const locked = d && d.locked && d.locked.game_bets;
+      return `<section class="xt-card xt-wide">${head}<p class="xt-hint">${locked
+        ? `The meter reads the board’s college game cards, which come with a membership — <a href="#paywall">see the plans</a>.`
+        : "No college moneylines on the board yet — the meter fills when the week’s prices post."}</p></section>`;
+    }
+    const li = rows.slice(0, 25).map((r) => {
+      const [tone, word] = upsetTier(r);
+      return `<li class="xt-up t-${tone}">
+        <div class="xt-up-t">${mark(r.dog, "cfb")}<div><b>${esc(r.dog)}</b><span>${r.dogHome ? "vs" : "at"} ${esc(r.fav)} · ${amTxt(r.price)}</span></div>
+          <em class="xt-pill t-${tone}">${word}</em></div>
+        <div class="xt-meter" role="img" aria-label="Our chance ${pctTxt(r.ours, 0)}, market ${pctTxt(r.market, 0)}">
+          <i style="width:${(r.ours * 100).toFixed(1)}%"></i><u style="left:${(r.market * 100).toFixed(1)}%"></u></div>
+        <div class="xt-up-n"><span>Ours <b>${pctTxt(r.ours, 0)}</b></span><span>Market <b>${pctTxt(r.market, 0)}</b></span>
+          <span class="${r.gap >= 0 ? "pos" : "neg"}">${ptsTxt(r.gap)} pts</span></div>
+      </li>`;
+    }).join("");
+    return `<section class="xt-card xt-wide">${head}<ul class="xt-ups">${li}</ul>
+      <p class="xt-fine">Context, not a pick. College game cards are priced from our ratings and shown, never staked, and the
+      meter is that same published number — it moves nothing on the board. The fill is ours; the tick is the market’s.</p></section>`;
+  }
+
+  /* Each sport's own tools, drawn above the calculators when that sport
+     is the one selected. */
+  const SPORT_TOOLS = {
+    cfb: [upsetsHTML],
+  };
+  const SPORT_NAME = { nfl: "NFL", cfb: "College football", mlb: "MLB", nba: "NBA", wnba: "WNBA", nhl: "NHL", ufc: "UFC" };
+
+  function tools(host) {
+    if (!host) return;
+    const sport = sportNow();
+    const own = (SPORT_TOOLS[sport] || []).map((f) => f(board())).join("");
+    host.innerHTML = `${own ? `<h2 class="xt-sec">${esc(SPORT_NAME[sport] || sport.toUpperCase())}</h2><div class="xt-grid">${own}</div>` : ""}
+      <h2 class="xt-sec">Every sport · calculators</h2>${calculatorsHTML()}`;
+    host.querySelectorAll("[data-calc]").forEach(calc);
+  }
+
+  // ---- My Bets' report card ---------------------------------------------
+  const CLOSES_KEY = "qb_rc_closes";
+  function loadCloses() {
+    try { const o = JSON.parse(localStorage.getItem(CLOSES_KEY) || "{}"); return o && typeof o === "object" ? o : {}; }
+    catch (e) { return {}; }
+  }
+  function saveCloses(o) { try { localStorage.setItem(CLOSES_KEY, JSON.stringify(o)); } catch (e) { /* private window */ } }
+
+  const rowHTML = (g, label) => {
+    const diff = g.hit - g.need;
+    return `<tr><td>${esc(label || g.key)}${g.range ? `<small>${esc(g.range)}</small>` : ""}</td><td>${g.wins}-${g.n - g.wins}</td>
+      <td>${pctTxt(g.hit)}</td><td>${pctTxt(g.need)}</td><td class="${diff >= 0 ? "pos" : "neg"}">${ptsTxt(diff)}</td></tr>`;
+  };
+  const splitTable = (title, groups) => !groups.length ? "" : `<div class="xt-split"><h4>${title}</h4>
+    <table class="xt-tbl"><thead><tr><th></th><th>W-L</th><th>Hit</th><th>Needed</th><th>±</th></tr></thead>
+    <tbody>${groups.map((g) => rowHTML(g)).join("")}</tbody></table></div>`;
+
+  function reportHTML(bets, ours) {
+    const r = report(bets, ours);
+    const a = r.all;
+    const [tone, word] = r.verdict;
+    if (!a.n) {
+      return `<section class="xt-rc"><header class="xt-card-h"><h3>Your report card</h3>
+        <p>Grade a few bets won or lost and this fills in: your hit rate against what your prices needed, by sport, kind and price, and your closing-line value.</p></header></section>`;
+    }
+    const pos = a.hit - a.need;
+    const c = r.clv;
+    const clvBlock = c.n
+      ? `<div class="xt-stats">${stat("Bets with a close", String(c.n))}${stat("Beat the close", pctTxt(c.beat / c.n, 0), c.beat / c.n >= 0.5 ? "good" : "bad")}
+          ${stat("Average", `${ptsTxt(c.avg)} pts`, c.avg >= 0 ? "good" : "bad")}</div>
+         <p class="xt-fine">${c.ours ? `${c.ours} of these closes are ours — the price the market settled at on a pick we published that your bet matched.` : "These are the closes you logged yourself."}
+          Beating the close is the earliest honest sign of skill; it shows up long before a win rate can.</p>`
+      : `<p class="xt-note">No closes yet. Log a closing price with a bet, or let us look up the ones that match picks we published.</p>`;
+    const ask = r.asked
+      ? `<button class="xt-btn" type="button" data-xt="rc-closes">Look up our closes</button>
+         <p class="xt-fine">Sends the sport, date and description of your ${r.asked} settled bet${r.asked === 1 ? "" : "s"} without a close — never the stake or the book — and we answer only from picks of ours that are already settled. Nothing is kept.</p>`
+      : "";
+    return `<section class="xt-rc">
+      <header class="xt-card-h"><h3>Your report card</h3><p>Graded against the prices you took, not against a coin.</p></header>
+      <div class="xt-rc-top">
+        <div class="xt-ring ${pos >= 0 ? "good" : "bad"}"><b>${pctTxt(a.hit)}</b><span>hit rate</span></div>
+        <div class="xt-stats">${stat("Record", `${a.wins}-${a.n - a.wins}`)}${stat("Prices needed", pctTxt(a.need))}
+          ${stat("Above or below", `${ptsTxt(pos)} pts`, pos >= 0 ? "good" : "bad")}${stat("Wins vs expected", `${a.wins} / ${a.exp.toFixed(1)}`)}</div>
+      </div>
+      <p class="xt-verdict${tone ? ` ${tone}` : ""}">${word}</p>
+      <div class="xt-splits">${splitTable("By sport", r.sports)}${splitTable("By kind", r.kinds)}${splitTable("By price", r.bands)}</div>
+      <h4 class="xt-sub">Closing-line value</h4>${clvBlock}${ask}<div class="xt-rc-msg" aria-live="polite"></div>
+    </section>`;
+  }
+  function reportCard(host) {
+    if (!host || typeof mbLoad !== "function") return;
+    host.innerHTML = reportHTML(mbLoad(), loadCloses());
+  }
+  async function askCloses(btn) {
+    const host = btn.closest(".xt-rc") && btn.closest(".xt-rc").parentElement;
+    const msg = host && host.querySelector(".xt-rc-msg");
+    const bets = (typeof mbLoad === "function" ? mbLoad() : [])
+      .filter((b) => ["win", "loss", "push"].includes(b.result) && b.sport && b.date && b.desc && (b.close == null || b.close === ""))
+      .slice(0, 300).map((b) => ({ id: b.id, sport: String(b.sport).toLowerCase(), date: b.date, desc: b.desc }));
+    btn.disabled = true;
+    if (msg) msg.textContent = "Looking…";
+    try {
+      const res = await fetch("/api/mybets/closes", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                       body: JSON.stringify({ bets }) });
+      const out = res.ok ? await res.json() : null;
+      if (!out) throw new Error("no answer");
+      const got = out.closes || {};
+      saveCloses(Object.assign(loadCloses(), got));
+      reportCard(host);
+      const m2 = host.querySelector(".xt-rc-msg");
+      const n = Object.keys(got).length;
+      if (m2) m2.textContent = n ? `Found ${n} of ${bets.length}.` : "None of these matched a settled pick of ours — the close stays yours to log.";
+    } catch (e) {
+      btn.disabled = false;
+      if (msg) msg.textContent = "Could not reach the record just now. Try again in a minute.";
+    }
+  }
+
+  // ---- one listener per event -------------------------------------------
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("input", (e) => {
+      const t = e.target;
+      if (!t || !t.matches || !t.matches("[data-xc]")) return;
+      const box = t.closest("[data-calc]");
+      if (box) calc(box);
+    });
+    document.addEventListener("change", (e) => {
+      const t = e.target;
+      if (!t || !t.matches || !t.matches("select[data-xc]")) return;
+      const box = t.closest("[data-calc]");
+      if (box) calc(box);
+    });
+    document.addEventListener("click", (e) => {
+      const t = e.target && e.target.closest && e.target.closest("[data-xt]");
+      if (!t) return;
+      if (t.dataset.xt === "rc-closes") askCloses(t);
+    });
+  }
+
+  window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
+                      report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC };
+})();

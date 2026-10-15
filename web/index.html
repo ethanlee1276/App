@@ -517,6 +517,9 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       <div class="sb-group" data-group="tools" hidden>
+        <button class="nav-btn sb-item" data-view="tools" data-hint="calculators and each sport’s own tools">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h2M12 12h2M16 12h0M8 16h2M12 16h2M16 16h0"/></svg>
+          Toolbox</button>
         <button class="nav-btn sb-item" data-view="alerts" data-hint="line moves, injuries, the desk">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
           Alerts <span class="sb-badge" id="sb-alert-badge" hidden></span></button>
@@ -1171,6 +1174,16 @@
         under your own account, so what is behind the paywall stays there.</span>
       </div>
       <div id="messages-body"></div>
+    </section>
+
+    <!-- The Toolbox (js/extras.js, loaded on first visit): the calculators
+         and each sport's own tools. None of them changes a pick. -->
+    <section class="view" id="view-tools">
+      <div class="section-title">Toolbox
+        <span class="sub">— calculators for any price you are looking at, and each sport’s own tools.
+        Switch sports at the top to see that sport’s.</span>
+      </div>
+      <div id="tools-body"></div>
     </section>
 
     <!-- The Streak — the free daily game. No money on it anywhere: picks
