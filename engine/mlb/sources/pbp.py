@@ -294,6 +294,8 @@ def current_at_bat(payload: dict) -> dict | None:
         "batter_id": (matchup.get("batter") or {}).get("id"),
         "pitcher": (matchup.get("pitcher") or {}).get("fullName") or "",
         "pitcher_id": (matchup.get("pitcher") or {}).get("id"),
+        # The side he bats from, for the next pitch's mix (engine/mlb/nextpitch).
+        "bat_side": str((matchup.get("batSide") or {}).get("code") or ""),
         "inning": about.get("inning") if isinstance(about.get("inning"), int) else None,
         "half": _HALF.get(str(about.get("halfInning") or "").lower(), ""),
         "pitches": len(pitches),

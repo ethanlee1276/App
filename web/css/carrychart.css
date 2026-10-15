@@ -770,6 +770,7 @@ a.mb-btn { text-decoration: none; }
   color: var(--text-mute); }
 .mb-own b { font-family: var(--font-mono); color: var(--text); }
 .mb-cap { margin: 0 2px 10px; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
+.mb-fences .cc-bars + .mb-cap, .mb-fences > .mb-cap:last-child { margin-top: 14px; margin-bottom: 0; }
 .mb-stats .mb-cap { margin: 10px 2px 0; }
 .mb-big .cc-tile b { font-size: clamp(22px, 4.4vw, 30px); }
 /* his six counting numbers, runs and stolen bases among them, three across */

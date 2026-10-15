@@ -874,7 +874,7 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, x)) for x in cur.fetchall()]
     seq = _sequences(conn, pid, [r["game_pk"] for r in rows])
-    from . import xstats
+    from . import fences, xstats
     model = xstats.load()
     games: dict = {}
     side = ""
@@ -892,6 +892,11 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
         v = xstats.xvals(model, r["launch_speed"], r["launch_angle"])
         if v:
             pa["xh"], pa["xtb"] = round(v[0], 3), round(v[1], 3)
+        # In how many of the 30 parks it would have been out (engine/mlb/
+        # fences — an estimate the page says is one).
+        cleared = fences.parks_out(r["distance"], spray_angle(r["coord_x"], r["coord_y"]), r["trajectory"])
+        if cleared is not None:
+            pa["pk"], pa["pko"] = len(cleared), cleared
         # A barrel by MLB's own rule, off MLB's own speed and angle.
         if barrel(r["launch_speed"], r["launch_angle"]):
             pa["br"] = 1
@@ -901,6 +906,10 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
         g["line"] = _hline(g["pas"])
         out_games.append(g)
     every = [p for g in out_games for p in g["pas"]]
+    # The season's card reads which parks; each ball keeps only its count.
+    fence = fences.season_block([dict(p, date=g["date"], opp=g["opp"]) for g in out_games for p in g["pas"]])
+    for p in every:
+        p.pop("pko", None)
     types = (("ground_ball", "Ground balls"), ("line_drive", "Line drives"), ("fly_ball", "Fly balls"),
              ("popup", "Popups"))
     by_type = [dict(_hline([p for p in every if p["tr"] == k]), key=k, name=label)
@@ -943,6 +952,7 @@ def hits_chart(conn, player: str, season: int | None = None) -> dict:
             "by_dir": by_dir, "by_hand": by_hand, "logged": _logged(conn, name, pick),
             # The sides he batted from: a switch-hitter pulls to both fields.
             "sides": sorted({r["bat_side"] for r in rows if r["bat_side"]}),
+            "fences": fence,
             "x_measured": {"hits": m["passed"].get("hits", False), "bases": m["passed"].get("bases", False),
                            "at": str(m.get("at", ""))[:10]} if m else None}
 

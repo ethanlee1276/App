@@ -281,6 +281,16 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
         "events": game_events(payload),
         "current": current_at_bat(payload),
     }
+    # THE NEXT PITCH (2026-10-15): the man on the mound's own mix in each
+    # count against this batter's side, off our stored pitches, read-only.
+    # A table that will not read costs the card and nothing else.
+    try:
+        from engine.mlb.nextpitch import for_current
+        nxt = for_current(doc["current"])
+        if nxt:
+            doc["next_pitch"] = nxt
+    except Exception:                                        # noqa: BLE001
+        pass
     # The box score, for the Player stats tab (Ethan, 2026-09-05: "the
     # play by plays other rooms"): the same statsapi boxscore the
     # tracker reads, on its own five-minute cache, through the same

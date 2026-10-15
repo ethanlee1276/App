@@ -555,6 +555,32 @@
         : `His ${L.pa} plate appearances ${vs[1]}.`)}</p>` : ""}
     </section>`;
   }
+  /* HOMER IN HOW MANY OF THE 30 PARKS (engine/mlb/fences): each of his
+     home runs, and each ball that was not one but would have been
+     somewhere, laid over every park's fence. An estimate, and it says so. */
+  function fencesCard(d) {
+    const f = d.fences, hr = (f && f.hr) || [], near = (f && f.near) || [];
+    if (!hr.length && !near.length) return "";
+    const P = f.parks || 30, half = Math.floor(P / 2);
+    const row = (x, said) => `<div class="cc-brow">
+        <span class="cc-bn">${esc([x.date ? when(x.date, { month: "short", day: "numeric" }) : "", x.opp ? `vs ${x.opp}` : ""].filter(Boolean).join(" · "))}</span>
+        <span class="cc-bt"><i style="width:${(100 * x.n / P).toFixed(1)}%"></i></span>
+        <b class="cc-bv">${x.n}<small>of ${P}</small></b>
+        <span class="cc-bx">${esc([said, x.d == null ? "" : `${Math.round(x.d)} ft`, x.ls == null ? "" : `${Math.round(x.ls)} mph`,
+                                  (x.held_by || []).length ? `held in ${x.held_by.join(", ")}` : "",
+                                  (x.out_of || []).length ? `out only in ${x.out_of.join(", ")}` : ""].filter(Boolean).join(" · "))}</span></div>`;
+    // The doubters first: a no-doubter says less than a fly ball only a few parks would not have held.
+    const shown = hr.slice().sort((a, b) => a.n - b.n);
+    const tiles = [tile("Home runs", hr.length), tile("No-doubters", f.no_doubt || 0, `out of all ${P}`),
+                   tile("Doubters", f.doubters || 0, `out of ${half} or fewer`),
+                   tile("Gone somewhere", f.near_n || 0, "not a homer here")];
+    return `<section class="cc-card mb-fences"><header class="cc-card-h"><h3 class="cc-card-t">A homer in how many of the ${P} parks?</h3><span class="cc-pill mute">Estimate</span></header>
+      <div class="cc-tiles cc-tiles-2">${tiles.join("")}</div>
+      ${shown.length ? `<h4 class="cc-bh">His home runs</h4><div class="cc-bars">${shown.slice(0, 15).map((x) => row(x, "")).join("")}</div>${shown.length > 15 ? `<p class="mb-cap">And ${shown.length - 15} more out of more parks.</p>` : ""}` : ""}
+      ${near.length ? `<h4 class="cc-bh">Not a homer, but gone somewhere</h4><div class="cc-bars">${near.map((x) => row(x, x.ev || "")).join("")}</div>` : ""}
+      <p class="mb-cap">An estimate from the fences alone: each ball’s distance (MLB’s own feed) against each park’s fence at the angle it was hit, the distances down the lines and to centre with a straight fence between, plus the wall’s height. No air, altitude or wind, and real outfields curve where these do not. Nothing on the board reads it.</p>
+    </section>`;
+  }
   /* MLB'S OWN NUMBERS BESIDE OURS (Baseball Savant): its expected average
      and slugging and its barrel rate, as of the day the box last read
      them, over the games Savant's season board counts. */
@@ -657,7 +683,7 @@
     const top = hero(d, sport) + tabs;
     if (view === "game" && g) return top + recent(d, sport) + gameCard(d, g, sport) + summaryCard(g) + hitCard(d, g, sport, note, ink);
     const splits = Q.h.splits(SPLITS, sprayTables(d));
-    if (view === "season") return top + hitCard(d, null, sport, note, ink) + seasonStats(d, sport) + splits;
+    if (view === "season") return top + hitCard(d, null, sport, note, ink) + seasonStats(d, sport) + fencesCard(d) + splits;
     return `${top}<section class="cc-card cc-dist"><header class="cc-card-h"><h3 class="cc-card-t">${esc(SPRAY_TITLE[view] || "")}</h3></header>${sprayBars(d, view)}</section>`
       + seasonStats(d, sport) + splits;
   }
@@ -684,13 +710,14 @@
     note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not his park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one he put in play, struck out or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. A barrel is MLB’s own rule on MLB’s own numbers: a ball hit 98 mph or harder at 26 to 30 degrees, the window widening with every mph past that until at 116 mph it runs from 8 to 50; the barrel rate is barrels over balls in play. Runs and stolen bases are his own game log’s, game by game; the season’s are shown only when every game on the chart has them. A club’s record is the one through that game, from MLB’s schedule, and shown only where our own count of the season’s finals agrees with it. MLB’s own expected average, slugging and barrel rate are Baseball Savant’s, as of the day shown. The game opens on MLB.com.${xNote(d)}</p>`,
     // The page's own arithmetic, for its tests.
     _t: { line, result, nth, wallFt, inVs, pitchesSeen, where, sumOf, gameTiles, gameHead, scoreBoard, mlbOwn,
-          GAMEDAY },
+          fencesCard, GAMEDAY },
     tip: (p) => {
       const lp = lastPitch(p);
       return `<b class="${band(p.et)}">${esc(result(p))}</b>${p.rbi ? ` · ${p.rbi} RBI` : ""}
       <span>${esc([`${nth(p.inn)} inning`, `off ${p.p || "?"}${p.ph ? ` (${p.ph})` : ""}`,
                    lp ? `${pitchName(lp[0])}${lp[1] == null ? "" : ` ${Math.round(lp[1])} mph`}` : "", ballWords(p),
-                   p.xh != null ? `xBA ${avg3(p.xh)}` : ""].filter(Boolean).join(" · "))}</span>`;
+                   p.xh != null ? `xBA ${avg3(p.xh)}` : "",
+                   p.pk != null && (p.pk || p.et === "home_run") ? `out in ${p.pk} of 30 parks (estimate)` : ""].filter(Boolean).join(" · "))}</span>`;
     },
   });
 

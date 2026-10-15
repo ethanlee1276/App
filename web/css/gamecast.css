@@ -264,6 +264,14 @@
 .gc-pz-t b { font-size: var(--fs-sm); }
 .gc-pz-t span { font-size: var(--fs-xs); color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gc-pz-row em { font: 700 var(--fs-sm) var(--font-mono); font-style: normal; color: var(--text-dim); }
+.gc-np { margin-top: 14px; padding-top: 12px; border-top: var(--hairline) solid var(--border); }
+.gc-np-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-width: 560px; }
+.gc-np-row { display: grid; grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) 40px; align-items: center; gap: 10px; font-size: var(--fs-sm); }
+.gc-np-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-np-row i { height: 8px; border-radius: 999px; background: color-mix(in oklab, var(--text-mute) 18%, transparent); overflow: hidden; }
+.gc-np-row b { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+.gc-np-row em { font: 700 var(--fs-sm) var(--font-mono); font-style: normal; text-align: right; color: var(--text-dim); }
+.gc-np-cap { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
 .gc-pz-key { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: var(--fs-xs); color: var(--text-mute); }
 .gc-pz-key span { display: inline-flex; align-items: center; gap: 6px; }
 .gc-pz-key span::before { content: ""; width: 10px; height: 10px; border-radius: 50%; }

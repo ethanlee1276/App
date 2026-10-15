@@ -276,7 +276,9 @@ are being built, a slice at a time: first a Toolbox page (five calculators
 for every sport, and college football's upset meter) and a report card in
 My Bets (step 119; BN checks the close lookup answers); then basketball's
 schedule spots and "what if he sits" (step 120; BO); then hockey's goalie
-board, each line's on-ice expected goals and the live xG race (step 121; BP).
+board, each line's on-ice expected goals and the live xG race (step 121; BP);
+then baseball's "a homer in how many of the 30 parks" on the hit page and the
+next pitch on the live pitch tracker (step 122; BQ).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -315,13 +317,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Hockey's Toolbox and live page: the goalie board, each line's on-ice expected goals, and the xG race`
+**A. The box has today's code.** The first line should end `Baseball: a homer in how many of the 30 parks, and the next pitch on the live tracker`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 406f3cf4 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 84e9987e HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1736,6 +1738,26 @@ for t, l in sorted((d.get('lines') or {}).items()):
     f=(l.get('forwards') or [{}])[0]; print(t, f.get('players'), 'xGF', f.get('xgf'), 'xGA', f.get('xga'), 'att', (f.get('att_for') or 0)+(f.get('att_against') or 0))
 for g in d.get('games') or []:
     for t, s in ((g.get('nhl_tape') or {}).get('sides') or {}).items(): print(t, s.get('starter'), s.get('starter_source'), s.get('starter_gsax'))
+"
+```
+
+**BQ. The hit page's 30 parks and the live next pitch** (step 122;
+read-only, a second each). The first prints, for one hitter, how many home
+runs the page counts, how many were out of every park and how many of half
+or fewer, the balls that were not homers but were gone somewhere, and his
+first five homers with their count of parks; `fences None` means his balls
+in play carry no distance yet. The second, during a live MLB game, prints
+each game file's pitcher, the batter's side, and whether the next-pitch
+table is in it and how many of his pitches it rests on; `next_pitch False`
+for a pitcher means none of his pitches are stored yet (the hit page's
+nightly fill writes them):
+```
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=spray&sport=mlb&player=Aaron%20Judge" | python3 -c "import json,sys; d=json.load(sys.stdin); f=d.get('fences'); print('fences', None if f is None else ('HR', len(f['hr']), 'no-doubt', f['no_doubt'], 'doubters', f['doubters'], 'gone somewhere', f['near_n'])); print([(r['date'], r['n'], r.get('d')) for r in ((f or {}).get('hr') or [])[:5]])"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json, glob
+for p in sorted(glob.glob('web/data/pbp/mlb_*.json')):
+    d=json.load(open(p)); n=d.get('next_pitch'); c=d.get('current') or {}
+    print(p.split('/')[-1], (d.get('live') or {}).get('state'), c.get('pitcher'), c.get('bat_side'), 'next_pitch', bool(n), n and n.get('n'))
 "
 ```
 
@@ -5533,6 +5555,34 @@ first). Paste back anything that prints an error or looks off.
     attempts are priced. New: `tests/test_hockey_goalies_lines_and_the_xg_race.py`
     (6 checks). No pin changed: `tests/test_the_nhl_live_page.py`'s flow
     shape is kept as it was (the race's points ride beside it).
+122. **Baseball: a homer in how many of the 30 parks, and the next pitch on
+    the live tracker** (2026-10-15, two more of the sixteen). Neither moves
+    a number. THE 30 PARKS (the hit page, season view, and each ball's tip):
+    every fly ball and line drive of 250 feet or more laid over every park's
+    fence (`engine/mlb/fences.py`): the distances down the lines and to
+    centre from `engine/mlb/parks`, the fence drawn straight from each pole
+    to centre, and a ball clears it when its distance (MLB's own
+    `totalDistance`) reaches the fence at the angle it was hit plus the
+    wall's height (the Monster's 37 feet down the left-field line, 8 feet in
+    the middle). The card lists his home runs with their count of parks,
+    the doubters first, and the balls that were not homers but would have
+    been somewhere, naming the shorter list of clubs (where it was out, or
+    where it would have been held). It says it is an estimate: no air,
+    altitude or wind, and real outfields curve where these do not. Each ball
+    keeps only its count; which parks rides on the season card. THE NEXT
+    PITCH (the live pitch tracker, under the zone): the man on the mound's
+    own mix in the count, this season and last, against batters on this
+    one's side (`engine/mlb/nextpitch.py`, off the stored `mlb_pitches`; the
+    feed's count on a pitch is the count after it, so the count a pitch was
+    thrown in is the one after the pitch before). A count he has thrown in
+    fewer than 30 times falls back, in a stated order, to every batter, then
+    the count's family (ahead, even, behind), then his whole mix, and says
+    which. The live build reads the database read-only, keeps each pitcher's
+    table six hours, and a table that will not read costs only the card.
+    The at-bat in progress now carries the batter's side (`bat_side`). New:
+    `tests/test_baseball_fences_and_the_next_pitch.py` (10 checks). No pin
+    changed; no size budget moved (the hit page and the live tracker are
+    their own lazy files).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

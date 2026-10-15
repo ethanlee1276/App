@@ -1000,6 +1000,29 @@
     _pzReplay = false;
     return { from: _pz.from, elapsed: (now - _pz.start) / 1000 };
   }
+  /* THE NEXT PITCH (engine/mlb/nextpitch, 2026-10-15): what the man on
+     the mound has thrown in this count, this season and last, against
+     batters on this one's side — his own record, not a forecast. Shown
+     for the at-bat in progress (its count after the newest pitch), or at
+     0-0 for the batter just up. */
+  const NP_SIDE = { L: "left-handed batters", R: "right-handed batters" };
+  const NP_FAM = { ahead: "when he is ahead", behind: "when he is behind", even: "in even counts" };
+  function nextPitch(d, ps, done) {
+    const np = d.next_pitch, cur = d.current;
+    if (!np || !cur || np.pitcher_id !== cur.pitcher_id) return "";
+    const last = ps[ps.length - 1];
+    const key = !done && last && last.balls != null && last.strikes != null && last.balls < 4 && last.strikes < 3
+      ? `${last.balls}-${last.strikes}` : done && !cur.pitches ? "0-0" : "";
+    const row = key && (np.counts || {})[key];
+    if (!row || !(row.mix || []).length) return "";
+    const side = NP_SIDE[np.side] || "every batter";
+    const said = { count: `in ${key} counts to ${side}`, count_all: `in ${key} counts to every batter`,
+                   family: `${NP_FAM[row.fam] || ""} against ${side}`, family_all: `${NP_FAM[row.fam] || ""} against every batter`,
+                   all: `to ${np.side ? side : "every batter"}, every count` }[row.basis] || "";
+    return `<div class="gc-np"><div class="gc-k">Next pitch · ${esc(key)}${cur.pitcher ? ` · ${esc(cur.pitcher)}` : ""}</div>
+      <div class="gc-np-bars">${row.mix.map(([, name, sh]) => `<div class="gc-np-row"><span>${esc(name)}</span><i><b style="width:${(100 * sh).toFixed(1)}%"></b></i><em>${Math.round(100 * sh)}%</em></div>`).join("")}</div>
+      <p class="gc-np-cap">His own mix ${esc(said)}, this season and last (${row.n} pitch${row.n === 1 ? "" : "es"}). A record of what he throws, not a forecast.</p></div>`;
+  }
   function zone(d) {
     const lv = d.live || {};
     const ev = (d.events || []).filter((r) => r && (r.kind === "pitch" || r.kind === "atbat"));
@@ -1060,7 +1083,7 @@
       <div class="gc-pz-head"><div><div class="gc-k">${done ? "Last at-bat" : "This at-bat"} · ${ps.length} pitch${ps.length === 1 ? "" : "es"}</div>
         <b>${esc(last.batter || "")}</b><span class="mini"> vs ${esc(last.pitcher || "")}</span>${tag}</div>${replay}</div>
       <div class="gc-pz-body">${svg}<ol class="gc-pz-list">${list}</ol></div>
-      <div class="gc-pz-key">${["c", "w", "x", "f", "b"].map((o) => `<span class="${o}">${PZ_WORDS[o]}</span>`).join("")}</div></div>`;
+      <div class="gc-pz-key">${["c", "w", "x", "f", "b"].map((o) => `<span class="${o}">${PZ_WORDS[o]}</span>`).join("")}</div>${nextPitch(d, ps, done)}</div>`;
   }
 
   /* ---------------- the last play ----------------
