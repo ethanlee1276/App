@@ -270,13 +270,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A settled moneyline or total keeps its close: the board's last current line before kickoff`
+**A. The box has today's code.** The first line should end `The close check runs after Thursday night's game, on Ethan's Eastern day`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 48aa7497 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor e0abc235 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1464,7 +1464,8 @@ there), is the one I need: paste all of it. A `403` is the server refusing
 a Python script, not the page; say so and I'll check it another way.
 
 **BG. Moneylines and totals keep their close** (step 110; read-only,
-seconds). Run it after tonight's game has settled, and again on Monday:
+seconds). Run it on Friday, once Thursday night's game has settled, and
+again on Monday:
 ```
 cd /srv/qellys && sudo -u qellys python3 - <<'PY'
 import sqlite3
@@ -4758,8 +4759,9 @@ first). Paste back anything that prints an error or looks off.
     lines, so it now keeps a game line's close instead of clearing it, and
     prints those apart as KEPT. NOT BACKFILLED: the 31 stay without a
     close. The lines stored before today can't show their price was
-    current, and a close of unknown age is worse than none. Tonight's game
-    and every one after get one. If the store can't be read, the settle
+    current, and a close of unknown age is worse than none. Every game-line
+    bet that settles from now on gets one, the NFL's from Thursday night's
+    game on. If the store can't be read, the settle
     still grades every bet and its log says "game-line closes skipped".
     New: `tests/test_a_game_line_keeps_its_close.py` (10 checks). One
     other test file changed, the way it asks of every new function that
