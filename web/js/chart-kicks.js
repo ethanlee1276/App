@@ -222,6 +222,10 @@
     legend: () => legend(),
     gameSide: (g) => gameTiles(g),
     seasonSide: (d) => seasonTiles(d),
+    //: His card's five (carrychart.js `playerHero`).
+    heroTiles: (d) => { const l = d.season_line || {};
+      return [["FG%", pct(l.fg_pct)], ["FG", `${l.fgm}/${l.fga}`], ["Long", l.long == null ? "—" : l.long],
+              ["50+", `${l.fg50}/${l.fga50}`], ["XP%", pct(l.xp_pct)]]; },
     list: (g) => kickList(g),
     flags, filters: FILTERS, csv,
     views: (d) => VIEWS.filter(([, , k]) => (d[k] || []).length).map(([k, name]) => [k, name]),

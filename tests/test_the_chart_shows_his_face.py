@@ -425,18 +425,26 @@ def test_in_a_browser_a_failed_photo_falls_back_and_a_missing_one_shows_initials
             page.set_content(html)
             page.evaluate("(c) => { window.CHART = c; window.QBCarry.open('Kenny Gainwell', 'nfl', 'carries'); }",
                           _chart("https://faces.test/gainwell.png"))
-            page.wait_for_selector(".cc-face.on img", timeout=5000)
-            assert asked == ["https://faces.test/gainwell.png?w=116", "https://faces.test/gainwell.png"], asked
-            assert page.evaluate("getComputedStyle(document.querySelector('.cc-init')).visibility") == "hidden"
+            page.wait_for_selector(".cc-head .cc-face.on img", timeout=5000)
+            # His card (2026-10-14) asks for its own size of the same photo
+            # beside the header's, and steps to the whole one the same way.
+            page.wait_for_selector(".mb-hero-face .cc-act.cut.on img", timeout=5000)
+            assert set(asked[:2]) == {"https://faces.test/gainwell.png?w=116",
+                                      "https://faces.test/gainwell.png?w=320"}, asked
+            assert set(asked[2:]) == {"https://faces.test/gainwell.png"}, asked
+            assert page.evaluate("getComputedStyle(document.querySelector('.cc-head .cc-init')).visibility") == "hidden"
             page.evaluate("window.QBCarry.close()")
 
             page.evaluate("(c) => { window.CHART = c; window.QBCarry.open('Kenny Gainwell', 'nfl', 'carries'); }",
                           _chart("https://faces.test/nobody.png"))
             page.wait_for_selector(".cc-head", timeout=5000)
-            page.wait_for_function("!document.querySelector('.cc-face img')", timeout=5000)
-            init = page.locator(".cc-init")
+            page.wait_for_function("!document.querySelector('.cc-face img') && !document.querySelector('.cc-act')",
+                                   timeout=5000)
+            init = page.locator(".cc-head .cc-init")
             assert init.inner_text() == "KG" and init.is_visible()
-            assert page.evaluate("getComputedStyle(document.querySelector('.cc-init')).visibility") == "visible"
+            assert page.evaluate("getComputedStyle(document.querySelector('.cc-head .cc-init')).visibility") == "visible"
+            card = page.locator(".mb-hero-face .cc-init")
+            assert card.inner_text() == "KG" and card.is_visible()
         finally:
             browser.close()
 

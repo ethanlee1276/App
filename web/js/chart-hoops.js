@@ -261,6 +261,9 @@
     legend: (g) => legend(g),
     gameSide: (g) => gameTiles(g),
     seasonSide: (d) => seasonTiles(d),
+    //: His card's five (carrychart.js `playerHero`).
+    heroTiles: (d) => { const L = d.season_line || {};
+      return [["Games", L.games], ["PPG", num1(L.ppg)], ["FG%", pct(L.fg_pct)], ["3PT%", pct(L.fg3_pct)], ["FT%", pct(L.ft_pct)]]; },
     list: (g) => shotList(g),
     flags, filters: FILTERS, csv,
     views: (d) => VIEWS.filter(([, , k]) => (d[k] || []).some((x) => x.fga)).map(([k, name]) => [k, name]),

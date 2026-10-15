@@ -217,7 +217,14 @@ ideas"), the usage step for college was measured first, on four seasons of
 college games, and it made no market's number better (receiving yards worse
 in all four), so the college board is unchanged (step 106; BE re-runs it on
 the box if you want it confirmed there). The other two ideas wait on L and
-step 30's check, as planned.
+step 30's check, as planned. And on your word ("why do baseball players have
+cool ass photos of themselves but no one else does, fix that"), every chart
+in every league now opens on his card, the hit page's: his club, his photo,
+his name with his position and number, and his season in five numbers. The
+NHL publishes action shots, so hockey's card carries one; the NFL, college,
+the NBA, the WNBA and the UFC publish none, so his cut-out stands on his
+club's colour (step 107; BF asks the box whether each league's photos
+answer).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -255,13 +262,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `College's usage step, measured on four seasons: no market clears the bar, so the college board is unchanged`
+**A. The box has today's code.** The first line should end `Every league's chart opens on his card: his photo, his club and his season in five numbers`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 5cb8a49f HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 069286e2 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1414,6 +1421,19 @@ cd /srv/qellys && sudo -u qellys python3 cfbbridgefit.py
 ```
 The last line should read `passes the bar: none`. If it names a market,
 paste all of it: that market would then be built, the way the NFL's is.
+
+**BF. Every league's card gets its photo** (step 107; read-only, under a
+minute):
+```
+cd /srv/qellys && sudo -u qellys python3 photocheck.py
+```
+For three regulars in each league it asks for every photo his card asks
+for, in the page's order, and ends each league on `→ the cards draw: ...`.
+What I expect: the NHL and MLB `action`; the NFL, college, the NBA, the
+WNBA and the UFC `card size` or `whole` (his cut-out). `initials`
+anywhere, or an NHL or MLB line without `action` (its action shots not
+there), is the one I need: paste all of it. A `403` is the server refusing
+a Python script, not the page; say so and I'll check it another way.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4600,6 +4620,34 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_the_college_usage_bridge_is_measured_first.py` (3 checks:
     the role is the NFL's rule on college's columns, the bar takes every
     season, the replay blends what the board would). No pin changed.
+107. **Every chart opens on his card, with his photo** (2026-10-14, "why
+    do baseball players have cool ass photos of themselves but no one else
+    does, fix that"; BF checks the photos). The hit page's card (his club's
+    mark and name over its building, his photo, his name with his position
+    and number, the season, and five numbers of his season) now leads every
+    chart in every league: carries, routes, passes, kicks, the shot chart,
+    the shot and save maps, the pitch chart, the role chart and the fight
+    history; on a pick page it sits over the game's own header. Each
+    league's five are its own (a back's games, carries, yards, yards a
+    carry and touchdowns; a goalie's save rate, goals against and GSAx; a
+    kicker's field goal rate, long and 50+); a fighter has no club, so his
+    record stands where its mark would. THE PHOTO IS THE BEST HIS LEAGUE
+    PUBLISHES: MLB's and the NHL's action shots, built off the id in his
+    headshot's address (`engine/photos`); the NFL, college, the NBA, the
+    WNBA and the UFC publish none (their action photography is licensed
+    through Getty and Sportradar, paid), so the card stands his cut-out
+    headshot on his club's colour with its mark behind him, asked for at
+    the card's size and then whole; his initials when nothing loads. A
+    name no longer breaks mid-word ("HERNÁNDE / Z" on the hit page's own
+    card): each is sized by its longest word. No page budget moved; it is
+    all in the chart's own files, which load when a chart opens. Pins
+    changed, told to you, in `tests/test_the_chart_shows_his_face.py`
+    (browser half): the page now also asks for his card's size of his
+    headshot (`?w=320`) beside the header's (`?w=116`), so the check holds
+    the two sized requests first (in either order: the page sends them
+    together) and then the whole photo, and it reads the header's
+    initials by name, since the card has its own. New: `tests/test_every_player_has_his_card.py` (10 checks)
+    and `photocheck.py`.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

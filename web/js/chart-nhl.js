@@ -36,6 +36,7 @@
   const xgWord = (s) => (s.xg == null ? "" : `${num1(s.xg * 100)}% chance (our xG)`);
   const xg2 = (s) => (s.xg == null ? "—" : Number(s.xg).toFixed(2));
   const svPct = (v) => (v == null ? "—" : Number(v).toFixed(3).replace(/^0/, ""));
+  const plus1 = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(1)}`);
   const how = (s) => [s.reb ? "Rebound" : "", s.rush ? "Off the rush" : ""].filter(Boolean);
 
   /* ---------------- the zones ----------------
@@ -219,6 +220,10 @@
     legend: () => legend(goalie),
     gameSide: (g) => (goalie ? goalieTiles(g.line) : skaterTiles(g.line)),
     seasonSide: (d) => (goalie ? goalieTiles(d.season_line, true) : skaterTiles(d.season_line, true)),
+    //: His card's five (carrychart.js `playerHero`): a goalie's saves, a skater's shots.
+    heroTiles: (d) => { const L = d.season_line || {};
+      return goalie ? [["Games", L.games], ["SV%", svPct(L.sv_pct)], ["GA", L.ga], ["GSAx", plus1(L.gsax)], ["Shots/gm", num1(L.shots_pg)]]
+        : [["Games", L.games], ["Goals", L.goals], ["SOG/gm", num1(L.sog_pg)], ["SH%", pct(L.sh_pct)], ["xG", num1(L.ixg)]]; },
     list: (g) => list(g, goalie),
     flags: goalie ? goalieFlags : skaterFlags, filters: FILTERS[goalie ? "goalie" : "skater"], csv: csv(goalie),
     views: (d) => VIEWS.filter(([, , k]) => (d[k] || []).length).map(([k, name]) => [k, name]),

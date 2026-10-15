@@ -1121,13 +1121,15 @@
   //: A team's colour, only as the team data spells one (it goes in a style).
   const inkOf = (sport, a) => { const p = teamOf(sport, a).primary; return HEX.test(p || "") ? p : ""; };
   const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
+  //: A name's longest word's letters, which size it in a hero (CSS `--nl`) so it never breaks mid-word.
+  const nameLen = (s) => Math.max(4, ...String(s || "").split(/\s+/).map((w) => w.length));
   //: One side of the game: the logo, the city over the name, the record.
   function heroTeam(sport, a, rec, right) {
     const t = teamOf(sport, a);
     const nick = t.nick || teamNameIn(sport, a) || a;
     const loc = t.loc || (t.name && t.name !== nick && t.name.endsWith(nick) ? t.name.slice(0, -nick.length).trim() : "");
     const mark = `<span class="cc-hero-logo">${teamMarkIn(sport, a, 56)}</span>`;
-    const words = `<span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b>${esc(nick)}</b>${rec
+    const words = `<span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b style="--nl:${nameLen(nick)}">${esc(nick)}</b>${rec
       ? `<i>${esc(rec)}</i>` : ""}</span>`;
     return `<div class="cc-hero-team${right ? " r" : ""}">${right ? words + mark : mark + words}</div>`;
   }
@@ -1175,6 +1177,79 @@
   function heroShell(ink, art, left, mid, right, cls) {
     return `<div class="cc-hero${cls ? ` ${cls}` : ""}"${ink ? ` style="${ink}"` : ""}>${art}
       <div class="cc-hero-in">${left}${mid}${right}</div></div>`;
+  }
+
+  /* ---------------- his card (2026-10-14) ----------------
+     Ethan, beside the hit tracker's card with Teoscar Hernández at the
+     plate: "why do baseball players have cool ass photos of themselves
+     but no one else does, fix that". The hit page's hero (js/chart-mlb.js
+     `hero`) is every league's card now, in the same parts and the same
+     styles: his club's mark and name over its building, his photo, his
+     name with his position and number, the season, and his season in five
+     numbers. The hit page keeps its own (its season picker and its count
+     of games charted so far).
+
+     THE PHOTO IS THE BEST HIS LEAGUE PUBLISHES. An action shot where the
+     league files one under his id (MLB's and the NHL's, `d.action`,
+     engine/photos); otherwise his cut-out headshot standing on his club's
+     colour with its mark behind him, the way the league's own Next Gen
+     Stats card draws him (Ethan's carry chart screenshot, 2026-10-13),
+     asked for at the card's size (visuals.js facePreview) and then whole;
+     and under both his initials, which is what shows when neither loads.
+     A failure steps to the next and the chart keeps where it got to
+     (`S.ph`), so a redraw neither flashes nor asks again. */
+  function heroShots(d) {
+    const out = d.action ? [{ u: d.action, cut: false }] : [];
+    const full = d.face || "";
+    const small = full && typeof facePreview === "function" ? facePreview(full, 160) : "";
+    for (const u of [...new Set([small, full].filter(Boolean))]) out.push({ u, cut: true });
+    return out;
+  }
+  function heroPhoto(d, sport, st) {
+    const list = heroShots(d), key = list.map((x) => x.u).join(" ");
+    if (!st.ph || st.ph.key !== key) st.ph = { key, list, i: 0, ok: null };
+    const x = st.ph.ok === false ? null : st.ph.list[st.ph.i];
+    const mark = d.team ? `<span class="ph-mark" aria-hidden="true">${teamMarkIn(sport, d.team, 96)}</span>` : "";
+    /* Under the photo, his initials in his club's colour — never a second
+       round photo: its addresses are already in the list above, and two
+       images stepping one chart's face list (the header's) skip each
+       other's turns. */
+    return (x ? `<span class="cc-act${x.cut ? " cut" : ""}${st.ph.ok ? " on" : ""}" data-ph>${mark}<img src="${esc(x.u)}" alt="" decoding="async"></span>` : "")
+      + faceHTML(Object.assign({}, d, { face: "" }), {});
+  }
+  //: His season in five numbers on his card: football's here, a league's own (`heroTiles`) beside its chart.
+  function heroTiles(kind, d) {
+    const L = d.season_line || {}, n = (d.games || []).length, yds = Math.round(Number(L.yds) || 0);
+    if (kind === "carries") return [["Games", n], ["Carries", L.n], ["Yards", yds], ["YPC", num1(L.ypc)], ["TD", L.td]];
+    if (kind === "routes") return [["Games", n], ["Targets", L.tgt], ["Rec", L.rec], ["Yards", yds], ["TD", L.td]];
+    if (kind === "passes") return [["Games", n], ["Cmp/Att", slash(L.cmp, L.att)], ["Yards", yds], ["TD", L.td], ["INT", L.int]];
+    const P = DRAW[kind];
+    return (P && P.heroTiles && P.heroTiles(d)) || [];
+  }
+  function playerHero(d, sport, kind) {
+    const team = d.team || "", t = teamOf(sport, team), ink = inkOf(sport, team);
+    const nick = t.nick || (team ? teamNameIn(sport, team) : "") || team;
+    const loc = t.loc || (t.name && t.name !== nick && t.name.endsWith(nick) ? t.name.slice(0, -nick.length).trim() : "");
+    const art = team && typeof venuePhotoTag === "function" ? venuePhotoTag(sport, team, t) : "";
+    const words = String(d.player || "").trim().split(/\s+/);
+    const first = words.length > 1 ? words[0] : "", last = words.length > 1 ? words.slice(1).join(" ") : words[0];
+    const tag = [d.position || "", d.jersey ? `#${d.jersey}` : ""].filter(Boolean);
+    const P = DRAW[kind];
+    // A fighter has no club: his division and record stand where its mark would.
+    const side = team ? `<span class="cc-hero-logo">${teamMarkIn(sport, team, 60)}</span>
+          <span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b style="--nl:${nameLen(nick)}">${esc(nick)}</b></span>`
+      : P && P.heroSide ? P.heroSide(d) : "";
+    const T = heroTiles(kind, d).filter((x) => x && x[1] != null && x[1] !== "" && x[1] !== "—");
+    return `<div class="cc-hero mb-hero ph-hero"${ink ? ` style="--ta:${ink};--tb:${ink}"` : ""}>${art}
+      <div class="mb-hero-in">
+        <div class="mb-hero-top"><span class="mb-pick one">${esc(d.season ? `${seasonName(sport, d.season)} season` : "Career")}</span></div>
+        <div class="mb-hero-team">${side}</div>
+        <div class="mb-hero-face">${heroPhoto(d, sport, S || {})}</div>
+        <div class="mb-hero-who">${first ? `<small>${esc(first)}</small>` : ""}<b style="--nl:${nameLen(last)}">${esc(last)}</b>${tag.length
+          ? `<span>${tag.map(esc).join("  ")}</span>` : ""}</div>
+        ${T.length ? `<div class="mb-hero-tiles" style="--n:${T.length}">${T.map(([k, v]) =>
+          `<div class="mb-ht"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("")}</div>` : ""}
+      </div></div>`;
   }
   //: The games, newest first, with an arrow either end (the render's carousel).
   function gamesRow(d, sport, chipOf) {
@@ -1507,9 +1582,11 @@
     }
     const barRow = bar ? `<div class="cc-bar">${bar}</div>` : "";
     const main = C.inline ? `<div class="cc-split"><div class="cc-fig">${dist}</div><div class="cc-side">${stats}</div></div>` : dist + stats;
-    // The game over its stadium says what the title line said; a chart
-    // with no team to draw (a fighter's) keeps its title.
-    box.innerHTML = (C.inline ? barRow + hero : head + hero + barRow) + tabs + rows + (hero ? "" : title) + main + tail
+    // His card first (the hit page's, every league's: `playerHero`), then
+    // the game over its stadium, which says what the title line said; a
+    // chart with no team to draw (a fighter's) keeps its title.
+    const card = playerHero(d, sport, S.kind);
+    box.innerHTML = (C.inline ? barRow + card + hero : head + card + hero + barRow) + tabs + rows + (hero ? "" : title) + main + tail
       + fold("note", "How it’s drawn", note);
     settle(box);
   }
@@ -1685,6 +1762,25 @@
   function faceStep(type, img, st) {
     if (!st || !img || img.tagName !== "IMG") return;
     const act = img.closest(".cc-act");
+    // His card's photo (`heroPhoto`): the next of its list on a failure,
+    // the round face under it once the list is spent.
+    const ph = act && act.dataset && act.dataset.ph != null ? st.ph : null;
+    if (ph) {
+      if (type === "load") {
+        ph.ok = true;
+        act.classList.add("on");
+        return;
+      }
+      const next = ph.list[++ph.i];
+      if (next) {
+        act.classList.toggle("cut", !!next.cut);
+        img.src = next.u;
+      } else {
+        ph.ok = false;
+        act.remove();
+      }
+      return;
+    }
     if (act) {
       st.act = type === "load";
       if (st.act) act.classList.add("on");
@@ -2167,7 +2263,7 @@
                  h: { esc, tile, tableHTML, pct, num1, signed, ord, fold, state: () => S,
                       grid: gridHTML, two, pills, bars: barList, hero: heroShell, cap,
                       /* a league's own page (`page`) builds with the frame's parts */
-                      face: (d) => faceHTML(d, S), team: teamOf, ink: inkOf, seasonName,
+                      face: (d) => faceHTML(d, S), team: teamOf, ink: inkOf, seasonName, nameLen,
                       seg: (Z) => segHTML(kindOf(S.kind, S.sport), Z),
                       tools: (items, flags, filters) => toolsHTML(S.kind, items, flags, filters),
                       stats: statsCard, splits: splitsCard } };
@@ -2180,5 +2276,6 @@
                                          passTables, passChip, kindOf, cfbTargetGame, cfbTargetSeason,
                                          cfbTargetTiles, cfbTargetNote, heroHTML, sideOf, sidesHTML, carryResult,
                                          carryFlags, targetFlags, csvOf, routeViews, routeBars, descOf,
-                                         gridHTML, barList, segHTML, poolOf, zonesOf, toolsHTML, heroShell } };
+                                         gridHTML, barList, segHTML, poolOf, zonesOf, toolsHTML, heroShell,
+                                         playerHero, heroShots, heroTiles, heroPhoto, nameLen } };
 })();

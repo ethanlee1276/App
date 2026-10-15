@@ -56,7 +56,7 @@
    under both teams' colours, each from its own side, and a dark wash so
    the names read; his team on the left. */
 .cc-hero { position: relative; overflow: hidden; isolation: isolate; margin-top: 14px; border-radius: var(--radius-lg);
-  border: var(--hairline) solid var(--border); background: var(--bg); }
+  border: var(--hairline) solid var(--border); background: var(--bg); container-type: inline-size; }
 .cc-hero .venue-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: .6; }
 .cc-hero::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
@@ -72,8 +72,13 @@
 .cc-hero-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.02; }
 .cc-hero-name small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--text-dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cc-hero-name b { font-family: var(--font-display); font-size: clamp(20px, 3.6vw, 32px); font-weight: 800; letter-spacing: .02em;
-  text-transform: uppercase; color: var(--text); overflow-wrap: anywhere; }
+/* A NAME ON ITS OWN LINE (2026-10-14: "NUGGET / S", "TSARUK / YAN" on a
+   phone): the display face runs about .73em a letter, so the size comes
+   down with the longest word's letters (`--nl`, set where the name is
+   drawn) instead of the word breaking; a two-word name ("Maple Leafs")
+   still breaks between its words. */
+.cc-hero-name b { font-family: var(--font-display); font-size: clamp(13px, min(3.6vw, calc(34cqi / var(--nl, 6))), 32px); font-weight: 800;
+  letter-spacing: .02em; text-transform: uppercase; color: var(--text); overflow-wrap: normal; }
 .cc-hero-name i { margin-top: 5px; font-style: normal; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-dim); }
 .cc-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 4px; text-align: center; }
 .cc-hero-mid small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 800; color: var(--brand); }
@@ -106,7 +111,7 @@
   .cc-hero-team, .cc-hero-team.r { flex-direction: column; gap: 8px; text-align: center; }
   .cc-hero-team.r { flex-direction: column-reverse; justify-content: center; }
   .cc-hero-name small { letter-spacing: .1em; font-size: var(--fs-2xs); }
-  .cc-hero-name b { font-size: clamp(16px, 4.8vw, 22px); }
+  .cc-hero-name b { font-size: clamp(13px, min(4.8vw, calc(34cqi / var(--nl, 6))), 22px); }
 }
 
 /* the switches: his charts as chips with their counts, the views as tabs,
@@ -645,14 +650,32 @@ button.cc-sd:hover { border-color: var(--border); }
   box-shadow: 0 10px 28px color-mix(in oklab, var(--bg) 80%, transparent); }
 .mb-hero-face .cc-act img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
 .mb-hero-face .cc-act.on + .cc-face { display: none; }
+/* EVERY LEAGUE'S CARD (2026-10-14, carrychart.js `playerHero`): where his
+   league publishes no action shot, his cut-out headshot stands on his
+   club's colour with its mark faint behind him, head and shoulders filling
+   the frame — the league's own Next Gen Stats card. */
+.mb-hero-face .cc-act.cut { background: radial-gradient(120% 95% at 50% 18%,
+  color-mix(in oklab, var(--ta, var(--brand)) 72%, var(--bg)) 0%,
+  color-mix(in oklab, var(--ta, var(--brand)) 30%, var(--bg)) 62%, var(--bg) 100%); }
+.mb-hero-face .cc-act.cut img { object-position: 50% 4%; z-index: 1; }
+.mb-hero-face .cc-act .ph-mark { display: none; }
+.mb-hero-face .cc-act.cut .ph-mark { position: absolute; inset: -18% -30% auto auto; display: grid; place-items: center;
+  width: 92%; aspect-ratio: 1; opacity: .2; pointer-events: none; }
+.mb-hero-face .cc-act.cut .ph-mark > * { width: 100%; height: 100%; }
+.mb-hero-face .cc-act.cut::after { content: ""; position: absolute; inset: auto 0 0; height: 26%; z-index: 2; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in oklab, var(--ta, var(--brand)) 55%, var(--bg)), transparent); }
 .mb-hero-who { grid-area: who; display: flex; flex-direction: column; align-items: flex-end; min-width: 0; text-align: right;
   line-height: 1.02; }
 .mb-hero-who small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--text-dim); }
-.mb-hero-who b { font-family: var(--font-display); font-size: clamp(22px, 6.6cqi, 40px); font-weight: 800; letter-spacing: .02em;
-  text-transform: uppercase; color: var(--text); overflow-wrap: anywhere; }
+/* HIS SURNAME ON ONE LINE (2026-10-14: the card read "HERNÁNDE / Z" and
+   "WILLIA / MS" on a phone): the size comes down with the longest word's
+   letters (`--nl`, set where it is drawn) so a name is never cut, and a
+   two-word one ("St. Brown") still breaks only between its words. */
+.mb-hero-who b { font-family: var(--font-display); font-size: clamp(12px, min(6.6cqi, calc(34cqi / var(--nl, 6))), 40px);
+  font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: var(--text); overflow-wrap: normal; }
 .mb-hero-who span { margin-top: 6px; font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: .1em; color: var(--text-dim);
   white-space: pre; }
-.mb-hero-tiles { grid-area: tiles; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 2px; }
+.mb-hero-tiles { grid-area: tiles; display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 6px; margin-top: 2px; }
 .mb-ht { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; padding: 9px 4px 8px;
   border-radius: var(--radius); border: var(--hairline) solid color-mix(in oklab, var(--text) 18%, transparent);
   background: color-mix(in oklab, var(--bg) 58%, transparent); }
@@ -663,7 +686,7 @@ button.cc-sd:hover { border-color: var(--border); }
   .mb-hero-in { gap: 8px; padding: 10px 10px 12px; }
   .mb-hero-face .cc-face { width: 72px; height: 72px; }
   .mb-hero-face .cc-act.on { width: 104px; height: 76px; }
-  .mb-hero-team .cc-hero-name b { font-size: 19px; }
+  .mb-hero-team .cc-hero-name b { font-size: clamp(12px, min(19px, calc(34cqi / var(--nl, 6))), 19px); }
   .mb-hero-tiles { gap: 4px; }
   .mb-ht span { letter-spacing: .06em; }
 }

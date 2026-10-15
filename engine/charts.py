@@ -161,7 +161,7 @@ def known(kind: str, sport: str) -> bool:
 def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
            opp: str = "", fam: str = "") -> dict:
     """The chart a page draws, as every chart's endpoint answers it."""
-    from . import statlogs
+    from . import photos, statlogs
     _leagues, build, stored = KINDS[kind]
     out = (build(conn, sport, player, season, opp, fam) if kind in TOLD_OPP
            else build(conn, sport, player, season)) or {}
@@ -170,6 +170,9 @@ def answer(conn, kind: str, sport: str, player: str, season: int | None = None,
         # The site's own photo first; a chart that knows his face from its
         # own record (a fighter's ESPN id) keeps it when the site has none.
         out["face"] = statlogs.face(conn, sport, out["player"]) or out.get("face") or ""
+        # His league's action photo for his card, where it publishes one
+        # (engine/photos: MLB's and the NHL's, off the id in his headshot).
+        out["action"] = out.get("action") or photos.action_url(sport, out["face"])
         # His position and number for the chart's head, off his club's
         # published roster where the chart's own record names neither.
         if not out.get("position") or not out.get("jersey"):

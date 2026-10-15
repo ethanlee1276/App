@@ -172,7 +172,7 @@
   function side(name, sub, right, me) {
     const w = String(name || "").trim().split(/\s+/), lastName = w.length > 1 ? w.pop() : w[0] || "", first = w.length && w[0] !== lastName ? w.join(" ") : "";
     const mark = `<span class="cc-hero-logo"><span class="uf-ring${me ? " me" : ""}" aria-hidden="true">${esc(inits(name))}</span></span>`;
-    const words = `<span class="cc-hero-name">${first ? `<small>${esc(first)}</small>` : ""}<b>${esc(lastName)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</span>`;
+    const words = `<span class="cc-hero-name">${first ? `<small>${esc(first)}</small>` : ""}<b style="--nl:${Q.h.nameLen(lastName)}">${esc(lastName)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</span>`;
     return `<div class="cc-hero-team${right ? " r" : ""}">${right ? words + mark : mark + words}</div>`;
   }
   function fightHero(g, d) {
@@ -218,6 +218,10 @@
     legend: () => legend(),
     gameSide: (g) => gameTiles(g),
     seasonSide: (d) => seasonTiles(d),
+    //: His card (carrychart.js `playerHero`): no club, so his record stands where its mark would.
+    heroSide: (d) => `<span class="cc-hero-name"><small>Record</small><b>${esc(record(d.season_line || {}))}</b></span>`,
+    heroTiles: (d) => { const L = d.season_line || {};
+      return [["Fights", L.n], ["KO/TKO", L.ko_w], ["Subs", L.sub_w], ["Decisions", L.w - L.ko_w - L.sub_w]]; },
     list: (g) => statList(g),
     csv, file: "fights", fileWhat: "his fight history",
     views: (d) => [["method", "How he wins", (d.by_method || []).some((m) => m.w + m.l)],

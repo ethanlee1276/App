@@ -243,6 +243,12 @@
     legend: (g, d) => legend(d),
     gameSide: (g, d) => gameTiles(g, d),
     seasonSide: (d) => seasonTiles(d),
+    //: His card's five (carrychart.js `playerHero`): his season's lead number, now and at its best.
+    heroTiles: (d) => { const L = d.season_line || {}, m = lead(d), k = m && m.key;
+      if (!k) return [];
+      return [["Games", L.games], [m.short, fmt(m, (L.avg || {})[k], d.sport, true)], ["Last 3", fmt(m, (L.last3 || {})[k], d.sport, true)],
+              ["Last 5", fmt(m, (L.last5 || {})[k], d.sport, true)],
+              [m.unit === "spot" ? "Highest" : "High", fmt(m, m.unit === "spot" ? (L.low || {})[k] : (L.high || {})[k], d.sport)]]; },
     list: (g, d) => rowList(g, d),
     csv: seasonCsv, file: "game log", fileWhat: "his season, game by game,",
     splits: (d) => tables(d),

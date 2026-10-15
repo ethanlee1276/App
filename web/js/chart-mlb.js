@@ -213,9 +213,9 @@
       <div class="mb-hero-in">
         <div class="mb-hero-top">${pick}</div>
         <div class="mb-hero-team"><span class="cc-hero-logo">${mark(sport, team, 60)}</span>
-          <span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b>${esc(nick)}</b></span></div>
+          <span class="cc-hero-name">${loc ? `<small>${esc(loc)}</small>` : ""}<b style="--nl:${Q.h.nameLen(nick)}">${esc(nick)}</b></span></div>
         <div class="mb-hero-face${act ? " has-act" : ""}">${act}${Q.h.face(d)}</div>
-        <div class="mb-hero-who">${first ? `<small>${esc(first)}</small>` : ""}<b>${esc(last)}</b>${tag.length
+        <div class="mb-hero-who">${first ? `<small>${esc(first)}</small>` : ""}<b style="--nl:${Q.h.nameLen(last)}">${esc(last)}</b>${tag.length
           ? `<span>${tag.map(esc).join("  ")}</span>` : ""}</div>
         <div class="mb-hero-tiles">${tiles.map(([k, v]) => `<div class="mb-ht"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("")}</div>
       </div></div>${cover}`;
