@@ -766,6 +766,13 @@ def main() -> None:
             sched_days = {}
         conn = connect()
         teams = {t for g in games for t in (g["home"], g["away"])}
+        # TONIGHT'S SCHEDULE SPOTS (engine/nba/schedspots): the rest bucket
+        # the minutes model reads, the trip, the clock, the altitude, and
+        # (once the lines are in, below) the blowout watch. Context on the
+        # Toolbox; nothing here prices.
+        from engine.nba import schedspots as _ss
+        out["schedule_spots"] = _ss.spots(games, sched_days, args.date, args.league,
+                                          {t: schedule_density(sched_days, t, args.date) for t in teams})
         # This season and last: early in a year a player's most recent 20
         # games run back into the previous season, so one is too few — and
         # six is a different player.
@@ -940,6 +947,7 @@ def main() -> None:
 
         defense = defense_ratings(conn, args.league)
         density = {t: schedule_density(sched_days, t, args.date) for t in teams}
+        _ss.add_spreads(out.get("schedule_spots") or [], spread_by_team)
         # §8 freshness: how recently the price we would bet was actually
         # fetched. There is no availability feed for either league, so this
         # tops out below 1.0 on purpose — and with it the grade, which is

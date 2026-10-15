@@ -353,10 +353,109 @@
       meter is that same published number — it moves nothing on the board. The fill is ours; the tick is the market’s.</p></section>`;
   }
 
+  // ---- basketball: tonight's schedule spots, and what if he sits ---------
+  /* A spot's words, from the build's flags (engine/nba/schedspots). Tone:
+     "bad" for the ones the minutes model already reads as a cost, "warn"
+     for the context that moves nothing. */
+  function spotChips(t) {
+    const out = [];
+    for (const f of t.flags || []) {
+      if (f === "b2b_home") out.push(["bad", "Back-to-back"]);
+      else if (f === "3in4") out.push(["bad", "3 in 4 nights"]);
+      else if (f === "4in6_road") out.push(["bad", "4 in 6 nights"]);
+      else if (f === "long_trip") out.push(["warn", `${Number(t.miles || 0).toLocaleString("en-US")} mi from ${t.from}`]);
+      else if (f === "clock") out.push(["warn", `Clock ${t.tz_shift > 0 ? "+" : "−"}${Math.abs(t.tz_shift)} h`]);
+      else if (f === "altitude") out.push(["warn", "Up to altitude"]);
+      else if (f === "blowout") out.push(["warn", "Blowout watch"]);
+    }
+    return out;
+  }
+  function spotsHTML(d) {
+    const sport = sportNow();
+    const rows = ((d && d.schedule_spots) || []).slice()
+      .sort((a, b) => spotChips(b.teams.home).length + spotChips(b.teams.away).length
+                    - spotChips(a.teams.home).length - spotChips(a.teams.away).length);
+    const head = `<header class="xt-card-h"><h3>Schedule spots</h3><p>Tonight’s games, each side’s rest, the trip
+      from its last arena, the clock it crossed, the altitude and the blowout watch.</p></header>`;
+    if (!rows.length) {
+      return `<section class="xt-card xt-wide">${head}<p class="xt-hint">No games on the board tonight — the spots fill with the slate.</p></section>`;
+    }
+    const side = (t) => `<div class="xt-sp-t">${mark(t.team, sport)}<b>${esc(t.team)}</b><span>${esc(t.rest_word || "")}</span>
+      <span class="xt-chips">${spotChips(t).map(([tone, w]) => `<em class="xt-chip t-${tone}">${esc(w)}</em>`).join("")}</span></div>`;
+    const li = rows.map((g) => `<li class="xt-sp">
+      <div class="xt-sp-h"><b>${esc(g.away)} @ ${esc(g.home)}</b><span>${esc(g.arena || "")}${g.feet != null ? ` · ${Number(g.feet).toLocaleString("en-US")} ft` : ""}</span>
+        ${g.spread != null ? `<span>${esc(g.home)} ${g.spread > 0 ? "+" : g.spread < 0 ? "−" : ""}${Math.abs(g.spread)}</span>` : ""}</div>
+      ${side(g.teams.away)}${side(g.teams.home)}</li>`).join("");
+    return `<section class="xt-card xt-wide">${head}<ul class="xt-sps">${li}</ul>
+      <p class="xt-fine">Context, not a price. The minutes model already reads the rest it was fitted on (rested, a day
+      off, the back-to-back); the trip, the clock, the altitude and the blowout watch move nothing until a measurement
+      says they should.</p></section>`;
+  }
+
+  const WI_STATS = [["min", "Minutes"], ["pts", "Points"], ["reb", "Rebounds"], ["ast", "Assists"]];
+  function whatifHTML(d) {
+    const sport = sportNow();
+    const tonight = [...new Set(((d && d.schedule_spots) || (d && d.games) || []).flatMap((g) => [g.away, g.home]).filter(Boolean))];
+    const every = typeof teamsForSport === "function" ? Object.keys(teamsForSport(sport) || {}) : [];
+    const teams = tonight.length ? tonight : every;
+    return `<section class="xt-card xt-wide" data-xw-league="${esc(sport)}">
+      <header class="xt-card-h"><h3>What if he sits</h3><p>Pick a club and a man in its rotation: in the games he missed for
+        this club, how each teammate’s share of the minutes, points, rebounds and assists moved against the games he played.</p></header>
+      <div class="xt-in">
+        <label class="xt-f"><span>${tonight.length ? "Tonight’s clubs" : "Club"}</span><select data-xw="team"><option value="">Pick a club</option>${
+          teams.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select></label>
+        <label class="xt-f"><span>If this man sits</span><select data-xw="player" disabled><option value="">Pick a club first</option></select></label>
+      </div>
+      <div class="xt-wi-out" aria-live="polite"></div>
+      <p class="xt-fine">Evidence only: the board’s numbers do not move for it. A share is of the team’s total that night,
+        so pace cancels; a game he missed is read from the box score, not a report; his games before he joined the club
+        don’t count as sitting.</p>
+    </section>`;
+  }
+  function whatifOut(r, stat) {
+    if (!r || r.error) return `<p class="xt-hint">${esc((r && r.error) || "Nothing came back.")}</p>`;
+    const s = (r.stats || {})[stat];
+    if (!s) return "";
+    const chips = WI_STATS.map(([k, w]) => `<button type="button" class="xt-tab${k === stat ? " on" : ""}" data-xt="wi-stat" data-arg="${k}">${w}</button>`).join("");
+    const warn = s.enough ? "" : `<p class="xt-verdict bad">He has missed ${s.n_out} game${s.n_out === 1 ? "" : "s"} for this club since ${esc(r.since || "")} —
+      under ${r.floor}, so what follows is the shape, not evidence.</p>`;
+    const rows = (s.rows || []).map((x) => `<tr><td>${esc(x.player)}</td><td>${pctTxt(x.with)}</td><td>${pctTxt(x.without)}</td>
+      <td class="${x.delta >= 0 ? "pos" : "neg"}">${ptsTxt(x.delta)}</td><td>${x.n_with}/${x.n_without}</td></tr>`).join("");
+    return `<div class="xt-tabs">${chips}</div>
+      <p class="xt-note">${esc(r.player)}: ${s.n_played} game${s.n_played === 1 ? "" : "s"} played, ${s.n_out} missed for ${esc(r.team)} since ${esc(r.since || "")}.</p>
+      ${warn}${rows ? `<table class="xt-tbl"><thead><tr><th>Teammate</th><th>With him</th><th>Without</th><th>±</th><th>Games</th></tr></thead><tbody>${rows}</tbody></table>`
+        : `<p class="xt-hint">No teammate played enough games on both sides to compare.</p>`}`;
+  }
+  async function whatifAsk(box, player) {
+    const league = box.dataset.xwLeague, team = (box.querySelector('[data-xw="team"]') || {}).value || "";
+    const out = box.querySelector(".xt-wi-out"), sel = box.querySelector('[data-xw="player"]');
+    if (!team) return;
+    if (out) out.innerHTML = `<p class="xt-hint">Reading the box scores…</p>`;
+    try {
+      const q = new URLSearchParams({ league, team, ...(player ? { player } : {}) });
+      const res = await fetch(`/api/hoops/whatif?${q}`);
+      const r = res.ok ? await res.json() : null;
+      if (!r) throw new Error("no answer");
+      if (!player) {
+        sel.innerHTML = `<option value="">Pick a man</option>${(r.rotation || []).map((p) =>
+          `<option value="${esc(p.player)}">${esc(p.player)} · ${p.minutes} min</option>`).join("")}`;
+        sel.disabled = !(r.rotation || []).length;
+        if (out) out.innerHTML = (r.rotation || []).length ? "" : `<p class="xt-hint">No games stored for ${esc(team)} yet.</p>`;
+        return;
+      }
+      box._wi = r;
+      if (out) out.innerHTML = whatifOut(r, box._wiStat || "min");
+    } catch (e) {
+      if (out) out.innerHTML = `<p class="xt-hint">The box scores could not be read just now.</p>`;
+    }
+  }
+
   /* Each sport's own tools, drawn above the calculators when that sport
      is the one selected. */
   const SPORT_TOOLS = {
     cfb: [upsetsHTML],
+    nba: [spotsHTML, whatifHTML],
+    wnba: [spotsHTML, whatifHTML],
   };
   const SPORT_NAME = { nfl: "NFL", cfb: "College football", mlb: "MLB", nba: "NBA", wnba: "WNBA", nhl: "NHL", ufc: "UFC" };
 
@@ -457,7 +556,13 @@
     });
     document.addEventListener("change", (e) => {
       const t = e.target;
-      if (!t || !t.matches || !t.matches("select[data-xc]")) return;
+      if (!t || !t.matches) return;
+      if (t.matches("[data-xw]")) {
+        const box = t.closest("[data-xw-league]");
+        if (box) whatifAsk(box, t.dataset.xw === "player" ? t.value : "");
+        return;
+      }
+      if (!t.matches("select[data-xc]")) return;
       const box = t.closest("[data-calc]");
       if (box) calc(box);
     });
@@ -465,9 +570,16 @@
       const t = e.target && e.target.closest && e.target.closest("[data-xt]");
       if (!t) return;
       if (t.dataset.xt === "rc-closes") askCloses(t);
+      if (t.dataset.xt === "wi-stat") {
+        const box = t.closest("[data-xw-league]");
+        if (!box || !box._wi) return;
+        box._wiStat = t.dataset.arg;
+        box.querySelector(".xt-wi-out").innerHTML = whatifOut(box._wi, box._wiStat);
+      }
     });
   }
 
   window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
-                      report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC };
+                      report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
+                      spotChips, spotsHTML, whatifHTML, whatifOut };
 })();

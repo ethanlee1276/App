@@ -274,7 +274,8 @@ all day; the settle each one runs at its end is faster now, and BM times one
 NFL build by hand to show where the rest goes (step 118). The sixteen ideas
 are being built, a slice at a time: first a Toolbox page (five calculators
 for every sport, and college football's upset meter) and a report card in
-My Bets (step 119; BN checks the close lookup answers).
+My Bets (step 119; BN checks the close lookup answers); then basketball's
+schedule spots and "what if he sits" (step 120; BO).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -313,13 +314,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The Toolbox: five calculators and the college upset meter, and a report card in My Bets`
+**A. The box has today's code.** The first line should end `Basketball's Toolbox: tonight's schedule spots and what if he sits`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 4f0c0465 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor a8de3fdc HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1706,6 +1707,18 @@ second). It asks for our close on one made-up bet and should print
 `{"closes": {}}` (or one close, if it happens to match a settled pick):
 ```
 curl -s -X POST http://127.0.0.1:8000/api/mybets/closes -H 'Content-Type: application/json' -d '{"bets":[{"id":"t","sport":"nfl","date":"2026-10-12","desc":"Jared Goff Over 255.5 passing yards"}]}'; echo
+```
+
+**BO. What if he sits answers from the box scores** (step 120; read-only,
+seconds). The first prints the Celtics' rotation from last season's games
+(a list of names and minutes); the second asks what happened when the first
+name sat. Paste both. From the NBA's opening night on the 20th, the third
+prints how many of tonight's games carry their schedule spots (it should
+equal the number of games):
+```
+curl -s "http://127.0.0.1:8000/api/hoops/whatif?league=nba&team=BOS" | head -c 600; echo
+curl -s "http://127.0.0.1:8000/api/hoops/whatif?league=nba&team=BOS&player=Jayson%20Tatum" | head -c 900; echo
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba.json')); print(len(d.get('games') or []), 'games,', len(d.get('schedule_spots') or []), 'with spots')"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -5448,6 +5461,34 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_wall_routing.py` name every page open behind the paywall,
     and the Toolbox joins them (its back link checked in a browser with the
     wall on); nothing was loosened.
+120. **Basketball's Toolbox: tonight's schedule spots, and what if he sits**
+    (2026-10-15, two more of the sixteen). NOTHING HERE MOVES A NUMBER.
+    SCHEDULE SPOTS: the NBA and WNBA builds now publish, per game and side,
+    the rest bucket the minutes model already reads (rested, one day off,
+    the second night of a back-to-back, three in four, four in six), the
+    trip from the arena of the club's last game this week (miles), the hours
+    the clock moved, an altitude flag for a visitor coming up from near sea
+    level to Denver or Salt Lake City, and, once the lines are in, a blowout
+    watch at a spread of 10 or more (`engine/nba/schedspots.py`, with a
+    table of every NBA and WNBA arena: its coordinates, height and time
+    zone; a club it does not know gets no trip, never a guess). The Toolbox
+    draws them per game, the busiest spots first, under "Context, not a
+    price". WHAT IF HE SITS: pick a club and a man in its rotation; a new
+    endpoint, `/api/hoops/whatif` (`engine/nba/whatif.py`, read from the
+    stored box scores, ungated like the other log reads), answers with each
+    teammate's share of the team's minutes, points, rebounds and assists in
+    the games he missed for this club against the games he played, the game
+    counts beside them, and a warning under three missed games that it is
+    the shape and not evidence. It is the same on/off read
+    (`engine/nba/onoff`) the board's teammate card already uses for a man
+    who IS out. Your O run met the vacancy bar, but no rule is adopted, so
+    the card says "Evidence only: the board's numbers do not move for it."
+    New: `tests/test_basketball_schedule_spots_and_what_if_he_sits.py` (8
+    checks: the trip, the clock and the altitude; the blowout watch after
+    the lines; no guess for an unknown club; an arena for every club; the
+    what-if from box scores; his games before the club not counted as sat;
+    the build, the server and the page reaching both; the cards' words).
+    No pin changed; no size budget moved (the cards load with the Toolbox).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

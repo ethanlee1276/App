@@ -1169,6 +1169,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_logs(parse_qs(parsed.query))
         if parsed.path in ("/api/players/fantasy", "/api/players/fantasy/"):
             return self._players_fantasy(parse_qs(parsed.query))
+        if parsed.path in ("/api/hoops/whatif", "/api/hoops/whatif/"):
+            return self._hoops_whatif(parse_qs(parsed.query))
         if parsed.path in ("/api/players/versus", "/api/players/versus/"):
             return self._players_versus(parse_qs(parsed.query))
         if parsed.path in ("/api/players/carries", "/api/players/carries/"):
@@ -3219,6 +3221,29 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the record could not be read"}', ".json")
         return self._send(200, json.dumps({"closes": out}).encode(), ".json")
+
+    def _hoops_whatif(self, q):
+        """What if he sits (engine/nba/whatif): one club's rotation and, with
+        a player named, each teammate's share of the minutes, points,
+        rebounds and assists in the games he missed against the games he
+        played. UNGATED like the other log endpoints: box-score facts, and
+        evidence only — nothing on the board moves for it."""
+        import re as _re
+        from engine.db import connect as _connect
+        from engine.nba import whatif as W
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        league, team, player = arg("league").lower()[:5], arg("team").upper()[:4], arg("player")[:60]
+        if league not in W.LEAGUES or not _re.fullmatch(r"[A-Z]{2,4}", team):
+            return self._send(400, b'{"error":"league and team"}', ".json")
+        try:
+            conn = _connect()
+            try:
+                out = W.whatif(conn, league, team, player)
+            finally:
+                conn.close()
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the logs could not be read"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _players_versus(self, q):
         """A player's history against one opponent — the head-to-head.
