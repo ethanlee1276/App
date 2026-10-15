@@ -266,13 +266,16 @@ landed (step 114; BJ covers it). The last idea waiting in H, trusting the
 price more where our chance runs far above it, is built as a read-only
 check with its bar written before it runs: BK runs it on the record, and
 nothing on the site changes unless it passes and you say yes (step 115).
+And every check below that can run on any day now runs as one command, BL,
+read-only, about half an hour (step 116).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
 
-**If you only do a few, do these, in this order.** AM first if the
+**BL first, if you do one thing** (step 116): it runs every check below
+that can run on any day, in one go. **If you only do a few, do these, in this order.** AM first if the
 boards are still empty an hour after the fix lands (it reads why). Then A
 and B: is today's code there, and is the box well; AS beside them says how
 long a sweep takes and where its minutes go. Then the four that matter before
@@ -303,13 +306,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `BK's coverage: which NFL board picks the price check can see, and why the rest can't be`
+**A. The box has today's code.** The first line should end `One command for every any-day check in the runbook: tools/catchup.sh, read-only, held to the runbook word for word`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor e8c98d31 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor cd791216 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1657,6 +1660,27 @@ It prints market names and counts only. **Run 2026-10-15** (read in step
 about half; the yardage markets barely (receiving 37 of 180, rushing 19 of
 101, passing 2 of 61); anytime TD 13 of 134; moneylines and kicking points
 none. Tuesday's verdict speaks for the picks it can see.
+
+**BL. Every any-day check, in one go** (step 116; read-only, about half
+an hour, at low priority). Forty-odd blocks above had never been pasted
+back; most only confirm a feature the box already runs. This runs every one
+of them that can run on any day, each under its letter, quick ones first
+and the slow measurements last:
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh 2>&1 | tee /tmp/catchup.txt
+```
+Paste all of it (or `cat /tmp/catchup.txt` and paste that). Each block
+prints `===== <letter>. <what it checks>`, then the runbook's own lines'
+output, then how long it took; a block that runs past its limit says
+`(stopped after …)` and the next one runs anyway. Each block above still
+says what its numbers should read. NOT in it: anything that writes (M's and
+K's fills, Q's photo fill, AD's save, AP's fill, AZ's cap, BB's apply; the
+chores do those themselves) and AR (it re-downloads Savant's files); the
+ones that wait for a moment (BH, BI, BJ during games; BG on Friday and
+Monday; BK on Tuesday; N's and S's second lines from the NBA's opening
+night; AX's second and AY around a UFC card); and what only your hands can
+do (C's email setup if it says off, D's three Stripe settings, F, AE, AJ,
+and the phone halves of the rest).
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -5285,6 +5309,27 @@ first). Paste back anything that prints an error or looks off.
     measures exactly the picks the rule could move. Tuesday's verdict
     speaks for those picks, not for the yardage, touchdown or moneyline
     picks.
+116. **Every any-day check in one command** (2026-10-15, you: "check the
+    runbook and make sure that there's no code at all that I still need to
+    run"; BL). Read against this session's own record of what you've pasted
+    back: A, I, L, X, AG, AI, BB, BC, BD and BK have been run; forty-odd
+    blocks never were. Most of those only confirm a feature the box already
+    runs. `tools/catchup.sh` runs every one of them that can run on any day,
+    each under its letter, quick ones first and the slow measurements last
+    (AT, BE, M2, P2, O, AD, E), each with its own time limit and nothing on
+    its input, so no block can swallow the next one's lines or stop the
+    rest. READ-ONLY: every command is the runbook's own line, word for word,
+    except two that print less or write nothing (AD's test with
+    `--dry-run`; K's chart-fill log read from its last 20 lines). Left out:
+    the commands that write (the chores do them), AR (it re-downloads
+    Savant's files), the blocks that wait for a moment (BG, BH, BI, BJ, BK,
+    the NBA's opening night, a UFC card), and what only your hands can do.
+    New: `tests/test_the_catchup_script_is_the_runbooks_own_checks.py` (8
+    checks: valid bash; every line the runbook's own but the two named;
+    nothing that writes; every block a runbook block, the timed ones and the
+    done ones left out; a limit on each, the slow ones last; a block that
+    reads its input or runs long cannot touch the next; root only; this
+    runbook names it). No pin changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
