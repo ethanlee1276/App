@@ -47528,9 +47528,15 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
       : stadium(game, { w: 640, h: 400 });
   } catch (e) { art = ""; }
   window.ACTIVE_TEAMS = keep;
-  const arc = league === "mlb" && hitRow && hitRow.hit
+  // THE DRIVE OR THE AT-BAT ON THE PHOTOGRAPH (Ethan, 2026-10-15: "All
+  // the animations should work flawlessly with the stadium art and field
+  // art"): js/gamecast.js draws the run the card below is running, on one
+  // clock with it, and this keeps its single play or batted ball for when
+  // the module has none to draw (or has not loaded).
+  const fx = window.QBGamecast && QBGamecast.art && QBGamecast.art(d, league, hitRow, boardGame);
+  const arc = fx || (league === "mlb" && hitRow && hitRow.hit
     ? pbpArcSVG(hitRow.hit, (boardGame || {}).park, { photo })
-    : isFootball && hitRow ? pbpPlaySVG(hitRow) : "";
+    : isFootball && hitRow ? pbpPlaySVG(hitRow) : "");
   const park = (boardGame || {}).park || {};
   const w = (boardGame || {}).weather || {};
   const wx = w.temp_f != null ? `${Math.round(w.temp_f)}°F${w.wind_mph != null
@@ -47624,21 +47630,25 @@ function pbpPlayTilesHTML(play) {
  *
  * MEASURED, NOT GUESSED. The numbers below were read off a 240x150 grid
  * laid over the render (scratch: field_grid.png), the same method the
- * ballpark's PBP_PHOTO points came from:
+ * ballpark's PBP_PHOTO points came from.
  *
- *     y = 108   the line the linemen are standing on   ->   0 yards
- *     y =  84   midfield, under the shield             ->  20 yards
- *     y =  62   the goal line at the near end zone     ->  70 yards
- *
- * A camera does not space those evenly, so a linear map would put a
- * five-yard run halfway to midfield. `y = A - B/(d + C)` is the shape a
- * lens actually produces, fitted through those three points exactly;
- * 5 yards moves 8 units, 70 reaches the goal line, and everything past
- * it compresses instead of running off the picture. */
+ * RE-MEASURED 2026-10-15, when the drive came onto the photograph
+ * (js/gamecast.js draws it with these same numbers, and a test holds the
+ * two together). The first fit went through three points by eye: the
+ * defensive line's feet (y 108) as the line of scrimmage, the shield as
+ * midfield, the end zone as the goal line. Fifteen painted five-yard
+ * lines, found by their brightness down the photograph (scratch:
+ * fieldcal), put the ball under the centre on the painted 30 at y 115.4
+ * — seven units below the old zero, two and a half yards at the line —
+ * with midfield (84) and the goal line (61) where the first fit had them.
+ * `y = A - B/(d + C)` is the shape a lens actually produces; pinned at
+ * the 30, it lands every painted line from there to forty yards on within
+ * 0.6 of a unit, so a ten-yard gain ends on the painted ten. The passer's
+ * hands are at (117.6, 131), the ball's line x 117.6, in all four frames. */
 const PBP_FIELD = {
-  qb: [118, 120],            // where the passer stands, in the same grid
-  los: 108, goal: 62,
-  A: 35.368, B: -2943.490, C: 40.526,
+  qb: [117.6, 131],          // where the passer takes the snap, in the same grid
+  los: 115.4, goal: 61,
+  A: 37.775, B: -2279.86, C: 29.37,
 };
 
 /* How far up the picture a play of `yards` reaches. */

@@ -267,8 +267,23 @@
       // A punt flies its own yards when they read as a punt's; a kick at the posts flies to them.
       const fly = kind === "fg" || word === "NO GOOD" ? (dir > 0 ? 110 : -10)
         : word === "PUNT" && gain >= 15 && gain <= 85 ? Math.max(-10, Math.min(110, from + gain * dir)) : null;
-      return { id: String(p.id || i), kind, word, label, from, to, ext, fly, dir, air, period: p.period };
+      // The down and the distance it was snapped on: the photograph draws
+      // each snap's own line to gain.
+      const at = (v) => (v != null && isFinite(Number(v)) ? Number(v) : null);
+      return { id: String(p.id || i), kind, word, label, from, to, ext, fly, dir, air, period: p.period,
+               down: at(p.down), togo: at(p.distance) };
     });
+  }
+  /* How long each part of a snap takes. One table for the card's field and
+     the photograph, so the ball reaches every play's end on both at the
+     same moment: the card's drop to the next row is the photograph's cut
+     to the next snap (out, across, in: twice 0.2 and 0.01). */
+  const SNAP = { leg: 0.41, hold: 0.12 }, EXT = { leg: 0.35, hold: 0.2 };
+  function beat(r) {
+    if (r.fly != null) return { leg: 0.85, hold: 0.35, how: "fly" };
+    if (r.kind === "inc" || r.kind === "to") return { leg: 0.45, hold: 0.25, how: "hop" };
+    if (r.to !== r.from) return { leg: Math.min(1.1, Math.max(0.35, Math.abs(r.to - r.from) / 40)), hold: 0.3, how: "move" };
+    return { leg: 0.05, hold: 0.35, how: "stay" };
   }
   //: The scoreboard's next snap: the line of scrimmage, the line to gain
   //: ("& Goal" is the goal line itself) and the words for it.
@@ -373,23 +388,22 @@
     const pts = [];
     rows.forEach((r, i) => {
       if (i < startAt) return;
-      const y = Y(i), x0 = X(r.from);
-      pts.push({ x: x0, y, leg: 0.22, hold: 0.12, i, at: "snap" });
-      if (r.fly != null) {
+      const y = Y(i), x0 = X(r.from), bt = beat(r);
+      pts.push({ x: x0, y, leg: SNAP.leg, hold: SNAP.hold, i, at: "snap" });
+      if (bt.how === "fly") {
         const x1 = X(r.fly);
-        pts.push({ x: x1, y, leg: 0.85, hold: 0.35, via: [(x0 + x1) / 2, y - g.row * 1.6], i, at: "end" });
-      } else if (r.kind === "inc") {
-        pts.push({ x: x0, y, leg: 0.45, hold: 0.25, via: [x0 + r.dir * 4 * g.U, y - g.row * 0.9], i, at: "end" });
-      } else if (r.to !== r.from) {
+        pts.push({ x: x1, y, leg: bt.leg, hold: bt.hold, via: [(x0 + x1) / 2, y - g.row * 1.6], i, at: "end" });
+      } else if (bt.how === "hop") {
+        pts.push({ x: x0, y, leg: bt.leg, hold: bt.hold, via: [x0 + r.dir * 4 * g.U, y - g.row * 0.9], i, at: "end" });
+      } else if (bt.how === "move") {
         const x1 = X(r.to);
-        pts.push({ x: x1, y, leg: Math.min(1.1, Math.max(0.35, Math.abs(r.to - r.from) / 40)), hold: 0.3,
-                   via: r.air ? [(x0 + x1) / 2, y - g.row * 1.15] : null, i, at: "end" });
+        pts.push({ x: x1, y, leg: bt.leg, hold: bt.hold, via: r.air ? [(x0 + x1) / 2, y - g.row * 1.15] : null, i, at: "end" });
       } else {
-        pts.push({ x: x0, y, leg: 0.05, hold: 0.35, i, at: "end" });
+        pts.push({ x: x0, y, leg: bt.leg, hold: bt.hold, i, at: "end" });
       }
-      if (r.ext != null) pts.push({ x: X(r.ext), y, leg: 0.35, hold: 0.2, i, at: "ext" });
+      if (r.ext != null) pts.push({ x: X(r.ext), y, leg: EXT.leg, hold: EXT.hold, i, at: "ext" });
     });
-    if (nx) pts.push({ x: X(nx.los), y: Y(n), leg: 0.25, hold: 0.15, i: n, at: "now" });
+    if (nx) pts.push({ x: X(nx.los), y: Y(n), leg: SNAP.leg, hold: SNAP.hold, i: n, at: "now" });
     const T = track(pts, { elapsed: run.elapsed });
     const moving = !T.still;
     const ix = (i, at) => pts.findIndex((p) => p.i === i && p.at === at);
@@ -471,15 +485,15 @@
     const ring = nx ? pop(moving ? T.dur : null, `<circle class="gc-fd-ring" cx="${f1(rest[0])}" cy="${f1(rest[1])}" r="${f1(g.ball[0] * 1.6)}"/>`) : "";
     return { body: `${lines}${marks}${words}${ring}${ballSVG(g, rest[0], rest[1], moving ? T.motion : "")}`, moving };
   }
-  /* The tracker for the Gamecast tab's drive card: the drive on file that
-     the scoreboard's drive belongs to, its last DRIVE_ROWS snaps. Empty
-     when no snap of it has a spot. */
-  function driveFieldHTML(d, league, dr) {
+  /* The drive both drawings run: the last drive on file, its last
+     DRIVE_ROWS snaps, the next snap while the scoreboard is still on it,
+     and where the run is. One clock for the card and the photograph. */
+  function driveModel(d) {
     const drives = d.drives || [];
     const last = drives[drives.length - 1];
-    if (!last || !dr || last.team !== dr.team) return { html: "", rz: false, replay: "" };
+    if (!last) return null;
     const all = driveRows(d, last);
-    if (!all.length) return { html: "", rz: false, replay: "" };
+    if (!all.length) return null;
     const rows = all.slice(-DRIVE_ROWS);
     const lv = d.live || {};
     const dir = rows[0].dir;
@@ -488,6 +502,15 @@
     const run = driveRun(d, `${ids[ids.length - 1]}|${nx ? nx.los : ""}`, ids);
     const seen = run.from != null ? ids.indexOf(run.from) : -1;
     const startAt = seen >= 0 ? seen + 1 : Math.max(0, rows.length - DRIVE_RUN);
+    return { last, all, rows, nx, dir, run, startAt };
+  }
+  /* The tracker for the Gamecast tab's drive card: the drive on file that
+     the scoreboard's drive belongs to, its last DRIVE_ROWS snaps. Empty
+     when no snap of it has a spot. */
+  function driveFieldHTML(d, league, dr) {
+    const md = driveModel(d);
+    if (!md || !dr || md.last.team !== dr.team) return { html: "", rz: false, replay: "" };
+    const { all, rows, nx, dir, run, startAt } = md;
     _last = { d, league, dr };
     const cols = fieldColours(d, league);
     const m = { rows, nx, startAt };
@@ -509,32 +532,375 @@
   }
   const REPLAY = `<svg class="ic" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.2 8a4.8 4.8 0 1 0 1.4-3.4"/><path d="M3 2.6v3h3"/></svg>`;
-  /* Replay redraws the field in place: the page's own redraw would come
-     round in a few seconds anyway, and the click is the module's to take
-     (no inline handler under the page's CSP, and nothing new in app.js). */
+  /* Replay redraws in place everything that runs the same clock — the
+     card's field and the photograph's drawing, or the zone and the
+     photograph's pitches — so the two start together again. The page's own
+     redraw would come round in a few seconds anyway, and the click is the
+     module's to take (no inline handler under the page's CSP). */
+  const swap = (sel, html) => {
+    const box = document.querySelector(sel);
+    if (!box || !html) return;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    const next = tmp.querySelector(sel);
+    if (next) box.replaceWith(next);
+  };
+  const reArt = () => { if (_artLast) swap("[data-gc-art]", art(_artLast.d, _artLast.league, _artLast.hit, _artLast.game)); };
   if (typeof document !== "undefined" && document.addEventListener) {
     document.addEventListener("click", (e) => {
       const z = e.target && e.target.closest ? e.target.closest("[data-gc-pz-replay]") : null;
-      if (z && _pzLast) {
-        const box = z.closest("[data-gc-pz]");
+      if (z) {
         _pzReplay = true;
-        const tmp = document.createElement("div");
-        tmp.innerHTML = zone(_pzLast);
-        if (box && tmp.firstElementChild) box.replaceWith(tmp.firstElementChild);
+        if (_pzLast) swap("[data-gc-pz]", zone(_pzLast));
+        reArt();
+        _pzReplay = false;
         return;
       }
       const b = e.target && e.target.closest ? e.target.closest("[data-gc-replay]") : null;
-      if (!b || !_last) return;
-      const card = b.closest(".gc-drive");
-      const box = card && card.querySelector("[data-gc-fd]");
-      if (!box) return;
+      if (!b) return;
       _replay = true;
-      const fresh = driveFieldHTML(_last.d, _last.league, _last.dr);
-      const tmp = document.createElement("div");
-      tmp.innerHTML = fresh.html;
-      const next = tmp.querySelector("[data-gc-fd]");
-      if (next) box.replaceWith(next);
+      if (_last) swap(".gc-drive [data-gc-fd]", driveFieldHTML(_last.d, _last.league, _last.dr).html);
+      reArt();
+      _replay = false;
     });
+  }
+
+  /* ---------------- on Ethan's photographs ----------------
+     Ethan, 2026-10-15: "are we still using all our renders I've been giving
+     you for the stadium art … All the animations should work flawlessly
+     with the stadium art and field art and shit we already have." So the
+     drive and the at-bat run on his photographs as well as on the cards,
+     on one clock with them: the field render cuts to each snap of the
+     drive the card is running, and the ballpark render throws each pitch
+     the zone is drawing, at the same moment. app.js asks for the drawing
+     (`art`) and keeps its own single play or batted ball when there is
+     none. A photograph is a night game in either theme, so what is drawn
+     on it keeps its own colours (gamecast.css, `.gc-art`).
+
+     THE FIELD'S CAMERA IS MEASURED. The render is a broadcast angle from
+     behind the offence, the ball on its own 30 under the centre. Fifteen
+     painted five-yard lines, found by their brightness down the photograph
+     (scratch: fieldcal), fit `y = A + B / (yards + C)` — the shape a lens
+     gives a flat field — pinned at the painted line the ball sits on: from
+     there to forty yards on, no drawn yard is more than 0.6 of a unit
+     (about a fifth of a yard at the line) off a painted one, so a ten-yard
+     gain ends on the painted line ten yards on. Behind the line it is 2.9
+     units a yard, straight, through the painted line five yards back. All
+     four frames share it: the away frame's lines sit within a unit of the
+     home frame's, and the college pair is the home pair's to a tenth.
+
+     IT IS THE CAMERA THAT MOVES. The players are pixels and stand where
+     they stand, so every snap is drawn from their line: the painted
+     numbers are not the field position (the strip under the photograph
+     and the card's field are), but a play's length is real — it is
+     measured against lines that really are that far apart.
+
+     Where across the field a play went is not in the file, so the ball
+     goes straight down the field from the centre. A pass rises over its
+     gain (height, not a direction); a field goal climbs to the posts in the
+     picture, a punt drops where its yards say; an incompletion and a
+     turnover hop back to the line with a cross. The next snap ends the run:
+     the line of scrimmage blue, the line to gain gold (a white goal line
+     when it is "& Goal"), the down beside the ball. */
+  const CAM = { A: 37.775, B: 2279.86, C: 29.37, los: 115.4, back: 2.9, vx: 120, ball: [117.6, 117.4],
+                qb: 131, hold: 135.7, punt: 146, posts: [119.8, 47], bar: 54.5 };
+  const artY = (yd) => (yd < 0 ? Math.min(146, CAM.los - CAM.back * yd) : Math.max(57, CAM.A + CAM.B / (yd + CAM.C)));
+  const artS = (y) => (y - CAM.A) / (CAM.los - CAM.A);                    // size, against the line of scrimmage
+  const artX = (y) => CAM.vx + (CAM.ball[0] - CAM.vx) * artS(y);          // the ball's line, to the far end
+  const sz = (y) => Math.max(0.42, Math.min(1.4, artS(y)));
+  // A line across the field: sideline to sideline (measured off the same
+  // photograph), or the picture's edge where the field runs past it.
+  const across = (y, cls) => {
+    const half = 2.952 * (y - 42.35);
+    return `<line class="${cls}" x1="${f1(Math.max(0, 120 - half))}" y1="${f1(y)}" x2="${f1(Math.min(240, 120 + half))}" y2="${f1(y)}"`
+      + ` stroke-width="${(1.15 * Math.max(0.45, artS(y))).toFixed(2)}"/>`;
+  };
+  //: A caption beside a mark: up and to the right, flipped left at the
+  //: edge, dropped below where there is no sky (app.js pbpCalloutBox's rule).
+  function chipAt(L, cw, ch) {
+    let x = L[0] + 7;
+    if (x + cw > 236) x = L[0] - cw - 7;
+    let y = L[1] - ch - 6;
+    if (y < 4) y = L[1] + 6;
+    return [Math.max(4, Math.min(236 - cw, x)), Math.max(4, Math.min(146 - ch, y))];
+  }
+  function chip(L, title, detail) {
+    const cw = Math.max(34, Math.min(110, 10 + Math.max(title.length * 3.45, detail.length * 2.75)));
+    const ch = detail ? 17 : 11;
+    const [x, y] = chipAt(L, cw, ch);
+    return `<g class="gc-art-chip"><rect x="${f1(x)}" y="${f1(y)}" width="${f1(cw)}" height="${ch}" rx="2.6"/>`
+      + `<text class="t" x="${f1(x + 4.5)}" y="${f1(y + 7.3)}">${esc(title)}</text>`
+      + (detail ? `<text class="s" x="${f1(x + 4.5)}" y="${f1(y + 13.6)}">${esc(detail)}</text>` : "") + `</g>`;
+  }
+  const rings = (L, s) => `<circle class="gc-art-mark" cx="${f1(L[0])}" cy="${f1(L[1])}" r="${f1(6.4 * s)}" stroke-width=".7" opacity=".45"/>`
+    + `<circle class="gc-art-mark" cx="${f1(L[0])}" cy="${f1(L[1])}" r="${f1(3.6 * s)}" stroke-width="1"/>`;
+  const crossAt = (L, s) => { const k = 2.4 * s; return `<path class="gc-art-x" d="M${f1(L[0] - k)} ${f1(L[1] - k)}l${f1(2 * k)} ${f1(2 * k)}m0 ${f1(-2 * k)}l${f1(-2 * k)} ${f1(2 * k)}"/>`; };
+  const artBall = (x, y, s, motion) => `<g class="gc-art-ball" transform="translate(${f1(x)} ${f1(y)}) scale(${s.toFixed(3)})">`
+    + `<circle class="glow" r="4.2"/><ellipse class="skin" rx="2.1" ry="1.6"/>${motion || ""}</g>`;
+  /* One snap on the photograph: where the ball goes first (back to the
+     passer, the holder or the punter), where it ends, the arc's control
+     point, a flag's walk after it, the line it was snapped to gain. */
+  function artPlay(r) {
+    const yd = (v) => (v - r.from) * r.dir;
+    const ytg = r.dir > 0 ? 100 - r.from : r.from;
+    const bt = beat(r), on = (y) => [artX(y), y];
+    let pre = null, to = CAM.ball, via = null;
+    if (bt.how === "fly") {
+      const posts = r.kind === "fg" || r.word === "NO GOOD";
+      pre = [CAM.ball[0], posts ? CAM.hold : CAM.punt];
+      to = posts ? (r.kind === "fg" ? CAM.posts : [CAM.posts[0], CAM.bar]) : on(artY(yd(r.fly)));
+      via = [(pre[0] + to[0]) / 2, Math.max(4, to[1] - (posts ? 43 : 45))];
+    } else if (bt.how === "hop") {
+      pre = [CAM.ball[0], CAM.qb];
+      to = [CAM.ball[0], CAM.los];
+      via = [CAM.ball[0], CAM.los - 14];
+    } else if (bt.how === "move") {
+      const g = r.kind === "td" ? ytg : yd(r.to);
+      to = on(artY(g));
+      if (r.kind !== "flag") pre = [CAM.ball[0], CAM.qb];
+      if (r.air && g > 0) via = [(CAM.ball[0] + to[0]) / 2, to[1] - Math.min(40, 18 + g)];
+    }
+    const goalToGo = r.togo != null && r.togo >= ytg;
+    return {
+      bt, pre, to, via, ytg,
+      ext: r.ext != null ? on(artY(yd(r.ext))) : null,
+      gain: r.togo != null && r.togo > 0 && !goalToGo ? artY(r.togo) : null,
+      goal: (goalToGo || r.kind === "td") && ytg <= 70 ? artY(ytg) : null,
+      words: r.down ? downWord({ down: r.down, distance: goalToGo ? 0 : r.togo }) : "",
+    };
+  }
+  function driveArt(d, league, hitRow) {
+    const md = driveModel(d);
+    if (!md) return null;
+    const lv = d.live || {};
+    // The frame app.js draws (pbpFieldHTML): the away side's ball is the
+    // away frame, anything else the home one. A drive that is not the
+    // frame's offence is not drawn over it.
+    const who = (hitRow && hitRow.team) || lv.possession || "";
+    if (md.last.team !== (who && who === d.away ? d.away : d.home)) return null;
+    const { rows, nx, dir, run, startAt } = md;
+    const plan = [], pts = [];
+    rows.forEach((r, i) => {
+      if (i < startAt) return;
+      const p = artPlay(r);
+      plan.push({ i, r, p });
+      pts.push({ x: CAM.ball[0], y: CAM.ball[1], size: 1, jump: true, hold: SNAP.hold, i, at: "snap" });
+      const lead = !p.pre ? 0 : p.bt.how === "fly" ? 0.2 : 0.16;
+      if (p.pre) pts.push({ x: p.pre[0], y: p.pre[1], size: sz(p.pre[1]), leg: lead, hold: 0, i, at: "pre" });
+      pts.push({ x: p.to[0], y: p.to[1], size: sz(p.to[1]), leg: p.bt.leg - lead, hold: p.bt.hold, via: p.via, i, at: "end" });
+      if (p.ext) pts.push({ x: p.ext[0], y: p.ext[1], size: sz(p.ext[1]), leg: EXT.leg, hold: EXT.hold, i, at: "ext" });
+    });
+    if (nx) pts.push({ x: CAM.ball[0], y: CAM.ball[1], size: 1, jump: true, hold: SNAP.hold, i: rows.length, at: "now" });
+    const T = track(pts, { elapsed: run.elapsed });
+    const moving = !T.still;
+    const k = (i, at) => pts.findIndex((q) => q.i === i && q.at === at);
+    const arrive = (i, at) => { const n = k(i, at); return n >= 0 ? T.at[n] : null; };
+    const leave = (i, at) => { const n = k(i, at); return n >= 0 ? T.go[n] : null; };
+    // Shown from t0 to t1 (seconds into the run; null, from the start or to
+    // the end), fading in and out as the camera cuts.
+    const win = (t0, t1, inner) => {
+      if (!inner || (t1 != null && T.past(t1 + 0.2))) return "";
+      const on = t0 == null || T.past(t0);
+      const a = (on ? "" : `<animate attributeName="opacity" from="0" to="1" dur="0.2s" begin="${T.begin(t0)}" fill="freeze"/>`)
+        + (t1 != null ? `<animate attributeName="opacity" to="0" dur="0.2s" begin="${T.begin(t1)}" fill="freeze"/>` : "");
+      return a ? `<g opacity="${on ? 1 : 0}">${a}${inner}</g>` : inner;
+    };
+    // The play's line along the ground, drawn behind the ball as it goes.
+    const bar = (a, b, kind, t0, t1) => {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 0.5) return "";
+      const on = moving && t0 != null && t1 != null && !T.past(t1) && kind !== "flag" && kind !== "loss";
+      const left = on ? len * Math.min(1, (t1 - Math.max(t0, T.elapsed)) / Math.max(0.01, t1 - t0)) : 0;
+      const draw = on ? ` stroke-dasharray="${f1(len)} ${f1(len + 2)}" stroke-dashoffset="${f1(left)}"` : "";
+      const anim = on ? `<animate attributeName="stroke-dashoffset" from="${f1(left)}" to="0" begin="${T.begin(t0)}" dur="${Math.max(0.05, t1 - Math.max(t0, T.elapsed)).toFixed(2)}s" fill="freeze"/>` : "";
+      const seg = (cls) => `<line class="${cls}" x1="${f1(a[0])}" y1="${f1(a[1])}" x2="${f1(b[0])}" y2="${f1(b[1])}"${draw}>${anim}</line>`;
+      return seg("gc-art-halo") + seg(`gc-art-bar ${kind}`);
+    };
+    // A play's marks: everything but the line to gain, each from when the
+    // ball gets to it (all of them at once on a drawing at rest). A cross
+    // goes over the ball, which comes to rest on it.
+    const marks = (e, show) => {
+      const { r, p, i } = e;
+      const los = [artX(CAM.los), CAM.los];
+      const t1 = arrive(i, "end"), lastAt = p.ext ? arrive(i, "ext") : t1;
+      let out = "", over = "";
+      if (p.bt.how === "fly") {
+        const from = p.pre || CAM.ball;
+        out += show(t1, `<path class="gc-art-kick" d="M${f1(from[0])} ${f1(from[1])}Q${f1(p.via[0])} ${f1(p.via[1])} ${f1(p.to[0])} ${f1(p.to[1])}"/>`)
+          + (r.word === "NO GOOD" ? "" : show(t1, rings(p.to, sz(p.to[1]))));
+        if (r.word === "NO GOOD") over += show(t1, crossAt(p.to, 0.8));
+      } else if (p.bt.how === "hop") {
+        over += show(t1, crossAt(p.to, 1));
+      } else if (p.bt.how === "move") {
+        // From the line (or the snap, for a flag) to where the play ended;
+        // drawn as the ball crosses the line, or whole on arrival for a loss.
+        const a = r.kind === "flag" ? CAM.ball : los;
+        const t0 = leave(i, "end");
+        const cross = t0 != null && t1 != null && p.pre ? t0 + (t1 - t0) * Math.max(0, Math.min(1, (p.pre[1] - CAM.los) / Math.max(1, p.pre[1] - p.to[1]))) : t0;
+        out += show(r.kind === "flag" ? t0 : r.kind === "loss" ? t1 : cross, bar(a, p.to, r.kind, cross, t1))
+          + show(t1, rings(p.to, sz(p.to[1])));
+      }
+      if (p.ext) {
+        out += show(leave(i, "ext"), `<line class="gc-art-bar flag" x1="${f1(p.to[0])}" y1="${f1(p.to[1])}" x2="${f1(p.ext[0])}" y2="${f1(p.ext[1])}"/>`)
+          + show(arrive(i, "ext"), `<circle class="gc-art-flag" cx="${f1(p.ext[0])}" cy="${f1(p.ext[1])}" r="${f1(1.6 * sz(p.ext[1]))}"/>`);
+      }
+      out += show(lastAt, chip(p.ext || p.to, r.label, p.words));
+      return { out, over };
+    };
+    let body = across(CAM.los, "gc-art-los"), top = "";
+    const nowAt = nx ? leave(rows.length, "now") : null;
+    if (moving) {
+      plan.forEach((e, j) => {
+        // From the moment the camera cuts to this snap to the next cut.
+        const tIn = j ? leave(e.i, "snap") + 0.21 : null;
+        const nextGo = plan[j + 1] ? leave(plan[j + 1].i, "snap") : nowAt;
+        // The last snap of a drive that is over keeps its goal line when it
+        // scored, and lets its line to gain go: that line is spent.
+        const ends = nextGo == null && j === plan.length - 1, kept = ends && e.r.kind === "td";
+        const gain = e.p.gain != null ? across(e.p.gain, "gc-art-gain") : "", goal = e.p.goal != null ? across(e.p.goal, "gc-art-goal") : "";
+        const m = marks(e, (t, inner) => win(t, null, inner));
+        body += win(tIn, nextGo != null ? nextGo : ends ? T.dur : null, kept ? gain : gain + goal) + (kept ? win(tIn, null, goal) : "");
+        body += win(tIn, nextGo, `<g class="gc-art-play ${e.r.kind}">${m.out}</g>`);
+        if (m.over) top += win(tIn, nextGo, `<g class="gc-art-play ${e.r.kind}">${m.over}</g>`);
+      });
+    } else if (!nx && rows.length) {
+      // At rest after a drive that ended: its last play, as it finished.
+      const e = { i: rows.length - 1, r: rows[rows.length - 1], p: artPlay(rows[rows.length - 1]) };
+      const m = marks(e, (t, inner) => inner);
+      body += (e.p.goal != null && e.r.kind === "td" ? across(e.p.goal, "gc-art-goal") : "")
+        + `<g class="gc-art-play ${e.r.kind}">${m.out}</g>`;
+      if (m.over) top = `<g class="gc-art-play ${e.r.kind}">${m.over}</g>`;
+    }
+    let rest;
+    if (nx) {
+      const ytg = dir > 0 ? 100 - nx.los : nx.los;
+      const rz = ytg <= 20;
+      const lineY = nx.goal ? (ytg <= 70 ? artY(ytg) : null) : nx.gain != null ? artY(Math.abs(nx.gain - nx.los)) : null;
+      const lines = lineY == null ? "" : across(lineY, nx.goal ? "gc-art-goal" : "gc-art-gain");
+      const words = [rz ? "Red zone" : "", spotWord(d, nx.los)].filter(Boolean).join(" · ");
+      // The down rides on the line it is going for, as a broadcast's does.
+      const now = `${lines}<g class="gc-art-play now${rz ? " rz" : ""}">${chip([CAM.ball[0], lineY != null ? lineY : CAM.los], nx.words || "Next snap", words)}</g>`
+        + `<circle class="gc-art-ring" cx="${f1(CAM.ball[0])}" cy="${f1(CAM.ball[1])}" r="3.4"/>`;
+      body += moving ? win(nowAt + 0.21, null, now) : now;
+      rest = [CAM.ball[0], CAM.ball[1], 1];
+    } else {
+      const p = artPlay(rows[rows.length - 1]), at = p.ext || p.to;
+      rest = [at[0], at[1], sz(at[1])];
+    }
+    // Replay on the photograph too: the card's button is a tab away.
+    return `<svg class="gc-art" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true" data-gc-art>`
+      + `${body}${artBall(rest[0], rest[1], rest[2], moving ? T.motion : "")}${top}</svg>`
+      + `<button type="button" class="gc-replay gc-art-replay" data-gc-replay aria-label="Replay the drive">${REPLAY}</button>`;
+  }
+
+  /* THE BALLPARK'S PITCHES. The same photograph's points app.js measured
+     for the batted ball (PBP_PHOTO), and two more read off it the same way
+     (scratch: fieldcal/grid_park_zoom.png): the pitcher's hand over the
+     mound and the plate between the batter's boxes. A foot across is 2.73
+     units there — the boxes' inside lines are 29 inches apart and 6.6 units
+     — and a foot up 2.1, off the batter's stance; so every pitch the zone
+     below draws crosses the plate in the picture where it crossed it in the
+     game, the strike zone the batter's own. A pitch the cameras did not
+     track is not thrown (it has no place to land). After the at-bat, a ball
+     in play flies on from the plate the way app.js draws one
+     (pbpFlight), and an earlier batted ball stays faint under the pitches
+     the tiles below still describe. */
+  const PARK = { hand: [119.5, 95.5], plate: [119.5, 131], fx: 2.73, fz: 2.1 };
+  const parkPt = (p) => [PARK.plate[0] + Math.max(-2.5, Math.min(2.5, Number(p.px))) * PARK.fx,
+    PARK.plate[1] - Math.max(-0.5, Math.min(5.5, Number(p.pz))) * PARK.fz];
+  function pitchArt(d, hitRow, game) {
+    const lv = d.live || {};
+    const ev = (d.events || []).filter((r) => r && (r.kind === "pitch" || r.kind === "atbat"));
+    if (lv.state !== "live" || !ev.length) return null;
+    const ab = ev[ev.length - 1].at_bat;
+    const ps = ev.filter((r) => r.kind === "pitch" && r.at_bat === ab);
+    if (!ps.length) return null;
+    const done = ev.find((r) => r.kind === "atbat" && r.at_bat === ab);
+    const run = pitchRun(d, ab, ps.length);
+    const calm = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const FLY = 0.42, GAP = 0.75;                        // the zone's own beat
+    const t = (s) => `${Math.max(0, s).toFixed(2)}s`;
+    const pop = (s, inner) => (s != null && s > 0 ? `<g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.12s" begin="${t(s)}" fill="freeze"/>${inner}</g>` : inner);
+    // Each located pitch, and when (from now) it leaves the hand: the zone's
+    // schedule exactly, so the two land together.
+    let n = 0;
+    const thrown = ps.map((p, i) => {
+      const at = p.px != null && p.pz != null ? parkPt(p) : null;
+      const b = at && i >= run.from && !calm ? (n++) * GAP + 0.15 - run.elapsed : null;
+      return { p, i, at, b: b != null && b > 0 ? b : null, o: pzOutcome(p.code) };
+    });
+    const tops = ps.map((p) => (p.sz || [])[0]).filter((v) => v != null), bots = ps.map((p) => (p.sz || [])[1]).filter((v) => v != null);
+    const top = tops.length ? tops.reduce((a, b) => a + b, 0) / tops.length : 3.4;
+    const bot = bots.length ? bots.reduce((a, b) => a + b, 0) / bots.length : 1.6;
+    const z0 = parkPt({ px: -PZ_HALF, pz: top }), z1 = parkPt({ px: PZ_HALF, pz: bot });
+    let body = thrown.some((q) => q.at) ? `<rect class="gc-art-zone" x="${f1(z0[0])}" y="${f1(z0[1])}" width="${f1(z1[0] - z0[0])}" height="${f1(z1[1] - z0[1])}"/>` : "";
+    const fly = thrown.filter((q) => q.b != null);
+    thrown.forEach((q) => {
+      if (!q.at) return;
+      const [x, y] = q.at, h = PARK.hand;
+      if (q.b != null) {
+        const len = Math.hypot(x - h[0], y - h[1]);
+        body += `<line class="gc-art-trail" x1="${f1(h[0])}" y1="${f1(h[1])}" x2="${f1(x)}" y2="${f1(y)}" opacity="0" stroke-dasharray="${f1(len)} ${f1(len + 2)}" stroke-dashoffset="${f1(len)}">`
+          + `<animate attributeName="stroke-dashoffset" from="${f1(len)}" to="0" begin="${t(q.b)}" dur="${FLY}s" fill="freeze"/>`
+          + `<animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;0.06;0.65;1" begin="${t(q.b)}" dur="${(FLY + 0.5).toFixed(2)}s" fill="freeze"/></line>`
+          + `<circle class="gc-art-pitch" cx="${f1(x)}" cy="${f1(y)}" r="1.7" opacity="0">`
+          + `<animate attributeName="cx" from="${f1(h[0])}" to="${f1(x)}" begin="${t(q.b)}" dur="${FLY}s" fill="freeze"/>`
+          + `<animate attributeName="cy" from="${f1(h[1])}" to="${f1(y)}" begin="${t(q.b)}" dur="${FLY}s" fill="freeze"/>`
+          + `<animate attributeName="r" from="0.9" to="1.7" begin="${t(q.b)}" dur="${FLY}s" fill="freeze"/>`
+          + `<animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.05;0.8;1" begin="${t(q.b)}" dur="${(FLY + 0.12).toFixed(2)}s" fill="freeze"/></circle>`;
+      }
+      body += pop(q.b != null ? q.b + FLY : null, `<circle class="gc-art-dot ${q.o}" cx="${f1(x)}" cy="${f1(y)}" r="1.25"/>`);
+    });
+    // The caption: each pitch as it lands, until the next one does; the
+    // newest (and how the at-bat ended) last, and kept.
+    const last = thrown[thrown.length - 1], lastP = last.p;
+    const words = (p) => [p.speed != null ? `${Math.round(Number(p.speed))} mph` : "", p.pitch || "",
+      p.balls != null && p.strikes != null ? `${p.balls}-${p.strikes}` : ""].filter(Boolean).join(" · ");
+    const at = (q) => q.at || [PARK.plate[0], PARK.plate[1] - 2.5 * PARK.fz];
+    const endAt = last.b != null ? last.b + FLY : fly.length ? fly[fly.length - 1].b + FLY : null;
+    fly.forEach((q, j) => {
+      if (q === last) return;
+      const until = j + 1 < fly.length ? fly[j + 1].b + FLY : endAt;
+      body += `<g class="gc-art-play pz ${q.o}" opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.12s" begin="${t(q.b + FLY)}" fill="freeze"/>`
+        + `<animate attributeName="opacity" to="0" dur="0.12s" begin="${t(until)}" fill="freeze"/>${chip(at(q), `${q.i + 1} · ${lastWord(q.p)}`, words(q.p))}</g>`;
+    });
+    const endTitle = done && done.event ? String(done.event) : `${last.i + 1} · ${lastWord(lastP)}`;
+    body += pop(endAt, `<g class="gc-art-play pz ${done && done.scoring ? "score" : last.o}">${chip(at(last), endTitle, done ? `Pitch ${last.i + 1} · ${words(lastP)}` : words(lastP))}</g>`);
+    // The ball in play, on from the plate; or the last one hit, faint.
+    const park = (game || {}).park;
+    const flight = (hit, from, faint) => {
+      const f = typeof pbpFlight === "function" ? pbpFlight(hit, park, { photo: true }) : null;
+      if (!f) return "";
+      const path = `M${f1(f.H[0])} ${f1(f.H[1])}Q${f1(f.C[0])} ${f1(f.C[1])} ${f1(f.L[0])} ${f1(f.L[1])}`;
+      if (faint) return `<g class="gc-art-old"><path class="gc-art-arc" d="${path}"/><circle class="gc-art-mark" cx="${f1(f.L[0])}" cy="${f1(f.L[1])}" r="3.6" stroke-width="1"/></g>`;
+      const title = (typeof PBP_TRAJ === "object" && PBP_TRAJ[hit.trajectory]) || String(hit.trajectory || "").replace(/_/g, " ");
+      const detail = [hit.launch_speed != null ? `${Number(hit.launch_speed).toFixed(1)} MPH` : "", hit.distance != null ? `${Math.round(hit.distance)} FT` : ""].filter(Boolean).join(" · ");
+      const end = rings(f.L, 1) + chip(f.L, title || "In play", detail);
+      if (from == null) return `<path class="gc-art-arc" d="${path}"/>${end}<circle class="gc-art-pitch" cx="${f1(f.L[0])}" cy="${f1(f.L[1])}" r="1.7"/>`;
+      const id = "gcarc" + Math.random().toString(36).slice(2, 7);
+      return `<path id="${id}" class="gc-art-arc" d="${path}" stroke-dasharray="${f1(f.len)} ${f1(f.len + 2)}" stroke-dashoffset="${f1(f.len)}">`
+        + `<animate attributeName="stroke-dashoffset" from="${f1(f.len)}" to="0" begin="${t(from)}" dur="1.2s" fill="freeze"/></path>`
+        + `<circle class="gc-art-pitch" r="1.7" opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.05s" begin="${t(from)}" fill="freeze"/>`
+        + `<animateMotion begin="${t(from)}" dur="1.2s" fill="freeze"><mpath href="#${id}"/></animateMotion></circle>`
+        + pop(from + 1.2, end);
+    };
+    if (done && done.hit) body += flight(done.hit, endAt != null ? endAt + 0.1 : null, false);
+    else if (hitRow && hitRow.hit && hitRow.at_bat !== ab) body = flight(hitRow.hit, null, true) + body;
+    return `<svg class="gc-art" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true" data-gc-art>${body}</svg>`
+      + `<button type="button" class="gc-replay gc-art-replay" data-gc-pz-replay aria-label="Replay the at-bat">${REPLAY}</button>`;
+  }
+  const lastWord = (p) => p.call || PZ_WORDS[pzOutcome(p.code)];
+
+  /* What app.js draws over the render it is showing: the drive on the
+     field, the at-bat in the ballpark — or null, and it draws its own. */
+  let _artLast = null;
+  function art(d, league, hitRow, game) {
+    _artLast = { d, league, hit: hitRow, game };
+    try {
+      if (FOOTBALL.has(league)) return driveArt(d, league, hitRow);
+      if (league === "mlb") return pitchArt(d, hitRow, game);
+    } catch (e) { if (typeof console !== "undefined") console.error("gamecast art", e); }
+    return null;
   }
 
   /* ---------------- the whole game, a drive a row ----------------
@@ -1060,23 +1426,30 @@
      attribute as the mark sets off on each leg (a glow in the colour of
      the side moving it) and settles on the end value. A reader who asked
      for less motion, or a run already over, gets the end state with no
-     animation (`still`), and the page draws every mark where it is. */
+     animation (`still`), and the page draws every mark where it is.
+
+     `size` on a point is the mark's size there, against its drawn size: on a
+     photograph the ball is smaller the further down the field it is, and
+     a point with one gives the run a scale as well as a place (an arc's
+     size goes evenly from one end to the other, since its rise is height,
+     not distance from the camera). */
   function track(points, opts) {
     const o = Object.assign({ speed: 900, min: 0.35, max: 1.1, hold: 0.3, fade: 0.2, elapsed: 0 }, opts || {});
     const pts = (points || []).filter((p) => p && isFinite(p.x) && isFinite(p.y));
     const calm = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const at = [], go = [], keys = [];                       // keys: [seconds, x, y, opacity]
+    const sized = pts.some((p) => p.size != null), S = (p) => (p.size != null ? p.size : 1);
+    const at = [], go = [], keys = [];                       // keys: [seconds, x, y, opacity, size]
     let t = 0;
     pts.forEach((p, i) => {
       if (!i) {
-        keys.push([0, p.x, p.y, 0], [o.fade, p.x, p.y, 1]);
+        keys.push([0, p.x, p.y, 0, S(p)], [o.fade, p.x, p.y, 1, S(p)]);
         t = o.fade;
         go.push(0); at.push(0);
       } else {
         const q = pts[i - 1];
         go.push(t);
         if (p.jump) {
-          keys.push([t + o.fade, q.x, q.y, 0], [t + o.fade + 0.01, p.x, p.y, 0], [t + 2 * o.fade + 0.01, p.x, p.y, 1]);
+          keys.push([t + o.fade, q.x, q.y, 0, S(q)], [t + o.fade + 0.01, p.x, p.y, 0, S(p)], [t + 2 * o.fade + 0.01, p.x, p.y, 1, S(p)]);
           t += 2 * o.fade + 0.01;
         } else {
           const leg = p.leg != null ? p.leg : Math.min(o.max, Math.max(o.min, Math.hypot(p.x - q.x, p.y - q.y) / o.speed));
@@ -1084,16 +1457,17 @@
             // An arc, as six short glides along the curve.
             for (let j = 1; j < 6; j++) {
               const f = j / 6, u = 1 - f;
-              keys.push([t + leg * f, u * u * q.x + 2 * u * f * p.via[0] + f * f * p.x, u * u * q.y + 2 * u * f * p.via[1] + f * f * p.y, 1]);
+              keys.push([t + leg * f, u * u * q.x + 2 * u * f * p.via[0] + f * f * p.x, u * u * q.y + 2 * u * f * p.via[1] + f * f * p.y, 1,
+                S(q) + (S(p) - S(q)) * f]);
             }
           }
           t += leg;
-          keys.push([t, p.x, p.y, 1]);
+          keys.push([t, p.x, p.y, 1, S(p)]);
         }
         at.push(t);
       }
       const hold = p.hold != null ? p.hold : o.hold;
-      if (hold > 0) { t += hold; keys.push([t, p.x, p.y, 1]); }
+      if (hold > 0) { t += hold; keys.push([t, p.x, p.y, 1, S(p)]); }
     });
     const dur = t, el = Math.max(0, Number(o.elapsed) || 0), left = dur - el;
     const past = (s) => s <= el;
@@ -1116,11 +1490,14 @@
     // From now on: where the mark is at this moment, then every key to come.
     const k0 = keys.findIndex((k) => k[0] > el);
     const a = keys[k0 - 1], b = keys[k0], f = (el - a[0]) / (b[0] - a[0]);
-    const rest = [[0, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f]]
-      .concat(keys.slice(k0).map(([s2, x, y, op]) => [s2 - el, x, y, op]));
+    const rest = [[0, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f, a[4] + (b[4] - a[4]) * f]]
+      .concat(keys.slice(k0).map(([s2, x, y, op, sz]) => [s2 - el, x, y, op, sz]));
     const timing = `keyTimes="${rest.map(([s2]) => (s2 / left).toFixed(4)).join(";")}" dur="${left.toFixed(2)}s" begin="0s" fill="freeze"`;
+    // The size rides on the place (`additive="sum"`: scaled where it stands).
     const motion = `<animateTransform attributeName="transform" type="translate" calcMode="linear" values="${
       rest.map(([, x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(";")}" ${timing}/>`
+      + (sized ? `<animateTransform attributeName="transform" type="scale" additive="sum" calcMode="linear" values="${
+        rest.map((k) => k[4].toFixed(3)).join(";")}" ${timing}/>` : "")
       + `<animate attributeName="opacity" calcMode="linear" values="${rest.map((k) => +k[3].toFixed(3)).join(";")}" ${timing}/>`;
     return { at, go, dur, left, elapsed: el, still: false, motion, begin, past, steps };
   }
@@ -1131,6 +1508,8 @@
     track,
     // Baseball's at-bat, pitch by pitch, under the MLB page's at-bat card.
     zone,
+    // The drive and the at-bat on the photographs (app.js pbpParkHTML).
+    art,
     // Exposed for the tests and for Ask: the readers, not the markup.
     spotWord, playerLine, leaderOf, currentDrive, newestPlay, lineFor, faceURL, driveRows, nextSnap,
   };

@@ -255,7 +255,14 @@ a bar, the ball running it to the line of scrimmage, the line to gain, the
 red zone) with the whole game a drive a row on the Play-by-play tab, and a
 baseball game draws the at-bat in the strike zone, every pitch where it
 crossed, the newest flying in; Replay runs each again (step 113; BJ asks
-the game files whether they carry what the trackers draw).
+the game files whether they carry what the trackers draw). And on your
+renders ("are we still using all our renders … All the animations should
+work flawlessly with the stadium art and field art"), they all are, and the
+drive and the at-bat now run on the photographs themselves, on the cards'
+clock: the field render cuts to each snap through a camera measured off its
+own painted yard lines, the ballpark throws each pitch from the pitcher's
+hand to the plate where it crossed, and a ball in play flies on to where it
+landed (step 114; BJ covers it).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -293,13 +300,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Live tracking: the puck and the ball run, football's drive on the field, baseball's at-bat in the zone`
+**A. The box has today's code.** The first line should end `The drive and the at-bat on your renders: the field photo's measured camera, one clock with the cards`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 930a97bb HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 2a20dbbf HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -5094,6 +5101,70 @@ first). Paste back anything that prints an error or looks off.
     rows and card, the drive chart, the pitch rows and the zone, the styles;
     the browser one walks a football game and a baseball game at 390 and
     1280 under `QB_BROWSER_TESTS=1`).
+114. **The drive and the at-bat on your renders** (2026-10-15: "Ok are we
+    still using all our renders I've been giving you for the stadium art and
+    shit. All the animations should work flawlessly with the stadium art and
+    field art and shit we already have."; BJ). Every render is in use: the
+    four field frames (pro and college, the home side's ball and the away
+    side's), the ballpark, the arena and the rink. The puck and the ball
+    already ran on the rink and the arena; now FOOTBALL runs on the field
+    photograph too, the same drive the card under it is running and on the
+    same clock, so every play ends on both at the same moment. The camera
+    cuts to each snap; the ball goes back to the passer (the holder, the
+    punter) and up the field by the yards the play gained, a pass rising over
+    its gain, a sack or a loss going behind the line, a flag sliding, an
+    incompletion or a turnover hopping back to the line with a cross, a field
+    goal climbing through the posts in the picture, a punt dropping where its
+    yards say. Each snap draws its own line to gain in gold (a white goal line
+    on "& Goal" and on a touchdown) and each play its words where it ended
+    (`+18 PASS · 2nd & 6`); the run ends on the next snap, the line of
+    scrimmage blue under the ball, the line to gain gold with the down on it,
+    red inside the twenty. Gains are white on the photograph, not the
+    offence's colour: a red side's gain would read as a loss. Replay sits on
+    the photograph's corner and runs the photograph and the card together.
+    THE CAMERA IS MEASURED: fifteen painted five-yard lines, found by their
+    brightness down the photograph, fit the lens's curve pinned at the
+    painted 30 the ball sits on, every line from there to forty yards on
+    within 0.6 of a unit, so a ten-yard gain ends on the painted line ten
+    yards on; all four frames share it. The first fit (three points by eye,
+    2026-09-07) had put the line of scrimmage at the defensive line's feet,
+    seven units (two and a half yards) up the picture; app.js's own single
+    play, drawn when there is no drive to run (a kickoff, or before the
+    module loads), now uses the same camera. The card's line of scrimmage is
+    blue like the photograph's (it was white), its drop to the next snap now
+    takes the photograph's cut (0.41 s and a 0.12 s hold), and a turnover
+    hops like an incompletion. BASEBALL runs on the ballpark photograph: each
+    tracked pitch of the at-bat leaves the pitcher's hand in the picture and
+    crosses the plate where it crossed in the game (2.73 units a foot across,
+    off the batter's boxes; 2.1 a foot up, off his stance), at the moment the
+    zone below lands it, with a trail, a mark in the pitch chart's colours,
+    and the call, speed, type and count as it lands; the at-bat's result
+    last. A ball in play then flies on from the plate to where it landed
+    (app.js's batted-ball path and callout), and the last ball in play from
+    an earlier at-bat stays, faint, under the new at-bat's pitches. Replay on
+    the photograph runs the zone with it. A photograph is a night game in
+    either theme, so what is drawn on it keeps its own colours in light mode
+    too; a phone that asks for less motion gets the end state and no Replay.
+    app.js makes one guarded call (`QBGamecast.art`) and keeps its own single
+    play or batted ball when the module has nothing to draw: 494.883 KB of
+    495 (+28 bytes), first visit 611.803 of 612; no budget moved. ONE TEST
+    PIN CHANGED: `tests/test_football_field.py`'s "the field maps yards the
+    way the render was measured" pinned the old camera (line of scrimmage at
+    y 108, the goal line 62, the far end 58); it now pins the painted lines
+    themselves (the 30 at 115.4, the 35, 40, 45 and 50 within 0.6 of a unit,
+    the goal line 61, the far end 57). No test was removed.
+    `tests/test_the_live_trackers.py` has 25 checks now: the mark's size on
+    the timeline; the drive on the photograph landing every play at the same
+    moment as the card; one camera in both files, on the painted lines;
+    app.js's own play when there is no drive, another side's frame or another
+    sport; a touchdown keeping its goal line and a field goal through the
+    posts; each pitch leaving the hand when the zone's does; a ball in play
+    after the last pitch, an earlier one faint; app.js's call; the styles.
+    The browser walk now checks the drawing sits exactly on the photograph at
+    390 and 1280 and that its Replay runs both. Nothing to run on the box (BJ
+    already asks the files for what this draws): open a football game and a
+    baseball game from the Live tab, on the phone and the computer, and tell
+    me how it looks.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

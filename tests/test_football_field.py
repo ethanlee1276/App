@@ -188,17 +188,22 @@ def test_the_college_frames_are_not_the_pro_ones_renamed():
 
 
 def test_the_field_maps_yards_the_way_the_render_was_measured():
-    """The three anchors read off the grid: the line the linemen stand
-    on, midfield, and the goal line."""
+    """The painted lines read off the photograph. Re-measured 2026-10-15:
+    the first fit took the defensive line's feet (y 108) as the line of
+    scrimmage; fifteen painted five-yard lines, found by their brightness,
+    put the ball on the painted 30 at y 115.4 — the 35 at 103.9, the 40 at
+    95.4, the 45 at 88.6, midfield 83.4 — and the goal line about 61. Every
+    drawn yard within 0.6 of a unit of the line painted there."""
     got = _node("""
       const at = {};
-      for (const d of [0, 5, 10, 20, 40, 70, 100]) at[d] = pbpFieldY(d);
+      for (const d of [0, 5, 10, 15, 20, 40, 70, 100]) at[d] = pbpFieldY(d);
       console.log(JSON.stringify(at));""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert abs(got["0"] - 108) < 0.05, got      # line of scrimmage
-    assert abs(got["20"] - 84) < 0.05, got      # midfield
-    assert abs(got["70"] - 62) < 0.05, got      # the goal line
+    assert abs(got["0"] - 115.4) < 0.05, got    # line of scrimmage: the ball on the painted 30
+    for yards, painted in ((5, 103.9), (10, 95.4), (15, 88.6), (20, 83.4)):
+        assert abs(got[str(yards)] - painted) < 0.6, (yards, got)
+    assert abs(got["70"] - 61) < 0.5, got       # the goal line
     # Monotone downfield, and compressing — a lens, not a ruler.
     ys = [got[str(d)] for d in (0, 5, 10, 20, 40, 70, 100)]
     assert all(b < a for a, b in zip(ys, ys[1:])), ys
@@ -208,8 +213,8 @@ def test_the_field_maps_yards_the_way_the_render_was_measured():
     near = (got["0"] - got["5"]) / 5
     far = (got["40"] - got["70"]) / 30
     assert near > far * 3, (near, far)
-    # Nothing runs off the back of the picture.
-    assert got["100"] >= 58 - 0.01, got
+    # Nothing runs off the back of the picture: four units past the goal line.
+    assert got["100"] >= 57 - 0.01, got
 
 
 def test_a_play_that_lost_yards_draws_no_flight():

@@ -103,10 +103,13 @@
 /* ---------------- the drive on the field (2026-10-15) ----------------
    The site's own football field (the carry and kicker charts): dark turf,
    a mowing stripe every ten yards, the end zones in each side's colour.
-   The line of scrimmage is white and the line to gain gold, the way a
-   broadcast draws them; the plays are bars in the offence's colour, a
+   The line of scrimmage is blue and the line to gain gold, the way a
+   broadcast draws them (the photograph above draws them the same); the
+   plays are bars in the offence's colour, a
    loss red, a flag amber and dashed, a score gold. Two drawings ride in
    the card and it shows the one that fits it. */
+:root { --gc-los: oklch(0.72 0.15 248); }
+:root[data-theme="light"] { --gc-los: oklch(0.55 0.17 255); }
 .gc-drive-end { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .gc-drive-end .gc-q { margin-left: 0; }
 .gc-rz { padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
@@ -137,10 +140,10 @@
 .gc-fd-num { fill: var(--text-mute); font: 600 12px var(--font-mono); text-anchor: middle; }
 .narrow .gc-fd-num { font-size: 10px; }
 .gc-fd-rz { fill: var(--bad); fill-opacity: .13; }
-.gc-fd-los { stroke: var(--text); stroke-width: 2.2; }
+.gc-fd-los { stroke: var(--gc-los); stroke-width: 2.2; }
 .gc-fd-gain { stroke: var(--brand); stroke-width: 2.2; }
 .gc-fd-lh { stroke-width: 9; opacity: .14; }
-.gc-fd-lh.los { stroke: var(--text); }
+.gc-fd-lh.los { stroke: var(--gc-los); }
 .gc-fd-lh.gain { stroke: var(--brand); }
 .gc-fd-snap { fill: var(--text); fill-opacity: .55; }
 .gc-fd-halo { stroke: var(--bg); stroke-opacity: .6; stroke-width: 11; stroke-linecap: round; }
@@ -181,6 +184,7 @@
 .gc-fd-key .los, .gc-fd-key .gain, .gc-dc-key { display: inline-flex; align-items: center; gap: 6px; }
 .gc-fd-key .los::before, .gc-fd-key .gain::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--text); }
 .gc-fd-key .gain::before { background: var(--brand); }
+.gc-fd-key .los::before { background: var(--gc-los); }
 
 /* the whole game, a drive a row */
 .gc-chart { margin-bottom: 10px; }
@@ -272,3 +276,54 @@
   .gc-pz-body { grid-template-columns: minmax(0, 1fr); }
   .gc-pz-svg { max-width: 260px; margin: 0 auto; }
 }
+
+/* ---------------- on Ethan's photographs (2026-10-15) ----------------
+   The drive on the field render and the at-bat in the ballpark, drawn by
+   js/gamecast.js `art` over app.js's `.pbp-park`. A photograph is a night
+   game in either theme, so these colours are the drawing's own and do not
+   re-tint with the page: the broadcast's blue line and gold line, white
+   for the ball and the captions, the pitch chart's colours for a pitch.
+   Widths that follow the camera's depth ride on the lines themselves. */
+.gc-art { --art-ink: oklch(0.96 0.012 270); --art-dim: oklch(0.78 0.03 270); --art-gold: oklch(0.87 0.16 88);
+  --art-blue: oklch(0.72 0.15 248); --art-red: oklch(0.7 0.19 25); --art-amber: oklch(0.8 0.15 65);
+  --art-green: oklch(0.8 0.16 150); --art-shade: oklch(0.15 0.02 270); --art-ball: oklch(0.97 0.03 95);
+  pointer-events: none; }
+.gc-art-los { stroke: var(--art-blue); stroke-opacity: .92; }
+.gc-art-gain { stroke: var(--art-gold); stroke-opacity: .92; }
+.gc-art-goal { stroke: var(--art-ink); stroke-opacity: .9; }
+/* A gain is white, never the offence's colour: on a red side's drive a red
+   bar would read as a loss. */
+.gc-art-play { --c: var(--art-ink); }
+.gc-art-play.td, .gc-art-play.fg, .gc-art-play.now, .gc-art-play.score { --c: var(--art-gold); }
+.gc-art-play.loss, .gc-art-play.to, .gc-art-play.rz, .gc-art-play.pz.w { --c: var(--art-red); }
+.gc-art-play.flag, .gc-art-play.pz.c { --c: var(--art-amber); }
+.gc-art-play.inc, .gc-art-play.kick, .gc-art-play.pz.f, .gc-art-play.pz.b { --c: var(--art-dim); }
+.gc-art-play.pz.x { --c: var(--art-green); }
+.gc-art-halo { stroke: var(--art-shade); stroke-opacity: .5; stroke-width: 2.8; stroke-linecap: round; }
+.gc-art-bar { stroke: var(--c); stroke-width: 1.3; stroke-linecap: round; }
+.gc-art-bar.flag { stroke: var(--art-amber); stroke-dasharray: 2.4 1.8; stroke-linecap: butt; }
+.gc-art-mark { fill: none; stroke: var(--c, var(--art-gold)); }
+.gc-art-x { fill: none; stroke: var(--c); stroke-width: 1.1; stroke-linecap: round; }
+.gc-art-kick { fill: none; stroke: var(--art-ink); stroke-opacity: .65; stroke-width: .7; stroke-dasharray: 2 2; }
+.gc-art-flag { fill: var(--art-amber); stroke: var(--art-shade); stroke-width: .4; }
+.gc-art-chip rect { fill: var(--art-shade); fill-opacity: .88; stroke: var(--c, var(--art-gold)); stroke-opacity: .7; stroke-width: .5; }
+.gc-art-chip .t { fill: var(--c, var(--art-gold)); font: 700 5.6px var(--font-mono); }
+.gc-art-chip .s { fill: var(--art-ink); font: 600 4.7px var(--font-sans); }
+.gc-art-ball .glow { fill: var(--art-gold); opacity: .28; }
+.gc-art-ball .skin { fill: var(--art-ball); stroke: var(--art-shade); stroke-opacity: .5; stroke-width: .35; }
+.gc-art-ring { fill: none; stroke: var(--art-gold); stroke-width: .7; transform-box: fill-box; transform-origin: center;
+  animation: gc-fd-ring 1.8s var(--ease-out) infinite; }
+@media (prefers-reduced-motion: reduce) { .gc-art-ring { animation: none; opacity: 0; } }
+.gc-art-zone { fill: none; stroke: var(--art-ink); stroke-opacity: .6; stroke-width: .35; }
+.gc-art-trail { stroke: var(--art-ink); stroke-width: .7; stroke-linecap: round; }
+.gc-art-pitch { fill: var(--art-ball); }
+.gc-art-dot { stroke: var(--art-shade); stroke-width: .3; }
+.gc-art-dot.c { fill: var(--art-amber); }
+.gc-art-dot.w { fill: var(--art-red); }
+.gc-art-dot.x { fill: var(--art-green); }
+.gc-art-dot.f { fill: var(--art-dim); }
+.gc-art-dot.b { fill: none; stroke: var(--art-ink); stroke-width: .45; }
+.gc-art-arc { fill: none; stroke: var(--art-gold); stroke-width: 1.6; stroke-linecap: round; opacity: .95; }
+.gc-art-old { opacity: .45; }
+/* Replay on the photograph's corner, over the sky. */
+.pbp-park > .gc-art-replay { position: absolute; top: 8px; right: 8px; z-index: 1; }

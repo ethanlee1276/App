@@ -21,6 +21,11 @@ last shots on the basketball page (their own tests pin those pages). Here:
   * baseball's at-bat — the league's own pitch tracking on each pitch row,
     and the strike zone with every pitch of the at-bat where it crossed,
     numbered and coloured by what came of it, the newest flying in;
+  * the same runs on Ethan's photographs (his question the same day: "are we
+    still using all our renders … All the animations should work flawlessly
+    with the stadium art and field art"), on the cards' clock: the drive on
+    the field render through a camera measured off its painted lines, the
+    at-bat on the ballpark render from the pitcher's hand to the plate;
   * the stylesheets' rules, and the page in a browser (opt-in).
 
 Run directly: `python3 tests/test_the_live_trackers.py`
@@ -383,6 +388,155 @@ def test_the_mlb_page_loads_the_module_and_draws_the_zone_under_the_at_bat():
     assert "zone," in GC.split("window.QBGamecast = {")[1]
 
 
+# --- on Ethan's photographs -------------------------------------------------------------
+# Ethan, 2026-10-15: "are we still using all our renders I've been giving you for
+# the stadium art … All the animations should work flawlessly with the stadium art
+# and field art and shit we already have." The drive runs on the field render and
+# the at-bat on the ballpark render, on the same clock as the cards under them.
+def _pop_at(svg, label):
+    """When `label` shows: the last `begin` written before it (its fade-in)."""
+    i = svg.index(f">{label}<")
+    return float(re.findall(r'begin="([\d.]+)s"', svg[:i])[-1])
+
+
+def _art(d, hit, league="nfl", setup=""):
+    return _node(f"""{setup} const d = {json.dumps(d)};
+      return Q.art(d, "{league}", {json.dumps(hit)}, null);""")
+
+
+def test_the_timeline_scales_the_mark_with_its_size():
+    got = _node("""const a = Q.track([{ x: 0, y: 0, size: 1 }, { x: 0, y: -50, size: 0.5, leg: 1, via: [0, -90] }], {});
+      const b = Q.track([{ x: 0, y: 0 }, { x: 0, y: -50, leg: 1 }], {});
+      const vals = /type="scale" additive="sum" calcMode="linear" values="([^"]+)"/.exec(a.motion);
+      const keys = (m) => [...m.matchAll(/keyTimes="([^"]+)"/g)].map((k) => k[1]);
+      return { sizes: vals ? vals[1].split(";").map(Number) : null, same: new Set(keys(a.motion)).size, none: b.motion.includes('type="scale"') };""")
+    if got is None:
+        return
+    s = got["sizes"]
+    assert s and s[0] == 1 and s[-1] == 0.5, s
+    assert all(x >= y for x, y in zip(s, s[1:])), "evenly smaller along the arc: its rise is height, not distance"
+    assert got["same"] == 1, "the size keeps the place's clock"
+    assert got["none"] is False, "a mark with no size is not scaled"
+
+
+def test_the_drive_on_the_photograph_runs_on_the_cards_clock():
+    d = _fb_doc()
+    hit = [p for p in d["plays"] if p.get("kind") == "football"][-1]
+    got = _node(f"""const d = {json.dumps(d)}, hit = {json.dumps(hit)};
+      const card = Q.panel("gamecast", {{ d, league: "nfl", faces: {{}}, boardGame: null }});
+      const photo = Q.art(d, "nfl", hit, null);
+      NOW += 60000;
+      return {{ card, photo, rest: Q.art(d, "nfl", hit, null) }};""")
+    if got is None:
+        return
+    photo = got["photo"]
+    wide = re.search(r'<svg class="gc-fd-svg wide".*?</svg>', got["card"], re.S).group(0)
+    assert photo.count("data-gc-art") == 1 and 'data-gc-replay' in photo, "Replay on the photograph too"
+    assert 'class="gc-art-los" x1="0.0" y1="115.4" x2="240.0"' in photo, "the line of scrimmage under the ball, side to side"
+    # Each snap's own line to gain: 1st & 10 on the painted 40 (95.4), 2nd & 5 after the flag.
+    assert '<line class="gc-art-gain" x1="0.0" y1="95.7"' in photo
+    assert 'type="scale" additive="sum"' in photo, "the ball is smaller down the field"
+    for label in ("+4 RUN", "INC", "+5 FLAG", "−3 SACK"):
+        assert _pop_at(photo, label) == _pop_at(wide, label), f"{label}: the photograph and the card land it together"
+    assert ">3rd &amp; 8<" in photo and ">TB 24<" in photo, "the run ends on the next snap"
+    rest = got["rest"]
+    assert "<animate" not in rest, "a redraw after the run draws it at rest"
+    assert '<line class="gc-art-gain" x1="0.0" y1="98.8"' in rest, "3rd & 8: eight yards on"
+    assert 'transform="translate(117.6 117.4) scale(1.000)"' in rest, "the ball under the centre"
+    assert ">3rd &amp; 8<" in rest and "+4 RUN" not in rest
+
+
+def test_the_photograph_and_app_js_draw_with_one_measured_camera():
+    cam = re.search(r"const CAM = \{ A: ([\d.]+), B: ([\d.]+), C: ([\d.]+), los: ([\d.]+), back: ([\d.]+), vx: \d+, ball: \[([\d.]+), ([\d.]+)\],\s+qb: ([\d.]+)", GC)
+    field = re.search(r"qb: \[([\d.]+), ([\d.]+)\],.*?\n\s+los: ([\d.]+), goal: \d+,\n\s+A: ([\d.]+), B: -([\d.]+), C: ([\d.]+),", APP)
+    assert cam and field, "both cameras found"
+    A, B, C, los, back, bx, by, qb = (float(v) for v in cam.groups())
+    qx, qy, flos, fA, fB, fC = (float(v) for v in field.groups())
+    assert (A, B, C, los) == (fA, fB, fC, flos), "the drive and app.js's own play on one camera"
+    assert (bx, qb) == (qx, qy), "and the passer in the same place"
+    # Pinned to the painted lines: the 30 the ball is on, then the 35, 40, 45.
+    y = lambda yd: A + B / (yd + C)
+    for yd, painted in ((0, 115.3), (5, 103.9), (10, 95.4), (15, 88.6)):
+        assert abs(y(yd) - painted) < 0.6, (yd, y(yd))
+    assert abs(los + back * 5 - 129.9) < 0.2, "five yards back: the painted 25"
+
+
+def test_the_photograph_keeps_app_js_play_when_it_has_no_drive_to_draw():
+    if not shutil.which("node"):
+        return
+    d = _fb_doc()
+    tb = dict([p for p in d["plays"] if p.get("kind") == "football"][-1], team="TB")
+    got = [_art(d, tb), _art(_fb_doc(spots=False), None), _art(d, None, league="nba")]
+    assert got == [None, None, None], "another side's frame, no spots, another sport: app.js draws its own"
+
+
+def test_a_drive_that_ended_keeps_its_last_play_on_the_photograph():
+    td = _fb_doc()
+    td["drives"] = td["drives"][:2]
+    fg = json.loads(json.dumps(td))
+    kick = [p for p in fg["drives"][1]["plays"] if "Touchdown" in str(p.get("event"))][0]
+    kick.update({"event": "Field Goal Good", "yards": 0})
+    got = _node(f"""const run = (d) => {{ const dr = d.drives[d.drives.length - 1]; const hit = dr.plays[dr.plays.length - 1];
+        Q.art(d, "nfl", hit, null); NOW += 60000; return Q.art(d, "nfl", hit, null); }};
+      return [run({json.dumps(td)}), run({json.dumps(fg)})];""")
+    if got is None:
+        return
+    td_rest, fg_rest = got
+    assert ">+53 TD<" in td_rest and 'class="gc-art-goal"' in td_rest, "a touchdown keeps its goal line"
+    assert 'transform="translate(119.1 65.5)' in td_rest, "the ball on it, fifty-three yards on"
+    assert "gc-art-gain" not in td_rest, "the line to gain is spent"
+    assert ">FG<" in fg_rest and 'transform="translate(119.8 47.0)' in fg_rest, "a field goal goes through the posts in the picture"
+    assert 'class="gc-art-kick"' in fg_rest
+
+
+def test_the_ballpark_throws_the_at_bat_on_the_zones_clock():
+    d = _mlb_doc()
+    got = _node(f"""const d = {json.dumps(d)};
+      const photo = Q.art(d, "mlb", null, null), zone = Q.zone(d);
+      NOW += 60000;
+      return {{ photo, zone, rest: Q.art(d, "mlb", null, null) }};""")
+    if got is None:
+        return
+    photo, zone = got["photo"], got["zone"]
+    flights = lambda s: re.findall(r'attributeName="cx"[^>]*?begin="([\d.]+)s"', s)
+    assert flights(photo) == flights(zone) and len(flights(photo)) == 4, "every tracked pitch leaves the hand as the zone's does"
+    assert 'from="119.5" to="118.1"' in photo, "from the pitcher's hand to where it crossed: -0.5 ft, 3.0 ft up"
+    assert re.findall(r'class="gc-art-dot (\w)"', photo) == ["c", "b", "w", "f"], "the pitch chart's colours; the untracked fourth not thrown"
+    assert 'class="gc-art-zone"' in photo and "data-gc-pz-replay" in photo
+    chips = re.findall(r'<text class="t"[^>]*>([^<]+)<', photo)
+    assert chips == ["1 · Called strike", "2 · Ball", "3 · Swinging strike", "5 · Foul"], "each tracked pitch named as it lands, the newest last"
+    rest = got["rest"]
+    assert "<animate" not in rest and ">5 · Foul<" in rest, "a redraw draws the at-bat at rest, the newest pitch named"
+
+
+def test_a_ball_in_play_flies_on_from_the_plate_and_an_old_one_stays_faint():
+    done = _mlb_doc(done=True)
+    ab = [r for r in done["events"] if r["kind"] == "atbat"][-1]
+    ab.update({"event": "Home Run", "scoring": True, "hit": {"distance": 421, "trajectory": "fly_ball", "launch_speed": 108.4}})
+    old = _mlb_doc()
+    earlier = dict(ab, at_bat=6)
+    stub = ('globalThis.pbpFlight = () => ({ H: [118, 131], C: [112, 60], L: [100, 58], len: 80, over: true });'
+            ' globalThis.PBP_TRAJ = { fly_ball: "Fly ball" };')
+    got = _node(f"""{stub}
+      const hr = Q.art({json.dumps(done)}, "mlb", {json.dumps(ab)}, null);
+      const faint = Q.art({json.dumps(old)}, "mlb", {json.dumps(earlier)}, null);
+      return {{ hr, faint }};""")
+    if got is None:
+        return
+    hr = got["hr"]
+    last_lands = max(float(b) for b in re.findall(r'attributeName="cx"[^>]*?begin="([\d.]+)s"', hr)) + 0.42
+    motion = float(re.search(r'<animateMotion begin="([\d.]+)s"', hr).group(1))
+    assert abs(motion - (last_lands + 0.1)) < 0.011, "the ball leaves the bat as the last pitch lands"
+    assert ">Home Run<" in hr and ">Fly ball<" in hr and "421 FT" in hr
+    assert 'class="gc-art-old"' in got["faint"] and ">Fly ball<" not in got["faint"], "an earlier ball in play stays, faint, under the pitches"
+
+
+def test_the_live_page_asks_for_the_photographs_drawing():
+    assert "const fx = window.QBGamecast && QBGamecast.art && QBGamecast.art(d, league, hitRow, boardGame);" in APP
+    assert "const arc = fx || (league === \"mlb\" && hitRow && hitRow.hit" in APP, "and keeps its own when there is none"
+    assert "art," in GC.split("window.QBGamecast = {")[1]
+
+
 # --- the stylesheets ------------------------------------------------------------------
 def test_the_stylesheet_is_the_sites_tokens_and_motion_stops_for_a_reader_who_asked():
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", GC_CSS), "tokens only: it re-tints in light mode with the rest"
@@ -398,10 +552,18 @@ def test_the_stylesheet_is_the_sites_tokens_and_motion_stops_for_a_reader_who_as
         assert rule in GC_CSS, rule
     assert "@container (max-width: 480px)" in GC_CSS and ".gc-fd { margin-top: 12px; container-type: inline-size; }" in GC_CSS
     # A line that draws itself must take its dashes from the drawing, not a rule.
-    for cls in ("gc-fd-bar", "gc-fd-halo"):
+    for cls in ("gc-fd-bar", "gc-fd-halo", "gc-art-bar", "gc-art-halo", "gc-art-trail", "gc-art-arc"):
         rules = re.findall(r"\." + cls + r"(?:\.(?!flag)\w+)?\s*\{[^}]*\}", GC_CSS)
         assert rules and not any("stroke-dasharray" in r for r in rules), cls
     assert "onclick" not in GC and "onerror" not in GC
+    # On the photographs: a night game in either theme keeps its own colours,
+    # the broadcast's blue line on the card as well, and the ring stops.
+    art = re.search(r"\.gc-art \{([^}]*)\}", GC_CSS).group(1)
+    for name in ("--art-ink", "--art-gold", "--art-blue", "--art-red", "--art-shade"):
+        assert name + ":" in art, name
+    assert ".gc-fd-los { stroke: var(--gc-los);" in GC_CSS and ':root[data-theme="light"] { --gc-los:' in GC_CSS
+    assert "@media (prefers-reduced-motion: reduce) { .gc-art-ring { animation: none; opacity: 0; } }" in GC_CSS
+    assert ".pbp-park > .gc-art-replay { position: absolute; top: 8px; right: 8px; z-index: 1; }" in GC_CSS
 
 
 def test_the_views_bars_fit_with_replay_from_a_phone_to_a_desktop():
@@ -461,9 +623,16 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                     assert shown == (["narrow"] if width < 600 else ["wide"]), shown
                     assert page.evaluate("""[...document.querySelectorAll('.gc-drive .gc-fd-svg')]
                         .find((s) => getComputedStyle(s).display !== 'none').getBoundingClientRect().height""") > 100
-                    # Replay draws the field again and the ball runs.
-                    page.click("[data-gc-replay]")
-                    assert page.query_selector(".gc-drive .gc-fd-ball animateTransform"), "the ball runs again"
+                    # The drive on the photograph sits exactly on it, at every width.
+                    page.wait_for_selector(".pbp-park [data-gc-art]", state="attached", timeout=5000)
+                    boxes = page.evaluate("""(() => { const p = document.querySelector('.pbp-park');
+                        const r = (e) => { const b = e.getBoundingClientRect(); return [b.x, b.y, b.width, b.height].map((v) => Math.round(v)); };
+                        return [r(p.querySelector('.pbp-photo')), r(p.querySelector('[data-gc-art]'))]; })()""")
+                    assert boxes[0] == boxes[1], boxes
+                    # Replay (the photograph's) draws both again, and both balls run.
+                    page.click(".pbp-park [data-gc-replay]")
+                    assert page.query_selector(".gc-drive .gc-fd-ball animateTransform"), "the card's ball runs again"
+                    assert page.query_selector(".pbp-park .gc-art-ball animateTransform"), "and the photograph's"
                     page.click('.pbp-tab[data-pbp-tab="plays"]')
                     page.wait_for_selector(".gc-chart .gc-dc-row", state="attached", timeout=5000)
                     assert page.evaluate("""[...document.querySelectorAll('.gc-chart .gc-fd-svg')]
@@ -473,8 +642,10 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                     page.wait_for_selector(".gc-pz .gc-pz-dot", timeout=15000)
                     assert len(page.query_selector_all(".gc-pz-svg .gc-pz-dot")) == 4
                     assert len(page.query_selector_all(".gc-pz-row")) == 5
-                    page.click("[data-gc-pz-replay]")
+                    assert len(page.query_selector_all(".pbp-park [data-gc-art] .gc-art-dot")) == 4, "the same four on the ballpark"
+                    page.click(".pbp-park [data-gc-pz-replay]")
                     assert page.query_selector(".gc-pz-svg animate"), "the at-bat flies in again"
+                    assert page.query_selector(".pbp-park [data-gc-art] animate"), "on the ballpark too"
                     assert page.evaluate("document.scrollingElement.scrollWidth") <= width
                     assert not errors, errors
                     ctx.close()
