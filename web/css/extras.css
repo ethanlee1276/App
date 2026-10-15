@@ -120,3 +120,38 @@
 @media (prefers-reduced-motion: reduce) {
   .xt-meter i, .xt-btn { transition: none; }
 }
+
+/* UFC: each fight's path (extras.js pathsHTML). Corner a in the brand's
+   colour, corner b in plum; knockout darkest, decision lightest. */
+.xt-fps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.xt-fp { display: grid; gap: 8px; padding: 12px; border-radius: var(--radius-sm); background: var(--panel-2); border: var(--hairline) solid var(--border); }
+.xt-fp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.xt-fp-h b { color: var(--text); font-size: var(--fs-md); overflow-wrap: anywhere; }
+.xt-fp-h span { color: var(--text-mute); font-size: var(--fs-xs); text-transform: capitalize; }
+.xt-fp-h .xt-pill { margin-left: auto; }
+.xt-fp-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--panel-3); }
+.xt-fp-bar i { display: block; height: 100%; }
+.xt-fp-bar .xt-fp-a.k-ko { background: var(--brand); }
+.xt-fp-bar .xt-fp-a.k-sub { background: color-mix(in oklab, var(--brand) 70%, var(--panel-3)); }
+.xt-fp-bar .xt-fp-a.k-dec { background: color-mix(in oklab, var(--brand) 42%, var(--panel-3)); }
+.xt-fp-bar .xt-fp-b.k-dec { background: color-mix(in oklab, var(--plum) 42%, var(--panel-3)); }
+.xt-fp-bar .xt-fp-b.k-sub { background: color-mix(in oklab, var(--plum) 70%, var(--panel-3)); }
+.xt-fp-bar .xt-fp-b.k-ko { background: var(--plum); }
+.xt-fp-key { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-2xs); color: var(--text-mute); }
+.xt-fp-key span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xt-fp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+.xt-fp-s { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel); border-left: 3px solid var(--brand); }
+.xt-fp-s.xt-fp-b { border-left-color: var(--plum); }
+.xt-fp-s h4 { margin: 0 0 4px; font-size: var(--fs-sm); color: var(--text); overflow-wrap: anywhere; }
+.xt-fp-s h4 small { color: var(--text-mute); font-weight: 600; }
+.xt-fp-s p { margin: 2px 0; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; font-size: var(--fs-xs); color: var(--text-dim); }
+.xt-fp-s p.xt-hint { display: block; }
+.xt-fp-s p span { color: var(--text-mute); }
+.xt-fp-s p i { font-style: normal; min-width: 0; }
+.xt-fp-s p b { color: var(--text); margin-right: 4px; }
+.xt-fp-last { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.xt-fp-l { padding: 1px 7px; border-radius: 999px; font-style: normal; font-size: var(--fs-2xs); font-weight: 700; background: var(--panel-3); color: var(--text-dim); }
+.xt-fp-l.t-good { color: var(--good); }
+.xt-fp-l.t-bad { color: var(--bad); }
+.xt-fp-end { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-xs); color: var(--text-dim); }
+.xt-fp-end span { color: var(--text-mute); }

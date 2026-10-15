@@ -525,6 +525,68 @@
       change, so who meets whom tonight is his call.</p></section>`;
   }
 
+  // ---- UFC: each fight's path (drawn on the UFC page, under its card) -----
+  /* The model's six-way read of a fight (each man by knockout, submission
+     or decision; engine/ufc/model `method`, corner a first) beside how each
+     man's own stored fights ended (engine/ufc/fightpath `path`) and, where
+     the finishes on file allow, the round it ends in (engine/ufc/rounds). */
+  const FP_KEYS = [["ko", "KO/TKO"], ["sub", "Sub"], ["dec", "Dec"]];
+  function fightPaths(d) {
+    const rows = [].concat((d && d.picks) || [], (d && d.pass_list) || []);
+    return rows.filter((r) => r && r.method && (r.fighters || []).length === 2).map((r) => {
+      const m = r.method, ends = {};
+      for (const c of r.market_board || []) {
+        const k = c.market === "exact_round" && /round (\d)/i.exec(c.selection || "");
+        if (k) ends[k[1]] = c.p_model;
+      }
+      const side = (i) => {
+        const x = i ? "b" : "a", f = r.fighters[i] || {};
+        const how = { ko: m[`${x}_ko`] || 0, sub: m[`${x}_sub`] || 0, dec: m[`${x}_dec`] || 0 };
+        return { name: f.name || "", record: f.record || "", path: f.path || null, how, win: how.ko + how.sub + how.dec };
+      };
+      return { fight: r.fight || "", division: String(r.division || "").replace(/_/g, " "), rounds: r.scheduled_rounds || 3,
+               a: side(0), b: side(1), distance: m.distance, ends, pick: r.kind === "pick" ? r.pick || "" : "" };
+    });
+  }
+  const fpCount = (o) => FP_KEYS.map(([k, w]) => `${o[k] || 0} ${w}`).join(" · ");
+  function fpSide(s, tone) {
+    const p = s.path;
+    const won = p ? Object.entries(p.won_in || {}).sort((x, y) => x[0] - y[0]).map(([r, n]) => `R${r} ${n}`).join(" · ") : "";
+    const last = p ? (p.last || []).map(([res, how, rnd, opp, date]) => `<em class="xt-fp-l t-${res === "W" ? "good" : res === "L" ? "bad" : "none"}"
+        title="${esc(`${date} vs ${opp}`)}">${esc(res)}${how ? ` ${esc(how === "KO/TKO" ? "KO" : how)}` : ""}${rnd ? ` R${rnd}` : ""}</em>`).join("") : "";
+    return `<div class="xt-fp-s ${tone}"><h4>${esc(s.name)}${s.record ? ` <small>${esc(s.record)}</small>` : ""}</h4>
+      <p><span>Our read</span><i><b>${pctTxt(s.win, 0)}</b> to win · ${FP_KEYS.map(([k, w]) => `${w} ${pctTxt(s.how[k], 0)}`).join(" · ")}</i></p>
+      ${p ? `<p><span>Last ${p.n}</span><i>Won: ${fpCount(p.wins)}</i></p><p><span></span><i>Lost: ${fpCount(p.losses)}${p.draws ? ` · ${p.draws} drawn or no contest` : ""}</i></p>
+        ${won ? `<p><span>His finishes</span><i>${won}</i></p>` : ""}${last ? `<div class="xt-fp-last">${last}</div>` : ""}`
+        : `<p class="xt-hint">His fights are not on file yet.</p>`}</div>`;
+  }
+  function pathsHTML(d) {
+    const rows = fightPaths(d);
+    const head = `<header class="xt-card-h"><h3>Fight path</h3><p>How each man wins by our read — knockout, submission or
+      decision — beside how his own recent fights ended, and when this one ends.</p></header>`;
+    if (!rows.length) {
+      const locked = d && d.locked && (d.locked.picks || d.locked.pass_list);
+      return `<section class="xt-card xt-wide">${head}<p class="xt-hint">${locked
+        ? `The paths read the card’s fight reads, which come with a membership — <a href="#paywall">see the plans</a>.`
+        : "No fights read on the card yet — the paths fill when the card’s prices post."}</p></section>`;
+    }
+    const li = rows.map((r) => {
+      const segs = [["a", "ko"], ["a", "sub"], ["a", "dec"], ["b", "dec"], ["b", "sub"], ["b", "ko"]]
+        .map(([x, k]) => `<i class="xt-fp-${x} k-${k}" style="width:${(100 * (r[x].how[k] || 0)).toFixed(1)}%"></i>`).join("");
+      const ends = Object.keys(r.ends).sort().map((k) => `R${k} ${pctTxt(r.ends[k], 0)}`);
+      return `<li class="xt-fp">
+        <div class="xt-fp-h"><b>${esc(r.fight)}</b><span>${esc([r.division, `${r.rounds} rounds`].filter(Boolean).join(" · "))}</span>${r.pick ? `<em class="xt-pill t-alert">Pick: ${esc(r.pick)}</em>` : ""}</div>
+        <div class="xt-fp-bar" role="img" aria-label="${esc(`${r.a.name} ${pctTxt(r.a.win, 0)}, ${r.b.name} ${pctTxt(r.b.win, 0)}`)}">${segs}</div>
+        <div class="xt-fp-key"><span class="xt-fp-a">${esc(r.a.name)}: KO · Sub · Dec</span><span class="xt-fp-b">Dec · Sub · KO: ${esc(r.b.name)}</span></div>
+        <div class="xt-fp-cols">${fpSide(r.a, "xt-fp-a")}${fpSide(r.b, "xt-fp-b")}</div>
+        <p class="xt-fp-end"><span>When it ends</span>${ends.length ? `${ends.join(" · ")} · ` : ""}Distance ${pctTxt(r.distance, 0)}</p>
+      </li>`;
+    }).join("");
+    return `<section class="xt-card xt-wide">${head}<ul class="xt-fps">${li}</ul>
+      <p class="xt-fine">Context, not a pick. The read is the card’s own published number (the same one its picks come from) and the
+      record is each man’s stored fights, counted — nothing here moves a price. A round appears only where enough finishes are on file.</p></section>`;
+  }
+
   /* Each sport's own tools, drawn above the calculators when that sport
      is the one selected. */
   const SPORT_TOOLS = {
@@ -657,5 +719,5 @@
 
   window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
-                      spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML };
+                      spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML };
 })();

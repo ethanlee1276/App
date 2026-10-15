@@ -39871,10 +39871,13 @@ async function renderUFC() {
       return html || `<div class="section-title">Pass list</div>
         ${panelEmpty("Nothing to pass on.")}`;
     })()}
+    <div id="ufc-paths"></div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Every fight is priced
       off a dossier of measured records, and each one is reviewed before a card — a red flag on
       a fighter blocks a bet until it is resolved. The model refuses any fight missing a
       dossier rather than guessing at it. Updated ${escapeHtml(formatStamp(d.generated_at))}.</p>`;
+  // Each fight's path (js/extras.js), under the card it reads.
+  loadExtras().then((X) => { const el = document.getElementById("ufc-paths"); if (X && el) el.innerHTML = X.pathsHTML(d); });
 }
 
 /* ============================================================

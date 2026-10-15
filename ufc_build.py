@@ -324,6 +324,20 @@ def main() -> None:
             print(f"Round prices: {n_rounds} priced fight(s) carry them")
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  round prices skipped: {exc}")
+        # EACH CORNER'S PATH (engine/ufc/fightpath, 2026-10-15): how his own
+        # stored fights ended, beside the model's read of this one, for the
+        # Toolbox's fight path. Context; a man with nothing on file has none.
+        try:
+            from engine import db as _pdb
+            from engine.ufc import fightpath as _fp
+            _pc = _pdb.connect()
+            try:
+                n_paths = _fp.attach(out, _pc)
+            finally:
+                _pc.close()
+            print(f"Fight paths: {n_paths} corner(s) carry their record")
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  fight paths skipped: {exc}")
         # WHERE EACH LINE OPENED (engine/ufc/moves, 2026-10-13): the fight
         # snapshots this build has written on every paid pull since
         # 2026-08-10, read for the first time. Evidence on the card — the

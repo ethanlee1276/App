@@ -278,7 +278,8 @@ My Bets (step 119; BN checks the close lookup answers); then basketball's
 schedule spots and "what if he sits" (step 120; BO); then hockey's goalie
 board, each line's on-ice expected goals and the live xG race (step 121; BP);
 then baseball's "a homer in how many of the 30 parks" on the hit page and the
-next pitch on the live pitch tracker (step 122; BQ).
+next pitch on the live pitch tracker (step 122; BQ); then UFC's fight path on
+the UFC page (step 123; BR).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -317,13 +318,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Baseball: a homer in how many of the 30 parks, and the next pitch on the live tracker`
+**A. The box has today's code.** The first line should end `UFC: each fight's path, how each man wins by our read beside how his own fights ended`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 84e9987e HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 07f13170 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1758,6 +1759,23 @@ import json, glob
 for p in sorted(glob.glob('web/data/pbp/mlb_*.json')):
     d=json.load(open(p)); n=d.get('next_pitch'); c=d.get('current') or {}
     print(p.split('/')[-1], (d.get('live') or {}).get('state'), c.get('pitcher'), c.get('bat_side'), 'next_pitch', bool(n), n and n.get('n'))
+"
+```
+
+**BR. Every corner of the UFC card carries his record** (step 123; read-only,
+a second, after the next UFC build on the new code). It prints how many fights
+the card shows, how many corners carry a path, then the first six corners
+with their stored fights, wins and losses by how they ended. A corner with
+`None` has no fights on file yet (the scheduler's UFC tick reads a few
+fighters at a time):
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json; d=json.load(open('web/data/ufc.json'))
+rows=(d.get('picks') or [])+(d.get('pass_list') or [])
+fs=[f for r in rows for f in r.get('fighters') or []]
+print(len(rows), 'fights,', sum(1 for f in fs if f.get('path')), 'of', len(fs), 'corners carry a path')
+for f in fs[:6]:
+    p=f.get('path') or {}; print(f.get('name'), p.get('n'), p.get('wins'), p.get('losses'))
 "
 ```
 
@@ -5583,6 +5601,23 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_baseball_fences_and_the_next_pitch.py` (10 checks). No pin
     changed; no size budget moved (the hit page and the live tracker are
     their own lazy files).
+123. **UFC: each fight's path** (2026-10-15, one more of the sixteen).
+    Context; nothing moves a price. On the UFC page, under the card, a Fight
+    path section: for every fight the model read, the six-way split as one
+    bar (each man by knockout, submission or decision, corner a on the left
+    in gold, corner b on the right in plum), and for each man our read
+    beside how his own stored fights ended — his last fifteen, wins and
+    losses by knockout, submission and decision, the rounds his finishes
+    came in, and his last five as chips — then when the fight ends (the
+    round prices from `engine/ufc/rounds`, where enough finishes
+    are on file) and the chance it goes the distance. The build hangs each
+    corner's record on the card (`engine/ufc/fightpath.py`, off
+    `ufc_fights`; a man with nothing on file carries none). The reads ride
+    inside `picks` and `pass_list`, so a reader without a membership gets
+    the sealed card and the section says the reads come with one. UFC is its
+    own page rather than a sport the Toolbox switches to, so the section
+    sits there. New: `tests/test_the_ufc_fight_path.py` (5 checks). No pin
+    changed; app.js grew by 0.06 KB, inside its budget (no budget moved).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
