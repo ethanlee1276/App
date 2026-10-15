@@ -282,6 +282,28 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
 
 
 # --- game lines ---------------------------------------------------------------
+def attach_line_slots(recs: list, lines: dict) -> None:
+    """Each skater's forward line or defence pair, on his row.
+
+    UNDER `line_slot`, NEVER `line`. `line` is the BETTING line (2.5 shots)
+    that every reader after this one prices, journals and shows. This
+    loop wrote the slot over it from 2026-10-03, and once the shift
+    charts filled every skater on a line carried a dict where his number
+    was: the journal refused the whole batch ("Error binding parameter 8:
+    type 'dict' is not supported", 2026-10-15) so no NHL pick reached the
+    record, and the Pick of the Day selector fell over on it ("unhashable
+    type: 'dict'")."""
+    from engine.nhl import lines as LN
+    for r in recs:
+        slot = LN.slot_of(lines.get(r["team"]) or {}, r["player"])
+        if slot:
+            r["line_slot"] = slot
+            r["line_unit"] = f"{r['team']}-{slot['unit']}"
+            r.setdefault("reasons", []).append(
+                f"Line: {slot['unit']} with {' and '.join(slot['mates'])} "
+                f"({slot['together']:.0%} of their ice together lately)")
+
+
 def game_bets(g, teams: dict, ctx: dict | None = None, league: dict | None = None) -> list[dict]:
     """Moneyline, puck line and total for one game with a real price.
 
@@ -728,14 +750,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
             print(f"⚠️  lines skipped: {exc}")
             lines = {}
     out["lines"] = lines
-    for r in recs:
-        slot = LN.slot_of(lines.get(r["team"]) or {}, r["player"])
-        if slot:
-            r["line"] = slot
-            r["line_unit"] = f"{r['team']}-{slot['unit']}"
-            r.setdefault("reasons", []).append(
-                f"Line: {slot['unit']} with {' and '.join(slot['mates'])} "
-                f"({slot['together']:.0%} of their ice together lately)")
+    attach_line_slots(recs, lines)
     for r in recs:
         inj = injuries.get(r["player"])
         if inj and r["player"] not in ruled_out:
@@ -754,7 +769,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     for rd in (x for v in sc["reads"].values() for x in v.get("players") or []):
         slot = LN.slot_of(lines.get(rd.get("team")) or {}, rd.get("player") or "")
         if slot:
-            rd["line"] = slot
+            rd["line_slot"] = slot
             rd.setdefault("notes", []).append(f"Line {slot['unit']} with {' and '.join(slot['mates'])}")
     out["scan_reads"] = sc["reads"]
     inj_by_team: dict = {}

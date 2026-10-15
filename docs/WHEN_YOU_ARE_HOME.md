@@ -267,7 +267,8 @@ price more where our chance runs far above it, is built as a read-only
 check with its bar written before it runs: BK runs it on the record, and
 nothing on the site changes unless it passes and you say yes (step 115).
 And every check below that can run on any day now runs as one command, BL,
-read-only, about half an hour (step 116).
+read-only, about half an hour (step 116). Your BL paste found the NHL's
+picks not reaching the record at all; fixed in step 117 (BA re-checks it).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -306,13 +307,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `One command for every any-day check in the runbook: tools/catchup.sh, read-only, held to the runbook word for word`
+**A. The box has today's code.** The first line should end `NHL picks reach the record again: a skater's forward line no longer overwrites his betting line`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor cd791216 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 214b3fc1 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -5330,6 +5331,27 @@ first). Paste back anything that prints an error or looks off.
     done ones left out; a limit on each, the slow ones last; a block that
     reads its input or runs long cannot touch the next; root only; this
     runbook names it). No pin changed.
+117. **NHL picks reach the record again** (2026-10-15, found in your BL
+    paste: BA printed `NHL journal skipped: Error binding parameter 8: type
+    'dict' is not supported` twice, and AQ's NHL card `the selector could
+    not run on this board — unhashable type: 'dict'`). One line in
+    `nhl_build.py`, from the line combinations (2026-10-03): a skater's
+    forward line or defence pair (unit, linemates, shared ice) was written to
+    `line`, the key that holds his BETTING line (2.5 shots) for every reader
+    after it. Once the shift charts filled, every skater on a line carried a
+    dict there: the journal refused the whole NHL batch, so since the season
+    opened only 4 NHL picks (the 13th, before the charts filled) ever reached
+    the record; the Pick of the Day selector fell over building its keys.
+    The slot now sits beside the line as `line_slot` (`line_unit` as
+    before, which the parlay check reads), in a small function the test
+    calls. NOT BACKFILLED: the picks the board showed while the journal
+    refused them were never recorded, and the record can't invent them
+    after the fact. New: `tests/test_an_nhl_line_combination_never_overwrites_the_betting_line.py`
+    (5 checks: the slot beside the line, a skater on no line untouched,
+    such rows reaching the journal, the Pick of the Day key hashable, no
+    line of the build writing a slot into `line`). No pin changed. After
+    the box pulls this, BA's first command should stop printing the NHL
+    line, and AQ's NHL card should read `BET …` or `NO BET — <a bar>`.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
