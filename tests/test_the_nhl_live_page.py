@@ -382,11 +382,14 @@ STUBS = """
 """
 
 
-def _node(js):
+def _node(js, gc=False):
+    """`gc` loads js/gamecast.js first, as the page has it: the shared run
+    (QBGamecast.track) that moves the puck. Without it the page draws every
+    mark where it is, which is what a reader who asked for less motion sees."""
     node = shutil.which("node")
     if not node:
         return None
-    prog = f"{TEAMS}\n{STUBS}\n{RC}\nconsole.log(JSON.stringify((() => {{ const Q = window.QBRink; {js} }})()));"
+    prog = f"{TEAMS}\n{STUBS}\n{GC if gc else ''}\n{RC}\nconsole.log(JSON.stringify((() => {{ const Q = window.QBRink; {js} }})()));"
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)
         path = fh.name
@@ -398,13 +401,13 @@ def _node(js):
     return json.loads(out.stdout.strip())
 
 
-def _page(doc, board=None):
+def _page(doc, board=None, gc=False):
     return _node(f"""
       const host = {{ innerHTML: "", dataset: {{}}, querySelector: () => null, addEventListener: () => {{}} }};
       const ctx = {{ d: {json.dumps(doc)}, league: "nhl", stripHTML: "<nav>strip</nav>", back: "<b>back</b>",
                     boardGame: {json.dumps(board)}, faces: {{}}, wire: () => {{}} }};
       Q.render(host, ctx);
-      return host.innerHTML;""")
+      return host.innerHTML;""", gc=gc)
 
 
 def test_the_page_and_the_parser_read_a_situation_code_alike():
@@ -538,7 +541,11 @@ def test_the_page_draws_the_scoreboard_the_arena_the_plays_and_the_three_cards()
     assert "BOS power play · 1:40" in html, "the badge on the arena"
     # The newest event is NYR's faceoff win: the puck is theirs, said once, and the sequence starts at the dot.
     assert 'class="rc-arrow"' in html and "Puck: NYR" in html and 'class="rc-puckmark"' in html.split('class="rc-side home"')[0]
-    assert "rc-flight" not in html and "rc-trail" not in html, "a faceoff is the drop: nothing to join it to"
+    # The run is the period's (2026-10-15): the miss and the shot each fly to
+    # the net and play goes on from there, one join; the faceoff is the drop
+    # and is joined to nothing — the puck appears on the dot.
+    stage = html.split('class="card rc-stage')[1].split('class="card rc-card rc-right"')[0]
+    assert stage.count('class="rc-flight') == 2 and stage.count('class="rc-trail"') == 1, "a faceoff is the drop: nothing to join it to"
     # The plays: the period being played, newest first; the choices.
     assert len(re.findall(r'<div class="rc-play k-', html)) == 6
     assert html.index("Won by #93 Mika Zibanejad") < html.index("Missed shot"), "newest first"
@@ -555,11 +562,13 @@ def test_the_page_draws_the_scoreboard_the_arena_the_plays_and_the_three_cards()
 
 
 def test_the_live_view_flies_the_last_shot_and_joins_its_sequence():
-    html = _page(_deep(upto=14))
+    html = _page(_deep(upto=14), gc=True)
     if html is None:
         return
     stage = html.split('class="card rc-stage')[1].split('class="card rc-card rc-right"')[0]
-    assert 'class="rc-flight' in stage and "<animateMotion" in stage and 'class="rc-ring"' in stage
+    # The puck runs the sequence on the shared timeline (QBGamecast.track):
+    # a translate along the points, not a flight of its own.
+    assert 'class="rc-flight' in stage and '<animateTransform attributeName="transform" type="translate"' in stage and 'class="rc-ring"' in stage
     assert stage.count('class="rc-trail"') == 1, "the miss and the shot of the third, joined"
     assert 'data-half="right"' in stage, "a phone sees the half the shot went up in"
     assert "Shot on goal" in stage and "saved by #31 Igor Shesterkin" in stage and "in the NYR end" in stage

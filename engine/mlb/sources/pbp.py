@@ -229,6 +229,19 @@ def game_events(payload: dict) -> list[dict]:
                 "in_play": bool(details.get("isInPlay")),
                 "time": _when(ev),
             }
+            # WHERE IT CROSSED (2026-10-15, the live pitch tracker): feet
+            # across the plate from the catcher's view (`pX`) and up from
+            # the ground (`pZ`), with this batter's own zone — the fields
+            # the season pitch chart reads (engine/mlb/charts). Absent,
+            # never null, when the feed has none: a pitch the cameras did
+            # not track, an automatic ball on the pitch clock.
+            co = pd.get("coordinates") or {}
+            px, pz = _num(co.get("pX")), _num(co.get("pZ"))
+            if px is not None and pz is not None and abs(px) < 6 and -2 < pz < 8:
+                row["px"], row["pz"] = round(px, 2), round(pz, 2)
+                top, bot = _num(pd.get("strikeZoneTop")), _num(pd.get("strikeZoneBottom"))
+                if top is not None and bot is not None and 0 < bot < top < 6:
+                    row["sz"] = [round(top, 2), round(bot, 2)]
             out.append(row)
             h = _hit(ev)
             if h:

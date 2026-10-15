@@ -280,11 +280,14 @@ STUBS = """
 """
 
 
-def _node(js):
+def _node(js, gc=False):
+    """`gc` loads js/gamecast.js first, as the page has it: the shared run
+    (QBGamecast.track) that moves the ball. Without it every mark is drawn
+    where it is, which is what a reader who asked for less motion sees."""
     node = shutil.which("node")
     if not node:
         return None
-    prog = f"{STUBS}\n{HC}\nconsole.log(JSON.stringify((() => {{ const Q = window.QBHoops; {js} }})()));"
+    prog = f"{STUBS}\n{GC if gc else ''}\n{HC}\nconsole.log(JSON.stringify((() => {{ const Q = window.QBHoops; {js} }})()));"
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)
         path = fh.name
@@ -296,14 +299,14 @@ def _node(js):
     return json.loads(out.stdout.strip())
 
 
-def _page(doc, board=None, view="live"):
+def _page(doc, board=None, view="live", gc=False):
     """The page `render` writes, through a stand-in host."""
     return _node(f"""
       const host = {{ innerHTML: "", dataset: {{}}, querySelector: () => null, addEventListener: () => {{}} }};
       const ctx = {{ d: {json.dumps(doc)}, league: "nba", stripHTML: "<nav>strip</nav>", back: "<b>back</b>",
                     boardGame: {json.dumps(board)}, faces: {{}}, wire: () => {{}} }};
       Q.render(host, ctx);
-      return host.innerHTML;""")
+      return host.innerHTML;""", gc=gc)
 
 
 def test_the_ball_is_somebodys_only_where_a_play_settles_it():
@@ -443,7 +446,7 @@ def test_each_side_wears_a_colour_that_reads_on_the_dark_floor():
 # --- the page: what it draws -------------------------------------------------------
 def test_the_page_draws_the_scoreboard_the_arena_and_the_three_panels():
     board = {"home": "BOS", "away": "LAL", "spread": -4.5, "total": 227.5, "home_ml": -180, "away_ml": 150}
-    html = _page(_deep(), board)
+    html = _page(_deep(), board, gc=True)
     if html is None:
         return
     assert html.startswith("<nav>strip</nav>") and html.endswith("<b>back</b>"), "app.js's strip and way back"
@@ -461,7 +464,9 @@ def test_the_page_draws_the_scoreboard_the_arena_and_the_three_panels():
     assert "Timeouts <b>3</b>" in away and "Fouls <b>2</b>" in away
     assert 'class="hc-ball"' in away and 'title="Ball"' in away, "ESPN's possession wins over the plays' guess"
     # The last shot flies to the rim and the arrow points the ball's way.
-    assert 'class="hc-flight' in html and "<animateMotion" in html and 'class="hc-arrow"' in html
+    # The ball runs the last shots on the shared timeline (QBGamecast.track,
+    # 2026-10-15): a translate along the points, not a flight of its own.
+    assert 'class="hc-flight' in html and '<animateTransform attributeName="transform" type="translate"' in html and 'class="hc-arrow"' in html
     # The plays: the quarter being played, newest first; the choices.
     plays = re.findall(r'<div class="hc-play k-', html)
     assert len(plays) == 8, len(plays)

@@ -61,7 +61,7 @@
 
   /* What the reader chose, kept across the twelve-second redraws. `q` null
      follows the quarter being played; 0 is every play. */
-  const S = { view: "live", stats: "team", odds: "odds", q: null, shots: "both", seen: "", from: null, ctx: null };
+  const S = { view: "live", stats: "team", odds: "odds", q: null, shots: "both", run: null, replay: false, ctx: null };
 
   /* ---------------- the clock ---------------- */
   const QUARTER_S = { nba: 720, wnba: 600 };
@@ -370,6 +370,9 @@
   //: The four corners of a full-screen button, drawn the way app.js's icons are.
   const EXPAND = `<svg class="ic" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>`;
+  //: Replay's mark, in the same stroke grid.
+  const REPLAY = `<svg class="ic" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.2 8a4.8 4.8 0 1 0 1.4-3.4"/><path d="M3 2.6v3h3"/></svg>`;
   const cross = (x, y, r) => `M${(x - r).toFixed(1)} ${(y - r).toFixed(1)} l${2 * r} ${2 * r} m0 ${-2 * r} l${-2 * r} ${2 * r}`;
   function shotMark(s, alpha, k) {
     const c = courtSpot(s);
@@ -384,28 +387,6 @@
       : `<g style="opacity:${alpha.toFixed(2)}"><path class="hc-halo" d="${cross(x, y, r - 2)}"/>`
         + `<path class="hc-shot miss" d="${cross(x, y, r - 2)}" style="stroke:${col}"/></g>`;
   }
-  /* The last shot's flight: from where it went up to the rim the render
-     draws, the ball travelling it once when the shot is new to this page
-     and the trail left behind it after. */
-  function flightSVG(s) {
-    const c = courtSpot(s);
-    if (!c) return "";
-    const [x, y] = artSpot(c, s.side);
-    const [rx, ry] = RIMS[s.side] || RIMS.home;
-    const cx = (x + rx) / 2, cy = Math.min(y, ry) - 120;
-    const d = `M${x.toFixed(1)} ${y.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${rx} ${ry}`;
-    const fresh = S.seen !== s.id;
-    S.seen = s.id;
-    const go = fresh && !still();
-    const id = `hcf${s.id.replace(/[^a-z0-9]/gi, "")}`;
-    return `<path class="hc-halo" d="${d}"/><path id="${id}" class="hc-flight${s.made ? " made" : ""}" d="${d}"/>
-      <circle class="hc-halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="22"/>
-      <circle class="hc-spot-ring" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="22"/>
-      <g class="hc-ball-g"${go ? "" : ` transform="translate(${rx} ${ry})"`}>
-        <circle class="hc-ball-glow" r="16"/><circle class="hc-ball-dot" r="8"/>
-        ${go ? `<animateMotion dur="0.9s" fill="freeze" path="${d}"/>` : ""}</g>
-      ${s.made ? `<circle class="hc-swish" cx="${rx}" cy="${ry}" r="18"/>` : ""}`;
-  }
   /* The ball's side, as an arrow at centre court pointing at the basket it
      attacks. */
   function arrowSVG(side) {
@@ -414,14 +395,91 @@
     const dir = side === "away" ? -1 : 1, col = side === "home" ? "var(--ch)" : "var(--ca)";
     return `<path class="hc-arrow" style="fill:${col}" d="M${(x + dir * 46).toFixed(1)} ${y.toFixed(1)} l${-dir * 30} -16 v32 z"/>`;
   }
+  /* THE BALL'S RUN (2026-10-15; Ethan, of the hockey page's puck: "a
+     hockey puck moving back and forth across the ice when we show the
+     switching of positions" — the ball does it here). The ball goes
+     through the newest shots in order: from where the last one ended to
+     where the next went up (across the court when the other side shoots
+     next, a step when the same side has it again), then up to the rim on
+     the shot's arc, through on a make and off the iron on a miss. Its
+     glow is the shooting side's colour on the way to each shot. No feed
+     has the ball between shots, so the run joins where shots went up, in
+     order, and the plays down the side say what came between. The first
+     look plays the newest six; a refresh with new shots moves the ball on
+     from where it stopped; Replay plays the six again (js/gamecast.js
+     `track` keeps the time; less motion asked for, the end of the run). */
+  const RUN = 6;
+  //: Which run the page is in: a new one when the game, the point the ball
+  //: ends on or Replay says so; otherwise the same one, further on.
+  function runFor(d, end, keys) {
+    const now = Date.now(), r = S.run;
+    if (S.replay || !r || r.game !== d.event_id) {
+      S.run = { game: d.event_id, upto: end, from: null, start: now };
+    } else if (r.upto !== end) {
+      S.run = { game: d.event_id, upto: end, from: keys.includes(r.upto) ? r.upto : null, start: now };
+    }
+    S.replay = false;
+    return { from: S.run.from, elapsed: (now - S.run.start) / 1000 };
+  }
+  //: The top of a shot's arc from its spot to the rim.
+  const apex = (x, y, rx, ry) => [(x + rx) / 2, Math.min(y, ry) - 120];
+  //: The basket a run of shots stays at ("left", "right"), or null when it
+  //: goes end to end — a phone shows the whole court for that.
+  function runSpan(k) {
+    const win = k.shots.filter((s) => courtSpot(s)).slice(-RUN);
+    if (!win.length) return null;
+    if (win.every((s) => s.side === "away")) return "left";
+    if (win.every((s) => s.side === "home")) return "right";
+    return null;
+  }
   function liveMarks(d, k) {
-    const spotted = k.shots.filter((s) => courtSpot(s));
-    const recent = spotted.slice(-8, -1);
-    const marks = recent.map((s, i) => shotMark(s, 0.3 + 0.55 * (i + 1) / Math.max(1, recent.length), k)).join("");
-    const last = spotted[spotted.length - 1];
-    // The ball is somebody's only while the game is on.
     const on = (d.live || {}).state === "live";
-    return `${marks}${last ? shotMark(last, 1, k) + flightSVG(last) : ""}${on ? arrowSVG(k.ballSide) : ""}`;
+    const win = k.shots.filter((s) => courtSpot(s)).slice(-RUN);
+    const last = win[win.length - 1];
+    if (!last) return on ? arrowSVG(k.ballSide) : "";
+    const W = [];
+    win.forEach((s, n) => {
+      const [x, y] = artSpot(courtSpot(s), s.side);
+      const [rx, ry] = RIMS[s.side] || RIMS.home;
+      W.push({ key: String(s.id), x, y, jump: n > 0 && win[n - 1].period !== s.period, s, side: s.side, hold: 0.15 });
+      W.push({ key: `${s.id}>rim`, x: rx, y: ry, via: apex(x, y, rx, ry), s, side: s.side, leg: 0.6, hold: s.made ? 0.35 : 0.05, rim: true });
+      if (!s.made) W.push({ key: `${s.id}>off`, x: rx + (s.side === "home" ? -70 : 70), y: ry + 45, s, side: "", leg: 0.3, hold: 0.3 });
+    });
+    const run = runFor(d, W[W.length - 1].key, W.map((p) => p.key));
+    const from = run.from == null ? 0 : Math.max(0, W.findIndex((p) => p.key === run.from));
+    const pts = W.slice(from).map((p, n) => (n ? p : Object.assign({}, p, { jump: false, via: null })));
+    const G = window.QBGamecast;
+    const T = G && G.track ? G.track(pts, { elapsed: run.elapsed }) : null;
+    const moving = !!(T && !T.still);
+    const when = (list, n) => (moving && n > from ? list[n - from] : null);
+    const pop = (t, inner) => (t == null || T.past(t) ? inner
+      : `<g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.2s" begin="${T.begin(t)}" fill="freeze"/>${inner}</g>`);
+    // Each shot's mark shows as its ball reaches the rim: that is where it is decided.
+    const rimAt = (s) => W.findIndex((p) => p.s === s && p.rim);
+    const marks = win.slice(0, -1).map((s, i) => pop(when(T ? T.at : [], rimAt(s)),
+      shotMark(s, 0.3 + 0.55 * (i + 1) / Math.max(1, win.length - 1), k))).join("");
+    // The newest shot: the ring where it went up, its flight as the ball
+    // takes off on it, its mark and a swish as it gets to the rim.
+    const si = W.findIndex((p) => p.s === last), ri = rimAt(last);
+    const { x, y } = W[si], [rx, ry] = [W[ri].x, W[ri].y], [cx, cy] = W[ri].via;
+    const d2 = `M${x.toFixed(1)} ${y.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${rx} ${ry}`;
+    const ring = pop(when(T ? T.at : [], si), `<circle class="hc-halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="22"/>
+      <circle class="hc-spot-ring" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="22"/>`);
+    const flight = pop(when(T ? T.go : [], ri), `<path class="hc-halo" d="${d2}"/><path class="hc-flight${last.made ? " made" : ""}" d="${d2}"/>`);
+    const done = pop(when(T ? T.at : [], ri), `${shotMark(last, 1, k)}${last.made ? `<circle class="hc-swish" cx="${rx}" cy="${ry}" r="18"/>` : ""}`);
+    // The ball, on top: its glow the shooting side's on the way to each
+    // shot; at rest, the side the plays give it to, while the game is on.
+    const rest = on ? k.ballSide : "";
+    const glow = (side) => {
+      const lit = (v) => (v === side ? "0.5" : "0");
+      const anim = moving ? T.steps("opacity", pts.map((p, n) => lit(n && !p.jump ? p.side : "")), lit(rest)) : "";
+      return `<circle class="hc-ball-side" r="28" style="fill:${side === "home" ? "var(--ch)" : "var(--ca)"}" opacity="${lit(rest)}">${anim}</circle>`;
+    };
+    const end = W[W.length - 1];
+    const ball = `<g class="hc-ball-g" transform="translate(${end.x.toFixed(1)} ${end.y.toFixed(1)})">${glow("away")}${glow("home")}
+      <circle class="hc-ball-glow" r="18"/><circle class="hc-ball-dot" r="12"/>${moving ? T.motion : ""}</g>`;
+    const arrow = on ? arrowSVG(k.ballSide) : "";
+    return `${marks}${ring}${flight}${done}${ball}${moving && arrow ? pop(T.dur, arrow) : arrow}`;
   }
   function shotsMarks(k) {
     return k.shots.filter((s) => courtSpot(s) && (S.shots === "both" || s.side === S.shots))
@@ -499,7 +557,9 @@
   function stageHTML(d, league, k) {
     const view = S.view;
     const last = k.shots.filter((s) => courtSpot(s)).slice(-1)[0];
-    const side = view === "live" && last ? (last.side === "away" ? "left" : "right") : "none";
+    // A phone crops the live view to the basket the ball's run stays at,
+    // and shows the whole court when the run goes end to end.
+    const side = view === "live" && last ? (runSpan(k) || "none") : "none";
     const svg = view === "live" ? liveMarks(d, k) : view === "shots" ? shotsMarks(k) : "";
     const pane = view === "tracker" ? trackerHTML(d, league, k) : view === "flow" ? flowPaneHTML(d, league, k) : "";
     const v = d.venue || {};
@@ -521,7 +581,7 @@
       ${legend}${view === "live" ? captionHTML(d, league, k) : ""}
       ${pane ? `<div class="hc-pane">${pane}</div>` : ""}
       <div class="hc-views" role="toolbar" aria-label="What the arena shows">${tabs}
-        <button type="button" class="hc-full" data-hc-full aria-label="Full screen">${EXPAND}</button></div></div>`;
+        ${view === "live" && last ? `<button type="button" class="hc-replay" data-hc-replay aria-label="Replay the last shots">${REPLAY}<span>Replay</span></button>` : ""}<button type="button" class="hc-full" data-hc-full aria-label="Full screen">${EXPAND}</button></div></div>`;
   }
   function shotLegendHTML(d, league, k) {
     const tally = (side) => { const s = k.shots.filter((r) => r.side === side); return `${s.filter((r) => r.made).length}/${s.length}`; };
@@ -799,13 +859,14 @@
     if (host.dataset.hcWired) return;
     host.dataset.hcWired = "1";
     host.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-hc-view],[data-hc-stats],[data-hc-odds],[data-hc-shots],[data-hc-full]");
+      const t = e.target.closest("[data-hc-view],[data-hc-stats],[data-hc-odds],[data-hc-shots],[data-hc-full],[data-hc-replay]");
       if (!t || !host.contains(t)) return;
       if (t.hasAttribute("data-hc-full")) {
         const st = host.querySelector(".hc-stage");
         if (st && st.requestFullscreen) st.requestFullscreen().catch(() => {});
         return;
       }
+      if (t.hasAttribute("data-hc-replay")) S.replay = true;
       if (t.dataset.hcView) S.view = t.dataset.hcView;
       if (t.dataset.hcStats) S.stats = t.dataset.hcStats;
       if (t.dataset.hcOdds) S.odds = t.dataset.hcOdds;
@@ -827,7 +888,7 @@
      were scrolled to. */
   function render(host, ctx, chose) {
     if (!host || !ctx || !ctx.d) return false;
-    if (!S.ctx || !S.ctx.d || S.ctx.d.event_id !== ctx.d.event_id) { S.seen = ""; S.q = null; }
+    if (!S.ctx || !S.ctx.d || S.ctx.d.event_id !== ctx.d.event_id) { S.run = null; S.q = null; }
     const same = !!(S.ctx && S.ctx.d && S.ctx.d.event_id === ctx.d.event_id);
     S.ctx = ctx;
     const pic = same ? host.querySelector(".hc-frame > picture") : null;

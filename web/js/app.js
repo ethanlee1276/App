@@ -48411,7 +48411,8 @@ async function renderPbpPage() {
   const tabs = pbpTabsFor(league);
   const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : tabs[0][0];
   const GC = league === "mlb" ? null : (window.QBGamecast || null);
-  if (league !== "mlb" && !GC) {
+  // Baseball loads it too, for the at-bat's pitches (QBGamecast.zone).
+  if (!window.QBGamecast) {
     loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });
   }
   // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
@@ -48450,7 +48451,7 @@ async function renderPbpPage() {
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
           ${pbpParkHTML(d, league, boardGame, lastPlay)}
-          ${pbpSituationHTML(d, league, faces)}
+          ${pbpSituationHTML(d, league, faces)}${league === "mlb" && window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}
         </div>
         ${infoHTML}
         ${back}

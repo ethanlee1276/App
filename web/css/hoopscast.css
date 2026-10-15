@@ -67,11 +67,21 @@
 .hc-spot-ring { fill: none; stroke: var(--brand); stroke-width: 3; opacity: .9;
   animation: hc-ring var(--dur-slow) var(--ease-out) infinite alternate; transform-box: fill-box; transform-origin: center; }
 .hc-ball-glow { fill: var(--brand); opacity: .28; }
+/* The ball's run (js/hoopscast.js liveMarks): the side moving it glows. */
+/* Replay sits in the views bar beside full screen, never over the floor. */
+.hc-replay { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: var(--radius-sm); font: 700 var(--fs-sm) / 1.2 var(--font-sans); color: var(--text); cursor: pointer;
+  background: color-mix(in oklab, var(--bg) 70%, transparent); border: var(--hairline) solid var(--border);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.hc-replay + .hc-full { margin-left: 0; }
+.hc-replay:hover { background: var(--brand); color: var(--brand-ink); }
 .hc-ball-dot { fill: var(--brand-2); stroke: var(--brand-ink); stroke-width: 2; }
 .hc-swish { fill: none; stroke: var(--good); stroke-width: 4; opacity: .85; }
 .hc-arrow { opacity: .85; stroke: var(--bg); stroke-width: 3; }
 @keyframes hc-ring { from { opacity: .35; } to { opacity: .95; } }
 @media (prefers-reduced-motion: reduce) { .hc-spot-ring { animation: none; } }
+/* Nothing moves for a reader who asked for less motion, so nothing replays. */
+@media (prefers-reduced-motion: reduce) { .hc-replay { display: none; } }
 
 .hc-venue { position: absolute; top: var(--sp-3); right: var(--sp-3); display: flex; flex-direction: column; align-items: flex-end;
   padding: 6px 10px; border-radius: var(--radius-sm); background: color-mix(in oklab, var(--bg) 68%, transparent);
@@ -262,6 +272,8 @@
   .hc-venue b { font-size: var(--fs-xs); }
   .hc-venue span { display: none; }
   .hc-run { top: auto; bottom: var(--sp-2); right: var(--sp-2); }
+  .hc-replay { padding: 0 9px; }
+  .hc-replay span { display: none; }
   .hc-caption { position: static; max-width: none; margin: var(--sp-2) var(--sp-3) 0; box-shadow: none; }
   .hc-legend { position: static; padding: var(--sp-2) var(--sp-3) 0; }
   .hc-pane { position: static; margin: var(--sp-2) var(--sp-3) 0; }
@@ -272,7 +284,7 @@
   .hc-play-list { max-height: 420px; }
   .hc-ts { grid-template-columns: minmax(54px, auto) minmax(0, 1fr) minmax(70px, auto) minmax(0, 1fr) minmax(54px, auto); gap: 6px; }
 }
-/* The narrowest phones keep the four words and lose the marks beside them. */
-@media (max-width: 380px) {
+/* Phones keep the four words and lose the marks beside them. */
+@media (max-width: 420px) {
   .hc-view .ic { display: none; }
 }

@@ -245,7 +245,17 @@ event of the game where it happened (the plays since the last faceoff joined
 in order, the last shot flying to the net), whose puck it is when a play
 settles it, every attempt and every hit, the skaters' ice time and the
 attempt race, then the plays, the stats, the lineups and the odds (step 112;
-BI asks a game what the league's feed carries for it).
+BI asks a game what the league's feed carries for it). And on your red line
+across the rink ("a hockey puck moving back and forth across the ice … any
+other ideas you have for the tracking of the live games for all sports"),
+every live page now tracks the game: the puck runs the period's last plays
+across the ice in the colour of the side moving it, the ball runs the last
+shots end to end, a football game draws the drive on the field (every snap
+a bar, the ball running it to the line of scrimmage, the line to gain, the
+red zone) with the whole game a drive a row on the Play-by-play tab, and a
+baseball game draws the at-bat in the strike zone, every pitch where it
+crossed, the newest flying in; Replay runs each again (step 113; BJ asks
+the game files whether they carry what the trackers draw).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -283,13 +293,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The NHL live page in Ethan's render: every event on the rink, whose puck, the power play and its clock`
+**A. The box has today's code.** The first line should end `Live tracking: the puck and the ball run, football's drive on the field, baseball's at-bat in the zone`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 24a90edd HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 930a97bb HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1560,6 +1570,34 @@ Then open the game from the Live tab, on the phone and on the computer:
 nothing to run, just tell me how it looks. The live scores log says what
 the pass did each time (`nhl rink: 2 of 2 game(s)`); a game the league's
 feed doesn't answer for shows there as `unreachable`.
+
+**BJ. Do the game files carry what the trackers draw** (step 113;
+read-only, seconds). Best with a football game and a baseball game on (the
+newest three files of each league are read either way):
+```
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import glob, json, os
+for lg in ("nfl", "cfb", "mlb"):
+    for f in sorted(glob.glob(f"web/data/pbp/{lg}_*.json"), key=os.path.getmtime)[-3:]:
+        d = json.load(open(f)); lv = d.get("live") or {}
+        if lg == "mlb":
+            ps = [e for e in d.get("events") or [] if e.get("kind") == "pitch"]
+            print(lg, os.path.basename(f), lv.get("state"), "pitches", len(ps), "located", sum("px" in p for p in ps), "with a zone", sum("sz" in p for p in ps))
+        else:
+            ps = [p for dr in d.get("drives") or [] for p in dr.get("plays") or []]
+            print(lg, os.path.basename(f), lv.get("state"), "drives", len(d.get("drives") or []), "plays", len(ps), "with a spot", sum("spot" in p for p in ps), "ball on", lv.get("yard_line"), "down words", bool(lv.get("detail")))
+EOF
+```
+It prints counts only, never a name. What I expect: a football game in
+progress with nearly every play `with a spot` (a timeout or the end of a
+quarter has none, and is not drawn), `ball on` a number and `down words
+True`; a college game whose plays read `with a spot 0` draws no field, and
+that's the one to paste. A baseball game in progress with `located` close to
+`pitches` once the box has pulled today's code (a file written before that
+reads `located 0` until its next pass); `located` far under `pitches` on a
+live game is the one I need. Then open a football game and a baseball game
+from the Live tab, on the phone and on the computer, and press Replay:
+nothing to run, just tell me how it looks.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4989,6 +5027,73 @@ first). Paste back anything that prints an error or looks off.
     changed, no pin changed. New: `tests/test_the_nhl_live_page.py` (26
     checks; the browser one walks the page at 390 and 1280 under
     `QB_BROWSER_TESTS=1`) and `rinkprobe.py`.
+113. **Every live page tracks the game** (2026-10-15, with your red line
+    across the rink: "Are we able too do like a animation of a hockey puck
+    moving back and forth across the ice when we show the switching of
+    positions … Also think and do any other ideas you have for the tracking
+    of the live games for all sports"; BJ). ONE TIMELINE for every page
+    (`QBGamecast.track` in `js/gamecast.js`): a mark glides from point to
+    point, fades out and back in across a whistle, arcs where it flies, and
+    a redraw (the page refreshes every few seconds) carries on from where the
+    run was instead of starting over. A first look runs the newest plays, a
+    new play runs from the last one seen, and Replay runs them all again; a
+    reader whose phone asks for less motion gets the end state and no
+    Replay. HOCKEY: the puck runs the period's last six events that have a
+    spot, each where it happened, in the colour of the side moving it (a
+    shot, a block or a giveaway is the shooter's or the giver's, a takeaway
+    the taker's), flies to the net on every unblocked shot and goes on from
+    there, and fades at a stoppage, a penalty or a faceoff; the line it
+    leaves draws itself behind it, the older legs fainter. On a phone the
+    rink shows one half only when the whole run is in it. BASKETBALL: the
+    ball runs the last six shots, from where each was taken in an arc to the
+    rim, a miss bouncing off; a new quarter starts fresh. Replay sits in the
+    views bar on both pages; the bars now fit from a 360 phone to a 1440
+    desktop (on a phone the tab marks go and the words stay; on a desktop
+    with the plays beside the rink, the short words). FOOTBALL (NFL and
+    college): the Gamecast tab's drive card draws the drive on the field from
+    above: each snap a bar from where it was snapped to where it ended (a
+    run or a pass in the offence's colour, a loss red, a penalty amber and
+    dashed, a touchdown gold, an incompletion or a turnover a cross), the
+    words beside each (`+18 PASS`, `−7 SACK`), a flag walked off after a
+    play drawn dashed to the next snap, the ball running the drive play by
+    play and coming to rest on the line of scrimmage (white), the line to
+    gain in gold from the scoreboard's own words (`3rd & 8`), the red zone
+    lit and named once the offence is inside the twenty, the end zones in
+    each side's colour. A pass is an arc over its whole gain: where it was
+    caught is not in the file. A kickoff, a try and a timeout are not snaps
+    (a kickoff's spot is the kicking side's) and are not drawn; a drive with
+    no spot draws no field and the card is what it was. The Play-by-play tab
+    now leads with the whole game, a drive a row: from where it started to
+    where it ended, in its side's colour, how it ended (TD, FG, PUNT, INT,
+    DOWNS, HALF), the drive in progress where the ball is now, the quarters
+    down the left; it draws itself in the first time the game is opened. Two
+    drawings ride in each card, one for a phone and one for a desktop, and
+    the card shows the one that fits it. BASEBALL: the pitch rows in the game
+    file now carry where each pitch crossed the plate and the batter's own
+    zone (`px`, `pz`, `sz`; the league's pitch tracking, the fields the
+    season pitch chart already reads), and under the at-bat card a new
+    section draws the strike zone from the catcher's side with every pitch of
+    the at-bat, numbered and coloured by what came of it (a called strike
+    amber, a whiff red, in play green, a foul grey, a ball an open ring), the
+    newest flying in from the mound and ringed; the list beside it reads each
+    pitch's call, speed, type and the count. Between at-bats it keeps the last
+    one with how it ended. A pitch the cameras did not track is listed and
+    not drawn. To get there the MLB page now loads the gamecast files too
+    (only when a game opens) and calls them in one place: app.js 494.855 KB of
+    495 (+22 bytes), first visit 611.775 of 612; no budget moved. On a phone
+    the at-bat card above gives the club badge's room to the names, which
+    wrap rather than run under the count. TWO TEST PINS CHANGED, both told
+    here: `tests/test_the_nhl_live_page.py` said "a faceoff is the drop:
+    nothing to join it to" by finding no trail at all; with the run it finds
+    exactly the period's one join and two flights to the net, and nothing
+    joined into the faceoff. Its moving check, and
+    `tests/test_the_nba_live_page.py`'s, looked for the old single flight
+    (`<animateMotion>`); they now load `js/gamecast.js` as the page does and
+    look for the shared run's motion. No test was removed. New:
+    `tests/test_the_live_trackers.py` (17 checks: the timeline, the drive's
+    rows and card, the drive chart, the pitch rows and the zone, the styles;
+    the browser one walks a football game and a baseball game at 390 and
+    1280 under `QB_BROWSER_TESTS=1`).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

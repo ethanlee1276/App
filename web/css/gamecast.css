@@ -99,3 +99,176 @@
   .gc-lead-k { font-size: var(--fs-xs); }
   .gc-chips { grid-template-columns: 1fr; }
 }
+
+/* ---------------- the drive on the field (2026-10-15) ----------------
+   The site's own football field (the carry and kicker charts): dark turf,
+   a mowing stripe every ten yards, the end zones in each side's colour.
+   The line of scrimmage is white and the line to gain gold, the way a
+   broadcast draws them; the plays are bars in the offence's colour, a
+   loss red, a flag amber and dashed, a score gold. Two drawings ride in
+   the card and it shows the one that fits it. */
+.gc-drive-end { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.gc-drive-end .gc-q { margin-left: 0; }
+.gc-rz { padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, transparent); }
+.gc-replay { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-sm);
+  color: var(--text); background: var(--panel-2); border: var(--hairline) solid var(--border); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.gc-replay:hover { background: var(--brand); color: var(--brand-ink); }
+@media (prefers-reduced-motion: reduce) { .gc-replay { display: none; } }
+.gc-fd { margin-top: 12px; container-type: inline-size; }
+.gc-fd-svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); }
+.gc-fd-svg.narrow { display: none; }
+@container (max-width: 480px) {
+  .gc-fd-svg.wide { display: none; }
+  .gc-fd-svg.narrow { display: block; }
+}
+.gc-fd-turf { fill: color-mix(in oklab, var(--good) 11%, var(--bg)); }
+.gc-fd-mow { fill: var(--text); fill-opacity: .035; }
+.gc-fd-ez { fill: color-mix(in oklab, color-mix(in oklab, var(--tm, var(--text-mute)) 65%, var(--text)) 24%, var(--bg)); }
+.gc-fd-ezt { fill: var(--text); fill-opacity: .82; font: 800 17px var(--font-display); letter-spacing: .14em;
+  text-anchor: middle; dominant-baseline: central; }
+.narrow .gc-fd-ezt { font-size: 12px; letter-spacing: .1em; }
+.gc-fd-ezt.band { font: 800 12px var(--font-mono); letter-spacing: .06em; dominant-baseline: auto; }
+.narrow .gc-fd-ezt.band { font-size: 10px; letter-spacing: .02em; }
+.gc-fd-yl { fill: none; stroke: color-mix(in oklab, var(--text) 9%, transparent); stroke-width: 1; }
+.gc-fd-yl.ten { stroke: color-mix(in oklab, var(--text) 20%, transparent); stroke-width: 1.2; }
+.gc-fd-goal { stroke: color-mix(in oklab, var(--text) 55%, transparent); stroke-width: 2; }
+.gc-fd-num { fill: var(--text-mute); font: 600 12px var(--font-mono); text-anchor: middle; }
+.narrow .gc-fd-num { font-size: 10px; }
+.gc-fd-rz { fill: var(--bad); fill-opacity: .13; }
+.gc-fd-los { stroke: var(--text); stroke-width: 2.2; }
+.gc-fd-gain { stroke: var(--brand); stroke-width: 2.2; }
+.gc-fd-lh { stroke-width: 9; opacity: .14; }
+.gc-fd-lh.los { stroke: var(--text); }
+.gc-fd-lh.gain { stroke: var(--brand); }
+.gc-fd-snap { fill: var(--text); fill-opacity: .55; }
+.gc-fd-halo { stroke: var(--bg); stroke-opacity: .6; stroke-width: 11; stroke-linecap: round; }
+.narrow .gc-fd-halo { stroke-width: 9; }
+.gc-fd-bar { stroke: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke-width: 6; stroke-linecap: round; }
+.narrow .gc-fd-bar { stroke-width: 5; }
+.gc-fd-bar.loss { stroke: var(--bad); }
+.gc-fd-bar.td { stroke: var(--brand); }
+.gc-fd-bar.flag { stroke: var(--warn); stroke-dasharray: 6 5; stroke-linecap: butt; }
+.gc-fd-head { fill: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke: var(--bg); stroke-width: 1.2; }
+.gc-fd-head.loss { fill: var(--bad); }
+.gc-fd-head.td { fill: var(--brand); }
+.gc-fd-head.flag { fill: var(--warn); }
+.gc-fd-ext { stroke: var(--warn); stroke-width: 3; stroke-dasharray: 5 4; }
+.gc-fd-flag { fill: var(--warn); stroke: var(--bg); stroke-width: 1.2; }
+.gc-fd-kick { fill: none; stroke: color-mix(in oklab, var(--text) 70%, transparent); stroke-width: 2; stroke-dasharray: 4 4; }
+.gc-fd-x { fill: none; stroke: var(--text-mute); stroke-width: 2.4; stroke-linecap: round; }
+.gc-fd-x.to { stroke: var(--bad); }
+.gc-fd-lbl { fill: var(--text); font: 700 13px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
+  stroke-linejoin: round; }
+.narrow .gc-fd-lbl { font-size: 11px; }
+.gc-fd-lbl.loss, .gc-fd-lbl.to { fill: var(--bad); }
+.gc-fd-lbl.td, .gc-fd-lbl.fg { fill: var(--brand); }
+.gc-fd-lbl.flag { fill: var(--warn); }
+.gc-fd-lbl.inc, .gc-fd-lbl.kick { fill: var(--text-mute); }
+.gc-fd-dn { fill: var(--brand); font: 800 13px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
+  stroke-linejoin: round; }
+.narrow .gc-fd-dn { font-size: 11px; }
+.gc-fd-ball .skin { fill: color-mix(in oklab, var(--warn) 52%, var(--ink-warm)); stroke: var(--bg); stroke-width: 1.4; }
+.gc-fd-ball .lace { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linecap: round; }
+.gc-fd-ball .glow { fill: var(--brand); opacity: .22; }
+.gc-fd-ring { fill: none; stroke: var(--brand); stroke-width: 2; transform-box: fill-box; transform-origin: center;
+  animation: gc-fd-ring 1.8s var(--ease-out) infinite; }
+@keyframes gc-fd-ring { from { transform: scale(.55); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gc-fd-ring { animation: none; opacity: 0; } }
+.gc-fd-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+.gc-fd-key .los, .gc-fd-key .gain, .gc-dc-key { display: inline-flex; align-items: center; gap: 6px; }
+.gc-fd-key .los::before, .gc-fd-key .gain::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--text); }
+.gc-fd-key .gain::before { background: var(--brand); }
+
+/* the whole game, a drive a row */
+.gc-chart { margin-bottom: 10px; }
+.gc-dc-halo { stroke: var(--bg); stroke-opacity: .6; stroke-width: 10; stroke-linecap: round; }
+.gc-dc-bar { stroke: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke-width: 6; stroke-linecap: round; }
+.narrow .gc-dc-halo { stroke-width: 8; }
+.narrow .gc-dc-bar { stroke-width: 4.5; }
+.gc-dc-head, .gc-dc-dot { fill: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); }
+.gc-dc-tag { fill: var(--text-mute); font: 700 11px var(--font-mono); letter-spacing: .04em; paint-order: stroke;
+  stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
+.narrow .gc-dc-tag { font-size: 9.5px; }
+.gc-dc-tag.score { fill: var(--brand); }
+.gc-dc-tag.bad { fill: var(--bad); }
+.gc-dc-tag.now { fill: var(--good); }
+.gc-dc-q { stroke: color-mix(in oklab, var(--text) 30%, transparent); stroke-width: 1; stroke-dasharray: 3 4; }
+.gc-dc-ql { fill: var(--text-mute); font: 700 11px var(--font-mono); text-anchor: middle; }
+.narrow .gc-dc-ql { font-size: 9.5px; }
+.gc-dc-key::before { content: ""; width: 14px; height: 5px; border-radius: 3px; background: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); }
+.gc-dc-key { font-weight: 700; color: var(--text-dim); }
+/* drawn in once, the first time the game is opened */
+.gc-dc-row.grow { transform-box: fill-box; transform-origin: left center; animation: gc-dc-grow .5s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms); }
+.gc-dc-row.grow.away { transform-origin: right center; }
+@keyframes gc-dc-grow { from { transform: scaleX(0); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gc-dc-row.grow { animation: none; } }
+
+/* ---------------- the at-bat, pitch by pitch (2026-10-15) ----------------
+   Under the MLB page's at-bat card: the zone from the catcher's side on
+   the left, the pitches in order on the right; on a phone, one over the
+   other. The pitch chart's colours (css/carrychart.css, .mp-*). */
+.gc-pz { padding: 12px 14px 14px; border-top: var(--hairline) solid var(--border); }
+/* The at-bat card above it (app.js): the inning and the outs keep their
+   line, and on a phone the club badge (the AT BAT · NYY line already says
+   it) gives its room to the name, which wraps rather than running under
+   the count. */
+.pbp-sit-mid .mini { white-space: nowrap; }
+@media (max-width: 480px) {
+  .pbp-sit-badge { display: none; }
+  .pbp-sit .pbp-face { width: 34px; height: 34px; }
+  .pbp-sit-side b, .pbp-sit-side .mini { overflow-wrap: anywhere; }
+}
+.gc-pz-head { display: flex; align-items: center; gap: 10px; }
+.gc-pz-head > div { min-width: 0; }
+.gc-pz-head .gc-replay { margin-left: auto; }
+.gc-tag.quiet { background: color-mix(in srgb, var(--text-mute) 16%, transparent); color: var(--text-dim); }
+.gc-pz-body { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 10px; }
+.gc-pz-svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--good) 7%, var(--bg)); }
+.gc-pz-box { fill: none; stroke: var(--text); stroke-width: 2; }
+.gc-pz-glow { fill: var(--brand); fill-opacity: .05; stroke: var(--brand); stroke-width: 9; stroke-opacity: .14; }
+.gc-pz-grid { stroke: color-mix(in oklab, var(--text) 22%, transparent); stroke-width: 1; stroke-dasharray: 4 4; }
+.gc-pz-plate { fill: color-mix(in oklab, var(--text) 10%, var(--panel)); stroke: var(--text-mute); stroke-width: 1.4; }
+.gc-pz-view { fill: var(--text-mute); font: 600 10px var(--font-mono); letter-spacing: .06em; }
+.gc-pz-dot { stroke: var(--bg); stroke-width: 1.6; }
+.gc-pz-dot.c { fill: var(--warn); }
+.gc-pz-dot.w { fill: var(--bad); }
+.gc-pz-dot.x { fill: var(--good); }
+.gc-pz-dot.f { fill: var(--text-mute); }
+.gc-pz-dot.b { fill: var(--panel); stroke: var(--text-dim); stroke-width: 2; }
+.gc-pz-num { fill: var(--bg); font: 800 10px var(--font-mono); text-anchor: middle; }
+.gc-pz-num.b { fill: var(--text); }
+.gc-pz-ring { fill: none; stroke: var(--brand); stroke-width: 2; transform-box: fill-box; transform-origin: center;
+  animation: gc-fd-ring 1.8s var(--ease-out) infinite; }
+@media (prefers-reduced-motion: reduce) { .gc-pz-ring { animation: none; opacity: .7; } }
+.gc-pz-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.gc-pz-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 8px;
+  border-radius: var(--radius-sm); border: var(--hairline) solid var(--border-soft); }
+.gc-pz-row.now { border-color: color-mix(in oklab, var(--brand) 55%, var(--border)); background: color-mix(in oklab, var(--brand) 6%, transparent); }
+.gc-pz-n { display: inline-grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; border-radius: 50%;
+  font: 800 11px var(--font-mono); color: var(--bg); }
+.gc-pz-n.c { background: var(--warn); }
+.gc-pz-n.w { background: var(--bad); }
+.gc-pz-n.x { background: var(--good); }
+.gc-pz-n.f { background: var(--text-mute); }
+.gc-pz-n.b { background: var(--panel); color: var(--text); border: 2px solid var(--text-dim); }
+.gc-pz-t { display: flex; flex-direction: column; min-width: 0; }
+.gc-pz-t b { font-size: var(--fs-sm); }
+.gc-pz-t span { font-size: var(--fs-xs); color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-pz-row em { font: 700 var(--fs-sm) var(--font-mono); font-style: normal; color: var(--text-dim); }
+.gc-pz-key { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: var(--fs-xs); color: var(--text-mute); }
+.gc-pz-key span { display: inline-flex; align-items: center; gap: 6px; }
+.gc-pz-key span::before { content: ""; width: 10px; height: 10px; border-radius: 50%; }
+.gc-pz-key .c::before { background: var(--warn); }
+.gc-pz-key .w::before { background: var(--bad); }
+.gc-pz-key .x::before { background: var(--good); }
+.gc-pz-key .f::before { background: var(--text-mute); }
+.gc-pz-key .b::before { box-sizing: border-box; border: 2px solid var(--text-dim); }
+@media (max-width: 600px) {
+  .gc-pz-body { grid-template-columns: minmax(0, 1fr); }
+  .gc-pz-svg { max-width: 260px; margin: 0 auto; }
+}

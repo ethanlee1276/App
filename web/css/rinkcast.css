@@ -69,17 +69,28 @@
 .rc-goal-ring { fill: none; stroke: var(--brand); stroke-width: 5; }
 .rc-ice { stroke: var(--bg); stroke-width: 3; }
 .rc-step { stroke: var(--bg); stroke-width: 3; }
-.rc-trail-halo { fill: none; stroke: var(--bg); stroke-width: 9; stroke-linejoin: round; opacity: .5; }
-.rc-trail { fill: none; stroke: var(--brand); stroke-width: 3.5; stroke-dasharray: 9 7; stroke-linejoin: round; }
+/* The puck's run (js/rinkcast.js liveMarks): solid legs, so the line can
+   draw itself behind the puck (its dash length is the leg's own). */
+.rc-trail-halo { fill: none; stroke: var(--bg); stroke-width: 13; stroke-linecap: round; opacity: .5; }
+.rc-trail { fill: none; stroke: var(--brand); stroke-width: 6; stroke-linecap: round; }
 .rc-ring { fill: none; stroke: var(--brand); stroke-width: 4;
   animation: rc-ring var(--dur-slow) var(--ease-out) infinite alternate; transform-box: fill-box; transform-origin: center; }
-.rc-flight { fill: none; stroke: var(--brand); stroke-width: 4; stroke-dasharray: 10 8; }
+.rc-flight { fill: none; stroke: var(--brand); stroke-width: 6; stroke-linecap: round; }
 .rc-flight.goal { stroke: var(--bad); }
-.rc-puck-dot { fill: var(--bg); stroke: var(--text); stroke-width: 3; }
+.rc-puck { fill: var(--bg); stroke: var(--text); stroke-width: 3.5; }
+/* Replay sits in the views bar beside full screen, never over the ice. */
+.rc-replay { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: var(--radius-sm); font: 700 var(--fs-sm) / 1.2 var(--font-sans); color: var(--text); cursor: pointer;
+  background: var(--panel-2); border: var(--hairline) solid var(--border);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.rc-replay + .rc-full { margin-left: 0; }
+.rc-replay:hover { background: var(--brand); color: var(--brand-ink); }
 .rc-lamp { fill: none; stroke: var(--bad); stroke-width: 5; opacity: .9; }
 .rc-arrow { opacity: .9; stroke: var(--bg); stroke-width: 3; }
 @keyframes rc-ring { from { opacity: .35; } to { opacity: .95; } }
 @media (prefers-reduced-motion: reduce) { .rc-ring { animation: none; } }
+/* Nothing moves for a reader who asked for less motion, so nothing replays. */
+@media (prefers-reduced-motion: reduce) { .rc-replay { display: none; } }
 
 .rc-venue { position: absolute; top: var(--sp-3); right: var(--sp-3); display: flex; flex-direction: column; align-items: flex-end;
   padding: 6px 10px; border-radius: var(--radius-sm); background: color-mix(in oklab, var(--bg) 68%, transparent);
@@ -292,6 +303,8 @@
   .rc-venue b { font-size: var(--fs-xs); }
   .rc-venue span { display: none; }
   .rc-ppbadge { top: auto; bottom: var(--sp-2); right: var(--sp-2); }
+  .rc-replay { padding: 0 9px; }
+  .rc-replay span { display: none; }
   .rc-caption { position: static; max-width: none; margin: var(--sp-2) var(--sp-3) 0; box-shadow: none; }
   .rc-legend { position: static; padding: var(--sp-2) var(--sp-3) 0; }
   .rc-pane { position: static; margin: var(--sp-2) var(--sp-3) 0; }
@@ -304,7 +317,20 @@
   .rc-lineup .rc-card-body { max-height: none; }
   .rc-ts { grid-template-columns: minmax(32px, auto) minmax(0, 1fr) minmax(76px, auto) minmax(0, 1fr) minmax(32px, auto); gap: 6px; }
 }
-/* The narrowest phones keep the five words and lose the marks beside them. */
-@media (max-width: 400px) {
+/* Phones keep the five words and lose the marks beside them; the narrowest close the tabs up. */
+@media (max-width: 480px) {
   .rc-view .ic { display: none; }
+}
+@media (max-width: 400px) {
+  .rc-views { gap: 5px; }
+  .rc-view { padding: 8px 7px; }
+}
+/* A desktop with the plays column beside the rink: the short words, Replay as its mark. */
+@media (min-width: 1101px) and (max-width: 1299px) {
+  .rc-vl { display: none; }
+  .rc-vs { display: inline; }
+  .rc-views { gap: 6px; }
+  .rc-view { padding: 8px 10px; }
+  .rc-replay { padding: 0 9px; }
+  .rc-replay span { display: none; }
 }

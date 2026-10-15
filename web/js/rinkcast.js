@@ -52,7 +52,7 @@
   /* What the reader chose, kept across the twelve-second redraws. `q` null
      follows the period being played; 0 is every play. */
   const S = { view: "live", right: "plays", stats: "team", lineup: "lineup", team: "", odds: "odds", q: null,
-              shots: "both", ice: "all", seen: "", ctx: null };
+              shots: "both", ice: "all", run: null, replay: false, ctx: null };
 
   /* ---------------- the clock ---------------- */
   const PERIOD_S = 1200;
@@ -356,6 +356,7 @@
     start: '<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>',
     end: '<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>',
     other: '<circle cx="8" cy="8" r="1.5"/>',
+    replay: '<path d="M3.2 8a4.8 4.8 0 1 0 1.4-3.4"/><path d="M3 2.6v3h3"/>',
   };
   const EXPAND = svg('<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/>', 14);
 
@@ -460,52 +461,141 @@
       : e.kind === "penalty" ? `M${x - r} ${y - r * 0.6} h${r * 2} v${r * 1.2} h${-r * 2} Z` : "";
     return shape ? `<path class="rc-ice ${e.kind}" d="${shape}" style="fill:${col};opacity:${o}"/>` : "";
   }
-  /* THE PLAY'S PATH: the newest events with a spot in this period, joined
-     in order, the newest brightest, a puck at the newest; a shot flies
-     from its spot to the net once, when it is new to the page. */
+  /* THE PUCK'S RUN. Ethan, 2026-10-15, drawing a line across the rink:
+     "Are we able too do like a animation of a hockey puck moving back and
+     forth across the ice when we show the switching of positions". The
+     puck goes through the period's newest events in the order they
+     happened: a glide between two events of one sequence, a fade where a
+     whistle came between them (the puck went dead and was dropped again),
+     a flight to the net on a shot, the lamp on a goal. Its glow, and the
+     line it leaves, is the colour of the side moving it on that leg: the
+     shooter's on the way to his shot, the giver's to a giveaway, the other
+     side's to a takeaway (they had it until then), nobody's after a hit.
+     No feed has the puck between events, so the run joins where things
+     happened, in order; the caption says what each was.
+
+     The first look at a game plays its newest six. A refresh that brings
+     new events moves the puck on from where it stopped. Replay plays the
+     six again. js/gamecast.js `track` keeps the time; a reader who asked
+     for less motion gets the end of the run, still. */
+  const RUN = 6;
+  //: The side the puck travels with into an event, or "" when the event
+  //: does not say.
+  function carrier(d, e) {
+    const s = sideOf(d, e.team);
+    if (ATTEMPTS.has(e.kind) || e.kind === "giveaway") return s;
+    if (e.kind === "takeaway") return other(s);
+    return "";
+  }
+  //: Which run the page is in: a new one when the game, the point the
+  //: puck ends on or the reader's Replay says so; otherwise the same one,
+  //: further on. `keys` are the window's points; a new run starts where
+  //: the last one stopped when that point is still in the window.
+  function runFor(d, end, keys) {
+    const now = Date.now(), r = S.run;
+    if (S.replay || !r || r.game !== d.event_id) {
+      S.run = { game: d.event_id, upto: end, from: null, start: now };
+    } else if (r.upto !== end) {
+      S.run = { game: d.event_id, upto: end, from: keys.includes(r.upto) ? r.upto : null, start: now };
+    }
+    S.replay = false;
+    return { from: S.run.from, elapsed: (now - S.run.start) / 1000 };
+  }
+  function netPoint(d, e) {
+    const net = NET[sideOf(d, e.team) || "home"];
+    return toArt(net[0], net[1] + (e.kind === "miss" ? (e.y >= 0 ? 6 : -6) : 0));
+  }
+  const flies = (e) => ATTEMPTS.has(e.kind) && e.kind !== "block";
+  //: The half of the rink the run's events all sit in ("left", "right"),
+  //: or null when they cross centre ice.
+  function runSpan(d) {
+    const all = events(d).filter((e) => e.x != null && e.y != null);
+    const last = all[all.length - 1];
+    if (!last) return null;
+    const win = all.filter((e) => e.period === last.period).slice(-RUN);
+    if (win.every((e) => e.x < 0)) return "left";
+    if (win.every((e) => e.x >= 0)) return "right";
+    return null;
+  }
   function liveMarks(d, k) {
-    /* THE SEQUENCE SINCE THE DROP: the spotted events back to the newest
-       faceoff, never across a whistle (a stoppage, a penalty, a goal, a
-       period's start), the newest eight at most. No feed has the puck's
-       path between two events, so the line joins where things happened,
-       in the order they happened, and stops where play stopped. */
     const all = events(d);
     let i = all.length - 1;
     while (i >= 0 && (all[i].x == null || all[i].y == null)) i--;
     if (i < 0) return "";
     const last = all[i];
-    const path = [last];
-    // A faceoff is the drop itself: the sequence starts there.
-    for (let j = i - 1; last.kind !== "faceoff" && j >= 0 && path.length < 8; j--) {
-      const e = all[j];
-      if (e.period !== last.period || WHISTLES.has(e.kind)) break;
-      if (e.x != null && e.y != null) path.unshift(e);
-      if (e.kind === "faceoff") break;
+    const idx = [];
+    for (let j = i; j >= 0 && idx.length < RUN; j--) {
+      if (all[j].period !== last.period) break;
+      if (all[j].x != null && all[j].y != null) idx.unshift(j);
     }
-    const pts = path.map((e) => at(e).join(","));
-    const trail = path.length > 1 ? `<polyline class="rc-trail-halo" points="${pts.join(" ")}"/><polyline class="rc-trail" points="${pts.join(" ")}"/>` : "";
-    const steps = path.slice(0, -1).map((e, i) => {
-      const a = 0.35 + 0.5 * (i + 1) / Math.max(1, path.length - 1);
-      return ATTEMPTS.has(e.kind) ? shotMark(d, e, k, a) : (iceMark(d, e, k, a) || `<circle class="rc-step" cx="${at(e)[0]}" cy="${at(e)[1]}" r="6" style="fill:${colOf(d, e, k)};opacity:${a.toFixed(2)}"/>`);
+    // The window's points: each event where it happened, joined to the one
+    // before unless a whistle (or the drop itself) came between them; an
+    // unblocked shot goes on to the net, and play goes on from there.
+    const W = [];
+    idx.forEach((j, n) => {
+      const e = all[j], [x, y] = toArt(e.x, e.y);
+      const jump = n > 0 && (e.kind === "faceoff" || all.slice(idx[n - 1] + 1, j).some((b) => WHISTLES.has(b.kind)));
+      W.push({ key: String(e.id), x, y, jump, e, side: jump ? "" : carrier(d, e) });
+      if (flies(e)) {
+        const [nx, ny] = netPoint(d, e);
+        W.push({ key: `${e.id}>net`, x: nx, y: ny, e, net: true, side: sideOf(d, e.team), leg: 0.45, hold: e === last ? 0.8 : 0.25 });
+      }
+    });
+    const run = runFor(d, W[W.length - 1].key, W.map((p) => p.key));
+    const from = run.from == null ? 0 : Math.max(0, W.findIndex((p) => p.key === run.from));
+    const pts = W.slice(from).map((p, n) => (n ? p : Object.assign({}, p, { jump: false })));
+    const G = window.QBGamecast;
+    const T = G && G.track ? G.track(pts, { elapsed: run.elapsed }) : null;
+    const moving = !!(T && !T.still);
+    // When the mark at window point n arrives: before the run, already.
+    const arrive = (n) => (moving && n > from ? T.at[n - from] : null);
+    const leaves = (n) => (moving && n > from ? T.go[n - from] : null);
+    const pop = (n, inner) => {
+      const t = arrive(n);
+      return t == null || T.past(t) ? inner : `<g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.2s" begin="${T.begin(t)}" fill="freeze"/>${inner}</g>`;
+    };
+    const col = (side) => (side === "home" ? "var(--ch)" : side === "away" ? "var(--ca)" : "var(--text)");
+    // The line the puck leaves, leg by leg, the older fainter; drawn as
+    // the puck goes when it is moving.
+    const legs = W.map((p, n) => {
+      if (!n || p.jump) return "";
+      const q = W[n - 1], len = Math.hypot(p.x - q.x, p.y - q.y), a = (0.35 + 0.6 * n / Math.max(1, W.length - 1)).toFixed(2);
+      // Drawn whole once the puck is past it; drawing itself behind the
+      // puck while it is on it (from where it is now, after a redraw).
+      const t0 = leaves(n), t1 = arrive(n);
+      const on = t0 != null && !T.past(t1);
+      const left = on ? len * Math.min(1, (t1 - Math.max(t0, T.elapsed)) / Math.max(0.01, t1 - t0)) : 0;
+      const draw = on ? ` stroke-dasharray="${len.toFixed(1)}" stroke-dashoffset="${left.toFixed(1)}"` : "";
+      const anim = on ? `<animate attributeName="stroke-dashoffset" from="${left.toFixed(1)}" to="0" begin="${T.begin(t0)}" dur="${Math.max(0.05, t1 - Math.max(t0, T.elapsed)).toFixed(2)}s" fill="freeze"/>` : "";
+      const cls = p.net ? `rc-flight${p.e.kind === "goal" ? " goal" : ""}` : "rc-trail";
+      const line = (c, style) => `<line class="${c}" x1="${q.x.toFixed(1)}" y1="${q.y.toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}"${draw}${style}>${anim}</line>`;
+      return `<g style="opacity:${a}">${line("rc-trail-halo", "")}${line(cls, p.net ? "" : ` style="stroke:${col(p.side)}"`)}</g>`;
     }).join("");
-    const [x, y] = toArt(last.x, last.y);
-    const fresh = S.seen !== String(last.id);
-    S.seen = String(last.id);
-    let flight = "";
-    if (ATTEMPTS.has(last.kind) && last.kind !== "block") {
-      const side = sideOf(d, last.team) || "home";
-      const net = NET[side];
-      const [nx, ny] = toArt(net[0], net[1] + (last.kind === "miss" ? (last.y >= 0 ? 6 : -6) : 0));
-      const dpath = `M${x.toFixed(1)} ${y.toFixed(1)} L${nx.toFixed(1)} ${ny.toFixed(1)}`;
-      const go = fresh && !still();
-      flight = `<path class="rc-halo" d="${dpath}"/><path class="rc-flight${last.kind === "goal" ? " goal" : ""}" d="${dpath}"/>
-        <g${go ? "" : ` transform="translate(${nx.toFixed(1)} ${ny.toFixed(1)})"`}><circle class="rc-puck-dot" r="6"/>${go ? `<animateMotion dur="0.6s" fill="freeze" path="${dpath}"/>` : ""}</g>
-        ${last.kind === "goal" ? `<circle class="rc-lamp" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="22"/>` : ""}`;
-    }
-    const now = ATTEMPTS.has(last.kind) ? shotMark(d, last, k, 1) : iceMark(d, last, k, 1);
-    const ring = `<circle class="rc-halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="20"/><circle class="rc-ring" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="20"/>`;
-    const puck = flight ? "" : `<circle class="rc-puck-dot" cx="${x.toFixed(1)}" cy="${(y - 16).toFixed(1)}" r="6"/>`;
-    return `${trail}${steps}${ring}${now}${flight}${puck}${arrowSVG(d, k)}`;
+    // Every event's mark, the older fainter, each showing as the puck gets there.
+    const marks = W.map((p, n) => {
+      if (p.net || p.e === last) return "";
+      const a = 0.35 + 0.5 * (n + 1) / Math.max(1, W.length - 1);
+      const e = p.e;
+      return pop(n, ATTEMPTS.has(e.kind) ? shotMark(d, e, k, a) : (iceMark(d, e, k, a) || `<circle class="rc-step" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" style="fill:${colOf(d, e, k)};opacity:${a.toFixed(2)}"/>`));
+    }).join("");
+    const ln = W.findIndex((p) => p.e === last && !p.net);
+    const { x, y } = W[ln];
+    const now = pop(ln, `<circle class="rc-halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="20"/><circle class="rc-ring" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="20"/>${
+      ATTEMPTS.has(last.kind) ? shotMark(d, last, k, 1) : iceMark(d, last, k, 1)}`);
+    const end = W[W.length - 1];
+    const lamp = last.kind === "goal" && end.net ? pop(W.length - 1, `<circle class="rc-lamp" cx="${end.x.toFixed(1)}" cy="${end.y.toFixed(1)}" r="22"/>`) : "";
+    // The puck, on top, its glow the side moving it on each leg; at rest,
+    // the side the last event gave it to (none after a shot or a hit).
+    const rest = (d.live || {}).state === "live" ? k.puck : "";
+    const glow = (side) => {
+      const on = (s) => (s === side ? "0.55" : "0");
+      const anim = moving ? T.steps("opacity", pts.map((p, n) => on(n && !p.jump ? p.side : "")), on(rest)) : "";
+      return `<circle class="rc-puck-glow" r="26" style="fill:${col(side)}" opacity="${on(rest)}">${anim}</circle>`;
+    };
+    const puck = `<g class="rc-puck-run" transform="translate(${end.x.toFixed(1)} ${end.y.toFixed(1)})">${glow("away")}${glow("home")}
+      <ellipse class="rc-puck" rx="13" ry="8"/>${moving ? T.motion : ""}</g>`;
+    const arrow = arrowSVG(d, k);
+    return `${legs}${marks}${now}${lamp}${puck}${moving && arrow ? `<g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="${T.begin(T.dur)}" fill="freeze"/>${arrow}</g>` : arrow}`;
   }
   const WHISTLES = new Set(["stoppage", "penalty", "goal", "start", "end"]);
   /* Whose puck, as an arrow at centre ice toward the net they attack. */
@@ -601,7 +691,10 @@
   function stageHTML(d, k) {
     const view = S.view;
     const lastSpot = events(d).filter((e) => e.x != null).slice(-1)[0];
-    const half = view === "live" && lastSpot ? (lastSpot.x < 0 ? "left" : "right")
+    // A phone crops the live view to the half the puck's run stays in, and
+    // shows the whole rink when the run crosses centre ice.
+    const ran = view === "live" ? runSpan(d) : null;
+    const half = view === "live" && lastSpot ? (ran ? ran : "none")
       : view === "shots" && S.shots !== "both" ? (S.shots === "away" ? "left" : "right") : "none";
     const marks = view === "live" ? liveMarks(d, k) : view === "shots" ? shotsMarks(d, k) : view === "ice" ? iceMarks(d, k) : "";
     const pane = view === "tracker" ? trackerHTML(d, k) : view === "flow" ? flowPaneHTML(d, k) : "";
@@ -614,6 +707,9 @@
       `<button type="button" class="rc-view${view === key ? " on" : ""}" data-rc-view="${key}" aria-pressed="${view === key}" aria-label="${label}">${icon(ic, 13)}<span class="rc-vl">${label}</span><span class="rc-vs">${short}</span></button>`).join("");
     // The scene is the art and what sits over it; the views are a bar under
     // it, as in Ethan's render.
+    // Replay plays the newest events again (the puck's run, liveMarks).
+    const replay = view === "live" && lastSpot
+      ? `<button type="button" class="rc-replay" data-rc-replay aria-label="Replay the last plays">${svg(GLYPH.replay, 13)}<span>Replay</span></button>` : "";
     return `<div class="card rc-stage v-${view}" style="--ca:${k.colors.away};--ch:${k.colors.home}">
       <div class="rc-scene"><div class="rc-art" data-half="${half}">
         <div class="rc-frame">${PICTURE}
@@ -622,7 +718,7 @@
       ${chipsHTML(d, k)}${view === "live" ? captionHTML(d, k) : ""}
       ${pane ? `<div class="rc-pane">${pane}</div>` : ""}</div>
       <div class="rc-views" role="toolbar" aria-label="What the arena shows">${tabs}
-        <button type="button" class="rc-full" data-rc-full aria-label="Full screen">${EXPAND}</button></div></div>`;
+        ${replay}<button type="button" class="rc-full" data-rc-full aria-label="Full screen">${EXPAND}</button></div></div>`;
   }
 
   /* ---------------- the right-hand column ---------------- */
@@ -842,7 +938,7 @@
     if (host.dataset.rcWired) return;
     host.dataset.rcWired = "1";
     host.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-rc-view],[data-rc-right],[data-rc-stats],[data-rc-lineup],[data-rc-odds],[data-rc-shots],[data-rc-ice],[data-rc-team],[data-rc-full]");
+      const t = e.target.closest("[data-rc-view],[data-rc-right],[data-rc-stats],[data-rc-lineup],[data-rc-odds],[data-rc-shots],[data-rc-ice],[data-rc-team],[data-rc-full],[data-rc-replay]");
       if (!t || !host.contains(t)) return;
       if (t.hasAttribute("data-rc-full")) {
         const st = host.querySelector(".rc-stage");
@@ -850,6 +946,7 @@
         return;
       }
       const ds = t.dataset;
+      if (t.hasAttribute("data-rc-replay")) S.replay = true;
       if (ds.rcView) S.view = ds.rcView;
       if (ds.rcRight) S.right = ds.rcRight;
       if (ds.rcStats) S.stats = ds.rcStats;
@@ -875,7 +972,7 @@
   function render(host, ctx, chose) {
     if (!host || !ctx || !ctx.d || !ctx.d.rink) return false;
     const same = !!(S.ctx && S.ctx.d && S.ctx.d.event_id === ctx.d.event_id);
-    if (!same) { S.seen = ""; S.q = null; S.team = ""; }
+    if (!same) { S.run = null; S.q = null; S.team = ""; }
     S.ctx = ctx;
     const pic = same ? host.querySelector(".rc-frame > picture") : null;
     const scrolled = same && !chose ? [".rc-play-list", ".rc-pane"].map((sel) => [sel, (host.querySelector(sel) || {}).scrollTop || 0]) : [];
