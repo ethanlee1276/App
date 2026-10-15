@@ -25034,6 +25034,8 @@ function renderMyBets() {
   // on the user's own stake and price, never a projection.
   const mbToWin = (b) => !b.odds || !b.stake ? 0
     : (b.odds > 0 ? b.stake * b.odds / 100 : b.stake * 100 / Math.abs(b.odds));
+  // A saved slip plays its night back (js/extras.js replayInto).
+  const replayBtn = (b) => b.src === "slip" && b.result !== "pending" ? `<button class="mb-act" data-xt="replay" data-id="${escapeAttr(b.id || "")}">Replay</button>` : "";
   const card = (b) => {
     const [label, color] = resultTag[b.result] || resultTag.pending;
     const legs = (b.desc || "").includes(" + ") ? (b.desc || "").split(" + ") : null;
@@ -25056,7 +25058,7 @@ function renderMyBets() {
       <div class="mbc-sub">${escapeHtml(b.book || "")}${b.sport ? ` · ${escapeHtml(b.sport)}` : ""} · ${escapeHtml(b.date || "")}</div>
       <div class="mbc-foot"><span class="mbc-stake">${mbMoney(b.stake)} staked</span>
         <span class="mbc-outcome">${outcome}</span>
-        <span class="mb-actions">${actions}
+        <span class="mb-actions">${replayBtn(b)}${actions}
           <button class="mb-act del" title="Delete this bet" aria-label="Delete"
             data-act="mbDelete" data-arg="${b.id}">${icon("cross", 12)}</button></span></div>
     </article>`;
@@ -25083,7 +25085,7 @@ function renderMyBets() {
         ? `<button class="mb-act win" data-act="mbResult" data-arg="${b.id}" data-arg2="win">W</button>
            <button class="mb-act loss" data-act="mbResult" data-arg="${b.id}" data-arg2="loss">L</button>
            <button class="mb-act push" data-act="mbResult" data-arg="${b.id}" data-arg2="push">P</button>`
-        : `<button class="mb-act undo" data-act="mbResult" data-arg="${b.id}" data-arg2="pending">Reopen</button>`}
+        : `<button class="mb-act undo" data-act="mbResult" data-arg="${b.id}" data-arg2="pending">Reopen</button>`}${replayBtn(b)}
         <button class="mb-act del" title="Delete this bet" aria-label="Delete"
           data-act="mbDelete" data-arg="${b.id}">${icon("cross", 12)}</button></td>
     </tr>`;

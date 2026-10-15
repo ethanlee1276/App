@@ -1173,6 +1173,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._hoops_whatif(parse_qs(parsed.query))
         if parsed.path in ("/api/lines/books", "/api/lines/books/"):
             return self._lines_books(parse_qs(parsed.query))
+        if parsed.path in ("/api/mybets/replay", "/api/mybets/replay/"):
+            return self._mybets_replay(parse_qs(parsed.query))
         if parsed.path in ("/api/players/versus", "/api/players/versus/"):
             return self._players_versus(parse_qs(parsed.query))
         if parsed.path in ("/api/players/carries", "/api/players/carries/"):
@@ -3246,6 +3248,26 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the logs could not be read"}', ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _mybets_replay(self, q):
+        """One saved slip's live chance as the box kept it (engine/
+        slipreplay): the caller's own slip only, and behind the membership,
+        like the live chance it plays back."""
+        from engine import slipreplay as SR
+        bid = ((q.get("id") or [""])[0] or "")[:40]
+        if not bid:
+            return self._send(400, b'{"error":"which slip"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who or not self._entitled(conn, who):
+                locked = {"error": "The replay comes with a membership.", "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+            pts = SR.history(conn, who["id"], bid)
+        finally:
+            conn.close()
+        return self._send(200, json.dumps({"id": bid, "points": pts}).encode(), ".json")
 
     def _lines_books(self, q):
         """Every book's line on one market over time, and the steam marks

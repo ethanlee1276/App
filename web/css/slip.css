@@ -184,3 +184,24 @@
 @media (min-width: 900px) {
   .pgr-track { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; }
 }
+
+/* The sweat meter (slip.js sweatHTML): the ticket's live chance for the
+   rest as a half-dial, its word and how far it moved since the last read. */
+.pgr-sweat { display: flex; align-items: center; gap: 12px; margin: 8px 0; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--panel-2); border: var(--hairline) solid var(--border); }
+.pgr-sweat svg { width: 96px; height: auto; flex-shrink: 0; }
+.pgr-sw-track { fill: none; stroke: var(--panel-3); stroke-width: 9; stroke-linecap: round; }
+.pgr-sw-fill { fill: none; stroke: var(--text-dim); stroke-width: 9; stroke-linecap: round; }
+.pgr-sweat.t-good .pgr-sw-fill { stroke: var(--good); }
+.pgr-sweat.t-warn .pgr-sw-fill { stroke: var(--warn); }
+.pgr-sweat.t-bad .pgr-sw-fill { stroke: var(--bad); }
+.pgr-sw-needle { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; }
+.pgr-sw-hub { fill: var(--text); }
+.pgr-sw-t { display: grid; gap: 1px; min-width: 0; }
+.pgr-sw-t b { font: 800 var(--fs-lg) var(--font-mono); color: var(--text); }
+.pgr-sw-t span { font-size: var(--fs-sm); font-weight: 700; color: var(--text-dim); }
+.pgr-sweat.t-good .pgr-sw-t span { color: var(--good); }
+.pgr-sweat.t-bad .pgr-sw-t span { color: var(--bad); }
+.pgr-sw-t em { font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
+.pgr-sw-t em.up { color: var(--good); }
+.pgr-sw-t em.dn { color: var(--bad); }

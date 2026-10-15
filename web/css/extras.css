@@ -184,3 +184,20 @@
 .xb-st { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-xs); color: var(--text-dim); }
 .xb-st li::before { content: "▲ "; color: var(--good); }
 .xb-st li.dn::before { content: "▼ "; color: var(--bad); }
+
+/* The bet replay (extras.js replayHTML): the slip's chance, drawn in. */
+.xr-wrap { grid-column: 1 / -1; }
+.xr-box { padding: 10px 2px; display: grid; gap: 6px; }
+.xr-svg { width: 100%; max-width: 640px; height: auto; display: block; }
+.xr-mid { stroke: var(--border); stroke-dasharray: 3 3; }
+.xr-path { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0;
+  animation: xr-draw var(--dur-slow) var(--ease-out) both; }
+@keyframes xr-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.xr-end { fill: var(--brand); }
+.xr-end.won { fill: var(--good); }
+.xr-end.lost { fill: var(--bad); }
+.xr-sum { margin: 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.xr-sum b { color: var(--text); }
+.xr-sum b.pos { color: var(--good); }
+.xr-sum b.neg { color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .xr-path { animation: none; } }

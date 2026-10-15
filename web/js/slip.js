@@ -771,6 +771,26 @@
       <div class="pgr-leg-h"><b>${esc(legName(l))}</b>${res ? `<span class="pgr-res r-${esc(res)}">${esc(RESULT[res] || res)}</span>` : ""}</div>
       ${liveHTML(l)}${when}</li>`;
   }
+  /* THE SWEAT METER (2026-10-15, one of the sixteen ideas): the ticket's
+     live chance for the rest (slipgrade.standing) as a gauge, with a word
+     for where it stands and how far it moved since the last read. Drawn
+     only while the slip is live and the rest has a number. */
+  const SWEAT = [[0.8, "Cruising", "good"], [0.6, "In control", "good"], [0.4, "Coin flip", "warn"],
+                 [0.2, "Sweating", "warn"], [0, "Needs a miracle", "bad"]];
+  const _sweat = new Map();
+  function sweatHTML(id, n) {
+    if (!n || n.status !== "open" || n.chance == null) return "";
+    const p = Math.max(0, Math.min(1, Number(n.chance) || 0)), was = _sweat.get(id);
+    if (!was || was.p !== p) _sweat.set(id, { p, prev: was ? was.p : null });
+    const prev = _sweat.get(id).prev, [, word, tone] = SWEAT.find(([lo]) => p >= lo);
+    const a = Math.PI * (1 - p), x = (60 + 46 * Math.cos(a)).toFixed(1), y = (58 - 46 * Math.sin(a)).toFixed(1);
+    const moved = prev == null || Math.round(100 * (p - prev)) === 0 ? ""
+      : `<em class="${p > prev ? "up" : "dn"}">${p > prev ? "▲" : "▼"} ${Math.abs(Math.round(100 * (p - prev)))} since the last read</em>`;
+    return `<div class="pgr-sweat t-${tone}" role="img" aria-label="${esc(`Our chance for the rest ${pct(p)}: ${word}`)}">
+      <svg viewBox="0 0 120 66"><path class="pgr-sw-track" d="M14 58A46 46 0 0 1 106 58"/>${p > 0
+        ? `<path class="pgr-sw-fill" d="M14 58A46 46 0 0 1 ${x} ${y}"/>` : ""}<line class="pgr-sw-needle" x1="60" y1="58" x2="${x}" y2="${y}"/><circle class="pgr-sw-hub" cx="60" cy="58" r="4"/></svg>
+      <div class="pgr-sw-t"><b>${pct(p)}</b><span>${word}</span>${moved}</div></div>`;
+  }
   function trackCardHTML(b, got) {
     const pay = dec(b.paid_odds || b.odds);
     const head = `<div class="pgr-track-h"><b>${esc(b.desc)}</b><span>${esc(b.book || "")} · ${money(b.stake)} at ${esc(price(b.odds))}${
@@ -785,7 +805,7 @@
     }
     const first = !c.now && c.first_kickoff && kick(c.first_kickoff)
       ? `<div class="pgr-now">Nothing has started · first game ${esc(kick(c.first_kickoff))}</div>` : "";
-    return `<div class="pgr-card pgr-track-card">${head}${done || lastHTML(c) + (nowHTML(c.now) || first)}${b.result === "pending" ? hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
+    return `<div class="pgr-card pgr-track-card">${head}${done || lastHTML(c) + (nowHTML(c.now) || first)}${b.result === "pending" ? sweatHTML(b.id, c.now) + hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
       <ol class="pgr-legs">${(c.legs || []).map(trackLegHTML).join("")}</ol></div>`;
   }
   function draw() {
@@ -889,5 +909,5 @@
     });
   }
 
-  window.QBSlip = { send, card, shrink, track, hedgeOut, cashOut, slipKey, entryOf, settleOne, lastLeg, lastHTML };
+  window.QBSlip = { send, card, shrink, track, hedgeOut, cashOut, slipKey, entryOf, settleOne, lastLeg, lastHTML, sweatHTML };
 })();

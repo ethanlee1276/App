@@ -672,6 +672,65 @@
     }).catch(() => {});
   }
 
+  // ---- the bet replay (My Bets) -------------------------------------------
+  /* engine/slipreplay through /api/mybets/replay: a saved slip's chance as
+     the box kept it while it watched — before kickoff, every swing while
+     the games ran, and how it ended — drawn in, start to finish. */
+  const rpTime = (s) => new Date(s * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  function replayFacts(points) {
+    const pts = (points || []).filter((p) => p && Number.isFinite(p[0]) && p[1] != null);
+    if (pts.length < 2) return null;
+    const live = pts.filter((p) => p[2] === "live"), pre = pts.find((p) => p[2] === "pre"), end = pts[pts.length - 1];
+    let swing = null;
+    for (let i = 1; i < pts.length; i++) {
+      const d = pts[i][1] - pts[i - 1][1];
+      if (pts[i][2] !== "won" && pts[i][2] !== "lost" && (!swing || Math.abs(d) > Math.abs(swing.d))) swing = { d, at: pts[i][0] };
+    }
+    return { pts, pre: pre ? pre[1] : null, end: end[2] === "won" || end[2] === "lost" ? end[2] : "",
+             lo: live.length ? live.reduce((a, p) => (p[1] < a[1] ? p : a)) : null,
+             hi: live.length ? live.reduce((a, p) => (p[1] > a[1] ? p : a)) : null, swing };
+  }
+  function replayHTML(d) {
+    const f = replayFacts(d && d.points);
+    if (!f) return `<p class="xt-hint">No replay for this slip yet. The box keeps a saved slip’s chance while it watches it,
+      from the first grade after 2026-10-15; a slip it never graded has none.</p>`;
+    const W = 640, H = 170, L = 40, R = 12, T = 12, B = 22, t0 = f.pts[0][0], span = Math.max(1, f.pts[f.pts.length - 1][0] - t0);
+    const x = (t) => L + (W - L - R) * ((t - t0) / span), y = (p) => T + (H - T - B) * (1 - p);
+    const path = f.pts.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join("");
+    const last = f.pts[f.pts.length - 1];
+    const bits = [f.pre != null ? `Before kickoff <b>${pctTxt(f.pre, 0)}</b>` : "",
+                  f.lo ? `low <b>${pctTxt(f.lo[1], 0)}</b> at ${esc(rpTime(f.lo[0]))}` : "",
+                  f.hi ? `high <b>${pctTxt(f.hi[1], 0)}</b> at ${esc(rpTime(f.hi[0]))}` : "",
+                  f.swing && Math.abs(f.swing.d) >= 0.05 ? `biggest swing <b>${f.swing.d > 0 ? "+" : "−"}${Math.round(Math.abs(f.swing.d) * 100)} points</b> at ${esc(rpTime(f.swing.at))}` : "",
+                  f.end ? `<b class="${f.end === "won" ? "pos" : "neg"}">${f.end === "won" ? "Cashed" : "Lost"}</b>` : "still live"];
+    return `<svg class="xr-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Our chance this slip hit, from the first read to the last">
+      <line class="xr-mid" x1="${L}" x2="${W - R}" y1="${y(0.5)}" y2="${y(0.5)}"/>
+      <text class="xb-ax" x="${L - 6}" y="${y(1) + 4}" text-anchor="end">100%</text><text class="xb-ax" x="${L - 6}" y="${y(0.5) + 4}" text-anchor="end">50%</text>
+      <text class="xb-ax" x="${L - 6}" y="${y(0) + 4}" text-anchor="end">0%</text>
+      <text class="xb-ax" x="${L}" y="${H - 4}">${esc(rpTime(t0))}</text><text class="xb-ax" x="${W - R}" y="${H - 4}" text-anchor="end">${esc(rpTime(last[0]))}</text>
+      <path class="xr-path" pathLength="1" d="${path}"/><circle class="xr-end ${f.end || "live"}" cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="5"/></svg>
+      <p class="xr-sum">${bits.filter(Boolean).join(" · ")}</p>
+      <p class="xt-fine">Our chance as the box read it about once a minute: before kickoff, our chance it all hits; once it ran, our
+      chance for the rest. Our own number, not the book’s.</p>`;
+  }
+  function replayInto(btn) {
+    const row = btn.closest("[data-mbid]"), id = btn.dataset.id;
+    if (!row || !id) return;
+    const next = row.nextElementSibling;
+    if (next && next.classList.contains("xr-wrap")) { next.remove(); return; }
+    const tr = row.tagName === "TR";
+    const wrap = document.createElement(tr ? "tr" : "div");
+    wrap.className = "xr-wrap";
+    const set = (html) => { wrap.innerHTML = tr ? `<td colspan="8"><div class="xr-box">${html}</div></td>` : `<div class="xr-box">${html}</div>`; };
+    set(`<p class="xt-hint">Reading the replay…</p>`);
+    row.after(wrap);
+    fetch(`/api/mybets/replay?id=${encodeURIComponent(id)}`, { credentials: "same-origin" })
+      .then((r) => (r.status === 401 ? { gate: "Sign in to see the replay." } : r.status === 402 ? { gate: "The replay comes with a membership." } : r.ok ? r.json() : null))
+      .then((d) => set(!d ? `<p class="xt-hint">The replay could not be read — try again in a minute.</p>`
+        : d.gate ? `<p class="xt-hint">${esc(d.gate)} <a href="#paywall">See the plans</a>.</p>` : replayHTML(d)))
+      .catch(() => set(`<p class="xt-hint">The replay could not be read — try again in a minute.</p>`));
+  }
+
   /* Each sport's own tools, drawn above the calculators when that sport
      is the one selected. */
   const SPORT_TOOLS = {
@@ -793,6 +852,7 @@
       const t = e.target && e.target.closest && e.target.closest("[data-xt]");
       if (!t) return;
       if (t.dataset.xt === "rc-closes") askCloses(t);
+      if (t.dataset.xt === "replay") replayInto(t);
       if (t.dataset.xt === "wi-stat") {
         const box = t.closest("[data-xw-league]");
         if (!box || !box._wi) return;
@@ -805,5 +865,5 @@
   window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
                       spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML,
-                      bookModel, bookLinesHTML, bookLines };
+                      bookModel, bookLinesHTML, bookLines, replayFacts, replayHTML };
 })();

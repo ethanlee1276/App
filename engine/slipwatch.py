@@ -346,9 +346,12 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
     — with none given nobody is mailed and the alert is only noted;
     ``mail_on`` says whether a relay exists (engine.mailer.configured)."""
     from . import slipgrade as SG
+    from . import slipreplay as SR
     t = time.time() if now is None else now
     ensure_tables(conn)
+    SR.ensure_table(conn)
     conn.execute("DELETE FROM slip_alerts WHERE fired_at < ?", (t - KEEP_DAYS * 86400,))
+    SR.prune(conn, t)
     conn.commit()
     rows = pending_slips(conn) if rows is None else rows
     out = {"slips": len(rows), "noted": 0, "mailed": 0, "failed": 0, "settled": 0}
@@ -374,6 +377,13 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
         except Exception as exc:                                   # noqa: BLE001
             log(f"  slip watch: a saved slip could not be read ({type(exc).__name__}: {exc})")
             continue
+        # THE REPLAY (engine/slipreplay, 2026-10-15): this grade's number,
+        # kept when it earns a place, so My Bets can play the night back.
+        try:
+            if SR.bank(conn, r["user_id"], bid, card, t):
+                conn.commit()
+        except sqlite3.Error as exc:
+            log(f"  slip watch: a replay point could not be kept ({type(exc).__name__})")
         done = settled(bet, card)
         if done is not None:
             settles.setdefault(r["user_id"], {})[str(bet["id"])] = done
