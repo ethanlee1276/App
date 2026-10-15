@@ -3795,6 +3795,11 @@ async function renderPickOfTheDay() {
   const potdStyle = `border-left:3px solid ${accent};margin-bottom:12px`;
   // The team's stadium when this league has them; the ball otherwise.
   const heroArt = potdVenueArt(potdArt) || potdBallArt();
+  // HIS TILE over the stadium (Ethan, 2026-10-15): a player's pick with
+  // a photo on file wears him, and the small face beside the bet goes; a
+  // side, a total or a pick with no photo keeps the art alone. Last in the
+  // card: styles.css places it (top right, or beside the heading on a phone).
+  const tile = isTeam || !pick.headshot ? "" : playerTileHTML(pick, 140);
   const carriedNote = got.carried ? escapeHtml(got.carried) : "";
   const relockNote = got.relocked
     || (pick.off_board
@@ -3810,7 +3815,7 @@ async function renderPickOfTheDay() {
         ${iconMark("clock")}${carriedNote}</div>` : ""}
       ${potdLiveStrip(liveNow)}
       <div class="${door ? "openable" : ""}"${door} style="display:flex;gap:11px;align-items:center;margin-top:7px">
-        <span class="pick-id">${betMark(pick, 30)}</span>
+        ${tile ? "" : `<span class="pick-id">${betMark(pick, 30)}</span>`}
         <span style="flex:1;min-width:0">
           <strong class="potd-bet">${text}</strong>
           <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
@@ -3848,6 +3853,7 @@ async function renderPickOfTheDay() {
         a sharper book disagrees with this price, not because our number does.</div>` : ""}
       <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div>
       <div id="potd-record" style="margin-top:6px;font-size:var(--fs-xs);color:var(--text-mute)"></div>
+      ${tile}
     </div>`;
   /* INSIDE THE CARD, NOT ABOVE IT. The first draft gave the day's top
      pick its own block at the top of the board and tests/test_board_order
@@ -4698,13 +4704,27 @@ function adoptPooledRecord(rec) {
    chip underneath it, so a dead CDN costs nothing. */
 const TEAM_SIDE_MARKETS = new Set(["moneyline", "spread", "team_total"]);
 
-function betMark(r, size = 30) {
+function betMark(r, size = 30, tile = 0) {
   const market = String(r.market || r.bet_type || "").toLowerCase();
   if (market === "total") return leagueMark(state.sport, size);
   if (TEAM_SIDE_MARKETS.has(market) || (!r.player && r.team))
     return teamMark(r.team || r.player, size);
-  // A prop: a real name, and the face if the payload carries one.
-  return playerAvatar(r.player, r.team, { size, headshot: r.headshot });
+  // A prop: a real name, and the face if the payload carries one — his
+  // tile where the place draws him large.
+  return tile ? playerTileHTML(r, tile) : playerAvatar(r.player, r.team, { size, headshot: r.headshot });
+}
+
+/* HIS TILE (Ethan, 2026-10-15, "yes build all three": the Pick of the
+   Day, the pick page and the player page). The chart card's photo at the
+   size each place draws him: his cut-out headshot on his club's colour,
+   its mark faint behind him, the card-size copy first and then the whole
+   one (visuals.js swapFull), his initials until it paints and for good
+   when it never does. */
+function playerTileHTML(r, w) {
+  const lg = r.sport || state.sport, h = r.headshot || "", s = h && facePreview(h, w);
+  return `<span class="ptile" aria-hidden="true" style="--pw:${w}px;--ta:${escapeAttr(teamPrimaryIn(lg, r.team))}">${
+    r.team ? `<i>${teamMarkIn(lg, r.team, Math.round(w * 0.8))}</i>` : ""}<b>${escapeHtml(initials(r.player || ""))}</b>${
+    s ? `<img alt="" decoding="async" src="${escapeAttr(s)}"${s !== h ? ` data-full="${escapeAttr(h)}"` : ""} data-onload="art-on" data-onerr="swapFull">` : ""}</span>`;
 }
 
 /* One line on the board when the selection haircut is actually moving the
@@ -13255,7 +13275,7 @@ function renderPropPage() {
     </div>
     <article class="card pp-card">
       <div class="card-head">
-        <div class="card-id">${betMark(r, 56)}
+        <div class="card-id">${betMark(r, 56, 76)}
           <div>
             <div class="player">${escapeHtml(r.player || "")}
               <span class="ml-odds">${oddsTxt(v.odds)}</span></div>
@@ -16206,7 +16226,7 @@ function _profileHead(r, right, door = "") {
      has a bet to point at. */
   const lg = r.sport || state.sport;
   return `<div class="profile-head"${door}>
-        ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
+        ${playerTileHTML(r, 72)}
         <div class="meta"><div class="nm">${escapeHtml(r.player)}${
           r.sport && r.sport !== state.sport ? leagueBadge(r.sport) : ""
         }${injTag(lg || "nfl", r.player)}</div>
@@ -49671,7 +49691,7 @@ function potdHeroHTML(d) {
   if (!(pick && pick.player && (call == null || String(call) === "bet"))) return "";
   return `<div class="hd-card hd-potd"><span class="hd-eyebrow">Pick of the day</span>${
     deckPickRow({ player: pick.player, side: pick.side, line: pick.line,
-                  market_label: pick.market_label || pick.market,
+                  market_label: pick.market_label || pick.market, headshot: pick.headshot,
                   team: pick.team, opponent: pick.opponent, model_prob: pick.model_prob })}${
     betItHTML(pick, "btn primary hd-betit")}</div>`;
 }

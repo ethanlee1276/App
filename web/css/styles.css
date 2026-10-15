@@ -11950,6 +11950,42 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .potd-hero[data-art="ball"] .potd-call.is-pass { margin: 14px 0 10px; padding: 10px 16px; border-radius: var(--radius);
   border: var(--hairline) solid var(--border); background: color-mix(in oklab, var(--panel) 70%, transparent); }
 .potd-hero[data-art="ball"] .potd-call.is-pass .potd-call-word { color: var(--text); }
+/* HIS TILE (2026-10-15, Ethan: "yes build all three"; app.js
+   playerTileHTML): the chart card's photo — his cut-out on his club's
+   colour, its mark faint behind him, his initials until it paints. On
+   the Pick of the Day it stands at the top right, over the stadium. */
+.ptile {
+  --pw: 76px;
+  --ta: var(--brand);
+  --grad-ptile: radial-gradient(120% 95% at 50% 18%, color-mix(in oklab, var(--ta) 72%, var(--bg)) 0%,
+    color-mix(in oklab, var(--ta) 30%, var(--bg)) 62%, var(--bg) 100%);
+  position: relative; flex: none; width: var(--pw); aspect-ratio: 4 / 5; overflow: hidden; container-type: inline-size;
+  border-radius: var(--radius); border: var(--hairline) solid color-mix(in oklab, var(--ta) 60%, var(--text));
+  background: var(--grad-ptile); }
+.ptile > * { position: absolute; }
+.ptile i { top: -12%; right: -26%; opacity: .2; }
+.ptile b { inset: 0; display: grid; place-items: center; color: var(--text); font: 800 calc(var(--pw) * .3) / 1 var(--font-display);
+  font-size: 30cqi; }
+.ptile img { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 4%; opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out); }
+.ptile.art-on img { opacity: 1; }
+.ptile.art-on b { visibility: hidden; }
+.potd-hero:has(> .ptile) {
+  --pw-h: 140px;
+  padding-right: calc(var(--pw-h) + 52px); min-height: calc(var(--pw-h) * 1.25 + 44px); }
+.potd-hero:has(> .ptile) > .ptile { position: absolute; top: 22px; right: 26px;
+  box-shadow: var(--glow-soft); }
+/* On a phone the words take the width: the heading and the call beside
+   him, the bet under both. */
+@media (max-width: 720px) {
+  .potd-hero:has(> .ptile) { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px;
+    padding-right: 14px; min-height: 0; }
+  .potd-hero:has(> .ptile) > * { grid-column: 1 / -1; }
+  .potd-hero:has(> .ptile) > .player, .potd-hero:has(> .ptile) > .potd-call { grid-column: 1; }
+  .potd-hero:has(> .ptile) > .potd-call { justify-self: start; }
+  .potd-hero:has(> .ptile) > .ptile { position: relative; top: auto; right: auto; grid-column: 2; grid-row: 1 / span 2;
+    width: 84px; align-self: start; }
+}
 /* Live now: the green dot beside the heading, the quiet card on the field. */
 .hd-head > span { display: inline-flex; align-items: center; gap: 10px; }
 .hd-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); }

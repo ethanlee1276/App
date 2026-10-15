@@ -224,7 +224,13 @@ his name with his position and number, and his season in five numbers. The
 NHL publishes action shots, so hockey's card carries one; the NFL, college,
 the NBA, the WNBA and the UFC publish none, so his cut-out stands on his
 club's colour (step 107; BF asks the box whether each league's photos
-answer).
+answer). On your word ("yes build all three"), the same photo now leads the
+Pick of the Day (top right over the stadium; beside the heading on a phone),
+the pick page and the player page (step 108). Your two pastes answered the
+last two ideas, and both said no: the NFL price rule would have staked the
+picks that did worse, and the picks that lost the close hit above their
+claim, so neither was built (step 109). The pastes also showed every NFL
+moneyline bet settling with no close; that one is a fix (step 109).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -262,13 +268,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Every league's chart opens on his card: his photo, his club and his season in five numbers`
+**A. The box has today's code.** The first line should end `His photo leads the Pick of the Day, the pick page and the player page`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 069286e2 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 0e9b3689 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -395,14 +401,28 @@ struck through here as it is built.
   2026-10-14: "yes count the defence for those three".** Built: step 102.
 * ~~**The last-leg alert on the Alerts bell too?**~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 92.
-* **Pull a Most Likely pick when its line moves a point against it
+* ~~**Pull a Most Likely pick when its line moves a point against it
   before kickoff?** L's answer first (step 51). **2026-10-14: yes** ("do
-  all of the ideas"), built once L's paste is in.
-* **The NFL price rule** (step 30): stake only the NFL Most Likely picks
+  all of the ideas"), built once L's paste is in.~~ **Answered by L's
+  paste, 2026-10-15: no.** The bar was "lost-the-close picks hit far under
+  their claim"; staked Most Likely picks that lost the close hit 61% where
+  we claimed 59% (+3.5% ROI), so a pull would have cut winners (step 109).
+* ~~**The NFL price rule** (step 30): stake only the NFL Most Likely picks
   whose chance covers what the price needs, as college has since 10-09?
   Step 30's read-only check (`lossaudit.py --sport nfl`) shows first
   whether the covered picks do better than the rest. **2026-10-14: yes**
-  ("do all of the ideas"), built once step 30's paste is in.
+  ("do all of the ideas"), built once step 30's paste is in.~~ **Answered
+  by step 30's paste, 2026-10-15: no.** On the one board the covered picks
+  did worse (−10.0% ROI against −6.0%); on staked Most Likely the gap was
+  two points inside the noise (step 109).
+* **Trust the price more where our chance runs far above it?** Step 109:
+  on the one board, the picks whose chance ran furthest above the price
+  were the furthest wrong (claimed 65%, hit 53%, 367 picks). The idea:
+  measure, on settled picks held out by week, whether pulling our chance
+  part of the way toward the price's de-vigged chance would have been
+  closer to what happened, with the bar set before the run (every held-out
+  week no worse, the pooled log loss better). Nothing changes unless it
+  clears; your call.
 * ~~**A Pick of the Day for the UFC card?** Every other league that names
   one now records it (steps 85 and 86); UFC names none.~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 97, AY.
@@ -516,6 +536,12 @@ If the lost-the-close picks still hit far under their claim and the
 finals sit near the close, that is news, and the fix is a last look
 before kickoff that pulls (or flags) a pick once its line has moved a
 point against it — your call in H.
+**Run 2026-10-15** (read in step 109): the lost-the-close picks no longer
+hit far under their claim (staked Most Likely 65-42, 61% against 59%
+claimed), so no pull was built. Nine of 203 are scratch suspects; week 3's
+anytime-touchdown "closes" (+122 → +545 and the like) are in-game prices,
+not closes; and all 31 NFL moneyline bets have no close at all (the fix is
+in step 109).
 
 **M. College receivers thrown at who caught nothing** (step 53; a few
 minutes). The nightly writes this season's; this re-reads last season's
@@ -2092,6 +2118,10 @@ first). Paste back anything that prints an error or looks off.
     * `-- bigger units on the same … picks` — the same picks at 1u flat
       against 3u Top pick / 2u Strong / 1u Worth a look. Sizing multiplies
       a result. It cannot turn a loss into a win.
+    **Run 2026-10-15** (read in step 109): the one board covered its price
+    on 367 picks for −10.0% and missed it on 552 for −6.0%; staked Most
+    Likely −1.2% against −3.2%. The rule is not turned on. Bigger units:
+    −7.6u flat against −14.2u tiered per 100 picks.
 
 31. **Bills @ Rams: the four reports against our model** (2026-10-12,
     Ethan: "compare to what we have … then fix shit"). The write-up is
@@ -4648,6 +4678,38 @@ first). Paste back anything that prints an error or looks off.
     together) and then the whole photo, and it reads the header's
     initials by name, since the card has its own. New: `tests/test_every_player_has_his_card.py` (10 checks)
     and `photocheck.py`.
+108. **His photo leads the Pick of the Day, the pick page and the player
+    page** (2026-10-15, "yes build all three"; nothing to run). The chart
+    card's photo, in each place's size: his cut-out headshot on his club's
+    colour with its mark faint behind him, his initials until it paints and
+    for good when it never does (`playerTileHTML`). The Pick of the Day
+    wears it when its pick is a player's and his photo is on file: top
+    right over the stadium on a wide screen, beside the heading and the
+    call on a phone, and the small face beside the bet goes; a side, a
+    total or a pick without a photo keeps the stadium alone. The pick page
+    draws it at the head of the card and the player page at the head of
+    his profile, where the round faces were. Inside the page budgets
+    (app.js 494.791 KB of 495; first visit 611.688 of 612). No pin
+    changed. New: `tests/test_his_tile_on_the_pick_of_the_day_and_both_pages.py`
+    (5 checks; the browser one draws all three on a test board at 390 and
+    1280, with the photo and without it).
+109. **The two ideas your pastes answered: both no** (2026-10-15; L and
+    step 30's runs). THE NFL PRICE RULE (stake only the picks whose chance
+    covers the price): the bar was "the covered picks clearly beat the
+    rest". On the one board they did worse — 195-172, −10.0% ROI, against
+    307-245, −6.0% — and on staked Most Likely the two were −1.2% and
+    −3.2%, two points apart inside the noise. Not turned on. THE LINE-MOVE
+    PULL (pull a pick once its line moves a point against it): the bar was
+    "the picks that lost the close hit far under their claim". Staked Most
+    Likely picks that lost the close went 65-42, 61% where we claimed 59%,
+    +3.5% ROI; a pull would have cut winners. Not built. WHAT THE PASTES
+    DID SHOW: the one board's loss is mostly week 3 (−5.32u of −6.97u;
+    weeks 4 and 5 −1.41u and −0.24u), and where our chance ran furthest
+    above the price it was furthest wrong (claimed 65%, hit 53%; 70–80%
+    claimed, 59% hit). That is a measurement to set up with its own bar
+    before anything moves, not a change; it is the next idea in H. AND ONE
+    BUG: all 31 NFL moneyline bets settled with no close — the game-line
+    settle never looked one up — fixed in the next push.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
