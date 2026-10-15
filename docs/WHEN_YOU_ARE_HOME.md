@@ -279,7 +279,8 @@ schedule spots and "what if he sits" (step 120; BO); then hockey's goalie
 board, each line's on-ice expected goals and the live xG race (step 121; BP);
 then baseball's "a homer in how many of the 30 parks" on the hit page and the
 next pitch on the live pitch tracker (step 122; BQ); then UFC's fight path on
-the UFC page (step 123; BR).
+the UFC page (step 123; BR); then every book's line with the steam marked on
+the pick page (step 124; BS).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -318,13 +319,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `UFC: each fight's path, how each man wins by our read beside how his own fights ended`
+**A. The box has today's code.** The first line should end `Every book's line on the pick page, with the steam marked, for every sport`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 07f13170 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor ce471eb4 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1777,6 +1778,24 @@ print(len(rows), 'fights,', sum(1 for f in fs if f.get('path')), 'of', len(fs), 
 for f in fs[:6]:
     p=f.get('path') or {}; print(f.get('name'), p.get('n'), p.get('wins'), p.get('losses'))
 "
+```
+
+**BS. Every book's number is being kept for the posted picks** (step 124;
+read-only, a second, after each league's next build on the new code). The
+first prints each league's build line for the prop tape (how many moved
+prices it stored and for how many watched men). The second counts, per
+league, the per-book prop rows stored today and the books among them; a
+league with picks posted should show more than one book once a line has
+moved. The third asks the server for one market's chart with your signed-in
+cookie stripped, so it should print `401`, the membership check:
+```
+for b in nfl cfb mlb nba nhl; do echo "$b: $(grep -E 'prop tape' /srv/qellys/data/logs/${b}_build.log | tail -1)"; done
+cd /srv/qellys && sudo -u qellys python3 -c "
+import sqlite3, datetime as dt; c=sqlite3.connect('file:data/history.db?mode=ro', uri=True)
+day=dt.datetime.utcnow().strftime('%Y-%m-%d')
+for sp, n, b in c.execute(\"SELECT sport, COUNT(*), COUNT(DISTINCT book) FROM odds_history WHERE taken_at >= ? AND market NOT IN ('total','spread','moneyline') GROUP BY sport\", (day,)): print(sp, n, 'rows', b, 'books')
+"
+curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8000/api/lines/books?sport=nfl&player=Josh%20Allen&market=pass_yds"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -5617,6 +5636,26 @@ first). Paste back anything that prints an error or looks off.
     the sealed card and the section says the reads come with one. UFC is its
     own page rather than a sport the Toolbox switches to, so the section
     sits there. New: `tests/test_the_ufc_fight_path.py` (5 checks). No pin
+    changed; app.js grew by 0.06 KB, inside its budget (no budget moved).
+124. **Every book's line on the pick page, with the steam marked** (2026-10-15,
+    one more of the sixteen, every sport). Context; nothing moves a number.
+    On a prop's pick page, under the books table, a chart of each book's
+    own number on that market as our builds saw it — a step line per book,
+    the line itself when any book moved it, otherwise the over's price as a
+    chance — and a table of each book's first and current number. STEAM is
+    marked where three or more books (and half of those quoting) moved the
+    same way within fifteen minutes: the line, or the over's price by three
+    points of chance at the same line (`engine/linebooks.py`; a written
+    rule, not measured, so the page calls it a mark and nothing reads it).
+    THE DATA: per-book prop numbers were only kept for men on an injury
+    report (the NFL build). Now every league's build (NFL, college, MLB,
+    NBA/WNBA, NHL) keeps them also for any man with an open pick in the
+    journal from the last two days (`engine/proptape.posted`, read-only),
+    and only when a number changes — the same bound that keeps the tape
+    small. Served at `/api/lines/books`, behind the membership like the
+    boards (401 signed out, 402 lapsed). Game lines keep only the best and
+    the sharp book's numbers, so they draw two lines and can carry no steam.
+    New: `tests/test_every_books_line_and_the_steam.py` (6 checks). No pin
     changed; app.js grew by 0.06 KB, inside its budget (no budget moved).
 
 Everything older and lower priority (the measurements, the Discord feed,

@@ -215,6 +215,11 @@ def main() -> None:
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  MLB line ledger skipped: {_exc}")
     _stg.stop(_tk)
+    # EVERY BOOK'S NUMBER for the men with an open pick and the men on an
+    # injury report, kept when it changes (engine/proptape): the line chart
+    # with every book on it reads it back (engine/linebooks). Never raises.
+    from engine.proptape import note_for as _tape_note
+    print(_tape_note("mlb", slate))
 
     # WHEN the book prices on this board were last pulled, and when the
     # pre-game window opens. Both were only visible in the launcher's

@@ -587,6 +587,91 @@
       record is each man’s stored fights, counted — nothing here moves a price. A round appears only where enough finishes are on file.</p></section>`;
   }
 
+  // ---- every book's line, and the steam (the pick page) -------------------
+  /* engine/linebooks through /api/lines/books: each book's own quotes on
+     this market, minute by minute as the builds saw them, with a mark
+     where several books moved the same way inside a few minutes. A step
+     line per book; the line itself when any book moved it, otherwise the
+     over's price as a chance. A mark, not a signal: nothing reads it. */
+  const BK_KEEP = new Map();
+  const bkT = (at) => Date.parse(String(at || "").slice(0, 16) + ":00Z");
+  const bkTime = (ms) => new Date(ms).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  function bookModel(d) {
+    const books = Object.entries((d && d.books) || {}).filter(([, p]) => (p || []).length);
+    const all = [].concat(...books.map(([, p]) => p));
+    if (!all.length) return null;
+    const lines = all.map((p) => p.line).filter((v) => v != null);
+    const byLine = lines.length && Math.max(...lines) > Math.min(...lines);
+    const val = (p) => (byLine ? p.line : implied(p.over));
+    const ts = all.map((p) => bkT(p.at)).filter(Number.isFinite);
+    const vs = all.map(val).filter((v) => v != null && Number.isFinite(v));
+    if (!ts.length || !vs.length) return null;
+    return { books, byLine, val, t0: Math.min(...ts), t1: Math.max(...ts), v0: Math.min(...vs), v1: Math.max(...vs) };
+  }
+  function bookLinesHTML(d) {
+    const m = bookModel(d);
+    const head = `<div class="section-title">Every book’s line<span class="sub">— each book’s own number on this market as our
+      builds saw it, with the steam marked: three or more books moving the same way within ${(d && d.rule && d.rule.minutes) || 15} minutes.</span></div>`;
+    if (!m) return `${head}<div class="card xb-card"><p class="xt-hint">No book-by-book history for this market yet. It is kept,
+      on every change, for anyone with an open pick or on an injury report.</p></div>`;
+    const W = 640, H = 220, L = 46, R = 12, T = 14, B = 26;
+    const span = Math.max(1, m.t1 - m.t0), pad = (m.v1 - m.v0) * 0.12 || (m.byLine ? 0.5 : 0.02);
+    const lo = m.v0 - pad, hi = m.v1 + pad;
+    const x = (t) => L + (W - L - R) * ((t - m.t0) / span), y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+    const fmt = (v) => (m.byLine ? String(Math.round(v * 2) / 2) : pctTxt(v, 0));
+    const paths = m.books.map(([b, pts], i) => {
+      let dd = "";
+      pts.forEach((p, j) => {
+        const t = bkT(p.at), v = m.val(p);
+        if (!Number.isFinite(t) || v == null) return;
+        dd += dd ? `H${x(t).toFixed(1)}V${y(v).toFixed(1)}` : `M${x(t).toFixed(1)} ${y(v).toFixed(1)}`;
+        if (j === pts.length - 1) dd += `H${x(m.t1).toFixed(1)}`;
+      });
+      return `<path class="xb-l xb-c${i % 10}" d="${dd}"><title>${esc(b)}</title></path>`;
+    }).join("");
+    const marks = ((d && d.steam) || []).map((s) => {
+      const t = bkT(s.at);
+      if (!Number.isFinite(t)) return "";
+      const up = s.sign > 0, xx = x(t).toFixed(1);
+      return `<g class="xb-steam ${up ? "up" : "dn"}"><line x1="${xx}" x2="${xx}" y1="${T}" y2="${H - B}"/>
+        <text x="${xx}" y="${T + 10}" text-anchor="middle">${up ? "▲" : "▼"}</text>
+        <title>${esc(`Steam toward the ${up ? "over" : "under"} at ${bkTime(t)}: ${(s.books || []).join(", ")}`)}</title></g>`;
+    }).join("");
+    const axis = `<text class="xb-ax" x="${L - 6}" y="${y(m.v1).toFixed(1)}" text-anchor="end">${esc(fmt(m.v1))}</text>
+      <text class="xb-ax" x="${L - 6}" y="${y(m.v0).toFixed(1)}" text-anchor="end">${esc(fmt(m.v0))}</text>
+      <text class="xb-ax" x="${L}" y="${H - 6}">${esc(bkTime(m.t0))}</text>
+      <text class="xb-ax" x="${W - R}" y="${H - 6}" text-anchor="end">${esc(bkTime(m.t1))}</text>`;
+    const rows = m.books.map(([b, pts], i) => {
+      const a = pts[0], z = pts[pts.length - 1];
+      const q = (p) => `${p.line == null ? "" : `${p.line} `}${p.over == null ? "" : amTxt(p.over)}`;
+      return `<tr><td><i class="xb-key xb-c${i % 10}"></i>${esc(b)}</td><td>${esc(q(a))}</td><td>${esc(q(z))}</td><td>${pts.length - 1}</td></tr>`;
+    }).join("");
+    const st = (d.steam || []).map((s) => `<li class="${s.sign > 0 ? "up" : "dn"}">${esc(bkTime(bkT(s.at)))} · toward the ${s.sign > 0 ? "over" : "under"}
+      · ${esc((s.books || []).join(", "))}${s.kind === "price" ? " (the price)" : " (the line)"}</li>`).join("");
+    return `${head}<div class="card xb-card">
+      <svg class="xb-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${m.books.length} books, ${m.byLine ? "the line" : "the over's price as a chance"} over time`)}">
+        <line class="xb-g" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>${marks}${paths}${axis}</svg>
+      <p class="xt-fine">${m.byLine ? "The line each book hung." : "No book moved the line, so this is the over’s price, as a chance."}
+        ${(d.more || []).length ? `Also quoting: ${esc(d.more.join(", "))}.` : ""}</p>
+      ${st ? `<ul class="xb-st">${st}</ul>` : ""}
+      <div class="xt-scroll"><table class="xt-tbl xb-tbl"><thead><tr><th>Book</th><th>First</th><th>Now</th><th>Moves</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <p class="xt-fine">Steam is a mark, not a signal: it has not been scored against results, and nothing on the board reads it.</p></div>`;
+  }
+  function bookLines(el, sport, player, market) {
+    if (!el || !sport || !player || !market) return;
+    const key = [sport, player, market].join("|"), hit = BK_KEEP.get(key);
+    if (hit && Date.now() - hit.at < 60000) { el.innerHTML = hit.html; return; }
+    const q = `/api/lines/books?sport=${encodeURIComponent(sport)}&player=${encodeURIComponent(player)}&market=${encodeURIComponent(market)}`;
+    fetch(q).then((r) => (r.status === 401 || r.status === 402 ? { locked: true } : r.ok ? r.json() : null)).then((d) => {
+      if (!d) return;
+      const html = d.locked ? `<div class="section-title">Every book’s line</div><div class="card xb-card"><p class="xt-hint">Every book’s
+        number on this market, and the steam, come with a membership — <a href="#paywall">see the plans</a>.</p></div>` : bookLinesHTML(d);
+      BK_KEEP.set(key, { at: Date.now(), html });
+      el.innerHTML = html;
+    }).catch(() => {});
+  }
+
   /* Each sport's own tools, drawn above the calculators when that sport
      is the one selected. */
   const SPORT_TOOLS = {
@@ -719,5 +804,6 @@
 
   window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
-                      spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML };
+                      spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML,
+                      bookModel, bookLinesHTML, bookLines };
 })();

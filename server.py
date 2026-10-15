@@ -1171,6 +1171,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_fantasy(parse_qs(parsed.query))
         if parsed.path in ("/api/hoops/whatif", "/api/hoops/whatif/"):
             return self._hoops_whatif(parse_qs(parsed.query))
+        if parsed.path in ("/api/lines/books", "/api/lines/books/"):
+            return self._lines_books(parse_qs(parsed.query))
         if parsed.path in ("/api/players/versus", "/api/players/versus/"):
             return self._players_versus(parse_qs(parsed.query))
         if parsed.path in ("/api/players/carries", "/api/players/carries/"):
@@ -3243,6 +3245,40 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the logs could not be read"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _lines_books(self, q):
+        """Every book's line on one market over time, and the steam marks
+        (engine/linebooks). Behind the membership, like the boards: the
+        books' numbers are the line-shopping half of what a member pays
+        for, and this is them minute by minute."""
+        from engine.db import connect as _connect
+        from engine import linebooks as LB
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        sport, player, market = arg("sport").lower()[:5], arg("player")[:60].strip(), arg("market")[:40].strip()
+        try:
+            hours = max(1, min(168, int(arg("hours") or LB.HOURS)))
+        except ValueError:
+            hours = LB.HOURS
+        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl") or not player or not market:
+            return self._send(400, b'{"error":"sport, player and market"}', ".json")
+        A = _acct()
+        aconn = A.connect()
+        try:
+            who = self._account(aconn)
+            if not self._entitled(aconn, who):
+                locked = {"error": "Every book's line comes with a membership.", "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+        finally:
+            aconn.close()
+        try:
+            conn = _connect()
+            try:
+                out = LB.chart(conn, sport, player, market, hours)
+            finally:
+                conn.close()
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the lines could not be read"}', ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
 
     def _players_versus(self, q):

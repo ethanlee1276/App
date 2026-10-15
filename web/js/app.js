@@ -13341,6 +13341,7 @@ function renderPropPage() {
 
     ${booksTableHTML(r)}
     ${lineMoveHTML(r)}
+    <div id="pp-books"></div>
 
     ${shown ? `<div class="section-title">Last ${shown} game${shown === 1 ? "" : "s"}
       <span class="sub">— every one measured against tonight’s
@@ -13395,6 +13396,8 @@ function renderPropPage() {
   const b = document.getElementById("pp-back");
   if (b) b.addEventListener("click", detailBack);
   if (typeof fillMeters === "function") fillMeters(host);
+  // Every book's line and the steam (js/extras.js).
+  if (r.player && r.market) loadExtras().then((X) => X && X.bookLines(document.getElementById("pp-books"), state.sport, r.player, r.market));
 }
 
 /* ============================================================

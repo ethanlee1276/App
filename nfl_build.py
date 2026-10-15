@@ -821,7 +821,7 @@ def main() -> None:
             try:
                 from engine import proptape, db as _pdb
                 _pc = _pdb.connect()
-                print(proptape.record_note(_pc, "nfl", slate))
+                print(proptape.record_note(_pc, "nfl", slate, also=proptape.posted("nfl")))
                 _pc.close()
             except Exception as _exc:                        # noqa: BLE001
                 print(f"  ⚠️  NFL prop tape skipped: {_exc}")

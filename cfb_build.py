@@ -2067,6 +2067,11 @@ def main() -> None:
                                                   alt_sharp=alt_sharp_prop_lines,
                                                   record=bool(args.odds))
         prop_census["priced"] = _matched
+        # EVERY BOOK'S NUMBER for the men with an open pick and the men on
+        # an injury report, kept when it changes (engine/proptape): the line
+        # chart with every book on it reads it back (engine/linebooks).
+        from engine.proptape import note_for as _tape_note
+        print(_tape_note("cfb", _prop_slate))
         for _pg in getattr(_prop_slate, "games", None) or []:
             _pg.injuries = [i for i in _cfb_inj if i.team in (_pg.home, _pg.away)]
         # WHO PLAYS AROUND HIM, FOR COLLEGE (engine/cfb/lineup; Ethan,

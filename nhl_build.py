@@ -965,6 +965,12 @@ def main() -> None:
 
     conn = connect()
     out, slate = build(args.date, games, conn, attach_odds=attach)
+    # EVERY BOOK'S NUMBER for the men with an open pick and the men on an
+    # injury report, kept when it changes (engine/proptape): the line chart
+    # with every book on it reads it back (engine/linebooks). Never raises.
+    if slate is not None:
+        from engine.proptape import note_for as _tape_note
+        print(_tape_note("nhl", slate))
     # THE GAME LINES PINNACLE QUOTED, for the Pick of the Day: this league's
     # Most Likely board carries no game market (none is measured for
     # hockey) and the day's pick is game lines only (`potd.game_lines`).

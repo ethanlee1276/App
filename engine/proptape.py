@@ -200,12 +200,44 @@ def rows_for(sport: str, slate, watch: set, last: dict,
     return rows
 
 
-def _write(conn, sport: str, slate, now=None) -> tuple:
+#: How far back an open pick on the board still puts its man on the tape.
+POSTED_DAYS = 2
+
+
+def posted(sport: str, now: _dt.datetime | None = None, path=None) -> set:
+    """Men with an open pick journaled for this league in the last
+    `POSTED_DAYS`, in the books' spelling (2026-10-15, the line chart with
+    every book on it: a posted pick is the market a reader opens, so its
+    every book is worth keeping — on change only, the same bound as the
+    injury watch). The journal opens read-only; one that will not read
+    watches nobody, and the injury watch carries on."""
+    import sqlite3
+    from pathlib import Path
+    try:
+        if path is None:
+            from .ledger import DEFAULT_DB as path
+        if not Path(path).exists():
+            return set()
+        n = now or _dt.datetime.now(_dt.timezone.utc)
+        since = (n - _dt.timedelta(days=POSTED_DAYS)).strftime("%Y-%m-%d")
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+        try:
+            rows = conn.execute("SELECT DISTINCT player FROM bets WHERE sport=? AND status='open' AND date >= ?",
+                                (sport, since)).fetchall()
+        finally:
+            conn.close()
+        return {_norm(r[0]) for r in rows if r[0]}
+    except Exception:                                         # noqa: BLE001
+        return set()
+
+
+def _write(conn, sport: str, slate, now=None, also=()) -> tuple:
     """``(stored, watched, error)`` — the whole truth once, so `record`
-    and `record_note` can never disagree about what happened."""
+    and `record_note` can never disagree about what happened. ``also``:
+    more men to watch beside the injury report (`posted`)."""
     try:
         from . import db
-        watch = watchlist(conn, sport, now)
+        watch = watchlist(conn, sport, now) | set(also or ())
         if not watch:
             return 0, 0, ""
         rows = rows_for(sport, slate, watch,
@@ -224,9 +256,9 @@ def record(conn, sport: str, slate, now=None) -> int:
     return _write(conn, sport, slate, now)[0]
 
 
-def record_note(conn, sport: str, slate, now=None) -> str:
+def record_note(conn, sport: str, slate, now=None, also=()) -> str:
     """`record`, plus the sentence the build prints. Never raises."""
-    stored, watched, err = _write(conn, sport, slate, now)
+    stored, watched, err = _write(conn, sport, slate, now, also)
     if err:
         return f"  ⚠️  prop tape skipped: {err}"
     league = sport.upper()
@@ -238,3 +270,18 @@ def record_note(conn, sport: str, slate, now=None) -> str:
                 f"since the last build — a quiet market is free.")
     return (f"  {league} prop tape: {stored} moved price(s) stored free "
             f"for {watched} watched men.")
+
+
+def note_for(sport: str, slate, now=None) -> str:
+    """The whole call a build makes (2026-10-15, every sport's build, for
+    the line chart with every book on it): its own connection, the injury
+    watch and the men with an open pick (`posted`). Never raises."""
+    try:
+        from . import db
+        conn = db.connect()
+        try:
+            return record_note(conn, sport, slate, now, also=posted(sport, now))
+        finally:
+            conn.close()
+    except Exception as exc:                                  # noqa: BLE001
+        return f"  ⚠️  {sport.upper()} prop tape skipped: {exc}"

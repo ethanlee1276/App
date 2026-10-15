@@ -934,6 +934,11 @@ def main() -> None:
             out["market_scan"] = {"stale": stale_quotes(scan_rows)}
         except Exception:
             out["market_scan"] = {"stale": []}
+        # EVERY BOOK'S NUMBER for the men with an open pick and the men on
+        # an injury report, kept when it changes (engine/proptape): the line
+        # chart with every book on it reads it back (engine/linebooks).
+        from engine.proptape import note_for as _tape_note
+        print(_tape_note(args.league, slate))
 
         spread_by_team: dict = {}
         total_by_team: dict = {}
