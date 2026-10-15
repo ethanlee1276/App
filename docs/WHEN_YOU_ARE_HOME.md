@@ -275,13 +275,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The NBA live page in Ethan's render: the arena, the last shot's flight, whose ball, who's on the floor`
+**A. The box has today's code.** The first line should end `Shot marks on the NBA arena carry a dark edge, so a club in gold reads on the wood`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 897b978c HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 701e8502 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -4854,7 +4854,9 @@ first). Paste back anything that prints an error or looks off.
     every spot in feet on the picture; the render's lines are drawn about a
     tenth larger than a real court, so distances are stretched to match (a
     three lands outside the painted arc). The away side shoots at the left
-    basket, the home side at the right. The page redraws every twelve
+    basket, the home side at the right. Every mark on the floor sits on a
+    dark edge of itself, so a club drawn in gold (the Lakers, the Warriors)
+    still reads on the wood. The page redraws every twelve
     seconds without the picture blinking or the plays jumping back to the
     top. AND THE NBA'S GAMES NOW CARRY THEIR MONEYLINES on the board
     (`nba_build`), which the Game Odds panel reads and which step 110's

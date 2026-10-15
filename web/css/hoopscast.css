@@ -57,9 +57,12 @@
   width: calc(1672 / var(--crop-w) * 100%); height: calc(941 / var(--crop-h) * 100%); }
 .hc-photo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .hc-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.hc-shot.made { stroke: var(--bg); stroke-width: 3; }
-.hc-shot.miss { fill: none; stroke-width: 5; stroke-linecap: round; }
-.hc-flight { fill: none; stroke: var(--brand); stroke-width: 3; stroke-dasharray: 10 9; opacity: .75; }
+.hc-shot.made { stroke: var(--bg); stroke-width: 5; }
+.hc-shot.miss { fill: none; stroke-width: 6; stroke-linecap: round; }
+/* The dark edge under a miss, the flight and the spot, so a club drawn in
+   gold (the Lakers, the Warriors) still reads on the wood. */
+.hc-halo { fill: none; stroke: var(--bg); stroke-width: 12; stroke-linecap: round; opacity: .7; }
+.hc-flight { fill: none; stroke: var(--brand); stroke-width: 4; stroke-dasharray: 10 9; opacity: .9; }
 .hc-flight.made { stroke: var(--brand-2); }
 .hc-spot-ring { fill: none; stroke: var(--brand); stroke-width: 3; opacity: .9;
   animation: hc-ring var(--dur-slow) var(--ease-out) infinite alternate; transform-box: fill-box; transform-origin: center; }

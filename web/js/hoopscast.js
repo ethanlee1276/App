@@ -377,9 +377,12 @@
     const [x, y] = artSpot(c, s.side);
     const col = s.side === "home" ? "var(--ch)" : "var(--ca)";
     const r = 9;
+    // A miss is drawn over a dark edge of itself, as a make is ringed in
+    // one: a club in gold still reads on the wood.
     return s.made
       ? `<circle class="hc-shot made" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" style="fill:${col};opacity:${alpha.toFixed(2)}"/>`
-      : `<path class="hc-shot miss" d="${cross(x, y, r - 2)}" style="stroke:${col};opacity:${alpha.toFixed(2)}"/>`;
+      : `<g style="opacity:${alpha.toFixed(2)}"><path class="hc-halo" d="${cross(x, y, r - 2)}"/>`
+        + `<path class="hc-shot miss" d="${cross(x, y, r - 2)}" style="stroke:${col}"/></g>`;
   }
   /* The last shot's flight: from where it went up to the rim the render
      draws, the ball travelling it once when the shot is new to this page
@@ -395,7 +398,8 @@
     S.seen = s.id;
     const go = fresh && !still();
     const id = `hcf${s.id.replace(/[^a-z0-9]/gi, "")}`;
-    return `<path id="${id}" class="hc-flight${s.made ? " made" : ""}" d="${d}"/>
+    return `<path class="hc-halo" d="${d}"/><path id="${id}" class="hc-flight${s.made ? " made" : ""}" d="${d}"/>
+      <circle class="hc-halo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="22"/>
       <circle class="hc-spot-ring" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="22"/>
       <g class="hc-ball-g"${go ? "" : ` transform="translate(${rx} ${ry})"`}>
         <circle class="hc-ball-glow" r="16"/><circle class="hc-ball-dot" r="8"/>
