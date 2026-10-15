@@ -303,13 +303,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Trust the price more where our chance runs far above it: the read-only check, its bar written first`
+**A. The box has today's code.** The first line should end `BK's first run: the NFL board waits for week 6, one small MLB pass brought for your call`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 8c142d8c HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 42eebc63 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -458,7 +458,10 @@ struck through here as it is built.
   closer to what happened, with the bar set before the run (every held-out
   week no worse, the pooled log loss better). Nothing changes unless it
   clears; your call. **Built as that check, 2026-10-15** (step 115; BK
-  runs it): your answer waits on BK's paste.
+  runs it): your answer waits on BK's paste. **BK's first run, the same
+  evening:** the NFL board needs one more week (run BK again Tuesday);
+  Most Likely paper MLB passes by a hair at w 0.3, and my advice is no
+  (step 115). Your call on that one.
 * ~~**A Pick of the Day for the UFC card?** Every other league that names
   one now records it (steps 85 and 86); UFC names none.~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 97, AY.
@@ -1626,6 +1629,30 @@ and how the picks did by how far our chance ran above the market. The one
 to read first is `=== The one board · NFL`. A PASS changes nothing by
 itself: I bring it to you with the `w` and `T` it chose, and the board
 moves only on your yes. A FAIL or NOT YET leaves the board as it is.
+
+**Run 2026-10-15** (read in step 115): the NFL one board is NOT YET, with
+two of the three held-out weeks the bar needs, and both came out closer
+with the rule at full strength (w 1.0: log loss 0.698 → 0.686). Week 6,
+tonight through Monday, is the third. **Run BK again on Tuesday morning**,
+once Monday night's game has settled, and paste the `=== The one board ·
+NFL` block. Any time before then, this (read-only, a minute) says which
+NFL board markets the check can see at all; only 267 of the 919 settled
+picks had the market's chance at the moment they were posted:
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 - <<'EOF'
+import pricetrust as PT
+from collections import Counter
+rows = [b for b in PT.load(PT.open_ledger(PT.LEDGER), "nfl") if b["category"] == "board"]
+PT.attach_market(rows)
+seen, have = Counter(), Counter()
+for b in rows:
+    seen[b["market"]] += 1
+    have[b["market"]] += b["market_p"] is not None
+for m, n in seen.most_common():
+    print(f"{m:22} {n:4} picks  {have[m]:4} with a market chance")
+EOF
+```
+It prints market names and counts only.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -5224,6 +5251,20 @@ first). Paste back anything that prints an error or looks off.
     play or over six hours old never used, an under read as the other side,
     three books or none, an accented name, a thin book refusing to judge,
     nothing written, the bar in the script's own words). No pin changed.
+    RUN 2026-10-15 (your BK paste). THE NFL ONE BOARD: NOT YET. 267 of its
+    919 settled picks had the market's chance at pick time (all rebuilt
+    from the snapshots). Two held-out weeks, W04 and W05 (188 picks), both
+    closer with w 1.0, T 0 (log loss 0.698 → 0.686); week 6 is the third.
+    Described only, not judged: its 24 picks where ours ran 15 or more
+    points above the market hit 37.5%, where we said 75% and the market
+    54%. ONE PASS: Most Likely, paper · MLB, three held-out weeks (w 0.0,
+    0.1, 0.3; log loss 0.6949 → 0.6941). Brought to you as promised, with
+    my advice against it: the gain is about a tenth of a percent, the first
+    of its three weeks passed by changing nothing, it is the paper book,
+    and the MLB season ends within days. ONE FAIL: Edge picks · MLB, 3 of 7
+    held-out weeks worse. The Edge book is already pulled toward the
+    market, and more pull hurt. Everything else NOT YET; college had the
+    market's chance on 40 of its 667 board picks. Nothing changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
