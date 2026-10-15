@@ -237,7 +237,15 @@ from now on keeps one, the board's last current line before kickoff
 now opens its own page in their layout: the scoreboard, our arena with the
 last shot flying to the rim, every shot of the game on its floor, who is on
 the court, the game's flow, then the plays, the stats and the odds
-(step 111; BH asks a game what ESPN carries for it).
+(step 111; BH asks a game what ESPN carries for it). On your NHL renders
+("figure out what data we can use for the live play by play screen for nhl
+like live posetions and puck tracking"), a hockey game now opens its own page
+the same way: the scoreboard with the power play's clock, our rink with every
+event of the game where it happened (the plays since the last faceoff joined
+in order, the last shot flying to the net), whose puck it is when a play
+settles it, every attempt and every hit, the skaters' ice time and the
+attempt race, then the plays, the stats, the lineups and the odds (step 112;
+BI asks a game what the league's feed carries for it).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -275,13 +283,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Shot marks on the NBA arena carry a dark edge, so a club in gold reads on the wood`
+**A. The box has today's code.** The first line should end `The NHL live page in Ethan's render: every event on the rink, whose puck, the power play and its clock`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 701e8502 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 24a90edd HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1519,6 +1527,39 @@ A `CHECK` on line 2, `starters marked in the box: NONE`, or `neither order
 holds` is the one I need. Paste all four sections either way.
 Then open the game from the Live tab, on the phone and on the computer:
 nothing to run, just tell me how it looks.
+
+**BI. What the league's feed carries for the new NHL page** (step 112;
+read-only, seconds). Best during an NHL game:
+```
+cd /srv/qellys && sudo -u qellys python3 rinkprobe.py
+```
+With no game on, read the newest final instead:
+`cd /srv/qellys && sudo -u qellys python3 rinkprobe.py --prefer post`.
+It prints six sections: key names, counts and the league's short codes,
+never a sentence. What I expect:
+1. `the events`: faceoffs, hits, takeaways, giveaways, shots, blocks,
+   goals and penalties, nearly all `with a spot`, their keys including
+   `xCoord`, `winningPlayerId`, `shootingPlayerId`, `blockingPlayerId`.
+2. `the ends`: every period `ok` (a period the feed never names reads
+   `inferred from the shots`, also fine). A `CHECK` means the page would
+   draw that period at the wrong end: paste all of it. The last line says
+   whose side a blocked shot's owner names; either answer is fine for the
+   page (it reads the shooter's club off the roster), and it tells me
+   whether the expected-goals store counts blocks for the right club.
+3. `the scorer's table`: codes like `1551`; during a power play the feed's
+   own block and `the parser reads: {'pp': ...}` with the time left.
+4. `who is on the ice`: `the chart is live` means the shift charts keep up
+   and the Player Tracker could show the five and the goalie on the ice;
+   `the chart lags the game` means it keeps showing every skater's game.
+5. `puck tracking`: the goal visualizer's answer for the newest goal. A
+   shape with frames means the page could replay the seconds before each
+   goal; an error code (or `no goal yet`) means it can't, from this box.
+6. `what the deep file will carry`: the keys, the events with a spot, the
+   box's skaters and goalies a side.
+Then open the game from the Live tab, on the phone and on the computer:
+nothing to run, just tell me how it looks. The live scores log says what
+the pass did each time (`nhl rink: 2 of 2 game(s)`); a game the league's
+feed doesn't answer for shows there as `unreachable`.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4870,6 +4911,84 @@ first). Paste back anything that prints an error or looks off.
     file worth trimming, and the bar stays. No pin changed, no test changed.
     New: `tests/test_the_nba_live_page.py` (20 checks; the browser one walks
     the page at 390 and 1280 under `QB_BROWSER_TESTS=1`) and `hoopsprobe.py`.
+112. **The NHL live page, in your render** (2026-10-15, with your renders:
+    "figure out what data we can use for the live play by play screen for
+    nhl like live posetions and puck tracking"; BI). A hockey game now opens
+    its own page in the render's layout. THE SCOREBOARD: both clubs with
+    their records, the score, the period and the clock, the power play with
+    its time left (`PP BOS 1:40`), shots on goal. THE ARENA (your rink, the
+    crown at centre ice) with five views in a bar under it, as the render
+    has them. Live: the newest event ringed where it happened; the plays
+    since the last faceoff joined in the order they happened (never across
+    a whistle), the earlier ones fading; a shot flies to the net, once, when
+    it is new to the page; a goal lights the lamp; an arrow at centre ice
+    when a play has settled whose puck it is; the last play in a caption
+    with the player's face. Shot Chart: every attempt, a goal ringed, a shot
+    on goal filled, a miss hollow, a block crossed, either side or both,
+    with each side's goals over its shots and our expected goals. Ice
+    Tracker: the hits, takeaways, giveaways, faceoffs and penalties where
+    they happened, a chip for each kind with its count. Player Tracker: each
+    side's skaters by ice time with goals, assists, shots and plus-minus,
+    and each goalie's saves. Game Flow: each side's running count of shot
+    attempts, each goal a dot on the scorer's line. Down the right: every
+    play by period, newest first; Game Stats (goals and shots by period,
+    faceoffs, power plays); Trends (the last five minutes' attempts, the
+    power play, a side without a shot on goal in five minutes, a pulled
+    goalie, our expected goals, the goalies); our picks on the game. Under
+    it: Team Stats (bars in each club's colour), Player Stats, a flat shot
+    chart and the flow; the lineup (forwards, defence, the goalie), every
+    skater's ice time, the goalies with our goals saved above expected; Game
+    Odds (the board's puck line, moneyline and total, and our win chance)
+    and Live Props. On a phone the scoreboard is one line a side and the
+    rink shows the half the newest event is in.
+    WHAT THE LIVE DATA CAN AND CAN'T DO. The league's own play-by-play (the
+    keyless feed the expected-goals model already reads) places every event
+    on the ice in feet, with who was in it and how many skaters each side
+    had; ESPN's hockey plays carry none of that. `engine/sources/nhlrink`
+    turns it into the game file's `rink` block, with the league's box score
+    (ice time) and our expected goals on each unblocked attempt, and the
+    live scores loop writes it on every pass for up to eight games
+    (`livescore_build.nhl_rink_pass`; the file's own clock is left alone, so
+    the play feed's rotation is unchanged). Nobody publishes where the puck
+    is between events, live: the Live view draws the events where they
+    happened, in order, which is as close to puck tracking as any public
+    feed gets. Whose puck it is is said only after a faceoff won, a takeaway
+    or a giveaway; a shot, a hit or a block leaves it loose and the page
+    says nothing. The power play is the feed's own when it carries one,
+    else worked out from the penalties on the sheet (a minor ends at the
+    first goal against it), and `PP` with no time when it can't be told.
+    Who is on the ice is not in the play-by-play; the shift charts might
+    say, if they are kept up during a game, which BI checks, and until then
+    the page says so and lists every skater's game. The league does publish
+    tracked puck and skater positions for the seconds before each goal (its
+    goal visualizer); BI checks that feed's shape before anything is built
+    on it. A play's club is its player's, off the roster (a blocked shot
+    counts as the shooter's attempt and the blocker's block), and only the
+    league's short codes are kept, never a sentence. Overtime is five
+    minutes in the regular season and twenty in the playoffs. THE RINK ON
+    THE ART: the render is a panorama (short end zones, bowed near boards),
+    so twenty-five points were read off it at full size (the faceoff dots,
+    both nets, centre ice, the blue lines and the red line at five depths,
+    the boards) and a smooth map through them puts every spot on the
+    picture; every row is turned so the home side shoots at the right-hand
+    net. THE CLUBS' COLOURS follow your render: the Rangers in their blue,
+    lifted until it reads on the dark panels; a navy far too dark gives way
+    to the club's next colour (Washington's red, Edmonton's orange), black
+    gives way (Pittsburgh's gold, the Kings' silver), and the away side
+    takes another of its colours when the two would look alike; every mark
+    on the ice sits on a dark edge. The basketball page keeps its own rule.
+    If the page fails to load or draw, or a game has no `rink` block yet,
+    hockey stays on the old rooms. The new files (`js/rinkcast.js`,
+    `css/rinkcast.css`, the art at two sizes) load only when a hockey game
+    opens: app.js 494.833 KB of 495 and first visit 611.753 of 612, both
+    unchanged; like the basketball page's, they are served as written, not
+    trimmed. The live scores log now prints the hockey box pass's line and
+    the rink pass's (`nhl rink: N of M game(s)`). One list grew:
+    `engine/maintenance.py` prunes the pass's `nhl_live_pbp_` snapshots with
+    the live box's, so the classification test passes as it stands. No test
+    changed, no pin changed. New: `tests/test_the_nhl_live_page.py` (26
+    checks; the browser one walks the page at 390 and 1280 under
+    `QB_BROWSER_TESTS=1`) and `rinkprobe.py`.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

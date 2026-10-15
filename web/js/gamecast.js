@@ -484,6 +484,7 @@
   const HOOPS = new Set(["nba", "wnba"]);
   let _hoops = null, _hoopsFailed = false;
   function hoops(host, ctx) {
+    if (host && ctx && ctx.league === "nhl") return rink(host, ctx);
     if (!host || !ctx || !HOOPS.has(ctx.league) || _hoopsFailed) return false;
     // A page that throws leaves the host as it was and hands back to the
     // old rooms for this pass; the next refresh tries the new page again.
@@ -504,6 +505,36 @@
       }).then(() => { if (state.view === "pbp") renderPbpPage(); });
     }
     host.innerHTML = `${ctx.stripHTML || ""}<div class="card"><p class="rail-quiet">Loading the court…</p></div>${ctx.back || ""}`;
+    if (typeof ctx.wire === "function") ctx.wire();
+    return true;
+  }
+
+  /* ---------------- the hockey page ----------------
+     Ethan's NHL render (2026-10-15), the same way: js/rinkcast.js and
+     css/rinkcast.css, loaded the first time a hockey game opens whose file
+     carries the league's own events (`rink`, written by
+     livescore_build.nhl_rink_pass). A game without them, or a file that
+     will not load, stays on the rooms above. */
+  let _rink = null, _rinkFailed = false;
+  function rink(host, ctx) {
+    if (!ctx.d || !ctx.d.rink || _rinkFailed) return false;
+    if (window.QBRink) {
+      try { return window.QBRink.render(host, ctx); } catch (e) { console.error("rinkcast", e); return false; }
+    }
+    if (!_rink) {
+      _rink = new Promise((resolve) => {
+        const css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = "css/rinkcast.css";
+        document.head.appendChild(css);
+        const el = document.createElement("script");
+        el.src = "js/rinkcast.js";
+        el.addEventListener("load", () => resolve(true));
+        el.addEventListener("error", () => { _rinkFailed = true; resolve(false); });
+        document.head.appendChild(el);
+      }).then(() => { if (state.view === "pbp") renderPbpPage(); });
+    }
+    host.innerHTML = `${ctx.stripHTML || ""}<div class="card"><p class="rail-quiet">Loading the rink…</p></div>${ctx.back || ""}`;
     if (typeof ctx.wire === "function") ctx.wire();
     return true;
   }

@@ -582,7 +582,9 @@ PRUNABLE_CACHE_PREFIXES = (
     # The live loop's hockey box (livescore_build.nhl_box_pass, 2026-10-13):
     # mid-game snapshots on a thirty-second clock, under their own names so
     # settlement's `nhl_box_` never reads one. Worthless once the game ends.
-    "nhl_live_score_", "nhl_live_box_",
+    # The live rink's play-by-play (nhl_rink_pass, 2026-10-15) is the same
+    # kind, under its own name so the shot ingest's `nhl_pbp_` never does.
+    "nhl_live_score_", "nhl_live_box_", "nhl_live_pbp_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
     # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
     # league, overwritten every poll, so these do not grow in COUNT the

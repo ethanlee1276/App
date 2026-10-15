@@ -649,6 +649,15 @@ def write(league: str, out_dir: Path = OUT) -> dict:
                 payload["box_note"] = note
         except Exception:                                    # noqa: BLE001
             pass
+        # The league's own events onto each game's deep file, for the live
+        # rink page (nhl_rink_pass). Its own try again: a play-by-play that
+        # will not load leaves the page on ESPN's plays, as before.
+        try:
+            note = nhl_rink_pass(payload.get("games") or [], Path(out_dir))
+            if note:
+                payload["rink_note"] = note
+        except Exception:                                    # noqa: BLE001
+            pass
     return payload
 
 
@@ -758,6 +767,140 @@ def nhl_box_pass(games: list[dict], out_dir: Path, fetch_day=None,
     return note
 
 
+#: THE LIVE RINK (2026-10-15, Ethan's NHL renders: "figure out what data we
+#: can use for the live play by play screen for nhl like live posetions and
+#: puck tracking"). The league's play-by-play places every event on the ice —
+#: faceoffs, hits, takeaways, giveaways, shots, blocks, goals, penalties —
+#: with who was in it and how many skaters each side had; ESPN's hockey
+#: plays carry none of that. `engine/sources/nhlrink` turns it into the
+#: deep file's `rink` block, with the league's box score (ice time) and our
+#: expected goals on each attempt when the model is on the box. Fetched
+#: under its own cache name, like the box: the shot ingest reads
+#: `nhl_pbp_{id}` for a month, and a mid-game snapshot under that name
+#: would be read as the final's.
+NHL_PBP_TTL = 15
+
+
+def _nhl_feed(fetch_day, today: _dt.date | None = None) -> dict:
+    """{(away, home): score-feed row} for today and yesterday on the
+    Eastern clock — a late game runs past midnight."""
+    from engine.sources import nhldata
+    day = today or _et_today()
+    feed: dict = {}
+    for d in (day, day - _dt.timedelta(days=1)):
+        try:
+            rows = nhldata.parse_score_day(fetch_day(d.isoformat()))
+        except Exception:                                    # noqa: BLE001
+            continue
+        for r in rows:
+            feed.setdefault((r.get("away"), r.get("home")), r)
+    return feed
+
+
+_XG_CACHE: dict = {}
+
+
+def _nhl_xg():
+    """The expected-goals scorer for one shot row, or None when the model
+    file is not on this box. Re-read when the nightly refit rewrites it."""
+    from engine.nhl import xg
+    path = xg._models_dir() / xg.MODEL_FILE
+    try:
+        stamp = path.stat().st_mtime
+    except OSError:
+        return None
+    if _XG_CACHE.get("stamp") != stamp:
+        model = xg.load(path)
+        _XG_CACHE.clear()
+        _XG_CACHE.update(stamp=stamp, model=model)
+    model = _XG_CACHE.get("model")
+    return (lambda shot: xg.xg(model, shot)) if model else None
+
+
+def _merge_rink(g: dict, rink: dict, pbp_dir: Path) -> None:
+    """Put the rink block on the game's deep file, atomically. A file ESPN
+    already wrote keeps its modified time — that time is the round robin's
+    cursor (`_round_robin`) and the league's events are not ESPN serving
+    the game; a game ESPN has not served yet gets a file of its own."""
+    pbp_dir = Path(pbp_dir)
+    pbp_dir.mkdir(parents=True, exist_ok=True)
+    out = pbp_dir / f"nhl_{g['event_id']}.json"
+    stamp = None
+    try:
+        doc = json.loads(out.read_text())
+        stamp = out.stat().st_mtime
+    except (OSError, ValueError):
+        doc = None
+    if not isinstance(doc, dict):
+        doc = {"league": "nhl", "event_id": str(g.get("event_id") or ""), "generated_at": utc_stamp(),
+               "home": g.get("home"), "away": g.get("away"),
+               "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""), "plays": []}
+    if g.get("live"):
+        doc["live"] = g["live"]          # this pass's scoreboard, the freshest
+    doc["rink"] = rink
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc))
+    os.replace(tmp, out)
+    if stamp is not None:
+        os.utime(out, (stamp, stamp))
+
+
+def nhl_rink_pass(games: list[dict], out_dir: Path, fetch_day=None, fetch_box=None,
+                  fetch_pbp=None, xg_fn=..., today: _dt.date | None = None) -> str:
+    """The `rink` block onto the deep file of every hockey game in progress
+    or over (up to the box pass's cap, in progress first). Returns a line
+    for the log, or "" when no game is on."""
+    on = [g for g in games or [] if (g.get("live") or {}).get("state") in ("live", "final")]
+    if not on:
+        return ""
+    from engine.sources import nhldata, nhlrink
+    from engine.sources.fetch import fetch_json
+    if fetch_day is None:
+        def fetch_day(d):
+            return fetch_json(f"{nhldata.API}/score/{d}", f"nhl_live_score_{d}.json", ttl=NHL_BOX_TTL)
+    if fetch_box is None:
+        def fetch_box(gid, final=False):
+            return fetch_json(f"{nhldata.API}/gamecenter/{gid}/boxscore", f"nhl_live_box_{gid}.json",
+                              ttl=NHL_FINAL_TTL if final else NHL_BOX_TTL)
+    if fetch_pbp is None:
+        def fetch_pbp(gid, final=False):
+            return fetch_json(f"{nhldata.API}/gamecenter/{gid}/play-by-play", f"nhl_live_pbp_{gid}.json",
+                              ttl=NHL_FINAL_TTL if final else NHL_PBP_TTL)
+    if xg_fn is ...:
+        xg_fn = _nhl_xg()
+    feed = _nhl_feed(fetch_day, today)
+    on.sort(key=lambda g: 0 if (g.get("live") or {}).get("state") == "live" else 1)
+    done = failed = missing = 0
+    for g in on[:NHL_BOX_MAX_GAMES]:
+        r = feed.get((g.get("away"), g.get("home")))
+        if not r or not r.get("game_id"):
+            missing += 1
+            continue
+        final = bool(r.get("final"))
+        try:
+            pbp = fetch_pbp(r["game_id"], final=final)
+        except Exception:                                    # noqa: BLE001
+            failed += 1
+            continue
+        try:
+            box = fetch_box(r["game_id"], final=final)
+        except Exception:                                    # noqa: BLE001
+            box = None                 # the events stand without ice time
+        try:
+            rink = nhlrink.rink_doc(pbp, box, xg_fn)
+            rink["at"] = utc_stamp()
+            _merge_rink(g, rink, Path(out_dir) / "pbp")
+            done += 1
+        except Exception:                                    # noqa: BLE001
+            failed += 1
+    note = f"nhl rink: {done} of {len(on)} game(s)"
+    if failed:
+        note += f", {failed} unreachable"
+    if missing:
+        note += f", {missing} not on the league's score feed"
+    return note
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--league", default="",
@@ -787,6 +930,12 @@ def main() -> None:
               + (f" — {note}" if note else ""))
         if on and payload.get("plays_note"):
             print(f"      {payload['plays_note']}")
+        # Hockey's two league passes say what they did (nhl_box_pass,
+        # nhl_rink_pass): a game the league's feed did not answer for shows
+        # here, not only as a page without its rink.
+        for key in ("box_note", "rink_note"):
+            if payload.get(key):
+                print(f"      {payload[key]}")
     print(f"live scores: {total} game(s) across {len(leagues)} league(s), "
           f"{live} in progress → {out_dir}/live_*.json")
 
