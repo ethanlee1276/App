@@ -639,11 +639,16 @@ LINES_GAMES = 2
 LINES_FILE = Path("web/data/nhl_lines.json")
 
 
-def team_lines(conn, teams, players: dict, fetch=None) -> dict:
+def team_lines(conn, teams, players: dict, fetch=None, price=None, pbp_fetch=None) -> dict:
     """{team: engine.nhl.lines.build(...)} from each team's LINES_GAMES
     newest finals' shift charts (the league's stats host, keyless, cached a
     month per game). A team whose charts will not load is left out — the
-    board reads as it did without lines."""
+    board reads as it did without lines.
+
+    ``price(shot)`` is our xG on one attempt (engine/nhl/xg); with it, each
+    unit also carries its expected goals for and against at even strength
+    on the ice together, read from the same games' play-by-play
+    (engine/nhl/lineimpact, the Toolbox's line matchups). Context only."""
     import json as _json
     from engine.nhl import lines as LN
     from engine.sources import nhlshifts
@@ -655,7 +660,7 @@ def team_lines(conn, teams, players: dict, fetch=None) -> dict:
         rows = conn.execute(
             "SELECT extra FROM games WHERE sport='nhl' AND home_score IS NOT NULL AND (home=? OR away=?) "
             "ORDER BY date DESC, period DESC LIMIT ?", (team, team, LINES_GAMES)).fetchall()
-        charts = []
+        charts, by_game = [], []
         for (extra,) in rows:
             try:
                 gid = int((_json.loads(extra or "{}")).get("nhl_id") or 0)
@@ -669,9 +674,29 @@ def team_lines(conn, teams, players: dict, fetch=None) -> dict:
                 got = None
             if got:
                 charts.append(got)
+                by_game.append((gid, got))
         if charts:
             out[team] = LN.build(charts, positions)
+            if price is not None:
+                out[team] = _line_xg(out[team], by_game, team, price, pbp_fetch)
     return out
+
+
+def _line_xg(lines: dict, by_game: list, team: str, price, pbp_fetch=None) -> dict:
+    """Each unit's on-ice expected goals over the games its lines came from.
+    A play-by-play that will not load costs only its own game's shots."""
+    from engine.nhl import lineimpact
+    from engine.sources import nhlpbp
+    from engine.sources.fetch import DataUnavailable as _DU
+    pbp_fetch = pbp_fetch or nhlpbp.fetch_pbp
+    games = []
+    for gid, chart in by_game:
+        try:
+            shots = nhlpbp.parse_shots(pbp_fetch(gid))
+        except _DU:
+            shots = []
+        games.append((chart, shots))
+    return lineimpact.team_units(lines, games, team, price)
 
 
 def save_lines(lines: dict, path: Path = LINES_FILE, date: str = "") -> None:
@@ -745,7 +770,9 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     from engine.nhl import lines as LN
     if lines is None:
         try:
-            lines = team_lines(conn, {t for g in games for t in (g["home"], g["away"])}, players)
+            _xm = X.load()
+            lines = team_lines(conn, {t for g in games for t in (g["home"], g["away"])}, players,
+                               price=(lambda s: X.xg(_xm, s)) if _xm else None)
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  lines skipped: {exc}")
             lines = {}

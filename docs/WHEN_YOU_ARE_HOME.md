@@ -275,7 +275,8 @@ NFL build by hand to show where the rest goes (step 118). The sixteen ideas
 are being built, a slice at a time: first a Toolbox page (five calculators
 for every sport, and college football's upset meter) and a report card in
 My Bets (step 119; BN checks the close lookup answers); then basketball's
-schedule spots and "what if he sits" (step 120; BO).
+schedule spots and "what if he sits" (step 120; BO); then hockey's goalie
+board, each line's on-ice expected goals and the live xG race (step 121; BP).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -314,13 +315,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Basketball's Toolbox: tonight's schedule spots and what if he sits`
+**A. The box has today's code.** The first line should end `Hockey's Toolbox and live page: the goalie board, each line's on-ice expected goals, and the xG race`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor a8de3fdc HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 406f3cf4 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1719,6 +1720,23 @@ equal the number of games):
 curl -s "http://127.0.0.1:8000/api/hoops/whatif?league=nba&team=BOS" | head -c 600; echo
 curl -s "http://127.0.0.1:8000/api/hoops/whatif?league=nba&team=BOS&player=Jayson%20Tatum" | head -c 900; echo
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba.json')); print(len(d.get('games') or []), 'games,', len(d.get('schedule_spots') or []), 'with spots')"
+```
+
+**BP. The hockey board carries the lines' expected goals and how sure each
+start is** (step 121; read-only, a second, after the first NHL build on the
+new code). It prints, for each team on tonight's board, its first line, that
+line's expected goals for and against and how many attempts they rest on,
+then each starter and whether he is confirmed, probable or our guess. A
+team with no `xgf` means the shot model has not been fitted on the box yet
+(`python3 -m engine.nhl.xg fit`, which the chores run):
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json; d=json.load(open('data/built/nhl.json'))
+for t, l in sorted((d.get('lines') or {}).items()):
+    f=(l.get('forwards') or [{}])[0]; print(t, f.get('players'), 'xGF', f.get('xgf'), 'xGA', f.get('xga'), 'att', (f.get('att_for') or 0)+(f.get('att_against') or 0))
+for g in d.get('games') or []:
+    for t, s in ((g.get('nhl_tape') or {}).get('sides') or {}).items(): print(t, s.get('starter'), s.get('starter_source'), s.get('starter_gsax'))
+"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -5489,6 +5507,32 @@ first). Paste back anything that prints an error or looks off.
     what-if from box scores; his games before the club not counted as sat;
     the build, the server and the page reaching both; the cards' words).
     No pin changed; no size budget moved (the cards load with the Toolbox).
+121. **Hockey's Toolbox and live page: the goalie board, each line's on-ice
+    expected goals, and the xG race** (2026-10-15, three more of the
+    sixteen). Context, all of it; nothing moves a number. THE GOALIE BOARD
+    (Toolbox, NHL): tonight's starters off each game's tape, best goals
+    saved above expected first, with whether his club has named him (the
+    tape now carries `starter_source`: confirmed, probable, or our guess
+    from recent starts), the back-to-back, his regressed save rate, his
+    share of the starts and the opponent's expected goals tonight. LINE
+    MATCHUPS (Toolbox, NHL): each club's forward lines and defence pairs, as
+    the board already reads them off the shift charts of its two newest
+    games, now with each unit's expected goals for and against at even
+    strength while every one of its men was on the ice (`engine/nhl/
+    lineimpact.py`; the same games' play-by-play, priced by our xG model;
+    power plays and empty nets left out; a shift ending on the second
+    counts, one starting on it does not). The attempt count sits beside
+    every rate, because two games of one line is a handful of shots. The
+    build adds it only when the xG model is fitted, and a play-by-play that
+    will not load costs only its own game (both cached a month, the same
+    files the shot ingest reads). Each parsed shot now keeps its second
+    (`t`), in memory only; the stored table is unchanged. THE XG RACE (the
+    live NHL page, Flow): a toggle between the attempt race and the running
+    expected goals of each side, goals as dots at their side's running xG,
+    and the game's biggest single chance named under it, when the game's
+    attempts are priced. New: `tests/test_hockey_goalies_lines_and_the_xg_race.py`
+    (6 checks). No pin changed: `tests/test_the_nhl_live_page.py`'s flow
+    shape is kept as it was (the race's points ride beside it).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

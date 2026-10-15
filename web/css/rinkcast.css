@@ -148,6 +148,8 @@
 .rc-flow-line.away { stroke: var(--ca); }
 .rc-flow-line.home { stroke: var(--ch); }
 .rc-flow-goal { stroke: var(--bg); stroke-width: 2; }
+.rc-flow-best { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--text-dim); }
+.rc-flow-best b { color: var(--text); }
 .rc-q-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
 .rc-flow-stats { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-2); font: 500 var(--fs-sm) / 1.4 var(--font-sans); color: var(--text-dim); }
 .rc-flow-stats b { color: var(--text); }

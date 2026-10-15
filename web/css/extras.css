@@ -84,6 +84,16 @@
 .xt-tab.on { color: var(--text); border-color: var(--brand); }
 .xt-wi-out { min-height: 1.4em; }
 
+/* Hockey: the goalie board and the line matchups. */
+.xt-scroll { overflow-x: auto; max-width: 100%; }
+.xt-gk { display: inline-flex; align-items: center; gap: 8px; }
+.xt-gk > span { display: grid; }
+.xt-gk small { color: var(--text-mute); font-size: var(--fs-2xs); }
+.xt-chip.t-good { color: var(--good); }
+.xt-chip.t-none { color: var(--text-mute); }
+.xt-lm { display: grid; gap: 6px; padding: 10px; border-radius: var(--radius-sm); background: var(--panel-2); }
+.xt-lm .xt-tbl small { color: var(--text-mute); font-size: var(--fs-2xs); }
+
 /* The report card. */
 .xt-rc { margin: 0 0 14px; }
 .xt-rc-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }

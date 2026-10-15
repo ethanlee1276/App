@@ -450,12 +450,88 @@
     }
   }
 
+  // ---- hockey: the goalie board and the line matchups --------------------
+  const SOURCE_WORD = { confirmed: ["good", "Confirmed"], probable: ["warn", "Probable"], "recent starts": ["", "Our guess"] };
+  /* Tonight's starting goalies off each game's tape, best goals saved
+     above expected first; a goalie with no number yet sorts last. */
+  function goalies(d) {
+    const out = [];
+    for (const g of (d && d.games) || []) {
+      const t = g.nhl_tape;
+      if (!t || !t.sides) continue;
+      for (const [team, opp] of [[g.away, g.home], [g.home, g.away]]) {
+        const s = t.sides[team], o = t.sides[opp];
+        if (!s || !s.starter) continue;
+        out.push({ team, opp, home: team === g.home, goalie: s.starter, sure: !!s.starter_sure,
+                   source: s.starter_source || "", sv: s.starter_sv, gsax: s.starter_gsax, share: s.starter_share,
+                   b2b: !!s.b2b, faces: o && o.xg != null ? o.xg : null });
+      }
+    }
+    return out.sort((a, b) => (b.gsax == null ? -1e9 : b.gsax) - (a.gsax == null ? -1e9 : a.gsax));
+  }
+  function goaliesHTML(d) {
+    const sport = sportNow();
+    const rows = goalies(d);
+    const head = `<header class="xt-card-h"><h3>Goalie board</h3><p>Tonight’s starters, best goals saved above expected
+      first: whether his club has named him, his save rate, his share of the starts and what the man shooting at him is
+      expected to score.</p></header>`;
+    if (!rows.length) {
+      return `<section class="xt-card xt-wide">${head}<p class="xt-hint">No starters on the board yet — they fill with the slate.</p></section>`;
+    }
+    const li = rows.map((r) => {
+      const [tone, word] = SOURCE_WORD[r.source] || (r.sure ? ["good", "Expected"] : ["", "Unsure"]);
+      return `<tr><td><span class="xt-gk">${mark(r.team, sport)}<span><b>${esc(r.goalie)}</b><small>${esc(r.team)} ${r.home ? "vs" : "at"} ${esc(r.opp)}</small></span></span></td>
+        <td><em class="xt-chip t-${tone || "none"}">${word}</em>${r.b2b ? ` <em class="xt-chip t-bad">B2B</em>` : ""}</td>
+        <td>${r.gsax == null ? "—" : `<b class="${r.gsax >= 0 ? "pos" : "neg"}">${r.gsax > 0 ? "+" : r.gsax < 0 ? "−" : ""}${Math.abs(r.gsax).toFixed(1)}</b>`}</td>
+        <td>${r.sv == null ? "—" : Number(r.sv).toFixed(3).replace(/^0/, "")}</td>
+        <td>${r.share == null ? "—" : pctTxt(r.share, 0)}</td>
+        <td>${r.faces == null ? "—" : Number(r.faces).toFixed(2)}</td></tr>`;
+    }).join("");
+    return `<section class="xt-card xt-wide">${head}<div class="xt-scroll"><table class="xt-tbl xt-gk-tbl"><thead><tr><th>Goalie</th><th>Named</th>
+      <th>GSAx</th><th>Save %</th><th>Starts</th><th>Faces</th></tr></thead><tbody>${li}</tbody></table></div>
+      <p class="xt-fine">GSAx: goals saved above what our shot model expected on the shots he faced, over his recent games.
+      Save % is regressed toward the league, as the board prices it. “Faces” is the opponent’s expected goals tonight. The
+      board already prices every one of these; this lays them side by side.</p></section>`;
+  }
+  /* One team's units, its forward lines then its pairs, each with its
+     on-ice expected goals at even strength. */
+  function unitsHTML(team, lines) {
+    const row = (u, i, pre) => {
+      const n = (u.att_for || 0) + (u.att_against || 0);
+      return `<tr><td><b>${pre}${i + 1}</b> <small>${(u.players || []).map((p) => esc(String(p).split(" ").slice(-1)[0])).join(" · ")}</small></td>
+        <td>${u.xgf == null ? "—" : Number(u.xgf).toFixed(2)}</td><td>${u.xga == null ? "—" : Number(u.xga).toFixed(2)}</td>
+        <td>${u.xgf_pct == null ? "—" : `<b class="${u.xgf_pct >= 0.5 ? "pos" : "neg"}">${pctTxt(u.xgf_pct, 0)}</b>`}</td>
+        <td>${u.att_for == null ? "—" : n}</td><td>${u.together == null ? "—" : pctTxt(u.together, 0)}</td></tr>`;
+    };
+    const f = (lines.forwards || []).map((u, i) => row(u, i, "F")).join("");
+    const dd = (lines.defence || []).map((u, i) => row(u, i, "D")).join("");
+    return `<div class="xt-split"><h4>${esc(team)}</h4><div class="xt-scroll"><table class="xt-tbl"><thead><tr><th>Unit</th><th>xGF</th><th>xGA</th>
+      <th>xGF%</th><th>Att</th><th>Together</th></tr></thead><tbody>${f}${dd}</tbody></table></div></div>`;
+  }
+  function linesHTML(d) {
+    const lines = (d && d.lines) || {};
+    const games = ((d && d.games) || []).filter((g) => lines[g.home] || lines[g.away]);
+    const head = `<header class="xt-card-h"><h3>Line matchups</h3><p>Each club’s forward lines and defence pairs from the
+      shift charts of its newest games, with what each unit’s shots and its opponents’ shots were worth in expected goals
+      while all of it was on the ice at even strength.</p></header>`;
+    if (!games.length) {
+      return `<section class="xt-card xt-wide">${head}<p class="xt-hint">No lines read yet — they fill once a club’s newest games have shift charts.</p></section>`;
+    }
+    const body = games.map((g) => `<div class="xt-lm"><div class="xt-sp-h"><b>${esc(g.away)} @ ${esc(g.home)}</b></div>
+      <div class="xt-splits">${lines[g.away] ? unitsHTML(g.away, lines[g.away]) : ""}${lines[g.home] ? unitsHTML(g.home, lines[g.home]) : ""}</div></div>`).join("");
+    return `<section class="xt-card xt-wide">${head}${body}
+      <p class="xt-fine">Context only, and small: two games of one line is a handful of attempts, so the attempt count sits
+      beside every rate. “Together” is how much of its members’ ice they spent with each other. The home coach gets the last
+      change, so who meets whom tonight is his call.</p></section>`;
+  }
+
   /* Each sport's own tools, drawn above the calculators when that sport
      is the one selected. */
   const SPORT_TOOLS = {
     cfb: [upsetsHTML],
     nba: [spotsHTML, whatifHTML],
     wnba: [spotsHTML, whatifHTML],
+    nhl: [goaliesHTML, linesHTML],
   };
   const SPORT_NAME = { nfl: "NFL", cfb: "College football", mlb: "MLB", nba: "NBA", wnba: "WNBA", nhl: "NHL", ufc: "UFC" };
 
@@ -581,5 +657,5 @@
 
   window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
-                      spotChips, spotsHTML, whatifHTML, whatifOut };
+                      spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML };
 })();

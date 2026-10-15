@@ -52,7 +52,7 @@
   /* What the reader chose, kept across the twelve-second redraws. `q` null
      follows the period being played; 0 is every play. */
   const S = { view: "live", right: "plays", stats: "team", lineup: "lineup", team: "", odds: "odds", q: null,
-              shots: "both", ice: "all", run: null, replay: false, ctx: null };
+              shots: "both", ice: "all", run: null, replay: false, ctx: null, flowBy: "att" };
 
   /* ---------------- the clock ---------------- */
   const PERIOD_S = 1200;
@@ -161,18 +161,22 @@
     });
     return t;
   }
-  /* The running count of attempts a side, and the goals, over the game. */
+  /* The running count of attempts a side, and the goals, over the game;
+     beside them the running expected goals (`xa`, `xh`) — the xG RACE
+     (Ethan, 2026-10-15) — and the game's biggest single chance. */
   function flow(d) {
-    const pts = [{ t: 0, a: 0, h: 0 }], goals = [];
-    let a = 0, h = 0;
+    const pts = [{ t: 0, a: 0, h: 0, xa: 0, xh: 0 }], goals = [];
+    let a = 0, h = 0, xa = 0, xh = 0, best = null;
     events(d).forEach((e) => {
       const s = sideOf(d, e.team);
       if (!s || !ATTEMPTS.has(e.kind)) return;
-      if (s === "away") a++; else h++;
-      pts.push({ t: Number(e.elapsed) || 0, a, h });
+      const x = e.xg != null ? Number(e.xg) || 0 : 0;
+      if (s === "away") { a++; xa += x; } else { h++; xh += x; }
+      pts.push({ t: Number(e.elapsed) || 0, a, h, xa, xh });
+      if (x && (!best || x > best.xg)) best = { xg: x, e, side: s };
       if (e.kind === "goal") goals.push({ t: Number(e.elapsed) || 0, side: s, n: s === "away" ? a : h });
     });
-    return { pts, goals };
+    return { pts, goals, best };
   }
   /* Attempts a side over the last `win` seconds — who is pressing. */
   function pressure(d, win) {
@@ -649,10 +653,12 @@
   function flowSVG(d, k, h) {
     const f = flow(d);
     if (f.pts.length < 2) return `<p class="rail-quiet">The game flow draws itself from the first attempt.</p>`;
+    const byXg = S.flowBy === "xg" && (d.rink || {}).xg;
+    const ka = byXg ? "xa" : "a", kh = byXg ? "xh" : "h";
     const reg = 3 * PERIOD_S, last = f.pts[f.pts.length - 1];
     const end = Math.max(reg, last.t);
     const Wd = 1000, H2 = h || 220;
-    const top = Math.max(10, last.a, last.h);
+    const top = byXg ? Math.max(2, last.xa, last.xh) : Math.max(10, last.a, last.h);
     const X = (t) => (t / end) * Wd, Y = (n) => H2 - 10 - (n / top) * (H2 - 24);
     const line = (key) => {
       let p = `M0 ${Y(0)}`;
@@ -661,15 +667,26 @@
     };
     let lines = "";
     for (let t = PERIOD_S; t < end; t += PERIOD_S) lines += `<line class="rc-q-line" x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="0" y2="${H2}"/>`;
-    const goals = f.goals.map((g) => `<circle class="rc-flow-goal" cx="${X(g.t).toFixed(1)}" cy="${Y(g.n).toFixed(1)}" r="6" style="fill:${g.side === "home" ? "var(--ch)" : "var(--ca)"}"/>`).join("");
-    return `<svg class="rc-flow" viewBox="0 0 ${Wd} ${H2}" preserveAspectRatio="none" role="img" aria-label="Shot attempts over the game">
-      ${lines}<path class="rc-flow-line away" d="${line("a")}"/><path class="rc-flow-line home" d="${line("h")}"/>${goals}</svg>`;
+    // On the xG race a goal sits at its side's running xG at that moment.
+    const at = (g) => (byXg ? (f.pts.filter((p) => p.t <= g.t).pop() || {})[g.side === "home" ? "xh" : "xa"] || 0 : g.n);
+    const goals = f.goals.map((g) => `<circle class="rc-flow-goal" cx="${X(g.t).toFixed(1)}" cy="${Y(at(g)).toFixed(1)}" r="6" style="fill:${g.side === "home" ? "var(--ch)" : "var(--ca)"}"/>`).join("");
+    return `<svg class="rc-flow" viewBox="0 0 ${Wd} ${H2}" preserveAspectRatio="none" role="img" aria-label="${byXg ? "Expected goals" : "Shot attempts"} over the game">
+      ${lines}<path class="rc-flow-line away" d="${line(ka)}"/><path class="rc-flow-line home" d="${line(kh)}"/>${goals}</svg>`;
   }
   function flowPaneHTML(d, k) {
     const T = k.stats;
-    const xg = (d.rink || {}).xg ? `<span>xG <b>${T.away.xg.toFixed(2)}</b> – <b>${T.home.xg.toFixed(2)}</b> <i class="mini">our model</i></span>` : "";
-    return `<div class="rc-pane-head"><b>Game flow</b><span class="mini">Shot attempts over the game, each goal a dot on the scorer's line.</span></div>
-      ${flowSVG(d, k, 200)}
+    const has = !!(d.rink || {}).xg;
+    const byXg = has && S.flowBy === "xg";
+    const xg = has ? `<span>xG <b>${T.away.xg.toFixed(2)}</b> – <b>${T.home.xg.toFixed(2)}</b> <i class="mini">our model</i></span>` : "";
+    const chips = has ? `<div class="rc-legend"><button type="button" class="rc-chip${byXg ? "" : " on"}" data-rc-flow="att">Attempts</button>
+      <button type="button" class="rc-chip${byXg ? " on" : ""}" data-rc-flow="xg">xG race</button></div>` : "";
+    const best = byXg ? flow(d).best : null;
+    const big = best ? `<p class="rc-flow-best">Biggest chance: <b>${esc(best.e.player || d[best.side])}</b> (${esc(d[best.side])}), ${best.xg.toFixed(2)} xG
+      · ${esc([periodShort(best.e.period), best.e.clock ? String(best.e.clock).replace(/^0(\d:)/, "$1") : ""].filter(Boolean).join(" "))}${best.e.kind === "goal" ? " · scored" : ""}</p>` : "";
+    return `<div class="rc-pane-head"><b>${byXg ? "xG race" : "Game flow"}</b><span class="mini">${byXg
+      ? "Each side's expected goals as the game goes, our shot model's price on every unblocked attempt; each goal a dot."
+      : "Shot attempts over the game, each goal a dot on the scorer's line."}</span></div>
+      ${chips}${flowSVG(d, k, 200)}${big}
       <div class="rc-flow-stats"><span class="rc-key away">${esc(d.away)}</span><span class="rc-key home">${esc(d.home)}</span>
         <span>Attempts <b>${T.away.att}</b> – <b>${T.home.att}</b></span><span>Shots on goal <b>${T.away.sog}</b> – <b>${T.home.sog}</b></span>${xg}</div>`;
   }
@@ -938,7 +955,7 @@
     if (host.dataset.rcWired) return;
     host.dataset.rcWired = "1";
     host.addEventListener("click", (e) => {
-      const t = e.target.closest("[data-rc-view],[data-rc-right],[data-rc-stats],[data-rc-lineup],[data-rc-odds],[data-rc-shots],[data-rc-ice],[data-rc-team],[data-rc-full],[data-rc-replay]");
+      const t = e.target.closest("[data-rc-view],[data-rc-right],[data-rc-stats],[data-rc-lineup],[data-rc-odds],[data-rc-shots],[data-rc-ice],[data-rc-team],[data-rc-full],[data-rc-replay],[data-rc-flow]");
       if (!t || !host.contains(t)) return;
       if (t.hasAttribute("data-rc-full")) {
         const st = host.querySelector(".rc-stage");
@@ -955,6 +972,7 @@
       if (ds.rcShots) S.shots = ds.rcShots;
       if (ds.rcIce) S.ice = ds.rcIce;
       if (ds.rcTeam) S.team = ds.rcTeam;
+      if (ds.rcFlow) S.flowBy = ds.rcFlow;
       if (S.ctx) render(host, S.ctx, true);
     });
     host.addEventListener("change", (e) => {

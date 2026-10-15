@@ -83,7 +83,8 @@ def tape(home: str, away: str, teams: dict, ctx: dict) -> dict:
             "starter_gsax": c.get("gsax"),
             "ranks": {k: rk[k].get(t) for k in rk if rk[k] or not k.startswith("x")},
             "starter": c.get("starter"), "starter_sv": c.get("sv"), "starter_share": c.get("starter_share"),
-            "starter_sure": bool(c.get("starter_sure")), "b2b": bool(c.get("b2b")),
+            "starter_sure": bool(c.get("starter_sure")), "starter_source": c.get("starter_source") or "",
+            "b2b": bool(c.get("b2b")),
             "xg": round(c["xg"], 2) if c.get("xg") is not None else None,
             "season_weight": prof.get("season_weight"), "gp_season": prof.get("gp_season"),
         }

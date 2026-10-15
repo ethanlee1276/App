@@ -135,7 +135,7 @@ def parse_shots(payload: dict, date: str = "", season: int | None = None) -> lis
             "goalie_id": goalie, "goalie": names.get(goalie, ""), "kind": kind,
             "x": float(x), "y": float(y), "dist": dist, "angle": angle,
             "shot_type": str(d.get("shotType") or ""), "strength": strength, "empty_net": empty,
-            "rebound": rebound, "rush": rush, "is_goal": int(kind == "goal"), "period": period,
+            "rebound": rebound, "rush": rush, "is_goal": int(kind == "goal"), "period": period, "t": t,
             "assist1": names.get(str(d.get("assist1PlayerId") or ""), "") if kind == "goal" else "",
             "assist2": names.get(str(d.get("assist2PlayerId") or ""), "") if kind == "goal" else "",
         })
