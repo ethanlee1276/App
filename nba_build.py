@@ -1171,12 +1171,20 @@ def main() -> None:
             out["market_scan"] = ms
             # Odds attach set spread/total on the slate games after the
             # games list was written — carry them across for game cards.
+            # THE MONEYLINES TOO (2026-10-15), as the NHL board carries
+            # them: the live page's Game Odds read them, and engine/lineopen
+            # keeps a game's last pregame line only when both sides are
+            # priced — which is what a settled NBA moneyline closes on
+            # (ledger._game_close). 0 is "not offered" and is written as
+            # nothing.
             by_pair = {(g.home, g.away): g for g in slate.games}
             for gd in out.get("games", []):
                 g = by_pair.get((gd["home"], gd["away"]))
                 if g is not None:
                     gd["spread"] = g.spread
                     gd["total"] = g.total
+                    gd["home_ml"] = g.home_ml or None
+                    gd["away_ml"] = g.away_ml or None
         except Exception as exc:
             print(f"⚠️  shared-schema layer skipped: {exc}")
 

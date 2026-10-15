@@ -232,7 +232,12 @@ picks that did worse, and the picks that lost the close hit above their
 claim, so neither was built (step 109). The pastes also showed every NFL
 moneyline bet settling with no close; every moneyline and total settled
 from now on keeps one, the board's last current line before kickoff
-(step 110; BG shows the box keeping those lines).
+(step 110; BG shows the box keeping those lines). And on your two renders
+("the live play by play screen for nba looks like shit"), a basketball game
+now opens its own page in their layout: the scoreboard, our arena with the
+last shot flying to the rim, every shot of the game on its floor, who is on
+the court, the game's flow, then the plays, the stats and the odds
+(step 111; BH asks a game what ESPN carries for it).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -270,13 +275,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The close check runs after Thursday night's game, on Ethan's Eastern day`
+**A. The box has today's code.** The first line should end `The NBA live page in Ethan's render: the arena, the last shot's flight, whose ball, who's on the floor`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor e0abc235 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 897b978c HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1481,10 +1486,39 @@ for r in ro(ledger.DEFAULT_DB).execute(
     print("closes  %-5s %-9s %3d settled, %3d with a close" % r)
 PY
 ```
-What I expect: a `lines` row for each league whose board ran, nearly every
-game with a pregame line; and every `closes` row with its two numbers
-equal or close. A league whose `closes` row shows none with a close, or a
-`lines` row with none, is the one I need: paste all of it.
+What I expect: a `lines` row for the NFL, MLB and the NHL, nearly every
+game with a pregame line, and from the first NBA build after step 111 one
+for the NBA too (the WNBA's once its season starts); none for college, whose
+board keeps no line (step 110). And every `closes` row with its two numbers
+equal or close (a college row none, for the same reason). Any other league
+whose `closes` row shows none with a close, or whose `lines` row shows none
+with a pregame line, is the one I need: paste all of it.
+
+**BH. What ESPN carries for the new NBA page** (step 111; read-only,
+seconds). Best during an NBA game (the preseason plays most evenings until
+opening night on the 20th):
+```
+cd /srv/qellys && sudo -u qellys python3 hoopsprobe.py
+```
+With no game on, read the newest final instead:
+`cd /srv/qellys && sudo -u qellys python3 hoopsprobe.py --prefer post`.
+It prints four sections and never a play's written text. What I expect:
+1. `the scorer's table`: either a `situation` block with timeouts, team
+   fouls, the bonus and the ball, or `ABSENT` everywhere. Absent is fine:
+   the page then draws no bonus, no timeouts and no arrow from ESPN, only
+   the ball the plays settle.
+2. `the court`: dunks and layups `ok` (within four feet of the basket the
+   page draws at), threes `ok` (a median between 22 and 27.5 feet).
+3. `who is on the floor`: five starters marked a side, and one verdict
+   line, `ESPN lists the man coming IN first` or `... going OUT first`.
+   `neither order holds` means the Player Tracker shows the leading
+   scorers instead of the five on the floor: paste all of it.
+4. `what the deep file will carry`: the keys, `linescores` and `venue`
+   among them during a game.
+A `CHECK` on line 2, `starters marked in the box: NONE`, or `neither order
+holds` is the one I need. Paste all four sections either way.
+Then open the game from the Live tab, on the phone and on the computer:
+nothing to run, just tell me how it looks.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4752,10 +4786,15 @@ first). Paste back anything that prints an error or looks off.
     none: the store keeps one row per pair per day, so which leg's price
     it ended on is a guess. A price the board marks as dated (over six
     hours old; it shows them for up to two days) no longer moves that row,
-    so it can't pass for the close. Only the NFL board marks one today:
-    college, MLB, the NBA, the WNBA and the NHL write the same rows, and
-    get closes too, but theirs is the last line they showed, whatever its
-    age. The close repair (`launch.py --repair-closes`) doesn't read these
+    so it can't pass for the close. WHICH BOARDS WRITE THESE LINES
+    (corrected 2026-10-15 with step 111): a game row is kept only when it
+    carries both moneylines. The NFL, MLB and the NHL boards' rows do; the
+    NBA's and the WNBA's do from step 111 on (their games carried no
+    moneyline until then, so they kept no line); college's board games still
+    carry none, so college keeps no line here and its game-line bets settle
+    with no close, as before. Only the NFL board marks a price as dated: the
+    others' close is the last line they showed, whatever its age. The close
+    repair (`launch.py --repair-closes`) doesn't read these
     lines, so it now keeps a game line's close instead of clearing it, and
     prints those apart as KEPT. NOT BACKFILLED: the 31 stay without a
     close. The lines stored before today can't show their price was
@@ -4768,6 +4807,67 @@ first). Paste back anything that prints an error or looks off.
     swallows its errors: `tests/test_silent_failures.py` now lists
     `_line_opens_ro` as judged, because its failure prints that warning
     where a quiet day prints nothing. No pin changed.
+111. **The NBA live page, in your render** (2026-10-15, with your two
+    renders: "the live play by play screen for nba looks like shit ...
+    figure out what live data we can get too make it look like an actual
+    play by play screen like ball tracking or possessions"; BH). A
+    basketball game, the NBA's or the WNBA's, now opens its own page in the
+    render's layout. THE SCOREBOARD: both clubs with their records, the
+    score, the quarter and the clock; the bonus, team fouls and timeouts
+    only when ESPN's scorer's-table block carries them; a ball beside the
+    side that has it. THE ARENA (your art, the crown at centre court) with
+    four views. Live: the last shot flies from where it went up to the
+    rim, once, when it is new to the page; the seven before it stay on the
+    floor, fading; an arrow at centre court points the way the ball is
+    going; the last play sits in a caption; a run of six or more unanswered
+    gets a badge. Shot Chart: every shot of the game on the floor, made or
+    missed, either side or both, with each side's makes over its tries.
+    Player Tracker: the five on the floor with their points, rebounds,
+    assists and fouls. Game Flow: the margin over the game, lead changes,
+    ties, each side's largest lead. Then three panels: every play by
+    quarter, newest first; Team Stats (bars in each club's colour), Player
+    Stats, a flat shot chart with each zone's makes, and the quarter-by-
+    quarter line with the runs; Game Odds (the board's spread, moneyline and
+    total, and our win chance), our picks on the game, and Trends (the pace
+    against the board's total, shooting, the run, any side without a field
+    goal in three minutes). On a phone the scoreboard is one line a side,
+    crest and score either side of the clock, and the arena shows the half
+    the last shot went up in, so the court is big enough to read.
+    WHAT THE LIVE DATA CAN AND CAN'T DO. Nobody sells us ball tracking: the
+    league's own feed, which has it play by play, answers the box 403 (step
+    103), and there is no shot clock in anything we can read. ESPN's game
+    file has every play in order, who was in it, and where every shot went
+    up, so `engine/sources/espnplays` now keeps each play's spot on the
+    floor and every name on it, and the game file adds the quarter scores,
+    the building and ESPN's scorer's-table block where one exists; the box
+    score marks its starters. Everything else the page works out from the
+    plays, in the open, and draws nothing it can't stand behind: whose ball
+    it is only where a play settles it (a make, a rebound, a turnover, a
+    foul, the last free throw of a trip; a missed shot leaves no arrow until
+    the rebound); who is on the floor only when every substitution of the
+    game is possible under one reading of ESPN's two names (one impossible
+    step and the tracker shows the leading scorers instead); an assist,
+    block, steal or drawn foul only when the box puts that man on that
+    role's side. ESPN's written sentences are not stored and not drawn. The
+    win chance is our model's. THE COURT ON THE ART: the four corners of the
+    floor were read off the render at full size and a perspective map puts
+    every spot in feet on the picture; the render's lines are drawn about a
+    tenth larger than a real court, so distances are stretched to match (a
+    three lands outside the painted arc). The away side shoots at the left
+    basket, the home side at the right. The page redraws every twelve
+    seconds without the picture blinking or the plays jumping back to the
+    top. AND THE NBA'S GAMES NOW CARRY THEIR MONEYLINES on the board
+    (`nba_build`), which the Game Odds panel reads and which step 110's
+    closes need: until now the NBA and the WNBA kept no game line to close
+    from. The old page stays for football and hockey, and comes back for a
+    basketball game if the new one ever fails to load or draw. The new files
+    (`js/hoopscast.js`, `css/hoopscast.css`, the art at two sizes) load only
+    when a basketball game opens: app.js 494.833 KB of 495, first visit
+    611.753 of 612. The two new files are served as written, not trimmed:
+    the trimmer takes 15% off them, under the 80% bar its test sets for a
+    file worth trimming, and the bar stays. No pin changed, no test changed.
+    New: `tests/test_the_nba_live_page.py` (20 checks; the browser one walks
+    the page at 390 and 1280 under `QB_BROWSER_TESTS=1`) and `hoopsprobe.py`.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

@@ -557,6 +557,20 @@ def pbp_doc(league: str, g: dict, payload: dict,
             drive = None
         if drive:
             doc["drive"] = drive
+    # THE BASKETBALL PAGE'S HEADER (2026-10-15, Ethan's NBA render): the
+    # quarter-by-quarter line, the building, and the scorer's table —
+    # timeouts, team fouls, the bonus, the ball — where ESPN carries it.
+    # Each guarded on its own, each absent rather than empty.
+    if league in espnplays.HOOPS:
+        for key, read in (("linescores", lambda: espnplays.hoops_linescores(payload, league)),
+                          ("venue", lambda: espnplays.hoops_venue(payload)),
+                          ("situation", lambda: espnplays.hoops_situation(payload, league))):
+            try:
+                got = read()
+            except Exception:                                # noqa: BLE001
+                continue
+            if got:
+                doc[key] = got
     return doc
 
 

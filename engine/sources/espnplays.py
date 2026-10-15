@@ -469,6 +469,11 @@ def summary_box(payload: dict, league: str = "nfl") -> list[dict]:
                 aid = str(info.get("id") or "").strip()
                 if aid:
                     row["id"] = aid
+                # WHO STARTED (2026-10-15): the live basketball page tracks
+                # the five on the floor from the starters and the
+                # substitutions, and ESPN's box marks a starter as such.
+                if ath.get("starter") is True:
+                    row["starter"] = True
                 rows.append(row)
             if labels and rows:
                 groups.append({"name": str(grp.get("name") or grp.get("text") or ""),
@@ -678,10 +683,11 @@ def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,
             seen.add(pid)
         tid = str((p.get("team") or {}).get("id") or "")
         parts = p.get("participants") or []
-        first = (parts[0] or {}).get("athlete") if parts and isinstance(parts[0], dict) else None
-        aid = str((first or {}).get("id") or "")
+        ids = [str((((q or {}).get("athlete")) or {}).get("id") or "") if isinstance(q, dict) else ""
+               for q in parts]
+        aid = ids[0] if ids else ""
         ptype = p.get("type") or {}
-        rows.append({
+        row = {
             "kind": "hockey" if league in HOCKEY else "hoops",
             "id": pid,
             "period": _int((p.get("period") or {}).get("number")),
@@ -695,5 +701,115 @@ def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,
             "points_attempted": _int(p.get("pointsAttempted")) or 0,
             "away_score": _int(p.get("awayScore")),
             "home_score": _int(p.get("homeScore")),
-        })
+        }
+        # EVERY NAME ON THE PLAY (2026-10-15), in ESPN's order: the shooter
+        # then the assist on a make or the block on a miss
+        # (engine/nba/shots.fold_espn reads the same order), the two men in
+        # a substitution, the two in a steal. Only when there is more than
+        # one — `player` is the first already.
+        if len(ids) > 1:
+            row["players"] = [names.get(i, "") for i in ids]
+        # WHERE ON THE FLOOR, for the live court (basketball only): ESPN's
+        # feet, the shooting team's basket at (25, 0) — the anchor
+        # nbashotcheck.py held a real final to on 2026-10-14. A play with
+        # no spot carries ESPN's far-off sentinel and gets none.
+        if league in HOOPS:
+            spot = _floor_spot(p.get("coordinate"))
+            if spot:
+                row["x"], row["y"] = spot
+        rows.append(row)
     return rows[-limit:] if limit and limit > 0 else rows
+
+
+#: ESPN puts a play with no spot (a free throw, a rebound) far off the
+#: floor — the same bound `engine/nba/shots.ESPN_FLOOR` draws its line at.
+OFF_FLOOR = 100.0
+
+
+def _floor_spot(coord) -> tuple | None:
+    """``(x, y)`` in ESPN's feet, rounded to a tenth, or None off the floor."""
+    if not isinstance(coord, dict):
+        return None
+    try:
+        x, y = float(coord.get("x")), float(coord.get("y"))
+    except (TypeError, ValueError):
+        return None
+    if not (abs(x) <= OFF_FLOOR and abs(y) <= OFF_FLOOR):
+        return None
+    return round(x, 1), round(y, 1)
+
+
+def hoops_linescores(payload: dict, league: str = "nba") -> dict:
+    """``{team: [points in Q1, Q2, ...]}`` off the summary's header — the
+    quarter-by-quarter line ESPN prints over its box score. Empty when the
+    header carries none."""
+    out: dict = {}
+    hdr = (payload or {}).get("header") or {}
+    for comp in (hdr.get("competitions") or [])[:1]:
+        for side in (comp or {}).get("competitors") or []:
+            if not isinstance(side, dict):
+                continue
+            tinfo = side.get("team") or {}
+            team = _side_key(tinfo, league) or str(tinfo.get("abbreviation") or "")
+            quarters = []
+            for ls in side.get("linescores") or []:
+                if not isinstance(ls, dict):
+                    continue
+                v = _int(ls.get("displayValue") if ls.get("displayValue") not in (None, "") else ls.get("value"))
+                if v is None:
+                    break
+                quarters.append(v)
+            if team and quarters:
+                out[team] = quarters
+    return out
+
+
+def hoops_venue(payload: dict) -> dict:
+    """``{name, city, state}`` — the building, off the summary's game info.
+    Names, never a sentence; anything longer than a name is dropped."""
+    venue = (((payload or {}).get("gameInfo") or {}).get("venue")) or {}
+    addr = venue.get("address") or {}
+    out = {}
+    for key, value in (("name", venue.get("fullName")), ("city", addr.get("city")),
+                       ("state", addr.get("state"))):
+        v = str(value or "").strip()
+        if v and len(v) <= 60:
+            out[key] = v
+    return out if out.get("name") else {}
+
+
+def hoops_situation(payload: dict, league: str = "nba") -> dict:
+    """What the scorer's table knows that the plays do not say outright:
+    each side's timeouts left, its team fouls this period and whether it
+    is in the bonus, and who has the ball — read off ESPN's `situation`
+    block wherever the summary carries one (the header's competition, or
+    the top level). NOT YET SEEN on a live NBA summary from the box: the
+    probe (hoopsprobe.py) prints whether it is there. Anything absent is
+    absent — the page draws no dots and no arrow it cannot stand behind,
+    and nothing here is worked out from the plays."""
+    hdr = (payload or {}).get("header") or {}
+    comp = ((hdr.get("competitions") or [{}])[:1] or [{}])[0] or {}
+    sit = comp.get("situation") or (payload or {}).get("situation") or {}
+    if not isinstance(sit, dict) or not sit:
+        return {}
+    ids = {}
+    for side in comp.get("competitors") or []:
+        if isinstance(side, dict) and side.get("homeAway") in ("home", "away"):
+            ids[str((side.get("team") or {}).get("id") or side.get("id") or "")] = side["homeAway"]
+    out: dict = {}
+    for ha in ("home", "away"):
+        t = _int(sit.get(f"{ha}Timeouts"))
+        if t is not None and 0 <= t <= 10:
+            out.setdefault("timeouts", {})[ha] = t
+        fouls = sit.get(f"{ha}Fouls")
+        if isinstance(fouls, dict):
+            n = _int(fouls.get("teamFouls"))
+            if n is not None and 0 <= n <= 30:
+                out.setdefault("fouls", {})[ha] = n
+            state = str(fouls.get("bonusState") or "").strip().upper()
+            if state and len(state) <= 16:
+                out.setdefault("bonus", {})[ha] = state not in ("NONE", "NO_BONUS", "FALSE")
+    pos = str(sit.get("possession") or "").strip()
+    if pos and ids.get(pos):
+        out["possession"] = ids[pos]
+    return out

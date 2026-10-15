@@ -475,8 +475,41 @@
     }
   }
 
+  /* ---------------- the basketball page ----------------
+     Ethan's NBA render (2026-10-15) is its own page — js/hoopscast.js and
+     css/hoopscast.css, loaded the first time a basketball game opens —
+     handed the strip, the way back and app.js's own wiring. Until it lands
+     the page says so; a file that will not load leaves basketball on the
+     rooms above, as it was. */
+  const HOOPS = new Set(["nba", "wnba"]);
+  let _hoops = null, _hoopsFailed = false;
+  function hoops(host, ctx) {
+    if (!host || !ctx || !HOOPS.has(ctx.league) || _hoopsFailed) return false;
+    // A page that throws leaves the host as it was and hands back to the
+    // old rooms for this pass; the next refresh tries the new page again.
+    if (window.QBHoops) {
+      try { return window.QBHoops.render(host, ctx); } catch (e) { console.error("hoopscast", e); return false; }
+    }
+    if (!_hoops) {
+      _hoops = new Promise((resolve) => {
+        const css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = "css/hoopscast.css";
+        document.head.appendChild(css);
+        const el = document.createElement("script");
+        el.src = "js/hoopscast.js";
+        el.addEventListener("load", () => resolve(true));
+        el.addEventListener("error", () => { _hoopsFailed = true; resolve(false); });
+        document.head.appendChild(el);
+      }).then(() => { if (state.view === "pbp") renderPbpPage(); });
+    }
+    host.innerHTML = `${ctx.stripHTML || ""}<div class="card"><p class="rail-quiet">Loading the court…</p></div>${ctx.back || ""}`;
+    if (typeof ctx.wire === "function") ctx.wire();
+    return true;
+  }
+
   window.QBGamecast = {
-    panel, setTeam: (t) => { _team = String(t || ""); }, team: () => _team,
+    panel, hoops, setTeam: (t) => { _team = String(t || ""); }, team: () => _team,
     // Exposed for the tests and for Ask: the readers, not the markup.
     spotWord, playerLine, leaderOf, currentDrive, newestPlay, lineFor, faceURL,
   };

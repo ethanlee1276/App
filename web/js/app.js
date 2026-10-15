@@ -48414,6 +48414,8 @@ async function renderPbpPage() {
   if (league !== "mlb" && !GC) {
     loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });
   }
+  // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
+  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire })) { if (lv.state === "live") again(); return; }
   const panel = tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
