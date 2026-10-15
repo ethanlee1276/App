@@ -9472,6 +9472,8 @@ def repair_closes(apply: bool = False, sport: str | None = None) -> None:
           f"different one")
     print(f"  {r['cleared']:>5} CLEARED    had a close, no legal one exists "
           f"for that side/line")
+    print(f"  {r['kept']:>5} KEPT       a moneyline's or total's close, banked "
+          f"at settle off the board's game lines (not read here)")
     # The overwrites first and in full, because they are the only rows
     # where a value that already existed is being replaced.
     _rows("OVERWRITTEN — check these before applying:",

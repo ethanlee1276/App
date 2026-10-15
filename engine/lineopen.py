@@ -13,6 +13,14 @@ home club's number), total and moneylines are written once and never
 touched again; every later build updates the "now" columns. One row per
 game, in the crowd database beside the prediction-market tape.
 
+THE "NOW" COLUMNS ARE THE CLOSE (2026-10-15). They stop at kickoff, so
+the row left standing is the last line the board read before the game —
+and the ledger banks it as a settled moneyline's or total's close
+(`ledger._game_close`): the game lines' only close, since the stores the
+props close from carry none. So a price the board marks as dated
+(``price_stale``: past oddsapi.MAX_GAME_PRICE_AGE, shown for up to two
+days) never moves them: a day-old number would pass for the close.
+
 WHAT THE PAGE GETS. ``line_open`` on the game: the opening numbers, when
 they were first seen, and the moves. With the money split on the game
 (engine/moneysplit) it also says when the spread moved AGAINST the money
@@ -71,8 +79,9 @@ def priced(g: dict) -> bool:
 
 
 def record(conn, sport: str, games, now: float | None = None) -> dict:
-    """First-seen numbers written once; ``now`` columns every build.
-    Started games are left alone (engine/crowd.started). Returns a census."""
+    """First-seen numbers written once; ``now`` columns every build on a
+    current price (a dated one opens a row but never moves them). Started
+    games are left alone (engine/crowd.started). Returns a census."""
     from .crowd import home_spread, started
     ensure_tables(conn)
     ts = int(now if now is not None else time.time())
@@ -88,11 +97,13 @@ def record(conn, sport: str, games, now: float | None = None) -> dict:
         hm, am = _ml(g.get("home_ml")), _ml(g.get("away_ml"))
         row = conn.execute("SELECT open_ts FROM line_opens WHERE sport=? AND date=? AND away=? AND home=?",
                            (sport, date, away, home)).fetchone()
+        dated = bool(g.get("price_stale"))
         if row is None:
+            now_cols = (None,) * 5 if dated else (ts, sp, tot, hm, am)
             conn.execute("INSERT INTO line_opens VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                         (sport, date, away, home, ts, sp, tot, hm, am, ts, sp, tot, hm, am))
+                         (sport, date, away, home, ts, sp, tot, hm, am, *now_cols))
             census["opened"] += 1
-        else:
+        elif not dated:
             conn.execute("UPDATE line_opens SET now_ts=?, now_spread=?, now_total=?, now_home_ml=?, now_away_ml=? "
                          "WHERE sport=? AND date=? AND away=? AND home=?",
                          (ts, sp, tot, hm, am, sport, date, away, home))
@@ -175,5 +186,7 @@ def attach_to_board(result: dict, sport: str, conn=None, now: float | None = Non
     moved = sum(1 for g in games if isinstance(g, dict)
                 and ((g.get("line_open") or {}).get("spread_move") or 0))
     rlm = sum(1 for g in games if isinstance(g, dict) and (g.get("line_open") or {}).get("against_money"))
+    dated = sum(1 for g in games if isinstance(g, dict) and priced(g) and g.get("price_stale"))
     return (f"  {sport.upper()} opening lines: {c['opened']} opened, {c['updated']} updated, "
-            f"{stamped} on the board · {moved} spread(s) moved · {rlm} against the money")
+            f"{stamped} on the board · {moved} spread(s) moved · {rlm} against the money"
+            + (f" · {dated} dated price(s) kept out of the close" if dated else ""))

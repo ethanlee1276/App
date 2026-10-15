@@ -230,7 +230,9 @@ the pick page and the player page (step 108). Your two pastes answered the
 last two ideas, and both said no: the NFL price rule would have staked the
 picks that did worse, and the picks that lost the close hit above their
 claim, so neither was built (step 109). The pastes also showed every NFL
-moneyline bet settling with no close; that one is a fix (step 109).
+moneyline bet settling with no close; every moneyline and total settled
+from now on keeps one, the board's last current line before kickoff
+(step 110; BG shows the box keeping those lines).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -268,13 +270,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `His photo leads the Pick of the Day, the pick page and the player page`
+**A. The box has today's code.** The first line should end `A settled moneyline or total keeps its close: the board's last current line before kickoff`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 0e9b3689 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 48aa7497 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1460,6 +1462,28 @@ WNBA and the UFC `card size` or `whole` (his cut-out). `initials`
 anywhere, or an NHL or MLB line without `action` (its action shots not
 there), is the one I need: paste all of it. A `403` is the server refusing
 a Python script, not the page; say so and I'll check it another way.
+
+**BG. Moneylines and totals keep their close** (step 110; read-only,
+seconds). Run it after tonight's game has settled, and again on Monday:
+```
+cd /srv/qellys && sudo -u qellys python3 - <<'PY'
+import sqlite3
+from engine import crowd, ledger
+ro = lambda p: sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+for r in ro(crowd.DB_PATH).execute("SELECT sport, COUNT(*), SUM(now_ts IS NOT NULL), MAX(date) FROM line_opens GROUP BY sport"):
+    print("lines   %-5s %4d games, %4d with a pregame line, latest %s" % r)
+for r in ro(ledger.DEFAULT_DB).execute(
+        "SELECT sport, market, COUNT(*), SUM(COALESCE(closing_odds, closing_line) IS NOT NULL) FROM bets "
+        "WHERE market IN ('moneyline','total') AND status IN ('won','lost','push') AND "
+        "((date LIKE '____-W__' AND date >= '2026-W06') OR (date NOT LIKE '____-W__' AND date >= '2026-10-15')) "
+        "GROUP BY sport, market"):
+    print("closes  %-5s %-9s %3d settled, %3d with a close" % r)
+PY
+```
+What I expect: a `lines` row for each league whose board ran, nearly every
+game with a pregame line; and every `closes` row with its two numbers
+equal or close. A league whose `closes` row shows none with a close, or a
+`lines` row with none, is the one I need: paste all of it.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -4689,7 +4713,7 @@ first). Paste back anything that prints an error or looks off.
     total or a pick without a photo keeps the stadium alone. The pick page
     draws it at the head of the card and the player page at the head of
     his profile, where the round faces were. Inside the page budgets
-    (app.js 494.791 KB of 495; first visit 611.688 of 612). No pin
+    (app.js 494.794 KB of 495; first visit 611.714 of 612). No pin
     changed. New: `tests/test_his_tile_on_the_pick_of_the_day_and_both_pages.py`
     (5 checks; the browser one draws all three on a test board at 390 and
     1280, with the photo and without it).
@@ -4709,7 +4733,39 @@ first). Paste back anything that prints an error or looks off.
     claimed, 59% hit). That is a measurement to set up with its own bar
     before anything moves, not a change; it is the next idea in H. AND ONE
     BUG: all 31 NFL moneyline bets settled with no close — the game-line
-    settle never looked one up — fixed in the next push.
+    settle never looked one up — fixed in step 110.
+110. **A settled moneyline or total keeps its close** (2026-10-15, found
+    in your `closecheck.py --sport nfl` paste: 31 of 31 NFL moneylines had
+    none; BG shows the box keeping the lines). The game-line settle graded
+    the bet and looked up no close, because the stores the props close
+    from (the purchased history, our own prop snapshots) carry no game
+    lines. The board's own do: `engine/lineopen` writes each game's numbers
+    every build and stops at kickoff, so the row left standing is the last
+    line the board read before the game, at the best price across the
+    books (the price a moneyline is taken at). The settle now banks it
+    (`ledger._game_close`): a moneyline on its side's price, so its price
+    CLV reads; a total on the number; a spread nothing, as before. The game
+    is found the way its grade finds it, the clubs under either spelling on
+    the slate's day; a football week also takes the day either side (a
+    Monday night game the history files on Tuesday). A doubleheader banks
+    none: the store keeps one row per pair per day, so which leg's price
+    it ended on is a guess. A price the board marks as dated (over six
+    hours old; it shows them for up to two days) no longer moves that row,
+    so it can't pass for the close. Only the NFL board marks one today:
+    college, MLB, the NBA, the WNBA and the NHL write the same rows, and
+    get closes too, but theirs is the last line they showed, whatever its
+    age. The close repair (`launch.py --repair-closes`) doesn't read these
+    lines, so it now keeps a game line's close instead of clearing it, and
+    prints those apart as KEPT. NOT BACKFILLED: the 31 stay without a
+    close. The lines stored before today can't show their price was
+    current, and a close of unknown age is worse than none. Tonight's game
+    and every one after get one. If the store can't be read, the settle
+    still grades every bet and its log says "game-line closes skipped".
+    New: `tests/test_a_game_line_keeps_its_close.py` (10 checks). One
+    other test file changed, the way it asks of every new function that
+    swallows its errors: `tests/test_silent_failures.py` now lists
+    `_line_opens_ro` as judged, because its failure prints that warning
+    where a quiet day prints nothing. No pin changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

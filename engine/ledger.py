@@ -5313,6 +5313,99 @@ def _derived_rows(hist_conn, b, where: str, wargs: list) -> list:
             for g in games.values() if set(g["parts"]) == set(parts)]
 
 
+#: The game markets whose close the board's game lines carry: a moneyline
+#: on its side's price, a total on its number. A spread or team total keeps
+#: none, as before (the stored line is the club's own and `_bet_clv` reads
+#: a line as over/under).
+GAME_CLOSE_MARKETS = ("moneyline", "total")
+
+
+def _line_opens_ro():
+    """The board's game lines (engine/lineopen, in the crowd database),
+    read-only, or None when there are none to read. Never created here.
+
+    No file, or no table in it, is a quiet day (no board has written its
+    lines yet) and says nothing. A store that is there and cannot be read
+    leaves the same None — no game line gets a close this run — so that
+    says so, once: the settle opens this once a run."""
+    try:
+        from . import crowd
+        path = Path(crowd.DB_PATH)
+        if not path.exists():
+            return None
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
+        if not conn.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                            "AND name='line_opens'").fetchall():
+            conn.close()
+            return None
+        return conn
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"  ⚠️  game-line closes skipped, the board's lines unreadable: {exc}")
+        return None
+
+
+def _game_close(closes_cache, hist_conn, b, g, n_games: int = 1) -> tuple:
+    """``(closing_line, closing_odds)`` for a settled game bet: the last
+    current line the board saw for its game before kickoff. Never raises.
+
+    FOUND 2026-10-15 in Ethan's `closecheck.py --sport nfl` paste: every
+    NFL moneyline bet (31 of 31) had no close. The game-line branch of the
+    settle graded the bet and banked nothing, because the stores the props
+    close from (the purchased history, our own prop snapshots) carry no game
+    lines. The board's own game lines do: engine/lineopen writes each game's
+    numbers every build into `now_*` columns and stops at kickoff, so the
+    row left standing is the last pregame price the board read — the same
+    best-of-the-books number a line shopper could still take. A moneyline
+    closes on its side's price (`closing_odds`; `_bet_price_clv` reads it), a
+    total on the total (`closing_line`; `_bet_clv` reads an over or under).
+    The game is found as the grade found it: the clubs under either
+    spelling, on the slate's day — which every board files its games under,
+    so a daily sport matches exactly (a baseball series is the same two
+    clubs night after night). Football's bet carries a week, read through
+    `close_dates`, and takes the day either side as well: a pair meets once
+    a week, and the history's calendar can sit a day off the board's
+    Eastern one on a night game. A doubleheader (``n_games`` > 1) is
+    refused: the store keeps one row per pair per day, and which leg's
+    price it ended on is a guess."""
+    if g is None or b["market"] not in GAME_CLOSE_MARKETS or n_games > 1:
+        return None, None
+    if "_line_opens" not in closes_cache:
+        closes_cache["_line_opens"] = _line_opens_ro()
+    lo = closes_cache["_line_opens"]
+    if lo is None:
+        return None, None
+    try:
+        from .divisions import canonical as _canon, spellings as _spellings
+        sport = b["sport"]
+        homes, aways = _spellings(sport, g["home"]), _spellings(sport, g["away"])
+        dates = close_dates(hist_conn, b, team=g["home"]) or [str(b["date"] or "")[:10]]
+        if _NFL_WEEK_DATE.match(str(b["date"] or "")):
+            one = datetime.timedelta(days=1)
+            days = [datetime.date.fromisoformat(str(d)[:10]) for d in dates]
+            dates = sorted({str(d + k * one) for d in days for k in (-1, 0, 1)})
+        mark = lambda xs: ",".join("?" * len(xs))              # noqa: E731
+        # fetchall, not fetchone: the statement runs to its end and lets go
+        # of its read lock, so a board writing its lines never waits on us.
+        rows = lo.execute(
+            f"SELECT now_home_ml, now_away_ml, now_total FROM line_opens WHERE sport=? "
+            f"AND home IN ({mark(homes)}) AND away IN ({mark(aways)}) AND date IN ({mark(dates)}) "
+            f"AND now_ts IS NOT NULL ORDER BY now_ts DESC LIMIT 1",
+            (sport, *homes, *aways, *dates)).fetchall()
+        if not rows:
+            return None, None
+        row = rows[0]
+        if b["market"] == "total":
+            return (float(row[2]) if row[2] is not None else None), None
+        px = row[0] if _canon(sport, g["home"]) == _canon(sport, b["player"]) else row[1]
+        return None, (int(px) if px and abs(int(px)) >= 100 else None)
+    except Exception as exc:                                   # noqa: BLE001
+        # Named once a run: no close is what a quiet night also leaves.
+        if not closes_cache.get("_game_close_warned"):
+            closes_cache["_game_close_warned"] = True
+            print(f"  ⚠️  game-line close skipped: {type(exc).__name__}: {exc}")
+        return None, None
+
+
 @_audited("settle")
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
@@ -5364,7 +5457,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 continue
             if g is None:
                 continue
-            _settle_one(conn, b, actual_fn(g), None)
+            _cl, _co = _game_close(closes_cache, hist_conn, b, g, n_games=len(rows))
+            _settle_one(conn, b, actual_fn(g), _cl, closing_odds=_co)
             settled += 1
             continue
         rows = hist_conn.execute(
@@ -5637,6 +5731,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         _tag_loss_causes(conn, hist_conn)
     except Exception:                              # noqa: BLE001
         pass                 # a tagging hiccup must never block settling
+    if closes_cache.get("_line_opens") is not None:
+        closes_cache["_line_opens"].close()
     return settled + voided
 
 
@@ -5966,7 +6062,7 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None, sport: str | 
     _sb_cache: dict = {}
     # The snapshot index's stamped keys, as (player, market, date).
     _snap_stamped = {k[:3] for k in getattr(snaps, "stamped", ())}
-    fixed = cleared = agreed = filled = 0
+    fixed = cleared = agreed = filled = kept = 0
     changes: list = []      # filled: had nothing, gains a close
     over_sample: list = []  # OVERWRITTEN: had a value, gets another
     clear_sample: list = [] # cleared: had a value, loses it
@@ -6009,6 +6105,13 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None, sport: str | 
         had = b["closing_odds"]
         if want is None and had is None:
             continue
+        if want is None and b["market"] in GAME_CLOSE_MARKETS and b["sport"] != "ufc":
+            # A game line's close is banked at settle off the board's game
+            # lines (`_game_close`), which this pass does not read. Not
+            # finding it here is not evidence against it, so it is kept —
+            # and counted apart, because it was not checked (2026-10-15).
+            kept += 1
+            continue
         if had is not None and want is not None and int(had) == int(want):
             agreed += 1
             continue
@@ -6043,7 +6146,7 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None, sport: str | 
     if apply:
         conn.commit()
     return {"settled": len(rows), "agreed": agreed, "overwritten": fixed,
-            "filled": filled, "cleared": cleared,
+            "filled": filled, "cleared": cleared, "kept": kept,
             "sample": changes, "overwritten_sample": over_sample,
             "cleared_sample": clear_sample, "applied": apply}
 

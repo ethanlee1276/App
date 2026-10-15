@@ -1537,6 +1537,10 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
         # offered) — the MLB payload has always shipped these, and the
         # Kalshi divergence read joins on them venue-vs-venue.
         "home_ml": g.home_ml, "away_ml": g.away_ml,
+        # Past the freshness bar (oddsapi.MAX_GAME_PRICE_AGE) the prices are
+        # shown but dated; engine/lineopen keeps a dated price out of the
+        # game's last pregame line, which the ledger banks as its close.
+        "price_stale": bool(getattr(g, "price_stale", False)),
         # Venue reference for the game page. Unlike MLB parks this is
         # context, not an input — see engine/stadiums.py for why. A game
         # ABROAD is not at the home team's building (Ethan, 2026-10-10:

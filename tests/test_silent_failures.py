@@ -210,6 +210,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # weekly replay calls it and must still replay when it fails — the
         # last saved table stays in place.
         "refresh",
+        # THE GAME LINES' CLOSE (ledger._line_opens_ro, 2026-10-15), caught
+        # by this sweep the hour it was written. Its None on failure IS what
+        # a quiet day returns (no board has written its lines yet), so the
+        # failure prints "game-line closes skipped, the board's lines
+        # unreadable: <error>"; the quiet day prints nothing. The settle
+        # must still grade every bet when it fails.
+        "_line_opens_ro",
     }
 
     def broad(h):
