@@ -324,13 +324,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The pick'em reads the NFL's Eastern kickoff clock and locks only games that have begun`
+**A. The box has today's code.** The first line should end `Your no to the MLB paper pull, and what BW's paste found, in the runbook`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor c8306949 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 9ff217d2 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -482,7 +482,8 @@ struck through here as it is built.
   runs it): your answer waits on BK's paste. **BK's first run, the same
   evening:** the NFL board needs one more week (run BK again Tuesday);
   Most Likely paper MLB passes by a hair at w 0.3, and my advice is no
-  (step 115). Your call on that one.
+  (step 115). **Answered 2026-10-16: no** ("no to mlb paper pass"). The MLB
+  paper book keeps its own chances; nothing changes.
 * ~~**A Pick of the Day for the UFC card?** Every other league that names
   one now records it (steps 85 and 86); UFC names none.~~ **Answered
   2026-10-14: yes** ("do 1-11"). Built: step 97, AY.
@@ -5861,6 +5862,27 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_the_sweat_meter_and_the_bet_replay.py`. No pin changed or
     loosened; app.js did not change (no budget moved). NOT CHANGED, waiting
     on BW and your yes: the goalies' expected goals (BW part 2).
+    BW'S PASTE, the same evening. (1) The pick'em reads `Oct 13 – 19 14
+    games, 1 begun` (Thursday's), so the fix is live. (2) The goalies:
+    CONFIRMED. Every season the expected goals on every unblocked attempt
+    match the goals (2023: 8,070 vs 8,105; 2024: 7,755 vs 7,867; 2025: 8,154
+    vs 8,025; 2026 so far 631 vs 638), and the expected goals on shots on
+    net alone are about 70% of them (5,731; 5,312; 5,511; 426), so every
+    goalie's expected goals against read ~30% short; all 122,520 stored
+    misses name the goalie. Where it shows: the goalie ratio is ~1.4 for an
+    average goalie instead of 1.0, so nearly every confirmed opposing starter
+    hits the 20% cap on skater goals, anytime goal, points and assists, and
+    Edge Hunter's goalie lean lifts goals on almost every game; game lines
+    barely move (a starter against his own team's goalies, both short alike).
+    The record has barely seen it: 4 settled NHL goal/point/assist picks
+    (assists unders, 0 of 4). The fix (the misses back in, in
+    `engine/nhl/xg.py` and the goalie save map) is written and waits on
+    your yes. (3) The NBA log's last lines are the WNBA's run, "no games
+    today": no NBA prices until opening night on the 20th, as expected.
+    (4) Judge's 66 games are all he played: every one of 2026's 2,461 finals
+    is stored (76 to 419 a month, March to October), the backfill read its
+    last game on the 14th, and the page caps nothing, so the page is right.
+    (5) UFC: 49 fights, 63 of 98 corners carry a path.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
