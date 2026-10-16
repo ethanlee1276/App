@@ -49,7 +49,8 @@
   const DAYS = [["7", "7D"], ["30", "30D"], ["all", "All"]];
   const NAV = [["feed", "#feed", "home", "Feed"], ["following", "#feed/following", "userplus", "Following"],
                ["mine", "#feed/mine", "doc", "My Posts"], ["trending", "#feed/trending", "trend", "Trending"],
-               ["leaders", "#feed/leaders", "people", "Top Bettors"], ["tags", "#feed/tags", "tag", "Tags"],
+               ["leaders", "#feed/leaders", "people", "Top Bettors"], ["pickem", "#feed/pickem", "trophy", "Pick’em"],
+               ["tags", "#feed/tags", "tag", "Tags"],
                ["activity", "#feed/activity", "bell", "Activity"]];
   const MAX_LEGS = 3;
 
@@ -863,6 +864,52 @@
       <p class="fd-fine">Graded automatically from the journal — nobody can type in a result.</p>`;
   }
 
+  /* THE WEEKLY PICK'EM (engine/pickem, Ethan 2026-10-15: "a free weekly
+     pick'em contest with a leaderboard on Social"). Every game on a
+     sport's board, pick who wins; picks lock at kickoff and the server
+     grades them from the final. Free with a profile; no entry, no prize. */
+  const PK_RES = { won: "Won", lost: "Lost", push: "Push", void: "Void" };
+  function pickemTable(T, empty) {
+    const rows = ((T && T.rows) || []).map((p) => `<div class="fd-lead${p.me ? " me" : ""}"><span class="fd-rank${p.rank <= 3 ? ` top${p.rank}` : ""}">${p.rank}</span>
+      <a class="fd-person" href="${profHref(p.handle)}">${avatar(p, "sm")}<span><b>${displayName(p)}${badge(p)}</b><span>@${escapeHtml(p.handle)}</span></span></a>
+      <span class="fd-lead-rec">${p.open ? `${p.open} open` : ""}</span><b class="fd-lead-v">${p.w}-${p.l}${p.p ? `-${p.p}` : ""}</b></div>`).join("");
+    const me = T && T.me && !(T.rows || []).some((r) => r.me) ? `<p class="fd-fine">You: #${T.me.rank} at ${T.me.w}-${T.me.l}.</p>` : "";
+    return rows ? `${rows}${me}` : `<p class="fd-fine">${empty}</p>`;
+  }
+  function pickemPageHTML(P) {
+    const head = headHTML("Pick’em", "Free every week: pick the winner of every game on the board before it starts. Picks lock at kickoff and are graded from the final score — nobody types in a result. No entry fee, no prizes: bragging rights.");
+    if (!P) return `${head}<div class="fd-card fd-empty">The pick’em did not load — try again in a moment.</div>`;
+    const s = P.sport, can = P.signed_in && P.has_handle;
+    const when = (iso) => { try { return new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } };
+    const side = (g, team) => {
+      const on = g.pick === team;
+      return `<button class="fd-pk-team${on ? " on" : ""}${on && g.result ? ` ${g.result}` : ""}" data-fd="pk-pick" data-gid="${escapeAttr(g.gid)}" data-team="${escapeAttr(team)}"
+        type="button" aria-pressed="${on}"${g.locked || !can ? " disabled" : ""}>${teamLogo(team, s, 28)}<b>${escapeHtml(team)}</b>${
+        on ? `<span class="fd-pk-tag">${PK_RES[g.result] || "Your pick"}</span>` : ""}</button>`;
+    };
+    const games = (P.games || []).map((g) => {
+      const n = g.n_home + g.n_away, pa = n ? Math.round((g.n_away / n) * 100) : 50;
+      return `<div class="fd-pk-game${g.locked ? " locked" : ""}"><div class="fd-pk-when">${g.locked ? `${icon("lock", 12)} Locked` : escapeHtml(when(g.kickoff))}</div>
+        <div class="fd-pk-row">${side(g, g.away)}<span class="fd-pk-at">at</span>${side(g, g.home)}</div>
+        ${n ? `<div class="fd-pk-split" aria-hidden="true"><i style="width:${pa}%"></i></div>
+          <div class="fd-pk-pct"><span>${pa}% ${escapeHtml(g.away)}</span><span>${n} pick${n === 1 ? "" : "s"}</span><span>${100 - pa}% ${escapeHtml(g.home)}</span></div>` : ""}</div>`;
+    }).join("");
+    const gate = !P.signed_in ? `<a href="#account">Sign in (free)</a> to play.` : !P.has_handle ? `<a href="#account">Make your Social profile</a> to play — the standings show your handle.` : "";
+    return `${head}
+      <div class="fd-lbar"><div class="fd-seg fd-pk-sports" role="tablist" aria-label="Sport">${BOARD_SPORTS.map((k) =>
+        `<a class="${s === k ? "on" : ""}" href="#feed/pickem/${k}" role="tab" aria-selected="${s === k}">${SPORT_NAME[k]}</a>`).join("")}</div></div>
+      <div class="fd-pk-week"><a class="fd-btn ghost sm" href="#feed/pickem/${s}/${P.prev}">${ico("back", 14)} Earlier</a>
+        <b>${P.current ? "This week · " : ""}${escapeHtml(P.label)}</b>
+        ${P.next ? `<a class="fd-btn ghost sm" href="#feed/pickem/${s}/${P.next}">Later ${ico("chevr", 14)}</a>` : "<span></span>"}</div>
+      ${gate ? `<div class="fd-card fd-pk-gate">${gate}</div>` : ""}
+      <section class="fd-card fd-pk-games">${games || `<p class="fd-fine">No ${SPORT_NAME[s]} games on the board this week${P.current ? " yet — they appear as the board posts them" : ""}.</p>`}</section>
+      <div class="fd-pk-tables">
+        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemTable(P.week_table, "No picks graded or made this week yet.")}</section>
+        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemTable(P.season_table, "The season table fills as picks are graded.")}</section>
+      </div>
+      <p class="fd-fine">Ranked by wins, then fewest losses. A week runs Tuesday to Monday, Eastern time; the season is every week of the last ${P.season_days || 200} days. A tie is a push; a game with no final ten days on is void.</p>`;
+  }
+
   function trendingPageHTML(T) {
     const picks = (T && T.picks) || [];
     const tags = (T && T.tags) || [];
@@ -1035,6 +1082,17 @@
       paint(seq, "leaders", leadersPageHTML(res.ok ? res.out : {}), { hero: false });
       return;
     }
+    if (kind === "pickem") {
+      const sport = BOARD_SPORTS.includes(arg) ? arg
+        : F.pkSport || (typeof state !== "undefined" && BOARD_SPORTS.includes(state.sport) ? state.sport : "nfl");
+      F.pkSport = sport;
+      const wk = /^\d{4}-\d{2}-\d{2}$/.test(sub || "") ? sub : "";
+      const res = await api(`pickem?sport=${sport}${wk ? `&week=${wk}` : ""}`);
+      await railP;
+      F.pk = res.ok ? res.out : null;
+      paint(seq, "pickem", pickemPageHTML(F.pk), { hero: false });
+      return;
+    }
     if (kind === "trending") {
       const [res] = await Promise.all([api("trending"), loadList({ order: "hot" }, append), railP]);
       paint(seq, "trending", trendingPageHTML(res.ok ? res.out : {}), { hero: false });
@@ -1158,6 +1216,14 @@
     if (act === "poll-del") { syncPoll(); F.comp.poll.splice(Number(d.i), 1); redrawComposer(); return; }
     if (act === "send") return send(t);
     if (act === "rail-metric") { F.railMetric = d.v; await refreshLeaders(); return; }
+    if (act === "pk-pick") {
+      if (!F.pk) return;
+      t.disabled = true;
+      const r = await api("pickem", { sport: F.pk.sport, gid: d.gid, team: d.team });
+      if (!r.ok) { tfToast(r.out.error || "That pick did not save."); t.disabled = false; return; }
+      try { buzz("tap"); } catch (e) { /* no haptics */ }
+      return render();
+    }
     if (act === "lb-metric" || act === "lb-days") {
       if (act === "lb-metric") F.metric = d.v; else F.days = d.v;
       return render();
@@ -1631,5 +1697,5 @@
     location.hash = `#feed/post/${res.out.id}`;
   }
 
-  window.QBSocial = { render, slipPostStart, slipPost, mountAccount, avatar };
+  window.QBSocial = { render, slipPostStart, slipPost, mountAccount, avatar, pickemPageHTML };
 })();

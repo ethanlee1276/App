@@ -2737,6 +2737,19 @@ class Handler(BaseHTTPRequestHandler):
             if path == "leaders":
                 return self._send(200, json.dumps(
                     SF.leaders(conn, uid, days, one("metric", "units")[:9])).encode(), ".json")
+            if path == "pickem":
+                # The weekly pick'em (engine/pickem): free, open to read. A
+                # pick whose game is over is graded here, the first read
+                # after it, from the finals table opened read-only.
+                import sqlite3 as _sq
+                from engine import pickem as PK
+                from engine.db import DEFAULT_DB as _HDB
+                try:
+                    PK.grade(conn, lambda: _sq.connect(f"file:{_HDB}?mode=ro", uri=True))
+                except Exception as exc:                 # noqa: BLE001
+                    _seclog("pickem_grade", "failed", self._client_ip(), error=type(exc).__name__)
+                return self._send(200, json.dumps(PK.view(conn, one("sport", "nfl")[:8].lower(), uid,
+                                                          one("week")[:10] or None)).encode(), ".json")
             if path == "search":
                 return self._send(200, json.dumps(
                     SF.search(conn, one("q"), uid, entitled, strong)).encode(), ".json")
@@ -2772,7 +2785,7 @@ class Handler(BaseHTTPRequestHandler):
         from engine import socialfeed as SF
         if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
                         "delete", "report", "profile", "follow", "block", "seen", "friend",
-                        "hide", "vote", "verify", "pin"):
+                        "hide", "vote", "verify", "pin", "pickem"):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
         txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
         A = _acct()
@@ -2811,6 +2824,12 @@ class Handler(BaseHTTPRequestHandler):
                                            poll=poll, link=txt("link"))
             elif path == "vote":
                 code, out = SF.vote(conn, uid, _int(body.get("id")), body.get("option"))
+            elif path == "pickem":
+                # Which game and which team, never a result: engine/pickem
+                # finds the game on the board and locks it at kickoff.
+                from engine import pickem as PK
+                code, out = PK.pick(conn, uid, txt("sport"), str(body.get("gid") or "")[:80],
+                                    str(body.get("team") or "")[:40])
             elif path == "pin":
                 code, out = SF.pin(conn, uid, _int(body.get("id")), bool(body.get("on", True)))
             elif path == "edit":

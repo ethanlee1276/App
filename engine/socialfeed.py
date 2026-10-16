@@ -2028,6 +2028,8 @@ def delete_user(conn, user_id: int) -> None:
     conn.execute("DELETE FROM feed_blocks WHERE user_id=? OR blocked_id=?", (uid, uid))
     conn.execute("DELETE FROM feed_posts WHERE user_id=?", (uid,))
     conn.execute("DELETE FROM feed_profiles WHERE user_id=?", (uid,))
+    if "pickem_picks" in have:                   # the weekly pick'em (engine/pickem)
+        conn.execute("DELETE FROM pickem_picks WHERE user_id=?", (uid,))
 
 
 def export_user(conn, user_id: int) -> dict:
@@ -2053,4 +2055,8 @@ def export_user(conn, user_id: int) -> dict:
             "following": handles("SELECT f.handle FROM feed_follows x JOIN feed_profiles f "
                                  "ON f.user_id=x.followee_id WHERE x.follower_id=?"),
             "blocked": handles("SELECT f.handle FROM feed_blocks b JOIN feed_profiles f "
-                               "ON f.user_id=b.blocked_id WHERE b.user_id=?")}
+                               "ON f.user_id=b.blocked_id WHERE b.user_id=?"),
+            "pickem": [{"sport": r[0], "week": r[1], "game": r[2], "pick": r[3], "result": r[4]}
+                       for r in conn.execute("SELECT sport, week, gid, pick, result FROM pickem_picks "
+                                             "WHERE user_id=? ORDER BY kickoff", (uid,))]
+                      if "pickem_picks" in have else []}

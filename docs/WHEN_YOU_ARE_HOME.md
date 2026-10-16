@@ -282,7 +282,8 @@ next pitch on the live pitch tracker (step 122; BQ); then UFC's fight path on
 the UFC page (step 123; BR); then every book's line with the steam marked on
 the pick page (step 124; BS); then the sweat meter on a live saved slip and
 the replay of its night in My Bets (step 125; BT); then a parlay builder in
-every board sport's Toolbox (step 126; BU).
+every board sport's Toolbox (step 126; BU); and last, a free weekly pick'em
+on Social with week and season standings (step 127; BV).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -321,13 +322,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A parlay builder in every sport's Toolbox, priced with the correlation between the legs`
+**A. The box has today's code.** The first line should end `A free weekly pick'em on Social, graded from the final, for every board sport`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 22ba6437 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor f7b1887a HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1824,6 +1825,24 @@ rule's reason:
 ```
 curl -s -X POST http://127.0.0.1:8000/api/parlay/build -H 'Content-Type: application/json' -d '{"sport":"nfl","legs":[{"player":"Josh Allen","market":"pass_yds","side":"over","line":249.5,"team":"BUF","opponent":"MIA","game_date":"2026-10-19","position":"QB","odds":-115,"p":0.58},{"player":"Khalil Shakir","market":"rec_yds","side":"over","line":52.5,"team":"BUF","opponent":"MIA","game_date":"2026-10-19","position":"WR","odds":-110,"p":0.55}]}'; echo
 curl -s -X POST http://127.0.0.1:8000/api/parlay/build -H 'Content-Type: application/json' -d '{"sport":"nfl","legs":[{"player":"Josh Allen","market":"pass_yds","side":"over","p":0.58,"team":"BUF","opponent":"MIA"},{"player":"Josh Allen","market":"pass_yds","side":"under","p":0.42,"team":"BUF","opponent":"MIA"}]}'; echo
+```
+
+**BV. The pick'em is open and grading** (step 127; read-only, a second, any
+time; the counts mean something once people have played a week). The first
+prints this week's NFL pick'em as the page reads it: the week, how many games
+the board offers, how many people have picked. The second counts the picks
+kept per sport and week — people, picks, and how many are graded; a week whose
+games are over should show its picks graded within a read of the page (each
+read grades what is due). "no pick'em table yet" means nobody has picked since
+the deploy:
+```
+curl -s "http://127.0.0.1:8000/api/feed/pickem?sport=nfl" | python3 -c "import sys, json; d = json.load(sys.stdin); print(d['label'], len(d['games']), 'games,', d['week_table']['players'], 'players')"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import sqlite3; c=sqlite3.connect('file:data/accounts.db?mode=ro', uri=True)
+try:
+    for r in c.execute('SELECT sport, week, COUNT(DISTINCT user_id), COUNT(*), SUM(result IS NOT NULL) FROM pickem_picks GROUP BY sport, week ORDER BY week DESC LIMIT 12'): print(r)
+except sqlite3.OperationalError as e: print('no pick-em table yet:', e)
+"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -5739,6 +5758,30 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_hockey_goalies_lines_and_the_xg_race.py` reads
     `nhl: [goaliesHTML, linesHTML, builderHTML]`. app.js did not change (no
     budget moved).
+127. **A free weekly pick'em on Social** (2026-10-15, the last of the sixteen:
+    NFL, college, MLB, NBA, WNBA, NHL). A Pick'em tab on Social: every game on
+    a sport's board, pick the team that wins. A week runs Tuesday to Monday,
+    Eastern, so an NFL week (Thursday night to Monday night) is one contest;
+    the daily sports add each day's games as the board posts them. Each game
+    shows the room's split; the standings rank the week and the season (every
+    week of the last 200 days) by wins, then fewest losses, ties sharing a
+    rank, the viewer's own row lit. Free: a signed-in account with a Social
+    handle, no membership, no entry fee, no prizes. THE RECORD CANNOT BE
+    FAKED, the feed's rule: the page sends which game and which team, never a
+    result; the game is looked up on the sport's own board, the team must be
+    one of its two, and the pick locks at kickoff (or the board's live flag) —
+    changeable until then, never after. GRADING is the server's alone, from
+    the finals table every bet grades from (`history.db` `games`, opened
+    read-only, matched on both teams and the date within a day and oriented
+    to the pick's own home and away): a tie is a push, two different finals
+    are refused rather than guessed, a game with no final ten days on is void.
+    It grades lazily, on the first read of the page after a game is due, like
+    the feed's parlays — no scheduled job. `engine/pickem.py`, table
+    `pickem_picks` beside the accounts; served at `/api/feed/pickem` (GET,
+    open to read) and POST `/api/feed/pickem` (signed in). A deleted account
+    takes its picks with it and the account export includes them. Nothing
+    reads or moves a model number. New: `tests/test_the_weekly_pickem.py`
+    (7 checks). No pin changed; app.js did not change (no budget moved).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
