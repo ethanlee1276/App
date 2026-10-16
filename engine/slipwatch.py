@@ -474,9 +474,13 @@ def run_once(entitled=None, log=print) -> dict:
     """One sweep on the box's own accounts database. Reads no board when
     no member has a saved slip open — the common minute."""
     from . import accounts as A
+    from . import slipreplay as SR
     conn = A.connect()
     try:
         ensure_tables(conn)
+        # The replay's table exists from the first pass, slips or none, so
+        # the box check reads "no slip yet" rather than "no table".
+        SR.ensure_table(conn)
         rows = pending_slips(conn)
         if not rows:
             return {"slips": 0, "noted": 0, "mailed": 0, "failed": 0, "settled": 0}

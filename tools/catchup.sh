@@ -65,7 +65,7 @@ run B "Health check" 60 <<'SH'
 uptime; free -m
 ps -eo pid,ni,pcpu,pmem,etime,args --sort=-pcpu | head -8
 for p in / /js/app.js /data/recommendations.json /data/record.json; do curl -s -o /dev/null -w "$p %{http_code} %{size_download}B %{time_total}s\n" http://127.0.0.1:8000$p; done
-journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build|slip watch" | tail -15
+journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build|slip watch" | grep -v "/api/" | tail -15
 SH
 run C "Is email on? (reset_by_email true means yes)" 30 <<'SH'
 curl -s http://127.0.0.1:8000/api/account/me; echo

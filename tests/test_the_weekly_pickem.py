@@ -96,6 +96,27 @@ def test_a_pick_is_a_team_in_a_board_game_before_kickoff():
         assert PK.pick(c, 2, "nfl", "2026-10-19|BUF@NYJ", "BUF", NOW, d)[0] == 409, "the board's live flag locks it too"
 
 
+def test_a_football_clock_and_the_scoreboard_status_are_read_right():
+    """The box, 2026-10-16: BV read "0 games" with the NFL board full. The
+    NFL's kickoff is a bare Eastern clock beside its date, and every game
+    carries the scoreboard's status, "scheduled" before the start."""
+    nfl = [{"home": "CHI", "away": "GB", "date": "2026-10-18", "kickoff": "13:00", "live": {"state": "scheduled"}},
+           {"home": "NYJ", "away": "BUF", "date": "2026-10-19", "kickoff": "20:15", "live": None},
+           {"home": "MIN", "away": "DET", "date": "2026-10-15", "kickoff": "20:15", "live": {"state": "final"}},
+           {"home": "KC", "away": "LV", "date": "2026-W06", "kickoff": "16:25"}]
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _board(tmp, nfl)
+        got = {g["gid"]: g for g in PK.board_games("nfl", d)}
+        assert set(got) == {"2026-10-18|GB@CHI", "2026-10-19|BUF@NYJ", "2026-10-15|DET@MIN"}, \
+            "a week label is no day: that game is left off, not guessed"
+        assert got["2026-10-18|GB@CHI"]["kickoff"] == _t(2026, 10, 18, 17), "13:00 Eastern on the 18th"
+        assert got["2026-10-18|GB@CHI"]["live"] is False and got["2026-10-15|DET@MIN"]["live"] is True
+        c = _conn("ann")
+        assert PK.pick(c, 1, "nfl", "2026-10-18|GB@CHI", "GB", NOW, d)[0] == 200, "a scheduled game takes a pick"
+        v = PK.view(c, "nfl", 1, now=NOW, data_dir=d)
+        assert [g["locked"] for g in v["games"]] == [True, False, False]
+
+
 def _hist(rows):
     h = sqlite3.connect(":memory:")
     h.execute("CREATE TABLE games (sport TEXT, season INTEGER, period TEXT, date TEXT, home TEXT, away TEXT, "

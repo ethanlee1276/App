@@ -283,7 +283,9 @@ the UFC page (step 123; BR); then every book's line with the steam marked on
 the pick page (step 124; BS); then the sweat meter on a live saved slip and
 the replay of its night in My Bets (step 125; BT); then a parlay builder in
 every board sport's Toolbox (step 126; BU); and last, a free weekly pick'em
-on Social with week and season standings (step 127; BV).
+on Social with week and season standings (step 127; BV). Your paste on the
+16th found the pick'em's NFL week empty; fixed in step 128, and BW re-checks
+it beside three questions the paste raised.
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -322,13 +324,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A free weekly pick'em on Social, graded from the final, for every board sport`
+**A. The box has today's code.** The first line should end `The pick'em reads the NFL's Eastern kickoff clock and locks only games that have begun`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor f7b1887a HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor c8306949 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -336,7 +338,7 @@ git -C /srv/qellys merge-base --is-ancestor f7b1887a HEAD && echo "has today's c
 uptime; free -m
 ps -eo pid,ni,pcpu,pmem,etime,args --sort=-pcpu | head -8
 for p in / /js/app.js /data/recommendations.json /data/record.json; do curl -s -o /dev/null -w "$p %{http_code} %{size_download}B %{time_total}s\n" http://127.0.0.1:8000$p; done
-journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build|slip watch" | tail -15
+journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build|slip watch" | grep -v "/api/" | tail -15
 ```
 
 **C. Is email on?** "Forgot password?" and the new last-leg email both
@@ -1771,10 +1773,12 @@ a second, after the next UFC build on the new code). It prints how many fights
 the card shows, how many corners carry a path, then the first six corners
 with their stored fights, wins and losses by how they ended. A corner with
 `None` has no fights on file yet (the scheduler's UFC tick reads a few
-fighters at a time):
+fighters at a time). It reads the subscribers' copy in `data/built/`: the
+fight reads are behind the paywall, so the public `web/data/ufc.json` always
+shows `0 fights` (the first version of this check read that one):
 ```
 cd /srv/qellys && sudo -u qellys python3 -c "
-import json; d=json.load(open('web/data/ufc.json'))
+import json; d=json.load(open('data/built/ufc.json'))
 rows=(d.get('picks') or [])+(d.get('pass_list') or [])
 fs=[f for r in rows for f in r.get('fighters') or []]
 print(len(rows), 'fights,', sum(1 for f in fs if f.get('path')), 'of', len(fs), 'corners carry a path')
@@ -1795,7 +1799,7 @@ cookie stripped, so it should print `401`, the membership check:
 for b in nfl cfb mlb nba nhl; do echo "$b: $(grep -E 'prop tape' /srv/qellys/data/logs/${b}_build.log | tail -1)"; done
 cd /srv/qellys && sudo -u qellys python3 -c "
 import sqlite3, datetime as dt; c=sqlite3.connect('file:data/history.db?mode=ro', uri=True)
-day=dt.datetime.utcnow().strftime('%Y-%m-%d')
+day=dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d')
 for sp, n, b in c.execute(\"SELECT sport, COUNT(*), COUNT(DISTINCT book) FROM odds_history WHERE taken_at >= ? AND market NOT IN ('total','spread','moneyline') GROUP BY sport\", (day,)): print(sp, n, 'rows', b, 'books')
 "
 curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8000/api/lines/books?sport=nfl&player=Josh%20Allen&market=pass_yds"
@@ -1804,8 +1808,10 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8000/api/lines/books?
 **BT. The box is keeping each saved slip's night** (step 125; read-only, a
 second, after a night with a saved slip in play). It prints, by kind, how many
 chance points the slip watcher has kept and for how many slips: `pre` before
-kickoff, `live` while it ran, `won`/`lost` its last word. "no replay table
-yet" means the watcher has not passed since the deploy (it runs every minute):
+kickoff, `live` while it ran, `won`/`lost` its last word. Nothing printed
+means no member has had a saved slip open since the deploy; "no replay table
+yet" means the box hasn't pulled step 128, which makes the table on the
+watcher's first pass (it used to wait for the first open slip):
 ```
 cd /srv/qellys && sudo -u qellys python3 -c "
 import sqlite3; c=sqlite3.connect('file:data/accounts.db?mode=ro', uri=True)
@@ -1842,6 +1848,56 @@ import sqlite3; c=sqlite3.connect('file:data/accounts.db?mode=ro', uri=True)
 try:
     for r in c.execute('SELECT sport, week, COUNT(DISTINCT user_id), COUNT(*), SUM(result IS NOT NULL) FROM pickem_picks GROUP BY sport, week ORDER BY week DESC LIMIT 12'): print(r)
 except sqlite3.OperationalError as e: print('no pick-em table yet:', e)
+"
+```
+
+**BW. The pick'em's NFL week, and three questions from the 16th** (step 128;
+read-only, seconds, once A shows the new code). Paste all of it.
+1. The pick'em again: this week's NFL games and how many have begun. It
+   should now count every game left this week (Sunday's and Monday's), none
+   locked until Sunday's first kickoff.
+2. Goalies' goals saved above expected read −31 to −49 for every starter in
+   BP, far past anything real. Expected goals are fitted on every unblocked
+   attempt, misses included, but each goalie's figure adds them up only on
+   the shots that reached him, so it undercounts what he faced. This prints,
+   by season, the goals, the expected goals on shots on net, and the
+   expected goals on every unblocked attempt (low priority, a minute). If
+   the last is close to the goals and the middle well under, that's
+   confirmed, and the fix (adding the misses back) waits for your yes, since
+   it moves the hockey numbers.
+3. The NBA board's last lines: BS showed no prop-tape line for the NBA, and
+   BG no NBA line row. I expect the preseason build stops before the odds
+   step until opening night on the 20th.
+4. Aaron Judge's hit page counted 17 home runs: how many of his games the
+   box holds this season, and the home runs in them.
+5. BR again, now reading the subscribers' copy.
+```
+curl -s "http://127.0.0.1:8000/api/feed/pickem?sport=nfl" | python3 -c "import sys, json; d = json.load(sys.stdin); print(d['label'], len(d['games']), 'games,', sum(g['locked'] for g in d['games']), 'begun')"
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 - <<'EOF'
+import sqlite3
+from engine.nhl import xg as X
+m = X.load()
+print('model: league rate', m and m.get('league'), 'fit on', m and m.get('n'), 'attempts')
+c = sqlite3.connect('file:data/history.db?mode=ro', uri=True); c.row_factory = sqlite3.Row
+tot = {}
+for r in c.execute("SELECT season, kind, empty_net, is_goal, goalie, dist, angle, shot_type, rebound, rush, strength FROM nhl_shots"):
+    if r['empty_net'] or not m: continue
+    s = tot.setdefault(r['season'], [0, 0.0, 0.0, 0, 0])
+    x = X.xg(m, dict(r))
+    s[0] += r['is_goal']
+    if r['kind'] in ('goal', 'sog'): s[1] += x
+    if r['kind'] in X.UNBLOCKED: s[2] += x
+    if r['kind'] == 'miss': s[3] += 1; s[4] += bool(r['goalie'])
+for se, (g, on, allx, mi, mg) in sorted(tot.items()):
+    print(se, 'goals', g, '| xG on net', round(on), '| xG every unblocked attempt', round(allx), '| misses', mi, 'with a goalie', mg)
+EOF
+tail -4 /srv/qellys/data/logs/nba_build.log 2>&1
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=spray&sport=mlb&player=Aaron%20Judge" | python3 -c "import json, sys; d = json.load(sys.stdin); print(len(d.get('games') or []), 'games stored for', d.get('season'), '- home runs in them:', (d.get('season_line') or {}).get('hr'))"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json; d=json.load(open('data/built/ufc.json'))
+rows=(d.get('picks') or [])+(d.get('pass_list') or [])
+fs=[f for r in rows for f in r.get('fighters') or []]
+print(len(rows), 'fights,', sum(1 for f in fs if f.get('path')), 'of', len(fs), 'corners carry a path')
 "
 ```
 
@@ -5782,6 +5838,29 @@ first). Paste back anything that prints an error or looks off.
     takes its picks with it and the account export includes them. Nothing
     reads or moves a model number. New: `tests/test_the_weekly_pickem.py`
     (7 checks). No pin changed; app.js did not change (no budget moved).
+128. **The pick'em's NFL week, from your paste on the 16th** (2026-10-16).
+    BV read `0 games` with Sunday's and Monday's games on the board. Two
+    faults in reading the board's games, both fixed in `engine/pickem.py`:
+    the NFL board carries its kickoff as a bare Eastern clock
+    ("13:00", nflverse's game time) beside the game's date, and the pick'em
+    read only a full timestamp, so it left every football game off; it now
+    joins the two with `engine/fatigue.kickoff_instant`, the helper the
+    ledger's kickoff map already uses (a week label like "2026-W06" is not a
+    day, so that game stays off rather than be guessed). And every game
+    carries the scoreboard's status, `scheduled` before the start, which the
+    pick'em read as begun, so every game would have been locked; now only a
+    game the scoreboard calls live or final has begun, or one past its
+    kickoff. The slip watcher also makes the replay's table on its first
+    pass rather than at the first open saved slip (BT read "no replay table
+    yet" only because no member had a slip open). BR's check read the public
+    UFC file, whose fight reads are behind the paywall, so it always printed
+    `0 fights`; it reads `data/built/ufc.json` now. B's journal line skips
+    the site's own `/api/` requests, which the new parlay builder's `build`
+    URLs were flooding. One more check in `tests/test_the_weekly_pickem.py`
+    (now 8) and one more assertion in
+    `tests/test_the_sweat_meter_and_the_bet_replay.py`. No pin changed or
+    loosened; app.js did not change (no budget moved). NOT CHANGED, waiting
+    on BW and your yes: the goalies' expected goals (BW part 2).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

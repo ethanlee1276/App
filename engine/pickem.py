@@ -120,12 +120,24 @@ def board_games(sport: str, data_dir: Path | None = None) -> list[dict]:
     for g in payload.get("games") or []:
         if not isinstance(g, dict) or not g.get("home") or not g.get("away"):
             continue
-        k = _ts(g.get("kickoff") or g.get("commence_time"))
+        raw = g.get("kickoff") or g.get("commence_time")
+        if raw and len(str(raw)) <= 5:
+            # FOOTBALL'S KICKOFF IS A BARE EASTERN CLOCK ("13:00", nflverse's
+            # gametime) beside the game's date; engine/fatigue joins the two,
+            # as the ledger's kickoff map does. Read as an instant on its own,
+            # every NFL game was left off (the box, 2026-10-16: "0 games").
+            from .fatigue import kickoff_instant
+            raw = kickoff_instant(str(g.get("date") or ""), str(raw))
+        k = _ts(raw)
         if k is None:
             continue
         date = str(g.get("date") or _dt.datetime.fromtimestamp(k, ET).date().isoformat())[:10]
+        # The scoreboard's status rides on every game, "scheduled" before
+        # the start, so only a game it calls live or final has begun.
+        lv = g.get("live")
+        begun = lv is True or (isinstance(lv, dict) and str(lv.get("state") or "") in ("live", "final"))
         out.append({"gid": gid_of({**g, "date": date}), "home": str(g["home"]), "away": str(g["away"]),
-                    "game_date": date, "kickoff": k, "live": bool(g.get("live"))})
+                    "game_date": date, "kickoff": k, "live": begun})
     return out
 
 

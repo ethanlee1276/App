@@ -82,6 +82,10 @@ def test_the_sweep_keeps_it_and_the_endpoint_is_the_members_own():
     assert "SR.ensure_table(conn)" in body and "SR.prune(conn, t)" in body
     assert body.index("SR.bank(conn, r[\"user_id\"], bid, card, t)") < body.index("done = settled(bet, card)"), \
         "kept before the settle, so the last word is on the tape"
+    j = src.index("def run_once(")
+    once = src[j:src.index("\ndef ", j + 10)]
+    assert once.index("SR.ensure_table(conn)") < once.index("if not rows:"), \
+        "the table is made on the first pass, slips or none (the box, 2026-10-16)"
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     assert '"/api/mybets/replay"' in srv
     j = srv.index("def _mybets_replay(")
