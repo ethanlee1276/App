@@ -201,3 +201,27 @@
 .xr-sum b.pos { color: var(--good); }
 .xr-sum b.neg { color: var(--bad); }
 @media (prefers-reduced-motion: reduce) { .xr-path { animation: none; } }
+
+/* The parlay builder (extras.js builderHTML): the board's legs, the ticket, its chance with the correlation. */
+.xt-pb { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@media (min-width: 860px) { .xt-pb { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.xt-pb-pick, .xt-pb-ticket { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.xt-pb-list, .xt-pb-legs, .xt-pb-pairs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.xt-pb-list { max-height: 360px; overflow-y: auto; }
+.xt-pb-list li, .xt-pb-legs li { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; border-radius: var(--radius-sm); background: var(--panel-2); min-width: 0; }
+.xt-pb-list li span, .xt-pb-legs li span { min-width: 0; color: var(--text); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.xt-pb-list small, .xt-pb-legs small { display: block; color: var(--text-mute); font-size: var(--fs-2xs); font-family: var(--font-mono); }
+.xt-pb-list .xt-btn { flex: none; padding: 5px 12px; font-size: var(--fs-xs); }
+.xt-pb-legs li { border: var(--hairline) solid var(--brand); }
+.xt-x { flex: none; width: 28px; height: 28px; border-radius: 999px; border: var(--hairline) solid var(--border);
+  background: var(--panel); color: var(--text-mute); font: inherit; font-size: var(--fs-md); line-height: 1; cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.xt-x:hover { color: var(--bad); border-color: var(--bad); }
+.xt-pb-pairs { font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-snug); }
+.xt-pb-pairs b { display: inline-block; min-width: 3.4em; font-family: var(--font-mono); }
+.xt-pb-pairs .pos, .xt-pb .xt-fine .pos { color: var(--good); }
+.xt-pb-pairs .neg, .xt-pb .xt-fine .neg { color: var(--bad); }
+.xt-pb-no { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--bad);
+  color: var(--text); font-size: var(--fs-sm); }
+@media (prefers-reduced-motion: reduce) { .xt-x { transition: none; } }

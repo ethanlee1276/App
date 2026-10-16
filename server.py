@@ -1347,6 +1347,7 @@ class Handler(BaseHTTPRequestHandler):
                 or parsed.path.startswith("/api/feed/")
                 or parsed.path.startswith("/api/alerts/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
+                or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
                 or parsed.path in ("/api/mybets/closes", "/api/mybets/closes/")
                 or parsed.path in ("/api/draftplan", "/api/draftplan/")):
             try:
@@ -1367,6 +1368,8 @@ class Handler(BaseHTTPRequestHandler):
                     parsed.path[len("/api/alerts/"):].strip("/"), body)
             if parsed.path.startswith("/api/parlay/check"):
                 return self._parlay_check(body)
+            if parsed.path.startswith("/api/parlay/build"):
+                return self._parlay_build(body)
             if parsed.path.startswith("/api/mybets/closes"):
                 return self._mybets_closes(body)
             if parsed.path.startswith("/api/draftplan"):
@@ -3208,6 +3211,21 @@ class Handler(BaseHTTPRequestHandler):
                           for k, v in l.items() if isinstance(k, str)})
         return self._send(200, json.dumps(check_ticket(sport, clean)).encode(),
                           ".json")
+
+    def _parlay_build(self, body: dict):
+        """The parlay builder (engine/parlaybuild): the legs the reader chose,
+        priced with the correlation between them, and the board's legs that
+        stack with them. Ungated like the ticket check: it reads nothing but
+        the legs and chances it is sent, which the page already holds."""
+        from engine import parlaybuild as PB
+        sport = str(body.get("sport") or "").strip().lower()[:8]
+        legs = body.get("legs") if isinstance(body.get("legs"), list) else []
+        pool = body.get("pool") if isinstance(body.get("pool"), list) else []
+        try:
+            out = PB.build(sport, legs[:12], pool[:PB.MAX_POOL])
+        except Exception:                                # noqa: BLE001
+            return self._send(400, b'{"ok":false,"reason":"that ticket could not be read"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _mybets_closes(self, body: dict):
         """Our close on the bets a reader logged, for My Bets' report card

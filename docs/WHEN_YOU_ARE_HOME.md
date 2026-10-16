@@ -281,7 +281,8 @@ then baseball's "a homer in how many of the 30 parks" on the hit page and the
 next pitch on the live pitch tracker (step 122; BQ); then UFC's fight path on
 the UFC page (step 123; BR); then every book's line with the steam marked on
 the pick page (step 124; BS); then the sweat meter on a live saved slip and
-the replay of its night in My Bets (step 125; BT).
+the replay of its night in My Bets (step 125; BT); then a parlay builder in
+every board sport's Toolbox (step 126; BU).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -320,13 +321,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The sweat meter on a live saved slip, and the replay of its night in My Bets`
+**A. The box has today's code.** The first line should end `A parlay builder in every sport's Toolbox, priced with the correlation between the legs`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 2be92944 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 22ba6437 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1811,6 +1812,18 @@ try:
     for r in c.execute('SELECT kind, COUNT(*), COUNT(DISTINCT bet_id) FROM slip_chance GROUP BY kind'): print(r)
 except sqlite3.OperationalError as e: print('no replay table yet:', e)
 "
+```
+
+**BU. The parlay builder answers** (step 126; read-only, a second, any time).
+It sends the builder two legs from one game (a quarterback's yards and his
+receiver's) and prints its answer: `ok` true, a `joint` above the
+`independent` one (the two move together), `same_game` true and `ev` null (a
+book prices a same-game ticket its own way, so no edge is claimed). The
+second sends the same quarterback twice and should print `ok` false with the
+rule's reason:
+```
+curl -s -X POST http://127.0.0.1:8000/api/parlay/build -H 'Content-Type: application/json' -d '{"sport":"nfl","legs":[{"player":"Josh Allen","market":"pass_yds","side":"over","line":249.5,"team":"BUF","opponent":"MIA","game_date":"2026-10-19","position":"QB","odds":-115,"p":0.58},{"player":"Khalil Shakir","market":"rec_yds","side":"over","line":52.5,"team":"BUF","opponent":"MIA","game_date":"2026-10-19","position":"WR","odds":-110,"p":0.55}]}'; echo
+curl -s -X POST http://127.0.0.1:8000/api/parlay/build -H 'Content-Type: application/json' -d '{"sport":"nfl","legs":[{"player":"Josh Allen","market":"pass_yds","side":"over","p":0.58,"team":"BUF","opponent":"MIA"},{"player":"Josh Allen","market":"pass_yds","side":"under","p":0.42,"team":"BUF","opponent":"MIA"}]}'; echo
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -5691,6 +5704,41 @@ first). Paste back anything that prints an error or looks off.
     plays back. A slip settled before this deploy has no replay. New:
     `tests/test_the_sweat_meter_and_the_bet_replay.py` (6 checks). No pin
     changed; app.js grew by 0.05 KB, inside its budget (no budget moved).
+126. **A parlay builder in every board sport's Toolbox** (2026-10-15, one more
+    of the sixteen: NFL, college, MLB, NBA, WNBA, NHL). Context; nothing on
+    the board moves for it. The reader picks legs off tonight's Most Likely
+    board (filtered by game) and sees the chance they all hit WITH the
+    correlation between them beside the chance as if they were independent,
+    the fair price, the legs' own prices multiplied, each correlated pair
+    with the engine's reason, and up to five of the board's legs that move
+    with the ones chosen ("stacks with it", an average correlation of 0.15
+    or more). THE RULES ARE THE MODEL'S OWN: every pair goes through
+    `engine/parlays.relate` (the clash taxonomy and its measured priors) and
+    the ticket through `check_ticket`, so a pair the taxonomy kills (the
+    same man twice, the pass game with the run game, two receivers splitting
+    one catch pie) is refused with its reason, and the ticket stops at the
+    sport's ceiling (three legs; two in hockey). THE PRICE: legs with no
+    correlation between them (two games) multiply; a linked pair is the
+    engine's Gaussian copula (`joint_two`), a linked three with every pair
+    positive is the model's own `joint_three`, anything else a fixed-seed
+    simulation. Priced whole, a cross-game leg's zero would shrink
+    `joint_three`'s one-factor loadings to nothing and lose the correlated
+    pair, so the groups are priced apart. A ticket with two legs from one
+    game claims no edge: a book prices a same-game parlay with its own
+    correlation, never as the legs multiplied, so the page says to compare
+    its price with the fair one. Across games it shows what the ticket is
+    worth a dollar at the legs' own prices by our chances.
+    `engine/parlaybuild.py`, served at `/api/parlay/build` — unauthenticated
+    like the ticket check, since it reads nothing but the legs and chances
+    the page already holds (the picks themselves stay behind the membership:
+    a signed-out reader's builder says so). New:
+    `tests/test_the_parlay_builder.py` (7 checks). Two pins changed, each to
+    the new line with the builder appended and still an exact match:
+    `tests/test_basketball_schedule_spots_and_what_if_he_sits.py` now reads
+    `nba: [spotsHTML, whatifHTML, builderHTML]` (and the same for WNBA), and
+    `tests/test_hockey_goalies_lines_and_the_xg_race.py` reads
+    `nhl: [goaliesHTML, linesHTML, builderHTML]`. app.js did not change (no
+    budget moved).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

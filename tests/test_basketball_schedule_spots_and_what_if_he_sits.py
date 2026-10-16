@@ -142,7 +142,8 @@ def test_the_build_the_server_and_the_page_reach_them():
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     assert '"/api/hoops/whatif"' in srv and "W.whatif(conn, league, team, player)" in srv
     js = EXTRAS.read_text(encoding="utf-8")
-    assert "nba: [spotsHTML, whatifHTML]" in js and "wnba: [spotsHTML, whatifHTML]" in js
+    # 2026-10-15: the parlay builder (step 126) joins every board sport's Toolbox after these two.
+    assert "nba: [spotsHTML, whatifHTML, builderHTML]" in js and "wnba: [spotsHTML, whatifHTML, builderHTML]" in js
     assert "/api/hoops/whatif?" in js and "Evidence only: the board’s numbers do not move for it." in js
     assert "Context, not a price." in js
 

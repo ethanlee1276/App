@@ -153,7 +153,8 @@ def test_the_goalie_board_and_the_lines_card():
     assert "Context only, and small" in got["lines"]
     assert "No starters on the board yet" in got["none"] and "No lines read yet" in got["nolines"]
     js = EXTRAS.read_text(encoding="utf-8")
-    assert "nhl: [goaliesHTML, linesHTML]" in js
+    # 2026-10-15: the parlay builder (step 126) joins every board sport's Toolbox after these two.
+    assert "nhl: [goaliesHTML, linesHTML, builderHTML]" in js
 
 
 def test_the_live_flow_races_expected_goals():

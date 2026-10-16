@@ -672,6 +672,108 @@
     }).catch(() => {});
   }
 
+  // ---- the parlay builder (every sport's Toolbox) --------------------------
+  /* engine/parlaybuild through /api/parlay/build: pick legs off tonight's
+     board, see the chance they all hit with the correlation between them
+     beside the chance as if they were independent, the fair price, and the
+     board's legs that stack with them. The engine's own rules refuse a
+     pair its taxonomy kills. Context: the board's numbers, not a pick. */
+  const PB = { rows: [], legs: [], game: "", out: null, sport: "", cap: 0, seq: 0 };
+  const pbLeg = (r) => ({ player: r.player || "", market: r.market || "", side: r.side || "", line: r.line,
+    team: r.team || "", opponent: r.opponent || "", home: r.home || "", away: r.away || "",
+    game_date: r.game_date || "", position: r.position || "", odds: r.odds,
+    p: r.model_prob != null ? r.model_prob : r.hit_prob, label: r.market_label || r.market || "" });
+  const pbGame = (l) => [l.home || l.team, l.away || l.opponent].filter(Boolean).sort().join(" · ");
+  // A game line's row already names its side ("GB ML", "Over 43", "CHI +6.5"): the game goes beside it.
+  const PB_GAME = new Set(["moneyline", "spread", "total", "h2h", "spreads", "totals", "run_line", "puck_line"]);
+  const pbName = (l) => {
+    if (l.home && l.away && PB_GAME.has(l.market)) return `${l.player} · ${l.away} @ ${l.home}`;
+    const side = /^yes$/i.test(l.side || "") ? "" : String(l.side || "").replace(/^(\w)(\w*)$/, (_m, a, b) => a.toUpperCase() + b.toLowerCase());
+    return `${l.player} ${side} ${l.line != null ? l.line : ""} ${l.label || l.market}`.replace(/\s+/g, " ").trim();
+  };
+  function pbRows(d) {
+    const seen = new Set(), out = [];
+    for (const r of [].concat((d && d.most_likely) || [], (d && d.recommendations) || [])) {
+      const l = pbLeg(r || {}), k = `${l.player}|${l.market}|${l.side}`;
+      if (!l.player || !l.market || l.p == null || !(l.p > 0 && l.p < 1) || seen.has(k)) continue;
+      seen.add(k);
+      out.push(l);
+    }
+    return out;
+  }
+  function pbTicketHTML() {
+    const o = PB.out;
+    const legs = PB.legs.map((l, i) => `<li><span>${esc(pbName(l))}<small>${pctTxt(l.p, 0)}${l.odds != null ? ` · ${amTxt(l.odds)}` : ""}</small></span>
+      <button type="button" class="xt-x" data-xt="pb-del" data-arg="${i}" aria-label="Remove">×</button></li>`).join("");
+    if (!PB.legs.length) return `<p class="xt-hint">Add a leg from the list to start a ticket.</p>`;
+    let res = o ? "" : `<p class="xt-hint">Working it out…</p>`;
+    if (o && o.ok === false) res = `<p class="xt-pb-no">${esc(o.reason || "The engine refuses this ticket.")}</p>`;
+    else if (o && o.ok) {
+      const who = (i) => esc((o.sent[i] || {}).player || "");
+      const pairs = (o.pairs || []).map((p) => `<li><b class="${p.rho >= 0 ? "pos" : "neg"}">${p.rho > 0 ? "+" : ""}${p.rho.toFixed(2)}</b>
+        ${who(p.pair[0])} &amp; ${who(p.pair[1])} — ${esc(p.why)}</li>`).join("");
+      const st = (o.stacks || []).map((c) => `<li><span>${esc(pbName(PB.rows.find((x) => x.player === c.player && x.market === c.market
+        && x.side === c.side) || Object.assign({ label: c.market }, c)))}<small>${pctTxt(c.p, 0)} · moves with it ${c.rho > 0 ? "+" : ""}${c.rho.toFixed(2)}</small></span>
+        <button type="button" class="xt-btn" data-xt="pb-stack" data-arg="${esc(`${c.player}|${c.market}|${c.side}`)}">Add</button></li>`).join("");
+      res = `<div class="xt-stats"><div class="xt-stat"><span>All hit, with the correlation</span><b>${pctTxt(o.joint, 1)}</b></div>
+        <div class="xt-stat"><span>As if independent</span><b>${pctTxt(o.independent, 1)}</b></div>
+        <div class="xt-stat"><span>Fair price</span><b>${o.fair != null ? amTxt(o.fair) : "—"}</b></div>
+        <div class="xt-stat"><span>Legs’ prices multiplied</span><b>${o.pays != null ? amTxt(o.pays) : "—"}</b></div></div>
+        ${o.same_game ? `<p class="xt-fine">A same-game ticket: a book prices it with its own correlation, never as these legs multiplied —
+          compare its price with the fair one.</p>` : o.ev != null ? `<p class="xt-fine">${o.legs > 1 ? "Across games the legs are priced as independent: at their own prices it is"
+          : "At its own price it is"} worth <b class="${o.ev >= 0 ? "pos" : "neg"}">${ptsTxt(o.ev)}¢</b> a dollar by our chances.</p>` : ""}
+        ${pairs ? `<ul class="xt-pb-pairs">${pairs}</ul>` : ""}
+        ${st ? `<h4 class="xt-sub">Stacks with it</h4><ul class="xt-pb-list">${st}</ul>` : ""}`;
+    }
+    return `<ul class="xt-pb-legs">${legs}</ul>${res}`;
+  }
+  function pbListHTML() {
+    const games = [...new Set(PB.rows.map(pbGame))].filter(Boolean);
+    const rows = PB.rows.map((l, i) => [l, i]).filter(([l]) => !PB.game || pbGame(l) === PB.game).slice(0, 40);
+    const full = PB.cap > 0 && PB.legs.length >= PB.cap;
+    return `<label class="xt-f"><span>Game</span><select data-xw="pb-game"><option value="">Every game</option>${games.map((g) =>
+      `<option value="${esc(g)}"${g === PB.game ? " selected" : ""}>${esc(g)}</option>`).join("")}</select></label>
+      <ul class="xt-pb-list">${rows.map(([l, i]) => `<li><span>${esc(pbName(l))}<small>${pctTxt(l.p, 0)}${l.odds != null ? ` · ${amTxt(l.odds)}` : ""}</small></span>
+        <button type="button" class="xt-btn" data-xt="pb-add" data-arg="${i}"${PB.legs.includes(l) || full ? " disabled" : ""}>Add</button></li>`).join("")}</ul>`;
+  }
+  function pbDraw() {
+    const box = document.querySelector("[data-pb]");
+    if (!box) return;
+    box.querySelector(".xt-pb-ticket").innerHTML = pbTicketHTML();
+    box.querySelector(".xt-pb-pick").innerHTML = pbListHTML();
+  }
+  function pbAsk() {
+    PB.out = null;
+    if (!PB.legs.length) return pbDraw();
+    const pool = PB.rows.filter((l) => !PB.legs.includes(l) && PB.legs.some((x) => pbGame(x) === pbGame(l))).slice(0, 40);
+    const sent = PB.legs.slice(), seq = ++PB.seq;
+    pbDraw();
+    // The last ask wins: an answer to a ticket since changed is dropped.
+    fetch("/api/parlay/build", { method: "POST", headers: { "Content-Type": "application/json" },
+                                 body: JSON.stringify({ sport: PB.sport, legs: sent, pool }) })
+      .then((r) => r.json()).then((o) => { if (seq !== PB.seq) return; PB.out = Object.assign(o || {}, { sent }); PB.cap = (o && o.cap) || PB.cap; pbDraw(); })
+      .catch(() => { if (seq === PB.seq) { PB.out = { ok: false, reason: "The builder could not be reached — try again in a moment." }; pbDraw(); } });
+  }
+  function builderHTML(d) {
+    const sport = sportNow();
+    if (PB.sport !== sport) Object.assign(PB, { legs: [], game: "", out: null, sport, cap: 0 });
+    PB.rows = pbRows(d);
+    const key = (l) => `${l.player}|${l.market}|${l.side}`;
+    PB.legs = PB.legs.map((l) => PB.rows.find((x) => key(x) === key(l)) || l);
+    const head = `<header class="xt-card-h"><h3>Parlay builder</h3><p>Put tonight’s legs together and see the chance they all hit
+      with the correlation between them — the engine’s own pair rules and copula — beside the chance as if they were independent.</p></header>`;
+    if (!PB.rows.length) {
+      const locked = d && d.locked && (d.locked.most_likely || d.locked.recommendations);
+      return `<section class="xt-card xt-wide">${head}<p class="xt-hint">${locked
+        ? `The builder reads the board’s picks, which come with a membership — <a href="#paywall">see the plans</a>.`
+        : "No legs on the board yet — the builder fills when tonight’s picks post."}</p></section>`;
+    }
+    return `<section class="xt-card xt-wide" data-pb>${head}<div class="xt-pb">
+      <div class="xt-pb-pick">${pbListHTML()}</div><div class="xt-pb-ticket">${pbTicketHTML()}</div></div>
+      <p class="xt-fine">Context, not a pick: our published chance on each leg and the engine’s correlation priors. A pair the
+      engine’s rules kill is refused with the reason. Up to the sport’s own ticket size.</p></section>`;
+  }
+
   // ---- the bet replay (My Bets) -------------------------------------------
   /* engine/slipreplay through /api/mybets/replay: a saved slip's chance as
      the box kept it while it watched — before kickoff, every swing while
@@ -734,10 +836,12 @@
   /* Each sport's own tools, drawn above the calculators when that sport
      is the one selected. */
   const SPORT_TOOLS = {
-    cfb: [upsetsHTML],
-    nba: [spotsHTML, whatifHTML],
-    wnba: [spotsHTML, whatifHTML],
-    nhl: [goaliesHTML, linesHTML],
+    nfl: [builderHTML],
+    cfb: [upsetsHTML, builderHTML],
+    mlb: [builderHTML],
+    nba: [spotsHTML, whatifHTML, builderHTML],
+    wnba: [spotsHTML, whatifHTML, builderHTML],
+    nhl: [goaliesHTML, linesHTML, builderHTML],
   };
   const SPORT_NAME = { nfl: "NFL", cfb: "College football", mlb: "MLB", nba: "NBA", wnba: "WNBA", nhl: "NHL", ufc: "UFC" };
 
@@ -839,6 +943,7 @@
     document.addEventListener("change", (e) => {
       const t = e.target;
       if (!t || !t.matches) return;
+      if (t.dataset.xw === "pb-game") { PB.game = t.value; pbDraw(); return; }
       if (t.matches("[data-xw]")) {
         const box = t.closest("[data-xw-league]");
         if (box) whatifAsk(box, t.dataset.xw === "player" ? t.value : "");
@@ -853,6 +958,12 @@
       if (!t) return;
       if (t.dataset.xt === "rc-closes") askCloses(t);
       if (t.dataset.xt === "replay") replayInto(t);
+      if (t.dataset.xt === "pb-add" && PB.rows[+t.dataset.arg]) { PB.legs.push(PB.rows[+t.dataset.arg]); pbAsk(); }
+      if (t.dataset.xt === "pb-del") { PB.legs.splice(+t.dataset.arg, 1); pbAsk(); }
+      if (t.dataset.xt === "pb-stack") {
+        const l = PB.rows.find((x) => `${x.player}|${x.market}|${x.side}` === t.dataset.arg);
+        if (l && !PB.legs.includes(l)) { PB.legs.push(l); pbAsk(); }
+      }
       if (t.dataset.xt === "wi-stat") {
         const box = t.closest("[data-xw-league]");
         if (!box || !box._wi) return;
@@ -865,5 +976,6 @@
   window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
                       spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML,
-                      bookModel, bookLinesHTML, bookLines, replayFacts, replayHTML };
+                      bookModel, bookLinesHTML, bookLines, replayFacts, replayHTML,
+                      pbRows, builderHTML, pbTicketHTML, PB };
 })();
