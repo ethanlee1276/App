@@ -45,6 +45,9 @@ SECTIONS = {
     "menu": "bookmenu",
     "curve": "altcurve",
     "recipe": "bookrecipe",
+    "copies": "bookclusters",
+    "practice": "practice",
+    "attention": "attention",
 }
 
 _CACHE: dict = {}
@@ -146,19 +149,28 @@ def game_slice(data: dict, home: str, away: str) -> dict:
     return out
 
 
-def attach(sport: str, props, games, board, quiet: bool = False) -> dict:
-    """What a build calls: build every section and write the file. Never
-    raises; prints one line, and the error names if any."""
+def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> dict:
+    """What a build calls: build every section and write the file beside
+    the build's own full board (`out` is the board's public path, as
+    `gate.publish` takes it). Never raises; prints one line, and the error
+    names if any.
+
+    THE JOURNALS RUN ONLY FOR THE REAL BOARD. A build pointed at a scratch
+    tree (every test that runs one) writes its file there and keeps nothing
+    in the history database, which no test may touch."""
     try:
+        from . import gate
+        where = gate._full_dir_for(out) if out else directory()
+        live = Path(where).resolve() == Path(directory()).resolve()
         data = build(sport, props, games, board)
-        for name, sec in list(data["sections"].items()):
+        for name, sec in (list(data["sections"].items()) if live else []):
             try:
                 fn = _section_fns(name)[3]
                 if fn is not None:
                     fn(sport, sec)
             except Exception as exc:                        # noqa: BLE001
                 data["errors"][f"{name}.journal"] = f"{type(exc).__name__}: {exc}"[:300]
-        write(sport, data)
+        write(sport, data, where)
         if not quiet:
             errs = data.get("errors") or {}
             print(f"  Ideas: {len(data['sections'])} section(s) written for {sport.upper()}"

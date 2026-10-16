@@ -289,7 +289,10 @@ it beside three questions the paste raised. Then the thirteen inventions
 from your brainstorm ("add everything now. 1-13"), each shown on the pick
 or game page as a reading and measured before it may move anything: each
 book's own menu checked against itself, the market's whole curve off the
-alternate ladders, and each book's recipe for a line (step 129; BX).
+alternate ladders, and each book's recipe for a line (step 129; BX); then
+which books copy which, the injury report read closely (how he practised,
+how honest his club's "questionable" is), and how much the public is
+reading about him on Wikipedia (step 130; BY).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -328,13 +331,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The first three inventions: each book's menu checked against itself, the market's whole curve, each book's recipe`
+**A. The box has today's code.** The first line should end `Three more inventions: which books copy which, the injury report read closely, public attention from Wikipedia`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 6c090d8b HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 8afeaf27 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1926,6 +1929,25 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookmenu --sport n
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookrecipe --sport nfl --save
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.altcurve --sport nfl
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/ideas_nfl.json')); print(d['built_at'], sorted(d['sections']), d['errors'])"
+```
+
+**BY. The inventions, part 2: copies, the injury report, attention**
+(step 130; minutes each, any time; `--save` keeps what the pick page reads).
+Paste all of it.
+1. Which books copy which: the closest pairs (how often they hang the
+   identical line), the groups that count as one opinion, each group's
+   leader and how fast its copies follow, and the held-out consensus test.
+2. The injury report against what happened, every season the box can read:
+   how often a questionable (doubtful, out) man played by how he practised,
+   his snaps when he did, the clubs whose questionables play least and most,
+   and the held-out test of folding the club in.
+3. Wikipedia: one run fetches up to 500 players' page views since 2022 (one
+   call each, about two minutes; run it again until "fetched this run" reads
+   0, it resumes), then measures spiked players' unders against the close.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookclusters --sport nfl --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.practice --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.attention --sport nfl --backfill --save
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -5947,6 +5969,42 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_how_each_book_sets_a_line.py` (5). No pin changed; app.js
     grew by two hooks (a pick-page slot and a game-page slot), inside its
     budget.
+130. **The inventions, part 2** (2026-10-16, the same request). (4)
+    **Which books copy which** (`engine/bookclusters.py`): for each pair of
+    books, on every stored close both priced, how often they hung the
+    identical line and how far apart their over prices were when they did;
+    average-linkage groups on that (a pair needs 200 shared closes, and two
+    books must agree three times in four to be one feed); the prop tape
+    (every book's number when it changes, since September) names each
+    group's leader and how fast its copies follow. The pick page says how
+    many books price him and how many opinions that is, the fair over chance
+    counted by book and by opinion, and any group whose leader has moved
+    while its copies still show the old number. Nothing on the board stops
+    counting books until a held-out test says counting opinions is better
+    (log loss, 2,000 props, t ≥ 2). (5) **The injury report, read closely**
+    (`engine/practice.py`): every nflverse report the box can read, against
+    whether the man played (a snap share above zero) and his snaps when he
+    did, by designation and how he practised; and each club's questionable
+    rate, pulled toward the league by 20 listings so a small sample does not
+    make its own number. The pick page shows a listed man's designation, how
+    he practised, how often men listed like him played, and his club's
+    record; the game page lists every listed man in the game. The board's
+    injury hold is unchanged. (6) **Public attention** (`engine/attention.py`):
+    daily human views of each player's Wikipedia page from Wikimedia's own
+    free API (a User-Agent, no key, nothing scraped), his article found once
+    with Wikipedia's own search; the builds keep the board's players current
+    (each at most once a day, a few seconds a build) and `--backfill` fills
+    past seasons. The pick page shows his last three days against his usual
+    and the month; whether a spike makes his over the expensive side is
+    measured on every past close (BY 3). The ideas file now goes beside the
+    build's own board (`gate`'s private copy), and the journals run only for
+    the real board: a test that runs a build writes its file in its scratch
+    tree and keeps nothing in the history database. The menu, recipe and
+    clusters measurements load one market at a time as tuples, sized for a
+    gigabyte box. New tests: `tests/test_which_books_copy_which.py` (6),
+    `tests/test_practice_reports_and_club_honesty.py` (5),
+    `tests/test_public_attention_from_wikipedia.py` (6), and one more check
+    in `tests/test_the_books_checked_against_themselves.py`. No pin changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

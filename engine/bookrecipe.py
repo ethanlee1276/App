@@ -150,7 +150,6 @@ def _fair_over(q):
 def history(conn, sport: str = "nfl", market: str = REC_YDS, dates=None) -> list:
     """Every stored close with his features as they stood before the game
     and what he did: [(season, book, line, fair_over, x, actual)]."""
-    from . import db as _db
     from .backtest import _norm
     if dates is None:
         from .formbook import game_dates
@@ -163,7 +162,8 @@ def history(conn, sport: str = "nfl", market: str = REC_YDS, dates=None) -> list
         except (TypeError, ValueError):
             continue
         seq.setdefault(_norm(r["player"]), []).append((season, week, r["team"], float(r["value"])))
-    closes = _db.closing_odds_all_books(conn, sport, market)
+    from .bookmenu import closes_compact
+    closes = closes_compact(conn, sport, market)
     out = []
     for name, games in seq.items():
         prior: list = []
@@ -171,12 +171,8 @@ def history(conn, sport: str = "nfl", market: str = REC_YDS, dates=None) -> list
             x = features_from(prior)
             date = dates.get((season, week, team))
             if x is not None and date:
-                for q in closes.get((name, date), []):
-                    try:
-                        line = float(q["line"])
-                    except (TypeError, ValueError, KeyError):
-                        continue
-                    out.append((season, str(q.get("book") or ""), line, _fair_over(q), x, value))
+                for book, (line, over, under) in (closes.get((name, date)) or {}).items():
+                    out.append((season, book, line, _fair_over({"over_odds": over, "under_odds": under}), x, value))
             prior.insert(0, (season, value))
     return out
 

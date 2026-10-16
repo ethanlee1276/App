@@ -55,3 +55,13 @@
 .lb-tbl th:first-child, .lb-tbl td:first-child { text-align: left; font-family: var(--font-sans); color: var(--text); }
 .lb-tbl .pos { color: var(--good); }
 .lb-tbl .neg { color: var(--bad); }
+
+/* 4. Which books copy which. */
+.lb-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.lb-list b { color: var(--text); }
+.lb-more summary { cursor: pointer; color: var(--text-mute); font-size: var(--fs-xs); }
+.lb-more[open] summary { margin-bottom: 6px; }
+
+/* 6. Public attention. */
+.lb-spark { width: 100%; height: 50px; display: block; }
+.lb-spark polyline { fill: none; stroke: var(--brand); stroke-width: 2; }

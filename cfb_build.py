@@ -2098,7 +2098,7 @@ def main() -> None:
         # The inventions (engine/ideas): readings of this slate, written
         # to a private file the pick and game pages ask for.
         from engine import ideas as _ideas
-        _ideas.attach("cfb", _prop_slate.props, out.get("games"), out)
+        _ideas.attach("cfb", _prop_slate.props, out.get("games"), out, out=args.out)
         if prop_census.get("candidates"):
             print(f"  Player props: {prop_census['props']} market(s) across "
                   f"{prop_census['candidates']} placed player(s), "

@@ -400,14 +400,36 @@ def _season_week_dates(seasons=None) -> dict:
     return game_dates(seasons)
 
 
+def closes_compact(conn, sport: str, market: str) -> dict:
+    """``{(player, date): {book: (line, over, under)}}`` — each book's last
+    pre-game quote that date, as tuples. A tuple, not a dict, because six
+    seasons of props at eight books is millions of quotes and the box has
+    a gigabyte; one market is loaded at a time for the same reason."""
+    from . import db as _db
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at"
+         f"{_db._commence_sql(conn)} FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
+    out: dict = {}
+    for r in conn.execute(q, (sport, market)):
+        if _db._in_play(r) or _num(r["line"]) is None or not r["book"]:
+            continue
+        out.setdefault((r["player"], str(r["taken_at"])[:10]), {})[str(r["book"])] = (
+            float(r["line"]), r["over_odds"], r["under_odds"])
+    return out
+
+
+#: The markets each check reads, loaded only while that check runs.
+NEEDS = {"pass_rec": (PASS_YDS, REC_YDS), "cmp_rec": (PASS_CMP, RECEPTIONS),
+         "rush_rec": (RUSH_REC_YDS, RUSH_YDS, REC_YDS), "pass_rush": (PASS_RUSH_YDS, PASS_YDS, RUSH_YDS),
+         "td_total": (ANYTIME_TD,)}
+
+
 def history_cases(conn, sport: str = "nfl", seasons=None) -> list[dict]:
     """Every stored pre-game menu, with what happened.
 
-    Closes are the last snapshot per player-date at each book
-    (`db.closing_odds_all_books`); who a man played for, and what he did,
-    come from `player_game_logs`, dated by the schedule. One case per
-    (check, book, team-or-player, date)."""
-    from . import db as _db
+    Closes are each book's last pre-game quote per player-date
+    (`closes_compact`); who a man played for, and what he did, come from
+    `player_game_logs`, dated by the schedule. One case per (check, book,
+    team-or-player, date)."""
     from .backtest import _norm
     dates = _season_week_dates(seasons)
     who: dict = {}
@@ -437,40 +459,37 @@ def history_cases(conn, sport: str = "nfl", seasons=None) -> list[dict]:
             a, b = actual.get((n, d, PASS_YDS)), actual.get((n, d, RUSH_YDS))
             if a is not None and b is not None:
                 actual[(n, d, PASS_RUSH_YDS)] = a + b
-    closes = {m: _db.closing_odds_all_books(conn, sport, m)
-              for m in (PASS_YDS, REC_YDS, PASS_CMP, RECEPTIONS, RUSH_YDS,
-                        RUSH_REC_YDS, PASS_RUSH_YDS, ANYTIME_TD)}
     games = _game_points(conn, sport, seasons)
     cases: list[dict] = []
     for check, spec in CHECKS.items():
+        closes = {m: closes_compact(conn, sport, m) for m in NEEDS[check]}
         if spec["kind"] == "team":
             cases += _hist_team(check, spec, closes, who, actual)
         elif spec["kind"] == "player":
             cases += _hist_player(check, spec, closes, who, actual)
         else:
             cases += _hist_td(closes, who, actual, games, dates)
+        del closes
     return cases
 
 
 def _quotes_by(closes_m, who):
-    """``{(team, date, book): [(name, quote)]}`` for one market."""
+    """``{(team, date, book): [(name, (line, over, under))]}`` for one market."""
     out: dict = {}
-    for (name, date), quotes in (closes_m or {}).items():
+    for (name, date), books in (closes_m or {}).items():
         w = who.get((name, date))
         if not w:
             continue
-        for q in quotes:
-            if _num(q.get("line")) is None or not q.get("book"):
-                continue
-            out.setdefault((w[0], date, q["book"]), []).append((name, q))
+        for book, q in books.items():
+            out.setdefault((w[0], date, book), []).append((name, q))
     return out
 
 
 def _leg(name, q, market, actual, date):
+    line, over, under = q
     a = actual.get((name, date, market))
-    fp = fair_pair(q.get("over_odds"), q.get("under_odds"))
-    line = _num(q.get("line"))
-    if a is None or fp is None or line is None or a == line:
+    fp = fair_pair(over, under)
+    if a is None or fp is None or a == line:
         return None
     return {"player": name, "line": line, "over": int(a > line), "p_over": fp[0]}
 
@@ -484,11 +503,11 @@ def _hist_team(check, spec, closes, who, actual):
         qbs = [(n, q) for n, q in plist if who.get((n, date), ("", ""))[1] in ("QB", "")]
         if not qbs:
             continue
-        name, q = max(qbs, key=lambda nq: _num(nq[1]["line"]))
+        name, q = max(qbs, key=lambda nq: nq[1][0])
         legs = [(n, pq) for n, pq in prt.get(key, []) if n != name]
         if len(legs) < MIN_PARTS:
             continue
-        x = statistic(sum(_num(pq["line"]) for _n, pq in legs), q["line"])
+        x = statistic(sum(pq[0] for _n, pq in legs), q[0])
         if x is None:
             continue
         out.append({"check": check, "bucket": bucket(check, len(legs)), "x": x, "season": who[(name, date)][2],
@@ -502,17 +521,15 @@ def _hist_player(check, spec, closes, who, actual):
     a_m, b_m = spec["parts"]
     out = []
     ca, cb = closes.get(a_m) or {}, closes.get(b_m) or {}
-    for (name, date), quotes in (closes.get(spec["parent"]) or {}).items():
+    for (name, date), books in (closes.get(spec["parent"]) or {}).items():
         w = who.get((name, date))
         if not w:
             continue
-        qa = {q["book"]: q for q in ca.get((name, date), [])}
-        qb = {q["book"]: q for q in cb.get((name, date), [])}
-        for q in quotes:
-            book = q.get("book")
+        qa, qb = ca.get((name, date)) or {}, cb.get((name, date)) or {}
+        for book, q in books.items():
             if book not in qa or book not in qb:
                 continue
-            x = statistic(_num(qa[book]["line"]) + _num(qb[book]["line"]), q.get("line"))
+            x = statistic(qa[book][0] + qb[book][0], q[0])
             if x is None:
                 continue
             out.append({"check": check, "bucket": "all", "x": x, "season": w[2], "date": date, "book": book,
@@ -523,7 +540,7 @@ def _hist_player(check, spec, closes, who, actual):
 
 
 def _game_points(conn, sport, seasons=None) -> dict:
-    """``{(season, week, team): (points, is_home)}`` from stored closes."""
+    """``{(season, week, team): points}`` from stored closes."""
     out: dict = {}
     for r in conn.execute("SELECT season, period, home, away, spread, total FROM games WHERE sport=?", (sport,)):
         try:
@@ -541,15 +558,14 @@ def _game_points(conn, sport, seasons=None) -> dict:
 
 def _hist_td(closes, who, actual, games, dates):
     by: dict = {}
-    for (name, date), quotes in (closes.get(ANYTIME_TD) or {}).items():
+    for (name, date), books in (closes.get(ANYTIME_TD) or {}).items():
         w = who.get((name, date))
         if not w:
             continue
-        for q in quotes:
-            lam = td_rate(q.get("over_odds"), q.get("under_odds"))
-            if lam is None or not q.get("book"):
-                continue
-            by.setdefault((w[0], date, q["book"]), []).append((name, q, lam))
+        for book, q in books.items():
+            lam = td_rate(q[1], q[2])
+            if lam is not None:
+                by.setdefault((w[0], date, book), []).append((name, q, lam))
     when = {(t, d): (s, wk) for (s, wk, t), d in dates.items()}
     out = []
     for (team, date, book), legs in by.items():
@@ -564,7 +580,7 @@ def _hist_td(closes, who, actual, games, dates):
         parts = []
         for name, q, _lam in legs:
             a = actual.get((name, date, ANYTIME_TD))
-            fp = fair_pair(q.get("over_odds"), q.get("under_odds"))
+            fp = fair_pair(q[1], q[2])
             if a is None or fp is None:
                 continue
             parts.append({"player": name, "line": 0.5, "over": int(a > 0.5), "p_over": fp[0]})

@@ -184,6 +184,19 @@ def test_the_ideas_file_builds_each_section_alone_and_serves_slices():
         shutil.rmtree(d)
     from engine import gate
     assert ID.directory() == Path(gate.FULL_DIR), "private: beside the full boards, outside the web root"
+    tree = Path(tempfile.mkdtemp())
+    try:
+        calls = []
+        real_j = ID._section_fns
+        ID._section_fns = lambda name: (*real_j(name)[:3], lambda sport, sec: calls.append(name))
+        try:
+            ID.attach("nfl", props, games, {}, out=str(tree / "web" / "data" / "recommendations.json"), quiet=True)
+        finally:
+            ID._section_fns = real_j
+        assert (tree / "data" / "built" / "ideas_nfl.json").exists(), "the file goes beside that build's own board"
+        assert calls == [], "a scratch tree keeps nothing in the history database"
+    finally:
+        shutil.rmtree(tree)
 
 
 def test_the_endpoint_the_builds_and_the_pages():
@@ -192,7 +205,8 @@ def test_the_endpoint_the_builds_and_the_pages():
     body = src[src.index("    def _ideas(self, q):"):src.index("    def _players_versus(self, q):")]
     assert "self._entitled(aconn, who)" in body and "401 if not who else 402" in body
     for build, sport in (("nfl_build.py", "nfl"), ("cfb_build.py", "cfb")):
-        assert f'_ideas.attach("{sport}",' in (ROOT / build).read_text(encoding="utf-8")
+        src_b = (ROOT / build).read_text(encoding="utf-8")
+        assert f'_ideas.attach("{sport}",' in src_b and "out=args.out)" in src_b, "beside the build's own board"
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     assert '<div id="pp-lab"></div>' in app and '<div id="gp-lab"></div>' in app
     assert 'X.pickLab(document.getElementById("pp-lab"), state.sport, r)' in app

@@ -113,9 +113,71 @@
       "Each book’s recipe is fitted from the lines it hung on past games; the results recipe from what players actually did. Where they lean differently is a habit worth knowing — and a reading until the held-out test says otherwise.");
   }
 
+  // ---- 4. which books copy which (engine/bookclusters) ---------------------
+  function copiesHTML(sec) {
+    if (!sec || !sec.books) return "";
+    const c = sec.consensus || {};
+    const state = !sec.measured ? "pending" : c.holds ? "holds" : c.n ? "fails" : "pending";
+    const gap = sec.by_group != null && sec.by_book != null ? sec.by_group - sec.by_book : null;
+    const stale = (sec.stale || []).map((s) => `<li><b>${esc(s.leader)}</b> moved to ${esc(num(s.line))}; still at the old number:
+      ${Object.entries(s.behind).map(([b, l]) => `${esc(b)} ${esc(num(l))}`).join(", ")} <span class="lb-z">(its copies usually follow in ~${esc(num(s.lag_min, 0))} min)</span></li>`).join("");
+    const groups = (sec.groups || []).map((g) => `<li>${g.map(esc).join(" · ")}</li>`).join("");
+    return card("Which books copy which", `${sec.books} books price ${esc(num(sec.line))} — ${sec.opinions} independent opinion${sec.opinions === 1 ? "" : "s"}`, state,
+      `<div class="lb-stats"><div class="lb-stat"><span>Fair over, by book</span><b>${pct(sec.by_book, 1)}</b></div>
+       <div class="lb-stat"><span>Fair over, by opinion</span><b>${pct(sec.by_group, 1)}</b></div>
+       <div class="lb-stat ${gap != null && Math.abs(gap) >= 0.02 ? (gap > 0 ? "good" : "bad") : ""}"><span>Difference</span><b>${gap == null ? "—" : `${gap >= 0 ? "+" : "−"}${Math.abs(gap * 100).toFixed(1)}`}</b></div></div>
+       ${stale ? `<ul class="lb-list">${stale}</ul>` : ""}
+       ${groups ? `<details class="lb-more"><summary>Books that hang the same number (one opinion each)</summary><ul class="lb-list">${groups}</ul></details>` : ""}`,
+      sec.measured ? "Groups come from how often two books hung the identical line on every stored close. Whether counting each opinion once beats counting each book is measured on held-out seasons; until it holds, the board keeps counting books."
+        : "Which books copy which is measured on the box’s stored closes first; until then every book counts as its own opinion here.");
+  }
+
+  // ---- 5. the injury report: how he practised, who filed it (engine/practice)
+  const PRACTISED = { DNP: "did not practise", Limited: "was limited in practice", Full: "practised fully", None: "has no practice note" };
+  function practiceState(sec) {
+    const h = sec.held_out || {};
+    return !sec.measured ? "pending" : h.holds ? "holds" : h.n ? "fails" : "pending";
+  }
+  function practiceHTML(sec) {
+    if (!sec || !sec.designation) return "";
+    const stats = sec.league == null ? "" : `<div class="lb-stats">
+      <div class="lb-stat"><span>${esc(sec.designation)} + ${esc(sec.practice)}: played</span><b>${pct(sec.league)}</b></div>
+      ${sec.club != null ? `<div class="lb-stat"><span>With ${esc(sec.team)}’s record</span><b>${pct(sec.club)}</b></div>` : ""}
+      ${sec.ratio != null ? `<div class="lb-stat"><span>Snaps when he plays</span><b>${pct(sec.ratio)}</b></div>` : ""}</div>`;
+    return card("The injury report, read closely", `${esc(sec.designation)}${sec.injury ? ` (${esc(sec.injury)})` : ""} — he ${esc(PRACTISED[sec.practice] || PRACTISED.None)}.`,
+      practiceState(sec), stats || `<p class="lb-read">How often a man listed like this plays is measured on every stored report first.</p>`,
+      `How often players listed and practising like this have played, from every report since the box’s first season${sec.club_n ? `, and how often this club’s questionable players did (${sec.club_n} listings, pulled toward the league)` : ""}. A reading: the board’s injury hold is unchanged.`);
+  }
+  function practiceGameHTML(sec) {
+    if (!sec || !(sec.rows || []).length) return "";
+    const rows = sec.rows.map((r) => `<tr><td>${esc(r.player)} <small>${esc(r.team)}</small></td><td>${esc(r.designation)}</td>
+      <td>${esc(r.practice)}</td><td>${pct(r.league)}</td><td>${pct(r.club)}</td></tr>`).join("");
+    return card("Who is on the injury report", "Every listed player in this game, how he practised, and how often men listed like him have played.",
+      practiceState(sec), `<div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Player</th><th>Listed</th><th>Practice</th><th>Played</th><th>Club-adjusted</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`, "A reading: the board’s injury hold is unchanged.");
+  }
+
+  // ---- 6. how much the public is reading about him (engine/attention) -------
+  function spark(days) {
+    const vs = (days || []).filter((v) => Number.isFinite(v));
+    if (vs.length < 2) return "";
+    const W = 300, H = 50, max = Math.max(...vs, 1);
+    const pts = vs.map((v, i) => `${(i / (vs.length - 1) * W).toFixed(1)},${(H - 4 - v / max * (H - 8)).toFixed(1)}`).join(" ");
+    return `<svg class="lb-spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Daily Wikipedia views, last ${vs.length} days`)}"><polyline points="${pts}"/></svg>`;
+  }
+  function attentionHTML(sec) {
+    if (!sec || sec.ratio == null) return "";
+    const v = sec.verdict || {};
+    const state = v.holds ? "holds" : v.closes ? "fails" : "pending";
+    return card("How much the public is reading about him", `Wikipedia: ${num(sec.recent, 0)} views a day lately against ${num(sec.usual, 0)} usually`, state,
+      `<div class="lb-stats"><div class="lb-stat ${sec.spike ? "bad" : ""}"><span>Attention</span><b>${esc(num(sec.ratio, 1))}×</b></div></div>
+       ${spark(sec.days)}${sec.spike ? `<p class="lb-read">He is being read about <b>far more than usual</b>. Public money follows public attention, and a book that knows it may lean his over.</p>` : ""}`,
+      "Daily human views of his Wikipedia page (Wikimedia’s own public count). Whether a spike means his over is overpriced is being measured on every past close; until it holds, nothing on the board reads it.");
+  }
+
   /* Section drawers, in the order the page shows them. */
-  const PICK = [["curve", curveHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")]];
-  const GAME = [["menu", (s) => menuHTML(s, "game")]];
+  const PICK = [["practice", practiceHTML], ["attention", attentionHTML], ["curve", curveHTML], ["copies", copiesHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")]];
+  const GAME = [["practice", practiceGameHTML], ["menu", (s) => menuHTML(s, "game")]];
 
   function draw(order, slice) {
     const secs = (slice && slice.sections) || {};
@@ -153,5 +215,5 @@
     ask(el, `/api/ideas?${p}`, gameHTML);
   }
 
-  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, badge };
+  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, copiesHTML, practiceHTML, practiceGameHTML, attentionHTML, badge };
 })();
