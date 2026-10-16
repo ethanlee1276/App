@@ -175,9 +175,45 @@
       "Daily human views of his Wikipedia page (Wikimedia’s own public count). Whether a spike means his over is overpriced is being measured on every past close; until it holds, nothing on the board reads it.");
   }
 
+  // ---- 7. the air a kick flies through (engine/kickphysics) ------------------
+  function kicksHTML(sec) {
+    if (!sec || sec.density == null) return "";
+    const f = sec.fit || {};
+    const state = f.holds ? "holds" : f.n ? "fails" : "pending";
+    const dev = sec.density_dev;
+    const air = `${Math.abs(dev * 100).toFixed(0)}% ${dev < 0 ? "thinner" : "thicker"} than sea-level air`;
+    const wp = sec.wind_parts;
+    const wind = sec.dome ? "Indoors: no wind."
+      : sec.wind_mph == null ? "No wind reading yet."
+      : `${num(sec.wind_mph, 0)} mph${sec.wind_dir ? ` from the ${esc(sec.wind_dir)}` : ""}${wp ? ` — ${num(Math.abs(wp.along), 0)} mph down the field, ${num(wp.across, 0)} across it` : ""}.`;
+    return card("The air a kick flies through", `${sec.dome ? "Indoors" : `${num(sec.temp_f, 0)}°F`} at ${num(sec.altitude_ft, 0)} ft — ${air}`, state,
+      `<div class="lb-stats"><div class="lb-stat ${dev < -0.05 ? "good" : dev > 0.05 ? "bad" : ""}"><span>Air density</span><b>${esc(num(sec.density, 3))}</b></div>
+       ${sec.plays_like_50 != null ? `<div class="lb-stat"><span>A 50-yard try plays like</span><b>${esc(num(sec.plays_like_50, 1))}</b></div>` : ""}</div>
+       <p class="lb-read">${wind}</p>`,
+      sec.plays_like_50 != null ? "Thinner air means less drag. How much that moves a make was measured on every stored field goal and held up on held-out seasons."
+        : `Thinner air means less drag, so a kick carries farther. How many yards that is gets measured on every stored field goal first; until then this is the air, not a number.${wp ? "" : " The wind’s angle to the uprights needs this stadium’s bearing, which is recorded from a source one stadium at a time."}`);
+  }
+
+  // ---- 8. rookies and transfers from the college line (engine/rookies) ------
+  function rookieHTML(sec) {
+    if (!sec || sec.college_pg == null) return "";
+    const rookie = sec.kind === "rookie";
+    const h = sec.held_out || {};
+    const state = !rookie ? "info" : h.holds ? "holds" : h.n ? "fails" : "pending";
+    const sub = rookie
+      ? `Last college season at ${esc(sec.school)}: ${num(sec.college_pg, 1)} a game over ${sec.college_games} games · drafted ${sec.pick >= 260 ? "undrafted" : `#${sec.pick}`}`
+      : `Last season at ${esc(sec.school)}: ${num(sec.college_pg, 1)} a game over ${sec.college_games} games`;
+    const stat = rookie
+      ? `<div class="lb-stat"><span>His college line, translated</span><b>${esc(num(sec.translated, 1))}</b></div>`
+      : `<div class="lb-stat"><span>Transfers keep</span><b>${pct(sec.keep)}</b></div><div class="lb-stat"><span>His line, carried over</span><b>${esc(num(sec.translated, 1))}</b></div>`;
+    return card(rookie ? "His college line, translated" : "A transfer’s line, carried over", sub, state, `<div class="lb-stats">${stat}</div>`,
+      rookie ? "A first NFL month projected from his last college season and where he was drafted, fitted on past rookie classes. Whether it beats the draft slot alone and his position’s rookie mean is tested on the two newest classes; until it does, nothing on the board reads it."
+        : `How much of their old production college transfers kept in their first four games at the new school (${sec.keep_n} transfers). Context: nothing on the board reads it.`);
+  }
+
   /* Section drawers, in the order the page shows them. */
-  const PICK = [["practice", practiceHTML], ["attention", attentionHTML], ["curve", curveHTML], ["copies", copiesHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")]];
-  const GAME = [["practice", practiceGameHTML], ["menu", (s) => menuHTML(s, "game")]];
+  const PICK = [["practice", practiceHTML], ["rookie", rookieHTML], ["kicks", kicksHTML], ["attention", attentionHTML], ["curve", curveHTML], ["copies", copiesHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")]];
+  const GAME = [["kicks", kicksHTML], ["practice", practiceGameHTML], ["menu", (s) => menuHTML(s, "game")]];
 
   function draw(order, slice) {
     const secs = (slice && slice.sections) || {};
@@ -215,5 +251,5 @@
     ask(el, `/api/ideas?${p}`, gameHTML);
   }
 
-  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, copiesHTML, practiceHTML, practiceGameHTML, attentionHTML, badge };
+  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, copiesHTML, practiceHTML, practiceGameHTML, attentionHTML, kicksHTML, rookieHTML, badge };
 })();

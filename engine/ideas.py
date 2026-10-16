@@ -48,6 +48,8 @@ SECTIONS = {
     "copies": "bookclusters",
     "practice": "practice",
     "attention": "attention",
+    "kicks": "kickphysics",
+    "rookie": "rookies",
 }
 
 _CACHE: dict = {}

@@ -292,7 +292,9 @@ book's own menu checked against itself, the market's whole curve off the
 alternate ladders, and each book's recipe for a line (step 129; BX); then
 which books copy which, the injury report read closely (how he practised,
 how honest his club's "questionable" is), and how much the public is
-reading about him on Wikipedia (step 130; BY).
+reading about him on Wikipedia (step 130; BY); then the air a field goal
+flies through and the wind along each stadium, and rookies and college
+transfers read off their last college season (step 131; BZ).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -331,13 +333,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Three more inventions: which books copy which, the injury report read closely, public attention from Wikipedia`
+**A. The box has today's code.** The first line should end `Two more inventions: the air a kick flies through, rookies and transfers from their college line`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 8afeaf27 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 0510f94f HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1948,6 +1950,29 @@ Paste all of it.
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookclusters --sport nfl --save
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.practice --save
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.attention --sport nfl --backfill --save
+```
+
+**BZ. The inventions, part 3: kick physics, rookies and transfers**
+(step 131; a few minutes each, any time; `--save` keeps what the pick page
+reads). Paste all of it.
+1. Every stored NFL field goal: the make chance by distance, wind and the
+   air's density, fitted on every season but the last two and scored on
+   those two, with the density term's sign (thinner air should mean more
+   makes). It says HOLDS or does not hold.
+2. Rookies: each rookie class's last college season and draft slot against
+   his first NFL month, held out on the two newest classes against draft
+   slot alone and his position's rookie mean; then how much college
+   transfers kept in their first four games at the new school, and how many
+   of this season's rookies and transfers the pick page can now read.
+3. Stadium bearings start empty. Only if you want the wind split along and
+   across the field: one line per stadium, the compass direction its long
+   axis points (0-360), with a link to where the number comes from. The
+   example is the shape only, not a measured bearing.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.kickphysics --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.rookies --save
+# shape only — replace TEAM, DEGREES and the link with a real stadium's:
+# cd /srv/qellys && sudo -u qellys python3 -m engine.kickphysics --bearing TEAM DEGREES --source https://...
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -6005,6 +6030,34 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_practice_reports_and_club_honesty.py` (5),
     `tests/test_public_attention_from_wikipedia.py` (6), and one more check
     in `tests/test_the_books_checked_against_themselves.py`. No pin changed.
+131. **The inventions, part 3** (2026-10-16, the same request). (7) **The
+    air a kick flies through** (`engine/kickphysics.py`): the air's density
+    from the ideal gas law — the standard atmosphere's pressure at the
+    stadium's altitude (or a measured pressure), the game-time temperature,
+    and water vapour when the humidity is known (moist air is lighter); sea
+    level at 59°F is 1.225, Denver on a mild day about a fifth thinner, and
+    under a roof the building's 70°F. A wind is split along and across the
+    field once a stadium's bearing is recorded, and a bearing is recorded
+    only with a source link (`--bearing TEAM DEGREES --source URL`; the
+    table starts empty). The make chance is a logistic fit on every stored
+    field goal (distance, distance squared, wind × distance outdoors) with
+    and without distance × the air's density against sea level; the density
+    term earns a reading only if it improves held-out log loss over the two
+    newest seasons, t ≥ 2, 2,000 kicks, AND its sign is the physics' (BZ 1).
+    The game page and a kicker's pick page show the air, the wind and the
+    stadium's height; "a 50-yard try plays like" appears only from a fit
+    that held. (8) **Rookies and transfers** (`engine/rookies.py`): a
+    rookie receiver, tight end or back's last college season (the college
+    board's own logs, one school, six games) and his draft slot (nflverse
+    rosters; undrafted reads as pick 260), translated by one least-squares
+    fit per market into his first NFL month (weeks 1-4, two games). It must
+    beat draft slot alone AND his position's rookie mean on the two newest
+    classes, paired, t ≥ 2, 60 rookies (BZ 2). For college, a transfer's
+    first four games at the new school against his last season at the old
+    one, as one ratio per market. The pick page shows his college line and
+    the translation, labelled; nothing on the board reads either. New
+    tests: `tests/test_the_air_a_kick_flies_through.py` (5),
+    `tests/test_rookies_from_their_college_line.py` (5). No pin changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
