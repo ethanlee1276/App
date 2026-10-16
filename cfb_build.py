@@ -2095,6 +2095,10 @@ def main() -> None:
         except Exception as _lux:                            # noqa: BLE001
             print(f"  ⚠️  college lineup step skipped: {_lux}")
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
+        # The inventions (engine/ideas): readings of this slate, written
+        # to a private file the pick and game pages ask for.
+        from engine import ideas as _ideas
+        _ideas.attach("cfb", _prop_slate.props, out.get("games"), out)
         if prop_census.get("candidates"):
             print(f"  Player props: {prop_census['props']} market(s) across "
                   f"{prop_census['candidates']} placed player(s), "

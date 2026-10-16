@@ -13342,6 +13342,7 @@ function renderPropPage() {
     ${booksTableHTML(r)}
     ${lineMoveHTML(r)}
     <div id="pp-books"></div>
+    <div id="pp-lab"></div>
 
     ${shown ? `<div class="section-title">Last ${shown} game${shown === 1 ? "" : "s"}
       <span class="sub">— every one measured against tonight’s
@@ -13397,7 +13398,9 @@ function renderPropPage() {
   if (b) b.addEventListener("click", detailBack);
   if (typeof fillMeters === "function") fillMeters(host);
   // Every book's line and the steam (js/extras.js).
-  if (r.player && r.market) loadExtras().then((X) => X && X.bookLines(document.getElementById("pp-books"), state.sport, r.player, r.market));
+  // ...and the inventions' readings of this pick (js/extras.js pickLab).
+  if (r.player && r.market) loadExtras().then((X) => X && (X.bookLines(document.getElementById("pp-books"), state.sport, r.player, r.market),
+    X.pickLab(document.getElementById("pp-lab"), state.sport, r)));
 }
 
 /* ============================================================
@@ -15079,6 +15082,7 @@ function renderGamePage() {
     ${gamePlanHTML(g)}
     ${matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}
     ${simCard ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
+    <div id="gp-lab"></div>
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}
 
     <div class="stats gp-stats">
@@ -15212,6 +15216,7 @@ function renderGamePage() {
   });
   fillMeters(host);
   host.querySelectorAll(".cards").forEach(revealChildren);
+  loadExtras().then((X) => X && X.gameLab(document.getElementById("gp-lab"), state.sport, g));
   // The replay panel's gauge + histogram upgrade in place when the
   // vendored ECharts loads; the div bars above stay as the fallback.
   if (typeof mountEChartsPanels === "function") mountEChartsPanels(host);

@@ -1434,6 +1434,11 @@ def main() -> None:
                       f"page panels stamped, journal appended.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  drive-sim journal skipped: {_exc}")
+        # The inventions (engine/ideas, Ethan 2026-10-16 "add everything
+        # now. 1-13"): readings of this slate written to a private file the
+        # pick and game pages ask for. Nothing in it moves a number.
+        from engine import ideas as _ideas
+        _ideas.attach("nfl", slate.props, result.get("games"), result)
         # Team shapes — the game page's two-team radar. Percentile ranks
         # over the last RANKABLE season's finals (in August that is last
         # season, and the panel's label says so). Never fatal: a fresh DB

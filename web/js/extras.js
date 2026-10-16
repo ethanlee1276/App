@@ -973,9 +973,28 @@
     });
   }
 
+  // ---- the inventions (js/lab.js) ------------------------------------------
+  /* Ethan, 2026-10-16: "add everything now. 1-13". Each invention's
+     reading of a pick or a game lives in js/lab.js and css/lab.css, loaded
+     the first time a pick or game page asks for one. */
+  let labLoading = null;
+  function loadLab() {
+    if (window.QBLab) return Promise.resolve(window.QBLab);
+    return labLoading || (labLoading = new Promise((resolve) => {
+      const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "css/lab.css";
+      document.head.appendChild(css);
+      const s = document.createElement("script"); s.src = "js/lab.js";
+      s.onload = () => resolve(window.QBLab || null);
+      s.onerror = () => { labLoading = null; resolve(null); };
+      document.head.appendChild(s);
+    }));
+  }
+  function pickLab(el, sport, r) { if (el) loadLab().then((L) => L && L.pickLab(el, sport, r)); }
+  function gameLab(el, sport, g) { if (el) loadLab().then((L) => L && L.gameLab(el, sport, g)); }
+
   window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
                       spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML,
                       bookModel, bookLinesHTML, bookLines, replayFacts, replayHTML,
-                      pbRows, builderHTML, pbTicketHTML, PB };
+                      pbRows, builderHTML, pbTicketHTML, PB, pickLab, gameLab, loadLab };
 })();

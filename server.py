@@ -1173,6 +1173,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._hoops_whatif(parse_qs(parsed.query))
         if parsed.path in ("/api/lines/books", "/api/lines/books/"):
             return self._lines_books(parse_qs(parsed.query))
+        if parsed.path in ("/api/ideas", "/api/ideas/"):
+            return self._ideas(parse_qs(parsed.query))
         if parsed.path in ("/api/mybets/replay", "/api/mybets/replay/"):
             return self._mybets_replay(parse_qs(parsed.query))
         if parsed.path in ("/api/players/versus", "/api/players/versus/"):
@@ -3339,6 +3341,40 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the lines could not be read"}', ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _ideas(self, q):
+        """One pick's, or one game's, slice of the inventions file
+        (engine/ideas): the books' own menus checked, and the rest as they
+        land. Behind the membership: every section is a reading of the
+        priced board, which is what a member pays for."""
+        from engine import ideas as ID
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        sport = arg("sport").lower()[:5]
+        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl"):
+            return self._send(400, b'{"error":"sport"}', ".json")
+        player, market = arg("player")[:60].strip(), arg("market")[:40].strip()
+        home, away = arg("home")[:40].strip(), arg("away")[:40].strip()
+        if not (player and market) and not (home and away):
+            return self._send(400, b'{"error":"player and market, or home and away"}', ".json")
+        A = _acct()
+        aconn = A.connect()
+        try:
+            who = self._account(aconn)
+            if not self._entitled(aconn, who):
+                locked = {"error": "This comes with a membership.", "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+        finally:
+            aconn.close()
+        data = ID.read(sport)
+        if not data:
+            return self._send(200, json.dumps({"sport": sport, "sections": {}, "empty": True}).encode(), ".json")
+        try:
+            line = float(arg("line")) if arg("line") else None
+        except ValueError:
+            line = None
+        out = (ID.pick_slice(data, player, market, arg("side")[:8], line) if player and market
+               else ID.game_slice(data, home, away))
+        return self._send(200, json.dumps(out, default=str).encode(), ".json")
 
     def _players_versus(self, q):
         """A player's history against one opponent — the head-to-head.

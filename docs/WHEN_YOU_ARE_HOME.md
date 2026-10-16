@@ -285,7 +285,11 @@ the replay of its night in My Bets (step 125; BT); then a parlay builder in
 every board sport's Toolbox (step 126; BU); and last, a free weekly pick'em
 on Social with week and season standings (step 127; BV). Your paste on the
 16th found the pick'em's NFL week empty; fixed in step 128, and BW re-checks
-it beside three questions the paste raised.
+it beside three questions the paste raised. Then the thirteen inventions
+from your brainstorm ("add everything now. 1-13"), each shown on the pick
+or game page as a reading and measured before it may move anything: each
+book's own menu checked against itself, the market's whole curve off the
+alternate ladders, and each book's recipe for a line (step 129; BX).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -324,13 +328,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Your no to the MLB paper pull, and what BW's paste found, in the runbook`
+**A. The box has today's code.** The first line should end `The first three inventions: each book's menu checked against itself, the market's whole curve, each book's recipe`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 9ff217d2 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 6c090d8b HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1900,6 +1904,28 @@ rows=(d.get('picks') or [])+(d.get('pass_list') or [])
 fs=[f for r in rows for f in r.get('fighters') or []]
 print(len(rows), 'fights,', sum(1 for f in fs if f.get('path')), 'of', len(fs), 'corners carry a path')
 "
+```
+
+**BX. The inventions, part 1: the books against themselves, the whole
+curve, each book's recipe** (step 129; a few minutes each, any time; the
+first two save the normals the pick page reads). Paste all of it.
+1. Every stored pre-game menu, NFL: what normal looks like for each check
+   (passing yards against the receivers, completions against the catches,
+   rush + rec against its halves, pass + rush against its halves, the
+   touchdown prices against the team's points), then the held-out test.
+   `--save` keeps the normals, so the pick page can flag a menu; the
+   verdict is saved beside them and nothing on the board reads it.
+2. Each book's recipe and the results' recipe, four markets, with the
+   held-out test. `--save` keeps the recipes for the pick page.
+3. The alternate-ladder curves kept so far and how they score (it starts
+   empty; the builds keep a curve per player a day from now on).
+4. The new private file: when it was built, its sections, and any section
+   that failed.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookmenu --sport nfl --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookrecipe --sport nfl --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.altcurve --sport nfl
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/ideas_nfl.json')); print(d['built_at'], sorted(d['sections']), d['errors'])"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -5883,6 +5909,44 @@ first). Paste back anything that prints an error or looks off.
     is stored (76 to 419 a month, March to October), the backfill read its
     last game on the 14th, and the page caps nothing, so the page is right.
     (5) UFC: 49 fights, 63 of 98 corners carry a path.
+129. **The inventions, part 1** (2026-10-16, Ethan: "add everything now.
+    1-13 and dont stop till everything is done", after the brainstorm of
+    ideas no betting app he could name was using). Each is a reading on the
+    pick or game page, labelled with what its measurement says, and moves
+    no number. They travel in one private file per board,
+    `data/built/ideas_<sport>.json` (`engine/ideas.py`), written by the NFL
+    and college builds and served one pick or one game at a time at
+    `/api/ideas`, behind the membership like every book's line; the page
+    draws it from a new lazy `js/lab.js` + `css/lab.css`, loaded by
+    `js/extras.js`. A section that fails is named in the file's `errors`
+    and the others ship. (1) **Do the books add up?** (`engine/bookmenu.py`)
+    At one book at a time: the passer it prices highest against his own
+    receivers' yards (three or more priced), his completions against their
+    catches, a back's rush + rec against its two halves, a passer's pass +
+    rush against its halves, and the team's touchdown prices (both sides of
+    each, de-vigged) against the touchdowns its points imply. What normal
+    looks like is measured on the box's stored closes (BX 1); a menu is
+    flagged only two spreads from that, and the side it leans to is a
+    reading until a held-out test written before the first run says
+    otherwise (both test seasons above zero, 150 flagged menus, t ≥ 2,
+    +3 points over the fair price). (2) **The market's whole curve**
+    (`engine/altcurve.py`): every rung of the alternate ladder priced both
+    ways, de-vigged, the median across books, made to fall as the number
+    rises, beside our chance at the same rungs (the Most Likely board's own
+    rung pricing). "Ends disagree" when the middle agrees and an end parts
+    by 6 points. The ladders were never stored, so the builds now keep a
+    curve per player and market a day (`alt_curves` in history.db) and BX 3
+    scores them as games settle. (3) **How each book sets his line**
+    (`engine/bookrecipe.py`): a least-squares recipe per book from his last
+    game, last three, season and career to the line it hung, beside the
+    recipe that predicted what players did; the pick page shows each book's
+    recipe for him beside its line and how much each leans on his last
+    game. Measured on held-out seasons (BX 2). New tests:
+    `tests/test_the_books_checked_against_themselves.py` (7),
+    `tests/test_the_markets_whole_curve.py` (6),
+    `tests/test_how_each_book_sets_a_line.py` (5). No pin changed; app.js
+    grew by two hooks (a pick-page slot and a game-page slot), inside its
+    budget.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
