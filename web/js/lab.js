@@ -288,8 +288,55 @@
       "Read by a Bayesian changepoint detector on each man’s share game by game. A reading: the board’s volume is unchanged.");
   }
 
+  // ---- 11. honest ranges (engine/conformal) ---------------------------------
+  function rangeBar(sec) {
+    const r50 = (sec.ranges || {})["0.5"], r80 = (sec.ranges || {})["0.8"];
+    if (!r50 || !r80) return "";
+    const lo = Math.min(r80[0], sec.line, sec.projection), hi = Math.max(r80[1], sec.line, sec.projection);
+    const pad = (hi - lo) * 0.08 || 1, a = lo - pad, b = hi + pad, W = 300;
+    const x = (v) => ((v - a) / (b - a) * W).toFixed(1);
+    return `<svg class="lb-range" viewBox="0 0 ${W} 44" role="img" aria-label="${esc(`80% range ${num(r80[0])} to ${num(r80[1])}, 50% range ${num(r50[0])} to ${num(r50[1])}, line ${num(sec.line)}`)}">
+      <rect class="r80" x="${x(r80[0])}" y="14" width="${(x(r80[1]) - x(r80[0])).toFixed(1)}" height="14" rx="3"/>
+      <rect class="r50" x="${x(r50[0])}" y="14" width="${(x(r50[1]) - x(r50[0])).toFixed(1)}" height="14" rx="3"/>
+      <line class="proj" x1="${x(sec.projection)}" x2="${x(sec.projection)}" y1="10" y2="32"/>
+      <line class="line" x1="${x(sec.line)}" x2="${x(sec.line)}" y1="4" y2="40"/>
+      <text x="${x(sec.line)}" y="10" text-anchor="middle">${esc(num(sec.line))}</text></svg>`;
+  }
+  function rangeHTML(sec) {
+    if (!sec || !sec.ranges) return "";
+    const v = sec.verdict || {};
+    const state = v.holds ? "holds" : v.coverage ? "fails" : "pending";
+    const r50 = sec.ranges["0.5"], r80 = sec.ranges["0.8"];
+    const mr = sec.model_range || [];
+    const cov = v.coverage ? ` On the newest ${v.n} graded picks the 50% range covered ${pct(v.coverage["0.5"])} and the 80% range ${pct(v.coverage["0.8"])}.` : "";
+    return card("How wide it really is", `Half his games like this land ${num(r50[0])}–${num(r50[1])}; four in five ${num(r80[0])}–${num(r80[1])}`, state,
+      `${rangeBar(sec)}<div class="lb-stats">
+       <div class="lb-stat"><span>His ${esc(sec.side || "pick")} by the range</span><b>${pct(sec.range_chance)}</b></div>
+       <div class="lb-stat"><span>The model’s chance</span><b>${pct(sec.model_chance)}</b></div>
+       ${mr[0] != null && mr[1] != null ? `<div class="lb-stat"><span>The model’s own range</span><b>${esc(num(mr[0]))}–${esc(num(mr[1]))}</b></div>` : ""}</div>`,
+      `Built from how far ${Number(sec.n || 0).toLocaleString()} graded picks landed from the number we published (conformal prediction: no assumption about the shape of the misses).${cov} A reading: nothing on the board reads it.`);
+  }
+
+  // ---- 12. the loss autopsy (engine/autopsy) --------------------------------
+  const TAG_ORDER = ["volume", "efficiency", "script", "left early", "both"];
+  const STEP_NAMES = { volume: "Usage (how much he is used)", efficiency: "Per touch (what he does with each)", script: "Game script", left_early: "Availability (left early)" };
+  function autopsyHTML(sec) {
+    const s = sec && sec.summary;
+    if (!s || !s.losses) return "";
+    const tags = TAG_ORDER.filter((t) => s.tags[t]).map((t) => `<span class="lb-tag t-${t.replace(" ", "-")}" style="flex:${s.tags[t]}">${esc(t)} ${Math.round(s.tags[t] / s.losses * 100)}%</span>`).join("");
+    const steps = Object.entries(s.steps || {}).map(([k, v]) => `<tr><td>${esc(STEP_NAMES[k] || k)}</td><td>${pct(v.losses)}</td><td>${pct(v.wins)}</td>
+      <td class="${v.z >= 2 && v.excess > 0 ? "bad" : ""}">${v.excess >= 0 ? "+" : "−"}${Math.abs(v.excess * 100).toFixed(0)}</td></tr>`).join("");
+    const his = (sec.his || []).map((h) => `<li><b>${esc(h.date)}</b> ${esc(h.side)} ${esc(num(h.line))}: we said ${esc(num(h.projection))}, he did ${esc(num(h.actual))} — ${h.won ? "won" : `lost (${esc(h.tag)})`}; volume ${signed(h.parts.volume, 1)}, per touch ${signed(h.parts.efficiency, 1)}</li>`).join("");
+    return card("When picks like this lose", `${s.losses} graded ${MKT(sec.market)} losses, each miss split into usage and per-touch`, "info",
+      `<div class="lb-tags">${tags}</div>
+       <div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Step</th><th>Against us in losses</th><th>In wins</th><th>Excess</th></tr></thead><tbody>${steps}</tbody></table></div>
+       <p class="lb-read">${s.wrong_most_label ? `The step wrong most: <b>${esc(s.wrong_most_label)}</b>.` : "No step stands out from the wins yet."}</p>
+       ${his ? `<details class="lb-more"><summary>His last graded picks in this market</summary><ul class="lb-list">${his}</ul></details>` : ""}`,
+      "Each miss is split exactly into how much he was used against his four games before (usage) and what he did with each touch. A step is named only when it goes against our picks in losses clearly more often than in wins (z ≥ 2, 100 losses). Context: nothing on the board reads it.");
+  }
+
   /* Section drawers, in the order the page shows them. */
-  const PICK = [["practice", practiceHTML], ["role", roleHTML], ["rookie", rookieHTML], ["kicks", kicksHTML], ["attention", attentionHTML], ["curve", curveHTML], ["sim", simHTML], ["copies", copiesHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")]];
+  const PICK = [["range", rangeHTML], ["practice", practiceHTML], ["role", roleHTML], ["rookie", rookieHTML], ["kicks", kicksHTML], ["attention", attentionHTML], ["curve", curveHTML], ["sim", simHTML], ["copies", copiesHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")], ["autopsy", autopsyHTML]];
   const GAME = [["kicks", kicksHTML], ["practice", practiceGameHTML], ["sim", simGameHTML], ["role", roleGameHTML], ["menu", (s) => menuHTML(s, "game")]];
 
   function draw(order, slice) {
@@ -328,5 +375,5 @@
     ask(el, `/api/ideas?${p}`, gameHTML);
   }
 
-  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, copiesHTML, practiceHTML, practiceGameHTML, attentionHTML, kicksHTML, rookieHTML, simHTML, simGameHTML, roleHTML, roleGameHTML, badge };
+  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, copiesHTML, practiceHTML, practiceGameHTML, attentionHTML, kicksHTML, rookieHTML, simHTML, simGameHTML, roleHTML, roleGameHTML, rangeHTML, autopsyHTML, badge };
 })();

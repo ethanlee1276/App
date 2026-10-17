@@ -298,7 +298,9 @@ transfers read off their last college season (step 131; BZ); then every
 player on a team inside the same simulated games, checked against the
 parlay pricer's correlations (step 132; CA); then a change in a player's
 role (his share of the targets, carries or snaps) spotted within a game or
-two (step 133; CB).
+two (step 133; CB); and last, an honest range around every pick, every
+graded pick's miss split into usage and per-touch, and one risk view of
+every open bet in My Bets (step 134; CC). All thirteen are built.
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -337,13 +339,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Inventions 9 and 10: players inside the simulated game, a role change spotted early`
+**A. The box has today's code.** The first line should end `Inventions 11 to 13: honest ranges, the loss autopsy, one risk view of every open bet`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 2faeb900 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor fa8a1a24 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1999,6 +2001,24 @@ every next-game forecast in the newest two against the board's four-week
 average. Each share says HOLDS or does not hold on its own.
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.rolechange --save
+```
+
+**CC. The inventions, part 6: honest ranges, the loss autopsy, the risk
+view** (step 134; a minute or two, any time; `--save` keeps what the pick
+page reads). Paste all of it.
+1. Every graded pick in the journal: the 50% and 80% ranges calibrated on
+   the oldest two thirds and checked on the newest third, sport by sport
+   and market by market, with the range's chance for the side against the
+   model's own (Brier). Each says HOLDS or does not hold.
+2. Every graded NFL pick's miss split into usage and per touch, the tags on
+   the losses, and each step's rate against us in losses beside wins. The
+   builds refresh this once a day by themselves; this is the first run.
+3. The newest ideas file names every section (the sims, roles, ranges and
+   autopsy show up after the next NFL build), and its errors.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.conformal --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.autopsy --save
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/ideas_nfl.json')); print(d['built_at'], sorted(d['sections']), d['errors'])"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -6137,6 +6157,40 @@ first). Paste back anything that prints an error or looks off.
     forecast beside the four-week average; the game page lists the players
     whose role just changed. The board's volume is unchanged. New test:
     `tests/test_a_role_change_spotted_early.py` (6). No pin changed.
+134. **The inventions, part 6** (2026-10-17, the same request; all thirteen
+    now built). (11) **Honest ranges** (`engine/conformal.py`): split
+    conformal prediction on every graded pick in the journal — how far he
+    landed from the number we published, over the square root of the
+    number — gives a 50% and an 80% range around tonight's projection with
+    no assumption about the shape of the misses, and a second chance for
+    the pick's side (the share of past misses that would have put him over)
+    beside the model's own. The bar, set before its first run: on the newest
+    third of graded picks, calibrated on the oldest two thirds, each range
+    covers its share within three points or two standard errors over 150
+    picks (CC 1). The pick page draws the two ranges, the projection and the
+    line, with both chances and the model's own range. (12) **The loss
+    autopsy** (`engine/autopsy.py`): each graded NFL pick's miss split
+    exactly into usage (his targets, carries or attempts against his four
+    games before) and per touch, with nothing left over; each loss tagged
+    left early (snaps under 60% of his usual), script (a blowout and usage
+    against us), usage, per touch, or both; and each step's rate of going
+    against us in losses set beside its rate in wins, so the step "wrong
+    most" is named only at z ≥ 2 over 100 losses. The builds refresh it once
+    a day. The pick page shows how picks in that market lose and his last
+    three graded picks. (13) **One risk view of every open bet**
+    (`engine/risk.py`, `/api/mybets/risk`, members only, nothing kept): My
+    Bets' open tab plays the night out 5,000 times at once with every open
+    leg once (the same leg on two slips is one event), our chance where a
+    board prices it and its price's otherwise, legs in one game joined by
+    the parlay engine's number. It shows the average night, the chance to
+    finish up, the bad night (one in twenty), the chance every ticket loses
+    beside what it would be if they were unrelated, where the money rides,
+    and the one bet on a leg's other side that lifts the bad night most (or
+    none). The settled tab keeps the report card. New tests:
+    `tests/test_honest_ranges_around_every_pick.py` (5),
+    `tests/test_the_loss_autopsy.py` (5),
+    `tests/test_one_risk_view_of_every_open_bet.py` (5). No pin changed;
+    app.js grew by the My Bets hook and stays inside its budget.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

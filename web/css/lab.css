@@ -73,3 +73,18 @@
 .lb-role rect { fill: var(--text-mute); opacity: .55; }
 .lb-role rect.new { fill: var(--brand); opacity: 1; }
 .lb-role line { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* 11. Honest ranges. */
+.lb-range { width: 100%; height: 44px; display: block; }
+.lb-range .r80 { fill: var(--brand); opacity: .22; }
+.lb-range .r50 { fill: var(--brand); opacity: .5; }
+.lb-range .proj { stroke: var(--text); stroke-width: 2; }
+.lb-range .line { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.lb-range text { fill: var(--text-mute); font-size: 9px; font-family: var(--font-mono); }
+
+/* 12. The loss autopsy. */
+.lb-tags { display: flex; gap: 2px; border-radius: var(--radius-sm); overflow: hidden; font-size: var(--fs-2xs); font-weight: 700; }
+.lb-tag { min-width: 0; padding: 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); background: var(--panel-2); }
+.lb-tag.t-volume { background: color-mix(in srgb, var(--brand) 35%, transparent); }
+.lb-tag.t-efficiency { background: color-mix(in srgb, var(--bad) 30%, transparent); }
+.lb-tag.t-script { background: color-mix(in srgb, var(--good) 25%, transparent); }

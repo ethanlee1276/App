@@ -52,6 +52,8 @@ SECTIONS = {
     "rookie": "rookies",
     "sim": "playsim",
     "role": "rolechange",
+    "range": "conformal",
+    "autopsy": "autopsy",
 }
 
 _CACHE: dict = {}

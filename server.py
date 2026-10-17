@@ -1351,6 +1351,7 @@ class Handler(BaseHTTPRequestHandler):
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
                 or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
                 or parsed.path in ("/api/mybets/closes", "/api/mybets/closes/")
+                or parsed.path in ("/api/mybets/risk", "/api/mybets/risk/")
                 or parsed.path in ("/api/draftplan", "/api/draftplan/")):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -1374,6 +1375,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._parlay_build(body)
             if parsed.path.startswith("/api/mybets/closes"):
                 return self._mybets_closes(body)
+            if parsed.path.startswith("/api/mybets/risk"):
+                return self._mybets_risk(body)
             if parsed.path.startswith("/api/draftplan"):
                 return self._draft_plan(body)
             if parsed.path.startswith("/api/feed/"):
@@ -3264,6 +3267,34 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the record could not be read"}', ".json")
         return self._send(200, json.dumps({"closes": out}).encode(), ".json")
+
+    def _mybets_risk(self, body: dict):
+        """One risk view of the reader's open bets (engine/risk): the night
+        simulated with every open leg once, our chance where a board prices
+        it, the parlay engine's correlation inside a game; the bad night,
+        the chance every ticket loses, where the money rides, and the one
+        hedge that lifts the bad night most. Behind the membership: the
+        chances are the boards'. The page sends the open tickets' stakes,
+        prices and legs; nothing is kept."""
+        from engine import risk as RK
+        from engine import slipwatch as SW
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            ok = bool(who) and self._entitled(conn, who)
+        finally:
+            conn.close()
+        if not ok:
+            locked = {"error": "The risk view comes with a membership.", "signed_in": bool(who), "locked": True}
+            return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+        bets = body.get("bets") if isinstance(body.get("bets"), list) else []
+        try:
+            boards = SW.boards_and_live()[0]
+            out = RK.analyze(bets[:RK.MAX_BETS], boards)
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the risk view could not be worked out just now"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _hoops_whatif(self, q):
         """What if he sits (engine/nba/whatif): one club's rotation and, with

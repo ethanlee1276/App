@@ -25113,7 +25113,7 @@ function renderMyBets() {
     ${form}
     ${ribbon}
     ${mbMonthHTML(bets, today)}
-    ${st.settled ? `<div id="mb-report"></div>` : ""}
+    ${st.settled ? `<div id="mb-report"></div>` : `<div id="mb-risk"></div>`}
     ${(() => {
       if (st.settled < 3) return "";
       const takes = mbTakeaways(bets);
@@ -25217,7 +25217,7 @@ function renderMyBets() {
       browser data erases it, so Export now and then if you want a backup.</p>`;
   sweepRings(host);
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
-  if (st.settled) loadExtras().then((X) => X && X.reportCard(document.getElementById("mb-report")));
+  loadExtras().then((X) => X && (st.settled ? X.reportCard(document.getElementById("mb-report")) : X.riskView(document.getElementById("mb-risk"))));
 }
 
 /* Weather — the Zeno sidebar's page (Ethan, 2026-08-12), built from

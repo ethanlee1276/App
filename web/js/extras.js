@@ -932,6 +932,45 @@
     }
   }
 
+  // ---- one risk view of every open bet (engine/risk, /api/mybets/risk) ---
+  /* Ethan, 2026-10-16: "add everything now. 1-13" — idea 13. The open
+     tickets together: the night simulated with every open leg once, our
+     chance where a board prices it, legs in one game joined the way the
+     parlay engine joins them. Sends the open tickets' stakes, prices and
+     legs; nothing is kept. A locked or failed answer draws nothing. */
+  const openBets = () => (typeof mbLoad === "function" ? mbLoad() : [])
+    .filter((b) => b && String(b.result || "pending") === "pending" && Number(b.stake) > 0)
+    .slice(0, 60).map((b) => ({ id: b.id, stake: b.stake, odds: b.odds, desc: b.desc, sport: b.sport, legs: b.legs || [] }));
+  function riskHTML(r) {
+    if (!r || !r.bets) return "";
+    const h = r.hedge;
+    const ex = (r.exposure && r.exposure.players) || [];
+    const lean = ex.length && ex[0].share >= 0.3
+      ? `<p class="xt-verdict bad">${pctTxt(ex[0].share, 0)} of your money rides on <b>${esc(ex[0].name)}</b>.</p>` : "";
+    return `<section class="xt-rc">
+      <header class="xt-card-h"><h3>Your open bets, together</h3><p>${r.bets} ticket${r.bets === 1 ? "" : "s"}, ${r.legs} leg${r.legs === 1 ? "" : "s"}, ${money(r.at_risk)} at risk — played out ${Number(r.nights).toLocaleString()} times at once.</p></header>
+      <div class="xt-stats">${stat("Average night", `${r.expected >= 0 ? "+" : "−"}${money(r.expected)}`, r.expected >= 0 ? "good" : "bad")}
+        ${stat("Chance you finish up", pctTxt(r.profit_chance, 0))}${stat("A bad night (1 in 20)", `${r.bad_night >= 0 ? "+" : "−"}${money(r.bad_night)}`, "bad")}
+        ${stat("Every ticket loses", pctTxt(r.all_lose, 0), r.all_lose > r.independent_all_lose + 0.02 ? "bad" : "")}</div>
+      ${r.all_lose > r.independent_all_lose + 0.02 ? `<p class="xt-fine">If your tickets were unrelated, all of them would lose ${pctTxt(r.independent_all_lose, 0)} of the time; they share legs and games, so it is ${pctTxt(r.all_lose, 0)}.</p>` : ""}
+      ${lean}
+      ${h ? `<h4 class="xt-sub">The hedge that helps most</h4><p class="xt-fine"><b>${esc(h.leg)}</b> — the other side, about ${money(h.stake)} at ${esc(String(decToAm(h.other_side_price)))}: your bad night goes from −${money(h.bad_night_before)} to ${h.bad_night_after >= 0 ? "+" : "−"}${money(h.bad_night_after)}, and it costs about ${money(h.cost)} a night on average.</p>`
+        : `<p class="xt-fine">No single hedge lifts your bad night by much.</p>`}
+      <p class="xt-fine">${r.ours} of ${r.legs} legs carry our own chance (a board prices them); the rest carry their price's. A reading, not advice: nothing is placed.</p>
+    </section>`;
+  }
+  async function riskView(host) {
+    if (!host) return;
+    const bets = openBets();
+    if (!bets.length) { host.innerHTML = ""; return; }
+    try {
+      const res = await fetch("/api/mybets/risk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bets }) });
+      host.innerHTML = res.ok ? riskHTML(await res.json()) : "";
+    } catch (e) {
+      host.innerHTML = "";
+    }
+  }
+
   // ---- one listener per event -------------------------------------------
   if (typeof document !== "undefined" && document.addEventListener) {
     document.addEventListener("input", (e) => {
@@ -992,7 +1031,7 @@
   function pickLab(el, sport, r) { if (el) loadLab().then((L) => L && L.pickLab(el, sport, r)); }
   function gameLab(el, sport, g) { if (el) loadLab().then((L) => L && L.gameLab(el, sport, g)); }
 
-  window.QBExtras = { tools, reportCard, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
+  window.QBExtras = { tools, reportCard, riskView, riskHTML, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
                       spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML,
                       bookModel, bookLinesHTML, bookLines, replayFacts, replayHTML,
