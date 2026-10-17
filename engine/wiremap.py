@@ -107,6 +107,8 @@ FITS = (
     ("engine.bookclusters", "gated", ("engine.ideagate",), "the market's fair chance, one vote per opinion"),
     ("engine.practice", "gated", ("engine.ideagate",), "a listed man unlikely to play"),
     ("engine.conformal", "gated", ("engine.ideagate",), "the honest range, where it beat our chance"),
+    ("engine.nhl.endgame", "gated", ("engine.ideagate", "nhl_build"),
+     "the NHL final score's shape (score effects, pulled goalie, empty net) on the puck line and total"),
     # ---- cards, by design -------------------------------------------------------------------
     ("engine.altcurve", "card", ("engine.ideas",), "picks sit at the main line, where the two curves agree"),
     ("engine.autopsy", "card", ("engine.ideas",), "it names the step that is wrong; it is not a step"),

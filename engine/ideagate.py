@@ -36,6 +36,10 @@ Likely read the same number:
               measured excess
     copies    the market check compares our chance with the market's fair
               chance counted one vote per opinion, not the posted price
+  the NHL game lines
+    endgame   the final score's shape — score effects, the pulled goalie and
+              the empty net — prices the puck line, the total and the
+              moneyline (engine/nhl/endgame → nhl_build.game_bets)
   holds — a pick comes off Most Likely and off Edge
     practice  a listed man whose designation, practice and club say he
               plays under half the time
@@ -158,6 +162,12 @@ def role_verdict(key: str) -> dict:
 def sim_verdict() -> dict:
     from . import playsim
     return (_load("sim", playsim.load).get("verdict")) or {}
+
+
+def endgame_verdict() -> dict:
+    """The NHL endgame chain's held-out verdict (engine/nhl/endgame)."""
+    from .nhl import endgame
+    return endgame.verdict()
 
 
 def curve_verdict(sport: str) -> dict:
@@ -488,6 +498,9 @@ GATES = (
      lambda s: bool(copies_verdict(s).get("holds"))),
     ("practice", "practice", "holds a listed man unlikely to play off Most Likely and Edge",
      lambda s: bool(practice_verdict(s).get("holds"))),
+    ("endgame", "nhl.endgame", "the NHL puck line, total and moneyline: the final score's shape (score effects, "
+     "the pulled goalie, the empty net) — priced in nhl_build.game_bets",
+     lambda s: s == "nhl" and bool(endgame_verdict().get("holds"))),
     ("range", "conformal", "holds a pick the honest range puts under even",
      lambda s: any(range_proven(v) for k, v in ((_load("range", __import__("engine.conformal", fromlist=["x"]).load)
                                                 .get("held_out") or {}).items()) if k.startswith(f"{s}|"))),
@@ -510,7 +523,7 @@ def state(sport: str = "nfl") -> list:
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description="Which of the inventions are moving picks, and which wait on their verdict")
-    ap.add_argument("--sport", default="nfl", help="nfl or cfb (default nfl)")
+    ap.add_argument("--sport", default="nfl", help="nfl, cfb or nhl (default nfl)")
     a = ap.parse_args(argv)
     print(f"The inventions in the picks — {a.sport}")
     for name, mod, moves, st in state(a.sport):

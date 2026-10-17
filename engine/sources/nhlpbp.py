@@ -33,6 +33,8 @@ API = "https://api-web.nhle.com/v1"
 KINDS = {"goal": "goal", "shot-on-goal": "sog", "missed-shot": "miss", "blocked-shot": "block"}
 NET_X = 89.0
 REBOUND_S, RUSH_S = 3, 4
+#: A final's play file is read from the cache at any age (ten years).
+FINAL_TTL = 10 * 365 * 86400
 
 
 def fetch_pbp(game_id, ttl: int = 30 * 86400) -> dict:
@@ -65,6 +67,17 @@ def _strength(code: str, home_shooter: bool) -> tuple[str, int]:
     their_goalie = ag if home_shooter else hg
     strength = "EV" if mine == theirs else "PP" if mine > theirs else "SH"
     return strength, 0 if their_goalie else 1
+
+
+def own_pulled(code: str, home_shooter: bool) -> int:
+    """1 when the SHOOTER's side has pulled its own goalie (an extra
+    attacker), from the same situation code as `_strength`; 0 otherwise,
+    and 0 for a code that cannot be read."""
+    c = str(code or "")
+    if len(c) != 4 or not c.isdigit():
+        return 0
+    ag, hg = int(c[0]), int(c[3])
+    return int((hg if home_shooter else ag) == 0)
 
 
 def geometry(x: float, y: float, attack_right: bool | None) -> tuple[float, float]:
@@ -136,6 +149,7 @@ def parse_shots(payload: dict, date: str = "", season: int | None = None) -> lis
             "x": float(x), "y": float(y), "dist": dist, "angle": angle,
             "shot_type": str(d.get("shotType") or ""), "strength": strength, "empty_net": empty,
             "rebound": rebound, "rush": rush, "is_goal": int(kind == "goal"), "period": period, "t": t,
+            "pulled": own_pulled(play.get("situationCode"), is_home),
             "assist1": names.get(str(d.get("assist1PlayerId") or ""), "") if kind == "goal" else "",
             "assist2": names.get(str(d.get("assist2PlayerId") or ""), "") if kind == "goal" else "",
         })
@@ -160,9 +174,15 @@ def backfill(conn, seasons=None, fetch=fetch_pbp, limit: int | None = None) -> d
     rerun, a game already stored is skipped. ``limit`` caps one run."""
     import json as _json
     # A game stored before goals carried their assists (NULL, never "") is
-    # read again, so the power-play role sees who set up every goal.
+    # read again, so the power-play role sees who set up every goal — and
+    # one stored before goals carried their clock (2026-10-17, the endgame
+    # model), so a late one-goal lead can be told from an early one. The
+    # play file is read from the cache when it is there (any age: a final's
+    # play-by-play never changes), so the clock costs no new fetch for a
+    # game already read once.
     have = {r[0] for r in conn.execute("SELECT DISTINCT game_id FROM nhl_shots")} - {
-        r[0] for r in conn.execute("SELECT DISTINCT game_id FROM nhl_shots WHERE is_goal = 1 AND assist1 IS NULL")}
+        r[0] for r in conn.execute("SELECT DISTINCT game_id FROM nhl_shots WHERE is_goal = 1 "
+                                   "AND (assist1 IS NULL OR t IS NULL)")}
     q = "SELECT date, season, extra FROM games WHERE sport='nhl' AND home_score IS NOT NULL"
     args: list = []
     if seasons:
@@ -178,6 +198,10 @@ def backfill(conn, seasons=None, fetch=fetch_pbp, limit: int | None = None) -> d
             todo.append((gid, date, season))
     if limit:
         todo = todo[:limit]
+    if fetch is fetch_pbp:
+        # Every game here is a stored final, whose play file never changes:
+        # a cached copy of any age is the same file a fetch would return.
+        fetch = lambda gid: fetch_pbp(gid, ttl=FINAL_TTL)          # noqa: E731
     shots = games = failed = 0
     for i, (gid, date, season) in enumerate(todo, 1):
         n = ingest_game(conn, gid, date, season, fetch=fetch)

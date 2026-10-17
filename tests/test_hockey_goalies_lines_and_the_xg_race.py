@@ -97,8 +97,12 @@ def test_every_shot_keeps_its_second():
     rows = nhlpbp.parse_shots(T.PBP, "2025-10-30", 2025)
     assert rows and all(isinstance(r["t"], int) for r in rows)
     assert all((r["period"] - 1) * 1200 <= r["t"] <= r["period"] * 1200 for r in rows)
+    # STORED SINCE 2026-10-17 (it rode only in memory before): the endgame
+    # model (engine/nhl/endgame) needs WHEN a goal went in, and whether the
+    # shooter's own goalie was pulled, from three seasons of finals.
     from engine import db
-    assert "t" not in db.NHL_SHOT_COLS, "the stored table is unchanged; the second rides only in memory"
+    assert "t" in db.NHL_SHOT_COLS and "pulled" in db.NHL_SHOT_COLS
+    assert all(r["pulled"] in (0, 1) for r in rows)
 
 
 def test_the_tape_says_how_sure_the_start_is():

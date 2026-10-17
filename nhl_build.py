@@ -336,12 +336,20 @@ def game_bets(g, teams: dict, ctx: dict | None = None, league: dict | None = Non
             if abs(f - 1) >= 0.03:
                 goalie_note.append(f"{side['starter']} in net moves the other side's goals {f - 1:+.0%}")
     lam = tuple(lam)
-    probs = M.game_probs(*lam)
+    # THE ENDGAME (engine/nhl/endgame, 2026-10-17): score effects and the
+    # pulled goalie change the shape of the final score — the puck line and
+    # the total — and the chain prices them once its held-out verdict
+    # holds. Until then this is the steady-rate model, unchanged.
+    from engine.nhl import endgame as EG
+    probs = EG.priced(*lam)
     out = []
     why = (f"Expected goals {g.home} {lam[0]:.2f} – {g.away} {lam[1]:.2f} (regulation), "
            f"from each side's goals"
            + (" and expected goals" if (teams.get(g.home) or {}).get("xgf") is not None else "")
            + " for and against" + ("; " + "; ".join(goalie_note) if goalie_note else ""))
+    late = EG.note(probs, *lam)
+    if late:
+        why += "; " + late
     if g.home_ml and g.away_ml:
         fh, fa = devig_two_way(int(g.home_ml), int(g.away_ml))
         best = None
