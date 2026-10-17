@@ -93,6 +93,252 @@
     return { full, stake: f, dollars: roll > 0 ? roll * f : null, ev: p * d - 1, need: 1 / d };
   }
 
+  // ---- seeded draws and the normal ---------------------------------------
+  /* A small seeded generator (mulberry32), so a simulation the reader runs
+     twice reads the same — and a test can pin it. */
+  function rng(seed) {
+    let a = (seed >>> 0) || 1;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  /* A standard normal from two uniforms (Box–Muller). */
+  const gauss = (r) => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+  /* The normal's CDF (Abramowitz–Stegun 7.1.26 on erf, |error| < 1.5e-7). */
+  function phi(z) {
+    const x = Math.abs(z) / Math.SQRT2, t = 1 / (1 + 0.3275911 * x);
+    const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+    return z >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
+  }
+  /* Its inverse (Acklam's rational approximation, |error| < 1.2e-9). */
+  function phiInv(p) {
+    if (!(p > 0 && p < 1)) return p <= 0 ? -Infinity : Infinity;
+    const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+    const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+    const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+    const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+    const lo = 0.02425;
+    if (p < lo) { const q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+    if (p > 1 - lo) { const q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+    const q = p - 0.5, r2 = q * q;
+    return (((((a[0] * r2 + a[1]) * r2 + a[2]) * r2 + a[3]) * r2 + a[4]) * r2 + a[5]) * q / (((((b[0] * r2 + b[1]) * r2 + b[2]) * r2 + b[3]) * r2 + b[4]) * r2 + 1);
+  }
+
+  // ---- the middle finder ----------------------------------------------------
+  /* An over at one book and an under at another, on two different numbers.
+     When the over's number sits BELOW the under's, a result between them
+     wins both bets — the middle — and outside it one wins and one loses.
+     The stakes are split so either single win returns the same, which
+     makes the outside a fixed small loss (the two holds) or, when the
+     prices are generous enough, a fixed profit: an arbitrage.
+
+     The chance of landing in the middle is read off a normal around the
+     reader's projection (the midpoint of the two numbers when none is
+     given), and a counted stat — catches, shots, strikeouts — is counted
+     one result at a time, so a whole number on either line pushes that bet
+     rather than winning or losing it. EV is the stake-weighted average over
+     every result; the break-even is the middle chance at which EV is zero. */
+  function middle(o) {
+    const L1 = Number(o.overLine), L2 = Number(o.underLine), S = Number(o.stake) > 0 ? Number(o.stake) : 100;
+    const d1 = dec(o.overOdds), d2 = dec(o.underOdds);
+    if (!Number.isFinite(L1) || !Number.isFinite(L2) || !d1 || !d2) return null;
+    const mu = Number.isFinite(Number(o.mean)) && o.mean !== "" && o.mean != null ? Number(o.mean) : (L1 + L2) / 2;
+    const sd = Number(o.sd) > 0 ? Number(o.sd) : Math.max(1, Math.abs(L2 - L1) * 2, Math.abs(mu) * 0.3);
+    const s1 = S * d2 / (d1 + d2), s2 = S * d1 / (d1 + d2);
+    const ret = s1 * d1;                                       // one bet wins, the other loses
+    const pay = (x) => {
+      const over = x > L1 ? s1 * d1 : x === L1 ? s1 : 0;
+      const under = x < L2 ? s2 * d2 : x === L2 ? s2 : 0;
+      return over + under - S;
+    };
+    let ev = 0, pMid = 0, pPush = 0;
+    if (o.counted) {
+      const lo = Math.floor(Math.min(L1, L2, mu - 6 * sd)), hi = Math.ceil(Math.max(L1, L2, mu + 6 * sd));
+      for (let k = Math.max(0, lo); k <= hi; k++) {
+        const pk = phi((k + 0.5 - mu) / sd) - phi((k - 0.5 - mu) / sd);
+        ev += pk * pay(k);
+        if (k > L1 && k < L2) pMid += pk;
+        if (k === L1 || k === L2) pPush += pk;
+      }
+    } else {
+      const a = Math.min(L1, L2), b = Math.max(L1, L2);
+      const pin = phi((b - mu) / sd) - phi((a - mu) / sd);
+      pMid = L1 < L2 ? pin : 0;
+      const mid = L1 < L2 ? 2 * ret - S : L1 > L2 ? -S : ret - S;
+      ev = (1 - pin) * (ret - S) + pin * mid;
+    }
+    const breakeven = L1 < L2 && ret < S ? (S - ret) / ret : null;
+    return { stakes: [s1, s2], outside: ret - S, both: 2 * ret - S, pMiddle: pMid, pPush, ev,
+             breakeven, arb: ret > S, reverse: L1 > L2, width: L2 - L1, mean: mu, sd };
+  }
+
+  // ---- the bankroll simulator --------------------------------------------
+  /* Where a staking plan takes a bankroll: PATHS seasons of BETS bets at one
+     price and one true chance, each played out bet by bet. Flat stakes a
+     fixed amount; percent stakes a share of the bankroll as it stands;
+     Kelly stakes the given fraction of what the true chance earns at the
+     price. A path that can no longer cover a stake (or falls to a cent) is
+     ruined and stops. Returns the ending bankroll's spread, the chance of
+     finishing up, of ever being down half, of ruin, the median worst
+     drawdown, and the percentile band at twenty checkpoints for a chart. */
+  function bankrollSim(o) {
+    const start = Number(o.bankroll) > 0 ? Number(o.bankroll) : 1000;
+    const n = Math.max(1, Math.min(5000, Math.round(Number(o.bets) || 0)));
+    const d = dec(o.price), p = Number(o.hit);
+    if (!d || !(p > 0 && p < 1)) return null;
+    const paths = Math.max(100, Math.min(5000, Math.round(Number(o.paths) || 2000)));
+    const r = rng(o.seed == null ? 7 : o.seed);
+    const rule = o.rule || "flat", size = Number(o.size) || 0;
+    const kellyF = Math.max(0, ((d - 1) * p - (1 - p)) / (d - 1));
+    const marks = 20, at = [];
+    for (let i = 1; i <= marks; i++) at.push(Math.max(1, Math.round((i * n) / marks)));
+    const atSet = new Map(at.map((v, i) => [v, i]));
+    const bands = at.map(() => []);
+    const ends = [], dds = [];
+    let up = 0, half = 0, ruin = 0;
+    for (let k = 0; k < paths; k++) {
+      let b = start, peak = start, dd = 0, halfHit = false, dead = false;
+      for (let i = 1; i <= n; i++) {
+        if (!dead) {
+          const stake = rule === "pct" ? b * size / 100 : rule === "kelly" ? b * kellyF * size : size;
+          if (b < 0.01 || stake > b + 1e-9) {
+            dead = true;                      // can no longer cover the stake
+          } else if (stake > 0) {
+            b += r() < p ? stake * (d - 1) : -stake;
+            peak = Math.max(peak, b);
+            dd = Math.max(dd, peak > 0 ? (peak - b) / peak : 0);
+            if (b <= start / 2) halfHit = true;
+          }
+        }
+        if (atSet.has(i)) bands[atSet.get(i)].push(b);
+      }
+      ends.push(b); dds.push(dd);
+      if (b > start) up += 1;
+      if (halfHit) half += 1;
+      if (dead) ruin += 1;
+    }
+    const q = (arr, f) => { const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(f * a.length))]; };
+    return { start, bets: n, paths, ev: p * d - 1, kelly: kellyF,
+             median: q(ends, 0.5), p10: q(ends, 0.1), p90: q(ends, 0.9),
+             upChance: up / paths, halfChance: half / paths, ruinChance: ruin / paths, medianDrawdown: q(dds, 0.5),
+             band: bands.map((v, i) => ({ bet: at[i], p10: q(v, 0.1), p50: q(v, 0.5), p90: q(v, 0.9) })) };
+  }
+
+  // ---- the slate sizer (Kelly for bets that move together) ---------------
+  /* Kelly sizes ONE bet. Sizing a slate as if each bet were alone over-bets
+     it the moment two of them move together — a quarterback's yards and his
+     receiver's, two sides of one game — because a bad night takes them both.
+     This finds the stakes that grow the bankroll fastest for the slate as a
+     whole, exactly rather than by simulation (a simulation's noise is the
+     size of a small edge):
+
+       * the outcomes are joined by a one-factor Gaussian copula — each bet
+         keeps its own chance exactly, and bets in the same group share a
+         common draw with correlation RHO; bets in different groups, or in
+         none, are independent;
+       * given its group's common draw z a bet wins with chance
+         Φ((Φ⁻¹(p) − √ρ·z) / √(1−ρ)), so each group's win/lose patterns are
+         an integral over z (a fine grid on ±6σ), and the slate's patterns
+         are the groups' multiplied together — every one of the 2ⁿ, n ≤ 8;
+       * the stakes climb E[log(1 + Σ fᵢ·rᵢ)] over those patterns by
+         projected gradient ascent, never staking more than all of it.
+
+     The answer is then cut to the fraction asked for, as Kelly always
+     should be. */
+  const MAX_SLATE = 8;
+  function slatePatterns(legs, rho) {
+    // Each group's own patterns: [{wins: [bool...], p}] over its members.
+    const byGroup = new Map();
+    legs.forEach((l, i) => {
+      const key = l.g || `solo-${i}`;
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key).push(i);
+    });
+    const Z = [];
+    for (let k = -120; k <= 120; k++) Z.push(k / 20);
+    const wz = Z.map((z) => Math.exp(-0.5 * z * z));
+    const wsum = wz.reduce((a, b) => a + b, 0);
+    const parts = [];
+    for (const [key, idx] of byGroup) {
+      const solo = key.startsWith("solo-") || rho <= 0;
+      const pats = [];
+      for (let m = 0; m < (1 << idx.length); m++) {
+        let pr = 0;
+        if (solo && idx.length === 1) {
+          pr = (m & 1) ? legs[idx[0]].p : 1 - legs[idx[0]].p;
+        } else {
+          for (let j = 0; j < Z.length; j++) {
+            let q = 1;
+            idx.forEach((li, b) => {
+              const pw = rho > 0 ? phi((phiInv(legs[li].p) - Math.sqrt(rho) * Z[j]) / Math.sqrt(1 - rho)) : legs[li].p;
+              q *= (m >> b) & 1 ? pw : 1 - pw;
+            });
+            pr += wz[j] * q;
+          }
+          pr /= wsum;
+        }
+        pats.push({ m, p: pr });
+      }
+      parts.push({ idx, pats });
+    }
+    // The slate's patterns: every combination of the groups' patterns.
+    let all = [{ wins: legs.map(() => false), p: 1 }];
+    for (const part of parts) {
+      const next = [];
+      for (const a of all) {
+        for (const pt of part.pats) {
+          const wins = a.wins.slice();
+          part.idx.forEach((li, b) => { wins[li] = Boolean((pt.m >> b) & 1); });
+          next.push({ wins, p: a.p * pt.p });
+        }
+      }
+      all = next;
+    }
+    return all.filter((x) => x.p > 1e-15);
+  }
+  function slateKelly(bets, o = {}) {
+    const legs = (bets || []).map((b) => ({ p: Number(b.p), d: dec(b.odds), g: String(b.group || "").trim().toUpperCase() }))
+      .filter((b) => b.p > 0 && b.p < 1 && b.d).slice(0, MAX_SLATE);
+    if (!legs.length) return null;
+    const rho = Math.max(0, Math.min(0.95, o.rho == null ? 0.3 : Number(o.rho)));
+    const frac = Number(o.frac) > 0 ? Number(o.frac) : 0.25;
+    const pats = slatePatterns(legs, rho).map((x) => ({ p: x.p, r: x.wins.map((w, i) => (w ? legs[i].d - 1 : -1)) }));
+    const growth = (f) => pats.reduce((g, x) => {
+      let w = 1;
+      for (let i = 0; i < f.length; i++) w += f[i] * x.r[i];
+      return g + x.p * Math.log(Math.max(w, 1e-12));
+    }, 0);
+    const alone = legs.map((l) => Math.max(0, ((l.d - 1) * l.p - (1 - l.p)) / (l.d - 1)));
+    let f = alone.slice();
+    const t0 = f.reduce((a, b) => a + b, 0);
+    if (t0 > 0.95) f = f.map((x) => x * 0.95 / t0);
+    let step = 0.2, g0 = growth(f);
+    for (let it = 0; it < 2000 && step > 1e-7; it++) {
+      const grad = f.map(() => 0);
+      for (const x of pats) {
+        let w = 1;
+        for (let i = 0; i < f.length; i++) w += f[i] * x.r[i];
+        w = Math.max(w, 1e-12);
+        for (let i = 0; i < f.length; i++) grad[i] += x.p * x.r[i] / w;
+      }
+      let nf = f.map((v, i) => Math.max(0, v + step * grad[i]));
+      const t = nf.reduce((a, b) => a + b, 0);
+      if (t > 0.99) nf = nf.map((v) => v * 0.99 / t);
+      const g1 = growth(nf);
+      if (g1 > g0 + 1e-15) { f = nf; g0 = g1; step *= 1.1; } else step *= 0.5;
+    }
+    const allLose = pats.filter((x) => x.r.every((v) => v < 0)).reduce((a, x) => a + x.p, 0);
+    const indepLose = legs.reduce((a, l) => a * (1 - l.p), 1);
+    return { legs: legs.length, rho, frac, alone, joint: f, stake: f.map((x) => x * frac),
+             totalAlone: alone.reduce((a, b) => a + b, 0), totalJoint: f.reduce((a, b) => a + b, 0),
+             growthJoint: g0, growthAlone: growth(alone.map((x) => Math.min(x, 0.99 / Math.max(1, legs.length)))),
+             allLose, indepLose, patterns: pats.length };
+  }
+
   // ---- the college upset meter ------------------------------------------
   /* Tonight's college underdogs, from the moneyline cards the board
      already publishes: the dog is the side the market's fair price makes
@@ -248,7 +494,33 @@
          <label class="xt-f"><span>Fraction</span><select data-xc="ky-f"><option value="1">Full</option><option value="0.5">Half</option><option value="0.25" selected>Quarter</option><option value="0.1">Tenth</option></select></label>`)}
       ${calcCard("ev", "Break-even and value", "What a price needs to hit, and what it is worth at your chance.",
         `${field("Price", "ev-o", "+150")}${field("Your chance %", "ev-p", "42")}${field("Stake $", "ev-s", "100")}`)}
+      ${calcCard("mid", "Middle finder", "An over at one book and an under at another on two numbers: the stakes that balance them, the chance a result lands between and wins both, and whether it is worth it.",
+        `${field("Over line", "md-l1", "44.5")}${field("Over price", "md-o1", "-110")}${field("Under line", "md-l2", "47.5")}${field("Under price", "md-o2", "-110")}
+         ${field("Your projection", "md-mu", "", 'placeholder="midpoint"')}${field("Spread (1 sd)", "md-sd", "13")}${field("Both stakes $", "md-s", "200")}
+         <label class="xt-f"><span>Counted stat</span><select data-xc="md-c"><option value="0">No (yards)</option><option value="1">Yes (catches)</option></select></label>`)}
+      ${calcCard("roll", "Bankroll simulator", "Where a staking plan takes a bankroll over a run of bets at one price and one true chance — played out two thousand times.",
+        `${field("Bankroll $", "br-b", String(roll))}${field("Bets", "br-n", "500")}${field("Price", "br-o", "-110")}${field("True chance %", "br-p", "54")}
+         <label class="xt-f"><span>Stake by</span><select data-xc="br-r"><option value="flat">Flat $</option><option value="pct" selected>% of roll</option><option value="kelly">Kelly ×</option></select></label>
+         ${field("Size", "br-s", "2", 'placeholder="$, % or fraction"')}`)}
+      ${calcCard("slate", "Slate sizer", "Kelly for a slate, not one bet. Bets that move together — one game, one quarterback and his receiver — share a bad night, so they earn less together than each would alone.",
+        `${[1, 2, 3, 4, 5, 6].map((i) => `<div class="xt-leg">${field(`Bet ${i} chance %`, `sk-p${i}`, i < 3 ? "56" : "", i > 2 ? 'placeholder="—"' : "")}${field("Price", `sk-o${i}`, i < 3 ? "-110" : "", i > 2 ? 'placeholder="odds"' : "")}${field("Game", `sk-g${i}`, i < 3 ? "A" : "", 'placeholder="A, B …" maxlength="2"')}</div>`).join("")}
+         <label class="xt-f"><span>Same-game pull</span><select data-xc="sk-r"><option value="0">None</option><option value="0.15">Light</option><option value="0.3" selected>Usual</option><option value="0.5">Strong</option></select></label>
+         <label class="xt-f"><span>Fraction</span><select data-xc="sk-f"><option value="1">Full</option><option value="0.5">Half</option><option value="0.25" selected>Quarter</option><option value="0.1">Tenth</option></select></label>`)}
     </div>`;
+  }
+
+  /* The bankroll's percentile band as a small chart: the 10th–90th shaded,
+     the median drawn, the starting bankroll a dashed rule. */
+  function bandSVG(r) {
+    const W = 320, H = 120, pad = 6;
+    const pts = [{ bet: 0, p10: r.start, p50: r.start, p90: r.start }].concat(r.band);
+    const hi = Math.max(r.start * 1.05, ...pts.map((x) => x.p90)), lo = Math.min(0, ...pts.map((x) => x.p10));
+    const X = (b) => pad + (W - 2 * pad) * (b / r.bets), Y = (v) => H - pad - (H - 2 * pad) * ((v - lo) / ((hi - lo) || 1));
+    const line = (k) => pts.map((x, i) => `${i ? "L" : "M"}${X(x.bet).toFixed(1)},${Y(x[k]).toFixed(1)}`).join("");
+    const area = `${line("p90")}${pts.slice().reverse().map((x) => `L${X(x.bet).toFixed(1)},${Y(x.p10).toFixed(1)}`).join("")}Z`;
+    return `<svg class="xt-band" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bankroll from ${money(r.start)}: median ${money(r.median)} after ${r.bets} bets">
+      <path class="xt-band-area" d="${area}"/><path class="xt-band-mid" d="${line("p50")}"/>
+      <line class="xt-band-start" x1="${pad}" x2="${W - pad}" y1="${Y(r.start).toFixed(1)}" y2="${Y(r.start).toFixed(1)}"/></svg>`;
   }
 
   const val = (box, k) => {
@@ -319,6 +591,54 @@
         ${ev == null ? "" : stat("Worth", `${ev >= 0 ? "+" : "−"}${money(s * Math.abs(ev))}`, ev >= 0 ? "good" : "bad")}</div>
         ${ev == null ? "" : `<p class="xt-note">At ${pctTxt(p)} the bet ${ev >= 0 ? "earns" : "loses"} ${pctTxt(Math.abs(ev))} of the stake on average${ev >= 0 ? "" : " — the price wants more than you give it"}.</p>`}`;
     },
+  };
+  CALC.mid = function (box) {
+    const r = middle({ overLine: num(val(box, "md-l1")), overOdds: val(box, "md-o1"), underLine: num(val(box, "md-l2")),
+                       underOdds: val(box, "md-o2"), mean: val(box, "md-mu") === "" ? null : num(val(box, "md-mu")),
+                       sd: num(val(box, "md-sd")), stake: num(val(box, "md-s")), counted: val(box, "md-c") === "1" });
+    if (!r) return `<p class="xt-hint">Type both lines and both prices.</p>`;
+    const word = r.arb ? `<b class="pos">An arbitrage.</b> Either single win returns more than both stakes — a locked ${money(r.outside)} whatever happens${r.width > 0 ? `, and ${money(r.both)} if it lands between` : ""}.`
+      : r.reverse ? `<b class="neg">The gap runs the wrong way.</b> The over's number is above the under's, so a result between them loses both bets.`
+      : r.width === 0 ? `Same number at both books: a hedge, not a middle. It costs ${money(-r.outside)} whatever happens.`
+      : `${r.ev >= 0 ? `<b class="pos">Worth it</b>` : `<b class="neg">Not worth it</b>`} at this spread: it lands between ${pctTxt(r.pMiddle)} of the time and needs ${pctTxt(r.breakeven)} to break even.`;
+    return `<div class="xt-stats">${stat("Over stake", money(r.stakes[0]))}${stat("Under stake", money(r.stakes[1]))}
+        ${stat("Outside", `${r.outside >= 0 ? "+" : "−"}${money(r.outside)}`, r.outside >= 0 ? "good" : "")}
+        ${r.width > 0 ? stat("Lands between", `${r.both >= 0 ? "+" : "−"}${money(r.both)}`, "good") : ""}
+        ${stat("Chance between", pctTxt(r.pMiddle))}${stat("Worth", `${r.ev >= 0 ? "+" : "−"}${money(r.ev)}`, r.ev >= 0 ? "good" : "bad")}</div>
+      <p class="xt-note">${word}</p>
+      <p class="xt-fine">The chance is a normal around ${r.mean.toFixed(1)} with a spread of ${r.sd.toFixed(1)}${val(box, "md-c") === "1" ? ", counted one result at a time, so a whole-number line pushes" : ""}. A player's own spread is on his pick page; a game total's is about 13 in the NFL and 18 in college.</p>`;
+  };
+  CALC.roll = function (box) {
+    const rule = val(box, "br-r") || "pct";
+    const r = bankrollSim({ bankroll: num(val(box, "br-b")), bets: num(val(box, "br-n")), price: val(box, "br-o"),
+                            hit: (num(val(box, "br-p")) || 0) / 100, rule, size: num(val(box, "br-s")) });
+    if (!r) return `<p class="xt-hint">Type a price and a true chance (1–99%).</p>`;
+    const edge = r.ev >= 0;
+    return `<div class="xt-stats">${stat("Middle outcome", money(r.median), r.median >= r.start ? "good" : "bad")}
+        ${stat("Bad run (1 in 10)", money(r.p10), "bad")}${stat("Good run (1 in 10)", money(r.p90), "good")}
+        ${stat("Finish up", pctTxt(r.upChance, 0))}${stat("Down half at some point", pctTxt(r.halfChance, 0), r.halfChance > 0.2 ? "bad" : "")}
+        ${stat("Wiped out", pctTxt(r.ruinChance, 0), r.ruinChance > 0.05 ? "bad" : "")}</div>
+      ${bandSVG(r)}
+      <p class="xt-note">${edge ? `Each bet is worth ${ptsTxt(r.ev)}% at this chance; the typical worst drop along the way is ${pctTxt(r.medianDrawdown, 0)} from a high.`
+        : `<b class="neg">No edge:</b> at this chance the price takes ${pctTxt(-r.ev)} of every dollar, and no staking plan turns that around.`}
+        ${rule === "kelly" ? ` Kelly's full stake here is ${pctTxt(r.kelly, 2)} of the bankroll.` : ""}</p>
+      <p class="xt-fine">${r.paths.toLocaleString()} runs of ${r.bets.toLocaleString()} bets, every bet at the same price and chance. Real chances are never known exactly — the band is wider in life.</p>`;
+  };
+  CALC.slate = function (box) {
+    const bets = [1, 2, 3, 4, 5, 6].map((i) => ({ p: (num(val(box, `sk-p${i}`)) || 0) / 100, odds: val(box, `sk-o${i}`), group: val(box, `sk-g${i}`) }))
+      .filter((b) => b.odds !== "" && b.p > 0);
+    const r = slateKelly(bets, { rho: Number(val(box, "sk-r")), frac: Number(val(box, "sk-f")) || 0.25 });
+    if (!r) return `<p class="xt-hint">Type each bet's chance and price; give bets from one game the same letter.</p>`;
+    const kept = bets.filter((b) => b.p > 0 && b.p < 1 && dec(b.odds));
+    const rows = kept.map((b, i) => `<tr><td>${i + 1}${b.group ? ` <small>${esc(String(b.group).toUpperCase())}</small>` : ""}</td>
+      <td>${pctTxt(r.alone[i], 2)}</td><td><b>${pctTxt(r.joint[i], 2)}</b></td><td>${pctTxt(r.stake[i], 2)}</td></tr>`).join("");
+    const cut = r.totalAlone > 0 ? 1 - r.totalJoint / r.totalAlone : 0;
+    return `<table class="xt-tbl"><thead><tr><th>Bet</th><th>Alone</th><th>Together</th><th>Your stake</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="xt-stats">${stat("Slate stakes", pctTxt(r.totalJoint * r.frac, 2))}${stat("Every bet loses", pctTxt(r.allLose, 1), r.allLose > r.indepLose + 0.01 ? "bad" : "")}
+        ${stat("Growth per slate", `${(r.growthJoint * 100).toFixed(2)}%`, r.growthJoint > 0 ? "good" : "")}</div>
+      <p class="xt-note">${cut > 0.02 ? `Taken together the slate earns ${pctTxt(cut, 0)} less than the bets would sized one at a time — ${r.allLose > r.indepLose + 0.01 ? `the same-game bets lose together ${pctTxt(r.allLose, 1)} of the time, not ${pctTxt(r.indepLose, 1)}` : "the stakes overlap"}.`
+        : "These bets barely overlap: sizing them together changes little."}</p>
+      <p class="xt-fine">"Alone" is each bet's own Kelly; "Together" is the full-Kelly stakes that grow the bankroll fastest for the whole slate, computed over every way it can land (${r.patterns}). Your stake is that, cut to the fraction you chose.</p>`;
   };
   function calc(box) {
     const f = CALC[box.dataset.calc];
@@ -1032,6 +1352,7 @@
   function gameLab(el, sport, g) { if (el) loadLab().then((L) => L && L.gameLab(el, sport, g)); }
 
   window.QBExtras = { tools, reportCard, riskView, riskHTML, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
+                      rng, phi, phiInv, middle, bankrollSim, slateKelly, slatePatterns, bandSVG,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
                       spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML,
                       bookModel, bookLinesHTML, bookLines, replayFacts, replayHTML,

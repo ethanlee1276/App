@@ -225,3 +225,10 @@
 .xt-pb-no { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--bad);
   color: var(--text); font-size: var(--fs-sm); }
 @media (prefers-reduced-motion: reduce) { .xt-x { transition: none; } }
+
+/* The bankroll simulator's band (js/extras.js bandSVG): the 10th–90th
+   percentile shaded, the median drawn, the starting bankroll dashed. */
+.xt-band { display: block; width: 100%; height: auto; max-height: 160px; margin: 10px 0 4px; }
+.xt-band-area { fill: var(--brand); opacity: .16; }
+.xt-band-mid { fill: none; stroke: var(--brand); stroke-width: 2; stroke-linejoin: round; }
+.xt-band-start { stroke: var(--text-mute); stroke-width: 1; stroke-dasharray: 4 4; }

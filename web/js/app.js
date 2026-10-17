@@ -2653,7 +2653,7 @@ const FEATURES = [
 
   ["Your account", "Your money, your picks, your people",
    [["My Bets", "Log your own tickets and track them to settlement, graded by the same rules the house journal uses — with a report card: your hit rate against what your prices needed, and your closing-line value.", "mybets"],
-    ["Toolbox", "Odds, no-vig and hold, parlay, Kelly and break-even calculators, and each sport’s own tools — the college upset meter first.", "tools"],
+    ["Toolbox", "Odds, no-vig, parlay, Kelly and break-even; a middle finder, a bankroll simulator and a slate sizer; and each sport’s own tools.", "tools"],
     ["Bankroll", "Size your units, set your limits, and see what is at risk.", "bankroll"],
     ["Alerts", "Line moves, injuries and the desk — conditions you set, fired when they happen.", "alerts"],
     ["Social", "Parlays, takes and polls under one profile for the whole site. Follow, like, comment, and tap the whale to tail a parlay at your book.", "feed"],

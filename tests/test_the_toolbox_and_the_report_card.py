@@ -71,6 +71,79 @@ def test_the_odds_arithmetic():
     assert got["k0"]["full"] < 0 and got["k0"]["stake"] == 0
 
 
+def test_the_middle_finder():
+    """Ethan, 2026-10-17: "invent new tools". Over 44.5 at one book and
+    under 47.5 at another: the stakes balance either single win, the
+    outside costs the two holds, between them wins both. A counted stat
+    pushes on a whole-number line; a gap the wrong way loses both; prices
+    generous enough lock a profit (an arbitrage)."""
+    got = _node("""process.stdout.write(JSON.stringify({
+      a: X.middle({overLine: 44.5, overOdds: -110, underLine: 47.5, underOdds: -110, mean: 46, sd: 13, stake: 200}),
+      c: X.middle({overLine: 6, overOdds: -110, underLine: 8, underOdds: -110, mean: 7, sd: 1.5, counted: true, stake: 200}),
+      r: X.middle({overLine: 48.5, overOdds: -110, underLine: 45.5, underOdds: -110}),
+      arb: X.middle({overLine: 44.5, overOdds: 110, underLine: 44.5, underOdds: 105}),
+      bad: X.middle({overLine: 'x', overOdds: -110, underLine: 47.5, underOdds: -110})}));""")
+    if got is None:
+        return
+    a = got["a"]
+    assert abs(a["stakes"][0] - 100) < 1e-9 and abs(a["stakes"][1] - 100) < 1e-9
+    assert abs(a["outside"] - (100 * (1 + 100 / 110) - 200)) < 1e-9 and a["both"] > 180
+    assert 0.08 < a["pMiddle"] < 0.10 and a["ev"] > 0 and abs(a["breakeven"] - (-a["outside"]) / (a["outside"] + 200)) < 1e-9
+    c = got["c"]
+    assert c["pPush"] > 0.3, "a whole-number line pushes that bet on the number"
+    assert 0.2 < c["pMiddle"] < 0.3, "only 7 lands strictly between 6 and 8"
+    assert got["r"]["reverse"] and got["r"]["pMiddle"] == 0 and got["r"]["ev"] < got["a"]["ev"]
+    assert got["arb"]["arb"] and got["arb"]["outside"] > 0
+    assert got["bad"] is None
+
+
+def test_the_bankroll_simulator():
+    got = _node("""process.stdout.write(JSON.stringify({
+      edge: X.bankrollSim({bankroll: 1000, bets: 400, price: -110, hit: 0.56, rule: 'pct', size: 2, paths: 800, seed: 3}),
+      again: X.bankrollSim({bankroll: 1000, bets: 400, price: -110, hit: 0.56, rule: 'pct', size: 2, paths: 800, seed: 3}),
+      none: X.bankrollSim({bankroll: 1000, bets: 400, price: -110, hit: 0.5, rule: 'flat', size: 100, paths: 800}),
+      kelly: X.bankrollSim({bankroll: 1000, bets: 400, price: -110, hit: 0.45, rule: 'kelly', size: 0.25, paths: 300}),
+      bad: X.bankrollSim({bankroll: 1000, bets: 400, price: -110, hit: 0})}));""")
+    if got is None:
+        return
+    e = got["edge"]
+    assert e["median"] > 1000 and e["upChance"] > 0.6 and e["p10"] < e["median"] < e["p90"]
+    assert e == got["again"], "the same seed reads the same"
+    assert len(e["band"]) == 20 and e["band"][-1]["bet"] == 400
+    n = got["none"]
+    assert n["ev"] < 0 and n["ruinChance"] > 0.5, "flat $100 on $1,000 with no edge ruins most runs"
+    k = got["kelly"]
+    assert k["kelly"] == 0 and k["median"] == 1000, "Kelly with no edge stakes nothing"
+    assert got["bad"] is None
+
+
+def test_the_slate_sizer_bets_less_on_bets_that_lose_together():
+    """Two 56% bets at -110 from one game, one from another. Alone each
+    earns Kelly's 7.6%; together the same-game pair earns less, the
+    unrelated one about its own, and the answer is exact — identical bets
+    get identical stakes, and every way the slate can land is counted."""
+    got = _node("""process.stdout.write(JSON.stringify({
+      k: X.slateKelly([{p: 0.56, odds: -110, group: 'A'}, {p: 0.56, odds: -110, group: 'a'}, {p: 0.56, odds: -110}], {rho: 0.5}),
+      ind: X.slateKelly([{p: 0.56, odds: -110}, {p: 0.56, odds: -110}], {rho: 0.5}),
+      one: X.slateKelly([{p: 0.56, odds: -110}]),
+      pats: X.slatePatterns([{p: 0.6, g: 'A'}, {p: 0.6, g: 'A'}], 0.5).map((x) => x.p),
+      none: X.slateKelly([{p: 0.4, odds: -110}])}));""")
+    if got is None:
+        return
+    k = got["k"]
+    alone = (0.56 * (1 + 100 / 110) - 1) / (100 / 110)
+    assert abs(k["alone"][0] - alone) < 1e-9
+    assert abs(k["joint"][0] - k["joint"][1]) < 1e-6, "identical bets, identical stakes"
+    assert k["joint"][0] < alone - 0.01, "the same-game pair earns less together"
+    assert k["joint"][2] > k["joint"][0] + 0.005, "the unrelated bet keeps more"
+    assert k["allLose"] > k["indepLose"] + 0.01
+    assert k["patterns"] == 8 and abs(k["stake"][0] - 0.25 * k["joint"][0]) < 1e-12
+    assert abs(got["one"]["joint"][0] - got["one"]["alone"][0]) < 1e-6, "one bet alone is plain Kelly"
+    assert abs(got["ind"]["joint"][0] - got["ind"]["joint"][1]) < 1e-6
+    assert abs(sum(got["pats"]) - 1) < 1e-9 and got["pats"][3] > 0.36 + 0.03, "a shared draw: both win more often"
+    assert got["none"]["joint"][0] == 0, "no edge, no stake"
+
+
 def test_every_calculator_draws_its_numbers():
     """Each card's inputs, read the way the page reads them, give text."""
     got = _node("""
