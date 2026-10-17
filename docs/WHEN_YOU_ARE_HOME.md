@@ -308,7 +308,7 @@ every fit and measurement in the repo mapped to where its answer lands,
 checked against the code (step 135; CD). Then your paste of all of it,
 read line by line, everything it found fixed, and the commands to run
 again (step 136; CE); and what that run found, fixed, with what to run
-next (step 137; CF).
+next (step 137; CF), and the round after (step 138; CG).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -2197,6 +2197,31 @@ cd /srv/qellys && sudo -u qellys python3 settlecheck.py | grep -A30 "^CFB"
 cd /srv/qellys && sudo -u qellys python3 homecheck.py inputs | grep -A12 "LOOK AT THESE"
 cd /srv/qellys && sudo -u qellys python3 doctor.py --skip-tests
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.attention --sport nfl --backfill --save
+```
+
+**CG. Round five: what your CF run found** (step 138).
+1. The top pick was still public: the site's own process had not restarted
+   onto the fix (a restart waits up to 45 minutes for the sweep in
+   progress). The first line says whether it is still waiting; the second
+   restarts it now if it is (the sweep in progress starts again); then the
+   seal, and the check should print `unsealed: []`.
+2. The builds did not leave the record to the settle lane: its last pass
+   read 17 minutes old beside a pass running for six, and the first rule
+   wanted 15. A running pass now counts, and a pass begun within 40
+   minutes. The builds print `record: ...` either way, with the seconds
+   when they do it themselves.
+3. Three college touchdown flags were filed with no team, and the settler
+   pinned them on a namesake's school. The flags now carry the man's team
+   from the board, and every stale flag outside the NFL is dated by its own
+   game. The three already open cannot settle; they are 0.1u paper rows.
+4. The doctor read the paywall as off (it ran without the site's settings);
+   the last line runs it with the paywall flag.
+```
+cat /srv/qellys/data/autoupdate.json; echo
+sudo systemctl restart qellys
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 -c "from engine import gate; print(gate.seal()['sealed']); print('unsealed:', gate.unsealed())"
+cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1500 python3 cfb_build.py $(TZ=America/New_York date +%F) --out /tmp/cfb_probe.json --cached-odds > /tmp/cfb_probe.log 2>&1; grep -E "⏱|record:" /tmp/cfb_probe.log
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 doctor.py --skip-tests
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

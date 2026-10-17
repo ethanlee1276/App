@@ -76,10 +76,12 @@ def test_a_build_leaves_the_record_to_a_live_settle_lane():
     import time as _time
     from engine import ledger
     t = Path(tempfile.mkdtemp())
-    real = (ledger.LANE_STATE, ledger.RECORD_DIRTY, ledger.settle_from_history, ledger.export_json)
+    real = (ledger.LANE_STATE, ledger.RECORD_DIRTY, ledger.settle_from_history, ledger.export_json,
+            ledger.LANE_RUN)
     calls = []
     try:
         ledger.LANE_STATE, ledger.RECORD_DIRTY = t / "maintenance.json", t / "record_dirty"
+        ledger.LANE_RUN = t / "chores_settle.json"
         ledger.settle_from_history = lambda c, h, sport=None: calls.append("settle") or 2
         ledger.export_json = lambda c, p: calls.append("export")
         assert not ledger.settle_lane_alive(), "no state: the builds settle"
@@ -93,8 +95,21 @@ def test_a_build_leaves_the_record_to_a_live_settle_lane():
         ledger.LANE_STATE.write_text(_json.dumps({"last_settle_ts": _time.time() - ledger.LANE_ALIVE_S - 5}))
         assert ledger.settle_and_export(None, None, "nfl", logged=3) == 2
         assert calls == ["settle", "export"], "a silent lane hands the work back"
+        # THE BOX'S CASE (2026-10-17): the last pass began 17 minutes ago and
+        # the next has been running for six. Both say the lane is alive.
+        now = _time.time()
+        ledger.LANE_STATE.write_text(_json.dumps({"last_settle_ts": now - 17 * 60}))
+        assert ledger.settle_lane_alive(now)
+        ledger.LANE_STATE.write_text(_json.dumps({"last_settle_ts": now - 3 * 3600}))
+        ledger.LANE_RUN.write_text(_json.dumps({"pid": 1, "step": "autosettle", "since": now - 6 * 60}))
+        assert ledger.settle_lane_alive(now), "a pass in progress"
+        ledger.LANE_RUN.write_text(_json.dumps({"pid": 1, "step": None, "since": None}))
+        assert not ledger.settle_lane_alive(now), "idle, and its last pass three hours ago"
+        ledger.LANE_RUN.write_text(_json.dumps({"pid": 1, "step": "autosettle", "since": now - 3 * 3600}))
+        assert not ledger.settle_lane_alive(now), "a 'running' pass past the lane's own kill ceiling"
     finally:
-        ledger.LANE_STATE, ledger.RECORD_DIRTY, ledger.settle_from_history, ledger.export_json = real
+        (ledger.LANE_STATE, ledger.RECORD_DIRTY, ledger.settle_from_history, ledger.export_json,
+         ledger.LANE_RUN) = real
 
 
 def test_the_lane_exports_what_a_build_left_it():

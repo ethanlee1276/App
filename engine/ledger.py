@@ -3041,8 +3041,15 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
             # Slate-level date first: it's the key settling maps to the
             # history DB (NFL journals '2025-W05', not the game's ISO day).
             # …and the calendar day beside it — see `log_most_likely`.
+            # THE GAME'S OWN DATE outside the NFL, as every other journal
+            # does (`log_most_likely`, `_journal_longshot_rows`): a college
+            # flag raised on Thursday for a Saturday game was filed under
+            # Thursday, and the settler looks a day either side of it.
             (game_day_for(r, slate_date or ""),
-             now, sport, slate_date or r.get("date"), r["player"], market,
+             now, sport,
+             (slate_date or r.get("date")) if sport == "nfl"
+             else (str(r.get("game_date") or "").strip() or slate_date or r.get("date")),
+             r["player"], market,
              (r.get("side") or "OVER").upper(), line, r.get("book", ""), odds,
              None,
              # hit_prob = the field's consensus implied — what the flag
@@ -10161,28 +10168,44 @@ from . import zeno as _zeno                                      # noqa: E402
 
 
 #: The settle lane's own state (engine/maintenance.STATE_PATH); its
-#: `last_settle_ts` says whether the lane is alive.
+#: `last_settle_ts` says when its last pass began.
 LANE_STATE = ROOT_DIR / "data" / "cache" / "maintenance.json"
-#: A build leaves the settle to the lane while the lane's last pass is this
-#: recent: three of its five-minute passes, so one slow pass does not hand
-#: the work back to every build.
-LANE_ALIVE_S = 900
+#: What the lane's child is doing now (launch.chore_child): a `step` and
+#: its `since` while a pass runs, both None between passes.
+LANE_RUN = ROOT_DIR / "data" / "cache" / "chores_settle.json"
+#: A build leaves the settle to the lane while the lane's last pass began
+#: this recently, or while one is running. Fifteen minutes was the first
+#: cut and it never fired on the box: a pass there runs six minutes and
+#: more, and the stamp (its start, written at its end) read 17 minutes old
+#: beside a pass in progress (box run, 2026-10-17).
+LANE_ALIVE_S = 40 * 60
+#: A pass "running" longer than this is the lane's own kill ceiling
+#: (launch.CHORE_TIMEOUT_S): a state file that old is a dead child's.
+LANE_RUN_MAX_S = 45 * 60
 #: Set when a build journals while the lane owns the record; the lane's next
 #: pass exports record.json when it is set (engine/maintenance.settle_open).
 RECORD_DIRTY = ROOT_DIR / "data" / "cache" / "record_dirty"
 
 
 def settle_lane_alive(now: float | None = None) -> bool:
-    """Has the settle lane passed within LANE_ALIVE_S? False when its state
-    is missing or unreadable — the builds then settle as they always did."""
+    """Is the settle lane running a pass now, or did its last pass begin
+    within LANE_ALIVE_S? False when neither file says so — the builds then
+    settle as they always did."""
     import time as _time
-    try:
-        last = json.loads(LANE_STATE.read_text()).get("last_settle_ts")
-    except (OSError, ValueError, AttributeError):
-        return False
-    if not isinstance(last, (int, float)):
-        return False
-    return 0 <= (now if now is not None else _time.time()) - last < LANE_ALIVE_S
+    now = now if now is not None else _time.time()
+
+    def _read(path):
+        try:
+            d = json.loads(path.read_text())
+            return d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            return {}
+    run = _read(LANE_RUN)
+    since = run.get("since")
+    if run.get("step") and isinstance(since, (int, float)) and 0 <= now - since < LANE_RUN_MAX_S:
+        return True
+    last = _read(LANE_STATE).get("last_settle_ts")
+    return isinstance(last, (int, float)) and 0 <= now - last < LANE_ALIVE_S
 
 
 def mark_record_dirty() -> None:
@@ -10231,12 +10254,19 @@ def settle_and_export(conn, hist_conn, sport: str | None = None,
     if defer:
         if logged is None or logged:
             mark_record_dirty()
-        print("  record: settle and export left to the settle lane (it passed within "
-              f"{LANE_ALIVE_S // 60} min)")
+        print("  record: settle and export left to the settle lane (running, or passed "
+              f"within {LANE_ALIVE_S // 60} min)")
         return 0
+    import time as _time
+    t0 = _time.time()
     settled = settle_from_history(conn, hist_conn, sport=sport)
+    t1 = _time.time()
     if logged is None or logged or settled:
         export_json(conn, path)
+    # Which half the time went to, on the build's own log: the two were one
+    # 90-to-320-second stage on the box and nothing said which.
+    print(f"  record: no live settle lane — settled {settled} {sport or 'all'} bet(s) in "
+          f"{t1 - t0:.0f}s, record exported in {_time.time() - t1:.0f}s")
     return settled
 
 

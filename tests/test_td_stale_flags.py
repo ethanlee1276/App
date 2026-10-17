@@ -136,7 +136,7 @@ def test_both_boards_hand_their_touchdown_quotes_to_the_scan():
     assert "_market_scan(results, ls, extra=td_scan_rows(slate))" in src
     import cfb_build
     src = inspect.getsource(cfb_build.main)
-    assert "extra=td_scan_rows(games, td_quotes)" in src
+    assert "extra=td_scan_rows(games, td_quotes, teams=_teams)" in src
     # And the scan itself sends the extra rows to the stale scan only.
     src = inspect.getsource(pipeline._market_scan)
     i = src.index("scan_recommendations(results)")
@@ -169,6 +169,32 @@ def test_college_rows_carry_the_real_name_from_the_quote():
     # a row nothing can settle.
     nameless = [{k: v for k, v in q.items() if k != "player"} for q in quotes[key]]
     assert cfb_build.td_scan_rows(games, {0: {"runner a": nameless}}) == []
+    # HIS TEAM, when the board knows it and it is one of this game's two
+    # (box run, 2026-10-17: three flags with no team were pinned on a
+    # namesake's school and could not settle).
+    assert rows[0]["team"] == ""
+    assert cfb_build.td_scan_rows(games, {0: {"runner a": quotes[key]}},
+                                  teams={"runner a": "TOL"})[0]["team"] == "TOL"
+    assert cfb_build.td_scan_rows(games, {0: {"runner a": quotes[key]}},
+                                  teams={"runner a": "BOIS"})[0]["team"] == "", "not in this game"
+
+
+def test_a_college_stale_flag_is_dated_by_its_game_not_the_build():
+    """A Thursday build flags a Saturday game; the flag is filed under
+    Saturday, the day the settler looks a day either side of — as every
+    other college journal does. The NFL keeps its week label."""
+    lconn = ledger.connect(":memory:")
+    ledger.configure_bankroll(lconn, starting=1000, unit_pct=1)
+    flag = {"player": "Runner A", "team": "TOL", "market": "anytime_td", "line": 0.5, "side": "OVER",
+            "book": "DraftKings", "odds": 200, "consensus": 0.25, "gap_pts": 4.0,
+            "game_date": "2026-09-12"}
+    assert ledger.log_stale_flags(lconn, {"sport": "cfb", "date": "2026-09-10",
+                                          "market_scan": {"stale": [flag]}}) == 1
+    got = dict(lconn.execute("SELECT date, game_day, team FROM bets").fetchone())
+    assert got == {"date": "2026-09-12", "game_day": "2026-09-12", "team": "TOL"}, got
+    assert ledger.log_stale_flags(lconn, {"sport": "nfl", "date": "2026-W02",
+                                          "market_scan": {"stale": [dict(flag, player="Back B")]}}) == 1
+    assert lconn.execute("SELECT date FROM bets WHERE player='Back B'").fetchone()[0] == "2026-W02"
 
 
 if __name__ == "__main__":
