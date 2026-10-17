@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
                     release_unavailable)
 from .. import carry as _carry
+from .. import ideagate as _ideagate
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
     PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
@@ -1253,6 +1254,17 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             thin = _carry.thin_for(logs, mine_before, spec.player, spec.market,
                                    spec.position or position_of(spec.market),
                                    pos_means.get(spec.market, {}), upto_week)
+        if thin is not None and not thin.get("prior_games"):
+            # A ROOKIE (no NFL games before this season): his last college
+            # season, translated (engine/rookies), stands in for the
+            # position's typical number as the prior his one or two games
+            # are pulled toward — only once the translation beat draft slot
+            # and the position's rookie mean held out (engine/ideagate).
+            rk = _ideagate.rookie_prior(spec.player, spec.market, len(logs))
+            if rk is not None:
+                w = len(logs) / (len(logs) + _carry.THIN_PRIOR_GAMES)
+                thin = dict(thin, anchor=rk, weight=w, kind="rookie",
+                            baseline=w * thin["own_mean"] + (1.0 - w) * rk)
         if carried is None and thin is None and len(logs) < MIN_LOGS:
             continue  # not enough history to project
         # HIS OWN LAST SEASON, FROM WEEK 4 ON (engine/carry
@@ -1341,6 +1353,10 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             form_prior_kind="thin" if thin else "season" if season_prior else "",
             aux=aux,
         ))
+        if thin and thin.get("kind") == "rookie":
+            # His translated college line is the pull, not the position's
+            # typical number (the pick page names it — engine/ideagate).
+            props[-1].form_prior_kind = "rookie"
 
     # ANYTIME-TOUCHDOWN PROPS, one per skill player already on the board.
     #

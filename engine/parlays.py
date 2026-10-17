@@ -983,6 +983,40 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
 
 def relate(sport: str, a: dict, b: dict, game: dict | None = None,
            joints: dict | None = None) -> Relation:
+    """How two legs relate: the taxonomy (``relate_prior``), and for two
+    teammates' football props the simulated games' correlation once the
+    drive simulator beat this taxonomy's numbers on held-out games.
+
+    TWO TEAMMATES FROM THE SAME SIMULATED GAMES (engine/playsim, gated by
+    engine/ideagate, 2026-10-17). The taxonomy prices every quarterback
+    and receiver pair at one number; the simulator draws both lines out of
+    the same drives, so a receiver who takes a third of the targets and one
+    who takes a tenth stop being joined identically. Only the number moves:
+    the clash type and the verdict stay the taxonomy's, so a pairing the
+    doc bans stays banned. The simulated number is for both overs; a pair
+    on opposite sides takes it with the sign turned, as a Gaussian copula
+    does when one leg is flipped.
+    """
+    rel = relate_prior(sport, a, b, game, joints)
+    if (sport in ("nfl", "cfb") and not _is_game_leg(a) and not _is_game_leg(b)
+            and (a.get("player") or "_a") != (b.get("player") or "_b")
+            and (a.get("team") or "_a") == (b.get("team") or "_b")
+            and game_key(a) == game_key(b)):
+        try:
+            from .ideagate import sim_rho
+            sim = sim_rho(sport, a, b)
+        except Exception:                                     # noqa: BLE001
+            sim = None
+        if sim is not None:
+            r = sim if _side_up(a) == _side_up(b) else -sim
+            return Relation(r, f"{rel.mechanism} — the simulated games join them at {r:+.2f}, "
+                               f"which beat this table on held-out games",
+                            rel.clash, rel.verdict, measured=True)
+    return rel
+
+
+def relate_prior(sport: str, a: dict, b: dict, game: dict | None = None,
+                 joints: dict | None = None) -> Relation:
     """Classify a pair of legs against §3's taxonomy and §4-8's prior tables.
 
     Ordered most-fatal first: a pair that is both a Type 5 and a Type 3 is a

@@ -55,6 +55,7 @@ STEP_LABELS = {
     "environment": "Scoring environment",
     "rest": "Rest and layoff",
     "power_play": "Power play",
+    "air": "The air a kick flies through",
 }
 
 #: Where the multiplying starts.

@@ -1109,6 +1109,23 @@ def main() -> None:
                        likely_previous=_likely_prev(args.out, slate.date)
                        if args.out else None,
                        before_likely=_scan_first)
+    # THE INVENTIONS (engine/ideas, Ethan 2026-10-16 "add everything now.
+    # 1-13"), BEFORE THE MOST LIKELY BOARD since 2026-10-17: readings of this
+    # slate written to a private file the pick and game pages ask for, and
+    # held in memory so the readings whose held-out bar holds reach the
+    # picks through engine/ideagate — the Most Likely chance and holds, and
+    # here the Edge picks they hold or take the edge from. Ethan,
+    # 2026-10-17: "make sure we are wrapping all the features into the most
+    # likely bets and edge bets where it makes sense."
+    from engine import ideas as _ideas
+    _ideas.attach("nfl", slate.props, result.get("games"), result, out=args.out)
+    try:
+        from engine import ideagate as _gate
+        _refused = _gate.edge(result, "nfl")
+        if _refused:
+            print(f"  Proven readings refused {_refused} Edge pick(s)")
+    except Exception as _gexc:                                # noqa: BLE001
+        print(f"  ⚠️  idea gates on Edge skipped: {_gexc}")
     # ONE MOST LIKELY BOARD (engine/likelyboard): the Most Likely rows, the
     # matchup picks and the touchdown scenarios in one pool, each put
     # through four checks — our chance, the matchup, the market, our own
@@ -1434,11 +1451,6 @@ def main() -> None:
                       f"page panels stamped, journal appended.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  drive-sim journal skipped: {_exc}")
-        # The inventions (engine/ideas, Ethan 2026-10-16 "add everything
-        # now. 1-13"): readings of this slate written to a private file the
-        # pick and game pages ask for. Nothing in it moves a number.
-        from engine import ideas as _ideas
-        _ideas.attach("nfl", slate.props, result.get("games"), result, out=args.out)
         # Team shapes — the game page's two-team radar. Percentile ranks
         # over the last RANKABLE season's finals (in August that is last
         # season, and the panel's label says so). Never fatal: a fresh DB

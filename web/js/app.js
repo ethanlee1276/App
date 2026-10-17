@@ -12638,7 +12638,11 @@ function chainShrinkHTML(base, position, decimals) {
   /* HIS OWN LAST SEASON, week 4 on (engine/carry.SEASON_PRIOR_GAMES,
      2026-10-12): the same sentence, saying whose number it leans on. */
   const season = base.shrink_kind === "season";
+  /* A ROOKIE whose college line, translated, held out better than draft
+     slot (engine/ideagate, 2026-10-17): that number is the pull. */
+  const rookie = base.shrink_kind === "rookie";
   const who = season ? "his own per-game number last season"
+    : rookie ? "his last college season, translated to the NFL"
     : position ? `the typical ${escapeHtml(String(position).toUpperCase())}` : "a longer record’s rate";
   return `<span class="ch-why">${season ? "" : "Only "}${n} game${n === 1 ? "" : "s"} ${season ? "this season" : "of his own"}${
     pull != null ? `, so the blend is pulled ${pull}%` : ", so the blend is pulled"} toward ${

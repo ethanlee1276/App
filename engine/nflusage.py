@@ -46,6 +46,8 @@ OPP_BY_MARKET = {
     "pass_yds": "pass_att",
 }
 VOL_WEEKS = 4
+#: The opportunities whose share the role detector reads (engine/rolechange).
+ROLE_SHARES = ("targets", "carries")
 # Efficiency needs a real denominator: below these season totals a per-
 # opportunity rate is one screen pass wearing a trend costume, and the
 # player simply has no volume role rather than a junk one.
@@ -237,6 +239,16 @@ def snap_shares(conn, season: int | None = None) -> dict:
     return out
 
 
+def _role_ratio(opp: str, shares: list) -> float:
+    """The detected role over his four-week share (engine/ideagate), 1.0
+    when the detector has not held or cannot be read."""
+    try:
+        from .ideagate import role_ratio
+        return role_ratio(opp, shares)
+    except Exception:                                         # noqa: BLE001
+        return 1.0
+
+
 def volume_roles(conn, season: int | None = None,
                  upto_week: int | None = None) -> dict:
     """``{(initial, lastname, team): {market: role}}`` where each role is
@@ -286,6 +298,16 @@ def volume_roles(conn, season: int | None = None,
         per.setdefault((r["player"], r["team"]), {}) \
            .setdefault(r["period"], {})[r["market"]] = float(r["value"] or 0)
 
+    # HIS TEAM'S TOTALS each week, for the share series the role detector
+    # reads (engine/rolechange.series_from: his targets or carries over his
+    # team's that week — the definition it was measured on).
+    tot: dict = {}
+    for (player, team), weeks in per.items():
+        for w, vals in weeks.items():
+            for opp in ROLE_SHARES:
+                if opp in vals:
+                    tot[(team, w, opp)] = tot.get((team, w, opp), 0.0) + vals[opp]
+
     out: dict = {}
     for (player, team), weeks in per.items():
         roles: dict = {}
@@ -295,6 +317,17 @@ def volume_roles(conn, season: int | None = None,
                 continue
             recent = sorted(with_opp, reverse=True)[:VOL_WEEKS]
             opp_pg = sum(weeks[w][opp] for w in recent) / len(recent)
+            # THE ROLE HE HOLDS NOW, not four flat weeks: once the
+            # changepoint detector beat the four-week share held out
+            # (engine/rolechange, verdict on the box), the volume follows
+            # it — a back who took the job two weeks ago is not averaged
+            # with the two weeks before. 1.0 until then (engine/ideagate).
+            ratio = 1.0
+            if opp in ROLE_SHARES:
+                shares = [weeks[w][opp] / tot[(team, w, opp)] for w in sorted(with_opp)
+                          if tot.get((team, w, opp))]
+                ratio = _role_ratio(opp, shares)
+                opp_pg *= ratio
             paired = [w for w in with_opp if market in weeks[w]]
             tot_opp = sum(weeks[w][opp] for w in paired)
             if tot_opp < MIN_EFF_OPPS[opp]:
@@ -304,6 +337,8 @@ def volume_roles(conn, season: int | None = None,
                             "eff": round(eff, 3),
                             "opp_market": opp,
                             "n_weeks": len(with_opp)}
+            if ratio != 1.0:
+                roles[market]["role_ratio"] = round(ratio, 3)
         if roles:
             out[_short_key(player, team)] = roles
     return out

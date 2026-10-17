@@ -340,7 +340,13 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     if player_mult is None:
         from .playerfit import mult_for
         player_mult = mult_for(sport, prop.market, prop.player)
-    mean = mean_base * total_mult * ctx_mult * player_mult * lineup_mult
+    # THE AIR A KICK FLIES THROUGH (engine/kickphysics via engine/ideagate):
+    # a kicker's field goals scale with tonight's air density, only once the
+    # density term beat distance and wind alone on held-out kicks. Measured,
+    # so outside the cap like the lineup step; 1.0 (and no step) otherwise.
+    from .ideagate import kick_factor as _kick_factor
+    air_mult, air_why = _kick_factor(prop.market, game, sport, getattr(prop, "team", None))
+    mean = mean_base * total_mult * ctx_mult * player_mult * lineup_mult * air_mult
 
     # Uncertainty: never below the market-typical variance floor, and it grows
     # as we push further from the player's own baseline.
@@ -377,6 +383,8 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     reasons += weather.reasons
     reasons += injury.reasons
     reasons += lineup_why
+    if air_why:
+        reasons.append(f"Air: {air_why}")
 
     # Recent-form narrative. Both directions read the same way now: a
     # note about the player, not a claim about the number. The cool-off
@@ -431,6 +439,8 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                    else "Nothing in the record says this blend misreads him."),
         chain.step("lineup", lineup_mult, "; ".join(lineup_why)),
     ]
+    if air_mult != 1.0:
+        steps.append(chain.step("air", air_mult, air_why))
     return Projection(
         mean=mean,
         std=adj_std,

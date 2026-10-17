@@ -19,7 +19,9 @@ and a broken one says so instead of vanishing.
 
 NOTHING HERE MOVES A NUMBER. Every section is a reading, shown as one.
 An invention reaches a price only through its own measurement and its
-own bar, and only with Ethan's yes.
+own bar: once its saved verdict holds, engine/ideagate applies it where
+it belongs (Ethan, 2026-10-17: "make sure we are wrapping all the features
+into the most likely bets and edge bets where it makes sense").
 
 Standard library only.
 """
@@ -32,6 +34,10 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+#: The latest build's data per sport, in this process — what engine/ideagate
+#: reads while the same build makes its Most Likely board and Edge picks.
+LAST: dict = {}
 
 #: The sections, in the order the pick page draws them. Each entry:
 #: name -> module. The module's `ideas_section(props, games, board, sport)`
@@ -169,6 +175,7 @@ def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> di
         where = gate._full_dir_for(out) if out else directory()
         live = Path(where).resolve() == Path(directory()).resolve()
         data = build(sport, props, games, board)
+        LAST[sport] = data
         for name, sec in (list(data["sections"].items()) if live else []):
             try:
                 fn = _section_fns(name)[3]

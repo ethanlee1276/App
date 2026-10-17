@@ -196,7 +196,11 @@ def held_out(kicks: list) -> dict:
     var = sum((x - m) ** 2 for x in diffs) / (n - 1) if n > 1 else 0.0
     t = m / math.sqrt(var / n) if var > 0 else None
     sign_ok = full[4] < 0
+    devs = [k["dens_dev"] for k in kicks if k.get("dens_dev") is not None]
     return {"n": n, "gain": round(m, 6), "t": None if t is None else round(t, 2), "test": sorted(test),
+            # The air the league's kicks usually fly through — what a
+            # kicker's own average was built in (engine/ideagate.kick_factor).
+            "mean_dev": round(sum(devs) / len(devs), 4) if devs else 0.0,
             "density_coef": round(full[4], 4), "distance_coef": round(full[1], 4), "sign_ok": sign_ok,
             "holds": bool(n >= MIN_KICKS and m > 0 and (t or 0) >= MIN_T and sign_ok),
             "base": [round(x, 5) for x in base], "full": [round(x, 5) for x in full]}

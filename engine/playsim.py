@@ -291,7 +291,10 @@ def prior_rho(sport: str, a: dict, b: dict) -> float:
     """What the parlay pricer joins these two overs with, shrunk the way it
     shrinks an unmeasured number."""
     from . import parlays as P
-    rel = P.relate(sport, {**a, "side": "over"}, {**b, "side": "over"})
+    # The taxonomy alone: once the simulation holds, `relate` hands back
+    # the simulation's own number, and measuring it against itself is no
+    # measurement.
+    rel = P.relate_prior(sport, {**a, "side": "over"}, {**b, "side": "over"})
     return rel.rho if rel.measured else rel.rho * P.RHO_SHRINK
 
 

@@ -300,7 +300,12 @@ parlay pricer's correlations (step 132; CA); then a change in a player's
 role (his share of the targets, carries or snaps) spotted within a game or
 two (step 133; CB); and last, an honest range around every pick, every
 graded pick's miss split into usage and per-touch, and one risk view of
-every open bet in My Bets (step 134; CC). All thirteen are built.
+every open bet in My Bets (step 134; CC). All thirteen are built. Then,
+your "make sure we are wrapping all the features into the most likely bets
+and edge bets", every one of them wired into Most Likely and Edge where it
+belongs, each moving a number only once its own measurement holds, and
+every fit and measurement in the repo mapped to where its answer lands,
+checked against the code (step 135; CD).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -339,13 +344,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Inventions 11 to 13: honest ranges, the loss autopsy, one risk view of every open bet`
+**A. The box has today's code.** The first line should end `The inventions into Most Likely and Edge, each behind its verdict; every fit mapped`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor fa8a1a24 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 2945a0e6 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -2019,6 +2024,24 @@ page reads). Paste all of it.
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.conformal --save
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.autopsy --save
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/ideas_nfl.json')); print(d['built_at'], sorted(d['sections']), d['errors'])"
+```
+
+**CD. The inventions in the picks, and where every fit lands** (step 135;
+seconds, any time, read-only). Paste all of it.
+1. Each invention's gate, NFL then college: `HOLDS — applied` (it is moving
+   Most Likely or Edge now) or `waiting on its verdict` (a reading on the
+   page, nothing moved). Every one should read waiting until its own box
+   run (BX to CC) saves a verdict that holds.
+2. Every fit and measurement in the repo with where its answer lands, the
+   gates again, three findings for you, and last a line that should read
+   `NO PROBLEMS: every fit lands where the map says`.
+3. Every step of the projection on tonight's boards, and any that moved no
+   pick (the air step only appears when it moves one).
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nfl
+cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport cfb
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.wiremap
+cd /srv/qellys && sudo -u qellys python3 homecheck.py inputs
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -6191,6 +6214,51 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_the_loss_autopsy.py` (5),
     `tests/test_one_risk_view_of_every_open_bet.py` (5). No pin changed;
     app.js grew by the My Bets hook and stays inside its budget.
+
+135. **The inventions in the picks, and every fit mapped** (2026-10-17,
+    Ethan: "make sure we are wrapping all the features into the most likely
+    bets and edge bets where it makes sense … make sure all of our tools
+    and data are being used correctly and not just the ones you just added
+    but ALL tools and data we were and are using"). **The gates**
+    (`engine/ideagate.py`): each invention reaches the picks at the
+    earliest point it belongs, so Edge and Most Likely read the same
+    number, and only once its own saved verdict says HOLDS — the way
+    likelycal and likelyctx already work, with no hand-wiring after a
+    result. The rookie translation becomes the prior a thin rookie sample
+    is pulled toward (the pick page says "his last college season,
+    translated to the NFL"); the role detector scales the usage bridge's
+    targets and carries, read off the same share it was measured on; the
+    air becomes its own step in a kicker's chain, against the air his
+    record was kicked in (half his home stadium's, half the league's) and
+    never off the 65° placeholder an unforecast game carries; the simulated
+    games join two teammates' parlay legs, the doc's banned pairings staying
+    banned; a book's menu, the outcome recipe and a public-attention spike
+    move the Most Likely chance by what they measured, together at most
+    eight points, and refuse an Edge pick whose edge they take away; the
+    market check uses the fair chance counted one vote per opinion; and the
+    practice report and the honest range hold a pick off both boards. The
+    curve, the autopsy and the risk view never move a number, by design. A
+    posted pick keeps its chance, and the journal keeps the first claim. The
+    NFL build now writes the readings before its Most Likely board, not
+    after it, so they can reach it. Found on the way and fixed before any
+    gate opens: the air step compared tonight's air with sea level (a
+    Denver kicker's altitude counted twice); the simulation, once gated,
+    would have been measured against itself; a pair on opposite sides would
+    have taken the simulated number with the wrong sign. **The map**
+    (`engine/wiremap.py`): every fitter and measurement script in the repo,
+    and the thirteen, with where its answer lands — the number, the Most
+    Likely board, gated, a card, a report, or failed its bar and unwired on
+    purpose — checked against the code: a new fit cannot be added without
+    a row, a row naming a reader that never names it fails, and nothing on
+    the number path may import a fit that failed. Three findings for you,
+    not changed here: the game-line haircut (the claimed moneyline edge did
+    not survive in either league, and the shipped college haircut assumes
+    65% does — refusing game-line Edge picks outright is your call); the
+    learned multiplier model, off on purpose (the measured steps replaced
+    it); and an empty, harmless usage hook on the volume markets. The
+    write-up is `docs/WIRING_AUDIT_2026-10-17.md`. New tests:
+    `tests/test_the_inventions_gated_into_the_picks.py` (10),
+    `tests/test_every_fit_lands_where_it_says.py` (6).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

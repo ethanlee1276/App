@@ -2099,6 +2099,14 @@ def main() -> None:
         # to a private file the pick and game pages ask for.
         from engine import ideas as _ideas
         _ideas.attach("cfb", _prop_slate.props, out.get("games"), out, out=args.out)
+        # The readings whose held-out bar holds, on the Edge picks (engine/ideagate).
+        try:
+            from engine import ideagate as _gate
+            _refused = _gate.edge(out, "cfb")
+            if _refused:
+                print(f"  Proven readings refused {_refused} Edge pick(s)")
+        except Exception as _gexc:                                # noqa: BLE001
+            print(f"  ⚠️  idea gates on Edge skipped: {_gexc}")
         if prop_census.get("candidates"):
             print(f"  Player props: {prop_census['props']} market(s) across "
                   f"{prop_census['candidates']} placed player(s), "

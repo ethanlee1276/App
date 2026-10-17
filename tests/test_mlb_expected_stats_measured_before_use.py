@@ -283,7 +283,11 @@ def test_the_nightly_refits_the_table_after_the_balls_come_in():
 
 
 def test_nothing_that_prices_a_bet_reads_it():
-    allowed = {"engine/mlb/xstats.py", "engine/mlb/xstatsfit.py", "engine/mlb/charts.py", "engine/maintenance.py"}
+    # engine/wiremap names every fit in the repo to check where each lands
+    # (here: a card on the hit page); it is a command-line auditor and
+    # prices nothing.
+    allowed = {"engine/mlb/xstats.py", "engine/mlb/xstatsfit.py", "engine/mlb/charts.py", "engine/maintenance.py",
+               "engine/wiremap.py"}
     found = set()
     for p in list((ROOT / "engine").rglob("*.py")) + [ROOT / "server.py", ROOT / "launch.py"]:
         if "xstats" in p.read_text(encoding="utf-8"):

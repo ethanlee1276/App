@@ -154,6 +154,8 @@ def held_reason(r: dict, checks: dict) -> str | None:
     seat until its game, as every posted pick does."""
     if r.get("locked"):
         return None
+    if r.get("idea_hold"):
+        return r["idea_hold"]
     proven = r.get("ctx_note") or r.get("cal_note")
     prob = r.get("model_prob")
     if (proven and lane_of(r) != "td" and prob is not None and float(prob) < DROP_FLOOR
@@ -300,6 +302,16 @@ def record_seen(table: dict | None, market: str, side: str, prob: float) -> dict
 def market_check(r: dict):
     from .odds import american_to_prob
     p = r.get("model_prob")
+    if r.get("market_fair") is not None:
+        # The market's fair chance counted one vote per opinion (engine/
+        # ideagate, once engine/bookclusters' held-out test holds).
+        gap = float(p) - float(r["market_fair"])
+        words = f"the market's fair chance, one vote per opinion, is {float(r['market_fair']):.0%}; we say {float(p):.0%}"
+        if abs(gap) <= MARKET_AGREE:
+            return True, words
+        if gap >= MARKET_FAR:
+            return False, words + " — far above the market"
+        return None, words
     implied = r.get("implied_prob")
     if implied is None and r.get("odds"):
         try:
@@ -542,6 +554,17 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             _ctx.apply(_rows, sport)
     except Exception:                                        # noqa: BLE001
         pass
+    # THE INVENTIONS, ONCE PROVEN (engine/ideagate; Ethan, 2026-10-17: "make
+    # sure we are wrapping all the features into the most likely bets and
+    # edge bets where it makes sense"). A reading whose held-out bar holds
+    # moves the chance by what it measured, holds a pick it says will not
+    # stand, or gives the market check the fair chance by opinion. Before a
+    # verdict holds, nothing here moves.
+    try:
+        from . import ideagate as _gate
+        _gate.most_likely([pool[k] for k in order], sport)
+    except Exception:                                        # noqa: BLE001
+        pass
     rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
     for k in order:
         r = pool[k]
@@ -552,7 +575,8 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         checks["model"] = prob >= bar
         notes["model"] = (f"our chance {prob:.0%} (the bar here is {bar:.0%})"
                           + (f" — {r['cal_note']}" if r.get("cal_note") else "")
-                          + (f" — {r['ctx_note']}" if r.get("ctx_note") else ""))
+                          + (f" — {r['ctx_note']}" if r.get("ctx_note") else "")
+                          + (f" — {r['idea_note']}" if r.get("idea_note") else ""))
         checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
         # NOT A SECOND OPINION ON ITSELF (Ethan, 2026-10-03, "yeah make the
         # tier change"). A pick only the matchup picks or the touchdown
