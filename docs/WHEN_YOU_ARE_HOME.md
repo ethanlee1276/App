@@ -2263,6 +2263,17 @@ cd /srv/qellys && sudo -u qellys nice -n 19 timeout 3600 python3 -m engine.nhl.e
 cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1800 python3 -m engine.nhl.endgame --save | tail -10
 cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nhl | grep endgame
 ```
+Also new this round, nothing to run for them: four tools on the Toolbox
+page (a middle finder, a bankroll simulator, a slate sizer that stakes
+same-game bets less, and a strategy lab that tests any rule against every
+graded pick and says how often luck alone would match it). And one new
+data source being kept: who refereed each NBA and WNBA game, read off the
+summary the ingest already downloads. The two lines below give the past
+games their crews from the cached summaries (no fetching) and count them.
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.officials --league nba --backfill
+cd /srv/qellys && sudo -u qellys python3 -m engine.officials --league wnba --backfill
+```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

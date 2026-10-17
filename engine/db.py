@@ -285,6 +285,15 @@ CREATE TABLE IF NOT EXISTS team_units (
 -- the power play role"). One row per shot attempt from the league's
 -- play-by-play: where it came from, what kind, at what strength, and
 -- whether it went in. engine/nhl/xg.py fits expected goals on these.
+-- WHO REFEREED EACH GAME (engine/officials, 2026-10-17): the crew, off the
+-- game summary the basketball ingest already reads. Kept so a crew's
+-- effect can be measured against the closing total once a season of
+-- closes is stored (refcheck.py answered the NFL's: none).
+CREATE TABLE IF NOT EXISTS game_officials (
+    sport TEXT, game_id TEXT, date TEXT, name TEXT, role TEXT,
+    PRIMARY KEY (sport, game_id, name)
+);
+CREATE INDEX IF NOT EXISTS game_officials_name ON game_officials (sport, name);
 CREATE TABLE IF NOT EXISTS nhl_shots (
     game_id INTEGER, event_id INTEGER, date TEXT, season INTEGER,
     team TEXT, opponent TEXT, shooter_id TEXT, shooter TEXT,

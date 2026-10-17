@@ -314,6 +314,13 @@ def ingest_day(conn, date: str, league: str = "wnba",
         except DataUnavailable as exc:
             result["skipped"].append(f"{league} box {g['game_id']}: {exc}")
             continue
+        # THE CREW, off the same summary (engine/officials): kept for the
+        # day a crew's effect can be measured against the closing total.
+        try:
+            from .. import officials as _officials
+            _officials.store(conn, league, g["game_id"], date, _officials.parse(summary))
+        except Exception as exc:                              # noqa: BLE001
+            result["skipped"].append(f"{league} officials {g['game_id']}: {exc}")
         opp = {g["home"]: g["away"], g["away"]: g["home"]}
         for row in parse_summary(summary):
             row = dict(row, team=club(row["team"]))
