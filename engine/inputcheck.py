@@ -37,7 +37,6 @@ KNOWN = {
     ("nfl", "pass_td"): {
         "matchup": "measured 2026-09-23: no defence rating predicted passing TDs (engine/defensevs); "
                    "the card shows it, the number does not use it",
-        "weather": "the weather model (engine/weather) has no passing-TD coefficient — not yet measured",
     },
     # Flat BY CONSTRUCTION — each of these factors is built without a
     # coefficient for the market, so "moved none" is the code doing what
@@ -61,6 +60,30 @@ KNOWN = {
         "statcast": "contact quality has hitter and strikeout branches only (engine/mlb/statcast)",
     },
 }
+
+
+def flat_by_construction(sport: str, market: str, step: str) -> str | None:
+    """Why a football step moves nothing on this market by construction,
+    read off the tables the projection multiplies by — or None. A market
+    with a coefficient that still moved nothing stays a finding; only one
+    the model has no coefficient for is printed as known. Box run,
+    2026-10-17: sixteen of these sat under LOOK AT THESE (attempts,
+    completions, carries, the combined markets, tackles and kicks)."""
+    if sport not in ("nfl", "cfb"):
+        return None
+    if step == "weather":
+        from .weather import RAIN, SNOW, WIND, WIND_FORECAST
+        measured = {m for (m, _g) in list(WIND_FORECAST) + list(WIND) + list(RAIN) + list(SNOW)}
+        if market not in measured:
+            return (f"the weather model (engine/weather) is measured on {', '.join(sorted(measured))} "
+                    f"only — no coefficient for this market")
+    if step == "matchup":
+        from .defensevs import TRANSFER, TRANSFER_CFB
+        table = TRANSFER_CFB if sport == "cfb" else TRANSFER
+        if not any(m == market and t for (m, _g), t in table.items()):
+            return ("no defence rating cleared its held-out bar for this market (engine/defensevs "
+                    "TRANSFER): the card shows the matchup, the number leaves it out")
+    return None
 
 
 def _memory_on(sport: str, market: str) -> bool:
@@ -124,7 +147,7 @@ def findings(sport: str, cen: dict) -> list[str]:
         for k, seen in sorted(c["seen"].items()):
             if c["moved"].get(k) or k in OFF_BY_DESIGN or k in SITUATIONAL or seen < MIN_ROWS:
                 continue
-            if k in KNOWN.get((sport, m), {}):
+            if k in KNOWN.get((sport, m), {}) or flat_by_construction(sport, m, k):
                 continue
             if k == "player" and not _memory_on(sport, m):
                 continue
@@ -167,6 +190,11 @@ def report(boards: dict) -> list[str]:
         for m in sorted(cen):
             for k, why in KNOWN.get((sport, m), {}).items():
                 lines.append(f"    known: {m} {STEP_LABELS.get(k, k).lower()} — {why}")
+            for k in sorted(cen[m]["seen"]):
+                why = None if k in KNOWN.get((sport, m), {}) or cen[m]["moved"].get(k) \
+                    else flat_by_construction(sport, m, k)
+                if why:
+                    lines.append(f"    known: {m} {STEP_LABELS.get(k, k).lower()} — {why}")
             if cen[m]["seen"].get("player") and not _memory_on(sport, m):
                 lines.append(f"    known: {m} player memory — off: the record has not earned it "
                              f"for this market (engine/playerfit)")
@@ -179,6 +207,10 @@ def report(boards: dict) -> list[str]:
         if w["checked"]:
             lines.append(f"    wiring: {w['checked']} rows checked — every step and card reaches the number"
                          if not w["bad"] else f"    wiring: {len(w['bad'])} of {w['checked']} rows do not add up")
+            if w.get("posted_off_board") or w.get("board_corrected"):
+                lines.append(f"    wiring: {w.get('posted_off_board', 0)} posted pick(s) carried as they went up "
+                             f"(his prop is off tonight's board); {w.get('board_corrected', 0)} row(s) show the "
+                             f"one board's record-corrected chance")
             flagged += [f"{sport} wiring: {x}" for x in w["bad"][:12]]
     lines.append("")
     if flagged:
@@ -234,32 +266,71 @@ def wiring(board: dict, fits=None) -> dict:
         if abs(got - want) > 0.002:
             bad.append(f"{r.get('player')} {r.get('market')}: its cards say ×{want:.3f} was applied, "
                        f"the projection used ×{got:.3f}")
+    from .likely import _main_shown, _prob_at
+    by_bet = {(str(r.get("player") or ""), str(r.get("team") or ""), str(r.get("market") or "")): r
+              for r in recs}
+    posted_off = corrected = 0
     for m in (board or {}).get("most_likely") or []:
         if not isinstance(m, dict) or m.get("kind") != "prop":
             continue
         n += 1
+        market = m.get("market") or ""
+        # A POSTED PICK (likely._locked) stays at the number it went up at,
+        # wherever the books have since moved the main line, and its chance
+        # is today's at that number off his current prop row. Matched on
+        # the line it was posted at, every one whose line had moved read
+        # "no prop row behind it" (box run, 2026-10-17).
+        if m.get("locked"):
+            src = by_bet.get((str(m.get("player") or ""), str(m.get("team") or ""), market))
+            if src is None:
+                posted_off += 1          # his prop is off tonight's board: carried as it went up
+                continue
+            if src.get("projection") is not None and m.get("projection") != src.get("projection"):
+                bad.append(f"{m.get('player')} {market}: posted pick projects {m.get('projection')}, "
+                           f"his prop row {src.get('projection')}")
+            want = _prob_at(src, market, m.get("side"), m.get("line"), fits, main_as_shown=True)
+            if want is not None and abs(float(want) - float(m["model_prob"])) > TOL_PROB:
+                bad.append(f"{m.get('player')} {market}: posted pick shows {float(m['model_prob']):.3f}, "
+                           f"his prop row gives {float(want):.3f} at that number")
+            continue
         src = by.get(_key(m, "main_side", "main_line"))
         if src is None:
-            bad.append(f"{m.get('player')} {m.get('market')}: on Most Likely with no prop row behind it")
+            bad.append(f"{m.get('player')} {market}: on Most Likely with no prop row behind it")
             continue
         if m.get("projection") != src.get("projection"):
-            bad.append(f"{m.get('player')} {m.get('market')}: Most Likely projects {m.get('projection')}, "
+            bad.append(f"{m.get('player')} {market}: Most Likely projects {m.get('projection')}, "
                        f"its prop row {src.get('projection')}")
-        if m.get("rung") == "main":
-            if m.get("prob_source") == "mixture":
-                p = display_prob(m["market"], src.get("projection"), m.get("line"),
-                                 src.get("recent_values"), fits=fits)
-                if p is not None:
-                    p = 1.0 - p if str(m.get("side") or "").lower() == "under" else p
-                    if abs(p - float(m["model_prob"])) > TOL_PROB:
-                        bad.append(f"{m.get('player')} {m.get('market')}: shows {m['model_prob']:.3f}, "
-                                   f"its projection gives {p:.3f}")
-            else:
-                own = src.get("raw_prob") if src.get("sharp_anchored") else src.get("hit_prob")
-                if own is not None and abs(float(own) - float(m["model_prob"])) > TOL_PROB:
-                    bad.append(f"{m.get('player')} {m.get('market')}: shows {m['model_prob']:.3f}, "
-                               f"its prop row says {float(own):.3f}")
-    return {"checked": n, "bad": bad}
+        if m.get("rung") != "main":
+            continue
+        # THE LIST'S OWN NUMBER. The one board's record correction
+        # (likelyboard.harmonize: engine/likelycal, engine/likelyctx) is
+        # written onto the row afterwards, its own kept as `listed_prob`.
+        own = m.get("listed_prob")
+        if own is not None:
+            corrected += 1
+        shown = float(own if own is not None else m["model_prob"])
+        side = str(m.get("side") or "").lower()
+        if side != str(m.get("main_side") or "").lower():
+            # THE OTHER SIDE OF THE MAIN NUMBER (likely._main_other_side) is
+            # the complement of what the main side shows: an under at 66% on
+            # Most Likely beside the Edge row's over at 34% is one number,
+            # not two (box run, 2026-10-17: WNBA threes).
+            main = _main_shown(src, market, fits)
+            if main is not None and abs((1.0 - float(main)) - shown) > TOL_PROB:
+                bad.append(f"{m.get('player')} {market}: shows {shown:.3f} on the other side, "
+                           f"its prop row gives {1.0 - float(main):.3f}")
+            continue
+        if m.get("prob_source") == "mixture":
+            p = display_prob(market, src.get("projection"), m.get("line"), src.get("recent_values"), fits=fits)
+            if p is not None:
+                p = 1.0 - p if side == "under" else p
+                if abs(p - shown) > TOL_PROB:
+                    bad.append(f"{m.get('player')} {market}: shows {shown:.3f}, its projection gives {p:.3f}")
+        else:
+            main = src.get("raw_prob") if src.get("sharp_anchored") else src.get("hit_prob")
+            if main is not None and abs(float(main) - shown) > TOL_PROB:
+                bad.append(f"{m.get('player')} {market}: shows {shown:.3f}, its prop row says {float(main):.3f}")
+    return {"checked": n, "bad": bad, "posted_off_board": posted_off, "board_corrected": corrected}
 
 
 # ---- weather: did the forecast reach the games, and the numbers?

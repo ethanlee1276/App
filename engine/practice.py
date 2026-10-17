@@ -20,10 +20,13 @@ per (designation, how he practised), and per club and season for the
 questionable designation, shrunk toward the league by PRIOR_N listings
 so a club with six questionable players does not get its own number.
 
-THE BAR, WRITTEN BEFORE ITS FIRST RUN. On the last season held out: the
+THE BAR, WRITTEN BEFORE ITS FIRST RUN. On the seasons held out: the
 club-and-practice chance a questionable man plays must beat the
 league-wide chance by log loss, with a paired t ≥ MIN_T over at least
-MIN_LISTED listings. Until then the page shows both numbers as readings
+MIN_LISTED listings. Since 2026-10-17 the held-out seasons are the newest
+two, each scored walk-forward on the seasons before it, and each must
+come out ahead on its own: the newest season alone (a part season) could
+never reach MIN_LISTED. Until then the page shows both numbers as readings
 and nothing on the board — the hold, a projection, a tier — reads them.
 
 Standard library only.
@@ -148,32 +151,46 @@ def _ll(p, y):
 
 
 def held_out(rows) -> dict:
-    """Fit on every season but the last; on the last, questionable
-    listings: league-and-practice chance vs club-folded chance, by log
-    loss, paired."""
-    seasons = sorted({r[0] for r in rows})
-    if len(seasons) < 2:
+    """Walk-forward over the held-out seasons (the newest two once there
+    are three — engine/bookmenu.held_seasons): each one's questionable
+    listings scored with a fit on every season before it, league-and-
+    practice chance against club-folded chance, by log loss, paired and
+    pooled. Scored on the newest season alone, a part season held 66
+    questionable listings against a bar of 300 (box run, 2026-10-17); and
+    a club's honesty is read from its season or the one before, so each
+    season has to see the seasons before it."""
+    from .bookmenu import held_seasons
+    test = held_seasons({r[0] for r in rows})
+    if not test:
         return {"n": 0, "gain": None, "t": None, "holds": False}
-    last = seasons[-1]
-    train = [r for r in rows if r[0] != last]
-    fit = {"table": table(train)}
-    fit["clubs"] = clubs(train, (fit["table"].get("Questionable|*") or {}).get("played") or 0.5)
-    diffs = []
-    for season, team, d, p, played, _r in (r for r in rows if r[0] == last):
-        if d != "Questionable":
+    diffs: list = []
+    by: dict = {}
+    for season_out in sorted(test):
+        train = [r for r in rows if r[0] < season_out]
+        if not train:
             continue
-        c = chance(fit, team, season, d, p)
-        if not c or c["club"] is None:
-            continue
-        diffs.append(_ll(c["league"], played) - _ll(c["club"], played))
+        fit = {"table": table(train)}
+        fit["clubs"] = clubs(train, (fit["table"].get("Questionable|*") or {}).get("played") or 0.5)
+        for season, team, d, p, played, _r in (r for r in rows if r[0] == season_out):
+            if d != "Questionable":
+                continue
+            c = chance(fit, team, season, d, p)
+            if not c or c["club"] is None:
+                continue
+            x = _ll(c["league"], played) - _ll(c["club"], played)
+            diffs.append(x)
+            by.setdefault(str(season_out), []).append(x)
+    label = "+".join(str(y) for y in sorted(test))
     n = len(diffs)
     if n < 2:
-        return {"n": n, "gain": None, "t": None, "holds": False, "season": last}
+        return {"n": n, "gain": None, "t": None, "holds": False, "season": label}
     m = sum(diffs) / n
     var = sum((x - m) ** 2 for x in diffs) / (n - 1)
     t = m / math.sqrt(var / n) if var > 0 else None
-    return {"n": n, "gain": round(m, 5), "t": None if t is None else round(t, 2), "season": last,
-            "holds": bool(n >= MIN_LISTED and m > 0 and (t or 0) >= MIN_T)}
+    per = {k: round(sum(v) / len(v), 5) for k, v in sorted(by.items())}
+    return {"n": n, "gain": round(m, 5), "t": None if t is None else round(t, 2), "season": label,
+            "by_season": per,
+            "holds": bool(n >= MIN_LISTED and m > 0 and (t or 0) >= MIN_T and all(v > 0 for v in per.values()))}
 
 
 # ---- the box: every season's reports against every season's snaps ------------

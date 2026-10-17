@@ -433,15 +433,34 @@ def lock_note(why: str, now=None, then=None) -> str:
     return f"Changed since this went up: {reader_reason(why)}."
 
 
-def _prob_at(row: dict | None, market: str, side, line, fits=None):
+def _prob_at(row: dict | None, market: str, side, line, fits=None, main_as_shown: bool = False):
     """The model's chance for (side, line) off a prop's CURRENT row — the
-    derivation `rungs` prices a ladder number with — or None."""
+    derivation `rungs` prices a ladder number with — or None.
+    ``main_as_shown``: a posted pick's chance today (`now_prob`), see below."""
     if not row or line is None:
         return None
     try:
         line = float(line)
     except (TypeError, ValueError):
         return None
+    # THE MAIN NUMBER IS PRICED AS A FRESH PICK SHOWS IT (`_main_shown`),
+    # and its other side as the complement. Re-derived through the normal
+    # below, a posted rushing-attempts pick read 84% beside the 54% the same
+    # number got as a fresh pick — the normal hangs on the raw projection,
+    # without the engine's own reading of the main line (box run,
+    # 2026-10-17: MarShawn Lloyd, Chuba Hubbard, Rico Dowdle).
+    # ONLY WHEN ASKED: a ladder (the slip grader, the off-board replay, the
+    # alt curve) is one distribution priced at every number, and the shown
+    # chance dropped into its middle bends it (253.5 → 60%, 258.5 → 69%).
+    main_side = _side(row.get("side"))
+    try:
+        on_main = row.get("line") is not None and abs(float(row.get("line")) - line) < 1e-9
+    except (TypeError, ValueError):
+        on_main = False
+    if main_as_shown and on_main and main_side in ("over", "under") and _side(side) in ("over", "under"):
+        shown = _main_shown(row, market or row.get("market") or "", fits)
+        if shown is not None:
+            return round(float(shown) if _side(side) == main_side else 1.0 - float(shown), 4)
     pre = (row.get("rung_probs") or {}).get(f"{line:g}")
     if pre is not None:
         p_over = float(pre)
@@ -3018,7 +3037,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         if (h.get("kind") or "prop") != "prop":
             return None
         return _prob_at(prop_now.get(hold_key(h)), h.get("market") or "",
-                        h.get("side"), h.get("line"), fits)
+                        h.get("side"), h.get("line"), fits, main_as_shown=True)
 
     def lock(h, why):
         """`_locked` at today's chance, with today's projection and today's

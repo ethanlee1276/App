@@ -400,6 +400,21 @@ def _season_week_dates(seasons=None) -> dict:
     return game_dates(seasons)
 
 
+def held_seasons(years) -> set:
+    """The seasons a measurement is scored on: the newest two once there
+    are three or more, the newest one when there are two (fitted on the
+    older, scored on the newer — still nothing scored that it was fitted
+    on), none with fewer. The props closes only begin in 2025, so the
+    three-season rule alone left the menus, the recipes and the attention
+    test with nothing to hold out until 2027 (box run, 2026-10-17)."""
+    ys = sorted(set(years))
+    if len(ys) >= 3:
+        return set(ys[-2:])
+    if len(ys) == 2:
+        return {ys[-1]}
+    return set()
+
+
 def closes_compact(conn, sport: str, market: str) -> dict:
     """``{(player, date): {book: (line, over, under)}}`` — each book's last
     pre-game quote that date, as tuples. A tuple, not a dict, because six
@@ -410,7 +425,11 @@ def closes_compact(conn, sport: str, market: str) -> dict:
          f"{_db._commence_sql(conn)} FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
     out: dict = {}
     for r in conn.execute(q, (sport, market)):
-        if _db._in_play(r) or _num(r["line"]) is None or not r["book"]:
+        # "proxy" is our own placeholder line where no book hung one — never
+        # a book's close (it sat in the copies groups as a book of its own,
+        # box run 2026-10-17).
+        if (_db._in_play(r) or _num(r["line"]) is None or not r["book"]
+                or str(r["book"]).strip().lower() == "proxy"):
             continue
         out.setdefault((r["player"], str(r["taken_at"])[:10]), {})[str(r["book"])] = (
             float(r["line"]), r["over_odds"], r["under_odds"])
@@ -642,10 +661,10 @@ def verdict(scored) -> dict:
 def measure(conn, sport: str = "nfl", seasons=None) -> dict:
     cases = history_cases(conn, sport, seasons)
     years = sorted({c["season"] for c in cases})
-    if len(years) < 3:
+    test = held_seasons(years)
+    if not test:
         return {"sport": sport, "cases": len(cases), "seasons": years,
-                "note": "fewer than three seasons of stored closes — nothing to hold out"}
-    test = set(years[-2:])
+                "note": "fewer than two seasons of stored closes — nothing to hold out"}
     train = [c for c in cases if c["season"] not in test]
     held = [c for c in cases if c["season"] in test]
     f_train = fit(train)

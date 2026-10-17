@@ -76,15 +76,18 @@ def test_the_table_and_the_clubs_shrunk_toward_the_league():
     assert out["league"] == 0.02 and out["club"] is None, "the club is folded in for questionable only"
 
 
-def test_the_held_out_season_is_the_last():
+def test_the_held_out_seasons_walk_forward():
     rows = []
     for season in (2023, 2024, 2025):
         for i in range(40):
             rows.append((season, "KC", "Questionable", "Limited", i % 10 != 0, None))
             rows.append((season, "NYJ", "Questionable", "Limited", i % 2 == 0, None))
     h = P.held_out(rows)
-    assert h["season"] == 2025 and h["n"] == 80 and h["gain"] > 0
-    assert not h["holds"], "80 listings is not 300"
+    assert h["season"] == "2024+2025" and h["n"] == 160 and h["gain"] > 0, h
+    assert set(h["by_season"]) == {"2024", "2025"}, "each held-out season scored on the seasons before it"
+    assert not h["holds"], "160 listings is not 300"
+    two = [r for r in rows if r[0] >= 2024]
+    assert P.held_out(two)["season"] == "2025", "two seasons: fitted on the older, scored on the newer"
 
 
 def test_the_section_reads_this_weeks_report_and_the_pages_draw_it():

@@ -162,8 +162,10 @@ def test_the_export_reveals_picks_only_for_days_whose_games_are_over():
 def test_run_does_all_three_and_survives_an_empty_chain():
     conn, d = _ledger([])
     store = W.connect(d / "witness.db")
-    out = W.run(conn, store, NOW, http=FakeCalendar(), post=lambda s: True)
+    out = W.run(conn, store, NOW, http=FakeCalendar(), post=lambda s: True,
+                out_dir=d / "ots", path=d / "witness.json")
     assert out["anchored"] is False and "empty" in out["why"] and out["upgraded"] == 0
+    assert (d / "witness.json").exists(), "the page it writes is the one it was given, never the live one"
 
 
 def test_the_sweep_calls_the_witness_after_the_heads_and_the_page_is_wired():

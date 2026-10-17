@@ -5085,10 +5085,18 @@ def _absent_player_verdict(hist_conn, b):
             return "zero"
         return "void"
     # College from here.
+    return _college_absent(hist_conn, b, target)[0]
+
+
+def _college_absent(hist_conn, b, target):
+    """``(verdict, why)`` — the college half of `_absent_player_verdict`.
+    ``why`` names the link that holds the bet open, so the settle check
+    can say which one (`absent_blocker`); the verdict is the rule's own."""
+    from .sources.oddsapi import normalize_name
     try:
         d0 = datetime.date.fromisoformat(b["date"] or "")
     except ValueError:
-        return None
+        return None, "its date is not a calendar day"
     # The team: off the bet where the writer stamped it, else off the
     # player's own earlier stat rows. Five 09-12 rows had neither — a
     # first-appearance freshman has no history — which is why the bet
@@ -5114,7 +5122,8 @@ def _absent_player_verdict(hist_conn, b):
         except Exception:                                # noqa: BLE001
             team = None
     if not team:
-        return None
+        return None, ("no team for him — none stamped on the bet, no stat row in the "
+                      "45 days before, not on the cached roster")
     lo = (d0 - datetime.timedelta(days=1)).isoformat()
     hi = (d0 + datetime.timedelta(days=1)).isoformat()
     # ONE FIXTURE, however many rows. The games table holds the same
@@ -5128,14 +5137,15 @@ def _absent_player_verdict(hist_conn, b):
         (lo, hi, team, team)).fetchall()
     fixtures = {(g["home"], g["away"]) for g in finals}
     if len(fixtures) != 1:
-        return None
+        return None, (f"{team} has no final game a day either side of the date" if not fixtures
+                      else f"{team} has {len(fixtures)} final games a day either side — the rule needs one")
     periods = sorted({g["period"] for g in finals})
     marks = ",".join("?" * len(periods))
     filed = hist_conn.execute(
         f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
         f"AND team=? LIMIT 1", (*periods, team)).fetchone()
     if not filed:
-        return None
+        return None, f"{team}'s game is final but its box score is not filed"
     if b["market"] in PLAY_FILE_MARKETS and (datetime.date.today() - d0).days < PLAY_FILE_DAYS:
         # The box score is in; the play file, which would show him thrown
         # at, may not be (see PLAY_FILE_MARKETS). Its rows carry no `-box`.
@@ -5143,8 +5153,18 @@ def _absent_player_verdict(hist_conn, b):
             f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
             f"AND team=? AND game_id NOT LIKE '%-box' LIMIT 1", (*periods, team)).fetchone()
         if not read:
-            return "wait"
-    return "void"
+            return "wait", f"waiting for the play file on {team}'s game (up to {PLAY_FILE_DAYS} days)"
+    return "void", "the absent-player rule voids it — the settle has not run since"
+
+
+def absent_blocker(hist_conn, b) -> str:
+    """Words for why a college prop with no stat line is still open — the
+    link of the absent-player rule it stops at — or ``""`` where the rule
+    does not apply. Read-only; the settle check prints it."""
+    if b["sport"] != "cfb" or b["market"] in GAME_MARKETS or b["category"] in GRADED_ELSEWHERE:
+        return ""
+    from .sources.oddsapi import normalize_name
+    return _college_absent(hist_conn, b, normalize_name(b["player"] or ""))[1]
 
 
 def _waits_for_play_file(hist_conn, b) -> bool:

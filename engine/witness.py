@@ -382,13 +382,19 @@ def export(ledger_conn, store=None, now=None, path: Path = EXPORT) -> dict:
     return payload
 
 
-def run(ledger_conn, store=None, now=None, http=_http, post=None) -> dict:
-    """The sweep's one call: anchor if due, upgrade what is ready, export."""
+def run(ledger_conn, store=None, now=None, http=_http, post=None,
+        out_dir: Path = OTS_DIR, path: Path = EXPORT) -> dict:
+    """The sweep's one call: anchor if due, upgrade what is ready, export.
+
+    ``out_dir`` and ``path`` are the proofs' folder and the page's file,
+    the live ones by default; the suite passes its own, because a test of
+    this call wrote the live web/data/witness.json on every deploy's run
+    (found 2026-10-17)."""
     store = store or connect()
-    out = anchor(ledger_conn, store, now, http=http, post=post)
-    out["upgraded"] = upgrade_pending(store, now, http=http)
+    out = anchor(ledger_conn, store, now, http=http, post=post, out_dir=out_dir)
+    out["upgraded"] = upgrade_pending(store, now, http=http, out_dir=out_dir)
     try:
-        export(ledger_conn, store, now)
+        export(ledger_conn, store, now, path=path)
     except OSError as exc:
         out["export_error"] = str(exc)
     return out

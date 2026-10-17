@@ -67,13 +67,13 @@ def _final_margin(hconn, b) -> float | None:
 
     where, wargs = _hist_where(b)
     rows = hconn.execute(
-        f"SELECT player, game_id FROM player_game_logs WHERE {where} "
+        f"SELECT player, game_id, team FROM player_game_logs WHERE {where} "
         f"AND market=? AND player=?",
         (*wargs, b["market"], b["player"])).fetchall()
     if not rows:
         target = normalize_name(b["player"])
         rows = [r for r in hconn.execute(
-                    f"SELECT player, game_id FROM player_game_logs "
+                    f"SELECT player, game_id, team FROM player_game_logs "
                     f"WHERE {where} AND market=?", (*wargs, b["market"]))
                 if normalize_name(r["player"]) == target]
     if len(rows) > 1:
@@ -84,6 +84,17 @@ def _final_margin(hconn, b) -> float | None:
     g = hconn.execute(
         f"SELECT home_score, away_score FROM games WHERE {where} "
         f"AND game_id=?", (*wargs, rows[0]["game_id"])).fetchone()
+    team = rows[0]["team"]
+    if g is None and team:
+        # AN NFL LOG NAMES ITS GAME BY TEAM AND WEEK ("BUF-005", engine/
+        # ingest.nfl_player_log_rows) and the games table by its matchup
+        # ("BUF@LA"), so the id above never matched an NFL final and no NFL
+        # loss was ever read as a blowout (found 2026-10-17: the autopsy's
+        # script step at 0% in every market). His team's one game that week.
+        found = hconn.execute(
+            f"SELECT home_score, away_score FROM games WHERE {where} "
+            f"AND (home=? OR away=?)", (*wargs, team, team)).fetchall()
+        g = found[0] if len(found) == 1 else None
     if not g or g["home_score"] is None or g["away_score"] is None:
         return None
     return abs(float(g["home_score"]) - float(g["away_score"]))

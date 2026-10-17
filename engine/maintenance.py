@@ -1779,6 +1779,17 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             ingest_ok = False
             log(f"  ⚠️  results ingest failed: {exc}")
 
+    # THE LOSS AUTOPSY (engine/autopsy), rebuilt once a day here and no
+    # longer inside a board build: it reads every graded pick and four
+    # seasons of usage, and the NFL build already runs within seconds of its
+    # 600-second limit on this box (2026-10-17: it timed out every cycle).
+    try:
+        from . import autopsy as _ap
+        if _ap.refresh():
+            log("  loss autopsy: rebuilt from the graded picks")
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  loss autopsy skipped: {exc}")
+
     # THE HIT TRACKER AND THE PITCH CHART (engine/mlb/charts, 2026-10-13,
     # Ethan: "Can we do a hit tracker for mlb?"): every final in the same
     # range, each read once, and this season's finals not yet read, a

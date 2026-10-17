@@ -231,8 +231,9 @@ def measure(conn, sport: str = "nfl", markets=MARKETS) -> dict:
         rows = history(conn, sport, market, dates)
         years = sorted({r[0] for r in rows})
         entry: dict = {"closes": len(rows), "seasons": years}
-        if len(years) >= 3:
-            test = set(years[-2:])
+        from .bookmenu import held_seasons
+        test = held_seasons(years)
+        if test:
             train = [r for r in rows if r[0] not in test]
             held = [r for r in rows if r[0] in test]
             ft = fit_all(train)

@@ -31,6 +31,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,6 +65,12 @@ SECTIONS = {
 
 _CACHE: dict = {}
 
+#: The most a board build spends on the readings, all sections together.
+#: Past it the rest are skipped for this build (named in the file's errors)
+#: and the board is written on time: the NFL build ran out its 600 seconds
+#: every cycle on 2026-10-17, and the readings are the part that can wait.
+BUDGET_SECONDS = 60.0
+
 
 def _section_fns(name: str):
     import importlib
@@ -72,13 +79,20 @@ def _section_fns(name: str):
             getattr(m, "game_view", None), getattr(m, "journal", None))
 
 
-def build(sport: str, props=None, games=None, board=None, only=None) -> dict:
-    """Every section for one board. Never raises."""
+def build(sport: str, props=None, games=None, board=None, only=None,
+          budget: float = BUDGET_SECONDS, clock=time.monotonic) -> dict:
+    """Every section for one board, each timed (``timings``), inside one
+    budget. Never raises."""
     out: dict = {"sport": sport, "built_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
-                 "sections": {}, "errors": {}}
+                 "sections": {}, "errors": {}, "timings": {}}
+    t0 = clock()
     for name in SECTIONS:
         if only and name not in only:
             continue
+        if clock() - t0 > budget:
+            out["errors"][name] = f"skipped: the readings' {budget:.0f}-second budget was spent"
+            continue
+        t = clock()
         try:
             fn = _section_fns(name)[0]
             if fn is None:
@@ -88,6 +102,8 @@ def build(sport: str, props=None, games=None, board=None, only=None) -> dict:
                 out["sections"][name] = data
         except Exception as exc:                            # noqa: BLE001
             out["errors"][name] = f"{type(exc).__name__}: {exc}"[:300]
+        finally:
+            out["timings"][name] = round(clock() - t, 2)
     return out
 
 
@@ -186,7 +202,10 @@ def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> di
         write(sport, data, where)
         if not quiet:
             errs = data.get("errors") or {}
-            print(f"  Ideas: {len(data['sections'])} section(s) written for {sport.upper()}"
+            tm = data.get("timings") or {}
+            slow = sorted(tm.items(), key=lambda kv: -kv[1])[:3]
+            print(f"  Ideas: {len(data['sections'])} section(s) written for {sport.upper()} in "
+                  f"{sum(tm.values()):.0f}s (slowest: {', '.join(f'{k} {v:.0f}s' for k, v in slow)})"
                   + (f" — failed: {', '.join(f'{k} ({v})' for k, v in errs.items())}" if errs else ""))
         return data
     except Exception as exc:                                # noqa: BLE001

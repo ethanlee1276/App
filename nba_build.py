@@ -310,6 +310,43 @@ def lineup_card(player: str, market: str, team: str, gone: dict, hist: dict,
     return card
 
 
+def vacancy_for(player: str, team: str, gone: dict, hist: dict, listed: dict, k: float,
+                tune=None, cache: dict | None = None) -> float:
+    """The minutes tonight's absences open for ``player`` (engine/nba/vacancy):
+    ``k`` × the ruled-out regulars' usual minutes, shared over his club's
+    rotation — the men who played in its last `NEW_ABSENCE_GAMES` games and
+    are not ruled out — by each one's own base minutes. 0.0 with ``k`` 0
+    (the verdict has not held) or nobody out, so the slot stays empty."""
+    away = (gone or {}).get(team) or []
+    if not k or not away:
+        return 0.0
+    cache = {} if cache is None else cache
+    if team not in cache:
+        from engine.nba.minutes import base_minutes, role_minutes
+        from engine.nba.vacancy import shares
+        from engine.hoops import NBA
+        out = {n for n, _m in away}
+        days = set()
+        for h in hist.values():
+            if h.get("team") == team:
+                days.update((h.get("by_week") or {}).keys())
+        recent = set(sorted(days, reverse=True)[:NEW_ABSENCE_GAMES])
+        rotation = {}
+        for name, h in hist.items():
+            if h.get("team") != team or name in out:
+                continue
+            if str((listed.get(name) or {}).get("status") or "").strip().lower() in OUT_STATUSES:
+                continue
+            if not recent & set((h.get("by_week") or {}).keys()):
+                continue
+            mins = [float(m) for m in (h.get("minutes") or [])]
+            if len(mins) < 3:
+                continue
+            rotation[name] = base_minutes(role_minutes(mins)[0], tune or NBA) or 0.0
+        cache[team] = shares(sum(m for _n, m in away), rotation, k)
+    return float(cache[team].get(player) or 0.0)
+
+
 def lineup_note(player: str, market: str, team: str, gone: dict, hist: dict,
                 cache: dict | None = None) -> str:
     """The teammate card as one sentence, for the Edge card's context."""
@@ -790,6 +827,11 @@ def main() -> None:
         from engine.sources.oddsapi import normalize_name as _nn
         listed = {p: injuries[_nn(p)] for p in hist if _nn(p) in injuries}
         gone = absences(hist, injuries)
+        # THE MINUTES THOSE ABSENCES OPEN (engine/nba/vacancy), only once
+        # nbavacancy.py's held-out verdict holds; k 0 leaves the slot empty.
+        from engine.nba import vacancy as _vac
+        _vac_k = _vac.k_for(args.league)
+        _vac_cache: dict = {}
         out["availability"] = {
             "rosters_read": bool(roster), "roster_clubs_missed": sorted(roster_missed),
             "moved": sorted(moved),
@@ -997,8 +1039,16 @@ def main() -> None:
                         if _dvp0 else (1.0, ""))
             _inj = listed.get(prop.player) or {}
             _status = str(_inj.get("status") or "").strip()
+            _vac_min = vacancy_for(prop.player, h["team"], gone, hist, listed, _vac_k, tune, _vac_cache)
+            _mate = lineup_card(prop.player, prop.market, h["team"], gone, hist, _onoff_cache)
+            if _mate and _vac_min:
+                _mate["note"] = _mate["note"].replace(
+                    "our minutes model does not move for it",
+                    f"our minutes model gives him {_vac_min:.1f} more of them (measured held out, "
+                    f"nbavacancy.py)")
             props.append({
                 "dvp_mult": _dm, "dvp_note": _dn,
+                "vacancy_minutes": _vac_min,
                 # THE INJURY BOARD ON THE PROP: ruled out is a grade-D
                 # restriction (no bet, the card says why); listed and
                 # playable is held until the lineup confirms, on the Edge
@@ -1007,10 +1057,9 @@ def main() -> None:
                 # itself does not move.
                 "injury_status": _status,
                 "restriction": _status.lower() in OUT_STATUSES,
-                "lineup_note": lineup_note(prop.player, prop.market, h["team"], gone,
-                                           hist, _onoff_cache),
-                "mate_card": lineup_card(prop.player, prop.market, h["team"], gone,
-                                         hist, _onoff_cache),
+                "lineup_note": (f"{_mate['headline']}. {_mate['note'].replace('Shown for you. ', '')}"
+                                if _mate else ""),
+                "mate_card": _mate,
                 # Each game's opponent and home or away, for the pick page.
                 "opps": h.get("opps") or [], "homes": h.get("homes") or [],
                 "player": prop.player, "team": h["team"],

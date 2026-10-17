@@ -86,23 +86,35 @@ def sports_with_history(db: str = "data/history.db") -> list[str]:
         conn.close()
 
 
-def refit_sport(sport: str, db: str = "data/history.db") -> list[str]:
+def refit_sport(sport: str, db: str = "data/history.db", say=None) -> list[str]:
     """Run all three fitters for one sport. Returns log lines.
 
     Invokes the real CLIs rather than reimplementing them, so there is
     exactly one definition of each fit and this cannot drift from the
     thing it runs — the same reasoning launch.py's refit command gives.
+
+    ``say``, when given, hears each fitter start and finish as it happens
+    (`python3 -m engine.deepfit nba` passes print). The lines alone come
+    back only at the end — the runbook's step AI printed nothing for 25
+    minutes on 2026-10-17 and was stopped, when the temperature fit on its
+    own had taken 17 the run before.
     """
+    import time as _time
     lines = []
+    note = say or (lambda _l: None)
     for label, script in REFIT_ORDER:
         cmd = [sys.executable, script, "--from-db", db, "--sport", sport]
+        t0 = _time.monotonic()
+        note(f"  {sport} {label}: running {script} (up to {TIMEOUT_S // 60} min)…")
         try:
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True,
                                text=True, timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
             lines.append(f"⚠️  {sport} {label}: still running after "
                          f"{TIMEOUT_S}s — skipped")
+            note(lines[-1])
             continue
+        note(f"  {sport} {label}: done in {_time.monotonic() - t0:.0f}s")
         if r.returncode != 0:
             tail = ((r.stderr or r.stdout or "").strip().splitlines()
                     or ["no output"])[-1]
@@ -332,5 +344,11 @@ def refit_all(db: str = "data/history.db") -> list[str]:
 
 
 if __name__ == "__main__":                       # pragma: no cover
-    for _line in refit_all():
-        print(_line)
+    # `python3 -m engine.deepfit nba` refits one sport and says each step as
+    # it goes; with no sport, every sport with history, as the weekly job.
+    if len(sys.argv) > 1:
+        for _line in refit_sport(sys.argv[1].lower(), say=lambda l: print(l, flush=True)):
+            print(_line, flush=True)
+    else:
+        for _line in refit_all():
+            print(_line)

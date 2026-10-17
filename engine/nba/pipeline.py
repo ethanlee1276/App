@@ -84,9 +84,13 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
                           restriction=prop.get("restriction", False),
                           role_uncertain=prop.get("role_uncertain", False),
                           tune=tune)
+    # THE MINUTES A TEAMMATE'S ABSENCE OPENS (engine/nba/vacancy): filled
+    # by the build only once nbavacancy.py's held-out verdict holds; 0.0
+    # otherwise, so the slot stays empty exactly as before.
     proj_min = project_minutes(base, spread, prop.get("is_starter", False),
                                prop.get("is_favorite", False),
                                prop.get("rest", "1day"),
+                               vacancy_minutes=float(prop.get("vacancy_minutes") or 0.0),
                                recent_high=max(minutes) if minutes else None,
                                tune=tune)
     # Player memory (engine/playerfit.py): the record's earned correction

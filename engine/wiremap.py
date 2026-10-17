@@ -83,6 +83,8 @@ FITS = (
     ("bridgefit", "number", ("engine.carry",), "the usage bridge leans on last season in the volume role"),
     ("seasonpriorfit", "number", ("engine.carry",), "his own last season as the form's prior, week 4 on"),
     ("hoopsdvpfit", "number", ("engine.hoopsdvp",), "how much of a basketball defence reaches one line"),
+    ("nbavacancy", "number", ("engine.nba.vacancy",),
+     "the minutes a regular's absence opens for his teammates, once its held-out verdict holds"),
     ("tdearlyfit", "number", ("engine.touchdowns",), "September touchdown chances, graded"),
     ("cfbtargetfit", "number", ("engine.sources.cfbstats",), "a thrown-at, caught-nothing game counts as a zero"),
     ("marketfit", "number", ("engine.passint",), "which new markets the model can sort (interceptions shipped)"),

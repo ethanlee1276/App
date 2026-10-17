@@ -112,7 +112,10 @@ def test_the_fit_finds_a_real_effect_and_the_bar_wants_the_physics_sign():
     wrong = K.held_out(_sim(effect=+1.2))
     assert not wrong["sign_ok"] and not wrong["holds"], "an effect against the physics never holds"
     few = K.held_out(_sim(n=1500))
-    assert few["n"] == 600 and not few["holds"], "600 kicks is not 2,000"
+    assert few["test"] == [2023, 2024, 2025] and few["n"] == 900, "newest seasons until 2,000, two left to fit"
+    assert not few["holds"], "900 kicks is not 2,000"
+    mid = K.held_out(_sim(n=4500))
+    assert mid["test"] == [2023, 2024, 2025] and mid["n"] == 2700, "two seasons short of 2,000: a third is held out"
 
 
 def test_the_game_and_kicker_pages_show_the_air():

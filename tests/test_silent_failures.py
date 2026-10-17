@@ -217,6 +217,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # unreadable: <error>"; the quiet day prints nothing. The settle
         # must still grade every bet when it fails.
         "_line_opens_ro",
+        # THE BUILD'S STAGE CLOCK (engine/stageclock.mark, 2026-10-17),
+        # caught by this sweep the hour it was written. Nothing reads the
+        # seconds it returns; its output is the printed line, and a failure
+        # leaves that stage's line out, which reads as "it did not finish",
+        # never as a quiet stage. A timer must never cost the build it times.
+        "mark",
     }
 
     def broad(h):

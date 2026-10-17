@@ -9,7 +9,7 @@ market that is its own opportunity is all volume; the role going in is his
 four games before, two at least; the tags run left early, script, volume,
 efficiency, both; the journal counts a pick once and reads only NFL
 season-week keys; a step is named only when it goes against the pick in
-losses clearly more than in wins, over 100 losses; the builds refresh it at
+losses clearly more than in wins, over 100 losses; the daily chores refresh it at
 most once a day; and the pick page shows the shares, the steps and his last
 picks, labelled. No test touches the network.
 

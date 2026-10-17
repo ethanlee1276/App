@@ -3,6 +3,8 @@
 
     cd /srv/qellys && sudo -u qellys python3 nbavacancy.py          # NBA, every stored season
     cd /srv/qellys && sudo -u qellys python3 nbavacancy.py wnba     # the same for the WNBA
+    cd /srv/qellys && sudo -u qellys python3 nbavacancy.py --heldout         # the rule, held out
+    cd /srv/qellys && sudo -u qellys python3 nbavacancy.py --heldout --save  # ...and keep its verdict
 
 Read-only: it opens the history database read-only and writes nothing.
 
@@ -42,6 +44,19 @@ rule only if, in EVERY season measured, teammates' minutes run at least
 0, AND points run above the projection with the interval above 0. A
 candidate that clears it still has to beat the empty slot on held-out
 seasons before it moves a number; this script changes nothing.
+
+THE HELD-OUT TEST (`--heldout`, 2026-10-17, after the bar above was MET on
+the box): the rule in engine/nba/vacancy — ``k`` × the absent regulars'
+usual minutes, shared over the teammates who played in proportion to each
+one's own base minutes — replayed through the board's own minutes model
+(`project_minutes(vacancy_minutes=...)`, its caps included) and the same
+per-minute rate. Each season held out in turn, ``k`` fitted on the others
+(least squared error on minutes). THE BAR, written before the run: in
+EVERY held-out season the squared error of BOTH minutes and points in
+fresh-absence games falls against the empty slot. `--save` writes the
+verdict (data/models/nba_vacancy.json) with ``k`` fitted on every season;
+the board fills the slot only when it holds (engine/nba/vacancy.k_for).
+Opened read-only like the rest; `--save` writes only that one file.
 """
 
 import math
@@ -153,6 +168,128 @@ def replay(clubs: dict, sport: str, tune=None) -> dict:
     return out
 
 
+def cases(clubs: dict, sport: str, tune=None) -> list:
+    """Every teammate who played in a fresh-absence game, with what the
+    board projected for him and what it would have with a vacancy:
+    ``[{season, min, pts, proj_min, proj_pts, base, starter, high, absent, share}]``.
+    ``absent`` is the absent regulars' usual minutes summed; ``share`` his
+    base minutes over the base minutes of every teammate who played."""
+    from engine import playerfit
+    from engine.hoops import for_league
+    from engine.nba import pipeline
+    from engine.nba.minutes import base_minutes, role_minutes
+    tune = tune or for_league(sport)
+    keep = playerfit.mult_for
+    playerfit.mult_for = lambda *a, **k: 1.0
+    out: list = []
+    try:
+        for (season, team), games in sorted(clubs.items()):
+            dates = sorted(games)
+            hist: dict = {}
+            for i, d in enumerate(dates):
+                game = games[d]
+                recent = set(dates[max(0, i - FRESH):i])
+                gone = _absent(hist, game, recent)
+                if gone:
+                    absent = sum(sum(s.get("min", 0.0) for _d, s in hist[g][-REGULAR_GAMES:])
+                                 / len(hist[g][-REGULAR_GAMES:]) for g in gone)
+                    rows = []
+                    for name, s in game.items():
+                        if s.get("min", 0.0) <= 0:
+                            continue
+                        prior = list(reversed(hist.get(name, [])[-WINDOW:]))   # newest first
+                        if len(prior) < MIN_PRIOR:
+                            continue
+                        mins = [p.get("min", 0.0) for _d, p in prior]
+                        pj = pipeline.project({"player": name, "minutes": mins, "spread": 0.0,
+                                               "is_starter": bool(prior[0][1].get("starter")),
+                                               "is_favorite": False, "rest": "1day", "market": "pts",
+                                               "values": [p.get("pts", 0.0) for _d, p in prior]}, tune)
+                        if "skip" in pj or not pj.get("proj_min"):
+                            continue
+                        base = base_minutes(role_minutes(mins)[0], tune) or 0.0
+                        rows.append({"season": season, "team": team, "date": d,
+                                     "min": s.get("min", 0.0), "pts": s.get("pts", 0.0),
+                                     "proj_min": float(pj["proj_min"]), "proj_pts": float(pj["projection"]),
+                                     "base": float(base), "starter": bool(prior[0][1].get("starter")),
+                                     "high": max(mins) if mins else None, "absent": absent})
+                    tot = sum(r["base"] for r in rows if r["base"] > 0)
+                    for r in rows:
+                        r["share"] = (r["base"] / tot) if tot > 0 and r["base"] > 0 else 0.0
+                        out.append(r)
+                for name, s in game.items():
+                    hist.setdefault(name, []).append((d, s))
+    finally:
+        playerfit.mult_for = keep
+    return out
+
+
+def _with_k(r: dict, k: float, tune) -> tuple:
+    """(minutes, points) the board would have projected with ``k``."""
+    from engine.nba.minutes import project_minutes
+    if k <= 0 or r["share"] <= 0:
+        return r["proj_min"], r["proj_pts"]
+    m0 = project_minutes(r["base"], 0.0, r["starter"], False, "1day",
+                         recent_high=r["high"], tune=tune)
+    mk = project_minutes(r["base"], 0.0, r["starter"], False, "1day",
+                         vacancy_minutes=k * r["absent"] * r["share"], recent_high=r["high"], tune=tune)
+    if not m0:
+        return r["proj_min"], r["proj_pts"]
+    return r["proj_min"] * mk / m0, r["proj_pts"] * mk / m0
+
+
+def _sse(rows: list, k: float, tune) -> tuple:
+    em = ep = 0.0
+    for r in rows:
+        pm, pp = _with_k(r, k, tune)
+        em += (r["min"] - pm) ** 2
+        ep += (r["pts"] - pp) ** 2
+    return em, ep
+
+
+def heldout(rows: list, sport: str = "nba", tune=None) -> dict:
+    """Each season held out in turn: ``k`` fitted on the others, scored
+    against the empty slot. ``{"holds", "k", "by_season", "n"}`` — ``k``
+    refitted on every season for the board to use if it holds."""
+    from engine.hoops import for_league
+    from engine.nba.vacancy import K_GRID
+    tune = tune or for_league(sport)
+    seasons = sorted({r["season"] for r in rows})
+    by: dict = {}
+
+    def fit(train):
+        return min(K_GRID, key=lambda k: (_sse(train, k, tune)[0], k))
+
+    for s in seasons:
+        train = [r for r in rows if r["season"] != s]
+        test = [r for r in rows if r["season"] == s]
+        if not train or not test:
+            continue
+        k = fit(train)
+        m0, p0 = _sse(test, 0.0, tune)
+        mk, pk = _sse(test, k, tune)
+        by[str(s)] = {"k": k, "n": len(test),
+                      "minutes_gain": round(1 - mk / m0, 4) if m0 else 0.0,
+                      "points_gain": round(1 - pk / p0, 4) if p0 else 0.0}
+    holds = len(by) >= 2 and all(v["k"] > 0 and v["minutes_gain"] > 0 and v["points_gain"] > 0
+                                 for v in by.values())
+    return {"holds": holds, "k": fit(rows) if rows else 0.0, "by_season": by, "n": len(rows),
+            "bar": "every held-out season: squared error of minutes AND points falls against the empty slot"}
+
+
+def heldout_report(res: dict, sport: str) -> list:
+    lines = [f"{sport.upper()} VACANCY RULE, HELD OUT — k × the absent regulars' minutes, shared by base "
+             f"minutes over the teammates who played ({res['n']} teammate-games in fresh absences)", ""]
+    for s, v in sorted(res["by_season"].items()):
+        lines.append(f"  {s} held out   k {v['k']:.2f} (fitted on the others)   n {v['n']:5d}   "
+                     f"minutes {100 * v['minutes_gain']:+.2f}%   points {100 * v['points_gain']:+.2f}%")
+    lines.append("")
+    lines.append(f"THE BAR ({res['bar']}): " + ("HOLDS" if res["holds"] else "does not hold")
+                 + (f" — the board fills the slot at k {res['k']:.2f} once saved (--save)." if res["holds"]
+                    else " — the slot stays empty."))
+    return lines
+
+
 def _mean_ci(vals: list) -> tuple:
     n = len(vals)
     if n < 2:
@@ -210,6 +347,8 @@ def _ro(path):
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    flags = {a for a in argv if a.startswith("--")}
+    argv = [a for a in argv if not a.startswith("--")]
     sport = (argv[0] if argv else "nba").lower()
     from engine import db
     conn = _ro(db.DEFAULT_DB)
@@ -227,6 +366,14 @@ def main(argv=None) -> int:
         conn.close()
     if not clubs:
         print(f"No {sport} logs stored.")
+        return 0
+    if "--heldout" in flags:
+        res = heldout(cases(clubs, sport, tune), sport, tune)
+        for line in heldout_report(res, sport):
+            print(line)
+        if "--save" in flags:
+            from engine.nba import vacancy
+            print(f"saved: {vacancy.save(sport, res)}")
         return 0
     for line in report(replay(clubs, sport, tune), sport):
         print(line)

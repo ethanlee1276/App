@@ -436,6 +436,39 @@ def test_the_box_check_names_what_each_owed_bet_waits_on():
     assert "settle lane: autosettle for 1 min" in got, got
     assert "settle lane: idle" in S.settle_line(t / "none.json", t / "none.json", now=now)
 
+
+def test_the_box_check_says_which_step_holds_a_college_bet_with_no_stat_line():
+    # 2026-10-17: 61 college rows read only "no stat line for him yet",
+    # and a man with no team, a box that never landed and a void the settle
+    # had not reached all looked the same. Each now names its link of the
+    # settler's own absent-player rule, and the verdict is the rule's.
+    import settlecheck as S
+    t = Path(tempfile.mkdtemp())
+    L = ledger.connect(t / "l.db")
+    ledger.configure_bankroll(L, starting=1000, unit_pct=1)
+    H = db.connect(t / "h.db")
+    for player, team in (("Nobody Known", None), ("Box Missing", "UGA"), ("Gone Man", "BAMA")):
+        _bet(L, "cfb", OLD, player, "anytime_td", 0.5, category="stale")
+        if team:
+            L.execute("UPDATE bets SET team=? WHERE player=?", (team, player))
+    L.commit()
+    for gid, home, away in (("AUB@UGA", "UGA", "AUB"), ("LSU@BAMA", "BAMA", "LSU")):
+        H.execute("INSERT INTO games (sport, season, period, game_id, date, home, away, home_score, away_score) "
+                  "VALUES ('cfb', 2026, ?, ?, ?, ?, ?, 24, 17)", (OLD, gid, OLD, home, away))
+    db.upsert_player_logs(H, [{"sport": "cfb", "season": 2026, "period": OLD, "game_id": "LSU@BAMA",
+                               "player": "Other Back", "team": "BAMA", "opponent": "LSU",
+                               "position": "RB", "home": 1, "market": "rush_yds", "value": 70.0}])
+    H.commit()
+    text = "\n".join(S.report(t / "l.db", t / "h.db", today=TODAY))
+    assert "Nobody Known anytime_td [stale] — no stat line for him — no team for him" in text, text
+    assert "Box Missing anytime_td [stale] — no stat line for him — UGA's game is final but its box score is not filed" in text, text
+    assert "Gone Man anytime_td [stale] — no stat line for him — the absent-player rule voids it" in text, text
+    L.row_factory = H.row_factory = __import__("sqlite3").Row
+    got = {b["player"]: ledger._absent_player_verdict(H, b)
+           for b in L.execute("SELECT * FROM bets WHERE sport='cfb'")}
+    assert got == {"Nobody Known": None, "Box Missing": None, "Gone Man": "void"}, got
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

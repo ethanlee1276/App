@@ -179,11 +179,30 @@ def _ll(p, y):
     return -(math.log(p) if y else math.log(1 - p))
 
 
+def held_seasons(kicks: list, seasons: list) -> set:
+    """The newest seasons, as many as it takes to score MIN_KICKS kicks,
+    always leaving at least two seasons to fit on (and never fewer than the
+    newest two held out). A season holds about a thousand field goals, so
+    the newest two — one of them in progress — could not reach the bar's
+    count until December (box run, 2026-10-17: 1,467 kicks in all)."""
+    per = {s: 0 for s in seasons}
+    for k in kicks:
+        per[k["season"]] += 1
+    test: list = []
+    for s in reversed(seasons):
+        if len(seasons) - len(test) <= 2:
+            break
+        test.append(s)
+        if len(test) >= 2 and sum(per[x] for x in test) >= MIN_KICKS:
+            break
+    return set(test)
+
+
 def held_out(kicks: list) -> dict:
     seasons = sorted({k["season"] for k in kicks})
     if len(seasons) < 3:
         return {"n": 0, "gain": None, "t": None, "holds": False, "note": "fewer than three seasons"}
-    test = set(seasons[-2:])
+    test = held_seasons(kicks, seasons)
     tr = [k for k in kicks if k["season"] not in test]
     te = [k for k in kicks if k["season"] in test]
     base = logistic([features(k, False) for k in tr], [k["made"] for k in tr])

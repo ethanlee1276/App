@@ -114,8 +114,15 @@ def test_the_droplet_check_names_a_step_that_moves_nothing():
     assert not [x for x in got if "every RB" in x], "two roles among the backs"
     few = C.findings("nfl", C.census([_row("rec_yds", "WR", "wr1", {"park": 1.0})] * 5))
     assert few == [], "five rows say nothing"
-    known = [_row("pass_td", "QB", "starter", {"matchup": 1.0, "weather": 1.0})] * 25
+    # Left out on purpose (pass_td matchup, KNOWN) or with no coefficient to
+    # move (weather on carries) — never a finding. Passing TDs DO carry a
+    # weather coefficient now, so a flat week of them is asked about.
+    known = ([_row("pass_td", "QB", "starter", {"matchup": 1.0})] * 25
+             + [_row("rush_att", "RB", f"rb{1 + i % 2}", {"weather": 1.0}) for i in range(25)])
     assert C.findings("nfl", C.census(known)) == [], "measured and left out on purpose"
+    flat = [_row("pass_td", "QB", "starter", {"weather": 1.0})] * 25
+    assert C.findings("nfl", C.census(flat)) == [
+        "nfl pass_td: 'Weather' moved none of 25 rows — wired in and reading nothing?"], "it has a coefficient"
     text = "\n".join(C.report({"nfl": {"recommendations": rows + known}, "mlb": "unreadable — x"}))
     assert "LOOK AT THESE:" in text and "known: pass_td matchup" in text and "mlb: unreadable" in text
 

@@ -237,6 +237,14 @@ def _peak_mb() -> float:
 
 def _mem(stage: str, on: bool = True) -> None:
     """Record where memory stands after one stage. Never fatal."""
+    # THE LIVE LINE, with or without --memtrace (engine/stageclock): the
+    # loop kills a build at 600 seconds, before any report at the end can
+    # print, so each stage says its seconds as it finishes.
+    try:
+        from engine import stageclock as _clock
+        _clock.start() if stage == "start" else _clock.mark(stage)
+    except Exception:                                        # noqa: BLE001
+        pass
     if not on:
         return
     try:
@@ -1109,6 +1117,7 @@ def main() -> None:
                        likely_previous=_likely_prev(args.out, slate.date)
                        if args.out else None,
                        before_likely=_scan_first)
+    _mem("run_slate", args.memtrace)
     # THE INVENTIONS (engine/ideas, Ethan 2026-10-16 "add everything now.
     # 1-13"), BEFORE THE MOST LIKELY BOARD since 2026-10-17: readings of this
     # slate written to a private file the pick and game pages ask for, and
@@ -1119,6 +1128,7 @@ def main() -> None:
     # likely bets and edge bets where it makes sense."
     from engine import ideas as _ideas
     _ideas.attach("nfl", slate.props, result.get("games"), result, out=args.out)
+    _mem("ideas readings", args.memtrace)
     try:
         from engine import ideagate as _gate
         _refused = _gate.edge(result, "nfl")
@@ -1144,6 +1154,7 @@ def main() -> None:
               f"{_t.get('top', 0)} top, {_t.get('strong', 0)} strong, {_t.get('look', 0)} worth a look")
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  one Most Likely board skipped: {_exc}")
+    _mem("most likely board", args.memtrace)
     # THE GAME PLAN (engine/gameplan): each game read in a bettor's order —
     # the line and the script, who is out, the matchup, the plays that
     # fit (volume first), the plays to avoid, what changes the read, and

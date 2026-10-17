@@ -103,6 +103,22 @@ def _has_line(hist, sport, b) -> str:
     return "box" if all(str(r[0]).endswith("-box") for r in rows) else "official"
 
 
+def _absent_why(hist, b) -> str:
+    """A prop with no stat line. College says which link of the settler's
+    absent-player rule holds it (engine.ledger.absent_blocker) — 61 college
+    rows read only "no stat line" on 2026-10-17 and nobody could tell a
+    missing box from a man with no team."""
+    plain = "no stat line for him yet (box or league file not in, or he did not play)"
+    if b["sport"] != "cfb":
+        return plain
+    try:
+        from engine import ledger
+        why = ledger.absent_blocker(hist, b)
+    except Exception:                                    # noqa: BLE001
+        return plain
+    return f"no stat line for him — {why}" if why else plain
+
+
 def report(ledger_path, history_path, today=None) -> list:
     today = today or _dt.date.today()
     yday = (today - _dt.timedelta(days=1)).isoformat()
@@ -136,7 +152,7 @@ def report(ledger_path, history_path, today=None) -> list:
             why = ("game bet on a final score — the settle has not run since" if b["market"] in GAME_MARKETS
                    else "stat line on file (box score) — the settle has not run since" if line == "box"
                    else "stat line on file — the settle has not run since" if line == "official"
-                   else "no stat line for him yet (box or league file not in, or he did not play)")
+                   else _absent_why(hist, b))
             owed.append((d, b["player"], b["market"], b["category"], why))
         out.append(f"{sport.upper():5} open {len(mine)}  ·  today {when['today']}  yesterday {when['yesterday']}  "
                    f"older {when['older']}  ahead {when['ahead']}"
@@ -146,6 +162,12 @@ def report(ledger_path, history_path, today=None) -> list:
             out.append(f"      {d}  {p} {m} [{c}] — {why}")
         if len(owed) > SHOW:
             out.append(f"      … and {len(owed) - SHOW} more")
+            # The whole list by reason, so the rows past SHOW are not a mystery.
+            tally: dict = {}
+            for *_, why in owed:
+                tally[why] = tally.get(why, 0) + 1
+            for why, n in sorted(tally.items(), key=lambda kv: -kv[1]):
+                out.append(f"      {n:4} × {why}")
     fights = [b for b in rows if b["sport"] == "ufc" or (b["category"] or "") == "ufc"]
     desk = [b for b in rows if (b["category"] or "") == "predmarket"]
     out.append(f"UFC   open {len(fights)}" + (f"  ·  oldest card {min(_day(b) for b in fights)}" if fights else ""))

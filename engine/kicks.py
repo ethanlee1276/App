@@ -26,6 +26,8 @@ football charts share; `chart` is what the page draws.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from .carries import _clean, _clock, _flag, _fold, _int, _num
 from .targets import _pid
 
@@ -134,6 +136,30 @@ def backfill_nfl(conn, season: int) -> int:
     for r in load_pbp_rows(int(season), columns=PBP_COLS):
         fold.add(r)
     return db.upsert_kicks(conn, fold.rows(nfl_names(int(season))))
+
+
+def backfill_past(conn, seasons, say=print, cache_dir=None) -> dict:
+    """``backfill_nfl`` for each of ``seasons`` with no kicks stored, for
+    the kick-physics bar (box run, 2026-10-17: 1,467 kicks in two seasons
+    against a bar of 2,000 held out). ``{season: rows}``.
+
+    A season's play file is about 100 MB in the cache, which nothing
+    prunes (engine/maintenance KEEP list), and the box has filled its disk
+    before — so a file this call downloaded is removed once its season is
+    read. One that was already there stays."""
+    if cache_dir is None:
+        from .sources.fetch import CACHE_DIR as cache_dir
+    out = {}
+    for s in missing_seasons(conn, seasons):
+        f = Path(cache_dir) / f"pbp_{int(s)}.csv"
+        had = f.exists()
+        try:
+            out[s] = backfill_nfl(conn, s)
+        finally:
+            if not had and f.exists():
+                f.unlink()
+        say(f"  {s}: {out[s]} kick(s) stored" + ("" if had else " · its download removed"))
+    return out
 
 
 # --- what the page draws ------------------------------------------------------

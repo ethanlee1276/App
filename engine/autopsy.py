@@ -253,8 +253,10 @@ def run(lconn, hconn) -> dict:
 
 
 def refresh(max_age: float = REFRESH_SECONDS) -> bool:
-    """Rebuild the saved autopsy when it is older than a day — the builds
-    keep it current without anyone running the command."""
+    """Rebuild the saved autopsy when it is older than a day — the daily
+    chores keep it current without anyone running the command (engine/
+    maintenance; inside a board build until 2026-10-17, when the NFL build
+    ran out of time every cycle)."""
     if time.time() - float(load().get("built_at") or 0) < max_age:
         return False
     from . import db as _db
@@ -281,10 +283,6 @@ def ideas_section(props, games, board, sport):
         rows[f"{r.get('player')}|{m}"] = {"market": m, "summary": summ,
                                           "his": (saved.get("players") or {}).get(f"{sport}|{r.get('player')}|{m}") or []}
     return {"rows": rows}
-
-
-def journal(sport, sec):
-    refresh()
 
 
 def pick_view(sec, player, market, side="", line=None):

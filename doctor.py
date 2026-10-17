@@ -488,13 +488,23 @@ def check_record_page(rep):
             "SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
             "AND category='main' AND (stake_units IS NULL OR stake_units <= 0)"
         ).fetchone()[0]
+        # THE PAGE'S HEADLINE IS THE PUBLIC RECORD, since RECORD_EPOCH
+        # (ledger.export_json writes it as "overall"; the unscoped count is
+        # "all_time"). Compared with the all-time count, the bets before the
+        # epoch read as an export 241 behind on every run of 2026-10-17 —
+        # the page leaving them out on purpose, not a stale file.
+        scoped = ledger.performance(c, since=ledger.RECORD_EPOCH)["settled"]
         shown = ((d.get("overall") or {}).get("settled")
                  or (d.get("performance") or {}).get("settled"))
+        shown_all = ((d.get("all_time") or {}).get("overall") or {}).get("settled")
         age_h = (time.time() - p.stat().st_mtime) / 3600
-        if shown is not None and shown != settled:
+        behind = shown is not None and (
+            shown != scoped or (shown_all is not None and shown_all != settled))
+        if behind:
             rep.add("record page", FAIL,
-                    f"the page shows {shown} settled bet(s), the journal has "
-                    f"{settled} — the export is behind",
+                    f"the page shows {shown} settled bet(s) since "
+                    f"{ledger.RECORD_EPOCH}, the journal has {scoped} — the "
+                    f"export is behind",
                     "python3 launch.py --settle all")
         else:
             note = (f" (+{unstaked} graded-but-unstaked, reported separately"
@@ -547,6 +557,12 @@ def check_premature_evidence(rep):
                 (*ledger.GAME_MARKETS, *ledger.GRADED_ELSEWHERE)).fetchall():
             where, wargs = ledger._hist_where(b)
             rows, _actual_fn = ledger._game_bet_evidence(h, b, where, wargs)
+            if not rows and b["sport"] == "cfb":
+                # THE SETTLER'S OWN FALLBACK (ledger.settle_from_history): a
+                # late college game is filed on the next UTC day — Hawaii-
+                # UNLV, 2026-09-05 Eastern, read as "a name mismatch" on
+                # every run of 2026-10-17 while its grade stood on a final.
+                rows, _actual_fn = ledger._neighbour_game_evidence(h, b, where, wargs)
             finals = [g for g in rows if g["home_score"] is not None]
             if finals:
                 continue

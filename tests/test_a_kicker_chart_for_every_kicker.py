@@ -246,6 +246,30 @@ def test_every_door_and_the_module():
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"
 
 
+def test_the_past_seasons_backfill_leaves_no_download_it_made():
+    # Box run, 2026-10-17: kick physics had 1,467 kicks and the bar needs
+    # 2,000 held out, so past seasons are read once — and a season's ~100 MB
+    # play file, which nothing prunes, goes once read unless it was there.
+    t = Path(tempfile.mkdtemp())
+    conn = D.connect(t / "h.db")
+    (t / "pbp_2022.csv").write_text("kept")
+    real, said = K.backfill_nfl, []
+
+    def fake(c, season):               # the fetch reuses a cached file
+        f = t / f"pbp_{season}.csv"
+        if not f.exists():
+            f.write_text("downloaded")
+        return 7
+    K.backfill_nfl = fake
+    try:
+        got = K.backfill_past(conn, (2022, 2023), say=said.append, cache_dir=t)
+    finally:
+        K.backfill_nfl = real
+    assert got == {2022: 7, 2023: 7}, got
+    assert (t / "pbp_2022.csv").read_text() == "kept" and not (t / "pbp_2023.csv").exists()
+    assert said == ["  2022: 7 kick(s) stored", "  2023: 7 kick(s) stored · its download removed"], said
+
+
 if __name__ == "__main__":
     fns = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
     for name, fn in fns:

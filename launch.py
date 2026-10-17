@@ -1601,9 +1601,28 @@ def refresh_ufc(quiet: bool = False) -> bool:
 #: also its live-games feed (`LIVE_FEEDS` maps cfb to cfb.json; there is
 #: no fast scoreboard behind it, so one stale board takes both down).
 _BOARD_RUNS: dict = {}
+class _ThreadNote:
+    """One note slot PER THREAD, read and written as ``note[0]`` like the
+    one-item list it replaced. The meme board rebuilds on its own thread
+    every 15 seconds (`_live_memes_refresher`), so a shared slot let its
+    timeout land between the college build failing and `_note_board`
+    reading why: the heartbeat said college failed because
+    "memes_build.py timed out after 180 seconds" (2026-10-17)."""
+
+    def __init__(self):
+        self._local = threading.local()
+
+    def __getitem__(self, _i):
+        return getattr(self._local, "note", "")
+
+    def __setitem__(self, _i, value):
+        self._local.note = value
+
+
 #: The last _run_build failure's reason (cleared on success) — read by
 #: _note_board so the heartbeat can carry WHY a board's refresh failed.
-_LAST_BUILD_NOTE = [""]
+#: Per thread (`_ThreadNote`): a board's note is its own thread's build.
+_LAST_BUILD_NOTE = _ThreadNote()
 
 
 #: The slate boards a stuck build would freeze, by the name

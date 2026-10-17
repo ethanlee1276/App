@@ -1266,6 +1266,11 @@ def main() -> None:
     ap.add_argument("--backfill", metavar="START:END",
                     help="ingest completed games across a date span, then exit")
     args = ap.parse_args()
+    # ONE LINE PER STAGE as the build goes (engine/stageclock): the loop
+    # kills a build at 600 seconds, and every college build of 2026-10-17
+    # was killed with nothing in its log to say where the time went.
+    from engine import stageclock as _clock
+    _clock.start()
 
     conn = connect()
     if args.backfill:
@@ -1486,6 +1491,7 @@ def main() -> None:
     all_seasons = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
                                                  exclude_prefix=_fallback)
     fit = cfbratings.fit_from_history(conn, all_seasons or ratings)
+    _clock.mark("history + team ratings")
     # OPPONENT-ADJUSTED, since 2026-09-02 (Ethan, on the audit's third Ask:
     # "whatever u think"). §5 calls opponent adjustment "everything" in a
     # sport where a Sun Belt schedule and an SEC schedule are not
@@ -1709,6 +1715,7 @@ def main() -> None:
         gd["spread"] = (lines.get("spread") or [None])[0]
         gd["total"] = (lines.get("total") or [None])[0]
 
+    _clock.mark("opponent-adjusted ratings + game lines")
     # KEEP THE LINES THIS BOARD ALREADY PAID FOR. Free — the prices are in
     # memory — and it is the closing number the spread/total/moneyline
     # model is graded on later. NFL and MLB have done this on every build
@@ -1967,6 +1974,7 @@ def main() -> None:
         "by_tier": result["by_tier"],
     }
 
+    _clock.mark("game bets")
     # THE PLAYER BOARD (Ethan, twice on 2026-09-02: "make sure everything
     # I'm telling you to do for NFL is also being implemented for college
     # football because I'm still not seeing any props for college
@@ -2029,6 +2037,7 @@ def main() -> None:
             quotes_note = f"player quotes unavailable: {_qexc}"
             print(f"  ⚠️  {quotes_note}")
 
+    _clock.mark("player slate + quotes")
     # WHO IS HURT, from ESPN's college injury board — the feed the Injuries
     # page already draws, which this build never read (Ethan, 2026-09-26:
     # college "locked in" like the NFL). It reaches the same places the
@@ -2095,10 +2104,12 @@ def main() -> None:
         except Exception as _lux:                            # noqa: BLE001
             print(f"  ⚠️  college lineup step skipped: {_lux}")
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
+        _clock.mark("injuries + lineup + prop pricing")
         # The inventions (engine/ideas): readings of this slate, written
         # to a private file the pick and game pages ask for.
         from engine import ideas as _ideas
         _ideas.attach("cfb", _prop_slate.props, out.get("games"), out, out=args.out)
+        _clock.mark("ideas readings")
         # The readings whose held-out bar holds, on the Edge picks (engine/ideagate).
         try:
             from engine import ideagate as _gate
@@ -2228,6 +2239,7 @@ def main() -> None:
                      "games_priced": len(priced),
                      **result["counts"]}
 
+    _clock.mark("player board")
     # THE LONG-SHOT BOARD (Ethan, 2026-08-25: "fix the odds range for
     # long shot picks for nfl and CFB"). Anytime-TD quotes for the best
     # games on the card, priced by engine/cfb/tds — implied totals, each
@@ -2513,6 +2525,7 @@ def main() -> None:
             "quotes_note": quotes_note,
             "games_quoted": 0,
         }
+    _clock.mark("long shots + Most Likely board")
     # THE MATCHUP SCAN runs before the Most Likely board, above. That board
     # is built only with odds in play, so a build without them (or one
     # whose board step failed first) scans here, as it always did.
@@ -2657,6 +2670,7 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  CFB journal skipped: {exc}")
 
+    _clock.mark("stale lines + journal + settle")
     # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this
     # league's Live tab read "No open bets on today's card" whatever the
     # journal held — and the tab's two panels (edge bets, Most Likely bets)
@@ -2814,6 +2828,8 @@ def _write(out: dict, path: str) -> None:
     out["comps"] = _attach_comps(out.get("recommendations") or [], "cfb")
     from engine.parlays import attach
     attach(out, "cfb")
+    from engine import stageclock as _clock
+    _clock.mark("pick of the day + crowd + parlays")
     # WHEN THESE PRICES WERE PULLED, which this board has never said.
     #
     # Ethan, 2026-09-03: "The lines on the most likely best bet page ...

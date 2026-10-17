@@ -65,6 +65,23 @@ def test_the_chance_on_a_locked_pick_is_todays():
     assert f"now {round(r['model_prob'] * 100)}%, down from {round(then * 100)}%" in r["lock_note"]
 
 
+def test_a_pick_posted_at_the_main_number_reads_the_chance_a_fresh_pick_shows():
+    # Box run, 2026-10-17: posted rushing-attempts picks read 84% (the raw
+    # normal) beside the 54% the same number got as a fresh pick. At its own
+    # main number a posted pick now carries the main line's shown chance,
+    # and the other side its complement; a ladder stays one curve.
+    row = dict(_row(70.0), side="over", line=62.5)
+    shown = K._main_shown(row, "rush_yds", FITS)
+    assert shown is not None
+    assert K._prob_at(row, "rush_yds", "over", 62.5, FITS, main_as_shown=True) == round(shown, 4)
+    assert K._prob_at(row, "rush_yds", "under", 62.5, FITS, main_as_shown=True) == round(1 - shown, 4)
+    curve = [K._prob_at(row, "rush_yds", "over", x, FITS) for x in (57.5, 62.5, 67.5)]
+    assert curve[0] >= curve[1] >= curve[2], curve
+    src = open(os.path.join(ROOT, "engine", "likely.py"), encoding="utf-8").read()
+    i = src.index("    def now_prob(h):")
+    assert "main_as_shown=True" in src[i:i + 400], "the board's posted picks ask for it"
+
+
 def test_the_card_labels_it_now_and_shows_the_posted_chance():
     i = APP.index("function likelyCard(")
     card = APP[i:APP.index("\nfunction ", i + 10)]

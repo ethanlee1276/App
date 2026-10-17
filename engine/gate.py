@@ -843,10 +843,21 @@ def _count_paid(node: dict, paid, path: str = "") -> int:
     n = 0
     for key, value in node.items():
         if key in paid:
-            n += _size(value)
+            n += _rows(value)
         elif isinstance(value, dict) and not _is_disclosure(key, path):
             n += _count_paid(value, paid, f"{path}.{key}" if path else key)
     return n
+
+
+def _rows(value) -> int:
+    """Rows a paid value actually exposes: a container of containers counts
+    what is inside them. `_size` counts keys, so an empty scan — `stale`,
+    `arbs`, `middles`, `low_holds`, `longshots`, every one an empty list —
+    read as five paid rows on the public path when it held none."""
+    if isinstance(value, dict) and value and all(
+            isinstance(v, (list, tuple, dict)) for v in value.values()):
+        return sum(_rows(v) for v in value.values())
+    return _size(value)
 
 
 def seal(web_data=None, verbose=True) -> dict:

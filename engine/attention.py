@@ -47,7 +47,9 @@ import urllib.request
 API = ("https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/"
        "all-access/user/{title}/daily/{start}/{end}")
 SEARCH = "https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=3&format=json&srsearch={q}"
-USER_AGENT = "qellys-book/0.1 (+wikimedia pageviews research; one call per player)"
+#: Wikimedia's policy asks for a name and a way to reach the operator; a
+#: bare one is throttled first (the 429s of 2026-10-17).
+USER_AGENT = "QellysBook/1.0 (https://qellysbook.com; pageview research, one call per player)"
 SPORT_WORDS = {"nfl": "American football", "cfb": "college football", "mlb": "baseball",
                "nba": "basketball", "wnba": "basketball", "nhl": "ice hockey"}
 
@@ -60,6 +62,12 @@ SPIKE = 2.0
 #: API at most this often.
 BUILD_SECONDS = 8.0
 PAUSE = 0.2
+#: A backfill is hundreds of calls in a row, so it goes slower.
+BACKFILL_PAUSE = 1.0
+#: After Wikipedia says "too many requests", no build asks again for this long.
+COOLDOWN_SECONDS = 3600
+#: The longest Retry-After we will sit through once before giving up for the run.
+MAX_RETRY_WAIT = 30
 #: The bar.
 MIN_EXCESS = 0.03
 MIN_T = 2.0
@@ -77,10 +85,52 @@ def ensure_tables(conn) -> None:
     conn.executescript(TABLES)
 
 
-def _get_json(url: str, timeout: int = 20):
+class RateLimited(Exception):
+    """Wikipedia answered 429 twice: stop for now, keep what was fetched."""
+
+
+def _cooldown_path() -> str:
+    from . import modelstate
+    return modelstate.path("attention_cooldown.json")
+
+
+def cooling_down(now: float | None = None) -> bool:
+    try:
+        with open(_cooldown_path()) as fh:
+            return float(json.load(fh).get("until") or 0) > (now if now is not None else time.time())
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def start_cooldown(now: float | None = None) -> None:
+    import os
+    p = _cooldown_path()
+    try:
+        os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
+        with open(p, "w") as fh:
+            json.dump({"until": (now if now is not None else time.time()) + COOLDOWN_SECONDS}, fh)
+    except OSError:
+        pass
+
+
+def _get_json(url: str, timeout: int = 20, sleep=time.sleep):
+    """One call; a 429 waits out its Retry-After once (up to MAX_RETRY_WAIT)
+    and then raises RateLimited rather than hammering on."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as r:      # noqa: S310 — fixed https hosts
-        return json.loads(r.read().decode("utf-8"))
+    for attempt in (1, 2):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:      # noqa: S310 — fixed https hosts
+                return json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429:
+                raise
+            if attempt == 2:
+                raise RateLimited(url) from exc
+            try:
+                wait = float(exc.headers.get("Retry-After") or 5)
+            except (TypeError, ValueError, AttributeError):
+                wait = 5.0
+            sleep(min(max(wait, 1.0), MAX_RETRY_WAIT))
 
 
 def pick_title(hits: list, name: str) -> str | None:
@@ -162,6 +212,8 @@ def keep_current(conn, sport: str, players, get=_get_json, today=None, budget=BU
     """Bring each player's last five weeks up to yesterday, each at most
     once a day, inside a few seconds. Returns the players refreshed."""
     ensure_tables(conn)
+    if cooling_down():
+        return 0                       # Wikipedia asked us to slow down within the hour
     today = today or _dt.date.today()
     yday = (today - _dt.timedelta(days=1)).isoformat()
     start = (today - _dt.timedelta(days=RECENT + BASELINE + 4)).isoformat()
@@ -169,13 +221,17 @@ def keep_current(conn, sport: str, players, get=_get_json, today=None, budget=BU
     for p in players:
         if time.monotonic() - t0 > budget:
             break
-        title = title_of(conn, sport, p, get, today)
-        if not title:
-            continue
-        have = conn.execute("SELECT MAX(date) FROM pageviews WHERE title=?", (title,)).fetchone()[0]
-        if have and have >= yday:
-            continue
-        got = fetch_views(title, start, yday, get)
+        try:
+            title = title_of(conn, sport, p, get, today)
+            if not title:
+                continue
+            have = conn.execute("SELECT MAX(date) FROM pageviews WHERE title=?", (title,)).fetchone()[0]
+            if have and have >= yday:
+                continue
+            got = fetch_views(title, start, yday, get)
+        except RateLimited:
+            start_cooldown()
+            break                      # what this build fetched is kept; the next hour's builds skip
         conn.executemany("INSERT OR REPLACE INTO pageviews VALUES (?,?,?)", [(title, d, v) for d, v in got.items()])
         conn.commit()
         n += 1
@@ -250,17 +306,22 @@ def backfill(conn, sport: str, players, start: str, end: str, limit: int = 500, 
     for p in players:
         if n >= limit:
             break
-        title = title_of(conn, sport, p, get)
-        if not title:
-            continue
-        have = conn.execute("SELECT MIN(date) FROM pageviews WHERE title=?", (title,)).fetchone()[0]
-        if have and have <= start:
-            continue
-        got = fetch_views(title, start, end, get)
+        try:
+            title = title_of(conn, sport, p, get)
+            if not title:
+                continue
+            have = conn.execute("SELECT MIN(date) FROM pageviews WHERE title=?", (title,)).fetchone()[0]
+            if have and have <= start:
+                continue
+            got = fetch_views(title, start, end, get)
+        except RateLimited:
+            # Everything fetched so far is committed; the next run resumes.
+            start_cooldown()
+            raise
         conn.executemany("INSERT OR REPLACE INTO pageviews VALUES (?,?,?)", [(title, d, v) for d, v in got.items()])
         conn.commit()
         n += 1
-        time.sleep(PAUSE)
+        time.sleep(BACKFILL_PAUSE)
     return n
 
 
@@ -320,8 +381,8 @@ def _stats(xs):
 
 
 def verdict(rows) -> dict:
-    seasons = sorted({r[0] for r in rows})
-    test = set(seasons[-2:])
+    from .bookmenu import held_seasons
+    test = held_seasons({r[0] for r in rows})
     spiked = [r for r in rows if r[0] in test and r[4] >= SPIKE]
     ex = [(1 - r[5]) - (1 - r[3]) for r in spiked]
     per = {}
@@ -380,10 +441,16 @@ def main(argv=None) -> int:
             players = [r[0] for r in conn.execute(
                 "SELECT DISTINCT player FROM player_game_logs WHERE sport=? AND season >= ? AND market IN "
                 "('rec_yds','rush_yds','pass_yds')", (a.sport, _dt.date.today().year - 4))]
-            n = backfill(conn, a.sport, players, f"{_dt.date.today().year - 4}-08-01",
-                         (_dt.date.today() - _dt.timedelta(days=1)).isoformat(), a.limit)
+            try:
+                n = backfill(conn, a.sport, players, f"{_dt.date.today().year - 4}-08-01",
+                             (_dt.date.today() - _dt.timedelta(days=1)).isoformat(), a.limit)
+                stopped = ""
+            except RateLimited:
+                n, stopped = None, (" Wikipedia asked us to slow down (429): everything fetched is kept — "
+                                    "run this again in an hour and it carries on.")
             done = conn.execute("SELECT COUNT(DISTINCT title) FROM pageviews").fetchone()[0]
-            print(f"Backfill: {n} player(s) fetched this run; {done} article(s) stored in all, of {len(players)} players.")
+            print(f"Backfill: {'some' if n is None else n} player(s) fetched this run; {done} article(s) stored in all, "
+                  f"of {len(players)} players.{stopped}")
         v = verdict(cases(conn, a.sport))
     finally:
         conn.close()

@@ -234,9 +234,22 @@ def snap_shares(conn, season: int | None = None) -> dict:
     for (player, team), weeks in per_player.items():
         recent = sorted(weeks, reverse=True)[:SNAP_WEEKS]
         if recent:
-            out[_short_key(player, team)] = round(
-                sum(weeks[w] for w in recent) / len(recent), 3)
+            share = sum(weeks[w] for w in recent) / len(recent)
+            # THE ROLE AS IT STANDS once the changepoint detector beat the
+            # four-week average on snap share held out (engine/rolechange,
+            # HOLDS on the box 2026-10-17, t 2.56, both seasons ahead).
+            fc = _role_forecast("snap_pct", [weeks[w] for w in sorted(weeks)])
+            out[_short_key(player, team)] = round(fc if fc is not None else share, 3)
     return out
+
+
+def _role_forecast(market: str, shares: list) -> float | None:
+    """The detected share (engine/ideagate), None when it has not held."""
+    try:
+        from .ideagate import role_forecast
+        return role_forecast(market, shares)
+    except Exception:                                         # noqa: BLE001
+        return None
 
 
 def _role_ratio(opp: str, shares: list) -> float:

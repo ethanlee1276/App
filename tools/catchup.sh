@@ -159,7 +159,7 @@ for q in "nfl&player=Ja%27Marr%20Chase&opp=PIT" "nfl&player=Derrick%20Henry&opp=
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print([r[0] for r in c.execute(\"SELECT name FROM sqlite_master WHERE type='index' AND name IN ('carries_season','targets_season','passes_season','nba_shots_opp','nhl_shots_season','mlb_pa_season')\")])"
 SH
 run AF "Every league's Most Likely cards" 60 <<'SH'
-cd /srv/qellys && for f in recommendations cfb mlb_recommendations nba wnba nhl; do python3 -c "import json,sys; f=sys.argv[1]; d=json.load(open('web/data/'+f+'.json')); ml=d.get('most_likely') or []; print(f, len(ml), 'picks |', sum(1 for r in ml if r.get('matchup_card')), 'matchup |', sum(1 for r in ml if r.get('mate_card')), 'teammate |', d.get('likely_board',{}).get('matchup_source'))" $f 2>/dev/null || echo "$f: no board"; done
+cd /srv/qellys && for f in recommendations cfb mlb_recommendations nba wnba nhl; do python3 -c "import json,sys; f=sys.argv[1]; import os; p='data/built/'+f+'.json'; d=json.load(open(p if os.path.exists(p) else 'web/data/'+f+'.json')); ml=d.get('most_likely') or []; print(f, len(ml), 'picks |', sum(1 for r in ml if r.get('matchup_card')), 'matchup |', sum(1 for r in ml if r.get('mate_card')), 'teammate |', d.get('likely_board',{}).get('matchup_source'))" $f 2>/dev/null || echo "$f: no board"; done
 journalctl -u qellys --since "3 hours ago" --no-pager | grep -E "Matchup cards:" | tail -3
 SH
 run AH "UFC round prices" 60 <<'SH'

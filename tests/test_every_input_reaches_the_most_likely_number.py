@@ -184,7 +184,8 @@ def test_the_wiring_check_passes_a_good_board_and_names_every_break():
     ml = {"kind": "prop", "rung": "main", "player": "Kareem Hunt", "market": RUSH_YDS, "side": "OVER",
           "line": 49.5, "main_side": "OVER", "main_line": 49.5, "projection": 65.9, "model_prob": 0.71,
           "prob_source": "model"}
-    assert C.wiring({"recommendations": [good], "most_likely": [ml]}) == {"checked": 2, "bad": []}
+    w = C.wiring({"recommendations": [good], "most_likely": [ml]})
+    assert (w["checked"], w["bad"]) == (2, [])
     bad = copy.deepcopy(good)
     bad["chain"]["steps"][1]["mult"] = 1.0
     got = C.wiring({"recommendations": [bad]})["bad"]
@@ -194,6 +195,61 @@ def test_the_wiring_check_passes_a_good_board_and_names_every_break():
     assert any("Most Likely projects 60.0" in x for x in got) and any("its prop row says 0.710" in x for x in got)
     stray = dict(ml, player="Nobody")
     assert "no prop row behind it" in C.wiring({"recommendations": [good], "most_likely": [stray]})["bad"][0]
+
+
+def test_the_wiring_check_reads_posted_picks_other_sides_and_corrected_chances_as_built():
+    """Box run, 2026-10-17: posted picks whose line had moved read "no prop
+    row behind it", an under beside the Edge row's over read as a 0.661 vs
+    0.339 contradiction, and rows the one board corrected read as breaks."""
+    from engine.likely import _prob_at
+    good = _row("Kareem Hunt", RUSH_YDS, "OVER", 49.5, 65.9, [{"key": "usage", "mult": 1.6475}], 0.71,
+                team="KC", proj_std=20.0)
+    base = {"kind": "prop", "rung": "main", "player": "Kareem Hunt", "team": "KC", "market": RUSH_YDS,
+            "main_side": "OVER", "main_line": 49.5, "projection": 65.9, "prob_source": "model"}
+    under = dict(base, side="UNDER", line=49.5, model_prob=0.29)
+    w = C.wiring({"recommendations": [good], "most_likely": [under]}, fits={})
+    assert w["bad"] == [], w["bad"]
+    assert C.wiring({"recommendations": [good], "most_likely": [dict(under, model_prob=0.71)]},
+                    fits={})["bad"], "the other side is the complement, not the same number"
+    corrected = dict(base, side="OVER", line=49.5, model_prob=0.64, listed_prob=0.71)
+    w = C.wiring({"recommendations": [good], "most_likely": [corrected]}, fits={})
+    assert w["bad"] == [] and w["board_corrected"] == 1
+    posted = dict(base, side="OVER", line=44.5, main_line=44.5, locked=True,
+                  model_prob=_prob_at(good, RUSH_YDS, "OVER", 44.5, fits={}))
+    w = C.wiring({"recommendations": [good], "most_likely": [posted]}, fits={})
+    assert w["bad"] == [], "posted at 44.5, the books now hang 49.5: today's chance at the posted number"
+    assert C.wiring({"recommendations": [good], "most_likely": [dict(posted, model_prob=0.99)]}, fits={})["bad"]
+    gone = dict(posted, player="Isiah Pacheco")
+    w = C.wiring({"recommendations": [good], "most_likely": [gone]}, fits={})
+    assert w["bad"] == [] and w["posted_off_board"] == 1, "his prop is off the board: carried as posted"
+    at_main = dict(posted, line=49.5, main_line=49.5)
+    assert _prob_at(good, RUSH_YDS, "OVER", 49.5, fits={}, main_as_shown=True) == 0.71, \
+        "a posted pick at the main number: as a fresh pick shows it"
+    assert _prob_at(good, RUSH_YDS, "UNDER", 49.5, fits={}, main_as_shown=True) == 0.29
+    ladder = [_prob_at(good, RUSH_YDS, "OVER", x, fits={}) for x in (44.5, 49.5, 54.5)]
+    assert ladder[0] > ladder[1] > ladder[2] and ladder[1] != 0.71, \
+        "a ladder stays one curve: the main rung is not swapped for the shown chance"
+    w = C.wiring({"recommendations": [good], "most_likely": [dict(at_main, model_prob=0.71)]}, fits={})
+    assert w["bad"] == []
+
+
+def test_a_step_the_model_has_no_coefficient_for_is_known_not_a_finding():
+    """Box run, 2026-10-17: carries, combos, tackles and kicks sat under
+    LOOK AT THESE for a weather and a matchup step that has no number to
+    give them. Read off the model's own tables, so a market that HAS a
+    coefficient and still moves nothing stays a finding."""
+    def cen(market, steps):
+        return {market: {"n": 40, "seen": {k: 40 for k in steps}, "moved": {}, "priced": 40,
+                         "roles": {}, "cards": 0}}
+    assert C.flat_by_construction("nfl", "rush_att", "weather")
+    assert C.flat_by_construction("nfl", "rush_att", "matchup")
+    assert C.flat_by_construction("cfb", "pass_att", "matchup"), "college volume markets left out on measurement"
+    assert C.flat_by_construction("nfl", "pass_att", "matchup") is None, "the NFL's attempts transfer passed"
+    assert C.flat_by_construction("nfl", "rec_yds", "weather") is None
+    assert C.flat_by_construction("mlb", "hits", "weather") is None, "football tables only"
+    assert C.findings("nfl", cen("tackles_ast", ("matchup", "weather"))) == []
+    got = C.findings("nfl", cen(REC_YDS, ("matchup", "weather")))
+    assert len(got) == 2 and all("wired in and reading nothing" in x for x in got)
 
 
 def test_homecheck_prints_it():

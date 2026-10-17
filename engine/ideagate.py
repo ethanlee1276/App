@@ -18,7 +18,9 @@ Likely read the same number:
     rookie    his college line, translated, is the prior a thin rookie
               sample shrinks toward (engine/rookies → sources/nflverse)
     role      the usage bridge's volume follows the detected role instead
-              of four flat weeks (engine/rolechange → nflusage.volume_roles)
+              of four flat weeks (engine/rolechange → nflusage.volume_roles),
+              and the touchdown card's snap share is the detected one
+              (→ nflusage.snap_shares) — each share on its own verdict
     kicks     a kicker's field goals scale with the air's density
               (engine/kickphysics → projection, its own "air" step)
   the parlay pricer
@@ -76,7 +78,7 @@ KICK_MARKETS = ("fg_made", "kick_pts")
 STANDARD_F = 59.0
 #: The role detector moves the usage bridge's volume within this range.
 ROLE_RANGE = (0.6, 1.6)
-SHARES = {"targets": "tgt", "carries": "car"}
+SHARES = {"targets": "tgt", "carries": "car", "snap_pct": "snap"}
 
 _cache: dict = {}
 
@@ -182,21 +184,32 @@ def rookie_prior(player: str, market: str, nfl_games: int) -> float | None:
     return round(rookies.translate(model, col["pg"], info.get("pick") or rookies.UNDRAFTED), 2)
 
 
-def role_ratio(opp_market: str, shares: list) -> float:
-    """How far the detected role sits from his four-week share — the usage
-    bridge's volume is scaled by it once the detector beat the four-week
-    average held out on this share. 1.0 otherwise."""
-    key = SHARES.get(opp_market)
+def role_forecast(market: str, shares: list) -> float | None:
+    """The detector's forecast of his next share (targets, carries or snap
+    share, in order, oldest first) once it beat the four-week average held
+    out on that share; None otherwise."""
+    key = SHARES.get(market)
     if not key or len(shares) < 4:
-        return 1.0
+        return None
     g = role_verdict(key)
     if not (g.get("verdict") or {}).get("holds"):
-        return 1.0
+        return None
     from . import rolechange
     s = g.get("settings") or rolechange.DEFAULT
     nxt = rolechange.detect(list(shares), s.get("hazard", rolechange.DEFAULT["hazard"]),
                             s.get("spread", rolechange.DEFAULT["spread"]))["next"]
-    base = sum(shares[-rolechange.BASELINE_WEEKS:]) / len(shares[-rolechange.BASELINE_WEEKS:])
+    return float(nxt) if nxt else None
+
+
+def role_ratio(opp_market: str, shares: list) -> float:
+    """How far the detected role sits from his four-week share — the usage
+    bridge's volume is scaled by it once the detector beat the four-week
+    average held out on this share. 1.0 otherwise."""
+    if opp_market not in ("targets", "carries"):
+        return 1.0
+    nxt = role_forecast(opp_market, shares)
+    from . import rolechange
+    base = sum(shares[-rolechange.BASELINE_WEEKS:]) / len(shares[-rolechange.BASELINE_WEEKS:]) if shares else 0
     if not nxt or base <= 0:
         return 1.0
     return max(ROLE_RANGE[0], min(ROLE_RANGE[1], nxt / base))
@@ -462,8 +475,8 @@ def edge(result: dict, sport: str, data: dict | None = None) -> int:
 GATES = (
     ("rookie", "rookies", "the projection's prior for a thin rookie sample",
      lambda s: any(rookie_verdict(m).get("holds") for m in ("rec_yds", "receptions", "rush_yds"))),
-    ("role", "rolechange", "the usage bridge's volume (targets, carries)",
-     lambda s: any((role_verdict(k).get("verdict") or {}).get("holds") for k in ("tgt", "car"))),
+    ("role", "rolechange", "the usage bridge's volume (targets, carries); the touchdown card's snap share",
+     lambda s: any((role_verdict(k).get("verdict") or {}).get("holds") for k in ("tgt", "car", "snap"))),
     ("kicks", "kickphysics", "a kicker's field goals (fg_made, kick_pts)", lambda s: bool(kicks_verdict(s).get("holds"))),
     ("sim", "playsim", "the parlay pricer's correlation for two teammates", lambda s: bool(sim_verdict().get("holds"))),
     ("menu", "bookmenu", "Most Likely chance; Edge refusal",

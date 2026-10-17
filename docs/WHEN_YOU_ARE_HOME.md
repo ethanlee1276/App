@@ -305,7 +305,9 @@ your "make sure we are wrapping all the features into the most likely bets
 and edge bets", every one of them wired into Most Likely and Edge where it
 belongs, each moving a number only once its own measurement holds, and
 every fit and measurement in the repo mapped to where its answer lands,
-checked against the code (step 135; CD).
+checked against the code (step 135; CD). Then your paste of all of it,
+read line by line, everything it found fixed, and the commands to run
+again (step 136; CE).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -987,7 +989,7 @@ each served board, the Most Likely picks that carry a matchup card, a
 teammate card and the projection walk; the second is the baseball build's
 own line about its cards:
 ```
-cd /srv/qellys && for f in recommendations cfb mlb_recommendations nba wnba nhl; do python3 -c "import json,sys; f=sys.argv[1]; d=json.load(open('web/data/'+f+'.json')); ml=d.get('most_likely') or []; print(f, len(ml), 'picks |', sum(1 for r in ml if r.get('matchup_card')), 'matchup |', sum(1 for r in ml if r.get('mate_card')), 'teammate |', d.get('likely_board',{}).get('matchup_source'))" $f 2>/dev/null || echo "$f: no board"; done
+cd /srv/qellys && for f in recommendations cfb mlb_recommendations nba wnba nhl; do python3 -c "import json,sys; f=sys.argv[1]; import os; p='data/built/'+f+'.json'; d=json.load(open(p if os.path.exists(p) else 'web/data/'+f+'.json')); ml=d.get('most_likely') or []; print(f, len(ml), 'picks |', sum(1 for r in ml if r.get('matchup_card')), 'matchup |', sum(1 for r in ml if r.get('mate_card')), 'teammate |', d.get('likely_board',{}).get('matchup_source'))" $f 2>/dev/null || echo "$f: no board"; done
 journalctl -u qellys --since "3 hours ago" --no-pager | grep -E "Matchup cards:" | tail -3
 ```
 The baseball card reads the season's stored plate appearances, which the
@@ -2017,7 +2019,7 @@ page reads). Paste all of it.
    model's own (Brier). Each says HOLDS or does not hold.
 2. Every graded NFL pick's miss split into usage and per touch, the tags on
    the losses, and each step's rate against us in losses beside wins. The
-   builds refresh this once a day by themselves; this is the first run.
+   daily chores refresh this once a day by themselves; this is the first run.
 3. The newest ideas file names every section (the sims, roles, ranges and
    autopsy show up after the next NFL build), and its errors.
 ```
@@ -2042,6 +2044,127 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nfl
 cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport cfb
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.wiremap
 cd /srv/qellys && sudo -u qellys python3 homecheck.py inputs
+```
+
+**CE. Round three: what the 2026-10-17 paste found, fixed — run these
+again** (step 136; in this order; the long ones say so). Your paste of A to
+CD, read line by line. What was fixed is in the commit; what each line here
+does is below it. Paste back everything each one prints, with its number.
+1. A first: the box has the round-three code (A's first line names it).
+2. The kicks. Kick physics read 1,467 field goals, two seasons, and the
+   bar needs 2,000 held out. The first line shows the free disk (each
+   season's play file is about 100 MB while it is read; stop if under
+   1 GB is free). The second reads 2021–2024 once (a few minutes a season,
+   at the lowest priority), prints each season and the kicks stored, and
+   deletes each download once read (a file that was already there stays);
+   it prints nothing if they are all stored. Then the measurement again:
+   it now holds out as many of the newest seasons as it takes to reach
+   the bar's count.
+3. Wikipedia said 429 (too many requests) to the attention backfill and to
+   the build. It now names the site in every call, goes slower, waits out
+   one "slow down", and stops for an hour after a second. Wait an hour
+   from your last run, then run it, and again every hour or so until
+   "fetched this run" reads 0.
+4. The four measurements that held out only the newest season (a part
+   season: 66 questionable listings against a bar of 300; menus and
+   recipes with nothing to hold out until 2027) now hold out the newest
+   two, or the newest one when only two are stored; and the copies no
+   longer count our own placeholder line ("proxy") as a book. Save all
+   four again. The loss autopsy now rebuilds once a day in the chores, not
+   inside the NFL build (it was part of why that build hit 600 seconds);
+   the last line runs it once now.
+5. The NBA vacancy. O met its bar, so the held-out test is built: each
+   season held out in turn, k (the share of the absent man's minutes his
+   teammates take) fitted on the others, and it HOLDS only if minutes and
+   points both get closer in every held-out season. Run the first line
+   and paste it. Only if it says HOLDS, run the second: it saves the
+   verdict, and from the next NBA build a teammate's minutes go up when a
+   regular is ruled out. Without `--save`, nothing moves.
+6. AI again. The refit you stopped after 25 minutes was working, but said
+   nothing until the end. It now prints each fitter as it starts and how
+   long it took. Run it in the background so closing the laptop does not
+   stop it, then watch the log (Ctrl-C stops the watching, not the refit;
+   it is finished when the log says `done`).
+7. The college board was three hours stale because every college build hit
+   the 600-second limit, and the limit killed it before its timing report
+   printed. Each stage now prints a ⏱ line the moment it finishes. Run one
+   college build by hand (up to 25 minutes; it builds and journals exactly
+   what the loop would, and writes its board to /tmp) and paste what it
+   prints when it finishes: the ⏱ lines and the last five lines of the
+   build. The slowest stage is the next fix.
+8. BM again, the NFL build by hand: it now prints the same ⏱ lines as it
+   goes, besides `Seconds by stage` at the end. Paste what it prints when
+   it finishes (the ⏱ lines, then the build's last 40). Both builds keep
+   their whole output in /tmp (`cfb_probe.log`, `nfl_probe.log`).
+9. The paywall. The first line says whether the paywall is on and lists
+   any board on the public path that still carries paid rows; with the
+   paywall on it should print `unsealed: []`. Only if it lists a board,
+   run the second: it strips the paid rows from those public files and
+   keeps the full copy for subscribers. With the paywall off it does
+   nothing.
+10. Passing + rushing yards: all 25 NFL rows were priced off our own
+    placeholder line. This counts what the books have actually hung for it.
+    If it prints nothing, no book in our region posts it.
+11. J again: the settle check now says why each open college bet with no
+    stat line is still open: no team for him, his game not final, its box
+    not filed, the play file not in, or "the absent-player rule voids it"
+    (the next settle pass does). Past eight rows it adds a count by reason.
+    Paste the CFB lines.
+12. Last, the four checks from CD and the doctor. Fixed since your paste:
+    the input check no longer calls a step that has no coefficient for a
+    market a finding (it reads `known:`), no longer flags a posted pick at
+    its own line, the other side of a line, or a chance the one board
+    corrected; and the doctor's "record 241 behind" and "Hawaii–UNLV
+    graded early" were the doctor reading wrongly (the record counts from
+    2026-08-06; a late college final sits under the next day's date), not
+    the record.
+```
+df -h / | tail -1
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db, kicks; kicks.backfill_past(db.connect(), range(2021, 2025))"
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.kickphysics --save
+```
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.attention --sport nfl --backfill --save
+```
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookmenu --sport nfl --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookrecipe --sport nfl --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.bookclusters --sport nfl --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.practice --save
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.autopsy --save
+```
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout
+# only if that says HOLDS:
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout --save
+```
+```
+cd /srv/qellys && sudo -u qellys nohup nice -n 19 python3 -u -m engine.deepfit nba > /tmp/deepfit_nba.log 2>&1 &
+tail -f /tmp/deepfit_nba.log
+```
+```
+cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1500 python3 cfb_build.py $(TZ=America/New_York date +%F) --out /tmp/cfb_probe.json --cached-odds > /tmp/cfb_probe.log 2>&1; grep "⏱" /tmp/cfb_probe.log; tail -5 /tmp/cfb_probe.log
+```
+```
+cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1500 python3 nfl_build.py 2026 6 --out /tmp/nfl_probe.json --injuries --depth --carry --cached-odds --memtrace > /tmp/nfl_probe.log 2>&1; grep "⏱" /tmp/nfl_probe.log; tail -40 /tmp/nfl_probe.log
+```
+```
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 -c "from engine import gate; print('paywall on' if gate.enabled() else 'paywall off'); print('unsealed:', gate.unsealed())"
+# only if that lists a board:
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 -c "from engine import gate; print(gate.seal())"
+```
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); [print(*r) for r in c.execute(\"SELECT book, COUNT(*), MIN(taken_at), MAX(taken_at) FROM odds_history WHERE sport='nfl' AND market='pass_rush_yds' GROUP BY book\")]"
+```
+```
+cd /srv/qellys && sudo -u qellys python3 settlecheck.py
+```
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nfl
+cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport cfb
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.wiremap
+cd /srv/qellys && sudo -u qellys python3 homecheck.py inputs
+cd /srv/qellys && sudo -u qellys python3 doctor.py
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
