@@ -1,0 +1,241 @@
+"""The research lab: a registry that checks itself, and experiments whose arithmetic is pinned.
+
+Ethan, 2026-10-17, the research spec: every candidate method in a registry
+with its prior art, novelty class and evidence status; data sources labelled
+VERIFIED / PARTIALLY VERIFIED / UNVERIFIED / UNAVAILABLE; experiments with
+their bar written before they run. research/ holds the lab.
+
+What these hold: the committed registry and audit break none of their own
+rules, and the checker catches every way an entry could lie (a measured
+status with no result, a number outside its own interval, a source that is
+not audited, an unknown novelty class); both load into the spec's tables;
+EXP-001's distributions are distributions (a pmf sums to one, a CDF climbs)
+and CRPS is zero for a perfect forecast; EXP-002's ridge recovers a known
+line; EXP-003a's de-vig sums to one and its rates use only earlier weeks;
+EXP-003b reads the journal read-only, scores only weeks after enough came
+before, and says NOT YET when that is too few; the box audit opens nothing
+for writing.
+
+Run directly: `python3 tests/test_research_lab.py`
+"""
+import copy
+import math
+import os
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "research"))
+
+import registry as R                                             # noqa: E402
+import exp1_two_stage as E1                                      # noqa: E402
+import exp2_interactions as E2                                   # noqa: E402
+import exp3_totals as E3                                         # noqa: E402
+import exp3_props_box as E3B                                     # noqa: E402
+import audit_box as AB                                           # noqa: E402
+
+
+# --- the registry -------------------------------------------------------------
+def test_the_committed_registry_and_audit_are_sound():
+    reg, src = R.load(), R.load_sources()
+    assert R.problems(reg, src) == [], R.problems(reg, src)
+    ids = [e["id"] for e in reg["experiments"]]
+    for want in ("EXP-001", "EXP-001b", "EXP-002", "EXP-003a", "EXP-003b"):
+        assert want in ids
+    statuses = {s["status"] for s in src["sources"]}
+    assert statuses <= set(R.SOURCE_STATUSES)
+    assert "UNVERIFIED" in statuses, "the vendors not read today stay unverified"
+    vendors = {s["id"]: s["status"] for s in src["sources"]}
+    assert vendors["SRC-PARLAYAPI"] == vendors["SRC-SPORTSGAMEODDS"] == vendors["SRC-FLASHPROPS"] == "UNVERIFIED"
+    assert vendors["SRC-ODDSAPI"] != "VERIFIED", "a product page is never VERIFIED; only counted data is"
+
+
+def test_the_checker_catches_every_way_an_entry_could_lie():
+    reg, src = R.load(), R.load_sources()
+    bad = copy.deepcopy(reg)
+    e = bad["experiments"][0]
+    e["status"] = "HOLDOUT VALIDATED"
+    e["results"] = []
+    assert any("claims a measurement" in p for p in R.problems(bad, src))
+    bad = copy.deepcopy(reg)
+    bad["experiments"][0]["results"][0]["value"] = 9.0
+    assert any("outside its own interval" in p for p in R.problems(bad, src))
+    bad = copy.deepcopy(reg)
+    bad["experiments"][0]["data"] = ["SRC-NOWHERE"]
+    assert any("not in sources.json" in p for p in R.problems(bad, src))
+    bad = copy.deepcopy(reg)
+    bad["experiments"][0]["novelty"] = "9"
+    assert any("not a known class" in p for p in R.problems(bad, src))
+    bad = copy.deepcopy(reg)
+    del bad["experiments"][0]["prior_art"]
+    assert any("missing prior_art" in p for p in R.problems(bad, src))
+    bad = copy.deepcopy(reg)
+    bad["experiments"][0]["code"] = "research/nope.py"
+    assert any("does not exist" in p for p in R.problems(bad, src))
+    badsrc = copy.deepcopy(src)
+    badsrc["sources"][0]["status"] = "PROBABLY FINE"
+    assert any("is not one of" in p for p in R.problems(reg, badsrc))
+
+
+def test_both_load_into_the_spec_tables():
+    reg, src = R.load(), R.load_sources()
+    conn = sqlite3.connect(":memory:")
+    got = R.to_sqlite(conn, reg, src)
+    assert got["experiments"] == len(reg["experiments"]) == conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
+    assert got["sources"] == conn.execute("SELECT COUNT(*) FROM data_sources").fetchone()[0]
+    assert got["results"] == conn.execute("SELECT COUNT(*) FROM experiment_results").fetchone()[0] > 0
+    d = conn.execute("SELECT decision FROM experiment_decisions WHERE experiment_id='EXP-001' AND subject='receptions'").fetchone()[0]
+    assert d.startswith("ADVANCE")
+    again = R.to_sqlite(conn, reg, src)
+    assert again == got, "loading twice replaces, never doubles"
+
+
+# --- EXP-001 ------------------------------------------------------------------
+def test_the_two_stage_pieces_are_distributions():
+    pmf = E1.nb_pmf(6.0, 5.0, 60)
+    assert abs(sum(pmf) - 1.0) < 1e-9
+    assert abs(sum(k * p for k, p in enumerate(pmf)) - 6.0) < 0.05
+    assert E1.binom_cdf(-1, 5, 0.6) == 0.0 and E1.binom_cdf(5, 5, 0.6) == 1.0
+    assert abs(E1.binom_cdf(2, 5, 0.5) - 0.5) < 1e-12
+    grid = [float(t) for t in range(0, 16)]
+    perfect = [1.0 if t >= 4 else 0.0 for t in grid]
+    assert E1.crps(perfect, grid, 4.0) == 0.0
+    assert E1.crps([0.5] * 16, grid, 4.0) > 0
+
+
+def test_the_bootstrap_and_the_decision_follow_the_bar():
+    rows = [{"who": f"p{i % 7}", "a": 1.0, "b": 0.9} for i in range(70)]
+    mean, lo, hi = E1.boot_diff(rows)
+    assert abs(mean + 0.1) < 1e-12 and abs(lo + 0.1) < 1e-9 and abs(hi + 0.1) < 1e-9
+    assert E1.decide(+0.01, None).startswith("REJECTED")
+    assert E1.decide(-0.01, None).startswith("validation passed")
+    assert E1.decide(-0.01, (-0.02, -0.03, -0.001)) == "ADVANCE"
+    assert E1.decide(-0.01, (-0.02, -0.04, +0.001)) == "INCONCLUSIVE"
+    assert E1.decide(-0.01, (+0.02, -0.01, +0.05)).startswith("REJECTED")
+
+
+# --- EXP-002 ------------------------------------------------------------------
+def test_the_ridge_recovers_a_known_line():
+    X = [[1.0, x, x * x] for x in [i / 10 for i in range(50)]]
+    y = [2.0 + 3.0 * r[1] - 0.5 * r[2] for r in X]
+    w = E2.ridge(X, y, 0.0)
+    assert all(abs(a - b) < 1e-6 for a, b in zip(w, (2.0, 3.0, -0.5))), w
+    shrunk = E2.ridge(X, y, 1000.0)
+    assert abs(shrunk[1]) < abs(w[1]), "the penalty pulls the slopes in"
+    flat = E2.ridge(X, y, 1e9)
+    assert abs(flat[0] - sum(y) / len(y)) < 1e-3, "the intercept is never penalised: it lands on the mean"
+
+
+# --- EXP-003a -----------------------------------------------------------------
+def test_the_devig_and_the_rates_use_only_what_came_before():
+    assert abs(E3.devig(-110, -110) - 0.5) < 1e-12
+    p = E3.devig(-130, +110)
+    assert 0.5 < p < 1 and abs(E3.devig(+110, -130) - (1 - p)) < 1e-12
+    def game(wk, h, a, hs, as_, line):
+        return {"season": "2020", "week": str(wk), "game_type": "REG", "home_team": h, "away_team": a,
+                "home_score": str(hs), "away_score": str(as_), "total_line": str(line), "over_odds": "-110",
+                "under_odds": "-110", "roof": "outdoors", "surface": "grass", "home_rest": "7", "away_rest": "7",
+                "div_game": "0"}
+    gs = [game(1, "A", "B", 30, 30, 40), game(1, "C", "D", 10, 10, 40),
+          game(2, "A", "C", 30, 30, 40), game(2, "B", "D", 10, 10, 40),
+          game(3, "A", "D", 99, 99, 41.5)]
+    rows = E3.rows(gs)
+    assert len(rows) == 1 and rows[0]["wk"] == "2020-03"
+    # A scored 60 and allowed 60 over two games; D scored 20 and allowed 20 —
+    # week 3's own 198 points are nowhere in the expectation.
+    prior = 21.0
+    a_sc = (60 + 4 * prior) / 6
+    d_al = (20 + 4 * prior) / 6
+    assert abs(rows[0]["mu"] - ((a_sc + d_al) / 2 + ((20 + 4 * prior) / 6 + (60 + 4 * prior) / 6) / 2)) < 1e-9
+
+
+# --- EXP-003b -----------------------------------------------------------------
+def _journal(path: str, weeks: int, per_week: int):
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE bets (sport TEXT, date TEXT, market TEXT, side TEXT, odds INTEGER, hit_prob REAL, "
+                 "status TEXT, category TEXT, fair_consensus REAL, lead_min REAL)")
+    import datetime as dt
+    import random
+    rng = random.Random(1)
+    d0 = dt.date(2026, 1, 5)
+    for w in range(weeks):
+        for i in range(per_week):
+            truth = rng.uniform(0.35, 0.65)
+            won = rng.random() < truth
+            conn.execute("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?)",
+                         ("nfl", (d0 + dt.timedelta(days=7 * w + i % 6)).isoformat(), "receptions",
+                          "OVER" if i % 2 else "UNDER", -110, min(0.95, truth + 0.08), "won" if won else "lost",
+                          "main", truth if i % 2 else 1 - truth, 600.0))
+    conn.execute("INSERT INTO bets VALUES ('nfl','2026-01-05','receptions','OVER',-110,0.6,'won','main',NULL,0)")
+    conn.commit()
+    conn.close()
+
+
+def test_the_journal_arm_scores_only_later_weeks_and_says_not_yet():
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "ledger.db")
+        _journal(db, weeks=10, per_week=80)
+        rows, skipped = E3B.load(db, None)
+        assert skipped["no market fair at pick time"] == 1 and len(rows) == 800
+        scored = E3B.walk(rows)
+        first = min(x["wk"] for x in scored)
+        assert sum(1 for x in rows if x["wk"] < first) >= E3B.MIN_TRAIN, "a week is scored only after enough came before"
+        ll = {k: sum(E3B._ll(x[k], x["y"]) for x in scored) / len(scored) for k in ("a", "c", "d")}
+        assert ll["c"] < ll["a"], "the made-up market is the truth here; ours overclaims by eight points"
+        assert ll["d"] <= ll["a"] + 1e-3, "the blend learns to lean on the market"
+        with open(db, "rb") as fh:
+            before = fh.read()
+        E3B.main(["--db", db])
+        with open(db, "rb") as fh:
+            assert fh.read() == before, "read-only"
+        small = os.path.join(d, "small.db")
+        _journal(small, weeks=3, per_week=50)
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            E3B.main(["--db", small])
+        assert "NOT YET" in buf.getvalue()
+
+
+def test_the_box_audit_opens_nothing_for_writing():
+    with tempfile.TemporaryDirectory() as d:
+        db = Path(d) / "h.db"
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE odds_history (sport TEXT, taken_at TEXT, event_id TEXT, home TEXT, away TEXT, "
+                     "player TEXT, market TEXT, book TEXT, line REAL, over_odds INTEGER, under_odds INTEGER, commence_time TEXT)")
+        conn.execute("INSERT INTO odds_history VALUES ('nfl','2025-09-07T16:00:00Z','e1','KC','BUF','X','player_receptions','fanduel',4.5,-110,-110,'')")
+        conn.execute("INSERT INTO odds_history VALUES ('nfl','2025-09-07T16:00:00Z','e1','KC','BUF','','totals','fanduel',47.5,-110,-110,'')")
+        conn.commit()
+        conn.close()
+        ro = AB._ro(db)
+        lines = AB.odds_history(ro)
+        assert any("1 events" in ln for ln in lines) and any("player_receptions" in ln for ln in lines)
+        try:
+            ro.execute("DELETE FROM odds_history")
+            wrote = True
+        except sqlite3.OperationalError:
+            wrote = False
+        assert not wrote, "the audit's connection must be read-only"
+        assert AB._ro(Path(d) / "missing.db") is None
+
+
+if __name__ == "__main__":
+    fails = ran = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                ran += 1
+                print(f"  ok  {name}")
+            except AssertionError as exc:
+                fails += 1
+                print(f"  FAIL {name}: {exc}")
+            except Exception as exc:                          # noqa: BLE001
+                fails += 1
+                print(f"  FAIL {name}: {type(exc).__name__}: {exc}")
+    print(f"\n{ran} tests passed." if not fails else f"\n{fails} failed")
+    sys.exit(1 if fails else 0)

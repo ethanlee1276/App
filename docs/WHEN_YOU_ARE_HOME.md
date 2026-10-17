@@ -311,8 +311,8 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The
-whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+The research lab, session one: four read-only lines (step 141; CJ).
+The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -2273,6 +2273,22 @@ games their crews from the cached summaries (no fetching) and count them.
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.officials --league nba --backfill
 cd /srv/qellys && sudo -u qellys python3 -m engine.officials --league wnba --backfill
+```
+
+**CJ. The research lab, session one** (step 141). Your research spec. The
+lab is docs/RESEARCH_LAB.md; its registry and data audit are in research/.
+Three experiments ran in the sandbox on public data, each with its bar
+written before it ran. Opportunities-first ADVANCES for receptions only
+(not yet to the board). The matchup interactions and the totals-versus-the-
+close test were rejected. The usage bridge now weights each player's games
+by age, which measured better in every season tested (small). Four box
+lines, all read-only; the last spends no credits (it prints what a 2024
+receptions/yards prop harvest would cost). Paste all four.
+```
+cd /srv/qellys && git log --oneline -1
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/audit_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
+cd /srv/qellys && sudo -u qellys python3 harvest_odds.py nfl --from 2024-09-08 --to 2024-10-27 --weekdays sun --hour 17 --markets receptions,rec_yds,rush_yds --dry-run
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

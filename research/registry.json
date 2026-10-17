@@ -1,0 +1,498 @@
+{
+ "_about": "The research registry (spec Part 11). Every candidate method, run or refused, with its evidence status. Numbers here are copied from the run's own output, never estimated; a field that has no measurement says so. research/registry.py checks every entry and loads them into the spec's tables (research/schema.sql).",
+ "novelty_classes": {
+  "1": "Potentially novel mathematical method",
+  "2": "New combination of existing methods",
+  "3": "New feature or data transformation",
+  "4": "New application of an established method",
+  "5": "Rediscovery of existing work",
+  "6": "Novelty unverified"
+ },
+ "statuses": [
+  "THEORETICAL",
+  "PROPOSED",
+  "IMPLEMENTED",
+  "BACKTESTED",
+  "HOLDOUT VALIDATED",
+  "PROSPECTIVELY TESTED",
+  "INDEPENDENTLY REPLICATED",
+  "REJECTED"
+ ],
+ "experiments": [
+  {
+   "id": "EXP-001",
+   "sport": "nfl",
+   "market": "player props: receptions, receiving yards, rushing yards",
+   "proposed": "2026-10-17",
+   "question": "Does predicting opportunities first, then production given those opportunities, give a better forecast of a prop's whole distribution than a direct model of the stat?",
+   "equation": "P(Y|X) = sum_o P(Y | O=o, X) P(O=o | X); O ~ NegBin(mu_O, r); receptions: Y|o ~ Binomial(o, p); rec_yds: zero w.p. (1-p)^o else Normal with the compound's moments given >=1 catch; rush_yds: Y|o ~ Normal(o m, o s^2)",
+   "variables": "Y the stat; O targets or carries; mu_O his games weighted by age (engine/nflusage.ewma_opps); r NegBin size fitted per market and position; p catch rate and m yards per opportunity, shrunk toward the position's by k (fitted); s^2 per-opportunity variance (training method of moments). Direct model A: mean = the board's form blend, shape = the training pool of y/mean ratios.",
+   "mechanism": "Coordinators hand out opportunities on purpose while efficiency is noisier, so the two parts can be shrunk at their own rates and the count shape (zeros, lumps) comes from the structure instead of being assumed.",
+   "prior_art": "Usage x efficiency decompositions are standard in fantasy and prop modelling, and compound count distributions (NegBin opportunities, Binomial successes) are textbook. The site's usage bridge (engine/nflusage) already blends recent opportunities x season efficiency into the mean. No web literature search was possible from the sandbox (page fetches blocked); the novelty call rests on that general knowledge.",
+   "novelty": "4",
+   "data": [
+    "SRC-NFLVERSE-PLAYERWEEK"
+   ],
+   "dataset_version": "data/cache/player_stats_2016..2025.csv as of 2026-10-17 (row counts in research/sources.json)",
+   "code": "research/exp1_two_stage.py",
+   "baseline": "A: direct model (board form mean, empirical ratio shape)",
+   "protocol": "fit 2017-2021; validation 2022-2023 (one amendment there: shrink grid widened, before any holdout read); holdout 2024-2025 read once with the code frozen; paired player-season-clustered bootstrap; Bonferroni over 3 markets (98.33%)",
+   "primary_metric": "CRPS on a fixed threshold grid (RPS for receptions)",
+   "sample_size": "holdout rows: receptions 4,152 (485 player-seasons); rec_yds 3,996 (481); rush_yds 1,441 (160)",
+   "results": [
+    {
+     "period": "validation 2022-2023",
+     "market": "receptions",
+     "metric": "CRPS B-A",
+     "value": -0.032,
+     "lo": -0.0463,
+     "hi": -0.0175,
+     "notes": "A 1.2000, B 1.1680"
+    },
+    {
+     "period": "validation 2022-2023",
+     "market": "rec_yds",
+     "metric": "CRPS B-A",
+     "value": 0.0865,
+     "lo": -0.0944,
+     "hi": 0.2842,
+     "notes": "A 16.2513, B 16.3378; B@A 16.1374"
+    },
+    {
+     "period": "validation 2022-2023",
+     "market": "rush_yds",
+     "metric": "CRPS B-A",
+     "value": -0.265,
+     "lo": -0.5459,
+     "hi": -0.0236,
+     "notes": "A 18.2684, B 18.0034; B@A 18.0267"
+    },
+    {
+     "period": "holdout 2024-2025",
+     "market": "receptions",
+     "metric": "CRPS B-A",
+     "value": -0.027,
+     "lo": -0.0436,
+     "hi": -0.0102,
+     "notes": "A 1.1746, B 1.1476; proxy-line Brier A 0.2165, B 0.2198 (B worse at a line); B's top-decile over-chance 0.49, observed 0.36"
+    },
+    {
+     "period": "holdout 2024-2025",
+     "market": "rec_yds",
+     "metric": "CRPS B-A",
+     "value": 0.0284,
+     "lo": -0.1491,
+     "hi": 0.2252,
+     "notes": "A 16.1170, B 16.1454; B@A 15.9846"
+    },
+    {
+     "period": "holdout 2024-2025",
+     "market": "rush_yds",
+     "metric": "CRPS B-A",
+     "value": -0.2153,
+     "lo": -0.4567,
+     "hi": 0.0474,
+     "notes": "A 18.2176, B 18.0023; B@A 17.9104"
+    }
+   ],
+   "decision": {
+    "receptions": "ADVANCE (to calibration and a test at real book prices; not to the board)",
+    "rec_yds": "REJECTED (validation)",
+    "rush_yds": "INCONCLUSIVE"
+   },
+   "multiple_testing": "Bonferroni over the three markets",
+   "failure_modes": "zero-target games missing from the source for both models; yardage given o is a moment-matched approximation; no defence step in either model; receptions' gain does not show at a line-like threshold and its over-chances are too extreme",
+   "next": "Calibrate B's receptions over-chances on training seasons and score at real 2024-2025 book lines (The Odds API archive, from 2023-05-03); EXP-001b prospective.",
+   "status": "HOLDOUT VALIDATED"
+  },
+  {
+   "id": "EXP-001b",
+   "sport": "nfl",
+   "market": "player props: receiving yards, rushing yards",
+   "proposed": "2026-10-17",
+   "question": "Is the direct model's mean with the two-stage model's shape better than the direct model, on games played after the idea was written down?",
+   "equation": "F_H(t) = F_B(t * mu_B / mu_A): the two-stage CDF rescaled to the direct model's mean",
+   "variables": "as EXP-001",
+   "mechanism": "EXP-001's yardage results suggest the two-stage SHAPE is right and its MEAN is worse; this keeps each part where it measured better.",
+   "prior_art": "Separating location from shape is standard (location-scale families, distributional regression). Seen in EXP-001's data after looking, so it is a hypothesis, not a result.",
+   "novelty": "2",
+   "data": [
+    "SRC-NFLVERSE-PLAYERWEEK"
+   ],
+   "dataset_version": "fit 2017-2025; scored on 2026 games after 2026-10-17",
+   "code": "research/exp1_two_stage.py --prospective",
+   "baseline": "A: direct model",
+   "protocol": "prospective: every 2026 regular-season game played after 2026-10-17; week-blind; clustered bootstrap; Bonferroni over 2 markets (97.5%)",
+   "primary_metric": "CRPS",
+   "sample_size": "none yet (0 games played since the freeze)",
+   "results": [],
+   "decision": {
+    "rec_yds": "waiting for games",
+    "rush_yds": "waiting for games"
+   },
+   "multiple_testing": "Bonferroni over the two markets",
+   "failure_modes": "a 2026 half-season is small (rush_yds ~350 rows); the bound may stay over zero for a while",
+   "next": "Re-run after each week's stats land (the nightly ingest refreshes the cache on the box).",
+   "status": "PROPOSED"
+  },
+  {
+   "id": "EXP-002",
+   "sport": "nfl",
+   "market": "player props: receptions, receiving yards, rushing yards",
+   "proposed": "2026-10-17",
+   "question": "Do interactions between a player's trait and the defence's tendency add information beyond the two alone?",
+   "equation": "base y = b0 + b1 mu + b2 A + b3 D; candidate adds b4 A*D; ridge, standardised columns",
+   "variables": "mu the board's form mean; I1 air yards a target x completed air yards allowed a target; I2 YAC a reception x YAC allowed a reception; I3 target share x targets faced a game; I4 carries a game x yards allowed a carry; I5 yards a carry x yards allowed a carry. All from games before this one.",
+   "mechanism": "Deep receivers against secondaries that allow the deep ball; runners after the catch against poor tackling; workhorse backs against soft fronts.",
+   "prior_art": "Defence-versus-position adjustments are standard; the site already multiplies every projection by a measured defence step (engine/defensevs, TRANSFER from engine/defensefit), itself an interaction in levels; engine/scanfit has measured several matchup signals of this kind.",
+   "novelty": "5",
+   "data": [
+    "SRC-NFLVERSE-PLAYERWEEK"
+   ],
+   "dataset_version": "data/cache/player_stats_2016..2025.csv as of 2026-10-17",
+   "code": "research/exp2_interactions.py",
+   "baseline": "the same model without A*D",
+   "protocol": "fit 2017-2021, ridge penalty from a fixed grid on 2022-2023, holdout 2024-2025 read once; player-season-clustered bootstrap; Bonferroni over five (99%)",
+   "primary_metric": "mean squared error on y",
+   "sample_size": "holdout rows: rec_yds 3,996; receptions 4,152; rush_yds 1,441",
+   "results": [
+    {
+     "period": "holdout 2024-2025",
+     "market": "I1 rec_yds",
+     "metric": "MSE cand-base",
+     "value": 0.885,
+     "lo": -0.0356,
+     "hi": 1.9998,
+     "notes": "validation -0.7658 [-1.8889, +0.5757]; training coefficient +4.47 (standardised)"
+    },
+    {
+     "period": "holdout 2024-2025",
+     "market": "I2 rec_yds",
+     "metric": "MSE cand-base",
+     "value": 0.5041,
+     "lo": -0.9136,
+     "hi": 2.1032,
+     "notes": "validation -0.2466; training coefficient +5.29"
+    },
+    {
+     "period": "holdout 2024-2025",
+     "market": "I3 receptions",
+     "metric": "MSE cand-base",
+     "value": 0.0013,
+     "lo": -0.0021,
+     "hi": 0.0049,
+     "notes": "validation -0.0022"
+    },
+    {
+     "period": "holdout 2024-2025",
+     "market": "I4 rush_yds",
+     "metric": "MSE cand-base",
+     "value": 1.1886,
+     "lo": -3.5889,
+     "hi": 7.3351,
+     "notes": "validation +1.0542 (rejected there)"
+    },
+    {
+     "period": "holdout 2024-2025",
+     "market": "I5 rush_yds",
+     "metric": "MSE cand-base",
+     "value": 0.0287,
+     "lo": -0.7879,
+     "hi": 0.869,
+     "notes": "validation +0.1842 (rejected there)"
+    }
+   ],
+   "decision": {
+    "I1": "REJECTED (holdout)",
+    "I2": "REJECTED (holdout)",
+    "I3": "REJECTED (holdout)",
+    "I4": "REJECTED (validation)",
+    "I5": "REJECTED (validation)"
+   },
+   "multiple_testing": "Bonferroni over the five interactions",
+   "failure_modes": "weekly totals cannot see coverage or route matchups; clustering by player-season ignores opponent-level correlation",
+   "next": "None of these; the large training coefficients of I1/I2 that vanished out of sample are the warning this experiment existed to give.",
+   "status": "REJECTED"
+  },
+  {
+   "id": "EXP-003a",
+   "sport": "nfl",
+   "market": "game totals (closing over/under)",
+   "proposed": "2026-10-17",
+   "question": "Does a residual correction from pre-game context improve a totals model, and does anything beat the de-vigged closing market?",
+   "equation": "A: P = 1 - Phi((line - mu)/sigma), mu from each side's points for/against this season; B: mu + ridge(context); C: de-vigged close; D: logit blend of B and C",
+   "variables": "context: dome, turf, rest days each side, division game, week. Observed game-day temperature and wind are excluded (measured at the game, not forecast).",
+   "mechanism": "Scheduling and venue context the scoring averages do not hold.",
+   "prior_art": "Closing totals are widely documented as hard to beat; the site's refcheck.py already found referees carry nothing past the close.",
+   "novelty": "5",
+   "data": [
+    "SRC-NFLVERSE-GAMES"
+   ],
+   "dataset_version": "data/cache/games.csv as of 2026-10-17",
+   "code": "research/exp3_totals.py",
+   "baseline": "A (Q1) and C, the market (Q2)",
+   "protocol": "fit 2006-2017, validate 2018-2021, holdout 2022-2025 read once; week-clustered bootstrap; two questions at 0.025",
+   "primary_metric": "log loss on over/under (pushes left out)",
+   "sample_size": "holdout 951 games; validation 900; training 2,585",
+   "results": [
+    {
+     "period": "holdout 2022-2025",
+     "market": "Q1 B-A",
+     "metric": "log loss",
+     "value": 0.00026,
+     "lo": -0.00504,
+     "hi": 0.00641,
+     "notes": "A 0.71497, B 0.71523"
+    },
+    {
+     "period": "holdout 2022-2025",
+     "market": "Q2 D-C",
+     "metric": "log loss",
+     "value": 0.00173,
+     "lo": -0.0009,
+     "hi": 0.00446,
+     "notes": "C (market) 0.69308, D 0.69481; validation D-C +0.00179"
+    }
+   ],
+   "decision": {
+    "Q1": "REJECTED (holdout)",
+    "Q2": "REJECTED (validation)"
+   },
+   "multiple_testing": "Bonferroni over the two questions",
+   "failure_modes": "the closing price is not a price a bettor could reliably take before it; one quote per game, no book or time detail",
+   "next": "No further totals work on this feature set; the props arm (EXP-003b) runs on the box.",
+   "status": "REJECTED"
+  },
+  {
+   "id": "EXP-003b",
+   "sport": "all",
+   "market": "the site's own settled picks (props and game lines)",
+   "proposed": "2026-10-17",
+   "question": "On our journaled picks, does a residual correction beat our shown chance, and does anything beat the market's de-vigged fair at pick time?",
+   "equation": "B: ridge logistic on logit(our chance), price implied chance, minutes before start, side, sport, market; D: logistic on logit(ours) and logit(market)",
+   "variables": "hit_prob, fair_consensus (journaled), odds, lead_min, sport, market, side",
+   "mechanism": "Where our model's misses are systematic by market or price band, a correction learned from earlier weeks should carry forward.",
+   "prior_art": "pricetrust.py (leaning toward the price) and engine/likelycal + likelyctx (calibration and context correction refit on settle) already test parts of this on the box.",
+   "novelty": "5",
+   "data": [
+    "SRC-OWN-JOURNAL"
+   ],
+   "dataset_version": "the box's data/ledger.db at run time",
+   "code": "research/exp3_props_box.py",
+   "baseline": "A (ours) and C (market)",
+   "protocol": "walk-forward by ISO week, each week fitted on earlier weeks only; week-clustered bootstrap; three comparisons at 0.05/3; NOT YET under 6 weeks or 600 rows",
+   "primary_metric": "log loss",
+   "sample_size": "not run (needs the box)",
+   "results": [],
+   "decision": {
+    "all": "not run"
+   },
+   "multiple_testing": "Bonferroni over the three comparisons",
+   "failure_modes": "only rows with a journaled market fair (the Edge book) are usable; the picks are a selected sample",
+   "next": "Run on the box (command in docs/RESEARCH_LAB.md) and paste the output.",
+   "status": "IMPLEMENTED"
+  },
+  {
+   "id": "EXP-R01",
+   "sport": "nfl",
+   "market": "usage bridge (receptions, rec_yds, rush_yds, pass_yds)",
+   "proposed": "2026-10-17",
+   "question": "Should the bridge weight a player's games by age instead of the last four flat?",
+   "equation": "opp_per_game = sum_a 0.5^(a/H) x_a / sum_a 0.5^(a/H)",
+   "variables": "x_a opportunities a games back; H half-life per opportunity",
+   "mechanism": "Recent games carry more of a role; a flat window drops the fifth game entirely.",
+   "prior_art": "Exponentially weighted averages are textbook; the site's changepoint detector (engine/rolechange) answers the same question another way.",
+   "novelty": "5",
+   "data": [
+    "SRC-NFLVERSE-PLAYERWEEK"
+   ],
+   "dataset_version": "data/cache/player_stats_2016..2025.csv as of 2026-10-17",
+   "code": "rolewindowfit.py",
+   "baseline": "the flat last-four window",
+   "protocol": "H chosen on 2017-2021; judged on 2022-2025, every season must improve; the board's whole base rebuilt",
+   "primary_metric": "squared error of the board's base",
+   "sample_size": "every qualifying player-game 2022-2025",
+   "results": [
+    {
+     "period": "2022-2025",
+     "market": "receptions (H=8)",
+     "metric": "% squared error cut, worst test season",
+     "value": 0.11,
+     "lo": null,
+     "hi": null,
+     "notes": "2022 +0.57, 2023 +0.11, 2024 +0.18, 2025 +0.26"
+    },
+    {
+     "period": "2022-2025",
+     "market": "rec_yds (H=8)",
+     "metric": "% squared error cut, worst test season",
+     "value": 0.15,
+     "lo": null,
+     "hi": null,
+     "notes": "2022 +0.53, 2023 +0.17, 2024 +0.15, 2025 +0.25"
+    },
+    {
+     "period": "2022-2025",
+     "market": "rush_yds (H=2)",
+     "metric": "% squared error cut, worst test season",
+     "value": 0.02,
+     "lo": null,
+     "hi": null,
+     "notes": "2022 +1.09, 2023 +0.20, 2024 +0.25, 2025 +0.02"
+    },
+    {
+     "period": "2022-2025",
+     "market": "pass_yds (H=8)",
+     "metric": "% squared error cut, worst test season",
+     "value": -0.54,
+     "lo": null,
+     "hi": null,
+     "notes": "2022 +1.35, 2023 +0.48, 2024 -0.54, 2025 +1.52: fails"
+    }
+   ],
+   "decision": {
+    "targets": "WIRED (engine/nflusage.ROLE_HALF_LIFE)",
+    "carries": "WIRED",
+    "pass_att": "REJECTED"
+   },
+   "multiple_testing": "per-season bar (every season must improve) instead of an interval",
+   "failure_modes": "small effect; no interval computed (the bar is per-season sign)",
+   "next": "Watch the board's record by market; nothing further.",
+   "status": "HOLDOUT VALIDATED"
+  },
+  {
+   "id": "EXP-R02",
+   "sport": "nfl",
+   "market": "game totals and spreads",
+   "proposed": "2026-10-17",
+   "question": "Does a referee's past predict a game against the closing total or spread?",
+   "equation": "pred = sum(residuals before season S) / (n + K), K in {20, 50, 100}",
+   "variables": "residual = points over the closing total, or margin over the closing spread",
+   "mechanism": "Crews differ in flag rates and pace.",
+   "prior_art": "Referee tendencies are widely discussed in betting media; the question tested is whether any of it survives the close.",
+   "novelty": "5",
+   "data": [
+    "SRC-NFLVERSE-GAMES"
+   ],
+   "dataset_version": "games.csv, 7,340 games 2015 to 2026 week 4",
+   "code": "refcheck.py",
+   "baseline": "predicting zero",
+   "protocol": "held out by season; better than zero in most seasons and a positive pooled correlation",
+   "primary_metric": "held-out squared error vs zero; correlation",
+   "sample_size": "7,340 games",
+   "results": [
+    {
+     "period": "2016-2026",
+     "market": "totals",
+     "metric": "pooled correlation",
+     "value": -0.02,
+     "lo": null,
+     "hi": null,
+     "notes": "worse than zero in 8-10 of 11 seasons at every shrink"
+    },
+    {
+     "period": "2016-2026",
+     "market": "spreads",
+     "metric": "pooled correlation",
+     "value": -0.01,
+     "lo": null,
+     "hi": null,
+     "notes": ""
+    }
+   ],
+   "decision": {
+    "all": "REJECTED"
+   },
+   "multiple_testing": "three shrinks x two targets, all failed",
+   "failure_modes": "nflverse fills the referee only after the game",
+   "next": "None.",
+   "status": "REJECTED"
+  },
+  {
+   "id": "EXP-R03",
+   "sport": "nfl",
+   "market": "team volume (dropbacks, carries, plays)",
+   "proposed": "2026-10-17",
+   "question": "How much of a team's volume does the betting line know?",
+   "equation": "volume = b0 + b1 own_trailing + b2 opp_allowed_trailing (+ b3 implied_points + b4 team_spread)",
+   "variables": "trailing six-game means; implied points and spread from the closing line",
+   "mechanism": "Expected game script sets pass/run mix.",
+   "prior_art": "Game-script effects on volume are well known; the site's engine/gamescript carries the spread's part.",
+   "novelty": "5",
+   "data": [
+    "SRC-NFLVERSE-GAMES"
+   ],
+   "dataset_version": "4,316 team-games 2016-2025",
+   "code": "volumecheck.py",
+   "baseline": "the model without the line",
+   "protocol": "fit on earlier seasons, scored on the next, 2019-2025",
+   "primary_metric": "held-out RMSE",
+   "sample_size": "4,316 team-games",
+   "results": [
+    {
+     "period": "2019-2025",
+     "market": "dropbacks",
+     "metric": "% RMSE cut, pooled",
+     "value": 0.5,
+     "lo": null,
+     "hi": null,
+     "notes": "8.11 -> 8.07, better in 6/7 seasons"
+    },
+    {
+     "period": "2019-2025",
+     "market": "carries",
+     "metric": "% RMSE cut, pooled",
+     "value": 0.8,
+     "lo": null,
+     "hi": null,
+     "notes": "7.38 -> 7.32, better in 7/7"
+    },
+    {
+     "period": "2019-2025",
+     "market": "plays",
+     "metric": "% RMSE cut, pooled",
+     "value": 0.9,
+     "lo": null,
+     "hi": null,
+     "notes": "8.27 -> 8.20, better in 6/7"
+    }
+   ],
+   "decision": {
+    "all": "RECORDED, not wired (would double-count engine/gamescript)"
+   },
+   "multiple_testing": "three targets reported together",
+   "failure_modes": "the team's total is near its noise floor; the player's share is the lever (EXP-R01, EXP-001)",
+   "next": "None on team volume.",
+   "status": "BACKTESTED"
+  },
+  {
+   "id": "EXP-R04",
+   "sport": "nhl",
+   "market": "puck line, total, moneyline",
+   "proposed": "2026-10-17",
+   "question": "Does a time-and-score Markov chain with the pulled goalie beat independent Poisson goals?",
+   "equation": "per-minute scoring rates by score difference and phase (early, minutes 56-60), fitted multipliers, chain over 10-second steps",
+   "variables": "team rates (leave-one-out), league shape by phase and score state, empty-net flag",
+   "mechanism": "Trailing teams pull the goalie late; independent Poisson cannot produce that dependence.",
+   "prior_art": "Score-effects and empty-net models are established in hockey analytics.",
+   "novelty": "4",
+   "data": [
+    "SRC-ESPN"
+   ],
+   "dataset_version": "the box's nhl_shots after the goal-clock backfill",
+   "code": "engine/nhl/endgame.py",
+   "baseline": "plain Poisson goals",
+   "protocol": "held out by season (seasons before only); verdict saved; used in pricing only if it holds",
+   "primary_metric": "held-out log loss on game results",
+   "sample_size": "not run (needs the box's backfill)",
+   "results": [],
+   "decision": {
+    "all": "waiting for the box's backfill and fit"
+   },
+   "multiple_testing": "one gate",
+   "failure_modes": "thin late-game cells; the prior shrinks them",
+   "next": "Box: backfill the goal clock, fit, read the verdict (runbook block CI).",
+   "status": "IMPLEMENTED"
+  }
+ ]
+}
