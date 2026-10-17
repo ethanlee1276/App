@@ -751,6 +751,65 @@
    "failure_modes": "college target counts are short where incompletions name no target (45%, 38%, 21% named in 2022-24; 78-84% in 2025; 92% in 2026), so receiving runs only on 2025-26 and still carries a small level shift into the holdout; players appear only in games where they recorded a stat; 2026 reads 2025's roster",
    "next": "EXP-004c: price B (receptions) and H (rush_yds) at the college lines the box holds, against the books' consensus, as EXP-001c does for the NFL; and in both sports, a model that takes B's shape at A's centre for receptions, since B's centre is worse at a line in both.",
    "status": "HOLDOUT VALIDATED"
+  },
+  {
+   "id": "EXP-005",
+   "sport": "nfl",
+   "market": "player props: receptions, receiving yards, rushing yards",
+   "proposed": "2026-10-17",
+   "question": "Can a small searched equation in pre-game quantities explain the direct model's misses well enough to improve its distribution on unseen games?",
+   "equation": "r = y - mu_a; r_hat = c0 + c1 * g, g from {f(t), f1(t1) op f2(t2)}, f in {x, sqrt, log1p, 1/(1+x)}, op in {+, -, *, protected /}, t in {a, b, o, e, w, v}; chosen by validation MSE x (1 + 0.01 x complexity)",
+   "variables": "a mu_a (direct centre); b two-stage centre; o age-weighted opportunities; e production per opportunity so far; w week; v opportunities so far",
+   "mechanism": "If the form blend is systematically wrong in a way its inputs predict, the shape of that error is findable and fixable before kickoff.",
+   "prior_art": "Symbolic regression by genetic programming (Koza 1992; PySR, Cranmer 2023); residual boosting; shrinkage toward the mean (James-Stein, empirical Bayes). The chosen equation is plain shrinkage.",
+   "novelty": "5",
+   "data": [
+    "SRC-NFLVERSE-PLAYERWEEK"
+   ],
+   "dataset_version": "data/cache player_stats 2017-2026 (2026 to date)",
+   "code": "research/exp5_symbolic_residuals.py",
+   "baseline": "A unchanged (no correction)",
+   "protocol": "search fitted on 2017-21, choice on 2022-23 with the complexity price, refit 2017-23, one scored test per market on 2024-26: A's shape at the corrected centre against A by CRPS, clustered 98.33% bound (Bonferroni over 3). Chosen equations committed before the holdout read.",
+   "primary_metric": "CRPS on EXP-001's grids",
+   "sample_size": "validation: receptions 4,221; rec_yds 4,014; rush_yds 1,394",
+   "results": [
+    {
+     "period": "validation 2022-2023",
+     "market": "receptions",
+     "metric": "residual MSE, chosen v none",
+     "value": 4.4591,
+     "lo": null,
+     "hi": null,
+     "notes": "no correction 4.5270; chosen r_hat = c0 + c1 * a, c1 = -0.149 (search fit)"
+    },
+    {
+     "period": "validation 2022-2023",
+     "market": "rush_yds",
+     "metric": "residual MSE, chosen v none",
+     "value": 1111.3019,
+     "lo": null,
+     "hi": null,
+     "notes": "no correction 1124.6396; c1 = -0.152"
+    },
+    {
+     "period": "validation 2022-2023",
+     "market": "rec_yds",
+     "metric": "residual MSE, best v none",
+     "value": 921.5906,
+     "lo": null,
+     "hi": null,
+     "notes": "no correction 929.4244; best penalised 930.8065 does not beat it: rejected at the search"
+    }
+   ],
+   "decision": {
+    "receptions": "chosen [a]; holdout not yet read",
+    "rec_yds": "REJECTED (search)",
+    "rush_yds": "chosen [a]; holdout not yet read"
+   },
+   "multiple_testing": "1,680 equations searched per market, but the choice is made on validation and only the one chosen is tested on the holdout; Bonferroni over the three markets",
+   "failure_modes": "2024-25 were read before as EXP-001's holdout (A against B, never A's misses against these quantities); one season of 2026; the correction moves A's centre but keeps its pool's shape",
+   "next": "If it holds: the same shrink measured on the board's live projections (engine/form's blend) before any change to a number.",
+   "status": "IMPLEMENTED"
   }
  ]
 }

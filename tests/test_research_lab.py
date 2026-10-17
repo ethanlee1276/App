@@ -37,6 +37,7 @@ from research import exp3_props_box as E3B                       # noqa: E402
 from research import audit_box as AB                             # noqa: E402
 from research import exp1_lines_box as EL                        # noqa: E402
 from research import exp4_college_two_stage as E4                # noqa: E402
+from research import exp5_symbolic_residuals as E5               # noqa: E402
 
 
 # --- the registry -------------------------------------------------------------
@@ -369,6 +370,38 @@ def test_the_college_rows_use_only_earlier_games():
         assert r["opps"] == sum(x["stats"]["carries"] for x in before), "history is the games before it only"
         assert r["y"] == 70 + 3 * r["week"] and r["o"] == 15 + r["week"]
         assert r["who"] == "Back One|State|2030" and r["pos"] == "RB"
+
+
+def test_the_equation_search_space_is_what_its_docstring_says():
+    eqs = E5.equations()
+    assert len(eqs) == 1680 and len({name for name, _c, _s in eqs}) == 1680, "every equation once"
+    assert sum(1 for _n, _c, sp in eqs if sp[0] == "leaf") == 24
+    assert min(c for _n, c, _s in eqs) == 1 and max(c for _n, c, _s in eqs) == 5
+    f = [{"a": 3.0, "b": 0.0, "o": 0.0, "e": 0.0, "w": 0.0, "v": 0.0}]
+    assert E5.values(("pair", ("x", "a"), "/", ("x", "b")), f) == [3.0], "division by zero is protected"
+    assert E5.ols([1.0, 1.0, 1.0], [0.0, 1.0, 2.0]) is None, "a constant equation has no slope to fit"
+
+
+def test_the_search_finds_a_planted_shrink_and_refuses_noise():
+    class _Fit:
+        def mean_b(self, x):
+            return 0.5 * x["mu_o"]
+    rng = __import__("random").Random(3)
+
+    def rows(n, planted):
+        out = []
+        for i in range(n):
+            a = rng.uniform(1, 9)
+            y = a + (2.0 - 0.3 * a if planted else 0.0) + rng.gauss(0, 0.5)
+            out.append({"m": "receptions", "mu_a": a, "mu_o": rng.uniform(2, 10), "prod": rng.uniform(5, 40),
+                        "opps": rng.uniform(10, 60), "week": rng.randint(4, 17), "y": y})
+        return out
+    best = E5.search(rows(1500, True), rows(800, True), _Fit())[0]
+    assert best[2] == "a", best[2]
+    c0, c1 = best[5]
+    assert abs(c1 + 0.3) < 0.05 and abs(c0 - 2.0) < 0.3, best[5]
+    noise = E5.search(rows(1500, False), rows(800, False), _Fit())
+    assert noise[0][2] == "no correction", "with nothing planted the complexity price keeps the baseline"
 
 
 if __name__ == "__main__":
