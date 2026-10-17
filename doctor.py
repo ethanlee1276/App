@@ -845,15 +845,17 @@ def check_market_coverage(rep):
             rep.add("market coverage", OK,
                     "no market has enough settled picks to judge yet")
             return
+        # Either instrument counts: a moneyline closes on price alone.
         dark = [r for r in graded
-                if r["coverage"] < MARKET_COVERAGE_FLOOR]
+                if r.get("any_coverage", r["coverage"]) < MARKET_COVERAGE_FLOOR]
         if not dark:
             rep.add("market coverage", OK,
                     f"{len(graded)} market(s) with real volume, all above "
                     f"{MARKET_COVERAGE_FLOOR:.0%} close coverage")
             return
         worst = ", ".join(
-            f"{r['sport']} {r['market']} ({r['with_close']}/{r['settled']})"
+            f"{r['sport']} {r['market']} "
+            f"({r.get('with_any_close', r['with_close'])}/{r['settled']})"
             for r in dark[:4])
         rep.add("market coverage", WARN,
                 f"{len(dark)} market(s) settling with almost no closing "
@@ -862,7 +864,9 @@ def check_market_coverage(rep):
                 "JOIN, not a quiet week — check that the harvest asks for "
                 "this market's real API key (engine/sources/oddshistory."
                 "resolve_market_keys) and that its sport is in "
-                "maintenance._HARVEST_SPORTS")
+                "maintenance._HARVEST_SPORTS; a game line settled before "
+                "its close was read fills with `python3 launch.py "
+                "--fill-game-closes --apply`")
 
 
 #: A correlation still running on a hand-taken number this long after it

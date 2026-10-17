@@ -308,7 +308,8 @@ every fit and measurement in the repo mapped to where its answer lands,
 checked against the code (step 135; CD). Then your paste of all of it,
 read line by line, everything it found fixed, and the commands to run
 again (step 136; CE); and what that run found, fixed, with what to run
-next (step 137; CF), and the round after (step 138; CG).
+next (step 137; CF), the round after (step 138; CG), and the closing
+lines for baseball's run lines and moneylines (step 139; CH).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -2222,6 +2223,25 @@ sudo systemctl restart qellys
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 -c "from engine import gate; print(gate.seal()['sealed']); print('unsealed:', gate.unsealed())"
 cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1500 python3 cfb_build.py $(TZ=America/New_York date +%F) --out /tmp/cfb_probe.json --cached-odds > /tmp/cfb_probe.log 2>&1; grep -E "⏱|record:" /tmp/cfb_probe.log
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 doctor.py --skip-tests
+```
+
+**CH. Round six: what your CG run found** (step 139). The paywall sealed and
+the college build ran in 188 seconds with the record left to the settle
+lane. The doctor's last two real items:
+1. "mlb spread (0/21), mlb moneyline (0/20)". A moneyline closes on its
+   price alone, and the doctor counted only line closes, so every
+   moneyline read 0 however well it was graded. It counts either now. A
+   spread kept no close at all; it now takes its club's closing number
+   from the board's own stored lines, as totals and moneylines already
+   did. The second line fills the ones already settled (fill-only,
+   nothing overwritten); the first is the dry run.
+2. Two stuck bets read "gradeable now" and two "logged under the next
+   day": the last line names them.
+```
+cd /srv/qellys && sudo -u qellys python3 launch.py --fill-game-closes
+cd /srv/qellys && sudo -u qellys python3 launch.py --fill-game-closes --apply
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 doctor.py --skip-tests | grep -A2 "market coverage"
+cd /srv/qellys && sudo -u qellys python3 launch.py --stuck | grep -B1 -A3 -E "gradeable now|next day"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

@@ -7,7 +7,9 @@ no game lines. The board's own do: engine/lineopen writes each game's
 numbers every build into `now_*` columns and stops at kickoff, so the row
 left standing is the last pregame line the board read. The settle now
 banks it (`ledger._game_close`): a moneyline on its side's price, a total
-on its number, a spread nothing (as before).
+on its number, a spread on its club's number negated as the bet is stored
+(since 2026-10-17 — "mlb spread (0/21)"), and `fill_game_closes` gives
+the ones graded before that their close, fill-only.
 
 Pinned here: an NFL moneyline closes on its own side's price, the club
 under either spelling, and its price CLV reads the right way; a total
@@ -112,15 +114,48 @@ def test_an_nfl_moneyline_closes_on_its_own_sides_last_pregame_price():
     assert clv["SF"] < -0.009, "took +125, closed +130: it went away"
 
 
-def test_a_total_closes_on_the_number_and_a_spread_keeps_none():
+def test_a_total_closes_on_the_number_and_a_spread_on_its_clubs_number():
     L, H = _world("nfl", RAMS)
     _bet(L, "nfl", WEEK, "total", "SF@LAR", side="OVER", line=47.5)      # 44 points: lost
-    _bet(L, "nfl", WEEK, "spread", "LAR", line=-2.5)                     # won by 4
-    store = _crowd([_line("nfl", SUNDAY, "SF", "LAR", -150, +130, 48.5)])
-    assert _with_crowd(store, lambda: ledger.settle_from_history(L, H, sport="nfl")) == 2
+    # The journal stores a spread NEGATED, side OVER (`game_row_keys`):
+    # LAR laid at -2.0 is line 2.0; SF taking +2.0 is line -2.0.
+    _bet(L, "nfl", WEEK, "spread", "LAR", line=2.0)                      # won by 4
+    _bet(L, "nfl", WEEK, "spread", "SF", line=-2.0)                      # lost by 4
+    store = _crowd([_line("nfl", SUNDAY, "SF", "LAR", -150, +130, 48.5)])   # LAR closes -2.5
+    assert _with_crowd(store, lambda: ledger.settle_from_history(L, H, sport="nfl")) == 3
     got = _closes(L)
     assert got[("total", "SF@LAR")] == ("lost", 48.5, None), got
-    assert got[("spread", "LAR")] == ("won", None, None), "a spread banks no close, as before"
+    assert got[("spread", "LAR")] == ("won", 2.5, None), got
+    assert got[("spread", "SF")] == ("lost", -2.5, None), got
+    clv = {r["player"]: ledger._bet_clv(r) for r in L.execute(
+        "SELECT * FROM bets WHERE market='spread'")}
+    assert clv == {"LAR": 0.5, "SF": -0.5}, \
+        "laid -2 and it closed -2.5: the market came to the Rams bettor, away from the 49ers one"
+
+
+def test_a_run_line_graded_before_its_close_was_read_is_filled_once():
+    """Ethan's doctor, 2026-10-17: "mlb spread (0/21)". A settled bet never
+    settles again, so the run lines graded before the spread could close
+    are filled by `fill_game_closes` — fill-only, the settle's own store
+    and function, a close already banked never touched."""
+    L, H = _world("mlb", [(2026, DAY, "746201", DAY, "NYY", "BOS", 3, 5)])
+    _bet(L, "mlb", DAY, "spread", "BOS", line=-1.5)        # BOS -1.5, won by 2
+    _bet(L, "mlb", DAY, "moneyline", "BOS", odds=+120)
+    _bet(L, "mlb", DAY, "total", "BOS@NYY", line=8.5)
+    L.execute("UPDATE bets SET status='won', closing_line=NULL, closing_odds=NULL")
+    L.execute("UPDATE bets SET closing_line=9.0 WHERE market='total'")   # banked already
+    L.commit()
+    store = _crowd([_line("mlb", DAY, "BOS", "NYY", +110, -130, 8.5)])  # home -2.5 → BOS +2.5
+    dry = _with_crowd(store, lambda: ledger.fill_game_closes(L, H, apply=False))
+    assert (dry["examined"], dry["filled"]) == (2, 2), dry
+    assert _closes(L)[("spread", "BOS")][1] is None, "a dry run writes nothing"
+    wet = _with_crowd(store, lambda: ledger.fill_game_closes(L, H, apply=True))
+    assert wet["by_market"] == {"mlb moneyline": 1, "mlb spread": 1}, wet
+    got = _closes(L)
+    assert got[("spread", "BOS")][1] == -2.5 and got[("moneyline", "BOS")][2] == -130, got
+    assert got[("total", "BOS@NYY")][1] == 9.0, "a banked close is never touched"
+    again = _with_crowd(store, lambda: ledger.fill_game_closes(L, H, apply=True))
+    assert again["examined"] == 0, "once filled, nothing left to examine"
 
 
 def test_a_monday_night_game_filed_a_day_apart_still_finds_its_line():
@@ -234,7 +269,12 @@ def test_the_wiring():
     j = pipe.index("def _game_to_dict(")
     assert '"price_stale": bool(getattr(g, "price_stale", False)),' in pipe[j:j + 2500], \
         "the NFL board's game row says when its price is dated"
-    assert "KEPT       a moneyline's or total's close" in (ROOT / "launch.py").read_text(encoding="utf-8")
+    launch = (ROOT / "launch.py").read_text(encoding="utf-8")
+    assert "KEPT       a moneyline's, total's or spread's close" in launch
+    i = launch.index("def fill_game_closes(")
+    assert "ledger.fill_game_closes(conn, hist_db.connect(), apply=apply, sport=sport)" in launch[i:i + 3000]
+    assert '_backed_up("fill-game-closes")' in launch[i:i + 3000], "a write takes the backup first"
+    assert '"--fill-game-closes" in argv' in launch
 
 
 if __name__ == "__main__":

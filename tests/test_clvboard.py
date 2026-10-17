@@ -268,6 +268,32 @@ def test_price_clv_sits_beside_line_clv_with_its_own_count():
     assert t["with_price_close"] == 1 and abs(t["avg_price_clv_pts"] - 2.22) < 0.01
 
 
+def test_a_moneyline_graded_on_its_price_is_not_called_dark():
+    """Ethan's doctor run, 2026-10-17: "mlb moneyline (0/20)". A moneyline
+    has no line to move and closes on its price alone, so the line count
+    reads 0 for every one of them however well it is graded. The doctor
+    counts a close by either instrument; a market with neither is still
+    named."""
+    b = _Book()
+    for i in range(20):
+        b.conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line, book,"
+            " odds, closing_odds, stake_units, status, category, pnl_units)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-10-10T10:00:00", "mlb", "2026-10-10", f"T{i}", "moneyline",
+             "OVER", 0.5, "DK", -130, -140, 1.0, "won", "main", 0.77))
+    b.conn.commit()
+    row = clvboard.scoreboard(b.conn)["rows"][0]
+    assert (row["with_close"], row["with_any_close"], row["any_coverage"]) == (0, 20, 1.0), row
+    _name, level, detail, _hint = _doctor_on(b)
+    assert level == "ok", (level, detail)
+    for _ in range(21):
+        b.bet("mlb", "spread", "OVER", 1.5, None, "lost")
+    _name, level, detail, hint = _doctor_on(b)
+    assert level == "warn" and "mlb spread (0/21)" in detail, detail
+    assert "--fill-game-closes --apply" in hint
+
+
 def test_the_module_is_a_runnable_command():
     """`python3 -m engine.clvboard` printed nothing on the droplet: no
     main, no argument parsing, no top-level code. It has one now, and

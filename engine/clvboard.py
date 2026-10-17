@@ -84,7 +84,7 @@ def scoreboard(conn, category: str = "main",
     by: dict = {}
     for b in _rows(conn, category, since):
         key = (b["sport"] or "?", b["market"] or "?")
-        d = by.setdefault(key, {"settled": 0, "clvs": [], "pclvs": []})
+        d = by.setdefault(key, {"settled": 0, "clvs": [], "pclvs": [], "any": 0})
         d["settled"] += 1
         c = _bet_clv(b)
         if c is not None:
@@ -99,6 +99,13 @@ def scoreboard(conn, category: str = "main",
         pc = _bet_price_clv(b)
         if pc is not None:
             d["pclvs"].append(pc)
+        # A close by EITHER instrument. A moneyline has no line to move —
+        # it closes on its price alone — so "with_close" (a line close)
+        # reads 0 for every moneyline however well it is graded. The
+        # doctor's coverage check reads this one (2026-10-17: "mlb
+        # moneyline (0/20)" was the instrument, not the harvest).
+        if c is not None or pc is not None:
+            d["any"] += 1
 
     rows = []
     for (sport, market), d in by.items():
@@ -109,6 +116,8 @@ def scoreboard(conn, category: str = "main",
             "sport": sport, "market": market, "market_label": label,
             "settled": settled, "with_close": n,
             "coverage": round(n / settled, 3) if settled else 0.0,
+            "with_any_close": d["any"],
+            "any_coverage": round(d["any"] / settled, 3) if settled else 0.0,
             "avg_clv": round(sum(clvs) / n, 3) if n else None,
             "beat_rate": (round(sum(1 for c in clvs if c > 0) / n, 3)
                           if n else None),

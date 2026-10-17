@@ -9493,8 +9493,8 @@ def repair_closes(apply: bool = False, sport: str | None = None) -> None:
           f"different one")
     print(f"  {r['cleared']:>5} CLEARED    had a close, no legal one exists "
           f"for that side/line")
-    print(f"  {r['kept']:>5} KEPT       a moneyline's or total's close, banked "
-          f"at settle off the board's game lines (not read here)")
+    print(f"  {r['kept']:>5} KEPT       a moneyline's, total's or spread's close, "
+          f"banked at settle off the board's game lines (not read here)")
     # The overwrites first and in full, because they are the only rows
     # where a value that already existed is being replaced.
     _rows("OVERWRITTEN — check these before applying:",
@@ -9508,6 +9508,34 @@ def repair_closes(apply: bool = False, sport: str | None = None) -> None:
         print("  or just let tonight's run do it.\n")
     else:
         print("\n  DRY RUN — nothing written. Add --apply to commit it.\n")
+
+
+def fill_game_closes(apply: bool = False, sport: str | None = None) -> None:
+    """Give every settled moneyline, total and spread that has no close
+    the one the settle would bank today. Fill-only — a close already
+    banked is never touched — and dry run unless --apply.
+
+    A settled bet never settles again, so a run line graded before the
+    spread could close (2026-10-17, the doctor's "mlb spread (0/21)") keeps
+    no close forever unless something fills it. Its own command, apart
+    from --repair-closes, because that one may overwrite or clear a prop's
+    close and this never may."""
+    from engine import db as hist_db
+    from engine import ledger
+    conn = ledger.connect()
+    if apply and not _backed_up("fill-game-closes"):
+        return
+    g = ledger.fill_game_closes(conn, hist_db.connect(), apply=apply, sport=sport)
+    print(f"\n  GAME LINES (moneyline, total, spread) settled with no close: {g['examined']}")
+    print(f"  {g['filled']:>5} {'FILLED' if apply else 'would fill'} from the board's stored pregame lines"
+          + (" — " + ", ".join(f"{k} {v}" for k, v in sorted(g["by_market"].items()))
+             if g["by_market"] else ""))
+    print(f"  {g['no_line']:>5} no line    the board never stored that game's line")
+    print(f"  {g['no_game']:>5} no game    its games row is not on file")
+    for date, sp, mk, who, line, val in g["sample"]:
+        print(f"    {date}  {sp:<4} {mk:<9} {str(who)[:16]:<16} {line}  close {val}")
+    print("\n  written — the Record page's closing-line numbers pick it up on the next export.\n"
+          if apply else "\n  DRY RUN — nothing written. Add --apply to fill them.\n")
 
 
 def set_paper_mode(want: str | None = None) -> None:
@@ -10319,7 +10347,7 @@ KNOWN_FLAGS = frozenset({
     "--bind", "--board-size", "--boards", "--booksharp", "--both-ways",
     "--card-venue", "--check", "--chore", "--clean-cache", "--confirm-qb",
     "--coverage", "--data-audit", "--data-use", "--desk", "--desk-probe",
-    "--doctor", "--epoch", "--gates", "--haircut", "--injuries",
+    "--doctor", "--epoch", "--fill-game-closes", "--gates", "--haircut", "--injuries",
     "--inspect-pick", "--learning", "--likely", "--matchup", "--memes",
     "--nfl-baseline", "--nightly", "--odds-audit", "--odds-doctor",
     "--ml-doctor", "--bet-audit",
@@ -10907,6 +10935,10 @@ def main() -> None:
         return
     if "--stuck" in argv:
         show_stuck()
+        return
+    if "--fill-game-closes" in argv:
+        _fs = next((a for a in argv if a in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")), None)
+        fill_game_closes(apply="--apply" in argv, sport=_fs)
         return
     if "--void-unplayed" in argv:
         show_unplayed(apply="--apply" in argv)
