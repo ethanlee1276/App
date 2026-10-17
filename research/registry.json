@@ -655,6 +655,66 @@
    "failure_modes": "only picks with a market chance can be scored (5,281 had none); few weeks per book; the rule cannot raise a chance, only lower it",
    "next": "Prospective check: every few weeks, pricetrust.py --sport nfl on board picks made after 2026-10-17, scored on trust_from; the rule stays only while held-out weeks keep agreeing.",
    "status": "BACKTESTED"
+  },
+  {
+   "id": "EXP-004",
+   "sport": "cfb",
+   "market": "player props: rushing yards (004a); receptions, receiving yards (004b)",
+   "proposed": "2026-10-17",
+   "question": "Does EXP-001's opportunities-first model (and EXP-001b's hybrid) beat the direct model on college games, a sport neither was built on?",
+   "equation": "P(Y | X) = sum_o P(Y | O = o, X) P(O = o | X); O ~ NegBin(ewma opportunities, r); Y | o as EXP-001 (research/exp1_two_stage.Fit, unchanged)",
+   "variables": "Y the stat; O carries (004a) or targets (004b); X his games this season before this one, last season's for the prior; H = A's mean with B's shape",
+   "mechanism": "Volume is steadier than production per touch; modelling it first should give the distribution the right spread. Untested outside the NFL.",
+   "prior_art": "As EXP-001: compound and hurdle count models for player stats are established; this is an out-of-sport replication, not a new method.",
+   "novelty": "4",
+   "data": [
+    "SRC-CFB-PLAYERSTATS"
+   ],
+   "dataset_version": "data/cache cfb_player_stats 2022-2026 (2026 to 2026-10-13), rosters 2022-2025",
+   "code": "research/exp4_college_two_stage.py",
+   "baseline": "A, the direct model (form-blend mean, training pool's shape)",
+   "protocol": "004a: fit 2022-23, validate 2024, hold out 2025-26; 004b: fit 2025 weeks 1-8, validate 2025 weeks 9+, hold out 2026. Each test advances only if validation favours it and the holdout's player-season-clustered 97.5% upper bound on CRPS(test) - CRPS(A) is under zero (Bonferroni over two tests per family). Bar committed before the holdout was read.",
+   "primary_metric": "CRPS on EXP-001's grids",
+   "sample_size": "validation: rush_yds 4,243 rows (714 player-seasons); receptions 5,609; rec_yds 5,424",
+   "results": [
+    {
+     "period": "validation 2024",
+     "market": "rush_yds",
+     "metric": "CRPS B-A",
+     "value": -0.3493,
+     "lo": -0.549,
+     "hi": -0.1558,
+     "notes": "A 21.1650, B 20.8157, H 20.8642 (H-A -0.3008 [-0.3941, -0.2160])"
+    },
+    {
+     "period": "validation 2025 weeks 9+",
+     "market": "receptions",
+     "metric": "CRPS B-A",
+     "value": -0.07,
+     "lo": -0.0825,
+     "hi": -0.0568,
+     "notes": "A 1.0890, B 1.0190"
+    },
+    {
+     "period": "validation 2025 weeks 9+",
+     "market": "rec_yds",
+     "metric": "CRPS B-A",
+     "value": -0.0947,
+     "lo": -0.2562,
+     "hi": 0.0751,
+     "notes": "A 16.0667, B 15.9720"
+    }
+   ],
+   "decision": {
+    "004a B rush_yds": "validation passed; holdout not yet read",
+    "004a H rush_yds": "validation passed; holdout not yet read",
+    "004b B receptions": "validation passed; holdout not yet read",
+    "004b B rec_yds": "validation passed; holdout not yet read"
+   },
+   "multiple_testing": "Bonferroni within each family (0.05 / 2); two families, each held to 0.05",
+   "failure_modes": "college target counts are short where incompletions name no target (45%, 38%, 21% named in 2022-24; 78-84% in 2025; 92% in 2026), so receiving runs only on 2025-26 and still carries a small level shift into the holdout; players appear only in games where they recorded a stat; 2026 reads 2025's roster",
+   "next": "Read the holdout once; if B or H advances in college as well as the NFL, it goes to a test at real college book lines (the box holds college props).",
+   "status": "IMPLEMENTED"
   }
  ]
 }

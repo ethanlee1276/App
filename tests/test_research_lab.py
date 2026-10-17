@@ -36,6 +36,7 @@ from research import exp3_totals as E3                           # noqa: E402
 from research import exp3_props_box as E3B                       # noqa: E402
 from research import audit_box as AB                             # noqa: E402
 from research import exp1_lines_box as EL                        # noqa: E402
+from research import exp4_college_two_stage as E4                # noqa: E402
 
 
 # --- the registry -------------------------------------------------------------
@@ -327,6 +328,47 @@ def test_the_box_audit_opens_nothing_for_writing():
             wrote = False
         assert not wrote, "the audit's connection must be read-only"
         assert AB._ro(Path(d) / "missing.db") is None
+
+
+def test_the_college_replication_keeps_its_splits_apart_and_its_roles_honest():
+    for fam, (markets, train, valid, hold) in E4.FAMILIES.items():
+        def span(period):
+            return [(s, lo, hi) for s, lo, hi in period]
+        last_train = max((s, hi) for s, _lo, hi in span(train))
+        first_valid = min((s, lo) for s, lo, _hi in span(valid))
+        last_valid = max((s, hi) for s, _lo, hi in span(valid))
+        first_hold = min((s, lo) for s, lo, _hi in span(hold))
+        assert last_train < first_valid and last_valid < first_hold, f"{fam}: periods overlap"
+        assert len(E4.TESTS[fam]) == 2 and all(m in markets for m, _k in E4.TESTS[fam])
+    # Receiving never trains on a season whose incompletions mostly name no target.
+    assert all(s >= 2025 for s, _lo, _hi in E4.FAMILIES["EXP-004b"][1])
+    g = lambda **st: {"stats": st}                                   # noqa: E731
+    assert E4.role("WR", []) == "REC" and E4.role("FB", []) == "RB" and E4.role("QB", []) == "QB"
+    assert E4.role("", [g(carries=12, targets=1), g(carries=9, targets=2)]) == "RB"
+    assert E4.role("", [g(carries=1, targets=6)]) == "REC"
+    assert E4.role("", [g(carries=8, pass_att=20)]) is None, "a passer is left out"
+
+
+def test_the_college_rows_use_only_earlier_games():
+    def game(week, carries, yds):
+        return {"week": week, "gid": f"g{week}", "pos": "RB",
+                "stats": {"carries": float(carries), "rush_yds": float(yds), "targets": 1.0, "receptions": 1.0,
+                          "rec_yds": 5.0}}
+    season = {("Back One", "State"): [game(w, 15 + w, 70 + 3 * w) for w in range(1, 9)]}
+    keep = dict(E4._CACHE)
+    E4._CACHE.clear()
+    E4._CACHE.update({2030: season, 2029: {}})
+    try:
+        rows = E4.rows_for(2030, ("rush_yds",))
+    finally:
+        E4._CACHE.clear()
+        E4._CACHE.update(keep)
+    assert rows and all(r["week"] >= 4 for r in rows)
+    for r in rows:
+        before = [x for x in season[("Back One", "State")] if x["week"] < r["week"]]
+        assert r["opps"] == sum(x["stats"]["carries"] for x in before), "history is the games before it only"
+        assert r["y"] == 70 + 3 * r["week"] and r["o"] == 15 + r["week"]
+        assert r["who"] == "Back One|State|2030" and r["pos"] == "RB"
 
 
 if __name__ == "__main__":

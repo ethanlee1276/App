@@ -67,7 +67,7 @@
    "coverage": "read here: 2022 171,489 rows; 2023 182,694; 2024 197,903; 2025 213,202; 2026 101,136 so far",
    "update": "weekly in season",
    "ids": "athlete id, team, game id",
-   "missing": "schedules and rosters cached for four seasons only; transfer and availability data not in this file",
+   "missing": "schedules and rosters cached for four seasons only (none for 2026); transfer and availability data not in this file; the TARGET on an incompletion is often unnamed — share named, measured 2026-10-17: 2022 45%, 2023 38%, 2024 21%, 2025 78-84% by week, 2026 92% — so target counts before 2025 are short and not comparable across seasons; every rushing play names its runner",
    "quality": "wide format by stat category; FBS and FCS mixed",
    "license": "not verified in this audit",
    "verified": "2026-10-17",
