@@ -1,0 +1,13 @@
+# Refresh Cloudflare's published edge ranges (audit E-17, roadmap #52).
+# The app trusts CF-Connecting-IP only from these ranges; a stale list
+# turns every visitor behind a new edge range into one rate-limit bucket.
+# Run weekly by qellys-cfips.timer; install with the runbook's P52-a.
+
+[Unit]
+Description=Qellys Cloudflare IP list refresh
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/qellys/deploy/cfips.sh

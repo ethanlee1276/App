@@ -1,0 +1,337 @@
+/* Qellys Book — Gamecast (js/gamecast.js): the live game page's rooms in
+   ESPN's layout. Loaded with the module, on the first live game opened,
+   so a first visit carries none of it. Tokens only — every colour is the
+   site's, and it re-tints in light mode with the rest. */
+.gc-k { display: block; font-size: var(--fs-xs); letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-mute); }
+.gc-head { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; font-weight: 700;
+  color: var(--text-mute); margin-bottom: 8px; }
+.gc-tag { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 999px;
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.gc-tag.turnover { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+
+/* the face: the mark under the photograph, so a photo that does not load
+   leaves a mark rather than a hole */
+.gc-face { position: relative; display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+  background: var(--bg-2); color: var(--text-mute); }
+.gc-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+
+/* the drive in progress */
+.gc-drive-head { display: flex; align-items: center; gap: 12px; }
+.gc-drive-head b { font-size: var(--fs-md); }
+.gc-q { margin-left: auto; font-family: var(--font-mono); color: var(--text-mute); }
+.gc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.gc-tile { padding: 8px 10px; border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
+  background: rgba(255,255,255,.03); text-align: center; }
+.gc-tile b { display: block; font-size: var(--fs-lg); margin-top: 2px; }
+
+/* the last play */
+.gc-last-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.gc-last-title { font-size: var(--fs-lg); }
+.gc-win { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.gc-win b { font-family: var(--font-mono); font-size: var(--fs-md); }
+.gc-last-team { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-dim);
+  font-size: var(--fs-sm); }
+.gc-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-top: 12px; }
+.gc-chip { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-width: 0;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); background: rgba(255,255,255,.03); }
+.gc-chip-t { display: flex; flex-direction: column; min-width: 0; }
+.gc-chip-t b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-chip-line { font-size: var(--fs-sm); color: var(--text-dim); }
+.gc-last-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  margin-top: 10px; font-size: var(--fs-sm); color: var(--text-mute); }
+.gc-score { font-family: var(--font-mono); }
+
+/* the leaders and the team stats: the card's head sits tight over its rows */
+.gc-leaders, .gc-tstats { padding-bottom: 6px; }
+.gc-lead-teams { display: flex; justify-content: space-between; align-items: center; font-weight: 700;
+  padding-bottom: 8px; border-bottom: var(--hairline) solid var(--border); }
+.gc-lead-teams span { display: inline-flex; align-items: center; gap: 6px; }
+.gc-lead-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: var(--hairline) solid var(--border-soft); }
+.gc-lead-row:last-child { border-bottom: 0; }
+.gc-lead-k { font-weight: 700; font-size: var(--fs-sm); text-align: center; color: var(--text-dim); }
+.gc-lead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gc-lead.right { flex-direction: row-reverse; text-align: right; }
+.gc-lead.none { opacity: .55; }
+.gc-lead-t { display: flex; flex-direction: column; min-width: 0; }
+.gc-lead-v { font-family: var(--font-mono); font-size: var(--fs-xl); line-height: 1.05; }
+.gc-lead-n { font-weight: 600; overflow-wrap: anywhere; line-height: 1.2; }
+
+/* the box score */
+.gc-toggle { display: flex; gap: 8px; margin: 4px 0 12px; }
+.gc-tog { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font: inherit;
+  color: var(--text-mute); background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: 999px; cursor: pointer; }
+.gc-tog.active { color: var(--text); border-color: var(--gold); font-weight: 700; }
+.gc-bx .pbp-bx-who { display: flex; align-items: center; gap: 8px; }
+.gc-bx .gc-face { width: 28px; height: 28px; }
+
+/* team stats */
+.gc-ts-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  padding-bottom: 8px; border-bottom: var(--hairline) solid var(--border); }
+.gc-ts-head > span:first-child, .gc-ts-head > span:last-child { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.gc-ts-head > span:last-child { justify-content: flex-end; }
+.gc-ts-head .gc-head { margin: 0; }
+.gc-ts { padding: 8px 0 6px; border-bottom: var(--hairline) solid var(--border-soft); }
+.gc-ts:last-child { border-bottom: 0; }
+.gc-ts-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: baseline; }
+.gc-ts-row b:last-child { text-align: right; }
+.gc-ts-row b { font-family: var(--font-mono); }
+.gc-ts-k { font-size: var(--fs-sm); color: var(--text-dim); text-align: center; }
+.gc-bar { display: flex; gap: 3px; height: 5px; margin-top: 6px; }
+.gc-bar span { display: block; height: 100%; border-radius: 999px; background: var(--text-mute); opacity: .35; }
+.gc-bar span:first-child { background: var(--gold); opacity: 1; }
+
+/* play by play, drive by drive */
+.gc-dr { margin-bottom: 10px; }
+.gc-dr.scoring { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); }
+.gc-dr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.gc-dr-score { margin-left: auto; font-family: var(--font-mono); color: var(--text-mute); font-size: var(--fs-sm); }
+
+@media (max-width: 700px) {
+  .gc-lead-row { grid-template-columns: 1fr auto 1fr; gap: 6px; }
+  .gc-lead { gap: 6px; }
+  .gc-lead-v { font-size: var(--fs-lg); }
+  .gc-lead-n, .gc-lead-t .mini { font-size: var(--fs-xs); }
+  .gc-lead-k { font-size: var(--fs-xs); }
+  .gc-chips { grid-template-columns: 1fr; }
+}
+
+/* ---------------- the drive on the field (2026-10-15) ----------------
+   The site's own football field (the carry and kicker charts): dark turf,
+   a mowing stripe every ten yards, the end zones in each side's colour.
+   The line of scrimmage is blue and the line to gain gold, the way a
+   broadcast draws them (the photograph above draws them the same); the
+   plays are bars in the offence's colour, a
+   loss red, a flag amber and dashed, a score gold. Two drawings ride in
+   the card and it shows the one that fits it. */
+:root { --gc-los: oklch(0.72 0.15 248); }
+:root[data-theme="light"] { --gc-los: oklch(0.55 0.17 255); }
+.gc-drive-end { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.gc-drive-end .gc-q { margin-left: 0; }
+.gc-rz { padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, transparent); }
+.gc-replay { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-sm);
+  color: var(--text); background: var(--panel-2); border: var(--hairline) solid var(--border); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.gc-replay:hover { background: var(--brand); color: var(--brand-ink); }
+@media (prefers-reduced-motion: reduce) { .gc-replay { display: none; } }
+.gc-fd { margin-top: 12px; container-type: inline-size; }
+.gc-fd-svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); }
+.gc-fd-svg.narrow { display: none; }
+@container (max-width: 480px) {
+  .gc-fd-svg.wide { display: none; }
+  .gc-fd-svg.narrow { display: block; }
+}
+.gc-fd-turf { fill: color-mix(in oklab, var(--good) 11%, var(--bg)); }
+.gc-fd-mow { fill: var(--text); fill-opacity: .035; }
+.gc-fd-ez { fill: color-mix(in oklab, color-mix(in oklab, var(--tm, var(--text-mute)) 65%, var(--text)) 24%, var(--bg)); }
+.gc-fd-ezt { fill: var(--text); fill-opacity: .82; font: 800 17px var(--font-display); letter-spacing: .14em;
+  text-anchor: middle; dominant-baseline: central; }
+.narrow .gc-fd-ezt { font-size: 12px; letter-spacing: .1em; }
+.gc-fd-ezt.band { font: 800 12px var(--font-mono); letter-spacing: .06em; dominant-baseline: auto; }
+.narrow .gc-fd-ezt.band { font-size: 10px; letter-spacing: .02em; }
+.gc-fd-yl { fill: none; stroke: color-mix(in oklab, var(--text) 9%, transparent); stroke-width: 1; }
+.gc-fd-yl.ten { stroke: color-mix(in oklab, var(--text) 20%, transparent); stroke-width: 1.2; }
+.gc-fd-goal { stroke: color-mix(in oklab, var(--text) 55%, transparent); stroke-width: 2; }
+.gc-fd-num { fill: var(--text-mute); font: 600 12px var(--font-mono); text-anchor: middle; }
+.narrow .gc-fd-num { font-size: 10px; }
+.gc-fd-rz { fill: var(--bad); fill-opacity: .13; }
+.gc-fd-los { stroke: var(--gc-los); stroke-width: 2.2; }
+.gc-fd-gain { stroke: var(--brand); stroke-width: 2.2; }
+.gc-fd-lh { stroke-width: 9; opacity: .14; }
+.gc-fd-lh.los { stroke: var(--gc-los); }
+.gc-fd-lh.gain { stroke: var(--brand); }
+.gc-fd-snap { fill: var(--text); fill-opacity: .55; }
+.gc-fd-halo { stroke: var(--bg); stroke-opacity: .6; stroke-width: 11; stroke-linecap: round; }
+.narrow .gc-fd-halo { stroke-width: 9; }
+.gc-fd-bar { stroke: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke-width: 6; stroke-linecap: round; }
+.narrow .gc-fd-bar { stroke-width: 5; }
+.gc-fd-bar.loss { stroke: var(--bad); }
+.gc-fd-bar.td { stroke: var(--brand); }
+.gc-fd-bar.flag { stroke: var(--warn); stroke-dasharray: 6 5; stroke-linecap: butt; }
+.gc-fd-head { fill: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke: var(--bg); stroke-width: 1.2; }
+.gc-fd-head.loss { fill: var(--bad); }
+.gc-fd-head.td { fill: var(--brand); }
+.gc-fd-head.flag { fill: var(--warn); }
+.gc-fd-ext { stroke: var(--warn); stroke-width: 3; stroke-dasharray: 5 4; }
+.gc-fd-flag { fill: var(--warn); stroke: var(--bg); stroke-width: 1.2; }
+.gc-fd-kick { fill: none; stroke: color-mix(in oklab, var(--text) 70%, transparent); stroke-width: 2; stroke-dasharray: 4 4; }
+.gc-fd-x { fill: none; stroke: var(--text-mute); stroke-width: 2.4; stroke-linecap: round; }
+.gc-fd-x.to { stroke: var(--bad); }
+.gc-fd-lbl { fill: var(--text); font: 700 13px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
+  stroke-linejoin: round; }
+.narrow .gc-fd-lbl { font-size: 11px; }
+.gc-fd-lbl.loss, .gc-fd-lbl.to { fill: var(--bad); }
+.gc-fd-lbl.td, .gc-fd-lbl.fg { fill: var(--brand); }
+.gc-fd-lbl.flag { fill: var(--warn); }
+.gc-fd-lbl.inc, .gc-fd-lbl.kick { fill: var(--text-mute); }
+.gc-fd-dn { fill: var(--brand); font: 800 13px var(--font-mono); paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
+  stroke-linejoin: round; }
+.narrow .gc-fd-dn { font-size: 11px; }
+.gc-fd-ball .skin { fill: color-mix(in oklab, var(--warn) 52%, var(--ink-warm)); stroke: var(--bg); stroke-width: 1.4; }
+.gc-fd-ball .lace { fill: none; stroke: var(--text); stroke-width: 1.3; stroke-linecap: round; }
+.gc-fd-ball .glow { fill: var(--brand); opacity: .22; }
+.gc-fd-ring { fill: none; stroke: var(--brand); stroke-width: 2; transform-box: fill-box; transform-origin: center;
+  animation: gc-fd-ring 1.8s var(--ease-out) infinite; }
+@keyframes gc-fd-ring { from { transform: scale(.55); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gc-fd-ring { animation: none; opacity: 0; } }
+.gc-fd-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+.gc-fd-key .los, .gc-fd-key .gain, .gc-dc-key { display: inline-flex; align-items: center; gap: 6px; }
+.gc-fd-key .los::before, .gc-fd-key .gain::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--text); }
+.gc-fd-key .gain::before { background: var(--brand); }
+.gc-fd-key .los::before { background: var(--gc-los); }
+
+/* the whole game, a drive a row */
+.gc-chart { margin-bottom: 10px; }
+.gc-dc-halo { stroke: var(--bg); stroke-opacity: .6; stroke-width: 10; stroke-linecap: round; }
+.gc-dc-bar { stroke: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); stroke-width: 6; stroke-linecap: round; }
+.narrow .gc-dc-halo { stroke-width: 8; }
+.narrow .gc-dc-bar { stroke-width: 4.5; }
+.gc-dc-head, .gc-dc-dot { fill: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); }
+.gc-dc-tag { fill: var(--text-mute); font: 700 11px var(--font-mono); letter-spacing: .04em; paint-order: stroke;
+  stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
+.narrow .gc-dc-tag { font-size: 9.5px; }
+.gc-dc-tag.score { fill: var(--brand); }
+.gc-dc-tag.bad { fill: var(--bad); }
+.gc-dc-tag.now { fill: var(--good); }
+.gc-dc-q { stroke: color-mix(in oklab, var(--text) 30%, transparent); stroke-width: 1; stroke-dasharray: 3 4; }
+.gc-dc-ql { fill: var(--text-mute); font: 700 11px var(--font-mono); text-anchor: middle; }
+.narrow .gc-dc-ql { font-size: 9.5px; }
+.gc-dc-key::before { content: ""; width: 14px; height: 5px; border-radius: 3px; background: color-mix(in oklab, var(--tm, var(--text)) 55%, var(--text)); }
+.gc-dc-key { font-weight: 700; color: var(--text-dim); }
+/* drawn in once, the first time the game is opened */
+.gc-dc-row.grow { transform-box: fill-box; transform-origin: left center; animation: gc-dc-grow .5s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms); }
+.gc-dc-row.grow.away { transform-origin: right center; }
+@keyframes gc-dc-grow { from { transform: scaleX(0); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gc-dc-row.grow { animation: none; } }
+
+/* ---------------- the at-bat, pitch by pitch (2026-10-15) ----------------
+   Under the MLB page's at-bat card: the zone from the catcher's side on
+   the left, the pitches in order on the right; on a phone, one over the
+   other. The pitch chart's colours (css/carrychart.css, .mp-*). */
+.gc-pz { padding: 12px 14px 14px; border-top: var(--hairline) solid var(--border); }
+/* The at-bat card above it (app.js): the inning and the outs keep their
+   line, and on a phone the club badge (the AT BAT · NYY line already says
+   it) gives its room to the name, which wraps rather than running under
+   the count. */
+.pbp-sit-mid .mini { white-space: nowrap; }
+@media (max-width: 480px) {
+  .pbp-sit-badge { display: none; }
+  .pbp-sit .pbp-face { width: 34px; height: 34px; }
+  .pbp-sit-side b, .pbp-sit-side .mini { overflow-wrap: anywhere; }
+}
+.gc-pz-head { display: flex; align-items: center; gap: 10px; }
+.gc-pz-head > div { min-width: 0; }
+.gc-pz-head .gc-replay { margin-left: auto; }
+.gc-tag.quiet { background: color-mix(in srgb, var(--text-mute) 16%, transparent); color: var(--text-dim); }
+.gc-pz-body { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 10px; }
+.gc-pz-svg { display: block; width: 100%; height: auto; border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--good) 7%, var(--bg)); }
+.gc-pz-box { fill: none; stroke: var(--text); stroke-width: 2; }
+.gc-pz-glow { fill: var(--brand); fill-opacity: .05; stroke: var(--brand); stroke-width: 9; stroke-opacity: .14; }
+.gc-pz-grid { stroke: color-mix(in oklab, var(--text) 22%, transparent); stroke-width: 1; stroke-dasharray: 4 4; }
+.gc-pz-plate { fill: color-mix(in oklab, var(--text) 10%, var(--panel)); stroke: var(--text-mute); stroke-width: 1.4; }
+.gc-pz-view { fill: var(--text-mute); font: 600 10px var(--font-mono); letter-spacing: .06em; }
+.gc-pz-dot { stroke: var(--bg); stroke-width: 1.6; }
+.gc-pz-dot.c { fill: var(--warn); }
+.gc-pz-dot.w { fill: var(--bad); }
+.gc-pz-dot.x { fill: var(--good); }
+.gc-pz-dot.f { fill: var(--text-mute); }
+.gc-pz-dot.b { fill: var(--panel); stroke: var(--text-dim); stroke-width: 2; }
+.gc-pz-num { fill: var(--bg); font: 800 10px var(--font-mono); text-anchor: middle; }
+.gc-pz-num.b { fill: var(--text); }
+.gc-pz-ring { fill: none; stroke: var(--brand); stroke-width: 2; transform-box: fill-box; transform-origin: center;
+  animation: gc-fd-ring 1.8s var(--ease-out) infinite; }
+@media (prefers-reduced-motion: reduce) { .gc-pz-ring { animation: none; opacity: .7; } }
+.gc-pz-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.gc-pz-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 8px;
+  border-radius: var(--radius-sm); border: var(--hairline) solid var(--border-soft); }
+.gc-pz-row.now { border-color: color-mix(in oklab, var(--brand) 55%, var(--border)); background: color-mix(in oklab, var(--brand) 6%, transparent); }
+.gc-pz-n { display: inline-grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; border-radius: 50%;
+  font: 800 11px var(--font-mono); color: var(--bg); }
+.gc-pz-n.c { background: var(--warn); }
+.gc-pz-n.w { background: var(--bad); }
+.gc-pz-n.x { background: var(--good); }
+.gc-pz-n.f { background: var(--text-mute); }
+.gc-pz-n.b { background: var(--panel); color: var(--text); border: 2px solid var(--text-dim); }
+.gc-pz-t { display: flex; flex-direction: column; min-width: 0; }
+.gc-pz-t b { font-size: var(--fs-sm); }
+.gc-pz-t span { font-size: var(--fs-xs); color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-pz-row em { font: 700 var(--fs-sm) var(--font-mono); font-style: normal; color: var(--text-dim); }
+.gc-np { margin-top: 14px; padding-top: 12px; border-top: var(--hairline) solid var(--border); }
+.gc-np-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-width: 560px; }
+.gc-np-row { display: grid; grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) 40px; align-items: center; gap: 10px; font-size: var(--fs-sm); }
+.gc-np-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-np-row i { height: 8px; border-radius: 999px; background: color-mix(in oklab, var(--text-mute) 18%, transparent); overflow: hidden; }
+.gc-np-row b { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+.gc-np-row em { font: 700 var(--fs-sm) var(--font-mono); font-style: normal; text-align: right; color: var(--text-dim); }
+.gc-np-cap { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
+.gc-pz-key { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: var(--fs-xs); color: var(--text-mute); }
+.gc-pz-key span { display: inline-flex; align-items: center; gap: 6px; }
+.gc-pz-key span::before { content: ""; width: 10px; height: 10px; border-radius: 50%; }
+.gc-pz-key .c::before { background: var(--warn); }
+.gc-pz-key .w::before { background: var(--bad); }
+.gc-pz-key .x::before { background: var(--good); }
+.gc-pz-key .f::before { background: var(--text-mute); }
+.gc-pz-key .b::before { box-sizing: border-box; border: 2px solid var(--text-dim); }
+@media (max-width: 600px) {
+  .gc-pz-body { grid-template-columns: minmax(0, 1fr); }
+  .gc-pz-svg { max-width: 260px; margin: 0 auto; }
+}
+
+/* ---------------- on Ethan's photographs (2026-10-15) ----------------
+   The drive on the field render and the at-bat in the ballpark, drawn by
+   js/gamecast.js `art` over app.js's `.pbp-park`. A photograph is a night
+   game in either theme, so these colours are the drawing's own and do not
+   re-tint with the page: the broadcast's blue line and gold line, white
+   for the ball and the captions, the pitch chart's colours for a pitch.
+   Widths that follow the camera's depth ride on the lines themselves. */
+.gc-art { --art-ink: oklch(0.96 0.012 270); --art-dim: oklch(0.78 0.03 270); --art-gold: oklch(0.87 0.16 88);
+  --art-blue: oklch(0.72 0.15 248); --art-red: oklch(0.7 0.19 25); --art-amber: oklch(0.8 0.15 65);
+  --art-green: oklch(0.8 0.16 150); --art-shade: oklch(0.15 0.02 270); --art-ball: oklch(0.97 0.03 95);
+  pointer-events: none; }
+.gc-art-los { stroke: var(--art-blue); stroke-opacity: .92; }
+.gc-art-gain { stroke: var(--art-gold); stroke-opacity: .92; }
+.gc-art-goal { stroke: var(--art-ink); stroke-opacity: .9; }
+/* A gain is white, never the offence's colour: on a red side's drive a red
+   bar would read as a loss. */
+.gc-art-play { --c: var(--art-ink); }
+.gc-art-play.td, .gc-art-play.fg, .gc-art-play.now, .gc-art-play.score { --c: var(--art-gold); }
+.gc-art-play.loss, .gc-art-play.to, .gc-art-play.rz, .gc-art-play.pz.w { --c: var(--art-red); }
+.gc-art-play.flag, .gc-art-play.pz.c { --c: var(--art-amber); }
+.gc-art-play.inc, .gc-art-play.kick, .gc-art-play.pz.f, .gc-art-play.pz.b { --c: var(--art-dim); }
+.gc-art-play.pz.x { --c: var(--art-green); }
+.gc-art-halo { stroke: var(--art-shade); stroke-opacity: .5; stroke-width: 2.8; stroke-linecap: round; }
+.gc-art-bar { stroke: var(--c); stroke-width: 1.3; stroke-linecap: round; }
+.gc-art-bar.flag { stroke: var(--art-amber); stroke-dasharray: 2.4 1.8; stroke-linecap: butt; }
+.gc-art-mark { fill: none; stroke: var(--c, var(--art-gold)); }
+.gc-art-x { fill: none; stroke: var(--c); stroke-width: 1.1; stroke-linecap: round; }
+.gc-art-kick { fill: none; stroke: var(--art-ink); stroke-opacity: .65; stroke-width: .7; stroke-dasharray: 2 2; }
+.gc-art-flag { fill: var(--art-amber); stroke: var(--art-shade); stroke-width: .4; }
+.gc-art-chip rect { fill: var(--art-shade); fill-opacity: .88; stroke: var(--c, var(--art-gold)); stroke-opacity: .7; stroke-width: .5; }
+.gc-art-chip .t { fill: var(--c, var(--art-gold)); font: 700 5.6px var(--font-mono); }
+.gc-art-chip .s { fill: var(--art-ink); font: 600 4.7px var(--font-sans); }
+.gc-art-ball .glow { fill: var(--art-gold); opacity: .28; }
+.gc-art-ball .skin { fill: var(--art-ball); stroke: var(--art-shade); stroke-opacity: .5; stroke-width: .35; }
+.gc-art-ring { fill: none; stroke: var(--art-gold); stroke-width: .7; transform-box: fill-box; transform-origin: center;
+  animation: gc-fd-ring 1.8s var(--ease-out) infinite; }
+@media (prefers-reduced-motion: reduce) { .gc-art-ring { animation: none; opacity: 0; } }
+.gc-art-zone { fill: none; stroke: var(--art-ink); stroke-opacity: .6; stroke-width: .35; }
+.gc-art-trail { stroke: var(--art-ink); stroke-width: .7; stroke-linecap: round; }
+.gc-art-pitch { fill: var(--art-ball); }
+.gc-art-dot { stroke: var(--art-shade); stroke-width: .3; }
+.gc-art-dot.c { fill: var(--art-amber); }
+.gc-art-dot.w { fill: var(--art-red); }
+.gc-art-dot.x { fill: var(--art-green); }
+.gc-art-dot.f { fill: var(--art-dim); }
+.gc-art-dot.b { fill: none; stroke: var(--art-ink); stroke-width: .45; }
+.gc-art-arc { fill: none; stroke: var(--art-gold); stroke-width: 1.6; stroke-linecap: round; opacity: .95; }
+.gc-art-old { opacity: .45; }
+/* Replay on the photograph's corner, over the sky. */
+.pbp-park > .gc-art-replay { position: absolute; top: 8px; right: 8px; z-index: 1; }
