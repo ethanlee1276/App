@@ -615,6 +615,7 @@ KEEP_CACHE_PREFIXES = {
     "pbp_": "nflverse per-SEASON bulk (~100 MB each); bounded, not per-game",
     "pbp_participation_": "nflverse per-season bulk, same",
     "player_stats_": "nflverse per-season bulk, same",
+    "stats_team_week_": "nflverse per-season team totals (volumecheck.py), small and bounded",
     "snap_counts_": "nflverse per-season bulk, same",
     "depth_charts_": "nflverse per-season bulk, same",
     "roster_": "nflverse per-season bulk, same",

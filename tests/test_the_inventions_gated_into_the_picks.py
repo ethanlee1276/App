@@ -220,7 +220,11 @@ def test_the_usage_bridge_follows_the_detected_role_once_proven():
     cook = _short_key("James Cook", "BUF")
     with _Models() as m:
         flat = NU.volume_roles(_usage_conn(), season=2026)[cook]["rush_yds"]
-        assert flat["opp_per_game"] == 10.0 and "role_ratio" not in flat, "four flat weeks: 14, 14, 6, 6"
+        # Before the detector holds, carries are every game by its age
+        # (nflusage.ROLE_HALF_LIFE, 2026-10-17); once it holds, its role
+        # scales the four flat weeks (14, 14, 6, 6 = 10) as it always did.
+        aged = NU.ewma_opps([14.0] * 6 + [6.0] * 2, NU.ROLE_HALF_LIFE["carries"])
+        assert flat["opp_per_game"] == round(aged, 2) and "role_ratio" not in flat, flat
         m.put("rolechange.json", {"shares": {"car": {"settings": RC.DEFAULT, "verdict": {"holds": True}}}})
         ratio = G.role_ratio("carries", [0.7] * 6 + [0.3] * 2)
         assert G.ROLE_RANGE[0] <= ratio < 0.8, ratio

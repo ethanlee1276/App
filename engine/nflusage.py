@@ -48,6 +48,21 @@ OPP_BY_MARKET = {
 VOL_WEEKS = 4
 #: The opportunities whose share the role detector reads (engine/rolechange).
 ROLE_SHARES = ("targets", "carries")
+#: The bridge's games weighted by age instead of the last VOL_WEEKS flat:
+#: opportunity -> half-life in games; absent = flat. MEASURED 2026-10-17 by
+#: rolewindowfit.py (half-life chosen on 2017-2021, the board's whole base
+#: rebuilt and judged on 2022-2025, every season had to improve):
+#:
+#:     targets  H=8   receptions +0.57 +0.11 +0.18 +0.26 %   rec_yds +0.53 +0.17 +0.15 +0.25 %
+#:     carries  H=2   rush_yds   +1.09 +0.20 +0.25 +0.02 %
+#:     pass_att H=8   pass_yds   +1.35 +0.48 −0.54 +1.52 %   (2024 worse: stays flat)
+#:
+#: Small, because the bridge is only part of the base. On the opportunities
+#: alone the cut is near 2.5% (targets 2.55 → 2.48 a game). Targets want a
+#: LONG memory (eight games back still counts half), carries a short one,
+#: which is the backfield job that changes hands. Splitting volume into his
+#: share of the team's measured nothing over the raw counts.
+ROLE_HALF_LIFE = {"targets": 8.0, "carries": 2.0}
 # Efficiency needs a real denominator: below these season totals a per-
 # opportunity rate is one screen pass wearing a trend costume, and the
 # player simply has no volume role rather than a junk one.
@@ -252,6 +267,23 @@ def _role_forecast(market: str, shares: list) -> float | None:
         return None
 
 
+def ewma_opps(opps: list, half_life: float | None) -> float:
+    """Opportunities a game from his games oldest first: the flat mean of
+    the last VOL_WEEKS when ``half_life`` is None, otherwise every game, the
+    one ``a`` games back weighted 0.5 ** (a / half_life)."""
+    if not opps:
+        return 0.0
+    if not half_life:
+        recent = opps[-VOL_WEEKS:]
+        return sum(recent) / len(recent)
+    num = den = 0.0
+    for age, x in enumerate(reversed(opps)):
+        w = 0.5 ** (age / half_life)
+        num += w * x
+        den += w
+    return num / den
+
+
 def _role_ratio(opp: str, shares: list) -> float:
     """The detected role over his four-week share (engine/ideagate), 1.0
     when the detector has not held or cannot be read."""
@@ -341,6 +373,11 @@ def volume_roles(conn, season: int | None = None,
                           if tot.get((team, w, opp))]
                 ratio = _role_ratio(opp, shares)
                 opp_pg *= ratio
+            # EVERY GAME BY ITS AGE where that measured better than four
+            # flat (ROLE_HALF_LIFE). The detector's role, when it has held,
+            # stays in charge: the two are answers to the same question.
+            if ratio == 1.0 and ROLE_HALF_LIFE.get(opp):
+                opp_pg = ewma_opps([weeks[w][opp] for w in sorted(with_opp)], ROLE_HALF_LIFE[opp])
             paired = [w for w in with_opp if market in weeks[w]]
             tot_opp = sum(weeks[w][opp] for w in paired)
             if tot_opp < MIN_EFF_OPPS[opp]:

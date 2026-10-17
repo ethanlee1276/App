@@ -117,7 +117,21 @@ def test_the_recent_window_still_takes_the_latest_weeks_under_the_cutoff():
     c = _conn()
     _busy(c, range(1, 5), carries=2.0, yards=8.0)
     _busy(c, range(5, 9), carries=20.0, yards=80.0)
+    _busy(c, range(9, 12), carries=90.0, yards=400.0)     # after the cutoff
+    # CARRIES ARE WEIGHTED BY AGE since 2026-10-17 (nflusage.ROLE_HALF_LIFE,
+    # rolewindowfit.py): week 8 is the newest game, ages count back from
+    # it, and weeks 9-11 are not there at all.
     role = nflusage.volume_roles(c, 2024, upto_week=9)[("a", "back", "LV")]
+    want = nflusage.ewma_opps([2.0] * 4 + [20.0] * 4, nflusage.ROLE_HALF_LIFE["carries"])
+    assert round(role["rush_yds"]["opp_per_game"], 2) == round(want, 2)
+    assert 15.0 < want < 20.0, "the last four weeks carry most of it, the four before a little"
+    # And with no half-life the window is the flat VOL_WEEKS it was.
+    saved = dict(nflusage.ROLE_HALF_LIFE)
+    nflusage.ROLE_HALF_LIFE.clear()
+    try:
+        role = nflusage.volume_roles(c, 2024, upto_week=9)[("a", "back", "LV")]
+    finally:
+        nflusage.ROLE_HALF_LIFE.update(saved)
     assert role["rush_yds"]["opp_per_game"] == 20.0, \
         f"VOL_WEEKS={nflusage.VOL_WEEKS} should cover weeks 5-8 only"
 
