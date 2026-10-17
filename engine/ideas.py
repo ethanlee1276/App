@@ -50,6 +50,8 @@ SECTIONS = {
     "attention": "attention",
     "kicks": "kickphysics",
     "rookie": "rookies",
+    "sim": "playsim",
+    "role": "rolechange",
 }
 
 _CACHE: dict = {}

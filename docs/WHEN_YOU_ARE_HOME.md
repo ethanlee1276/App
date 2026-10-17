@@ -294,7 +294,11 @@ which books copy which, the injury report read closely (how he practised,
 how honest his club's "questionable" is), and how much the public is
 reading about him on Wikipedia (step 130; BY); then the air a field goal
 flies through and the wind along each stadium, and rookies and college
-transfers read off their last college season (step 131; BZ).
+transfers read off their last college season (step 131; BZ); then every
+player on a team inside the same simulated games, checked against the
+parlay pricer's correlations (step 132; CA); then a change in a player's
+role (his share of the targets, carries or snaps) spotted within a game or
+two (step 133; CB).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -333,13 +337,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Two more inventions: the air a kick flies through, rookies and transfers from their college line`
+**A. The box has today's code.** The first line should end `Inventions 9 and 10: players inside the simulated game, a role change spotted early`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 0510f94f HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 2faeb900 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1973,6 +1977,28 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.kickphysics --save
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.rookies --save
 # shape only — replace TEAM, DEGREES and the link with a real stadium's:
 # cd /srv/qellys && sudo -u qellys python3 -m engine.kickphysics --bearing TEAM DEGREES --source https://...
+```
+
+**CA. The inventions, part 4: players inside the simulated game** (step
+132; a few minutes, any time; `--save` keeps the fitted shocks and the
+verdict the pick page reads). Paste all of it. The last four NFL seasons'
+logs: the three game-wide shocks (plays, script, the passer's day) and the
+two yardage shapes fitted on the older two, then every pair of two
+teammates' closes in the newest two, joined by the simulation and by the
+parlay pricer's number for that kind of pair, scored on what happened. It
+says HOLDS or does not hold.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.playsim --sport nfl --save
+```
+
+**CB. The inventions, part 5: a role change spotted early** (step 133; a
+minute or two, any time; `--save` keeps the chosen settings and verdicts
+the pick page reads). Paste all of it. For target share, carry share and
+snap share: the detector's two settings chosen on the older seasons, then
+every next-game forecast in the newest two against the board's four-week
+average. Each share says HOLDS or does not hold on its own.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.rolechange --save
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -6058,6 +6084,59 @@ first). Paste back anything that prints an error or looks off.
     the translation, labelled; nothing on the board reads either. New
     tests: `tests/test_the_air_a_kick_flies_through.py` (5),
     `tests/test_rookies_from_their_college_line.py` (5). No pin changed.
+132. **The inventions, part 4** (2026-10-16, the same request). (9)
+    **Players inside the simulated game** (`engine/playsim.py`). The drive
+    simulator (`engine/drivesim`) replays games as two scores with no
+    player in them, so every same-game ticket is joined with one number
+    per kind of pair (a passer and any receiver; two receivers), whoever
+    the players are. This plays each team's game pass by pass and carry by
+    carry: how many of each, each throw's target by his share of the
+    team's attempts over its last eight games (in the games he played),
+    whether it is caught (his catch rate, pulled toward the league by 20
+    targets), how far (his yards a catch, a gamma draw), and each carry's
+    runner and yards. Three shocks touch the whole team at once — the
+    number of plays, the script (passes up and runs down), and the passer's
+    day (every catch likelier and longer) — and the passer's attempts,
+    completions and yards are the sum of his throws, so they never disagree
+    with his receivers inside one game. The shocks' sizes and the yardage
+    shapes are fitted on team games (Poisson noise taken out), not chosen.
+    The bar, set before its first run: every pair of two teammates' closes
+    in the two newest seasons, the four outcomes priced with the closes'
+    fair chances joined by the simulation's correlation and by the parlay
+    pricer's (`parlays.relate`, shrunk as it shrinks), log loss averaged
+    within each team-game first; it must beat the pricer with t ≥ 2 over
+    300 team-games and 1,000 pairs, in each test season (CA). The pick page
+    shows his over in the simulated games and which teammates' legs move
+    with his ("when his hits, this hits"), beside the pricer's number; the
+    game page lists where the two disagree most. Nothing on a ticket reads
+    it. The builds simulate the board's teams in at most ten seconds. New
+    test: `tests/test_players_inside_the_simulated_game.py` (7). Seasons
+    logged before carries had the market's name read their `carries`. No
+    pin changed.
+133. **The inventions, part 5** (2026-10-17, the same request). (10) **A
+    role change spotted early** (`engine/rolechange.py`). A role jumps — a
+    receiver moves into the slot, a back takes the job — and the board
+    reads volume as his last four weeks (`nflusage.VOL_WEEKS`), which keeps
+    the old role in the number for three games after the new one is plain.
+    Online Bayesian changepoint detection (Adams and MacKay) on each share
+    series (his targets over his team's that week, his carries over his
+    team's, his snap share): after every game, the chance his current role
+    began 0, 1, 2 … games ago, each candidate role a normal with unknown
+    mean and spread, a new role judged on what a new role would predict and
+    starting with chance one in HAZARD each game. The forecast for next game
+    weighs every candidate role's mean by its chance. Tested on planted
+    jumps: 94% on the right game, no false alarms on 600 flat roles. The
+    bar, set before its first run: the two settings chosen from a fixed
+    grid on the older seasons only; every next-game share in the two newest
+    seasons forecast from the games before it (four at least) by the
+    detector and by the four-week average, absolute error, averaged within
+    each player-season; each share must beat the average with t ≥ 2 over
+    300 player-seasons and 2,000 forecasts, in each test season (CB). The
+    pick page shows his shares game by game with the new role marked, how
+    sure the detector is that it changed in the last three games, and its
+    forecast beside the four-week average; the game page lists the players
+    whose role just changed. The board's volume is unchanged. New test:
+    `tests/test_a_role_change_spotted_early.py` (6). No pin changed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

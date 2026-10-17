@@ -19,6 +19,8 @@
 .lb-stat b { color: var(--text); font-family: var(--font-mono); font-size: var(--fs-md); overflow-wrap: anywhere; }
 .lb-stat.good b { color: var(--good); }
 .lb-stat.bad b { color: var(--bad); }
+.lb-tbl td.good { color: var(--good); }
+.lb-tbl td.bad { color: var(--bad); }
 
 /* 1. Do the books add up? */
 .lb-menu { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
@@ -65,3 +67,9 @@
 /* 6. Public attention. */
 .lb-spark { width: 100%; height: 50px; display: block; }
 .lb-spark polyline { fill: none; stroke: var(--brand); stroke-width: 2; }
+
+/* 10. A role change. */
+.lb-role { width: 100%; height: 56px; display: block; }
+.lb-role rect { fill: var(--text-mute); opacity: .55; }
+.lb-role rect.new { fill: var(--brand); opacity: 1; }
+.lb-role line { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; }

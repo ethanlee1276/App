@@ -211,9 +211,86 @@
         : `How much of their old production college transfers kept in their first four games at the new school (${sec.keep_n} transfers). Context: nothing on the board reads it.`);
   }
 
+  // ---- 9. players inside the simulated game (engine/playsim) --------------
+  const MKT = (m) => String(m || "").replace(/_/g, " ").replace("rec yds", "receiving yards").replace("rush yds", "rushing yards")
+    .replace("pass yds", "passing yards").replace("rush att", "carries").replace("pass att", "attempts").replace("pass cmp", "completions");
+  function simState(v) {
+    return v && v.holds ? "holds" : v && v.pairs ? "fails" : "pending";
+  }
+  function simFoot(v) {
+    const p = (v && v.vs_pricer) || {};
+    return "Each team’s game played pass by pass and carry by carry, from each man’s share of the throws and carries over the team’s last eight games, with one shared shock each for the number of plays, the game script and the passer’s day. "
+      + (v && v.pairs ? `Measured on ${v.pairs.toLocaleString()} past pairs: against the parlay pricer’s number for that kind of pair it is ${p.gain > 0 ? "better" : "no better"} by ${num(p.gain, 4)} a pair (t ${num(p.t, 1)}). ` : "")
+      + "Until it beats the pricer on held-out seasons, nothing on a ticket reads it.";
+  }
+  function simHTML(sec) {
+    if (!sec || !(sec.links || []).length) return "";
+    const rows = sec.links.map((l) => {
+      const lift = l.their_over_given_his != null && l.their_over != null ? l.their_over_given_his - l.their_over : null;
+      return `<tr><td>${esc(l.player)}</td><td>${esc(MKT(l.market))} ${esc(num(l.line))}</td><td>${pct(l.their_over)}</td>
+        <td class="${lift == null ? "" : lift >= 0.03 ? "good" : lift <= -0.03 ? "bad" : ""}">${pct(l.their_over_given_his)}</td><td>${signed(l.rho)}</td><td>${signed(l.pricer_rho)}</td></tr>`;
+    }).join("");
+    return card("The same simulated games", `His over hits in ${pct(sec.sim_over)} of ${Number(sec.trials || 0).toLocaleString()} simulated games at ${num(sec.line)}`, simState(sec.verdict),
+      `<div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Teammate</th><th>Leg</th><th>Hits</th><th>When his hits</th><th>Sim link</th><th>Pricer’s</th></tr></thead>
+       <tbody>${rows}</tbody></table></div>`, simFoot(sec.verdict));
+  }
+  function simGameHTML(sec) {
+    if (!sec || !(sec.pairs || []).length) return "";
+    const rows = sec.pairs.map((p) => `<tr><td>${esc(p.a)}</td><td>${esc(p.b)}</td><td>${signed(p.rho)}</td><td>${signed(p.pricer_rho)}</td></tr>`).join("");
+    return card("Where the simulation and the parlay pricer disagree", "Teammates’ legs on tonight’s board, joined in the same simulated games", simState(sec.verdict),
+      `<div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Leg</th><th>With</th><th>Sim link</th><th>Pricer’s</th></tr></thead><tbody>${rows}</tbody></table></div>`,
+      simFoot(sec.verdict));
+  }
+
+  // ---- 10. a role change spotted early (engine/rolechange) -----------------
+  function roleBars(rd) {
+    const vs = (rd.values || []).filter((v) => Number.isFinite(v));
+    if (vs.length < 2) return "";
+    const W = 300, H = 56, max = Math.max(...vs, 0.05), bw = W / vs.length;
+    const cut = rd.games_ago ? vs.length - rd.games_ago : null;
+    const bars = vs.map((v, i) => {
+      const h = Math.max(1, v / max * (H - 6));
+      return `<rect class="${cut != null && i >= cut ? "new" : ""}" x="${(i * bw + 1).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}"/>`;
+    }).join("");
+    const mark = cut != null ? `<line x1="${(cut * bw).toFixed(1)}" x2="${(cut * bw).toFixed(1)}" y1="0" y2="${H}"/>` : "";
+    return `<svg class="lb-role" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`His share, game by game, ${vs.length} games`)}">${bars}${mark}</svg>`;
+  }
+  const ROLE_NAMES = { tgt: "Target share", car: "Carry share", snap: "Snap share" };
+  function roleState(rd) {
+    const v = rd.verdict || {};
+    return v.holds ? "holds" : v.series ? "fails" : "pending";
+  }
+  function roleHTML(sec) {
+    const reads = (sec && sec.reads) || {};
+    const keys = Object.keys(reads);
+    if (!keys.length) return "";
+    const lead = reads[sec.lead] ? sec.lead : keys[0];
+    const rd = reads[lead];
+    const sub = rd.games_ago && rd.flag
+      ? `${ROLE_NAMES[lead]} ${pct(rd.before)} → ${pct(rd.after)} over his last ${rd.games_ago} game${rd.games_ago === 1 ? "" : "s"}`
+      : `${ROLE_NAMES[lead]}: no clear change in his role`;
+    const others = keys.filter((k) => k !== lead).map((k) => {
+      const o = reads[k];
+      return `<li><b>${esc(ROLE_NAMES[k])}</b> ${pct(o.forecast)} next game${o.flag && o.games_ago ? ` — changed ${o.games_ago} game${o.games_ago === 1 ? "" : "s"} ago (${pct(o.before)} → ${pct(o.after)})` : ""}</li>`;
+    }).join("");
+    return card("His role, watched for a change", sub, roleState(rd),
+      `<div class="lb-stats"><div class="lb-stat ${rd.flag ? "good" : ""}"><span>Chance it changed in the last 3 games</span><b>${pct(rd.changed)}</b></div>
+       <div class="lb-stat"><span>Detector’s next game</span><b>${pct(rd.forecast, 1)}</b></div>
+       <div class="lb-stat"><span>Four-week average</span><b>${pct(rd.four_week, 1)}</b></div></div>
+       ${roleBars(rd)}${others ? `<ul class="lb-list">${others}</ul>` : ""}`,
+      "A Bayesian changepoint detector reads his share game by game and weighs every possible start of his current role by how well it explains the games since. The board reads volume as his last four weeks; whether the detector forecasts the next game closer is measured on held-out seasons, and until it does, the board’s number is unchanged.");
+  }
+  function roleGameHTML(sec) {
+    if (!sec || !(sec.rows || []).length) return "";
+    const rows = sec.rows.map((r) => `<tr><td>${esc(r.player)}</td><td>${esc(r.label)}</td><td>${pct(r.before)}</td><td>${pct(r.after)}</td><td>${esc(r.games_ago)}</td><td>${pct(r.changed)}</td></tr>`).join("");
+    return card("Roles that just changed", "Players in this game whose share of the work jumped or fell", "pending",
+      `<div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Player</th><th>Share</th><th>Before</th><th>Since</th><th>Games</th><th>Sure</th></tr></thead><tbody>${rows}</tbody></table></div>`,
+      "Read by a Bayesian changepoint detector on each man’s share game by game. A reading: the board’s volume is unchanged.");
+  }
+
   /* Section drawers, in the order the page shows them. */
-  const PICK = [["practice", practiceHTML], ["rookie", rookieHTML], ["kicks", kicksHTML], ["attention", attentionHTML], ["curve", curveHTML], ["copies", copiesHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")]];
-  const GAME = [["kicks", kicksHTML], ["practice", practiceGameHTML], ["menu", (s) => menuHTML(s, "game")]];
+  const PICK = [["practice", practiceHTML], ["role", roleHTML], ["rookie", rookieHTML], ["kicks", kicksHTML], ["attention", attentionHTML], ["curve", curveHTML], ["sim", simHTML], ["copies", copiesHTML], ["recipe", recipeHTML], ["menu", (s) => menuHTML(s, "pick")]];
+  const GAME = [["kicks", kicksHTML], ["practice", practiceGameHTML], ["sim", simGameHTML], ["role", roleGameHTML], ["menu", (s) => menuHTML(s, "game")]];
 
   function draw(order, slice) {
     const secs = (slice && slice.sections) || {};
@@ -251,5 +328,5 @@
     ask(el, `/api/ideas?${p}`, gameHTML);
   }
 
-  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, copiesHTML, practiceHTML, practiceGameHTML, attentionHTML, kicksHTML, rookieHTML, badge };
+  window.QBLab = { pickLab, gameLab, pickHTML, gameHTML, menuHTML, curveHTML, recipeHTML, copiesHTML, practiceHTML, practiceGameHTML, attentionHTML, kicksHTML, rookieHTML, simHTML, simGameHTML, roleHTML, roleGameHTML, badge };
 })();
