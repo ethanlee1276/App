@@ -11,12 +11,24 @@ READ-ONLY), whose every row is a real price observed when the pick was
 posted, the chance we showed for it, and how it settled. Registry EXP-003b.
 Its game-totals twin, runnable anywhere, is research/exp3_totals.py.
 
-ROWS. Settled won or lost (a push or void has no outcome to score), with
-our chance (`hit_prob`) and the field's de-vigged fair for the over at pick
-time (`fair_consensus`, journaled by the Edge book; an under takes one
-minus it). Rows without a market fair are counted and left out: the market
-is never rebuilt from the price we took with a vig assumed off it, and
-never from the close (that is after the pick).
+ROWS. Settled won or lost (a push or void has no outcome to score), in the
+books the site publishes (Edge main + paper, Most Likely staked and paper,
+the one board), with our chance (`hit_prob`) and the market's chance for
+the side we took at pick time. Rows without one are counted and left out:
+the market is never rebuilt from the price we took with a vig assumed off
+it, and never from the close (that is after the pick).
+
+AMENDMENT 1 (2026-10-17, after the first box run printed NOT YET and
+before any comparison was ever printed): the market's chance was the
+journaled `fair_consensus` alone, which only the Edge book writes — 790 of
+28,320 settled rows. It is now pricetrust.attach_market's, the same
+function pricetrust.py runs on this journal: the journaled fair when there
+is one, otherwise rebuilt from our own snapshots (each book's last
+two-sided quote at the bet's line in the hours before the pick, never
+after it or the start, de-vigged, the median of at least the site's
+minimum of books). And the rows are the published books only, as
+pricetrust and lossaudit read them; the prediction-market and weather
+books are different products. The bar is unchanged.
 
 THE FOUR FORECASTS of the side we took:
   A  OURS: hit_prob as shown.
@@ -48,12 +60,16 @@ import argparse
 import datetime as _dt
 import math
 import random
+import re
 import sqlite3
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+#: A calendar day; the NFL's journal `date` is a week label ("2026-W03"),
+#: so the row's `game_day` is read first.
+E3DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 MIN_TRAIN = 300
 MIN_WEEKS = 6
 MIN_HELD = 600
@@ -88,34 +104,42 @@ def week_of(date: str) -> str:
     return f"{y}-W{w:02d}"
 
 
-def load(db: str, sport: str | None) -> tuple[list[dict], Counter]:
+#: The books the site publishes (pricetrust.BOOKS, lossaudit's split).
+PUBLISHED = ("main", "paper", "likely_live", "likely", "board")
+
+
+def load(db: str, sport: str | None, snapshots=None) -> tuple[list[dict], Counter]:
     conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     cols = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
-    want = ["sport", "date", "market", "side", "odds", "hit_prob", "status", "category"]
-    want += [c for c in ("fair_consensus", "lead_min") if c in cols]
-    sql = f"SELECT {', '.join(want)} FROM bets WHERE status IN ('won','lost') AND hit_prob IS NOT NULL"
-    args: list = []
+    want = ["id", "ts", "sport", "date", "game_day", "player", "market", "side", "line", "odds",
+            "hit_prob", "status", "category"]
+    want = [c for c in want if c in cols] + [c for c in ("fair_consensus", "lead_min") if c in cols]
+    sql = (f"SELECT {', '.join(want)} FROM bets WHERE status IN ('won','lost') AND hit_prob IS NOT NULL "
+           f"AND category IN ({','.join('?' * len(PUBLISHED))})")
+    args: list = list(PUBLISHED)
     if sport:
         sql += " AND sport = ?"
         args.append(sport)
+    bets = [dict(r) for r in conn.execute(sql + " ORDER BY date", args)]
+    conn.close()
+    sys.path.insert(0, str(ROOT))
+    import pricetrust
+    pricetrust.attach_market(bets, snapshots)
     skipped: Counter = Counter()
     out = []
-    for r in conn.execute(sql + " ORDER BY date", args):
-        r = dict(r)
-        fair = r.get("fair_consensus")
-        if fair is None or not (0 < float(fair) < 1):
-            skipped["no market fair at pick time"] += 1
+    for r in bets:
+        if r.get("market_p") is None or not (0 < float(r["market_p"]) < 1):
+            skipped["no market chance at pick time"] += 1
             continue
-        if not r.get("odds") or not r.get("date"):
+        day = str(r.get("game_day") or r.get("date") or "")
+        if not r.get("odds") or not E3DATE.match(day):
             skipped["no price or date"] += 1
             continue
-        side = str(r.get("side") or "").upper()
-        mkt = float(fair) if side in ("OVER", "YES", "") else 1.0 - float(fair)
-        out.append({"wk": week_of(r["date"]), "sport": r["sport"], "market": r["market"] or "",
-                    "side": side, "a": float(r["hit_prob"]), "c": mkt, "odds": float(r["odds"]),
+        out.append({"wk": week_of(day), "sport": r["sport"], "market": r["market"] or "",
+                    "side": str(r.get("side") or "").upper(), "a": float(r["hit_prob"]),
+                    "c": float(r["market_p"]), "src": r.get("market_src"), "odds": float(r["odds"]),
                     "lead": float(r.get("lead_min") or 0.0), "y": 1.0 if r["status"] == "won" else 0.0})
-    conn.close()
     return out, skipped
 
 
@@ -232,7 +256,9 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     rows, skipped = load(a.db, a.sport)
     print(f"EXP-003b — our settled picks against the market at pick time ({a.sport or 'every sport'})")
-    print(f"  usable rows {len(rows):,}" + "".join(f"; left out ({k}) {v:,}" for k, v in skipped.items()))
+    src = Counter(x["src"] for x in rows)
+    print(f"  usable rows {len(rows):,} (market chance: " + ", ".join(f"{k} {v:,}" for k, v in src.items()) + ")"
+          + "".join(f"; left out ({k}) {v:,}" for k, v in skipped.items()))
     scored = walk(rows)
     weeks = len({x["wk"] for x in scored})
     print(f"  held-out weeks {weeks}, held-out rows {len(scored):,}")

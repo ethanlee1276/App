@@ -137,23 +137,42 @@ coefficient is not an invention.
 
 ### 16. Next highest-value experiment
 
-Price EXP-001's calibrated receptions distribution at real receptions
-lines, scored by log loss against the de-vigged book and then by the return
-at the prices actually posted.
+**EXP-001c, built after the box audit.** It prices EXP-001's models,
+recalibrated, at the lines the books actually hung, against the de-vigged
+market (`research/exp1_lines_box.py`).
 
-- Develop it on 2023 lines from The Odds API archive.
-- Decide it on 2026 games played after today, against the quotes the site
-  already records every pull.
-
-2024–25 cannot decide it: those seasons were EXP-001's holdout and have
-been read once. The 2023 lines need one harvest decision from Ethan (see
-"Decisions for Ethan").
+- The box already holds 2025 and 2026 NFL props from 16 books, so it
+  needs no harvest and no credits.
+- 2025 and pre-freeze 2026 are development data, because 2025 was
+  EXP-001's holdout and has been read once.
+- Games after 2026-10-17 decide it, with the bar written in the script
+  before its first run.
 
 ---
 
 ## Task 1 — data audit
 
 ### What the site already owns (the most important finding)
+
+**Counted on the box, 2026-10-17** (`research/audit_box.py`):
+
+- **NFL props are already stored, 2025-09-07 to today.** odds_history
+  holds 1.49M NFL rows from 16 books over 332 games. That includes
+  receptions on 305 games, receiving yards on 311, rushing yards on 306,
+  passing yards on 272 and anytime TD on 279.
+- **MLB:** 742k rows since 2026-06-01. **College:** 159k rows since
+  2026-08-29. **NHL:** props only, since 2026-10-15; no NHL game lines are
+  stored yet.
+- **Line snapshots:** `line_history.jsonl` has 3.28M quotes from 15 books,
+  2026-08-16 to today.
+- **Journal:** about 28,300 settled picks and 32,366 sealed forecasts. The
+  market's fair price is journaled only on the Edge book (NFL 246, MLB
+  631, CFB 5). That is why EXP-003b now rebuilds it from the snapshots.
+- **Outcomes:** NFL 2021–26, MLB 2021–26, NHL 2023–26, NBA 2024–25, WNBA
+  2021–26 and CFB 2022–26 player logs, plus 811 UFC fights.
+
+So **the 2025 and 2026 NFL seasons need no historical purchase.** A 2023
+harvest would only add development data.
 
 - **The Odds API is already paid for.** The site already speaks its
   historical endpoints: `harvest_odds.py` and
@@ -304,13 +323,13 @@ market at pick time) is written and tested, and waits on one box command.
 
 | # | item | depends on | effort | data | accepted when |
 |---|---|---|---|---|---|
-| B1 | Calibrate EXP-001 receptions (isotonic or Platt on training seasons), re-score on the 2024–25 holdout's existing CRPS/Brier | — | small | have it | calibrated Brier at the proxy line ≤ A's on validation, and CRPS still beats A |
-| B2 | Harvest 2024–25 NFL receptions / receiving / rushing props, one pre-kick Sunday snapshot | Ethan's credit decision | box time | The Odds API | dry-run cost accepted; rows land in odds_history |
-| B3 | Score A, B and calibrated B at real lines: log loss vs the de-vigged book, then return at the posted price. Develop on 2023 lines; DECIDE on 2026 games after the freeze against `line_history` (2024–25 was EXP-001's holdout, read once, so it is no longer untouched) | B1, B2 | medium | B2 + the box's line history | the bar written before the run (as EXP-001) |
+| B1 | Calibrate EXP-001 receptions | — | — | — | **built into EXP-001c** (logistic recalibration fitted on 2023–24) |
+| B2 | Harvest NFL props | — | — | — | **not needed**: the box already holds 2025–26 |
+| B3 | Score A, B and calibrated B at real lines against the de-vigged book | — | — | box | **EXP-001c, implemented**; decides on games after 2026-10-17 |
 | B4 | Canonical participant table with aliases (gsis / ESPN / book spellings) | — | medium | have ids | every journal row maps to one id; a test that fails on a new unmapped name |
 | B5 | Store each pick's feature vector at decision time (feature_snapshots) | — | medium | own | a pick can be re-priced from its stored features alone |
 | B6 | EXP-001b scored weekly | games | none | auto | the preregistered bar |
-| B7 | EXP-003b on the box | Ethan runs it | none | journal | the bar in the script |
+| B7 | EXP-003b on the box (amended: market chance rebuilt from snapshots) | Ethan runs it | none | journal + line history | the bar in the script |
 | B8 | MLB first experiment: two-stage strikeouts (batters faced × K rate) vs direct | — | medium | MLB Stats API on the box | same protocol as EXP-001 |
 | B9 | NBA: minutes × per-minute rate, minutes from rotation/injury state | — | medium | box history | same protocol |
 | B10 | UFC: fight-time distribution × striking rate for significant-strike props | data audit of per-fight stats | large | needs a per-fight stats source | coverage verified first |
@@ -343,28 +362,20 @@ market at pick time) is written and tested, and waits on one box command.
 
 ### Decisions for Ethan
 
-1. **Credits for B2.** Run the dry-run below first. It is free and prints
-   the cost.
-   - At the documented rate, three markets on one region is about 30
-     credits per game-snapshot.
-   - A 2024 regular season of Sunday games (about 230 games) is therefore
-     roughly 7,000 credits, plus each day's events call. That is an
-     estimate; the dry-run's number is the real one.
-   - The dry-run below covers September–October 2024 at 17:00 UTC.
-     November onward needs a second run with `--hour 18`, because the
-     clocks change. The harvester's own warning: a
-   careless full-market harvest once emptied a 20,000-credit plan in an
-   afternoon, which is why it now has a budget cap.
+1. **No credits needed now.** The box already holds the 2025–26 NFL props.
+   A 2023 harvest stays optional. The dry-run printed its plan but no
+   price, because pricing it needs one events call.
 2. **SQLite stays** (recommended) or the lab moves to Postgres.
-3. **Vendor samples:** only if the dry-run shows thin coverage.
+3. **Vendor samples:** not needed yet.
 
-### Box commands
+### Box commands (round two)
 
 ```
 cd /srv/qellys && git log --oneline -1
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/audit_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
-cd /srv/qellys && sudo -u qellys python3 harvest_odds.py nfl --from 2023-09-10 --to 2023-10-29 --weekdays sun --hour 17 --markets receptions,rec_yds,rush_yds --dry-run
 ```
 
-The last one spends nothing. Paste all four outputs.
+Both are read-only. The first fits on the box's nflverse files (fetching
+any season it lacks, once) and takes a few minutes on one core. The second
+streams the 541 MB snapshot file. Paste both outputs.

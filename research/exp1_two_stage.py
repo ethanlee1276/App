@@ -84,7 +84,8 @@ models alike; the defence step is left out of both (the same in each, so it
 cannot favour either); weekly totals have no per-target yards, so B's
 yardage given o is a moment-matched approximation, not the true compound.
 
-Reads data/cache (nflverse weekly player stats); writes nothing.
+Reads data/cache (nflverse weekly player stats); writes nothing but a
+season file the cache lacks, fetched once through the site's own loader.
 """
 from __future__ import annotations
 
@@ -129,10 +130,24 @@ def _num(row: dict, col: str) -> float:
         return 0.0
 
 
+#: The columns the lab reads. Keeping only these holds a season in a tenth
+#: of the memory, which is what lets the same code run on the 1 GB box.
+KEEP = ("player_display_name", "player_name", "position", "position_group", "team", "opponent_team",
+        "season", "week", "season_type", "game_id", "targets", "receptions", "receiving_yards",
+        "receiving_air_yards", "receiving_yards_after_catch", "carries", "rushing_yards", "attempts")
+
+
 def load(season: int) -> list[dict]:
+    """A season's regular-season weekly rows, from data/cache, fetched once
+    through the site's own loader when the cache does not have it."""
     import csv
-    with open(ROOT / "data" / "cache" / f"player_stats_{season}.csv", newline="") as fh:
-        return [r for r in csv.DictReader(fh) if str(r.get("season_type") or "REG") == "REG"]
+    path = ROOT / "data" / "cache" / f"player_stats_{season}.csv"
+    if not path.exists():
+        from engine.sources.nflverse import load_weekly_stats
+        load_weekly_stats(season)
+    with open(path, newline="") as fh:
+        return [{k: r.get(k) for k in KEEP} for r in csv.DictReader(fh)
+                if str(r.get("season_type") or "REG") == "REG"]
 
 
 # --- the rows: one per player-game and market, with what was known before it ---
@@ -186,7 +201,8 @@ def rows_for(season: int, only: set | None = None) -> list[dict]:
                 if only is not None and r.get("game_id") not in only:
                     continue
                 row = {"m": m, "s": season, "pos": "RB" if pos == "RB" else "REC",
-                       "who": f"{name}|{season}", "y": stat_value(r, m), "o": _num(r, ocol),
+                       "who": f"{name}|{season}", "name": name, "team": team, "gid": r.get("game_id"),
+                       "week": int(float(r["week"])), "y": stat_value(r, m), "o": _num(r, ocol),
                        "mu_a": form.mean, "mu_o": ewma_opps(opps, ROLE_HALF_LIFE.get(okey)),
                        "opps": sum(opps), "prod": sum(prods)}
                 if m == "rec_yds":

@@ -102,7 +102,7 @@
    },
    "multiple_testing": "Bonferroni over the three markets",
    "failure_modes": "zero-target games missing from the source for both models; yardage given o is a moment-matched approximation; no defence step in either model; receptions' gain does not show at a line-like threshold and its over-chances are too extreme",
-   "next": "Calibrate B's receptions over-chances on the training seasons (judged on 2022-23). Then price it at real lines: develop on 2023 book lines (The Odds API archive starts 2023-05-03) and DECIDE on 2026 games after the freeze, scored against the lines the site records every pull (line_history), because 2024-25 has now been read once as this experiment's holdout and is no longer untouched.",
+   "next": "EXP-001c prices it at real lines: the box already holds the 2025-26 NFL props (odds_history from 2025-09-07, 16 books), so no harvest is needed; 2025 and pre-freeze 2026 are development, games after 2026-10-17 decide.",
    "status": "HOLDOUT VALIDATED"
   },
   {
@@ -134,6 +134,37 @@
    "failure_modes": "a 2026 half-season is small (rush_yds ~350 rows); the bound may stay over zero for a while",
    "next": "Re-run after each week's stats land (the nightly ingest refreshes the cache on the box).",
    "status": "PROPOSED"
+  },
+  {
+   "id": "EXP-001c",
+   "sport": "nfl",
+   "market": "player props at real book lines: receptions (decides), receiving and rushing yards (reported)",
+   "proposed": "2026-10-17",
+   "question": "Priced at the lines books actually hung, does the recalibrated two-stage model beat the direct one, and does blending it with the market beat the market alone?",
+   "equation": "A*, B* = sigma(a + b logit p) recalibrations of EXP-001's over-chances, fitted on 2023-24 at the proxy line; C = median de-vigged consensus of the books at the most-hung line, each book's last quote before kickoff; D = sigma(0.5 logit B* + 0.5 logit C)",
+   "variables": "p the model's chance of the over at the real line; a, b fitted per market; C engine/odds.consensus_fair (three books at least)",
+   "mechanism": "EXP-001 found B's distribution better but its over-chances too extreme; recalibration should keep the ranking and fix the scale, and a model that sees what the market does not should improve a blend with it.",
+   "prior_art": "Platt-style recalibration is standard; blending a model with market-implied probabilities is standard in forecasting and betting research. The site's pricetrust.py tests a related give-back rule on the journal.",
+   "novelty": "4",
+   "data": [
+    "SRC-NFLVERSE-PLAYERWEEK",
+    "SRC-OWN-LINES"
+   ],
+   "dataset_version": "the box's odds_history (NFL from 2025-09-07) and nflverse weekly stats",
+   "code": "research/exp1_lines_box.py",
+   "baseline": "A* (Q1) and C, the market (Q2)",
+   "protocol": "models fitted on 2017-2024, recalibrated on 2023-24; 2025 and pre-freeze 2026 are DEVELOPMENT (2025 was EXP-001's holdout); the decision uses only games after 2026-10-17, receptions only, game-week-clustered bootstrap, Bonferroni over 2 (97.5%), at least 300 rows",
+   "primary_metric": "log loss of the over at the real line",
+   "sample_size": "not run yet (needs the box)",
+   "results": [],
+   "decision": {
+    "Q1": "waiting for the box run and post-freeze games",
+    "Q2": "waiting for the box run and post-freeze games"
+   },
+   "multiple_testing": "Bonferroni over the two questions",
+   "failure_modes": "name joins between books and nflverse can miss; the consensus needs three books; the recalibration is fitted at a proxy line, not real ones; the secondary ROI uses the median over price and an estimated under price",
+   "next": "Run on the box now for the development read; re-run weekly until 300 post-freeze receptions rows decide it.",
+   "status": "IMPLEMENTED"
   },
   {
    "id": "EXP-002",
@@ -275,14 +306,15 @@
    "prior_art": "pricetrust.py (leaning toward the price) and engine/likelycal + likelyctx (calibration and context correction refit on settle) already test parts of this on the box.",
    "novelty": "5",
    "data": [
-    "SRC-OWN-JOURNAL"
+    "SRC-OWN-JOURNAL",
+    "SRC-OWN-LINES"
    ],
    "dataset_version": "the box's data/ledger.db at run time",
    "code": "research/exp3_props_box.py",
    "baseline": "A (ours) and C (market)",
-   "protocol": "walk-forward by ISO week, each week fitted on earlier weeks only; week-clustered bootstrap; three comparisons at 0.05/3; NOT YET under 6 weeks or 600 rows",
+   "protocol": "walk-forward by ISO week, each week fitted on earlier weeks only; week-clustered bootstrap; three comparisons at 0.05/3; NOT YET under 6 weeks or 600 rows; AMENDMENT 1 (before any comparison was printed): the market chance is pricetrust.attach_market's (journaled fair, else rebuilt from our own pre-pick snapshots), and the rows are the published books only",
    "primary_metric": "log loss",
-   "sample_size": "not run (needs the box)",
+   "sample_size": "first box run 2026-10-17: 790 usable rows of 28,320 (journaled fair only), 450 held out over 8 weeks: NOT YET; re-run after the amendment",
    "results": [],
    "decision": {
     "all": "not run"

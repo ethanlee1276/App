@@ -35,6 +35,7 @@ from research import exp2_interactions as E2                     # noqa: E402
 from research import exp3_totals as E3                           # noqa: E402
 from research import exp3_props_box as E3B                       # noqa: E402
 from research import audit_box as AB                             # noqa: E402
+from research import exp1_lines_box as EL                        # noqa: E402
 
 
 # --- the registry -------------------------------------------------------------
@@ -154,31 +155,56 @@ def test_the_devig_and_the_rates_use_only_what_came_before():
 # --- EXP-003b -----------------------------------------------------------------
 def _journal(path: str, weeks: int, per_week: int):
     conn = sqlite3.connect(path)
-    conn.execute("CREATE TABLE bets (sport TEXT, date TEXT, market TEXT, side TEXT, odds INTEGER, hit_prob REAL, "
+    conn.execute("CREATE TABLE bets (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, sport TEXT, date TEXT, "
+                 "game_day TEXT, player TEXT, market TEXT, side TEXT, line REAL, odds INTEGER, hit_prob REAL, "
                  "status TEXT, category TEXT, fair_consensus REAL, lead_min REAL)")
     import datetime as dt
     import random
     rng = random.Random(1)
     d0 = dt.date(2026, 1, 5)
+    cols = "ts, sport, date, game_day, player, market, side, line, odds, hit_prob, status, category, fair_consensus, lead_min"
     for w in range(weeks):
         for i in range(per_week):
             truth = rng.uniform(0.35, 0.65)
             won = rng.random() < truth
-            conn.execute("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?)",
-                         ("nfl", (d0 + dt.timedelta(days=7 * w + i % 6)).isoformat(), "receptions",
-                          "OVER" if i % 2 else "UNDER", -110, min(0.95, truth + 0.08), "won" if won else "lost",
-                          "main", truth if i % 2 else 1 - truth, 600.0))
-    conn.execute("INSERT INTO bets VALUES ('nfl','2026-01-05','receptions','OVER',-110,0.6,'won','main',NULL,0)")
+            day = (d0 + dt.timedelta(days=7 * w + i % 6)).isoformat()
+            conn.execute(f"INSERT INTO bets ({cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                         (f"{day}T12:00:00", "nfl", "2026-W%02d" % (w + 1), day, f"P{i}", "receptions",
+                          "OVER" if i % 2 else "UNDER", 4.5, -110, min(0.95, truth + 0.08),
+                          "won" if won else "lost", "main", truth if i % 2 else 1 - truth, 600.0))
+    # No journaled fair: its market chance can only come from our own snapshots.
+    conn.execute(f"INSERT INTO bets ({cols}) VALUES ('2026-01-05T12:00:00','nfl','2026-W01','2026-01-05',"
+                 "'Snap Man','receptions','OVER',5.5,-110,0.6,'won','likely',NULL,0)")
+    # A prediction-market pick: a different product, never read.
+    conn.execute(f"INSERT INTO bets ({cols}) VALUES ('2026-01-05T12:00:00','nfl','2026-W01','2026-01-05',"
+                 "'Kalshi Guy','receptions','OVER',5.5,-110,0.6,'won','predmarket',0.5,0)")
     conn.commit()
     conn.close()
+
+
+def _snapshots(path: str):
+    import datetime as dt
+    import json
+    t = dt.datetime(2026, 1, 5, 11, 0, tzinfo=dt.timezone.utc).timestamp()     # an hour before the pick
+    with open(path, "w", encoding="utf-8") as fh:
+        for book, o, u in (("draftkings", -120, 100), ("fanduel", -118, -102), ("caesars", -125, 105)):
+            fh.write(json.dumps({"ts": t, "player": "Snap Man", "market": "receptions", "book": book,
+                                 "line": 5.5, "over_odds": o, "under_odds": u}) + "\n")
 
 
 def test_the_journal_arm_scores_only_later_weeks_and_says_not_yet():
     with tempfile.TemporaryDirectory() as d:
         db = os.path.join(d, "ledger.db")
         _journal(db, weeks=10, per_week=80)
-        rows, skipped = E3B.load(db, None)
-        assert skipped["no market fair at pick time"] == 1 and len(rows) == 800
+        snaps = os.path.join(d, "line_history.jsonl")
+        _snapshots(snaps)
+        rows, skipped = E3B.load(db, None, snapshots=snaps)
+        assert len(rows) == 801 and not skipped, (len(rows), skipped)
+        snap = [x for x in rows if x["src"] == "snapshots"]
+        assert len(snap) == 1 and 0.5 < snap[0]["c"] < 0.6, "rebuilt from three books' quotes before the pick"
+        assert sum(1 for x in rows if x["src"] == "journaled") == 800
+        none, skipped = E3B.load(db, None, snapshots=os.path.join(d, "missing.jsonl"))
+        assert len(none) == 800 and skipped["no market chance at pick time"] == 1, "no quotes, no market, left out"
         scored = E3B.walk(rows)
         first = min(x["wk"] for x in scored)
         assert sum(1 for x in rows if x["wk"] < first) >= E3B.MIN_TRAIN, "a week is scored only after enough came before"
@@ -198,6 +224,65 @@ def test_the_journal_arm_scores_only_later_weeks_and_says_not_yet():
         with contextlib.redirect_stdout(buf):
             E3B.main(["--db", small])
         assert "NOT YET" in buf.getvalue()
+
+
+# --- EXP-001c ----------------------------------------------------------------
+def test_the_real_line_consensus_is_the_fields_and_only_before_the_start():
+    assert EL.et_date("2025-09-08T00:15:00Z") == "2025-09-07", "a Sunday night kickoff is Sunday's game"
+    assert EL.et_date("2025-10-12T13:30:00Z") == "2025-10-12", "a London morning is the same day"
+    q = {"dk": (4.5, -120, 100), "fd": (4.5, -115, -105), "cz": (4.5, -125, 105), "mgm": (5.5, 110, -130)}
+    line, fair, books, price = EL.consensus(q)
+    assert line == 4.5 and books == 3 and 0.5 < fair < 0.6 and price == -120
+    assert EL.consensus({"dk": (4.5, -120, 100), "fd": (4.5, -115, -105)}) is None, "two books are not a field"
+    tie = {"a": (3.5, -110, -110), "b": (3.5, -110, -110), "c": (3.5, -110, -110),
+           "d": (4.5, -110, -110), "e": (4.5, -110, -110), "f": (4.5, -110, -110)}
+    assert EL.consensus(tie)[0] == 3.5, "a tie goes to the lower line"
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "h.db")
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE odds_history (sport TEXT, taken_at TEXT, event_id TEXT, home TEXT, away TEXT, "
+                     "player TEXT, market TEXT, book TEXT, line REAL, over_odds INTEGER, under_odds INTEGER, commence_time TEXT)")
+        start = "2025-09-07T17:00:00Z"
+        rows = [("2025-09-07T12:00:00Z", "dk", 3.5, -110, -110), ("2025-09-07T16:00:00Z", "dk", 4.5, -120, 100),
+                ("2025-09-07T16:00:00Z", "fd", 4.5, -115, -105), ("2025-09-07T16:00:00Z", "cz", 4.5, -125, 105),
+                ("2025-09-07T18:00:00Z", "fd", 6.5, -300, 240)]          # in play: never read
+        for t, b, ln, o, u in rows:
+            conn.execute("INSERT INTO odds_history VALUES ('nfl',?,'e1','KC','BUF','Amon-Ra St. Brown','receptions',?,?,?,?,?)",
+                         (t, b, ln, o, u, start))
+        conn.commit()
+        props = EL.book_props(conn)
+        conn.close()
+    got = props[("amon ra st brown", "2025-09-07", "receptions")]
+    assert got[0] == 4.5 and got[2] == 3, "each book's last quote before the start; the in-play 6.5 never counts"
+
+
+def test_the_calibrator_recovers_a_known_slope_and_the_join_scores_real_lines():
+    import random
+    rng = random.Random(3)
+    pairs = []
+    for _ in range(4000):
+        p = rng.uniform(0.05, 0.95)
+        true = EL._sig(0.5 * EL._logit(p))                     # the forecast is twice too extreme
+        pairs.append((p, 1.0 if rng.random() < true else 0.0))
+    cal = EL.Calibrator(pairs)
+    assert 0.35 < cal.b < 0.65 and abs(cal.a) < 0.15, (cal.a, cal.b)
+    x = next(r for r in E1.rows_for(2025) if r["m"] == "receptions")
+    day = EL.game_dates()[x["gid"]]
+    from engine.sources.oddsapi import normalize_name
+    line = 0.5 if x["y"] >= 1 else 1.5
+    props = {(normalize_name(x["name"]), day, "receptions"): (line, 0.55, 4, -125)}
+
+    class Stub:
+        def cdf_a(self, r, t):
+            return 0.4
+
+        def cdf_b(self, r, ts):
+            return [0.3 for _ in ts]
+    ident = EL.Calibrator([(0.2, 0.0), (0.8, 1.0)] * 50)
+    out = EL.scored(Stub(), {m: (ident, ident) for m in EL.MARKETS}, props, seasons=(2025,))
+    mine = [r for r in out if r["day"] == day]
+    assert len(mine) == 1 and mine[0]["A"] == 0.6 and abs(mine[0]["B"] - 0.7) < 1e-12 and mine[0]["C"] == 0.55
+    assert mine[0]["y"] == (1.0 if x["y"] > line else 0.0) and not mine[0]["after"], "2025 is development"
 
 
 def test_the_box_audit_opens_nothing_for_writing():

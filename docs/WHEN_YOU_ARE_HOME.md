@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ).
+The research lab, session one: four read-only lines (step 141; CJ), and round two (step 142; CK).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2289,6 +2289,22 @@ cd /srv/qellys && git log --oneline -1
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/audit_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
 cd /srv/qellys && sudo -u qellys python3 harvest_odds.py nfl --from 2023-09-10 --to 2023-10-29 --weekdays sun --hour 17 --markets receptions,rec_yds,rush_yds --dry-run
+```
+
+**CK. The research lab, round two** (step 142). Your CJ paste showed the
+box already holds the 2025 and 2026 NFL props from 16 books, so no credits
+are needed: EXP-001's models are now priced at those real lines against
+the books' consensus (2025 and the 2026 weeks so far are development only;
+games after 2026-10-17 decide it). And EXP-003b could use only the 790
+picks with a journaled market price; it now rebuilds the market from the
+site's own line snapshots for the rest, as pricetrust does. The first
+line makes a bare `git pull` follow this branch (what made your last one
+say "divergent": the branch was tracking a different one; nothing was
+lost, the backup branch is the same commit). Both checks are read-only.
+```
+cd /srv/qellys && git rev-parse --abbrev-ref @{u}; git branch --set-upstream-to=origin/claude/sports-betting-app-vhgmho && git branch -d box-only-backup-1017
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
