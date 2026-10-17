@@ -266,20 +266,32 @@ def test_the_calibrator_recovers_a_known_slope_and_the_join_scores_real_lines():
         pairs.append((p, 1.0 if rng.random() < true else 0.0))
     cal = EL.Calibrator(pairs)
     assert 0.35 < cal.b < 0.65 and abs(cal.a) < 0.15, (cal.a, cal.b)
-    x = next(r for r in E1.rows_for(2025) if r["m"] == "receptions")
-    day = EL.game_dates()[x["gid"]]
-    from engine.sources.oddsapi import normalize_name
-    line = 0.5 if x["y"] >= 1 else 1.5
-    props = {(normalize_name(x["name"]), day, "receptions"): (line, 0.55, 4, -125)}
+    # A made-up season, so the test needs no cache file and no network.
+    season = [{"player_display_name": "Test Receiver", "position": "WR", "team": "DET", "opponent_team": "GB",
+               "season": "2025", "week": str(w), "season_type": "REG", "game_id": f"2025_{w:02d}_DET_GB",
+               "targets": "8", "receptions": str(4 + w % 2), "receiving_yards": "60", "carries": "0",
+               "rushing_yards": "0", "attempts": "0"} for w in range(1, 6)]
+    days = {f"2025_{w:02d}_DET_GB": f"2025-10-{w:02d}" for w in range(1, 6)}
+    real_load, real_dates = E1.load, EL.game_dates
+    E1.load = lambda s: season if s == 2025 else []
+    EL.game_dates = lambda: days
+    try:
+        x = next(r for r in E1.rows_for(2025) if r["m"] == "receptions")
+        day = days[x["gid"]]
+        from engine.sources.oddsapi import normalize_name
+        line = 0.5 if x["y"] >= 1 else 1.5
+        props = {(normalize_name(x["name"]), day, "receptions"): (line, 0.55, 4, -125)}
 
-    class Stub:
-        def cdf_a(self, r, t):
-            return 0.4
+        class Stub:
+            def cdf_a(self, r, t):
+                return 0.4
 
-        def cdf_b(self, r, ts):
-            return [0.3 for _ in ts]
-    ident = EL.Calibrator([(0.2, 0.0), (0.8, 1.0)] * 50)
-    out = EL.scored(Stub(), {m: (ident, ident) for m in EL.MARKETS}, props, seasons=(2025,))
+            def cdf_b(self, r, ts):
+                return [0.3 for _ in ts]
+        ident = EL.Calibrator([(0.2, 0.0), (0.8, 1.0)] * 50)
+        out = EL.scored(Stub(), {m: (ident, ident) for m in EL.MARKETS}, props, seasons=(2025,))
+    finally:
+        E1.load, EL.game_dates = real_load, real_dates
     mine = [r for r in out if r["day"] == day]
     assert len(mine) == 1 and mine[0]["A"] == 0.6 and abs(mine[0]["B"] - 0.7) < 1e-12 and mine[0]["C"] == 0.55
     assert mine[0]["y"] == (1.0 if x["y"] > line else 0.0) and not mine[0]["after"], "2025 is development"
