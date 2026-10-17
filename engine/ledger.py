@@ -772,7 +772,12 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
                 # NULL when no movement was observed for the prop. Rejected
                 # picks land in the `loose` bucket carrying a negative one,
                 # which is what makes the veto's own record readable.
-                "move_delta", "move_steam"):
+                "move_delta", "move_steam",
+                # THE BOARD'S CHANCE BEFORE THE PRICE TOOK BACK ITS GAP
+                # (likelyboard.trust_price, 2026-10-17), NULL where it did
+                # not: `hit_prob` is what the page showed, and this is what
+                # pricetrust.py re-tests the rule on, picks made after it.
+                "trust_from"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
         except sqlite3.OperationalError as exc:
@@ -1864,8 +1869,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
             "grade, stake_units, stake_dollars, lead_min, status, category, "
-            "evidence, raw_prob) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?)",
+            "evidence, raw_prob, trust_from) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?)",
             # THE CALENDAR DAY, STAMPED HERE TOO — see `game_day_for`.
             # Eleven inserts write this table and only three filled this
             # column. `date` is the SETTLE KEY and for football it is a
@@ -1913,7 +1918,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # before that shrink, as `raw_prob` is for the edge book's
              # market shrink, so the next fit reads the raw claim and never
              # compounds its own correction.
-             r.get("board_raw_prob")))
+             r.get("board_raw_prob"),
+             r.get("trust_from")))
         _stamp_team(conn, cur, r)
         n += cur.rowcount or 0
     conn.commit()

@@ -645,15 +645,15 @@
     }
    ],
    "decision": {
-    "the one board, NFL": "PASSES: awaiting Ethan's yes",
-    "Most Likely paper, MLB": "PASSES (small): awaiting Ethan's yes",
+    "the one board, NFL": "WIRED 2026-10-17 on Ethan's yes: engine/likelyboard.trust_price (w 1, T 0), switch QB_PRICE_TRUST; picks it moves journal trust_from, so pricetrust.py re-tests the rule on them prospectively",
+    "Most Likely paper, MLB": "PASSES (small): not wired; recommended not yet",
     "Edge, MLB": "FAILS",
     "Edge, NFL": "FAILS",
     "others": "NOT YET (the one board MLB 0.6913 -> 0.6853 and Most Likely staked NFL 0.6770 -> 0.6748 on 2 weeks)"
    },
    "multiple_testing": "one rule family per book and sport, each with its own bar; many books tested, so a single pass is weaker evidence than it looks",
    "failure_modes": "only picks with a market chance can be scored (5,281 had none); few weeks per book; the rule cannot raise a chance, only lower it",
-   "next": "If Ethan says yes, wire the NFL one-board rule behind a switch; keep re-running so the NOT YET books can decide.",
+   "next": "Prospective check: every few weeks, pricetrust.py --sport nfl on board picks made after 2026-10-17, scored on trust_from; the rule stays only while held-out weeks keep agreeing.",
    "status": "BACKTESTED"
   }
  ]

@@ -28,7 +28,10 @@ lossaudit.py splits them:
 and within each book each sport on its own: a week is a sport's week (the
 NFL's "2026-W03", every other league's calendar week from its Monday).
 
-OUR CHANCE is the row's `hit_prob`, the number the page showed.
+OUR CHANCE is the row's `hit_prob`, the number the page showed — or, on a
+pick the rule itself moved once it went live (NFL board, 2026-10-17), the
+chance before it (`trust_from`), so the rule is re-tested on what it was
+applied to, never on its own output.
 
 THE MARKET'S CHANCE AT PICK TIME, for the side we took, in this order:
 
@@ -80,6 +83,14 @@ Changing the grid or these constants after seeing a run is fitting the
 bar. A PASS changes nothing by itself: it is reported to Ethan with the
 w and T the latest week chose, and the board moves only on his yes.
 
+THE YES SO FAR. 2026-10-17, the NFL one board ("yes nfl board"): it passed
+at 0.6966 -> 0.6852 over 199 held-out picks, every week better, the weeks
+choosing w = 1, T = 0. engine/likelyboard.trust_price applies it (off with
+QB_PRICE_TRUST=off), and each pick it moved journals the chance before it
+as `trust_from`, which this script scores — so later runs re-test the rule
+on picks made after it went live. MLB's Most Likely paper passed too, by
+less (0.6901 -> 0.6895); not wired.
+
 Also printed, as description only (every settled pick at once, so it
 judges nothing): how the picks did by how far our chance ran above the
 market, and how many picks had no market chance to measure against.
@@ -106,7 +117,7 @@ BOOKS = (("Edge picks", ("main", "paper")),
          ("Most Likely, paper", ("likely",)),
          ("The one board", ("board",)))
 COLUMNS = ("id", "sport", "date", "game_day", "ts", "player", "market", "side", "line",
-           "book", "odds", "hit_prob", "status", "category", "fair_consensus")
+           "book", "odds", "hit_prob", "status", "category", "fair_consensus", "trust_from")
 
 #: The rule's menu (see THE RULE above). Written before any run.
 GRID_W = tuple(round(i / 10, 1) for i in range(11))
@@ -343,7 +354,7 @@ def scorable(bets) -> list[dict]:
     out = []
     for b in bets:
         try:
-            ours = float(b["hit_prob"])
+            ours = float(b["trust_from"] if b.get("trust_from") is not None else b["hit_prob"])
         except (TypeError, ValueError):
             continue
         wk = week(b)

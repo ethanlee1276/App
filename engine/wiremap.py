@@ -97,6 +97,8 @@ FITS = (
     ("engine.tdmatchfit", "board", ("engine.tdscenarios",),
      "a bad defence adds nothing beyond the game total, so a scenario is a selection rule, the chance unmoved"),
     ("scanblendfit", "board", ("engine.teamchange",), "how much of a team's rating is this season"),
+    ("pricetrust", "board", ("engine.likelyboard",),
+     "the NFL one board never shows a chance above the books' price (PRICE_TRUST, Ethan's yes 2026-10-17)"),
     # ---- the inventions (engine/ideagate) ---------------------------------------------------
     ("engine.rookies", "gated", ("engine.ideagate",), "a thin rookie sample's prior"),
     ("engine.rolechange", "gated", ("engine.ideagate",), "the usage bridge's volume follows the detected role"),

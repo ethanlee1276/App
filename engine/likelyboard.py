@@ -115,6 +115,28 @@ RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "boa
 #: Chance bands the record is read in (ledger.LIKELY_BANDS).
 BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
 
+#: TRUST THE PRICE WHERE WE RUN ABOVE IT (pricetrust.py, step 109; Ethan,
+#: 2026-10-17: "yes nfl board"). Where our chance runs above the books'
+#: de-vigged price, the board shows
+#:
+#:     ours - w * max(0, ours - market - T)
+#:
+#: with the (w, T) the held-out weeks chose for that league's board. For
+#: the NFL that is w = 1, T = 0: never above the market's number. Tried
+#: week by week on settled board picks the choice never saw, it cut log
+#: loss from 0.6966 to 0.6852 over 199 picks, and every held-out week
+#: improved; the picks 15+ points above the market had hit 37.5% where
+#: they claimed 75.3% (24 picks). The market's chance is the one pricetrust
+#: scored: each book's quote at the bet's own line, both sides, de-vigged,
+#: the median of three books or more (`engine.odds.consensus_fair`). A pick
+#: with no such field keeps its chance, as it was left out of the test. A
+#: league joins only when pricetrust passes on its board and Ethan says yes
+#: (MLB's Most Likely paper passed narrowly; Edge failed in both leagues).
+PRICE_TRUST = {"nfl": (1.0, 0.0)}
+#: The off switch, without a deploy: ``sudo ./deploy/setenv.sh
+#: QB_PRICE_TRUST off`` then ``sudo systemctl restart qellys``.
+PRICE_TRUST_ENV = "QB_PRICE_TRUST"
+
 TIERS = (("top", "Top pick"), ("strong", "Strong"), ("look", "Worth a look"))
 #: The paper bucket for picks the board held back (see `held_reason`).
 HELD_CATEGORY, HELD_LABEL = "held", "Held back"
@@ -162,6 +184,12 @@ def held_reason(r: dict, checks: dict) -> str | None:
             and checks.get("matchup") is not True):
         return (f"held back: our chance is {float(prob):.0%} after the record's correction "
                 f"({proven}) — under {DROP_FLOOR:.0%}, and no matchup read backs it")
+    # THE PRICE'S NUMBER UNDER EVEN (`trust_price`) is a correction the record
+    # proved too — on held-out weeks — so the same floor holds it.
+    if (r.get("trust_note") and lane_of(r) != "td" and prob is not None
+            and float(prob) < DROP_FLOOR and checks.get("matchup") is not True):
+        return (f"held back: the books' price gives it {float(prob):.0%} — under "
+                f"{DROP_FLOOR:.0%} — and no matchup read backs it")
     if checks.get("matchup") is not False or not proven:
         return None
     return f"held back: {proven}, and our matchup read leans the other way"
@@ -327,6 +355,97 @@ def market_check(r: dict):
     if gap >= MARKET_FAR:
         return False, words + " — far above every book"
     return None, words
+
+
+def price_trust_rule(sport: str):
+    """``(w, T)`` for this league's board, or None — not a league the test
+    passed on, or switched off (PRICE_TRUST_ENV)."""
+    import os
+    if os.environ.get(PRICE_TRUST_ENV, "").strip().lower() in ("off", "0", "no", "false"):
+        return None
+    return PRICE_TRUST.get(str(sport or "").lower())
+
+
+def book_quotes(result: dict, rows=()) -> dict:
+    """``{(player, market): [quote, ...]}`` — every book's number on each
+    prop the build priced (`all_lines`, then the alternate ladder), off the
+    build's prop rows and any pick row that carries its own."""
+    from .sources.oddsapi import normalize_name
+    out: dict = {}
+    for r in list(result.get("recommendations") or []) + list(rows or []):
+        if not isinstance(r, dict) or not r.get("player") or not r.get("market"):
+            continue
+        qs = [q for q in (r.get("all_lines") or []) + (r.get("alt_lines") or []) if isinstance(q, dict)]
+        if qs:
+            out.setdefault((normalize_name(r["player"]), r["market"]), []).extend(qs)
+    return out
+
+
+def market_chance(r: dict, quotes: dict):
+    """``(the market's chance for this pick's side, books)`` or None: each
+    book's first quote at the pick's own line, both sides sane, never the
+    proxy, de-vigged and the median taken with the three-book floor — the
+    number pricetrust's snapshots rebuilt (`pricetrust.snapshot_fairs`)."""
+    from .models import SportsbookLine
+    from .odds import consensus_fair, pair_is_sane
+    from .sources.oddsapi import normalize_name
+    try:
+        line = round(float(r.get("line")), 1)
+    except (TypeError, ValueError):
+        return None
+    seen, lines = set(), []
+    for q in quotes.get((normalize_name(r.get("player") or ""), r.get("market")), ()):
+        book = str(q.get("book") or "").lower()
+        try:
+            if round(float(q.get("line")), 1) != line:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if not book or book == "proxy" or book in seen or not pair_is_sane(q.get("over_odds"), q.get("under_odds")):
+            continue
+        seen.add(book)
+        lines.append(SportsbookLine(book=book, line=line, over_odds=int(q["over_odds"]),
+                                    under_odds=int(q["under_odds"])))
+    got = consensus_fair(lines, line)
+    if not got:
+        return None
+    fair_over, books = got
+    under = str(r.get("side") or "").upper() in ("UNDER", "NO")
+    return (1.0 - fair_over if under else fair_over), books
+
+
+def trust_price(rows: list, result: dict, sport: str) -> int:
+    """Give the price back the part of our chance above it (PRICE_TRUST).
+    The chance before rides along as ``trust_from`` (journaled, so the rule
+    can be re-tested on picks made after it went live) and the first claim
+    as ``board_raw_prob``, as every correction here keeps it. A posted pick
+    keeps the number it went up at. Returns how many moved."""
+    rule = price_trust_rule(sport)
+    if not rule:
+        return 0
+    w, t = rule
+    quotes = book_quotes(result, rows)
+    moved = 0
+    for r in rows:
+        if r.get("kind") == "game" or r.get("model_prob") is None or r.get("locked"):
+            continue
+        got = market_chance(r, quotes)
+        if got is None:
+            continue
+        market, books = got
+        ours = float(r["model_prob"])
+        r["market_prob"], r["market_books"] = round(market, 4), books
+        shown = ours - w * max(0.0, ours - market - t)
+        if shown >= ours - 1e-9:
+            continue
+        r["trust_from"] = round(ours, 4)
+        r.setdefault("board_raw_prob", ours)
+        r["model_prob"] = round(shown, 4)
+        r["trust_note"] = (f"we said {ours:.0%}; {books} books' de-vigged price says {market:.0%}, "
+                           f"and on this board the price has been closer whenever we ran above it, "
+                           f"so we show the price's number")
+        moved += 1
+    return moved
 
 
 def model_matchups(recs: list) -> dict:
@@ -565,6 +684,14 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         _gate.most_likely([pool[k] for k in order], sport)
     except Exception:                                        # noqa: BLE001
         pass
+    # THE PRICE, WHERE WE RUN ABOVE IT (`trust_price`; Ethan, 2026-10-17:
+    # "yes nfl board"). Last, so it judges the number every correction above
+    # has already set — the number pricetrust tested — and the checks, the
+    # tier and the order all read what the page shows.
+    try:
+        trust_price([pool[k] for k in order], result, sport)
+    except Exception:                                        # noqa: BLE001
+        pass
     rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
     for k in order:
         r = pool[k]
@@ -576,7 +703,8 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         notes["model"] = (f"our chance {prob:.0%} (the bar here is {bar:.0%})"
                           + (f" — {r['cal_note']}" if r.get("cal_note") else "")
                           + (f" — {r['ctx_note']}" if r.get("ctx_note") else "")
-                          + (f" — {r['idea_note']}" if r.get("idea_note") else ""))
+                          + (f" — {r['idea_note']}" if r.get("idea_note") else "")
+                          + (f" — {r['trust_note']}" if r.get("trust_note") else ""))
         checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
         # NOT A SECOND OPINION ON ITSELF (Ethan, 2026-10-03, "yeah make the
         # tier change"). A pick only the matchup picks or the touchdown
@@ -772,7 +900,7 @@ def harmonize(result: dict) -> int:
         if p is not None and q is not None and abs(float(p) - float(q)) > 1e-9:
             src.setdefault("listed_prob", q)
             src["model_prob"] = p
-            for f in ("cal_note", "ctx_note"):
+            for f in ("cal_note", "ctx_note", "trust_note"):
                 if b.get(f):
                     src[f] = b[f]
             n += 1
