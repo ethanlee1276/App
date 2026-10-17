@@ -346,6 +346,76 @@ def stream_history(path: str | Path | None = None):
                 continue
 
 
+#: How far before the cut `stream_since` starts reading: the builds append
+#: in real time, so a line's place in the file is its time to within
+#: seconds; an hour more covers any writer that ran late.
+SINCE_MARGIN_S = 3600.0
+
+
+def _ts_after(fh, offset: int) -> float:
+    """The `ts` of the first whole line at or after ``offset`` (the line
+    the offset falls inside is skipped), inf at the end of the file."""
+    fh.seek(offset)
+    if offset:
+        fh.readline()
+    for _ in range(8):
+        raw = fh.readline()
+        if not raw:
+            return float("inf")
+        try:
+            return float(json.loads(raw).get("ts") or 0)
+        except (ValueError, TypeError, AttributeError):
+            continue
+    return 0.0
+
+
+def stream_since(ts: float, path: str | Path | None = None):
+    """The snapshots from about ``ts`` on, without parsing the file's past.
+
+    EVERY BUILD PARSED EVERY LINE TO KEEP TODAY'S. `todays_rows(
+    stream_history())` hands the whole history — every sport since the file
+    began — to `json.loads` and then keeps the rows since midnight; the NFL
+    build did it twice, the NBA and MLB builds once each, and the NFL's
+    "odds" stage ran 148 seconds on cached odds (box run, 2026-10-17). The
+    file is append-only in time order, so the first line at ``ts`` less
+    SINCE_MARGIN_S is found by halving the byte range, and only the lines
+    after it are read. The caller's own filter still runs on what comes
+    back, so the answer is the old one."""
+    path = Path(path) if path else HISTORY_PATH
+    if not path.exists():
+        return
+    target = float(ts) - SINCE_MARGIN_S
+    with path.open("rb") as fh:
+        fh.seek(0, 2)
+        lo, hi = 0, fh.tell()
+        while hi - lo > 65536:
+            mid = (lo + hi) // 2
+            if _ts_after(fh, mid) < target:
+                lo = mid
+            else:
+                hi = mid
+        fh.seek(lo)
+        if lo:
+            fh.readline()
+        for raw in fh:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                yield json.loads(raw)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+
+
+def stream_today(path: str | Path | None = None, now: float | None = None):
+    """`stream_since` local midnight — what `todays_rows` keeps, read fast."""
+    import datetime as _dt
+    now = now if now is not None else time.time()
+    midnight = _dt.datetime.fromtimestamp(now).replace(
+        hour=0, minute=0, second=0, microsecond=0).timestamp()
+    return stream_since(midnight, path)
+
+
 def stream_wanted(want, path: str | Path | None = None):
     """The snapshots of these ``{(normalized player, market)}`` only, one
     at a time, parsing a line only when its text says it may be wanted.

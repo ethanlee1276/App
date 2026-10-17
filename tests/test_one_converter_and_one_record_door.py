@@ -60,10 +60,49 @@ def test_the_door_exports_on_its_rule():
             calls.clear()
             ledger.settle_from_history = lambda c, h, sport=None, _n=settled: _n
             ledger.export_json = lambda c, p: calls.append(p)
-            assert ledger.settle_and_export(None, None, "nfl", logged=logged) == settled
+            assert ledger.settle_and_export(None, None, "nfl", logged=logged, defer=False) == settled
             assert bool(calls) is want, (settled, logged)
     finally:
         ledger.settle_from_history, ledger.export_json = real_s, real_e
+
+
+def test_a_build_leaves_the_record_to_a_live_settle_lane():
+    """Box run, 2026-10-17: the door was 184 of the NFL build's 846 seconds
+    and most of college's 533-second stage, while the settle lane settles
+    every league and exports the same file every five minutes. With the
+    lane alive a build journals, marks the record changed and goes; with
+    it silent (or no state at all) the build settles as before."""
+    import json as _json
+    import time as _time
+    from engine import ledger
+    t = Path(tempfile.mkdtemp())
+    real = (ledger.LANE_STATE, ledger.RECORD_DIRTY, ledger.settle_from_history, ledger.export_json)
+    calls = []
+    try:
+        ledger.LANE_STATE, ledger.RECORD_DIRTY = t / "maintenance.json", t / "record_dirty"
+        ledger.settle_from_history = lambda c, h, sport=None: calls.append("settle") or 2
+        ledger.export_json = lambda c, p: calls.append("export")
+        assert not ledger.settle_lane_alive(), "no state: the builds settle"
+        ledger.LANE_STATE.write_text(_json.dumps({"last_settle_ts": _time.time() - 60}))
+        assert ledger.settle_lane_alive()
+        assert ledger.settle_and_export(None, None, "nfl", logged=0) == 0 and calls == []
+        assert not ledger.record_dirty(), "nothing journaled, nothing to export"
+        assert ledger.settle_and_export(None, None, "nfl", logged=3) == 0 and calls == []
+        assert ledger.record_dirty(), "the lane's next pass exports it"
+        ledger.clear_record_dirty()
+        ledger.LANE_STATE.write_text(_json.dumps({"last_settle_ts": _time.time() - ledger.LANE_ALIVE_S - 5}))
+        assert ledger.settle_and_export(None, None, "nfl", logged=3) == 2
+        assert calls == ["settle", "export"], "a silent lane hands the work back"
+    finally:
+        ledger.LANE_STATE, ledger.RECORD_DIRTY, ledger.settle_from_history, ledger.export_json = real
+
+
+def test_the_lane_exports_what_a_build_left_it():
+    src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    i = src.index("def settle_open(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert body.count("ledger.record_dirty()") == 2, "both the quiet pass and the settling pass"
+    assert body.count("ledger.clear_record_dirty()") == 2
 
 
 def test_each_process_writes_its_own_temp_file():

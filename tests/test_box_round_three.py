@@ -281,7 +281,8 @@ def test_each_stage_says_its_seconds_as_it_finishes():
     assert cfb.index("_clock.start()") < cfb.index('_clock.mark("history + team ratings")')
     stages = [cfb.index(f'_clock.mark("{st}")') for st in
               ("history + team ratings", "game bets", "player slate + quotes", "ideas readings",
-               "long shots + Most Likely board", "stale lines + journal + settle")]
+               "long shots + Most Likely board", "stale-line scan + exposure caps", "journal writes",
+               "settle + record (or left to the settle lane)", "pick of the day + crowd + parlays")]
     assert stages == sorted(stages), "in the order the college build runs them"
     nfl = (ROOT / "nfl_build.py").read_text()
     body = nfl[nfl.index("def _mem("):nfl.index("def _mem_report")]

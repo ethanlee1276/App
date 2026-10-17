@@ -243,7 +243,6 @@ def wiring(board: dict, fits=None) -> dict:
     recomputed from it, or the prop row's own number. {"checked", "bad": [...]}"""
     from .yardagefit import display_prob
     recs = [r for r in (board or {}).get("recommendations") or [] if isinstance(r, dict)]
-    by = {_key(r): r for r in recs}
     bad, n = [], 0
     for r in recs:
         ch = r.get("chain") or {}
@@ -267,6 +266,14 @@ def wiring(board: dict, fits=None) -> dict:
             bad.append(f"{r.get('player')} {r.get('market')}: its cards say ×{want:.3f} was applied, "
                        f"the projection used ×{got:.3f}")
     from .likely import _main_shown, _prob_at
+    by_all: dict = {}
+    by_team: dict = {}
+
+    def _tkey(r, side_k="main_side", line_k="main_line"):
+        return (str(r.get("team") or ""),) + _key(r, side_k, line_k)
+    for r in recs:
+        by_all.setdefault(_key(r), []).append(r)
+        by_team.setdefault(_tkey(r, "side", "line"), []).append(r)
     by_bet = {(str(r.get("player") or ""), str(r.get("team") or ""), str(r.get("market") or "")): r
               for r in recs}
     posted_off = corrected = 0
@@ -293,10 +300,19 @@ def wiring(board: dict, fits=None) -> dict:
                 bad.append(f"{m.get('player')} {market}: posted pick shows {float(m['model_prob']):.3f}, "
                            f"his prop row gives {float(want):.3f} at that number")
             continue
-        src = by.get(_key(m, "main_side", "main_line"))
-        if src is None:
+        # BY TEAM AS WELL (box run, 2026-10-17: three college rows read
+        # "projects 80.1, its prop row 32.1"). College carries namesakes, and
+        # a number with two prop rows behind it matched whichever came last.
+        # The row with this team and this projection is the one it came from;
+        # two rows that disagree for one number is a finding of its own.
+        cands = by_team.get(_tkey(m)) or ([] if m.get("team") else by_all.get(_key(m, "main_side", "main_line")) or [])
+        if not cands:
             bad.append(f"{m.get('player')} {market}: on Most Likely with no prop row behind it")
             continue
+        src = next((c for c in cands if c.get("projection") == m.get("projection")), cands[0])
+        if len({c.get("projection") for c in cands}) > 1:
+            bad.append(f"{m.get('player')} ({m.get('team') or '?'}) {market}: {len(cands)} prop rows for one "
+                       f"number, projecting {', '.join(str(c.get('projection')) for c in cands)}")
         if m.get("projection") != src.get("projection"):
             bad.append(f"{m.get('player')} {market}: Most Likely projects {m.get('projection')}, "
                        f"its prop row {src.get('projection')}")

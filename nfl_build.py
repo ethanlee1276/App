@@ -703,6 +703,9 @@ def main() -> None:
                   f"{len(_mates_out)} team(s) — the players behind them are re-projected.")
     except Exception as exc:                                  # noqa: BLE001
         print(f"\n⚠️  Teammate check skipped: {exc}")
+    # The "odds" stage ran 148 s on cached odds (box run, 2026-10-17); these
+    # marks say which of its parts spends it.
+    _mem("qb change + teammates", args.memtrace)
     real_odds = False
     odds_status = {"checked": bool(args.odds or args.cached_odds
                                    or args.board_odds), "matched": 0,
@@ -836,14 +839,16 @@ def main() -> None:
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+        _mem("prices + quote journal + line ledger", args.memtrace)
 
         if real_odds:
-            from engine.linemoves import stream_history, analyze, summary_lines, todays_rows
-            moves = analyze(todays_rows(stream_history()))
+            from engine.linemoves import stream_today, analyze, summary_lines, todays_rows
+            moves = analyze(todays_rows(stream_today()))
             if moves:
                 print("\nLine movement (open → current):")
                 for line in summary_lines(moves):
                     print(line)
+        _mem("line movement (reads the line history)", args.memtrace)
 
     # THE CHEAP TIER, RUN AFTER the block above so it overwrites the cached
     # game prices with current ones. Three credits for the whole slate,
@@ -1274,9 +1279,9 @@ def main() -> None:
     # movement against can reject the pick (see engine/quality.py).
     if real_odds:
         try:
-            from engine.linemoves import (stream_history, analyze, todays_rows,
+            from engine.linemoves import (stream_today, analyze, todays_rows,
                                           annotate_recommendations, attach_series)
-            _today = todays_rows(stream_history())
+            _today = todays_rows(stream_today())
             annotate_recommendations(result["recommendations"], analyze(_today))
             # Today's tape on every priced pick, for the prop page's own
             # line chart (Ethan, 2026-09-05). Same rows, read once.

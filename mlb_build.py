@@ -617,10 +617,10 @@ def main() -> None:
     _tk = _stg.start("line movement")
     if real_odds:
         try:
-            from engine.linemoves import (stream_history, analyze, summary_lines,
+            from engine.linemoves import (stream_today, analyze, summary_lines,
                                           todays_rows, annotate_recommendations,
                                           attach_series)
-            _today = todays_rows(stream_history())
+            _today = todays_rows(stream_today())
             moves = analyze(_today)
             n_mv = annotate_recommendations(result["recommendations"], moves)
             # Today's tape on every priced pick, for the prop page's own

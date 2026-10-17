@@ -110,13 +110,13 @@ def test_the_three_builds_that_record_snapshots_hang_it_from_the_same_rows():
                            ("mlb_build.py", "attach_series", 'result["recommendations"]'),
                            ("nba_build.py", "_attach_series", "recs")):
         src = (ROOT / name).read_text()
-        assert "_today = todays_rows(stream_history())" in src, name
+        assert "_today = todays_rows(stream_today())" in src, name
         assert "analyze(_today)" in src, name
         assert fn + "(" in src, f"{name}: nothing hangs the tape on the picks"
         args = _call_args(src, fn)
         assert "_today" in args, f"{name}: the series must come from the same rows, read once"
         assert rows in args, f"{name}: the priced picks must be in the series pass"
-        assert src.count("todays_rows(stream_history())") == src.count("_today = todays_rows(stream_history())") \
+        assert src.count("todays_rows(stream_today())") == src.count("_today = todays_rows(stream_today())") \
             + (1 if name == "nfl_build.py" else 0), f"{name}: the snapshot file streamed more than it needs"
 
 

@@ -1158,8 +1158,8 @@ def main() -> None:
             # and on MLB it is vetoing on a still-unmeasured signal (#80).
             try:
                 from engine.linemoves import (analyze, annotate_recommendations,
-                                              stream_history, todays_rows)
-                _today = todays_rows(stream_history())
+                                              stream_today, todays_rows)
+                _today = todays_rows(stream_today())
                 _mv = analyze(_today)
                 _n_mv = annotate_recommendations(recs, _mv, price=False)
                 # Today's tape on every priced pick, for the prop page's

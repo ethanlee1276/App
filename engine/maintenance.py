@@ -1007,7 +1007,12 @@ def settle_open(log=print, state_path: Path | None = None,
         days = _open_bet_days(lconn, today, SETTLE_LOOKBACK_DAYS)
         if not days:
             # Nothing to do — still stamp the clock so we don't re-check
-            # the journal every single cycle.
+            # the journal every single cycle. A build that journaled since
+            # the last pass left the record to this lane (ledger.
+            # settle_and_export), so it is exported here even so.
+            if ledger.record_dirty():
+                ledger.clear_record_dirty()
+                ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
             state["last_settle_ts"] = now
             _save_state(state_path, state)
             return 0
@@ -1292,7 +1297,9 @@ def settle_open(log=print, state_path: Path | None = None,
                         log(f"  {line}")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  backtest lab skipped: {exc}")
-        if settled or fixed or parlays_moved:
+        # `record_dirty`: a build journaled and left the export to this lane.
+        if settled or fixed or parlays_moved or ledger.record_dirty():
+            ledger.clear_record_dirty()
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         if settled:
             log(f"  settled {settled} pick(s) from {res['games']} finished "

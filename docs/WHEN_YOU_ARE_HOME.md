@@ -307,7 +307,8 @@ belongs, each moving a number only once its own measurement holds, and
 every fit and measurement in the repo mapped to where its answer lands,
 checked against the code (step 135; CD). Then your paste of all of it,
 read line by line, everything it found fixed, and the commands to run
-again (step 136; CE).
+again (step 136; CE); and what that run found, fixed, with what to run
+next (step 137; CF).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -2164,7 +2165,38 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nfl
 cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport cfb
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.wiremap
 cd /srv/qellys && sudo -u qellys python3 homecheck.py inputs
-cd /srv/qellys && sudo -u qellys python3 doctor.py
+cd /srv/qellys && sudo -u qellys python3 doctor.py --skip-tests
+```
+
+**CF. Round four: what your CE run found, fixed — run these** (step 137).
+1. The paywall: the day's top pick was written straight to the public
+   folder every cycle (13 paid rows public). It now goes through the gate
+   like every board; the check should print `unsealed: []` and stay so.
+2. The builds' slowest stage was the record's settle and export (184 of the
+   NFL's 846 seconds, most of college's 533), which the settle lane does
+   every five minutes anyway. While the lane is alive a build now journals
+   and leaves those to it (the build prints `record: settle and export left
+   to the settle lane`); the lane exports the record on its next pass. The
+   "odds" stage (148 s on cached odds) parsed the whole line history twice
+   to keep today's rows; it now reads from today. Both builds print more ⏱
+   lines, so the next run shows what is left.
+3. The settle check now says, for a college bet whose team has no final a
+   day either side, where that team's nearest final is (or none in a week).
+4. The input check now pairs a Most Likely row with its prop row by team
+   too, and says when one number has two prop rows.
+5. The doctor ran the whole test suite first, silently, for most of an hour
+   ("froze"); it now says so, and the commands use `--skip-tests`.
+6. AI's log: paste its end, it was not in your paste.
+```
+git -C /srv/qellys log --oneline -1
+tail -30 /tmp/deepfit_nba.log
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 -c "from engine import gate; print('paywall on' if gate.enabled() else 'paywall off'); print('unsealed:', gate.unsealed())"
+cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1500 python3 nfl_build.py 2026 6 --out /tmp/nfl_probe.json --injuries --depth --carry --cached-odds --memtrace > /tmp/nfl_probe.log 2>&1; grep -E "⏱|record:" /tmp/nfl_probe.log; tail -25 /tmp/nfl_probe.log
+cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1500 python3 cfb_build.py $(TZ=America/New_York date +%F) --out /tmp/cfb_probe.json --cached-odds > /tmp/cfb_probe.log 2>&1; grep -E "⏱|record:" /tmp/cfb_probe.log; tail -5 /tmp/cfb_probe.log
+cd /srv/qellys && sudo -u qellys python3 settlecheck.py | grep -A30 "^CFB"
+cd /srv/qellys && sudo -u qellys python3 homecheck.py inputs | grep -A12 "LOOK AT THESE"
+cd /srv/qellys && sudo -u qellys python3 doctor.py --skip-tests
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.attention --sport nfl --backfill --save
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

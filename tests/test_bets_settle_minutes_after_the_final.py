@@ -447,7 +447,8 @@ def test_the_box_check_says_which_step_holds_a_college_bet_with_no_stat_line():
     L = ledger.connect(t / "l.db")
     ledger.configure_bankroll(L, starting=1000, unit_pct=1)
     H = db.connect(t / "h.db")
-    for player, team in (("Nobody Known", None), ("Box Missing", "UGA"), ("Gone Man", "BAMA")):
+    for player, team in (("Nobody Known", None), ("Box Missing", "UGA"), ("Gone Man", "BAMA"),
+                         ("Off Day", "FAU")):
         _bet(L, "cfb", OLD, player, "anytime_td", 0.5, category="stale")
         if team:
             L.execute("UPDATE bets SET team=? WHERE player=?", (team, player))
@@ -455,6 +456,9 @@ def test_the_box_check_says_which_step_holds_a_college_bet_with_no_stat_line():
     for gid, home, away in (("AUB@UGA", "UGA", "AUB"), ("LSU@BAMA", "BAMA", "LSU")):
         H.execute("INSERT INTO games (sport, season, period, game_id, date, home, away, home_score, away_score) "
                   "VALUES ('cfb', 2026, ?, ?, ?, ?, ?, 24, 17)", (OLD, gid, OLD, home, away))
+    later = (dt.date.fromisoformat(OLD) + dt.timedelta(days=3)).isoformat()
+    H.execute("INSERT INTO games (sport, season, period, game_id, date, home, away, home_score, away_score) "
+              "VALUES ('cfb', 2026, ?, 'FAU@USF', ?, 'USF', 'FAU', 30, 20)", (later, later))
     db.upsert_player_logs(H, [{"sport": "cfb", "season": 2026, "period": OLD, "game_id": "LSU@BAMA",
                                "player": "Other Back", "team": "BAMA", "opponent": "LSU",
                                "position": "RB", "home": 1, "market": "rush_yds", "value": 70.0}])
@@ -463,10 +467,12 @@ def test_the_box_check_says_which_step_holds_a_college_bet_with_no_stat_line():
     assert "Nobody Known anytime_td [stale] — no stat line for him — no team for him" in text, text
     assert "Box Missing anytime_td [stale] — no stat line for him — UGA's game is final but its box score is not filed" in text, text
     assert "Gone Man anytime_td [stale] — no stat line for him — the absent-player rule voids it" in text, text
+    assert (f"Off Day anytime_td [stale] — no stat line for him — FAU has no final game a day either side "
+            f"of the date; its nearest final on file is {later} (+3 days)") in text, text
     L.row_factory = H.row_factory = __import__("sqlite3").Row
     got = {b["player"]: ledger._absent_player_verdict(H, b)
            for b in L.execute("SELECT * FROM bets WHERE sport='cfb'")}
-    assert got == {"Nobody Known": None, "Box Missing": None, "Gone Man": "void"}, got
+    assert got == {"Nobody Known": None, "Box Missing": None, "Gone Man": "void", "Off Day": None}, got
 
 
 if __name__ == "__main__":

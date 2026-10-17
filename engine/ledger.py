@@ -5164,7 +5164,38 @@ def absent_blocker(hist_conn, b) -> str:
     if b["sport"] != "cfb" or b["market"] in GAME_MARKETS or b["category"] in GRADED_ELSEWHERE:
         return ""
     from .sources.oddsapi import normalize_name
-    return _college_absent(hist_conn, b, normalize_name(b["player"] or ""))[1]
+    verdict, why = _college_absent(hist_conn, b, normalize_name(b["player"] or ""))
+    if verdict is None and " has no final game a day either side" in why:
+        # WHERE HIS TEAM'S GAME IS, then: a date the bet missed by two days
+        # and a game the history never stored read alike until this says
+        # which (box run, 2026-10-17: FAU, UNM, BOIS, ARMY).
+        team = why.split(" has no final game", 1)[0]
+        near = _nearest_final(hist_conn, team, b["date"])
+        why += (f"; its nearest final on file is {near[0]} ({near[1]:+d} days)" if near
+                else "; no final for it on file within a week")
+    return why
+
+
+def _nearest_final(hist_conn, team: str, day: str):
+    """``(date, days off)`` of ``team``'s nearest final college game within a
+    week of ``day``, or None."""
+    try:
+        d0 = datetime.date.fromisoformat(str(day or "")[:10])
+    except ValueError:
+        return None
+    lo, hi = ((d0 + datetime.timedelta(days=n)).isoformat() for n in (-7, 7))
+    best = None
+    for r in hist_conn.execute(
+            "SELECT DISTINCT period FROM games WHERE sport='cfb' AND period BETWEEN ? AND ? "
+            "AND (home=? OR away=?) AND home_score IS NOT NULL AND away_score IS NOT NULL",
+            (lo, hi, team, team)):
+        try:
+            off = (datetime.date.fromisoformat(str(r[0])[:10]) - d0).days
+        except ValueError:
+            continue
+        if best is None or abs(off) < abs(best[1]):
+            best = (str(r[0])[:10], off)
+    return best
 
 
 def _waits_for_play_file(hist_conn, b) -> bool:
@@ -10129,9 +10160,53 @@ def _benched_settled(conn, since: str | None = None) -> int:
 from . import zeno as _zeno                                      # noqa: E402
 
 
+#: The settle lane's own state (engine/maintenance.STATE_PATH); its
+#: `last_settle_ts` says whether the lane is alive.
+LANE_STATE = ROOT_DIR / "data" / "cache" / "maintenance.json"
+#: A build leaves the settle to the lane while the lane's last pass is this
+#: recent: three of its five-minute passes, so one slow pass does not hand
+#: the work back to every build.
+LANE_ALIVE_S = 900
+#: Set when a build journals while the lane owns the record; the lane's next
+#: pass exports record.json when it is set (engine/maintenance.settle_open).
+RECORD_DIRTY = ROOT_DIR / "data" / "cache" / "record_dirty"
+
+
+def settle_lane_alive(now: float | None = None) -> bool:
+    """Has the settle lane passed within LANE_ALIVE_S? False when its state
+    is missing or unreadable — the builds then settle as they always did."""
+    import time as _time
+    try:
+        last = json.loads(LANE_STATE.read_text()).get("last_settle_ts")
+    except (OSError, ValueError, AttributeError):
+        return False
+    if not isinstance(last, (int, float)):
+        return False
+    return 0 <= (now if now is not None else _time.time()) - last < LANE_ALIVE_S
+
+
+def mark_record_dirty() -> None:
+    try:
+        RECORD_DIRTY.parent.mkdir(parents=True, exist_ok=True)
+        RECORD_DIRTY.write_text("1")
+    except OSError:
+        pass
+
+
+def record_dirty() -> bool:
+    return RECORD_DIRTY.exists()
+
+
+def clear_record_dirty() -> None:
+    try:
+        RECORD_DIRTY.unlink()
+    except OSError:
+        pass
+
+
 def settle_and_export(conn, hist_conn, sport: str | None = None,
                       logged: int | None = None,
-                      path="web/data/record.json") -> int:
+                      path="web/data/record.json", defer: bool | None = None) -> int:
     """THE BUILDERS' ONE DOOR to the record (audit #53): settle this
     league's open bets from history, then publish record.json. Returns the
     number settled.
@@ -10141,7 +10216,24 @@ def settle_and_export(conn, hist_conn, sport: str | None = None,
     something was logged or settled (the NBA and college builders' rule),
     so a quiet cycle does not rewrite the file for nothing. The order and
     the rule now live here, not in five copies.
+
+    LEFT TO THE LANE WHILE THE LANE IS ALIVE (box run, 2026-10-17): this
+    was the whole of the NFL build's slowest stage, 184 of its 846 seconds,
+    and most of college's 533-second one, on a box that kills a build at
+    600 — while the settle lane (engine/maintenance.settle_open) settles
+    every league and exports the same file every five minutes anyway. So
+    a build with a live lane journals, marks the record changed and goes;
+    the lane's next pass exports it. A build with no live lane (a dead
+    lane, a machine with none) settles here exactly as before.
     """
+    if defer is None:
+        defer = settle_lane_alive()
+    if defer:
+        if logged is None or logged:
+            mark_record_dirty()
+        print("  record: settle and export left to the settle lane (it passed within "
+              f"{LANE_ALIVE_S // 60} min)")
+        return 0
     settled = settle_from_history(conn, hist_conn, sport=sport)
     if logged is None or logged or settled:
         export_json(conn, path)

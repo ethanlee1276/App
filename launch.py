@@ -4712,10 +4712,12 @@ def _write_day_top_pick() -> None:
         # the page and by `potd_report`, so that is where the paths go.
         if missing:
             top["boards_unreadable"] = missing
-        p = web / "day_top_pick.json"
-        tmp = p.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(top, indent=1))
-        tmp.replace(p)
+        # THROUGH THE GATE, LIKE EVERY BOARD (box run, 2026-10-17: with the
+        # paywall on, `gate.unsealed()` found this file public with its 13
+        # paid rows). A plain write put the day's best pick on the public
+        # path every cycle; `publish` keeps the full copy private and
+        # strips the public one, atomically, both ways.
+        _gate.publish(top, web / "day_top_pick.json", "day_top_pick.json")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  day top pick not written: {type(exc).__name__}: {exc}")
 

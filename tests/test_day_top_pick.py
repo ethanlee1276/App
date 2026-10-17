@@ -16,6 +16,7 @@ Run directly: `python3 tests/test_day_top_pick.py`
 """
 
 import inspect
+import json
 import os
 import sys
 import tempfile
@@ -345,6 +346,40 @@ def _run_writer(tmp, boards, journal=()):
     finally:
         launch.ROOT, _ledger.DEFAULT_DB = old_root, old_db
         importlib.invalidate_caches()
+
+
+def test_with_the_paywall_on_the_public_copy_carries_no_paid_rows():
+    # Box run, 2026-10-17: `gate.unsealed()` found day_top_pick.json public
+    # with 13 paid rows — the writer wrote it straight to web/data. Through
+    # `gate.publish` the subscribers' copy keeps the pick and the public
+    # one does not.
+    import datetime as _dt
+    from engine import gate
+    today = _dt.date.today().isoformat()
+    card = {"player": "KC ML", "team": "KC", "market": "moneyline",
+            "kind": "game", "odds": -130, "sharp_anchored": True,
+            "sharp_fair": 0.60, "fair_prob": 0.60, "evidence": "sharp"}
+    old = os.environ.get("QB_PAYWALL")
+    os.environ["QB_PAYWALL"] = "1"
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            public, printed, _ = _run_writer(
+                tmp, {"nfl": {"pick_of_the_day": {"date": today, "pick": card}}},
+                journal=[(today + "T00:00:00", "nfl", today, "KC", "moneyline",
+                          "OVER", 0.5, -130, "open", "potd")])
+            full = os.path.join(tmp, "data", "built", "day_top_pick.json")
+            private = json.load(open(full)) if os.path.exists(full) else None
+            left = [u for u in gate.unsealed(os.path.join(tmp, "web", "data"))
+                    if u["board"] == "day_top_pick.json"]
+            assert left == [], f"the public copy is sealed: {left}"
+    finally:
+        if old is None:
+            os.environ.pop("QB_PAYWALL", None)
+        else:
+            os.environ["QB_PAYWALL"] = old
+    assert "⚠️" not in printed, printed
+    assert public is not None and "KC ML" not in json.dumps(public), public
+    assert private is not None and private["pick"]["player"] == "KC ML", "the subscribers' copy keeps it"
 
 
 def test_the_writer_writes_a_file_and_says_nothing():

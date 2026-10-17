@@ -1351,6 +1351,13 @@ def run(skip_tests: bool = False, code_only: bool = False) -> Report:
 
 
 def main(argv: list[str]) -> int:
+    # SAID BEFORE IT STARTS (box run, 2026-10-17: "step 10 froze"). The
+    # first check is the whole test suite, which on the one-core box runs
+    # for most of an hour and prints nothing until it is done.
+    if "--skip-tests" not in argv and "--code-only" not in argv and "--json" not in argv:
+        print(f"Running the full test suite first (up to {_suite_timeout() // 60} min on this "
+              "box; nothing prints until it is done). To skip it: python3 doctor.py --skip-tests",
+              flush=True)
     rep = run(skip_tests="--skip-tests" in argv,
               code_only="--code-only" in argv)
     if "--json" in argv:

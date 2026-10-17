@@ -2589,6 +2589,7 @@ def main() -> None:
                 print(f"  {_n}")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  exposure caps skipped: {exc}")
+    _clock.mark("stale-line scan + exposure caps")
 
     try:
         from engine import ledger
@@ -2661,6 +2662,7 @@ def main() -> None:
         st_n = ledger.log_stale_flags(
             lconn, {"sport": "cfb", "date": args.date,
                     "market_scan": out.get("market_scan") or {}})
+        _clock.mark("journal writes")
         settled = ledger.settle_and_export(lconn, conn, sport="cfb",
                                            logged=n + ls_n + ml_n + st_n)
         if n or ls_n or ml_n or st_n or settled:
@@ -2670,7 +2672,7 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  CFB journal skipped: {exc}")
 
-    _clock.mark("stale lines + journal + settle")
+    _clock.mark("settle + record (or left to the settle lane)")
     # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this
     # league's Live tab read "No open bets on today's card" whatever the
     # journal held — and the tab's two panels (edge bets, Most Likely bets)

@@ -233,6 +233,26 @@ def test_the_wiring_check_reads_posted_picks_other_sides_and_corrected_chances_a
     assert w["bad"] == []
 
 
+def test_the_wiring_check_tells_namesakes_apart_and_names_a_number_with_two_rows():
+    """Box run, 2026-10-17: three college rows read "projects 80.1, its prop
+    row 32.1" — matched without the team, two men of one name at one number
+    were one row. By team they are two; one team with two rows that
+    disagree for one number is said as that."""
+    a = _row("Jayce Brown", RUSH_YDS, "OVER", 49.5, 65.9, [{"key": "usage", "mult": 1.6475}], 0.71,
+             team="KSU", proj_std=20.0)
+    b = _row("Jayce Brown", RUSH_YDS, "OVER", 49.5, 40.0, [{"key": "usage", "mult": 1.0}], 0.40,
+             team="UCF", proj_std=20.0)
+    b["chain"]["base"]["value"] = 40.0
+    mine = {"kind": "prop", "rung": "main", "player": "Jayce Brown", "team": "KSU", "market": RUSH_YDS,
+            "main_side": "OVER", "main_line": 49.5, "side": "OVER", "line": 49.5, "projection": 65.9,
+            "prob_source": "model", "model_prob": 0.71}
+    w = C.wiring({"recommendations": [a, b], "most_likely": [mine]}, fits={})
+    assert w["bad"] == [], w["bad"]
+    twice = dict(b, team="KSU")
+    w = C.wiring({"recommendations": [a, twice], "most_likely": [mine]}, fits={})
+    assert w["bad"] == ["Jayce Brown (KSU) rush_yds: 2 prop rows for one number, projecting 65.9, 40.0"], w["bad"]
+
+
 def test_a_step_the_model_has_no_coefficient_for_is_known_not_a_finding():
     """Box run, 2026-10-17: carries, combos, tackles and kicks sat under
     LOOK AT THESE for a weather and a matchup step that has no number to

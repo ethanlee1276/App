@@ -171,10 +171,42 @@ def test_the_filtering_callers_stream():
     for name, expected in (("nfl_build.py", 2), ("mlb_build.py", 1),
                            ("nba_build.py", 1)):
         src = open(os.path.join(ROOT, name), encoding="utf-8").read()
-        assert src.count("todays_rows(stream_history())") == expected, \
-            f"{name} no longer streams its history"
+        assert src.count("todays_rows(stream_today())") == expected, \
+            f"{name} no longer streams today's history from its tail"
+        assert "todays_rows(stream_history())" not in src, \
+            f"{name} parses the whole history to keep today again"
         assert "todays_rows(load_history())" not in src, \
             f"{name} materialises the whole history again"
+
+
+def test_reading_from_today_returns_exactly_what_the_whole_read_keeps():
+    """Box run, 2026-10-17: the NFL build's "odds" stage ran 148 s on cached
+    odds, parsing every line of the history twice to keep today's rows.
+    `stream_today` halves the byte range to the first line near midnight;
+    what `todays_rows` keeps from it is what it keeps from the whole file,
+    late writers inside the margin included, and the past is not parsed."""
+    import datetime as _dt
+    import json as _json
+    import tempfile as _tf
+    from engine import linemoves as LM
+    now = _dt.datetime(2026, 10, 17, 15, 0).timestamp()
+    midnight = _dt.datetime(2026, 10, 17).timestamp()
+    rows = [{"ts": midnight - 3 * 86400 + i * 60, "player": f"p{i}", "market": "rec_yds", "line": 40.5}
+            for i in range(3 * 24 * 60 + 15 * 60)]
+    # A writer that ran late: stamped just after midnight, appended 20 min on.
+    late = {"ts": midnight + 30, "player": "late", "market": "rec_yds", "line": 9.5}
+    rows.insert(next(i for i, r in enumerate(rows) if r["ts"] >= midnight + 1200), late)
+    path = os.path.join(_tf.mkdtemp(), "line_history.jsonl")
+    with open(path, "w") as fh:
+        fh.write("not json\n")
+        for r in rows:
+            fh.write(_json.dumps(r) + "\n")
+    whole = LM.todays_rows(LM.stream_history(path), now=now)
+    fast = LM.todays_rows(LM.stream_today(path, now=now), now=now)
+    assert fast == whole and any(r["player"] == "late" for r in fast) and len(fast) == 15 * 60 + 1
+    read = sum(1 for _ in LM.stream_today(path, now=now))
+    assert read < len(rows) / 3, f"it parsed {read} of {len(rows)} lines: the past was read"
+    assert list(LM.stream_today(os.path.join(_tf.mkdtemp(), "none.jsonl"), now=now)) == []
 
 
 def test_the_callers_that_need_the_whole_list_still_have_it():
