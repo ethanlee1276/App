@@ -63,6 +63,23 @@ Anything else printed (H in the receiving markets, the proxy Brier, MAE,
 calibration) is description and decides nothing. Nothing is tuned after
 the holdout is read; an amendment before it is logged here with its reason.
 
+THE RESULT (2026-10-17, holdout read once, after the freeze commit 0ad7173c):
+
+  family    test             holdout              CRPS A    test     diff [97.5% clustered]     decision
+  EXP-004a  B v A rush_yds   2025 + 2026 to date  19.8970  19.7447  -0.1523 [-0.3386, +0.0205]  INCONCLUSIVE
+  EXP-004a  H v A rush_yds   2025 + 2026 to date  19.8970  19.7066  -0.1905 [-0.2455, -0.1366]  ADVANCE
+  EXP-004b  B v A receptions 2026 to date          1.2397   1.2126  -0.0271 [-0.0525, -0.0019]  ADVANCE
+  EXP-004b  B v A rec_yds    2026 to date         19.7514  19.5397  -0.2116 [-0.6368, +0.1891]  INCONCLUSIVE
+
+What it says beside the NFL's. Receptions: the two-stage gain is the same
+size in both sports (-0.0271 here, -0.0270 in the NFL), and in both B is
+worse at a line-like threshold (proxy Brier 0.2296 v 0.2257 here) and in
+its mean (MAE 1.77 v 1.71): the gain is the distribution's shape, not its
+centre. Rushing yards: the hybrid H — the direct model's centre with the
+two-stage shape — wins in college as a preregistered test; in the NFL it
+was seen after looking and waits on EXP-001b's games. Neither moves a
+pick: both go to a test at the college lines the box holds (EXP-004c).
+
 Reads data/cache only; writes nothing.
 """
 from __future__ import annotations

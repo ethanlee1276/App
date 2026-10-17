@@ -675,7 +675,7 @@
    "baseline": "A, the direct model (form-blend mean, training pool's shape)",
    "protocol": "004a: fit 2022-23, validate 2024, hold out 2025-26; 004b: fit 2025 weeks 1-8, validate 2025 weeks 9+, hold out 2026. Each test advances only if validation favours it and the holdout's player-season-clustered 97.5% upper bound on CRPS(test) - CRPS(A) is under zero (Bonferroni over two tests per family). Bar committed before the holdout was read.",
    "primary_metric": "CRPS on EXP-001's grids",
-   "sample_size": "validation: rush_yds 4,243 rows (714 player-seasons); receptions 5,609; rec_yds 5,424",
+   "sample_size": "holdout: rush_yds 5,635 rows (1,296 player-seasons); receptions 1,738; rec_yds 1,718",
    "results": [
     {
      "period": "validation 2024",
@@ -703,18 +703,54 @@
      "lo": -0.2562,
      "hi": 0.0751,
      "notes": "A 16.0667, B 15.9720"
+    },
+    {
+     "period": "holdout 2025-2026",
+     "market": "rush_yds",
+     "metric": "CRPS B-A",
+     "value": -0.1523,
+     "lo": -0.3386,
+     "hi": 0.0205,
+     "notes": "A 19.8970, B 19.7447; 5,635 rows, 1,296 player-seasons"
+    },
+    {
+     "period": "holdout 2025-2026",
+     "market": "rush_yds (H)",
+     "metric": "CRPS H-A",
+     "value": -0.1905,
+     "lo": -0.2455,
+     "hi": -0.1366,
+     "notes": "H 19.7066 (A's mean, B's shape) — EXP-001b's idea, preregistered here, holds in college"
+    },
+    {
+     "period": "holdout 2026",
+     "market": "receptions",
+     "metric": "CRPS B-A",
+     "value": -0.0271,
+     "lo": -0.0525,
+     "hi": -0.0019,
+     "notes": "A 1.2397, B 1.2126; 1,738 rows; NFL holdout was -0.0270. At a line-like threshold B is worse (proxy Brier 0.2296 v 0.2257) and its MAE is worse (1.77 v 1.71): the gain is the distribution's shape, not its centre"
+    },
+    {
+     "period": "holdout 2026",
+     "market": "rec_yds",
+     "metric": "CRPS B-A",
+     "value": -0.2116,
+     "lo": -0.6368,
+     "hi": 0.1891,
+     "notes": "A 19.7514, B 19.5397; 1,718 rows; H 19.6549 described only"
     }
    ],
    "decision": {
-    "004a B rush_yds": "validation passed; holdout not yet read",
-    "004a H rush_yds": "validation passed; holdout not yet read",
-    "004b B receptions": "validation passed; holdout not yet read",
-    "004b B rec_yds": "validation passed; holdout not yet read"
+    "004a B rush_yds": "INCONCLUSIVE",
+    "004a H rush_yds": "ADVANCE (to a test at real college lines; not to the board)",
+    "004b B receptions": "ADVANCE (to a test at real college lines; not to the board)",
+    "004b B rec_yds": "INCONCLUSIVE"
    },
    "multiple_testing": "Bonferroni within each family (0.05 / 2); two families, each held to 0.05",
    "failure_modes": "college target counts are short where incompletions name no target (45%, 38%, 21% named in 2022-24; 78-84% in 2025; 92% in 2026), so receiving runs only on 2025-26 and still carries a small level shift into the holdout; players appear only in games where they recorded a stat; 2026 reads 2025's roster",
-   "next": "Read the holdout once; if B or H advances in college as well as the NFL, it goes to a test at real college book lines (the box holds college props).",
-   "status": "IMPLEMENTED"
+   "next": "EXP-004c: price B (receptions) and H (rush_yds) at the college lines the box holds, against the books' consensus, as EXP-001c does for the NFL; and in both sports, a model that takes B's shape at A's centre for receptions, since B's centre is worse at a line in both.",
+   "status": "HOLDOUT VALIDATED"
   }
  ]
 }
