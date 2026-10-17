@@ -81,7 +81,8 @@ in the script.
 | EXP-003a totals | correction vs baseline | log loss +0.00026 [−0.00504, +0.00641] | REJECTED |
 | | anything vs the closing market | the market's log loss is 0.6931; our best blend is 0.6948 | **REJECTED** |
 | EXP-003b our picks vs the market (box, 1,804 held-out picks, 7 weeks) | correction vs ours / vs market; blend vs market | log loss: ours 0.6849, corrected 0.6921, market 0.6790, blend 0.6845; every comparison FAILS its bar | **REJECTED**: the market at pick time beats our shown chance |
-| EXP-001c real lines (box) | development only so far | first run joined just 100 props (stored odds rows often lack a start time); amended to place quotes by schedule kickoff | waiting |
+| EXP-001c real lines (box, development) | receptions / rec_yds / rush_yds at the books' consensus line | log loss, model vs market: receptions B* 0.6993, A* 0.6908, market 0.6837; rec_yds B* 0.7002, market 0.6933; rush_yds B* 0.7037, market 0.6937 (3,433 props) | waiting: the market beats every model so far; games after 2026-10-17 decide |
+| EXP-R05 pricetrust (box) | lean our chance toward the price | NFL one-board: 0.6966 → 0.6852, 199 picks, every week better (w 1.0); MLB Most Likely paper: 0.6901 → 0.6895; Edge NFL and MLB fail | **PASSES on two books: Ethan's call** |
 | EXP-R01 bridge window | targets, carries | every 2022–25 season improved; worst season +0.11% (receptions), +0.15% (receiving yards), +0.02% (rushing yards) | WIRED |
 | EXP-R02 referees | totals, spreads | correlation −0.02 / −0.01 vs the close | REJECTED |
 | EXP-R03 team volume | from the line | +0.5 to +0.9% RMSE | recorded, not wired |
@@ -369,6 +370,14 @@ market at pick time) is written and tested, and waits on one box command.
 
 ### Decisions for Ethan
 
+0. **pricetrust passed on the NFL one-board** (and narrowly on MLB Most
+   Likely paper). On the NFL board the weeks chose w = 1, T = 0: never show
+   a chance above the market's. That cut held-out log loss from 0.6966 to
+   0.6852 over 199 picks, and every week improved. The board's picks 15+
+   points above the market hit 37.5% where they claimed 75.3% (24 picks).
+   By the script's own rule nothing changes until you say yes. Saying yes
+   means the NFL board shows and ranks by the lower of our chance and the
+   market's, behind an on/off switch.
 1. **No credits needed now.** The box already holds the 2025–26 NFL props.
    A 2023 harvest stays optional. The dry-run printed its plan but no
    price, because pricing it needs one events call.

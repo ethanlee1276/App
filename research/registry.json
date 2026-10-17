@@ -155,14 +155,42 @@
    "baseline": "A* (Q1) and C, the market (Q2)",
    "protocol": "models fitted on 2017-2024, recalibrated on 2023-24; 2025 and pre-freeze 2026 are DEVELOPMENT (2025 was EXP-001's holdout); the decision uses only games after 2026-10-17, receptions only, game-week-clustered bootstrap, Bonferroni over 2 (97.5%), at least 300 rows",
    "primary_metric": "log loss of the over at the real line",
-   "sample_size": "not run yet (needs the box)",
-   "results": [],
+   "sample_size": "development, box run 2026-10-17: 3,807 props with a three-book consensus, 3,433 joined (receptions 1,587, rec_yds 1,364, rush_yds 482); decision rows 0 so far",
+   "results": [
+    {
+     "period": "development 2025 + 2026 to the freeze",
+     "market": "receptions",
+     "metric": "log loss",
+     "value": 0.6993,
+     "lo": null,
+     "hi": null,
+     "notes": "B*; A 0.7050, A* 0.6908, B 0.7141, market 0.6837, blend 0.6824; overs hit 0.445"
+    },
+    {
+     "period": "development 2025 + 2026 to the freeze",
+     "market": "rec_yds",
+     "metric": "log loss",
+     "value": 0.7002,
+     "lo": null,
+     "hi": null,
+     "notes": "B*; A 0.7109, A* 0.7080, B 0.7238, market 0.6933, blend 0.6950; overs hit 0.471"
+    },
+    {
+     "period": "development 2025 + 2026 to the freeze",
+     "market": "rush_yds",
+     "metric": "log loss",
+     "value": 0.7037,
+     "lo": null,
+     "hi": null,
+     "notes": "B*; A 0.7271, A* 0.7246, B 0.7260, market 0.6937, blend 0.6952; overs hit 0.481"
+    }
+   ],
    "decision": {
     "Q1": "waiting for the box run and post-freeze games",
     "Q2": "waiting for the box run and post-freeze games"
    },
    "multiple_testing": "Bonferroni over the two questions",
-   "failure_modes": "name joins between books and nflverse can miss; the consensus needs three books; the recalibration is fitted at a proxy line, not real ones; the secondary ROI uses the median over price and an estimated under price",
+   "failure_modes": "name joins between books and nflverse can miss; the consensus needs three books; the recalibration is fitted at a proxy line, not real ones; the secondary ROI uses the median over price and an estimated under price; development read: the market beats every model at real lines; recalibration helps both models; B* beats A* on the yardage markets but NOT on receptions, the reverse of EXP-001's CRPS ranking (the whole distribution and the region around the line are different targets)",
    "next": "Run on the box now for the development read; re-run weekly until 300 post-freeze receptions rows decide it.",
    "status": "IMPLEMENTED"
   },
@@ -556,6 +584,77 @@
    "failure_modes": "thin late-game cells; the prior shrinks them",
    "next": "Box: backfill the goal clock, fit, read the verdict (runbook block CI).",
    "status": "IMPLEMENTED"
+  },
+  {
+   "id": "EXP-R05",
+   "sport": "all",
+   "market": "the site's published picks: shown chance vs the market at pick time",
+   "proposed": "2026-10-15",
+   "question": "Where our chance runs above the market's, would giving part of the gap back to the price have been closer to what happened, week by week held out?",
+   "equation": "shown = ours - w * max(0, ours - market - T); w in {0, 0.1 .. 1}, T in {0, .05, .10, .15}, chosen on earlier weeks only",
+   "variables": "ours = hit_prob as shown; market = journaled fair or rebuilt from our own pre-pick snapshots (pricetrust.attach_market)",
+   "mechanism": "The loss audit showed picks whose chance ran far above the price were the furthest wrong; the price carries information our model lacks.",
+   "prior_art": "Shrinking a model toward market-implied probabilities is standard practice in forecasting and betting research.",
+   "novelty": "5",
+   "data": [
+    "SRC-OWN-JOURNAL",
+    "SRC-OWN-LINES"
+   ],
+   "dataset_version": "the box's ledger at run time, 2026-10-17",
+   "code": "pricetrust.py",
+   "baseline": "the chance as shown (w = 0)",
+   "protocol": "walk-forward by week; PASSES when every held-out week is no worse and the pooled log loss is better; NOT YET under 3 weeks or 100 picks; a pass changes nothing until Ethan says yes",
+   "primary_metric": "held-out log loss",
+   "sample_size": "box run 2026-10-17: per book and sport, below",
+   "results": [
+    {
+     "period": "held-out weeks W04-W06",
+     "market": "the one board, NFL",
+     "metric": "log loss with the rule",
+     "value": 0.6852,
+     "lo": null,
+     "hi": null,
+     "notes": "as shown 0.6966; 199 picks, 3 weeks, every week better; latest week chose w 1.0 T 0 (never show above the market); picks 15+ points above the market hit 37.5% against 75.3% shown (n 24)"
+    },
+    {
+     "period": "held-out weeks to 2026-10-12",
+     "market": "Most Likely paper, MLB",
+     "metric": "log loss with the rule",
+     "value": 0.6895,
+     "lo": null,
+     "hi": null,
+     "notes": "as shown 0.6901; 210 picks, 3 weeks; latest week chose w 0.3 T 0"
+    },
+    {
+     "period": "held-out weeks to 2026-09-28",
+     "market": "Edge, MLB",
+     "metric": "log loss with the rule",
+     "value": 0.6752,
+     "lo": null,
+     "hi": null,
+     "notes": "as shown 0.6736; 447 picks, 7 weeks, 3 worse: FAILS"
+    },
+    {
+     "period": "held-out weeks W04-W06",
+     "market": "Edge, NFL",
+     "metric": "log loss with the rule",
+     "value": 0.7014,
+     "lo": null,
+     "hi": null,
+     "notes": "as shown 0.6966; 123 picks, 3 weeks: FAILS"
+    }
+   ],
+   "decision": {
+    "the one board, NFL": "PASSES: awaiting Ethan's yes",
+    "Most Likely paper, MLB": "PASSES (small): awaiting Ethan's yes",
+    "Edge, MLB": "FAILS",
+    "Edge, NFL": "FAILS",
+    "others": "NOT YET (the one board MLB 0.6913 -> 0.6853 and Most Likely staked NFL 0.6770 -> 0.6748 on 2 weeks)"
+   },
+   "multiple_testing": "one rule family per book and sport, each with its own bar; many books tested, so a single pass is weaker evidence than it looks",
+   "failure_modes": "only picks with a market chance can be scored (5,281 had none); few weeks per book; the rule cannot raise a chance, only lower it",
+   "next": "If Ethan says yes, wire the NFL one-board rule behind a switch; keep re-running so the NOT YET books can decide.",
+   "status": "BACKTESTED"
   }
  ]
 }

@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK) and three (step 143; CL).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2324,6 +2324,18 @@ at; its verdict decides whether that is shown to anyone.
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py | tail -16
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py
+```
+
+**CM. Waiting on games, and one yes or no** (step 144). Your CL paste: the
+real-line test now joins 3,433 props (2025 and 2026 so far, development
+only), and the books' consensus beat every model there. pricetrust passed
+on the NFL one-board (never show a chance above the market's: held-out log
+loss 0.6966 to 0.6852, every week better) and narrowly on MLB Most Likely
+paper. Nothing changes until you answer that one. The decision rows for
+the real-line test start with tomorrow's games; nflverse posts the week's
+stats by Tuesday, so run this then:
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -14
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
