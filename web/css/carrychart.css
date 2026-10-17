@@ -982,10 +982,10 @@ a.mb-btn { text-decoration: none; }
 .cc-legend .dt.uf-d { background: var(--text-mute); }
 /* The fight's clock is at the top of its drawing: the tip sits under it. */
 .cc-stage:has(.uf-svg) .cc-tip { top: auto; bottom: 10px; }
-/* That fight's numbers: the stat, his, then his opponent's, one line. */
-.cc-row.uf-row { grid-template-columns: 12px minmax(0, 1fr) auto auto; }
-.uf-row .cc-r-h { grid-column: auto; grid-row: auto; color: var(--text); white-space: normal; }
-.uf-row .cc-r-y { grid-column: auto; grid-row: auto; }
+/* That fight's numbers: the stat, his, then his opponent's, one line. The
+   row is the generic grid's (`.cc-grid .cc-tr`, its columns read from the
+   --cc-p/--cc-w the module writes on the table), so the only thing left to
+   name here is his opponent's column. */
 .uf-o { font-family: var(--font-mono); color: var(--text-mute); text-align: right; min-width: 64px; }
 
 /* tonight's opponent beside his chart (js/chart-matchup.js): a row a zone */

@@ -300,6 +300,33 @@ def test_every_fighter_block_has_the_door_and_the_module_is_clean():
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"
 
 
+def test_no_uf_rule_styles_a_class_the_module_cannot_emit():
+    """`.cc-row.uf-row` and its two children shipped styling a class that
+    chart-ufc.js never writes.
+
+    The fight's numbers were first laid out by naming the row — a template
+    beside the cells — and then by the generic grid every league's table
+    moved to, which reads its columns from the --cc-p/--cc-w the module
+    writes on the table. The second landed; the first's rules stayed, three
+    of them, for the row class that no longer existed. A stylesheet cannot
+    tell you a rule stopped matching: it simply paints nothing, forever,
+    and reads to the next person as the layout that is in force.
+
+    So pin the direction, not the three lines: every `uf-` class the
+    stylesheet styles has to be one the module can actually put on an
+    element — written literally, or interpolated as `uf-${...}` from a
+    string the module quotes (that is the `gain`/`loss`/`short` of a
+    fight's result). A rule for anything else is dead the day it lands."""
+    quoted = set(re.findall(r"""["']([A-Za-z0-9_-]+)["']""", UF_JS))
+    styled = set(re.findall(r"\.(uf-[A-Za-z0-9_-]+)", re.sub(r"/\*.*?\*/", "", CC_CSS, flags=re.S)))
+    assert len(styled) > 15, "the uf- selectors stopped being found at all"
+    dead = sorted(c for c in styled if c not in UF_JS and c[len("uf-"):] not in quoted)
+    assert not dead, f"carrychart.css styles uf- classes chart-ufc.js never emits: {dead}"
+    # And the check can still see a dead one: the rule this test was born of.
+    assert "uf-row" not in UF_JS and "row" not in quoted, \
+        "the module now emits uf-row; the check above would no longer catch it"
+
+
 if __name__ == "__main__":
     fns = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
     for name, fn in fns:
