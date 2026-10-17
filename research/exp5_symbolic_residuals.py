@@ -69,6 +69,19 @@ toward the middle. That is regression to the mean, a rediscovery (novelty
 class 5), and the same direction as pricetrust's finding on the published
 picks. The holdout says whether it holds.
 
+THE RESULT (2026-10-17, holdout read once, after the freeze commit bc72d027):
+
+  market      holdout 2024-26   CRPS A    corrected  diff [98.33% clustered]   decision
+  receptions  4,343 rows         1.1835    1.1768    -0.0067 [-0.0108, -0.0024]  ADVANCE
+  rush_yds    1,519 rows        18.2534   18.2593    +0.0059 [-0.1140, +0.1306]  REJECTED (holdout)
+  rec_yds     —                 —         —          —                           REJECTED (search)
+
+Receptions' direct centre, shrunk about 15% toward the middle, is a better
+forecast on games the search never saw — small (a fifth of B's gain over A
+in EXP-001), and plain shrinkage, not a new mathematics. Rushing yards'
+squared error fell a little but its distribution did not improve, so it
+fails the bar as written. Nothing moves a pick.
+
 Reads data/cache (nflverse weekly player stats); writes nothing.
 """
 from __future__ import annotations

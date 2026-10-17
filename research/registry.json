@@ -771,7 +771,7 @@
    "baseline": "A unchanged (no correction)",
    "protocol": "search fitted on 2017-21, choice on 2022-23 with the complexity price, refit 2017-23, one scored test per market on 2024-26: A's shape at the corrected centre against A by CRPS, clustered 98.33% bound (Bonferroni over 3). Chosen equations committed before the holdout read.",
    "primary_metric": "CRPS on EXP-001's grids",
-   "sample_size": "validation: receptions 4,221; rec_yds 4,014; rush_yds 1,394",
+   "sample_size": "holdout: receptions 4,343 rows; rush_yds 1,519",
    "results": [
     {
      "period": "validation 2022-2023",
@@ -799,17 +799,35 @@
      "lo": null,
      "hi": null,
      "notes": "no correction 929.4244; best penalised 930.8065 does not beat it: rejected at the search"
+    },
+    {
+     "period": "holdout 2024-2026",
+     "market": "receptions",
+     "metric": "CRPS corrected - A",
+     "value": -0.0067,
+     "lo": -0.0108,
+     "hi": -0.0024,
+     "notes": "A 1.1835, corrected 1.1768; 4,343 rows; MSE 4.452 -> 4.430; 2026 alone (191 rows) -0.0188"
+    },
+    {
+     "period": "holdout 2024-2026",
+     "market": "rush_yds",
+     "metric": "CRPS corrected - A",
+     "value": 0.0059,
+     "lo": -0.114,
+     "hi": 0.1306,
+     "notes": "A 18.2534, corrected 18.2593; 1,519 rows; MSE 1117.96 -> 1113.91 but the distribution is worse"
     }
    ],
    "decision": {
-    "receptions": "chosen [a]; holdout not yet read",
+    "receptions": "ADVANCE (the direct centre shrunk ~15% toward the middle; not to the board)",
     "rec_yds": "REJECTED (search)",
-    "rush_yds": "chosen [a]; holdout not yet read"
+    "rush_yds": "REJECTED (holdout)"
    },
    "multiple_testing": "1,680 equations searched per market, but the choice is made on validation and only the one chosen is tested on the holdout; Bonferroni over the three markets",
    "failure_modes": "2024-25 were read before as EXP-001's holdout (A against B, never A's misses against these quantities); one season of 2026; the correction moves A's centre but keeps its pool's shape",
-   "next": "If it holds: the same shrink measured on the board's live projections (engine/form's blend) before any change to a number.",
-   "status": "IMPLEMENTED"
+   "next": "Does the shrink add to B's gain on receptions, or is it the same gain (B's centre is already lower when A runs high)? Test B with and without it on games after the freeze, and measure the same shrink on the board's live receptions projections before any number changes.",
+   "status": "HOLDOUT VALIDATED"
   }
  ]
 }
