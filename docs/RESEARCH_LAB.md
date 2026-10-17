@@ -18,10 +18,143 @@ The lab lives in `research/`:
 | `research/exp3_totals.py` | EXP-003a (game totals against the closing market) |
 | `research/exp3_props_box.py` | EXP-003b (our own picks against the market at pick time; runs on the box) |
 | `research/audit_box.py` | counts what the box already owns (odds, journal, outcomes) |
+| `research/exp1_lines_box.py` | EXP-001c (the models at the books' real NFL lines; runs on the box) |
+| `research/exp4_college_two_stage.py` | EXP-004 (EXP-001 replicated on college) |
+| `research/exp5_symbolic_residuals.py` | EXP-005 (searched equations for the direct model's misses) |
 | `tests/test_research_lab.py` | the lab's tests |
 
 `python3 research/registry.py` prints the ledger; `--sources` prints the
 data matrix.
+
+---
+
+## Session 2 report (2026-10-17, evening), in the spec's Part 13 format
+
+### 1–2. Research questions and why they matter
+
+- **EXP-R05, wired.** Ethan said yes to pricetrust's pass on the NFL one
+  board. Does the rule keep helping on picks made after it went live? That
+  is the only test a live change can still fail.
+- **EXP-004.** Does EXP-001's opportunities-first model hold in a second
+  sport? The spec forbids assuming an NFL finding transfers.
+- **EXP-005.** Can a small, searched equation explain the direct model's
+  misses (spec 5.1 symbolic regression, 5.4 residual discovery)?
+
+### 3–6. Methods, equations and variables
+
+- **R05 (live):** shown = ours − w·max(0, ours − market − T), with w = 1,
+  T = 0 on the NFL one board. Market = each book's quote at the pick's own
+  line, both sides, de-vigged, median of ≥ 3 books. This is pricetrust's
+  number, computed at build time (`engine/likelyboard.trust_price`).
+- **EXP-004:** EXP-001's models A, B and H, imported unchanged and fed
+  college player-games by the site's own parser. P(Y|X) = Σ_o P(Y|o,X)
+  P(o|X) with O ~ NegBin; H is A's centre with B's shape.
+- **EXP-005:** r = y − μ_A, r̂ = c0 + c1·g. g runs over every one- and
+  two-term formula (1,680) in six pre-game quantities: A's centre, B's
+  centre, age-weighted opportunities, production per opportunity, week
+  and opportunities so far. Four functions are allowed (x, √x, log(1+x),
+  1/(1+x)) and four operators (+ − × protected ÷). Choice is by validation
+  error × (1 + 0.01·complexity).
+
+### 7. Data and its verified availability
+
+- College play-by-play, 2022–2026, cached and read here.
+- **Measured this session:** the share of college incompletions that name
+  their target is 45% (2022), 38% (2023), 21% (2024), 78–84% by week
+  (2025) and 92% (2026). Every rushing play names its runner. Recorded in
+  `research/sources.json`.
+- So the college receiving test runs only on 2025→2026, and rushing on
+  2022–26. A target count whose meaning moves between seasons would test
+  the feed, not the model.
+
+### 8–10. Implementation, evaluation design, success criteria
+
+Every test's bar, splits and multiplicity correction were committed before
+its holdout was read:
+
+| experiment | committed before the holdout | holdout read in |
+|---|---|---|
+| EXP-004 | `0ad7173c` | `b036253e` |
+| EXP-005 | `bc72d027` | `edeb0fce` |
+
+- **Score:** CRPS on EXP-001's grids.
+- **Uncertainty:** player-season-clustered bootstrap, Bonferroni within
+  each family (97.5% or 98.33% intervals).
+
+### 11–12. Results (measured) and uncertainty
+
+| experiment | test | holdout | difference [CI] | decision |
+|---|---|---|---|---|
+| EXP-004a | H v A, college rushing yards | 2025–26, 5,635 games | −0.1905 [−0.2455, −0.1366] | **ADVANCE** |
+| | B v A, college rushing yards | same | −0.1523 [−0.3386, +0.0205] | INCONCLUSIVE |
+| EXP-004b | B v A, college receptions | 2026, 1,738 games | −0.0271 [−0.0525, −0.0019] | **ADVANCE** |
+| | B v A, college receiving yards | 2026, 1,718 games | −0.2116 [−0.6368, +0.1891] | INCONCLUSIVE |
+| EXP-005 | shrink A's centre, NFL receptions | 2024–26, 4,343 games | −0.0067 [−0.0108, −0.0024] | **ADVANCE** |
+| | the same, NFL rushing yards | 2024–26, 1,519 games | +0.0059 [−0.1140, +0.1306] | REJECTED |
+| | NFL receiving yards | (search) | nothing beat no correction | REJECTED |
+
+What the runs say together:
+
+1. **Receptions replicate across sports, and the gain is shape, not
+   centre.** Two-stage beat direct by −0.0271 in college and −0.0270 in
+   the NFL. In both sports it was *worse* at a line-like threshold and in
+   mean error. A bettor prices at a line, which is why EXP-001c (real
+   lines) is the test that matters.
+2. **The hybrid wins college rushing as a preregistered test.** It is the
+   same idea EXP-001b waits to test on NFL games after the freeze.
+3. **The search found shrinkage, not a new formula.** Out of 1,680 shapes,
+   the complexity price chose the plainest: the direct model's centres are
+   spread about 15% too wide. That held on unseen receptions games, and
+   held up where noise was planted in the tests. It points the same way as
+   pricetrust and EXP-003b: our numbers run too extreme.
+4. **None of this moves a pick.** The only live change is the one Ethan
+   approved: the NFL board at the market's price.
+
+### 13. Limitations and failure modes
+
+- College targets before 2025 are short (most incompletions are
+  unnamed). Even 2025→2026 carries a ten-point jump in naming into the
+  holdout, which was stated before the run.
+- EXP-005's holdout includes 2024–25, which were read before as
+  EXP-001's holdout for A against B. They were never read for A's misses
+  against these quantities, and the search read none of them.
+- The 2026 slices are a few weeks only.
+- The rushing-yards result shows why the score was fixed in advance:
+  squared error fell while the distribution got worse.
+
+### 14. Novelty assessment
+
+| experiment | class |
+|---|---|
+| EXP-004 | 4, an out-of-sport replication of an established method |
+| EXP-005's chosen equation | 5, rediscovered shrinkage |
+| the search procedure | 4 |
+
+Still no new mathematics. The spec says to report that rather than dress
+it up.
+
+### 15. Decisions
+
+| item | decision |
+|---|---|
+| EXP-R05 | **wired** (NFL board), re-tested prospectively on `trust_from` |
+| EXP-004 receptions (B) and rushing (H) | **advance** to college real lines |
+| EXP-004 rush B and rec_yds B | **investigate** (inconclusive) |
+| EXP-005 receptions | **advance**: does it add to B? |
+| EXP-005 rushing and receiving yards | **reject** |
+
+### 16. Next highest-value experiment
+
+**EXP-001c's decision rows** (NFL receptions at real lines, games after
+today). This is the test that says whether any of the distribution gains
+survive at the number a book actually hangs. The box script now prints its
+pace.
+
+Then:
+
+1. **EXP-004c:** the same at the college lines the box holds.
+2. **EXP-006:** B with and without the EXP-005 shrink on NFL receptions,
+   preregistered, scored on games after the freeze.
 
 ---
 
@@ -341,7 +474,12 @@ market at pick time) is written and tested, and waits on one box command.
 | B8 | MLB first experiment: two-stage strikeouts (batters faced × K rate) vs direct | — | medium | MLB Stats API on the box | same protocol as EXP-001 |
 | B9 | NBA: minutes × per-minute rate, minutes from rotation/injury state | — | medium | box history | same protocol |
 | B10 | UFC: fight-time distribution × striking rate for significant-strike props | data audit of per-fight stats | large | needs a per-fight stats source | coverage verified first |
-| B11 | College: the EXP-001 protocol on cfbfastR (verified 2022–26) | — | small | have it | same bar |
+| B11 | College: the EXP-001 protocol on cfbfastR (verified 2022–26) | — | small | have it | **done: EXP-004** (receptions B and rushing H advance) |
+| B12 | EXP-001c decision rows (NFL receptions at real lines) | games after 2026-10-17 + nflverse stats | none | box | 300 receptions rows; the bar in the script |
+| B13 | EXP-004c: college B (receptions) and H (rushing) at real college lines | a college twin of `exp1_lines_box.py` | medium | box (college props in odds history) | same bar as EXP-001c |
+| B14 | EXP-006: B with and without EXP-005's shrink, NFL receptions | — | small | have it | preregistered, scored on games after the freeze |
+| B15 | pricetrust prospective: the NFL board's rule re-tested on `trust_from` | four weeks of picks after 2026-10-17 | none | box | every held-out week no worse, pooled better — or the switch goes off |
+| B16 | Canonical participant table (B4) feeding every join above | — | medium | have ids | as B4 |
 
 ## Task 7 — what I can do, and what needs Ethan
 
@@ -370,26 +508,33 @@ market at pick time) is written and tested, and waits on one box command.
 
 ### Decisions for Ethan
 
-0. **pricetrust passed on the NFL one-board** (and narrowly on MLB Most
-   Likely paper). On the NFL board the weeks chose w = 1, T = 0: never show
-   a chance above the market's. That cut held-out log loss from 0.6966 to
-   0.6852 over 199 picks, and every week improved. The board's picks 15+
-   points above the market hit 37.5% where they claimed 75.3% (24 picks).
-   By the script's own rule nothing changes until you say yes. Saying yes
-   means the NFL board shows and ranks by the lower of our chance and the
-   market's, behind an on/off switch.
-1. **No credits needed now.** The box already holds the 2025–26 NFL props.
-   A 2023 harvest stays optional. The dry-run printed its plan but no
-   price, because pricing it needs one events call.
-2. **SQLite stays** (recommended) or the lab moves to Postgres.
-3. **Vendor samples:** not needed yet.
+0. **Done: the NFL board shows the market's number where ours ran above
+   it** (your "yes nfl board").
+   - Off switch, no deploy needed: `sudo ./deploy/setenv.sh QB_PRICE_TRUST
+     off`, then `sudo systemctl restart qellys`.
+   - The journal keeps our pre-price chance (`trust_from`), so pricetrust.py
+     re-tests the rule on picks made from today on.
+   - One consequence follows your 10-07 rule: a pick the price puts under
+     50% is held back unless the matchup read backs it. It still rides on
+     paper in the Held bucket.
+1. **MLB Most Likely paper** passed pricetrust too, by less (0.6901 →
+   0.6895). Recommended: not yet. Give it more weeks.
+2. **No credits needed.**
+3. **SQLite stays** (recommended) or the lab moves to Postgres.
+4. **Vendor samples:** still not needed.
 
-### Box commands (round three)
+### Box commands (round four)
 
 ```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py | tail -16
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py
+cd /srv/qellys && git log --oneline -1
+cd /srv/qellys && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),round(r.get('model_prob',0),3)) for r in t[:8]]"
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -16
 ```
 
-All read-only. Paste all three.
+All read-only.
+
+1. The first line shows the box has today's code.
+2. The second counts the NFL board picks now shown at the market's number.
+   Run it after the next NFL build.
+3. The third is EXP-001c. Run it Tuesday or later; it now prints how many
+   more weeks its decision needs.

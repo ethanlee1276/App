@@ -344,6 +344,17 @@ def report(label: str, rows: list[dict]) -> None:
         print(f"  {'':<10} secondary: B* off the market by >{EDGE:.0%} on {n:,} props, flat ROI {r_:+.3f}")
 
 
+def pace(dev: list[dict], post: list[dict], market: str = "receptions") -> tuple | None:
+    """(props a week, weeks still needed) for the decision, read off this
+    season's weeks before the freeze — description, it decides nothing."""
+    weeks = Counter(r["wk"] for r in dev if r["m"] == market and r["wk"].startswith(FREEZE[:4]))
+    if not weeks:
+        return None
+    rate = sum(weeks.values()) / len(weeks)
+    need = max(0, MIN_DECIDE - sum(1 for r in post if r["m"] == market))
+    return rate, (math.ceil(need / rate) if rate > 0 else None)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--db", default=str(ROOT / "data" / "history.db"))
@@ -369,6 +380,11 @@ def main(argv=None) -> int:
     print(f"\nDECISION (receptions, games after {FREEZE}): {len(rec):,} rows")
     if len(rec) < MIN_DECIDE:
         print(f"  NOT YET: needs {MIN_DECIDE}")
+        got = pace(dev, post)
+        if got:
+            rate, weeks = got
+            print(f"  pace: {FREEZE[:4]}'s weeks before the freeze averaged {rate:.0f} receptions props a week, "
+                  f"so about {weeks} more week(s) of games, scored once nflverse posts each week's stats")
         return 0
     for k1, k2, name in (("B*", "A*", "Q1 two-stage beats direct"), ("D", "C", "Q2 our number adds to the market")):
         mean, lo, hi = compare(rec, k1, k2)

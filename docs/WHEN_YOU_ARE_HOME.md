@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2336,6 +2336,44 @@ the real-line test start with tomorrow's games; nflverse posts the week's
 stats by Tuesday, so run this then:
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -14
+```
+
+**CN. The NFL board at the market's price; two new experiments** (step 145).
+
+Your "yes nfl board" is live:
+
+- Where our chance ran above the books' de-vigged consensus (three books
+  or more at the pick's own line), the NFL one board now shows and ranks
+  by the market's number.
+- Turning it off needs no deploy: `sudo ./deploy/setenv.sh QB_PRICE_TRUST
+  off`, then `sudo systemctl restart qellys`.
+- A pick the price puts under 50% is held back unless the matchup read
+  backs it, by your 10-07 rule. It still rides on paper.
+- Each moved pick journals our pre-price chance, so pricetrust re-tests
+  the rule on picks made from today on.
+
+Also run here, each with its bar committed before its holdout was read:
+
+- **College:** the two-stage model beat the direct one on college
+  receptions by the same margin as the NFL. The direct-centre,
+  two-stage-shape hybrid won college rushing yards.
+- **Equation search:** 1,680 formulas were searched. It found that the
+  direct model's receptions centres are spread about 15% too wide, and
+  shrinking them held on unseen games.
+
+Neither moves a pick; both go to real-line tests next. Three lines, all
+read-only:
+
+1. The box has today's code.
+2. How many NFL board picks are now shown at the market's number. Run it
+   after the next NFL build.
+3. EXP-001c. Run it Tuesday or later; it now says how many more weeks its
+   decision needs.
+
+```
+cd /srv/qellys && git log --oneline -1
+cd /srv/qellys && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),round(r.get('model_prob',0),3)) for r in t[:8]]"
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -16
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

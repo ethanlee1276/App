@@ -404,6 +404,15 @@ def test_the_search_finds_a_planted_shrink_and_refuses_noise():
     assert noise[0][2] == "no correction", "with nothing planted the complexity price keeps the baseline"
 
 
+def test_the_real_line_decision_says_its_pace_and_decides_nothing_with_it():
+    dev = ([{"m": "receptions", "wk": "2026-04"}] * 80 + [{"m": "receptions", "wk": "2026-05"}] * 120
+           + [{"m": "receptions", "wk": "2025-10"}] * 500 + [{"m": "rec_yds", "wk": "2026-05"}] * 90)
+    rate, weeks = EL.pace(dev, [{"m": "receptions"}] * 50)
+    assert rate == 100.0, "this season's weeks only, this market only"
+    assert weeks == 3, "250 still needed at 100 a week"
+    assert EL.pace([{"m": "receptions", "wk": "2025-10"}], []) is None
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
