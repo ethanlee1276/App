@@ -347,13 +347,13 @@ downloads any Savant file over six hours old, as the next MLB build would),
 and AZ's cap if you move it (one setting and a restart).
 Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Box round three: what the 2026-10-17 paste found, fixed; the re-run list`
+**A. The box has today's code.** The first line should end `Box round four: the top pick behind the paywall, builds leave the record to the settle lane`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor e1b5dbab HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 0aa3e0f5 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
