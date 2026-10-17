@@ -81,6 +81,7 @@ FITS = (
     ("engine.selectionfit", "number", ("engine.betting",), "the selection correction on Edge's claimed edge"),
     ("engine.pmfit", "number", ("engine.predmarket",), "the informed-flow weights on the prediction-market board"),
     ("bridgefit", "number", ("engine.carry",), "the usage bridge leans on last season in the volume role"),
+    ("rolewindowfit", "number", ("engine.nflusage",), "the usage bridge weights his games by age (ROLE_HALF_LIFE)"),
     ("seasonpriorfit", "number", ("engine.carry",), "his own last season as the form's prior, week 4 on"),
     ("hoopsdvpfit", "number", ("engine.hoopsdvp",), "how much of a basketball defence reaches one line"),
     ("nbavacancy", "number", ("engine.nba.vacancy",),
