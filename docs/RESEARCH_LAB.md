@@ -80,6 +80,8 @@ in the script.
 | EXP-002 interactions | all five | every holdout difference ≥ 0 | **REJECTED** (all five) |
 | EXP-003a totals | correction vs baseline | log loss +0.00026 [−0.00504, +0.00641] | REJECTED |
 | | anything vs the closing market | the market's log loss is 0.6931; our best blend is 0.6948 | **REJECTED** |
+| EXP-003b our picks vs the market (box, 1,804 held-out picks, 7 weeks) | correction vs ours / vs market; blend vs market | log loss: ours 0.6849, corrected 0.6921, market 0.6790, blend 0.6845; every comparison FAILS its bar | **REJECTED**: the market at pick time beats our shown chance |
+| EXP-001c real lines (box) | development only so far | first run joined just 100 props (stored odds rows often lack a start time); amended to place quotes by schedule kickoff | waiting |
 | EXP-R01 bridge window | targets, carries | every 2022–25 season improved; worst season +0.11% (receptions), +0.15% (receiving yards), +0.02% (rushing yards) | WIRED |
 | EXP-R02 referees | totals, spreads | correlation −0.02 / −0.01 vs the close | REJECTED |
 | EXP-R03 team volume | from the line | +0.5 to +0.9% RMSE | recorded, not wired |
@@ -98,7 +100,12 @@ Four observations from the same runs:
 3. **Training coefficients lie.** Two of the matchup interactions had
    large, "significant-looking" training coefficients (+4.5 and +5.3
    standardised) and made unseen seasons worse.
-4. **The closing total is close to unbeatable on public features.** Its
+4. **On our own published picks, the market's price is the better
+   forecast.** Over 1,804 held-out picks, our shown chances averaged 0.572,
+   the market's 0.547, and 0.538 hit. Neither a learned correction nor a
+   blend beat the market alone. That is the overclaim pricetrust.py was
+   built to test a fix for.
+5. **The closing total is close to unbeatable on public features.** Its
    log loss is about what forecasting 50/50 on every game would score,
    and our baseline is worse than that.
 
@@ -368,14 +375,12 @@ market at pick time) is written and tested, and waits on one box command.
 2. **SQLite stays** (recommended) or the lab moves to Postgres.
 3. **Vendor samples:** not needed yet.
 
-### Box commands (round two)
+### Box commands (round three)
 
 ```
-cd /srv/qellys && git log --oneline -1
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py | tail -16
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py
 ```
 
-Both are read-only. The first fits on the box's nflverse files (fetching
-any season it lacks, once) and takes a few minutes on one core. The second
-streams the 541 MB snapshot file. Paste both outputs.
+All read-only. Paste all three.

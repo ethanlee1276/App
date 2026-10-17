@@ -314,15 +314,46 @@
    "baseline": "A (ours) and C (market)",
    "protocol": "walk-forward by ISO week, each week fitted on earlier weeks only; week-clustered bootstrap; three comparisons at 0.05/3; NOT YET under 6 weeks or 600 rows; AMENDMENT 1 (before any comparison was printed): the market chance is pricetrust.attach_market's (journaled fair, else rebuilt from our own pre-pick snapshots), and the rows are the published books only",
    "primary_metric": "log loss",
-   "sample_size": "first box run 2026-10-17: 790 usable rows of 28,320 (journaled fair only), 450 held out over 8 weeks: NOT YET; re-run after the amendment",
-   "results": [],
+   "sample_size": "box run 2026-10-17 after amendment 1: 2,184 usable picks (790 journaled market, 1,394 rebuilt from snapshots; 5,281 left out for want of a market chance), 1,804 held out over 7 weeks",
+   "results": [
+    {
+     "period": "held-out weeks to 2026-10-17",
+     "market": "B-A (the correction)",
+     "metric": "log loss",
+     "value": 0.00721,
+     "lo": -0.01284,
+     "hi": 0.01702,
+     "notes": "ours 0.68488, corrected 0.69209"
+    },
+    {
+     "period": "held-out weeks to 2026-10-17",
+     "market": "B-C (correction vs market)",
+     "metric": "log loss",
+     "value": 0.01311,
+     "lo": -0.00171,
+     "hi": 0.01928,
+     "notes": "market 0.67898"
+    },
+    {
+     "period": "held-out weeks to 2026-10-17",
+     "market": "D-C (blend vs market)",
+     "metric": "log loss",
+     "value": 0.00552,
+     "lo": -0.00292,
+     "hi": 0.01193,
+     "notes": "blend 0.68450; mean chance ours 0.572, market 0.547, hit 0.538; secondary ROI all -0.061 (n 1,804), D-rated -0.105 (n 800)"
+    }
+   ],
    "decision": {
-    "all": "not run"
+    "B beats A": "FAILS",
+    "B beats C": "FAILS",
+    "D beats C": "FAILS",
+    "market edge": "NOT CLAIMED"
    },
    "multiple_testing": "Bonferroni over the three comparisons",
-   "failure_modes": "only rows with a journaled market fair (the Edge book) are usable; the picks are a selected sample",
-   "next": "Run on the box (command in docs/RESEARCH_LAB.md) and paste the output.",
-   "status": "IMPLEMENTED"
+   "failure_modes": "only rows with a journaled market fair (the Edge book) are usable; the picks are a selected sample; walk-forward weeks are few (7), so B and D are fitted on small, shifting samples; the result is about the picks the site made, not about props at large",
+   "next": "Read pricetrust.py's verdict on the same rows (the give-back-to-the-price rule, its bar set before it ran): the finding here is that our shown chances run 3.4 points above what hit while the market's run 0.9 above.",
+   "status": "BACKTESTED"
   },
   {
    "id": "EXP-R01",

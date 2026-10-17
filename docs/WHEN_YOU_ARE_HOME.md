@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), and round two (step 142; CK).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK) and three (step 143; CL).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2298,13 +2298,32 @@ the books' consensus (2025 and the 2026 weeks so far are development only;
 games after 2026-10-17 decide it). And EXP-003b could use only the 790
 picks with a journaled market price; it now rebuilds the market from the
 site's own line snapshots for the rest, as pricetrust does. The first
-line makes a bare `git pull` follow this branch (what made your last one
-say "divergent": the branch was tracking a different one; nothing was
-lost, the backup branch is the same commit). Both checks are read-only.
+line was a guess at the "divergent" message that turned out wrong: the
+branch already tracked the right upstream. Nothing was lost (the box had
+no commits of its own and matches GitHub); what caused the message is not
+known. Leave pulling to the auto-updater, and if it ever recurs, paste
+`git status -sb; git log --oneline -3 --all` before changing anything.
+Both checks are read-only.
 ```
 cd /srv/qellys && git rev-parse --abbrev-ref @{u}; git branch --set-upstream-to=origin/claude/sports-betting-app-vhgmho && git branch -d box-only-backup-1017
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
+```
+
+**CL. The research lab, round three** (step 143). Your CK paste: EXP-003b
+ran on 1,804 held-out picks and answered. The market's price at pick time
+was a better forecast than our shown chance, and no correction or blend
+beat it; our chances ran 3.4 points above what hit, the market's 0.9.
+Recorded, nothing changes on the site. EXP-001c joined only 100 props
+because many stored odds rows carry no game start; it now places each
+quote by the player's kickoff in the schedule and prints a funnel showing
+where props drop. The third line is pricetrust.py, the check whose rule
+(lean our chance toward the price) is the fix the EXP-003b finding points
+at; its verdict decides whether that is shown to anyone.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py | tail -16
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

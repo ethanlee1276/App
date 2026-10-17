@@ -250,10 +250,20 @@ def test_the_real_line_consensus_is_the_fields_and_only_before_the_start():
             conn.execute("INSERT INTO odds_history VALUES ('nfl',?,'e1','KC','BUF','Amon-Ra St. Brown','receptions',?,?,?,?,?)",
                          (t, b, ln, o, u, start))
         conn.commit()
-        props = EL.book_props(conn)
+        import datetime as dt
+        from collections import Counter
+        kick = dt.datetime(2025, 9, 7, 17, 0, tzinfo=dt.timezone.utc)
+        funnel = Counter()
+        props = EL.book_props(conn, {"amon ra st brown": [(kick, "2025-09-07")]}, funnel=funnel)
         conn.close()
     got = props[("amon ra st brown", "2025-09-07", "receptions")]
-    assert got[0] == 4.5 and got[2] == 3, "each book's last quote before the start; the in-play 6.5 never counts"
+    assert got[0] == 4.5 and got[2] == 3, "each book's last quote before the kickoff; the in-play 6.5 never counts"
+    assert funnel["quotes read"] == 5 and funnel["quotes before his next kickoff"] == 4
+    assert funnel["props with a three-book consensus"] == 1
+    # The kickoff comes from the schedule, not the row: 1 pm Eastern in September is 17:00 UTC.
+    assert EL.kickoff_utc("2025-09-07", "13:00") == kick
+    assert EL.kickoff_utc("2025-12-07", "13:00").hour == 18, "standard time is five hours behind"
+    assert EL.kickoff_utc("", "13:00") is None
 
 
 def test_the_calibrator_recovers_a_known_slope_and_the_join_scores_real_lines():
@@ -289,7 +299,7 @@ def test_the_calibrator_recovers_a_known_slope_and_the_join_scores_real_lines():
             def cdf_b(self, r, ts):
                 return [0.3 for _ in ts]
         ident = EL.Calibrator([(0.2, 0.0), (0.8, 1.0)] * 50)
-        out = EL.scored(Stub(), {m: (ident, ident) for m in EL.MARKETS}, props, seasons=(2025,))
+        out = EL.scored(Stub(), {m: (ident, ident) for m in EL.MARKETS}, props, E1.rows_for(2025))
     finally:
         E1.load, EL.game_dates = real_load, real_dates
     mine = [r for r in out if r["day"] == day]

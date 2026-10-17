@@ -136,7 +136,7 @@ def load(db: str, sport: str | None, snapshots=None) -> tuple[list[dict], Counte
         if not r.get("odds") or not E3DATE.match(day):
             skipped["no price or date"] += 1
             continue
-        out.append({"wk": week_of(day), "sport": r["sport"], "market": r["market"] or "",
+        out.append({"wk": week_of(day), "sport": r["sport"], "book": r.get("category") or "", "market": r["market"] or "",
                     "side": str(r.get("side") or "").upper(), "a": float(r["hit_prob"]),
                     "c": float(r["market_p"]), "src": r.get("market_src"), "odds": float(r["odds"]),
                     "lead": float(r.get("lead_min") or 0.0), "y": 1.0 if r["status"] == "won" else 0.0})
@@ -282,6 +282,18 @@ def main(argv=None) -> int:
     n_k, r_k = roi(kept)
     print(f"\n  secondary, decides nothing: flat 1u ROI, all held-out picks {r_all:+.3f} (n={n_all:,}); "
           f"those D still rates above the price's break-even {r_k:+.3f} (n={n_k:,})")
+    print("\n  where, described (decides nothing): held-out picks by sport and book")
+    print(f"    {'sport':<6} {'book':<12} {'n':>6}  {'ours':>5} {'market':>6} {'hit':>5}  {'LL ours':>8} {'LL mkt':>7}")
+    by = defaultdict(list)
+    for x in scored:
+        by[(x["sport"], x["book"])].append(x)
+    for (sp, bk), t in sorted(by.items(), key=lambda kv: -len(kv[1])):
+        if len(t) < 30:
+            continue
+        n = len(t)
+        print(f"    {sp:<6} {bk:<12} {n:>6,}  {sum(x['a'] for x in t) / n:>5.3f} {sum(x['c'] for x in t) / n:>6.3f} "
+              f"{sum(x['y'] for x in t) / n:>5.3f}  {sum(_ll(x['a'], x['y']) for x in t) / n:>8.4f} "
+              f"{sum(_ll(x['c'], x['y']) for x in t) / n:>7.4f}")
     return 0
 
 

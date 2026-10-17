@@ -10,8 +10,11 @@ already holds 2025 and 2026 NFL player props from 16 books (counted by
 research/audit_box.py on 2026-10-17), so no credits are spent.
 
 THE ROWS. Every NFL receptions, receiving-yards and rushing-yards prop in
-odds_history whose game has a start time. Each book's LAST quote before
-the start is kept; the line is the one most books hang (ties to the
+odds_history for a player the models can score. Each quote is placed by
+the player's next kickoff in the schedule (games.csv), not by the row's
+own start time, which many stored rows do not carry (AMENDMENT 1, after a
+first development run joined only 100 props and before any decision row
+existed). Each book's LAST quote before that kickoff is kept; the line is the one most books hang (ties to the
 lower); the market's chance for the over is the median de-vigged fair of
 the books quoting both sides at that line (engine/odds.consensus_fair, the
 function the site journals with, with its own minimum of books). The prop
@@ -86,10 +89,28 @@ def _ll(p: float, y: float) -> float:
 def et_date(iso: str) -> str:
     """The US calendar day of a UTC start (five hours back covers both
     daylight and standard time for every NFL kickoff)."""
-    t = _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
-    if t.tzinfo is None:
-        t = t.replace(tzinfo=_dt.timezone.utc)
+    t = _utc(iso)
     return (t - _dt.timedelta(hours=5)).date().isoformat()
+
+
+def _utc(iso: str) -> _dt.datetime:
+    t = _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    return t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)
+
+
+def kickoff_utc(gameday: str, gametime: str) -> _dt.datetime | None:
+    """A schedule's local (US Eastern) kickoff as UTC; None when either is missing."""
+    if not gameday or not gametime:
+        return None
+    try:
+        local = _dt.datetime.fromisoformat(f"{gameday}T{gametime}")
+    except ValueError:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        return local.replace(tzinfo=ZoneInfo("America/New_York")).astimezone(_dt.timezone.utc)
+    except Exception:                                         # noqa: BLE001 — no tz database
+        return (local + _dt.timedelta(hours=5)).replace(tzinfo=_dt.timezone.utc)
 
 
 def consensus(quotes: dict) -> tuple | None:
@@ -111,35 +132,84 @@ def consensus(quotes: dict) -> tuple | None:
     return line, got[0], got[1], overs[len(overs) // 2]
 
 
-def book_props(conn, markets=MARKETS) -> dict:
-    """{(normalized name, date, market): (line, fair over, books, price)} from
-    each book's last quote before the start."""
+#: How far ahead of a quote its game may be: a Thursday line is hung days early.
+LOOKAHEAD = _dt.timedelta(days=5)
+
+
+def book_props(conn, kickoffs: dict, markets=MARKETS, funnel: Counter | None = None) -> dict:
+    """{(normalized name, game day, market): (line, fair over, books, price)}
+    from each book's last quote before the player's kickoff.
+
+    ``kickoffs`` is {normalized name: sorted [(kickoff UTC, game day)]} from
+    the schedule, so a quote is placed by the game it precedes, not by the
+    row's own start time, which many stored rows do not carry."""
+    import bisect
     from engine.sources.oddsapi import normalize_name
+    funnel = funnel if funnel is not None else Counter()
+    names: dict = {}
     last: dict = {}
-    q = ("SELECT taken_at, event_id, player, market, book, line, over_odds, under_odds, commence_time "
-         "FROM odds_history WHERE sport='nfl' AND market IN (%s) AND commence_time IS NOT NULL "
-         "AND commence_time != '' AND taken_at < commence_time" % ",".join("?" * len(markets)))
-    for taken, ev, player, market, book, line, over, under, start in conn.execute(q, markets):
-        if not player or line is None:
+    q = ("SELECT taken_at, player, market, book, line, over_odds, under_odds FROM odds_history "
+         "WHERE sport='nfl' AND market IN (%s)" % ",".join("?" * len(markets)))
+    for taken, player, market, book, line, over, under in conn.execute(q, markets):
+        funnel["quotes read"] += 1
+        if not player or line is None or not taken:
             continue
-        k = (ev, player, market, str(book or "").lower())
-        if k not in last or taken > last[k][0]:
-            last[k] = (taken, float(line), over, under, start)
+        n = names.get(player)
+        if n is None:
+            n = names[player] = normalize_name(player)
+        games = kickoffs.get(n)
+        if not games:
+            continue
+        funnel["quotes on a scored player"] += 1
+        try:
+            t = _utc(taken)
+        except ValueError:
+            continue
+        i = bisect.bisect_right([g[0] for g in games], t)
+        if i >= len(games) or games[i][0] - t > LOOKAHEAD:
+            continue
+        funnel["quotes before his next kickoff"] += 1
+        k = (n, games[i][1], market, str(book or "").lower())
+        if k not in last or t > last[k][0]:
+            last[k] = (t, float(line), over, under)
     per: dict = defaultdict(dict)
-    for (ev, player, market, book), (_t, line, over, under, start) in last.items():
-        per[(normalize_name(player), et_date(start), market)][book] = (line, over, under)
+    for (n, day, market, book), (_t, line, over, under) in last.items():
+        per[(n, day, market)][book] = (line, over, under)
+    funnel["props (player, game, market)"] += len(per)
     out = {}
     for key, quotes in per.items():
         c = consensus(quotes)
         if c:
             out[key] = c
+    funnel["props with a three-book consensus"] += len(out)
     return out
 
 
-def game_dates() -> dict:
+def kickoffs_for(rows: list[dict]) -> dict:
+    """{normalized name: sorted [(kickoff UTC, game day)]} for the scored rows."""
+    from engine.sources.oddsapi import normalize_name
+    sched = game_schedule()
+    out: dict = defaultdict(set)
+    for x in rows:
+        g = sched.get(x.get("gid") or "")
+        if not g:
+            continue
+        k = kickoff_utc(*g)
+        if k:
+            out[normalize_name(x["name"])].add((k, g[0]))
+    return {n: sorted(v) for n, v in out.items()}
+
+
+def game_schedule() -> dict:
+    """{game_id: (game day, local kickoff time)} from the schedule file."""
     import csv
     with open(ROOT / "data" / "cache" / "games.csv", newline="") as fh:
-        return {g["game_id"]: g.get("gameday") or "" for g in csv.DictReader(fh)}
+        return {g["game_id"]: (g.get("gameday") or "", g.get("gametime") or "") for g in csv.DictReader(fh)}
+
+
+def game_dates() -> dict:
+    """{game_id: game day}."""
+    return {gid: day for gid, (day, _t) in game_schedule().items()}
 
 
 class Calibrator:
@@ -197,26 +267,26 @@ def calibrators(fit) -> dict:
     return {m: (Calibrator(a), Calibrator(b)) for m, (a, b) in pairs.items()}
 
 
-def scored(fit, cals: dict, props: dict, seasons=(2025, 2026)) -> list[dict]:
+def scored(fit, cals: dict, props: dict, rows: list[dict]) -> list[dict]:
     from engine.sources.oddsapi import normalize_name
     dates = game_dates()
     out = []
-    for s in seasons:
-        for x in E1.rows_for(s):
-            day = dates.get(x.get("gid") or "", "")
-            p = props.get((normalize_name(x["name"]), day, x["m"]))
-            if not p or not day:
-                continue
-            line, fair, books, price = p
-            if x["y"] == line:
-                continue
-            pa, pb = over_chances(fit, x, line)
-            ca, cb = cals[x["m"]]
-            pas, pbs = ca(pa), cb(pb)
-            out.append({"m": x["m"], "day": day, "wk": f"{s}-{x['week']:02d}", "after": day > FREEZE,
-                        "y": 1.0 if x["y"] > line else 0.0, "line": line, "books": books, "price": price,
-                        "A": pa, "B": pb, "A*": pas, "B*": pbs, "C": fair,
-                        "D": _sig(0.5 * _logit(pbs) + 0.5 * _logit(fair))})
+    for x in rows:
+        s = x["s"]
+        day = dates.get(x.get("gid") or "", "")
+        p = props.get((normalize_name(x["name"]), day, x["m"]))
+        if not p or not day:
+            continue
+        line, fair, books, price = p
+        if x["y"] == line:
+            continue
+        pa, pb = over_chances(fit, x, line)
+        ca, cb = cals[x["m"]]
+        pas, pbs = ca(pa), cb(pb)
+        out.append({"m": x["m"], "day": day, "wk": f"{s}-{x['week']:02d}", "after": day > FREEZE,
+                    "y": 1.0 if x["y"] > line else 0.0, "line": line, "books": books, "price": price,
+                    "A": pa, "B": pb, "A*": pas, "B*": pbs, "C": fair,
+                    "D": _sig(0.5 * _logit(pbs) + 0.5 * _logit(fair))})
     return out
 
 
@@ -278,15 +348,19 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--db", default=str(ROOT / "data" / "history.db"))
     a = ap.parse_args(argv)
+    targets = [x for s in (2025, 2026) for x in E1.rows_for(s)]
+    funnel: Counter = Counter()
     conn = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True)
-    props = book_props(conn)
+    props = book_props(conn, kickoffs_for(targets), funnel=funnel)
     conn.close()
     print(f"EXP-001c — {len(props):,} NFL props with a pre-game consensus (receptions, rec_yds, rush_yds)")
+    print("  funnel: " + " → ".join(f"{k} {v:,}" for k, v in funnel.items())
+          + f" → scorable player-games {len(targets):,}")
     fit = E1.Fit([x for s in TRAIN for x in E1.rows_for(s)])
     cals = calibrators(fit)
     for m, (ca, cb) in sorted(cals.items()):
         print(f"  calibration {m:<10} A*: a {ca.a:+.3f} b {ca.b:.3f}   B*: a {cb.a:+.3f} b {cb.b:.3f}")
-    rows = scored(fit, cals, props)
+    rows = scored(fit, cals, props, targets)
     dev = [r for r in rows if not r["after"]]
     post = [r for r in rows if r["after"]]
     print(f"  joined {len(rows):,} props to a player-game ({len(dev):,} development, {len(post):,} after {FREEZE})")
