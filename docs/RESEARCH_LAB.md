@@ -137,10 +137,17 @@ coefficient is not an invention.
 
 ### 16. Next highest-value experiment
 
-Price EXP-001's calibrated receptions distribution at the real 2024–2025
-receptions lines (The Odds API archive), scored by log loss against the
-de-vigged book and then by the return at the prices actually posted. It
-needs one harvest decision from Ethan (see "Decisions for Ethan").
+Price EXP-001's calibrated receptions distribution at real receptions
+lines, scored by log loss against the de-vigged book and then by the return
+at the prices actually posted.
+
+- Develop it on 2023 lines from The Odds API archive.
+- Decide it on 2026 games played after today, against the quotes the site
+  already records every pull.
+
+2024–25 cannot decide it: those seasons were EXP-001's holdout and have
+been read once. The 2023 lines need one harvest decision from Ethan (see
+"Decisions for Ethan").
 
 ---
 
@@ -299,7 +306,7 @@ market at pick time) is written and tested, and waits on one box command.
 |---|---|---|---|---|---|
 | B1 | Calibrate EXP-001 receptions (isotonic or Platt on training seasons), re-score on the 2024–25 holdout's existing CRPS/Brier | — | small | have it | calibrated Brier at the proxy line ≤ A's on validation, and CRPS still beats A |
 | B2 | Harvest 2024–25 NFL receptions / receiving / rushing props, one pre-kick Sunday snapshot | Ethan's credit decision | box time | The Odds API | dry-run cost accepted; rows land in odds_history |
-| B3 | Score A, B and calibrated B at real lines: log loss vs the de-vigged book, then return at the posted price | B1, B2 | medium | B2 | the bar written before the run (as EXP-001) |
+| B3 | Score A, B and calibrated B at real lines: log loss vs the de-vigged book, then return at the posted price. Develop on 2023 lines; DECIDE on 2026 games after the freeze against `line_history` (2024–25 was EXP-001's holdout, read once, so it is no longer untouched) | B1, B2 | medium | B2 + the box's line history | the bar written before the run (as EXP-001) |
 | B4 | Canonical participant table with aliases (gsis / ESPN / book spellings) | — | medium | have ids | every journal row maps to one id; a test that fails on a new unmapped name |
 | B5 | Store each pick's feature vector at decision time (feature_snapshots) | — | medium | own | a pick can be re-priced from its stored features alone |
 | B6 | EXP-001b scored weekly | games | none | auto | the preregistered bar |
@@ -357,7 +364,7 @@ market at pick time) is written and tested, and waits on one box command.
 cd /srv/qellys && git log --oneline -1
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/audit_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
-cd /srv/qellys && sudo -u qellys python3 harvest_odds.py nfl --from 2024-09-08 --to 2024-10-27 --weekdays sun --hour 17 --markets receptions,rec_yds,rush_yds --dry-run
+cd /srv/qellys && sudo -u qellys python3 harvest_odds.py nfl --from 2023-09-10 --to 2023-10-29 --weekdays sun --hour 17 --markets receptions,rec_yds,rush_yds --dry-run
 ```
 
 The last one spends nothing. Paste all four outputs.

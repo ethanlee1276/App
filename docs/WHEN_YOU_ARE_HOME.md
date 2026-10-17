@@ -2288,7 +2288,7 @@ receptions/yards prop harvest would cost). Paste all four.
 cd /srv/qellys && git log --oneline -1
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/audit_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp3_props_box.py
-cd /srv/qellys && sudo -u qellys python3 harvest_odds.py nfl --from 2024-09-08 --to 2024-10-27 --weekdays sun --hour 17 --markets receptions,rec_yds,rush_yds --dry-run
+cd /srv/qellys && sudo -u qellys python3 harvest_odds.py nfl --from 2023-09-10 --to 2023-10-29 --weekdays sun --hour 17 --markets receptions,rec_yds,rush_yds --dry-run
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

@@ -102,7 +102,7 @@
    },
    "multiple_testing": "Bonferroni over the three markets",
    "failure_modes": "zero-target games missing from the source for both models; yardage given o is a moment-matched approximation; no defence step in either model; receptions' gain does not show at a line-like threshold and its over-chances are too extreme",
-   "next": "Calibrate B's receptions over-chances on training seasons and score at real 2024-2025 book lines (The Odds API archive, from 2023-05-03); EXP-001b prospective.",
+   "next": "Calibrate B's receptions over-chances on the training seasons (judged on 2022-23). Then price it at real lines: develop on 2023 book lines (The Odds API archive starts 2023-05-03) and DECIDE on 2026 games after the freeze, scored against the lines the site records every pull (line_history), because 2024-25 has now been read once as this experiment's holdout and is no longer untouched.",
    "status": "HOLDOUT VALIDATED"
   },
   {
