@@ -405,6 +405,20 @@ the events are the hard part, and they are done.
 
 ---
 
+## Referees — measured and refused, 2026-10-17
+
+The officials were a data source the site had never read, and nflverse's
+games file names every NFL game's referee. `refcheck.py` asked the only
+question that decides whether they are worth wiring: does a referee's past
+predict a game's total against the CLOSING total, or its margin against the
+closing spread, in a season his estimate never saw? On 7,340 games (2015 to
+week 4 of 2026): no. Held-out correlation −0.02 on totals and −0.01 on
+margins at every shrink tried, and worse than predicting nothing in 8 to 10
+of 11 seasons. The closing number already has whatever a crew does. Not
+wired; nflverse fills the referee only after the game in any case. NBA and
+NHL crews wait on closing totals the box has only just started keeping
+(engine/lineopen); the same script shape answers them when there is a season.
+
 ## In-game live win probability — SHIPPED 2026-09-09
 
 **This entry used to be three lines below, under "needs data we do not

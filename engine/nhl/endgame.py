@@ -132,8 +132,8 @@ def load_games(conn, seasons=None) -> list[dict]:
         return []
     clocked = {r[0] for r in conn.execute(
         "SELECT game_id FROM nhl_shots GROUP BY game_id HAVING COUNT(t) > 0")}
-    for gid, team, period, t in conn.execute(
-            "SELECT game_id, team, period, t FROM nhl_shots WHERE is_goal = 1 AND period <= 3"):
+    for gid, team, t in conn.execute(
+            "SELECT game_id, team, t FROM nhl_shots WHERE is_goal = 1 AND period <= 3"):
         g = finals.get(gid)
         if g is None or t is None:
             continue

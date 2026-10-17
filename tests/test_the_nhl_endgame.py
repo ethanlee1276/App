@@ -167,7 +167,8 @@ def test_the_verdict_holds_on_an_endgame_league_and_not_on_a_steady_one():
         assert v["holds"], v["why"]
         assert [f["season"] for f in v["folds"]] == [2024, 2025]
         tg = v["folds"][-1]["two_goal_finish"]
-        assert abs(tg["endgame"] - tg["actual"]) < abs(tg["plain"] - tg["actual"]), tg
+        miss_end, miss_plain = abs(tg["endgame"] - tg["actual"]), abs(tg["plain"] - tg["actual"])
+        assert miss_end + 0.03 < miss_plain, ("two-goal finishes: the chain's miss is the smaller by a margin", tg)
         rng = random.Random(12)
         flat = (_season(2023, 300, rng, False) + _season(2024, 300, rng, False)
                 + _season(2025, 300, rng, False))

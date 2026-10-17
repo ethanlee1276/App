@@ -308,8 +308,9 @@ every fit and measurement in the repo mapped to where its answer lands,
 checked against the code (step 135; CD). Then your paste of all of it,
 read line by line, everything it found fixed, and the commands to run
 again (step 136; CE); and what that run found, fixed, with what to run
-next (step 137; CF), the round after (step 138; CG), and the closing
-lines for baseball's run lines and moneylines (step 139; CH).
+next (step 137; CF), the round after (step 138; CG), the closing
+lines for baseball's run lines and moneylines (step 139; CH), and the
+new-models round: the NHL endgame and the referee check (step 140; CI).
 The
 whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
@@ -2242,6 +2243,25 @@ cd /srv/qellys && sudo -u qellys python3 launch.py --fill-game-closes
 cd /srv/qellys && sudo -u qellys python3 launch.py --fill-game-closes --apply
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 doctor.py --skip-tests | grep -A2 "market coverage"
 cd /srv/qellys && sudo -u qellys python3 launch.py --stuck | grep -B1 -A3 -E "gradeable now|next day"
+```
+
+**CI. New models, round one: the NHL endgame** (step 140). Your "create
+models and features that don't exist". The NHL game lines priced
+regulation as two steady scoring rates, which cannot see a side down one
+pulling its goalie late, or the empty-netter that follows, and that is what
+the puck line and the total are built on. The new chain prices the score
+minute by minute, fitted from every regulation goal on the clock, and moves
+nothing until it beats the old model on seasons it never saw. The first
+line stores each goal's clock (it reads the saved play files first, so it
+is mostly free; up to an hour on a cold cache, safe to stop and rerun). The
+second fits, tests and saves; paste its last ten lines. The third says
+whether the gate opened. The NFL referee question was answered in the
+sandbox on 7,340 games (no: the closing line already has it), so there is
+nothing to run for it.
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 timeout 3600 python3 -m engine.nhl.endgame --backfill 6000 > /tmp/endgame_fill.log 2>&1; tail -3 /tmp/endgame_fill.log
+cd /srv/qellys && sudo -u qellys nice -n 10 timeout 1800 python3 -m engine.nhl.endgame --save | tail -10
+cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nhl | grep endgame
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
