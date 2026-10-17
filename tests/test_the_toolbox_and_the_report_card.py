@@ -144,6 +144,61 @@ def test_the_slate_sizer_bets_less_on_bets_that_lose_together():
     assert got["none"]["joint"][0] == 0, "no edge, no stake"
 
 
+def test_the_strategy_lab_reads_the_headline_record_compactly():
+    """ledger.lab_rows: the headline record's settled, staked rows, oldest
+    first, each saying which half of the record it is, nothing a record
+    page does not already show; a benched league and a row before the
+    epoch stay out; the server hands it out ungated and cached."""
+    t = Path(tempfile.mkdtemp())
+    L = ledger.connect(t / "l.db")
+    rows = [("2026-09-01", "nfl", "rec_yds", "OVER", -110, 0.61, "won", 0.91, 1.0, "main"),
+            ("2026-09-02", "cfb", "spread", "OVER", 105, 0.55, "lost", -1.0, 1.0, "likely"),
+            ("2026-09-03", "wnba", "pts", "UNDER", -115, 0.6, "won", 0.87, 1.0, "main"),
+            ("2026-07-01", "nfl", "rec_yds", "OVER", -110, 0.6, "won", 0.91, 1.0, "main"),
+            ("2026-09-04", "nfl", "rec_yds", "OVER", -110, 0.6, "open", 0.0, 1.0, "main")]
+    for d, sp, mk, sd, o, hp, st, u, su, cat in rows:
+        L.execute("INSERT INTO bets (ts, sport, date, game_day, player, market, side, line, odds, hit_prob, status, "
+                  "pnl_units, stake_units, stake_dollars, category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+                  (f"{d}T12:00:00", sp, d, d, "P", mk, sd, 1.5, o, hp, st, u, su, cat))
+    L.commit()
+    got = ledger.lab_rows(L)
+    cols = got["cols"]
+    assert cols == ["day", "sport", "kind", "market", "side", "odds", "claimed", "result", "units", "staked", "book"]
+    assert [r[cols.index("sport")] for r in got["rows"]] == ["nfl", "cfb"], got["rows"]
+    first, second = got["rows"]
+    assert first[cols.index("kind")] == "prop" and second[cols.index("kind")] == "line"
+    assert first[cols.index("book")] == "edge" and second[cols.index("book")] == "likely"
+    assert first[cols.index("result")] == "w" and second[cols.index("result")] == "l"
+    src = (ROOT / "server.py").read_text(encoding="utf-8")
+    assert 'if parsed.path in ("/api/record/lab", "/api/record/lab/"):' in src
+    i = src.index("def _record_lab(self):")
+    assert "_LAB_CACHE" in src[i:i + 1600] and "L.lab_rows(conn)" in src[i:i + 1600]
+
+
+def test_the_strategy_lab_says_how_much_luck_explains():
+    got = _node("""
+      const cols = ['day','sport','kind','market','side','odds','claimed','result','units','staked','book'];
+      let s = 7; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+      const mk = (hit, n) => { const out = []; for (let i = 0; i < n; i++) { const w = r() < hit;
+        out.push(['2026-09-' + String(1 + i % 28).padStart(2, '0'), i % 3 ? 'nfl' : 'cfb', 'prop', 'rec_yds',
+                  i % 2 ? 'OVER' : 'UNDER', -110, 0.6, w ? 'w' : 'l', w ? 100 / 110 : -1, 1, 'edge']); } return out; };
+      const good = mk(0.62, 600), coin = mk(0.5, 600);
+      process.stdout.write(JSON.stringify({
+        good: X.labStats(good, cols), coin: X.labStats(coin, cols), again: X.labStats(good, cols),
+        unders: X.labFilter(good, cols, {side: 'under'}).length, cfb: X.labFilter(good, cols, {sport: 'cfb'}).length,
+        shorter: X.labFilter(good, cols, {minOdds: '-105'}).length, chance: X.labFilter(good, cols, {minChance: 65}).length,
+        none: X.labStats([], cols)}));""")
+    if got is None:
+        return
+    g, c = got["good"], got["coin"]
+    assert g["roi"] > 0.08 and g["luck"] < 0.01, "62% at -110 over 600 bets: luck rarely does that"
+    assert c["luck"] > 0.5, "a coin at -110 is what luck does"
+    assert g["lo"] < g["roi"] < g["hi"] and g["drawdown"] > 0
+    assert g == got["again"], "the luck check is seeded"
+    assert got["unders"] == 300 and got["cfb"] == 200 and got["shorter"] == 0 and got["chance"] == 0
+    assert got["none"] is None
+
+
 def test_every_calculator_draws_its_numbers():
     """Each card's inputs, read the way the page reads them, give text."""
     got = _node("""

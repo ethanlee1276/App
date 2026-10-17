@@ -7460,6 +7460,55 @@ def settled_page(conn, sport: str | None = None, kind: str | None = None,
             "limit": SETTLED_PAGE_SIZE}
 
 
+#: The most rows the strategy lab is handed in one answer (newest kept).
+LAB_LIMIT = 20000
+
+
+def lab_rows(conn, limit: int = LAB_LIMIT) -> dict:
+    """Every settled pick of the headline record, compact, for the
+    strategy lab (js/extras.js labHTML): ``{"cols": [...], "rows": [[...]]}``.
+
+    Ethan, 2026-10-17: "invent new tools ... make our website better". The
+    lab lets a reader test a rule — "college unders priced −150 or better"
+    — against every pick we have graded, and says how much of what it
+    finds luck could have produced. THE SAME ROWS AS THE HEADLINE
+    (`settled_page`): POOLED_BOOKS, staked, settled, on or after
+    RECORD_EPOCH, benched leagues out. Each row says which half of the
+    record it is (`edge` or `likely`), and carries only what the record
+    page already shows: the day, league, kind of market, side, price, our
+    chance, the result and the units. Oldest first, so the lab's running
+    total reads left to right."""
+    books, bargs = books_sql(POOLED_BOOKS)
+    where = ("WHERE status IN ('won','lost','push') AND stake_units > 0 "
+             f"AND {books} AND date >= ?")
+    args: list = [*bargs, RECORD_EPOCH]
+    ex = tuple(str(x).lower() for x in BENCHED_SPORTS)
+    if ex:
+        where += f" AND LOWER(sport) NOT IN ({','.join('?' * len(ex))})"
+        args += list(ex)
+    rows = conn.execute(
+        f"SELECT {day_expr()} AS day, sport, market, side, odds, hit_prob, status, pnl_units, "
+        "stake_units, category FROM bets " + where + " ORDER BY day DESC, id DESC LIMIT ?",
+        (*args, int(limit))).fetchall()
+    out = []
+    for r in reversed(rows):
+        try:
+            odds = int(r["odds"])
+        except (TypeError, ValueError):
+            continue
+        if abs(odds) < 100:
+            continue
+        out.append([str(r["day"] or "")[:10], str(r["sport"] or "").lower(),
+                    "line" if r["market"] in GAME_MARKETS else "prop", str(r["market"] or ""),
+                    str(r["side"] or "").upper()[:5], odds,
+                    round(float(r["hit_prob"]), 4) if r["hit_prob"] is not None else None,
+                    str(r["status"])[0], round(float(r["pnl_units"] or 0.0), 4),
+                    round(float(r["stake_units"] or 0.0), 4),
+                    "likely" if r["category"] in LIKELY_HALF else "edge"])
+    return {"cols": ["day", "sport", "kind", "market", "side", "odds", "claimed", "result",
+                     "units", "staked", "book"], "rows": out, "epoch": RECORD_EPOCH}
+
+
 def settled_on(conn, date: str, sport: str | None = None,
                categories: tuple | None = None) -> list[dict]:
     """Every settled pick on one slate date — the profit calendar's tap.

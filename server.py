@@ -1075,6 +1075,9 @@ def sleeper_cache_name(path: str, cache_dir=None, cap: int = SLEEPER_CACHE_CAP) 
 _UNSUB_IN_LOG = re.compile(r"(/unsubscribe/|/unsubscribe/?\?t=)[^\s\"&]+")
 
 
+#: The strategy lab's answer, kept until the journal changes (Handler._record_lab).
+_LAB_CACHE: dict = {}
+
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
     #: (audit 2026-09-30, E-2). Without it a slow client held a worker for
@@ -1222,6 +1225,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._record_day(parse_qs(parsed.query))
         if parsed.path in ("/api/record/bets", "/api/record/bets/"):
             return self._record_bets(parse_qs(parsed.query))
+        if parsed.path in ("/api/record/lab", "/api/record/lab/"):
+            return self._record_lab()
         if parsed.path in ("/api/team", "/api/team/"):
             return self._team(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
@@ -4580,6 +4585,33 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         except Exception:                                    # noqa: BLE001
             return self._send(503, b'{"error":"record unavailable"}', ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _record_lab(self):
+        """Every settled pick of the headline record, compact — the strategy
+        lab's whole input (ledger.lab_rows; the lab itself runs in the page).
+
+        NOT GATED, for the reason `_record_bets` gives: every row is settled
+        and public. Read once per change to the journal and kept in memory,
+        so a page full of readers trying rules costs one query."""
+        try:
+            from engine import ledger as L
+            stamp = os.path.getmtime(str(L.DEFAULT_DB))
+        except Exception:                                    # noqa: BLE001
+            stamp = None
+        hit = _LAB_CACHE.get("body")
+        if hit is not None and _LAB_CACHE.get("stamp") == stamp and stamp is not None:
+            return self._send(200, hit, ".json")
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+            try:
+                body = json.dumps(L.lab_rows(conn), separators=(",", ":")).encode()
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"record unavailable"}', ".json")
+        _LAB_CACHE.update(stamp=stamp, body=body)
+        return self._send(200, body, ".json")
 
     def _explain(self, q):
         """One pick in plain English — engine/explainer, behind a tap.

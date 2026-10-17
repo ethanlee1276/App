@@ -339,6 +339,109 @@
              allLose, indepLose, patterns: pats.length };
   }
 
+  // ---- the strategy lab ------------------------------------------------------
+  /* Test a rule against every pick the record has graded, honestly. A rule
+     found by looking at the record will always look good on the record —
+     that is what looking does — so beside the ROI it says three things a
+     backtest usually hides:
+
+       * how wide the ROI really is (a 95% range, from the spread of each
+         bet's return on its stake);
+       * whether it held in BOTH halves of the time it covers, in order —
+         a rule fitted to noise tends to work in one;
+       * how often LUCK ALONE does as well: the same bets replayed LUCK_RUNS
+         times, each winning exactly as often as its own price says it
+         should (a fair price, no edge at all). A rule that pure luck beats a
+         third of the time has shown nothing yet. */
+  const LUCK_RUNS = 2000;
+  const LAB = { rows: null, cols: null, loading: null, failed: false };
+  const LAB_COL = (name) => (LAB.cols || []).indexOf(name);
+  function labFilter(rows, cols, f = {}) {
+    const ix = (n) => cols.indexOf(n);
+    const [D, SP, K, SD, O, C, B] = ["day", "sport", "kind", "side", "odds", "claimed", "book"].map(ix);
+    return (rows || []).filter((r) => {
+      if (f.book && f.book !== "all" && r[B] !== f.book) return false;
+      if (f.sport && f.sport !== "all" && r[SP] !== f.sport) return false;
+      if (f.kind && f.kind !== "all" && r[K] !== f.kind) return false;
+      if (f.side && f.side !== "any" && !String(r[SD] || "").startsWith(f.side === "under" ? "UNDER" : "OVER")) return false;
+      const d = dec(r[O]);
+      if (f.minOdds != null && d && d < dec(f.minOdds)) return false;    // shorter than the floor
+      if (f.maxOdds != null && d && d > dec(f.maxOdds)) return false;    // longer than the ceiling
+      if (f.minChance != null && !(r[C] != null && r[C] * 100 >= f.minChance)) return false;
+      if (f.maxChance != null && !(r[C] != null && r[C] * 100 <= f.maxChance)) return false;
+      if (f.since && String(r[D]) < f.since) return false;
+      return true;
+    });
+  }
+  function labStats(rows, cols, seed = 5) {
+    const ix = (n) => cols.indexOf(n);
+    const [O, R, U, S, C] = ["odds", "result", "units", "staked", "claimed"].map(ix);
+    const n = rows.length;
+    if (!n) return null;
+    let w = 0, l = 0, p = 0, units = 0, staked = 0, peak = 0, dd = 0, run = 0, claimSum = 0, claimN = 0;
+    const rets = [], curve = [];
+    rows.forEach((r) => {
+      if (r[R] === "w") w += 1; else if (r[R] === "l") l += 1; else p += 1;
+      units += r[U]; staked += r[S];
+      run += r[U]; peak = Math.max(peak, run); dd = Math.max(dd, peak - run);
+      curve.push(run);
+      if (r[S] > 0) rets.push(r[U] / r[S]);
+      if (r[C] != null && r[R] !== "p") { claimSum += r[C]; claimN += 1; }
+    });
+    const roi = staked > 0 ? units / staked : 0;
+    const mean = rets.reduce((a, b) => a + b, 0) / (rets.length || 1);
+    const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mean) * (b - mean), 0) / Math.max(1, rets.length - 1));
+    const half = Math.floor(n / 2);
+    const part = (xs) => { const st = xs.reduce((a, r) => a + r[S], 0); return st > 0 ? xs.reduce((a, r) => a + r[U], 0) / st : null; };
+    // Luck: every bet replayed at its own fair price, LUCK_RUNS times.
+    const rnd = rng(seed);
+    const fair = rows.map((r) => { const d = dec(r[O]); return d ? { q: 1 / d, win: r[S] * (d - 1), lose: -r[S] } : null; });
+    let beat = 0;
+    for (let k = 0; k < LUCK_RUNS; k++) {
+      let u = 0;
+      for (let i = 0; i < n; i++) {
+        const f = fair[i];
+        if (!f || rows[i][R] === "p") continue;
+        u += rnd() < f.q ? f.win : f.lose;
+      }
+      if (u >= units - 1e-9) beat += 1;
+    }
+    const decided = w + l;
+    return { n, w, l, p, units, staked, roi, lo: mean - 1.96 * sd / Math.sqrt(rets.length || 1),
+             hi: mean + 1.96 * sd / Math.sqrt(rets.length || 1), drawdown: dd, curve,
+             first: part(rows.slice(0, half)), second: part(rows.slice(half)),
+             luck: beat / LUCK_RUNS, hit: decided ? w / decided : null, claimed: claimN ? claimSum / claimN : null };
+  }
+  function curveSVG(curve) {
+    if (!curve || curve.length < 2) return "";
+    const W = 320, H = 90, pad = 4;
+    const hi = Math.max(0, ...curve), lo = Math.min(0, ...curve);
+    const X = (i) => pad + (W - 2 * pad) * (i / (curve.length - 1));
+    const Y = (v) => H - pad - (H - 2 * pad) * ((v - lo) / ((hi - lo) || 1));
+    const path = curve.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+    return `<svg class="xt-band" viewBox="0 0 ${W} ${H}" role="img" aria-label="Running units, ${curve.length} bets">
+      <line class="xt-band-start" x1="${pad}" x2="${W - pad}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}"/>
+      <path class="xt-band-mid" d="${path}"/></svg>`;
+  }
+  function labLoad(box) {
+    if (LAB.rows || LAB.loading) return;
+    LAB.loading = fetch("/api/record/lab", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && Array.isArray(d.rows)) { LAB.rows = d.rows; LAB.cols = d.cols; } else LAB.failed = true; })
+      .catch(() => { LAB.failed = true; })
+      .then(() => { LAB.loading = null; const b = document.querySelector('[data-calc="lab"]'); if (b) calc(b); });
+  }
+  function labCardHTML() {
+    const sel = (name, label, opts) => `<label class="xt-f"><span>${label}</span><select data-xc="${name}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select></label>`;
+    return calcCard("lab", "Strategy lab", "Test a rule against every pick we have graded — and see how much of what it finds luck alone could have done.",
+      `${sel("lb-book", "Book", [["all", "Whole record"], ["edge", "Edge picks"], ["likely", "Most Likely"]])}
+       ${sel("lb-sport", "League", [["all", "Every league"], ["nfl", "NFL"], ["cfb", "College"], ["mlb", "MLB"], ["nba", "NBA"], ["nhl", "NHL"], ["ufc", "UFC"]])}
+       ${sel("lb-kind", "Kind", [["all", "All kinds"], ["prop", "Props"], ["line", "Game lines"]])}
+       ${sel("lb-side", "Side", [["any", "Either"], ["over", "Overs / yes"], ["under", "Unders"]])}
+       ${field("Price from", "lb-o1", "", 'placeholder="−250"')}${field("Price to", "lb-o2", "", 'placeholder="+150"')}
+       ${field("Our chance from %", "lb-c1", "", 'placeholder="—"')}${field("to %", "lb-c2", "", 'placeholder="—"')}
+       <label class="xt-f"><span>Since</span><input data-xc="lb-since" type="date"></label>`);
+  }
   // ---- the college upset meter ------------------------------------------
   /* Tonight's college underdogs, from the moneyline cards the board
      already publishes: the dog is the side the market's fair price makes
@@ -592,6 +695,36 @@
         ${ev == null ? "" : `<p class="xt-note">At ${pctTxt(p)} the bet ${ev >= 0 ? "earns" : "loses"} ${pctTxt(Math.abs(ev))} of the stake on average${ev >= 0 ? "" : " — the price wants more than you give it"}.</p>`}`;
     },
   };
+  CALC.lab = function (box) {
+    if (!LAB.rows) {
+      if (LAB.failed) return `<p class="xt-hint">The record could not be read just now — try again in a minute.</p>`;
+      labLoad(box);
+      return `<p class="xt-hint">Reading the record…</p>`;
+    }
+    const f = { book: val(box, "lb-book"), sport: val(box, "lb-sport"), kind: val(box, "lb-kind"), side: val(box, "lb-side"),
+                minOdds: val(box, "lb-o1") === "" ? null : val(box, "lb-o1"), maxOdds: val(box, "lb-o2") === "" ? null : val(box, "lb-o2"),
+                minChance: num(val(box, "lb-c1")), maxChance: num(val(box, "lb-c2")), since: val(box, "lb-since") };
+    const rows = labFilter(LAB.rows, LAB.cols, f);
+    const r = labStats(rows, LAB.cols);
+    if (!r) return `<p class="xt-hint">No graded pick fits that rule.</p>`;
+    const roiTxt = (x) => (x == null ? "—" : `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1)}%`);
+    const thin = r.n < 100;
+    const both = r.first != null && r.second != null && Math.sign(r.first) === Math.sign(r.second);
+    const luckWord = r.luck <= 0.05 ? `<b class="pos">Luck rarely does this well</b> — only ${pctTxt(r.luck, 0)} of fair-price replays matched it.`
+      : r.luck <= 0.2 ? `Luck matches it ${pctTxt(r.luck, 0)} of the time — promising, not proven.`
+      : `<b class="neg">Luck alone does this well ${pctTxt(r.luck, 0)} of the time</b> — nothing shown yet.`;
+    return `<div class="xt-stats">${stat("Bets", r.n.toLocaleString())}${stat("Record", `${r.w}-${r.l}${r.p ? `-${r.p}` : ""}`)}
+        ${stat("Units", `${r.units >= 0 ? "+" : "−"}${Math.abs(r.units).toFixed(2)}`, r.units >= 0 ? "good" : "bad")}
+        ${stat("ROI", roiTxt(r.roi), r.roi >= 0 ? "good" : "bad")}${stat("95% range", `${roiTxt(r.lo)} to ${roiTxt(r.hi)}`)}
+        ${stat("Worst drop", `−${r.drawdown.toFixed(2)}u`, "bad")}</div>
+      ${curveSVG(r.curve)}
+      <p class="xt-note">${luckWord} ${both ? `It made money in both halves of its time (${roiTxt(r.first)}, then ${roiTxt(r.second)}).`
+        : `The halves disagree (${roiTxt(r.first)}, then ${roiTxt(r.second)}) — the kind of split a rule fitted to noise shows.`}
+        ${thin ? " Under a hundred bets: read it as a lead, not a finding." : ""}</p>
+      ${r.claimed != null ? `<p class="xt-fine">We said these would hit ${pctTxt(r.claimed)}; they hit ${pctTxt(r.hit)}.</p>` : ""}
+      <p class="xt-fine">Every pick the record graded since ${esc((LAB.rows[0] || [])[LAB_COL("day")] || "it began")}, at the price we posted. A rule you found by looking will look good here; the luck check and the halves are what keep it honest.</p>`;
+  };
+
   CALC.mid = function (box) {
     const r = middle({ overLine: num(val(box, "md-l1")), overOdds: val(box, "md-o1"), underLine: num(val(box, "md-l2")),
                        underOdds: val(box, "md-o2"), mean: val(box, "md-mu") === "" ? null : num(val(box, "md-mu")),
@@ -1170,7 +1303,8 @@
     const sport = sportNow();
     const own = (SPORT_TOOLS[sport] || []).map((f) => f(board())).join("");
     host.innerHTML = `${own ? `<h2 class="xt-sec">${esc(SPORT_NAME[sport] || sport.toUpperCase())}</h2><div class="xt-grid">${own}</div>` : ""}
-      <h2 class="xt-sec">Every sport · calculators</h2>${calculatorsHTML()}`;
+      <h2 class="xt-sec">Every sport · calculators</h2>${calculatorsHTML()}
+      <h2 class="xt-sec">The record · strategy lab</h2><div class="xt-grid">${labCardHTML()}</div>`;
     host.querySelectorAll("[data-calc]").forEach(calc);
   }
 
@@ -1352,7 +1486,7 @@
   function gameLab(el, sport, g) { if (el) loadLab().then((L) => L && L.gameLab(el, sport, g)); }
 
   window.QBExtras = { tools, reportCard, riskView, riskHTML, dec, implied, toAm, decToAm, noVig, parlay, kelly, upsets, upsetTier,
-                      rng, phi, phiInv, middle, bankrollSim, slateKelly, slatePatterns, bandSVG,
+                      rng, phi, phiInv, middle, bankrollSim, slateKelly, slatePatterns, bandSVG, labFilter, labStats, LAB,
                       report, clv, tally, verdict, calculatorsHTML, upsetsHTML, reportHTML, CALC,
                       spotChips, spotsHTML, whatifHTML, whatifOut, goalies, goaliesHTML, linesHTML, fightPaths, pathsHTML,
                       bookModel, bookLinesHTML, bookLines, replayFacts, replayHTML,
