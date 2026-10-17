@@ -419,6 +419,20 @@ wired; nflverse fills the referee only after the game in any case. NBA and
 NHL crews wait on closing totals the box has only just started keeping
 (engine/lineopen); the same script shape answers them when there is a season.
 
+## Team volume from the line — measured, small, recorded 2026-10-17
+
+The loss autopsy names usage/volume the step most often wrong, so
+`volumecheck.py` asked how much of an NFL team's volume the line knows
+before kickoff. On 4,316 team-games (2016-2025), held out by season:
+adding the line's implied team points and the spread to a team's own and
+its opponent's recent volume cuts the error 0.5-1.5% (dropbacks better in
+6 of 7 seasons, carries 7 of 7). Each implied point is about +0.4
+dropbacks and −0.2 carries; each point of favour −0.2 dropbacks, +0.26
+carries. The floor is high (about eight dropbacks a game whatever is
+known), so the volume the autopsy blames is mostly the player's share, not
+the team's total. Not wired: the projection's script step already carries
+the spread's part, and a 1% gain counted twice is worse than none.
+
 ## In-game live win probability — SHIPPED 2026-09-09
 
 **This entry used to be three lines below, under "needs data we do not
