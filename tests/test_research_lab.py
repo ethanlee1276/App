@@ -123,7 +123,7 @@ def test_the_ridge_recovers_a_known_line():
     w = E2.ridge(X, y, 0.0)
     assert all(abs(a - b) < 1e-6 for a, b in zip(w, (2.0, 3.0, -0.5))), w
     shrunk = E2.ridge(X, y, 1000.0)
-    assert abs(shrunk[1]) < abs(w[1]), "the penalty pulls the slopes in"
+    assert shrunk[1] < w[1] - 0.5, (shrunk[1], w[1], "the penalty pulls the slope in, well clear of a rounding")
     flat = E2.ridge(X, y, 1e9)
     assert abs(flat[0] - sum(y) / len(y)) < 1e-3, "the intercept is never penalised: it lands on the mean"
 
