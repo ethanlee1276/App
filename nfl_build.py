@@ -1157,6 +1157,16 @@ def main() -> None:
         _t = result["likely_board"]["tiers"]
         print(f"  Most Likely board: {len(result['likely_board']['rows'])} pick(s) — "
               f"{_t.get('top', 0)} top, {_t.get('strong', 0)} strong, {_t.get('look', 0)} worth a look")
+        # THE PRICE ON THE BOARD (likelyboard.trust_price), said every build so
+        # a rule that moves nothing can never pass for one that is working.
+        _pt = result["likely_board"].get("price_trust") or {}
+        if _pt.get("error"):
+            print(f"  ⚠️  price trust skipped: {_pt['error']}")
+        elif _pt:
+            print(f"  Price trust {'on' if _pt.get('on') else 'OFF'}: {_pt.get('rows', 0)} pick(s) checked, "
+                  f"{_pt.get('no_quotes', 0)} with no book quote, {_pt.get('thin', 0)} under 3 books at the line, "
+                  f"{_pt.get('fielded', 0)} with a 3-book field, {_pt.get('above', 0)} above it, "
+                  f"{_pt.get('moved', 0)} shown at the price ({_pt.get('posted', 0)} already posted)")
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  one Most Likely board skipped: {_exc}")
     _mem("most likely board", args.memtrace)

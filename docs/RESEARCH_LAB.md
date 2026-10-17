@@ -527,14 +527,15 @@ market at pick time) is written and tested, and waits on one box command.
 
 ```
 cd /srv/qellys && git log --oneline -1
-cd /srv/qellys && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),round(r.get('model_prob',0),3)) for r in t[:8]]"
+cd /srv/qellys && git log -1 --format='%h %ci %s' && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};print('price trust:',b.get('price_trust','(none: this board was built by older code)'));rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),r.get('trust_from'),'->',r.get('model_prob')) for r in t[:8]]"
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -16
 ```
 
 All read-only.
 
 1. The first line shows the box has today's code.
-2. The second counts the NFL board picks now shown at the market's number.
-   Run it after the next NFL build.
+2. The second shows the NFL board's price counts (checked, no quote, under
+   three books, fielded, above, moved) and the picks it moved. Run it after
+   the next NFL build; the file time must be later than the commit.
 3. The third is EXP-001c. Run it Tuesday or later; it now prints how many
    more weeks its decision needs.

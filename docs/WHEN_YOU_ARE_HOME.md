@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2374,6 +2374,34 @@ read-only:
 cd /srv/qellys && git log --oneline -1
 cd /srv/qellys && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),round(r.get('model_prob',0),3)) for r in t[:8]]"
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -16
+```
+
+**CO. The price rule reaches posted picks** (step 146).
+
+Your CN paste read 247 board picks, 0 at the price. The cause:
+
+- A pick counts as posted once it has been on a previous build, and that
+  is nearly every pick by Saturday evening.
+- The first cut skipped posted picks.
+- The board also takes a posted pick's number back from the list on every
+  build. So the rule could touch a pick on its first build only, then
+  lose it.
+
+The fix:
+
+- A posted pick keeps its line, price and book as before. Its chance is
+  today's on every build, and the price now judges that chance too.
+- The list shows the same number (your one-bet-one-chance rule).
+- The board now carries its own counts: picks checked, picks with no book
+  quote, picks with under three books at the line, picks with a field,
+  picks above it, and picks moved. A zero now says why it is zero.
+
+Run this after the box has pulled and the next NFL build has run (about
+half an hour). The first line should name `The price rule reaches posted
+picks`, and the file time should be later than that commit:
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};print('price trust:',b.get('price_trust','(none: this board was built by older code)'));rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),r.get('trust_from'),'->',r.get('model_prob')) for r in t[:8]]"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

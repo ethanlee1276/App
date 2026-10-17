@@ -79,9 +79,54 @@ def test_only_where_the_test_passed_and_only_while_switched_on():
             os.environ[LB.PRICE_TRUST_ENV] = was
 
 
-def test_a_posted_pick_keeps_the_number_it_went_up_at():
+def test_a_posted_pick_is_judged_by_the_price_too():
+    """A posted pick keeps its line, price and book; its chance is today's on
+    every build, so the price judges it. Skipping posted picks left the box's
+    first board after the change at 247 picks, none at the price."""
     r = _row(prob=0.80, locked=True)
-    assert LB.trust_price([r], _result([]), "nfl") == 0 and r["model_prob"] == 0.80
+    stats = {}
+    assert LB.trust_price([r], _result([]), "nfl", stats=stats) == 1
+    assert abs(r["model_prob"] - round(_field_over(), 4)) < 1e-9 and r["line"] == 6.5 and r["odds"] == -190
+    assert stats == {"on": True, "rows": 1, "no_quotes": 0, "thin": 0, "fielded": 1, "above": 1, "moved": 1,
+                     "posted": 1}
+
+
+def test_the_handoff_keeps_the_price_on_a_posted_pick_and_the_list_shows_it():
+    """harmonize gives a posted pick the list's number back; the price judges
+    that number again, and the list row shows what the board shows."""
+    listed = _row(prob=0.82, locked=True)
+    res = _result([listed])
+    board = LB.build(res, sport="nfl", calibration={}, band_verdict=None)
+    res["likely_board"] = board
+    (b,) = board["rows"]
+    LB.harmonize(res)
+    want = round(_field_over(), 4)
+    assert abs(b["model_prob"] - want) < 1e-9 and b["trust_from"] == 0.82
+    assert abs(listed["model_prob"] - want) < 1e-9 and listed["listed_prob"] == 0.82
+    assert "de-vigged price says" in listed["trust_note"]
+    assert board["price_trust"]["moved"] == 1 and board["price_trust"]["posted"] == 1
+
+
+def test_the_counts_say_where_a_pick_without_a_field_fell():
+    stats = {}
+    rows = [_row(prob=0.80), dict(_row(prob=0.80), line=9.5), dict(_row(prob=0.80), player="Nobody Quoted")]
+    LB.trust_price(rows, _result([]), "nfl", stats=stats)
+    assert (stats["fielded"], stats["thin"], stats["no_quotes"]) == (1, 1, 1), stats
+
+
+def test_switched_off_the_build_says_so():
+    was = os.environ.get(LB.PRICE_TRUST_ENV)
+    os.environ[LB.PRICE_TRUST_ENV] = "off"
+    try:
+        board = LB.build(_result([_row(prob=0.80)]), sport="nfl", calibration={}, band_verdict=None)
+    finally:
+        if was is None:
+            os.environ.pop(LB.PRICE_TRUST_ENV, None)
+        else:
+            os.environ[LB.PRICE_TRUST_ENV] = was
+    assert board["price_trust"] == {"on": False, "rows": 0, "no_quotes": 0, "thin": 0, "fielded": 0, "above": 0,
+                                    "moved": 0, "posted": 0}
+    assert board["rows"][0]["model_prob"] == 0.80
 
 
 def test_the_board_checks_tiers_and_ranks_on_the_price_number():

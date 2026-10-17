@@ -414,37 +414,74 @@ def market_chance(r: dict, quotes: dict):
     return (1.0 - fair_over if under else fair_over), books
 
 
-def trust_price(rows: list, result: dict, sport: str) -> int:
-    """Give the price back the part of our chance above it (PRICE_TRUST).
+def give_back(r: dict) -> bool:
+    """Apply the row's rule (``trust_rule``, set by `trust_price` where the
+    books' field was found) to its chance as it stands; True when it moved.
     The chance before rides along as ``trust_from`` (journaled, so the rule
     can be re-tested on picks made after it went live) and the first claim
-    as ``board_raw_prob``, as every correction here keeps it. A posted pick
-    keeps the number it went up at. Returns how many moved."""
+    as ``board_raw_prob``, as every correction here keeps it."""
+    rule, market = r.get("trust_rule"), r.get("market_prob")
+    if not rule or market is None or r.get("model_prob") is None:
+        return False
+    w, t = rule
+    ours, market = float(r["model_prob"]), float(market)
+    shown = ours - w * max(0.0, ours - market - t)
+    if shown >= ours - 1e-9:
+        return False
+    r["trust_from"] = round(ours, 4)
+    r.setdefault("board_raw_prob", ours)
+    r["model_prob"] = round(shown, 4)
+    r["trust_note"] = (f"we said {ours:.0%}; {r.get('market_books') or 3} books' de-vigged price says "
+                       f"{market:.0%}, and on this board the price has been closer whenever we ran above it, "
+                       f"so we show the price's number")
+    return True
+
+
+def trust_price(rows: list, result: dict, sport: str, stats: dict | None = None) -> int:
+    """Give the price back the part of our chance above it (PRICE_TRUST);
+    returns how many moved. ``stats`` (optional) is filled with what the
+    build log prints: picks checked, picks with no book quote at all, picks
+    whose line has under three two-sided books, picks with a books' field,
+    picks above it, picks moved, and how many of those were already posted.
+
+    A POSTED PICK TOO. A posted pick (``locked``) keeps its number, price
+    and book, and its chance is today's on every build (likely._locked) —
+    so today's chance is what the price judges. Skipping posted picks, as
+    the first cut did, left the rule touching a pick on its first build
+    only: on the box's first board after it shipped, 247 picks and none at
+    the price (Ethan's paste, 2026-10-17). `harmonize` applies it again
+    after the board takes a posted pick's number back from the list."""
     rule = price_trust_rule(sport)
+    if stats is not None:
+        stats.update(on=bool(rule), rows=0, no_quotes=0, thin=0, fielded=0, above=0, moved=0, posted=0)
     if not rule:
         return 0
-    w, t = rule
+    from .sources.oddsapi import normalize_name
     quotes = book_quotes(result, rows)
     moved = 0
     for r in rows:
-        if r.get("kind") == "game" or r.get("model_prob") is None or r.get("locked"):
+        if r.get("kind") == "game" or r.get("model_prob") is None:
             continue
+        if stats is not None:
+            stats["rows"] += 1
         got = market_chance(r, quotes)
         if got is None:
+            if stats is not None:
+                # No book quote for this player and market at all, or quotes
+                # but under three books pricing both sides at this line.
+                key = (normalize_name(r.get("player") or ""), r.get("market"))
+                stats["thin" if key in quotes else "no_quotes"] += 1
             continue
         market, books = got
-        ours = float(r["model_prob"])
-        r["market_prob"], r["market_books"] = round(market, 4), books
-        shown = ours - w * max(0.0, ours - market - t)
-        if shown >= ours - 1e-9:
-            continue
-        r["trust_from"] = round(ours, 4)
-        r.setdefault("board_raw_prob", ours)
-        r["model_prob"] = round(shown, 4)
-        r["trust_note"] = (f"we said {ours:.0%}; {books} books' de-vigged price says {market:.0%}, "
-                           f"and on this board the price has been closer whenever we ran above it, "
-                           f"so we show the price's number")
-        moved += 1
+        r["market_prob"], r["market_books"], r["trust_rule"] = round(market, 4), books, list(rule)
+        if stats is not None:
+            stats["fielded"] += 1
+            stats["above"] += float(r["model_prob"]) > market + 1e-9
+        if give_back(r):
+            moved += 1
+            if stats is not None:
+                stats["moved"] += 1
+                stats["posted"] += bool(r.get("locked"))
     return moved
 
 
@@ -688,10 +725,11 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     # "yes nfl board"). Last, so it judges the number every correction above
     # has already set — the number pricetrust tested — and the checks, the
     # tier and the order all read what the page shows.
+    trust_stats: dict = {}
     try:
-        trust_price([pool[k] for k in order], result, sport)
-    except Exception:                                        # noqa: BLE001
-        pass
+        trust_price([pool[k] for k in order], result, sport, stats=trust_stats)
+    except Exception as exc:                                 # noqa: BLE001
+        trust_stats["error"] = f"{type(exc).__name__}: {exc}"
     rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
     for k in order:
         r = pool[k]
@@ -765,7 +803,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     rank = {t: i for i, (t, _) in enumerate(TIERS)}
     rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
     return {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
-            "capped": capped, "held": held}
+            "capped": capped, "held": held, "price_trust": trust_stats}
 
 
 def _past(odds, cap: int) -> bool:
@@ -893,6 +931,13 @@ def harmonize(result: dict) -> int:
             if p is not None and abs(float(p) - float(q)) > 1e-9:
                 b.setdefault("corrected_prob", p)
                 b["model_prob"] = q
+            # THE PRICE ON A POSTED PICK (`trust_price`): the list's number
+            # is today's chance, so the price judges it here too, and the
+            # list shows what the board shows — one bet, one chance.
+            if give_back(b):
+                src.setdefault("listed_prob", q)
+                src["model_prob"] = b["model_prob"]
+                src["trust_note"] = b["trust_note"]
             w = matchup_warning(b)
             if w:
                 src["matchup_warning"] = w
