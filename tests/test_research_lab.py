@@ -28,14 +28,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "research"))
 
-import registry as R                                             # noqa: E402
-import exp1_two_stage as E1                                      # noqa: E402
-import exp2_interactions as E2                                   # noqa: E402
-import exp3_totals as E3                                         # noqa: E402
-import exp3_props_box as E3B                                     # noqa: E402
-import audit_box as AB                                           # noqa: E402
+from research import registry as R                               # noqa: E402
+from research import exp1_two_stage as E1                        # noqa: E402
+from research import exp2_interactions as E2                     # noqa: E402
+from research import exp3_totals as E3                           # noqa: E402
+from research import exp3_props_box as E3B                       # noqa: E402
+from research import audit_box as AB                             # noqa: E402
 
 
 # --- the registry -------------------------------------------------------------
