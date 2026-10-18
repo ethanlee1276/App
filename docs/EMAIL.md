@@ -59,7 +59,7 @@ What Gmail is NOT used for: the digests. A personal Gmail account sends
 a few hundred messages a day, and a mailing list through it is how an
 account gets suspended — taking the resets with it. `mailer.bulk_ok()` is
 False on Gmail, the Account page does not offer the digests there, and
-`digest.py --send` refuses. Reset emails are capped at 150 a day
+`digest.py --send` refuses. Reset emails are capped at 90 a day
 (`server.RESET_MAIL_PER_DAY`) for the same reason. The digests still
 need the provider below.
 
