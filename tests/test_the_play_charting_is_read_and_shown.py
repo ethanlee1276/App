@@ -123,6 +123,14 @@ def test_the_reads_quote_the_charting_and_the_tracking_as_notes():
                                         "play_action_rate": 0.191}, chi, None)
     assert qb[0] == "Charted: 1 interception-worthy throw on 62 attempts (2%), 69% catchable, play action on 19% of dropbacks"
     assert G.charting_notes("wr", "CHI", None, None, None) == [], "nothing charted, nothing said"
+    # A figure that rounds to nothing carries no sign: "-0.0 over expected"
+    # read as a fault on the first full board (2026-10-19).
+    flat = G.charting_notes("qb", "CHI", None, None, {"completion_percentage_above_expectation": -0.04,
+                                                      "completion_percentage_above_expectation_rank": 25,
+                                                      "n_ranked": 43, "avg_time_to_throw": 2.54})
+    assert flat[0] == "Tracking: completion rate 0.0 over expected (25th of 43 QBs), 2.54s to throw"
+    yac = G.charting_notes("wr", "CHI", None, None, dict(track, avg_yac_above_expectation=-0.03))
+    assert yac[0].endswith(", 0.0 yd after the catch over expected")
     # A read's notes carry them: the read function threads all three.
     src = (ROOT / "engine" / "gamescan.py").read_text(encoding="utf-8")
     assert "notes += charting_notes(group, opp, charting, charting_def, tracking)" in src

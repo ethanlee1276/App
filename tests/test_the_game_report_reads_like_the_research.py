@@ -365,6 +365,15 @@ def test_the_box_command_prints_a_game():
     assert "GB@DET" in out.getvalue()
 
 
+def test_a_figure_that_rounds_to_nothing_has_no_sign():
+    """The Steelers' defense read "−0.00 · 17th" in the units table on
+    the first full board: a sign on zero reads as a fault."""
+    assert [R._signed(v) for v in (-0.004, 0.004, 0)] == ["0.00"] * 3
+    assert R._signed(-0.18) == "\u22120.18" and R._signed(0.19) == "+0.19"
+    assert R._num(-0.04) == "0" and R._num(3.4) == "3.4" and R._pct(-0.0004) == "0%"
+    assert R._fmt(-0.004, "epa") == "0.00"
+
+
 def test_the_game_page_draws_it_and_steps_the_others_aside():
     for needle in ("function gameReportHTML(g, extras)", "function loadReport()",
                    "d.locked && d.locked.game_reports",

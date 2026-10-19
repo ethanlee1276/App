@@ -183,13 +183,15 @@ def _num(x, nd: int = 1) -> str:
     v = _f(x)
     if v is None:
         return ""
-    s = f"{v:.{nd}f}"
+    s = f"{v + 0.0 if round(v, nd) else 0.0:.{nd}f}"
     return s.rstrip("0").rstrip(".") if "." in s else s
 
 
 def _pct(x, nd: int = 0) -> str:
     v = _f(x)
-    return "" if v is None else f"{v * 100:.{nd}f}%"
+    if v is None:
+        return ""
+    return f"{v * 100 if round(v * 100, nd) else 0.0:.{nd}f}%"
 
 
 def _minus(s: str) -> str:
@@ -198,8 +200,13 @@ def _minus(s: str) -> str:
 
 
 def _signed(x, nd: int = 2) -> str:
+    """+0.19 / −0.18, and 0.00 for a figure that rounds to nothing: a sign
+    on zero ("−0.00", "+0.00") reads as a fault."""
     v = _f(x)
-    return "" if v is None else _minus(f"{v:+.{nd}f}")
+    if v is None:
+        return ""
+    s = f"{v:+.{nd}f}"
+    return s[1:] if float(s) == 0 else _minus(s)
 
 
 def _fmt(x, how: str) -> str:

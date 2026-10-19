@@ -730,6 +730,14 @@ def _pct(v) -> str:
     return f"{float(v):.0%}" if v is not None else "—"
 
 
+def _plus(v, nd: int) -> str:
+    """A signed figure (+0.41, -0.12), but a figure that rounds to nothing
+    is 0.0: a reader shown "-0.0 over expected" sees a fault, not a
+    quarterback exactly at his expected rate."""
+    s = f"{float(v):+.{nd}f}"
+    return s[1:] if float(s) == 0 else s
+
+
 def charting_notes(group: str, opp: str, charting: dict | None, charting_def: dict | None,
                    tracking: dict | None) -> list:
     """The read's charted and tracked lines, in the reader's words.
@@ -751,12 +759,12 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
             out.append(f"Tracking: {t['avg_separation']:.1f} yd of separation at the throw "
                        f"({_ord(t.get('avg_separation_rank'))} of {t['n_ranked']} {group.upper()}s), "
                        f"{t['avg_cushion']:.1f} yd of cushion, "
-                       f"{t['avg_yac_above_expectation']:+.1f} yd after the catch over expected")
+                       f"{_plus(t['avg_yac_above_expectation'], 1)} yd after the catch over expected")
         if d.get("blitz_rate") is not None:
             out.append(f"{opp} blitzes on {_pct(d['blitz_rate'])} of dropbacks this season")
     elif group == "rb":
         if t.get("rush_yards_over_expected_per_att") is not None and t.get("n_ranked"):
-            out.append(f"Tracking: {t['rush_yards_over_expected_per_att']:+.2f} rushing yards over "
+            out.append(f"Tracking: {_plus(t['rush_yards_over_expected_per_att'], 2)} rushing yards over "
                        f"expected a carry ({_ord(t.get('rush_yards_over_expected_per_att_rank'))} of "
                        f"{t['n_ranked']} RBs), sees 8+ in the box on "
                        f"{t['percent_attempts_gte_eight_defenders']:.0f}% of carries")
@@ -770,7 +778,7 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
                        f"{_pct(c.get('catchable_rate'))} catchable, play action on "
                        f"{_pct(c.get('play_action_rate'))} of dropbacks")
         if t.get("completion_percentage_above_expectation") is not None and t.get("n_ranked"):
-            out.append(f"Tracking: completion rate {t['completion_percentage_above_expectation']:+.1f} "
+            out.append(f"Tracking: completion rate {_plus(t['completion_percentage_above_expectation'], 1)} "
                        f"over expected ({_ord(t.get('completion_percentage_above_expectation_rank'))} of "
                        f"{t['n_ranked']} QBs), {t['avg_time_to_throw']:.2f}s to throw")
         if d.get("blitz_rate") is not None:
