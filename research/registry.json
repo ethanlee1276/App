@@ -859,6 +859,35 @@
    "failure_modes": "within-season spread includes moves the books foresee, so the curve may be a little wide (a FAIL then means not shown, not disproved); rushing attempts' spread drifts with the mean; passing touchdowns are read as Poisson (a little wide)",
    "next": "Run on the box when Ethan is home; if it passes and he says yes, the board extends trust_price to thin picks through engine/fieldcurve.field_chance.",
    "status": "IMPLEMENTED"
+  },
+  {
+   "id": "EXP-006",
+   "sport": "nfl",
+   "market": "player props: receptions",
+   "proposed": "2026-10-19",
+   "question": "Does EXP-005's shrink add to the two-stage model's gain on receptions, or is B's gain the shrink already?",
+   "equation": "B' = B's distribution moved to m' = max(0.05, m_B + c0 + c1 m_B); (c0, c1) least squares of (y - m_B) on m_B, 2017-2025 (fitted 2026-10-19: +0.4919, -0.18155)",
+   "variables": "m_B the two-stage model's centre; B fitted on 2017-2025 as EXP-001b",
+   "mechanism": "Both EXP-005 (A's centre too wide) and EXP-001/004 (B's shape better) improved receptions; if B's centre carries the same over-spread, the two should add.",
+   "prior_art": "Shrinkage toward the mean (James-Stein; empirical Bayes) applied to a compound-count forecast.",
+   "novelty": "2",
+   "data": [
+    "SRC-NFLVERSE-PLAYERWEEK"
+   ],
+   "dataset_version": "nflverse weekly 2017-2026",
+   "code": "research/exp6_shrink_b.py",
+   "baseline": "B, the two-stage model",
+   "protocol": "prospective: every 2026 regular-season game after 2026-10-17, read once when all are final with stats; CRPS(B') - CRPS(B) clustered by player-season, 95% upper bound under zero to advance",
+   "primary_metric": "CRPS on EXP-001's receptions grid",
+   "sample_size": "0 rows (season in progress)",
+   "results": [],
+   "decision": {
+    "receptions": "waiting for the season's games"
+   },
+   "multiple_testing": "one test",
+   "failure_modes": "a season's worth of rows only; the shrink line is fitted on seasons B also trains on",
+   "next": "Read at season end, with EXP-001b.",
+   "status": "PROPOSED"
   }
  ]
 }

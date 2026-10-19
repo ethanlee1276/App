@@ -38,6 +38,7 @@ from research import audit_box as AB                             # noqa: E402
 from research import exp1_lines_box as EL                        # noqa: E402
 from research import exp4_college_two_stage as E4                # noqa: E402
 from research import exp5_symbolic_residuals as E5               # noqa: E402
+from research import exp6_shrink_b as E6                         # noqa: E402
 
 
 # --- the registry -------------------------------------------------------------
@@ -440,6 +441,23 @@ def test_the_hybrid_reads_once_when_the_season_is_in():
     assert E1.season_done(2026, "2026-10-17", games=games, with_stats={"a"}) == (1, 2)
     games[-1]["home_score"] = "17"
     assert E1.season_done(2026, "2026-10-17", games=games, with_stats={"a", "b"}) == (2, 2)
+
+
+def test_the_b_shrink_line_is_fitted_on_bs_own_misses_and_decides_once():
+    class _Fit:
+        def mean_b(self, x):
+            return x["mb"]
+    rng = __import__("random").Random(4)
+    rows = []
+    for _ in range(3000):
+        mb = rng.uniform(1, 9)
+        rows.append({"m": "receptions", "mb": mb, "y": mb + (0.5 - 0.2 * mb) + rng.gauss(0, 0.3)})
+    rows.append({"m": "rec_yds", "mb": 40.0, "y": 400.0})
+    c0, c1 = E6.shrink_line(_Fit(), rows)
+    assert abs(c1 + 0.2) < 0.02 and abs(c0 - 0.5) < 0.1, (c0, c1)
+    better = [{"who": f"p{i % 40}", "b": 1.2, "s_": 1.1 + 0.01 * (i % 3)} for i in range(400)]
+    assert E6.decide(better)[0] == "ADVANCE"
+    assert E6.decide([dict(r, s_=r["b"] + 0.05) for r in better])[0] == "REJECTED"
 
 
 if __name__ == "__main__":
