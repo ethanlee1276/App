@@ -26,7 +26,8 @@ The lab lives in `research/`:
 | `engine/fieldcurve.py`, `fieldcurvefit.py` | the market's curve from main lines, and the spread law it reads |
 | `research/exp7_mlb_strikeouts_box.py` | EXP-007 (MLB: a starter's strikeouts, batters faced first; runs on the box) |
 | `research/exp4c_college_lines_box.py` | EXP-004c (the college results at the books' own lines; runs on the box) |
-| `tests/test_research_lab.py` | the lab's tests (also `test_thin_market.py`, `test_mlb_strikeouts_lab.py`, `test_college_lines_lab.py`) |
+| `research/exp8_nba_shape_box.py` | EXP-008 (NBA: a shape built from his minutes against the board's spread; runs on the box) |
+| `tests/test_research_lab.py` | the lab's tests (also `test_thin_market.py`, `test_mlb_strikeouts_lab.py`, `test_college_lines_lab.py`, `test_nba_shape_lab.py`) |
 
 `python3 research/registry.py` prints the ledger; `--sources` prints the
 data matrix.
@@ -36,7 +37,7 @@ data matrix.
 ## Session 3 report (2026-10-19), in the spec's Part 13 format
 
 Built while Ethan was away ("Yeah keep building. I'm not home so just
-save all code for when I'm home"). Four new tests and two protocol
+save all code for when I'm home"). Five new tests and two protocol
 amendments. None has read real data yet: each one runs on the box or
 waits on games, and every bar below was committed before that.
 
@@ -57,6 +58,11 @@ waits on games, and every bar below was committed before that.
   assuming an NFL finding transfers.
 - **EXP-004c.** Do the college results (B on receptions, H on rushing)
   hold at the books' own lines? A line is where a bet is made.
+- **EXP-008, NBA (backlog B9).** The NBA board's centre is already
+  minutes times a per-minute rate, but its spread is a fixed share of
+  that centre: a 38-minute night and a 24-minute night are the same
+  width. Does a shape built from his minutes price better at the same
+  centre?
 - **One read, not a read per run (EXP-001b, EXP-001c).** Deciding at
   whichever run first looks good is optional stopping, and it inflates
   false passes.
@@ -87,6 +93,13 @@ waits on games, and every bar below was committed before that.
   recalibrated by a logistic at the proxy line. L is the line most books
   hang among each book's last quote before kickoff. C is the books'
   de-vigged consensus there. The score is log loss.
+- **EXP-008.** One centre for both shapes: his rate per minute times his
+  role's base minutes (the board's own arithmetic). S is the board's
+  shape exactly (`engine/nba/prob`), at the cv the live build measures by
+  its own rule (`engine/hoops_fit`), on the training window only. C
+  takes his minutes from the training games' own spread around the base,
+  then a count with mean rate × minutes and variance PHI × mean. The
+  score is CRPS.
 
 ### 7. Data and its verified availability
 
@@ -108,16 +121,21 @@ waits on games, and every bar below was committed before that.
 - **MLB.** The box's play-by-play table holds the seasons the chart
   backfill has read, likely 2026 alone. EXP-007 prints its coverage
   against the season's regular-season finals.
+- **NBA.** The board's volatile-role gate is off for the NBA (on for
+  the WNBA). The live build refits its spreads from every season the box
+  holds; EXP-008 uses the same rule on its training window only, and the
+  test checks the two agree on the same rows.
 
 ### 8–10. Implementation, evaluation design, success criteria
 
 | experiment | bar committed in | read |
 |---|---|---|
-| EXP-001b, EXP-001c amendments (one read) | `8e0bf7d0` | before any decision row existed |
-| EXP-R06 | `e82dc323` | on the box (round five) |
-| EXP-006 | `beb1019b` | once, at the regular season's end |
-| EXP-007 | `76c9f82f` | on the box: validation first, holdout once |
-| EXP-004c | `97448fc5` | on the box: development now; decision as weeks 9+ complete |
+| EXP-001b, EXP-001c amendments (one read) | `3ba10078` | before any decision row existed |
+| EXP-R06 | `e6601811` | on the box (round five) |
+| EXP-006 | `c0941ca4` | once, at the regular season's end |
+| EXP-007 | `7544b1ca` | on the box: validation first, holdout once |
+| EXP-004c | `97563ef1` | on the box: development now; decision as weeks 9+ complete |
+| EXP-008 | `6db6e64a` | on the box: validation first, holdout once |
 
 Each bar's strictness was tried on made-up data where the truth is known:
 
@@ -125,6 +143,7 @@ Each bar's strictness was tried on made-up data where the truth is known:
 |---|---|---|
 | EXP-R06 | 33 runs of 40 | 1 of 40 |
 | EXP-007 (B v A) | 19 leagues of 20 | 0 of 20 |
+| EXP-008 (C v S, three stats) | 19 stat tests of 30 (points 10 of 10) | 0 of 30 |
 
 Two guards keep EXP-007's holdout to one honest read. It is not read
 until the table holds plays for 98% of every season's regular-season
@@ -159,6 +178,9 @@ What was measured:
   NFL namesake plays a day apart). There is one fitting season.
 - **EXP-006.** One season of rows. The line is fitted on the seasons B
   trains on.
+- **EXP-008.** The centre leaves out tonight's spread, rest, vacancy and
+  defence dials, which neither shape has. PHI by moments mixes the rate's
+  own estimation error into the count's spread.
 
 ### 14. Novelty assessment
 
@@ -168,6 +190,7 @@ What was measured:
 | EXP-006 | 2, shrinkage combined with the compound model |
 | EXP-007 | 4 |
 | EXP-004c | 4 |
+| EXP-008 | 4 |
 
 Still no new mathematics.
 
@@ -179,6 +202,7 @@ Still no new mathematics.
 | EXP-006 | preregistered; read once at season end |
 | EXP-007 | implemented; validation read first, then the holdout once |
 | EXP-004c | implemented; development now, decisions as college weeks 9+ complete |
+| EXP-008 | implemented; validation read first, then the holdout once. An advance goes to Ethan, then to a paper board |
 | EXP-001b, EXP-001c | amended to one read before any decision row was read |
 
 ### 16. Next highest-value experiment
@@ -190,13 +214,13 @@ book's number.
 
 Then, from the box:
 
-1. EXP-007's validation paste; its holdout follows once that looks sound.
+1. EXP-007's and EXP-008's validation pastes; each holdout follows once
+   that paste looks sound.
 2. EXP-004c as the college weeks complete.
 3. EXP-R06 as thin picks settle.
 
 Next to build: **EXP-007b**, strikeouts at the MLB lines the box holds
-(odds_history MLB from 2026-06-01). Then B9: NBA, minutes times a
-per-minute rate.
+(odds_history MLB from 2026-06-01). B9 (NBA) is now EXP-008.
 
 ---
 
@@ -644,7 +668,7 @@ market at pick time) is written and tested, and waits on one box command.
 | B6 | EXP-001b scored weekly | games | none | auto | the preregistered bar |
 | B7 | EXP-003b on the box (amended: market chance rebuilt from snapshots) | Ethan runs it | none | journal + line history | the bar in the script |
 | B8 | MLB first experiment: two-stage strikeouts (batters faced × K rate) vs direct | — | medium | MLB Stats API on the box | **EXP-007, implemented**; validation read first, then the holdout once |
-| B9 | NBA: minutes × per-minute rate, minutes from rotation/injury state | — | medium | box history | same protocol |
+| B9 | NBA: minutes × per-minute rate, minutes from rotation/injury state | — | — | box history | **EXP-008, implemented**: the board's centre is already this; the test is the shape |
 | B10 | UFC: fight-time distribution × striking rate for significant-strike props | data audit of per-fight stats | large | needs a per-fight stats source | coverage verified first |
 | B11 | College: the EXP-001 protocol on cfbfastR (verified 2022–26) | — | small | have it | **done: EXP-004** (receptions B and rushing H advance) |
 | B12 | EXP-001c decision rows (NFL receptions at real lines) | games after 2026-10-17 + nflverse stats | none | box | 300 receptions rows; the bar in the script |
@@ -708,6 +732,7 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/thinmarket_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -20
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp4c_college_lines_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp8_nba_shape_box.py
 ```
 
 1. The box has today's code.
@@ -718,6 +743,8 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp4c_college_lines
    this paste has been checked.
 5. EXP-004c. Development numbers now; each question decides as the
    college weeks after the freeze complete.
+6. EXP-008, validation only. Its holdout (`--holdout`) is read once,
+   after this paste has been checked, as EXP-007's.
 
 At the NFL regular season's end (January), EXP-001b and EXP-006 read once:
 

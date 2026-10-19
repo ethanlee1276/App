@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts and college at real lines (step 147; CP).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2421,6 +2421,9 @@ touches a pick:
 - **College at real lines.** CN's two college results, now tested at the
   books' own lines. It decides on the weeks after this Saturday as they
   finish.
+- **NBA.** The board prices a points prop at the same width whether he
+  plays 38 minutes or 24. A test asks whether a spread built from his
+  minutes prices better, on last season's games.
 
 Run these in order. Paste each output back:
 
@@ -2429,10 +2432,12 @@ Run these in order. Paste each output back:
 2. The thin-pick test. Expect NOT YET for a few weeks; the first line
    counts how many picks it could price.
 3. EXP-001c, the NFL test at real lines. Run it Tuesday or later.
-4. The MLB test, its first half only. I check this paste before step 6.
+4. The MLB test, its first half only. I check this paste before step 7.
 5. The college test. It prints development numbers now and says how many
    weeks its decision still needs. It takes about a minute and around
    250 MB.
+6. The NBA test, its first half only. As with step 4, I check this paste
+   before its holdout.
 
 ```
 cd /srv/qellys && git log --oneline -1
@@ -2440,15 +2445,17 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/thinmarket_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -20
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp4c_college_lines_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp8_nba_shape_box.py
 ```
 
-6. **Only after I have read step 4's paste:** the MLB holdout, read once.
-   The script itself refuses if the season's plays are not all in, or if
-   a fitted number sits on the edge of its range.
+7. **Only after I have read steps 4 and 6:** the MLB and NBA holdouts,
+   each read once. The MLB script itself refuses if the season's plays are
+   not all in, or if a fitted number sits on the edge of its range.
    ```
    cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py --holdout
+   cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp8_nba_shape_box.py --holdout
    ```
-7. **January, after the NFL regular season:** the two tests that read
+8. **January, after the NFL regular season:** the two tests that read
    once at season's end. Until then they print only how many games are in.
    ```
    cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_two_stage.py --prospective
