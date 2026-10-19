@@ -110,7 +110,14 @@ HTML = (WEB / "index.html").read_text()
 #: door and the report card's slot in My Bets. The tools themselves load on
 #: first use (js/extras.js, css/extras.css) — +0.31 KB gz (494.883 ->
 #: 495.197). Told to Ethan.
-APP_JS_BUDGET_KB = 496
+#: 496 -> 497 on 2026-10-19 by the game report (Ethan: "I want a full layed
+#: out detailed explanation for every nfl game just like how the report
+#: is"): the loader, the stand-in line, the fallback to the old page when
+#: it fails, and the game page stepping the scan and the plan's narrative
+#: aside for it — +0.61 KB gz (495.502 -> 496.109). The report itself, 3 KB
+#: gz with its styles, loads on first use (js/report.js, css/report.css);
+#: drawn here it was +1.18. Told to Ethan.
+APP_JS_BUDGET_KB = 497
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -170,7 +177,10 @@ APP_JS_BUDGET_KB = 496
 #: 494.498, inside its 495). Told to Ethan.
 #: 612 -> 613 on 2026-10-15 by the Toolbox: the app.js bump above plus its
 #: sidebar row and page section (611.803 -> 612.246 KB gz). Told to Ethan.
-BOOT_BUDGET_KB = 613
+#: 613 -> 614 on 2026-10-19 by the game report: the app.js bump above
+#: (612.551 -> 613.158 KB gz); its styles load with it (css/report.css).
+#: Told to Ethan.
+BOOT_BUDGET_KB = 614
 
 
 def _gz_trimmed(rel: str) -> int:

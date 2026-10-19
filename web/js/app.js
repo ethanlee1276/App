@@ -14533,12 +14533,9 @@ function gamePlanHTML(g, opts) {
      line, who is out, the matchup and what changes the read are the
      report's own sections, written out (one copy of everything). */
   const skip = new Set((opts && opts.skip) || []);
-  const head = skip.size ? `<div class="section-title">Game plan
-      <span class="sub">— the plays that fit, the plays to avoid, who scores and where we disagree
-      with the market; the read behind them is the game report above</span></div>`
-    : `<div class="section-title">Game plan
-      <span class="sub">— this game read in order: the line, who is out, the matchup, the plays
-      that fit, the plays to avoid, what changes the read, who scores</span></div>`;
+  const head = `<div class="section-title">Game plan
+      <span class="sub">— ${skip.size ? "the plays; the read behind them is the game report above"
+        : "this game read in order: the line, who is out, the matchup, the plays that fit, the plays to avoid, what changes the read, who scores"}</span></div>`;
   if (locked) {
     return `<div id="gp-sec-plan" class="ms gplan">${head}<div class="card ms-locked"><b>The game plan</b> —
       the seven steps, the plays that fit and the plays to avoid with our chance on each, is part of the
@@ -14584,79 +14581,45 @@ function gamePlanHTML(g, opts) {
    things, so they step aside (one copy of everything), and the replay
    panel moves into the report's "How the game could go". Paid:
    `game_reports` is a paid key; a reader without it sees what it holds. */
+let _grLoading = null, _grFailed = false;
 function gameReportFor(g) {
   const d = state.data || {};
+  if (_grFailed) return null;
   return (d.game_reports || []).find((r) => r && r.away === g.away && r.home === g.home) || null;
 }
-const GR_TONE = { favorable: "up", unfavorable: "down", up: "up", down: "down" };
-function grBlockHTML(b) {
-  if (!b || !b.type) return "";
-  if (b.type === "p") return `<p class="gr-p">${escapeHtml(b.text)}</p>`;
-  if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
-  if (b.type === "note") return `<p class="gr-note">${escapeHtml(b.text)}</p>`;
-  if (b.type === "list") {
-    return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>`;
-  }
-  if (b.type === "table") {
-    const head = b.head || [];
-    return `<div class="gr-table-wrap">${b.title ? `<div class="gr-table-title">${escapeHtml(b.title)}</div>` : ""}
-      <table class="agate gr-table"><thead><tr>${head.map((h, i) =>
-        `<th${i ? ' class="num"' : ""}>${escapeHtml(h)}</th>`).join("")}</tr></thead>
-      <tbody>${(b.rows || []).map((r) => `<tr>${r.map((c, i) =>
-        `<td${i ? ' class="num"' : ""}>${escapeHtml(String(c))}</td>`).join("")}</tr>`).join("")}</tbody></table>
-      ${b.note ? `<p class="gr-note">${escapeHtml(b.note)}</p>` : ""}</div>`;
-  }
-  if (b.type === "verdicts" || b.type === "players") {
-    // Each player opens his player page — the report points at a player,
-    // never at a bet.
-    return `<div class="gr-people">${(b.items || []).map((v) => {
-      const tone = GR_TONE[v.verdict || v.tone] || "";
-      const door = v.player ? ` data-open="player:${escapeAttr(slugify(v.player))}"` : "";
-      const who = [v.team ? teamName(v.team) : "", v.pos, v.role].filter(Boolean).join(" · ");
-      return `<div class="gr-person ${tone}"${door}>
-        <div class="gr-person-head">${playerAvatar(v.player, v.team, { size: 36, headshot: v.headshot })}
-          <span class="gr-person-who"><b>${escapeHtml(b.type === "verdicts" ? v.title : v.player)}</b>
-            <span>${escapeHtml(who)}</span></span>
-          ${v.label ? `<span class="ms-read-tag ${tone}">${escapeHtml(v.label)}</span>` : ""}</div>
-        ${b.type === "verdicts"
-          ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "")
-          : v.text ? `<p class="gr-person-text">${escapeHtml(v.text)}</p>` : ""}
-      </div>`;
-    }).join("")}</div>`;
-  }
-  return "";
+/* Drawn by js/report.js with css/report.css, loaded the first time a game
+   page has a report; until both land a line stands in, and the page draws
+   again when they do. If either fails the page draws as it did before the
+   report existed — the matchup scan and the whole game plan — for the rest
+   of the visit, rather than a loading line that never ends. */
+function loadReport() {
+  if (window.QBReport) return Promise.resolve(window.QBReport);
+  return _grLoading || (_grLoading = new Promise((resolve) => {
+    let left = 2;
+    const done = (ok) => {
+      if (left <= 0) return;
+      if (ok && --left > 0) return;
+      left = 0;
+      if (!ok || !window.QBReport) _grFailed = true;
+      resolve(window.QBReport || null);
+    };
+    const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "css/report.css";
+    css.onload = () => done(true); css.onerror = () => done(false);
+    document.head.appendChild(css);
+    const s = document.createElement("script"); s.src = "js/report.js";
+    s.onload = () => done(true); s.onerror = () => done(false);
+    document.head.appendChild(s);
+  }));
 }
 function gameReportHTML(g, extras) {
   const d = state.data || {};
   const r = gameReportFor(g);
-  const locked = !r && d.locked && d.locked.game_reports && g.scan && g.scan.units;
+  const locked = !r && !_grFailed && d.locked && d.locked.game_reports && g.scan && g.scan.units;
   if (!r && !locked) return "";
-  const head = `<div class="section-title">The game report
-      <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}the whole game written out from
-      tonight’s board; no prop picks in it</span></div>`;
-  if (locked) {
-    return `<div id="gp-sec-report" class="gr">${head}<div class="card ms-locked"><b>The game report</b> —
-      this game written out top to bottom: the line and what it means, how the units rank, how each team
-      plays, who is out and what it opens, who’s guarding who, the trenches, the red zone, coaching and the
-      schedule, how the game could go and the players to watch — is part of the subscription.</div></div>`;
-  }
-  const secs = (r.sections || []).filter((s) => s && (s.blocks || []).length);
-  const toc = secs.length > 2 ? `<nav class="std-chips gr-toc" aria-label="Sections of the report">${
-    secs.map((s) => `<button type="button" class="chip" data-jump="gr-${escapeAttr(s.key)}">${
-      escapeHtml(s.title)}</button>`).join("")}</nav>` : "";
-  const body = secs.map((s) => {
-    let blocks = s.blocks || [];
-    let extra = "";
-    // The replay panel draws the same simulated games the report's table
-    // lists, as a gauge and a histogram; with it here the table steps aside.
-    if (s.key === "scripts" && extras && extras.scripts) {
-      blocks = blocks.filter((b) => b.type !== "table");
-      extra = `<div class="gr-extra">${extras.scripts}</div>`;
-    }
-    return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
-      ${blocks.map(grBlockHTML).join("")}${extra}</section>`;
-  }).join("");
-  return `<div id="gp-sec-report" class="gr">${head}${toc}<div class="card gr-card">${body}</div></div>`;
+  if (window.QBReport) return window.QBReport.html(r, extras);
+  const id = state.gameId;
+  loadReport().then(() => { if (state.view === "game" && state.gameId === id) renderGamePage(); });
+  return `<div id="gp-sec-report" class="gr"><p class="loading">Loading the game report…</p></div>`;
 }
 
 function matchupScanHTML(g) {

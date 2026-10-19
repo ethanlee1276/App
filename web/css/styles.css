@@ -12579,45 +12579,6 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .gplan-row.avoid .ml-pct { background: color-mix(in oklab, var(--bad) 18%, transparent); color: var(--bad); }
 .gplan-row.gap .ml-pct { background: var(--bg); color: var(--text-dim); }
 .gplan-wx { width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-dim); }
-/* THE GAME REPORT (engine/gamereport, gameReportHTML): the game written
-   out — a reading column, not a dashboard. Body at reading size with room
-   between lines, each section under a rule, tables that scroll inside
-   themselves on a phone, and the players in the scan's own card shape. */
-.gr-toc { margin: 0 0 12px; }
-.gr-card { padding: 18px 20px; }
-@media (max-width: 600px) { .gr-card { padding: 14px; } }
-.gr-sec { padding: 16px 0; border-top: var(--hairline) solid var(--border-soft);
-  scroll-margin-top: calc(var(--topbar-h) + 64px); }
-.gr-sec:first-child { border-top: 0; padding-top: 2px; }
-.gr-title { margin: 0 0 8px; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
-.gr-h { margin: 16px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
-  text-transform: uppercase; color: var(--text-dim); }
-.gr-p { margin: 8px 0; font-size: var(--fs-lg); line-height: 1.55; color: var(--text); max-width: 76ch; }
-.gr-list { margin: 6px 0; padding-left: 20px; display: grid; gap: 7px; font-size: var(--fs-lg);
-  line-height: 1.5; color: var(--text); max-width: 80ch; }
-.gr-list li::marker { color: var(--brand); }
-.gr-table-wrap { margin: 12px 0; overflow-x: auto; }
-.gr-table-title { font-size: var(--fs-sm); font-weight: 700; color: var(--text); margin-bottom: 4px; }
-/* The row label is a phrase, not a name: it wraps instead of truncating. */
-.gr-table td:first-child { white-space: normal; max-width: none; min-width: 6.5em; font-weight: 600; }
-.gr-table th, .gr-table td { padding: 8px 10px; }
-@media (max-width: 600px) { .gr-table th, .gr-table td { padding: 7px 5px; } }
-.gr-note { margin: 4px 0 0; color: var(--text-mute); font-size: var(--fs-xs); }
-.gr-people { display: grid; gap: 10px; margin: 10px 0; grid-template-columns: 1fr; }
-@media (min-width: 861px) { .gr-people { grid-template-columns: 1fr 1fr; } }
-.gr-person { padding: 12px 14px; border: var(--hairline) solid var(--border); border-radius: var(--radius);
-  background: var(--panel); min-width: 0; }
-.gr-person.up { border-color: var(--good); }
-.gr-person.down { border-color: color-mix(in oklab, var(--bad) 60%, var(--border)); }
-.gr-person[data-open] { cursor: pointer; }
-.gr-person-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
-.gr-person-who { display: grid; min-width: 0; }
-.gr-person-who b { overflow-wrap: anywhere; }
-.gr-person-who span { color: var(--text-mute); font-size: var(--fs-xs); }
-.gr-why { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm);
-  color: var(--text-dim); }
-.gr-person-text { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
-.gr-extra { margin-top: 12px; }
 /* THE MOST LIKELY PAGE, TO ETHAN'S RENDER (2026-09-26; app.js obHeroHTML,
    oneBoardHTML, obCardHTML). A hero over the stadium art, the four pills,
    the tier chips and the view, the lane filters, then each tier's cards:

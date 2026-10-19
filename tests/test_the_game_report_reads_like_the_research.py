@@ -15,6 +15,12 @@ of the light copy; the build hangs it last and a broken board never stops
 the build; and the game page draws it, steps the scan and the plan's
 narrative steps aside, and locks it for a reader without the subscription.
 
+ITS PAGE CODE LOADS ON FIRST USE (js/report.js, css/report.css), like the
+Toolbox and the parlay grader: the report added 1.2 KB gzipped to app.js,
+over the first paint's budget, and only a game page ever draws it. Until it
+lands a loading line stands in; if it fails the page draws as it did before
+the report existed.
+
 Run directly: `python3 tests/test_the_game_report_reads_like_the_research.py`
 """
 import contextlib
@@ -22,6 +28,8 @@ import copy
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -34,6 +42,8 @@ from engine import lightboard                                       # noqa: E402
 
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+REPORT_JS = os.path.join(ROOT, "web", "js", "report.js")
+REPORT_CSS = open(os.path.join(ROOT, "web", "css", "report.css"), encoding="utf-8").read()
 BUILD = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
 
 NAMES = {"GB": "Packers", "DET": "Lions"}
@@ -356,7 +366,7 @@ def test_the_box_command_prints_a_game():
 
 
 def test_the_game_page_draws_it_and_steps_the_others_aside():
-    for needle in ("function gameReportHTML(g, extras)", "function grBlockHTML(b)",
+    for needle in ("function gameReportHTML(g, extras)", "function loadReport()",
                    "d.locked && d.locked.game_reports",
                    '["gp-sec-report", "Game report"]',
                    'gamePlanHTML(g, report ? { skip: ["line", "out", "matchup", "watch"] } : null)',
@@ -364,11 +374,74 @@ def test_the_game_page_draws_it_and_steps_the_others_aside():
                    "simCard && !report",
                    '.gp-jump [data-jump], .gr-toc [data-jump]'):
         assert needle in APP, needle
+    js = open(REPORT_JS, encoding="utf-8").read()
     # A player in the report opens his player page, never a bet.
-    body = APP[APP.index("function grBlockHTML(b)"):APP.index("function gameReportHTML(g, extras)")]
-    assert 'data-open="player:' in body and "likelyOpen" not in body and "prop:" not in body
+    assert 'data-open="player:' in js and "likelyOpen" not in js and "prop:" not in js
     for rule in (".gr-card", ".gr-sec", ".gr-table-wrap { margin: 12px 0; overflow-x: auto; }", ".gr-person"):
-        assert rule in CSS, rule
+        assert rule in REPORT_CSS, rule
+
+
+def test_its_page_code_loads_on_first_use_and_a_failed_load_falls_back():
+    loader = APP[APP.index("function loadReport()"):APP.index("function gameReportHTML(g, extras)")]
+    assert 'css.href = "css/report.css"' in loader and 's.src = "js/report.js"' in loader
+    # Both files, not the script alone: drawn before its rules land, the
+    # report would flash unstyled.
+    assert "let left = 2;" in loader and "css.onload" in loader and "s.onload" in loader
+    # A failure (or a script that defines nothing) is final for the visit,
+    # and the page draws without the report — no loading line forever, no
+    # loop of loads.
+    assert "if (!ok || !window.QBReport) _grFailed = true;" in loader
+    getter = APP[APP.index("function gameReportFor(g)"):APP.index("function loadReport()")]
+    assert "if (_grFailed) return null;" in getter
+    draw = APP[APP.index("function gameReportHTML(g, extras)"):APP.index("function matchupScanHTML(g)")]
+    assert "if (window.QBReport) return window.QBReport.html(r, extras);" in draw
+    assert 'state.view === "game" && state.gameId === id' in draw, "it redraws only the game it loaded for"
+    # Nothing of it rides the first paint.
+    index = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    sw = open(os.path.join(ROOT, "web", "sw.js"), encoding="utf-8").read()
+    assert 'src="js/report.js"' not in index and "report.css" not in index
+    assert "/js/report.js" not in sw
+    assert ".gr-" not in CSS, "the report's rules live in css/report.css"
+    assert "function grBlockHTML" not in APP and "GR_TONE" not in APP
+
+
+def test_the_module_draws_a_real_report():
+    """The engine's own report, drawn by js/report.js with app.js's
+    helpers stubbed: every section, the tables, the players' doors and
+    the subscription teaser — and no "undefined" or "[object" anywhere."""
+    node = shutil.which("node")
+    if not node:
+        print("      (skipped: no Node)")
+        return
+    rep = _report()
+    script = (
+        "const vm = require('vm'); const fs = require('fs');"
+        "const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
+        "const ctx = { window: {}, escapeHtml: esc, escapeAttr: esc,"
+        " slugify: (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-'),"
+        " teamName: (t) => t, playerAvatar: (p) => '<i class=av></i>' };"
+        "vm.createContext(ctx);"
+        f"vm.runInContext(fs.readFileSync({json.dumps(REPORT_JS)}, 'utf8'), ctx);"
+        "const R = ctx.window.QBReport;"
+        f"const rep = {json.dumps(rep, ensure_ascii=False)};"
+        "process.stdout.write(JSON.stringify({full: R.html(rep, {scripts: '<div id=simcard></div>'}),"
+        " locked: R.html(null, null)}));")
+    out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-1500:]
+    got = json.loads(out.stdout)
+    full = got["full"]
+    for sec in rep["sections"]:
+        assert f'id="gr-{sec["key"]}"' in full, sec["key"]
+        assert f'data-jump="gr-{sec["key"]}"' in full, sec["key"]
+    assert full.count("<table") >= 2 and 'data-open="player:' in full
+    # The simulation card takes the place of the scripts table.
+    scripts = full[full.index('id="gr-scripts"'):]
+    scripts = scripts[:scripts.index("</section>")]
+    assert "id=simcard" in scripts and "<table" not in scripts
+    for bad in ("undefined", "[object", "NaN"):
+        assert bad not in full, bad
+    assert "part of the subscription" in got["locked"] and "<table" not in got["locked"]
+    assert f"about {rep['minutes']} min to read" in full and "min to read" not in got["locked"]
 
 
 if __name__ == "__main__":
