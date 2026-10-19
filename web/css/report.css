@@ -32,7 +32,12 @@
 .gr-person.up { border-color: var(--good); }
 .gr-person.down { border-color: color-mix(in oklab, var(--bad) 60%, var(--border)); }
 .gr-person[data-open] { cursor: pointer; }
-.gr-person-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+/* The verdict can run to four words ("Favorable — breakout candidate"), so
+   it sits under the name, never beside it: beside it, a long one squeezed
+   the name to a letter or two a line on a phone. */
+.gr-person-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+  column-gap: 10px; row-gap: 6px; }
+.gr-person-head .ms-read-tag { grid-column: 2; justify-self: start; }
 .gr-person-who { display: grid; min-width: 0; }
 .gr-person-who b { overflow-wrap: anywhere; }
 .gr-person-who span { color: var(--text-mute); font-size: var(--fs-xs); }

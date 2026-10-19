@@ -379,6 +379,10 @@ def test_the_game_page_draws_it_and_steps_the_others_aside():
     assert 'data-open="player:' in js and "likelyOpen" not in js and "prop:" not in js
     for rule in (".gr-card", ".gr-sec", ".gr-table-wrap { margin: 12px 0; overflow-x: auto; }", ".gr-person"):
         assert rule in REPORT_CSS, rule
+    # A verdict can run to four words; beside the name it squeezed the name
+    # to a letter a line on a phone, so it sits under it.
+    assert ".gr-person-head .ms-read-tag { grid-column: 2; justify-self: start; }" in REPORT_CSS
+    assert "grid-template-columns: auto minmax(0, 1fr);" in REPORT_CSS
 
 
 def test_its_page_code_loads_on_first_use_and_a_failed_load_falls_back():
