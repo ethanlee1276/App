@@ -19,6 +19,15 @@ replay on the box tested it on every stored international game (2021+,
 Nothing held in both halves, so overs abroad do not hit less, and a card
 should not warn about something history says does not happen.
 
+THE ROOF (2026-10-19). nflverse fills a game abroad with the HOME team's
+building until it is played: Stade de France (PIT@NO, week 7) read "dome"
+because the Superdome is one, so the build skipped its forecast and the
+game report said "a fixed dome". An open-air ground abroad is now outdoors
+wherever the schedule is read (engine/sources/nflverse.schedule_roof); a
+roof that can close, or a building we do not know, keeps the schedule's
+word; and the report says nothing of the surface abroad, which is the home
+team's too.
+
 Run directly: `python3 tests/test_games_abroad.py`
 """
 import os
@@ -77,6 +86,62 @@ def test_the_scout_raises_no_abroad_caution():
     C.annotate(rows, {"games": games, "recommendations": []})
     assert not any("abroad" in f for f in rows[0]["scout_flags"])
     assert not hasattr(C, "abroad_keys"), "the history no longer marks games abroad"
+
+
+def test_an_open_air_ground_abroad_is_outdoors_whatever_the_home_team_plays_in():
+    from engine.nflwx import venue_roof
+    for v in VENUES_2026:
+        if v == "Bernabeu":
+            assert venue_roof(v) is None, "a retractable roof keeps the schedule's word"
+        else:
+            assert venue_roof(v) == "outdoors", v
+    assert venue_roof("Frankfurt Stadium") is None, "Frankfurt's roof closes"
+    assert venue_roof("Caesars Superdome") is None and venue_roof("") is None
+
+
+def test_the_schedule_roof_is_corrected_only_at_a_neutral_open_air_site():
+    from engine.sources.nflverse import schedule_roof
+    paris = {"location": "Neutral", "stadium": "Stade de France", "roof": "dome"}
+    assert schedule_roof(paris) == "outdoors"
+    munich = {"location": "Neutral", "stadium": "FC Bayern Munich Stadium", "roof": "dome"}
+    assert schedule_roof(munich) == "outdoors"
+    # A building whose roof can close, or one we do not know, keeps its word.
+    assert schedule_roof({"location": "Neutral", "stadium": "Bernabeu", "roof": ""}) == ""
+    assert schedule_roof({"location": "Neutral", "stadium": "Frankfurt Stadium", "roof": "closed"}) == "closed"
+    # At home the schedule is the team's own building, and right.
+    assert schedule_roof({"location": "Home", "stadium": "Caesars Superdome", "roof": "dome"}) == "dome"
+    assert schedule_roof({"location": "Home", "stadium": "Lambeau Field", "roof": "outdoors"}) == "outdoors"
+    # A neutral site at home (a Super Bowl in a dome) is not abroad.
+    assert schedule_roof({"location": "Neutral", "stadium": "Caesars Superdome", "roof": "dome"}) == "dome"
+
+
+def test_every_reader_of_the_schedule_takes_the_corrected_roof():
+    from engine.ingest import nfl_game_rows
+    from engine.sources.nflverse import weather_from_row
+    row = {"season": "2026", "week": "7", "home_team": "NO", "away_team": "PIT", "gameday": "2026-10-25",
+           "location": "Neutral", "stadium": "Stade de France", "roof": "dome", "surface": "sportturf",
+           "spread_line": "-3", "total_line": "44.5", "temp": "", "wind": ""}
+    w = weather_from_row(row)
+    assert not w.dome and not w.measured, "outdoors and unmeasured until the forecast lands — never a dome"
+    assert nfl_game_rows([row], {2026})[0]["roof"] == "outdoors", "the nightly ingest stores the true roof"
+    src = open(os.path.join(ROOT, "engine", "sources", "nflverse.py"), encoding="utf-8").read()
+    assert "roof=schedule_roof(r)," in src, "the build's games take it too"
+
+
+def test_the_report_says_nothing_of_the_home_teams_surface_abroad():
+    from engine import gamereport as R
+    st = {"team": "NO", "name": "Stade de France", "roof": "outdoors", "surface": "sportturf",
+          "altitude_ft": 0, "abroad": True, "plays": "Played abroad: a neutral site."}
+    g = {"away": "PIT", "home": "NO", "date": "2026-10-25", "kickoff": "09:30", "neutral_site": True,
+         "roof": "outdoors", "surface": "sportturf", "venue": "Stade de France", "stadium": st}
+    c = R.Ctx(g, {}, names={"PIT": "Steelers", "NO": "Saints"})
+    text = str(R.sec_facts(c))
+    assert "Venue: Stade de France — outdoors" in text and "sportturf" not in text
+    home = dict(g, neutral_site=False, venue="", stadium=dict(st, abroad=False, name="Caesars Superdome",
+                                                                roof="dome"))
+    home["roof"] = "dome"
+    text = str(R.sec_facts(R.Ctx(home, {}, names={"PIT": "Steelers", "NO": "Saints"})))
+    assert "sportturf surface" in text, "at home the surface is the team's own and is said"
 
 
 if __name__ == "__main__":

@@ -110,11 +110,36 @@ NEUTRAL_VENUES = (
 )
 
 
+#: WHAT THE BUILDING IS, by the same words: the open-air grounds. nflverse
+#: fills a future game's roof from the home team's own stadium until the
+#: game is played, so 2026's schedule read "dome" for the Melbourne
+#: Cricket Ground (the Rams'), Stade de France (the Saints') and Munich's
+#: Allianz Arena (the Lions') — an open-air game priced as if indoors,
+#: with no forecast pulled (found 2026-10-19, reading the game report).
+#: Frankfurt's and the Bernabéu's roofs can close, so the schedule's own
+#: word stands there.
+OPEN_AIR_ABROAD = ("maracana", "tottenham", "wembley", "allianz", "bayern", "olympiastadion",
+                   "corinthians", "neo quimica", "azteca", "banorte", "croke", "stade de france",
+                   "melbourne cricket")
+
+
+def _venue_key(name: str) -> str:
+    import unicodedata
+    return unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode().lower()
+
+
 def venue_coords(name: str):
     """A neutral site's coordinates from the schedule's stadium name, or None."""
-    import unicodedata
-    key = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode().lower()
+    key = _venue_key(name)
     return next((c for word, c in NEUTRAL_VENUES if word in key), None)
+
+
+def venue_roof(name: str) -> str | None:
+    """"outdoors" for an open-air ground abroad the schedule names
+    (OPEN_AIR_ABROAD), else None — a roof that can close, or a building
+    we do not know, keeps the schedule's own word."""
+    key = _venue_key(name)
+    return "outdoors" if any(word in key for word in OPEN_AIR_ABROAD) else None
 
 
 def attach(games, forecast=None) -> int:

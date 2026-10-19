@@ -15,7 +15,7 @@ from .sources.fetch import DataUnavailable
 
 # --- NFL --------------------------------------------------------------------
 def nfl_game_rows(schedule_rows: list[dict], seasons: set[int]) -> list[dict]:
-    from .sources.nflverse import _s, _f
+    from .sources.nflverse import _s, _f, schedule_roof
     out = []
     for r in schedule_rows:
         try:
@@ -42,7 +42,9 @@ def nfl_game_rows(schedule_rows: list[dict], seasons: set[int]) -> list[dict]:
             "away_score": _f(r, "away_score", default=None),
             "spread": -_f(r, "spread_line", default=0.0),
             "total": _f(r, "total_line", default=None),
-            "roof": _s(r, "roof"), "surface": _s(r, "surface", default="grass"),
+            # The schedule's roof, except on an open-air ground abroad
+            # (engine/sources/nflverse.schedule_roof).
+            "roof": schedule_roof(r), "surface": _s(r, "surface", default="grass"),
             "temp": _f(r, "temp", default=None), "wind": _f(r, "wind", default=None),
             # THE PRICES, WHICH WERE BEING THROWN AWAY. nflverse ships the
             # closing spread odds, total odds and moneylines for every

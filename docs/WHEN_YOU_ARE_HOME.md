@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it (step 148; CQ).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2508,10 +2508,26 @@ moves inside the report. The game plan keeps its plays. The report is
 paid; a reader without the subscription sees what it holds and the
 usual matchup scan.
 
+It does not slow the site down. The report's page code loads only when
+a game page opens, the way the Toolbox does, and if it ever fails to
+load, the page shows the old matchup scan and full game plan instead. The
+wiring that has to stay in the main file is 0.6 KB, so its size limit
+went from 496 to 497 KB (the reason is written in the test).
+
+The Paris game was read as a dome. nflverse gives a game abroad the home
+team's stadium until it is played. Stade de France (Steelers at Saints,
+Sunday 9:30 AM ET) read "dome" because the Superdome is one, so no
+forecast was pulled and the report said "a fixed dome". Open-air grounds
+abroad (London, Paris, Munich, Berlin, Mexico City, São Paulo, Rio,
+Dublin, Melbourne) now read outdoors and get their own city's forecast.
+A stadium whose roof can close, like Madrid or Frankfurt, keeps the
+schedule's word. The report also leaves out the surface for a game
+abroad, because that is the home team's too.
+
 Run this after the box has pulled and the next NFL build has run (about
-half an hour). The first line should name `NFL game report`. Then every
-game on the board is listed with its word count, then one game's report
-in full:
+half an hour). The first line is the newest commit and should be dated
+2026-10-19 or later. Then every game on the board is listed with its
+word count, then one game's report in full:
 
 ```
 cd /srv/qellys && git log -1 --format='%h %ci %s' && sudo -u qellys python3 -m engine.gamereport && sudo -u qellys python3 -m engine.gamereport --game DET | head -120
@@ -2519,6 +2535,16 @@ cd /srv/qellys && git log -1 --format='%h %ci %s' && sudo -u qellys python3 -m e
 
 Then open any NFL game on the site: the first chip on the game page is
 **Game report**.
+
+Then the Paris check. It only prints. The `PIT @ NO` line should end in
+a temperature and wind, not `dome`:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nfl_build.py 2026 7 --games-only | grep -E "Weather:|PIT @ NO"
+```
+
+If it still ends in `not pulled`, the forecast service did not answer.
+Paste the line back.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

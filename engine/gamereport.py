@@ -461,7 +461,9 @@ def sec_facts(c: Ctx) -> dict | None:
         roof = {"dome": "a fixed dome", "closed": "roof closed", "open": "roof open",
                 "retractable": "a retractable roof", "outdoors": "outdoors"}.get(
             str(g.get("roof") or st.get("roof") or "").lower(), "")
-        surface = str(g.get("surface") or st.get("surface") or "").replace("_", " ")
+        # Abroad the schedule carries the home team's own surface, not the
+        # ground's (nflverse), so the report says nothing rather than that.
+        surface = "" if st.get("abroad") else str(g.get("surface") or st.get("surface") or "").replace("_", " ")
         alt = _f(st.get("altitude_ft"))
         bits = [b for b in (roof, surface and f"{surface} surface",
                             alt and alt >= 1000 and f"{int(alt):,} feet up") if b]

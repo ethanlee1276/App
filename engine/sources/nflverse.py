@@ -207,6 +207,18 @@ def load_schedules(force: bool = False) -> list[dict]:
     return rows
 
 
+def schedule_roof(row: dict) -> str:
+    """The game's roof: the schedule's own, except at a neutral site on an
+    open-air ground abroad (engine/nflwx.venue_roof), where nflverse
+    carries the home team's building until the game is played — Stade de
+    France read "dome" because the Saints' Superdome is one."""
+    roof = _s(row, "roof")
+    if _s(row, "location").lower() == "neutral":
+        from ..nflwx import venue_roof
+        return venue_roof(_s(row, "stadium")) or roof
+    return roof
+
+
 def weather_from_row(row: dict) -> Weather:
     """Map an nflverse game row to the engine's Weather.
 
@@ -217,7 +229,7 @@ def weather_from_row(row: dict) -> Weather:
     nflverse schedules carry no precipitation, so rain/snow default to False —
     wire a weather API for precip in a later phase.
     """
-    roof = _s(row, "roof").lower()
+    roof = schedule_roof(row).lower()
     if roof in ("dome", "closed"):
         # Climate control is a fact about the building, known in advance.
         return Weather(dome=True, temp_f=70.0, wind_mph=0.0, measured=True)
@@ -263,7 +275,7 @@ def build_games(season: int, week: int) -> list[Game]:
             # Game.total_measured.
             total_measured=_has(r, "total_line"),
             spread_measured=_has(r, "spread_line"),
-            roof=_s(r, "roof"),
+            roof=schedule_roof(r),
             surface=_s(r, "surface", default="grass"),
             # Rest days come precomputed in the feed, which is better than
             # deriving them: nflverse already accounts for byes, holiday
