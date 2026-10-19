@@ -753,6 +753,37 @@
    "status": "HOLDOUT VALIDATED"
   },
   {
+   "id": "EXP-004c",
+   "sport": "cfb",
+   "market": "player props: receptions (B), rushing yards (H)",
+   "proposed": "2026-10-19",
+   "question": "Do EXP-004's college results, the two-stage model on receptions and the hybrid on rushing yards, beat the direct model where a bet is made: at the books' own lines?",
+   "equation": "P(over L) from A, B and H (EXP-004's models, fitted on 2025), each recalibrated by a logistic on its logit at the proxy line; L the line most books hang among each book's last pre-kickoff quote; the market's chance the median de-vigged fair of 3+ books at L",
+   "variables": "college player-games as EXP-004 (2026, week 4 on); the box's line snapshots (college since 2026-09-30) and odds_history (sport cfb); kickoffs from the mirror's 2026 schedule",
+   "mechanism": "A shape that scores better across the whole distribution need not price a line better, and the line is where a bet is made.",
+   "prior_art": "Calibrated probability forecasts scored against a de-vigged market consensus, as EXP-001c; a replication at real lines, not a new method.",
+   "novelty": "4",
+   "data": [
+    "SRC-CFB-PLAYERSTATS",
+    "SRC-OWN-LINES"
+   ],
+   "dataset_version": "the box's line snapshots and odds_history at run time; cfbfastR 2025-2026 play files and the 2026 schedule",
+   "code": "research/exp4c_college_lines_box.py",
+   "baseline": "A*, the direct model recalibrated",
+   "protocol": "Q1 B* v A* on receptions and Q2 H* v A* on rushing yards, log loss at the consensus line, on games after 2026-10-17 only, game-week-clustered bootstrap, 97.5% upper bound under zero to pass. One read per question: the first complete weeks reaching 300 rows, or at the season's end every complete week when they hold 100. 2026 through the freeze is development and decides nothing. Bar committed 2026-10-19, before any run.",
+   "primary_metric": "log loss of the over at the books' consensus line",
+   "sample_size": "not yet run on the box",
+   "results": [],
+   "decision": {
+    "Q1 receptions": "not yet run",
+    "Q2 rush_yds": "not yet run"
+   },
+   "multiple_testing": "Bonferroni over two questions (0.05 / 2)",
+   "failure_modes": "college snapshots begin 2026-09-30, so development is short; the snapshot file carries no sport, so a quote is placed only within 6 hours of the college kickoff its own start names; props exist only where the books and our college slate both priced a player; one fitting season (2025)",
+   "next": "If a question passes: a paper college board pricing that market by B* or H*, tracked before anything reaches a pick and only on Ethan's yes.",
+   "status": "IMPLEMENTED"
+  },
+  {
    "id": "EXP-005",
    "sport": "nfl",
    "market": "player props: receptions, receiving yards, rushing yards",
