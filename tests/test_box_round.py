@@ -66,7 +66,8 @@ def test_the_real_round_reads_no_holdout_and_names_scripts_that_exist():
         assert (ROOT / args[0]).exists(), args[0]
     assert [a[0] for _h, a, _t in BR.STEPS] == [
         "research/thinmarket_box.py", "research/exp1_lines_box.py", "research/exp7_mlb_strikeouts_box.py",
-        "research/exp4c_college_lines_box.py", "research/exp8_nba_shape_box.py"], "runbook block CP's order"
+        "research/exp7b_mlb_strikeout_lines_box.py", "research/exp4c_college_lines_box.py",
+        "research/exp8_nba_shape_box.py"], "runbook block CP's order"
 
 
 if __name__ == "__main__":

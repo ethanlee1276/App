@@ -387,7 +387,7 @@ def score(rows: list[dict], fit: Fit) -> list[dict]:
         fb = fit.cdf_b(x, grid)
         mb = fit.mean_b(x)
         fba = fit.cdf_b(x, grid, scale=x["mu_a"] / mb) if mb > 0 else fb
-        # the proxy line: A's median, to the half below it
+        # the proxy line: A's median plus a half (floor(median) + 0.5)
         med = next((t for t, f in zip(grid, fa) if f >= 0.5), grid[-1])
         line = math.floor(med) + 0.5 if x["m"] == "receptions" else math.floor(med) + 0.5
         over = 1.0 if x["y"] > line else 0.0

@@ -4,12 +4,13 @@ research/exp4c_college_lines_box.py prices EXP-004's college models at the
 lines the box's two stores hold, against the books' de-vigged consensus,
 and decides each question once. What these hold: a quote lands on the game
 its own start names, only before kickoff and never from too far out, the
-last quote per book wins across both stores, and a quote two same-named
-players could claim (or an NFL namesake's, a day apart) lands nowhere; the
-schedule reads the mirror's file; every forecast is a chance and the blend
-sits between its parts; a week is complete only when its major-college
-games are final and in the play file; and each question is decided on the
-first complete weeks that reach the minimum, the same on every later run.
+last two-sided quote per book wins across both stores, and a quote two
+same-named players could claim (or an NFL namesake's, a day apart) lands
+nowhere; the schedule reads the mirror's file; every forecast is a chance
+and the blend sits between its parts; a week is complete only when its
+major-college games are final and in the play file; and each question is
+decided on the first complete weeks that reach the minimum, the same on
+every later run.
 
 Run directly: `python3 tests/test_college_lines_lab.py`
 """
@@ -50,11 +51,13 @@ def test_a_quote_lands_on_the_game_its_own_start_names():
              _snap(K2 - 2 * h, None, "fd", 4.5)]                                   # no start: his next kickoff
     hist = [((K2 - dt.timedelta(days=2)).isoformat(), "Jo Smith", "receptions", "dk", 3.5, -120, 100, None),
             ((K2 - h).isoformat(), "Jo Smith", "receptions", "fd", 5.5, -105, -115, K2.isoformat()),
-            ((K2 + h).isoformat(), "Jo Smith", "receptions", "mgm", 2.5, -130, 110, K2.isoformat())]
+            ((K2 + h).isoformat(), "Jo Smith", "receptions", "mgm", 2.5, -130, 110, K2.isoformat()),
+            ((K2 - h / 2).isoformat(), "Jo Smith", "receptions", "dk", 4.5, 120, None, K2.isoformat())]
     got = C4.gather(kicks, snaps, hist)
     assert got[("jo smith", "g1", "receptions")] == {"dk": (5.5, -110, -110)}
     assert got[("jo smith", "g2", "receptions")] == {"dk": (3.5, -120, 100), "fd": (5.5, -105, -115)}, \
-        "the odds table's later fd quote beats the snapshot's; the in-play mgm one is dropped"
+        "the odds table's later fd quote beats the snapshot's; the in-play mgm one is dropped; " \
+        "dk's later one-sided quote does not displace its last two-sided one"
 
 
 def test_two_same_named_players_on_one_day_lose_the_quote():

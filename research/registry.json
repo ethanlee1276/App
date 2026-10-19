@@ -951,6 +951,37 @@
    "status": "IMPLEMENTED"
   },
   {
+   "id": "EXP-007b",
+   "sport": "mlb",
+   "market": "player props: pitcher strikeouts (starters), at the books' lines",
+   "proposed": "2026-10-19",
+   "question": "Do EXP-007's strikeout models, the two-stage B and the hybrid H, beat the direct model where a bet is made: at the books' own lines, against their de-vigged consensus?",
+   "equation": "P(over L) from A, B and H (EXP-007's Fit on its training starts), each recalibrated by a logistic on its logit at the proxy line (A's median plus a half); L the line most books hang among each book's last quote before the start; C the median de-vigged fair of 3+ books at L",
+   "variables": "EXP-007's scored starts; main-line quotes from odds_history (sport mlb, market strikeouts) and the line snapshots, placed on the pitcher's start by the start they carry or, carrying none, on his next start within two days and on the day only before 11 a.m. Eastern",
+   "mechanism": "A shape that scores better across the whole distribution need not price a line better, and the line is where a bet is made.",
+   "prior_art": "Calibrated probability forecasts scored against a de-vigged market consensus, as EXP-001c and EXP-004c; a new application of an established method.",
+   "novelty": "4",
+   "data": [
+    "SRC-MLB-STATSAPI",
+    "SRC-OWN-LINES"
+   ],
+   "dataset_version": "the box's history.db (mlb_pa, mlb_games, odds_history) and line snapshots at run time",
+   "code": "research/exp7b_mlb_strikeout_lines_box.py",
+   "baseline": "A*, the direct model recalibrated",
+   "protocol": "Q1 B* v A* and Q2 H* v A*, log loss at the consensus line, on EXP-007's holdout starts only, pitcher-season-clustered bootstrap, 97.5% upper bound under zero to pass, at least 300 scored props or NO DECISION. Read once with --holdout, under EXP-007's guards (plays for 98% of every season's finals; no fitted constant on its grid's edge). Every earlier start with a line is development. Bar committed 2026-10-19, before any run.",
+   "primary_metric": "log loss of the over at the books' consensus line",
+   "sample_size": "not yet run on the box",
+   "results": [],
+   "decision": {
+    "Q1 B* v A*": "not yet run",
+    "Q2 H* v A*": "not yet run"
+   },
+   "multiple_testing": "Bonferroni over two questions (0.05 / 2)",
+   "failure_modes": "the play table keeps a start's date, not its first pitch, so a quote carrying no start is kept only before 11 a.m. Eastern on the day (until 2026-09-30 the nightly close harvest also stored games under way at their live prices, with no start); strikeout props exist only where the paid harvest asked for them; the decision period is EXP-007's holdout, so both read the same starts (nothing is tuned between them)",
+   "next": "If a question passes: a paper MLB board pricing strikeouts by B* or H* from the 2027 season's first starts, before anything reaches a pick and only on Ethan's yes.",
+   "status": "IMPLEMENTED"
+  },
+  {
    "id": "EXP-008",
    "sport": "nba",
    "market": "player props: points, rebounds, assists",

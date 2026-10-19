@@ -9,90 +9,26 @@ before it; B is a distribution with the mean it claims, and H is B
 stretched; the fit finds the shrink a made-up league was built with, and
 lands on its grid's edge where there is nothing to shrink; the test finds
 batters faced where a league was built on them and not where it was not;
-the splits
-follow the seasons the table holds; and the holdout is read only with the
-flag, only on a complete season, and never off a grid's edge.
+the splits follow the seasons the table holds; and the holdout is read
+only with the flag, only on a complete season, and never off a grid's
+edge.
 
 Run directly: `python3 tests/test_mlb_strikeouts_lab.py`
 """
 import datetime as dt
-import math
 import os
-import random
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from engine import db                                              # noqa: E402
+from _mlb_league import _league, _write                            # noqa: E402  (path set above)
 from engine.form import MLB_WINDOW_WEIGHTS, compute_form           # noqa: E402
 from engine.models import GameLog                                  # noqa: E402
 from engine.nflusage import ewma_opps                              # noqa: E402
 from research import exp7_mlb_strikeouts_box as E7                # noqa: E402
-
-COLS = "(game_pk, at_bat, season, date, pitcher_id, pitcher, team, event_type)"
-
-
-def _write(pa, games):
-    path = os.path.join(tempfile.mkdtemp(), "history.db")
-    conn = db.connect(path)
-    conn.executemany(f"INSERT INTO mlb_pa {COLS} VALUES (?,?,?,?,?,?,?,?)", pa)
-    conn.executemany("INSERT INTO mlb_games (game_pk, season, date, game_type) VALUES (?,?,?,?)", games)
-    conn.commit()
-    conn.close()
-    return E7.open_db(path)
-
-
-def _league(seasons=(2025, 2026), pitchers=30, starts_each=28, seed=3, same_rate=False, missing=0, direct=False):
-    """A made-up league where strikeouts ARE batters faced times a rate:
-    each pitcher-season a true rate (one shared rate with ``same_rate``)
-    and a usual length; a start's batters faced around it, each batter
-    struck out at his rate; a reliever finishes every side. With
-    ``direct`` the strikeouts come straight from the pitcher's own mean
-    instead, spread wider than batters faced explain (a gamma-Poisson of
-    size 2) and placed among the batters at random. ``missing``
-    regular-season finals are listed with no plays (a backfill not done)."""
-    rng = random.Random(seed)
-    pa, games, pk = [], [], 1000
-
-    def poisson(lam):
-        k, term = 0, math.exp(-lam)
-        u, acc = rng.random(), term
-        while u > acc:
-            k += 1
-            term *= lam / k
-            acc += term
-        return k
-    for season in seasons:
-        rates = [0.235 if same_rate else rng.uniform(0.15, 0.32) for _ in range(pitchers)]
-        usual = [rng.uniform(18, 27) for _ in range(pitchers)]
-        means = [rng.uniform(3.0, 8.0) for _ in range(pitchers)]
-        for g in range(starts_each):
-            date = (dt.date(season, 3, 28) + dt.timedelta(days=6 * g)).isoformat()
-            for i in range(0, pitchers, 2):
-                pk += 1
-                ab = 0
-                for pit, batting in ((i, f"T{i + 1}"), (i + 1, f"T{i}")):
-                    bf = max(3, round(rng.gauss(usual[pit], 3.5)))
-                    if direct:
-                        k = poisson(rng.gammavariate(2.0, means[pit] / 2.0))
-                        bf = max(bf, k)
-                        ks = set(rng.sample(range(bf), k))
-                    for j in range(bf):
-                        hit = (j in ks) if direct else rng.random() < rates[pit]
-                        pa.append((pk, ab, season, date, 100 + pit, f"P{pit}", batting,
-                                   "strikeout" if hit else "field_out"))
-                        ab += 1
-                    for _ in range(4):
-                        out = "strikeout" if rng.random() < 0.25 else "single"
-                        pa.append((pk, ab, season, date, 900 + pit, f"R{pit}", batting, out))
-                        ab += 1
-                games.append((pk, season, date, "R"))
-    for j in range(missing):
-        games.append((90000 + j, seasons[-1], f"{seasons[-1]}-09-20", "R"))
-    return _write(pa, games)
 
 
 def test_a_start_is_the_pitcher_his_opponents_saw_first():
@@ -120,9 +56,10 @@ def test_a_start_is_the_pitcher_his_opponents_saw_first():
 
 def test_a_start_is_read_only_from_the_starts_before_it():
     ks, bfs = [5, 7, 3, 9, 4], [20, 24, 18, 26, 22]
-    ss = [{"pid": 7, "season": 2026, "date": f"2026-05-{10 + 5 * i:02d}", "game": i, "bf": b, "k": k}
+    ss = [{"pid": 7, "name": "Ace", "season": 2026, "date": f"2026-05-{10 + 5 * i:02d}", "game": i, "bf": b, "k": k}
           for i, (k, b) in enumerate(zip(ks, bfs))]
-    ss += [{"pid": 8, "season": 2026, "date": f"2026-05-{10 + 5 * i:02d}", "game": 50 + i, "bf": 22, "k": 6}
+    ss += [{"pid": 8, "name": "Deuce", "season": 2026, "date": f"2026-05-{10 + 5 * i:02d}", "game": 50 + i, "bf": 22,
+            "k": 6}
            for i in range(3)]
     rows = E7.rows_from(ss)
     assert [(r["who"], r["y"]) for r in rows] == [("7|2026", 9.0), ("7|2026", 4.0)], "three starts behind it first"

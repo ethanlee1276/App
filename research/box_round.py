@@ -29,6 +29,8 @@ STEPS = (
     ("EXP-R06: the board's thin picks priced from the main lines", ("research/thinmarket_box.py",), None),
     ("EXP-001c: the NFL models at the books' own lines", ("research/exp1_lines_box.py",), 20),
     ("EXP-007: MLB starters' strikeouts (validation only)", ("research/exp7_mlb_strikeouts_box.py",), None),
+    ("EXP-007b: those strikeout models at the books' own lines (development only)",
+     ("research/exp7b_mlb_strikeout_lines_box.py",), None),
     ("EXP-004c: the college results at the books' own lines", ("research/exp4c_college_lines_box.py",), None),
     ("EXP-008: the NBA spread against a shape built from minutes (validation only)",
      ("research/exp8_nba_shape_box.py",), None),

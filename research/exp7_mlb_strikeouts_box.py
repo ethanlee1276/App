@@ -161,7 +161,7 @@ def rows_from(all_starts: list[dict]) -> list[dict]:
             mu_a = compute_form(logs, sum(ks) / len(ks), None, weights=MLB_WINDOW_WEIGHTS).mean
             if mu_a <= 0:
                 continue
-            out.append({"who": f"{pid}|{season}", "s": season, "date": s["date"], "y": float(s["k"]),
+            out.append({"who": f"{pid}|{season}", "name": s["name"], "s": season, "date": s["date"], "y": float(s["k"]),
                         "o": float(s["bf"]), "mu_a": mu_a, "mu_o": ewma_opps(bfs, BF_HALF_LIFE),
                         "k_sum": float(sum(ks)), "bf_sum": sum(bfs)})
     return out

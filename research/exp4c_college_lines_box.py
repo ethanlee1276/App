@@ -36,8 +36,9 @@ THE FORECASTS of "over", all from information before the game:
              target counts are the nearest to 2026's; one season also keeps
              the run inside the box's memory)
   A*, B*, H* each recalibrated (a logistic on its logit) at the proxy line
-             — the half below A's median — on the same 2025 games, as
-             EXP-001c recalibrates on its training seasons
+             — A's median plus a half (exp1_lines_box.proxy_line) — on the
+             same 2025 games, as EXP-001c recalibrates on its training
+             seasons
   C          the books' de-vigged consensus
   D          the average of logit(C) and logit(B*) on receptions, of
              logit(H*) on rushing yards — description only
@@ -158,13 +159,17 @@ def next_game(games: list, taken: _dt.datetime) -> tuple | None:
 
 def gather(kicks: dict, snapshots=(), history=(), funnel: Counter | None = None) -> dict:
     """``{(name, game id, market): {book: (line, over, under)}}`` — each
-    book's last quote before kickoff, from snapshot rows (dicts as
+    book's last two-sided quote before kickoff, from snapshot rows (dicts as
     line_history.jsonl writes them) and odds_history rows (taken_at,
     player, market, book, line, over, under, commence_time)."""
+    from engine.odds import pair_is_sane
     funnel = funnel if funnel is not None else Counter()
     last: dict = {}
 
     def keep(name, gid, market, book, taken, line, over, under):
+        if not pair_is_sane(over, under):
+            funnel["one-sided quotes left out"] += 1
+            return
         k = (name, gid, market, str(book or "").lower())
         if k not in last or taken > last[k][0]:
             last[k] = (taken, line, over, under)
