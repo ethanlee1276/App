@@ -2425,7 +2425,15 @@ touches a pick:
   plays 38 minutes or 24. A test asks whether a spread built from his
   minutes prices better, on last season's games.
 
-Run these in order. Paste each output back:
+**The quick way: one line.** It checks the code, then runs steps 2 to 6
+below in order, each under its own heading, and says how each one
+exited. About ten minutes; paste everything back:
+
+```
+cd /srv/qellys && git log --oneline -1 && sudo -u qellys nice -n 19 python3 research/box_round.py
+```
+
+The same steps one at a time, if you would rather:
 
 1. The box has today's code. It should name `Research lab session three`
    or something newer.

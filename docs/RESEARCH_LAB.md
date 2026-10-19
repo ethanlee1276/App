@@ -27,6 +27,7 @@ The lab lives in `research/`:
 | `research/exp7_mlb_strikeouts_box.py` | EXP-007 (MLB: a starter's strikeouts, batters faced first; runs on the box) |
 | `research/exp4c_college_lines_box.py` | EXP-004c (the college results at the books' own lines; runs on the box) |
 | `research/exp8_nba_shape_box.py` | EXP-008 (NBA: a shape built from his minutes against the board's spread; runs on the box) |
+| `research/box_round.py` | every read-only box run above, in order, in one command (never a holdout) |
 | `tests/test_research_lab.py` | the lab's tests (also `test_thin_market.py`, `test_mlb_strikeouts_lab.py`, `test_college_lines_lab.py`, `test_nba_shape_lab.py`) |
 
 `python3 research/registry.py` prints the ledger; `--sources` prints the
@@ -724,7 +725,9 @@ market at pick time) is written and tested, and waits on one box command.
 ### Box commands (round five)
 
 The same list, in order, is block CP of `docs/WHEN_YOU_ARE_HOME.md`.
-Every line is read-only.
+Every line is read-only. `research/box_round.py` runs lines 2 to 6 in one
+command, each in its own process and under its own heading, and never
+passes `--holdout`.
 
 ```
 cd /srv/qellys && git log --oneline -1
