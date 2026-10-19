@@ -34,6 +34,8 @@ STEPS = (
     ("EXP-004c: the college results at the books' own lines", ("research/exp4c_college_lines_box.py",), None),
     ("EXP-008: the NBA spread against a shape built from minutes (validation only)",
      ("research/exp8_nba_shape_box.py",), None),
+    ("EXP-009: the NHL board's count against a shape built from ice time (validation only)",
+     ("research/exp9_nhl_shape_box.py",), None),
 )
 #: Per step. The slowest measured in the sandbox took about a minute; the
 #: box is slower and shares its one core with the site.

@@ -168,6 +168,24 @@
    "status": "PARTIALLY VERIFIED"
   },
   {
+   "id": "SRC-NHL-API",
+   "sports": [
+    "nhl"
+   ],
+   "provider": "NHL",
+   "dataset": "the league's public web API: schedules, box scores with ice time, play-by-play and shifts (engine/sources/nhldata.py, nhlpbp.py, nhlshifts.py)",
+   "url": "https://api-web.nhle.com/v1",
+   "access": "public JSON, no key",
+   "coverage": "used in production; the box's player_game_logs hold NHL 2023-26 skater and goalie games (box count, 2026-10-17); depth per season not counted here",
+   "update": "live",
+   "ids": "NHL game and player ids; logs filed by full name",
+   "missing": "not measured",
+   "quality": "official feed",
+   "license": "the NHL's terms of use not verified in this audit; commercial display needs checking",
+   "verified": "2026-10-19",
+   "status": "PARTIALLY VERIFIED"
+  },
+  {
    "id": "SRC-UFC",
    "sports": [
     "ufc"

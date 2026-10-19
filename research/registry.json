@@ -1011,6 +1011,37 @@
    "failure_modes": "the centre leaves out tonight's spread, rest, vacancy and defence dials, which neither shape has; the box holds the seasons its NBA backfill read; garbage time and foul trouble live in the minutes pool, not the rate; PHI by moments mixes the rate's own estimation error into the count's spread",
    "next": "If a stat advances: a paper NBA board pricing that stat by C, tracked against the live board's chances before Ethan decides anything.",
    "status": "IMPLEMENTED"
+  },
+  {
+   "id": "EXP-009",
+   "sport": "nhl",
+   "market": "player props: shots on goal, points, blocked shots (skaters)",
+   "proposed": "2026-10-19",
+   "question": "At the NHL board's own centre (engine/nhl/model.skater_projection, as the NHL walk calls it), does a shape built from his ice time price shots on goal, points and blocked shots better than the board's own count shape?",
+   "equation": "C: P(Y <= t) = (1/Q) sum_q F_count(t; mean mu * r_q, variance PHI_s * mean), r_q the Q = 25 quantiles of the training pool of actual over projected ice time, scaled to mean one, PHI_s by moments given actual ice time; S: model.nbinom_pmf at the projection's mean and dispersion (shots and blocks: his own variance ratio shrunk toward 1.25; points Poisson); N (described): F_count(t; mu, PHI_N_s * mu), PHI_N_s by moments given only the projection",
+   "variables": "mu = the board's projection at a neutral opponent with no power-play step, from his earlier games (up to 40) and the position priors from every skater-game before the date; Y the stat in a regular-season game he played; the walk's five-game floor and the board's ROLE_SWING refusal applied first",
+   "mechanism": "A skater's counts come from his ice time, which swings with game state, special teams, injuries and line juggling. The board's spread is set from his raw game counts and a written prior; a shape built from ice time widens with his minutes' spread and is skewed where the negative binomial is not.",
+   "prior_art": "Compound and mixed count models; ice time as the driver of skater counts is standard in hockey analytics. A new application to the site's own pricing shape.",
+   "novelty": "4",
+   "data": [
+    "SRC-NHL-API"
+   ],
+   "dataset_version": "the box's history.db player_game_logs (sport nhl: toi, sog, points, blocks) at run time; complete seasons only",
+   "code": "research/exp9_nhl_shape_box.py",
+   "baseline": "S, the board's own count at its own projection (engine/nhl/model, unchanged)",
+   "protocol": "complete seasons only (games from April 1 of the second year); scored games before April 15. Two or more: train on all but the last, validate on the last before January 1, hold out from January 1. One: train before December 15, validate to February 9, hold out from February 10. C v S per stat; each advances only if validation favours C and the holdout's player-season-clustered 98.33% interval on CRPS(C) - CRPS(S) sits under zero. Holdout read once (--holdout). An advance goes to Ethan with C - N beside it; when C - N's interval holds zero, the simpler N is what a paper test tries. Bar committed 2026-10-19, before any run on real data.",
+   "primary_metric": "CRPS on whole numbers (shots 0-15, points 0-6, blocks 0-10)",
+   "sample_size": "not yet run on the box. Made-up leagues of 90 skaters (tests/test_nhl_shape_lab.py): C advanced in 9 of 30 stat tests where counts come from the night's ice time, 1 of 30 where they come from his mean with the board's own spreads. At the box's scale (900 skaters, three seasons) the run took 42 s and 218 MB here",
+   "results": [],
+   "decision": {
+    "sog": "not yet run",
+    "points": "not yet run",
+    "blocks": "not yet run"
+   },
+   "multiple_testing": "Bonferroni over three tests (0.05 / 3)",
+   "failure_modes": "the centre is the walk's, at a neutral opponent with no power-play step, so tonight's opponent, goalie and special teams are in neither shape; PHI by moments mixes the centre's own error into the spread, which is also why N can beat S where the board's 1.25 is the true spread (on made-up leagues its refit read 1.27-1.37 there); playoff games feed projections as they feed the live board; a player is filed under his newest position",
+   "next": "If a stat advances: a paper NHL board pricing that stat by C (or by N when C - N holds zero), tracked against the live board's chances before Ethan decides anything.",
+   "status": "IMPLEMENTED"
   }
  ]
 }
