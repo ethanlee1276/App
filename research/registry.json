@@ -828,6 +828,37 @@
    "failure_modes": "2024-25 were read before as EXP-001's holdout (A against B, never A's misses against these quantities); one season of 2026; the correction moves A's centre but keeps its pool's shape",
    "next": "Does the shrink add to B's gain on receptions, or is it the same gain (B's centre is already lower when A runs high)? Test B with and without it on games after the freeze, and measure the same shrink on the board's live receptions projections before any number changes.",
    "status": "HOLDOUT VALIDATED"
+  },
+  {
+   "id": "EXP-R06",
+   "sport": "nfl",
+   "market": "the one board's thin picks: lines with no three-book two-sided field (mostly alternate rungs)",
+   "proposed": "2026-10-19",
+   "question": "For board picks the live price rule cannot judge, does a market chance read off the field's main-line curve make pricetrust's rule closer to what happened, week by week held out?",
+   "equation": "each book's main line, de-vigged, pins its centre m_b under a shape with variance = PHI x mean (negative binomial for counts, gamma for yards); the field's m = median over 3+ books; market = P(side at the pick's line | m); shown = ours - w max(0, ours - market - T)",
+   "variables": "PHI per market from 2022-25 player-seasons (fieldcurvefit.py, e.g. receptions 1.19, rec_yds 21.5, rush_yds 20.3, pass_att 1.77); ours = the board's journaled chance; w, T chosen each week on earlier weeks only",
+   "mechanism": "Alternate rungs are hung one-sided, so the exact-line field is missing exactly where our chance can run furthest from the middle; the main lines still say where the middle is.",
+   "prior_art": "Compound-Poisson (Tweedie-type) variance laws for counts and yards; extrapolating a market's implied distribution from quoted lines is standard in options and in sports pricing.",
+   "novelty": "4",
+   "data": [
+    "SRC-OWN-JOURNAL",
+    "SRC-OWN-LINES",
+    "SRC-NFLVERSE-PLAYERWEEK"
+   ],
+   "dataset_version": "the box's ledger and line snapshots at run time",
+   "code": "research/thinmarket_box.py",
+   "baseline": "the board's chance as shown (w = 0)",
+   "protocol": "pricetrust's walk and bar, imported unchanged; ONE READ: the decision uses the first held-out weeks reaching 3 weeks and 100 picks, fixed thereafter; a pass changes nothing until Ethan says yes. Power on made-up seasons of 80 thin picks a week: passes 33 of 40 runs where the curve is true and our chance a 12-point overclaim, 1 of 40 where ours is true.",
+   "primary_metric": "held-out log loss",
+   "sample_size": "not yet run",
+   "results": [],
+   "decision": {
+    "thin picks, NFL board": "not yet run (box)"
+   },
+   "multiple_testing": "one rule family, one population, one read; the single-book comparison is printed and decides nothing",
+   "failure_modes": "within-season spread includes moves the books foresee, so the curve may be a little wide (a FAIL then means not shown, not disproved); rushing attempts' spread drifts with the mean; passing touchdowns are read as Poisson (a little wide)",
+   "next": "Run on the box when Ethan is home; if it passes and he says yes, the board extends trust_price to thin picks through engine/fieldcurve.field_chance.",
+   "status": "IMPLEMENTED"
   }
  ]
 }

@@ -134,6 +134,8 @@ FITS = (
     ("selfit", "report", (), "fits the selection correction and tries to fail it out of sample (engine/selectionfit)"),
     ("palettefit", "report", (), "a colour token back on its contrast target — design, not a model"),
     ("qbscriptfit", "report", (), "retired the spread tilt on volume, 2026-10-12: on today's base it adds nothing"),
+    ("fieldcurvefit", "report", (), "the market's curve shape (PHI) the thin-pick test reads (research/thinmarket_box, "
+     "EXP-R06); on no board until that passes and Ethan says yes"),
     # ---- failed their bar --------------------------------------------------------------------
     ("engine.cbfit", "failed", (), "a top corner's effect — did not hold on the box, 2026-10-04"),
     ("engine.tdinjfit", "failed", (), "an injury moving WHO scores — did not hold on the box, 2026-10-04"),
