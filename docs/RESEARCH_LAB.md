@@ -21,10 +21,182 @@ The lab lives in `research/`:
 | `research/exp1_lines_box.py` | EXP-001c (the models at the books' real NFL lines; runs on the box) |
 | `research/exp4_college_two_stage.py` | EXP-004 (EXP-001 replicated on college) |
 | `research/exp5_symbolic_residuals.py` | EXP-005 (searched equations for the direct model's misses) |
-| `tests/test_research_lab.py` | the lab's tests |
+| `research/exp6_shrink_b.py` | EXP-006 (EXP-005's shrink on the two-stage model; read at season end) |
+| `research/thinmarket_box.py` | EXP-R06 (a market chance for the board's thin picks; runs on the box) |
+| `engine/fieldcurve.py`, `fieldcurvefit.py` | the market's curve from main lines, and the spread law it reads |
+| `research/exp7_mlb_strikeouts_box.py` | EXP-007 (MLB: a starter's strikeouts, batters faced first; runs on the box) |
+| `research/exp4c_college_lines_box.py` | EXP-004c (the college results at the books' own lines; runs on the box) |
+| `tests/test_research_lab.py` | the lab's tests (also `test_thin_market.py`, `test_mlb_strikeouts_lab.py`, `test_college_lines_lab.py`) |
 
 `python3 research/registry.py` prints the ledger; `--sources` prints the
 data matrix.
+
+---
+
+## Session 3 report (2026-10-19), in the spec's Part 13 format
+
+Built while Ethan was away ("Yeah keep building. I'm not home so just
+save all code for when I'm home"). Four new tests and two protocol
+amendments. None has read real data yet: each one runs on the box or
+waits on games, and every bar below was committed before that.
+
+### 1–2. Research questions and why they matter
+
+- **EXP-R06, the board's thin picks.** On the box's first full board
+  under the price rule, 133 of 230 NFL player picks had no three-book
+  field at their own line. They are mostly alternate rungs, which books
+  hang one-sided. Those picks keep our chance unjudged, and they are where
+  our chance can run furthest from the middle. Can the books' main lines
+  price them?
+- **EXP-006.** Is the two-stage model's receptions centre too wide in the
+  same way EXP-005 found the direct model's was, so that the two gains
+  add?
+- **EXP-007, MLB's first experiment (backlog B8).** Is a starter's
+  strikeout count better forecast as batters faced times a strikeout rate
+  than directly? The spec calls for a program per sport, and it forbids
+  assuming an NFL finding transfers.
+- **EXP-004c.** Do the college results (B on receptions, H on rushing)
+  hold at the books' own lines? A line is where a bet is made.
+- **One read, not a read per run (EXP-001b, EXP-001c).** Deciding at
+  whichever run first looks good is optional stopping, and it inflates
+  false passes.
+
+### 3–6. Methods, equations and variables
+
+- **EXP-R06.** Each book's main line is two-sided, so de-vigged it pins
+  that book's centre m_b. It does so under a measured shape: variance =
+  PHI × mean, read as a negative binomial for counts and a gamma for
+  yards (`engine/fieldcurve`). The field's centre is the median over
+  three books or more, and it gives the chance at the pick's own line.
+  The test is pricetrust's rule and bar, imported unchanged:
+  shown = ours − w·max(0, ours − market − T).
+- **EXP-006.** B′ is B moved to m′ = m_B + c0 + c1·m_B. The line was
+  fitted on 2017–2025 and printed before any scored game: +0.4919 −
+  0.18155·m_B. The score is CRPS(B′) − CRPS(B) on receptions.
+- **EXP-007.**
+  - A is the site's MLB form blend of his strikeouts, with the training
+    pool's shape.
+  - B: batters faced = his starts' age-weighted batters faced plus a
+    residual drawn from the training starts' own pool (early exits
+    included, no assumed curve). Then strikeouts | batters faced ~
+    Binomial(bf, p), with p his season rate shrunk toward the league's by
+    k batters, k fitted.
+  - H is A's mean with B's shape.
+  - The score is CRPS on 0–15 strikeouts.
+- **EXP-004c.** P(over L) from A, B and H, all fitted on 2025, each
+  recalibrated by a logistic at the proxy line. L is the line most books
+  hang among each book's last quote before kickoff. C is the books'
+  de-vigged consensus there. The score is log loss.
+
+### 7. Data and its verified availability
+
+- **The spread law, measured (`fieldcurvefit.py`, 2022–25).** Within a
+  player-season, a game's variance is a constant multiple of its mean.
+  The multiple is PHI = 1.19 for receptions, about 20 in every yards
+  market, and 1.77 for pass attempts. It holds across low, middle and high
+  means in every market but rushing attempts.
+- **Line stores.** The box's line snapshots keep every book's main line,
+  both sides, with the game's start. Alternate ladders live only in
+  `alt_curves`, and only since 2026-10-16. College snapshots begin
+  2026-09-30.
+- **odds_history's college props** come from the prop tape: players on an
+  injury report, kept only when the number moved. That is not a
+  representative sample on its own, so EXP-004c reads both stores.
+- **College completeness.** 2025's play file held 886 of 888 major-college
+  games. Every completed 2025 game has its real kickoff in the mirror's
+  schedule; none is still marked "time TBD".
+- **MLB.** The box's play-by-play table holds the seasons the chart
+  backfill has read, likely 2026 alone. EXP-007 prints its coverage
+  against the season's regular-season finals.
+
+### 8–10. Implementation, evaluation design, success criteria
+
+| experiment | bar committed in | read |
+|---|---|---|
+| EXP-001b, EXP-001c amendments (one read) | `8e0bf7d0` | before any decision row existed |
+| EXP-R06 | `e82dc323` | on the box (round five) |
+| EXP-006 | `beb1019b` | once, at the regular season's end |
+| EXP-007 | `76c9f82f` | on the box: validation first, holdout once |
+| EXP-004c | `97448fc5` | on the box: development now; decision as weeks 9+ complete |
+
+Each bar's strictness was tried on made-up data where the truth is known:
+
+| test | passes where it should | passes where it should not |
+|---|---|---|
+| EXP-R06 | 33 runs of 40 | 1 of 40 |
+| EXP-007 (B v A) | 19 leagues of 20 | 0 of 20 |
+
+Two guards keep EXP-007's holdout to one honest read. It is not read
+until the table holds plays for 98% of every season's regular-season
+finals, so the rows cannot change afterwards. It is not read while the
+fitted shrink sits on its grid's edge, which would need a written
+amendment first.
+
+### 11–12. Results (measured) and uncertainty
+
+No decision this session: every new test waits on the box or on games.
+What was measured:
+
+- **The live rule's own counts** (Ethan's paste, 2026-10-17): 230 player
+  picks checked; 26 with no book quote; 133 with under three books at the
+  line; 71 with a field; 35 above it and moved, 16 of them posted.
+- **EXP-006's fitted line** is a slope of −0.18155. B's receptions centre
+  is too wide as well, a little more than A's (EXP-005: −0.154). Whether
+  shrinking it adds is the test.
+- **EXP-001b:** 0 of 192 regular-season games after the freeze are final
+  yet.
+
+### 13. Limitations and failure modes
+
+- **EXP-R06.** One spread per market; rushing attempts breaks the law at
+  the extremes. A book's main line may come from a different model than
+  its alternates.
+- **EXP-007.** Likely one season, so the one-season split. Openers count
+  as starts. Opponent lineup, park and umpire are in neither model.
+- **EXP-004c.** Development is short, because college snapshots start
+  2026-09-30. The snapshot file has no sport field, so a quote is placed
+  only within six hours of the college kickoff its own start names (an
+  NFL namesake plays a day apart). There is one fitting season.
+- **EXP-006.** One season of rows. The line is fitted on the seasons B
+  trains on.
+
+### 14. Novelty assessment
+
+| item | class |
+|---|---|
+| EXP-R06 (a variance law used to extend a market's price to lines it does not quote) | 4 |
+| EXP-006 | 2, shrinkage combined with the compound model |
+| EXP-007 | 4 |
+| EXP-004c | 4 |
+
+Still no new mathematics.
+
+### 15. Decisions
+
+| item | decision |
+|---|---|
+| EXP-R06 | implemented. A pass goes to Ethan with its w and T, never straight to the board |
+| EXP-006 | preregistered; read once at season end |
+| EXP-007 | implemented; validation read first, then the holdout once |
+| EXP-004c | implemented; development now, decisions as college weeks 9+ complete |
+| EXP-001b, EXP-001c | amended to one read before any decision row was read |
+
+### 16. Next highest-value experiment
+
+**EXP-001c's decision** is still first: NFL receptions at real lines, the
+first complete weeks after the freeze to reach 300 rows. It is the
+earliest read that says whether any distribution gain survives at the
+book's number.
+
+Then, from the box:
+
+1. EXP-007's validation paste; its holdout follows once that looks sound.
+2. EXP-004c as the college weeks complete.
+3. EXP-R06 as thin picks settle.
+
+Next to build: **EXP-007b**, strikeouts at the MLB lines the box holds
+(odds_history MLB from 2026-06-01). Then B9: NBA, minutes times a
+per-minute rate.
 
 ---
 
@@ -471,15 +643,17 @@ market at pick time) is written and tested, and waits on one box command.
 | B5 | Store each pick's feature vector at decision time (feature_snapshots) | — | medium | own | a pick can be re-priced from its stored features alone |
 | B6 | EXP-001b scored weekly | games | none | auto | the preregistered bar |
 | B7 | EXP-003b on the box (amended: market chance rebuilt from snapshots) | Ethan runs it | none | journal + line history | the bar in the script |
-| B8 | MLB first experiment: two-stage strikeouts (batters faced × K rate) vs direct | — | medium | MLB Stats API on the box | same protocol as EXP-001 |
+| B8 | MLB first experiment: two-stage strikeouts (batters faced × K rate) vs direct | — | medium | MLB Stats API on the box | **EXP-007, implemented**; validation read first, then the holdout once |
 | B9 | NBA: minutes × per-minute rate, minutes from rotation/injury state | — | medium | box history | same protocol |
 | B10 | UFC: fight-time distribution × striking rate for significant-strike props | data audit of per-fight stats | large | needs a per-fight stats source | coverage verified first |
 | B11 | College: the EXP-001 protocol on cfbfastR (verified 2022–26) | — | small | have it | **done: EXP-004** (receptions B and rushing H advance) |
 | B12 | EXP-001c decision rows (NFL receptions at real lines) | games after 2026-10-17 + nflverse stats | none | box | 300 receptions rows; the bar in the script |
-| B13 | EXP-004c: college B (receptions) and H (rushing) at real college lines | a college twin of `exp1_lines_box.py` | medium | box (college props in odds history) | same bar as EXP-001c |
-| B14 | EXP-006: B with and without EXP-005's shrink, NFL receptions | — | small | have it | preregistered, scored on games after the freeze |
+| B13 | EXP-004c: college B (receptions) and H (rushing) at real college lines | — | — | box (line snapshots + odds_history) | **EXP-004c, implemented**; one read per question on weeks 9+ |
+| B14 | EXP-006: B with and without EXP-005's shrink, NFL receptions | — | — | have it | **preregistered**; read once at the regular season's end |
 | B15 | pricetrust prospective: the NFL board's rule re-tested on `trust_from` | four weeks of picks after 2026-10-17 | none | box | every held-out week no worse, pooled better — or the switch goes off |
 | B16 | Canonical participant table (B4) feeding every join above | — | medium | have ids | as B4 |
+| B17 | EXP-007b: strikeouts at the MLB lines the box holds (odds_history from 2026-06-01) | EXP-007's holdout | medium | box | the EXP-001c bar, one read |
+| B18 | EXP-R06: thin board picks priced from the main lines | settled weeks of thin picks | none | box | pricetrust's bar, one read; a pass goes to Ethan |
 
 ## Task 7 — what I can do, and what needs Ethan
 
@@ -523,19 +697,31 @@ market at pick time) is written and tested, and waits on one box command.
 3. **SQLite stays** (recommended) or the lab moves to Postgres.
 4. **Vendor samples:** still not needed.
 
-### Box commands (round four)
+### Box commands (round five)
+
+The same list, in order, is block CP of `docs/WHEN_YOU_ARE_HOME.md`.
+Every line is read-only.
 
 ```
 cd /srv/qellys && git log --oneline -1
-cd /srv/qellys && git log -1 --format='%h %ci %s' && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};print('price trust:',b.get('price_trust','(none: this board was built by older code)'));rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),r.get('trust_from'),'->',r.get('model_prob')) for r in t[:8]]"
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -16
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/thinmarket_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -20
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp4c_college_lines_box.py
 ```
 
-All read-only.
+1. The box has today's code.
+2. EXP-R06. It says NOT YET until three held-out weeks of settled thin
+   picks exist.
+3. EXP-001c. Run it Tuesday or later.
+4. EXP-007, validation only. The holdout (`--holdout`) is read once, after
+   this paste has been checked.
+5. EXP-004c. Development numbers now; each question decides as the
+   college weeks after the freeze complete.
 
-1. The first line shows the box has today's code.
-2. The second shows the NFL board's price counts (checked, no quote, under
-   three books, fielded, above, moved) and the picks it moved. Run it after
-   the next NFL build; the file time must be later than the commit.
-3. The third is EXP-001c. Run it Tuesday or later; it now prints how many
-   more weeks its decision needs.
+At the NFL regular season's end (January), EXP-001b and EXP-006 read once:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_two_stage.py --prospective
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp6_shrink_b.py
+```

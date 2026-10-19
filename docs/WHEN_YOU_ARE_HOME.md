@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts and college at real lines (step 147; CP).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2403,6 +2403,57 @@ picks`, and the file time should be later than that commit:
 ```
 cd /srv/qellys && git log -1 --format='%h %ci %s' && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "import json;d=json.load(open('data/built/recommendations.json'));b=d.get('likely_board') or {};print('price trust:',b.get('price_trust','(none: this board was built by older code)'));rows=(b.get('rows') or [])+(b.get('held') or []);t=[r for r in rows if 'de-vigged price says' in (r.get('check_notes') or {}).get('model','')];print(len(rows),'board picks,',len(t),'shown at the price');[print(' ',r.get('player'),r.get('market'),r.get('side'),r.get('line'),r.get('trust_from'),'->',r.get('model_prob')) for r in t[:8]]"
 ```
+
+**CP. The research lab, session three: everything to run, in order** (step 147).
+Your "Yeah keep building. I'm not home so just save all code for when I'm
+home". Your CO paste showed the price rule working: 230 picks checked, 35
+moved to the market's number. What is new, all read-only, and none of it
+touches a pick:
+
+- **Thin picks.** 133 of those 230 had no three-book field at their own
+  line (mostly alternate rungs), so they keep our chance unjudged. A test
+  now prices them from the books' main lines and tries the same rule, week
+  by week, on picks that have settled. A pass comes to you; the board does
+  not change without your yes.
+- **MLB's first experiment.** Does "batters faced × strikeout rate"
+  forecast a starter's strikeouts better than his strikeouts alone? It
+  reads the box's own play-by-play.
+- **College at real lines.** CN's two college results, now tested at the
+  books' own lines. It decides on the weeks after this Saturday as they
+  finish.
+
+Run these in order. Paste each output back:
+
+1. The box has today's code. It should name `Research lab session three`
+   or something newer.
+2. The thin-pick test. Expect NOT YET for a few weeks; the first line
+   counts how many picks it could price.
+3. EXP-001c, the NFL test at real lines. Run it Tuesday or later.
+4. The MLB test, its first half only. I check this paste before step 6.
+5. The college test. It prints development numbers now and says how many
+   weeks its decision still needs. It takes about a minute and around
+   250 MB.
+
+```
+cd /srv/qellys && git log --oneline -1
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/thinmarket_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -20
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp4c_college_lines_box.py
+```
+
+6. **Only after I have read step 4's paste:** the MLB holdout, read once.
+   The script itself refuses if the season's plays are not all in, or if
+   a fitted number sits on the edge of its range.
+   ```
+   cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py --holdout
+   ```
+7. **January, after the NFL regular season:** the two tests that read
+   once at season's end. Until then they print only how many games are in.
+   ```
+   cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_two_stage.py --prospective
+   cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp6_shrink_b.py
+   ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
