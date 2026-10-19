@@ -888,6 +888,36 @@
    "failure_modes": "a season's worth of rows only; the shrink line is fitted on seasons B also trains on",
    "next": "Read at season end, with EXP-001b.",
    "status": "PROPOSED"
+  },
+  {
+   "id": "EXP-007",
+   "sport": "mlb",
+   "market": "player props: pitcher strikeouts (starters)",
+   "proposed": "2026-10-19",
+   "question": "Is a starter's strikeout count better forecast as batters faced times a strikeout rate than directly from his strikeouts? EXP-001's question in a second sport (backlog B8).",
+   "equation": "P(K) = sum_bf P(K | BF = bf) P(BF = bf); BF = round(ewma of his earlier starts' batters faced, half-life 3, + e), e from the training starts' residual pool, at least 1; K | bf ~ Binomial(bf, p), p = (K so far + k league) / (BF so far + k), k fitted on {25, 50, ..., 1600}; H = A's mean with B's shape",
+   "variables": "K strikeouts and BF batters faced of the game's starter (the pitcher who faced the opponents' first batter), from history.db mlb_pa; X his earlier starts this season (three at least); A's mean the site's MLB form blend (engine.form with MLB_WINDOW_WEIGHTS)",
+   "mechanism": "How deep a starter goes (pitch count, leash, an early knockout) and how often he strikes a batter out are separate processes; the direct model folds both into one ratio pool.",
+   "prior_art": "Standard among baseball bettors and projection systems (strikeouts as batters faced times strikeout rate); a binomial with empirically shrunk rates is textbook. A new application, tested held out.",
+   "novelty": "4",
+   "data": [
+    "SRC-MLB-STATSAPI"
+   ],
+   "dataset_version": "the box's history.db mlb_pa (play-by-play, filled nightly by engine/mlb/charts) and mlb_games at run time; coverage printed per season",
+   "code": "research/exp7_mlb_strikeouts_box.py",
+   "baseline": "A, the direct model (the site's MLB form-blend mean, training pool's shape)",
+   "protocol": "seasons with 500+ scored starts. Two or more: train on all but the last, validate on the last before July 1, hold out from July 1. One: train before June 1, validate June 1 - July 14, hold out from July 15. Each test advances only if validation favours it and the holdout's pitcher-season-clustered 97.5% interval on CRPS(test) - CRPS(A) sits under zero. The holdout is read once (--holdout), only with every season's plays at 98% of its regular-season finals and no fitted constant on its grid's edge. Bar committed 2026-10-19, before any run on real data.",
+   "primary_metric": "CRPS (the ranked probability score) on 0..15 strikeouts",
+   "sample_size": "not yet run on the box. Made-up leagues of 30 starters (tests/test_mlb_strikeouts_lab.py): B advanced on 19 of 20 built two-stage, on 0 of 20 built direct",
+   "results": [],
+   "decision": {
+    "B v A": "not yet run",
+    "H v A": "not yet run"
+   },
+   "multiple_testing": "Bonferroni over two tests (0.05 / 2)",
+   "failure_modes": "openers count as starts; the table holds the seasons the chart backfill has read (likely 2026 alone, so the one-season split); opponent lineups, park and umpire are in neither model; a start's length is a manager's decision the model reads only through his history",
+   "next": "EXP-007b: price B (or H) at the strikeout lines the box holds (odds_history MLB from 2026-06-01) against the books' consensus, as EXP-001c does for the NFL.",
+   "status": "IMPLEMENTED"
   }
  ]
 }
