@@ -949,6 +949,37 @@
    "failure_modes": "openers count as starts; the table holds the seasons the chart backfill has read (likely 2026 alone, so the one-season split); opponent lineups, park and umpire are in neither model; a start's length is a manager's decision the model reads only through his history",
    "next": "EXP-007b: price B (or H) at the strikeout lines the box holds (odds_history MLB from 2026-06-01) against the books' consensus, as EXP-001c does for the NFL.",
    "status": "IMPLEMENTED"
+  },
+  {
+   "id": "EXP-008",
+   "sport": "nba",
+   "market": "player props: points, rebounds, assists",
+   "proposed": "2026-10-19",
+   "question": "At the NBA board's own centre (his rate per minute times his role's base minutes), does a shape built from his minutes price points, rebounds and assists better than the board's fixed-width spread?",
+   "equation": "C: P(Y <= t) = (1/Q) sum_q F_count(t; mean rate * max(1, base + e_q), variance PHI_s * mean), e_q the training residual pool's Q = 25 quantiles, centred; S: points Normal(mu, cv*mu), rebounds and assists negative binomial with SD cv*mu (engine/nba/prob), cv by engine/hoops_fit's rule on the training window; mu = rate * base for both",
+   "variables": "rate = his season-to-date stat per minute played; base = engine/nba/minutes.base_minutes(role_minutes(...)); Y the stat in a game he played; the board's refusals applied first (three games played, its volatile-role gate, a base of 15 minutes)",
+   "mechanism": "A 38-minute night and a 24-minute night are the same width to the board. The compound shape widens with his minutes' spread, narrows for a steady role, and is skewed where the normal is not.",
+   "prior_art": "Compound and mixed count models for player stats; minutes-based NBA projection is standard. A new application to the site's own pricing shape.",
+   "novelty": "4",
+   "data": [
+    "SRC-NBA-HIST"
+   ],
+   "dataset_version": "the box's history.db player_game_logs (sport nba) at run time; complete seasons only",
+   "code": "research/exp8_nba_shape_box.py",
+   "baseline": "S, the board's own shape (engine/nba/prob) at the live build's cv rule",
+   "protocol": "complete seasons only. Two or more: train on all but the last, validate on the last before January 1, hold out from January 1. One: train before December 15, validate to February 9, hold out from February 10. C v S per stat; each advances only if validation favours C and the holdout's player-season-clustered 98.33% interval on CRPS(C) - CRPS(S) sits under zero. Holdout read once (--holdout). Bar committed 2026-10-19, before any run on real data.",
+   "primary_metric": "CRPS on whole numbers (points 0-60, rebounds 0-25, assists 0-20)",
+   "sample_size": "not yet run on the box. Made-up leagues of 30 players (tests/test_nba_shape_lab.py): C advanced in 19 of 30 stat tests where stats are minutes times a rate, 0 of 30 where they are not",
+   "results": [],
+   "decision": {
+    "pts": "not yet run",
+    "reb": "not yet run",
+    "ast": "not yet run"
+   },
+   "multiple_testing": "Bonferroni over three tests (0.05 / 3)",
+   "failure_modes": "the centre leaves out tonight's spread, rest, vacancy and defence dials, which neither shape has; the box holds the seasons its NBA backfill read; garbage time and foul trouble live in the minutes pool, not the rate; PHI by moments mixes the rate's own estimation error into the count's spread",
+   "next": "If a stat advances: a paper NBA board pricing that stat by C, tracked against the live board's chances before Ethan decides anything.",
+   "status": "IMPLEMENTED"
   }
  ]
 }
