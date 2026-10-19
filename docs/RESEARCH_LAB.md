@@ -28,8 +28,9 @@ The lab lives in `research/`:
 | `research/exp7b_mlb_strikeout_lines_box.py` | EXP-007b (those strikeout models at the books' own lines; runs on the box) |
 | `research/exp4c_college_lines_box.py` | EXP-004c (the college results at the books' own lines; runs on the box) |
 | `research/exp8_nba_shape_box.py` | EXP-008 (NBA: a shape built from his minutes against the board's spread; runs on the box) |
+| `research/exp9_nhl_shape_box.py` | EXP-009 (NHL: a shape built from his ice time against the board's own count; runs on the box) |
 | `research/box_round.py` | every read-only box run above, in order, in one command (never a holdout) |
-| `tests/test_research_lab.py` | the lab's tests (also `test_thin_market.py`, `test_mlb_strikeouts_lab.py`, `test_college_lines_lab.py`, `test_nba_shape_lab.py`, `test_mlb_strikeout_lines_lab.py`, `test_box_round.py`) |
+| `tests/test_research_lab.py` | the lab's tests (also `test_thin_market.py`, `test_mlb_strikeouts_lab.py`, `test_college_lines_lab.py`, `test_nba_shape_lab.py`, `test_mlb_strikeout_lines_lab.py`, `test_nhl_shape_lab.py`, `test_box_round.py`) |
 
 `python3 research/registry.py` prints the ledger; `--sources` prints the
 data matrix.
@@ -39,7 +40,7 @@ data matrix.
 ## Session 3 report (2026-10-19), in the spec's Part 13 format
 
 Built while Ethan was away ("Yeah keep building. I'm not home so just
-save all code for when I'm home"). Six new tests, two protocol
+save all code for when I'm home"). Seven new tests, two protocol
 amendments and one correction. None has read real data yet: each one runs
 on the box or waits on games, and every bar below was committed before
 that.
@@ -68,6 +69,11 @@ that.
   that centre: a 38-minute night and a 24-minute night are the same
   width. Does a shape built from his minutes price better at the same
   centre?
+- **EXP-009, NHL.** The hockey board went live this month with written
+  priors for its spreads: shots and blocks as wide as each skater's own
+  game-to-game variance shrunk toward 1.25, points a Poisson. Nothing
+  has tested them. At the board's own centre, does a shape built from
+  his ice time price better?
 - **One read, not a read per run (EXP-001b, EXP-001c).** Deciding at
   whichever run first looks good is optional stopping, and it inflates
   false passes.
@@ -109,6 +115,13 @@ that.
   takes his minutes from the training games' own spread around the base,
   then a count with mean rate × minutes and variance PHI × mean. The
   score is CRPS.
+- **EXP-009.** One centre: the board's own projection, as the NHL walk
+  computes it (a test holds the centre, the spread and the position
+  priors equal to the walk's). S is the board's own count. C draws his
+  ice time from the training pool of actual over projected ice time,
+  then a count given it with variance PHI × mean. N, described only, is
+  the board's count with one refitted spread per stat. The score is
+  CRPS.
 
 ### 7. Data and its verified availability
 
@@ -137,6 +150,9 @@ that.
   no start counts for a start only from an earlier day, or before 11 a.m.
   Eastern on the day itself. Snapshot rows carry their start and are
   placed exactly. Both stores keep main lines only.
+- **NHL.** The box's logs hold 2023–26; the league's API is now in the
+  source ledger (SRC-NHL-API). At the box's scale (900 skaters, three
+  seasons), EXP-009 ran in 42 seconds here and peaked at 218 MB.
 - **NBA.** The board's volatile-role gate is off for the NBA (on for
   the WNBA). The live build refits its spreads from every season the box
   holds; EXP-008 uses the same rule on its training window only, and the
@@ -153,6 +169,7 @@ that.
 | EXP-004c | `97563ef1` | on the box: development now; decision as weeks 9+ complete |
 | EXP-008 | `6db6e64a` | on the box: validation first, holdout once |
 | EXP-007b | `0242e2ee` | on the box: development now; the decision once, on EXP-007's holdout starts |
+| EXP-009 | `ce5be82c` | on the box: validation first, holdout once |
 
 Each bar's strictness was tried on made-up data where the truth is known:
 
@@ -163,6 +180,7 @@ Each bar's strictness was tried on made-up data where the truth is known:
 | EXP-008 (C v S, three stats) | 19 stat tests of 30 (points 10 of 10) | 0 of 30 |
 | EXP-007b, Q2 (H* v A*: the shape at the line) | 17 leagues of 20 | 1 of 20 |
 | EXP-007b, Q1 (B* v A*: the whole model at the line) | 19 of 20 | 13 of 20, on its centre (below) |
+| EXP-009 (C v S, three stats; 90 skaters a league) | 9 stat tests of 30 (shots 5 of 10) | 1 of 30 |
 
 Two guards keep EXP-007's holdout to one honest read. It is not read
 until the table holds plays for 98% of every season's regular-season
@@ -178,6 +196,16 @@ starts was 3–9% lower, in leagues of both kinds. At one line the centre
 counts for more than the shape. So a Q1 pass says B* prices the line
 better, not that batters faced is the reason. Q2 shares A's centre, so it
 is the shape test at the line.
+
+EXP-009 carries a described arm for a related reason. Where the board
+set a spread too narrow or too wide, any refit can beat it, not only one
+built from ice time. N refits the board's spread with one number per
+stat, and C − N says which it was. In made-up leagues where the board's
+own spreads were the truth, N still beat S on shots in 5 of 10. The
+board's 1.25 is the spread around a player's true mean; a forecast's
+spread also carries the error in its own centre (the refit read
+1.27–1.37 there). If C advances and C − N holds zero, the simpler N is
+what a paper test tries; that rule was written before any run.
 
 One correction, made before any real data was read. EXP-004c's text says
 each book's last two-sided quote counts. Its code kept each book's last
@@ -215,6 +243,10 @@ What was measured:
   harvest's same-day quotes, so many of its lines are the day before's.
   It decides on the same starts as EXP-007's holdout, so the two reads
   are not independent.
+- **EXP-009.** The centre is the walk's: a neutral opponent and no
+  power-play step, so tonight's opponent, goalie and special teams are
+  in neither shape. Playoff games feed projections, as they feed the
+  live board. PHI by moments mixes the centre's error into the spread.
 - **EXP-006.** One season of rows. The line is fitted on the seasons B
   trains on.
 - **EXP-008.** The centre leaves out tonight's spread, rest, vacancy and
@@ -231,6 +263,7 @@ What was measured:
 | EXP-004c | 4 |
 | EXP-008 | 4 |
 | EXP-007b | 4 |
+| EXP-009 | 4 |
 
 Still no new mathematics.
 
@@ -244,6 +277,7 @@ Still no new mathematics.
 | EXP-004c | implemented; development now, decisions as college weeks 9+ complete |
 | EXP-008 | implemented; validation read first, then the holdout once. An advance goes to Ethan, then to a paper board |
 | EXP-007b | implemented; development now, the decision once, after EXP-007's validation paste is checked |
+| EXP-009 | implemented; validation read first, then the holdout once. An advance goes to Ethan with C − N beside it |
 | EXP-004c correction | its code now keeps each book's last two-sided quote, as its text says |
 | EXP-001b, EXP-001c | amended to one read before any decision row was read |
 
@@ -256,8 +290,9 @@ book's number.
 
 Then, from the box:
 
-1. EXP-007's and EXP-008's validation pastes, and EXP-007b's development
-   numbers; each holdout follows once that paste looks sound.
+1. EXP-007's, EXP-008's and EXP-009's validation pastes, and EXP-007b's
+   development numbers; each holdout follows once that paste looks
+   sound.
 2. EXP-004c as the college weeks complete.
 3. EXP-R06 as thin picks settle.
 
@@ -720,6 +755,7 @@ market at pick time) is written and tested, and waits on one box command.
 | B16 | Canonical participant table (B4) feeding every join above | — | medium | have ids | as B4 |
 | B17 | EXP-007b: strikeouts at the MLB lines the box holds (odds_history from 2026-06-01) | — | — | box | **EXP-007b, implemented**: decides on EXP-007's holdout starts, once |
 | B18 | EXP-R06: thin board picks priced from the main lines | settled weeks of thin picks | none | box | pricetrust's bar, one read; a pass goes to Ethan |
+| B19 | EXP-009: NHL shots, points and blocks, a shape built from ice time against the board's count | — | — | box | **EXP-009, implemented**; validation first, holdout once |
 
 ## Task 7 — what I can do, and what needs Ethan
 
@@ -766,7 +802,7 @@ market at pick time) is written and tested, and waits on one box command.
 ### Box commands (round five)
 
 The same list, in order, is block CP of `docs/WHEN_YOU_ARE_HOME.md`.
-Every line is read-only. `research/box_round.py` runs lines 2 to 7 in one
+Every line is read-only. `research/box_round.py` runs lines 2 to 8 in one
 command, each in its own process and under its own heading, and never
 passes `--holdout`.
 
@@ -778,6 +814,7 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7b_mlb_strikeout_lines_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp4c_college_lines_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp8_nba_shape_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp9_nhl_shape_box.py
 ```
 
 1. The box has today's code.
@@ -792,6 +829,7 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp8_nba_shape_box.
    college weeks after the freeze complete.
 7. EXP-008, validation only. Its holdout (`--holdout`) is read once,
    after this paste has been checked, as EXP-007's.
+8. EXP-009, validation only, the same way.
 
 At the NFL regular season's end (January), EXP-001b and EXP-006 read once:
 
