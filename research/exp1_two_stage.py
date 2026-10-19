@@ -78,6 +78,13 @@ regular-season game played after 2026-10-17 (`--prospective`). H advances
 if its mean CRPS beats A's in both markets with the clustered bound under
 zero at 97.5% (0.05 / 2). Nothing in the procedure changes before it reads.
 
+EXP-001b AMENDMENT 1 (2026-10-19, before any game after the freeze was
+read): "every 2026 regular-season game played after 2026-10-17" is read
+ONCE, when the last of those games is final in the schedule and in
+nflverse's weekly file. Until then `--prospective` prints how many rows
+have arrived and nothing else — no score, no difference — so no interim
+look can steer anything.
+
 KNOWN LIMITS. nflverse's weekly file has a row only when a player recorded
 a stat, so a receiver who played and saw no target is missing for both
 models alike; the defence step is left out of both (the same in each, so it
@@ -495,11 +502,37 @@ def main(argv=None) -> int:
     return 0
 
 
+def season_done(season: int = 2026, after: str = FREEZE, games=None, with_stats=None) -> tuple[int, int]:
+    """(games after ``after`` final and in nflverse's weekly file, all
+    regular-season games after it) — EXP-001b reads when the two match.
+    ``games`` and ``with_stats`` default to the cache's files."""
+    import csv
+    if games is None:
+        with open(ROOT / "data" / "cache" / "games.csv", newline="") as fh:
+            games = list(csv.DictReader(fh))
+    games = [g for g in games if str(g.get("season")) == str(season)
+             and (g.get("game_type") or "REG") == "REG" and (g.get("gameday") or "") > after]
+    if with_stats is None:
+        try:
+            with_stats = {r.get("game_id") for r in load(season)}
+        except Exception:                                     # noqa: BLE001 — no weekly file yet
+            with_stats = set()
+    done = sum(1 for g in games if str(g.get("home_score") or "").strip() != "" and g["game_id"] in with_stats)
+    return done, len(games)
+
+
 def prospective() -> int:
-    """EXP-001b as preregistered: hybrid (A's mean, B's shape) against A."""
+    """EXP-001b as preregistered: hybrid (A's mean, B's shape) against A,
+    read once when the regular season after the freeze is complete."""
     global ALPHA
-    fit = Fit([x for s in range(2017, 2026) for x in rows_for(s)])
+    done, total = season_done()
     games = _after_freeze()
+    if not total or done < total:
+        n = sum(1 for x in rows_for(2026, only=games) if x["m"] in ("rec_yds", "rush_yds")) if games else 0
+        print(f"EXP-001b prospective — {done} of {total} regular-season games after {FREEZE} final with stats; "
+              f"{n:,} rows so far. Read once when all are in (AMENDMENT 1); nothing scored until then.")
+        return 0
+    fit = Fit([x for s in range(2017, 2026) for x in rows_for(s)])
     scored = [p for p in score(rows_for(2026, only=games), fit) if p["m"] in ("rec_yds", "rush_yds")]
     print(f"EXP-001b prospective — 2026 games after {FREEZE}: {len(games)} games, {len(scored)} rows")
     if not scored:

@@ -122,7 +122,7 @@
    "dataset_version": "fit 2017-2025; scored on 2026 games after 2026-10-17",
    "code": "research/exp1_two_stage.py --prospective",
    "baseline": "A: direct model",
-   "protocol": "prospective: every 2026 regular-season game played after 2026-10-17; week-blind; clustered bootstrap; Bonferroni over 2 markets (97.5%)",
+   "protocol": "prospective: every 2026 regular-season game played after 2026-10-17; week-blind; clustered bootstrap; Bonferroni over 2 markets (97.5%). AMENDMENT 1 (2026-10-19, before any game after the freeze was read): read once, when every 2026 regular-season game after the freeze is final with stats posted; until then the script prints only how many rows have arrived.",
    "primary_metric": "CRPS",
    "sample_size": "none yet (0 games played since the freeze)",
    "results": [],
@@ -153,7 +153,7 @@
    "dataset_version": "the box's odds_history (NFL from 2025-09-07) and nflverse weekly stats",
    "code": "research/exp1_lines_box.py",
    "baseline": "A* (Q1) and C, the market (Q2)",
-   "protocol": "models fitted on 2017-2024, recalibrated on 2023-24; 2025 and pre-freeze 2026 are DEVELOPMENT (2025 was EXP-001's holdout); the decision uses only games after 2026-10-17, receptions only, game-week-clustered bootstrap, Bonferroni over 2 (97.5%), at least 300 rows",
+   "protocol": "models fitted on 2017-2024, recalibrated on 2023-24; 2025 and pre-freeze 2026 are DEVELOPMENT (2025 was EXP-001's holdout); the decision uses only games after 2026-10-17, receptions only, game-week-clustered bootstrap, Bonferroni over 2 (97.5%), at least 300 rows. AMENDMENT 2 (2026-10-19, before any decision row was read): one read — the decision uses the first complete game weeks after the freeze that reach 300 receptions rows, fixed thereafter; later weeks are description.",
    "primary_metric": "log loss of the over at the real line",
    "sample_size": "development, box run 2026-10-17: 3,807 props with a three-book consensus, 3,433 joined (receptions 1,587, rec_yds 1,364, rush_yds 482); decision rows 0 so far",
    "results": [

@@ -43,6 +43,19 @@ each with the game-week-clustered bootstrap's upper bound under zero at
 A secondary table, deciding nothing, shows flat-stake ROI at the median
 book price for props where B* sits above the market by more than EDGE.
 
+AMENDMENT 2 (2026-10-19, BEFORE ANY DECISION ROW WAS READ — the only box
+run after the freeze printed "0 rows"): ONE READ, NOT A READ PER RUN. As
+first written, every run after the 300th row would decide again on more
+rows, and deciding at whichever run first looks good is optional stopping,
+which inflates false passes. So the decision rows are fixed: the game
+weeks after the freeze, in order, each COMPLETE (every game of that week
+after the freeze has a final score in the schedule and rows in nflverse's
+weekly file), up to and including the first week at which the receptions
+count reaches MIN_DECIDE. An incomplete week stops the count; a week never
+counts in part. Once that week is complete the decision is printed from
+those weeks only, the same on every later run; rows from later weeks are
+printed beneath it as description.
+
 Read-only on every database. The only thing it may write is an nflverse
 season file the cache lacks, fetched once through the site's own loader.
 """
@@ -344,6 +357,49 @@ def report(label: str, rows: list[dict]) -> None:
         print(f"  {'':<10} secondary: B* off the market by >{EDGE:.0%} on {n:,} props, flat ROI {r_:+.3f}")
 
 
+def complete_weeks(season: int, after: str = FREEZE, games=None, with_stats=None) -> list[str]:
+    """This season's game weeks ("2026-07") with every game after ``after``
+    final in the schedule and present in nflverse's weekly file, in order,
+    stopping at the first week that is not — AMENDMENT 2's "complete".
+    ``games`` (schedule rows) and ``with_stats`` (game ids) default to the
+    cache's games.csv and weekly file."""
+    import csv
+    if games is None:
+        with open(ROOT / "data" / "cache" / "games.csv", newline="") as fh:
+            games = list(csv.DictReader(fh))
+    if with_stats is None:
+        try:
+            with_stats = {r.get("game_id") for r in E1.load(season)}
+        except Exception:                                     # noqa: BLE001 — no weekly file yet
+            with_stats = set()
+    by_week: dict = defaultdict(list)
+    for g in games:
+        if str(g.get("season")) != str(season) or (g.get("game_type") or "REG") != "REG":
+            continue
+        if (g.get("gameday") or "") > after:
+            by_week[int(g["week"])].append(g)
+    out = []
+    for wk in sorted(by_week):
+        games = by_week[wk]
+        if not all(str(g.get("home_score") or "").strip() != "" and g["game_id"] in with_stats for g in games):
+            break
+        out.append(f"{season}-{wk:02d}")
+    return out
+
+
+def decision_rows(post: list[dict], weeks: list[str], market: str = "receptions") -> tuple:
+    """(the decision's weeks, its rows) under AMENDMENT 2, or ((), []) when
+    the complete weeks have not yet reached MIN_DECIDE rows of ``market``."""
+    n, chosen = 0, []
+    for wk in weeks:
+        chosen.append(wk)
+        n += sum(1 for r in post if r["wk"] == wk and r["m"] == market)
+        if n >= MIN_DECIDE:
+            keep = set(chosen)
+            return tuple(chosen), [r for r in post if r["wk"] in keep]
+    return (), []
+
+
 def pace(dev: list[dict], post: list[dict], market: str = "receptions") -> tuple | None:
     """(props a week, weeks still needed) for the decision, read off this
     season's weeks before the freeze — description, it decides nothing."""
@@ -376,21 +432,31 @@ def main(argv=None) -> int:
     post = [r for r in rows if r["after"]]
     print(f"  joined {len(rows):,} props to a player-game ({len(dev):,} development, {len(post):,} after {FREEZE})")
     report("DEVELOPMENT (2025 and 2026 before the freeze) — decides nothing", dev)
-    rec = [r for r in post if r["m"] == "receptions"]
-    print(f"\nDECISION (receptions, games after {FREEZE}): {len(rec):,} rows")
-    if len(rec) < MIN_DECIDE:
-        print(f"  NOT YET: needs {MIN_DECIDE}")
+    done = complete_weeks(int(FREEZE[:4]))
+    weeks, chosen = decision_rows(post, done)
+    rec_all = [r for r in post if r["m"] == "receptions"]
+    print(f"\nDECISION (receptions, the first complete weeks after {FREEZE} that reach {MIN_DECIDE} rows; "
+          f"AMENDMENT 2)")
+    print(f"  complete weeks after the freeze: {', '.join(done) or 'none yet'}; "
+          f"receptions rows after the freeze so far: {len(rec_all):,}")
+    if not weeks:
+        print(f"  NOT YET: the complete weeks hold under {MIN_DECIDE} receptions rows")
         got = pace(dev, post)
         if got:
-            rate, weeks = got
+            rate, more = got
             print(f"  pace: {FREEZE[:4]}'s weeks before the freeze averaged {rate:.0f} receptions props a week, "
-                  f"so about {weeks} more week(s) of games, scored once nflverse posts each week's stats")
+                  f"so about {more} more week(s) of games, scored once nflverse posts each week's stats")
         return 0
+    rec = [r for r in chosen if r["m"] == "receptions"]
+    print(f"  decided on weeks {weeks[0]} to {weeks[-1]}: {len(rec):,} receptions rows (fixed from here on)")
     for k1, k2, name in (("B*", "A*", "Q1 two-stage beats direct"), ("D", "C", "Q2 our number adds to the market")):
         mean, lo, hi = compare(rec, k1, k2)
         verdict = "PASSES" if hi < 0 else ("INCONCLUSIVE" if mean < 0 else "FAILS")
         print(f"  {name:<34} {mean:+.5f} [{lo:+.5f}, {hi:+.5f}]  {verdict}")
-    report("decision rows, every market (receptions decides)", post)
+    report("decision rows, every market (receptions decides)", chosen)
+    later = [r for r in post if r["wk"] not in set(weeks)]
+    if later:
+        report("AFTER THE DECISION'S WEEKS — description, decides nothing", later)
     return 0
 
 

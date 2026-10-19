@@ -413,6 +413,35 @@ def test_the_real_line_decision_says_its_pace_and_decides_nothing_with_it():
     assert EL.pace([{"m": "receptions", "wk": "2025-10"}], []) is None
 
 
+def _sched(season, week, day, gid, final=True):
+    return {"season": str(season), "game_type": "REG", "week": str(week), "gameday": day, "game_id": gid,
+            "home_score": "21" if final else ""}
+
+
+def test_the_real_line_decision_is_read_once_on_complete_weeks():
+    games = [_sched(2026, 7, "2026-10-15", "g7a"), _sched(2026, 7, "2026-10-18", "g7b"),
+             _sched(2026, 8, "2026-10-25", "g8a"), _sched(2026, 9, "2026-11-01", "g9a", final=False),
+             _sched(2026, 10, "2026-11-08", "g10a")]
+    weeks = EL.complete_weeks(2026, "2026-10-17", games=games, with_stats={"g7b", "g8a", "g10a"})
+    assert weeks == ["2026-07", "2026-08"], "a week counts only whole, and an unfinished week stops the count"
+    assert EL.complete_weeks(2026, "2026-10-17", games=games, with_stats={"g7b"}) == ["2026-07"], \
+        "a final game whose stats are not posted leaves its week incomplete"
+    post = ([{"m": "receptions", "wk": "2026-07"}] * 200 + [{"m": "rec_yds", "wk": "2026-07"}] * 50
+            + [{"m": "receptions", "wk": "2026-08"}] * 150 + [{"m": "receptions", "wk": "2026-09"}] * 400)
+    chosen_weeks, rows = EL.decision_rows(post, ["2026-07", "2026-08", "2026-09"])
+    assert chosen_weeks == ("2026-07", "2026-08"), "stops at the first week that reaches the minimum"
+    assert len(rows) == 400 and all(r["wk"] != "2026-09" for r in rows), "later weeks never join the decision"
+    assert EL.decision_rows(post, ["2026-07"]) == ((), []), "under the minimum: not yet"
+
+
+def test_the_hybrid_reads_once_when_the_season_is_in():
+    games = [_sched(2026, 7, "2026-10-15", "early"), _sched(2026, 7, "2026-10-18", "a"),
+             _sched(2026, 18, "2027-01-03", "b", final=False)]
+    assert E1.season_done(2026, "2026-10-17", games=games, with_stats={"a"}) == (1, 2)
+    games[-1]["home_score"] = "17"
+    assert E1.season_done(2026, "2026-10-17", games=games, with_stats={"a", "b"}) == (2, 2)
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
