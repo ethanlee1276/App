@@ -970,14 +970,14 @@
    "baseline": "A*, the direct model recalibrated",
    "protocol": "Q1 B* v A* and Q2 H* v A*, log loss at the consensus line, on EXP-007's holdout starts only, pitcher-season-clustered bootstrap, 97.5% upper bound under zero to pass, at least 300 scored props or NO DECISION. Read once with --holdout, under EXP-007's guards (plays for 98% of every season's finals; no fitted constant on its grid's edge). Every earlier start with a line is development. Bar committed 2026-10-19, before any run.",
    "primary_metric": "log loss of the over at the books' consensus line",
-   "sample_size": "not yet run on the box",
+   "sample_size": "not yet run on the box. Made-up leagues of 30 starters, three books each (tests/test_mlb_strikeout_lines_lab.py): built on batters faced, Q1 passed 19 of 20 and Q2 17 of 20; built direct, Q2 passed 1 of 20 and Q1 still 13 of 20",
    "results": [],
    "decision": {
     "Q1 B* v A*": "not yet run",
     "Q2 H* v A*": "not yet run"
    },
    "multiple_testing": "Bonferroni over two questions (0.05 / 2)",
-   "failure_modes": "the play table keeps a start's date, not its first pitch, so a quote carrying no start is kept only before 11 a.m. Eastern on the day (until 2026-09-30 the nightly close harvest also stored games under way at their live prices, with no start); strikeout props exist only where the paid harvest asked for them; the decision period is EXP-007's holdout, so both read the same starts (nothing is tuned between them)",
+   "failure_modes": "the play table keeps a start's date, not its first pitch, so a quote carrying no start is kept only before 11 a.m. Eastern on the day (until 2026-09-30 the nightly close harvest also stored games under way at their live prices, with no start); strikeout props exist only where the paid harvest asked for them; the decision period is EXP-007's holdout, so both read the same starts (nothing is tuned between them); a Q1 pass can come from B's centre alone (its pooled season rate had 3-9% lower squared error than the form blend on made-up leagues of both kinds), so Q2, which shares A's centre, is the shape test at the line and Q1 the whole model's",
    "next": "If a question passes: a paper MLB board pricing strikeouts by B* or H* from the 2027 season's first starts, before anything reaches a pick and only on Ethan's yes.",
    "status": "IMPLEMENTED"
   },

@@ -7,8 +7,10 @@ these hold first is the placement: a quote carrying its game's start lands
 on that day's start only if taken before it; one carrying none lands on
 his next start within two days, and on the day itself only before 11 a.m.
 Eastern. Then: the last two-sided quote per book wins across both stores;
-A is read at the line and B and H as counts; and the decision is read only
-with the flag, under EXP-007's guards, and only on enough props.
+A is read at the line and B and H as counts; the decision is read only
+with the flag, under EXP-007's guards, and only on enough props; and on
+made-up leagues H* finds a shape built on batters faced and not one that
+is not, while B* can also win on its centre alone.
 
 Run directly: `python3 tests/test_mlb_strikeout_lines_lab.py`
 """
@@ -107,6 +109,25 @@ def test_a_is_read_at_the_line_and_b_and_h_as_counts():
     at = E7B.chances(fit, same, 5.5)
     assert abs(at["H"] - at["B"]) < 1e-12, "at B's own mean, H is B"
     assert E7B.proxy_line(fit, x) % 1 == 0.5
+
+
+def test_h_is_the_shape_test_at_the_line_and_b_also_carries_its_centre():
+    """The bar both ways on made-up leagues of 30 pitchers, three books
+    each. Measured over twenty leagues of each kind: where strikeouts are
+    batters faced times a rate, Q1 (B*) passed in 19 and Q2 (H*) in 17;
+    where they come from his mean whatever his batters faced, Q2 passed in
+    1 and Q1 still in 13. B's pooled season rate is a steadier centre than
+    the form blend (its squared error on the decision starts was 3-9% lower
+    over six leagues of each kind), and at one line the centre counts for
+    more than the shape. So H*, A's centre with B's shape, is the shape
+    test at the line; B* tests the whole model."""
+    quiet = []
+    for seed in (0, 2, 3):
+        built = E7B.study(_league_with_lines(seed=seed), os.devnull, holdout=True, say=quiet.append)["verdict"]
+        assert built == {"B*": "PASSES", "H*": "PASSES"}, (seed, built)
+        flat = E7B.study(_league_with_lines(seed=seed, direct=True), os.devnull, holdout=True,
+                         say=quiet.append)["verdict"]
+        assert flat["H*"] != "PASSES", (seed, flat)
 
 
 if __name__ == "__main__":

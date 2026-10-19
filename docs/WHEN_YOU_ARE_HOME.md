@@ -2417,7 +2417,8 @@ touches a pick:
   not change without your yes.
 - **MLB's first experiment.** Does "batters faced × strikeout rate"
   forecast a starter's strikeouts better than his strikeouts alone? It
-  reads the box's own play-by-play.
+  reads the box's own play-by-play, then asks the same at the books' own
+  strikeout lines.
 - **College at real lines.** CN's two college results, now tested at the
   books' own lines. It decides on the weeks after this Saturday as they
   finish.
@@ -2425,7 +2426,7 @@ touches a pick:
   plays 38 minutes or 24. A test asks whether a spread built from his
   minutes prices better, on last season's games.
 
-**The quick way: one line.** It checks the code, then runs steps 2 to 6
+**The quick way: one line.** It checks the code, then runs steps 2 to 7
 below in order, each under its own heading, and says how each one
 exited. About ten minutes; paste everything back:
 
@@ -2440,11 +2441,13 @@ The same steps one at a time, if you would rather:
 2. The thin-pick test. Expect NOT YET for a few weeks; the first line
    counts how many picks it could price.
 3. EXP-001c, the NFL test at real lines. Run it Tuesday or later.
-4. The MLB test, its first half only. I check this paste before step 7.
-5. The college test. It prints development numbers now and says how many
+4. The MLB test, its first half only. I check this paste before step 8.
+5. The same MLB models at the books' own strikeout lines, development
+   numbers only. Its funnel says how many strikeout lines the box holds.
+6. The college test. It prints development numbers now and says how many
    weeks its decision still needs. It takes about a minute and around
    250 MB.
-6. The NBA test, its first half only. As with step 4, I check this paste
+7. The NBA test, its first half only. As with step 4, I check this paste
    before its holdout.
 
 ```
@@ -2452,18 +2455,21 @@ cd /srv/qellys && git log --oneline -1
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/thinmarket_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_lines_box.py | tail -20
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7b_mlb_strikeout_lines_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp4c_college_lines_box.py
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp8_nba_shape_box.py
 ```
 
-7. **Only after I have read steps 4 and 6:** the MLB and NBA holdouts,
-   each read once. The MLB script itself refuses if the season's plays are
-   not all in, or if a fitted number sits on the edge of its range.
+8. **Only after I have read steps 4, 5 and 7:** the three holdouts, each
+   read once. The two MLB scripts refuse by themselves if the season's
+   plays are not all in, or if a fitted number sits on the edge of its
+   range.
    ```
    cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7_mlb_strikeouts_box.py --holdout
+   cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp7b_mlb_strikeout_lines_box.py --holdout
    cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp8_nba_shape_box.py --holdout
    ```
-8. **January, after the NFL regular season:** the two tests that read
+9. **January, after the NFL regular season:** the two tests that read
    once at season's end. Until then they print only how many games are in.
    ```
    cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_two_stage.py --prospective
