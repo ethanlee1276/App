@@ -215,6 +215,12 @@ def _coach(sched: Schedule, x: dict, team: str, staff: dict | None) -> str:
     return c
 
 
+def head_coach(sched: Schedule, x: dict, team: str, staff: dict | None = None) -> str:
+    """His team's head coach on schedule row ``x`` (the staff file's hire
+    where nflverse lags) — for the game report's facts (engine/gamereport)."""
+    return _coach(sched, x, str(team or "").upper(), staff)
+
+
 def coach_games(sched: Schedule, g: dict, team: str, staff: dict | None = None) -> tuple[str, int] | None:
     """(his team's head coach, which game under him this is) when his tenure
     started inside the schedule — None for a coach whose start is unknown."""

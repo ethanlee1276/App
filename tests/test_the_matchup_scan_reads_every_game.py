@@ -332,7 +332,10 @@ def test_the_dashboard_carries_the_reads_of_every_game():
 def test_the_game_page_draws_the_scan():
     j = APP.index("function renderGamePage(")
     page = APP[j:APP.index("\n}\n", j)]
-    assert "${matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}" in page and '["gp-sec-scan", "Matchup scan"]' in page
+    # With the NFL game report on the page the report is the read of the
+    # game and the scan steps aside (engine/gamereport, gameReportHTML).
+    assert '${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}' in page \
+        and '["gp-sec-scan", "Matchup scan"]' in page
     fn = APP[APP.index("function matchupScanHTML("):]
     fn = fn[:fn.index("\n}\n")]
     assert "(d.scan_reads || {})[`${away}@${home}`]" in fn

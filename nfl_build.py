@@ -1541,6 +1541,16 @@ def main() -> None:
         # hook, whose money split the against-the-money note reads.
         from engine import lineopen as _lo
         print(_lo.attach_to_board(result, "nfl"))
+        # THE GAME REPORT (engine/gamereport; Ethan, 2026-10-19: "a full
+        # layed out detailed explanation for every nfl game just like how
+        # the report is. Obv keep out the prop picks"). Last of the game
+        # hooks, because its market section reads the crowd, the opener and
+        # the sim; the defence-vs-position ratings are the slate's own, the
+        # ones every prop was priced against.
+        from engine import gamereport as _greport
+        _allowed = {t: getattr(getattr(tm, "defense", None), "ratings", None) or {}
+                    for t, tm in (getattr(slate, "teams", None) or {}).items()}
+        print(f"  {_greport.attach(result, allowed=_allowed, season=args.season)}")
         _pn = _potd.attach(result, "nfl")
         if _pn:
             print(_pn)

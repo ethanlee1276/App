@@ -289,7 +289,8 @@ def test_it_looks_for_the_real_board_names_not_the_league_code():
 
 def test_the_light_copy_is_preferred_and_the_full_board_is_the_fallback():
     """The light copy is small and keeps `pick_of_the_day` whole —
-    `lightboard.DROP_TOP` drops only `player_stats`. A box that has not
+    `lightboard.DROP_TOP` drops `player_stats` and the game reports,
+    never the pick. A box that has not
     written one yet still gets an answer from the full board."""
     names = [os.path.basename(p)
              for p in R.board_paths("nfl", "web/data")]

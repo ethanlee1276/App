@@ -14524,12 +14524,19 @@ function planRowHTML(r, kind) {
     ${tag || why.length ? `<ul class="sc-lines">${tag ? `<li class="gplan-tag">${tag}</li>` : ""}${
       why.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : ""}</div>`;
 }
-function gamePlanHTML(g) {
+function gamePlanHTML(g, opts) {
   const d = state.data || {};
   const p = gamePlanFor(g);
   const locked = !p && d.locked && d.locked.game_plans && g.scan && g.scan.units;
   if (!p && !locked) return "";
-  const head = `<div class="section-title">Game plan
+  /* WITH THE GAME REPORT ON THE PAGE the plan keeps only its plays: the
+     line, who is out, the matchup and what changes the read are the
+     report's own sections, written out (one copy of everything). */
+  const skip = new Set((opts && opts.skip) || []);
+  const head = skip.size ? `<div class="section-title">Game plan
+      <span class="sub">— the plays that fit, the plays to avoid, who scores and where we disagree
+      with the market; the read behind them is the game report above</span></div>`
+    : `<div class="section-title">Game plan
       <span class="sub">— this game read in order: the line, who is out, the matchup, the plays
       that fit, the plays to avoid, what changes the read, who scores</span></div>`;
   if (locked) {
@@ -14538,7 +14545,7 @@ function gamePlanHTML(g) {
       subscription.</div></div>`;
   }
   const by = {};
-  (p.steps || []).forEach((s) => { if (s && s.key) by[s.key] = s; });
+  (p.steps || []).forEach((s) => { if (s && s.key && !skip.has(s.key)) by[s.key] = s; });
   const step = (s, body) => !s || !body ? "" : `<div class="card gplan-step gplan-${escapeHtml(s.key)}">
       <div class="ms-sub">${escapeHtml(s.title)}</div>${body}${s.note ? `<p class="ms-note">${escapeHtml(s.note)}</p>` : ""}</div>`;
   const lines = (s) => s && (s.lines || []).length
@@ -14564,6 +14571,92 @@ function gamePlanHTML(g) {
     ${step(by.watch, people(by.watch))}
     ${step(by.gap, rows(by.gap, "gap"))}
   </div>`;
+}
+
+/* THE GAME REPORT (engine/gamereport; Ethan, 2026-10-19: "I want a full
+   layed out detailed explanation for every nfl game just like how the
+   report is. Obv keep out the prop picks but everything else it valuable
+   information too have typed out so the user can just read it"). The build
+   writes it from what the board holds — no line, price or probability on a
+   player anywhere in it — and this draws it block by block. With a report
+   on the page it IS the read of the game: the matchup scan and the game
+   plan's line, injuries, matchup and what-changes steps say the same
+   things, so they step aside (one copy of everything), and the replay
+   panel moves into the report's "How the game could go". Paid:
+   `game_reports` is a paid key; a reader without it sees what it holds. */
+function gameReportFor(g) {
+  const d = state.data || {};
+  return (d.game_reports || []).find((r) => r && r.away === g.away && r.home === g.home) || null;
+}
+const GR_TONE = { favorable: "up", unfavorable: "down", up: "up", down: "down" };
+function grBlockHTML(b) {
+  if (!b || !b.type) return "";
+  if (b.type === "p") return `<p class="gr-p">${escapeHtml(b.text)}</p>`;
+  if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
+  if (b.type === "note") return `<p class="gr-note">${escapeHtml(b.text)}</p>`;
+  if (b.type === "list") {
+    return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>`;
+  }
+  if (b.type === "table") {
+    const head = b.head || [];
+    return `<div class="gr-table-wrap">${b.title ? `<div class="gr-table-title">${escapeHtml(b.title)}</div>` : ""}
+      <table class="agate gr-table"><thead><tr>${head.map((h, i) =>
+        `<th${i ? ' class="num"' : ""}>${escapeHtml(h)}</th>`).join("")}</tr></thead>
+      <tbody>${(b.rows || []).map((r) => `<tr>${r.map((c, i) =>
+        `<td${i ? ' class="num"' : ""}>${escapeHtml(String(c))}</td>`).join("")}</tr>`).join("")}</tbody></table>
+      ${b.note ? `<p class="gr-note">${escapeHtml(b.note)}</p>` : ""}</div>`;
+  }
+  if (b.type === "verdicts" || b.type === "players") {
+    // Each player opens his player page — the report points at a player,
+    // never at a bet.
+    return `<div class="gr-people">${(b.items || []).map((v) => {
+      const tone = GR_TONE[v.verdict || v.tone] || "";
+      const door = v.player ? ` data-open="player:${escapeAttr(slugify(v.player))}"` : "";
+      const who = [v.team ? teamName(v.team) : "", v.pos, v.role].filter(Boolean).join(" · ");
+      return `<div class="gr-person ${tone}"${door}>
+        <div class="gr-person-head">${playerAvatar(v.player, v.team, { size: 36, headshot: v.headshot })}
+          <span class="gr-person-who"><b>${escapeHtml(b.type === "verdicts" ? v.title : v.player)}</b>
+            <span>${escapeHtml(who)}</span></span>
+          ${v.label ? `<span class="ms-read-tag ${tone}">${escapeHtml(v.label)}</span>` : ""}</div>
+        ${b.type === "verdicts"
+          ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "")
+          : v.text ? `<p class="gr-person-text">${escapeHtml(v.text)}</p>` : ""}
+      </div>`;
+    }).join("")}</div>`;
+  }
+  return "";
+}
+function gameReportHTML(g, extras) {
+  const d = state.data || {};
+  const r = gameReportFor(g);
+  const locked = !r && d.locked && d.locked.game_reports && g.scan && g.scan.units;
+  if (!r && !locked) return "";
+  const head = `<div class="section-title">The game report
+      <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}the whole game written out from
+      tonight’s board; no prop picks in it</span></div>`;
+  if (locked) {
+    return `<div id="gp-sec-report" class="gr">${head}<div class="card ms-locked"><b>The game report</b> —
+      this game written out top to bottom: the line and what it means, how the units rank, how each team
+      plays, who is out and what it opens, who’s guarding who, the trenches, the red zone, coaching and the
+      schedule, how the game could go and the players to watch — is part of the subscription.</div></div>`;
+  }
+  const secs = (r.sections || []).filter((s) => s && (s.blocks || []).length);
+  const toc = secs.length > 2 ? `<nav class="std-chips gr-toc" aria-label="Sections of the report">${
+    secs.map((s) => `<button type="button" class="chip" data-jump="gr-${escapeAttr(s.key)}">${
+      escapeHtml(s.title)}</button>`).join("")}</nav>` : "";
+  const body = secs.map((s) => {
+    let blocks = s.blocks || [];
+    let extra = "";
+    // The replay panel draws the same simulated games the report's table
+    // lists, as a gauge and a histogram; with it here the table steps aside.
+    if (s.key === "scripts" && extras && extras.scripts) {
+      blocks = blocks.filter((b) => b.type !== "table");
+      extra = `<div class="gr-extra">${extras.scripts}</div>`;
+    }
+    return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
+      ${blocks.map(grBlockHTML).join("")}${extra}</section>`;
+  }).join("");
+  return `<div id="gp-sec-report" class="gr">${head}${toc}<div class="card gr-card">${body}</div></div>`;
 }
 
 function matchupScanHTML(g) {
@@ -15009,6 +15102,12 @@ function renderGamePage() {
       }
     }).catch(() => {});
   }
+  /* THE GAME REPORT LEADS WHEN THERE IS ONE (gameReportHTML): the matchup
+     scan and the plan's narrative steps step aside, and the replay moves
+     into the report's "How the game could go". */
+  const report = gameReportFor(g);
+  const reportHTML = gameReportHTML(g, report && simCard ? { scripts: simCard } : null);
+  const planHTML = gamePlanHTML(g, report ? { skip: ["line", "out", "matchup", "watch"] } : null);
   host.innerHTML = `
     <div class="pp-nav">
       <button class="btn-quiet gp-back" id="gp-back">${escapeHtml(detailBackLabel())}</button>
@@ -15065,9 +15164,10 @@ function renderGamePage() {
 
     ${gpJumpHTML([
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
-      gamePlanHTML(g) ? ["gp-sec-plan", "Game plan"] : null,
-      (g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape ? ["gp-sec-scan", "Matchup scan"] : null,
-      simCard ? ["gp-sec-replay", "Replay"] : null,
+      reportHTML ? ["gp-sec-report", "Game report"] : null,
+      planHTML ? ["gp-sec-plan", "Game plan"] : null,
+      !report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape) ? ["gp-sec-scan", "Matchup scan"] : null,
+      simCard && !report ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
       // ONE "Most likely" CHIP (Ethan, 2026-10-01: "Most likely · 15" beside
@@ -15083,9 +15183,10 @@ function renderGamePage() {
     ])}
     ${linesCard || notesCard ? `<div class="gp-row" id="gp-sec-lines">${linesCard}${notesCard}</div>` : ""}
     ${pressurePairHTML(state.sport, g)}
-    ${gamePlanHTML(g)}
-    ${matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}
-    ${simCard ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
+    ${reportHTML}
+    ${planHTML}
+    ${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}
+    ${simCard && !report ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
     <div id="gp-lab"></div>
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}
 
@@ -15185,7 +15286,7 @@ function renderGamePage() {
 
   const back = document.getElementById("gp-back");
   if (back) back.addEventListener("click", detailBack);
-  host.querySelectorAll(".gp-jump [data-jump]").forEach((b) =>
+  host.querySelectorAll(".gp-jump [data-jump], .gr-toc [data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
       const el = document.getElementById(b.dataset.jump);
       if (el) el.scrollIntoView({ behavior: state.quiet ? "auto" : "smooth", block: "start" });

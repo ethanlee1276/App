@@ -207,8 +207,11 @@ def test_attach_never_raises_and_the_builds_journal_and_pay_for_it():
 
 
 def test_the_page_and_ask_carry_the_plan():
-    assert "function gamePlanHTML(g)" in APP and 'id="gp-sec-plan"' in APP
-    assert '["gp-sec-plan", "Game plan"]' in APP and "${gamePlanHTML(g)}" in APP
+    assert "function gamePlanHTML(g, opts)" in APP and 'id="gp-sec-plan"' in APP
+    # Drawn once and placed once; with the game report on the page
+    # (engine/gamereport) it keeps only its plays.
+    assert '["gp-sec-plan", "Game plan"]' in APP and "${planHTML}" in APP
+    assert "const planHTML = gamePlanHTML(g, report ? " in APP
     assert "d.locked.game_plans" in APP, "locked, the section says what it is"
     assert ".gplan-step" in CSS and ".gplan .sc-lines" in CSS
     from engine import askbot as A

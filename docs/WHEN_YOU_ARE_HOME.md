@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it (step 148; CQ).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2481,6 +2481,44 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp9_nhl_shape_box.
     cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp1_two_stage.py --prospective
     cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/exp6_shrink_b.py
     ```
+
+**CQ. The game report on every NFL game page** (step 148).
+Your "I want a full layed out detailed explanation for every nfl game just
+like how the report is. Obv keep out the prop picks". Every NFL game page
+now opens on a written report, in the research reports' order:
+
+- The short version.
+- Game facts, then the market: the line and what it implies, where it
+  opened, the prediction markets and their money, and the simulator.
+- How the units rank, both offenses against the other defense.
+- How each team plays: run rate, play action, the target tree, the
+  coverage and the blitz.
+- Injuries and what they open.
+- Who's guarding who: a verdict on every key player, the soft corner, and
+  where each defense leaks and holds.
+- The trenches, the red zone, coaching and the schedule.
+- How the game could go, players to watch, weather.
+- What to confirm before kickoff.
+
+Every number is the board's own. A section with nothing behind it is left
+out, and no line, price or chance on a player appears anywhere in it.
+With the report on the page, the matchup scan and the game plan's
+narrative steps step aside, so nothing is said twice. The replay chart
+moves inside the report. The game plan keeps its plays. The report is
+paid; a reader without the subscription sees what it holds and the
+usual matchup scan.
+
+Run this after the box has pulled and the next NFL build has run (about
+half an hour). The first line should name `NFL game report`. Then every
+game on the board is listed with its word count, then one game's report
+in full:
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && sudo -u qellys python3 -m engine.gamereport && sudo -u qellys python3 -m engine.gamereport --game DET | head -120
+```
+
+Then open any NFL game on the site: the first chip on the game page is
+**Game report**.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

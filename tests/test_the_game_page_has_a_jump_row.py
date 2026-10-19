@@ -81,8 +81,10 @@ def test_every_section_the_row_names_exists_on_the_page_and_the_chips_scroll():
     for sec in ("gp-sec-lines", "gp-sec-replay", "gp-sec-shapes", "gp-sec-likely", "gp-sec-bets", "gp-sec-props", "gp-sec-shots"):
         assert f'id="{sec}"' in page, sec
         assert f'["{sec}",' in page, f"{sec} is offered as a jump"
-    assert 'simCard ? ["gp-sec-replay", "Replay"] : null' in page, "no chip for a section that did not draw"
-    assert 'host.querySelectorAll(".gp-jump [data-jump]")' in page
+    # The replay draws inside the game report when there is one, so its
+    # own chip goes with it (engine/gamereport).
+    assert 'simCard && !report ? ["gp-sec-replay", "Replay"] : null' in page, "no chip for a section that did not draw"
+    assert 'host.querySelectorAll(".gp-jump [data-jump], .gr-toc [data-jump]")' in page
     assert 'el.scrollIntoView({ behavior: state.quiet ? "auto" : "smooth", block: "start" });' in page
     rule = re.search(r"\.gp-jump \{([^}]*)\}", _strip(CSS)).group(1)
     assert "sticky" not in rule and "fixed" not in rule, \

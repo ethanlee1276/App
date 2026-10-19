@@ -35,8 +35,10 @@ from pathlib import Path
 #: Top-level keys left out: read only by pages that are not the first
 #: paint, and heavy. `player_stats` is the per-player history table the
 #: Players page and the player profile read (both through
-#: `(state.data || {}).player_stats || {}`).
-DROP_TOP = ("player_stats",)
+#: `(state.data || {}).player_stats || {}`). `game_reports`
+#: (engine/gamereport, about 280 KB a week) is read only by the game page,
+#: which draws again when the full board lands.
+DROP_TOP = ("player_stats", "game_reports")
 
 #: The row lists whose rows are trimmed.
 ROW_LISTS = ("recommendations", "game_bets", "long_shots", "most_likely")

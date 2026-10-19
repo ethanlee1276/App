@@ -161,6 +161,12 @@ PAID_KEYS = (
     # EVERY QUOTED SCORER with our chance (engine/pipeline `td_field`) —
     # the whole touchdown watch list under another name.
     "td_field",
+    # THE GAME REPORT (engine/gamereport, 2026-10-19): every NFL game
+    # written out, its "who's guarding who" verdicts and its players to
+    # watch built from the scan's reads — `scan_reads` under an eighth
+    # name. No prop picks are in it; the reads are the paid half all the
+    # same. Remembered in the edit that made it, the only time it is cheap.
+    "game_reports",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found
