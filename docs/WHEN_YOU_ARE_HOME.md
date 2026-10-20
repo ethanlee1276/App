@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2545,6 +2545,95 @@ cd /srv/qellys && sudo -u qellys python3 nfl_build.py 2026 7 --games-only | grep
 
 If it still ends in `not pulled`, the forecast service did not answer.
 Paste the line back.
+
+**CR. Everything in the report, a report for every league, what changed,
+copy and share** (step 149). Your "I want you too do all of it besides
+D": A, B and C are built. D (the public betting percentages, the referee
+before kickoff, PFF grades) waits until you have read this.
+
+- **A, the NFL report reads the history.** Under every key player's card:
+  his season, his last three games, a trend when he is running hot or
+  cold, and his red-zone work. The practice report: how each listed man
+  practised and how often players listed that way have played. The role
+  changes the detector sees, as a breakout watch. When the two teams last
+  met, with the lines they closed at. Each team's turnover margin and
+  tempo. The kicking air: the air's density and the wind along the field.
+  The coaches' calls: how often each goes for it on fourth and short, two
+  point tries, how often it throws two scores up and two scores down, and
+  its pass rate over what the situation calls for.
+- **B, a report for every league.** College games get the same report in
+  college's terms (short names, the AP rank, a neutral site, a conference
+  game, college's own unit stats). MLB: the pitching matchup as a table,
+  each lineup against tonight's hand, the pens, the park, the weather and
+  the plate umpire, and a read on every hitter and starter. NHL: the tale
+  of the tape with ranks and tonight's expected goals, the goalies
+  (confirmed or not, save rate, goals saved above expected), the injury
+  report. NBA and WNBA: rest and travel, who carries each team over his
+  last ten, where each defence gives up the most and the fewest, the
+  injury report. The run line and the puck line are said by name, and no
+  team totals are read off them.
+- **C.** Ask Qellys reads the report, for members. Every report keeps a
+  **What changed** log under the short version: the line moving half a
+  point, a man ruled out, the forecast turning, a starter scratched, a
+  goalie confirmed, the lineups out, each stamped Eastern time. Small
+  wobbles are not written; a slow drift is, once it adds up. Two buttons
+  over every report: **Copy the report** (the whole thing as text) and
+  **Share this game** (only the game, kickoff, line and link, so nothing
+  paid goes out in a forwarded message).
+
+The coaches' calls come from play-by-play columns the nightly job now
+fills. The box catches itself up: if the columns are empty, the next
+nightly run fills them.
+
+Run these after the box has pulled and each league has built once (about
+half an hour). They only print. First, the code. It should be dated
+2026-10-20 or later:
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s'
+```
+
+The coaches' calls. Each season's row should show three numbers above
+zero after the team-week count. `None` or `0` for 2026 means the nightly
+job has not filled them yet; paste the line if it still does tomorrow:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.db import connect; c=connect(); print([tuple(r) for r in c.execute('SELECT season, COUNT(*), SUM(go4_opps), SUM(lead_plays), SUM(giveaways) FROM team_weeks WHERE season>=2025 GROUP BY season')])"
+```
+
+One NFL game's report in full. Look for each player's form lines, **WHEN
+THEY LAST MET**, the tempo and coaches' lines under coaching and the
+schedule, and the kicking air under the weather:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamereport --game DET | head -170
+```
+
+Every league's reports, listed. The off-season leagues print "No game
+reports" and that is right:
+
+```
+cd /srv/qellys && for b in recommendations cfb mlb_recommendations nhl nba wnba; do echo "== $b"; sudo -u qellys python3 -m engine.gamereport --board web/data/$b.json | head -6; done
+```
+
+One hockey game and one basketball game in full. Swap the team for any
+team the list above shows:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamereport --board web/data/nhl.json --game TOR | head -90 && sudo -u qellys python3 -m engine.gamereport --board web/data/nba.json --game BOS | head -90
+```
+
+What changed. One line per league: how many games it is tracking and how
+many changes it has written. The changes start once a game has been
+built twice:
+
+```
+cd /srv/qellys && ls -la data/built/reportlog_*.json; sudo -u qellys python3 -c "import json,glob; [print(p, len(d['games']), 'games,', sum(len(g.get('entries') or []) for g in d['games'].values()), 'changes') for p in sorted(glob.glob('data/built/reportlog_*.json')) for d in [json.load(open(p))]]"
+```
+
+Then on the site: open any game. The first chip is **Game report**,
+**What changed** sits under the short version once something has moved,
+and the two buttons sit over the contents.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

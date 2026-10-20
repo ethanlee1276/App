@@ -2086,8 +2086,9 @@ def summary(reports: list, logged: dict, out) -> str:
     words = sum(r["words"] for r in reports)
     moved = sum(1 for v in logged.values()
                 if v.get("entries") and v["entries"][-1].get("at") == v.get("at"))
+    each = max(1, round(words / max(1, len(reports)) / WORDS_A_MINUTE))
     return (f"Game reports: {len(reports)} game(s), {words:,} words "
-            f"(about {round(words / max(1, len(reports)) / WORDS_A_MINUTE)} minutes each)"
+            f"(about {each} minute{'s' if each != 1 else ''} each)"
             + (f"; what changed: {moved} game(s) moved since the last build, "
                f"{len(logged)} tracked" if out else ""))
 

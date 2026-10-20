@@ -25,7 +25,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
-import test_the_game_report_reads_like_the_research as T          # noqa: E402
+
+class _Fixture:
+    """The research report's own fixture (its board and its report),
+    imported on first use the way the suite shares a sibling's fixture."""
+
+    def __getattr__(self, name):
+        import test_the_game_report_reads_like_the_research as research
+        return getattr(research, name)
+
+
+T = _Fixture()
 
 REPORT_JS = os.path.join(ROOT, "web", "js", "report.js")
 REPORT_CSS = open(os.path.join(ROOT, "web", "css", "report.css"), encoding="utf-8").read()

@@ -260,7 +260,6 @@ def mlb_pitching(c: Ctx) -> dict | None:
     league = (_tape(c).get("league") or {})
     for t in (t_a, t_h):
         s = _sides(c).get(t) or {}
-        opp = c.opp[t]
         if s.get("mix"):
             items.append(f"{c.poss(t)} starter throws {s['mix']}")
         vh = s.get("vs_hand") or {}
