@@ -23,7 +23,11 @@ CDN = "https://cdn.nba.com/static/json"
 #: Every box-score stat stored per player-game. Steals, blocks and
 #: turnovers since 2026-10-13: stored for the charts and the reads, not
 #: priced — no board asks the odds feed for them.
-NBA_MARKETS = ("min", "pts", "reb", "ast", "fg3m", "stl", "blk", "tov")
+NBA_MARKETS = ("min", "pts", "reb", "ast", "fg3m", "stl", "blk", "tov",
+               # The shots and the glass (2026-10-20): what a team's
+               # possessions are counted from (engine/nba/teams), as the
+               # ESPN path stores them (`espnhoops.STAT_MAP`). Not priced.
+               "fgm", "fga", "fg3a", "ftm", "fta", "oreb")
 
 #: The league's own headshot for a boxscore personId. CONSTRUCTED, not
 #: taken — the CDN boxscore carries the id and no photo URL, the same
@@ -142,6 +146,12 @@ def parse_boxscore(box: dict) -> list[dict]:
                 "stl": float(st.get("steals", 0) or 0),
                 "blk": float(st.get("blocks", 0) or 0),
                 "tov": float(st.get("turnovers", 0) or 0),
+                "fgm": float(st.get("fieldGoalsMade", 0) or 0),
+                "fga": float(st.get("fieldGoalsAttempted", 0) or 0),
+                "fg3a": float(st.get("threePointersAttempted", 0) or 0),
+                "ftm": float(st.get("freeThrowsMade", 0) or 0),
+                "fta": float(st.get("freeThrowsAttempted", 0) or 0),
+                "oreb": float(st.get("reboundsOffensive", 0) or 0),
             })
     return rows
 

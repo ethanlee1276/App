@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2634,6 +2634,109 @@ cd /srv/qellys && ls -la data/built/reportlog_*.json; sudo -u qellys python3 -c 
 Then on the site: open any game. The first chip is **Game report**,
 **What changed** sits under the short version once something has moved,
 and the two buttons sit over the contents.
+
+**CS. The NBA, ready, with what the NFL has** (step 150). Your "make sure
+nba is ready to go ... match nfl for like all features ... offense vs
+defense ... matchup details ... key matchups and breakout players":
+
+- **Already working, checked:** NBA Edge picks and Most Likely picks are
+  posted and recorded every build: the Edge picks staked, Most Likely and
+  the one board on paper, the Pick of the Day in its own book, all settled
+  from the box scores the nightly job stores.
+- **Offense against defense.** Every NBA team's scoring and what it
+  allows, its offense and defense per 100 possessions, pace, shooting (the
+  effective field-goal rate both ways), the threes both ways, the
+  offensive glass and the turnovers both ways. Each comes with its rank of
+  30, and the points tonight's lines expect. Last season's numbers carry
+  each team until this season's games take over: this season counts
+  games / (games + 10) of the blend.
+- **Key matchups.** Up to five per game: one side's offense near the top
+  against the other's defense near the bottom (or the reverse), widest
+  gap first, and the pace when both teams play fast or both play slow.
+- **A read on every key player**, the NFL's could shine / could struggle
+  / breakout. It counts the defense in his own stats, the points his team
+  is expected to score, his minutes (and his share of the plays) over his
+  last five, what the logs show when tonight's ruled-out teammate sat,
+  rest on either side, and the blowout. A breakout spot needs a role
+  change (minutes, usage or a teammate out) behind a strong case.
+- **The reads lean Most Likely** and decide the one board's matchup check,
+  as in football and baseball. **Matchup picks** per game (his stats on
+  the read's side where our number agrees, at a real sportsbook price, a
+  20-minute role at least) are on paper under matchup_prop, and settle
+  like the rest.
+- **On the page:** every NBA game has a **Matchup scan** section (the tape,
+  the key matchups, the reads). For members the game report carries all
+  of it: **The matchup** (tale of the tape plus key matchups) and
+  **Players to watch** (breakout watch, could shine, could struggle). Ask
+  reads both. The dashboard's could shine / could struggle lists fill for
+  the NBA too.
+
+Two data fixes came with it. The box score now keeps field goals and free
+throws made and tried, threes tried and offensive rebounds; possessions,
+pace and the per-100 numbers are counted from those. And the NBA's history
+now reads the six clubs ESPN spelled its own way before 10-14 (GS, NY, NO,
+SA, UTAH, WSH) as the league's codes. If last season was stored that way,
+the Warriors, Knicks, Pelicans, Spurs, Jazz and Wizards players had no
+history to price on opening night.
+
+Run these after the box has pulled (about ten minutes). First, the code.
+It should be dated 2026-10-20 or later:
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s'
+```
+
+How last season is stored. The first list is any NBA rows still under
+ESPN's six spellings (nothing to do either way; the build reads both now,
+and the re-read below rewrites them). The second is the new shooting
+columns, empty until the re-read:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.db import connect; c=connect(); print([tuple(r) for r in c.execute(\"SELECT season, team, COUNT(*) FROM player_game_logs WHERE sport='nba' AND team IN ('GS','NY','NO','SA','UTAH','WSH') GROUP BY 1,2\")]); print([tuple(r) for r in c.execute(\"SELECT season, market, COUNT(*) FROM player_game_logs WHERE sport='nba' AND market IN ('fga','fta','oreb','fg3a') GROUP BY 1,2\")])"
+```
+
+Read last season's box scores again with the shooting columns. It is the
+same command as AG, and it re-reads every 2025-26 date. The game files
+from AG are cached for 30 days, so it is mostly reading from disk. It can
+take a while; it is safe to stop and run again:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py nba --seasons 2025 --refresh
+```
+
+Then the first command's second list should show 2025 rows for all four
+columns (tens of thousands each). The team numbers, straight from the
+database, best net rating first. Expect 30 teams, `per 100: True`, offense
+and defense ratings around 105–122 and pace around 96–104:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.db import connect; from engine.nba import teams as T; import datetime; p=T.board_profiles(connect(),'nba',datetime.date.today().isoformat()); print(p['n'],'teams, per 100:',p['per100']); [print(t, round(x['pts'],1), round(x.get('ortg',0),1), round(x.get('drtg',0),1), round(x.get('pace',0),1)) for t,x in sorted(p['teams'].items(), key=lambda kv: kv[1]['ranks'].get('net', kv[1]['ranks'].get('margin', 99)))]"
+```
+
+Once the NBA board has built (it does every cycle on a game day), what it
+carries. Expect a tape on every game, reads, leans and matchup picks:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine.gate import board_source; b=json.load(open(board_source('web/data/nba.json'))); g=b.get('games') or []; print(len(g),'games,', sum(1 for x in g if x.get('nba_tape')),'tapes,', sum(len(v.get('players') or []) for v in (b.get('scan_reads') or {}).values()),'reads,', sum(len(m.get('props') or []) for m in b.get('matchup_picks') or []),'matchup picks,', len(b.get('most_likely') or []),'Most Likely,', sum(1 for r in b.get('recommendations') or [] if r.get('recommended')),'Edge picks')"
+```
+
+One game's report in full. Look for **THE MATCHUP** (the tale of the tape
+and **KEY MATCHUPS**) and **PLAYERS TO WATCH**. Swap BOS for any team on
+tonight's slate:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamereport --board web/data/nba.json --game BOS | head -120
+```
+
+Which NBA markets Most Likely is allowed to carry. The weekly fit measures
+them on the box; an empty list means Most Likely stays empty until it has
+run:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.rankfit import load; print({k: v for k, v in load().items() if k.startswith('nba:')})"
+```
+
+Paste anything that looks off.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

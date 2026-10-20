@@ -59,6 +59,10 @@ PROP_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds", "pass_att", "pa
 #: a starter's strikeouts and outs. A hitter's role is a spot in tonight's
 #: posted lineup; a starter's is being tonight's starter.
 MLB_PROP_MARKETS = ("hits", "total_bases", "home_runs", "strikeouts", "outs")
+#: Basketball's (engine/nba/scan, 2026-10-20): the stats a read leans and
+#: their sums. A player's role is his minutes a game over his last ten.
+HOOPS_PROP_MARKETS = ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast")
+HOOPS_MIN_MINUTES = 20.0
 #: Our chance on the read's side at the posted line.
 PROP_MIN_PROB = 0.55
 #: The longest price a yards-or-catches pick is taken at. The box, 2026-09-26:
@@ -207,7 +211,8 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
     homers, strikeouts and outs): each read's markets on its side, where
     our number agrees."""
     home, away = game.get("home"), game.get("away")
-    markets = MLB_PROP_MARKETS if sport == "mlb" else PROP_MARKETS
+    markets = (MLB_PROP_MARKETS if sport == "mlb" else HOOPS_PROP_MARKETS if sport in ("nba", "wnba")
+               else PROP_MARKETS)
     by_key: dict = {}
     for r in props or []:
         if r.get("market") in markets and r.get("line") is not None and r.get("hit_prob") is not None:
@@ -227,6 +232,9 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
                 if (x.get("pos") or "") != "SP" and not u.get("lineup_spot"):
                     continue
                 role, bar = 99, 0
+            elif sport in ("nba", "wnba"):
+                # A rotation role, not a garbage-time line.
+                role, bar = u.get("mpg"), HOOPS_MIN_MINUTES
             else:
                 role = (u.get("carries_pg") if mk in ("rush_yds", "rush_att")
                         else 99 if mk in ("pass_yds", "pass_att", "pass_cmp") else u.get("targets_pg"))
@@ -288,7 +296,8 @@ def build(games: list, scan_reads: dict, watch: list, props: list, sport: str = 
         reads = ((scan_reads or {}).get(key) or {}).get("players") or []
         if not g.get("scan") and not reads:
             continue
-        td = [] if sport == "mlb" else td_picks(g, watch, reads, g.get("pulled_players") or (), positions)
+        td = (td_picks(g, watch, reads, g.get("pulled_players") or (), positions)
+              if sport in ("nfl", "cfb") else [])
         pp = prop_picks(g, reads, props, sport=sport)
         for r in td + pp:
             r["game"] = key

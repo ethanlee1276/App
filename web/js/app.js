@@ -10036,7 +10036,8 @@ function renderScanTop() {
   if (!host) return;
   const d = state.data || {};
   const rows = scanTopRows(d);
-  const locked = !rows.length && d.locked && d.locked.scan_reads && (d.games || []).some((g) => g.scan);
+  const locked = !rows.length && d.locked && d.locked.scan_reads
+    && (d.games || []).some((g) => g.scan || g.mlb_tape || g.nhl_tape || g.nba_tape);
   if (!rows.length && !locked) { host.innerHTML = ""; return; }
   const shine = scanRanked(rows.filter((x) => x.read === "breakout" || x.read === "good"), true);
   const struggle = scanRanked(rows.filter((x) => x.read === "avoid" || x.read === "tough"), false);
@@ -14254,7 +14255,7 @@ function scanWhyList(x) {
   return `<ul class="ms-why">
         ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
         ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}
-        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted${["mlb", "nhl"].includes(state.sport) ? "" : ", no lift when tested"}</li>
+        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted${["nfl", "cfb"].includes(state.sport) ? ", no lift when tested" : ""}</li>
           ${x.notes.map((t) => `<li class="note">${escapeHtml(t)}</li>`).join("")}` : ""}</ul>`;
 }
 
@@ -14367,7 +14368,8 @@ function scanUsageBits(x) {
   if (u.tgt_share) bits.push(`${Math.round(u.tgt_share * 100)}% of targets`);
   if (u.carry_share) bits.push(`${Math.round(u.carry_share * 100)}% of carries`);
   if (u.snap_pct) bits.push(`${Math.round(u.snap_pct * 100)}% of snaps`);
-  if (u.toi) bits.push(`${Number(u.toi).toFixed(1)} min a game`);
+  if (u.toi || u.mpg) bits.push(`${Number(u.toi || u.mpg).toFixed(1)} min a game`);
+  if (u.usg) bits.push(`${Math.round(u.usg * 100)}% usage`);
   if (u.starter_share != null) bits.push(`started ${Math.round(u.starter_share * 100)}% of the last 10`);
   return bits;
 }
@@ -14802,6 +14804,36 @@ function nhlScanHTML(g) {
   </div>`;
 }
 
+/* THE NBA MATCHUP SCAN on the game page (engine/nba/scan; Ethan, 2026-10-20:
+   "offense vs defense ... matchup details ... key matchups and breakout
+   players"). The engine formats the tape's rows — scoring, the ratings per
+   100, pace, shooting, the threes, the glass, the turnovers, each with its
+   rank — and writes the key matchups and the basis; this draws them in the
+   football tape's own cells, then the reads. */
+function nbaScanHTML(g) {
+  const t = g && g.nba_tape;
+  if (!t || !(t.rows || []).length) return "";
+  const d = state.data || {};
+  const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
+  const players = (reads && reads.players) || [];
+  const n = t.teams || 30;
+  const cell = (v, r, plain) => `<span class="tp-cell ${plain ? "" : (tapeTier(r, n) || [""])[0]}"><b>${escapeHtml(v)}</b>${r ? `<em>${ordinal(r)}</em>` : ""}</span>`;
+  const head = (tm) => `<span class="tp-team">${teamMark(tm, 22)}<b>${escapeHtml(teamName(tm))}</b></span>`;
+  return `<div id="gp-sec-scan" class="ms">
+    <div class="section-title">Matchup scan <span class="sub">— offense against defense, and who could shine or struggle</span></div>
+    <div class="card ms-tape"><div class="tp-row tp-head"><span class="tp-k">Rank of ${n}</span>${head(g.away)}${head(g.home)}</div>
+      ${t.rows.map((r) => `<div class="tp-row"><span class="tp-k">${escapeHtml(r.label)}</span>${cell(r.a, r.ar, r.plain)}${cell(r.h, r.hr, r.plain)}</div>`).join("")}</div>
+    ${(t.edges || []).length ? `<div class="card ms-edges"><div class="ms-sub">Key matchups</div>
+      <ul>${t.edges.map((e) => `<li class="${e.tone === "def" ? "def" : "off"}">${escapeHtml(e.text)}</li>`).join("")}</ul></div>` : ""}
+    ${t.note ? `<p class="ms-note">${escapeHtml(t.note)}</p>` : ""}
+    ${players.length ? `<div class="ms-sub ms-sub-top">Who could shine, who could struggle</div>
+      <div class="ms-reads">${players.map(scanReadHTML).join("")}</div>` : !reads && d.locked && d.locked.scan_reads
+      ? `<div class="card ms-locked"><b>Who could shine, who could struggle, who could break out</b> — a read on every
+          key player, with the reasons for and against, is part of the subscription.</div>` : ""}
+    <p class="ms-note">${escapeHtml(t.basis || "")}</p>
+  </div>`;
+}
+
 function renderGamePage() {
   const host = document.getElementById("game-body");
   if (!host) return;
@@ -15133,7 +15165,7 @@ function renderGamePage() {
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
       reportHTML ? ["gp-sec-report", "Game report"] : null,
       planHTML ? ["gp-sec-plan", "Game plan"] : null,
-      !report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape) ? ["gp-sec-scan", "Matchup scan"] : null,
+      !report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape) ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard && !report ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
@@ -15152,7 +15184,7 @@ function renderGamePage() {
     ${pressurePairHTML(state.sport, g)}
     ${reportHTML}
     ${planHTML}
-    ${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}
+    ${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g) || nbaScanHTML(g)}
     ${simCard && !report ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
     <div id="gp-lab"></div>
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}

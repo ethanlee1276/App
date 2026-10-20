@@ -379,7 +379,7 @@ def test_the_game_page_draws_it_and_steps_the_others_aside():
                    "d.locked && d.locked.game_reports",
                    '["gp-sec-report", "Game report"]',
                    'gamePlanHTML(g, report ? { skip: ["line", "out", "matchup", "watch"] } : null)',
-                   '${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}',
+                   '${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g) || nbaScanHTML(g)}',
                    "simCard && !report",
                    '.gp-jump [data-jump], .gr-toc [data-jump]'):
         assert needle in APP, needle

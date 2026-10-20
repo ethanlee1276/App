@@ -120,9 +120,11 @@ def test_the_game_page_draws_the_tape_and_the_reads():
     # The NFL game report (engine/gamereport) stands in for the scan when
     # the board carries one; no other league's board does, so baseball's
     # scan draws as before.
-    assert '${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}' in js
-    assert '!report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape) ? ["gp-sec-scan", "Matchup scan"] : null,' in js
-    assert 'Also noticed — not counted${["mlb", "nhl"].includes(state.sport) ? "" : ", no lift when tested"}' in js, \
+    assert '${report ? "" : matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g) || nbaScanHTML(g)}' in js
+    assert '!report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape) ? ["gp-sec-scan", "Matchup scan"] : null,' in js
+    # Football's notes were tested and added nothing; baseball's, hockey's and
+    # basketball's never were, so only football says so.
+    assert 'Also noticed — not counted${["nfl", "cfb"].includes(state.sport) ? ", no lift when tested" : ""}' in js, \
         "baseball's noticed items were never tested; the page must not say they were"
     assert ".mlb-tape { display: grid;" in css
     src = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()

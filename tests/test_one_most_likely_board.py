@@ -287,13 +287,14 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     built on every sport's build; what the matchup check reads is the
     sport's own — the scan in hockey, the scan or the projection's
     Matchup step in baseball and (Ethan, 2026-10-14, "do 1-11") football,
-    and in basketball the
-    projection's Matchup step: what tonight's defence allows at the share
-    measured to reach one player (engine/hoopsdvp; 2026-10-14, it said
-    "no read yet" while the projection read the defence). A sport with no
-    read says so, and its picks top out at Strong."""
+    and in basketball (2026-10-20, Ethan: "make sure NBA has the same") the
+    NBA scan's read, else the projection's Matchup step: what tonight's
+    defence allows at the share measured to reach one player
+    (engine/hoopsdvp; 2026-10-14, it said "no read yet" while the
+    projection read the defence). A sport with no read says so, and its
+    picks top out at Strong."""
     assert B.MATCHUP_SOURCE == {"nfl": "scan+model", "cfb": "scan+model", "mlb": "scan+model", "nhl": "scan",
-                                "nba": "model", "wnba": "model"}
+                                "nba": "scan+model", "wnba": "scan+model"}
     def rec(player, market, mult, why="opp starter K% +12%"):
         return {"player": player, "market": market,
                 "chain": {"base": 1.0, "steps": [{"key": "park", "mult": 1.02},
@@ -324,8 +325,17 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
                      "most_likely": [ml("Brunson", "pts", "over"), ml("Hart", "reb", "over"),
                                      ml("Bridges", "pts", "over")]}, record={}, sport="nba")
     hb = {r["player"]: r for r in hoops["rows"]}
-    assert hoops["matchup_source"] == "model"
+    # The NBA scan's read decides where it has one (2026-10-20); with no
+    # reads on the board the projection's step decides, as before.
+    assert hoops["matchup_source"] == "scan+model"
     assert hb["Brunson"]["checks"]["matchup"] is True and "+6%" in hb["Brunson"]["check_notes"]["matchup"]
+    read = {"NYK@BOS": {"players": [{"player": "Brunson", "team": "NYK", "read": "tough",
+                                      "label": "Tough matchup", "lean": ["pts"]}]}}
+    leaned = B.build({"games": [], "scan_reads": read,
+                      "recommendations": [rec("Brunson", "pts", 1.06, "BOS allow 118 a game")],
+                      "most_likely": [dict(ml("Brunson", "pts", "over"), team="NYK")]}, record={}, sport="nba")
+    assert leaned["rows"][0]["checks"]["matchup"] is False, leaned["rows"][0]["check_notes"]
+    assert "leans the other way" in leaned["rows"][0]["check_notes"]["matchup"]
     assert hb["Hart"]["checks"]["matchup"] is None and "not enough to call" in hb["Hart"]["check_notes"]["matchup"]
     assert hb["Bridges"]["checks"]["matchup"] is None and hb["Bridges"]["tier"] != "top"
     assert hb["Bridges"]["check_notes"]["matchup"] == "the model has no matchup step for this market"

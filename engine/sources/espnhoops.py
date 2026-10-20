@@ -55,7 +55,17 @@ STAT_MAP = {"MIN": "min", "PTS": "pts", "REB": "reb", "AST": "ast",
             "3PT": "fg3m",
             # Stored since 2026-10-13 beside the CDN's own (nbadata), for the
             # charts and the reads; no board prices them.
-            "STL": "stl", "BLK": "blk", "TO": "tov"}
+            "STL": "stl", "BLK": "blk", "TO": "tov",
+            # THE SHOTS AND THE GLASS (2026-10-20, Ethan: "We need offense vs
+            # defense"): field goals and free throws made and tried, threes
+            # tried and offensive rebounds — what a team's possessions are
+            # counted from, and with them pace, the per-100 ratings and the
+            # four factors (engine/nba/teams). Read off the same box, no board
+            # prices them. FG and FT carry "made-tried" as 3PT does (MADE_TRIED).
+            "FG": "fgm", "FT": "ftm", "OREB": "oreb"}
+
+#: The "made-tried" columns and the two markets each one fills.
+MADE_TRIED = {"FG": ("fgm", "fga"), "3PT": ("fg3m", "fg3a"), "FT": ("ftm", "fta")}
 
 
 def _season_of(date: str, league: str) -> int:
@@ -171,11 +181,18 @@ def parse_summary(payload: dict) -> list[dict]:
                     raw = stats[i]
                     if col == "MIN":
                         vals["min"] = _num(raw) or 0.0
-                    elif col == "3PT":
-                        # "5-11" → makes. Attempts are the denominator and
-                        # are not a market we price.
-                        made = str(raw).split("-")[0]
-                        vals["fg3m"] = _num(made) or 0.0
+                    elif col in MADE_TRIED:
+                        # "5-11" → 5 made, 11 tried. Threes made always
+                        # write (a "--" is 0, as it always was); the rest
+                        # only when the box gives a number.
+                        made, _sep, tried = str(raw).partition("-")
+                        m_key, a_key = MADE_TRIED[col]
+                        if col == "3PT":
+                            vals["fg3m"] = _num(made) or 0.0
+                        elif _num(made) is not None:
+                            vals[m_key] = _num(made)
+                        if _num(tried) is not None:
+                            vals[a_key] = _num(tried)
                     else:
                         v = _num(raw)
                         if v is not None:

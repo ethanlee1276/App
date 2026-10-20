@@ -98,17 +98,19 @@ RECORD_MISS = 0.08
 #:              the opponent's strikeout rate…); where it has none, the
 #:              projection's own Matchup step, when it moved the number at
 #:              least MODEL_MATCHUP_STEP toward this side;
-#:   nba, wnba  the projection's own Matchup step, read the same way: what
-#:              tonight's defence allows in this stat, at the share of its
-#:              lean MEASURED to reach one player (engine/hoopsdvp.TRANSFER,
-#:              every league and market past two standard errors, 2026-09-27)
-#:              — published on the row's chain since 2026-10-14; until then
-#:              this check said "no matchup read for this sport yet" while
-#:              the projection read the defence.
+#:   nba, wnba  the NBA scan's read (engine/nba/scan, 2026-10-20 — the
+#:              defence in his own stats, the game's expected points or pace,
+#:              his minutes, usage and a teammate's absence, rest, the
+#:              blowout); where it has none, the projection's own Matchup
+#:              step, read the same way: what tonight's defence allows in
+#:              this stat, at the share of its lean MEASURED to reach one
+#:              player (engine/hoopsdvp.TRANSFER, every league and market
+#:              past two standard errors, 2026-09-27), on the row's chain
+#:              since 2026-10-14.
 MATCHUP_SOURCE = {"nfl": "scan+model", "cfb": "scan+model", "mlb": "scan+model",
                   # Hockey's read (engine/nhl/scan, 2026-10-03): the opposing
                   # starter, shots allowed, expected goals, rest, ice time.
-                  "nhl": "scan", "nba": "model", "wnba": "model"}
+                  "nhl": "scan", "nba": "scan+model", "wnba": "scan+model"}
 MODEL_MATCHUP_STEP = 0.03
 #: The journal buckets whose settled rows make the record.
 RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board", "bold")

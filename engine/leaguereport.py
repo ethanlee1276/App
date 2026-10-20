@@ -18,7 +18,11 @@ each league's board holds:
         every key skater and starter (engine/nhl/scan: `nhl_tape`,
         `scan_reads`)
   NBA   the schedule spots (rest, the trip, the clock, altitude, the
-        blowout watch — the board's `schedule_spots`), the injury report,
+        blowout watch — the board's `schedule_spots`); the tale of the tape
+        — each side's offence and defence per 100 possessions, pace,
+        shooting, the threes, the glass and the turnovers, with ranks — and
+        the key matchups (engine/nba/scan: `nba_tape`); the breakout watch
+        and who could shine or struggle (`scan_reads`); the injury report,
         who carries each team over his last ten games, and where each
         defence gives up the most and the least a game (engine/hoopsdvp) —
         the last three what the build knows and the board does not carry,
@@ -179,7 +183,7 @@ def _stale(c: Ctx) -> list:
 
 # ═══ MLB ═════════════════════════════════════════════════════════════════════════════
 def _tape(c: Ctx) -> dict:
-    return c.g.get("mlb_tape") or c.g.get("nhl_tape") or {}
+    return c.g.get("mlb_tape") or c.g.get("nhl_tape") or c.g.get("nba_tape") or {}
 
 
 def _sides(c: Ctx) -> dict:
@@ -674,6 +678,47 @@ def nba_defense(c: Ctx) -> dict | None:
     return _section("defense", "Where each defence gives", [_list(items), {"type": "note", "text": _sentence(note)}])
 
 
+def nba_tape(c: Ctx) -> dict | None:
+    """The tale of the tape (engine/nba/scan formats the rows) and the key
+    matchups — where one side's offence meets the other's defence at the far
+    ends of the league."""
+    t = c.g.get("nba_tape") or {}
+    rows = [r for r in t.get("rows") or [] if isinstance(r, dict) and r.get("label")]
+    if not rows:
+        return None
+
+    def cell(v, rk):
+        return str(v or "—") + (f" ({_ord(int(rk))})" if rk and v not in (None, "—") else "")
+    table = [[r["label"], cell(r.get("a"), r.get("ar")), cell(r.get("h"), r.get("hr"))] for r in rows]
+    note = " ".join(x for x in (t.get("basis"), t.get("note")) if x)
+    blocks = [{"type": "table", "title": "Tale of the tape", "head": ["", c.away, c.home], "rows": table,
+               "note": _sentence(note) if note else ""}]
+    edges = [e.get("text") for e in t.get("edges") or [] if isinstance(e, dict) and e.get("text")]
+    if edges:
+        blocks += [_h("Key matchups"), _list(edges)]
+    return _section("tape", "The matchup", blocks)
+
+
+def nba_watch(c: Ctx) -> dict | None:
+    """The breakout watch, then who could shine and who could struggle."""
+    reads = c.reads
+    brk = sorted((r for r in reads if r.get("read") == "breakout"), key=lambda r: -len(r.get("pro") or []))
+    good = sorted((r for r in reads if r.get("read") == "good"), key=lambda r: -len(r.get("pro") or []))
+    bad = sorted((r for r in reads if r.get("read") in ("tough", "avoid")),
+                 key=lambda r: (r.get("read") != "avoid", -len(r.get("con") or [])))
+    blocks = []
+    if brk:
+        blocks += [_h("Breakout watch"), {"type": "verdicts", "items": [_verdict(r, "up") for r in brk[:SHINE_N]]}]
+    if good:
+        blocks += [_h("Could shine"), {"type": "verdicts", "items": [_verdict(r, "up") for r in good[:SHINE_N]]}]
+    if bad:
+        blocks += [_h("Could struggle"),
+                   {"type": "verdicts", "items": [_verdict(r, "down") for r in bad[:STRUGGLE_N]]}]
+    if reads and not brk and not good:
+        blocks.append(_p("No one in this game reads as a breakout spot or a good matchup"))
+    return _section("watch", "Players to watch", blocks)
+
+
 def nba_injuries(c: Ctx) -> dict | None:
     inj = [i for i in c.meta.get("injuries") or [] if isinstance(i, dict) and i.get("player")
            and i.get("team") in c.teams]
@@ -712,12 +757,21 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
              if rows]
     if leads:
         items.append("Leading the scoring lately: " + _join(leads))
+    edges = [e for e in (c.g.get("nba_tape") or {}).get("edges") or [] if isinstance(e, dict) and e.get("text")]
+    if edges:
+        e = edges[0]
+        items.append(f"Key matchup: {e.get('matchup') or e['text']}"
+                     + (f" — the edge is {e['team']}'s" if e.get("team") and e.get("matchup") else ""))
+    brk = [r for r in c.reads if r.get("read") == "breakout"]
+    if brk:
+        items.append("Breakout watch: " + _names(brk, 3))
+    items += _shine_short(c, [r for r in c.reads if r.get("read") != "breakout"])
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
         items.append("Blowout watch: a spread of 10 or more")
     return _section("short", "The short version", [_list(items)])
 
 
-NBA = ((nba_facts, sec_market, nba_carry, nba_defense, nba_injuries, nba_before), nba_short)
+NBA = ((nba_facts, sec_market, nba_tape, nba_watch, nba_carry, nba_defense, nba_injuries, nba_before), nba_short)
 
 
 def nba_more(g: dict, meta: dict | None) -> dict:

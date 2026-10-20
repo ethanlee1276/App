@@ -102,7 +102,10 @@ def test_stats_are_read_by_column_name():
     rows = W.parse_summary(_summary(
         ["MIN", "FG", "3PT", "FT", "REB", "AST", "PTS"],
         ["31", "8-15", "3-7", "2-2", "9", "5", "21"]))
-    assert rows[0]["stats"] == {"min": 31.0, "fg3m": 3.0, "reb": 9.0,
+    # Field goals and free throws read as made and tried, beside the threes
+    # (2026-10-20): what a team's possessions are counted from.
+    assert rows[0]["stats"] == {"min": 31.0, "fgm": 8.0, "fga": 15.0, "fg3m": 3.0,
+                                "fg3a": 7.0, "ftm": 2.0, "fta": 2.0, "reb": 9.0,
                                 "ast": 5.0, "pts": 21.0}
 
 

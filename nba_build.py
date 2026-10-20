@@ -99,10 +99,19 @@ def player_history(conn, teams: set[str], sport: str = "nba",
     from engine import divisions
     from engine.sources.oddsapi import normalize_name
     hist: dict = {}
+    # BOTH SPELLINGS OF A CLUB (2026-10-20). ESPN files six NBA clubs its own
+    # way (GS, NY, NO, SA, UTAH, WSH) and the ingest wrote those until
+    # 2026-10-14, when it moved to the league's codes — the codes tonight's
+    # schedule speaks. A season stored before then and not read again
+    # would hand the Warriors' players no history at all on opening night.
+    # So the NBA asks for every spelling and files each row under the
+    # league's code; the WNBA's rows are read as stored, as its board reads.
+    canon = (lambda t: divisions.canonical(sport, t or "")) if sport == "nba" else (lambda t: t or "")
+    asked = sorted({sp for t in teams for sp in (divisions.spellings(sport, t) if sport == "nba" else [t])})
     q = ("SELECT player, team, position, period, market, value, opponent, home "
          "FROM player_game_logs WHERE sport=? AND team IN (%s)"
-         % ",".join("?" * len(teams)))
-    args: list = [sport, *teams]
+         % ",".join("?" * len(asked)))
+    args: list = [sport, *asked]
     if seasons:
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += list(seasons)
@@ -117,14 +126,14 @@ def player_history(conn, teams: set[str], sport: str = "nba",
                 if moved is not None:
                     moved.add(r["player"])
                 continue
-        p = hist.setdefault(r["player"], {"team": r["team"], "starter": None,
+        p = hist.setdefault(r["player"], {"team": canon(r["team"]), "starter": None,
                                           "by_week": {}, "faced": {}})
         wk = p["by_week"].setdefault(r["period"], {})
         wk[r["market"]] = float(r["value"])
         # WHO HE PLAYED, AND WHERE: the pick page labels each past game
         # "vs BOS" as every other league's does, and reads his games
         # against tonight's opponent.
-        p["faced"].setdefault(r["period"], (r["opponent"] or "", 1 if r["home"] in (1, True, "1") else 0))
+        p["faced"].setdefault(r["period"], (canon(r["opponent"]), 1 if r["home"] in (1, True, "1") else 0))
         if p["starter"] is None and r["market"] == "min":
             p["starter"] = r["position"] == "S"
     for p in hist.values():
@@ -857,7 +866,9 @@ def main() -> None:
               "⚠️  Injury board unreadable — nobody is held for it, and that is a gap")
         # THE GAME REPORT'S OWN FACTS (engine/leaguereport): who carries each
         # team over his last ten, the injury report's names on each game,
-        # and where each defence gives (engine/hoopsdvp). Never fatal.
+        # and where each defence gives (engine/hoopsdvp). Never fatal. The
+        # defence ratings are the matchup scan's too (below).
+        _gr_rt, _gr_last = {}, False
         try:
             from engine import hoopsdvp as _gr_dvp
             from engine.leaguereport import nba_meta as _gr_nba_meta
@@ -1266,6 +1277,58 @@ def main() -> None:
         except Exception as exc:
             print(f"⚠️  shared-schema layer skipped: {exc}")
 
+        # THE MATCHUP SCAN (engine/nba/scan, 2026-10-20 — Ethan: "We need
+        # offense vs defense ... matchup details ... key matchups and breakout
+        # players"): a tale of the tape per game from every team's offence and
+        # defence (engine/nba/teams), the key matchups, and a read on every
+        # key player — could shine, could struggle, breakout — in the shape
+        # the NFL, MLB and NHL scans write. It picks a side for Most Likely
+        # (the leans below) and never moves a number. A failure is a line.
+        _nba_leans: dict = {}
+        _nba_lean_report: dict = {}
+        try:
+            from engine.nba import onoff as _onoff, scan as _nscan, teams as _nteams
+            from engine.nba.pipeline import _face as _nface
+            from engine.db import player_assets as _passets
+            from engine.gamescan import leans_from_reads as _nleans_of
+            from engine.sources.oddsapi import normalize_name as _pn
+            _prof = _nteams.board_profiles(conn, args.league, args.date)
+            _vacancy = {}
+            for _t, _away in (gone or {}).items():
+                _big = _away[0][0]
+                _first = min((hist.get(_big) or {}).get("by_week") or {"": None})
+                _vacancy[_t] = {"out": _away, "inherit": _onoff.inheritance(
+                    _team_rows(hist, _t, _first), _t, _big, "pts")}
+            _assets = _passets(conn, args.league)
+            _faces = {n: (_nface(_assets, n) or "") for n in hist}
+            _pulled = {_pn(n) for g in slate.games for n in (getattr(g, "pulled_players", None) or [])}
+            _ns = _nscan.scan(out.get("games") or [], hist, _prof,
+                              dvp=_gr_rt,
+                              spots=out.get("schedule_spots"), listed=listed, vacancy=_vacancy,
+                              key_players={r.get("player") for r in out.get("recommendations") or []},
+                              out_players={n for n in hist if _pn(n) in _pulled},
+                              faces=_faces, nights=_prof.get("nights"))
+            out["scan_reads"] = _ns["reads"]
+            for _gd in out.get("games") or []:
+                _tp = _ns["tapes"].get(f"{_gd['away']}@{_gd['home']}")
+                if _tp:
+                    for _side in (_gd["away"], _gd["home"]):
+                        _tp["sides"][_side]["injuries"] = sorted(
+                            ({"player": p, "status": i.get("status") or "", "injury": i.get("injury") or ""}
+                             for p, i in (listed or {}).items() if (hist.get(p) or {}).get("team") == _side),
+                            key=lambda r: r["player"])
+                    _gd["nba_tape"] = _tp
+            _nba_leans = _nleans_of(out["scan_reads"])
+            _nr = sum(len(v.get("players") or []) for v in _ns["reads"].values())
+            print(f"  Matchup scan: {len(_ns['tapes'])} tape(s), {_nr} read(s), {len(_nba_leans)} lean(s) "
+                  f"for Most Likely — team numbers {'per 100 possessions' if _prof.get('per100') else 'per game'}"
+                  f" ({_prof.get('n', 0)} teams rated)")
+            if not _prof.get("per100"):
+                print(f"  (pace and per-100 ratings need the shooting columns: python3 ingest.py "
+                      f"{args.league} --seasons 2025 --refresh)")
+        except Exception as _nsx:                           # noqa: BLE001
+            print(f"  ⚠️  NBA matchup scan skipped: {_nsx}")
+
         # THE GAME LINES PINNACLE QUOTED, for the Pick of the Day. This
         # board prices no game market and its Most Likely board carries
         # none (none is measured for basketball), and the day's pick is game
@@ -1299,7 +1362,27 @@ def main() -> None:
             out["most_likely"] = _likely_build(
                 out.get("recommendations") or [], sport=args.league,
                 census=_ml_census, census_by_kind=_ml_kinds, cut=_ml_cut,
-                previous=_likely_prev(args.out, args.date), turnover=_ml_turn)
+                previous=_likely_prev(args.out, args.date), turnover=_ml_turn,
+                leans=_nba_leans, lean_report=_nba_lean_report)
+            # EVERY READ SAYS WHAT THE BOARD DID WITH IT (engine/gamescan
+            # .stamp_picks): his pick on the read's side, the other side, or
+            # why there is none — as the NFL's and MLB's reads do.
+            if out.get("scan_reads"):
+                from engine.gamescan import stamp_picks as _stamp_nba
+                _stamp_nba(out["scan_reads"], _nba_lean_report, board=out["most_likely"])
+            # EVERY GAME'S MATCHUP PICKS (engine/matchpicks, the NFL's shelf):
+            # each read's markets on its side where our number agrees, at a
+            # real sportsbook's price — journaled on paper, pooled into the
+            # one board below.
+            try:
+                from engine.matchpicks import build as _mp_build
+                out["matchup_picks"] = _mp_build(out.get("games") or [], out.get("scan_reads") or {},
+                                                 [], out.get("recommendations") or [], sport=args.league)
+                print(f"  Matchup picks: {sum(len(m.get('props') or []) for m in out['matchup_picks'])} "
+                      f"across {len(out['matchup_picks'])} game(s)")
+            except Exception as _mpx:                       # noqa: BLE001
+                print(f"  ⚠️  matchup picks skipped: {_mpx}")
+                out["matchup_picks"] = []
             out["likely_turnover"] = _ml_turn
             if not out["most_likely"]:
                 from engine.rankfit import load as _rank_store
@@ -1368,6 +1451,14 @@ def main() -> None:
             ml = ledger.log_most_likely(
                 lconn, {"sport": args.league, "date": args.date,
                         "most_likely": out.get("most_likely") or []})
+            # The matchup picks on paper, as the NFL's and MLB's (matchup_prop).
+            from engine.matchpicks import journal_rows as _mp_rows
+            _mp_n = ledger.log_most_likely(
+                lconn, {"sport": args.league, "date": args.date, "games": out.get("games") or [],
+                        "most_likely": _mp_rows(out.get("matchup_picks"), "prop")},
+                depth=None, category="matchup_prop", grade_label="Matchup")
+            if _mp_n:
+                print(f"Matchup picks: {_mp_n} row(s) journaled on paper.")
             # The one board, per tier, on paper (engine/likelyboard).
             from engine import likelyboard as _lb
             _lb_n = _lb.journal(lconn, out, args.league, args.date)
