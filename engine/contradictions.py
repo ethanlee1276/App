@@ -2,6 +2,7 @@
 
     python3 -m engine.contradictions                 # the published NFL board
     python3 -m engine.contradictions --sport cfb
+    python3 -m engine.contradictions --sport nba     # or wnba
     python3 -m engine.contradictions --file path/to/board.json
 
 Ethan, 2026-10-06: "I feel like we have a lot of contradictions in our
@@ -38,7 +39,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-FILES = {"nfl": "recommendations.json", "cfb": "cfb.json"}
+#: The boards it reads. Basketball joined 2026-10-20, when the NBA board
+#: grew the same makers (player reads leaning Most Likely, matchup picks
+#: beside the Edge picks and the one board) and so the same ways to argue
+#: with itself.
+FILES = {"nfl": "recommendations.json", "cfb": "cfb.json", "nba": "nba.json", "wnba": "wnba.json"}
 
 #: Two chances for the same prop, side and line, further apart than this,
 #: are two numbers for one bet.
@@ -46,8 +51,10 @@ PROB_GAP = 0.05
 #: A projection this far off the Edge row's for the same prop is a second
 #: number for one player.
 PROJ_GAP = 0.05
-#: Statuses that mean he is not playing (or not expected to).
-OUT = {"OUT", "IR", "DOUBTFUL", "SUSPENDED", "PUP", "NFI"}
+#: Statuses that mean he is not playing (or not expected to): football's,
+#: then the basketball injury report's own words (nba_build.OUT_STATUSES).
+OUT = {"OUT", "IR", "DOUBTFUL", "SUSPENDED", "PUP", "NFI",
+       "SUSPENSION", "INJURED RESERVE", "OUT FOR SEASON", "INACTIVE", "NOT WITH TEAM"}
 
 
 def _side(v) -> str:

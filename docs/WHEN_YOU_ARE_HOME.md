@@ -2670,6 +2670,9 @@ defense ... matchup details ... key matchups and breakout players":
   **Players to watch** (breakout watch, could shine, could struggle). Ask
   reads both. The dashboard's could shine / could struggle lists fill for
   the NBA too.
+- **The whole list, NFL tool by NFL tool**, with the NBA's status next to
+  each (done, done differently, not possible, not yet and why), is
+  `docs/NBA_PARITY.md`.
 
 Two data fixes came with it. The box score now keeps field goals and free
 throws made and tried, threes tried and offensive rebounds; possessions,
@@ -2726,6 +2729,15 @@ tonight's slate:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.gamereport --board web/data/nba.json --game BOS | head -120
+```
+
+Whether the NBA board argues with itself: an over on one list and an
+under on another, a pick against its own player's read, a pick on a
+player who is ruled out. The football check reads the NBA board too now.
+Expect "No contradictions found", or a short list to paste:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.contradictions --sport nba
 ```
 
 Which NBA markets Most Likely is allowed to carry. The weekly fit measures

@@ -93,6 +93,25 @@ def test_a_started_game_still_on_the_board_is_caught():
     assert any(f["kind"] == "STARTED" for f in C.scan(d, now=NOW))
 
 
+def test_the_basketball_boards_are_read_the_same_way():
+    # 2026-10-20: the NBA board grew football's makers — reads leaning Most
+    # Likely, matchup picks beside the Edge picks — and so football's ways
+    # to argue with itself. The injury report's own words count as out.
+    assert C.FILES["nba"] == "nba.json" and C.FILES["wnba"] == "wnba.json"
+    d = {"recommendations": [_edge("Jay Star", "pts", "OVER", 24.5, 0.6, 27.1)],
+         "most_likely": [dict(player="Jay Star", market="pts", side="UNDER", line=24.5, model_prob=0.58,
+                              kickoff=LATER),
+                         dict(player="Heat Man", market="fg3m", side="OVER", line=2.5, model_prob=0.6,
+                              kickoff=LATER, injury_status="Suspension")],
+         "matchup_picks": [{"props": [dict(player="Heat Man", market="fg3m", side="over", line=2.5,
+                                           model_prob=0.6, kickoff=LATER,
+                                           matchup_lines=["BOS allows the 2nd-fewest threes a game (10.1)"])]}],
+         "scan_reads": {"MIA@BOS": {"players": [dict(player="Heat Man", read="tough", label="Tough matchup",
+                                                    lean=["fg3m", "pts"])]}}}
+    kinds = {f["kind"] for f in C.scan(d, now=NOW)}
+    assert {"BOTH WAYS", "NOT PLAYING", "READ vs PICK", "REASON AGAINST"} <= kinds, kinds
+
+
 def test_the_text_reader_only_reads_what_it_knows():
     assert C.text_sign("Against it — the script: leads late and runs the clock.", "receptions") == 0
     assert C.text_sign("He has a nice haircut", "receptions") == 0
