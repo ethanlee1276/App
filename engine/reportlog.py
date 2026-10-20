@@ -82,8 +82,12 @@ def game_key(g: dict) -> str:
 
 
 # --- the snapshot -------------------------------------------------------------------------
-def facts(g: dict, result: dict | None, extra: dict | None = None, is_key=None) -> dict:
-    """One game's snapshot. A fact the build did not read is left out."""
+def facts(g: dict, result: dict | None, extra: dict | None = None, is_key=None,
+          more: dict | None = None) -> dict:
+    """One game's snapshot. A fact the build did not read is left out.
+    ``more`` is what a league knows that its board's rows do not carry in
+    the football shape (engine/leaguereport): "starters" {team: name} with
+    "starter_word", "injuries" {player: status}, "weather", "who"."""
     result = result or {}
     out: dict = {}
     who: dict = {}
@@ -128,6 +132,11 @@ def facts(g: dict, result: dict | None, extra: dict | None = None, is_key=None) 
             if isinstance(x, dict) and x.get("player") and x.get("practice") in PRACTICE_WORDS:
                 out["practice"][str(x["player"])] = str(x["practice"])
                 who.setdefault(str(x["player"]), str(x.get("team") or ""))
+    for k, v in (more or {}).items():
+        if k == "who":
+            who.update(v or {})
+        elif v is not None:
+            out[k] = v
     out["who"] = {p: t for p, t in who.items() if t}
     return out
 
@@ -153,7 +162,8 @@ def _weather_words(w: dict) -> str:
     if _f(w.get("temp_f")) is not None:
         bits.append(f"{round(float(w['temp_f']))}°F")
     if _f(w.get("wind_mph")) is not None:
-        bits.append(f"wind {round(float(w['wind_mph']))} mph")
+        bits.append(f"wind {round(float(w['wind_mph']))} mph"
+                    + (f" blowing {w['wind_dir']}" if w.get("wind_dir") in ("in", "out") else ""))
     if _f(w.get("precip_chance")) is not None and float(w["precip_chance"]) > 0:
         bits.append(f"a {round(float(w['precip_chance']) * 100)}% chance of rain")
     if w.get("snow"):
@@ -167,8 +177,11 @@ def _weather_moved(a: dict, b: dict) -> bool:
     def step(k, bar):
         x, y = _f(a.get(k)), _f(b.get(k))
         return x is not None and y is not None and abs(x - y) >= bar
+    turned = a.get("wind_dir") in ("in", "out") and b.get("wind_dir") in ("in", "out") \
+        and a["wind_dir"] != b["wind_dir"]
     return (step("temp_f", TEMP_STEP) or step("wind_mph", WIND_STEP) or step("precip_chance", PRECIP_STEP)
-            or bool(a.get("rain")) != bool(b.get("rain")) or bool(a.get("snow")) != bool(b.get("snow")))
+            or bool(a.get("rain")) != bool(b.get("rain")) or bool(a.get("snow")) != bool(b.get("snow"))
+            or turned)
 
 
 def _moved(old: dict, new: dict, k: str, bar: float):
@@ -225,6 +238,20 @@ def diff(old: dict, new: dict, home: str, away: str) -> list:
                            f"{READ_WORDS.get(nr[p], nr[p])}")
     if "qb" in old and "qb" in new:
         out += sorted(set(new["qb"]) - set(old["qb"]))
+    os_, ns = old.get("starters") or {}, new.get("starters") or {}
+    word = new.get("starter_word") or old.get("starter_word") or "starter"
+    for t in sorted(set(os_) & set(ns)):
+        if os_[t] and ns[t] and os_[t] != ns[t]:
+            out.append(f"{t}'s {word} is now {ns[t]}, not {os_[t]}")
+    for t in sorted(set(ns) - set(os_)):
+        if "starters" in old and ns[t]:
+            out.append(f"{t} named its {word}: {ns[t]}")
+    oc, nc = old.get("confirmed") or {}, new.get("confirmed") or {}
+    for t in sorted(set(oc) & set(nc)):
+        if not oc[t] and nc[t] and ns.get(t):
+            out.append(f"{t}'s {word} is confirmed: {ns[t]}")
+    if old.get("lineups") is False and new.get("lineups") is True:
+        out.append("Both lineups are out")
     if "practice" in old and "practice" in new:
         opr, npr = old["practice"], new["practice"]
         for p in sorted(set(opr) & set(npr)):
@@ -245,6 +272,10 @@ def carry(old: dict, new: dict) -> dict:
     if ow and nw and not _weather_moved(ow, nw):
         keep["weather"] = ow
     keep["who"] = {**(old.get("who") or {}), **(new.get("who") or {})}
+    # A starter not named this build (still "to be announced") keeps the
+    # last one named: an announcement that blinks is not a change.
+    if isinstance(old.get("starters"), dict) and isinstance(new.get("starters"), dict):
+        keep["starters"] = {**old["starters"], **{t: n for t, n in new["starters"].items() if n}}
     return keep
 
 
@@ -271,7 +302,9 @@ def update(path, snapshots: dict, at: str, today: _dt.date | None = None) -> dic
     """Fold this build's ``snapshots`` ({game_key: (facts, home, away)}) into
     the file at ``path``; → {game_key: {"first", "at", "entries" (oldest
     first)}} for this build's games. Never raises: a file that cannot be
-    read or written leaves every report without the section."""
+    read or written leaves every report without the section and prints
+    "what changed not kept (<error>)" — the empty answer a quiet slate
+    gives too must not pass for one."""
     try:
         data = read(path)
         games = data.get("games") if isinstance(data.get("games"), dict) else {}
@@ -287,7 +320,13 @@ def update(path, snapshots: dict, at: str, today: _dt.date | None = None) -> dic
                 rec["last"] = carry(rec["last"], snap)
             games[key] = rec
             out[key] = {"first": rec["first"], "at": at, "entries": list(rec.get("entries") or [])}
-        today = today or _dt.date.today()
+        if today is None:
+            # The build's own day (its stamp), so the window moves with the
+            # builds and not with whatever clock reads the file.
+            try:
+                today = _dt.date.fromisoformat(str(at)[:10])
+            except ValueError:
+                today = _dt.date.today()
         for key in list(games):
             try:
                 day = _dt.date.fromisoformat(key.rsplit("|", 1)[-1])
@@ -298,7 +337,9 @@ def update(path, snapshots: dict, at: str, today: _dt.date | None = None) -> dic
                 games.pop(key)
         _write(path, {"games": games})
         return out
-    except Exception:                                        # noqa: BLE001
+    except Exception as exc:                                 # noqa: BLE001
+        # {} is also a slate with no games, so the failure says itself.
+        print(f"⚠️  what changed not kept ({type(exc).__name__}: {exc})")
         return {}
 
 

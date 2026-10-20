@@ -276,7 +276,10 @@ SYSTEM = (
     "scores up or down), each team's tempo, the practice report, role changes, the kicking "
     "air, each player's season, last three games and red-zone work (player_form), and what "
     "has moved since we first wrote it (what_changed: the line, the injury report, the "
-    "forecast, the reads, each stamped Eastern time). Use it for form, history, how a game "
+    "forecast, the reads, each stamped Eastern time). An MLB, NHL or basketball game's report "
+    "carries its own sections instead: the pitching matchup, park and weather; the tale of "
+    "the tape and the goalies; rest, who carries each team and where each defence gives. "
+    "Use it for form, history, how a game "
     "sets up and what changed, and say it comes from the game report. It carries no prop "
     "picks: never turn a line of it into one.\n"
     "For a start/sit you may say who you would start: lead with that, then each "
@@ -1147,6 +1150,41 @@ def _report_changes(sec: dict | None) -> list:
     return out
 
 
+def _report_all(sec: dict | None) -> list:
+    """Everything a report section says, its tables and player cards
+    included ("Expected ERA: 3.05 | 4.60"; "Kyle Schwarber (PHI) — Good
+    matchup: ..."), for the leagues whose report Ask reads whole."""
+    out = []
+    for b in (sec or {}).get("blocks") or []:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t in ("p", "note") and b.get("text"):
+            out.append(str(b["text"])[:400])
+        elif t == "h" and b.get("text"):
+            out.append(f"— {b['text']} —")
+        elif t == "list":
+            out += [str(x)[:400] for x in b.get("items") or []]
+        elif t == "table":
+            head = [str(x) for x in b.get("head") or []]
+            if b.get("title"):
+                out.append(f"{b['title']}: {' | '.join(head[1:])}")
+            out += [f"{r[0]}: {' | '.join(str(x) for x in r[1:])}" for r in b.get("rows") or [] if r]
+        elif t in ("verdicts", "players"):
+            for v in b.get("items") or []:
+                if not isinstance(v, dict):
+                    continue
+                why = "; ".join(str(w) for w in v.get("why") or []) or str(v.get("text") or "")
+                out.append(f"{v.get('player') or v.get('title')} ({v.get('team')})"
+                           + (f" — {v['label']}" if v.get("label") else "") + (f": {why}" if why else "")[:400])
+    return out
+
+
+#: The sections Ask reads from an MLB, NHL or basketball report, in order.
+LEAGUE_REPORT_KEYS = ("facts", "pitching", "tape", "goalies", "carry", "defense", "watch", "weather",
+                      "injuries", "before")
+
+
 def report_facts(board: dict, g: dict) -> dict:
     """A game's written report as Ask is shown it: the short version, what
     has changed since it was first written, the last meetings, coaching and
@@ -1160,6 +1198,22 @@ def report_facts(board: dict, g: dict) -> dict:
     if not rep:
         return {}
     secs = {x.get("key"): x for x in rep.get("sections") or [] if isinstance(x, dict)}
+    if str(rep.get("sport") or "nfl") not in ("nfl", "cfb"):
+        # MLB, the NHL, the NBA and the WNBA (engine/leaguereport): the
+        # short version, what changed, then every section whole — tables
+        # and player cards flattened — until the budget runs out.
+        out = {"short_version": _report_texts(secs.get("short"))[:10],
+               "what_changed": _report_changes(secs.get("changes"))[:10]}
+        for key in LEAGUE_REPORT_KEYS:
+            lines = _report_all(secs.get(key))
+            if lines:
+                out[key] = lines[:14]
+        out = {k: v for k, v in out.items() if v}
+        for key in reversed(LEAGUE_REPORT_KEYS):
+            if len(json.dumps(out, ensure_ascii=False)) <= REPORT_CHARS:
+                break
+            out.pop(key, None)
+        return out
     out: dict = {
         "short_version": _report_texts(secs.get("short"))[:10],
         "what_changed": _report_changes(secs.get("changes"))[:10],

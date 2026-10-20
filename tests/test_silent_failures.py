@@ -223,6 +223,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # leaves that stage's line out, which reads as "it did not finish",
         # never as a quiet stage. A timer must never cost the build it times.
         "mark",
+        # THE REPORTS' CHANGE LOG (engine/reportlog.update, 2026-10-20),
+        # caught by this sweep the hour it was written. Its {} on failure IS
+        # what a slate with no games returns, so the failure prints "what
+        # changed not kept (<error>)"; a quiet slate prints nothing. A log
+        # that cannot be kept must never cost the build its reports.
+        "update",
     }
 
     def broad(h):

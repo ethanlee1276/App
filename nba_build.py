@@ -786,6 +786,9 @@ def main() -> None:
     # The slate's game lines for the Pick of the Day (`potd.game_lines`),
     # filled once the odds are on the slate; empty on a night with none.
     potd_lines: list = []
+    # What the game report needs that the board does not carry (engine/
+    # leaguereport.nba_meta), filled below once the logs are read.
+    _gr_meta: dict = {}
     if games:
         played_yday = {t for g in yesterday
                        for t in (g["home"], g["away"])}
@@ -852,6 +855,19 @@ def main() -> None:
         print(f"Injuries: {len(listed)} designation(s) on tonight's players "
               f"({out['availability']['out']} out)" if injuries else
               "⚠️  Injury board unreadable — nobody is held for it, and that is a gap")
+        # THE GAME REPORT'S OWN FACTS (engine/leaguereport): who carries each
+        # team over his last ten, the injury report's names on each game,
+        # and where each defence gives (engine/hoopsdvp). Never fatal.
+        try:
+            from engine import hoopsdvp as _gr_dvp
+            from engine.leaguereport import nba_meta as _gr_nba_meta
+            try:
+                _gr_rt, _gr_last = _gr_dvp.board_ratings(conn, args.league, args.date)
+            except Exception:                               # noqa: BLE001
+                _gr_rt, _gr_last = {}, False
+            _gr_meta = _gr_nba_meta(games, hist, listed, _gr_rt, _gr_last, injuries_read=bool(injuries))
+        except Exception as _grx:                           # noqa: BLE001
+            print(f"  ⚠️  game report facts skipped: {_grx}")
 
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"],
                               g.get("home_name", ""), g.get("away_name", ""))
@@ -1432,6 +1448,12 @@ def main() -> None:
     # hook, whose money split the against-the-money note reads.
     from engine import lineopen as _lo
     print(_lo.attach_to_board(out, args.league))
+    # THE GAME REPORT (engine/leaguereport; Ethan, 2026-10-20: "I want you
+    # too do all of it besides D"): every game written out, the NFL's
+    # report in basketball's terms. Last of the game hooks, for the NFL's
+    # reason: its market section reads the crowd and the opener.
+    from engine import leaguereport as _lgr
+    print(f"  {_lgr.attach(out, args.league, meta=_gr_meta, out=args.out)}")
     _pn = _potd.attach(out, args.league, lines=potd_lines)
     if _pn:
         print(_pn)

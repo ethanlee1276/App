@@ -231,6 +231,13 @@ def _pct(x, nd: int = 0) -> str:
     return f"{v * 100 if round(v * 100, nd) else 0.0:.{nd}f}%"
 
 
+def a_pct(x, nd: int = 0) -> str:
+    """"a 60%", "an 85%" — the article a percentage is read with (eight,
+    eleven, eighteen and the eighties take "an")."""
+    s = _pct(x, nd)
+    return f"{'an' if s.startswith('8') or s.split('%')[0] in ('11', '18') else 'a'} {s}"
+
+
 def _minus(s: str) -> str:
     """The true minus sign, the way the site prints a negative (trueMinus)."""
     return str(s).replace("-", "\u2212")
@@ -321,6 +328,9 @@ class Ctx:
                  sport: str = "nfl", meta: dict | None = None, changes: dict | None = None):
         self.g = g
         self.sport = sport
+        # What a game is scored in: "point(s)", "run(s)", "goal(s)".
+        self.score_word = {"mlb": "run", "nhl": "goal"}.get(sport, "point")
+        self.score_words = self.score_word + "s"
         # What moved since the report was first written (engine/reportlog).
         self.changes = changes
         # What the build knows about the game and the board leaves off
@@ -671,12 +681,24 @@ def _clock(hh: int, mm: int) -> str:
     return f"{(hh % 12) or 12}:{mm:02d} {'PM' if hh >= 12 else 'AM'}"
 
 
+#: Baseball's and hockey's spread is a fixed line a run or a goal and a
+#: half wide, not the expected margin: said by its name, and no team
+#: totals are read off it.
+FIXED_LINES = {"mlb": "run line", "nhl": "puck line"}
+
+
 def line_words(c: Ctx) -> str:
-    """"DET by 3 at home, total 52.5" — the favorite, the margin, the total."""
+    """"DET by 3 at home, total 52.5" — the favorite, the margin, the total;
+    "PHI −1.5 on the run line, total 9.5" where the spread is a fixed line."""
     g = c.g
     sp, tot = _f(g.get("spread")), _f(g.get("total"))
     bits = []
-    if sp is not None:
+    fixed = FIXED_LINES.get(c.sport)
+    if sp is not None and fixed:
+        if sp:
+            fav = c.home if sp < 0 else c.away
+            bits.append(f"{fav} −{_num(abs(sp))} on the {fixed}")
+    elif sp is not None:
         if sp == 0:
             bits.append("a pick'em")
         else:
@@ -690,9 +712,10 @@ def line_words(c: Ctx) -> str:
 
 
 def implied_points(c: Ctx) -> dict:
-    """{team: points the spread and total imply}, or {}."""
+    """{team: points the spread and total imply}, or {} — and {} where the
+    spread is a fixed line (FIXED_LINES), which implies no margin."""
     sp, tot = _f(c.g.get("spread")), _f(c.g.get("total"))
-    if sp is None or tot is None:
+    if sp is None or tot is None or c.sport in FIXED_LINES:
         return {}
     return {c.home: (tot - sp) / 2.0, c.away: (tot + sp) / 2.0}
 
@@ -881,7 +904,7 @@ def sec_market(c: Ctx) -> dict | None:
     if lw:
         s = f"The line: {lw}"
         if pts:
-            s += (f". That puts {c.home} at about {_num(pts[c.home])} points and "
+            s += (f". That puts {c.home} at about {_num(pts[c.home])} {c.score_words} and "
                   f"{c.away} at about {_num(pts[c.away])}")
         out.append(_p(s))
     ml = ml_chances(c)
@@ -898,12 +921,13 @@ def sec_market(c: Ctx) -> dict | None:
         if o_sp is not None:
             opened = (f"{c.home} {_minus(_num(o_sp))}" if o_sp < 0 else f"{c.away} {_minus(_num(-o_sp))}"
                       if o_sp > 0 else "a pick'em")
+            what = FIXED_LINES.get(c.sport, "spread")
             if mv:
                 toward = c.home if mv < 0 else c.away
-                moves.append(f"The spread opened at {opened} and has moved {_num(abs(mv))} "
-                             f"point{'s' if abs(mv) != 1 else ''} toward {toward}")
+                moves.append(f"The {what} opened at {opened} and has moved {_num(abs(mv))} "
+                             f"{c.score_word if abs(mv) == 1 else c.score_words} toward {toward}")
             else:
-                moves.append(f"The spread opened at {opened} and has not moved")
+                moves.append(f"The {what} opened at {opened} and has not moved")
         o_tot, tmv = _f(lo.get("total")), _f(lo.get("total_move"))
         if o_tot is not None:
             moves.append(f"The total opened at {_num(o_tot)}" +
@@ -1777,7 +1801,7 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
         ml = ml_chances(c)
         if ml:
             fav = max(ml, key=ml.get)
-            s += f"; the moneyline makes {fav} a {_pct(ml[fav])} favorite"
+            s += f"; the moneyline makes {fav} {a_pct(ml[fav])} favorite"
         items.append(s[0].upper() + s[1:])
     edges = _edges(c)
     if edges:
@@ -1866,23 +1890,31 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
         return None
     c = Ctx(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
             form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta, changes=changes)
+    return finish(c, SECTIONS, sec_short)
+
+
+def finish(c: Ctx, sections_fns, short_fn) -> dict:
+    """The report: every section that has something to say, the short
+    version written last from what they found and put first, what changed
+    under it. Shared by every league's report (engine/leaguereport)."""
     built = {}
-    for fn in SECTIONS:
+    for fn in sections_fns:
         s = fn(c)
         if s:
             built[s["key"]] = s
-    short = sec_short(c, built)
+    short = short_fn(c, built)
     moved = sec_changes(c)
     sections = [x for x in (short, moved) if x] + list(built.values())
     words = _words(sections)
-    return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": sport,
+    g = c.g
+    return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": c.sport,
             "date": g.get("date") or "", "kickoff": g.get("kickoff") or "",
             "title": f"{c.name(c.away)} at {c.name(c.home)}",
             # What Share says beside the link: the kickoff and the line —
             # public facts only (js/report.js teaser).
             "when": kickoff_words(g.get("date") or "", g.get("kickoff") or ""),
             "line": line_words(c),
-            "built_at": result.get("built_at") or "",
+            "built_at": c.result.get("built_at") or "",
             "words": words, "minutes": max(1, round(words / WORDS_A_MINUTE)),
             "sections": sections}
 
@@ -2006,19 +2038,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             except Exception:                                # noqa: BLE001
                 met = []
             prepared.append((g, extra, met))
-        # WHAT CHANGED (engine/reportlog): this build's snapshot of every
-        # game, against the one kept beside the private board.
-        logged: dict = {}
-        if out:
-            try:
-                from . import reportlog as _log
-                from .gate import _full_dir_for
-                snaps = {_log.game_key(g): (_log.facts(g, result, extra, is_key=_is_key),
-                                            str(g.get("home") or ""), str(g.get("away") or ""))
-                         for g, extra, _met in prepared if g.get("home") and g.get("away")}
-                logged = _log.update(_log.path_for(sport, _full_dir_for(out)), snaps, at or _log.now_et())
-            except Exception:                                # noqa: BLE001
-                logged = {}
+        logged = log_changes(result, [(g, extra, None) for g, extra, _met in prepared], sport, out, at)
         reports = []
         for g, extra, met in prepared:
             home, away = str(g.get("home") or ""), str(g.get("away") or "")
@@ -2031,14 +2051,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
         result[KEY] = reports
         if not reports:
             return "Game reports: no games on the board"
-        words = sum(r["words"] for r in reports)
-        moved = sum(1 for v in logged.values()
-                    if v.get("entries") and v["entries"][-1].get("at") == v.get("at"))
-        return (f"Game reports: {len(reports)} game(s), {words:,} words "
-                f"(about {round(words / max(1, len(reports)) / WORDS_A_MINUTE)} minutes each); "
-                f"form for {len(form)} player(s)"
-                + (f"; what changed: {moved} game(s) moved since the last build, "
-                   f"{len(logged)} tracked" if out else ""))
+        return summary(reports, logged, out) + f"; form for {len(form)} player(s)"
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"
@@ -2050,11 +2063,40 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                 pass
 
 
+def log_changes(result: dict, prepared: list, sport: str, out, at: str | None) -> dict:
+    """WHAT CHANGED (engine/reportlog): this build's snapshot of every game
+    (``prepared``: [(game, extra, more)] — ``more`` the league's own facts,
+    a starter or an injury list the board does not carry), against the one
+    kept beside the private board. {} with no ``out``; never raises."""
+    if not out:
+        return {}
+    try:
+        from . import reportlog as _log
+        from .gate import _full_dir_for
+        snaps = {_log.game_key(g): (_log.facts(g, result, extra, is_key=_is_key, more=more),
+                                    str(g.get("home") or ""), str(g.get("away") or ""))
+                 for g, extra, more in prepared if g.get("home") and g.get("away")}
+        return _log.update(_log.path_for(sport, _full_dir_for(out)), snaps, at or _log.now_et())
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
+def summary(reports: list, logged: dict, out) -> str:
+    """The build log's line for a league's reports."""
+    words = sum(r["words"] for r in reports)
+    moved = sum(1 for v in logged.values()
+                if v.get("entries") and v["entries"][-1].get("at") == v.get("at"))
+    return (f"Game reports: {len(reports)} game(s), {words:,} words "
+            f"(about {round(words / max(1, len(reports)) / WORDS_A_MINUTE)} minutes each)"
+            + (f"; what changed: {moved} game(s) moved since the last build, "
+               f"{len(logged)} tracked" if out else ""))
+
+
 # --- reading one back -----------------------------------------------------------------
 def to_text(report: dict) -> str:
     """The report as plain text — what the box prints and the tests read."""
-    out = [f"{report.get('title')} — {report.get('game')} · {report.get('date')} "
-           f"{report.get('kickoff')} ET · about {report.get('minutes')} min"]
+    when = report.get("when") or f"{report.get('date')} {report.get('kickoff')} ET"
+    out = [f"{report.get('title')} — {report.get('game')} · {when} · about {report.get('minutes')} min"]
     for s in report.get("sections") or []:
         out += ["", s["title"].upper()]
         for b in s.get("blocks") or []:
@@ -2079,7 +2121,9 @@ def to_text(report: dict) -> str:
                     out += _form_text(v)
             elif t == "players":
                 for v in b["items"]:
-                    out.append(f"  • {v['player']} ({v.get('team')} {v.get('pos')}) — {v.get('label')}"
+                    who = " ".join(str(x) for x in (v.get("team"), v.get("pos")) if x)
+                    out.append(f"  • {v['player']}" + (f" ({who})" if who else "")
+                               + (f" — {v['label']}" if v.get("label") else "")
                                + (f": {v['text']}" if v.get("text") else ""))
                     out += _form_text(v)
     return "\n".join(out)

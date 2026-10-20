@@ -1031,6 +1031,11 @@ def main() -> None:
             ("exchange fair", lambda: __import__("engine.exchangefair", fromlist=["x"]).attach_to_board(out, SPORT)),
             ("crowd prices", lambda: __import__("engine.crowd", fromlist=["x"]).attach_to_board(out, SPORT)),
             ("opening lines", lambda: __import__("engine.lineopen", fromlist=["x"]).attach_to_board(out, SPORT)),
+            # THE GAME REPORT (engine/leaguereport): every game written out,
+            # the NFL's report in hockey's terms. After the crowd and the
+            # opener, which its market section reads.
+            ("game reports", lambda: __import__("engine.leaguereport", fromlist=["x"]).attach(
+                out, SPORT, out=args.out)),
             ("pick of the day", lambda: __import__("engine.potd", fromlist=["x"]).attach(
                 out, SPORT, lines=potd_lines))):
         try:

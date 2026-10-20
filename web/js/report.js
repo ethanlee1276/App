@@ -21,6 +21,22 @@
 
   const TONE = { favorable: "up", unfavorable: "down", up: "up", down: "down" };
 
+  /* What a league's report holds, for the reader without the paid key
+     (engine/gamereport, engine/leaguereport). */
+  const HOOPS = "the line and what it means, rest and travel, who carries each team, where each " +
+    "defence gives, the injury report and what to check before tip-off";
+  const HOLDS = {
+    nfl: "the line and what it means, how the units rank, how each team plays, who is out and what it " +
+      "opens, who’s guarding who, the trenches, the red zone, coaching and the schedule, how the game " +
+      "could go and the players to watch",
+    mlb: "the line and what it means, the pitching matchup, how each lineup hits tonight’s hand, the pens, " +
+      "the park, the weather and the umpire, and the hitters set up to shine or struggle",
+    nhl: "the line and what it means, the tale of the tape, the goalies, the injury report, and the " +
+      "skaters set up to shine or struggle",
+    nba: HOOPS, wnba: HOOPS,
+  };
+  HOLDS.cfb = HOLDS.nfl;
+
   /* His season, his last games, a trend and his red-zone work
      (engine/gamereport.form_lines): [[label, [lines]]]. */
   function form(rows) {
@@ -162,10 +178,9 @@
       <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}the whole game written out from
       tonight’s board; no prop picks in it</span></div>`;
     if (!r) {
+      const holds = HOLDS[(extras && extras.sport) || ""] || HOLDS.nfl;
       return `<div id="gp-sec-report" class="gr">${head}<div class="card ms-locked"><b>The game report</b> —
-        this game written out top to bottom: the line and what it means, how the units rank, how each team
-        plays, who is out and what it opens, who’s guarding who, the trenches, the red zone, coaching and the
-        schedule, how the game could go and the players to watch — is part of the subscription.</div></div>`;
+        this game written out top to bottom: ${holds} — is part of the subscription.</div></div>`;
     }
     const secs = (r.sections || []).filter((s) => s && (s.blocks || []).length);
     const toc = secs.length > 2 ? `<nav class="std-chips gr-toc" aria-label="Sections of the report">${

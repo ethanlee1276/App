@@ -989,6 +989,13 @@ def main() -> None:
         # hook, whose money split the against-the-money note reads.
         from engine import lineopen as _lo
         print(_lo.attach_to_board(result, "mlb"))
+        # THE GAME REPORT (engine/leaguereport; Ethan, 2026-10-20: "I want
+        # you too do all of it besides D"): every game written out, the
+        # NFL's report in baseball's terms — the pitching matchup, the park
+        # and the weather, a read on every hitter and starter. Last of the
+        # game hooks: its market section reads the crowd and the opener.
+        from engine import leaguereport as _lgr
+        print(f"  {_lgr.attach(result, 'mlb', out=args.out)}")
         _pn = _potd.attach(result, "mlb")
         if _pn:
             print(_pn)

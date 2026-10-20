@@ -14614,7 +14614,10 @@ function loadReport() {
 function gameReportHTML(g, extras) {
   const d = state.data || {};
   const r = gameReportFor(g);
-  const locked = !r && !_grFailed && d.locked && d.locked.game_reports && g.scan && g.scan.units;
+  // Every league's board writes a report for every game it holds
+  // (engine/gamereport, engine/leaguereport), so a locked board teases
+  // each of them.
+  const locked = !r && !_grFailed && d.locked && d.locked.game_reports;
   if (!r && !locked) return "";
   if (window.QBReport) return window.QBReport.html(r, extras);
   const id = state.gameId;
@@ -15070,7 +15073,7 @@ function renderGamePage() {
      into the report's "How the game could go". */
   const report = gameReportFor(g);
   const reportHTML = gameReportHTML(g, { scripts: report && simCard ? simCard : "",
-                                         url: cleanURL("game", gameSlug(g)) });
+                                         url: cleanURL("game", gameSlug(g)), sport: state.sport });
   const planHTML = gamePlanHTML(g, report ? { skip: ["line", "out", "matchup", "watch"] } : null);
   host.innerHTML = `
     <div class="pp-nav">
