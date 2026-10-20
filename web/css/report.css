@@ -5,6 +5,8 @@
    scroll inside themselves on a phone, and the players in the scan's own
    card shape. */
 .gr-toc { margin: 0 0 12px; }
+/* Copy the report, share the game: two quiet buttons over the contents. */
+.gr-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
 .gr-card { padding: 18px 20px; }
 @media (max-width: 600px) { .gr-card { padding: 14px; } }
 .gr-sec { padding: 16px 0; border-top: var(--hairline) solid var(--border-soft);

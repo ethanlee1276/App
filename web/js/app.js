@@ -15069,7 +15069,8 @@ function renderGamePage() {
      scan and the plan's narrative steps step aside, and the replay moves
      into the report's "How the game could go". */
   const report = gameReportFor(g);
-  const reportHTML = gameReportHTML(g, report && simCard ? { scripts: simCard } : null);
+  const reportHTML = gameReportHTML(g, { scripts: report && simCard ? simCard : "",
+                                         url: cleanURL("game", gameSlug(g)) });
   const planHTML = gamePlanHTML(g, report ? { skip: ["line", "out", "matchup", "watch"] } : null);
   host.innerHTML = `
     <div class="pp-nav">

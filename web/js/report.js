@@ -66,6 +66,95 @@
     return "";
   }
 
+  /* THE REPORT AS PLAIN TEXT — what "Copy the report" puts on the
+     clipboard, in the page's reading order (engine/gamereport.to_text is
+     the box's copy of the same walk). Tables go row by row with dots
+     between the cells: a message app's font is not monospaced, so padded
+     columns would not line up anyway. */
+  function toText(r, url) {
+    const out = [r.title + (r.when ? ` — ${r.when}` : ""), "The Qellys Book game report"];
+    for (const s of r.sections || []) {
+      out.push("", String(s.title || "").toUpperCase());
+      for (const b of s.blocks || []) {
+        if (!b || !b.type) continue;
+        if (b.type === "p" || b.type === "note") out.push(b.text);
+        else if (b.type === "h") out.push("", b.text);
+        else if (b.type === "list") (b.items || []).forEach((t) => out.push(`• ${t}`));
+        else if (b.type === "table") {
+          if (b.title) out.push(b.title);
+          [b.head || [], ...(b.rows || [])].forEach((row) => out.push(row.join("  ·  ")));
+          if (b.note) out.push(`(${b.note})`);
+        } else if (b.type === "verdicts" || b.type === "players") {
+          for (const v of b.items || []) {
+            const who = [v.team, v.pos].filter(Boolean).join(" ");
+            out.push(b.type === "verdicts"
+              ? `• ${v.title} — ${v.label}${v.role ? ` (${v.role})` : ""}`
+              : `• ${v.player}${who ? ` (${who})` : ""}${v.label ? ` — ${v.label}` : ""}${v.text ? `: ${v.text}` : ""}`);
+            (v.why || []).forEach((w) => out.push(`    – ${w}`));
+            (v.form || []).forEach(([k, lines]) => out.push(`    ${k}: ${(lines || []).join(" | ")}`));
+          }
+        }
+      }
+    }
+    if (url) out.push("", url);
+    return out.join("\n");
+  }
+
+  /* WHAT SHARE SENDS: the game, its kickoff and its line, and the link —
+     the public facts and nothing of the report. Whoever it is forwarded
+     to reads the share text before anybody has paid for anything (the
+     same rule as app.js pickSlug). */
+  function teaser(r) {
+    return [r.title + (r.when ? ` — ${r.when}` : ""), r.line ? r.line[0].toUpperCase() + r.line.slice(1) : "",
+            "Our full game report is on Qellys Book."].filter(Boolean).join(". ").replace(/\.\./g, ".");
+  }
+
+  function said(btn, msg) {
+    const was = btn.textContent;
+    btn.textContent = msg;
+    setTimeout(() => { btn.textContent = was; }, 1600);
+  }
+
+  /* The clipboard first, on a phone too: "Copy" that opens a share sheet
+     is not what the button says. Where there is no clipboard (an insecure
+     context, an app without the permission) the share sheet is the way
+     out; where there is neither, the button says so. */
+  async function copy(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      said(btn, "Copied");
+      return;
+    } catch (e) { /* no clipboard here */ }
+    if (navigator.share) {
+      try { await navigator.share({ text }); } catch (e) { /* dismissed */ }
+      return;
+    }
+    said(btn, "Copy didn’t work");
+  }
+
+  async function share(r, url, btn) {
+    const text = teaser(r);
+    if (navigator.share) {
+      try { await navigator.share({ title: r.title, text, url }); } catch (e) { /* dismissed */ }
+      return;
+    }
+    copy(url ? `${text}\n${url}` : text, btn);
+  }
+
+  /* The reports drawn this visit, by game, for the two buttons. */
+  const shown = new Map();
+  if (typeof document !== "undefined") {
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("[data-gr-copy], [data-gr-share]");
+      if (!b) return;
+      const hit = shown.get(b.dataset.grCopy || b.dataset.grShare);
+      if (!hit) return;
+      e.preventDefault();
+      if (b.dataset.grCopy) copy(toText(hit.r, hit.url), b);
+      else share(hit.r, hit.url, b);
+    });
+  }
+
   /* The report (r), or — for a reader without the paid key — what it
      holds. */
   function html(r, extras) {
@@ -95,8 +184,13 @@
       return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
         ${blocks.map(block).join("")}${extra}</section>`;
     }).join("");
-    return `<div id="gp-sec-report" class="gr">${head}${toc}<div class="card gr-card">${body}</div></div>`;
+    const url = (extras && extras.url) || "";
+    shown.set(r.game, { r, url });
+    const tools = `<div class="gr-tools">
+      <button type="button" class="btn ghost" data-gr-copy="${escapeAttr(r.game)}">Copy the report</button>
+      <button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button></div>`;
+    return `<div id="gp-sec-report" class="gr">${head}${tools}${toc}<div class="card gr-card">${body}</div></div>`;
   }
 
-  window.QBReport = { html, block };
+  window.QBReport = { html, block, toText, teaser };
 })();

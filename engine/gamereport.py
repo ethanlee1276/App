@@ -1878,6 +1878,10 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
     return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": sport,
             "date": g.get("date") or "", "kickoff": g.get("kickoff") or "",
             "title": f"{c.name(c.away)} at {c.name(c.home)}",
+            # What Share says beside the link: the kickoff and the line —
+            # public facts only (js/report.js teaser).
+            "when": kickoff_words(g.get("date") or "", g.get("kickoff") or ""),
+            "line": line_words(c),
             "built_at": result.get("built_at") or "",
             "words": words, "minutes": max(1, round(words / WORDS_A_MINUTE)),
             "sections": sections}
