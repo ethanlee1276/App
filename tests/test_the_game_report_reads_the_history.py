@@ -442,6 +442,36 @@ def test_abroad_the_kicking_air_is_the_host_citys():
     assert kickphysics.conditions(g)["altitude_ft"] == 5280.0
 
 
+# --- K8: Ask reads it -----------------------------------------------------------------
+def test_ask_reads_the_report_for_a_named_game_and_keeps_it_short():
+    from engine import askbot as AB
+    from engine import served
+    board = _board()
+    form = RD.player_form(_conn(), 2026, R.report_players(board), schedule=_schedule())
+    board["game_reports"] = [R.build(board["games"][0], board, names=NAMES, form=form,
+                                     meetings=RD.meetings("DET", "GB", "2026-10-25", path=_schedule()),
+                                     ideas={"practice": PRACTICE, "role": ROLE})]
+    facts = AB.game_facts(board, board["games"][0], scan=True)["game_report"]
+    assert facts["last_meetings"][0].startswith("GB has won 3 of the last 4 meetings")
+    assert any(x.startswith("Tempo: DET runs 66 plays a game") for x in facts["tempo"])
+    assert facts["practice_report"][0].startswith("Jahmyr Gibbs (DET, ankle) — questionable")
+    assert facts["roles_on_the_move"][0].startswith("Mike Williams (GB): target share up to 21%")
+    assert facts["player_form"]["Jahmyr Gibbs"][0].startswith("This season: 5 games: 88 carries")
+    assert any("went for it on 4 of 4" in x for x in facts["coaching_and_schedule"])
+    # Held under its cap: the players' form gives way first.
+    many = {f"P{i}": ["This season: " + "x" * 300] for i in range(40)}
+    big = dict(board["game_reports"][0])
+    big["sections"] = big["sections"] + [{"key": "watch", "title": "w", "blocks": [
+        {"type": "players", "items": [{"player": k, "form": [["This season", v]]} for k, v in many.items()]}]}]
+    trimmed = AB.report_facts(dict(board, game_reports=[big]), board["games"][0])
+    assert len(json.dumps(trimmed, ensure_ascii=False)) <= AB.REPORT_CHARS
+    # A game with no report reads nothing; Ask's copy of the board keeps the reports.
+    assert AB.report_facts({"game_reports": []}, board["games"][0]) == {}
+    assert "game_reports" in served.for_ask({"game_reports": [1], "player_stats": {}})
+    assert "game_report is our written report on it" in AB.SYSTEM
+    assert "It carries no prop picks: never turn a line of it into one." in AB.SYSTEM
+
+
 # --- the build and the page ------------------------------------------------------------
 def test_attach_reads_the_logs_and_never_raises_without_them():
     board = _board()

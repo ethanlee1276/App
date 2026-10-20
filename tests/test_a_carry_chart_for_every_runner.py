@@ -350,7 +350,8 @@ def test_the_nightly_reads_the_runs_with_the_units_and_fills_last_season_once():
     from engine import maintenance
     src = inspect.getsource(maintenance._run_chores)
     i = src.index("_carries_behind = False")
-    block = src[i:src.index("THE DEEP fitters", i) if "THE DEEP fitters" in src[i:] else i + 6000]
+    # 8,000 characters since the team weeks joined the read (2026-10-20).
+    block = src[i:src.index("THE DEEP fitters", i) if "THE DEEP fitters" in src[i:] else i + 8000]
     assert "today.weekday() == 1 or _units_behind or _carries_behind" in block, \
         "a Thursday or Monday game's chart does not wait for Tuesday"
     assert "runs = _carries.NflCarries(season)" in block and "units.add(r)" in block and "runs.add(r)" in block, \

@@ -67,7 +67,7 @@ def test_the_doctor_the_nightly_and_the_build_ask_it():
     # The nightly's play-by-play read still asks the unit ratings first;
     # since 2026-10-13 it also runs while a finished game has no carry
     # chart (engine/carries.nfl_behind).
-    assert 'if today.weekday() == 1 or _units_behind or _carries_behind:' in maint
+    assert 'if today.weekday() == 1 or _units_behind or _carries_behind or _weeks_behind:' in maint
     build = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
     assert '_wk = _fresh.football_weeks(_fdb.connect(), "nfl")' in build
     assert 'print("  " + _fresh.line(_wk))' in build

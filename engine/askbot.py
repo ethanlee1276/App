@@ -270,6 +270,13 @@ SYSTEM = (
     "from the market — named, never staked, on paper). When asked how a game sets up or "
     "what to play in it, walk those steps in that order and say which plays fit and "
     "which to avoid; a gap row is a disagreement we are testing, never a pick.\n"
+    "A named game's game_report is our written report on it, the one on its game page: the "
+    "short version, the last meetings at the lines they closed at, coaching and the schedule "
+    "with each coach's calls (fourth-and-short, two-point tries, how often they pass two "
+    "scores up or down), each team's tempo, the practice report, role changes, the kicking "
+    "air, and each player's season, last three games and red-zone work (player_form). Use it "
+    "for form, history and how a game sets up, and say it comes from the game report. It "
+    "carries no prop picks: never turn a line of it into one.\n"
     "For a start/sit you may say who you would start: lead with that, then each "
     "player's projected points on its own line, and mention a big weekly swing "
     "(boom-or-bust) or a tough matchup when it decides it. That is fantasy advice, "
@@ -1095,6 +1102,70 @@ def plan_facts(board: dict, g: dict) -> dict:
     return out
 
 
+#: What Ask is shown of a game's written report (engine/gamereport) —
+#: the parts the scan and the plan do not carry — held under this many
+#: characters (the players' form goes first when it runs over).
+REPORT_CHARS = 6000
+REPORT_FORM_PLAYERS = 8
+
+
+def _report_texts(sec: dict | None, heading: str | None = None) -> list:
+    """A report section's sentences in order (paragraphs, list items,
+    notes); with ``heading``, only those under that heading."""
+    out, under = [], None
+    for b in (sec or {}).get("blocks") or []:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "h":
+            under = b.get("text")
+            continue
+        if heading is not None and under != heading:
+            continue
+        if t in ("p", "note") and b.get("text"):
+            out.append(str(b["text"])[:400])
+        elif t == "list":
+            out += [str(x)[:400] for x in b.get("items") or []]
+    return out
+
+
+def report_facts(board: dict, g: dict) -> dict:
+    """A game's written report as Ask is shown it: the short version, the
+    last meetings, coaching and the schedule with the coaches' calls, each
+    team's tempo, the practice report, role changes, the kicking air and
+    every named player's form. Paid like the reads; it carries no prop
+    picks, and neither may an answer drawn from it."""
+    rep = next((r for r in (board or {}).get("game_reports") or []
+                if isinstance(r, dict) and r.get("away") == g.get("away") and r.get("home") == g.get("home")),
+               None)
+    if not rep:
+        return {}
+    secs = {x.get("key"): x for x in rep.get("sections") or [] if isinstance(x, dict)}
+    out: dict = {
+        "short_version": _report_texts(secs.get("short"))[:10],
+        "last_meetings": _report_texts(secs.get("meetings"))[:7],
+        "coaching_and_schedule": _report_texts(secs.get("context"))[:12],
+        "tempo": [t for t in _report_texts(secs.get("identity")) if t.startswith("Tempo:")],
+        "practice_report": _report_texts(secs.get("injuries"), "The practice report")[:8],
+        "roles_on_the_move": _report_texts(secs.get("watch"), "Roles on the move")[:6],
+        "kicking_air": [t for t in _report_texts(secs.get("weather")) if t.startswith(("Kicking air", "A 50-yard"))],
+    }
+    form: dict = {}
+    for key in ("matchups", "watch"):
+        for b in (secs.get(key) or {}).get("blocks") or []:
+            if isinstance(b, dict) and b.get("type") in ("verdicts", "players"):
+                for it in b.get("items") or []:
+                    if isinstance(it, dict) and it.get("form") and it.get("player") not in form:
+                        form[it["player"]] = [f"{k}: {' | '.join(v)}" for k, v in it["form"]][:4]
+    out["player_form"] = dict(list(form.items())[:REPORT_FORM_PLAYERS])
+    out = {k: v for k, v in out.items() if v}
+    while len(json.dumps(out, ensure_ascii=False)) > REPORT_CHARS and out.get("player_form"):
+        out["player_form"].popitem()
+        if not out["player_form"]:
+            out.pop("player_form")
+    return out
+
+
 def game_facts(board: dict, g: dict, scan: bool = False) -> dict:
     """One game as the model needs it: lines, weather, the stadium, rest —
     and, for a game the question names, its matchup scan."""
@@ -1156,6 +1227,9 @@ def game_facts(board: dict, g: dict, scan: bool = False) -> dict:
         plan = plan_facts(board, g)
         if plan:
             out["game_plan"] = plan
+        rep = report_facts(board, g)
+        if rep:
+            out["game_report"] = rep
     return out
 
 
