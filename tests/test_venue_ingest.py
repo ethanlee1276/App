@@ -20,6 +20,24 @@ every machine that had no Pillow — GitHub Actions included, red on
 every push from the night the ingest tool landed. A tool's optional
 dependency is not allowed to be the suite's dependency.
 
+ABSENT INCLUDES HALF-PRESENT, which the first guard missed. It caught
+ModuleNotFoundError, so it only covered the case where PIL is not on
+the path at all. Pillow is half C extension: `from PIL import Image`
+runs the pure-Python package, which then loads `PIL._imaging`, and when
+that .so is built for a different interpreter the raise is a plain
+ImportError ("cannot import name '_imaging'") — not a subclass the old
+guard caught. The nightly found it that way (2026-10-20): Pillow
+installed for 3.12, suite run on 3.11, the whole file red at import on
+a machine that cannot use the tool either way. An interpreter upgrade
+leaves exactly that state on a laptop, and the symptom is a confusing
+traceback in a file whose entire purpose is to bow out quietly.
+
+ImportError is the right width: ModuleNotFoundError is a subclass of
+it, so "not installed" and "installed but unusable" both skip, and
+either way this machine cannot run the hand-run tool the file tests.
+The other three PIL-guarded test files already catch ImportError; this
+one was the outlier.
+
 The skip is printed, not silent: run_tests.py reads the SKIP line and
 reports the file as skipped rather than as a green zero, because a
 skipped file that renders as a pass is how coverage quietly disappears.
@@ -34,8 +52,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from PIL import Image  # noqa: E402
-except ModuleNotFoundError:
-    print("SKIP Pillow is not installed; tools/venues_ingest.py is a "
+except ImportError:
+    print("SKIP Pillow is not usable here; tools/venues_ingest.py is a "
           "hand-run laptop tool and the rest of the suite is stdlib-only")
     print("\n0 tests passed.")
     raise SystemExit(0) from None

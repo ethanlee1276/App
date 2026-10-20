@@ -552,7 +552,18 @@ def test_a_skipped_test_file_is_not_reported_as_a_pass():
     # And the file that needs it still says it.
     vi = open(os.path.join(ROOT, "tests", "test_venue_ingest.py"),
               encoding="utf-8").read()
-    assert "except ModuleNotFoundError" in vi
+    # ImportError, not ModuleNotFoundError. The narrow one reads as the
+    # tighter, more precise guard and is the bug: Pillow is half C
+    # extension, so an unusable install (a .so built for another
+    # interpreter) raises plain ImportError and the file went red at
+    # import instead of skipping — exactly the outage this test exists
+    # to prevent, through the one door it was not watching (nightly,
+    # 2026-10-20). ModuleNotFoundError subclasses ImportError, so the
+    # wide catch still covers "no Pillow at all"; pin it closed.
+    assert "except ImportError" in vi
+    assert "except ModuleNotFoundError" not in vi, (
+        "too narrow — an installed-but-unusable Pillow raises ImportError "
+        "and must skip this file, not fail it")
     assert 'print("SKIP ' in vi
 
 
