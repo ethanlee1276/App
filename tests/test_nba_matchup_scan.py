@@ -247,6 +247,11 @@ def test_the_blowout_is_a_starters_worry_and_rest_cuts_both_ways():
     assert not any("back-to-back" in x or "four nights" in x for x in both["pro"] + both["con"]), both
 
 
+def test_the_scan_rules_out_whom_the_build_rules_out():
+    import nba_build
+    assert S.OUT == set(nba_build.OUT_STATUSES)
+
+
 def test_his_own_listing_is_a_note_and_rides_the_read():
     h = _hist(mins=[30] * 12, pts=[18] * 12)
     r = S.read_player("Q Guy", h, "BOS", "MIA", status="questionable")

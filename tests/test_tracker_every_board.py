@@ -406,8 +406,11 @@ def test_hoops_progress_reads_the_box_score_by_column_name():
     # Keyed by the SAME function the tracker looks a bet up with — it
     # strips the apostrophe, and a literal key here would test the test.
     from engine.sources.oddsapi import normalize_name
+    # The parser keeps the threes tried beside the made (2026-10-20: a team's
+    # possessions are counted from its shots). The tracker looks a bet up by
+    # its market, so a column no bet names rides along unread.
     assert prog[normalize_name("A'ja Wilson")] == {
-        "min": 30.0, "pts": 22.0, "reb": 9.0, "ast": 3.0, "fg3m": 1.0}, prog
+        "min": 30.0, "pts": 22.0, "reb": 9.0, "ast": 3.0, "fg3m": 1.0, "fg3a": 4.0}, prog
 
 
 def test_only_live_games_are_fetched_and_a_missing_id_is_counted():

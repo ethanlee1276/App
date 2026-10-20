@@ -94,8 +94,10 @@ EDGE_TOP = 10
 EDGE_GAP_SHARE = 0.35
 #: The most key matchups a game lists.
 EDGES_PER_GAME = 5
-#: Ruled out (the injury report's words, nba_build.OUT_STATUSES).
-OUT = {"out", "doubtful", "suspended", "inactive"}
+#: Ruled out: the injury report's words, nba_build.OUT_STATUSES exactly
+#: (a test holds the two together).
+OUT = {"out", "doubtful", "suspension", "suspended", "injured reserve", "ir", "out for season",
+       "inactive", "not with team"}
 
 #: The tape's rows: (stat, label, format). Per-100 rows need possessions,
 #: which need the shooting columns (engine/nba/teams); without them the

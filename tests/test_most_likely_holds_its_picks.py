@@ -278,7 +278,8 @@ def test_every_build_hands_the_hold_its_last_board():
     pipe = src("engine", "pipeline.py")
     assert "previous=likely_previous," in pipe and '"likely_turnover": _likely_turnover,' in pipe
     assert "previous=_likely_prev(args.out, result.get(\"date\"))" in src("mlb_build.py")
-    assert "previous=_likely_prev(args.out, args.date), turnover=_ml_turn)" in src("nba_build.py")
+    # Basketball's call also hands the board the matchup scan's leans (2026-10-20).
+    assert "previous=_likely_prev(args.out, args.date), turnover=_ml_turn,\n" in src("nba_build.py")
     assert "previous=_likely_prev(args.out, out.get(\"date\"))," in src("cfb_build.py"), \
         "college's payload date is the build date; args.date moves to the slate"
     for f in ("mlb_build.py", "nba_build.py", "cfb_build.py"):
