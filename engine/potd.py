@@ -1454,9 +1454,25 @@ def carry(card: dict, prev: dict | None) -> dict:
     # 00:06 UTC … this is still the best read we have").
     if _stamp_day(prev.get("decided_at")) != _stamp_day(card.get("decided_at")):
         return card
+    # …AND ANOTHER SLATE'S JUDGEMENT IS NOT THIS SLATE'S. Basketball, hockey
+    # and baseball roll their slate at 5 AM Eastern (launch._slate_date), so
+    # a build just after midnight is still judging LAST night's slate on
+    # what is already today's Eastern day. Both cards name their slate.
+    if (str(prev.get("date") or "") and str(card.get("date") or "")
+            and str(prev.get("date")) != str(card.get("date"))):
+        return card
     if str(prev.get("sport") or "") != str(card.get("sport") or ""):
         return card
     if has_pick(card):
+        return card
+    # A REFUSAL THAT SAW NOTHING HOLDS NOTHING (2026-10-20, NBA opening
+    # night). The tie rule below keeps the earlier of two equal readings,
+    # which is right for two readings of one board and wrong when both read
+    # zero: a decline made at 12:17 AM Eastern, before a line was posted,
+    # stood all day as "decided 04:17 UTC, when 0 of the slate had not
+    # started … still the best read we have". Zero open candidates judged
+    # nothing, so the newer reading stands.
+    if not has_pick(prev) and int(prev.get("open_candidates") or 0) <= 0:
         return card
     # `>=`, NOT `>`. Two readings of an unchanged board must not churn
     # the card — Ethan, 2026-09-15: "it will be different picks every

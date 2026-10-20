@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2749,6 +2749,85 @@ cd /srv/qellys && sudo -u qellys python3 -c "from engine.rankfit import load; pr
 ```
 
 Paste anything that looks off.
+
+**CT. NBA opening night: no lines, no live, a stale Pick of the Day**
+(step 151). Your 7:04 PM screenshot: the 76ers @ Knicks card read "lines
+post closer to tip-off", Top Picks was empty and the Pick of the Day read
+"decided 04:17 UTC, when 0 of the slate had not started". You also said the
+games weren't showing live. Three causes found in the code, all fixed:
+
+- **The NBA build was cut off after three minutes.** The launcher kills a
+  build that runs past 180 seconds unless that build gets a longer limit.
+  MLB, the NFL and college got 600 seconds. The NBA, WNBA and NHL never
+  did. Tonight is the first night the NBA board priced real props. A build
+  killed every cycle leaves the board file at the last build that finished:
+  no lines, no props, and live scores frozen at that build. All three now
+  get 600 seconds.
+- **The NBA had no cheap way to buy game lines.** Its only paid pull was
+  the props pull, 19 credits a game, on the NBA's small share of the day.
+  A night the pacer declined it had no moneyline, spread or total at all.
+  The NBA and WNBA now have the NFL's and college's 3-credit tier: the
+  whole slate's moneyline, spread and total in one request, on its own
+  clock. It is bought only for games that haven't started, and every build
+  reads the saved copy for free.
+- **The Pick of the Day kept a "no bet" from Monday night.** At 12:17 AM
+  Eastern the board was still on Monday's empty slate (the slate rolls at
+  5 AM). That decline saw zero games, and the tie rule kept it all day.
+  Now a decline that saw nothing never holds, and a card from a different
+  slate date is never carried.
+
+Once the box has the code (dated 2026-10-20 or later), check these.
+
+First, whether the NBA builds were being killed. Look for "timed out
+after 180 seconds" on nba_build lines:
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && journalctl -u qellys --since "2026-10-20 12:00" --no-pager | grep -E "nba_build|NBA " | tail -20
+```
+
+What the pacer decided for the NBA today (BUY or no, and why):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import time; from engine.oddsbudget import decisions; [print(r['iso'][11:16], r['lane'], 'BUY' if r['ok'] else 'no ', r['reason'][:120]) for r in decisions(since=time.time()-16*3600) if r['lane'].startswith('nba')][-12:]"
+```
+
+What the NBA board carries now: when it was built, and each game's spread,
+total, moneylines and state:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine.gate import board_source; b=json.load(open(board_source('web/data/nba.json'))); print(b.get('generated_at'), b.get('status'), len(b.get('recommendations') or []), 'props'); [print(g['away'],'@',g['home'], g.get('spread'), g.get('total'), g.get('away_ml'), g.get('home_ml'), (g.get('live') or {}).get('state')) for g in b.get('games') or []]"
+```
+
+The fast live scoreboard the cards read between builds (keyless ESPN, no
+credits). A game under way should say live:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/data/live_nba.json')); print(d.get('generated_at'), d.get('note') or ''); [print(g.get('away'),'@',g.get('home'),(g.get('live') or {}).get('state'),(g.get('live') or {}).get('detail')) for g in d.get('games') or []]"
+```
+
+If the board still has no lines, build it by hand. This one spends nothing
+and uses the prices already saved; `time` says how long the build takes.
+If it says more than 180 seconds, that was the cause:
+
+```
+cd /srv/qellys && time sudo -u qellys nice -n 10 python3 nba_build.py 2026-10-20 --cached-odds --out web/data/nba.json 2>&1 | tail -25
+```
+
+If it prints "no odds" or "0 matched", nothing was bought today. To buy
+just the game lines (3 credits):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 10 python3 nba_build.py 2026-10-20 --cached-odds --board-odds --out web/data/nba.json 2>&1 | grep -E "Game lines|Matchup scan|Most Likely|⚠️" | head
+```
+
+To buy the props as well (about 19 credits a game, ~57 for tonight's two
+games) so Edge and Most Likely have something to price:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 10 python3 nba_build.py 2026-10-20 --odds --out web/data/nba.json 2>&1 | grep -E "matched|Game lines|Most Likely|Edge|⚠️" | head -20
+```
+
+Paste what the first four print.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

@@ -643,6 +643,19 @@ def _live_block(g: dict) -> dict | None:
                        ("final" if state == "final" else "in progress"))}
 
 
+def _board_lines_cached(league: str) -> bool:
+    """Is a whole-slate game-lines payload on disk to read for free?
+
+    The pacer decides whether to BUY one (`--board-odds`); this decides
+    whether there is one to LOOK AT — nfl_build's `_with_board_cache`, for
+    the payload `oddsapi.apply_board_lines_to_slate` writes ("lines" tag)."""
+    try:
+        from engine.sources.fetch import CACHE_DIR
+        return (CACHE_DIR / f"odds_board_{league}_lines.json").is_file()
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
@@ -655,6 +668,11 @@ def main() -> None:
     # WNBA_LINES_CLOCK): one board pull for the slate while a game is live.
     ap.add_argument("--live-lines", action="store_true",
                     help="pull the in-play line for live games (its own budget lane)")
+    # The game lines on their own (launch.NBA_BOARD_CLOCK): the whole slate's
+    # moneyline, spread and total in one three-credit request, for a night the
+    # props pull is declined. A cached copy is read free on every build.
+    ap.add_argument("--board-odds", action="store_true",
+                    help="buy the slate's game lines in one request (spends three API credits)")
     ap.add_argument("--out", default="web/data/nba.json")
     # One build, two leagues. The WNBA runs the same Scalpy pipeline on the
     # same JSON shapes from its own CDN; what differs is the tuning (a
@@ -972,6 +990,33 @@ def main() -> None:
                                   f"player's team is not in, refused")
             except oddsapi.OddsAPIError as exc:
                 odds_note = f"odds unavailable: {exc}"
+
+        # THE GAME LINES ON THEIR OWN (2026-10-20, opening night). The only
+        # paid pull this board had was the props pull — nineteen credits a
+        # game on a small share of the day — so a night the pacer declined
+        # it showed no moneyline, spread or total anywhere: Ethan's 76ers @
+        # Knicks card read "lines post closer to tip-off" four minutes
+        # before tip. The NFL's and college's cheap tier, for basketball:
+        # one request for the whole slate (`--board-odds`), read back free
+        # from the cache on every build, and never older than a price the
+        # event pull already attached (`apply_board_lines_to_slate`). Games
+        # under way are left out: the endpoint quotes them in play, and an
+        # in-play number is not the game's pre-game line.
+        if args.board_odds or _board_lines_cached(args.league):
+            try:
+                from engine.sources import oddsapi as _boa
+                _pre = _Slate([sg for sg, g in zip(slate.games, games)
+                               if (g.get("state") or "scheduled") == "scheduled"], [])
+                if _pre.games:
+                    _bres = _boa.apply_board_lines_to_slate(
+                        _pre, sport=args.league, cache_only=not args.board_odds)
+                    _how = (f"from 1 request (quota remaining {_bres.quota.remaining})"
+                            if args.board_odds else "from the cached pull (no request)")
+                    print(f"Game lines: {_bres.games_priced} of {len(_pre.games)} game(s) before "
+                          f"tip-off {_how} — {_bres.moneylines} moneyline, {_bres.spreads} spread, "
+                          f"{_bres.totals} total.")
+            except Exception as exc:                        # noqa: BLE001
+                print(f"⚠️  game lines unavailable: {exc}")
 
         # Stale-line scan across every book's quotes — the sampler signal
         # MLB and NFL already journal. It must run HERE: the pipeline only

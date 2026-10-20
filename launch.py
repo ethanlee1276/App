@@ -248,6 +248,16 @@ MLB_LINES_CLOCK = "mlb_lines"
 #: its own money.
 NBA_LINES_CLOCK = "nba_lines"
 WNBA_LINES_CLOCK = "wnba_lines"
+#: …AND BASKETBALL'S PRE-GAME LINES, the NFL's and college's three-credit
+#: tier (2026-10-20, NBA opening night). The props pull was the only paid
+#: pull the hoops boards had — nineteen credits a game on a small share of
+#: the day — so a night the pacer declined it carried no moneyline, spread
+#: or total at all: the 76ers @ Knicks card read "lines post closer to
+#: tip-off" four minutes before tip. Its own clock, apart from the live
+#: lane's, and a name ending "_lines" so `oddsbudget.budget_sport` bills
+#: the league's money.
+NBA_BOARD_CLOCK = "nba_board_lines"
+WNBA_BOARD_CLOCK = "wnba_board_lines"
 #: …AND HOCKEY'S (2026-10-03), last in line: the same three-credit board
 #: pull on its own clock and the NHL's own (small) share of the money, and
 #: NEVER while a football game is live — the live history shares one
@@ -302,6 +312,35 @@ def _lines_stale(sport: str, tag: str = "lines") -> bool:
         return age is not None and not oddsapi.price_is_current(age)
     except Exception:                                        # noqa: BLE001
         return False
+
+
+def _games_before_tip(path: str) -> int:
+    """Games on a built board not yet under way or finished (0 when
+    missing/unreadable) — the ones a pre-game line can still price."""
+    try:
+        with open(path) as fh:
+            games = json.load(fh).get("games") or []
+    except Exception:                                        # noqa: BLE001
+        return 0
+    return sum(1 for g in games if isinstance(g, dict)
+               and (g.get("live") or {}).get("state") not in ("live", "final"))
+
+
+def _hoops_lines_tier(args: list, out_path: str, sport: str, clock: str,
+                      quiet: bool) -> tuple[bool, str]:
+    """THE BASKETBALL BOARDS' CHEAP TIER — refresh_nfl's --board-odds, for
+    hoops: the slate's moneyline, spread and total in one three-credit
+    request when the props pull was declined. Asked only while a game is
+    still to tip; the board's age ceiling (`_lines_stale`) lets it past the
+    ordinary cadence the way it does the NFL's. Appends `--board-odds` and
+    returns ``(spend, baseline)`` for `_finish_paid_pull`."""
+    if _games_before_tip(out_path) <= 0:
+        return False, ""
+    if not _odds_affordable(out_path, quiet, sport=clock, credits=BOARD_ODDS_COST,
+                            prices_stale=_lines_stale(sport)):
+        return False, ""
+    args.append("--board-odds")
+    return True, _paid_pull_baseline()
 
 
 def _slate_games(path: str) -> int:
@@ -1231,6 +1270,7 @@ def refresh_nba(quiet: bool = False) -> bool:
     if spend:
         args.append("--odds")
     live_spend, live_before = False, ""
+    lines_spend, lines_before = False, ""
     if not spend and _with_odds():
         args.append("--cached-odds")
         # THE LIVE LINE ON ITS OWN LANE (NBA_LINES_CLOCK), as baseball's: only
@@ -1241,9 +1281,20 @@ def refresh_nba(quiet: bool = False) -> bool:
             args.append("--live-lines")
             live_spend = True
             live_before = _paid_pull_baseline()
-    ok, tail = _run_build(args)
+        # …and the pre-game lines on theirs (NBA_BOARD_CLOCK).
+        lines_spend, lines_before = _hoops_lines_tier(args, NBA_OUT, "nba",
+                                                      NBA_BOARD_CLOCK, quiet)
+    # 600s, NOT THE DEFAULT 180 (2026-10-20, opening night): the first night
+    # this board priced real props, and the model boards' ceiling — MLB, NFL
+    # and college carry it for the measured reason that a board which does
+    # not fit inside three minutes on the one-core box is killed EVERY cycle,
+    # and its file stays at the last build that finished: no lines, no props
+    # and a live state frozen at that build.
+    ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(live_spend, live_before, ok, tail, "NBA live lines",
                       sport=NBA_LINES_CLOCK)
+    _finish_paid_pull(lines_spend, lines_before, ok, tail, "NBA game lines",
+                      sport=NBA_BOARD_CLOCK)
     _finish_paid_pull(spend, before_seen, ok, tail, "NBA", sport="nba")
     if not quiet:
         print(f"  NBA  slate: {_board_word(NBA_OUT, ok)}"
@@ -1272,7 +1323,9 @@ def refresh_nhl(quiet: bool = False) -> bool:
             args.append("--live-lines")
             live_spend = True
             live_before = _paid_pull_baseline()
-    ok, tail = _run_build(args)
+    # 600s, the model boards' ceiling (see refresh_nba): a skater-props board
+    # killed at 180s leaves its file at the last build that finished.
+    ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(live_spend, live_before, ok, tail, "NHL live lines", sport=NHL_LINES_CLOCK)
     _finish_paid_pull(spend, before_seen, ok, tail, "NHL", sport="nhl")
     if not quiet:
@@ -1296,6 +1349,7 @@ def refresh_wnba(quiet: bool = False) -> bool:
     if spend:
         args.append("--odds")
     live_spend, live_before = False, ""
+    lines_spend, lines_before = False, ""
     if not spend and _with_odds():
         args.append("--cached-odds")
         # THE LIVE LINE ON ITS OWN LANE (WNBA_LINES_CLOCK), as baseball's: only
@@ -1306,9 +1360,15 @@ def refresh_wnba(quiet: bool = False) -> bool:
             args.append("--live-lines")
             live_spend = True
             live_before = _paid_pull_baseline()
-    ok, tail = _run_build(args)
+        # …and the pre-game lines on theirs (WNBA_BOARD_CLOCK), as the NBA's.
+        lines_spend, lines_before = _hoops_lines_tier(args, WNBA_OUT, "wnba",
+                                                      WNBA_BOARD_CLOCK, quiet)
+    # 600s, the NBA's ceiling and for its reason (refresh_nba).
+    ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(live_spend, live_before, ok, tail, "WNBA live lines",
                       sport=WNBA_LINES_CLOCK)
+    _finish_paid_pull(lines_spend, lines_before, ok, tail, "WNBA game lines",
+                      sport=WNBA_BOARD_CLOCK)
     _finish_paid_pull(spend, before_seen, ok, tail, "WNBA", sport="wnba")
     if not quiet:
         print(f"  WNBA {_slate_date()}: {_board_word(WNBA_OUT, ok)}"

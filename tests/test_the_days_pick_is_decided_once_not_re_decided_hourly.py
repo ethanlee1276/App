@@ -178,6 +178,28 @@ def test_yesterdays_card_is_not_todays_judgement():
     assert potd.carry(_card(9, 2, _near()), old)["open_candidates"] == 2
 
 
+def test_a_refusal_that_saw_nothing_holds_nothing():
+    """NBA opening night, 2026-10-20: a decline made at 12:17 AM Eastern,
+    with no line posted yet (zero open candidates), held the whole day as
+    "decided 04:17 UTC, when 0 of the slate had not started". Zero judged
+    nothing; the newer reading stands, and says nothing about a carry."""
+    midnight = _card(4, 0, None)
+    evening = _card(23, 0, None)
+    got = potd.carry(evening, midnight)
+    assert got["decided_at"] == evening["decided_at"] and "carried" not in got, got
+    # A refusal that DID see games still holds against a thinner one.
+    assert potd.carry(_card(23, 2, _near()), _card(14, 12, _near()))["open_candidates"] == 12
+
+
+def test_another_slates_card_is_not_carried_on_the_same_eastern_day():
+    """The 5 AM roll: a build just after midnight judges last night's
+    slate on today's Eastern day. The cards name their slate; a different
+    one is never this one's judgement."""
+    last_night = dict(_card(14, 12, _near()), date=YESTERDAY)
+    tonight = _card(18, 4, _near())
+    assert potd.carry(tonight, last_night)["open_candidates"] == 4
+
+
 def test_another_sports_card_is_never_carried_into_this_one():
     """One file per league, but one function for all five."""
     nfl = _card(14, 30, _bet(), sport="nfl")
