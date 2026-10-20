@@ -21,6 +21,14 @@
 
   const TONE = { favorable: "up", unfavorable: "down", up: "up", down: "down" };
 
+  /* His season, his last games, a trend and his red-zone work
+     (engine/gamereport.form_lines): [[label, [lines]]]. */
+  function form(rows) {
+    if (!(rows || []).length) return "";
+    return `<dl class="gr-form">${rows.map(([k, lines]) => `<div class="gr-form-row"><dt>${escapeHtml(k)}</dt>
+      <dd>${(lines || []).map((l) => `<span>${escapeHtml(l)}</span>`).join("")}</dd></div>`).join("")}</dl>`;
+  }
+
   function block(b) {
     if (!b || !b.type) return "";
     if (b.type === "p") return `<p class="gr-p">${escapeHtml(b.text)}</p>`;
@@ -51,6 +59,7 @@
           ${b.type === "verdicts"
             ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "")
             : v.text ? `<p class="gr-person-text">${escapeHtml(v.text)}</p>` : ""}
+          ${form(v.form)}
         </div>`;
       }).join("")}</div>`;
     }

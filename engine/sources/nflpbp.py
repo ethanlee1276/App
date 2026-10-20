@@ -19,7 +19,10 @@ by 370 columns, so rows are reduced to the handful of fields we need):
   defense — the spec's efficiency layer, measured instead of inferred from
   box scores — and **neutral pace** (seconds between snaps with the game
   still in the balance: win probability 20–80%, first three quarters),
-  the stable half of a totals/environment read.
+  the stable half of a totals/environment read; and since 2026-10-20 the
+  **turnovers** both ways and the **coaching tendencies** the game report
+  writes out (Ethan: "do all of it besides D") — fourth-and-short calls,
+  two-point tries, and how often the team passes up or down two scores.
 
 Free nflverse release data, cached a day; everything degrades to a
 reported skip when unreachable.
@@ -37,7 +40,13 @@ NEEDED = ("week", "posteam", "play_type", "yardline_100", "air_yards",
           "game_id", "defteam", "epa", "wp", "qtr", "game_seconds_remaining",
           # The passer's pocket (2026-10-08): his throws with and without
           # a hit, for the clean-pocket completion split on his card.
-          "passer_player_name", "qb_hit", "sack")
+          "passer_player_name", "qb_hit", "sack",
+          # Turnovers and the coaching tendencies (2026-10-20): the game
+          # report's season numbers and its coaching section.
+          "down", "ydstogo", "punt_attempt", "field_goal_attempt",
+          "fourth_down_converted", "two_point_attempt", "two_point_conv_result",
+          "interception", "fumble_lost", "fumbled_1_team", "score_differential",
+          "qb_dropback", "half_seconds_remaining")
 
 #: The pocket split's player_game_logs markets: attempts and completions
 #: on throws when the passer was NOT hit, and when he was (sacks aside —
@@ -51,6 +60,26 @@ POCKET_MARKETS = ("att_clean", "cmp_clean", "att_hit", "cmp_hit")
 # is a penalty replay artifact, over 45s spans a drive change or timeout.
 PACE_WP = (0.20, 0.80)
 PACE_GAP_S = (4.0, 45.0)
+
+#: THE COACHING TENDENCIES, each read where the call is the coach's and
+#: not the clock's: never in the last two minutes of a half, never in
+#: overtime (two-point tries aside — every one counts, as a box score
+#: counts them). A fourth down counts as a go-or-kick decision at this many
+#: yards to go or fewer, past his own 30 (``yardline_100`` 70 or less),
+#: with his win chance between 10% and 90% — and only when he went for it,
+#: punted or tried a field goal (a penalty's replay is not a decision).
+GO4_YDS = 2
+GO4_YARDLINE = 70
+GO4_WP = (0.10, 0.90)
+LATE_HALF_S = 120
+#: "Up two scores" / "down two scores" for the pass-rate split.
+SCRIPT_MARGIN = 8
+
+#: The per-team-week counts the turnovers and the tendencies keep; each
+#: is a team_weeks column (engine/db.TEAM_WEEK_COLS).
+TENDENCY_KEYS = ("giveaways", "takeaways", "go4_opps", "go4_att", "go4_conv",
+                 "two_pt_att", "two_pt_conv", "lead_plays", "lead_pass",
+                 "trail_plays", "trail_pass")
 
 CARRY_BUCKETS = ("car_i5", "car_rz", "car_open")
 TARGET_BUCKETS = ("tgt_rz", "tgt_deep", "tgt_short")
@@ -134,7 +163,54 @@ def _target_bucket(yl: float, air: float) -> str:
 
 def _new_team() -> dict:
     return {"plays": 0, "oe": [0.0, 0], "epa": [0.0, 0],
-            "pass_epa": [0.0, 0], "rush_epa": [0.0, 0], "pace": [0.0, 0]}
+            "pass_epa": [0.0, 0], "rush_epa": [0.0, 0], "pace": [0.0, 0],
+            **{k: 0 for k in TENDENCY_KEYS}}
+
+
+def _tendencies(r: dict, teams: dict, team: str, wk: int, ptype: str, yl: float) -> None:
+    """One play's turnovers and coaching calls into ``teams``."""
+    dt = r.get("defteam") or ""
+    if team and dt:
+        # TURNOVERS on every play, special teams too: an interception is
+        # the offense's; a lost fumble is whoever fumbled it (a muffed punt
+        # is the return team's, and that team is not the offense).
+        if _f(r.get("interception")) == 1:
+            teams.setdefault((team, wk), _new_team())["giveaways"] += 1
+            teams.setdefault((dt, wk), _new_team())["takeaways"] += 1
+        if _f(r.get("fumble_lost")) == 1:
+            lost = r.get("fumbled_1_team") or team
+            won = dt if lost == team else team
+            teams.setdefault((lost, wk), _new_team())["giveaways"] += 1
+            teams.setdefault((won, wk), _new_team())["takeaways"] += 1
+    if not team or ptype in ("no_play", "qb_kneel", "qb_spike", ""):
+        return
+    if _f(r.get("two_point_attempt")) == 1:
+        # Every try, at any hour: the count is the record a box score keeps.
+        t = teams.setdefault((team, wk), _new_team())
+        t["two_pt_att"] += 1
+        t["two_pt_conv"] += int(str(r.get("two_point_conv_result") or "").lower() == "success")
+        return
+    if _f(r.get("qtr"), 5.0) > 4 or _f(r.get("half_seconds_remaining"), 0.0) < LATE_HALF_S:
+        return
+    t = teams.setdefault((team, wk), _new_team())
+    down = _f(r.get("down"))
+    if down == 4 and _f(r.get("ydstogo"), 99.0) <= GO4_YDS and yl <= GO4_YARDLINE \
+            and GO4_WP[0] <= _f(r.get("wp"), -1.0) <= GO4_WP[1]:
+        kicked = _f(r.get("punt_attempt")) == 1 or _f(r.get("field_goal_attempt")) == 1
+        went = ptype in ("run", "pass") and not kicked
+        if kicked or went:
+            t["go4_opps"] += 1
+            if went:
+                t["go4_att"] += 1
+                t["go4_conv"] += int(_f(r.get("fourth_down_converted")) == 1)
+    if ptype in ("run", "pass") and 1 <= down <= 4:
+        sd = r.get("score_differential")
+        if sd in (None, "", "NA"):
+            return
+        side = "lead" if _f(sd) >= SCRIPT_MARGIN else "trail" if _f(sd) <= -SCRIPT_MARGIN else ""
+        if side:
+            t[f"{side}_plays"] += 1
+            t[f"{side}_pass"] += int(_f(r.get("qb_dropback")) == 1)
 
 
 def aggregate_pbp(rows, also=None) -> dict:
@@ -160,6 +236,7 @@ def aggregate_pbp(rows, also=None) -> dict:
         team = r.get("posteam") or ""
         ptype = r.get("play_type") or ""
         yl = _f(r.get("yardline_100"), 100.0)
+        _tendencies(r, teams, team, wk, ptype, yl)
 
         if ptype in ("run", "pass") and team:
             t = teams.setdefault((team, wk), _new_team())
@@ -312,5 +389,6 @@ def team_week_rows(agg: dict, season: int) -> list[dict]:
             "rush_epa": _avg(t["rush_epa"], 8),
             "def_epa": _avg(defense.get((team, wk), [0.0, 0]), 20),
             "pace": _avg(t["pace"], 8),
+            **{k: int(t.get(k) or 0) for k in TENDENCY_KEYS},
         })
     return out

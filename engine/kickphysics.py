@@ -326,7 +326,11 @@ def conditions(game: dict, fit: dict | None = None, bears: dict | None = None) -
     w = game.get("weather") or {}
     dome = bool(w.get("dome")) or str(game.get("roof") or "").lower() in ("dome", "closed")
     temp = DOME_F if dome else w.get("temp_f")
-    alt = _altitude(home)
+    # Abroad the air is the host city's, not the home team's building's
+    # (engine/pipeline.venue_to_dict carries the venue's own altitude).
+    st = game.get("stadium") or {}
+    alt = float(st["altitude_ft"]) if st.get("abroad") and isinstance(st.get("altitude_ft"), (int, float)) \
+        else _altitude(home)
     rho = air_density(temp, alt)
     if rho is None:
         return None

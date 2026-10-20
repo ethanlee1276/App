@@ -309,7 +309,38 @@ NUMBER_SPECS = (
     ("rz_def", "Red-zone TD rate allowed", lambda c, g: c["d_rzt"] / c["d_rzd"] if c["d_rzd"] else None, False),
     ("run_rate", "Run rate (runs per play)", lambda c, g: c["o_rush"] / c["o_plays"] if c["o_plays"] else None, None),
     ("sacks", "Sacks a game", lambda c, g: c["d_sacks"] / g if g else None, True),
+    # From team_weeks (engine/sources/nflpbp, 2026-10-20): the tempo, the
+    # turnovers and the coaching calls the game report writes out. "1st"
+    # is the most plays, the quickest snap, the most passing over
+    # expected, the fewest giveaways, the most takeaways, the best margin
+    # and the most fourth-and-short goes; the pass rates two scores up and
+    # down are a habit, not a ranking.
+    ("plays_pg", "Plays a game", lambda c, g: c["w_plays"] / c["w_g"] if c["w_g"] else None, True),
+    ("pace", "Seconds a snap with the game in the balance",
+     lambda c, g: c["w_pace"][0] / c["w_pace"][1] if c["w_pace"][1] else None, False),
+    ("proe", "Pass rate over expected", lambda c, g: c["w_proe"][0] / c["w_proe"][1] if c["w_proe"][1] else None, True),
+    ("giveaways", "Giveaways a game", lambda c, g: c["giveaways"] / c["t_n"] if c["t_n"] else None, False),
+    ("takeaways", "Takeaways a game", lambda c, g: c["takeaways"] / c["t_n"] if c["t_n"] else None, True),
+    ("to_margin", "Turnover margin", lambda c, g: c["takeaways"] - c["giveaways"] if c["t_n"] else None, True),
+    ("go4_rate", "Go rate on fourth and 2 or less",
+     lambda c, g: c["go4_att"] / c["go4_opps"] if c["go4_opps"] >= MIN_GO4_OPPS else None, True),
+    ("lead_pass", "Pass rate up 8 or more",
+     lambda c, g: c["lead_pass"] / c["lead_plays"] if c["lead_plays"] >= MIN_SCRIPT_PLAYS else None, None),
+    ("trail_pass", "Pass rate down 8 or more",
+     lambda c, g: c["trail_pass"] / c["trail_plays"] if c["trail_plays"] >= MIN_SCRIPT_PLAYS else None, None),
 )
+
+#: The tendency counts summed off team_weeks (engine/sources/nflpbp.
+#: TENDENCY_KEYS), kept raw on each team's numbers as ``counts`` so a
+#: sentence can say "6 of 7" and not only "86%".
+TENDENCY_SUMS = ("giveaways", "takeaways", "go4_opps", "go4_att", "go4_conv",
+                 "two_pt_att", "two_pt_conv", "lead_plays", "lead_pass",
+                 "trail_plays", "trail_pass")
+
+#: A pass rate two scores up or down needs this many such plays, and a go
+#: rate this many fourth-and-shorts, before either is a number at all.
+MIN_SCRIPT_PLAYS = 20
+MIN_GO4_OPPS = 3
 
 
 def season_numbers(conn, season: int, before_week: int | None = None) -> dict:
@@ -320,7 +351,9 @@ def season_numbers(conn, season: int, before_week: int | None = None) -> dict:
     def cell(t):
         return cells.setdefault(t, {"pf": 0.0, "pa": 0.0, "g": 0, "d_rush_yds": 0.0, "d_rushes": 0,
                                     "o_3a": 0, "o_3c": 0, "d_3a": 0, "d_3c": 0, "o_rzd": 0, "o_rzt": 0,
-                                    "d_rzd": 0, "d_rzt": 0, "o_rush": 0, "o_plays": 0, "d_sacks": 0})
+                                    "d_rzd": 0, "d_rzt": 0, "o_rush": 0, "o_plays": 0, "d_sacks": 0,
+                                    "w_g": 0, "w_plays": 0, "w_pace": [0.0, 0], "w_proe": [0.0, 0],
+                                    "t_n": 0, **{k: 0 for k in TENDENCY_SUMS}})
     wk = " AND CAST(period AS INTEGER) < ?" if before_week else ""
     args = (int(season),) + ((int(before_week),) if before_week else ())
     try:
@@ -342,14 +375,43 @@ def season_numbers(conn, season: int, before_week: int | None = None) -> dict:
                 c["d_rzd"] += v("rz_drives"); c["d_rzt"] += v("rz_tds"); c["d_sacks"] += v("sacks")
     except Exception:                                        # noqa: BLE001
         return {}
+    try:
+        for r in conn.execute("SELECT * FROM team_weeks WHERE sport='nfl' AND season=?" + wk, args):
+            keys = r.keys()
+            plays = r["plays"] or 0
+            if not plays:
+                continue
+            c = cell(r["team"])
+            c["w_g"] += 1
+            c["w_plays"] += plays
+            for col, acc in (("pace", c["w_pace"]), ("proe", c["w_proe"])):
+                if r[col] is not None:
+                    acc[0] += r[col] * plays
+                    acc[1] += plays
+            # A week written before the tendency columns reads NULL: not
+            # counted, rather than counted as a week of none.
+            if "giveaways" in keys and r["giveaways"] is not None:
+                c["t_n"] += 1
+                for k in TENDENCY_SUMS:
+                    c[k] += r[k] or 0
+    except Exception:                                        # noqa: BLE001
+        pass                                                 # an old table: the scoreboard numbers stand alone
     out = {t: {"games": c["g"]} for t, c in cells.items()}
+    for t, c in cells.items():
+        if c["t_n"]:
+            out[t]["counts"] = {"weeks": c["t_n"], **{k: c[k] for k in TENDENCY_SUMS}}
     for key, _label, fn, higher in NUMBER_SPECS:
         vals = {t: fn(c, c["g"]) for t, c in cells.items()}
         have = sorted(((t, v) for t, v in vals.items() if v is not None),
                       key=lambda tv: -tv[1] if higher else tv[1])
         n = len(have)
+        # A tie shares its rank (1, 2, 2, 4): two teams at +4 are not
+        # 5th and 7th.
+        rank, prev = 0, None
         for i, (t, v) in enumerate(have):
-            out[t][key] = {"value": round(v, 3), "rank": i + 1 if higher is not None else None, "of": n}
+            if prev is None or round(v, 6) != prev:
+                rank, prev = i + 1, round(v, 6)
+            out[t][key] = {"value": round(v, 3), "rank": rank if higher is not None else None, "of": n}
     return out
 
 

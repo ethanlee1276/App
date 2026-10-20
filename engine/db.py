@@ -149,6 +149,9 @@ CREATE TABLE IF NOT EXISTS team_weeks (
     sport TEXT, season INTEGER, period TEXT, team TEXT,
     plays INTEGER, proe REAL,
     off_epa REAL, pass_epa REAL, rush_epa REAL, def_epa REAL, pace REAL,
+    giveaways INTEGER, takeaways INTEGER, go4_opps INTEGER, go4_att INTEGER,
+    go4_conv INTEGER, two_pt_att INTEGER, two_pt_conv INTEGER,
+    lead_plays INTEGER, lead_pass INTEGER, trail_plays INTEGER, trail_pass INTEGER,
     PRIMARY KEY (sport, season, period, team)
 );
 -- Every calibration sweep, kept. "Are we getting better?" was
@@ -772,6 +775,15 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
             conn.commit()
         except sqlite3.OperationalError as exc:
             column_exists_or_raise(exc)
+    # The turnovers and the coaching tendencies (engine/sources/nflpbp,
+    # 2026-10-20). NULL on a week written before them, so a season read
+    # tells "none" from "not yet counted".
+    for col in TEAM_WEEK_COLS[TEAM_WEEK_COLS.index("giveaways"):]:
+        try:
+            conn.execute(f"ALTER TABLE team_weeks ADD COLUMN {col} INTEGER")
+            conn.commit()
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     try:
         conn.execute("ALTER TABLE game_starters ADD COLUMN throws TEXT")
         conn.commit()
@@ -1064,7 +1076,11 @@ STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher",
                 "throws"]
 UMPIRE_COLS = ["sport", "season", "period", "game_id", "umpire"]
 TEAM_WEEK_COLS = ["sport", "season", "period", "team", "plays", "proe",
-                  "off_epa", "pass_epa", "rush_epa", "def_epa", "pace"]
+                  "off_epa", "pass_epa", "rush_epa", "def_epa", "pace",
+                  # engine/sources/nflpbp.TENDENCY_KEYS, in its order
+                  "giveaways", "takeaways", "go4_opps", "go4_att", "go4_conv",
+                  "two_pt_att", "two_pt_conv", "lead_plays", "lead_pass",
+                  "trail_plays", "trail_pass"]
 
 
 def upsert_team_weeks(conn, rows: list[dict]) -> int:

@@ -2220,12 +2220,29 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                                or _kk.nfl_behind(_cconn, _cseason, today))
         except Exception:                                       # noqa: BLE001
             _carries_behind = False
-        if today.weekday() == 1 or _units_behind or _carries_behind:
+        # …AND WHILE THE TEAM WEEKS TRAIL THE UNIT RATINGS, or a week of
+        # them predates the turnover and tendency columns (2026-10-20):
+        # the first night after this ships fills the season in.
+        _weeks_behind = False
+        try:
+            from . import db as _wdb
+            _wconn = _wdb.connect()
+            _wseason = today.year if today.month >= 8 else today.year - 1
+            _wu = _wconn.execute("SELECT MAX(CAST(period AS INTEGER)) FROM team_units "
+                                 "WHERE sport='nfl' AND season=?", (_wseason,)).fetchone()[0]
+            _ww = _wconn.execute("SELECT MAX(CAST(period AS INTEGER)) FROM team_weeks "
+                                 "WHERE sport='nfl' AND season=?", (_wseason,)).fetchone()[0]
+            _wnull = _wconn.execute("SELECT 1 FROM team_weeks WHERE sport='nfl' AND season=? "
+                                    "AND giveaways IS NULL LIMIT 1", (_wseason,)).fetchone()
+            _weeks_behind = bool(_wu) and (_ww is None or _ww < _wu or _wnull is not None)
+        except Exception:                                       # noqa: BLE001
+            _weeks_behind = False
+        if today.weekday() == 1 or _units_behind or _carries_behind or _weeks_behind:
             try:
                 from . import db as _pdb
                 from . import carries as _carries, kicks as _kicks, passes as _passes, targets as _targets
                 from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
-                                             xfp_player_rows)
+                                             xfp_player_rows, team_week_rows)
                 from .sources.nflunits import Units, UNIT_COLS
                 season = today.year if today.month >= 8 else today.year - 1
                 # The unit ratings the matchup scan ranks (engine/gamescan),
@@ -2250,6 +2267,13 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 _pc = _pdb.connect()
                 n = _pdb.upsert_player_logs(_pc, xfp_player_rows(agg, season))
                 n_u = _pdb.upsert_team_units(_pc, units.rows(season))
+                # THE TEAM WEEKS TOO (2026-10-20). Only `ingest.py nfl`
+                # wrote them, and nothing on the box runs that in season, so
+                # pass rate over expected, EPA and pace stopped at whatever
+                # week it was last run by hand. The same read carries them,
+                # and the turnovers and coaching tendencies the game report
+                # writes out.
+                n_w = _pdb.upsert_team_weeks(_pc, team_week_rows(agg, season))
                 names = _carries.nfl_names(season)
                 n_c = _pdb.upsert_carries(_pc, runs.rows(names))
                 # The league's charted routes where nflverse has the
@@ -2259,8 +2283,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                                                             _targets.charting_for(season)))
                 n_p = _pdb.upsert_passes(_pc, throws.rows(names, _passes.charting_for(season)))
                 n_k = _pdb.upsert_kicks(_pc, kicked.rows(names))
-                if n or n_u or n_c or n_t or n_p or n_k:
-                    log(f"  nfl pbp: {n:,} xFP/red-zone rows, {n_u:,} unit rows, "
+                if n or n_u or n_w or n_c or n_t or n_p or n_k:
+                    log(f"  nfl pbp: {n:,} xFP/red-zone rows, {n_u:,} unit rows, {n_w:,} team weeks, "
                         f"{n_c:,} carries, {n_t:,} targets, {n_p:,} throws, {n_k:,} kicks refreshed")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
