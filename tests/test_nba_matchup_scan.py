@@ -329,6 +329,13 @@ def test_the_nba_report_carries_the_tape_the_key_matchups_and_the_breakouts():
                  "Breakout watch: Jay Star (BOS)", "Could struggle: Heat Man (MIA)",
                  "Key matchup: BOS's offense (1st in points per 100) against MIA's defense ("):
         assert want.lower() in text.lower(), (want, text)
+    # Ask reads the same sections a member reads (askbot.LEAGUE_REPORT_KEYS):
+    # the tape's rows, its key matchups and the breakout watch.
+    from engine import askbot as A
+    facts = A.report_facts(board, g)
+    assert any(x.startswith("Points a game: ") for x in facts["tape"]), facts["tape"]
+    assert any(x.startswith("Edge BOS: ") for x in facts["tape"]), facts["tape"]
+    assert any("Jay Star" in x for x in facts["watch"]), facts["watch"]
     # The WNBA reads the same report.
     board2 = {"date": "2026-10-22", "games": [dict(g)], "scan_reads": board["scan_reads"]}
     assert L.attach(board2, "wnba", meta={}).startswith("Game reports: 1 game(s)")

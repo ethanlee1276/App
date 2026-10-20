@@ -1183,6 +1183,11 @@ def _report_all(sec: dict | None) -> list:
 #: The sections Ask reads from an MLB, NHL or basketball report, in order.
 LEAGUE_REPORT_KEYS = ("facts", "pitching", "tape", "goalies", "carry", "defense", "watch", "weather",
                       "injuries", "before")
+#: Lines Ask keeps of one such section. The basketball tape runs longer: a
+#: fourteen-row table, then the key matchups it leads to (2026-10-20 — at
+#: fourteen, Ask saw the table and never the matchups).
+REPORT_SECTION_LINES = 14
+REPORT_LINES = {"tape": 24}
 
 
 def report_facts(board: dict, g: dict) -> dict:
@@ -1207,7 +1212,7 @@ def report_facts(board: dict, g: dict) -> dict:
         for key in LEAGUE_REPORT_KEYS:
             lines = _report_all(secs.get(key))
             if lines:
-                out[key] = lines[:14]
+                out[key] = lines[:REPORT_LINES.get(key, REPORT_SECTION_LINES)]
         out = {k: v for k, v in out.items() if v}
         for key in reversed(LEAGUE_REPORT_KEYS):
             if len(json.dumps(out, ensure_ascii=False)) <= REPORT_CHARS:
