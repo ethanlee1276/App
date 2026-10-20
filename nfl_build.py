@@ -1550,7 +1550,7 @@ def main() -> None:
         from engine import gamereport as _greport
         _allowed = {t: getattr(getattr(tm, "defense", None), "ratings", None) or {}
                     for t, tm in (getattr(slate, "teams", None) or {}).items()}
-        print(f"  {_greport.attach(result, allowed=_allowed, season=args.season)}")
+        print(f"  {_greport.attach(result, allowed=_allowed, season=args.season, out=args.out)}")
         _pn = _potd.attach(result, "nfl")
         if _pn:
             print(_pn)

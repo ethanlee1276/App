@@ -274,9 +274,11 @@ SYSTEM = (
     "short version, the last meetings at the lines they closed at, coaching and the schedule "
     "with each coach's calls (fourth-and-short, two-point tries, how often they pass two "
     "scores up or down), each team's tempo, the practice report, role changes, the kicking "
-    "air, and each player's season, last three games and red-zone work (player_form). Use it "
-    "for form, history and how a game sets up, and say it comes from the game report. It "
-    "carries no prop picks: never turn a line of it into one.\n"
+    "air, each player's season, last three games and red-zone work (player_form), and what "
+    "has moved since we first wrote it (what_changed: the line, the injury report, the "
+    "forecast, the reads, each stamped Eastern time). Use it for form, history, how a game "
+    "sets up and what changed, and say it comes from the game report. It carries no prop "
+    "picks: never turn a line of it into one.\n"
     "For a start/sit you may say who you would start: lead with that, then each "
     "player's projected points on its own line, and mention a big weekly swing "
     "(boom-or-bust) or a tough matchup when it decides it. That is fantasy advice, "
@@ -1129,12 +1131,29 @@ def _report_texts(sec: dict | None, heading: str | None = None) -> list:
     return out
 
 
+def _report_changes(sec: dict | None) -> list:
+    """The report's "What changed" section, each change stamped with the
+    time it was seen ("Sat 2:10 PM ET: ...")."""
+    out, when = [], ""
+    for b in (sec or {}).get("blocks") or []:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "h":
+            when = str(b.get("text") or "")
+        elif b.get("type") == "p" and b.get("text"):
+            out.append(str(b["text"])[:300])
+        elif b.get("type") == "list":
+            out += [(f"{when}: {x}" if when else str(x))[:300] for x in b.get("items") or []]
+    return out
+
+
 def report_facts(board: dict, g: dict) -> dict:
-    """A game's written report as Ask is shown it: the short version, the
-    last meetings, coaching and the schedule with the coaches' calls, each
-    team's tempo, the practice report, role changes, the kicking air and
-    every named player's form. Paid like the reads; it carries no prop
-    picks, and neither may an answer drawn from it."""
+    """A game's written report as Ask is shown it: the short version, what
+    has changed since it was first written, the last meetings, coaching and
+    the schedule with the coaches' calls, each team's tempo, the practice
+    report, role changes, the kicking air and every named player's form.
+    Paid like the reads; it carries no prop picks, and neither may an
+    answer drawn from it."""
     rep = next((r for r in (board or {}).get("game_reports") or []
                 if isinstance(r, dict) and r.get("away") == g.get("away") and r.get("home") == g.get("home")),
                None)
@@ -1143,6 +1162,7 @@ def report_facts(board: dict, g: dict) -> dict:
     secs = {x.get("key"): x for x in rep.get("sections") or [] if isinstance(x, dict)}
     out: dict = {
         "short_version": _report_texts(secs.get("short"))[:10],
+        "what_changed": _report_changes(secs.get("changes"))[:10],
         "last_meetings": _report_texts(secs.get("meetings"))[:7],
         "coaching_and_schedule": _report_texts(secs.get("context"))[:12],
         "tempo": [t for t in _report_texts(secs.get("identity")) if t.startswith("Tempo:")],

@@ -12,6 +12,8 @@ what the board already holds, in the outside reports' order:
 
   short       The short version: the line, where the edges are, the soft
               spots, who could shine, who is out, the schedule, the sim
+  changes     What changed since the report was first written: the line,
+              the injury report, the forecast, the reads (engine/reportlog)
   facts       Kickoff, venue, records and recent results, head coaches,
               coordinator changes, rest, division
   meetings    When they last met: the scores, and the lines they were
@@ -316,9 +318,11 @@ class Ctx:
     def __init__(self, g: dict, result: dict, allowed: dict | None = None,
                  sched=None, staff: dict | None = None, names: dict | None = None,
                  form: dict | None = None, meetings: list | None = None, ideas: dict | None = None,
-                 sport: str = "nfl", meta: dict | None = None):
+                 sport: str = "nfl", meta: dict | None = None, changes: dict | None = None):
         self.g = g
         self.sport = sport
+        # What moved since the report was first written (engine/reportlog).
+        self.changes = changes
         # What the build knows about the game and the board leaves off
         # (college: neutral site, conference game, week).
         self.meta = meta or {}
@@ -1739,6 +1743,28 @@ def sec_before(c: Ctx) -> dict | None:
     return _section("before", "Before kickoff", [_list(lines)])
 
 
+def sec_changes(c: Ctx) -> dict | None:
+    """What changed since the report was first written, newest first
+    (engine/reportlog). Nothing on the report's first build; one line when
+    it has been rewritten and nothing a reader would call a change moved."""
+    ch = c.changes or {}
+    if not ch.get("first"):
+        return None
+    from .reportlog import when_words
+    first = when_words(ch["first"])
+    entries = [e for e in ch.get("entries") or [] if isinstance(e, dict) and e.get("changes")]
+    if not entries:
+        if ch.get("at") in (None, ch["first"]):
+            return None
+        return _section("changes", "What changed", [_p(
+            f"Nothing has moved since we first wrote this report ({first} ET): the line, the injury "
+            "report, the forecast and the reads are where they were")])
+    blocks = [_p(f"What has moved since we first wrote this report ({first} ET), newest first")]
+    for e in reversed(entries):
+        blocks += [_h(f"{when_words(e.get('at'))} ET"), _list(e["changes"])]
+    return _section("changes", "What changed", blocks)
+
+
 def sec_short(c: Ctx, built: dict) -> dict | None:
     """The short version, written last from what the sections found."""
     items = []
@@ -1834,19 +1860,20 @@ def _words(sections) -> int:
 def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
           staff: dict | None = None, names: dict | None = None, form: dict | None = None,
           meetings: list | None = None, ideas: dict | None = None, sport: str = "nfl",
-          meta: dict | None = None) -> dict | None:
+          meta: dict | None = None, changes: dict | None = None) -> dict | None:
     """One game's report, or None for a row with no teams."""
     if not isinstance(g, dict) or not g.get("away") or not g.get("home"):
         return None
     c = Ctx(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
-            form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta)
+            form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta, changes=changes)
     built = {}
     for fn in SECTIONS:
         s = fn(c)
         if s:
             built[s["key"]] = s
     short = sec_short(c, built)
-    sections = ([short] if short else []) + list(built.values())
+    moved = sec_changes(c)
+    sections = [x for x in (short, moved) if x] + list(built.values())
     words = _words(sections)
     return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": sport,
             "date": g.get("date") or "", "kickoff": g.get("kickoff") or "",
@@ -1903,14 +1930,18 @@ def college_names(result: dict) -> dict:
 
 
 def attach(result: dict, *, allowed: dict | None = None, season: int | None = None,
-           conn=None, ideas: dict | None = None, sport: str = "nfl", meta: dict | None = None) -> str:
+           conn=None, ideas: dict | None = None, sport: str = "nfl", meta: dict | None = None,
+           out=None, at: str | None = None) -> str:
     """``result["game_reports"]``: one report for every game on the board.
     ``conn`` reads the game logs and, for college, the meetings (the
     history database when none is given); ``ideas`` is this build's ideas
     file (engine/ideas.LAST when none is given; the NFL's only); ``meta``
     is {"AWAY@HOME": what the build knows of a game and the board leaves
-    off} (college's neutral site and conference game). One line for the
-    build log; never raises."""
+    off} (college's neutral site and conference game). ``out`` is the
+    board's public path: what changed is kept beside its private copy
+    (engine/reportlog), stamped ``at`` (now, Eastern, when none is given);
+    with no ``out`` nothing is kept and no report has the section. One
+    line for the build log; never raises."""
     own = False
     try:
         sched = staff = None
@@ -1951,7 +1982,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                 kfit, kbears = _kp.load("nfl"), _kp.bearings()
             except Exception:                                # noqa: BLE001
                 _kp = None
-        reports = []
+        prepared = []
         for g in result.get("games") or []:
             if not isinstance(g, dict):
                 continue
@@ -1970,18 +2001,40 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                        _rd.meetings_db(conn, sport, home, away, before=g.get("date") or ""))
             except Exception:                                # noqa: BLE001
                 met = []
+            prepared.append((g, extra, met))
+        # WHAT CHANGED (engine/reportlog): this build's snapshot of every
+        # game, against the one kept beside the private board.
+        logged: dict = {}
+        if out:
+            try:
+                from . import reportlog as _log
+                from .gate import _full_dir_for
+                snaps = {_log.game_key(g): (_log.facts(g, result, extra, is_key=_is_key),
+                                            str(g.get("home") or ""), str(g.get("away") or ""))
+                         for g, extra, _met in prepared if g.get("home") and g.get("away")}
+                logged = _log.update(_log.path_for(sport, _full_dir_for(out)), snaps, at or _log.now_et())
+            except Exception:                                # noqa: BLE001
+                logged = {}
+        reports = []
+        for g, extra, met in prepared:
+            home, away = str(g.get("home") or ""), str(g.get("away") or "")
             r = build(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
                       form=form, meetings=met, ideas=extra, sport=sport,
-                      meta=(meta or {}).get(f"{away}@{home}"))
+                      meta=(meta or {}).get(f"{away}@{home}"),
+                      changes=logged.get(f"{away}@{home}|{str(g.get('date') or '')[:10]}"))
             if r:
                 reports.append(r)
         result[KEY] = reports
         if not reports:
             return "Game reports: no games on the board"
         words = sum(r["words"] for r in reports)
+        moved = sum(1 for v in logged.values()
+                    if v.get("entries") and v["entries"][-1].get("at") == v.get("at"))
         return (f"Game reports: {len(reports)} game(s), {words:,} words "
                 f"(about {round(words / max(1, len(reports)) / WORDS_A_MINUTE)} minutes each); "
-                f"form for {len(form)} player(s)")
+                f"form for {len(form)} player(s)"
+                + (f"; what changed: {moved} game(s) moved since the last build, "
+                   f"{len(logged)} tracked" if out else ""))
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"

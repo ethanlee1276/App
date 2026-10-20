@@ -343,7 +343,7 @@ def test_attach_never_raises_and_the_build_hangs_it_last():
     board = {"date": "2026-10-25", "games": [{"away": "GB", "home": "DET", "scan": "not a dict"}, None, 7]}
     line = R.attach(board)
     assert isinstance(line, str)
-    assert "_greport.attach(result, allowed=_allowed, season=args.season)" in BUILD
+    assert "_greport.attach(result, allowed=_allowed, season=args.season, out=args.out)" in BUILD
     assert BUILD.index("_lo.attach_to_board(result") < BUILD.index("_greport.attach(") \
         < BUILD.index("gate.publish(result, args.out)")
 

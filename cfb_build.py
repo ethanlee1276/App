@@ -2726,7 +2726,9 @@ def main() -> None:
             "neutral_site": bool(_g.get("neutral_site")),
             "conference_game": bool(_g.get("conference_game")), "week": _g.get("week")}
             for _g in games if isinstance(_g, dict)}
-        print(f"  {_greport.attach(out, season=_gr_season_of('cfb', args.date), sport='cfb', meta=_gr_meta)}")
+        _gr_line = _greport.attach(out, season=_gr_season_of('cfb', args.date), sport='cfb',
+                                   meta=_gr_meta, out=args.out)
+        print(f"  {_gr_line}")
     except Exception as _grexc:                               # noqa: BLE001
         print(f"  ⚠️  game reports skipped: {_grexc}")
     _pn = _potd.attach(out, "cfb")
