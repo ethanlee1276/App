@@ -22,16 +22,23 @@ Standard library only. Never raises.
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 #: The weekly-stat markets a form line reads (engine/db player_game_logs).
+#: College logs carry "carries" where the NFL's carry "rush_att", and no
+#: targets, completions or interceptions at all — a line says only what
+#: its league logged.
 FORM_MARKETS = ("pass_cmp", "pass_att", "pass_yds", "pass_td", "pass_int",
-                "rush_att", "rush_yds", "rush_td",
+                "rush_att", "carries", "rush_yds", "rush_td",
                 "targets", "receptions", "rec_yds", "rec_td")
 
-#: Red-zone work off play-by-play: carries inside the 20 and the 5,
-#: targets inside the 20 and the 10 (engine/sources/nflpbp).
+#: Red-zone work. The NFL's comes off play-by-play under its short names
+#: (engine/sources/nflpbp): carries inside the 20 and the 5, targets inside
+#: the 20 and the 10. College's comes off the box-score backfill under the
+#: player's own name: carries inside the 20 and the 5, CATCHES inside the 20.
 RZ_MARKETS = ("rz_car", "i5_car", "rz_tgt", "i10_tgt")
+CFB_RZ_MARKETS = ("rz_car", "i5_car", "rz_rec")
 
 #: How many of his latest games the form line lists.
 LAST_N = 3
@@ -50,10 +57,12 @@ def _chunks(seq, n: int = 400):
 def player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=None) -> dict:
     """``players``: {name: team} for everyone the report names.
 
-    → {name: {"games": [newest first, up to LAST_N: {"season", "week",
-    "team", "opp", "where" ("home", "away", "neutral" or "" — off the
-    schedule file ``schedule``, nflverse's cached one by default),
-    "s": {market: value}}],
+    → {name: {"games": [newest first, up to LAST_N: {"season", "week"
+    (the NFL's) or "day" (college logs a game by its date), "team", "opp",
+    "where" ("home", "away", "neutral" or "" — off the schedule file
+    ``schedule`` for the NFL, whose logs' own home flag reads 1 on every
+    row; off the log for college, whose flag is kept), "s": {market:
+    value}}],
     "season": {"games": n, "s": {market: total}} (this season, when he
     has played in it), "last_season": the same for the season before
     (only when he has not played in this one), "rz": {"rz_car", "i5_car",
@@ -75,16 +84,24 @@ def player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=N
                  f"FROM player_game_logs WHERE sport=? AND season IN (?, ?) AND market IN ({marks}) "
                  f"AND player IN ({','.join('?' * len(chunk))})")
             for r in conn.execute(q, (sport, season, season - 1, *FORM_MARKETS, *chunk)):
-                name, team, opp, _home, yr, period, gid, mk, val = tuple(r)
-                try:
-                    wk = int(period)
-                except (TypeError, ValueError):
+                name, team, opp, home, yr, period, gid, mk, val = tuple(r)
+                period = str(period or "")
+                if not period:
                     continue
-                g = games.setdefault(name, {}).setdefault((int(yr), wk), {})
-                one = g.setdefault(str(gid), {"season": int(yr), "week": wk, "team": team, "opp": opp,
-                                               "s": {}})
+                # Weeks are zero-padded ("005") and dates ISO, so the
+                # period's own text sorts a season in order either way.
+                g = games.setdefault(name, {}).setdefault((int(yr), period), {})
+                one = g.setdefault(str(gid), {"season": int(yr), "team": team, "opp": opp, "s": {},
+                                               **({"week": int(period)} if period.isdigit() else
+                                                  {"day": period[:10]}),
+                                               **({} if sport == "nfl" else
+                                                  {"where": "home" if home else "away"})})
                 if val is not None:
-                    one["s"][mk] = float(val)
+                    # One name for a carry, whichever the league logged.
+                    k = "rush_att" if mk == "carries" else mk
+                    if k == "rush_att" and k in one["s"] and mk == "carries":
+                        continue
+                    one["s"][k] = float(val)
     except Exception:                                        # noqa: BLE001
         return {}
     out: dict = {}
@@ -98,8 +115,9 @@ def player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=N
             rows.append(pick)
         cur = [g for g in rows if g["season"] == season]
         prior = [g for g in rows if g["season"] == season - 1]
-        for g in rows[:LAST_N]:
-            g["where"] = venue(g["season"], g["week"], g["team"], schedule)
+        if sport == "nfl":
+            for g in rows[:LAST_N]:
+                g["where"] = venue(g["season"], g.get("week"), g["team"], schedule)
         rec = {"games": rows[:LAST_N]}
         if cur:
             rec["season"] = _totals(cur)
@@ -120,22 +138,27 @@ def _totals(rows) -> dict:
 
 
 def _red_zone(conn, season: int, players: dict, out: dict, sport: str) -> None:
-    """His red-zone counts this season and his team's, into ``out``."""
-    try:
-        from .fantasy import _short_key
-    except Exception:                                        # noqa: BLE001
-        return
-    marks = ",".join("?" * len(RZ_MARKETS))
+    """His red-zone counts this season and his team's, into ``out``: the
+    NFL's under play-by-play's short names, college's under his own."""
+    if sport == "nfl":
+        try:
+            from .fantasy import _short_key as key
+        except Exception:                                    # noqa: BLE001
+            return
+        markets = RZ_MARKETS
+    else:
+        key, markets = (lambda name, team: (name, team)), CFB_RZ_MARKETS
+    marks = ",".join("?" * len(markets))
     mine: dict = {}
     team_tot: dict = {}
     try:
         for r in conn.execute(f"SELECT player, team, market, SUM(value) FROM player_game_logs "
                               f"WHERE sport=? AND season=? AND market IN ({marks}) "
-                              f"GROUP BY player, team, market", (sport, season, *RZ_MARKETS)):
+                              f"GROUP BY player, team, market", (sport, season, *markets)):
             name, team, mk, tot = tuple(r)
             if tot is None:
                 continue
-            mine.setdefault(_short_key(name, team), {})[mk] = float(tot)
+            mine.setdefault(key(name, team), {})[mk] = float(tot)
             tt = team_tot.setdefault(team, {})
             tt[mk] = tt.get(mk, 0.0) + float(tot)
     except Exception:                                        # noqa: BLE001
@@ -144,12 +167,12 @@ def _red_zone(conn, season: int, players: dict, out: dict, sport: str) -> None:
         rec = out.get(name)
         if rec is None or not team:
             continue
-        got = mine.get(_short_key(name, team))
+        got = mine.get(key(name, team))
         if not got:
             continue
         tt = team_tot.get(team) or {}
-        rec["rz"] = {**{k: got.get(k, 0.0) for k in RZ_MARKETS}, "team": team,
-                     "team_rz_car": tt.get("rz_car", 0.0), "team_rz_tgt": tt.get("rz_tgt", 0.0)}
+        rec["rz"] = {**{k: got.get(k, 0.0) for k in markets}, "team": team,
+                     **{f"team_{k}": tt.get(k, 0.0) for k in ("rz_car", "rz_tgt", "rz_rec") if k in markets}}
 
 
 # --- the meetings ---------------------------------------------------------------------
@@ -217,6 +240,52 @@ def _num(v):
     except (TypeError, ValueError):
         return None
     return f if f == f else None
+
+
+def meetings_db(conn, sport: str, home: str, away: str, before: str, n: int = MEETINGS_N,
+                years: int = MEETINGS_YEARS) -> list:
+    """The two teams' last finished meetings from the history database's
+    games table — college's record, where nflverse's file has no rows. The
+    same shape as ``meetings``; the line is the stored closing spread from
+    the home side (negative when the home team was favored) and total.
+    Keys as the board writes them (college's are case-sensitive where a
+    school is still keyed by its ESPN id)."""
+    home, away = str(home or ""), str(away or "")
+    if conn is None or not home or not away:
+        return []
+    try:
+        floor = int(str(before)[:4]) - years
+    except ValueError:
+        floor = 0
+    try:
+        rows = conn.execute(
+            "SELECT season, period, home, away, home_score, away_score, spread, total, extra FROM games "
+            "WHERE sport=? AND ((home=? AND away=?) OR (home=? AND away=?)) AND home_score IS NOT NULL "
+            "AND away_score IS NOT NULL AND season>=? AND period<? ORDER BY period DESC LIMIT ?",
+            (sport, home, away, away, home, floor, str(before)[:10], n)).fetchall()
+    except Exception:                                        # noqa: BLE001
+        return []
+    out = []
+    for r in rows:
+        season, day, h, a, hs, as_, sp, tot, extra = tuple(r)
+        try:
+            meta = json.loads(extra or "{}")
+        except ValueError:
+            meta = {}
+        hs, as_ = float(hs), float(as_)
+        margin = hs - as_
+        sp, tot = _num(sp), _num(tot)
+        covered = None
+        if sp is not None:
+            covered = "push" if margin + sp == 0 else h if margin + sp > 0 else a
+        ou = None
+        if tot is not None:
+            ou = "push" if hs + as_ == tot else "over" if hs + as_ > tot else "under"
+        out.append({"season": int(season), "week": None, "round": "", "day": str(day)[:10],
+                    "home": h, "away": a, "hs": hs, "as": as_, "neutral": bool(meta.get("neutral")),
+                    "winner": h if margin > 0 else a if margin < 0 else None,
+                    "spread_home": sp, "total": tot, "covered": covered, "ou": ou})
+    return out
 
 
 #: nflverse's names for the playoff rounds.

@@ -133,7 +133,15 @@ UNIT_ROWS = (
     ("short", "Short throws", "num1"),
     ("mid", "Mid throws", "num1"),
     ("deep", "Deep throws", "num1"),
+    # College's own (engine/gamescan.CFB_UNITS; the NFL has none of them).
+    ("havoc", "Havoc rate", "pct1"),
+    ("line", "Line yards", "num1"),
+    ("stuff", "Stuff rate", "pct"),
 )
+CFB_UNIT_NOTE = ("EPA is expected points added a play (CFBD's PPA). Havoc is the share of plays that end in "
+                 "a tackle for a loss, a sack, a takeaway or a pass defended; line yards credit the blockers "
+                 "for a run's first yards; the stuff rate is runs stopped at or behind the line. Each cell is "
+                 "the value and its rank, 1st the best; the edge column names the side ahead by the edge bar.")
 UNIT_NOTE = ("EPA is expected points added a play. Pressure is the rate the offense allows and the "
              "defense gets home. Throws are yards a target: short under 10 air yards, mid 10–19, "
              "deep 20+. Each cell is the value and its rank, 1st the best; the edge column names the "
@@ -307,8 +315,13 @@ class Ctx:
 
     def __init__(self, g: dict, result: dict, allowed: dict | None = None,
                  sched=None, staff: dict | None = None, names: dict | None = None,
-                 form: dict | None = None, meetings: list | None = None, ideas: dict | None = None):
+                 form: dict | None = None, meetings: list | None = None, ideas: dict | None = None,
+                 sport: str = "nfl", meta: dict | None = None):
         self.g = g
+        self.sport = sport
+        # What the build knows about the game and the board leaves off
+        # (college: neutral site, conference game, week).
+        self.meta = meta or {}
         self.form = form or {}
         self.meetings = meetings or []
         self.ideas = ideas or {}
@@ -328,7 +341,7 @@ class Ctx:
         self.sched = sched
         self.staff = staff or {}
         self.names = names if names is not None else _team_names()
-        n_teams = int((self.scan.get("method") or {}).get("teams") or 32)
+        n_teams = int((self.scan.get("method") or {}).get("teams") or self.scan.get("n_teams") or 32)
         self.n_teams = n_teams
         try:
             from .gamescan import EDGE_GAP
@@ -385,17 +398,26 @@ def _volume(r: dict) -> float:
                1.0 if str(r.get("pos") or "").upper() == "QB" else 0.0)
 
 
+def _caught(u: dict) -> tuple:
+    """("targets", per game) — or ("catches", per game) where the share is
+    of the catches (college logs no targets: engine/gamescan.cfb_usage)."""
+    if u.get("share_of") == "catches":
+        return "catches", u.get("rec_pg")
+    return "targets", u.get("targets_pg")
+
+
 def _role_line(r: dict) -> str:
     """"31% of the targets (10.8 a game)" — his work, in one phrase."""
     u = _usage(r)
     pos = str(r.get("pos") or "").upper()
+    word, per = _caught(u)
     if pos in ("RB", "FB") and u.get("carry_share"):
         bits = [f"{_pct(u['carry_share'])} of the carries ({_num(u.get('carries_pg'))} a game)"]
         if (u.get("tgt_share") or 0) >= 0.08:
-            bits.append(f"{_pct(u['tgt_share'])} of the targets")
+            bits.append(f"{_pct(u['tgt_share'])} of the {word}")
         return ", ".join(bits)
     if pos in ("WR", "TE") and u.get("tgt_share"):
-        return f"{_pct(u['tgt_share'])} of the targets ({_num(u.get('targets_pg'))} a game)"
+        return f"{_pct(u['tgt_share'])} of the {word} ({_num(per)} a game)"
     return ""
 
 
@@ -414,6 +436,17 @@ def _count(n, one: str, many: str | None = None) -> str:
     return f"{n:,} {one if n == 1 else (many or one + 's')}"
 
 
+def day_label(day: str, season: int, current: int) -> str:
+    """College's games go by their date: "Oct. 18", or "Jan. 20, 2026"
+    for a game of another season (a bowl in January belongs to the one
+    before it)."""
+    try:
+        d = _dt.date.fromisoformat(str(day)[:10])
+    except ValueError:
+        return str(day)
+    return f"{d.strftime('%b')}. {d.day}" + ("" if int(season) == int(current) else f", {d.year}")
+
+
 def week_label(season: int, week: int, current: int) -> str:
     """"Wk 5" this season; "2025 wk 13" or "2025 wild-card round" before."""
     reg = 18 if int(season) >= 2021 else 17
@@ -428,9 +461,12 @@ def form_game(group: str, g: dict) -> str:
     s = g.get("s") or {}
     bits = []
     if group == "qb":
-        if s.get("pass_att"):
+        if s.get("pass_att") and "pass_cmp" in s:
             bits.append(f"{_n(s.get('pass_cmp'))} of {_n(s['pass_att'])}, {_count(s.get('pass_yds'), 'yd')}")
-        bits.append(f"{_n(s.get('pass_td'))} TD, {_n(s.get('pass_int'))} INT")
+        else:
+            bits.append(f"{_count(s.get('pass_att'), 'attempt')}, {_count(s.get('pass_yds'), 'yd')}"
+                        if s.get("pass_att") else _count(s.get("pass_yds"), "yd"))
+        bits.append(f"{_n(s.get('pass_td'))} TD" + (f", {_n(s.get('pass_int'))} INT" if "pass_int" in s else ""))
         if (s.get("rush_yds") or 0) >= 15 or s.get("rush_td"):
             bits.append(f"{_count(s.get('rush_yds'), 'rush yd')}"
                         + (f", {_n(s['rush_td'])} rush TD" if s.get("rush_td") else ""))
@@ -444,8 +480,9 @@ def form_game(group: str, g: dict) -> str:
             out += (f"; {_count(s.get('receptions'), 'catch', 'catches')}, {_count(s.get('rec_yds'), 'yd')}"
                     + (f", {_n(s['rec_td'])} TD" if s.get("rec_td") else ""))
         return out
-    out = (f"{_count(s.get('receptions'), 'catch', 'catches')} on {_count(s.get('targets'), 'target')}, "
-           f"{_count(s.get('rec_yds'), 'yd')}")
+    out = (f"{_count(s.get('receptions'), 'catch', 'catches')}"
+           + (f" on {_count(s.get('targets'), 'target')}" if "targets" in s else "")
+           + f", {_count(s.get('rec_yds'), 'yd')}")
     if s.get("rec_td"):
         out += f", {_n(s['rec_td'])} TD"
     return out
@@ -459,9 +496,9 @@ def form_season(group: str, t: dict) -> str:
     head = f"{_count(n, 'game')}: "
     if group == "qb":
         bits = [f"{_count(s.get('pass_yds'), 'yd')} ({_num((s.get('pass_yds') or 0) / n, 0)} a game)"]
-        if s.get("pass_att"):
+        if s.get("pass_att") and "pass_cmp" in s:
             bits.append(f"{_pct((s.get('pass_cmp') or 0) / s['pass_att'])} completed")
-        bits.append(f"{_n(s.get('pass_td'))} TD, {_n(s.get('pass_int'))} INT")
+        bits.append(f"{_n(s.get('pass_td'))} TD" + (f", {_n(s.get('pass_int'))} INT" if "pass_int" in s else ""))
         if (s.get("rush_yds") or 0) >= 50 or (s.get("rush_td") or 0) >= 2:
             bits.append(f"{_count(s.get('rush_yds'), 'rushing yd')}"
                         + (f", {_n(s['rush_td'])} rushing TD" if s.get("rush_td") else ""))
@@ -476,8 +513,9 @@ def form_season(group: str, t: dict) -> str:
             out += (f"; {_count(s['receptions'], 'catch', 'catches')}, {_count(s.get('rec_yds'), 'yd')}"
                     + (f", {_n(s['rec_td'])} TD" if s.get("rec_td") else ""))
         return head + out
-    out = (f"{_count(s.get('receptions'), 'catch', 'catches')} on {_count(s.get('targets'), 'target')}, "
-           f"{_count(s.get('rec_yds'), 'yd')} ({_num((s.get('rec_yds') or 0) / n, 0)} a game)")
+    out = (f"{_count(s.get('receptions'), 'catch', 'catches')}"
+           + (f" on {_count(s.get('targets'), 'target')}" if "targets" in s else "")
+           + f", {_count(s.get('rec_yds'), 'yd')} ({_num((s.get('rec_yds') or 0) / n, 0)} a game)")
     if s.get("rec_td"):
         out += f", {_n(s['rec_td'])} TD"
     return head + out
@@ -531,8 +569,14 @@ def form_rz(group: str, rz: dict) -> str:
         share = tgt / rz["team_rz_tgt"] if rz.get("team_rz_tgt") else None
         bits.append(f"{_count(tgt, 'target')} inside the 20 ({_n(rz.get('i10_tgt'))} inside the 10)"
                     + (f" — {_pct(share)} of {team}'s" if share else ""))
+    rec = _n(rz.get("rz_rec"))
+    if rec and group != "qb":
+        share = rec / rz["team_rz_rec"] if rz.get("team_rz_rec") else None
+        bits.append(f"{_count(rec, 'catch', 'catches')} inside the 20"
+                    + (f" — {_pct(share)} of {team}'s" if share else ""))
     if not bits:
-        return "No carries or targets inside the 20 this season" if group in ("rb", "rec") else ""
+        caught = "catches" if "rz_rec" in rz else "targets"
+        return f"No carries or {caught} inside the 20 this season" if group in ("rb", "rec") else ""
     return "; ".join(bits)
 
 
@@ -556,9 +600,12 @@ def form_lines(c: "Ctx", r: dict) -> list:
     games = []
     for g in f.get("games") or []:
         opp = g.get("opp") or ""
-        games.append(f"{week_label(g['season'], g['week'], c.season)} "
-                     f"{'at' if g.get('where') == 'away' else 'vs'} {opp}: {form_game(group, g)}"
-                     .replace(" vs :", ":"))
+        when = (week_label(g["season"], g["week"], c.season) if g.get("week") is not None
+                else day_label(g.get("day"), g["season"], c.season))
+        # College's school codes read poorly; its opponents go by name.
+        opp = c.name(opp) if opp and c.sport != "nfl" else opp
+        games.append(f"{when} {'at' if g.get('where') == 'away' else 'vs'} {opp}: "
+                     f"{form_game(group, g)}".replace(" vs :", ":"))
     if games:
         out.append([f"Last {len(games)}", games])
     trend = form_trend(group, f, c.season)
@@ -592,7 +639,18 @@ def _section(key: str, title: str, blocks) -> dict | None:
 
 
 def kickoff_words(date: str, kickoff: str) -> str:
-    """"Sunday, Oct. 25, 4:25 PM ET" from the board's date and ET kickoff."""
+    """"Sunday, Oct. 25, 4:25 PM ET" from the board's date and ET kickoff —
+    or from a UTC stamp, which is how college's feed writes a kickoff."""
+    if "T" in str(kickoff or ""):
+        try:
+            from .sources.cfbdata import to_eastern
+            et = to_eastern(str(kickoff))
+        except Exception:                                    # noqa: BLE001
+            et = None
+        if et is None:
+            kickoff = ""
+        else:
+            date, kickoff = et.date().isoformat(), f"{et.hour:02d}:{et.minute:02d}"
     try:
         d = _dt.date.fromisoformat(str(date)[:10])
     except ValueError:
@@ -677,10 +735,18 @@ def sec_facts(c: Ctx) -> dict | None:
         s = f"{int(r['wins'])}-{int(r['losses'])}"
         return s + (f"-{int(r['ties'])}" if r.get("ties") else "")
     ra, rh = record(c.away), record(c.home)
-    items.append(f"{c.name(c.away)}{f' ({ra})' if ra else ''} at {c.name(c.home)}"
-                 f"{f' ({rh})' if rh else ''}" + (" — a neutral site" if g.get("neutral_site") else ""))
+    neutral = g.get("neutral_site") or c.meta.get("neutral_site")
+
+    def ranked(t, side):
+        rank = g.get(f"{side}_rank")
+        return f"No. {int(rank)} {c.name(t)}" if isinstance(rank, (int, float)) and 0 < rank <= 25 else c.name(t)
+    items.append(f"{ranked(c.away, 'away')}{f' ({ra})' if ra else ''} at {ranked(c.home, 'home')}"
+                 f"{f' ({rh})' if rh else ''}" + (" — a neutral site" if neutral else ""))
     st = g.get("stadium") or {}
     venue = st.get("name") or g.get("venue") or ""
+    if venue and c.sport == "cfb":
+        items.append(f"Venue: {venue}" + (" — indoors" if g.get("indoor") else ""))
+        venue = ""
     if venue:
         roof = {"dome": "a fixed dome", "closed": "roof closed", "open": "roof open",
                 "retractable": "a retractable roof", "outdoors": "outdoors"}.get(
@@ -719,6 +785,11 @@ def sec_facts(c: Ctx) -> dict | None:
             items.append(f"{c.name(t)}: {_join(sorted(set(said)))}")
     if c.sched_row is not None and c.sched_row.get("div"):
         items.append("A division game")
+    hc, ac = str(g.get("home_conference") or ""), str(g.get("away_conference") or "")
+    if c.meta.get("conference_game"):
+        items.append(f"A {hc} game" if hc and hc == ac else "A conference game")
+    elif hc and ac and hc != ac:
+        items.append(f"Non-conference: {c.name(c.away)} ({ac}) against {c.name(c.home)} ({hc})")
     return _section("facts", "Game facts", [_list(items)])
 
 
@@ -737,7 +808,16 @@ def _rank_word(cell: dict, most: str, least: str) -> str:
 
 def meeting_line(m: dict) -> str:
     """"2025 week 13 at DET: GB won 31-24 · DET −2.5, GB covered · total 48.5, over"."""
-    when = f"{m['season']} {m['round']}" if m.get("round") else f"{m['season']} week {m['week']}"
+    if m.get("round"):
+        when = f"{m['season']} {m['round']}"
+    elif m.get("week") is None and m.get("day"):
+        try:
+            d = _dt.date.fromisoformat(str(m["day"])[:10])
+            when = f"{d.strftime('%b')}. {d.day}, {d.year}"
+        except ValueError:
+            when = str(m["day"])
+    else:
+        when = f"{m['season']} week {m['week']}"
     where = " (neutral site)" if m.get("neutral") else f" at {m['home']}"
     hs, as_ = _n(m.get("hs")), _n(m.get("as"))
     w = m.get("winner")
@@ -919,7 +999,7 @@ def sec_rankings(c: Ctx) -> dict | None:
     # The season's own numbers stand without the unit ranks.
     blocks = [_table_for(c, c.away, c.home), _table_for(c, c.home, c.away)] if c.units else []
     if any(blocks):
-        blocks.append({"type": "note", "text": UNIT_NOTE})
+        blocks.append({"type": "note", "text": CFB_UNIT_NOTE if c.sport == "cfb" else UNIT_NOTE})
     nums = c.scan.get("numbers") or {}
     if all(nums.get(t) for t in c.teams):
         rows = []
@@ -940,10 +1020,12 @@ def sec_rankings(c: Ctx) -> dict | None:
     u0 = c.units.get(c.home) or c.units.get(c.away) or {}
     if u0.get("blend") is not None and u0.get("games"):
         w = float(u0["blend"])
-        blocks.append(_p(f"The ranks are adjusted for the opponents each team has faced. After "
-                         f"{_plural(u0['games'], 'game')} a rank is {_pct(w)} this season and {_pct(1 - w)} "
-                         f"last season — the mix that best predicted the rest of a season when we tested "
-                         f"it. An edge is a gap of {c.gap_bar} or more ranks"))
+        adjusted = (c.scan.get("method") or {}).get("opponent_adjusted", c.sport != "cfb")
+        blocks.append(_p(("The ranks are adjusted for the opponents each team has faced. " if adjusted else
+                          f"The ranks are against all {c.n_teams} teams, not adjusted for opponents. ")
+                         + f"After {_plural(u0['games'], 'game')} a rank is {_pct(w)} this season and "
+                         f"{_pct(1 - w)} last season — the mix that best predicted the rest of a season when "
+                         f"we tested it. An edge is a gap of {c.gap_bar} or more ranks"))
     edges = _edges(c)
     if edges:
         said = [edge_words(c, e) for e in edges[:4]]
@@ -1004,9 +1086,10 @@ def sec_identity(c: Ctx) -> dict | None:
                        and (_usage(r).get("tgt_share") or 0) >= TREE_SHARE),
                       key=lambda r: -(_usage(r).get("tgt_share") or 0))
         if tree:
-            lines.append("Who gets the ball thrown to him: " + "; ".join(
-                f"{r['player']} ({r.get('pos')}) {_pct(_usage(r)['tgt_share'])} of the targets, "
-                f"{_num(_usage(r).get('targets_pg'))} a game" for r in tree[:5]))
+            word = _caught(_usage(tree[0]))[0]
+            lines.append(("Who catches it: " if word == "catches" else "Who gets the ball thrown to him: ")
+                         + "; ".join(f"{r['player']} ({r.get('pos')}) {_pct(_usage(r)['tgt_share'])} of the "
+                                     f"{word}, {_num(_caught(_usage(r))[1])} a game" for r in tree[:5]))
         backs = sorted((r for r in mine if str(r.get("pos") or "").upper() in ("RB", "FB", "QB")
                         and (_usage(r).get("carry_share") or 0) >= BACKFIELD_SHARE),
                        key=lambda r: -(_usage(r).get("carry_share") or 0))
@@ -1197,7 +1280,7 @@ def _why(r: dict) -> list:
     coverage lines under the verdicts, so neither is said again here."""
     role = bool(_role_line(r))
     why = [str(x) for x in (r.get("pro") or []) + (r.get("con") or []) if x
-           and not (role and ("of the carries" in str(x) or "of the targets" in str(x)))]
+           and not (role and any(w in str(x) for w in ("of the carries", "of the targets", "of the catches")))]
     for n in r.get("notes") or []:
         s = str(n)
         if s.startswith("Usage is ") or "passer rating on" in s:
@@ -1307,9 +1390,36 @@ def sec_trenches(c: Ctx) -> dict | None:
             gap = int(rd["rank"]) - int(ro["rank"])
             who = off if gap >= c.gap_bar else dfn if -gap >= c.gap_bar else None
             lines.append(s + (f" — edge {who}" if who else ""))
+        lines += _college_front(c, off, dfn)
         if lines:
             blocks += [_h(f"{c.name(off)} up front"), _list(lines)]
     return _section("trenches", "In the trenches", blocks)
+
+
+def _college_front(c: Ctx, off: str, dfn: str) -> list:
+    """College's line play (engine/gamescan.CFB_UNITS): havoc, line yards
+    and the stuff rate, each side's rank against the other's."""
+    out = []
+    for unit, said_off, verb, said_def in (("line", "line yards", "rank", "run front"),
+                                           ("stuff", "runs stuffed at the line", "rank", "stuff rate"),
+                                           ("havoc", "protection from havoc", "ranks", "havoc")):
+        o, d = c.unit(off, "off", unit), c.unit(dfn, "def", unit)
+        if o.get("rank") is None or d.get("rank") is None:
+            continue
+        gap = int(d["rank"]) - int(o["rank"])
+        who = off if gap >= c.gap_bar else dfn if -gap >= c.gap_bar else None
+        out.append(f"{off}'s {said_off} {verb} {_ord(o['rank'])} against {dfn}'s {said_def} "
+                   f"({_ord(d['rank'])})" + (f" — edge {who}" if who else ""))
+    return out
+
+
+def _versus_average(rel, team_words: str = "the average team") -> str:
+    """"22% above the average team"; "about average" within two points."""
+    if rel is None:
+        return ""
+    if abs(rel) < 0.02:
+        return " (about average)"
+    return f" ({_pct(abs(rel))} {'above' if rel >= 0 else 'below'} {team_words})"
 
 
 def sec_redzone(c: Ctx) -> dict | None:
@@ -1326,7 +1436,13 @@ def sec_redzone(c: Ctx) -> dict | None:
                          + f"; {dfn} allows one on {_pct(d['value'])}"
                          + (f" ({_ord(d['rank'])} of {d.get('of') or of}, 1st the stingiest)" if d.get("rank") else ""))
         ro, rd = rz.get(off) or {}, rz.get(dfn) or {}
-        if _f(ro.get("off")) is not None and _f(rd.get("def")) is not None:
+        if ro.get("what") and _f(ro.get("off")) is not None and _f(rd.get("def")) is not None:
+            # College's: drives that reach the opponent's 40, raw.
+            rel_o, rel_d = _f(ro.get("off_rel")), _f(rd.get("def_rel"))
+            lines.append(f"{off} gets about {_num(ro['off'])} {ro['what']} a game — drives that reach the "
+                         f"opponent's 40" + _versus_average(rel_o)
+                         + f"; {dfn} allows about {_num(rd['def'])}" + _versus_average(rel_d, "average"))
+        elif _f(ro.get("off")) is not None and _f(rd.get("def")) is not None:
             rel_o, rel_d = _f(ro.get("off_rel")), _f(rd.get("def_rel"))
             lines.append(f"{off} runs about {_num(ro['off'])} red-zone plays a game"
                          + (f" ({_pct(abs(rel_o))} {'above' if rel_o >= 0 else 'below'} the league)" if rel_o is not None else "")
@@ -1525,7 +1641,8 @@ def sec_weather(c: Ctx) -> dict | None:
     cond = g.get("conditions") or {}
     st = g.get("stadium") or {}
     lines = []
-    if w.get("dome") or str(g.get("roof") or "").lower() in ("dome", "closed"):
+    indoors = w.get("dome") or g.get("indoor") or str(g.get("roof") or "").lower() in ("dome", "closed")
+    if indoors:
         lines.append(st.get("plays") or "Indoors — no weather")
     elif w.get("forecast"):
         # A forecast only: the build's placeholder (measured False) and
@@ -1543,7 +1660,7 @@ def sec_weather(c: Ctx) -> dict | None:
             bits.append("rain")
         if bits:
             lines.append("Forecast for kickoff: " + ", ".join(bits))
-    if not (w.get("dome") or str(g.get("roof") or "").lower() in ("dome", "closed")) and st.get("plays"):
+    if not indoors and st.get("plays"):
         lines.append(st["plays"])
     for why in cond.get("why") or []:
         if why and why not in lines:
@@ -1590,6 +1707,8 @@ def sec_before(c: Ctx) -> dict | None:
     lines = []
     g = c.g
     try:
+        if c.sport != "nfl":
+            raise ValueError("no inactives list")
         hh, mm = (int(x) for x in str(g.get("kickoff") or "").split(":")[:2])
         t = _dt.datetime(2000, 1, 1, hh, mm) - _dt.timedelta(minutes=INACTIVES_BEFORE_MIN)
         lines.append(f"Inactives post about {_clock(t.hour, t.minute)} ET, "
@@ -1615,7 +1734,8 @@ def sec_before(c: Ctx) -> dict | None:
     behind = (c.result.get("data_freshness") or {}).get("behind") or []
     if behind:
         lines.append(f"Data behind the last week played: {_join(str(b) for b in behind)}")
-    lines.append(OFFICIALS)
+    if c.sport == "nfl":
+        lines.append(OFFICIALS)
     return _section("before", "Before kickoff", [_list(lines)])
 
 
@@ -1713,12 +1833,13 @@ def _words(sections) -> int:
 
 def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
           staff: dict | None = None, names: dict | None = None, form: dict | None = None,
-          meetings: list | None = None, ideas: dict | None = None) -> dict | None:
+          meetings: list | None = None, ideas: dict | None = None, sport: str = "nfl",
+          meta: dict | None = None) -> dict | None:
     """One game's report, or None for a row with no teams."""
     if not isinstance(g, dict) or not g.get("away") or not g.get("home"):
         return None
     c = Ctx(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
-            form=form, meetings=meetings, ideas=ideas)
+            form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta)
     built = {}
     for fn in SECTIONS:
         s = fn(c)
@@ -1727,7 +1848,7 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
     short = sec_short(c, built)
     sections = ([short] if short else []) + list(built.values())
     words = _words(sections)
-    return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home,
+    return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": sport,
             "date": g.get("date") or "", "kickoff": g.get("kickoff") or "",
             "title": f"{c.name(c.away)} at {c.name(c.home)}",
             "built_at": result.get("built_at") or "",
@@ -1771,54 +1892,71 @@ def report_players(result: dict) -> dict:
     return out
 
 
+def college_names(result: dict) -> dict:
+    """{key: the school's short name} off the college board's own team
+    table (cfb_build's ``teams``: ESPN's shortDisplayName as ``nick``)."""
+    out = {}
+    for abbr, meta in ((result or {}).get("teams") or {}).items():
+        if isinstance(meta, dict):
+            out[abbr] = meta.get("nick") or meta.get("name") or abbr
+    return out
+
+
 def attach(result: dict, *, allowed: dict | None = None, season: int | None = None,
-           conn=None, ideas: dict | None = None) -> str:
+           conn=None, ideas: dict | None = None, sport: str = "nfl", meta: dict | None = None) -> str:
     """``result["game_reports"]``: one report for every game on the board.
-    ``conn`` reads the game logs (the history database when none is
-    given); ``ideas`` is this build's ideas file (engine/ideas.LAST when
-    none is given). One line for the build log; never raises."""
+    ``conn`` reads the game logs and, for college, the meetings (the
+    history database when none is given); ``ideas`` is this build's ideas
+    file (engine/ideas.LAST when none is given; the NFL's only); ``meta``
+    is {"AWAY@HOME": what the build knows of a game and the board leaves
+    off} (college's neutral site and conference game). One line for the
+    build log; never raises."""
+    own = False
     try:
         sched = staff = None
         season = season or _season_of(result)
+        if sport == "nfl":
+            try:
+                from . import spots
+                sched = spots.load_schedule()
+                staff = spots.staff_for(season, (season or 1) - 1) if season else {}
+            except Exception:                                # noqa: BLE001
+                sched, staff = None, {}
+        names = _team_names() if sport == "nfl" else college_names(result)
         try:
-            from . import spots
-            sched = spots.load_schedule()
-            staff = spots.staff_for(season, (season or 1) - 1) if season else {}
-        except Exception:                                    # noqa: BLE001
-            sched, staff = None, {}
-        names = _team_names()
-        form, own = {}, False
-        try:
-            from . import reportdata
             if conn is None:
                 from .db import connect
                 conn, own = connect(), True
-            form = reportdata.player_form(conn, season, report_players(result))
+        except Exception:                                    # noqa: BLE001
+            conn = None
+        form = {}
+        try:
+            from . import reportdata
+            form = reportdata.player_form(conn, season, report_players(result), sport=sport)
         except Exception:                                    # noqa: BLE001
             form = {}
-        finally:
-            if own and conn is not None:
-                try:
-                    conn.close()
-                except Exception:                            # noqa: BLE001
-                    pass
-        if ideas is None:
+        if ideas is None and sport == "nfl":
             try:
                 from . import ideas as _ideas
                 ideas = _ideas.LAST.get("nfl") or {}
             except Exception:                                # noqa: BLE001
                 ideas = {}
-        try:
-            from . import kickphysics as _kp
-            kfit, kbears = _kp.load("nfl"), _kp.bearings()
-        except Exception:                                    # noqa: BLE001
-            _kp = None
+        _kp = None
+        if sport == "nfl":
+            # College's stadium altitudes are not kept (kickphysics reads the
+            # NFL's table, whose codes some schools share), so its kicking
+            # air is not written.
+            try:
+                from . import kickphysics as _kp
+                kfit, kbears = _kp.load("nfl"), _kp.bearings()
+            except Exception:                                # noqa: BLE001
+                _kp = None
         reports = []
         for g in result.get("games") or []:
             if not isinstance(g, dict):
                 continue
             home, away = str(g.get("home") or ""), str(g.get("away") or "")
-            extra = ideas_for(ideas, home, away)
+            extra = ideas_for(ideas, home, away) if sport == "nfl" else {}
             if _kp is not None:
                 try:
                     k = _kp.conditions(g, kfit, kbears)
@@ -1827,12 +1965,14 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                 except Exception:                            # noqa: BLE001
                     pass
             try:
-                from .reportdata import meetings as _meetings
-                met = _meetings(home, away, before=g.get("date") or "")
+                from . import reportdata as _rd
+                met = (_rd.meetings(home, away, before=g.get("date") or "") if sport == "nfl" else
+                       _rd.meetings_db(conn, sport, home, away, before=g.get("date") or ""))
             except Exception:                                # noqa: BLE001
                 met = []
             r = build(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
-                      form=form, meetings=met, ideas=extra)
+                      form=form, meetings=met, ideas=extra, sport=sport,
+                      meta=(meta or {}).get(f"{away}@{home}"))
             if r:
                 reports.append(r)
         result[KEY] = reports
@@ -1845,6 +1985,12 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"
+    finally:
+        if own and conn is not None:
+            try:
+                conn.close()
+            except Exception:                                # noqa: BLE001
+                pass
 
 
 # --- reading one back -----------------------------------------------------------------

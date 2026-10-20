@@ -2713,6 +2713,22 @@ def main() -> None:
     # hook, whose money split the against-the-money note reads.
     from engine import lineopen as _lo
     print(_lo.attach_to_board(out, "cfb"))
+    # THE GAME REPORT, as the NFL's (engine/gamereport; Ethan, 2026-10-20:
+    # "I want you too do all of it besides D" — the college report among
+    # it). Last of the game hooks, for the same reason as the NFL's: its
+    # market section reads the crowd and the opener. What the feed knows
+    # of a game and the board leaves off — a neutral site, a conference
+    # game — rides in beside it.
+    try:
+        from engine import gamereport as _greport
+        from engine.seasons import season_of as _gr_season_of
+        _gr_meta = {f"{_g.get('away')}@{_g.get('home')}": {
+            "neutral_site": bool(_g.get("neutral_site")),
+            "conference_game": bool(_g.get("conference_game")), "week": _g.get("week")}
+            for _g in games if isinstance(_g, dict)}
+        print(f"  {_greport.attach(out, season=_gr_season_of('cfb', args.date), sport='cfb', meta=_gr_meta)}")
+    except Exception as _grexc:                               # noqa: BLE001
+        print(f"  ⚠️  game reports skipped: {_grexc}")
     _pn = _potd.attach(out, "cfb")
     if _pn:
         print(_pn)
