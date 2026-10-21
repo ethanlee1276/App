@@ -38,14 +38,15 @@
 .rc-puckmark { display: inline-block; width: 14px; height: 9px; border-radius: 50%; background: var(--bg);
   border: 2px solid var(--text); }
 .rc-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 112px; text-align: center; }
-.rc-per { font: 700 var(--fs-sm) / 1.2 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); }
+.rc-per { font: 700 var(--fs-sm) / 1.2 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim);
+  text-wrap: balance; }
 .rc-clock { font: 800 var(--fs-3xl) / 1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
 .rc-pp { --pc: var(--brand); margin-top: 2px; padding: 1px 8px; border-radius: var(--radius-sm); font: 800 var(--fs-xs) / 1.4 var(--font-mono);
   color: var(--text); background: color-mix(in oklab, var(--pc) 45%, var(--bg)); border: var(--hairline) solid color-mix(in oklab, var(--pc) 70%, var(--text)); }
 .rc-live { display: inline-flex; align-items: center; gap: 4px; font: 800 var(--fs-2xs) / 1.4 var(--font-sans);
   letter-spacing: .1em; text-transform: uppercase; color: var(--bad); }
 .rc-sog { font: 700 var(--fs-xs) / 1.3 var(--font-mono); color: var(--text-dim); letter-spacing: .04em; }
-.rc-ago { font: 500 var(--fs-2xs) / 1.3 var(--font-mono); color: var(--text-faint); }
+.rc-ago { font: 500 var(--fs-2xs) / 1.3 var(--font-mono); color: var(--text-faint); text-wrap: balance; }
 /* The watch buttons span the card under the clock and both sides; in the
    clock's column they set its width (css/hoopscast.css, 2026-10-20). */
 .rc-watch { grid-column: 1 / -1; margin-top: 0; }
@@ -301,7 +302,7 @@
   .rc-loc { display: none; }
   .rc-nick { font-size: var(--fs-md); }
   .rc-rec { font-size: var(--fs-xs); }
-  .rc-mid { min-width: 76px; max-width: 100px; padding-top: 2px; }
+  .rc-mid { min-width: 76px; max-width: 104px; padding-top: 2px; }
   .rc-clock { font-size: var(--fs-2xl); }
   .rc-art { --crop-x: 60; --crop-y: 470; --crop-w: 1552; --crop-h: 430; aspect-ratio: 1552 / 430; }
   .rc-art[data-half="left"] { --crop-x: 60; --crop-y: 500; --crop-w: 860; --crop-h: 400; aspect-ratio: 860 / 400; }
