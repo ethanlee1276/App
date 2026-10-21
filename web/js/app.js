@@ -48594,11 +48594,11 @@ async function renderPbpPage() {
             <b>${name(d.away, d.away_name)}</b>${rec(d.away)}</div></div>
           <b class="pbp-hero-score">${lv.away_score != null ? lv.away_score : "–"}</b>
           <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>${carrier}
-            <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span>
-            ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}</div>
+            <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span></div>
           <b class="pbp-hero-score">${lv.home_score != null ? lv.home_score : "–"}</b>
           <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
             <b>${name(d.home, d.home_name)}</b>${rec(d.home)}</div>${mark(d.home)}</div>
+          ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
         </div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}

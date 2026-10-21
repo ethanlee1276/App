@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2828,6 +2828,33 @@ cd /srv/qellys && sudo -u qellys nice -n 10 python3 nba_build.py 2026-10-20 --od
 ```
 
 Paste what the first four print.
+
+**CU. The live scoreboard on a phone: logos over the score** (step 152).
+Your 8:41 PM screenshot of 76ers @ Knicks at the half: the 76ers logo sat
+under the "54" and the Knicks logo ran off the edge of the card. Two causes,
+both fixed on the NBA and NHL live pages:
+
+- **The Watch buttons set the width of the middle.** Watch Peacock,
+  YouTube TV and Gamecast sat in the clock's column, so that column was as
+  wide as all three buttons: 260px of a 340px card on a phone. Each team
+  was left 32px for a 56px logo and the score. The buttons are now their
+  own row under the scoreboard.
+- **The phone's smaller logo never applied.** The logo carries its desktop
+  size on itself, so the 36px phone rule never reached it. On a phone the
+  logo is now 36px, and it gets smaller before it can touch the score.
+
+Football's and baseball's live header had the same buttons in its middle,
+stacked beside the live state on a phone. They are under the scores there
+too. Checked in a browser from 320px to 1280px wide.
+
+Nothing to run. Once the box has the code (dated 2026-10-21 or later), open
+any live NBA or NHL game on your phone. The logo and the score sit side by
+side, the names are whole, and the Watch buttons are in a row underneath.
+To check the box has it (expect `1` on the last line):
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "hc-watch { grid-column: 1 / -1" web/css/hoopscast.css
+```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

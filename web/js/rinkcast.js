@@ -428,11 +428,14 @@
     }
     const sog = (T.away.sog || T.home.sog) ? `<span class="rc-sog">SOG ${T.away.sog} – ${T.home.sog}</span>` : "";
     const ago = typeof pbpAgo === "function" ? pbpAgo(r.at || d.generated_at) : "";
+    // The watch buttons are the card's last row, as on the basketball page:
+    // inside the clock's column they set its width and squeezed each side
+    // past its crest and score on a phone.
     const watch = lv.state === "live" && typeof watchHTML === "function" ? watchHTML(d, "nhl", "pbp-watch rc-watch") : "";
     return `<div class="card rc-score" style="--ca:${k.colors.away};--ch:${k.colors.home}">
       ${side("away")}
-      <div class="rc-mid">${mid}${sog}${ago ? `<span class="rc-ago">${esc(ago)}</span>` : ""}${watch}</div>
-      ${side("home")}</div>`;
+      <div class="rc-mid">${mid}${sog}${ago ? `<span class="rc-ago">${esc(ago)}</span>` : ""}</div>
+      ${side("home")}${watch}</div>`;
   }
 
   /* ---------------- the arena ---------------- */

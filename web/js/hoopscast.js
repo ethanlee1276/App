@@ -355,11 +355,15 @@
       mid = `<span class="hc-per">Tip-off</span><b class="hc-clock">${esc(tip || "—")}</b>`;
     }
     const ago = typeof pbpAgo === "function" ? pbpAgo(d.generated_at) : "";
+    // The watch buttons are the card's last row, under the clock and both
+    // sides. Inside the clock's column they set that column's width, and on
+    // a phone that left each side 32px for a 56px crest and the score
+    // (Ethan, 2026-10-20, 76ers @ Knicks: the crest under the "54").
     const watch = lv.state === "live" && typeof watchHTML === "function" ? watchHTML(d, league, "pbp-watch hc-watch") : "";
     return `<div class="card hc-score" style="--ca:${k.colors.away};--ch:${k.colors.home}">
       ${side("away")}
-      <div class="hc-mid">${mid}${ago ? `<span class="hc-ago">${esc(ago)}</span>` : ""}${watch}</div>
-      ${side("home")}</div>`;
+      <div class="hc-mid">${mid}${ago ? `<span class="hc-ago">${esc(ago)}</span>` : ""}</div>
+      ${side("home")}${watch}</div>`;
   }
 
   /* ---------------- the arena ---------------- */

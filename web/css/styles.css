@@ -10903,6 +10903,10 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 /* ESPN's header has the record under each side and the carrier under the
    clock (2026-10-08); both come off the deep file, both absent when unknown. */
 .pbp-hero-rec { color: var(--text-mute); }
+/* The watch buttons are the header's last row, under the scores, as on the
+   basketball and hockey pages (2026-10-20): in the middle column they set
+   its width, and on a phone they stacked beside the live state. */
+.pbp-hero > .pbp-watch { grid-column: 1 / -1; margin-top: 0; }
 .pbp-hero-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid var(--border);
   border-radius: 999px; color: var(--text-dim); }
 /* FOUR ITEMS NEED FOUR COLUMNS (Ethan, 2026-09-06: "this area on the
