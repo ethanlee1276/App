@@ -171,9 +171,11 @@ def test_the_launcher_reads_nfl_kickoffs_from_date_and_eastern_clock():
 
 
 def test_baseball_steps_back_behind_football():
+    # The weights are the fallback since the month's plan (2026-10-21,
+    # engine/oddsplan); called by their own name.
     assert launch.SPORT_WEIGHT["mlb"] < launch.SPORT_WEIGHT["nfl"] == launch.SPORT_WEIGHT["cfb"]
     launch._live_sports = lambda: ["mlb", "nfl", "cfb"]
-    nfl, cfb, mlb = (launch._budget_share(s) for s in ("nfl", "cfb", "mlb"))
+    nfl, cfb, mlb = (launch._weighted_share(s) for s in ("nfl", "cfb", "mlb"))
     assert nfl > mlb and cfb > mlb, (nfl, cfb, mlb)
     # At equal weights baseball drew about 0.15 of a three-league day
     # (its play-days scaling is 1 against football's 2.3 and 3.5); at

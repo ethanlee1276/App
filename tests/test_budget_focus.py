@@ -33,6 +33,14 @@ leagues jointly planning to spend the day twice over, which is the
 arithmetic that emptied the plan in the first place.
 `test_the_day_is_allocated_exactly_once` is the guard.
 
+SINCE 2026-10-21 THIS IS THE FALLBACK. Ethan: "we have 100k credit per
+month for figure out how too budget in all the sports that are currently
+active while keeping NFL at number one priority". The month's plan
+(engine/oddsplan, tests/test_the_odds_plan.py) answers
+`launch._budget_share` now; these weights answer it only when there is no
+measured balance to plan from, so the tests below call the weighted rule
+by its own name, `launch._weighted_share`.
+
 Run directly: `python3 tests/test_budget_focus.py`
 """
 
@@ -95,7 +103,7 @@ def test_one_league_s_spend_is_not_charged_to_another_s_ceiling():
     spend = _ledger(("mlb", 128))
     kicks = [now + 2 * 3600, now + 5 * 3600]
     _live("mlb", "cfb")
-    share = launch._budget_share("cfb")
+    share = launch._weighted_share("cfb")
 
     saved = ob.SPEND_LOG
     ob.SPEND_LOG = spend
@@ -127,7 +135,7 @@ def test_college_s_own_spend_still_stops_it():
     ob.SPEND_LOG = spend
     try:
         ok, why = ob.should_refresh(0, now=now, path=path, sport="cfb",
-                                    share=launch._budget_share("cfb"),
+                                    share=launch._weighted_share("cfb"),
                                     credits=launch.CFB_ODDS_COST)
         assert not ok, "a league that has spent its whole day still pulls"
         assert "budget" in why.lower() or "spent" in why.lower(), why
@@ -206,7 +214,7 @@ def test_the_day_is_allocated_exactly_once():
                   ("mlb", "nfl", "cfb"), ("mlb", "nfl", "cfb", "wnba"),
                   ("mlb", "nfl", "cfb", "nba", "wnba")):
         _live(*names)
-        total = sum(launch._budget_share(n) for n in names)
+        total = sum(launch._weighted_share(n) for n in names)
         assert abs(total - 1.0) < 1e-9, \
             f"{names} allocate {total:.2f} of the day, not 1.00"
 
@@ -231,9 +239,9 @@ def test_the_three_focus_leagues_outweigh_the_rest():
 
 def test_a_weeknight_basketball_slate_cannot_outbid_a_saturday():
     _live("cfb", "wnba", "nba")
-    assert launch._budget_share("cfb") > 0.7, launch._budget_share("cfb")
-    assert launch._budget_share("wnba") < 0.15
-    assert launch._budget_share("nba") < 0.15
+    assert launch._weighted_share("cfb") > 0.7, launch._weighted_share("cfb")
+    assert launch._weighted_share("wnba") < 0.15
+    assert launch._weighted_share("nba") < 0.15
 
 
 def test_a_weekly_league_is_paid_on_the_days_it_plays():
@@ -241,7 +249,7 @@ def test_a_weekly_league_is_paid_on_the_days_it_plays():
     it must take the larger slice of the days it is on, and that is the
     whole content of PLAY_DAYS_PER_WEEK."""
     _live("mlb", "cfb")
-    cfb, mlb = launch._budget_share("cfb"), launch._budget_share("mlb")
+    cfb, mlb = launch._weighted_share("cfb"), launch._weighted_share("mlb")
     assert cfb > mlb * 3, (
         f"college takes {cfb:.2f} against baseball's {mlb:.2f} on a day "
         f"college plays and baseball plays every day")
@@ -254,7 +262,7 @@ def test_the_concentration_does_not_invent_credits_over_a_week():
     Two leagues, one daily and one twice-weekly: over seven days each must
     draw close to its flat weekly entitlement."""
     _live("mlb", "cfb")
-    cfb_day, mlb_day = launch._budget_share("cfb"), launch._budget_share("mlb")
+    cfb_day, mlb_day = launch._weighted_share("cfb"), launch._weighted_share("mlb")
     # College claims its share on 2 days; baseball on all 7.
     cfb_week = cfb_day * launch.PLAY_DAYS_PER_WEEK["cfb"]
     mlb_week = mlb_day * launch.PLAY_DAYS_PER_WEEK["mlb"]
@@ -274,13 +282,15 @@ def test_a_league_with_no_board_yet_still_gets_a_share():
     the games, and only then is the league 'live'. A share of zero on that
     cycle would divide by a set it is missing from."""
     _live("mlb")
-    assert launch._budget_share("cfb") > 0.0
-    assert launch._budget_share("nfl") > 0.0
+    assert launch._weighted_share("cfb") > 0.0
+    assert launch._weighted_share("nfl") > 0.0
 
 
 def test_no_sport_still_answers_the_old_way():
-    """Callers with no league in hand kept the flat behaviour."""
+    """Callers with no league in hand kept the flat behaviour — through
+    `_budget_share` too, which never plans without a league."""
     _live("mlb", "nfl", "cfb")
+    assert abs(launch._weighted_share() - 1 / 3) < 1e-9
     assert abs(launch._budget_share() - 1 / 3) < 1e-9
 
 
@@ -296,7 +306,7 @@ def test_on_ethans_budget_college_gets_its_saturday():
     state = ob.load(path)
     day = _date.date(2026, 9, 5)                       # a Saturday
     pot = ob.daily_allowance(state, day)
-    allowance = int(pot * launch._budget_share("cfb"))
+    allowance = int(pot * launch._weighted_share("cfb"))
     flat = int(pot / 2)                                # the old even split
     # The gain here is 1.5x, not the 3x college takes against baseball on
     # the same day: with only two leagues live the old split was already a
@@ -314,7 +324,7 @@ def test_on_ethans_budget_college_gets_its_saturday():
     try:
         ok, why = ob.should_refresh(
             0, now=now, path=path, kickoffs=[now + 2 * 3600, now + 6 * 3600],
-            sport="cfb", share=launch._budget_share("cfb"),
+            sport="cfb", share=launch._weighted_share("cfb"),
             credits=launch.CFB_ODDS_COST)
         assert ok, f"college's Saturday pull is still declined: {why}"
     finally:

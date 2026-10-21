@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2854,6 +2854,47 @@ To check the box has it (expect `1` on the last line):
 
 ```
 cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "hc-watch { grid-column: 1 / -1" web/css/hoopscast.css
+```
+
+**CV. The month's odds plan: 100k credits, NFL first** (step 153). Your
+"we have 100k credit per month for figure out how too budget in all the
+sports that are currently active while keeping NFL at number one
+priority". The pacer now runs on a monthly plan (docs/ODDS_PLAN.md has
+all of it):
+
+- **NFL funded first, in full.** Then college. Then the NBA, NHL, MLB and
+  UFC split what's left at the same percentage, so a short month trims
+  each of them a little instead of shutting the last one off. Extra room
+  goes to the NFL first, but only after every league's normal cadence is
+  paid for.
+- **Every league gets a daily ceiling** sized to its real cadence: NBA and
+  NHL three prop pulls a game day (noon, the pre-game run, 6pm ET), college
+  eight on Saturday, the NFL its full Sunday. Before this, the NBA got
+  about 2% of a weekday, which was one pull. That's the opening-night board
+  with no lines.
+- **November at 100,000:** NFL 42,020 and college 13,940, both in full. NBA
+  16,667, NHL 9,001, MLB 426 and UFC 445, each at 86% of its target. Held
+  back: 12,000 for closing lines, 5,000 buffer, 500 reserve.
+- **Cheaper with it:** game lines no longer refresh every 15 minutes on days
+  with no game within 36 hours (NFL Tuesdays and Fridays were about 290
+  credits each). The live line polls every 10 minutes instead of 5. UFC is
+  metered at its real one credit a fight.
+
+Read-only, spends nothing. Once the box has the code (dated 2026-10-21 or
+later), paste all of this:
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && sudo -u qellys python3 -m engine.oddsplan
+```
+
+**Check the "renews" date on the first line.** The plan spends up to the
+day your Odds API month renews, which it works out from the spend ledger.
+The second line says how it knows. If the date isn't the renewal date on
+your Odds API account, set the right day of the month (14 here), then
+restart:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_ODDS_RESET_DAY 14 && sudo systemctl restart qellys
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

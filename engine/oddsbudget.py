@@ -91,7 +91,11 @@ CREDITS_PER_EVENT = 8
 #: The NBA's is nineteen since 2026-10-14: steals, blocks and turnovers
 #: (`oddsapi.HOOPS_COUNT_ODDS_TO_MARKET`; Ethan: "Do 1-7 and the ones we
 #: download but don't use"). The WNBA's stays thirteen.
-EVENT_CREDITS = {"nfl": 25, "mlb": 11, "nba": 19, "wnba": 13, "nhl": 12}
+#: UFC's is ONE (2026-10-21, the month's plan): `ufc_build` asks each
+#: fight for the head-to-head market alone, off the free events list, and
+#: was metered at the generic eight — a card priced at eight times its cost
+#: against a slice of the day sized for the real one.
+EVENT_CREDITS = {"nfl": 25, "mlb": 11, "nba": 19, "wnba": 13, "nhl": 12, "ufc": 1}
 
 
 def credits_per_event(sport: str | None = None) -> int:
@@ -1014,10 +1018,23 @@ TOUCHPOINTS = (7, 12, 15, 18)
 TOUCHPOINT_GRACE_S = 2 * 3600
 
 
-def _touchpoints() -> tuple:
+#: THE LEAGUES WHOSE PAID WINDOWS ARE NOT THE DEFAULT FOUR (2026-10-21, the
+#: month's plan, engine/oddsplan). Basketball and hockey tip in the evening
+#: and their props post through the day, and the plan funds three prop
+#: pulls a slate: a 7am pull bought a thin board and took the slot the
+#: pre-tip pull needed. Noon and 6pm, with the pre-game window's opening
+#: between them — and these leagues do not burst (`PRIME_BURST`), which
+#: would spend a three-pull day by five o'clock and leave the 6pm window,
+#: the one after the injury reports, at the day's ceiling. Keyed by LANE,
+#: so the three-credit lines lanes ("nba_board_lines") keep the four.
+#: QB_ODDS_WINDOWS, when set, moves every lane's windows, these included.
+SPORT_TOUCHPOINTS = {"nba": (12, 18), "nhl": (12, 18), "wnba": (12, 18)}
+
+
+def _touchpoints(sport: str | None = None) -> tuple:
     raw = os.environ.get("QB_ODDS_WINDOWS", "").strip()
     if not raw:
-        return TOUCHPOINTS
+        return SPORT_TOUCHPOINTS.get(sport or "", TOUCHPOINTS)
     out = []
     for part in raw.replace(",", " ").split():
         try:
@@ -1059,7 +1076,7 @@ def touchpoint_due(state: "BudgetState", sport: str | None, now: float):
     in the same window goes back through ordinary pacing.
     """
     local = _local(now)
-    hours = [h for h in _touchpoints() if h <= local.hour]
+    hours = [h for h in _touchpoints(sport) if h <= local.hour]
     if not hours:
         return None
     hour = max(hours)
@@ -1154,6 +1171,25 @@ def prime_window(kickoffs, now: float):
     if not ks:
         return None
     return min(ks) - PRIME_BEFORE_S <= now <= max(ks) + PRIME_AFTER_LAST_S
+
+
+def slate_is_far(kickoffs, now: float) -> bool:
+    """Kickoff times ARE known, and none is inside the window's horizon
+    (`prime_window`: twelve hours back, thirty-six ahead) — an off-peak
+    day, not an unknown one.
+
+    `prime_window` answers None for both, and None means "behave as before
+    kickoff times existed": no off-peak stretch. Right for a board with no
+    times on it; wrong for a week-long board whose next game is days away.
+    The NFL's game-lines lane is three credits, so its gap sits on the
+    fifteen-minute floor — and from Tuesday morning to Wednesday morning,
+    and again on Friday, nothing on the board was within thirty-six hours,
+    so it re-priced the week's lines every fifteen minutes all day: ~96
+    pulls, ~290 credits, on days nobody can bet a game. College's Sunday
+    did the same. Found planning the month (2026-10-21, engine/oddsplan).
+    """
+    known = [k for k in (kickoffs or []) if isinstance(k, (int, float))]
+    return bool(known) and prime_window(known, now) is None
 
 
 def inactives_window(kickoffs, now: float):
@@ -1358,7 +1394,10 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     # instead, which is the only stretch where a pull buys a real board.
     if window is True:
         kw.setdefault("active_hours", max(1.0, _window_hours_left(kickoffs, now)))
-        share = share * PRIME_BURST
+        # Not for a league on its own windows (SPORT_TOUCHPOINTS): those
+        # are its schedule, and the burst would spend them early.
+        if sport not in SPORT_TOUCHPOINTS:
+            share = share * PRIME_BURST
     gap = min_seconds_between(requests_per_refresh, state, share=share,
                               credits=credits, **kw)
     waited = now - state.sport_ts(sport)
@@ -1455,7 +1494,8 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         return False, (f"today's odds budget is spent for this slate "
                        f"({already} of {budget} credits; a pull costs "
                        f"{per_refresh}) — cached prices keep the board filled")
-    if window is False:
+    far = slate_is_far(kickoffs, now)
+    if window is False or far:
         # Ordinary pacing, off-peak: stretch the gap so most of the day's
         # refreshes land where the prices are.
         gap = gap * OFFPEAK_STRETCH
@@ -1484,6 +1524,7 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                           f"({state.remaining} credits left this month)")
         why = ("off-peak — saving the odds budget for the pre-game window"
                if window is False else
+               "off-peak — no game on this board inside 36h" if far else
                f"budgeting {state.remaining} credits to month end")
         return False, f"next odds refresh in {int(gap - waited)}s ({why})"
     return True, f"refreshing odds ({state.remaining} credits left this month)"

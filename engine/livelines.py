@@ -102,10 +102,16 @@ LIVE_MARKETS = ("h2h", "spreads", "totals")
 #: ``x-requests-remaining`` header — and the constants below only bound
 #: the answer.
 #:
-#: The floor is 5 minutes because a line chart does not get better below
-#: it: `series` already collapses consecutive identical prices, so faster
-#: polling on a quiet market buys more credits and the same picture.
-LIVE_GAP_FLOOR_S = 5 * 60
+#: The floor is TEN minutes since the month's plan (2026-10-21,
+#: engine/oddsplan). It was five, because a chart does not get better below
+#: that (`series` collapses consecutive identical prices) — but every live
+#: pull now spends its league's day, and the live clock's pulls for an
+#: evening's games land at the start of the box's (UTC) day, before that
+#: day's pre-game prop pulls. At five minutes the live chart was the
+#: costliest thing a night of basketball bought after the props themselves,
+#: ~9,000 credits a month across the leagues; at ten it is half that, and
+#: a ten-minute line is still a line.
+LIVE_GAP_FLOOR_S = 10 * 60
 LIVE_GAP_CEILING_S = 30 * 60
 #: A night of live baseball, for turning an allowance into a cadence.
 LIVE_WINDOW_S = 6 * 3600

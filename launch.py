@@ -536,7 +536,72 @@ def _live_sports() -> list[str]:
 
 
 def _budget_share(sport: str | None = None) -> float:
-    """This league's slice of the daily odds allowance.
+    """This league's slice of the daily odds allowance — THE MONTH'S PLAN.
+
+    Ethan, 2026-10-21: "we have 100k credit per month for figure out how too
+    budget in all the sports that are currently active while keeping NFL at
+    number one priority". engine/oddsplan plans the month from the real
+    balance — every league in season funded at its target cadence, the NFL
+    first, then headroom, NFL first — and hands each league a ceiling for
+    today (`oddsplan.envelope`). Returned here as the share of the day's
+    allowance that comes to, so the pacer's cadence, its day's ceiling and
+    its wide-or-narrow pull all read the plan's number.
+
+    The weights below (`_weighted_share`) are the FALLBACK, for a box whose
+    balance has not been read yet or a plan that cannot be built — and for
+    the callers that have no league, which keep the flat split.
+    """
+    if sport is None:
+        return _weighted_share(None)
+    try:
+        from engine import oddsplan
+        from engine.oddsbudget import daily_allowance, load
+        env = oddsplan.envelope(sport, games_today=_games_today())
+        allowance = daily_allowance(load())
+        # Half a credit over, so the pacer's int(allowance × share) lands
+        # on the envelope itself and not one credit under it.
+        return (env + 0.5) / allowance if env > 0 and allowance > 0 else 0.0
+    except Exception:                                        # noqa: BLE001
+        return _weighted_share(sport)
+
+
+#: How long one reading of the boards answers for every league.
+GAMES_TODAY_TTL_S = 60
+_GAMES_TODAY: list = [0.0, {}]
+
+
+def _games_today() -> dict:
+    """Games each league has on the pacer's day, off the built boards —
+    today's real slate for the month's plan (engine/oddsplan); its tables
+    cover the rest of the month.
+
+    The daily boards (baseball, the two basketball leagues, hockey) hold
+    exactly today's slate, and UFC's the next card's fights. The NFL's
+    holds the week, and the plan reads it only as "in season". College
+    counts the games inside its player window
+    (`cfb_build.PLAYER_WINDOW_HOURS`) — the ones a pull would price. Read
+    once a minute: the NFL board is megabytes and every league asks several
+    times a cycle.
+    """
+    now = time.time()
+    if _GAMES_TODAY[1] and now - _GAMES_TODAY[0] < GAMES_TODAY_TTL_S:
+        return dict(_GAMES_TODAY[1])
+    out = {name: _slate_games(path) for name, path in
+           (("mlb", MLB_OUT), ("nba", NBA_OUT), ("wnba", WNBA_OUT),
+            ("nhl", NHL_OUT), ("nfl", NFL_OUT), ("ufc", UFC_OUT))}
+    try:
+        from cfb_build import PLAYER_WINDOW_HOURS as hours
+    except Exception:                                        # noqa: BLE001
+        hours = 36
+    out["cfb"] = sum(1 for k in _slate_kickoffs(CFB_OUT)
+                     if isinstance(k, (int, float)) and now < k <= now + hours * 3600)
+    _GAMES_TODAY[0], _GAMES_TODAY[1] = now, out
+    return dict(out)
+
+
+def _weighted_share(sport: str | None = None) -> float:
+    """This league's slice of the day by WEIGHT — the rule before the
+    month's plan, and its fallback now (see `_budget_share`).
 
     Weighted by SPORT_WEIGHT across the leagues that are actually live, and
     then by how rarely this one plays (PLAY_DAYS_PER_WEEK) — see both

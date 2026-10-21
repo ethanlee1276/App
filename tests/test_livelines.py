@@ -106,9 +106,15 @@ def test_the_gap_never_leaves_its_bounds():
 
 def test_the_floor_exists_because_faster_buys_the_same_picture():
     """`series` collapses consecutive identical prices, so polling a quiet
-    market harder spends credits and draws the same line. Five minutes is
-    where the extra spend stops buying signal."""
-    assert ll.LIVE_GAP_FLOOR_S == 5 * 60
+    market harder spends credits and draws the same line. Ten minutes since
+    the month's plan (2026-10-21, engine/oddsplan): every live pull spends
+    its league's day, and the plan budgets the chart at three pulls an hour
+    a league (`oddsplan.LIVE_PULLS_PER_HOUR`) — the clock that polls faster
+    than the plan pays for spends the pre-game pulls' money."""
+    assert ll.LIVE_GAP_FLOOR_S == 10 * 60
+    from engine import oddsplan
+    assert oddsplan.LIVE_PULLS_PER_HOUR * 2 == 3600 // ll.LIVE_GAP_FLOOR_S, \
+        "the plan's live budget and the live clock disagree"
 
 
 def test_the_chart_never_gets_more_than_its_share_of_the_day():
