@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2971,6 +2971,32 @@ league shows it. To check the box has it (expect `1`):
 ```
 cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "Where the matchup tilts" engine/gamereport.py
 ```
+
+**CY. The live scoreboard, circled again** (step 156). You sent the 8:41 PM
+76ers @ Knicks screenshot again (the crest on the "54", the Watch buttons
+beside the clock). That's the same screenshot as CU, and its fix (step 152)
+is in the code: checked again today in a browser from 320 to 1280 px wide.
+The crests sit clear of the scores, both names are whole, and the Watch
+buttons are their own row under the scoreboard.
+
+The box picks up pushed code on its own within a few minutes, so a live
+NBA or NHL game should already look like that. If one still shows the
+buttons beside the clock, the box doesn't have the code. Check with this
+(expect `1` on the last line):
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "hc-watch { grid-column: 1 / -1" web/css/hoopscast.css
+```
+
+If it prints `0`, the auto-update is stuck. Paste its last words:
+
+```
+journalctl -u qellys --since "2 days ago" --no-pager | grep -i auto-update | tail -5
+```
+
+Also in the same box: "updated 11264 min ago" on a game opened days
+later now reads "updated 8 days ago" (and "updated 5 hr ago" the next
+morning).
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

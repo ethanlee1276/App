@@ -154,6 +154,29 @@ def test_the_reader_only_assumes_utc_when_the_stamp_names_no_zone():
     assert got["junk"] == "" and got["empty"] == "", got
 
 
+def test_an_old_stamp_reads_in_hours_and_days():
+    """A final opened the next morning said "updated 640 min ago", and one
+    opened a week later "updated 11264 min ago" (Ethan's 76ers @ Knicks
+    scoreboard, rendered off an old stamp, 2026-10-23)."""
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed"); return
+    prog = _fn("utcMs") + _fn("pbpAgo") + """
+      const ago = (sec) => pbpAgo(new Date(Date.now() - sec * 1000).toISOString());
+      console.log(JSON.stringify([ago(30), ago(120), ago(89 * 60), ago(5 * 3600), ago(35 * 3600),
+                                  ago(40 * 3600), ago(8 * 86400 - 300)]));"""
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog); path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout.strip()) == [
+        "updated 30s ago", "updated 2 min ago", "updated 89 min ago", "updated 5 hr ago",
+        "updated 35 hr ago", "updated 2 days ago", "updated 8 days ago"], out.stdout
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

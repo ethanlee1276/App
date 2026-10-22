@@ -47490,7 +47490,13 @@ function pbpAgo(stamp) {
   const t = utcMs(stamp);
   if (!isFinite(t)) return "";
   const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  return s < 90 ? `updated ${s}s ago` : `updated ${Math.round(s / 60)} min ago`;
+  if (s < 90) return `updated ${s}s ago`;
+  /* Past an hour and a half in hours, past a day and a half in days: a
+     final opened the next morning said "updated 640 min ago", and one
+     opened the week after, "11264". */
+  const m = Math.round(s / 60), h = Math.round(m / 60), days = Math.round(h / 24);
+  return m < 90 ? `updated ${m} min ago` : h < 36 ? `updated ${h} hr ago`
+    : `updated ${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 const pbpOrd = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
