@@ -99,6 +99,9 @@ FITS = (
     ("scanblendfit", "board", ("engine.teamchange",), "how much of a team's rating is this season"),
     ("pricetrust", "board", ("engine.likelyboard",),
      "the NFL one board never shows a chance above the books' price (PRICE_TRUST, Ethan's yes 2026-10-17)"),
+    ("fantasyweekfit", "board", ("engine.fantasyweek",),
+     "this week's fantasy file: the range, the head-to-head's spread, the play chances, and a touchdown "
+     "scale only where it held (2026-10-22)"),
     # ---- the inventions (engine/ideagate) ---------------------------------------------------
     ("engine.rookies", "gated", ("engine.ideagate",), "a thin rookie sample's prior"),
     ("engine.rolechange", "gated", ("engine.ideagate",), "the usage bridge's volume follows the detected role"),

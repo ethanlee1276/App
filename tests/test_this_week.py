@@ -41,6 +41,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+#: The week's drawing (js/fantasyweek.js), loaded on first use beside
+#: app.js; the harness loads it whole, as the page does.
+WEEK_JS = open(os.path.join(ROOT, "web", "js", "fantasyweek.js"), encoding="utf-8").read()
 
 
 def _fn(name):
@@ -122,13 +125,13 @@ def _run(script, desk=None, inj=None, today="2026-09-09", week=None):
            # The day-name tables `_ffCalSay` reads. Lifted rather than
            # stubbed: a test that supplies its own weekday names would
            # pass while the page printed Wednesday for a Thursday game.
-           + "\n".join(_const(c) for c in ("FFCAL_DOW", "FFCAL_MON", "FF_WEEK_PART"))
+           + "\n".join(_const(c) for c in ("FFCAL_DOW", "FFCAL_MON"))
            + "\n"
            + "\n".join(_fn(n) for n in (
                "ffNorm", "_ffImpliedAvg", "_ffDayEnv", "_ffDayBoard",
                "_ffCalSay", "_ffPlayerDay", "_ffPlayerSeat",
-               "ffWeekCurrent", "ffWeekVs", "ffWeekWhy", "ffWeekRowFor",
-               "ffWeekDossierHTML", "ffThisWeekHTML"))
+               "ffThisWeekHTML"))
+           + "\nconst window = globalThis;\n" + WEEK_JS
            + "\n" + script)
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(src)
@@ -328,6 +331,33 @@ def test_a_part_from_his_season_average_says_so():
     week["players"][0]["filled"] = ["receptions"]
     out = _panel("Star Wr", "SEA", week=week)
     assert "His catches from his season average: the board has no line on it" in out, out
+
+
+def test_the_room_draws_the_week_by_position():
+    """The "This week" room (QBWeek.room): the week's players by position,
+    a filter that redraws in place, the byes, the chips and the
+    measurement — and the locked copy says what it holds."""
+    measured = {"seasons": "2023-2025", "weeks": "4-17",
+                "score": {"ALL": {"n": 10445, "pairs_week": 0.7225, "pairs_season": 0.7127,
+                                  "mae_week": 4.661, "mae_season": 4.828}}}
+    week = dict(_WEEK, measured=measured)
+    out = _run("""
+      globalThis.escapeAttr = (x) => String(x == null ? "" : x);
+      globalThis.playerAvatar = () => "";
+      globalThis.nflMap = () => ({});
+      globalThis.icon = (n) => "";
+      globalThis.panelEmpty = (t) => t;
+      console.log(JSON.stringify({ all: QBWeek.room(_ffWeek),
+        locked: QBWeek.room({ locked_reason: "subscription" }), none: QBWeek.room(null) }));
+    """, week=week)
+    all_ = " ".join(out["all"].split())
+    assert "Week 1 in fantasy points" in all_ and "On a bye:</b> DET" in all_
+    assert 'data-ffwpos="RB"' in all_ and 'data-ffwpos="QB"' not in all_, "a filter for each position on the board"
+    assert all_.index("Star Wr") < all_.index("Hurt Rb"), "ordered by what each is worth this week"
+    assert "soft matchup" in all_ and "Questionable · 65% to play" in all_
+    assert "14.0 if he plays" in all_ and "8 in 10 weeks 7.2–31.8" in all_ and "TD 46%" in all_
+    assert "72.3% of the time to the season average’s 71.3%" in all_
+    assert "part of the subscription" in out["locked"] and "not built yet" in out["none"]
 
 
 def test_a_team_on_a_bye_is_told_so():

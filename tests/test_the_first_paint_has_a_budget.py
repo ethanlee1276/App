@@ -117,7 +117,13 @@ HTML = (WEB / "index.html").read_text()
 #: aside for it — +0.61 KB gz (495.502 -> 496.109). The report itself, 3 KB
 #: gz with its styles, loads on first use (js/report.js, css/report.css);
 #: drawn here it was +1.18. Told to Ethan.
-APP_JS_BUDGET_KB = 497
+#: 497 -> 498 on 2026-10-22 by fantasy reading the NFL board (Ethan: "make
+#: sure we wrap that into it how it should be"): the loader, the week on
+#: each lineup row, the dossier's hook and the full profile keeping its
+#: "This week" block, which it used to drop — +0.64 KB gz (496.483 ->
+#: 497.122). The room, the pickups and the notes load on first use
+#: (js/fantasyweek.js, 5.6 KB gz); drawn here they were +3.5. Told to Ethan.
+APP_JS_BUDGET_KB = 498
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -180,7 +186,10 @@ APP_JS_BUDGET_KB = 497
 #: 613 -> 614 on 2026-10-19 by the game report: the app.js bump above
 #: (612.551 -> 613.158 KB gz); its styles load with it (css/report.css).
 #: Told to Ethan.
-BOOT_BUDGET_KB = 614
+#: 614 -> 615 on 2026-10-22 by fantasy reading the NFL board: the app.js
+#: bump above and the week's eight style lines (613.548 -> 614.263 KB gz).
+#: Told to Ethan.
+BOOT_BUDGET_KB = 615
 
 
 def _gz_trimmed(rel: str) -> int:
