@@ -46,8 +46,9 @@ Standard library only. Never raises out of ``attach``.
 from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _f, _h, _join, _list, _num, _ord, _p, _pct, _section,
-                         _sentence, a_pct, finish, kickoff_words, line_words, log_changes, ml_chances,
-                         sec_market, summary)
+                         _sentence, a_pct, absent_sentence, cap, finish, kickoff_words, line_words,
+                         log_changes, market_sentence, ml_chances, named, player_clause, sec_market,
+                         shine_lines, summary, team_be, team_np, team_owner)
 
 #: The leagues this module writes.
 SPORTS = ("mlb", "nhl", "nba", "wnba")
@@ -142,29 +143,14 @@ def _names(rows, n) -> str:
 
 
 def _short_common(c: Ctx) -> list:
-    items = []
-    lw = line_words(c)
-    if lw:
-        s = lw
-        ml = ml_chances(c)
-        if ml:
-            fav = max(ml, key=ml.get)
-            s += f"; the moneyline makes {fav} {a_pct(ml[fav])} favorite"
-        items.append(s[0].upper() + s[1:])
-    return items
+    """The line, said as a sentence (gamereport.market_sentence)."""
+    s = market_sentence(c)
+    return [s] if s else []
 
 
 def _shine_short(c: Ctx, reads: list) -> list:
-    items = []
-    shine = [r for r in reads if r.get("read") in ("breakout", "good")]
-    shine.sort(key=lambda r: (r.get("read") != "breakout", -len(r.get("pro") or [])))
-    if shine:
-        items.append("Could shine: " + _names(shine, 4))
-    struggle = [r for r in reads if r.get("read") in ("tough", "avoid")]
-    struggle.sort(key=lambda r: (r.get("read") != "avoid", -len(r.get("con") or [])))
-    if struggle:
-        items.append("Could struggle: " + _names(struggle, 3))
-    return items
+    """Who could have a big day and a hard one, each with his reason."""
+    return shine_lines(c, reads)
 
 
 def _facts_head(c: Ctx, word: str) -> list:
@@ -374,20 +360,62 @@ def mlb_before(c: Ctx) -> dict | None:
     return _section("before", "Before first pitch", [_list(lines)])
 
 
+def _sp_clause(c: Ctx, t: str) -> str:
+    """"the Phillies start right-hander Zack Wheeler (a 3.05 expected ERA,
+    striking out 29% of the batters he faces)"."""
+    sp = _starter(c, t)
+    if not sp:
+        return f"{team_np(c, t)} {team_be(c, t, 'have', 'has')} not named a starter"
+    hand = {"R": "right-hander", "L": "left-hander"}.get(str(sp.get("throws") or "").upper()[:1], "")
+    bits = []
+    if _f(sp.get("xera")) is not None:
+        x = f"{float(sp['xera']):.2f}"
+        bits.append(f"{'an' if x.startswith('8') or x.startswith('11.') else 'a'} {x} expected ERA")
+    if _f(sp.get("k_rate")) is not None:
+        bits.append(f"striking out {_pct(sp['k_rate'])} of the batters he faces")
+    who = f"{hand} {sp['name']}" if hand else sp["name"]
+    return (f"{team_np(c, t)} {team_be(c, t, 'start', 'starts')} {who}"
+            + (f" ({', '.join(bits)})" if bits else ""))
+
+
+#: The home-run model's weather notes (engine/mlb/homeruns), said as
+#: sentences for the short version; any other note passes through.
+_WEATHER_SAID = (
+    (r"^Wind blowing OUT at (\d+) mph — \+(\d+)% to home-run probability$",
+     r"The wind is blowing out at \1 mph, which adds about \2% to the chance of a home run"),
+    (r"^Wind blowing IN at (\d+) mph — knocks balls down$",
+     r"The wind is blowing in at \1 mph, which knocks fly balls down"),
+    (r"^(\d+)°F — warm, thin air helps carry$", r"It's \1°F, and warm air helps the ball carry"),
+    (r"^(\d+)°F — cold, heavy air kills carry$", r"It's \1°F, and cold, heavy air keeps the ball in the park"),
+)
+
+
+def _weather_said(text: str) -> str:
+    import re
+    t = str(text or "").strip()
+    for pat, repl in _WEATHER_SAID:
+        if re.match(pat, t):
+            return _sentence(re.sub(pat, repl, t))
+    return _sentence(cap(t))
+
+
 def mlb_short(c: Ctx, built: dict) -> dict | None:
+    """The short version, in sentences (gamereport's note above
+    `POS_WORDS`: Ethan, 2026-10-23, "It's very blunt")."""
     items = _short_common(c)
     if _starter(c, c.away) or _starter(c, c.home):
-        items.append(f"On the mound: {_sp_words(c, c.away)} against {_sp_words(c, c.home)}")
+        items.append(_sentence(f"On the mound, {_sp_clause(c, c.away)}, and {_sp_clause(c, c.home)}"))
     why = (c.g.get("conditions") or {}).get("why") or []
     if why:
-        items.append(str(why[0]))
-    tired = [t for t in c.teams if (_f((_sides(c).get(t) or {}).get("pen_fatigue")) or 0) >= PEN_TIRED]
-    if tired:
-        items.append("Tired bullpen: " + _join(f"{t} ({_num((_sides(c).get(t) or {})['pen_fatigue'])} "
-                                               "relief innings the last two days)" for t in tired))
+        items.append(_weather_said(why[0]))
+    for t in c.teams:
+        tired = _f((_sides(c).get(t) or {}).get("pen_fatigue"))
+        if tired is not None and tired >= PEN_TIRED:
+            items.append(_sentence(f"{cap(team_owner(c, t))} bullpen is tired: it threw {_num(tired)} relief "
+                                   "innings over the last two days"))
     items += _shine_short(c, _reads(c, not_pos={"SP", "P", "RP"}))
     if c.g.get("lineups_confirmed") is False:
-        items.append("The lineups are not out yet")
+        items.append("The lineups are not out yet; they post two to four hours before first pitch.")
     return _section("short", "The short version", [_list(items)])
 
 
@@ -530,26 +558,33 @@ def nhl_before(c: Ctx) -> dict | None:
 
 
 def nhl_short(c: Ctx, built: dict) -> dict | None:
+    """The short version, in sentences (see mlb_short)."""
     items = _short_common(c)
     gl = []
     for t in c.teams:
         s = _goalie(c, t)
         if s.get("starter"):
-            gl.append(f"{s['starter']} ({t}{'' if s.get('starter_sure') else ', not confirmed'})")
+            gl.append(f"{s['starter']} for {team_np(c, t)}"
+                      + (" (confirmed)" if s.get("starter_sure") else " (expected, not confirmed yet)"))
     if gl:
-        items.append("In net: " + " against ".join(gl))
+        items.append(_sentence("In net: " + " against ".join(gl)))
     xg = [(t, _f(_goalie(c, t).get("xg"))) for t in c.teams]
     if all(v is not None for _t, v in xg):
-        items.append("Our game model expects " + " and ".join(f"{t} {v:.1f}" for t, v in xg) + " goals")
+        (ta, va), (tb, vb) = xg
+        items.append(_sentence(f"Our game model expects about {va:.1f} goals from {team_np(c, ta)} and "
+                               f"{vb:.1f} from {team_np(c, tb)}"))
     for t in c.teams:
         if _goalie(c, t).get("b2b"):
-            items.append(f"{t} is on the second night of a back-to-back")
+            items.append(_sentence(f"{cap(team_np(c, t))} {team_be(c, t)} on the second night of a "
+                                   "back-to-back, when the starting goalie often sits for the backup"))
     items += _shine_short(c, _reads(c, not_pos={"G"}))
-    outs = [f"{i['player']} ({t})" for t in c.teams for i in _goalie(c, t).get("injuries") or []
+    outs = [{"player": i["player"], "team": t, "status": "OUT", "position": ""}
+            for t in c.teams for i in _goalie(c, t).get("injuries") or []
             if isinstance(i, dict) and i.get("player")
             and str(i.get("status") or "").lower() not in ("day-to-day", "questionable", "")]
-    if outs:
-        items.append("Out: " + _join(outs[:5]))
+    gone = absent_sentence(c, outs)
+    if gone:
+        items.append(gone)
     return _section("short", "The short version", [_list(items)])
 
 
@@ -742,32 +777,43 @@ def nba_before(c: Ctx) -> dict | None:
 
 
 def nba_short(c: Ctx, built: dict) -> dict | None:
+    """The short version, in sentences (see mlb_short)."""
     items = _short_common(c)
     for t in c.teams:
         s = _spot(c, t)
         if s.get("rest") in ("b2b_home", "3in4", "4in6_road"):
-            items.append(f"{t} is {REST_SHORT[s['rest']]}")
-    outs = [i for i in c.meta.get("injuries") or [] if isinstance(i, dict) and i.get("team") in c.teams
+            items.append(_sentence(f"{cap(team_np(c, t))} {team_be(c, t)} {REST_SHORT[s['rest']]}"))
+    outs = [{"player": i["player"], "team": i["team"], "status": "OUT", "position": ""}
+            for i in c.meta.get("injuries") or [] if isinstance(i, dict) and i.get("team") in c.teams
             and str(i.get("status") or "").lower() == "out"]
-    if outs:
-        items.append("Out: " + _join(f"{i['player']} ({i['team']})" for i in outs[:6]))
+    gone = absent_sentence(c, outs, per_team=6)
+    if gone:
+        items.append(gone)
     carry = c.meta.get("carry") or {}
-    leads = [f"{rows[0]['player']} ({t}, {_num(rows[0].get('pts'))} points a game)" for t in c.teams
-             for rows in [[r for r in carry.get(t) or [] if isinstance(r, dict) and _f(r.get("pts")) is not None]]
-             if rows]
+    leads = []
+    for t in c.teams:
+        rows = [r for r in carry.get(t) or [] if isinstance(r, dict) and _f(r.get("pts")) is not None]
+        if rows:
+            r = rows[0]
+            n = int(r.get("games") or 0)
+            leads.append(f"{r['player']} for {team_np(c, t)} ({_num(r['pts'])} points a game"
+                         + (f" over his last {n}" if n else "") + ")")
     if leads:
-        items.append("Leading the scoring lately: " + _join(leads))
+        items.append(_sentence("Leading the scoring lately: " + _join(leads)))
     edges = [e for e in (c.g.get("nba_tape") or {}).get("edges") or [] if isinstance(e, dict) and e.get("text")]
     if edges:
         e = edges[0]
-        items.append(f"Key matchup: {e.get('matchup') or e['text']}"
-                     + (f" — the edge is {e['team']}'s" if e.get("team") and e.get("matchup") else ""))
+        items.append(_sentence(f"The key matchup: {named(c, e.get('matchup') or e['text'])}"
+                               + (f", an edge for {team_np(c, e['team'])}" if e.get("team") and e.get("matchup")
+                                  else "")))
     brk = [r for r in c.reads if r.get("read") == "breakout"]
     if brk:
-        items.append("Breakout watch: " + _names(brk, 3))
+        items.append(_sentence("On breakout watch: " + ". ".join(player_clause(c, r, "up", tag=False)
+                                                                  for r in brk[:3])))
     items += _shine_short(c, [r for r in c.reads if r.get("read") != "breakout"])
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
-        items.append("Blowout watch: a spread of 10 or more")
+        items.append("Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing "
+                     "a coach takes back if it turns lopsided.")
     return _section("short", "The short version", [_list(items)])
 
 

@@ -152,11 +152,19 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
     keys = [s["key"] for s in rep["sections"]]
     assert keys == ["short", "facts", "market", "pitching", "watch", "weather", "injuries", "before"], keys
     text = R.to_text(rep)
-    for want in ("PHI −1.5 on the run line, total 9.5; the moneyline makes PHI a 60% favorite",
-                 "On the mound: Zack Wheeler (PHI, R, 3.05 xERA, 29% K) against Javier Assad (CHC, R, 4.60 xERA, 19% K)",
-                 "Tired bullpen: CHC (7.1 relief innings the last two days)",
-                 "Could shine: Kyle Schwarber (PHI)", "Could struggle: Seiya Suzuki (CHC)",
-                 "The lineups are not out yet",
+    # The short version, said in sentences (Ethan, 2026-10-23: "It's very blunt").
+    for want in ("The Phillies are the moneyline favorites, with a 60% chance to win once the book's cut is "
+                 "taken out. They are −1.5 on the run line, and the total is 9.5 runs.",
+                 "On the mound, the Phillies start right-hander Zack Wheeler (a 3.05 expected ERA, striking out "
+                 "29% of the batters he faces), and the Cubs start right-hander Javier Assad (a 4.60 expected "
+                 "ERA, striking out 19% of the batters he faces).",
+                 "The wind is blowing out at 16 mph, which adds about 19% to the chance of a home run.",
+                 "The Cubs' bullpen is tired: it threw 7.1 relief innings over the last two days.",
+                 "Who could have a big day: Kyle Schwarber, the Phillies' designated hitter and a breakout "
+                 "candidate — Javier Assad allows a .470 SLG to lefties.",
+                 "Who could have a hard day: Seiya Suzuki, the Cubs' right fielder — Zack Wheeler holds righties "
+                 "to a .330 SLG.",
+                 "The lineups are not out yet; they post two to four hours before first pitch.",
                  "First pitch: Saturday, Jun. 20, 2:20 PM ET",
                  "Ballpark: Wrigley Field — open air, grass; 355 feet to left, 400 to center, 353 to right",
                  "Lineups: not out yet", "Plate umpire: Pat Hoberg",
@@ -198,12 +206,16 @@ def test_the_nhl_report_reads_the_tape_the_goalies_and_the_injuries():
     assert keys == ["short", "facts", "market", "tape", "goalies", "watch", "injuries", "before"], keys
     assert rep["title"] == "Bruins at Maple Leafs", rep["title"]
     text = R.to_text(rep)
-    for want in ("TOR −1.5 on the puck line, total 6.5; the moneyline makes TOR a 61% favorite",
-                 "In net: Jeremy Swayman (BOS, not confirmed) against Anthony Stolarz (TOR)",
-                 "Our game model expects BOS 2.7 and TOR 3.4 goals",
-                 "BOS is on the second night of a back-to-back",
-                 "Could shine: Auston Matthews (TOR)", "Could struggle: David Pastrnak (BOS)",
-                 "Out: Charlie McAvoy (BOS)",
+    for want in ("The Maple Leafs are the moneyline favorites, with a 61% chance to win once the book's cut "
+                 "is taken out. They are −1.5 on the puck line, and the total is 6.5 goals.",
+                 "In net: Jeremy Swayman for the Bruins (expected, not confirmed yet) against Anthony Stolarz "
+                 "for the Maple Leafs (confirmed).",
+                 "Our game model expects about 2.7 goals from the Bruins and 3.4 from the Maple Leafs.",
+                 "The Bruins are on the second night of a back-to-back, when the starting goalie often sits",
+                 "Who could have a big day: Auston Matthews, the Maple Leafs' center and a breakout candidate — "
+                 "the Bruins give up the sixth-most shots a game.",
+                 "Who could have a hard day: David Pastrnak, the Bruins' right wing — faces Anthony Stolarz",
+                 "The Bruins are without Charlie McAvoy.",
                  "Puck drop: Wednesday, Oct. 21, 7:00 PM ET",
                  "Bruins: the second night of a back-to-back",
                  "BOS has played 6 games this season, so last season still carries 40% of its numbers",
@@ -229,11 +241,14 @@ def test_the_nba_report_reads_rest_who_carries_each_team_and_the_defences():
     assert keys == ["short", "facts", "market", "carry", "defense", "injuries", "before"], keys
     assert rep["title"] == "Heat at Celtics"
     text = R.to_text(rep)
-    for want in ("BOS by 11.5 at home, total 214.5; the moneyline makes BOS an 85% favorite",
-                 "MIA is on the second night of a back-to-back",
-                 "Out: Tyler Herro (MIA)",
-                 "Leading the scoring lately: Bam Adebayo (MIA, 18 points a game) and Jayson Tatum (BOS, 27.5 points a game)",
-                 "Blowout watch: a spread of 10 or more",
+    for want in ("The Celtics are 11.5-point favorites at home, and the total is 214.5, which works out to "
+                 "about Celtics 113, Heat 102. Take out the book's cut and the moneyline gives the Celtics an 85% "
+                 "chance to win.",
+                 "The Heat is on the second night of a back-to-back.",
+                 "The Heat is without Tyler Herro.",
+                 "Leading the scoring lately: Bam Adebayo for the Heat (18 points a game over his last 3) and "
+                 "Jayson Tatum for the Celtics (27.5 points a game over his last 4).",
+                 "Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing",
                  "Tip-off: Thursday, Oct. 22, 7:30 PM ET", "Arena: TD Garden",
                  "Heat: on the second night of a back-to-back; 1,760 miles from DEN (a day ago); the clock moved "
                  "ahead 2 hours",
@@ -343,7 +358,7 @@ def test_ask_reads_a_league_report_whole_tables_and_cards_included():
     board = _mlb_board()
     L.attach(board, "mlb")
     facts = askbot.report_facts(board, board["games"][0])
-    assert facts["short_version"][0].startswith("PHI −1.5 on the run line")
+    assert facts["short_version"][0].startswith("The Phillies are the moneyline favorites")
     assert "Expected ERA: 3.05 | 4.60" in facts["pitching"], facts["pitching"]
     assert any(x.startswith("Kyle Schwarber (PHI) — Breakout candidate: ") for x in facts["watch"]), facts["watch"]
     assert len(json.dumps(facts, ensure_ascii=False)) <= askbot.REPORT_CHARS

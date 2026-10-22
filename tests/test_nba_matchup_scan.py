@@ -326,8 +326,9 @@ def test_the_nba_report_carries_the_tape_the_key_matchups_and_the_breakouts():
     text = R.to_text(rep)
     for want in ("KEY MATCHUPS", "Edge BOS: BOS's offense (1st in points per 100) against MIA's defense (",
                  "Breakout watch", "Jay Star", "Could struggle", "Heat Man",
-                 "Breakout watch: Jay Star (BOS)", "Could struggle: Heat Man (MIA)",
-                 "Key matchup: BOS's offense (1st in points per 100) against MIA's defense ("):
+                 "On breakout watch: Jay Star of the Celtics — the Heat allows the most points a game",
+                 "Who could have a hard day: Heat Man of the Heat — the Celtics allow the fewest threes",
+                 "The key matchup: the Celtics' offense (1st in points per 100) against the Heat's defense ("):
         assert want.lower() in text.lower(), (want, text)
     # Ask reads the same sections a member reads (askbot.LEAGUE_REPORT_KEYS):
     # the tape's rows, its key matchups and the breakout watch.

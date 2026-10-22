@@ -246,7 +246,8 @@ def test_the_meetings_section_sums_them_and_the_short_version_names_the_last():
     head = _sec(rep, "meetings")["blocks"][0]["text"]
     assert head == ("GB has won 3 of the last 4 meetings; against the spread GB is 3-0-1; "
                     "2 went over the total and 2 under."), head
-    assert "Last meeting: 2025 week 13 at DET: GB won 31-24" in R.to_text(rep)
+    assert ("The last time they met (week 13 of 2025), the Packers won 31-24 on the road as 2.5-point "
+            "underdogs; the 55 points went over the 48.5 total.") in R.to_text(rep)
     assert _sec(_built(meetings=[]), "meetings") is None
 
 
@@ -352,7 +353,8 @@ def test_tempo_turnovers_and_the_coaching_calls_are_written_out():
     assert "has not tried a two-point conversion" in calls
     assert "GB went for it on 6 of 7 fourth-and-shorts" in calls and "tried 2 two-point conversions (1 good)" in calls
     assert "passes on 52% of plays up by 8 or more and on 76% down by 8 or more" in calls
-    assert "Turnovers this season: GB +4 (5th); DET +4 (5th)" in ident
+    assert ("In turnover margin this season, the Packers and the Lions are both +4 (5th), near the top of "
+            "the league.") in ident
 
 
 # --- K2: the practice report -----------------------------------------------------------

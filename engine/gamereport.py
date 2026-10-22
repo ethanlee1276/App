@@ -1789,72 +1789,532 @@ def sec_changes(c: Ctx) -> dict | None:
     return _section("changes", "What changed", blocks)
 
 
-def sec_short(c: Ctx, built: dict) -> dict | None:
-    """The short version, written last from what the sections found."""
-    items = []
-    lw = line_words(c)
-    pts = implied_points(c)
-    if lw:
-        s = f"{lw}"
-        if pts:
-            s += f": the books expect about {c.home} {_num(pts[c.home])}, {c.away} {_num(pts[c.away])}"
-        ml = ml_chances(c)
+# --- the short version, said in sentences ---------------------------------------------
+# Ethan, 2026-10-23, at the Patriots–Bears short version on his phone: "we
+# need to be more descriptive in the wording. It's very blunt." It read like
+# a wire slip — "CHI by 3 at home, total 50.5", "Out: T.J. Edwards (CHI
+# LB)", "Last meeting: 2024 week 10 at CHI: NE won 19-3 · CHI −6.5, NE
+# covered". Each line is a sentence now: the teams by name, a position in
+# words, and what the number means. The facts are the same facts, from the
+# same places; nothing is said that the sections below do not hold, and a
+# player still never carries a line, a price or a chance.
+
+#: A position in words, per league.
+_GRIDIRON_POS = {
+    "QB": "quarterback", "RB": "running back", "HB": "running back", "FB": "fullback",
+    "WR": "wide receiver", "TE": "tight end", "T": "tackle", "OT": "tackle", "LT": "left tackle",
+    "RT": "right tackle", "G": "guard", "OG": "guard", "LG": "left guard", "RG": "right guard",
+    "C": "center", "OL": "offensive lineman", "DE": "defensive end", "DT": "defensive tackle",
+    "NT": "nose tackle", "DL": "defensive lineman", "EDGE": "edge rusher", "LB": "linebacker",
+    "ILB": "inside linebacker", "OLB": "outside linebacker", "MLB": "middle linebacker",
+    "CB": "cornerback", "LCB": "left cornerback", "RCB": "right cornerback", "NB": "nickel back",
+    "NCB": "nickel back", "SCB": "slot cornerback", "DB": "defensive back", "S": "safety",
+    "FS": "free safety", "SS": "strong safety", "K": "kicker", "P": "punter", "LS": "long snapper"}
+POS_WORDS = {
+    "nfl": _GRIDIRON_POS, "cfb": _GRIDIRON_POS,
+    "nba": {"G": "guard", "F": "forward", "C": "center", "PG": "point guard", "SG": "shooting guard",
+            "SF": "small forward", "PF": "power forward", "G-F": "guard", "F-G": "forward",
+            "F-C": "forward", "C-F": "center"},
+    "nhl": {"C": "center", "LW": "left wing", "RW": "right wing", "W": "wing", "F": "forward",
+            "D": "defenseman", "G": "goalie"},
+    "mlb": {"SP": "starting pitcher", "RP": "reliever", "P": "pitcher", "C": "catcher",
+            "1B": "first baseman", "2B": "second baseman", "3B": "third baseman", "SS": "shortstop",
+            "LF": "left fielder", "CF": "center fielder", "RF": "right fielder", "OF": "outfielder",
+            "DH": "designated hitter", "IF": "infielder", "UT": "utility man"},
+}
+POS_WORDS["wnba"] = POS_WORDS["nba"]
+
+#: The verbs a scan's reason puts right after a team's code, and the form
+#: a club's plural nickname takes: "GB gives up" → "the Packers give up".
+#: A word not listed is left as written, so a noun is never bent.
+_CLUB_VERBS = {"is": "are", "has": "have", "was": "were", "does": "do", "allows": "allow",
+               "gives": "give", "shoots": "shoot", "concedes": "concede", "blitzes": "blitz",
+               "stuffs": "stuff", "strikes": "strike", "starts": "start", "stacks": "stack",
+               "ranks": "rank", "misses": "miss", "leans": "lean", "hits": "hit", "scores": "score",
+               "plays": "play", "runs": "run", "throws": "throw", "takes": "take", "holds": "hold",
+               "leads": "lead", "faces": "face", "averages": "average", "comes": "come",
+               "turns": "turn", "wins": "win", "loses": "lose", "passes": "pass", "rushes": "rush",
+               "sits": "sit", "gets": "get", "sees": "see", "uses": "use", "lets": "let",
+               "leaks": "leak", "keeps": "keep", "needs": "need", "travels": "travel", "goes": "go"}
+
+
+#: Ranks a reader says in words (AP style: first through ninth).
+_ORDINAL_WORDS = {2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth", 7: "seventh",
+                  8: "eighth", 9: "ninth"}
+
+
+def pos_word(c: Ctx, pos, n: int = 1) -> str:
+    """"running back", or "running backs" for two; "" for a code the
+    league's table does not hold."""
+    w = POS_WORDS.get(c.sport, _GRIDIRON_POS).get(str(pos or "").upper().strip(), "")
+    if not w or n == 1:
+        return w
+    if w.endswith("man"):
+        return w[:-3] + "men"
+    return w[:-1] + "ies" if w.endswith("y") and w[-2] not in "aeiou" else w + "s"
+
+
+#: Club names that are places, said without "the" (the NHL's Utah side
+#: before it took a nickname: leaguereport.team_names).
+PLACE_NAMES = {"Utah"}
+#: Nicknames plural in use though not in spelling.
+PLURAL_NAMES = {"Red Sox", "White Sox"}
+
+
+def _the(c: Ctx, t: str) -> bool:
+    """A club goes by its nickname with "the" ("the Lions", "the Heat"); a
+    college by its school ("Indiana"); a code with no name stands alone."""
+    return c.sport != "cfb" and c.name(t) != t and c.name(t) not in PLACE_NAMES
+
+
+def _many(c: Ctx, t: str) -> bool:
+    """Whether the team takes a plural verb: "the Lions are", but "the Heat
+    is" and "Indiana is" — a nickname that is not plural in form is said
+    the way it is spelled."""
+    n = c.name(t)
+    return _the(c, t) and (n.endswith("s") or n in PLURAL_NAMES)
+
+
+def team_np(c: Ctx, t: str) -> str:
+    """"the Lions", "the Heat", "Indiana", or the code where no name is known."""
+    return f"the {c.name(t)}" if _the(c, t) else c.name(t)
+
+
+def team_owner(c: Ctx, t: str) -> str:
+    """"the Lions'", "the Heat's", "Indiana's"."""
+    return f"the {c.poss(t)}" if _the(c, t) else c.poss(t)
+
+
+def team_be(c: Ctx, t: str, plural: str = "are", singular: str = "is") -> str:
+    return plural if _many(c, t) else singular
+
+
+def cap(text: str) -> str:
+    text = str(text or "")
+    return text[:1].upper() + text[1:]
+
+
+def _an(word: str) -> str:
+    """"a 126.5" / "an 80.4" / "an 11": the article a number is read with."""
+    w = str(word)
+    return f"{'an' if w.startswith('8') or w.split('.')[0] in ('11', '18') else 'a'} {w}"
+
+
+def named(c: Ctx, text: str) -> str:
+    """A scan sentence with each team's code said as the team: "GB gives up
+    the 2nd-most" → "the Packers give up the second-most"; "DET's defense"
+    → "the Lions' defense"; "MIA's defense" → "the Heat's defense"; a
+    college's code becomes its school. A verb after the code turns plural
+    only for a plural nickname; a word not in `_CLUB_VERBS` is never bent."""
+    import re
+    out = str(text or "")
+    for t in c.teams:
+        if not t or c.name(t) == t:
+            continue
+        np_, own = team_np(c, t), team_owner(c, t)
+        out = re.sub(rf"\b{re.escape(t)}'s\b", own, out)
+        if _many(c, t):
+            def verb(m, np_=np_):
+                return f"{np_} {m.group(1) or ''}{_CLUB_VERBS[m.group(2)]}"
+            out = re.sub(rf"\b{re.escape(t)} ((?:[a-z]+ly )?)({'|'.join(_CLUB_VERBS)})\b", verb, out)
+        out = re.sub(rf"\b{re.escape(t)}\b", np_, out)
+    # "the 1st-most" is "the most" said aloud, and "the 6th-most" is "the
+    # sixth-most": first to ninth in words, as a reader says them.
+    out = re.sub(r"\bthe 1st-(most|fewest|best|worst|highest|lowest)\b", r"the \1", out)
+    return re.sub(r"\bthe ([2-9])(?:nd|rd|th)-", lambda m: f"the {_ORDINAL_WORDS[int(m.group(1))]}-", out)
+
+
+def _known_names(c: Ctx) -> set:
+    """Every name this game's report can open a reason on: the players in
+    the reads, the injury report, the corners, the starting pitchers and
+    the goalies, and the two teams."""
+    if getattr(c, "_known", None) is None:
+        names = {r.get("player") for r in c.reads}
+        names |= {r.get("player") for r in c.scan.get("injuries") or [] if isinstance(r, dict)}
+        for room in (c.scan.get("coverage") or {}).values():
+            names |= {cn.get("name") for cn in (room or {}).get("corners") or [] if isinstance(cn, dict)}
+        for p in ((c.g.get("pitchers") or {}).values()):
+            if isinstance(p, dict):
+                names.add(p.get("name"))
+        for tape in ("mlb_tape", "nhl_tape"):
+            for side in ((c.g.get(tape) or {}).get("sides") or {}).values():
+                st = (side or {}).get("starter")
+                names.add(st.get("name") if isinstance(st, dict) else st)
+        # And the teams themselves: a college's reason opens on its school.
+        names |= {c.name(t) for t in c.teams}
+        c._known = {str(n) for n in names if n}
+    return c._known
+
+
+def _clause(text: str, names=()) -> str:
+    """A reason as the end of a sentence: no full stop, and its first
+    letter small — "Takes 69% of the carries" → "takes 69% …", "A soft
+    corner" → "a soft corner", "Faces Jeremy Swayman" → "faces …" — unless
+    it opens on a code ("CHC strikes out") or on a player the report names
+    ("Zack Wheeler holds righties …")."""
+    t = str(text or "").strip().rstrip(".")
+    words = t.split()
+    if not words or not t[0].isupper() or (words[0].isupper() and len(words[0]) > 1):
+        return t
+    if any(t.startswith(n) for n in names or ()):
+        return t
+    return t[0].lower() + t[1:]
+
+
+def _slate_spot(c: Ctx) -> str:
+    """Where this game's total sits among the board's: "the highest total
+    on the board", "the third-lowest total on the board" — only at either
+    end of a board of six games or more, where it says something."""
+    tot = _f(c.g.get("total"))
+    totals = [v for v in (_f((x or {}).get("total")) for x in c.result.get("games") or []
+                          if isinstance(x, dict)) if v is not None]
+    if tot is None or len(totals) < 6:
+        return ""
+    for n, end in ((sum(1 for v in totals if v > tot), "highest"), (sum(1 for v in totals if v < tot), "lowest")):
+        if n <= 2:
+            return f"the {('', 'second-', 'third-')[n]}{end} total on the board"
+    return ""
+
+
+def market_sentence(c: Ctx) -> str:
+    """The line as a reader says it: who is favored and by how much, the
+    total and the score it points to, and the moneyline's chance with the
+    book's cut taken out. Baseball and hockey lead with the moneyline —
+    their spread is a fixed line a run or a goal and a half wide."""
+    g = c.g
+    sp, tot = _f(g.get("spread")), _f(g.get("total"))
+    ml = ml_chances(c)
+    unit = c.score_words
+    fixed = FIXED_LINES.get(c.sport)
+    spot = _slate_spot(c)
+    total = (f"the total is {_num(tot)}" + (f" {unit}" if fixed else "")
+             + (f", {spot}" if spot else "")) if tot is not None else ""
+    if fixed:
+        out, fav = [], None
         if ml:
             fav = max(ml, key=ml.get)
-            s += f"; the moneyline makes {fav} {a_pct(ml[fav])} favorite"
-        items.append(s[0].upper() + s[1:])
+            out.append(_sentence(f"{cap(team_np(c, fav))} {team_be(c, fav)} the moneyline favorite"
+                                 f"{'s' if _many(c, fav) else ''}, with {_an(_pct(ml[fav]))} chance to win "
+                                 "once the book's cut is taken out"))
+        rest = []
+        if sp:
+            rl = c.home if sp < 0 else c.away
+            who = ("they" if _many(c, rl) else "it") if rl == fav else team_np(c, rl)
+            rest.append(f"{who} {team_be(c, rl)} −{_num(abs(sp))} on the {fixed}")
+        if total:
+            rest.append(total)
+        if rest:
+            out.append(_sentence(cap(", and ".join(rest))))
+        return " ".join(out)
+    first = ""
+    if sp is not None and sp == 0:
+        first = "The books have this one as a pick'em"
+    elif sp is not None:
+        fav = c.home if sp < 0 else c.away
+        where = (" at a neutral site" if g.get("neutral_site") or c.meta.get("neutral_site") else
+                 " at home" if fav == c.home else " on the road")
+        size = f"{_num(abs(sp))}-point favorite"
+        first = (f"{cap(team_np(c, fav))} {team_be(c, fav)} "
+                 f"{size + 's' if _many(c, fav) else _an(size)}{where}")
+    parts = [x for x in (first, total) if x]
+    if not parts:
+        return ""
+    s = (", and ".join(parts) if first else cap(total))
+    pts = implied_points(c)
+    if pts:
+        hi = max(c.teams, key=lambda t: pts[t])
+        lo = c.opp[hi]
+        s += (f", which works out to about {c.name(hi)} {_n(pts[hi])}, {c.name(lo)} {_n(pts[lo])}"
+              if _n(pts[hi]) != _n(pts[lo]) else f", about {_n(pts[hi])} {unit} each")
+    s = _sentence(s)
+    if ml:
+        fav = max(ml, key=ml.get)
+        s += (f" Take out the book's cut and the moneyline gives {team_np(c, fav)} "
+              f"{_an(_pct(ml[fav]))} chance to win.")
+    return s
+
+
+def edge_sentence(c: Ctx, e: dict, first: bool = True) -> str:
+    """One edge from the scan, said with what it means on the field. The
+    first one says what the ranks are out of; the rest do not repeat it."""
+    off, dfn = str(e.get("off") or ""), str(e.get("def") or "")
+    try:
+        ro, rd = _ord(e["off_rank"]), _ord(e["def_rank"])
+    except (KeyError, TypeError, ValueError):
+        return named(c, edge_words(c, e))
+    where = (" in the country" if c.sport == "cfb" else " in the league") if first else ""
+    O, D, On, Dn = team_owner(c, off), team_owner(c, dfn), team_np(c, off), team_np(c, dfn)
+    ahead = (e.get("gap") or 0) > 0
+    unit = e.get("unit")
+    if unit == "passing":
+        return (f"{O} passing game ({ro}{where}) faces {D} pass defense ({rd}), an edge for {On} through "
+                "the air" if ahead else
+                f"{D} pass defense ({rd}{where}) should slow down {O} passing game ({ro})")
+    if unit == "rushing":
+        return (f"{O} run game ({ro}{where}) faces {D} run defense ({rd}), so there is room to run for {On}"
+                if ahead else
+                f"{D} run defense ({rd}{where}) should hold {O} run game ({ro}) in check")
+    if unit == "explosive":
+        return (f"{O} big plays ({ro}{where}) meet a {c.name(dfn) if _the(c, dfn) else dfn} defense that gives "
+                f"them up ({rd}), so {On} should find some chunk plays" if ahead else
+                f"{D} defense limits big plays ({rd}{where}) and {O} offense ranks {ro} at making them, so "
+                f"expect few chunk plays from {On}")
+    if unit == "pressure":
+        return (f"{O} pass protection ({ro}{where}) faces {D} pass rush ({rd}), so {O} quarterback should "
+                "have time to throw" if ahead else
+                f"{D} pass rush ({rd}{where}) faces {O} pass protection ({ro}), so expect pressure on {O} "
+                "quarterback")
+    if unit == "overall":
+        return (f"{O} offense ({ro}{where}) faces {D} defense ({rd}), an edge for {On}" if ahead else
+                f"{D} defense ({rd}{where}) faces {O} offense ({ro}), an edge for {Dn}")
+    return named(c, edge_words(c, e))
+
+
+def _best_reason(c: Ctx, r: dict, tone: str) -> str:
+    """The one reason a short line gives for a player: a matchup over his
+    workload, and either over the game's line, which every player in the
+    game shares."""
+    pool = [str(x) for x in (r.get("pro") if tone == "up" else r.get("con")) or [] if x]
+    if not pool:
+        return ""
+
+    def rank(x):
+        low = x.lower()
+        return (0 if any(w in low for w in ("most", "fewest", "allow", "give", "concede", "faces", "against"))
+                else 2 if low.startswith("the lines expect") else 1)
+    return _clause(named(c, sorted(pool, key=rank)[0]), _known_names(c))
+
+
+def player_clause(c: Ctx, r: dict, tone: str, tag: bool = True) -> str:
+    """"Jahmyr Gibbs, the Lions' running back and a breakout candidate —
+    the Packers give up the second-most touchdowns to running backs"."""
+    t = str(r.get("team") or "")
+    pw = pos_word(c, r.get("pos"))
+    who = f"{r.get('player')}" + (f", {team_owner(c, t)} {pw}" if pw and t else
+                                   f" of {team_np(c, t)}" if t else "")
+    if tag and r.get("read") == "breakout":
+        who += " and a breakout candidate" if pw and t else ", a breakout candidate"
+    why = _best_reason(c, r, tone)
+    return f"{who} — {why}" if why else who
+
+
+def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_only: bool = False) -> list:
+    """Who could have a big day and who could have a hard one, each with
+    the reason that says why."""
+    out = []
+    shine = [r for r in reads if r.get("read") in ("breakout", "good")]
+    shine.sort(key=lambda r: (r.get("read") != "breakout", -_volume(r), -len(r.get("pro") or [])))
+    if shine:
+        out.append("Who could have a big day: " + ". ".join(player_clause(c, r, "up") for r in shine[:shine_n]))
+    struggle = [r for r in reads if r.get("read") in ("tough", "avoid") and (not key_only or _is_key(r))]
+    struggle.sort(key=lambda r: (r.get("read") != "avoid", -_volume(r), -len(r.get("con") or [])))
+    if struggle:
+        out.append("Who could have a hard day: " + ". ".join(player_clause(c, r, "down")
+                                                             for r in struggle[:struggle_n]))
+    return out
+
+
+def absent_sentence(c: Ctx, rows: list, per_team: int = 5) -> str:
+    """Who is out, team by team, in positions a reader says: "The Bears are
+    without linebacker T.J. Edwards and defensive ends Dayo Odeyingbo and
+    Montez Sweat; the Patriots are missing cornerback Carlton Davis III."
+    A doubtful player is said as doubtful, never as out."""
+    parts = []
+    for t in c.teams:
+        mine = [r for r in rows if r.get("team") == t][:per_team]
+        if not mine:
+            continue
+        gone = [r for r in mine if "DOUBT" not in str(r.get("status") or "").upper()]
+        maybe = [r for r in mine if "DOUBT" in str(r.get("status") or "").upper()]
+
+        def grouped(rs):
+            order, by = [], {}
+            for r in rs:
+                k = str(r.get("position") or "").upper()
+                if k not in by:
+                    order.append(k)
+                by.setdefault(k, []).append(str(r.get("player") or ""))
+            out = []
+            for k in order:
+                names = by[k]
+                w = pos_word(c, k, len(names))
+                out.append(f"{w} {_join(names)}" if w else _join(names))
+            return _join(out)
+        bits = []
+        if gone:
+            verb = "without" if not parts else "missing"
+            bits.append(f"{team_np(c, t)} {team_be(c, t)} {verb} {grouped(gone)}")
+        if maybe:
+            n = len(maybe)
+            bits.append(f"{grouped(maybe)} {'is' if n == 1 else 'are'} doubtful"
+                        + ("" if gone else f" for {team_np(c, t)}"))
+        parts.append(", and ".join(bits))
+    return _sentence(cap("; ".join(parts))) if parts else ""
+
+
+#: How a rest band reads for the rested side (engine/fatigue.rest_band).
+REST_WORDS = {"off a bye": "come in off their bye", "extra days": "come in with extra rest"}
+
+
+def rest_sentence(c: Ctx) -> str:
+    """"The Lions come in off their bye: 14 days since their last game to
+    the Packers' 7" — the side with more rest, how, and the gap."""
+    fat = (c.result.get("fatigue") or {}).get("teams") or {}
+    ra, rh = (fat.get(c.away) or {}).get("rest_days"), (fat.get(c.home) or {}).get("rest_days")
+    if not ra or not rh or ra == rh:
+        return ""
+    more = c.away if ra > rh else c.home
+    less = c.opp[more]
+    band = (fat.get(more) or {}).get("rest_band")
+    club = _many(c, more)
+    lead = {"off a bye": "come in off their bye" if club else "comes in off its bye",
+            "extra days": "come in with extra rest" if club else "comes in with extra rest"}.get(
+        band, "come in better rested" if club else "comes in better rested")
+    s = (f"{cap(team_np(c, more))} {lead}: {max(ra, rh)} days since {'their' if club else 'its'} last game "
+         f"to {team_owner(c, less)} {min(ra, rh)}")
+    if (fat.get(less) or {}).get("rest_band") == "short week":
+        s += f", and {team_np(c, less)} {team_be(c, less)} on a short week"
+    return _sentence(s)
+
+
+def meeting_sentence(c: Ctx, m: dict) -> str:
+    """The last meeting, told: who won, where, as favorite or underdog,
+    whether it covered, and how the total went."""
+    if m.get("round"):
+        when = f"the {m['season']} {m['round']}"
+    elif m.get("week") is None and m.get("day"):
+        try:
+            d = _dt.date.fromisoformat(str(m["day"])[:10])
+            when = f"{d.strftime('%b')}. {d.day}, {d.year}"
+        except ValueError:
+            when = str(m["day"])
+    else:
+        when = f"week {m['week']} of {m['season']}"
+    hs, as_ = _n(m.get("hs")), _n(m.get("as"))
+    w = m.get("winner")
+    if not w:
+        s = f"The last time they met ({when}), they tied {hs}-{as_}"
+    else:
+        ws, ls = (hs, as_) if w == m.get("home") else (as_, hs)
+        where = (" at a neutral site" if m.get("neutral") else
+                 " at home" if w == m.get("home") else " on the road")
+        s = f"The last time they met ({when}), {team_np(c, w)} won {ws}-{ls}{where}"
+        sp = _f(m.get("spread_home"))
+        if sp:
+            fav = m.get("home") if sp < 0 else m.get("away")
+            size = f"{_num(abs(sp))}-point"
+            role = "favorite" if w == fav else "underdog"
+            s += f" as {size} {role}s" if _many(c, w) else f" as {_an(size)} {role}"
+            cov = m.get("covered")
+            if w == fav and cov == "push":
+                s += ", winning by exactly the spread"
+            elif w == fav and cov and cov != w:
+                s += ", but did not cover"
+    tot, ou = _f(m.get("total")), m.get("ou")
+    if tot is not None and ou:
+        both = hs + as_
+        s += ("; the " + _plural(both, "point") + (f" landed right on the {_num(tot)} total" if ou == "push" else
+                                                   f" went {ou} the {_num(tot)} total"))
+    return _sentence(s)
+
+
+def turnover_sentence(c: Ctx) -> str:
+    """Each side's turnover margin and rank, and where that sits in the
+    league when it is near either end."""
+    nums = c.scan.get("numbers") or {}
+    rows = [(t, (nums.get(t) or {}).get("to_margin") or {}) for t in c.teams]
+    if not all(_f(m.get("value")) is not None for _t, m in rows):
+        return ""
+    where = "the country" if c.sport == "cfb" else "the league"
+
+    def end(m):
+        try:
+            r = int(m.get("rank"))
+        except (TypeError, ValueError):
+            return ""
+        return "near the top" if r <= 5 else "near the bottom" if r > c.n_teams - 5 else ""
+    (ta, ma), (tb, mb) = rows
+    va, vb = _signed(ma["value"], 0), _signed(mb["value"], 0)
+    rk = lambda m: f" ({_ord(m['rank'])})" if m.get("rank") else ""         # noqa: E731
+    ea, eb = end(ma), end(mb)
+    if va == vb and rk(ma) == rk(mb):
+        s = (f"In turnover margin this season, {team_np(c, ta)} and {team_np(c, tb)} are both {va}{rk(ma)}"
+             + (f", {ea} of {where}" if ea else ""))
+    elif ea and ea == eb:
+        s = (f"In turnover margin this season, {team_np(c, ta)} {team_be(c, ta)} {va}{rk(ma)} and "
+             f"{team_np(c, tb)} {vb}{rk(mb)}, both {ea} of {where}")
+    else:
+        def one(t, v, m, e, verb=True):
+            r = f" ({_ord(m['rank'])}{', ' + e + ' of ' + where if e else ''})" if m.get("rank") else ""
+            return f"{team_np(c, t)}{' ' + team_be(c, t) if verb else ''} {v}{r}"
+        s = f"In turnover margin this season, {one(ta, va, ma, ea)} and {one(tb, vb, mb, eb, verb=False)}"
+    return _sentence(s)
+
+
+def sim_sentence(c: Ctx) -> str:
+    sim = c.g.get("sim") or {}
+    if _f(sim.get("p_home_win")) is None:
+        return ""
+    ph = float(sim["p_home_win"])
+    lead = c.home if ph >= 0.5 else c.away
+    runs = f" {int(sim['trials']):,} times" if _f(sim.get("trials")) else ""
+    s = (f"Our simulator, which plays the game out drive by drive{runs}, has {team_np(c, lead)} winning "
+         f"{_pct(max(ph, 1 - ph))} of the time")
+    bits = []
+    if _f(sim.get("one_score")) is not None:
+        bits.append(f"{_pct(sim['one_score'])} of the games are decided by 8 points or fewer")
+    if _f(sim.get("blowout")) is not None:
+        bits.append(f"{_pct(sim['blowout'])} by 14 or more")
+    if bits:
+        s += "; " + ", and ".join(bits)
+    return _sentence(s)
+
+
+def sec_short(c: Ctx, built: dict) -> dict | None:
+    """The short version, written last from what the sections found — in
+    sentences (see the note above `POS_WORDS`)."""
+    items = []
+    s = market_sentence(c)
+    if s:
+        items.append(s)
     edges = _edges(c)
     if edges:
-        items.append("Where the edges are: " + "; ".join(edge_words(c, e) for e in edges[:3]))
+        said = [edge_sentence(c, e, first=(i == 0)) for i, e in enumerate(edges[:3])]
+        items.append("Where the matchup tilts: " + ". ".join([said[0]] + [cap(x) for x in said[1:]]))
     cov = c.scan.get("coverage") or {}
     soft = []
     for t in c.teams:
         room = cov.get(t) or {}
         w = next((cn for cn in room.get("corners") or [] if cn.get("name") == room.get("weakest")), None)
         if w and w.get("targets") and _f(w.get("rating")) is not None:
-            soft.append(f"{w['name']} ({t} {w.get('spot')}), {_num(w['rating'])} rating allowed on "
-                        f"{_plural(w['targets'], 'target')}")
+            spot = pos_word(c, w.get("spot")) or "corner"
+            soft.append(f"{team_owner(c, t)} {spot} {w['name']} has allowed {_an(_num(w['rating']))} passer "
+                        f"rating on {_plural(w['targets'], 'target')}")
     if soft:
-        items.append("Soft spots in coverage: " + "; ".join(soft))
-    shine = [r for r in c.reads if r.get("read") in ("breakout", "good")]
-    shine.sort(key=lambda r: (r.get("read") != "breakout", -_volume(r)))
-    if shine:
-        items.append("Could shine: " + _join(f"{r['player']} ({r.get('team')} {r.get('pos')}"
-                                              f"{', breakout candidate' if r.get('read') == 'breakout' else ''})"
-                                              for r in shine[:4]))
-    struggle = [r for r in c.reads if r.get("read") in ("tough", "avoid") and _is_key(r)]
-    if struggle:
-        items.append("Could struggle: " + _join(f"{r['player']} ({r.get('team')} {r.get('pos')})"
-                                                 for r in struggle[:3]))
+        items.append(_sentence(cap(f"The softest spot{'s' if len(soft) > 1 else ''} in coverage: "
+                                   + "; ".join(soft)))
+                     + " A perfect passer rating is 158.3, so the receivers who line up across from "
+                     + ("them have" if len(soft) > 1 else "him have") + " the easier matchup.")
+    items += shine_lines(c, c.reads, key_only=True)
     outs = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict)
             and str(r.get("status") or "").upper() not in ("QUESTIONABLE", "")]
-    if outs:
-        items.append("Out: " + _join(f"{r.get('player')} ({r.get('team')} {r.get('position') or ''})".replace(" )", ")")
-                                     for r in outs[:5]))
+    gone = absent_sentence(c, outs)
+    if gone:
+        items.append(gone)
     for q in c.result.get("qb_changes") or []:
         if isinstance(q, dict) and q.get("team") in c.teams and q.get("headline"):
-            items.append(q["headline"])
-    fat = (c.result.get("fatigue") or {}).get("teams") or {}
-    ra, rh = (fat.get(c.away) or {}).get("rest_days"), (fat.get(c.home) or {}).get("rest_days")
-    if ra and rh and ra != rh:
-        more = c.away if ra > rh else c.home
-        items.append(f"Rest: {more} comes in on {max(ra, rh)} days to {c.opp[more]}'s {min(ra, rh)}")
+            items.append(_sentence(cap(named(c, q["headline"]))))
+    rest = rest_sentence(c)
+    if rest:
+        items.append(rest)
     if c.meetings:
-        items.append("Last meeting: " + meeting_line(c.meetings[0]))
-    nums = c.scan.get("numbers") or {}
-    margins = [(t, (nums.get(t) or {}).get("to_margin") or {}) for t in c.teams]
-    if all(_f(m.get("value")) is not None for _t, m in margins):
-        items.append("Turnovers this season: " + "; ".join(
-            f"{t} {_signed(m['value'], 0)}" + (f" ({_ord(m['rank'])})" if m.get("rank") else "")
-            for t, m in margins))
-    sim = c.g.get("sim") or {}
-    if _f(sim.get("p_home_win")) is not None:
-        ph = float(sim["p_home_win"])
-        lead = c.home if ph >= 0.5 else c.away
-        s = f"Our simulator has {lead} winning {_pct(max(ph, 1 - ph))}"
-        if _f(sim.get("one_score")) is not None:
-            s += f", a one-score game {_pct(sim['one_score'])} of the time"
-        items.append(s)
+        items.append(meeting_sentence(c, c.meetings[0]))
+    to = turnover_sentence(c)
+    if to:
+        items.append(to)
+    sim = sim_sentence(c)
+    if sim:
+        items.append(sim)
     return _section("short", "The short version", [_list(items)])
 
 
