@@ -1790,7 +1790,7 @@ def sec_changes(c: Ctx) -> dict | None:
 
 
 # --- the short version, said in sentences ---------------------------------------------
-# Ethan, 2026-10-23, at the Patriots–Bears short version on his phone: "we
+# Ethan, 2026-10-22, at the Patriots–Bears short version on his phone: "we
 # need to be more descriptive in the wording. It's very blunt." It read like
 # a wire slip — "CHI by 3 at home, total 50.5", "Out: T.J. Edwards (CHI
 # LB)", "Last meeting: 2024 week 10 at CHI: NE won 19-3 · CHI −6.5, NE
@@ -2082,7 +2082,21 @@ def _best_reason(c: Ctx, r: dict, tone: str) -> str:
         low = x.lower()
         return (0 if any(w in low for w in ("most", "fewest", "allow", "give", "concede", "faces", "against"))
                 else 2 if low.startswith("the lines expect") else 1)
-    return _clause(named(c, sorted(pool, key=rank)[0]), _known_names(c))
+    return _clause(named(c, short_reason(sorted(pool, key=rank)[0])), _known_names(c))
+
+
+def short_reason(text: str) -> str:
+    """A scan reason as the short version says it: the fact without the
+    model's footnotes. "Kyle Monangai (RB) is out — 36% of the carries
+    (12.7 a game) to go around; not enough games without him to measure
+    who takes them · our projection counts it: +10% rushing yards" (the
+    Patriots–Bears short version, 2026-10-22) → "with Kyle Monangai out,
+    36% of the carries (12.7 a game) are up for grabs". The footnotes stay
+    on the player's card below."""
+    import re
+    s = str(text or "").split(" · ")[0].split("; not enough games")[0].strip()
+    m = re.match(r"^(.+?) \([A-Z]+\) is out — (.+) to go around$", s)
+    return f"with {m.group(1)} out, {m.group(2)} are up for grabs" if m else s
 
 
 def player_clause(c: Ctx, r: dict, tone: str, tag: bool = True) -> str:
@@ -2282,19 +2296,32 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
         said = [edge_sentence(c, e, first=(i == 0)) for i, e in enumerate(edges[:3])]
         items.append("Where the matchup tilts: " + ". ".join([said[0]] + [cap(x) for x in said[1:]]))
     cov = c.scan.get("coverage") or {}
-    soft = []
+    soft, n_soft = [], 0
+    from .gamescan import MIN_TARGETS, SOFT_RATING
     for t in c.teams:
         room = cov.get(t) or {}
-        w = next((cn for cn in room.get("corners") or [] if cn.get("name") == room.get("weakest")), None)
-        if w and w.get("targets") and _f(w.get("rating")) is not None:
+        # EVERY STARTER PAST THE BAR, the worst first (the scan's `weakest`
+        # is the first), and one who may sit says so. Ethan's Patriots–Bears
+        # research, 2026-10-22, went at Jaylon Johnson (22 of 28 for 412
+        # yards, a 131 rating) while this named only Tyrique Stevenson (139
+        # on 17) and never said Stevenson was questionable.
+        bad = sorted((cn for cn in room.get("corners") or []
+                      if (cn.get("targets") or 0) >= MIN_TARGETS and _f(cn.get("rating")) is not None
+                      and float(cn["rating"]) >= SOFT_RATING), key=lambda cn: -float(cn["rating"]))[:2]
+        for i, w in enumerate(bad):
             spot = pos_word(c, w.get("spot")) or "corner"
-            soft.append(f"{team_owner(c, t)} {spot} {w['name']} has allowed {_an(_num(w['rating']))} passer "
-                        f"rating on {_plural(w['targets'], 'target')}")
+            maybe = " (questionable)" if str(w.get("status") or "").upper() == "QUESTIONABLE" else ""
+            if i == 0:
+                soft.append(f"{team_owner(c, t)} {spot} {w['name']}{maybe} has allowed "
+                            f"{_an(_num(w['rating']))} passer rating on {_plural(w['targets'], 'target')}")
+            else:
+                soft[-1] += f", and {spot} {w['name']}{maybe} {_an(_num(w['rating']))} on {_num(w['targets'])}"
+            n_soft += 1
     if soft:
-        items.append(_sentence(cap(f"The softest spot{'s' if len(soft) > 1 else ''} in coverage: "
+        items.append(_sentence(cap(f"The softest spot{'s' if n_soft > 1 else ''} in coverage: "
                                    + "; ".join(soft)))
                      + " A perfect passer rating is 158.3, so the receivers who line up across from "
-                     + ("them have" if len(soft) > 1 else "him have") + " the easier matchup.")
+                     + ("them have" if n_soft > 1 else "him have") + " the easier matchup.")
     items += shine_lines(c, c.reads, key_only=True)
     outs = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict)
             and str(r.get("status") or "").upper() not in ("QUESTIONABLE", "")]

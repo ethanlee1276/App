@@ -56,6 +56,9 @@ STATUS_WORDS = {"out": "out", "ir": "on injured reserve", "doubtful": "doubtful"
                 "pup": "on the PUP list", "suspended": "suspended", "inactive": "inactive",
                 "questionable": "questionable"}
 
+#: The statuses that keep a player off the field (engine/gamescan.OUT_STATUSES).
+OUT = {"out", "ir", "doubtful", "pup", "suspended", "inactive"}
+
 #: The scan's reads (engine/gamescan.READS), in words.
 READ_WORDS = {"breakout": "favorable, a breakout candidate", "good": "favorable",
               "neutral": "neutral", "tough": "unfavorable", "avoid": "unfavorable, one to avoid"}
@@ -223,7 +226,14 @@ def diff(old: dict, new: dict, home: str, away: str) -> list:
         op, np_ = set(old["pulled"]), set(new["pulled"])
         for p in sorted(np_ - op):
             out.append(f"Every book took {name(p)}'s props down")
-        for p in sorted(op - np_):
+        # NOT "BACK UP" FOR A MAN STILL LISTED OUT. Kyle Monangai,
+        # 2026-10-22, ruled out a third straight game: "Kyle Monangai's
+        # props are back up" sat under a report that said he was out. The
+        # pull memory now keeps him down until a pull prices him
+        # (engine/pricedplayers); a book that lists an out player's name
+        # again is still not news a reader can use.
+        listed = {p for p, st in (new.get("injuries") or {}).items() if st in OUT}
+        for p in sorted(op - np_ - listed):
             out.append(f"{name(p)}'s props are back up")
     ow, nw = old.get("weather"), new.get("weather")
     if ow and nw and _weather_moved(ow, nw):
@@ -258,6 +268,25 @@ def diff(old: dict, new: dict, home: str, away: str) -> list:
             if opr[p] != npr[p]:
                 out.append(f"{name(p)} {PRACTICE_WORDS[npr[p]]}, after he {PRACTICE_WORDS[opr[p]]}")
     return out
+
+
+def drop_false_returns(entries: list, last: dict) -> list:
+    """The kept entries without a "props are back up" for a player the
+    latest snapshot still lists out — the line the old pull memory wrote
+    and never should have (Kyle Monangai, 2026-10-22). An entry left with
+    nothing goes."""
+    who = last.get("who") or {}
+    out = {p for p, st in (last.get("injuries") or {}).items() if st in OUT}
+    if not out:
+        return entries
+    bad = {f"{p}'s props are back up" for p in out} | \
+          {f"{p} ({who[p]})'s props are back up" for p in out if who.get(p)}
+    keep = []
+    for e in entries:
+        changes = [x for x in e.get("changes") or [] if x not in bad]
+        if changes:
+            keep.append({**e, "changes": changes})
+    return keep
 
 
 def carry(old: dict, new: dict) -> dict:
@@ -318,6 +347,7 @@ def update(path, snapshots: dict, at: str, today: _dt.date | None = None) -> dic
                 if moved:
                     rec["entries"] = (list(rec.get("entries") or []) + [{"at": at, "changes": moved}])[-MAX_ENTRIES:]
                 rec["last"] = carry(rec["last"], snap)
+                rec["entries"] = drop_false_returns(rec.get("entries") or [], rec["last"])
             games[key] = rec
             out[key] = {"first": rec["first"], "at": at, "entries": list(rec.get("entries") or [])}
         if today is None:

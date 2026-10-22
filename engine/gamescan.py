@@ -633,13 +633,79 @@ def _pass_rush(team: str, defenders_now: dict, injuries=None, n: int = 3) -> lis
              "status": _status(injuries, team, v["name"])} for v in got[:n]]
 
 
-def _line_out(team: str, chart: list[dict], injuries=None) -> list[str]:
+#: The offensive line as the injury report spells its positions.
+_OL_REPORT = {"T", "G", "C", "OT", "OG", "OL", "LT", "LG", "RG", "RT"}
+
+
+def _line_out(team: str, chart: list[dict], injuries=None, recent: dict | None = None) -> list[str]:
     spots = {row["position"]: row.get("players") or [] for row in chart or []}
     out = []
     for pos in _OL:
         names = spots.get(pos) or []
         if names and _status(injuries, team, names[0]) in OUT_STATUSES:
             out.append(f"{names[0]} ({pos})")
+    # …AND A STARTER THE CHART HAS ALREADY REPLACED (recent_starters).
+    named = {_key(x.rsplit(" (", 1)[0]) for x in out}
+    mine = (recent or {}).get(team) or set()
+    for i in injuries or []:
+        who, pos = getattr(i, "player", "") or "", str(getattr(i, "position", "") or "").upper()
+        if (getattr(i, "team", "") == team and who and pos in _OL_REPORT and _key(who) in mine
+                and _key(who) not in named
+                and str(getattr(i, "status", "") or "").upper() in OUT_STATUSES):
+            out.append(f"{who} ({pos})")
+            named.add(_key(who))
+    return out
+
+
+#: A player at or above this share of his side's snaps, in at least half
+#: the games he played among his team's last STARTER_GAMES, is a starter
+#: whatever the depth chart now says.
+STARTER_SNAPS = 0.5
+STARTER_GAMES = 3
+
+
+def recent_starters(snap_rows, before_week: int | None = None, games: int = STARTER_GAMES,
+                    share: float = STARTER_SNAPS) -> dict:
+    """{team: {name key}}: who has been starting, by nflverse's snap counts
+    — at least ``share`` of his offense's or defense's snaps in at least
+    half of the games he played among his team's last ``games`` before
+    ``before_week``.
+
+    THE DEPTH CHART DROPS A MAN THE DAY HE IS HURT, which is when his
+    absence is the news, and a lineman has no targets or carries to be
+    counted by instead. Ethan's Patriots–Bears research, 2026-10-22: two
+    starting interior linemen out (Alijah Vera-Tucker, every snap through
+    week 5; Ben Brown) and Romeo Doubs on reserve (64% and 83% of the snaps
+    in weeks 4 and 5, 3% in week 6, the game he was hurt in — so "half his
+    games", not his average). A depth player who never played half the
+    snaps (the Patriots' Channing Canada and Karon Prunty, 5% at most) is
+    not one."""
+    weeks: dict = {}
+    per: dict = {}
+    for r in snap_rows or []:
+        if (r.get("game_type") or "REG") != "REG":
+            continue
+        try:
+            wk = int(float(r.get("week") or 0))
+        except ValueError:
+            continue
+        team, who = r.get("team") or "", r.get("player") or ""
+        if (before_week and wk >= before_week) or not team or not who:
+            continue
+        weeks.setdefault(team, set()).add(wk)
+
+        def pct(k):
+            try:
+                return float(r.get(k) or 0)
+            except ValueError:
+                return 0.0
+        per.setdefault((team, _key(who)), {})[wk] = max(pct("offense_pct"), pct("defense_pct"))
+    out: dict = {}
+    for (team, k), by_week in per.items():
+        last = set(sorted(weeks.get(team) or ())[-games:])
+        mine = [v for w, v in by_week.items() if w in last]
+        if k and mine and 2 * sum(1 for v in mine if v >= share) >= len(mine):
+            out.setdefault(team, set()).add(k)
     return out
 
 
@@ -1470,8 +1536,12 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               line_words: dict | None = None, faces: dict | None = None,
               evidence: list | None = None, pulled: list | None = None,
               charting: dict | None = None, tracking: dict | None = None,
-              contact: dict | None = None) -> dict:
+              contact: dict | None = None, recent: dict | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
+
+    ``recent`` is `recent_starters` — {team: {name key}} — who has started
+    lately by the snap counts, so a starter the depth chart has already
+    replaced is still named when he is out.
 
     ``evidence`` is every priced row of this game whose teammate-out notes
     a read may quote (`ripples`, `mate_card`) — the props and the Most
@@ -1487,7 +1557,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
     opp = {away: home, home: away}
     rooms = {t: coverage_room(t, (charts or {}).get(t) or [], defenders_now,
                               defenders_last, injuries) for t in teams}
-    lines = {t: _line_out(t, (charts or {}).get(t) or [], injuries) for t in teams}
+    lines = {t: _line_out(t, (charts or {}).get(t) or [], injuries, recent) for t in teams}
     edges = unit_edges(away, home, ratings) + unit_edges(home, away, ratings)
     edges = [e for e in edges if abs(e["gap"]) >= gap_bar]
     edges.sort(key=lambda e: -abs(e["gap"]))
@@ -1501,7 +1571,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
     for (t, _k), v in defenders_now.items():
         if t in starters and ((v.get("targets") or 0) >= MIN_TARGETS or (v.get("pressures") or 0) >= 3):
             starters[t].add(v.get("name") or "")
-    by_key = {t: {_key(n) for n in starters[t]} for t in teams}
+    by_key = {t: {_key(n) for n in starters[t]} | set((recent or {}).get(t) or ()) for t in teams}
     inj_rows = []
     for i in injuries or []:
         t, st = getattr(i, "team", ""), str(getattr(i, "status", "") or "").upper()
@@ -1962,9 +2032,10 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
             return fn(*a)
         except Exception:                                    # noqa: BLE001
             return []
+    snaps = _safe(load_snap_counts, season)
+    recent = recent_starters(snaps, before_week=week)
     usage = blend_usage(
-        usage_table(_safe(load_weekly_stats, season), _safe(load_snap_counts, season),
-                    before_week=week),
+        usage_table(_safe(load_weekly_stats, season), snaps, before_week=week),
         usage_table(_safe(load_weekly_stats, season - 1), _safe(load_snap_counts, season - 1)))
     try:
         from .nflusage import depth_mix, pocket_split
@@ -2011,7 +2082,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                                             if r.get("team") in (home, away)],
                          charting=charting, tracking=tracking,
                          pulled=getattr(g, "pulled_players", None) or [],
-                         contact=contact)
+                         contact=contact, recent=recent)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}

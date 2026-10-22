@@ -16,6 +16,13 @@ from every book in the newer one — for a game that has not started — was
 PULLED. The build marks him on the game (`Game.pulled_players`), the
 matchup scan gives him no read, and the scan says who was pulled and why.
 
+HE STAYS PULLED UNTIL A PULL PRICES HIM AGAIN (``gone``). Kyle Monangai,
+2026-10-22, ruled out for a third straight game: one pull priced him, the
+next did not, and the one after that did not either — and since only the
+last two pulls were compared, the third read as nobody pulled, and the
+report's change log wrote "Kyle Monangai's props are back up" beside the
+line that said he was out.
+
 A pull is recognised by its payload's write time, so a cached rebuild
 serving the same file is not a new pull and changes nothing. Standard
 library only; the store lives beside the other model state.
@@ -24,7 +31,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
+import unicodedata
 
 #: A player must have been priced within this long before the newer pull
 #: for his absence to mean anything: a menu from last week is a different
@@ -66,25 +75,57 @@ def record(event_id: str, players: list, pulled_at: float, data: dict) -> None:
     if pulled_at <= latest_at + 1.0:
         return
     if cur.get("latest") is not None:
-        data[event_id] = {"latest_at": pulled_at, "latest": names,
-                          "earlier_at": latest_at, "earlier": cur.get("latest") or []}
+        rec = {"latest_at": pulled_at, "latest": names,
+               "earlier_at": latest_at, "earlier": cur.get("latest") or []}
     else:
-        data[event_id] = {"latest_at": pulled_at, "latest": names}
+        rec = {"latest_at": pulled_at, "latest": names}
+    # Who is down stays down until a pull prices him; a pull that priced
+    # nobody says nothing about anyone, so it clears no one either.
+    gone = set(cur.get("gone") or []) | set(_dropped(rec))
+    if names:
+        now = {_same(p) for p in names}
+        gone = {p for p in gone if _same(p) not in now}
+    if gone:
+        rec["gone"] = sorted(gone)
+    data[event_id] = rec
 
 
-def pulled(event_id: str, data: dict) -> list:
+#: Name endings a book may or may not print.
+_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def _same(name: str) -> str:
+    """One key for a man however a pull spells him — "D.J. Moore" and "DJ
+    Moore", "Carlton Davis III" and "Carlton Davis", "Luka Dončić" and
+    "Luka Doncic" — so a spelling that changes between pulls is neither a
+    pull nor, once he is down, a man who never comes back."""
+    plain = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    words = re.sub(r"[^a-z ]", "", plain.lower().replace("-", " ")).split()
+    while len(words) > 1 and words[-1] in _SUFFIXES:
+        words.pop()
+    return "".join(words)
+
+
+def _dropped(cur: dict) -> list:
     """Players priced in the earlier pull and in none of the books in the
     latest one — [] when there is no earlier pull, the gap is too long, or
     the latest pull priced nobody (a payload with no player markets says
     nothing about any one player)."""
-    cur = data.get(event_id) or {}
     latest, earlier = cur.get("latest"), cur.get("earlier")
     if not latest or not earlier:
         return []
     if float(cur.get("latest_at") or 0) - float(cur.get("earlier_at") or 0) > MAX_GAP_S:
         return []
-    now = set(latest)
-    return sorted(p for p in earlier if p not in now)
+    now = {_same(p) for p in latest}
+    return sorted(p for p in earlier if _same(p) not in now)
+
+
+def pulled(event_id: str, data: dict) -> list:
+    """Every player the books have taken down for this event and no pull
+    has priced since: the one the latest pull dropped, and anyone dropped
+    before it who has not come back."""
+    cur = data.get(event_id) or {}
+    return sorted(set(cur.get("gone") or []) | set(_dropped(cur)))
 
 
 class Tracker:

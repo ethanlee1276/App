@@ -1,6 +1,6 @@
 """The short version reads as sentences, not a wire slip.
 
-Ethan, 2026-10-23, at the Patriots–Bears report on his phone: "Fix how in
+Ethan, 2026-10-22, at the Patriots–Bears report on his phone: "Fix how in
 the short version that we need to be more descriptive in the wording. It's
 very blunt." It read:
 
@@ -207,6 +207,48 @@ def test_the_total_is_placed_on_the_board_only_at_either_end():
         assert R._slate_spot(c) == want, (g, R._slate_spot(c))
     few = R.Ctx(games[-1], {"games": games[:3] + [games[-1]]}, names={})
     assert R._slate_spot(few) == "", "four games is not a board to rank on"
+
+
+# --- Ethan's research on the same game, 2026-10-22 -------------------------------------------
+def test_every_soft_corner_is_named_and_one_who_may_sit_says_so():
+    """The research went at Jaylon Johnson (22 of 28 for 412 yards); this
+    named only Stevenson, and never said Stevenson was questionable."""
+    corners =[{"name": "Tyrique Stevenson", "spot": "RCB", "status": "QUESTIONABLE", "targets": 17, "rating": 139.0},
+               {"name": "Jaylon Johnson", "spot": "LCB", "status": "", "targets": 28, "rating": 130.7},
+               {"name": "Kyler Gordon", "spot": "NB", "status": "", "targets": 3, "rating": 150.0},
+               {"name": "Nahshon Wright", "spot": "LCB", "status": "", "targets": 9, "rating": 88.0}]
+    g = {"away": "NE", "home": "CHI", "scan": {"coverage": {"CHI": {"corners": corners, "weakest": "Tyrique Stevenson"}},
+                                               "method": {"teams": 32}}}
+    c = R.Ctx(g, {"games": [g]}, names={"NE": "Patriots", "CHI": "Bears"})
+    got = [x for x in R.sec_short(c, {})["blocks"][0]["items"] if "coverage" in x]
+    assert got == [
+        "The softest spots in coverage: the Bears' right cornerback Tyrique Stevenson (questionable) has allowed "
+        "a 139 passer rating on 17 targets, and left cornerback Jaylon Johnson a 130.7 on 28. A perfect passer "
+        "rating is 158.3, so the receivers who line up across from them have the easier matchup."], got
+    # Three targets is not a sample, and 88 is not soft; one corner past
+    # the bar is still said as one.
+    one = [dict(x, status="") for x in corners[:1]] + corners[2:]
+    g["scan"]["coverage"]["CHI"]["corners"] = one
+    got = [x for x in R.sec_short(R.Ctx(g, {"games": [g]}, names={"NE": "Patriots", "CHI": "Bears"}), {})
+           ["blocks"][0]["items"] if "coverage" in x]
+    assert got and got[0].startswith("The softest spot in coverage: the Bears' right cornerback Tyrique Stevenson "
+                                     "has allowed a 139") and got[0].endswith("across from him have the easier matchup."), got
+
+
+def test_a_reason_is_said_without_the_models_footnotes():
+    said = ("Kyle Monangai (RB) is out — 36% of the carries (12.7 a game) to go around; not enough games without "
+            "him to measure who takes them · our projection counts it: +10% rushing yards")
+    assert R.short_reason(said) == "with Kyle Monangai out, 36% of the carries (12.7 a game) are up for grabs"
+    assert R.short_reason("Romeo Doubs (WR) is out — 16% of the targets (4.6 a game) to go around · not in our "
+                          "number: no lift measured across positions") == \
+        "with Romeo Doubs out, 16% of the targets (4.6 a game) are up for grabs"
+    plain = "NE gives up the 6th-most rushing yards to running backs (98.4 a game)"
+    assert R.short_reason(plain) == plain
+    c = _ctx("NE", "CHI", {"NE": "Patriots", "CHI": "Bears"})
+    r = {"player": "D'Andre Swift", "team": "CHI", "pos": "RB", "read": "good",
+         "pro": ["The lines expect CHI to score about 27 (−3 at home, total 50.5)", said]}
+    assert R.player_clause(c, r, "up") == ("D'Andre Swift, the Bears' running back — with Kyle Monangai out, 36% of "
+                                           "the carries (12.7 a game) are up for grabs")
 
 
 if __name__ == "__main__":

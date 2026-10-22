@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, and a starter the depth chart already replaced is still named out (step 157; CZ).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2965,7 +2965,7 @@ nothing new and no player prices. Your game now reads:
   road as 6.5-point underdogs; the 22 points went under the 37.5 total."
 
 Nothing to run. The reports are rewritten on every board build, so once
-the box has the code (dated 2026-10-23 or later) the next build of each
+the box has the code (dated 2026-10-22 or later) the next build of each
 league shows it. To check the box has it (expect `1`):
 
 ```
@@ -2997,6 +2997,50 @@ journalctl -u qellys --since "2 days ago" --no-pager | grep -i auto-update | tai
 Also in the same box: "updated 11264 min ago" on a game opened days
 later now reads "updated 8 days ago" (and "updated 5 hr ago" the next
 morning).
+
+**CZ. Your four Patriots–Bears research docs, checked** (step 157). Your "I
+did 4 pieces of research for the patriots vs pats game tonight so see where
+it makes sense and doesn't and where our website is hitting right and
+missing". The full write-up is the file I sent in chat. What it fixed on the
+site:
+
+- "Kyle Monangai (CHI RB)'s props are back up" (Thu 7:12 AM) was false: he
+  is out. We only compared the last two prop pulls, so the third pull
+  without him read as a return. Now:
+  - a player the books took down stays down until a pull prices him again;
+  - a build whose prices are too old keeps the list;
+  - the change log never says "back up" for a player listed out;
+  - the line already in the box's log goes on the next build.
+- The short version names every soft corner, not just the worst, and says
+  when one is questionable: "the Bears' right cornerback Tyrique Stevenson
+  (questionable) has allowed a 139 passer rating on 17 targets, and left
+  cornerback Jaylon Johnson a 130.7 on 28."
+- A starter the depth chart has already replaced (an IR move) is still
+  named as out, and on the starting line. Who counts as a starter comes
+  from the snap counts: half his side's snaps in at least half his recent
+  games. For the Patriots, Vera-Tucker, Ben Brown and Doubs count; Canada
+  and Prunty (5% of the snaps at most) don't.
+- A player's reason in the short version drops the model's footnotes:
+  "with Kyle Monangai out, 36% of the carries (12.7 a game) are up for
+  grabs".
+- CX said "dated 2026-10-23 or later". The code is dated 2026-10-22, and
+  CX now says so.
+
+Nothing to run. To check the box has it (expect `1` on the last line):
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "def recent_starters" engine/gamescan.py
+```
+
+Then open tonight's Patriots–Bears report. Under "What changed" the
+Thursday 7:12 AM Monangai line should be gone after the next NFL build.
+
+Not built, your call:
+- Should a team missing starting linemen move our numbers? I'd measure it
+  first; the same study for defenders found it didn't help.
+- Should the free pages be findable by search? One research tool couldn't
+  fetch the site and found nothing in search. There is no robots.txt or
+  sitemap, and every page is drawn by JavaScript.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

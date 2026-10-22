@@ -401,7 +401,7 @@ def _weather_said(text: str) -> str:
 
 def mlb_short(c: Ctx, built: dict) -> dict | None:
     """The short version, in sentences (gamereport's note above
-    `POS_WORDS`: Ethan, 2026-10-23, "It's very blunt")."""
+    `POS_WORDS`: Ethan, 2026-10-22, "It's very blunt")."""
     items = _short_common(c)
     if _starter(c, c.away) or _starter(c, c.home):
         items.append(_sentence(f"On the mound, {_sp_clause(c, c.away)}, and {_sp_clause(c, c.home)}"))

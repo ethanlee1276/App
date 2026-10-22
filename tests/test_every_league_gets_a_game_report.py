@@ -152,7 +152,7 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
     keys = [s["key"] for s in rep["sections"]]
     assert keys == ["short", "facts", "market", "pitching", "watch", "weather", "injuries", "before"], keys
     text = R.to_text(rep)
-    # The short version, said in sentences (Ethan, 2026-10-23: "It's very blunt").
+    # The short version, said in sentences (Ethan, 2026-10-22: "It's very blunt").
     for want in ("The Phillies are the moneyline favorites, with a 60% chance to win once the book's cut is "
                  "taken out. They are −1.5 on the run line, and the total is 9.5 runs.",
                  "On the mound, the Phillies start right-hander Zack Wheeler (a 3.05 expected ERA, striking out "

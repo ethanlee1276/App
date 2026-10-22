@@ -2748,6 +2748,22 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     from engine.pricedplayers import Tracker as _PricedTracker
     _priced = _PricedTracker()
 
+    def _mark_pulled(ev: dict, game, gone: list, home: str, away: str) -> None:
+        """Hang ``gone`` on the game — only when the memory's latest pull
+        came before kickoff."""
+        if not gone or game is None:
+            return
+        _kick = str(ev.get("commence_time") or "").replace("Z", "+00:00")
+        try:
+            import datetime as _dtm
+            _kick_ts = _dtm.datetime.fromisoformat(_kick).timestamp() if _kick else None
+        except ValueError:
+            _kick_ts = None
+        _cur = _priced.data.get(ev.get("id") or "") or {}
+        if _kick_ts is None or float(_cur.get("latest_at") or 0) < _kick_ts:
+            game.pulled_players = sorted(set(getattr(game, "pulled_players", None) or []) | set(gone))
+            result.pulled_players.extend(f"{p} ({away}@{home})" for p in gone)
+
     for ev in events:
         home = _abbr(ev.get("home_team", ""))
         away = _abbr(ev.get("away_team", ""))
@@ -2854,6 +2870,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         wanted = prop_leg.get(pair, 0)
         props_ok = (not wanted or game is None
                     or getattr(game, "game_number", 1) == wanted)
+        _prop_leg = props_ok
         # HOW OLD THIS PAYLOAD IS, read once and asked twice: of the
         # player markets against MAX_PROP_PRICE_AGE, of the game markets
         # against MAX_GAME_PRICE_AGE. A cached payload is served at any
@@ -2903,16 +2920,19 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 if scorer_map:
                     _who |= set(parse_event_players(payload, scorer_map).values())
                 _gone = _priced.see(ev.get("id") or "", sorted(_who), _age)
-                _kick = str(ev.get("commence_time") or "").replace("Z", "+00:00")
-                try:
-                    import datetime as _dtm
-                    _kick_ts = _dtm.datetime.fromisoformat(_kick).timestamp() if _kick else None
-                except ValueError:
-                    _kick_ts = None
-                _cur = _priced.data.get(ev.get("id") or "") or {}
-                if _gone and game is not None and (_kick_ts is None or float(_cur.get("latest_at") or 0) < _kick_ts):
-                    game.pulled_players = sorted(set(getattr(game, "pulled_players", None) or []) | set(_gone))
-                    result.pulled_players.extend(f"{p} ({away}@{home})" for p in _gone)
+                _mark_pulled(ev, game, _gone, home, away)
+            except Exception:                                # noqa: BLE001
+                pass
+        elif _prop_leg:
+            # TOO OLD TO PRICE FROM IS NOT A RETURN. A payload past the
+            # show ceiling prices nobody, and it brings nobody back either:
+            # who the books took down is still the memory's answer from the
+            # pulls that were fresh (asked with no age, so nothing is
+            # recorded). Without it a stale build carried no pulled players,
+            # and the report's change log read every one as "props are back
+            # up" — then "took his props down" again on the next fresh pull.
+            try:
+                _mark_pulled(ev, game, _priced.see(ev.get("id") or "", [], None), home, away)
             except Exception:                                # noqa: BLE001
                 pass
         # Attach real game-market prices to the matching game (each leg gets

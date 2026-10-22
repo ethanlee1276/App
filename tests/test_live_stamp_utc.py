@@ -157,7 +157,7 @@ def test_the_reader_only_assumes_utc_when_the_stamp_names_no_zone():
 def test_an_old_stamp_reads_in_hours_and_days():
     """A final opened the next morning said "updated 640 min ago", and one
     opened a week later "updated 11264 min ago" (Ethan's 76ers @ Knicks
-    scoreboard, rendered off an old stamp, 2026-10-23)."""
+    scoreboard, rendered off an old stamp, 2026-10-22)."""
     node = shutil.which("node")
     if not node:
         print("  SKIP node not installed"); return
