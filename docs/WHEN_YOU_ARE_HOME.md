@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA). Why Luther Burden III isn't on our boards: our numbers agree with the books on him, receiving yards is shut on Edge, and his likeliest lines sit just past the −250 cap; a check, a re-test and your call (step 159; DB).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -3105,6 +3105,55 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nfl
 ```
 
 Each Thursday's run keeps its log in `data/cache/weekly_inventionfit.log`.
+
+**DB. Why Luther Burden III isn't on our boards** (step 159). Your "every
+report I have recommended Luther burden III but we don't have him once in
+our board". The research and our model agree on him; the board's rules
+keep him off:
+
+- Edge shows only bets where we think the book is wrong. On Burden we
+  agree with the books: 40+ yards is 72% to us and −260 (72%) at the book;
+  4+ catches is 73% to us and about −260. And receiving yards has been
+  off Edge entirely since August, when our model couldn't beat the
+  closing lines there (engine/calibrate, SHUT_MARKETS).
+- Most Likely shows the likeliest bets at 55% or better, priced −250 or
+  shorter, and at most the top 40. His likeliest lines (4+ catches, 40+
+  yards) are about −260, just past your −250 cap. His main lines are coin
+  flips (5+ catches 54%, 56+ yards 48%), under the 55% floor. 45+ yards
+  (65%) qualifies but ranks below the top 40.
+
+1. Tonight's board, his rows and the rule that stopped each, then his
+   picks all season (read-only, seconds):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json, sqlite3
+from engine.calibrate import shut_reason
+d = json.load(open('data/built/recommendations.json'))
+for r in d.get('recommendations') or []:
+    if 'Burden' in (r.get('player') or ''):
+        bad = [c.get('key') for c in r.get('checks') or [] if not c.get('passed')]
+        why = 'market shut' if shut_reason('nfl', r.get('market')) else ', '.join(bad or ['-'])
+        print('edge:', r.get('market'), r.get('side'), r.get('line'), r.get('odds'), 'ours', round(100 * (r.get('hit_prob') or 0)), 'pick' if r.get('recommended') else 'no pick: ' + why)
+print('most likely:', [(r.get('market'), r.get('side'), r.get('line'), r.get('odds')) for r in d.get('most_likely') or [] if 'Burden' in (r.get('player') or '')] or 'not on it')
+c = sqlite3.connect('data/ledger.db')
+print('season picks:', c.execute(\"SELECT category, COUNT(*) FROM bets WHERE sport='nfl' AND player LIKE '%Burden%' GROUP BY category\").fetchall())
+"
+```
+
+2. Receiving and rushing yards, tested again against this season's real
+   closing lines (read-only, a few minutes). August's test had about one
+   week of closes; the box has seven now. If receiving yards beats the
+   closes now, the shut comes off (a code change I'd make from your
+   paste):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.yardagefit --real rec_yds rush_yds receptions
+```
+
+3. Your call: the −250 cap. You set it on Sept 1 ("i dont wanna be betting
+   on -1200 or -1800 bets"). At −275 or −300, legs like Burden's 4+
+   catches and 40+ yards would qualify for Most Likely.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
