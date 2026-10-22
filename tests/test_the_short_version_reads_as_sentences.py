@@ -235,6 +235,29 @@ def test_every_soft_corner_is_named_and_one_who_may_sit_says_so():
                                      "has allowed a 139") and got[0].endswith("across from him have the easier matchup."), got
 
 
+def test_two_starting_linemen_out_are_said_against_the_pass_rush():
+    """The matchup all four research docs led with; the season-long unit
+    ranks cannot see a line that lost two starters this week."""
+    g = {"away": "NE", "home": "CHI", "scan": {
+        "line_out": {"NE": ["Alijah Vera-Tucker (LG)", "Ben Brown (RG)"], "CHI": ["Darnell Wright (RT)"]},
+        "injuries": [{"team": "NE", "player": "Alijah Vera-Tucker", "position": "G", "status": "OUT"},
+                     {"team": "NE", "player": "Ben Brown", "position": "C", "status": "OUT"}]}}
+    c = R.Ctx(g, {"games": [g]}, names={"NE": "Patriots", "CHI": "Bears"})
+    assert R.line_sentence(c) == ("Two of the Patriots' starting offensive linemen are out (Alijah Vera-Tucker "
+                                  "and Ben Brown)."), "one out (the Bears' tackle) is not said; no rank, no clause"
+    c.units = {"CHI": {"def": {"pressure": {"rank": 6}}}}
+    assert R.line_sentence(c) == ("Two of the Patriots' starting offensive linemen are out (Alijah Vera-Tucker "
+                                  "and Ben Brown), and they face the Bears' pass rush, which ranks 6th.")
+    assert "Two of the Patriots' starting offensive linemen" in " ".join(R.sec_short(c, {})["blocks"][0]["items"])
+    g["scan"]["injuries"][1]["status"] = "DOUBTFUL"
+    assert "are out or doubtful (" in R.line_sentence(c)
+    school = {"away": "MIA", "home": "IND", "scan": {"line_out": {"IND": ["A (LT)", "B (C)", "C (RT)"]}}}
+    cfb = R.Ctx(school, {"games": [school]}, names={"MIA": "Miami", "IND": "Indiana"}, sport="cfb")
+    cfb.units = {"MIA": {"def": {"pressure": {"rank": 1}}}}
+    assert R.line_sentence(cfb) == ("Three of Indiana's starting offensive linemen are out (A, B and C), and it "
+                                    "faces Miami's pass rush, which ranks 1st.")
+
+
 def test_a_reason_is_said_without_the_models_footnotes():
     said = ("Kyle Monangai (RB) is out — 36% of the carries (12.7 a game) to go around; not enough games without "
             "him to measure who takes them · our projection counts it: +10% rushing yards")

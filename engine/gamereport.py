@@ -2166,6 +2166,41 @@ def absent_sentence(c: Ctx, rows: list, per_team: int = 5) -> str:
     return _sentence(cap("; ".join(parts))) if parts else ""
 
 
+#: Small counts as a reader says them.
+_COUNT_WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def line_sentence(c: Ctx) -> str:
+    """"Two of the Patriots' starting offensive linemen are out (Alijah
+    Vera-Tucker and Ben Brown), and they face the Bears' pass rush, which
+    ranks 6th."
+
+    Said when two or more of a team's starting linemen are out (the scan's
+    `line_out`: the depth chart's starters and the ones the snap counts
+    say started lately). The unit ranks above are season-long and cannot
+    see a line that lost two starters this week, and that was the matchup
+    all four of Ethan's Patriots–Bears research docs led with, 2026-10-22.
+    Nothing is said about what it will do: the model's one measured line
+    rule (engine/injuries.KNOCK_ONS) is a starting tackle's."""
+    lines = c.scan.get("line_out") or {}
+    status = {str(r.get("player") or ""): str(r.get("status") or "").upper()
+              for r in c.scan.get("injuries") or [] if isinstance(r, dict)}
+    said = []
+    for t in c.teams:
+        names = [str(x).rsplit(" (", 1)[0] for x in lines.get(t) or [] if x]
+        if len(names) < 2:
+            continue
+        maybe = any(status.get(n) == "DOUBTFUL" for n in names)
+        s = (f"{cap(_COUNT_WORDS.get(len(names), str(len(names))))} of {team_owner(c, t)} starting offensive "
+             f"linemen are {'out or doubtful' if maybe else 'out'} ({_join(names)})")
+        rush = c.rank(c.opp[t], "def", "pressure")
+        if rush:
+            s += (f", and {'they face' if _many(c, t) else 'it faces'} {team_owner(c, c.opp[t])} pass rush, "
+                  f"which ranks {_ord(rush)}")
+        said.append(_sentence(s))
+    return " ".join(said)
+
+
 #: How a rest band reads for the rested side (engine/fatigue.rest_band).
 REST_WORDS = {"off a bye": "come in off their bye", "extra days": "come in with extra rest"}
 
@@ -2328,6 +2363,9 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     gone = absent_sentence(c, outs)
     if gone:
         items.append(gone)
+    line = line_sentence(c)
+    if line:
+        items.append(line)
     for q in c.result.get("qb_changes") or []:
         if isinstance(q, dict) and q.get("team") in c.teams and q.get("headline"):
             items.append(_sentence(cap(named(c, q["headline"]))))
