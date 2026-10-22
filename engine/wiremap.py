@@ -146,6 +146,8 @@ FITS = (
     ("engine.tdtop", "failed", (), "the top of the touchdown board too shy — did not hold on the box, 2026-10-04"),
     ("cfbbridgefit", "failed", (), "college's usage bridge — worse in every season, 2026-10-14; nothing ships"),
     ("defoutfit", "failed", (), "a defence missing its starters — worse in a held-out season in every market, 2026-10-12"),
+    ("oloutfit", "failed", (), "an offence missing its starting linemen — worse in a held-out season in every "
+     "market, and sacks went down, 2026-10-22"),
 )
 
 #: Things the map found that a person decides — not changed here.

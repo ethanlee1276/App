@@ -3045,12 +3045,25 @@ cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "def line_sentence"
 Then open tonight's Patriots–Bears report. Under "What changed" the
 Thursday 7:12 AM Monangai line should be gone after the next NFL build.
 
-Not built, your call:
-- Should a team missing starting linemen move our numbers? I'd measure it
-  first; the same study for defenders found it didn't help.
-- Should the free pages be findable by search? One research tool couldn't
-  fetch the site and found nothing in search. There is no robots.txt or
-  sitemap, and every page is drawn by JavaScript.
+Measured, and not applied: should a team missing starting linemen move
+our numbers? `python3 oloutfit.py` (2022–2025, the same test the
+defenders study failed) says no:
+- one starting lineman out: nothing;
+- two out: the passing game ran 6–8% under its form, on just 39
+  quarterback games, and that didn't hold in 2025;
+- sacks went down, not up: 11% fewer with two out.
+Nothing moves a projection. It runs again once 2026 is complete. It
+changes nothing on the site (it fetches any old season's files it lacks),
+so you can run it on the box if you want to see it yourself (a few
+minutes):
+
+```
+cd /srv/qellys && sudo -u qellys python3 oloutfit.py
+```
+
+Your call: should the free pages be findable by search? One research tool
+couldn't fetch the site and found nothing in search. There is no
+robots.txt or sitemap, and every page is drawn by JavaScript.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

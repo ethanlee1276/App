@@ -2180,8 +2180,9 @@ def line_sentence(c: Ctx) -> str:
     say started lately). The unit ranks above are season-long and cannot
     see a line that lost two starters this week, and that was the matchup
     all four of Ethan's Patriots–Bears research docs led with, 2026-10-22.
-    Nothing is said about what it will do: the model's one measured line
-    rule (engine/injuries.KNOCK_ONS) is a starting tackle's."""
+    Nothing is said about what it will do: measured over 2022-2025
+    (oloutfit.py), a line missing starters held no effect in every season,
+    and its quarterbacks were sacked less, not more."""
     lines = c.scan.get("line_out") or {}
     status = {str(r.get("player") or ""): str(r.get("status") or "").upper()
               for r in c.scan.get("injuries") or [] if isinstance(r, dict)}
