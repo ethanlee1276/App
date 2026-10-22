@@ -120,6 +120,9 @@ def _no_feeds(monkeypatch):
     # a chart table is empty; the suite's sandbox already keeps it from
     # starting one, and a direct run of this file must not either.
     monkeypatch.setattr(maintenance, "fill_charts_if_owed", lambda log=print, **kw: [])
+    # The inventions' Thursday re-measure (2026-10-22), likewise: a test's
+    # Thursday must never start the real measurements.
+    monkeypatch.setattr(maintenance, "_run_inventions", lambda log: [])
 
 
 def _stub_chores(monkeypatch, calls):
@@ -765,6 +768,42 @@ def test_the_marker_is_written_before_the_refit_starts(monkeypatch):
         maintenance.run_if_due(harvest=False, log=lambda *_: None,
                                state_path=holder["state"], today=dt.date(2026, 9, 2))
     assert seen == ["2026-09-02"]
+
+
+def test_the_inventions_are_remeasured_on_thursdays_once(monkeypatch):
+    """Ethan, 2026-10-22: "Are all of our new data and changes being pushed
+    to the most likely bets too ... And the edge bets." The inventions join
+    them when a saved verdict holds (engine/ideagate); the verdicts were
+    saved by hand once. Thursdays they are measured again, out of process,
+    the attempt marked before the work."""
+    _quiet(monkeypatch)
+    monkeypatch.setattr(maintenance, "_run_deep_refit", lambda log: [])
+    calls, seen = [], []
+    holder = {}
+
+    def runs(log):
+        calls.append("run")
+        seen.append(json.loads(holder["state"].read_text()).get("inventions_attempted"))
+        return ["engine.inventionfit: started in the background"]
+
+    monkeypatch.setattr(maintenance, "_run_inventions", runs)
+    with tempfile.TemporaryDirectory() as td:
+        holder["state"] = Path(td) / "m.json"
+        thu = dt.date(2026, 10, 22)
+        maintenance.run_if_due(harvest=False, log=lambda *_: None, state_path=holder["state"],
+                               today=thu - dt.timedelta(days=1))
+        assert calls == [], "Wednesday is the deep refit's"
+        maintenance.run_if_due(harvest=False, log=lambda *_: None, state_path=holder["state"], today=thu)
+        assert calls == ["run"] and seen == ["2026-10-22"], "marked before it starts"
+        maintenance.run_if_due(force=True, harvest=False, log=lambda *_: None,
+                               state_path=holder["state"], today=thu)
+        assert calls == ["run"], "once a Thursday, even when the chores run again"
+        maintenance.run_if_due(force=True, harvest=False, log=lambda *_: None,
+                               state_path=holder["state"], today=thu + dt.timedelta(days=7))
+        assert calls == ["run", "run"]
+    src = open(maintenance.__file__, encoding="utf-8").read()
+    body = src[src.index("def _run_inventions("):src.index("\n\n\n", src.index("def _run_inventions("))]
+    assert '_spawn_module("engine.inventionfit", log)' in body and "modelstate.ENV_VAR" in body
 
 
 def test_the_weekly_fitters_run_out_of_process_and_detached(monkeypatch):

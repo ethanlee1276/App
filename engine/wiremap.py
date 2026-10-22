@@ -78,6 +78,8 @@ FITS = (
     ("engine.devigfit", "number", ("engine.devig",), "which de-vig the touchdown market wants (BAND_Z)"),
     ("engine.journalfit", "number", ("engine.ledger",), "the journal-learned drift every sport shares"),
     ("engine.deepfit", "number", ("engine.maintenance",), "runs the deep fitters nightly; their stores are read above"),
+    ("engine.inventionfit", "number", ("engine.maintenance",),
+     "re-measures the inventions every Thursday; their gates (engine/ideagate) read the verdicts"),
     ("engine.selectionfit", "number", ("engine.betting",), "the selection correction on Edge's claimed edge"),
     ("engine.pmfit", "number", ("engine.predmarket",), "the informed-flow weights on the prediction-market board"),
     ("bridgefit", "number", ("engine.carry",), "the usage bridge leans on last season in the volume role"),

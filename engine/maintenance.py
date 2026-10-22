@@ -1631,6 +1631,18 @@ def _run_lab(log) -> list[str]:
     return _spawn_module("engine.lab", log, args=("--auto",))
 
 
+def _run_inventions(log) -> list[str]:
+    """The inventions' weekly re-measure (engine/inventionfit), out of
+    process and detached. Never inside the suite's sandbox (it sets
+    engine.modelstate's directory, which production never does): the
+    measurements read the real stores, and today's date in a test is
+    whatever day the suite happens to run on."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        return ["engine.inventionfit: not started in the sandbox"]
+    return _spawn_module("engine.inventionfit", log)
+
+
 def game_rank_boot_due(store: dict, state: dict, today: _dt.date,
                        sport: str = "mlb") -> bool:
     """Should this pass measure ``sport``'s GAME markets now, not Wednesday?
@@ -2547,6 +2559,22 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 _lc.close()
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  likely scoreboard skipped: {exc}")
+
+    # THE INVENTIONS, RE-MEASURED (engine/inventionfit). Ethan, 2026-10-22:
+    # "Are all of our new data and changes being pushed to the most likely
+    # bets too ... And the edge bets." Each invention moves Most Likely and
+    # Edge once its saved verdict holds (engine/ideagate), and the verdicts
+    # were saved by hand once, a third of a season in. Thursdays: Monday's
+    # results are in, and Wednesday is the deep refit's. The attempt is
+    # marked before the work, as the deep refit's is.
+    if today.weekday() == 3 and state.get("inventions_attempted") != today.isoformat():
+        state["inventions_attempted"] = today.isoformat()
+        _save_state(state_path, state)
+        try:
+            for line in _run_inventions(log):
+                log(f"  {line}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  inventions re-measure skipped: {exc}")
 
     # BOOTSTRAP: a box holding a sport's logs with an EMPTY rank store
     # measures now rather than waiting for Wednesday — the same "fit it
