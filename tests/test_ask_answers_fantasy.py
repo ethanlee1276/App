@@ -58,6 +58,10 @@ conn = _db.connect(str(_TMP / "history.db"))
 _db.upsert_player_logs(conn, _logs())
 conn.close()
 AB.HISTORY_DB = str(_TMP / "history.db")
+# THE WEEK'S FILE (engine/fantasyweek) is read from the paid folder: an
+# empty one here, so every test reads the board-and-logs path whatever the
+# machine running it holds, unless it writes a week of its own.
+AB.PAID_DIR = str(_TMP)
 
 
 def _row(player, market, projection, **kw):
@@ -135,6 +139,48 @@ def test_a_rostered_player_with_no_game_is_known_not_unheard_of():
     assert got["found"] is False
     assert got["unsure"]["carnell tate"] == \
         "Carnell Tate (TEN WR) is on the roster with no NFL game logged yet: nothing to project from"
+
+
+def test_this_week_s_file_answers_first_and_says_so():
+    """Ethan, 2026-10-22: the board's offence, defence and game-script data
+    "wrapped into" fantasy. Ask answers a player on this week's file exactly
+    as the Fantasy page and the league desks score him: at the chance he
+    plays, with the range, the matchup and why; a bye is zero."""
+    import datetime as _dt
+    import json as _json
+    from engine import fantasyweek as FW
+    soon = (_dt.date.today() + _dt.timedelta(days=3)).isoformat()
+    rows = [_row("Chris Olave", "rec_yds", 90.0, injury_status="Questionable",
+                 matchup_card={"rank": 2, "of": 32, "text": "DET allow 190 receiving yards to WRs a game"}),
+            _row("Chris Olave", "receptions", 7.0)]
+    doc = {"week": 8, "players": FW.project_players(rows, {("NO", "Chris Olave"): {"prob": 0.40}}),
+           "byes": ["BUF"], "listed": {}, "teams": {"NO": {"date": soon}}, "measured": FW.MEASURED}
+    d = Path(tempfile.mkdtemp())
+    (d / FW.FILE).write_text(_json.dumps(doc))
+    was, AB.PAID_DIR = AB.PAID_DIR, str(d)
+    try:
+        got = AB.fantasy_points(BOARDS, ["Chris Olave", "Josh Allen", "Juwan Johnson"])
+        stale = dict(doc, teams={"NO": {"date": "2020-01-01"}})
+        (d / FW.FILE).write_text(_json.dumps(stale))
+        old = AB.fantasy_points(BOARDS, ["Chris Olave"])
+    finally:
+        AB.PAID_DIR = was
+    by = {p["player"]: p for p in got["players"]}
+    olave = by["Chris Olave"]
+    q = FW.FALLBACK_PLAY["Questionable|*"]
+    ppr = 90 * 0.1 + 7 + -math.log(1 - 0.40) * 6
+    assert olave["if_he_plays"] == round(ppr, 1) and olave["chance_to_play"] == round(q, 2)
+    assert olave["projected_points"] == round(ppr * q, 1), "counted at the chance he plays"
+    assert olave["injury"] == "Questionable" and olave["matchup_grade"] == "soft"
+    assert olave["eight_in_ten_weeks_ppr"] == list(FW.range_for("WR", round(ppr, 2)))
+    assert olave["parts"]["rec_yds"] == {"value": 90.0, "from": "this week's board"}
+    assert olave["touchdowns"]["from"] == "our touchdown model, 40% to score a touchdown"
+    assert olave["season"]["games"] == 4, "his season rides along"
+    allen = by["Josh Allen"]
+    assert allen["projected_points"] == 0.0 and allen["note"] == "BUF are on a bye this week"
+    assert by["Juwan Johnson"]["parts"]["rec_yds"]["from"] == "season average", "not on the week: the old path"
+    assert "this week's file" in got["how"] and got["measured"].startswith("walked forward on 2023-2025")
+    assert old["players"][0]["parts"]["rec_yds"]["from"] == "this week", "a finished week is not read"
 
 
 def test_defences_against_a_position_are_ranked_from_the_logs():

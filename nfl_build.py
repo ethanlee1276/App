@@ -1134,6 +1134,42 @@ def main() -> None:
     from engine import ideas as _ideas
     _ideas.attach("nfl", slate.props, result.get("games"), result, out=args.out)
     _mem("ideas readings", args.memtrace)
+    # THIS WEEK IN FANTASY POINTS (engine/fantasyweek). Ethan, 2026-10-22:
+    # "with all this new data added for nfl with how we do the offense and
+    # defense and game scripts and all the data from our game reports. We
+    # need to make sure we are using that data correctly for fantasy." The
+    # board's own projections (the matchup, the script, the weather, who is
+    # out around him), every skill player's touchdown chance, the practice
+    # reports and the scan's reads, added up in fantasy points and written
+    # to their own paid file beside this board. The league desks, the
+    # Fantasy page and Ask read it; it never costs the board.
+    try:
+        from engine import fantasyweek as _fw
+        from engine.pipeline import td_chances as _td_chances
+        # His season so far, for the parts the board has no line for him in
+        # (a receiver's catches, a back's receiving): the desks' own means.
+        _fw_means: dict = {}
+        try:
+            from engine.db import connect as _fw_connect
+            from engine.fantasy_lineup import per_game as _fw_per_game
+            _fw_conn = _fw_connect()
+            try:
+                # Last season for a man with no game yet this one (weeks 1-3).
+                _fw_means = {**_fw_per_game(_fw_conn, args.season - 1),
+                             **_fw_per_game(_fw_conn, args.season)}
+            finally:
+                _fw_conn.close()
+        except Exception:                                     # noqa: BLE001
+            _fw_means = {}
+        _fw_doc = _fw.from_board(result, _td_chances(slate, nfl_usage),
+                                 ideas=_ideas.LAST.get("nfl"), season=args.season,
+                                 week=args.week, slate=slate, season_means=_fw_means)
+        if args.out:
+            _fw.publish(_fw_doc, args.out)
+        print("  " + _fw.summary_line(_fw_doc))
+    except Exception as _fexc:                                # noqa: BLE001
+        print(f"  ⚠️  fantasy week skipped: {_fexc}")
+    _mem("fantasy week", args.memtrace)
     try:
         from engine import ideagate as _gate
         _refused = _gate.edge(result, "nfl")

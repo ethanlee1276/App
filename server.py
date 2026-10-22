@@ -1668,6 +1668,47 @@ class Handler(BaseHTTPRequestHandler):
                "board_rounds": draftplan.annotate_rounds(board, ranks, teams)[:150]}
         self._send(200, json.dumps(out).encode(), ".json")
 
+    def _fantasy_week(self) -> tuple[dict, dict]:
+        """(this week's fantasy file or {}, what the desk says about it).
+
+        THE WEEK IS THE PAID HALF OF THE DESK (engine/fantasyweek; Ethan,
+        2026-10-22, "make sure we wrap that into it how it should be").
+        Season averages are facts out of the box score and the desk has
+        always served them to anyone; this week's projection is the prop
+        board's numbers in fantasy points, which is the product. So a
+        caller who is not a member gets the season-average desk exactly as
+        before, and the page says what the week adds.
+
+        A file whose games are over is not this week's (fantasyweek
+        .current): until the board builds the next week, the desk scores
+        season averages and says why, rather than last week's matchups."""
+        from engine import fantasyweek
+        doc = fantasyweek.load()
+        if not doc or not doc.get("players"):
+            return {}, {"week": None, "state": "none", "locked": False,
+                        "note": "This week's projections are not built yet; season averages shown."}
+        if not fantasyweek.current(doc):
+            return {}, {"week": doc.get("week"), "state": "stale", "locked": False,
+                        "note": (f"Week {doc.get('week')}'s games are over and next week's "
+                                 "projections are not built yet; season averages shown.")}
+        A = _acct()
+        aconn = A.connect()
+        try:
+            ok = self._entitled(aconn, self._account(aconn))
+        except Exception:                                    # noqa: BLE001
+            ok = False
+        finally:
+            aconn.close()
+        if not ok:
+            return {}, {"week": doc.get("week"), "season": doc.get("season"),
+                        "state": "locked", "locked": True,
+                        "note": ("This week's projections — the matchup, the game script, "
+                                 "the weather, injuries and who is out around him — come with "
+                                 "a membership. Shown here: season averages.")}
+        return doc, {"week": doc.get("week"), "season": doc.get("season"),
+                     "built_at": doc.get("built_at"), "byes": doc.get("byes") or [],
+                     "state": "ok", "locked": False, "measured": doc.get("measured")}
+
     def _league_desk(self, query: dict):
         """Your optimal lineup and the trades worth proposing, in one read.
 
@@ -1734,8 +1775,17 @@ class Handler(BaseHTTPRequestHandler):
                 if name and pos:
                     out.append({"player": name, "position": pos,
                                 "starting": str(pid) in seated})
+                    # His NFL team, for the bye, and Sleeper's own injury
+                    # status, for a man on IR the week's practice report
+                    # never lists (engine/fantasyweek.with_week).
+                    if p.get("team"):
+                        team_of[name] = str(p["team"]).upper()
+                    if p.get("injury_status"):
+                        status_of[name] = str(p["injury_status"])
             return out
 
+        team_of: dict = {}
+        status_of: dict = {}
         owner = {}
         for u in users or []:
             owner[str(u.get("user_id"))] = (u.get("display_name")
@@ -1758,10 +1808,23 @@ class Handler(BaseHTTPRequestHandler):
             season = max((int(s[0]) for s in conn.execute(
                 "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
             ).fetchall()), default=0)
-            means = fantasy_lineup.per_game(conn, season) if season else {}
-            means = fantasy_lineup.with_board(means, self._kit_board())
+            season_means = fantasy_lineup.per_game(conn, season) if season else {}
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
         finally:
             conn.close()
+
+        # THIS WEEK, for the lineup and the head-to-head; THE SEASON, for
+        # the trades. A start is this week's question, and this week's
+        # projection answers it: the matchup, the script, the weather, who
+        # is out around him, a bye (engine/fantasyweek). A trade is the rest
+        # of the season's, and a man on a bye this week is not worth zero
+        # to it.
+        from engine import fantasyweek
+        week_doc, week_meta = self._fantasy_week()
+        league_names = [r["player"] for rows in by_roster.values() for r in rows]
+        means = (fantasyweek.with_week(season_means, week_doc, league_names, teams=team_of,
+                                       statuses=status_of)
+                 if week_doc else season_means)
 
         scoring = league.get("scoring_settings") or {}
         slots = fantasy_lineup.starting_slots(league.get("roster_positions"))
@@ -1770,8 +1833,12 @@ class Handler(BaseHTTPRequestHandler):
             "slots": slots, "has_me": bool(mine),
             "lineup": fantasy_lineup.lineup(mine, slots, scoring, means)
                       if mine else None,
+            "projection_week": week_meta,
+            # The best of this week nobody in the league rosters.
+            "free_agents": (fantasyweek.free_agents(week_doc, league_names)
+                            if week_doc else {}),
         }
-        trades = (fantasy_trade.generate(mine, rivals, slots, scoring, means)
+        trades = (fantasy_trade.generate(mine, rivals, slots, scoring, season_means)
                   if mine and rivals else [])
         out["trades"] = trades[:12]
         out["trade_summary"] = fantasy_trade.summary(trades)
@@ -1830,9 +1897,15 @@ class Handler(BaseHTTPRequestHandler):
                                              f"Team {opp_id}")
                         break
         if mine:
+            # THIS WEEK'S NUMBERS FOR THIS WEEK'S GAME ONLY. Asked about
+            # another week, the head-to-head is scored on season averages,
+            # as it always was: week 8's matchups say nothing about week 5.
+            same_week = (not week_doc or out["week"] is None
+                         or week_doc.get("week") in (None, out["week"]))
             h2h = fantasy_h2h.head_to_head(mine, opp_rows,
                                            league.get("roster_positions"),
-                                           scoring, means)
+                                           scoring, means if same_week else season_means)
+            h2h["basis"] = "week" if (week_doc and same_week) else "season"
             h2h["opponent"] = opp_name
             h2h["swings"] = fantasy_h2h.swings(h2h)
             out["h2h"] = h2h
@@ -1866,9 +1939,9 @@ class Handler(BaseHTTPRequestHandler):
             stat_season = max((int(s[0]) for s in conn.execute(
                 "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
             ).fetchall()), default=0)
-            means = (fantasy_lineup.per_game(conn, stat_season)
-                     if stat_season else {})
-            means = fantasy_lineup.with_board(means, self._kit_board())
+            season_means = (fantasy_lineup.per_game(conn, stat_season)
+                            if stat_season else {})
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
         finally:
             conn.close()
 
@@ -1878,13 +1951,24 @@ class Handler(BaseHTTPRequestHandler):
         mine = rosters.pop(mine_label, []) if mine_label else []
         slots = fantasy_lineup.starting_slots(lg.get("slots"))
         scoring = lg.get("scoring") or {}
-        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, means)
+        # This week for the lineup, the season for the trades — see the
+        # Sleeper desk above.
+        from engine import fantasyweek
+        week_doc, week_meta = self._fantasy_week()
+        league_names = [r["player"] for r in mine] + [r["player"] for rows in rosters.values()
+                                                      for r in rows]
+        means = (fantasyweek.with_week(season_means, week_doc, league_names)
+                 if week_doc else season_means)
+        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, season_means)
                   if mine and rosters else [])
         out = {
             "platform": "espn", "league": lg.get("name"),
             "season": stat_season, "slots": slots, "has_me": bool(mine),
             "lineup": (fantasy_lineup.lineup(mine, slots, scoring, means)
                        if mine else None),
+            "projection_week": week_meta,
+            "free_agents": (fantasyweek.free_agents(week_doc, league_names)
+                            if week_doc else {}),
             "trades": trades[:12],
             "trade_summary": fantasy_trade.summary(trades),
             # THE SCORING RULES WE COULD NOT READ. Reported to the page,
@@ -4082,9 +4166,9 @@ class Handler(BaseHTTPRequestHandler):
             stat_season = max((int(s[0]) for s in conn.execute(
                 "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
             ).fetchall()), default=0)
-            means = (fantasy_lineup.per_game(conn, stat_season)
-                     if stat_season else {})
-            means = fantasy_lineup.with_board(means, self._kit_board())
+            season_means = (fantasy_lineup.per_game(conn, stat_season)
+                            if stat_season else {})
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
         finally:
             conn.close()
 
@@ -4092,7 +4176,15 @@ class Handler(BaseHTTPRequestHandler):
         mine = rosters.pop(lg.get("mine"), []) if lg.get("mine") else []
         slots = fantasy_lineup.starting_slots(lg.get("slots"))
         scoring = lg.get("scoring") or {}
-        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, means)
+        # This week for the lineup, the season for the trades — see the
+        # Sleeper desk.
+        from engine import fantasyweek
+        week_doc, week_meta = self._fantasy_week()
+        league_names = [r["player"] for r in mine] + [r["player"] for rows in rosters.values()
+                                                      for r in rows]
+        means = (fantasyweek.with_week(season_means, week_doc, league_names)
+                 if week_doc else season_means)
+        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, season_means)
                   if mine and rosters else [])
         out = {
             "platform": "yahoo", "league": lg.get("name"),
@@ -4100,6 +4192,9 @@ class Handler(BaseHTTPRequestHandler):
             "my_team": lg.get("mine"),
             "lineup": (fantasy_lineup.lineup(mine, slots, scoring, means)
                        if mine else None),
+            "projection_week": week_meta,
+            "free_agents": (fantasyweek.free_agents(week_doc, league_names)
+                            if week_doc else {}),
             "trades": trades[:12],
             "trade_summary": fantasy_trade.summary(trades),
             # THE RULES WE DID NOT APPLY, split in two because they mean

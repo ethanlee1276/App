@@ -476,8 +476,10 @@ TOOLS = [
            "position": {"type": "string", "description": "Optional: QB, RB, WR, TE."}}, "view"),
     _tool("fantasy_points",
           "This week's projected fantasy points for up to six NFL players, side by side, highest first: "
-          "our board's own projection for each stat (matchup, weather and injuries already in it), his "
-          "expected touchdowns, his season average and week-to-week swing, his opponent and that "
+          "our board's own projection for each stat (matchup, game script, weather and who is out around "
+          "him already in it), his touchdown chance, the chance he plays if he is listed (points counted "
+          "at that chance, with what he scores if he plays), where eight weeks in ten land, the reasons "
+          "his number moved, a bye, his season average and week-to-week swing, his opponent and that "
           "defence's matchup line. For who to start, start/sit between players, flex calls, or how many "
           "points a player should score. Scoring is PPR unless the reader says half-PPR or standard.",
           {"players": {"type": "array", "items": {"type": "string"}, "description": "One to six players."},
@@ -3013,6 +3015,16 @@ def _fantasy_name(conn, boards: dict, name: str) -> tuple:
     return (top[0], []) if len(top) == 1 else (None, top[:5])
 
 
+def _fantasy_team(conn, player: str) -> str:
+    """His team in his latest logged game, for the bye: the roster file
+    first, this when the roster does not list him."""
+    if conn is None:
+        return ""
+    r = conn.execute("SELECT team FROM player_game_logs WHERE sport='nfl' AND player=? AND team IS NOT NULL "
+                     "ORDER BY season DESC, period DESC LIMIT 1", (player,)).fetchone()
+    return str((r[0] if r else "") or "")
+
+
 def _fantasy_season(conn, player: str) -> dict:
     """His latest season's per-game means for every scoring part, and his PPR swing."""
     if conn is None:
@@ -3032,21 +3044,91 @@ def _fantasy_season(conn, player: str) -> dict:
     return out
 
 
+def _fantasy_week(data_dir=None) -> dict:
+    """This week's fantasy file (engine/fantasyweek), when it is built and
+    still this week's; {} otherwise. Ask is members-only (server._ask), so
+    the paid copy is the one read."""
+    from engine import fantasyweek as FW
+    doc = _paid(FW.FILE, data_dir)
+    return doc if FW.current(doc) else {}
+
+
+def _fantasy_week_entry(row: dict, key: str) -> dict:
+    """His week, as the Fantasy page and the league desks have it: the
+    board's projections added up under this scoring, at the chance he
+    plays, with what he scores if he does, the range, the touchdown chance
+    and the reasons."""
+    from engine import fantasyweek as FW
+    pts = float(row.get(key) if row.get(key) is not None else row.get("ppr") or 0.0)
+    play = float(row.get("play", 1.0))
+    comp = row.get("proj") or {}
+    td = float(comp.get("rush_td", 0.0)) + float(comp.get("rec_td", 0.0))
+    entry = {"player": row.get("player"), "team": row.get("team"), "position": row.get("position"),
+             "opponent": row.get("opponent"), "projected_points": round(pts * play, 1),
+             "parts": {k: {"value": round(float(v), 2 if k in ("pass_td", "pass_int") else 1),
+                           "from": "this week's board"}
+                       for k, v in comp.items() if k not in ("rush_td", "rec_td")}}
+    if row.get("td_prob") is not None:
+        what = "a rushing touchdown" if row.get("position") == "QB" else "a touchdown"
+        entry["touchdowns"] = {"expected": round(td, 2),
+                               "from": f"our touchdown model, {round(100 * row['td_prob'])}% to score "
+                                       f"{what}"}
+    if play < 1.0:
+        entry["if_he_plays"] = round(pts, 1)
+        entry["chance_to_play"] = round(play, 2)
+        entry["chance_from"] = row.get("play_source") or ""
+    if row.get("status"):
+        entry["injury"] = row["status"] + (f", {row['practice']} in practice" if row.get("practice") else "")
+    if row.get("range"):
+        entry["eight_in_ten_weeks_ppr"] = row["range"]
+    m = row.get("matchup") or {}
+    if m.get("text"):
+        entry["matchup"] = m["text"]
+    if m.get("grade") in ("soft", "tough"):
+        entry["matchup_grade"] = m["grade"]
+    sc = row.get("script") or {}
+    if sc.get("team_implied") is not None:
+        entry["team_total"] = sc["team_implied"]
+    why = FW.week_card(row).get("why") or []
+    if why:
+        entry["why"] = why
+    if row.get("missing"):
+        entry["not_projected"] = row["missing"]
+    return entry
+
+
 def fantasy_points(boards: dict, players: list, scoring: str = "ppr") -> dict:
     """This week's projected fantasy points for up to six NFL players, side by side, highest first.
 
-    Each stat is the board's own projection where the board carries the
-    player in that market (matchup, weather and injuries already in it),
-    else his season average from the game logs, and every part says which.
-    Rushing and receiving touchdowns come from our touchdown model's chance
-    to score where the board priced one (a Poisson count at that chance),
-    else his season rate."""
+    THIS WEEK'S FILE FIRST (engine/fantasyweek, 2026-10-22): when the NFL
+    build has written it, a player on it is answered exactly as the
+    Fantasy page and the league desks score him — the board's projections
+    added up, his touchdown chance from the touchdown model (every skill
+    player, quoted by a book or not), at the chance he plays, with the
+    range and the reasons. A player whose team is on a bye, or who is ruled
+    out on the week's report, is worth zero and the answer says why.
+
+    Otherwise, as before: each stat is the board's own projection where
+    the board carries the player in that market, else his season average
+    from the game logs, and every part says which. Rushing and receiving
+    touchdowns come from our touchdown model's chance to score where the
+    board priced one (a Poisson count at that chance), else his season
+    rate."""
     rates = FANTASY_SCORING.get(str(scoring or "ppr").lower().replace("-", "").replace("halfppr", "half"))
     if not rates:
         return {"error": "scoring is one of: " + ", ".join(FANTASY_SCORING)}
     names = [str(p).strip() for p in (players or []) if str(p or "").strip()][:FANTASY_PLAYERS_MAX]
     if not names:
         return {"error": "name at least one player"}
+    key = next(k for k, v in FANTASY_SCORING.items() if v is rates)
+    week = _fantasy_week()
+    from engine import fantasyweek as FW
+    from engine.backtest import _norm as _wnorm       # the week's own keys (FW.index)
+    from engine.divisions import canonical
+    week_idx = FW.index(week) if week else {}
+    byes = {canonical("nfl", t) for t in (week or {}).get("byes") or []}
+    listed = {_wnorm(k): v for k, v in ((week or {}).get("listed") or {}).items()}
+    used_week = False
     conn = _history()
     try:
         out, unsure = [], {}
@@ -3055,8 +3137,32 @@ def fantasy_points(boards: dict, players: list, scoring: str = "ppr") -> dict:
             if not name:
                 unsure[typed] = others or "no NFL player by that name in our data"
                 continue
-            rows = [r for r in _fantasy_rows(boards) if r.get("player") == name]
+            row = week_idx.get(_wnorm(name))
             season = _fantasy_season(conn, name)
+            if row is not None:
+                entry = _fantasy_week_entry(row, key)
+                used_week = True
+                if season.get("games"):
+                    entry["season"] = {"season": season.get("season"), "games": season["games"],
+                                       "ppr_per_game": round(season.get("fp_ppr", 0.0), 1),
+                                       "weekly_swing_ppr": round(season.get("swing", 0.0), 1)}
+                out.append(entry)
+                continue
+            if week:
+                team = canonical("nfl", (_fantasy_roster().get(name) or {}).get("team")
+                                 or _fantasy_team(conn, name))
+                out_status = (listed.get(_wnorm(name)) or {}).get("status", "")
+                if (team and team in byes) or out_status.upper() in FW.OUT_STATUSES:
+                    entry = {"player": name, "team": team or None, "projected_points": 0.0,
+                             "note": (f"{team} are on a bye this week" if team in byes
+                                      else f"ruled out this week ({out_status})")}
+                    if season.get("games"):
+                        entry["season"] = {"season": season.get("season"), "games": season["games"],
+                                           "ppr_per_game": round(season.get("fp_ppr", 0.0), 1)}
+                    out.append(entry)
+                    used_week = True
+                    continue
+            rows = [r for r in _fantasy_rows(boards) if r.get("player") == name]
             if not rows and not season.get("games"):
                 ro = _fantasy_roster().get(name) or {}
                 unsure[typed] = (f"{name} ({' '.join(x for x in (ro.get('team'), ro.get('position')) if x)}) "
@@ -3111,12 +3217,24 @@ def fantasy_points(boards: dict, players: list, scoring: str = "ppr") -> dict:
         return {"found": False, "unsure": unsure,
                 "note": "no player matched; when a name fits several, ask which one"}
     out.sort(key=lambda e: -e["projected_points"])
-    res = {"scoring": {"ppr": "PPR", "half": "half-PPR", "standard": "standard"}[
-               next(k for k, v in FANTASY_SCORING.items() if v is rates)],
+    res = {"scoring": {"ppr": "PPR", "half": "half-PPR", "standard": "standard"}[key],
            "players": out,
            "how": "each stat × the scoring, plus expected touchdowns × 6 (passing touchdowns × 4); not "
                   "counted: interceptions, fumbles, two-point tries, return yards. weekly_swing_ppr is his "
                   "own week-to-week spread: a big one is a boom-or-bust start."}
+    if used_week:
+        res["how"] = ("this week's file: the board's projection of each stat (matchup, game script, weather, "
+                      "who is out around him) × the scoring, interceptions −2, the touchdown model's expected "
+                      "touchdowns × 6 and passing touchdowns × 4, all at the chance he plays when he is "
+                      "listed (if_he_plays is the number if he does). eight_in_ten_weeks_ppr is where eight "
+                      "of his weeks in ten land, measured. Not counted: fumbles, two-point tries, return "
+                      "yards. A player not on this week's file is scored the old way and says so.")
+        if week.get("measured"):
+            a = ((week["measured"].get("score") or {}).get("ALL") or {})
+            if a.get("pairs_week") is not None:
+                res["measured"] = (f"walked forward on {week['measured'].get('seasons')}: this week's "
+                                   f"projection ordered {a['pairs_week']:.1%} of same-position pairs right "
+                                   f"to the season average's {a['pairs_season']:.1%}")
     if unsure:
         res["unsure"] = unsure
     return res

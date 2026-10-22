@@ -106,11 +106,12 @@ _FF = {
 }
 
 
-def _run(script, desk=None, inj=None, today="2026-09-09"):
+def _run(script, desk=None, inj=None, today="2026-09-09", week=None):
     src = (_STUBS
            + f"const INJ = {json.dumps(inj or {})};\n"
            + f"let _ffData = {json.dumps(_FF)};\n"
            + f"let _ffDesk = {json.dumps(desk)};\n"
+           + f"let _ffWeek = {json.dumps(week)};\n"
            # Frozen clock: "his next game" must not depend on the day the
            # suite happens to run, which is how a test starts passing in
            # September and failing in October.
@@ -121,12 +122,13 @@ def _run(script, desk=None, inj=None, today="2026-09-09"):
            # The day-name tables `_ffCalSay` reads. Lifted rather than
            # stubbed: a test that supplies its own weekday names would
            # pass while the page printed Wednesday for a Thursday game.
-           + "\n".join(_const(c) for c in ("FFCAL_DOW", "FFCAL_MON"))
+           + "\n".join(_const(c) for c in ("FFCAL_DOW", "FFCAL_MON", "FF_WEEK_PART"))
            + "\n"
            + "\n".join(_fn(n) for n in (
                "ffNorm", "_ffImpliedAvg", "_ffDayEnv", "_ffDayBoard",
                "_ffCalSay", "_ffPlayerDay", "_ffPlayerSeat",
-               "ffThisWeekHTML"))
+               "ffWeekCurrent", "ffWeekVs", "ffWeekWhy", "ffWeekRowFor",
+               "ffWeekDossierHTML", "ffThisWeekHTML"))
            + "\n" + script)
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(src)
@@ -281,6 +283,85 @@ def test_the_two_numbers_are_never_presented_as_one():
     assert "projected for Thu Sep 10" in out
     assert "season-long per-game averages" in out
     assert "not on the day projection above it" in out
+
+
+# ------------------------------------------ the week off the board (2026-10-22)
+#: One week's file (engine/fantasyweek), as the room and the dossier read
+#: it. Games on Thursday the 10th; the frozen clock is the 9th.
+_WEEK = {
+    "week": 1, "season": 2026, "byes": ["DET"],
+    "teams": {"SEA": {"date": "2026-09-10"}, "NE": {"date": "2026-09-10"}},
+    "players": [
+        {"player": "Star Wr", "team": "SEA", "opponent": "NE", "position": "WR",
+         "game": {"home": "SEA", "away": "NE", "date": "2026-09-10"},
+         "ppr": 19.4, "expected": 19.4, "play": 1.0, "range": [7.2, 31.8],
+         "td_prob": 0.46, "matchup": {"grade": "soft", "text": "NE allow 171 yards a game to WRs"},
+         "script": {"team_implied": 26.0},
+         "reasons": [{"why": "NE allow the 3rd-most receiving yards to WRs"}],
+         "read": {"label": "could shine"}},
+        {"player": "Hurt Rb", "team": "SEA", "opponent": "NE", "position": "RB",
+         "ppr": 14.0, "expected": 9.1, "play": 0.65, "status": "Questionable",
+         "practice": "Limited", "game": {"home": "SEA"}},
+    ],
+}
+
+
+def test_his_week_off_the_board_comes_first_when_it_is_built():
+    """The board's own week replaces the day estimate: the projection
+    for this game, its range, his touchdown chance, the matchup and why."""
+    out = _panel("Star Wr", "SEA", week=_WEEK)
+    assert "19.4" in out and "projected PPR this week vs NE" in out, out
+    assert "7.2–31.8" in out and "46%" in out and "soft" in out
+    assert "NE allow the 3rd-most receiving yards to WRs" in out
+    assert "Matchup scan: could shine" in out
+    assert "baseline 16" not in out, "the day estimate drawn beside the week"
+
+
+def test_a_questionable_man_shows_both_numbers_and_the_chance():
+    out = _panel("Hurt Rb", "SEA", week=_WEEK)
+    assert "9.1" in out and "14.0 if he plays" in out and "65% that he does" in out, out
+    assert "Questionable, Limited in practice" in out
+
+
+def test_a_part_from_his_season_average_says_so():
+    week = json.loads(json.dumps(_WEEK))
+    week["players"][0]["filled"] = ["receptions"]
+    out = _panel("Star Wr", "SEA", week=week)
+    assert "His catches from his season average: the board has no line on it" in out, out
+
+
+def test_a_team_on_a_bye_is_told_so():
+    out = _panel("Bench Te", "DET", week=_WEEK)
+    assert "On a bye this week" in out, out
+    assert "Sep 13" not in out, "a bye week projected off next week's game"
+
+
+def test_a_locked_or_finished_week_falls_back_to_the_day():
+    locked = {"locked_reason": "subscription", "week": 1}
+    out = _panel("Star Wr", "SEA", week=locked)
+    assert "projected for Thu Sep 10" in out and "projected PPR this week" not in out
+    over = dict(_WEEK, teams={"SEA": {"date": "2026-09-01"}})
+    out = _panel("Star Wr", "SEA", week=over)
+    assert "projected PPR this week" not in out, "last week's numbers drawn as this week's"
+
+
+def test_a_call_scored_on_the_week_says_so():
+    desk = _desk(starters=[{"slot": "WR", "player": "Star Wr", "points": 19.4,
+                            "basis": "week"}], swaps=[])
+    out = _panel("Star Wr", "SEA", desk=desk, week=_WEEK)
+    assert "on this week’s projection" in out
+    assert "season-long per-game averages" not in out
+
+
+def test_the_full_profile_keeps_this_week_at_the_top():
+    """The full page REPLACES the compact card when the profile answers,
+    which on the box is a moment after every tap. Without this block on it,
+    the start/sit call and his week off the board were gone by the time a
+    reader looked (found 2026-10-22)."""
+    i = APP.index("function ffProfileHTML(")
+    body = APP[i:APP.index("\nfunction ", i + 10)]
+    assert "ffThisWeekHTML(info)" in body, "the full page dropped this week"
+    assert body.index("ffThisWeekHTML(info)") < body.index('class="ffp-top"'), "and first"
 
 
 def test_a_name_spelled_differently_by_the_two_sources_still_matches():

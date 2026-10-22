@@ -301,6 +301,10 @@ PAID_FILES = (
     # His TOTALS stay free in record.json: they are the proof, these are
     # the product.
     "zeno.json",
+    # THIS WEEK IN FANTASY POINTS (engine/fantasyweek, 2026-10-22): every
+    # row is the prop board's projections added up, its touchdown chances
+    # and its reads — the model's output, all of it.
+    "fantasy_week.json",
 )
 
 #: …and the ones that must NEVER be touched, named rather than inferred.
@@ -418,6 +422,9 @@ KNOWN_BOARDS = (
     # Zeno's bets, written beside record.json by ledger.export_json and on
     # every owner post (engine/zeno.publish_tickets). Paid whole.
     "zeno.json",
+    # The week's fantasy projections, written beside the NFL board by
+    # nfl_build (engine/fantasyweek). Paid whole.
+    "fantasy_week.json",
     # memes_build.py has written this since the meme ledger shipped and
     # nothing here had ever heard of it — the third time a pipeline grew
     # a board without telling the gate. Unregistered meant `is_free` said

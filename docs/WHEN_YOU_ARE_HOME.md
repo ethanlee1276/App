@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -2896,6 +2896,55 @@ restart:
 ```
 cd /srv/qellys && sudo ./deploy/setenv.sh QB_ODDS_RESET_DAY 14 && sudo systemctl restart qellys
 ```
+
+**CW. Fantasy reads the NFL board: this week's projection on every desk**
+(step 154). Your "make sure we are using that data correctly for fantasy
+... make sure we wrap that into it how it should be". Until now every
+league desk valued a player at his season average, with no matchup,
+script, weather or injuries, and a player on a bye at his average too.
+Now (docs/FANTASY_WEEK.md has all of it):
+
+- **The NFL build writes this week in fantasy points** beside the board,
+  members only. Each stat is the board's own projection (the defence
+  against his position, the game script, the weather, his quarterback or
+  a teammate out). Touchdowns come from the touchdown model for every
+  skill player. A questionable player counts at the measured chance he
+  plays (64.6%; 51.8% after a week of no practice). A bye or an Out is
+  zero.
+- **Your league desk** scores the lineup and the head-to-head on it, under
+  your league's scoring. Byes and Outs are zero, and so are Sleeper's IR
+  and suspended players. Trades stay on season averages, because a trade
+  is the rest of the season. "Best pickups this week" lists the best of
+  the week that nobody in your league has.
+- **The Fantasy page** opens on a "This week" room: every player by
+  position, with the matchup, the chance he plays, where eight weeks in
+  ten land, his touchdown chance and why. The player panel shows his week.
+  It also fixes a bug: the full profile used to drop the start/sit call a
+  moment after opening.
+- **Ask** answers start/sit from the same numbers.
+- **Measured on 2023-2025:** for every two players at a position, it had
+  the higher scorer ahead 72.3% of the time, against 71.3% for the season
+  average. It missed by 4.66 points a week against 4.83. Byes and Outs
+  aren't in that number.
+
+Spends nothing. Once the box has the code (dated 2026-10-22 or later),
+run the measurement with the box's own usage maps. It takes about ten
+minutes, uses about 650 MB, and saves the fit the week reads:
+
+```
+cd /srv/qellys && git log -1 --format='%h %ci %s' && sudo -u qellys nice -n 10 python3 fantasyweekfit.py --save 2>&1 | tail -70
+```
+
+Then, after the next NFL build, check the week:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import fantasyweek as F; d=F.load(); print(F.summary_line(d)); print('week', d.get('week'), '· this week:', F.current(d), '· byes:', d.get('byes'))"
+```
+
+Paste both. The first one's TOUCHDOWNS lines are the ones I most want:
+without the usage maps, backs scored 1.5 times the touchdowns the model
+said and quarterbacks 0.75 times. Your box's run says whether that holds
+with them, and keeps a correction only if it held on every season.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

@@ -505,6 +505,68 @@ def _long_shots(slate, usage: dict | None = None,
 from . import boards as _boards                          # noqa: E402
 
 
+def td_chances(slate, usage: dict | None = None) -> dict:
+    """Every skill player's chance to score, quoted or not:
+    ``{(team, player): {"prob", "raw", "reasons", "quoted"}}``.
+
+    THE FANTASY WEEK'S TOUCHDOWNS (engine/fantasyweek, 2026-10-22). The
+    long-shot pipeline above prices only the scorers a book quotes, and a
+    fantasy roster holds plenty nobody hangs a price on: a backup back, a
+    tight end two. Every one of them already has an anytime-touchdown prop
+    on the slate (sources/nflverse.build_slate builds one per skill player),
+    so this runs the same model over all of them, with the inputs the
+    touchdown watch hands it (touchdowns.td_watchlist): his share of the
+    workload, his red-zone work and his slice of the offence's expected
+    points.
+
+    CALIBRATED THE SAME WAY. `calibrate.calibrated` is the curve the
+    touchdown board applies (temperature or isotonic, whichever won its
+    bake-off). Where a book quotes him, the number is also pulled toward
+    the book's de-vigged price by the same shrink the board's own rows use
+    (`longshots.calibrated_prob`), so a fantasy card and the touchdown
+    watch never disagree about the same man."""
+    from .models import ANYTIME_TD
+    from .touchdowns import td_probability
+    from .calibrate import calibrated
+    from .longshots import calibrated_prob
+    from .odds import bettable_lines, prefer_sportsbook
+    from .nflusage import from_maps, usage_keys
+    from .statmath import clamp
+    usage = usage or {}
+    rz_map = usage.get("red_zone") or {}
+    xfp_map = usage.get("xfp") or {}
+    team_of = usage.get("team_of") or {}
+    shares = _opportunity_shares(slate)
+    out: dict = {}
+    for prop in slate.props:
+        if prop.market != ANYTIME_TD:
+            continue
+        key = (prop.team, prop.player)
+        if key in out:
+            continue
+        try:
+            keys = usage_keys(prop.player, prop.team, team_of)
+            raw, info = td_probability(prop, slate.game_for(prop), slate.team(prop.opponent),
+                                       shares.get(key, 0.15), from_maps(rz_map, keys),
+                                       from_maps(xfp_map, keys))
+        except Exception:                                    # noqa: BLE001
+            continue
+        prob = clamp(calibrated("nfl", ANYTIME_TD, raw), 1e-4, 0.999)
+        best = prefer_sportsbook(bettable_lines(prop.lines or []))
+        quoted = False
+        if best is not None and best.over_odds:
+            try:
+                prob, _implied = calibrated_prob("nfl", ANYTIME_TD, raw, int(best.over_odds),
+                                                 best.under_odds)
+                quoted = True
+            except Exception:                                # noqa: BLE001
+                pass
+        out[key] = {"prob": round(float(prob), 4), "raw": round(float(raw), 4),
+                    "reasons": list((info or {}).get("reasons") or [])[:4],
+                    "quoted": quoted}
+    return out
+
+
 def _likely_board(results: list, td_picks: list, td_watch: list,
                   census: dict | None = None, game_bets=None,
                   census_by_kind: dict | None = None,

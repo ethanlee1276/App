@@ -153,6 +153,18 @@ def per_game(conn, season: int, markets=None) -> dict:
             who["_sd_basis"] = "position"
         else:
             who["_sd"], who["_sd_basis"] = None, "none"
+    # HIS TEAM, from his latest game: what tells this week's projection
+    # (engine/fantasyweek.with_week) that he is on a bye. A season average
+    # carries no calendar, so without it a player whose team is off was
+    # worth his average, and the optimiser started him.
+    try:
+        for r in conn.execute(
+                "SELECT player, team FROM player_game_logs WHERE sport='nfl' AND season=? "
+                "AND market='fp_ppr' AND team IS NOT NULL ORDER BY period", [int(season)]):
+            if r["player"] in out and r["team"]:
+                out[r["player"]]["team"] = r["team"]
+    except Exception:                                         # noqa: BLE001
+        pass
     return out
 
 
@@ -333,6 +345,14 @@ def lineup(roster: list[dict], roster_positions, scoring: dict,
             # played. Distinct from `exact`, which is about whether this
             # LEAGUE's scoring could be applied — a different question.
             "projected": bool(m.get("_from_board")),
+            # THIS WEEK, when the desk read it (engine/fantasyweek
+            # .with_week): his opponent, matchup, script and why — or that
+            # he is on a bye or ruled out, or that the week's board does
+            # not carry him and his season average stands in.
+            "week": m.get("_week"),
+            "basis": ("week" if m.get("_from_week") else
+                      "board" if m.get("_from_board") else
+                      "season" if m else "none"),
             # WHO HE HAS ACTUALLY GOT IN. Optional, and absent on the
             # platforms whose league read does not carry it — see the
             # `current` block below for what that costs.
@@ -431,4 +451,10 @@ def lineup(roster: list[dict], roster_positions, scoring: dict,
                  "nflverse's PPR total and applying only the differences. "
                  "A component we do not store cannot be adjusted for, and "
                  "any that apply are named rather than assumed to match."),
+        # WHAT EACH STARTER IS VALUED ON: this week's projection, a bye or
+        # an Out (both "week"), his season average because this week's
+        # board does not carry him ("season"), or the draft board ("board").
+        "basis": {b: n for b in ("week", "season", "board", "none")
+                  for n in [sum(1 for s in starters
+                                if s.get("player") and s.get("basis") == b)] if n},
     }

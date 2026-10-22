@@ -162,7 +162,10 @@ def team_total(roster_rows, slots, scoring: dict, means: dict) -> dict:
                    key=lambda r: -r["points"])
     points = round(sum(float(p["points"] or 0) for p in starters), 2)
     var = sum(float(p["sd"] or 0) ** 2 for p in starters)
-    unmeasured = [p["player"] for p in starters if not p.get("sd")]
+    # A starter on a bye or ruled out is a KNOWN zero (fantasyweek
+    # .with_week, basis "zero"): no spread, and nothing unmeasured.
+    unmeasured = [p["player"] for p in starters
+                  if not p.get("sd") and p.get("sd_basis") != "zero"]
     return {"points": points, "sd": round(var ** 0.5, 2), "variance": var,
             "starters": starters, "bench": bench, "unmeasured": unmeasured}
 
