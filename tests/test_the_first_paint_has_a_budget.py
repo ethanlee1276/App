@@ -189,7 +189,13 @@ APP_JS_BUDGET_KB = 498
 #: 614 -> 615 on 2026-10-22 by fantasy reading the NFL board: the app.js
 #: bump above and the week's eight style lines (613.548 -> 614.263 KB gz).
 #: Told to Ethan.
-BOOT_BUDGET_KB = 615
+#: 615 -> 616 on 2026-10-23 by the bigger lines under every Most Likely pick
+#: (Ethan: "If we know a player can do well we should be recommending the
+#: higher line"): the fold's renderer, the guard that keeps a fold inside a
+#: card from opening the pick, and its seven style rules — +0.59 KB gz
+#: (614.606 -> 615.197). app.js stays inside its 498 (497.466 -> 497.965)
+#: once the fold's footnote was cut to one line. Told to Ethan.
+BOOT_BUDGET_KB = 616
 
 
 def _gz_trimmed(rel: str) -> int:

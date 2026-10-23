@@ -9650,7 +9650,7 @@ function likelyCard(r) {
     ${scriptLine}${rippleLine(r)}
     ${qbCardHTML(r.qb_card)}${mateCardHTML(r.mate_card)}${matchupCardHTML(r)}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
-    ${bet}${lean}${cal}${evTxt}
+    ${bet}${lean}${cal}${evTxt}${likelyBiggerHTML(r)}
   </article>`;
 }
 
@@ -10843,6 +10843,36 @@ function pickWarnHTML(r) {
   return [r && r.matchup_warning, r && r.avoid_warning].filter(Boolean)
     .map((t) => `<span class="ob-warn" role="note">${icon("warn", 12)} ${escapeHtml(cap(String(t)))}</span>`).join("");
 }
+/* BIGGER LINES (engine/likely.bigger_lines). Ethan, 2026-10-23: "If we
+   know a player can do well we should be recommending the higher line bc
+   obv it would have hit." The pick stays the likeliest number; under it,
+   folded so a phone's card stays two lines, the bigger ones further out
+   on the same side: each with its best price, our chance there and the
+   price that makes it worth betting, marked where the price beats our
+   chance. Shown, never staked or journaled. */
+function biggerLineLabel(c) {
+  const ln = Number(c.line);
+  if (String(c.side || "").toLowerCase() === "under") return `Under ${ln}`;
+  return Number.isInteger(ln) ? `Over ${ln}` : `${Math.ceil(ln)}+`;
+}
+function likelyBiggerHTML(r) {
+  const rows = (r && r.bigger_lines) || [];
+  if (!rows.length) return "";
+  const better = rows.filter((c) => c.better).length;
+  return `<details class="ob-bigger">
+    <summary>Bigger lines: ${escapeHtml(rows.map(biggerLineLabel).join(" · "))}${better
+      ? ` <span class="ob-bigger-good">· ${better === 1 ? "1 priced better than its chance"
+        : `${better} priced better than their chance`}</span>` : ""}</summary>
+    ${rows.map((c) => `<div class="ob-bigger-row${c.better ? " good" : ""}">
+      <b>${escapeHtml(biggerLineLabel(c))}</b>
+      <span>${escapeHtml(`${american(c.odds)}${c.book ? ` at ${(BOOKS[bookKey(c.book)] || [c.book])[0]}` : ""}`)}</span>
+      <span>we have it at ${wholePct(c.prob)}</span>
+      <span>worth it at ${escapeHtml(american(c.worth_at))} or better</span>
+      ${c.better ? `<span class="ob-bigger-mark">${icon("check", 11)} priced better than its chance</span>` : ""}
+    </div>`).join("")}
+    <p class="ob-bigger-note">Not picks. Never staked or journaled.</p>
+  </details>`;
+}
 function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);
   const tags = likelyTagsHTML(r);
@@ -10866,6 +10896,7 @@ function obCardHTML(r, rank, opts = {}) {
       escapeHtml(OB_TIER_WORD[r.tier] || "Worth a look")}${r.tier_rate != null ? "<small>real hit rate</small>" : ""}</span>${obBothHTML(r)}</span>
     <button class="ob-door" type="button"${door} aria-label="Open this pick">${icon("chart", 18)}</button>
     <button class="ob-view" type="button"${door}>View details ${icon("rising", 12)}</button>
+    ${likelyBiggerHTML(r)}
   </div>`;
 }
 /* What the matchup check reads on this sport's board (engine/likelyboard
@@ -12229,6 +12260,9 @@ function allProps() {
 document.addEventListener("click", (e) => {
   if (e.target.closest("a, button, input, label, select, .chip")) return;
   const card = e.target.closest("[data-prop]");
+  // A FOLD INSIDE A CARD is its own control (the bigger lines, 2026-10-23):
+  // opening it reads it and never leaves the board. A fold around cards is not.
+  if (card && foldInside(card, e.target)) return;
   if (card) return openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });
   const who = e.target.closest("[data-peek]");
   if (who) openPeek(who.dataset.peek);
@@ -12243,10 +12277,15 @@ document.addEventListener("click", (e) => {
 
 /* Keyboard parity: a card you can click is a control, and a control that
    only answers a mouse is not finished. */
+function foldInside(card, target) {
+  const fold = target.closest && target.closest("details");
+  return !!fold && card.contains(fold);
+}
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
   if (!e.target.closest || e.target.closest("a, button, input, select")) return;
   const card = e.target.closest("[data-prop]");
+  if (card && foldInside(card, e.target)) return;
   if (card) {
     e.preventDefault();
     return openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });

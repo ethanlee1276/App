@@ -12689,6 +12689,16 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   border-radius: var(--radius); background: none; border: var(--hairline) solid var(--brand); color: var(--brand);
   font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: var(--fs-xs); cursor: pointer; }
 @media (max-width: 1279px) { .ob-view { display: none; } .ob-card { grid-template-areas: "rank who checks odds ring door view"; } }
+/* The bigger lines under a Most Likely pick (app.js likelyBiggerHTML): a
+   full-width fold on the card's last row, closed by default. */
+.ob-bigger { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--text-mute); }
+.ob-bigger > summary { cursor: pointer; }
+.ob-bigger-good { color: var(--good); font-weight: 700; }
+.ob-bigger-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 4px 0;
+  border-top: var(--hairline) solid var(--border-soft); color: var(--text-dim); }
+.ob-bigger-row b { color: var(--text); min-width: 3.5em; }
+.ob-bigger-mark { display: inline-flex; align-items: center; gap: 4px; color: var(--good); font-weight: 700; }
+.ob-bigger-note { margin: 4px 0 0; font-size: var(--fs-2xs); }
 @media (max-width: 900px) {
   .ob-card { grid-template-columns: auto minmax(0, 1fr) auto auto;
     grid-template-areas: "rank who who who" "checks checks checks checks" "odds ring door ." ; }

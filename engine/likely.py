@@ -2763,6 +2763,98 @@ def past_cap_rows(props: list, sport: str = "nfl", fits=None, seated=(),
     return out[:limit]
 
 
+#: BIGGER LINES (Ethan, 2026-10-23): "I don't understand why we recommend
+#: just the low -240 40 yard line tho. If we know a player can do well we
+#: should be recommending the higher line bc obv it would have hit." This
+#: board takes the LIKELIEST number on a ladder, and the likeliest is
+#: always the lowest line the cap allows — 40+ at −240, not 60+. A higher
+#: line is not the better bet for having hit once: receivers projected
+#: like Luther Burden III (50 to 60 yards, 1,080 games since 2021,
+#: curvecheck.py's history) cleared 40 in 64% of them, 60 in 42% and 80 in
+#: 26%, and each line pays for exactly that. Nor is the lowest line the
+#: best bet for being likeliest: 40+ at −240 asks for 71% where they gave
+#: 64%. So, his choice, every prop pick lists its bigger lines — further
+#: out on its own side, each with the best bettable price, our chance
+#: there (`_prob_at`, the derivation every rung is priced with) and the
+#: price at which it would be worth betting — and marks one whose price
+#: beats our chance by the Pick of the Day's own floor (potd.MIN_EV). The
+#: pick stays the likeliest line. They ride inside the row, which the
+#: journal reads only for the row's own number: shown, never staked or
+#: journaled.
+BIGGER_SHOWN = 3
+#: Each of those at least this much less likely than the one before it,
+#: so the list spans the ladder (50+, 60+, 70+) instead of crowding its
+#: next half-yard where several books' ladders interleave.
+BIGGER_STEP = 0.08
+#: A marked line past those is listed too, the best few by expected value:
+#: a line priced better than its chance is never the one left off.
+BIGGER_MARKED = 2
+#: Under one in five a line is a long shot (boardtruth.LONGSHOT_PROB),
+#: not a bigger line.
+BIGGER_MIN_PROB = LEAN_BEST_MIN_PROB
+
+
+def _worth_at(p: float) -> int:
+    """The American price at which a bet this likely breaks even."""
+    p = min(max(float(p), 0.01), 0.99)
+    return -round(100 * p / (1 - p)) if p >= 0.5 else round(100 * (1 - p) / p)
+
+
+def bigger_lines(prop: dict, pick: dict, fits=None) -> list:
+    """A prop pick's bigger lines (see BIGGER_SHOWN), nearest first.
+
+    Every number a bettable book hangs further out on the pick's own side
+    (above an over, below an under), at its best price there, priced by
+    our curve, held to the board's credibility bar against the number's
+    own de-vigged price and to BIGGER_MIN_PROB. Each says its chance, the
+    price that would make it worth betting, and ``better`` when its price
+    beats that by potd.MIN_EV or more."""
+    from .odds import devig_two_way, expected_value, is_sharp_book
+    from .potd import MIN_EV
+    side = _side(pick.get("side"))
+    market = str(pick.get("market") or prop.get("market") or "")
+    try:
+        base, last = float(pick["line"]), float(pick["model_prob"])
+    except (KeyError, TypeError, ValueError):
+        return []
+    if side not in ("over", "under"):
+        return []
+    key = "under_odds" if side == "under" else "over_odds"
+    best: dict = {}
+    for ln in (prop.get("alt_lines") or []) + (prop.get("all_lines") or []):
+        try:
+            line, odds = float(ln.get("line")), int(ln.get(key) or 0)
+        except (TypeError, ValueError):
+            continue
+        book = str(ln.get("book") or "")
+        if not ((line > base) if side == "over" else (line < base)):
+            continue
+        if not odds or not _sane(odds) or not book or book.lower() == "proxy" or is_sharp_book(book):
+            continue
+        if line not in best or odds > best[line][0]:
+            best[line] = (odds, book, ln)
+    cands = []
+    for line in sorted(best, reverse=side == "under"):
+        odds, book, ln = best[line]
+        p = _prob_at(prop, market, side, line, fits)
+        if p is None or p < BIGGER_MIN_PROB:
+            continue
+        fair_over, fair_under = devig_two_way(int(ln.get("over_odds") or 0), int(ln.get("under_odds") or 0))
+        if not _credible(p, fair_under if side == "under" else fair_over):
+            continue
+        ev = expected_value(p, odds)
+        cands.append((ev, {"side": side, "line": line, "odds": odds, "book": book, "prob": round(p, 4),
+                           "worth_at": _worth_at(p), "better": ev >= MIN_EV}))
+    out = []
+    for _ev, c in cands:
+        if len(out) < BIGGER_SHOWN and last - c["prob"] >= BIGGER_STEP:
+            out.append(c)
+            last = c["prob"]
+    extra = sorted((t for t in cands if t[1]["better"] and t[1] not in out), key=lambda t: -t[0])
+    out += [c for _ev, c in extra[:BIGGER_MARKED]]
+    return sorted(out, key=lambda c: c["line"], reverse=side == "under")
+
+
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
           limit: int = LIMIT, fits=None, census: dict | None = None,
           game_bets=None, census_by_kind: dict | None = None,
@@ -3234,6 +3326,27 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         census.update(refused)
     if census_by_kind is not None:
         census_by_kind.update(funnel)
+    # EACH PROP PICK'S BIGGER LINES (BIGGER_SHOWN), off today's ladder for
+    # its prop — a posted pick carried forward included, while its prop is
+    # still offered.
+    ladders: dict = {}
+    for p in props or []:
+        k = (p.get("player") or "", p.get("team") or "", str(p.get("market") or ""))
+        if k not in ladders or len(p.get("alt_lines") or []) > len(ladders[k].get("alt_lines") or []):
+            ladders[k] = p
+    for r in out:
+        if (r.get("kind") or "prop") != "prop":
+            continue
+        src = ladders.get((r.get("player") or "", r.get("team") or "", str(r.get("market") or "")))
+        if src is None:
+            continue
+        try:
+            got = bigger_lines(src, r, fits)
+        except Exception:                                    # noqa: BLE001
+            # A view beside the pick never costs the pick.
+            got = []
+        if got:
+            r["bigger_lines"] = got
     if past_cap is not None:
         try:
             past_cap[:] = past_cap_rows(props, sport=sport, fits=fits, seated={
