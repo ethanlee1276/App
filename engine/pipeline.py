@@ -572,7 +572,7 @@ def _likely_board(results: list, td_picks: list, td_watch: list,
                   census_by_kind: dict | None = None,
                   cut: list | None = None, previous=None,
                   turnover: dict | None = None, leans: dict | None = None,
-                  lean_report: dict | None = None) -> list:
+                  lean_report: dict | None = None, past_cap: list | None = None) -> list:
     """The likelihood board — see `engine.likely` for why it exists.
 
     `game_bets` are the cards `_game_bets` priced for the edge board; the
@@ -582,14 +582,15 @@ def _likely_board(results: list, td_picks: list, td_watch: list,
     `cut` is filled with the rows the board's display caps dropped — see
     `likely.build`. They are for `potd.attach` and are never published.
     `previous` is last build's board for the hold, `turnover` what
-    changed against it (`likely.HOLD_MARGIN`)."""
+    changed against it (`likely.HOLD_MARGIN`); `past_cap` the likely legs
+    the price cap keeps off (`likely.past_cap_rows`), never picks."""
     from .likely import build
     try:
         return build(results, td_picks, td_watch, sport="nfl",
                      census=census, game_bets=game_bets,
                      census_by_kind=census_by_kind, cut=cut,
                      previous=previous, turnover=turnover,
-                     leans=leans, lean_report=lean_report)
+                     leans=leans, lean_report=lean_report, past_cap=past_cap)
     except Exception:                                         # noqa: BLE001
         # A second board must never cost the first one. This is an
         # additional view of rows that are already published; if it
@@ -1235,11 +1236,12 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  before the Most Likely board: {_exc}")
     _lean_report: dict = {}
+    _past_cap: list = []
     _likely = _likely_board(results, ls, ls_watch, census=_likely_census,
                             game_bets=game_bets, census_by_kind=_likely_kinds,
                             cut=_likely_cut, previous=likely_previous,
                             turnover=_likely_turnover, leans=_leans,
-                            lean_report=_lean_report)
+                            lean_report=_lean_report, past_cap=_past_cap)
     if _partial.get("scan_reads"):
         from .gamescan import stamp_picks
         stamp_picks(_partial["scan_reads"], _lean_report, board=_likely)
@@ -1313,6 +1315,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # Built from the SAME evaluated rows, so the two pages can never
         # disagree about the same player.
         "most_likely": _likely,
+        # PAST THE CAP (engine/likely.PAST_CAP_HEAVIEST, Ethan's choice
+        # 2026-10-22): the likely legs the -250 cap keeps off, shown and
+        # labelled, never picks. Its own key, so nothing that journals,
+        # stakes or ranks `most_likely` ever reads one.
+        "likely_past_cap": _past_cap,
         # The rows the display caps dropped, for `potd.attach` to select
         # over. It POPS this key, so it never reaches the published
         # payload — see `potd.POOL_KEY`.

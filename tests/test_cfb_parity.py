@@ -130,9 +130,16 @@ def test_the_floor_is_the_one_the_module_publishes():
 def test_the_gate_is_one_function_not_two_copies():
     src = _src("engine", "likely.py")
     # `floor` arrived 2026-09-08 for the reserve pass and is the ONLY
-    # override the bar takes — see `likely.RESERVE_MIN_PROB`. Pinned with
-    # the parameter named, so a second knob cannot be added quietly.
-    assert "def admissible(row: dict, floor=None) -> str:" in src
+    # override the BOARD's bar takes — see `likely.RESERVE_MIN_PROB`.
+    # Pinned with the parameter named, so a second knob cannot be added
+    # quietly. `band` arrived 2026-10-22, loudly: Ethan's choice to list
+    # the likely legs past the -250 cap (likely.PAST_CAP_HEAVIEST) beside
+    # the board, never on it. Only `past_cap_rows` passes it; the board's
+    # own call below never does.
+    assert "def admissible(row: dict, floor=None, band=None) -> str:" in src
+    assert src.count("band=PAST_CAP_BAND)") == 2, "the past-the-cap rung and its row, nothing else"
+    at = src.index("def past_cap_rows(")
+    assert src.index("band=PAST_CAP_BAND)") > at, "the window is asked only by the past-the-cap list"
     # `market_funnel` (2026-09-15) is a TALLY the gate writes into beside
     # the kind's — the same verdict recorded per market — never a second
     # knob on the bar: `admissible` still takes `floor` and nothing else.
@@ -144,6 +151,7 @@ def test_the_gate_is_one_function_not_two_copies():
     # census can be cut by kind; the gate is still the one function.
     assert body.count("not keep(got, ") == 3, body
     assert body.count("admissible(") == 1, "a second copy of the bar"
+    assert "band" not in body, "the board's bar never takes the past-the-cap window"
 
 
 # --- and it says why ------------------------------------------------------

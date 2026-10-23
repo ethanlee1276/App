@@ -10197,7 +10197,7 @@ function renderLikely() {
   if (oneBoardOn()) {
     note.innerHTML = obHeroHTML();
     host.innerHTML = oneBoardHTML() + likelyScriptsHTML(rows)
-      + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled());
+      + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled()) + likelyPastCapHTML();
     bindOneBoard(host, renderLikely);
     host.querySelectorAll("[data-jump]").forEach((b) =>
       b.addEventListener("click", () => {
@@ -10225,7 +10225,7 @@ function renderLikely() {
   host.innerHTML = (shelves.length
     ? jump + shelves.map(likelyShelf).join("")
     : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + matchupPicksHTML() + tdScenariosHTML() + likelyScriptsHTML(rows)
-    + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled());
+    + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled()) + likelyPastCapHTML();
   host.querySelectorAll("[data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
       const el = document.getElementById(b.dataset.jump);
@@ -11031,6 +11031,31 @@ function oneBoardHTML() {
       : view === "game" ? obByGameHTML(rows) : obTierSections(rows)}
     ${obHeldHTML()}
   </div>`;
+}
+/* PAST THE CAP (engine/likely.PAST_CAP_HEAVIEST). Ethan, 2026-10-22, after
+   Luther Burden III went for 84 yards in the first quarter while the board
+   showed nothing of his — his legs were priced about −260, past the −250
+   cap: "The app and you have to be better." He chose to show these,
+   labelled: the legs we rate 70% or better priced −251 to −350. Never picks —
+   the build keeps them on their own key, so nothing journals or stakes them.
+   (Our fitted curve had Burden under 70%, so this would not have named him;
+   see the note at PAST_CAP_HEAVIEST.) */
+function likelyPastCapHTML() {
+  const rows = (((state.data || {}).likely_past_cap) || []).filter((r) => !rowStarted(r));
+  if (!rows.length) return "";
+  return `<details class="ls-note likely-pulled likely-past-cap" open>
+      <summary><b>Past the −250 cap</b> <span class="mini">${rows.length}</span></summary>
+      <p class="likely-pulled-lede">Bets we rate 70% or better that cost more than −250, so they are not
+        picks: the board’s price cap keeps them off. They are shown so nothing we think is likely is hidden.
+        Not staked, not journaled.</p>
+      ${rows.map((r) => `<div class="ml-pulled-row"><span class="ml-pulled-what">
+        <b>${escapeHtml(r.player || "")}</b>
+        <span class="ml-pulled-facts">${escapeHtml(obBetLine(r))} · ${escapeHtml(String(r.odds ?? ""))}${
+          r.book ? ` at ${escapeHtml((BOOKS[bookKey(r.book)] || [r.book])[0])}` : ""} · we have it at ${
+          Math.round(Number(r.model_prob || 0) * 100)}%</span>
+        ${r.bettable === false ? `<span class="ml-pulled-why">A market we can rank but not price yet.</span>` : ""}
+        </span></div>`).join("")}
+    </details>`;
 }
 /* HELD BACK (engine/likelyboard.held_reason). Ethan, 2026-10-04: "I don't
    wanna take picks off bc they are going bad only if they also don't link

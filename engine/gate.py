@@ -110,6 +110,10 @@ PAID_KEYS = (
     # think will actually hit. Ranked by likelihood rather than edge, and
     # every bit as much the thing somebody is paying for.
     "most_likely",
+    # …AND THE LIKELY LEGS ITS PRICE CAP KEEPS OFF (engine/likely.
+    # PAST_CAP_HEAVIEST, 2026-10-22): a new view of the paid board is a new
+    # key, as the next comment says three times over.
+    "likely_past_cap",
     # THE SAME BOARD UNDER A SECOND NAME, and it leaked. `board_shelves`
     # groups the likelihood rows by market for the page's layout, which
     # means it carries a COPY of every row `most_likely` holds — player,

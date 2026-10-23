@@ -670,6 +670,45 @@ SPREAD_COHERENCE = 0.15
 #: chalk.
 HEAVIEST_PRICE = -250
 
+#: PAST THE CAP (Ethan, 2026-10-22). Luther Burden III, Patriots at Bears:
+#: all four of his research docs had him, his 4+ catches and 40+ yards were
+#: priced about −260 — just past HEAVIEST_PRICE — and the board showed
+#: nothing of his. He had 84 yards before the first quarter was out: "The
+#: app and you have to be better." Asked how the board should treat a leg
+#: our model rates likely and the cap keeps off, he chose to SHOW it,
+#: labelled. So legs at PAST_CAP_MIN_PROB or better, priced heavier than
+#: the cap and no heavier than PAST_CAP_HEAVIEST, are listed beside the
+#: board — every bar but the price asked exactly as the board asks it — and
+#: are NEVER a pick: not journalled, not staked, not the Pick of the Day,
+#: not a parlay leg. They ride on their own key (`likely_past_cap`) that
+#: only the page reads, so nothing that reads `most_likely` can take one
+#: for a pick. The cap stands: it is what he asked for on 09-01, and this
+#: is a view of what it hides.
+#:
+#: IT WOULD NOT HAVE NAMED BURDEN, and that is written here so nobody takes
+#: this for his fix. The 73% and 72% put to Ethan when he chose were the
+#: plain normal, from a build with no fitted curves; on the fitted mixture
+#: the box ranks those markets with (engine/yardagefit, the 08-30 fits) the
+#: same projections — 4.7 catches, 54.4 yards — give 4+ catches 66% and 40+
+#: yards 59%, under what the −260 says. This list answers the leg we DO
+#: rate likely that the cap hides. Whether that curve is too wide for a
+#: receiver of his volume is its own measurement (the runbook's DC).
+PAST_CAP_HEAVIEST = -350
+PAST_CAP_MIN_PROB = 0.70
+#: How many a sport's board lists, likeliest first.
+PAST_CAP_LIMIT = 10
+#: The price window the past-the-cap pass asks for: (heaviest, the cap).
+PAST_CAP_BAND = (PAST_CAP_HEAVIEST, HEAVIEST_PRICE)
+
+
+def _price_ok(odds: int, band=None) -> bool:
+    """Whether a price may stand: −250 or shorter on the board, or — when
+    ``band`` (heaviest, cap) is asked — heavier than the cap and no heavier
+    than its heaviest."""
+    if band is None:
+        return odds >= HEAVIEST_PRICE
+    return band[0] <= odds < band[1]
+
 #: How many player rows the board back-fills to per sport before it
 #: stops being a ranking and starts being a dump. Not a cap on the
 #: per-market seats: a sport that ranks more than LIMIT / PER_MARKET
@@ -1006,12 +1045,13 @@ BOOK_POSTED_GAME_MARKETS = ("moneyline", "spread", "total")
 #: discovered by Ethan on a live board. Task #206.
 BOOK_NAMED_SPORTS = ("nfl", "cfb")
 
-def admissible(row: dict, floor=None) -> str:
+def admissible(row: dict, floor=None, band=None) -> str:
     """"" if this row belongs on the board, else why it does not.
 
     ``floor`` overrides MIN_PROB for the reserve pass and NOTHING else —
     see RESERVE_MIN_PROB for why exactly one of these refusals is allowed
-    to move and the rest are not.
+    to move and the rest are not. ``band`` swaps the price cap for the
+    past-the-cap window (PAST_CAP_BAND), for rows that are never picks.
 
     ONE BAR, APPLIED TO EVERY ROW, WHATEVER BUILT IT. `build` takes rows
     from two makers — `from_prop` for the priced prop board and
@@ -1069,8 +1109,9 @@ def admissible(row: dict, floor=None) -> str:
     # tests/test_likely_gamelines.py). `from_prop` shows the under's
     # own probability; this bar holds it to the same cap, floor and
     # credibility as an over.
-    if int(row["odds"]) < HEAVIEST_PRICE:
-        return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
+    if not _price_ok(int(row["odds"]), band):
+        return (f"heavier than {HEAVIEST_PRICE} — chalk, not a pick" if band is None
+                else "outside the past-the-cap prices")
     # A REAL FIND STANDS PAST BOTH CREDIBILITY BARS (engine/boldcheck):
     # no sign its inputs are wrong, and a measured step or his own games
     # account for the gap. Everything else below still applies to it.
@@ -1208,7 +1249,7 @@ def _tally(ladder, why: str) -> None:
 
 
 def _best_rung(row: dict, market: str, fits=None, floor=None,
-               ladder: dict | None = None, prefer=None, lean=None) -> dict | None:
+               ladder: dict | None = None, prefer=None, lean=None, band=None) -> dict | None:
     """The likeliest priced number on the prop's alternate ladder, or None.
 
     THE CHOICE, over `rungs` below, which is the derivation. This board
@@ -1223,7 +1264,7 @@ def _best_rung(row: dict, market: str, fits=None, floor=None,
     the rungs clearing every bar, it is the answer, whatever its
     neighbour did to its price.
     """
-    got = rungs(row, market, fits, floor=floor, ladder=ladder)
+    got = rungs(row, market, fits, floor=floor, ladder=ladder, band=band)
     if not got:
         return None
     held = _held_choice(row, got, prefer, main_ok=False)
@@ -1303,13 +1344,14 @@ def _pick_brief(r: dict) -> dict:
 LEAN_BEST_MIN_PROB = 0.20
 
 
-def _main_candidate(row: dict, side, fits=None):
+def _main_candidate(row: dict, side, fits=None, band=None):
     """The prop's main number on ``side`` as a rung-shaped candidate —
     {side, line, odds, book, prob} — or None when no bettable book prices
-    that side at −250 or better, or the model cannot price the number."""
+    that side at −250 or better (inside ``band``, when one is asked), or
+    the model cannot price the number."""
     line = row.get("line")
     got = _price_at(row, side, line)
-    if got is None or got[0] < HEAVIEST_PRICE:
+    if got is None or not _price_ok(got[0], band):
         return None
     p = _prob_at(row, row.get("market") or "", side, line, fits)
     if p is None:
@@ -1414,7 +1456,7 @@ def _held_choice(row: dict, got: list, prefer, main_ok: bool):
 
 
 def rungs(row: dict, market: str, fits=None, floor=None,
-          ladder: dict | None = None) -> list:
+          ladder: dict | None = None, band=None) -> list:
     """EVERY priced number on the prop's alternate ladder that clears the
     floor and its own credibility bar, best price per (line, side).
 
@@ -1464,13 +1506,20 @@ def rungs(row: dict, market: str, fits=None, floor=None,
                 odds = int(ln.get(key) or 0)
             except (TypeError, ValueError):
                 continue
-            if not odds or not _sane(odds) or odds < HEAVIEST_PRICE:
-                if odds and odds < HEAVIEST_PRICE:
-                    _tally(ladder, "heavier than the cap")
+            if not odds or not _sane(odds):
                 continue
             prev = best_price.get((line, side))
             if prev is None or odds > prev[0]:
                 best_price[(line, side)] = (odds, book, ln)
+    # THE BEST PRICE ACROSS THE BOOKS SAYS WHICH SIDE OF THE CAP A NUMBER IS
+    # ON. A number one book hangs at −240 and another at −270 is a −240 bet
+    # (it is shopped to the best price), so it is the board's, never "past
+    # the cap" (PAST_CAP_BAND).
+    for k, (odds, _book, _ln) in list(best_price.items()):
+        if not _price_ok(odds, band):
+            if band is None and odds < HEAVIEST_PRICE:
+                _tally(ladder, "heavier than the cap")
+            del best_price[k]
     out: list = []
     priced = row.get("rung_probs") or {}
     for (line, side), (odds, book, ln) in best_price.items():
@@ -1543,7 +1592,7 @@ def rungs(row: dict, market: str, fits=None, floor=None,
     # candidate like any rung, at its own best bettable price, held to the
     # same floor, the same -250 cap and the same credibility bar against
     # its own side of the market.
-    other = _main_other_side(row, market, fits, floor=floor, ladder=ladder)
+    other = _main_other_side(row, market, fits, floor=floor, ladder=ladder, band=band)
     if other is not None and not any(
             _same_number(c["side"], c["line"], (other["side"], other["line"])) for c in out):
         out.append(other)
@@ -1554,14 +1603,14 @@ def rungs(row: dict, market: str, fits=None, floor=None,
 
 
 def _main_other_side(row: dict, market: str, fits=None, floor=None,
-                     ladder: dict | None = None) -> dict | None:
+                     ladder: dict | None = None, band=None) -> dict | None:
     """The main line's OTHER side — the one the edge engine did not pick
     — as a rung-shaped candidate that clears the board's bars, or None."""
     side = _side(row.get("side"))
     if side not in ("over", "under") or row.get("line") is None or not row.get("has_market"):
         return None
     flip = "under" if side == "over" else "over"
-    cand = _main_candidate(dict(row, market=market), flip, fits)
+    cand = _main_candidate(dict(row, market=market), flip, fits, band=band)
     if cand is None:
         return None
     # ONE NUMBER AND ITS COMPLEMENT. The rung derivation prices off the
@@ -2668,13 +2717,63 @@ def _funnel() -> dict:
     return {"offered": 0, "kept": 0, "duplicate": 0, "shown": 0, "refused": {}}
 
 
+def past_cap_note(row: dict) -> str:
+    """What a past-the-cap row says about itself, on the page."""
+    return (f"Past the {HEAVIEST_PRICE} cap: we have this at {round(float(row['model_prob']) * 100)}%, "
+            f"priced {int(row['odds'])}. Shown so nothing we rate likely is hidden; not a pick, "
+            f"never staked or journaled.")
+
+
+def past_cap_rows(props: list, sport: str = "nfl", fits=None, seated=(),
+                  limit: int = PAST_CAP_LIMIT) -> list:
+    """THE LIKELY LEGS THE CAP KEEPS OFF (see PAST_CAP_HEAVIEST), likeliest
+    first: per prop, its likeliest number whose best price anywhere is
+    inside PAST_CAP_BAND, at PAST_CAP_MIN_PROB or better, held to every bar
+    the board holds a row to but the price. A bet already on the board
+    (``seated``: its (player, team, market, side, line)) is not listed
+    again; another number of the same prop is — the board seating Burden's
+    under 5.5 catches does not answer whether his 4+ is likely."""
+    from .calibrate import is_reliable
+
+    def bettable(market):
+        return is_reliable(sport, market)
+    seated = set(seated or ())
+    out, props_seen = [], set()
+    for row in props or []:
+        market = str(row.get("market") or "")
+        prop = (row.get("player") or "", row.get("team") or "", market)
+        if prop in props_seen or not row.get("has_market") or not rankable(market, sport):
+            continue
+        rung = _best_rung(row, market, fits, floor=PAST_CAP_MIN_PROB, band=PAST_CAP_BAND)
+        if rung is None or (*prop, _side(rung["side"]), float(rung["line"])) in seated:
+            continue
+        best = _price_at(row, rung["side"], rung["line"])
+        if best is None or not _price_ok(best[0], PAST_CAP_BAND):
+            continue
+        prob = row.get("raw_prob") if row.get("sharp_anchored") and row.get("raw_prob") is not None \
+            else row.get("hit_prob")
+        got = _row_from(row, market, sport, bettable, prob, rung=rung)
+        if admissible(got, floor=PAST_CAP_MIN_PROB, band=PAST_CAP_BAND):
+            continue
+        got["past_cap"] = True
+        got["past_cap_note"] = past_cap_note(got)
+        props_seen.add(prop)
+        out.append(got)
+    out.sort(key=lambda r: -float(r["model_prob"]))
+    return out[:limit]
+
+
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
           limit: int = LIMIT, fits=None, census: dict | None = None,
           game_bets=None, census_by_kind: dict | None = None,
           cut: list | None = None, previous=None,
           turnover: dict | None = None, now: str | None = None,
-          leans: dict | None = None, lean_report: dict | None = None) -> list:
+          leans: dict | None = None, lean_report: dict | None = None,
+          past_cap: list | None = None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
+
+    ``past_cap`` is filled in place with the likely legs the price cap
+    keeps off (`past_cap_rows`) — never rows of the board itself.
 
     ``leans`` maps (player, team, market) to the matchup read's side —
     {"side": "over"|"under", "read": key, "label": words} — see READ_SEATS.
@@ -3135,6 +3234,15 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         census.update(refused)
     if census_by_kind is not None:
         census_by_kind.update(funnel)
+    if past_cap is not None:
+        try:
+            past_cap[:] = past_cap_rows(props, sport=sport, fits=fits, seated={
+                (r.get("player") or "", r.get("team") or "", str(r.get("market") or ""),
+                 _side(r.get("side")), float(r["line"]))
+                for r in out if (r.get("kind") or "prop") == "prop" and r.get("line") is not None})
+        except Exception:                                    # noqa: BLE001
+            # A view beside the board never costs the board.
+            past_cap[:] = []
     return out
 
 
