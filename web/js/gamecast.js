@@ -82,7 +82,6 @@
   const teamBox = (d, team) => (((d || {}).box || []).find((b) => b.team === team) || {}).groups || [];
   const col = (g, label) => (g.labels || []).findIndex((l) => String(l).toUpperCase() === String(label).toUpperCase());
   const cell = (g, row, label) => { const i = col(g, label); return i >= 0 ? (row.stats || [])[i] : undefined; };
-  const groupNamed = (groups, name) => groups.find((g) => lower(g.name) === lower(name)) || null;
   const rowOf = (g, name) => (g.rows || []).find((r) => lower(r.name) === lower(name)) || null;
 
   /* The columns a line is made of, per group, in ESPN's labels. "C/ATT"

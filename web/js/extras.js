@@ -106,8 +106,6 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  /* A standard normal from two uniforms (Box–Muller). */
-  const gauss = (r) => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
   /* The normal's CDF (Abramowitz–Stegun 7.1.26 on erf, |error| < 1.5e-7). */
   function phi(z) {
     const x = Math.abs(z) / Math.SQRT2, t = 1 / (1 + 0.3275911 * x);
