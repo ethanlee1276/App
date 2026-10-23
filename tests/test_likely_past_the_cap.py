@@ -121,6 +121,10 @@ def test_the_page_draws_it_labelled():
     assert "function likelyPastCapHTML()" in app and "likely_past_cap" in app
     assert "Past the −250 cap" in app and "Not staked, not journaled." in app
     assert app.count("likelyPulledHTML(likelyPulled()) + likelyPastCapHTML()") == 2, "both layouts"
+    at = app.index("function likelyPastCapHTML()")
+    body = app[at:app.index("\n}\n", at)]
+    assert "american(r.odds)" in body and "wholePct(" in body, "the price in the reader's format, a real minus"
+    assert "!rowStarted(r)" in body, "gone at kickoff like every row on the board"
 
 
 if __name__ == "__main__":

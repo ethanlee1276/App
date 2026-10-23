@@ -11048,11 +11048,12 @@ function likelyPastCapHTML() {
       <p class="likely-pulled-lede">Bets we rate 70% or better that cost more than −250, so they are not
         picks: the board’s price cap keeps them off. They are shown so nothing we think is likely is hidden.
         Not staked, not journaled.</p>
-      ${rows.map((r) => `<div class="ml-pulled-row"><span class="ml-pulled-what">
-        <b>${escapeHtml(r.player || "")}</b>
-        <span class="ml-pulled-facts">${escapeHtml(obBetLine(r))} · ${escapeHtml(String(r.odds ?? ""))}${
-          r.book ? ` at ${escapeHtml((BOOKS[bookKey(r.book)] || [r.book])[0])}` : ""} · we have it at ${
-          Math.round(Number(r.model_prob || 0) * 100)}%</span>
+      ${rows.map((r) => `<div class="ml-pulled-row">
+        <span class="ml-pulled-mark">${betMark(r, 28)}</span>
+        <span class="ml-pulled-what"><b>${escapeHtml(r.player || "")}</b>
+        <span class="ml-pulled-facts">${escapeHtml([obBetLine(r),
+          r.odds ? `${american(r.odds)}${r.book ? ` at ${(BOOKS[bookKey(r.book)] || [r.book])[0]}` : ""}` : "",
+          `we have it at ${wholePct(r.model_prob || 0)}`].filter(Boolean).join(" · "))}</span>
         ${r.bettable === false ? `<span class="ml-pulled-why">A market we can rank but not price yet.</span>` : ""}
         </span></div>`).join("")}
     </details>`;
