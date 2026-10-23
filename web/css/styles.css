@@ -6298,6 +6298,7 @@ body.has-rail .shell {
 }
 
 .sidebar { position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
+  height: calc(100dvh - var(--topbar-h));
   overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 14px;
   padding: 18px 14px 20px; border-right: var(--hairline) solid var(--border-soft);
@@ -7658,6 +7659,67 @@ body.has-deck #rail-live { display: none; }
      the phone-only flex reordering retired. */
   .hero-games .game-card, .hero-games .skeleton-game { min-width: 66vw; }
   .lb-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   THE OPEN iPHONE DUO (Ethan, 2026-10-23: "Make app work seamlessly
+   with iPhone duo ... The big screen we can do a desktop sort of view.
+   Also make it work when the duo is half open").
+
+   Safari hands a page no fold, no hinge and no posture: the Viewport
+   Segments and Device Posture APIs are Chrome's, and WebKit has taken
+   no position on either. So the open Duo is told apart by its SHAPE.
+   What Safari gives the page, measured in the iOS 27.1 simulator:
+   folded 382 x 580, open on its side 951 x 543 to 589, open upright
+   669 x 825; Apple's pixels over three say 466 x 678 and 890 x 626.
+   Every pose reports a finger.
+
+   Two shapes get the desktop shell where a phone or tablet would get
+   the drawer: the sidebar beside the page, no hamburger, no tab bar.
+     on its side  (min-width: 700px) and (min-height: 480px) and
+                  (min-aspect-ratio: 5/4). Any pointer, so a small
+                  laptop window gets the same; a phone on its side is
+                  under 480 tall and keeps its own layout.
+     upright      (pointer: coarse) and (min-width: 600px) and
+                  (max-width: 720px) and (min-height: 700px): a finger
+                  on a screen no phone has, under the iPad mini's 744.
+   The same two lines are UNFOLDED_MQ in app.js, which keeps the header
+   in place on these shapes and closes the drawer when the screen opens.
+
+   OVERRIDES, NOT A NEW CONDITION ON THE OLD BLOCKS. "Up to 900px, but
+   not the open Duo" needs Media Queries 4's `not`, and a browser without
+   it (Safari before 16.4) reads the whole query as false: the drawer
+   would vanish on exactly the oldest phones. These are plain `and`s.
+   ============================================================ */
+@media (min-width: 700px) and (max-width: 900px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
+       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px) {
+  .shell, body.has-rail .shell { display: grid; }
+  .rail { padding: 0 26px 26px; }
+  .menu-toggle { display: none; }
+  .sidebar { position: sticky; top: var(--topbar-h); left: auto; bottom: auto; z-index: auto;
+    width: auto; height: calc(100vh - var(--topbar-h)); height: calc(100dvh - var(--topbar-h));
+    will-change: auto; transform: none; transition: none;
+    border-right: var(--hairline) solid var(--border-soft); }
+  body.menu-open .sidebar { transform: none; box-shadow: none; }
+  body.menu-open #scrim { display: none; }
+}
+/* …and under 761px the phone's own chrome steps aside for it: the tab
+   bar and the riding tray that floats on it, the room kept for them, and
+   the search, bell and theme buttons the tab bar's More sheet took over. */
+@media (min-width: 700px) and (max-width: 760px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
+       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px) {
+  .tabbar, .riding-tray { display: none; }
+  body, body.has-tray { padding-bottom: 0; }
+  .sidebar { padding-bottom: 20px; }
+  #nav-search, #nav-bell, #theme-toggle { display: grid; }
+  .crash-note { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  #home-deck .hd-sec[data-sec="riding"]:not([hidden]) { display: block; }
+}
+/* At 951 wide (the open Duo on its side) the header ran 29px off the
+   right edge: the date range is the widest thing in it, and under 901
+   it already steps aside. Under 1000 it does too. */
+@media (max-width: 999px) {
+  #slate-date { display: none; }
 }
 
 /* ---------------- Rocket Radar, given direction (2026-08-10) -----------
@@ -12955,6 +13017,21 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
      lines lead the card's text. */
   .game-card .game-info { display: flex; flex-direction: column; }
   .game-card .game-info > .gc-mkts { order: -1; margin-bottom: 6px; }
+}
+
+/* THE DUO'S FRONT SCREEN, and any short phone (2026-10-23). Safari gives
+   the folded iPhone Duo's page 382 x 580, its own controls in a column
+   down the right; on Most Likely the first pick sat at 515px under a tab
+   bar starting at 514, so the screen opened on no picks at all. Under 700
+   tall the decoration gives way: the venue band goes (it is aria-hidden
+   art), and the league crests come down to 34px, the button still well
+   over the 44px a thumb needs with its name beneath. */
+@media (max-width: 760px) and (max-height: 700px) {
+  .venue-band { display: none; }
+  .sportbar-in { padding: 4px 8px 0; }
+  .sportbar-in .sport-btn { gap: 3px; padding: 4px 2px 6px; }
+  .sportbar-in .sport-btn .crest { width: 34px; height: 34px; }
+  .sportbar-in .sport-btn .crest svg { width: 18px; height: 18px; }
 }
 
 /* The week in one card (Record page). */

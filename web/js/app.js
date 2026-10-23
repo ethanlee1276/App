@@ -45572,10 +45572,23 @@ function showHeader() {
 const HEADER_TUCK_MQ =
   "(max-width: 760px), (pointer: coarse) and (max-width: 1024px)";
 
+/* THE OPEN iPHONE DUO, by its shape (styles.css, "THE OPEN iPHONE DUO"):
+   on its side, or upright on a screen no phone has. Safari tells a page
+   nothing about the fold, so these two lines are all there is to go on.
+   Where they match, the page wears the desktop shell: the header stays
+   put (a retracted header would leave the sticky sidebar a gap over it),
+   the phone's sheet is not the menu, and an open drawer closes. */
+const UNFOLDED_MQ = "(min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4), "
+  + "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px)";
+function unfolded() {
+  return !!(window.matchMedia && matchMedia(UNFOLDED_MQ).matches);
+}
+
 function initHeaderTuck() {
   const bar = document.querySelector(".topbar");
   if (!bar) return;
   const touch = matchMedia(HEADER_TUCK_MQ);
+  const open = matchMedia(UNFOLDED_MQ);
   let last = Math.max(0, window.scrollY);
   let height = 0;          // cached: reading it per frame forces layout
   let ticking = false;
@@ -45595,6 +45608,7 @@ function initHeaderTuck() {
   addEventListener("resize", reset);
   addEventListener("orientationchange", reset);
   if (touch.addEventListener) touch.addEventListener("change", reset);
+  if (open.addEventListener) open.addEventListener("change", reset);
 
   const apply = () => {
     ticking = false;
@@ -45606,7 +45620,7 @@ function initHeaderTuck() {
     // The menu panel lives inside this header; the body can't scroll while
     // it's open anyway. At the very top there is nothing to retract past.
     // And on a desktop the header stays put — see HEADER_TUCK_MQ.
-    if (!touch.matches || document.body.classList.contains("menu-open")
+    if (!touch.matches || open.matches || document.body.classList.contains("menu-open")
         || y === 0) {
       showHeader();
       return;
@@ -45623,6 +45637,101 @@ function initHeaderTuck() {
     ticking = true;
     requestAnimationFrame(apply);
   }, { passive: true });
+}
+
+/* FOLD AND UNFOLD WITHOUT LOSING YOUR PLACE (the iPhone Duo, 2026-10-23).
+   To a page the Duo is three screens and a resize: nothing reloads, but
+   every width-keyed layout reflows, and a scroll offset measured in the
+   old layout lands on some other pick in the new one. Safari has no
+   scroll anchoring of its own (overflow-anchor), so this keeps it: the
+   block at the top of the reading column is noted as the page moves, and
+   when the width jumps by a fifth or more (a fold, an unfold, a turn) it
+   is put back where it was on screen. The drawer and the phone's sheet
+   belong to the narrow screen, so they close when it goes. */
+function foldAnchorAt(x, y) {
+  const main = document.querySelector("main");
+  const hit = document.elementFromPoint(x, y);
+  if (!main || !hit || !main.contains(hit) || hit === main) return null;
+  // The biggest block under the point that is still smaller than most of
+  // a screen: a card, a row, a tile. A whole section kept in place still
+  // reflows everything inside it, which is the jump this exists to stop.
+  const cap = window.innerHeight * 0.6;
+  if (hit.getBoundingClientRect().height > cap) return { big: hit };
+  let best = hit;
+  for (let n = hit.parentElement; n && n !== main; n = n.parentElement) {
+    if (n.getBoundingClientRect().height > cap) break;
+    best = n;
+  }
+  return best;
+}
+function initFoldSeams() {
+  let anchor = null;
+  let width = window.innerWidth;
+  let pending = false;
+  let restoring = 0;
+  const note = () => {
+    pending = false;
+    if (restoring) return;
+    anchor = null;
+    if (window.scrollY < 40) return;
+    const bar = document.querySelector(".topbar");
+    const main = document.querySelector("main");
+    const r = main ? main.getBoundingClientRect() : { left: 0, width: window.innerWidth };
+    const x = Math.min(window.innerWidth - 4, Math.max(0, r.left) + Math.max(24, r.width / 2));
+    let y = Math.max(0, bar ? bar.getBoundingClientRect().bottom : 0) + 8;
+    let big = null;
+    for (let i = 0; i < 6 && y < window.innerHeight - 4; i += 1, y += 32) {
+      const got = foldAnchorAt(x, y);
+      if (got && got.big) { big = big || got.big; continue; }
+      if (got) { anchor = { el: got, top: got.getBoundingClientRect().top }; return; }
+    }
+    // Only a padded panel under the point: it beats nothing at all.
+    if (big) anchor = { el: big, top: big.getBoundingClientRect().top };
+  };
+  // Noted every frame the page moves, not when it settles: the screen can
+  // open mid-scroll, and the layout it was read in is gone by the resize.
+  addEventListener("scroll", () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(note);
+  }, { passive: true });
+  // A jump, not a glide: the page scrolls smoothly by its stylesheet.
+  const jump = (dy) => {
+    const root = document.documentElement;
+    const was = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    window.scrollBy(0, dy);
+    root.style.scrollBehavior = was;
+  };
+  // Put back after the reflow, and again as late layout lands (a rail or
+  // a strip a breakpoint redraws); a finger on the page ends it.
+  const stop = () => { restoring = 0; };
+  ["touchstart", "wheel", "keydown", "mousedown"].forEach((t) => addEventListener(t, stop, { passive: true }));
+  addEventListener("resize", () => {
+    const was = width;
+    width = window.innerWidth;
+    const a = anchor;
+    if (!was || Math.abs(width - was) / was < 0.2 || !a) return;
+    const run = ++restoring;
+    const fix = () => {
+      if (restoring !== run || !a.el.isConnected || !a.el.getClientRects().length) return;
+      const off = a.el.getBoundingClientRect().top - a.top;
+      if (Math.abs(off) > 1) jump(off);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(fix));
+    setTimeout(fix, 150);
+    setTimeout(() => { fix(); if (restoring === run) { restoring = 0; note(); } }, 450);
+  });
+  const narrow = matchMedia("(max-width: 900px)");
+  const phone = matchMedia("(max-width: 760px)");
+  const open = matchMedia(UNFOLDED_MQ);
+  const shut = () => {
+    if ((!narrow.matches || open.matches) && document.body.classList.contains("menu-open")) {
+      closeMobileMenu("the screen opened");
+    }
+    if (!isPhone() && document.body.classList.contains("more-open")) moreSheetOpen(false);
+  };
+  [narrow, phone, open].forEach((mq) => { if (mq.addEventListener) mq.addEventListener("change", shut); });
 }
 
 /* ---------------- wiring ---------------- */
@@ -45838,6 +45947,7 @@ leagueCrests();
 initMobileMenu();
 initMoreMenu();
 initHeaderTuck();
+initFoldSeams();
 requestAnimationFrame(moveIndicator);
 /* The tab labels are set in a web font. Measuring on the next frame reads
    the FALLBACK metrics, so the underline was drawn 114px wide under a 96px
@@ -49619,7 +49729,7 @@ function sidebarDestinations(root) {
 }
 
 function isPhone() {
-  return !!(window.matchMedia && matchMedia("(max-width: 760px)").matches);
+  return !!(window.matchMedia && matchMedia("(max-width: 760px)").matches) && !unfolded();
 }
 
 function morePillLabel(src) {

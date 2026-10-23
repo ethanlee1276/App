@@ -123,7 +123,12 @@ HTML = (WEB / "index.html").read_text()
 #: "This week" block, which it used to drop — +0.64 KB gz (496.483 ->
 #: 497.122). The room, the pickups and the notes load on first use
 #: (js/fantasyweek.js, 5.6 KB gz); drawn here they were +3.5. Told to Ethan.
-APP_JS_BUDGET_KB = 498
+#: 498 -> 499 on 2026-10-23 by the iPhone Duo (Ethan: "Make app work
+#: seamlessly with iPhone duo ... The big screen we can do a desktop sort of
+#: view"): the open screen's shape, shared by the header, the phone test and
+#: the drawer, and the block at the top of the screen kept in place across a
+#: fold — +0.97 KB gz (497.965 -> 498.938). Told to Ethan.
+APP_JS_BUDGET_KB = 499
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -195,7 +200,10 @@ APP_JS_BUDGET_KB = 498
 #: card from opening the pick, and its seven style rules — +0.59 KB gz
 #: (614.606 -> 615.197). app.js stays inside its 498 (497.466 -> 497.965)
 #: once the fold's footnote was cut to one line. Told to Ethan.
-BOOT_BUDGET_KB = 616
+#: 616 -> 617 on 2026-10-23 by the iPhone Duo: the app.js bump above, the
+#: open shell's overrides, the short front screen's and the header date's
+#: (615.197 -> 616.506 KB gz). Told to Ethan.
+BOOT_BUDGET_KB = 617
 
 
 def _gz_trimmed(rel: str) -> int:
