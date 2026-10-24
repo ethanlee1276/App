@@ -47,6 +47,8 @@ URL = "https://api.sharpapi.io/api/v1/splits?league={league}"
 #: One request a league per this long: the feed refreshes every five
 #: minutes, and the free plan allows twelve a minute.
 TTL = 600
+#: A key or plan refusal holds this long before the builds ask again.
+REFUSED_TTL = 24 * 3600
 HISTORY = os.path.join("data", "cache", "splits_history.jsonl")
 #: The book whose splits the report leads with: the biggest public book.
 LEAD_BOOK = "DraftKings"
@@ -114,6 +116,17 @@ def fetch(league: str, key: str | None = None, ttl: int = TTL, now: float | None
                 return json.load(fh)
     except (OSError, ValueError):
         pass
+    # A REFUSAL IS REMEMBERED FOR A DAY (REFUSED_TTL). The box's key, 2026-10-24:
+    # "This endpoint requires Pro tier or higher" — every build asking again
+    # would get the same answer. A probe (ttl 0) always asks.
+    gone = path.replace(".json", "_refused.json")
+    try:
+        if ttl and now - os.path.getmtime(gone) < REFUSED_TTL:
+            with open(gone, encoding="utf-8") as fh:
+                was = json.load(fh)
+            raise Refused(int(was.get("status") or 0), str(was.get("said") or ""))
+    except (OSError, ValueError):
+        pass
     req = urllib.request.Request(URL.format(league=league),
                                  headers={"X-API-Key": key, "Accept": "application/json",
                                           "User-Agent": AGENT})
@@ -121,7 +134,16 @@ def fetch(league: str, key: str | None = None, ttl: int = TTL, now: float | None
         with urllib.request.urlopen(req, timeout=20) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        raise Refused(exc.code, _said(exc)) from None
+        said = _said(exc)
+        if exc.code in (401, 402, 403):
+            os.makedirs(os.path.dirname(gone), exist_ok=True)
+            with open(gone, "w", encoding="utf-8") as fh:
+                json.dump({"status": exc.code, "said": said}, fh)
+        raise Refused(exc.code, said) from None
+    try:
+        os.remove(gone)
+    except OSError:
+        pass
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path + ".tmp", "w", encoding="utf-8") as fh:
         json.dump(payload, fh)

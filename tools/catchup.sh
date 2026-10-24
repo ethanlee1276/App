@@ -15,6 +15,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CT CU CV CW CX CY CZ DA DB DC DD DE DG DH BK 2>&1 | tee /tmp/tonight.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CY DA DE DB2 DI 2>&1 | tee /tmp/di.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DE DJ 2>&1 | tee /tmp/dj.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK 2>&1 | tee /tmp/dk.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -374,6 +375,15 @@ from engine import gate
 for sp, f in (('nba', 'web/data/nba.json'), ('nhl', 'web/data/nhl.json')):
     d = json.load(open(gate.board_source(f)))
     print(sp, len(d.get('recommendations') or []), 'props priced;', d.get('likely_census'))
+"
+SH
+run DK "The referees read from the prose post, and the marks on a fresh board" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.nflrefs --why | tail -30
+cd /srv/qellys && cat data/autoupdate.json; echo; sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/recommendations.json'))
+rows = [r for r in d.get('most_likely') or [] if r.get('bigger_lines')]
+print('built', d.get('built_at'), '·', len(rows), 'picks with bigger lines,', sum(1 for r in rows for c in r['bigger_lines'] if c.get('better')), 'marked,', sum(1 for r in rows for c in r['bigger_lines'] if (c.get('odds') or 0) < -1000), 'priced past -1000')
 "
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'

@@ -9,7 +9,9 @@ What these hold: a penalty is counted once, its yards either way, and the
 home team's share kept; a referee's overs and home covers are against the
 closing numbers, pushes left out, unplayed and unrefereed games left out;
 a post's row names a referee only with two teams and a referee this league
-knows, the visitor first; a name set by hand wins, ESPN next, Football
+knows, the visitor first; a post written as prose is read sentence by
+sentence against the week's games, a passing mention losing to the
+referee who names both teams and a tie naming no one; a name set by hand wins, ESPN next, Football
 Zebras fills the rest, and a game a week away is not asked about; the
 report's line says where he was named, puts the league beside every
 number, flags a thin record and carries the measured caveat; with no
@@ -86,6 +88,36 @@ def test_a_post_names_a_referee_only_with_two_teams_and_a_known_name():
     assert lines == {"PIT@NO": "Land Clark", "KC@SEA": "Alex Kemp"}, "the full names and the nicknames, visitor first"
 
 
+PROSE = """<p>Embed from Getty Images</p>
+<p>Alan Eck will be in Chicago on Thursday as the Patriots square off with the Bears.
+Clete Blakeman, Adrian Hill, and Shawn Hochuli are off this week.</p>
+<p>In the early window, Land Clark heads to New Orleans for Steelers-Saints, and Clay Martin has the
+49ers in Atlanta. Alex Kemp works in Los Angeles on Sunday.</p>
+<p>Sunday night: Kansas City at Seattle goes to Brad Allen; Brad Allen also worked the Super Bowl.</p>
+<p>John Hussey has the Cowboys and the Eagles on Monday night, a rematch of the game Bill Vinovich worked
+in Dallas.</p>"""
+WEEK = ["NE@CHI", "PIT@NO", "SF@ATL", "LA@LV", "KC@SEA", "DAL@PHI"]
+ALL_REFS = REFS | {"Alan Eck", "Clete Blakeman", "Adrian Hill", "Brad Allen", "John Hussey", "Bill Vinovich"}
+
+
+def test_the_prose_post_is_read_sentence_by_sentence_against_the_weeks_games():
+    # The box, 2026-10-24: Football Zebras' week 7 post is sentences, not a table.
+    got = R.parse_post(PROSE, ALL_REFS, games=WEEK)
+    assert got["NE@CHI"] == "Alan Eck", "a city and a nickname, both in the one game"
+    assert got["PIT@NO"] == "Land Clark" and got["SF@ATL"] == "Clay Martin", "two referees in one sentence"
+    assert "LA@LV" not in got, "Los Angeles alone is two teams; the game is LV's anyway"
+    assert got["DAL@PHI"] == "John Hussey", "the later referee's Dallas is his own part of the sentence"
+    assert got["KC@SEA"] == "Brad Allen", "teams before the referee, and his second mention names none"
+    whys = {(n, w) for _s, n, _t, g, w in R.readings(PROSE, ALL_REFS, WEEK) if not g}
+    assert ("Clete Blakeman", "no team named") in whys and ("Shawn Hochuli", "no team named") in whys
+    # One referee read onto two games is neither's.
+    twice = "<p>Alan Eck has Steelers-Saints.</p><p>Alan Eck has Chiefs-Seahawks.</p>"
+    assert R.parse_post(twice, ALL_REFS, games=WEEK) == {}
+    # Two referees each naming both teams of one game: a tie, and no name.
+    tie = "<p>Alan Eck has Steelers-Saints.</p><p>Land Clark has Steelers-Saints.</p>"
+    assert R.parse_post(tie, ALL_REFS, games=WEEK) == {}
+
+
 def test_by_hand_wins_espn_next_football_zebras_fills_the_rest():
     today = dt.date(2026, 10, 24)
     games = [{"away": "PIT", "home": "NO", "date": "2026-10-25"},
@@ -101,8 +133,8 @@ def test_by_hand_wins_espn_next_football_zebras_fills_the_rest():
                                            {"fullName": "Someone Else", "position": {"displayName": "Umpire"}}]}} \
             if g["away"] == "SF" else {}
 
-    def zebras(season, week, refs):
-        assert (season, week) == (2026, 7)
+    def zebras(season, week, refs, games=None):
+        assert (season, week) == (2026, 7) and "KC@SEA" in games
         return {"KC@SEA": "Alex Kemp", "SF@ATL": "Wrong Name", "BUF@MIA": "Too Early"}
     got = R.assigned(games, 2026, 7, store={}, today=today, espn=espn, zebras=zebras)
     assert got == {"PIT@NO": ("Clay Martin", "set"), "SF@ATL": ("Shawn Hochuli", "espn"),

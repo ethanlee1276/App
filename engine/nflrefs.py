@@ -250,34 +250,111 @@ def _nicknames() -> dict:
 def _rows(text: str) -> list[str]:
     """An HTML post as its rows of plain text: one per table row, list item,
     paragraph or line break."""
-    text = re.sub(r"(?i)<\s*(/tr|/li|/p|br\s*/?|/h\d)\s*>", "\n", text or "")
+    # A raw line break inside a paragraph is only wrapping; the tags say
+    # where a row ends.
+    text = re.sub(r"\s*\n\s*", " ", text or "")
+    text = re.sub(r"(?i)<\s*(/tr|/li|/p|br\s*/?|/h\d)\s*>", "\n", text)
     text = re.sub(r"(?i)<\s*/t[dh]\s*>", " | ", text)
     text = re.sub(r"<[^>]+>", " ", text)
     return [re.sub(r"\s+", " ", _html.unescape(r)).strip() for r in text.split("\n") if r.strip()]
 
 
-def parse_post(content: str, referees, nicknames: dict | None = None) -> dict:
-    """{"AWAY@HOME": referee} from an assignments post. A row counts only
-    when it names exactly two teams and one referee from ``referees``; the
-    first team named is the visitor ("Steelers at Saints")."""
-    nick = nicknames if nicknames is not None else _nicknames()
+#: The places a post names a home team by, where one place is one team.
+#: New York and Los Angeles hold two teams each and are left out: a
+#: sentence naming only "Los Angeles" cannot say which game.
+CITIES = {"arizona": "ARI", "glendale": "ARI", "atlanta": "ATL", "baltimore": "BAL", "buffalo": "BUF",
+          "orchard park": "BUF", "carolina": "CAR", "charlotte": "CAR", "chicago": "CHI", "cincinnati": "CIN",
+          "cleveland": "CLE", "dallas": "DAL", "arlington": "DAL", "denver": "DEN", "detroit": "DET",
+          "green bay": "GB", "houston": "HOU", "indianapolis": "IND", "jacksonville": "JAX",
+          "kansas city": "KC", "las vegas": "LV", "miami": "MIA", "minnesota": "MIN", "minneapolis": "MIN",
+          "new england": "NE", "foxborough": "NE", "new orleans": "NO", "philadelphia": "PHI",
+          "pittsburgh": "PIT", "san francisco": "SF", "santa clara": "SF", "seattle": "SEA",
+          "tampa bay": "TB", "tampa": "TB", "tennessee": "TEN", "nashville": "TEN", "washington": "WAS",
+          "landover": "WAS"}
+
+
+def _sentences(row: str) -> list[str]:
+    return [x.strip() for x in re.split(r"(?<=[.!?;])\s+", row) if x.strip()]
+
+
+def _teams_in(text: str, words: list, nick: dict) -> list:
+    """[(position, team)] for every team a stretch of text names, each name
+    read once (the longest first, so "Kansas City Chiefs" is one mention)."""
+    rest, found = text, []
+    for w in words:
+        pat = rf"(?<!\w){re.escape(w)}(?!\w)"
+        for m in re.finditer(pat, rest):
+            found.append((m.start(), nick[w]))
+        rest = re.sub(pat, lambda m: " " * len(m.group(0)), rest)
+    return sorted(found)
+
+
+def readings(content: str, referees, games=None, nicknames: dict | None = None) -> list:
+    """[(sentence, referee, teams, "AWAY@HOME" or "", why)] for every
+    stretch of a post that names a referee.
+
+    THE POSTS ARE PROSE (the box, 2026-10-24: "Alan Eck will be in Chicago
+    on Thursday as the Patriots square off with the Bears"), not a table.
+    So each sentence is split at every referee it names, and each part's
+    teams — by nickname, full name or a one-team city — are read. With the
+    week's ``games`` (["AWAY@HOME", …]) a part is that game when every team
+    it names plays in it, since a team plays once a week; order says
+    nothing. Without them, two teams, the visitor first."""
+    nick = dict(nicknames if nicknames is not None else _nicknames())
+    if nicknames is None:
+        nick.update(CITIES)
     names = sorted({str(r).strip() for r in referees if str(r).strip()}, key=len, reverse=True)
     words = sorted(nick, key=len, reverse=True)
-    out = {}
+    pairs = [tuple(str(g).upper().split("@", 1)) for g in games or [] if "@" in str(g)]
+    out = []
     for row in _rows(content):
-        low = row.lower()
-        found = [n for n in names if re.search(rf"(?<![\w.]){re.escape(n.lower())}(?!\w)", low)]
-        if len(found) != 1:
-            continue
-        rest, teams = low.replace(found[0].lower(), " "), []
-        for w in words:
-            for m in re.finditer(rf"(?<!\w){re.escape(w)}(?!\w)", rest):
-                teams.append((m.start(), nick[w]))
-            rest = re.sub(rf"(?<!\w){re.escape(w)}(?!\w)", lambda m: " " * len(m.group(0)), rest)
-        teams = [t for _i, t in sorted(teams)]
-        if len(teams) == 2 and teams[0] != teams[1]:
-            out[_key(teams[0], teams[1])] = found[0]
+        for sent in _sentences(row):
+            low = sent.lower()
+            spots = sorted((m.start(), n) for n in names
+                           for m in re.finditer(rf"(?<![\w.]){re.escape(n.lower())}(?!\w)", low))
+            for i, (at, name) in enumerate(spots):
+                stop = spots[i + 1][0] if i + 1 < len(spots) else len(low)
+                part = low[0 if i == 0 else at:stop]
+                part = re.sub(rf"(?<![\w.]){re.escape(name.lower())}(?!\w)", " " * len(name), part)
+                teams = [t for _p, t in _teams_in(part, words, nick)]
+                game, why = "", ""
+                if not teams:
+                    why = "no team named"
+                elif pairs:
+                    hit = [g for g in pairs if set(teams) <= set(g)]
+                    if len(hit) == 1:
+                        game = _key(*hit[0])
+                    else:
+                        why = "no one game this week holds " + "/".join(sorted(set(teams)))
+                elif len(teams) == 2 and teams[0] != teams[1]:
+                    game = _key(teams[0], teams[1])
+                else:
+                    why = f"{len(set(teams))} team(s), not a pair"
+                out.append((sent, name, teams, game, why))
     return out
+
+
+def parse_post(content: str, referees, nicknames: dict | None = None, games=None) -> dict:
+    """{"AWAY@HOME": referee} from an assignments post (see `readings`).
+    Two referees read onto one game: the one whose words name both its
+    teams wins over a passing mention of one ("a rematch of the game Bill
+    Vinovich worked in Dallas"); a tie, or a referee read onto two games,
+    is neither's — a wrong name is worse than none."""
+    got: dict = {}
+    for _s, name, teams, game, _w in readings(content, referees, games, nicknames):
+        if game:
+            both = len(set(teams) & set(game.split("@")))
+            got.setdefault(game, {})[name] = max(both, got.get(game, {}).get(name, 0))
+    one = {}
+    for g, cands in got.items():
+        best = max(cands.values())
+        top = [n for n, v in cands.items() if v == best]
+        if len(top) == 1:
+            one[g] = top[0]
+    used: dict = {}
+    for g, n in one.items():
+        used.setdefault(n, []).append(g)
+    return {g: n for g, n in one.items() if len(used[n]) == 1}
 
 
 def _cached_json(url: str, name: str):
@@ -285,8 +362,9 @@ def _cached_json(url: str, name: str):
     return fetch_json(url, name, ttl=SOURCE_TTL, timeout=20)
 
 
-def from_footballzebras(season: int, week: int, referees) -> dict:
-    """The week's post, read off the site's public feed; {} when none."""
+def from_footballzebras(season: int, week: int, referees, games=None) -> dict:
+    """The week's post, read off the site's public feed; {} when none.
+    ``games`` is the week's ["AWAY@HOME", …] (see `readings`)."""
     try:
         posts = _cached_json(FZ_FEED.format(week=int(week)), f"fz_assignments_{season}_w{int(week):02d}.json")
     except Exception:                                        # noqa: BLE001
@@ -297,14 +375,14 @@ def from_footballzebras(season: int, week: int, referees) -> dict:
             continue
         if str(season) not in str(p.get("date") or "") + title + str(p.get("link") or ""):
             continue
-        got = parse_post(str(((p or {}).get("content") or {}).get("rendered") or ""), referees)
+        got = parse_post(str(((p or {}).get("content") or {}).get("rendered") or ""), referees, games=games)
         if got:
             return got
     return {}
 
 
 def diagnose(games: list, season: int, week: int, store: dict | None = None,
-             espn=None, posts_fetch=None) -> list:
+             espn=None, posts_fetch=None, all_games: list | None = None) -> list:
     """What each source answered for the week, as lines: ESPN game by game
     (the officials it lists, by role), then Football Zebras (the posts the
     feed returned, which one is the week's, and what its rows named). For
@@ -338,12 +416,16 @@ def diagnose(games: list, season: int, week: int, store: dict | None = None,
         content = str(((p or {}).get("content") or {}).get("rendered") or "")
         wk = bool(re.search(rf"(?i)\bweek\s*{int(week)}\b", title)) and "assign" in title.lower()
         this = str(season) in str(p.get("date") or "") + title + str(p.get("link") or "")
-        got = parse_post(content, refs) if wk and this else {}
+        keys = [_key(g.get("away", ""), g.get("home", "")) for g in all_games or games]
+        got = parse_post(content, refs, games=keys) if wk and this else {}
         out.append(f"    {str(p.get('date') or '')[:10]} {title[:70]!r}: "
                    + ("the week's post, " + (f"{len(got)} game(s) named" if got else
-                                             f"no rows read ({len(_rows(content))} rows, e.g. "
-                                             f"{[r[:60] for r in _rows(content)[:3]]})")
+                                             f"no game read ({len(_rows(content))} rows)")
                       if wk and this else "not the week's post"))
+        if wk and this:
+            # Every stretch that names a referee, and what it was read as.
+            for sent, name, teams, game, why in readings(content, refs, keys)[:24]:
+                out.append(f"      {name}: {'/'.join(teams) or '-'} -> {game or why}   «{sent[:90]}»")
     out.append(f"  {len(refs)} referee names known to match against")
     return out
 
@@ -387,7 +469,8 @@ def assigned(games: list, season: int, week: int, store: dict | None = None,
         if name:
             out[key] = (name, "espn")
     if any(key not in out for key, _g in soon):
-        got = (zebras or from_footballzebras)(season, week, _known_referees(store))
+        got = (zebras or from_footballzebras)(season, week, _known_referees(store),
+                                             [_key(g.get("away", ""), g.get("home", "")) for g in games])
         for key, _g in soon:
             if key not in out and got.get(key):
                 out[key] = (got[key], "footballzebras")
@@ -502,7 +585,7 @@ def main(argv=None) -> int:
              for r in sched if str(r.get("season")) == str(season) and str(r.get("week")) == str(week)]
     if a.why:
         soon = [g for g in games if str(g["date"]) >= today]
-        for line in diagnose(soon, int(season), int(week)):
+        for line in diagnose(soon, int(season), int(week), all_games=games):
             print(line)
     got = assigned(games, int(season), int(week))
     print(f"  {week_key(season, week)}: {len(got)} of {len(games)} game(s) have a referee named")

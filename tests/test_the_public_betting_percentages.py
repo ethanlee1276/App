@@ -128,6 +128,13 @@ def test_a_refusal_says_why_and_the_client_says_who_it_is():
         assert req.get_header("User-agent") == SP.AGENT, "never urllib's default name"
         msg = SP.attach_to_board({"games": []}, "nfl", fetcher=lambda lg: SP.fetch(lg, key="sk-test-secret", ttl=0))
         assert msg == "Public betting unavailable (SharpAPI HTTP 403: Betting splits require the Pro plan)", msg
+        # The builds do not ask again for a day; a probe (ttl 0) always does.
+        asked = len(seen)
+        try:
+            SP.fetch("nfl", key="sk-test-secret")
+            raise AssertionError("a remembered refusal must raise")
+        except SP.Refused as exc:
+            assert exc.status == 403 and "Pro plan" in str(exc) and len(seen) == asked, "no request made"
         urllib.request.urlopen = refuse("<html><head><title>Attention Required</title></head></html>")
         try:
             SP.fetch("nfl", key="k", ttl=0)
