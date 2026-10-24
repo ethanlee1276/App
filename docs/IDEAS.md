@@ -32,33 +32,56 @@ holds still, Liquid Glass on the Duo. The rest, best value first:
    from the cache, refreshed in the background, renamed on every deploy by
    the VERSION hash already there. *Half a day; the biggest felt speed-up
    left for the store app.*
+   **BUILT 2026-10-24** (sw.js `appMode`, register-sw.js): an installed app
+   keeps every file of the version and opens from it with no signal; a tab
+   keeps the shell only. tests/test_the_app_opens_offline.py.
 2. **Split app.js further.** Measured today: evaluating it is a ~270 ms
    freeze at phone speed, on every first visit. Rocket Radar moved out
    today (~7 KB gz). Next, by size: the Fantasy room (draft kit, mock draft,
    usage: ~20 KB gz), the account and paywall pages, the team pages — each
    loaded the first time it opens, as the Feed and the Toolbox already are.
    Target: under 400 KB gz. *A day or two; tests read the moved code.*
+   **BUILT 2026-10-24, first cut**: the Fantasy room (186 functions, 4,412
+   lines) and its styles moved to fantasy.js/fantasy.css, the meme pages'
+   styles to memes.css: app.js 494 → 451 KB gz, a first visit 620 → 570.
+   Under 400 still wants the account pages and team pages next.
 3. **The first game's stadium photo** is the largest thing on the first
    screen and lands last (3.3 s on a slow phone). Preload it as soon as the
    board says which it is, or paint a 1 KB blurred copy first. *An hour.*
+   **BUILT 2026-10-24**: the first card's photo is `fetchpriority="high"`,
+   the rest lazy.
 4. **Style recalculation** is the next cost after the script (0.6 s at
    phone speed): the stylesheet is 463 KB before trimming. Split the lazy
    pages' styles out the way gamecast.css is, and drop selectors that match
    nothing (Chromium's coverage tool lists them). *A day.*
+   **PART BUILT 2026-10-24**: 336 rules moved out with the Fantasy and meme
+   pages. Dropping unmatched selectors is still open.
 5. **Brotli** instead of gzip for the trimmed files: ~15% fewer bytes. Caddy
    needs a plugin for it, or the files pre-compressed at build. *An hour on
    the box.*
+   **BUILT 2026-10-24, as zstd** (stock Caddy has no Brotli; zstd beats
+   gzip and Caddy encodes it itself): `encode zstd gzip`, and level-9 gzip
+   twins written beside the trimmed files (engine/shrink) and served
+   pre-compressed. Live once the Caddyfile is installed (runbook DN).
 
 **Look**
 
 6. **Liquid Glass for the iOS app itself**: a floating capsule tab bar (iOS
    26's own look) and glass sheets for the More and Bet panels — the Duo's
    material, carried to every iPhone in the store app. *Half a day.*
+   **BUILT 2026-10-24**: the iOS build and an iPhone Home Screen app float
+   the tab bar as a glass capsule; the More and Bet sheets are glass on
+   touch screens. No blur. tests/test_the_iphone_app_wears_its_own_glass.py.
 7. **A lock-screen-style "riding" pill.** The riding tray (bets on games in
    progress) as a Dynamic-Island-shaped pill pinned under the bar, live
    score inside. *Half a day.*
+   **BUILT 2026-10-24**: a centred night-glass pill above the bar, its dot
+   breathing for readers who allow motion. The real lock-screen version is
+   item 11.
 8. **Team colours for "my team".** Pick a club in settings; its colours tint
    the bar, the glass rim and the Live disc. *Half a day.*
+   **BUILT 2026-10-24**: Settings → Team colours (off by default): the bar's
+   edge, the Live disc and the lit tab, the team you follow in this league.
 
 **Features other apps have**
 
@@ -67,16 +90,29 @@ holds still, Liquid Glass on the Duo. The rest, best value first:
    (engine/alerts.py), and phones can now be knocked. A watch that fires
    becomes an alert for the member who set it. *A day; paid members only,
    the feed is a paid file.*
+   **BUILT 2026-10-24** (engine/pushmine): the member's own words and a
+   count, never the pick; members only; quiet hours held.
 10. **Your own bets by push**: your game is starting, your bet just settled.
     Needs My Bets kept on the server for signed-in members (the account sync
     exists). *A day.*
+    **BUILT 2026-10-24** for saved parlays (the slip watch already grades
+    them every minute): on, last leg, settled. A bet logged by hand has no
+    games to follow.
 11. **iPhone widgets and Live Activities** (Apple Sports' two best things):
     tonight's top pick and the record on the Home Screen; a bet's game on the
     lock screen. Native code (WidgetKit, ActivityKit) in the iOS shell, fed by
     the same APNs key. *Several days, on the Mac; after the app is accepted.*
+    **BOX HALF BUILT 2026-10-24**: /api/widget (engine/widgetfeed) and Live
+    Activity updates from the slip watch (engine/webpush.apns_live). The
+    Swift is written in deploy/ios/native, not compiled here; the Mac steps
+    are in deploy/ios/README.md.
 12. **Calendar**: an .ics feed of the games you have picks on. *Two hours.*
+    **BUILT 2026-10-24** (engine/calfeed): Settings → Calendar, your teams'
+    games and your open parlays' games; the address is the key.
 13. **The record offline**: record.json and My Bets readable with no signal
     (read-only, dated). *Two hours.*
+    **BUILT 2026-10-24**: the Record page's copy is kept for no signal and
+    says when it was kept; My Bets was already on the phone.
 
 **Tools for building and testing**
 
@@ -87,8 +123,12 @@ holds still, Liquid Glass on the Duo. The rest, best value first:
     and Firebase Test Lab's free tier run the TWA on real phones. Until then
     the nightly run opens every page in Chromium on five screen shapes and
     measures the first screen at phone speed.
+    **WRITTEN UP 2026-10-24** in docs/APP_STORES.md, "Testing on real
+    phones".
 15. **Lighthouse in the nightly run**, beside the probe added today, so a
     slower night shows up as a number rather than a feeling. *An hour.*
+    **BUILT 2026-10-24** (tools/lighthouse_check.py, the nightly run):
+    baseline 67 on Lighthouse's phone setting.
 
 
 ## The rule this list is filtered through

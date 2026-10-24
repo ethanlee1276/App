@@ -160,6 +160,32 @@ settles, a home-screen widget with tonight's top pick and the record, and
 the iPhone Duo's own layouts through Apple's native fold APIs (the web
 build already lays out for the Duo by its shape).
 
+## Testing on real phones (2026-10-24, docs/IDEAS.md 14)
+
+Nothing in this repository can run Xcode, Instruments or a real phone. What
+each store gives you instead, in the order worth doing:
+
+- **TestFlight** (Apple, free with the Developer Program): upload a build
+  from Xcode (Product → Archive → Distribute → TestFlight). Up to 100
+  people on your App Store Connect team test it at once as internal
+  testers; up to 10,000 others by email or a public link after Apple's
+  beta review of the build. This is how you try push, the
+  widget and the lock screen on your own iPhone before review.
+- **Instruments** (in Xcode, on the Mac): open the app on a plugged-in
+  iPhone, Product → Profile → *Time Profiler* for where the CPU goes and
+  *Animation Hitches* for dropped frames — the phone's own numbers, which
+  Chromium's emulation only approximates.
+- **Play's internal testing track** (Play Console → Testing → Internal
+  testing): up to 100 testers by email, live in minutes, no review. Upload
+  the `.aab` from the Android steps below; install from the opt-in link.
+- **Firebase Test Lab** (free tier, a few runs a day on real devices):
+  upload the `.apk` and run a *Robo test*; it taps through the app on real
+  Pixels and Samsungs and returns screenshots, a video and any crash.
+
+Until then the nightly run opens every page in Chromium on five screen
+shapes, measures the first screen at phone speed, and runs Lighthouse
+(tools/lighthouse_check.py, baseline 67 on its phone setting).
+
 ## What the app would be
 
 It would be the same site in a store wrapper, not a new codebase:

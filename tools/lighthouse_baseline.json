@@ -1,0 +1,11 @@
+{
+ "score": 67,
+ "lcp_ms": 6195,
+ "tbt_ms": 327,
+ "cls": 0.016,
+ "tti_ms": 6566,
+ "fcp_ms": 1367,
+ "si_ms": 3066,
+ "measured": "2026-10-24",
+ "lighthouse": "13.5.0"
+}
