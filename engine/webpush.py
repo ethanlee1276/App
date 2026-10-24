@@ -327,6 +327,36 @@ def apns_config(env=None) -> dict | None:
 def apns_send(token: str, alert: dict, cfg: dict, run=subprocess.run, now: float | None = None) -> int:
     """One alert to one iPhone through `curl --http2`; the status, 0 when it
     could not be tried. Never raises."""
+    payload = json.dumps({"aps": {"alert": {"title": alert.get("title", ""), "body": alert.get("body", "")},
+                                  "sound": "default", "thread-id": alert.get("kind", "")},
+                          "url": alert.get("url", "/")})
+    return _apns_post(token, payload, cfg, "alert", (cfg or {}).get("QB_APNS_TOPIC", ""), 5, run, now)
+
+
+#: A Live Activity a member started on their lock screen (the iOS app's
+#: ParlayActivity, deploy/ios/native) is updated through its own topic.
+LIVE_SUFFIX = ".push-type.liveactivity"
+
+
+def apns_live(token: str, state: dict, cfg: dict, event: str = "update", alert: dict | None = None,
+              run=subprocess.run, now: float | None = None) -> int:
+    """One Live Activity update (or its end) to the activity's own push
+    token, the way Apple asks: push type `liveactivity`, the app's topic
+    with `.push-type.liveactivity`, `content-state` matching the app's
+    ContentState field for field. An end stays on the lock screen an hour.
+    Never raises."""
+    t = int(now or time.time())
+    aps = {"timestamp": t, "event": "end" if event == "end" else "update", "content-state": state}
+    if event == "end":
+        aps["dismissal-date"] = t + 3600
+    if alert:
+        aps["alert"] = {"title": alert.get("title", ""), "body": alert.get("body", "")}
+    topic = (cfg or {}).get("QB_APNS_TOPIC", "") + LIVE_SUFFIX
+    return _apns_post(token, json.dumps({"aps": aps}), cfg, "liveactivity", topic, 10 if alert else 5, run, now)
+
+
+def _apns_post(token: str, payload: str, cfg: dict, push_type: str, topic: str, priority: int,
+               run=subprocess.run, now: float | None = None) -> int:
     token = str(token or "")
     if not cfg or not token or not all(c in "0123456789abcdefABCDEF" for c in token) or len(token) > 200:
         return 0
@@ -338,13 +368,10 @@ def apns_send(token: str, alert: dict, cfg: dict, run=subprocess.run, now: float
         return 0
     bearer = jwt({"iss": cfg["QB_APNS_TEAM_ID"], "iat": int(now or time.time())}, d,
                  {"alg": "ES256", "kid": cfg["QB_APNS_KEY_ID"]})
-    payload = json.dumps({"aps": {"alert": {"title": alert.get("title", ""), "body": alert.get("body", "")},
-                                  "sound": "default", "thread-id": alert.get("kind", "")},
-                          "url": alert.get("url", "/")})
     url = f"https://{APNS_HOSTS[cfg['env']]}/3/device/{token}"
     cmd = ["curl", "--http2", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "15",
-           "-H", f"authorization: bearer {bearer}", "-H", f"apns-topic: {cfg['QB_APNS_TOPIC']}",
-           "-H", "apns-push-type: alert", "-H", "apns-priority: 5", "--data-binary", "@-", url]
+           "-H", f"authorization: bearer {bearer}", "-H", f"apns-topic: {topic}",
+           "-H", f"apns-push-type: {push_type}", "-H", f"apns-priority: {priority}", "--data-binary", "@-", url]
     try:
         out = run(cmd, input=payload, capture_output=True, text=True, timeout=30)
         return int((out.stdout or "0").strip() or 0)

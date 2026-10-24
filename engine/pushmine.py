@@ -75,6 +75,10 @@ def ensure_tables(conn) -> None:
         PRIMARY KEY (user_id, id));
       CREATE TABLE IF NOT EXISTS push_watch_seen (
         user_id INTEGER PRIMARY KEY, ts TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS push_activities (
+        user_id INTEGER NOT NULL, bet_id TEXT NOT NULL, token TEXT NOT NULL,
+        last TEXT NOT NULL DEFAULT '', started REAL NOT NULL,
+        PRIMARY KEY (user_id, bet_id));
     """)
     conn.commit()
 
@@ -222,6 +226,122 @@ def bet_settled(conn, user_id, bet: dict, done: dict, now: float | None = None) 
         return False
     return tell(conn, user_id, f"bets:settled:{bet.get('id')}", "bets", title, body, "/#mybets",
                 ttl="settled", now=now)
+
+
+# --- the lock screen (a Live Activity in the iOS app) ------------------------
+#
+# The iOS app's "On my lock screen" (deploy/ios/native, ParlayActivity)
+# starts a Live Activity for a saved parlay and hands the box the activity's
+# own push token (POST /api/push/activity). The slip watch's pass then
+# updates it when the ticket's standing changes and ends it when the box
+# score settles it. What it shows is the member's ticket and the public
+# score — never our chance, which is the paid half.
+
+#: Activities a member can have running at once (Apple allows a handful).
+MAX_ACTIVITIES = 5
+#: Apple ends an activity after eight hours; the box forgets it after twelve.
+ACTIVITY_S = 12 * 3600
+
+
+def activity_add(conn, user_id, bet_id: str, token: str, now: float | None = None) -> tuple[int, dict]:
+    ensure_tables(conn)
+    token, bet_id = str(token or "").strip(), str(bet_id or "").strip()[:40]
+    if not (8 <= len(token) <= 200 and all(c in "0123456789abcdefABCDEF" for c in token)) or not bet_id:
+        return 400, {"error": "that is not a lock-screen token"}
+    t = time.time() if now is None else now
+    conn.execute("DELETE FROM push_activities WHERE started < ?", (t - ACTIVITY_S,))
+    n = conn.execute("SELECT COUNT(*) FROM push_activities WHERE user_id = ? AND bet_id != ?",
+                     (int(user_id), bet_id)).fetchone()[0]
+    if n >= MAX_ACTIVITIES:
+        return 400, {"error": f"{MAX_ACTIVITIES} on the lock screen is the most"}
+    conn.execute("INSERT INTO push_activities (user_id, bet_id, token, last, started) VALUES (?,?,?,'',?) "
+                 "ON CONFLICT(user_id, bet_id) DO UPDATE SET token = excluded.token, started = excluded.started",
+                 (int(user_id), bet_id, token, t))
+    conn.commit()
+    return 200, {"ok": True}
+
+
+def activity_remove(conn, user_id, bet_id: str) -> tuple[int, dict]:
+    ensure_tables(conn)
+    conn.execute("DELETE FROM push_activities WHERE user_id = ? AND bet_id = ?", (int(user_id), str(bet_id)))
+    conn.commit()
+    return 200, {"ok": True}
+
+
+def activity_state(card: dict) -> dict:
+    """The lock screen's numbers (the iOS app's ContentState, field for
+    field): legs won of legs, legs left, the leg that decides it and where
+    it stands. No chance — the paid half stays on the Live tab."""
+    from engine import slipwatch as SW
+    legs = (card or {}).get("legs") or []
+    now = (card or {}).get("now") or {}
+    status = str(now.get("status") or "open")
+    left = int(now.get("left") or 0) if status == "open" else 0
+    leg = SW.open_leg(card or {}) if status == "open" else None
+    title = {"won": "Won", "lost": "Lost"}.get(status) or (
+        "One leg left" if left == 1 else f"{left} legs left" if left else "Waiting on the first game")
+    return {"title": title, "status": status, "legs": len(legs), "left": left,
+            "won": sum(1 for l in legs if (l.get("live") or {}).get("result") == "won"),
+            "leg": SW.leg_name(card or {})[:60] if leg else "",
+            "line": (SW.where(leg) if leg else "")[:90]}
+
+
+def activity_update(conn, user_id, bet_id: str, card: dict, live=None, cfg=None, now: float | None = None) -> int:
+    """Send the activity its new standing when it changed; the status, or 0
+    when there was nothing to send (no activity, no change, no Apple key)."""
+    from engine import webpush as W
+    row = conn.execute("SELECT token, last FROM push_activities WHERE user_id = ? AND bet_id = ?",
+                       (int(user_id), str(bet_id))).fetchone() if _has_activities(conn) else None
+    if row is None:
+        return 0
+    state = activity_state(card)
+    blob = json.dumps(state, sort_keys=True)
+    if blob == row[1]:
+        return 0
+    cfg = W.apns_config() if cfg is None else cfg
+    if not cfg:
+        return 0
+    alert = {"title": "Down to the last leg", "body": f"{state['leg']} decides it."} \
+        if state["left"] == 1 and '"left": 1' not in row[1] else None
+    code = (live or W.apns_live)(row[0], state, cfg, event="update", alert=alert, now=now)
+    if code in (200, 201):
+        conn.execute("UPDATE push_activities SET last = ? WHERE user_id = ? AND bet_id = ?",
+                     (blob, int(user_id), str(bet_id)))
+    elif code in (400, 404, 410):
+        conn.execute("DELETE FROM push_activities WHERE user_id = ? AND bet_id = ?", (int(user_id), str(bet_id)))
+    conn.commit()
+    return code
+
+
+def activity_end(conn, user_id, bet_id: str, done: dict, live=None, cfg=None, now: float | None = None) -> int:
+    """The ticket settled: the activity's last word, then it is forgotten."""
+    from engine import webpush as W
+    row = conn.execute("SELECT token, last FROM push_activities WHERE user_id = ? AND bet_id = ?",
+                       (int(user_id), str(bet_id))).fetchone() if _has_activities(conn) else None
+    if row is None:
+        return 0
+    try:
+        state = json.loads(row[1]) if row[1] else {}
+    except ValueError:
+        state = {}
+    res = done.get("result")
+    state.update({"title": {"win": "Won", "loss": "Lost", "push": "Pushed"}.get(res, "Settled"),
+                  "status": {"win": "won", "loss": "lost", "push": "push"}.get(res, "open"),
+                  "left": 0, "leg": "", "line": "Settled off the box score"})
+    for k, v in (("legs", 0), ("won", 0)):
+        state.setdefault(k, v)
+    cfg = W.apns_config() if cfg is None else cfg
+    code = (live or W.apns_live)(row[0], state, cfg, event="end", now=now) if cfg else 0
+    conn.execute("DELETE FROM push_activities WHERE user_id = ? AND bet_id = ?", (int(user_id), str(bet_id)))
+    conn.commit()
+    return code
+
+
+def _has_activities(conn) -> bool:
+    try:
+        return conn.execute("SELECT 1 FROM push_activities LIMIT 1").fetchone() is not None
+    except sqlite3.Error:
+        return False
 
 
 # --- sending -----------------------------------------------------------------

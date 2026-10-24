@@ -1236,6 +1236,11 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/alerts/"):].strip("/"))
         if parsed.path.startswith("/api/calendar/"):
             return self._calendar_get(parsed.path[len("/api/calendar/"):].strip("/"))
+        if parsed.path in ("/api/widget", "/api/widget/"):
+            # The iPhone widget's few numbers (engine/widgetfeed): the free
+            # record, last night, and today's pick counts — never a pick.
+            from engine import widgetfeed
+            return self._send(200, json.dumps(widgetfeed.build()).encode(), ".json")
         if parsed.path in ("/api/push/key", "/api/push/key/"):
             # The server's public VAPID key: what a browser subscribes with.
             from engine import webpush
@@ -2152,7 +2157,7 @@ class Handler(BaseHTTPRequestHandler):
         phone, by the push service's address it alone was given. A phone
         that subscribes signed out is detached from any account. Nothing
         else about the caller is kept."""
-        if path not in ("subscribe", "unsubscribe", "latest"):
+        if path not in ("subscribe", "unsubscribe", "latest", "activity"):
             return self._send(404, b'{"error":"unknown push endpoint"}', ".json")
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -2171,6 +2176,19 @@ class Handler(BaseHTTPRequestHandler):
         conn = A.connect()
         try:
             endpoint = str(body.get("endpoint") or "")
+            if path == "activity":
+                # A saved parlay on the iOS app's lock screen (engine/pushmine):
+                # the activity's own push token, for the member's own ticket.
+                from engine import pushmine as PM
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                if body.get("end"):
+                    code, out = PM.activity_remove(conn, who["id"], str(body.get("bet_id") or ""))
+                else:
+                    code, out = PM.activity_add(conn, who["id"], str(body.get("bet_id") or ""),
+                                                str(body.get("token") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
             if path == "latest":
                 from engine import pushmine as PM
                 sub = PA.subscription(conn, endpoint) if endpoint else None

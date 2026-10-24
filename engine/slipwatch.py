@@ -398,6 +398,8 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
         on = next((l for l in card.get("legs") or [] if (l.get("live") or {}).get("state") == "live"), None)
         if on is not None:
             _tell("bet_on", conn, r["user_id"], bid, where(on), now=t, log=log)
+        # And the lock screen, where the member put this ticket there.
+        _tell("activity_update", conn, r["user_id"], str(bet["id"]), card, now=t, log=log)
         if noted(conn, r["user_id"], bid) or not last_leg(card):
             continue
         conn.execute("INSERT OR IGNORE INTO slip_alerts (user_id, bet_id, fired_at, mailed, leg) "
@@ -434,6 +436,7 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
             out["settled"] += n
             for bet_id, got in (done.items() if n else ()):
                 _tell("bet_settled", conn, uid, tickets[(uid, bet_id)], got, now=t, log=log)
+                _tell("activity_end", conn, uid, bet_id, got, now=t, log=log)
         except sqlite3.Error as exc:
             log(f"  slip watch: a member's My Bets could not be written ({type(exc).__name__}); "
                 f"settled next minute")

@@ -205,3 +205,8 @@
 .pgr-sw-t em { font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
 .pgr-sw-t em.up { color: var(--good); }
 .pgr-sw-t em.dn { color: var(--bad); }
+/* On my lock screen (the iOS app's Live Activity): one quiet button under the legs. */
+.pgr-lock { display: block; width: 100%; margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border); background: var(--fill-subtle); color: var(--text);
+  font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
+.pgr-lock.on { color: var(--text-mute); cursor: default; }

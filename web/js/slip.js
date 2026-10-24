@@ -806,7 +806,42 @@
     const first = !c.now && c.first_kickoff && kick(c.first_kickoff)
       ? `<div class="pgr-now">Nothing has started · first game ${esc(kick(c.first_kickoff))}</div>` : "";
     return `<div class="pgr-card pgr-track-card">${head}${done || lastHTML(c) + (nowHTML(c.now) || first)}${b.result === "pending" ? sweatHTML(b.id, c.now) + hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
-      <ol class="pgr-legs">${(c.legs || []).map(trackLegHTML).join("")}</ol></div>`;
+      <ol class="pgr-legs">${(c.legs || []).map(trackLegHTML).join("")}</ol>${b.result === "pending" ? lockHTML(b.id) : ""}</div>`;
+  }
+  /* ON MY LOCK SCREEN (engine/pushmine, deploy/ios/native): in the iOS app,
+     a saved parlay can sit on the lock screen and in the Dynamic Island as
+     a Live Activity. The app starts it and hands back the activity's own
+     push token; the box's slip watch updates it as the games run and ends
+     it when the box score settles it. Only where the app's plugin exists. */
+  function lockPlugin() {
+    const C = typeof window !== "undefined" && window.Capacitor;
+    return C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.ParlayActivity;
+  }
+  function lockHTML(id) {
+    if (!lockPlugin()) return "";
+    const on = T.locked && T.locked[id];
+    return `<button type="button" class="pgr-lock${on ? " on" : ""}" data-lock-slip="${esc(id)}"${on ? " disabled" : ""}>${
+      on ? "On your lock screen" : "On my lock screen"}</button>`;
+  }
+  async function lock(btn) {
+    const P = lockPlugin(), id = btn.dataset.lockSlip, b = tracked(T.ctx.load()).find((x) => String(x.id) === id);
+    if (!P || !b) return;
+    const c = (T.cards[id] || {}).slip || {}, legs = c.legs || [];
+    btn.disabled = true;
+    try {
+      const got = await P.start({ betId: id, title: String(b.desc || "Your parlay").slice(0, 60), state: {
+        title: "Following", status: "open", legs: legs.length, won: legs.filter((l) => l.live && l.live.result === "won").length,
+        left: legs.filter((l) => !(l.live && l.live.result)).length, leg: "", line: "" } });
+      const res = await fetch("/api/push/activity", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bet_id: id, token: got.token }) });
+      if (!res.ok) throw new Error("not kept");
+      (T.locked = T.locked || {})[id] = true;
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "Couldn’t start it — try again";
+      return;
+    }
+    draw();
   }
   function draw() {
     const host = T.host;
@@ -902,6 +937,8 @@
     document.addEventListener("click", (e) => {
       const btn = e.target && e.target.closest && e.target.closest("[data-save-slip]");
       if (btn) save(btn);
+      const lk = e.target && e.target.closest && e.target.closest("[data-lock-slip]");
+      if (lk) lock(lk);
     });
     document.addEventListener("change", (e) => {
       const t = e.target;

@@ -45,6 +45,33 @@ readable only by the `qellys` user), then set, with `sudo ./deploy/setenv.sh`:
 `python3 -m engine.pushalerts` then says "Apple key: set". Until it is set,
 iPhone-app subscriptions are kept and skipped, never errors.
 
+## The widget and the lock screen (docs/IDEAS.md 11)
+
+The Swift is written and waiting in `native/`; **nothing here has compiled
+it** (this repository cannot run Xcode), so expect Xcode to point at a line
+or two the first time. After the steps above:
+
+1. **The lock screen.** Drag `native/App/ParlayActivityPlugin.swift`,
+   `native/App/MainViewController.swift` and `native/Shared/ParlayAttributes.swift`
+   into the App target. In `Main.storyboard`, set the view controller's class
+   to `MainViewController` (module App). In the App's `Info.plist` add
+   `NSSupportsLiveActivities` = YES. Deployment target iOS 16.2 or later.
+2. **The widget extension.** File → New → Target → **Widget Extension**,
+   named `QellysWidgets`, "Include Live Activity" unticked (ours is in
+   `native/`). Delete the files Xcode made, then drag in everything in
+   `native/Widget/` plus `native/Shared/ParlayAttributes.swift` (tick the
+   widget target for it too). Deployment target iOS 17.
+3. Build to a phone. The Home Screen widget is "Qellys record" (the record,
+   last night, today's pick counts — from `/api/widget`, no sign-in, never a
+   pick). The lock screen: open the Live tab with a saved parlay and tap
+   **On my lock screen**.
+
+The lock screen is updated by the box with the same Apple key as the alerts
+(`QB_APNS_*` above): push type `liveactivity`, topic
+`com.qellysbook.app.push-type.liveactivity` (engine/webpush.apns_live). No
+second key. Until the key is set, the activity starts and simply is not
+updated.
+
 ## What Capacitor itself says about `server.url`
 
 Capacitor's documentation describes `server.url` as meant for live reload.
