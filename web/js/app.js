@@ -21598,11 +21598,13 @@ async function renderRecord() {
   // FAILED is not EMPTY (audit V-2): a 404 is "no record file yet", and
   // anything else that is not a 2xx is an outage with its own card.
   const got = { failed: false };
+  let kept = "";                    // the offline copy's moment, when that is what answered (sw.js)
   try {
     const res = await boardFetch("data/record.json", { cache: "no-cache" });
     if (res.ok) d = adoptPooledRecord(await res.json());
     if (res.ok) _lastGood.set("record", Date.now());
     else got.failed = res.status !== 404;
+    kept = (res.headers && res.headers.get("X-QB-Offline-Copy")) || "";
   } catch (e) { got.failed = true; }
   /* THROUGH THE ENTITLED ENDPOINT FIRST. `predmarkets.json` is a wholly
      paid file — gate.PAID_FILES — so the copy Caddy serves off disk is a
@@ -21647,7 +21649,12 @@ async function renderRecord() {
     : (scope === "intel" ? {overall: {}, curve: [], recent: [],
                             calibration: null, calibration_era: null}
                          : d.by_sport[scope]);
-  const scopeBar = recordScopeHTML(d, scope);
+  // With no signal the page reads the copy kept the last time it loaded
+  // (sw.js THE RECORD, OFFLINE), and says from when.
+  const scopeBar = (kept ? `<div class="rec-offline" role="status">${icon("warn", 14)}
+      <span><b>Offline.</b> The record as of ${escapeHtml(tzTime(Date.parse(kept), { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) || kept)} — the
+      last time it loaded on this phone. It updates when you are back online.</span></div>` : "")
+    + recordScopeHTML(d, scope);
 
   // Everything below reads ONE object. Scoping by swapping the source
   // rather than by filtering at each call site means a panel cannot

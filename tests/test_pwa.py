@@ -67,7 +67,9 @@ def test_it_is_network_first_not_cache_first():
     """Cache-first is the usual advice and it is wrong here: it would
     serve last night's board from disk and only then go looking for
     tonight's."""
-    fetch = SW[SW.index("respondWith"):]
+    # The general path; the installed app's own code is the one exception
+    # (tests/test_service_worker.py says which files, and that no board is one).
+    fetch = SW[SW.index("function networkFirst("):]
     assert fetch.index("fetch(req)") < fetch.index("caches.match"), \
         "the cache is consulted before the network — that serves stale prices"
 

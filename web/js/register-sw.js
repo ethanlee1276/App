@@ -69,6 +69,17 @@
     navigator.serviceWorker.register("/sw.js").then(function (r) {
       reg = r;
       lastCheck = Date.now();   // registering just did the fetch
+      // THE INSTALLED APP KEEPS ITS OWN COPY (sw.js "app-mode"): a Home
+      // Screen app, the Play build or the iOS shell asks the worker to keep
+      // every file of this version and to open from it. A browser tab does
+      // not ask, so a one-time visitor downloads only what they open.
+      var app = (typeof QB_STORE_APP !== "undefined" && QB_STORE_APP) || navigator.standalone === true;
+      try { app = app || matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches; } catch (e) {}
+      if (app) {
+        navigator.serviceWorker.ready.then(function (ready) {
+          if (ready.active) ready.active.postMessage({ type: "app-mode" });
+        });
+      }
     }).catch(function () {
       /* A failed registration is not a broken site. Swallowed on purpose:
          the alternative is an uncaught rejection in the console of every

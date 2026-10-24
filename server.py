@@ -878,8 +878,12 @@ def _sw_shell(body: str, web: Path = WEB) -> list[Path]:
     m = re.search(r"const SHELL = \[(.*?)\];", body, re.S)
     if not m:
         return []
+    # The pages' files too (LAZY, 2026-10-24): the installed app serves them
+    # from this version's copy, so a change to one must rename the version.
+    lazy = re.search(r"const LAZY = \[(.*?)\];", body, re.S)
+    urls = re.findall(r'"([^"]+)"', m.group(1)) + (re.findall(r'"([^"]+)"', lazy.group(1)) if lazy else [])
     out = []
-    for url in re.findall(r'"([^"]+)"', m.group(1)):
+    for url in urls:
         rel = "index.html" if url == "/" else url.lstrip("/")
         f = (web / rel).resolve()
         if f.is_relative_to(web.resolve()) and f.is_file():

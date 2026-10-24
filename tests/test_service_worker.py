@@ -194,12 +194,25 @@ def test_authenticated_and_live_responses_are_never_cached():
 
 
 def test_it_is_network_first():
+    """Prices are network first, always: a cache-first board is a phone shown
+    last night's prices in a window with no address bar. Since 2026-10-24 the
+    installed app's own CODE opens from its version's copy (sw.js "THE
+    INSTALLED APP OPENS FROM ITS OWN COPY"); that branch is reached only for
+    the app's own files, after /api/ and /data/ have been let go, and no
+    board or session can ever be in that copy."""
     src = _read(SW)
-    i = src.index("e.respondWith(")
+    i = src.index("function networkFirst(")
     body = src[i:i + 600]
-    assert body.index("fetch(req)") < body.index("caches.match"), (
-        "cache-first: a phone would be served last night's prices in a "
-        "window with no address bar to hint anything is wrong")
+    assert body.index("fetch(req)") < body.index("caches.match"), "the general path went cache-first"
+    main = src[src.index('addEventListener("fetch"'):]
+    first = main.index("e.respondWith(")
+    assert main.index('"/api/"') < first and main.index('"/data/"') < first
+    branch = main[main.index("SHELL_PATHS.has(url.pathname) || LAZY_PATHS.has(url.pathname)"):first + 200]
+    assert "fromThisVersion" in branch and "networkFirst(req, true)" in branch
+    import re as _re
+    lists = _re.search(r"const SHELL = \[(.*?)\];", src, _re.S).group(1) + _re.search(r"const LAZY = \[(.*?)\];", src, _re.S).group(1)
+    for u in _re.findall(r'"(/[^"]*)"', lists):
+        assert not u.startswith(("/data/", "/api/")), u
 
 
 def test_activate_deletes_every_other_cache():

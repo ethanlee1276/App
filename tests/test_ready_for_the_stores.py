@@ -146,7 +146,8 @@ def test_a_shared_slip_and_the_icon_badge_are_wired():
     assert sw.index('self.addEventListener("fetch", (e) => {\n  const req = e.request;\n  if (req.method !== "POST"') > \
         sw.index('if (req.method !== "GET") return;'), "its own listener, after the one that leaves writes alone"
     assert "12 * 1024 * 1024" in body and "/^image\\//" in body and 'Response.redirect("/?shared=slip#ask", 303)' in body
-    assert 'k !== VERSION && k !== "qb-shared"' in sw, "an update must not drop a slip mid-share"
+    assert 'const KEEP_BOXES = [MODE_BOX, "qb-shared", "qb-offline"];' in sw and "!KEEP_BOXES.includes(k)" in sw, \
+        "an update must not drop a slip mid-share"
     at = APP.index("async function sharedSlipIn() {")
     fn = APP[at:APP.index("\n}\n", at)]
     assert 'box.delete("/shared-slip")' in fn and "askSlipSend(new File(" in fn and 'switchView("ask")' in fn

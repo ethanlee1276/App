@@ -13409,3 +13409,9 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   .qt-chip, .sport-btn, .nav-btn, .al-cat, .seg button {
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 }
+
+/* The record read offline (app.js renderRecord, sw.js THE RECORD, OFFLINE). */
+.rec-offline { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px;
+  border-radius: var(--radius-sm); border: var(--hairline) solid color-mix(in oklab, var(--warn) 50%, var(--border));
+  background: color-mix(in oklab, var(--warn) 10%, var(--panel)); font-size: var(--fs-sm); }
+.rec-offline .ic { color: var(--warn); flex: none; margin-top: 2px; }

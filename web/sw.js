@@ -49,26 +49,103 @@ const SHELL = [
   "/",
   "/index.html",
   "/css/styles.css",
+  "/js/boot.js",
   "/js/app.js",
   "/js/teams.js",
+  "/js/teams_mlb.js",
+  "/js/teams_nba.js",
+  "/js/teams_wnba.js",
+  "/js/teams_nhl.js",
   "/js/visuals.js",
+  "/js/register-sw.js",
   "/vendor/apexcharts.min.js",
   "/favicon.svg",
   "/icon-192.png",
+  "/icon-badge-96.png",
   "/manifest.webmanifest",
 ];
+
+/* THE REST OF THE APP'S CODE, the pages it loads the first time they open.
+ * Cached with the shell only on a device running the installed app (below),
+ * so a one-time visitor on cellular never downloads every page; and in the
+ * version's hash (server.py), so a change to any of them is a new version. */
+const LAZY = [
+  "/js/memes.js", "/js/extras.js", "/css/extras.css", "/js/social.js", "/css/social.css",
+  "/js/gamecast.js", "/css/gamecast.css", "/js/hoopscast.js", "/css/hoopscast.css",
+  "/js/rinkcast.js", "/css/rinkcast.css", "/js/slip.js", "/css/slip.css",
+  "/js/report.js", "/css/report.css", "/js/carrychart.js", "/css/carrychart.css",
+  "/js/fantasyweek.js", "/js/lab.js", "/css/lab.css",
+  "/js/chart-hoops.js", "/js/chart-kicks.js", "/js/chart-matchup.js", "/js/chart-mlb.js",
+  "/js/chart-nhl.js", "/js/chart-role.js", "/js/chart-ufc.js",
+];
+
+/* THE INSTALLED APP OPENS FROM ITS OWN COPY (Ethan, 2026-10-24: "build
+ * everything" — docs/IDEAS.md's first). The rule above, network first, is
+ * about PRICES and stays theirs: /data/ and /api/ are never cached. The
+ * app's own CODE is another matter. An installed app on a weak signal used
+ * to wait for the network before it could show anything; a store app opens
+ * from what it has. So once the page says it is the installed app
+ * (register-sw.js posts "app-mode": a Home Screen app, the Play build or the
+ * iOS shell), this device keeps every file of the app, shell and pages,
+ * under this version's name, and serves them from there.
+ *
+ * ONE VERSION AT A TIME, never file by file: the cache is filled whole when
+ * a version installs and nothing in it is refreshed piecemeal, so a new
+ * app.js can never meet an old page script. A deploy renames the version
+ * (server.py hashes SHELL and LAZY), the phone fetches the new worker within
+ * fifteen minutes or on its next launch, the new one fills its own cache,
+ * and register-sw.js reloads the page the next time it is out of sight. */
+const MODE_BOX = "qb-mode";
+let APP_MODE = null;                       // read from MODE_BOX on first use
+async function appMode() {
+  if (APP_MODE === null) {
+    try { APP_MODE = !!(await (await caches.open(MODE_BOX)).match("/app")); } catch (err) { APP_MODE = false; }
+  }
+  return APP_MODE;
+}
+const SHELL_PATHS = new Set(SHELL);
+const LAZY_PATHS = new Set(LAZY);
+/* The next version's copies are fetched fresh, past the browser's own cache. */
+function fill(box, urls) {
+  return Promise.allSettled(urls.map((u) => box.add(new Request(u, { cache: "reload" }))));
+}
+async function fromThisVersion(req, url) {
+  const box = await caches.open(VERSION);
+  const doc = url.pathname === "/" || url.pathname === "/index.html";
+  const hit = await box.match(doc ? url.pathname : req, { ignoreSearch: doc });
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res && res.ok && res.type === "basic") box.put(doc ? url.pathname : req, res.clone()).catch(() => {});
+  return res;
+}
+self.addEventListener("message", (e) => {
+  if (!e.data || e.data.type !== "app-mode") return;
+  e.waitUntil((async () => {
+    await (await caches.open(MODE_BOX)).put("/app", new Response("1"));
+    APP_MODE = true;
+    const box = await caches.open(VERSION);
+    const have = new Set((await box.keys()).map((r) => new URL(r.url).pathname));
+    await fill(box, [...SHELL, ...LAZY].filter((u) => !have.has(u)));
+  })());
+});
 
 self.addEventListener("install", (e) => {
   // One miss must not fail the whole install — a renamed asset would
   // otherwise leave the worker permanently uninstallable and silently
   // turn the install prompt off.
-  e.waitUntil(caches.open(VERSION).then((c) =>
-    Promise.allSettled(SHELL.map((u) => c.add(u)))).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const box = await caches.open(VERSION);
+    await fill(box, (await appMode()) ? [...SHELL, ...LAZY] : SHELL);
+  })().then(() => self.skipWaiting()));
 });
+
+/* Boxes that are not a version: the app-mode mark, a slip mid-share, the
+ * record's offline copy. */
+const KEEP_BOXES = [MODE_BOX, "qb-shared", "qb-offline"];
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== "qb-shared").map((k) => caches.delete(k))))
+    .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && !KEEP_BOXES.includes(k)).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -80,6 +157,13 @@ self.addEventListener("fetch", (e) => {
   if (url.pathname.startsWith("/api/")) return;     // authenticated: never
   if (url.pathname.startsWith("/data/")) return;    // live numbers: never
 
+  // The app's own files: from this version's copy on the installed app,
+  // network first everywhere else (fromThisVersion, above).
+  if (SHELL_PATHS.has(url.pathname) || LAZY_PATHS.has(url.pathname)) {
+    e.respondWith(appMode().then((on) => (on ? fromThisVersion(req, url) : networkFirst(req, true))));
+    return;
+  }
+
   // THE SHELL'S OWN KINDS, and nothing else. The first cut cached any
   // successful same-origin GET, which measured out as the whole venue
   // photo library landing in the cache the moment somebody scrolled a
@@ -90,17 +174,45 @@ self.addEventListener("fetch", (e) => {
   const keep = kind === "document" || kind === "script" ||
                kind === "style" || kind === "manifest" || kind === "";
 
-  e.respondWith(
-    fetch(req)
-      .then((res) => {
-        if (keep && res && res.ok && res.type === "basic") {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      })
-      .catch(() => caches.match(req).then((hit) => hit || caches.match("/index.html")))
-  );
+  e.respondWith(networkFirst(req, keep));
+});
+
+/* Network first, the cache only when the network fails: everything that is
+ * not the installed app's own code. */
+function networkFirst(req, keep) {
+  return fetch(req)
+    .then((res) => {
+      if (keep && res && res.ok && res.type === "basic") {
+        const copy = res.clone();
+        caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    })
+    .catch(() => caches.match(req).then((hit) => hit || caches.match("/index.html")));
+}
+
+/* THE RECORD, OFFLINE (docs/IDEAS.md). The record is free and it is a
+ * history, not a price: the one /data/ file worth having with no signal.
+ * Network first like every board; each good answer is kept, and when the
+ * network fails the kept copy answers with the moment it was kept
+ * (X-QB-Offline-Copy), which the Record page says out loud. The main
+ * listener above leaves /data/ alone; this one answers only these two. */
+const OFFLINE_COPIES = new Set(["/data/record.json", "/data/record_head.json"]);
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || !OFFLINE_COPIES.has(url.pathname)) return;
+  const kept = () => caches.open("qb-offline").then((c) => c.match(url.pathname));
+  e.respondWith(fetch(req).then((res) => {
+    if (res && res.ok) {
+      res.clone().blob().then((b) => caches.open("qb-offline").then((c) => c.put(url.pathname, new Response(b, {
+        headers: { "Content-Type": "application/json", "X-QB-Offline-Copy": new Date().toISOString() } })))).catch(() => {});
+      return res;
+    }
+    // The box down (a 5xx) reads like no signal; a 404 is "no record yet".
+    return res && res.status >= 500 ? kept().then((hit) => hit || res) : res;
+  }).catch(() => kept().then((hit) => hit || Response.error())));
 });
 
 /* A SLIP SHARED IN (manifest share_target, 2026-10-24): the one post this
