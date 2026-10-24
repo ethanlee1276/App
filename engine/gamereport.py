@@ -319,14 +319,27 @@ def _season_of(result: dict, g: dict | None = None) -> int:
     return _dt.date.today().year
 
 
+def _week_of(result: dict) -> int | None:
+    """The NFL week a board is for, off its date ("2026-W07"); None when
+    the date is a day (a mid-week rebuild reads every week played)."""
+    d = str((result or {}).get("date") or "")
+    try:
+        return int(d.split("-W", 1)[1]) if "-W" in d else None
+    except ValueError:
+        return None
+
+
 class Ctx:
     """One game and everything on the board about it."""
 
     def __init__(self, g: dict, result: dict, allowed: dict | None = None,
                  sched=None, staff: dict | None = None, names: dict | None = None,
                  form: dict | None = None, meetings: list | None = None, ideas: dict | None = None,
-                 sport: str = "nfl", meta: dict | None = None, changes: dict | None = None):
+                 sport: str = "nfl", meta: dict | None = None, changes: dict | None = None,
+                 grades: dict | None = None):
         self.g = g
+        # Our grades (engine/grades), the NFL's: {kind: {(team, name): grade}}.
+        self.grades = grades or {}
         self.sport = sport
         # What a game is scored in: "point(s)", "run(s)", "goal(s)".
         self.score_word = {"mlb": "run", "nhl": "goal"}.get(sport, "point")
@@ -625,6 +638,12 @@ def form_lines(c: "Ctx", r: dict) -> list:
     trend = form_trend(group, f, c.season)
     if trend:
         out.append(["Lately", [trend]])
+    # OUR GRADE (engine/grades): his season against his position's, from
+    # free numbers — where the research docs quoted PFF's.
+    from .grades import of as _grade_of, words as _grade_words
+    graded = _grade_words(_grade_of(c.grades, r.get("team"), r.get("player"), r.get("pos")))
+    if graded:
+        out.append(["Our grade", [graded]])
     if (f.get("season") or {}).get("games", 0) >= 2:
         rz = form_rz(group, f.get("rz") or {})
         if rz:
@@ -1255,12 +1274,14 @@ def practice_blocks(c: Ctx) -> list:
     return [_h("The practice report"), _list(lines)] if lines else []
 
 
-def _corner_line(cn: dict) -> str:
+def _corner_line(cn: dict, grade: dict | None = None) -> str:
     bits = [f"{cn.get('name')} ({cn.get('spot')})"]
     if cn.get("targets"):
         bits.append(f"{_num(cn.get('rating'))} passer rating allowed on {_plural(cn['targets'], 'target')}"
                     + (f", {_num(cn.get('yds_per_tgt'))} yards a target" if cn.get("yds_per_tgt") else "")
                     + (f", {_plural(cn['td'], 'touchdown')}" if cn.get("td") else ""))
+    if grade:
+        bits.append(f"our coverage grade {grade['grade']} of 100 ({grade['n']} defenders ranked)")
     if cn.get("status"):
         bits.append(str(cn["status"]).lower())
     if cn.get("next_man_up"):
@@ -1363,12 +1384,16 @@ def sec_matchups(c: Ctx) -> dict | None:
         room = cov.get(dfn) or {}
         corners = [cn for cn in room.get("corners") or [] if isinstance(cn, dict) and cn.get("name")]
         notes = []
+        from .grades import coverage_of as _cov_grade
+
+        def _cg(cn, team=dfn):
+            return _cov_grade(c.grades, team, cn.get("name") or "")
         if room.get("weakest"):
             w = next((cn for cn in corners if cn.get("name") == room["weakest"]), None)
             if w and w.get("targets"):
-                notes.append(f"The soft spot in {dfn}'s coverage: {_corner_line(w)}")
+                notes.append(f"The soft spot in {dfn}'s coverage: {_corner_line(w, _cg(w))}")
         if corners:
-            notes.append(f"{dfn}'s corners: " + "; ".join(_corner_line(cn) for cn in corners))
+            notes.append(f"{dfn}'s corners: " + "; ".join(_corner_line(cn, _cg(cn)) for cn in corners))
         if room.get("missing"):
             notes.append(f"{dfn} is without {_join(room['missing'])} in the secondary")
         notes += funnel_lines(c, dfn)
@@ -1376,6 +1401,9 @@ def sec_matchups(c: Ctx) -> dict | None:
         sub = [b for b in sub if b]
         if sub:
             blocks += [_h(f"{c.name(off)} offense vs {c.name(dfn)} defense")] + sub
+    if c.grades and blocks:
+        from .grades import NOTE as _grade_note
+        blocks.append(_p(_grade_note))
     return _section("matchups", "Who's guarding who", blocks)
 
 
@@ -1763,7 +1791,10 @@ def sec_before(c: Ctx) -> dict | None:
     if behind:
         lines.append(f"Data behind the last week played: {_join(str(b) for b in behind)}")
     if c.sport == "nfl":
-        lines.append(OFFICIALS)
+        # THE REFEREE ONCE HE IS NAMED (engine/nflrefs; Ethan's D, 2026-10-24),
+        # with his games beside the league's and the measured caveat.
+        from .nflrefs import words as _ref_words
+        lines.append(_ref_words(g.get("officials") or {}) or OFFICIALS)
     return _section("before", "Before kickoff", [_list(lines)])
 
 
@@ -2410,12 +2441,14 @@ def _words(sections) -> int:
 def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
           staff: dict | None = None, names: dict | None = None, form: dict | None = None,
           meetings: list | None = None, ideas: dict | None = None, sport: str = "nfl",
-          meta: dict | None = None, changes: dict | None = None) -> dict | None:
+          meta: dict | None = None, changes: dict | None = None,
+          grades: dict | None = None) -> dict | None:
     """One game's report, or None for a row with no teams."""
     if not isinstance(g, dict) or not g.get("away") or not g.get("home"):
         return None
     c = Ctx(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
-            form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta, changes=changes)
+            form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta, changes=changes,
+            grades=grades)
     return finish(c, SECTIONS, sec_short)
 
 
@@ -2528,6 +2561,15 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             form = reportdata.player_form(conn, season, report_players(result), sport=sport)
         except Exception:                                    # noqa: BLE001
             form = {}
+        # OUR GRADES (engine/grades; Ethan's D, 2026-10-24), the NFL's, over
+        # the weeks before this board's — never a reason a report fails.
+        grades = {}
+        if sport == "nfl" and season:
+            try:
+                from . import grades as _grades
+                grades = _grades.table(season, before_week=_week_of(result))
+            except Exception:                                # noqa: BLE001
+                grades = {}
         if ideas is None and sport == "nfl":
             try:
                 from . import ideas as _ideas
@@ -2571,7 +2613,8 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             r = build(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
                       form=form, meetings=met, ideas=extra, sport=sport,
                       meta=(meta or {}).get(f"{away}@{home}"),
-                      changes=logged.get(f"{away}@{home}|{str(g.get('date') or '')[:10]}"))
+                      changes=logged.get(f"{away}@{home}|{str(g.get('date') or '')[:10]}"),
+                      grades=grades)
             if r:
                 reports.append(r)
         result[KEY] = reports

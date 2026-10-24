@@ -1643,6 +1643,15 @@ def _run_inventions(log) -> list[str]:
     return _spawn_module("engine.inventionfit", log)
 
 
+def _run_nflrefs(log) -> list[str]:
+    """The NFL referees' tendencies (engine/nflrefs --fit), out of process
+    and detached; never inside the suite's sandbox, as the inventions'."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        return ["engine.nflrefs: not started in the sandbox"]
+    return _spawn_module("engine.nflrefs", log, args=("--fit",))
+
+
 def game_rank_boot_due(store: dict, state: dict, today: _dt.date,
                        sport: str = "mlb") -> bool:
     """Should this pass measure ``sport``'s GAME markets now, not Wednesday?
@@ -2575,6 +2584,18 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 log(f"  {line}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  inventions re-measure skipped: {exc}")
+
+    # THE REFEREES' TENDENCIES (engine/nflrefs; Ethan's D, 2026-10-24),
+    # Tuesdays: Monday night's game is in the play-by-play by then, and the
+    # week's assignments are named after it. Marked before the work.
+    if today.weekday() == 1 and state.get("nflrefs_attempted") != today.isoformat():
+        state["nflrefs_attempted"] = today.isoformat()
+        _save_state(state_path, state)
+        try:
+            for line in _run_nflrefs(log):
+                log(f"  {line}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  referee tendencies skipped: {exc}")
 
     # BOOTSTRAP: a box holding a sport's logs with an EMPTY rank store
     # measures now rather than waiting for Wednesday — the same "fit it

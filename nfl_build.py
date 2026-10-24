@@ -1584,6 +1584,10 @@ def main() -> None:
         # the sim; the defence-vs-position ratings are the slate's own, the
         # ones every prop was priced against.
         from engine import gamereport as _greport
+        # THE REFEREE BEFORE KICKOFF (engine/nflrefs): stamped on each game
+        # once a source names him, for the report's "Before kickoff".
+        from engine import nflrefs as _nflrefs
+        print(f"  {_nflrefs.attach(result, args.season, args.week)}")
         _allowed = {t: getattr(getattr(tm, "defense", None), "ratings", None) or {}
                     for t, tm in (getattr(slate, "teams", None) or {}).items()}
         print(f"  {_greport.attach(result, allowed=_allowed, season=args.season, out=args.out)}")
