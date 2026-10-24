@@ -110,6 +110,9 @@ PAID_KEYS = (
     # think will actually hit. Ranked by likelihood rather than edge, and
     # every bit as much the thing somebody is paying for.
     "most_likely",
+    # THE PUBLIC BETTING PERCENTAGES (engine/splits, 2026-10-24): licensed
+    # from SharpAPI, so never handed to a reader who has not paid.
+    "betting_splits",
     # …AND THE LIKELY LEGS ITS PRICE CAP KEEPS OFF (engine/likely.
     # PAST_CAP_HEAVIEST, 2026-10-22): a new view of the paid board is a new
     # key, as the next comment says three times over.

@@ -1577,6 +1577,10 @@ def main() -> None:
         # hook, whose money split the against-the-money note reads.
         from engine import lineopen as _lo
         print(_lo.attach_to_board(result, "nfl"))
+        # THE PUBLIC BETTING PERCENTAGES (engine/splits): off until the
+        # SharpAPI key is set; a paid key on the board, said in the report.
+        from engine import splits as _splits
+        print(_splits.attach_to_board(result, "nfl"))
         # THE GAME REPORT (engine/gamereport; Ethan, 2026-10-19: "a full
         # layed out detailed explanation for every nfl game just like how
         # the report is. Obv keep out the prop picks"). Last of the game

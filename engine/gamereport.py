@@ -999,6 +999,12 @@ def sec_market(c: Ctx) -> dict | None:
     if split:
         venues_w = _join(money.get("venues") or []) or "the prediction markets"
         out.append(_p(f"Where the money is going on {venues_w}: {'; '.join(split)}"))
+    # THE SPORTSBOOK'S PUBLIC SPLITS (engine/splits; Ethan's D, 2026-10-24).
+    from .splits import words as _split_words
+    public = _split_words(((c.result.get("betting_splits") or {}).get(f"{c.away}@{c.home}")) or {},
+                          c.home, c.away)
+    if public:
+        out.append(_p(public))
     sim = g.get("sim") or {}
     if _f(sim.get("p_home_win")) is not None:
         ph = float(sim["p_home_win"])
