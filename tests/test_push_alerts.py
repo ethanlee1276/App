@@ -133,6 +133,9 @@ def test_the_key_is_made_once_and_kept_private():
     a = W.keys(path)
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert W.keys(path) == a and len(W.unb64u(a["pub"])) == 65 and W.unb64u(a["pub"])[0] == 4
+    import subprocess
+    got = subprocess.run(["git", "check-ignore", "-q", "data/push/vapid.json"], cwd=ROOT)
+    assert got.returncode == 0, "the private key is one `git add -A` from the repo"
 
 
 def _p8(d: int) -> str:
