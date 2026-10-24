@@ -16,6 +16,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CY DA DE DB2 DI 2>&1 | tee /tmp/di.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DE DJ 2>&1 | tee /tmp/dj.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK 2>&1 | tee /tmp/dk.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DL 2>&1 | tee /tmp/dl.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -385,6 +386,9 @@ d = json.load(open('data/built/recommendations.json'))
 rows = [r for r in d.get('most_likely') or [] if r.get('bigger_lines')]
 print('built', d.get('built_at'), '·', len(rows), 'picks with bigger lines,', sum(1 for r in rows for c in r['bigger_lines'] if c.get('better')), 'marked,', sum(1 for r in rows for c in r['bigger_lines'] if (c.get('odds') or 0) < -1000), 'priced past -1000')
 "
+SH
+run DL "The bug scan" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.bugscan
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

@@ -6,6 +6,75 @@ reviewed by Apple or Google.** Whether either store accepts the app is a
 guess [Guessing] until a person has read both policies in full and
 decided.
 
+## Update, 2026-10-24: what changed, what was built, what is yours to decide
+
+Ethan: "we need to optimize it for the App Store and the Google Play Store
+as well". Read fresh (through search summaries; neither store's policy
+page loads from the build machine, so the exact wording still needs a
+person's read at submission):
+
+**Built:**
+
+- **Every screen size and posture** (styles.css "EVERY FOLD AND FLIP",
+  tests/test_every_fold_and_flip.py): phones from 280px covers up,
+  Flip and Razr covers, the inner screens of every Fold, the Duo,
+  tablets either way up, list beside detail on wide open screens, the
+  panes split at a book-folded hinge, Flex Mode's controls in the bottom
+  half. This is what Play's large-screen quality bar asks for.
+- **No portrait lock.** The manifest and `deploy/twa/twa-manifest.json`
+  now say `"orientation": "any"`. Google Play has required apps to target
+  Android 16 (API 36) since August 2026, and Android 16 ignores portrait
+  and landscape locks and aspect-ratio limits on any screen 600dp or wider
+  (foldables open, tablets): the app has to work turned either way, and
+  now does. When building, check the generated `app/build.gradle` says
+  `targetSdkVersion 36` (a current Bubblewrap does).
+- **Account deletion, both ways the stores ask:** in the app (Account →
+  Delete my account), and a public page for Play's data-deletion form:
+  `https://qellysbook.com/privacy.html#delete-account` (the steps, and an
+  email route for anyone who cannot sign in).
+- **Crash reports** (engine/bugscan, privacy policy 2.6): a script error
+  on anyone's screen reaches the box with its page, screen size and
+  browser family, no identifier. Declare it on both forms as diagnostics,
+  not linked to the user, not used for tracking.
+- **Store screenshots for every size class** (`tools/store_screenshots.cjs`):
+  Play phone, 7- and 10-inch tablets and an open foldable; App Store 6.9-
+  inch iPhone and 13-inch iPad; the desktop install sheet. Run it against
+  the live site, look at each, then upload.
+
+**Settled since the last read:**
+
+- **Apple, payments.** Since 1 May 2025 (a US court order), apps on the
+  **US storefront** may show buttons and links to buy outside the App Store
+  (guideline 3.1.1(a)), so the Stripe checkout can be linked from a US
+  iOS app. Everywhere else, still no. Apple's commission on such
+  purchases has been litigated; check the current terms at submission.
+- **Google, gambling.** The Real-Money Gambling, Games, and Contests
+  policy admits approved gambling apps (an application, licences, geo-
+  restriction, and since 28 January 2026 age-screening tools) and, for
+  every other app, generally does not permit content that facilitates
+  wagering. A picks app that takes no bets is not a gambling app — but
+  the **Bet it** buttons open a sportsbook's bet slip with the bet filled
+  in (engine/betlinks), and that is the thing a reviewer is most likely to
+  read as facilitating.
+
+**Yours to decide before a Play build:**
+
+1. **The Bet it links in the app.** Either ship the Play build without the
+   sportsbook bet-slip links (the website keeps them; the app is told
+   apart by its start address), or apply to Play's gambling programme,
+   which needs licences the site does not hold. The first is a small
+   change; it is not made, because it changes what members see.
+2. **The listing's category and rating:** Sports, adults only, gambling
+   themes declared in the content-rating questionnaire; the site's own
+   floor is 21+.
+
+**Yours to decide before an iOS build:** 4.2 (minimum functionality) is
+still the likely rejection for a site in a wrapper. The native features
+that would carry it, in order of value: push alerts when a pick posts or
+settles, a home-screen widget with tonight's top pick and the record, and
+the iPhone Duo's own layouts through Apple's native fold APIs (the web
+build already lays out for the Duo by its shape).
+
 ## What the app would be
 
 It would be the same site in a store wrapper, not a new codebase:
@@ -110,7 +179,8 @@ keep a copy off the laptop.
 
 ## Store screenshots
 
-Run `tools/store_screenshots.cjs` against the live site. Look at every
-image first, then list them in the manifest's `screenshots`. Screenshots
-are not captured from a local copy, because a local copy can show a
-sample board.
+Run `tools/store_screenshots.cjs` against the live site (its header lists
+every size class and the store each is for). Look at every image first,
+then upload them and list the phone and desktop ones in the manifest's
+`screenshots`. Screenshots are not captured from a local copy, because a
+local copy can show a sample board.
