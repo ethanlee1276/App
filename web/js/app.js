@@ -8249,6 +8249,11 @@ function faviconBadge() {
   try {
     open = mbLoad().filter((b) => String(b.result || "pending") === "pending").length;
   } catch (e) { open = 0; }
+  // The installed app's icon carries the same count (the Badging API:
+  // Chrome and Edge apps, and Safari's Home Screen apps since iOS 16.4).
+  try {
+    if (navigator.setAppBadge) (open ? navigator.setAppBadge(open) : navigator.clearAppBadge()).catch(() => {});
+  } catch (e) { /* a browser without it shows the tab's mark alone */ }
   if (!open) {
     link.setAttribute("href", _faviconOrig.href);
     if (_faviconOrig.type) link.setAttribute("type", _faviconOrig.type);
@@ -42713,6 +42718,26 @@ function liveSlips() {
   }
 }
 
+/* A SLIP SHARED IN (2026-10-24): the manifest's share_target puts Qellys
+   in the phone's share sheet, so a bet-slip screenshot goes straight from
+   Photos or a sportsbook's own "share" to the grader. sw.js takes the
+   post, keeps the picture for a moment and opens Ask; Ask grades it as if
+   it had been picked from the gallery. (Android and desktop; iOS offers
+   no share target to a web app.) */
+async function sharedSlipIn() {
+  if (!/[?&]shared=slip\b/.test(location.search) || !("caches" in window)) return;
+  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* the address keeps it */ }
+  try {
+    const box = await caches.open("qb-shared");
+    const got = await box.match("/shared-slip");
+    if (!got) return;
+    await box.delete("/shared-slip");
+    const blob = await got.blob();
+    switchView("ask");
+    askSlipSend(new File([blob], "shared-slip", { type: blob.type || "image/jpeg" }));
+  } catch (e) { /* nothing shared reached us */ }
+}
+
 function askSlipSend(file) {
   loadSlip().then((S) => S && S.send({
     state: askState, save: askSave, errorText: askErrorText, thinkMs: ASK_THINK_MS,
@@ -45457,6 +45482,7 @@ renderQuickTools();
 load();
 // The first screen is drawn: lift the launch shimmer (boot.js `booting`).
 requestAnimationFrame(() => document.documentElement.classList.remove("booting"));
+sharedSlipIn();
 
 /* --- the true minus, applied where numbers stack --------------------------
    Every signed figure the site prints comes out of a template literal, and

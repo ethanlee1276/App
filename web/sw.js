@@ -68,12 +68,29 @@ self.addEventListener("install", (e) => {
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+    .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== "qb-shared").map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
+  // A SLIP SHARED IN (manifest share_target): the one post this worker
+  // answers itself. The picture is kept for the page to collect (app.js
+  // sharedSlipIn) and Ask opens; nothing goes to the server here.
+  if (req.method === "POST" && new URL(req.url).pathname === "/share-slip") {
+    e.respondWith((async () => {
+      try {
+        const form = await req.formData();
+        const file = form.get("slip");
+        if (file && file.size && file.size <= 12 * 1024 * 1024 && /^image\//.test(file.type || "image/")) {
+          const box = await caches.open("qb-shared");
+          await box.put("/shared-slip", new Response(file, { headers: { "Content-Type": file.type || "image/jpeg" } }));
+        }
+      } catch (err) { /* Ask opens either way */ }
+      return Response.redirect("/?shared=slip#ask", 303);
+    })());
+    return;
+  }
   if (req.method !== "GET") return;                 // never touch writes
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;  // embeds are theirs

@@ -178,6 +178,24 @@ def test_the_page_the_server_the_policy_and_the_day_carry_it():
     assert '_spawn_module("engine.bugscan", log, args=("--mail",))' in maint
 
 
+
+def test_a_crashs_line_number_is_the_repositorys_line():
+    """Phones run the comment-trimmed copy (engine/shrink), and a crash report
+    names a line in it. The trimmer used to fold a many-line comment into one
+    line break, so app.js:45601 pointed some 8,000 lines away from the code
+    that threw. Every line break is kept now, in every script it serves."""
+    from engine import shrink
+    for rel in shrink.FILES:
+        if not rel.endswith(".js"):
+            continue
+        src = open(os.path.join(ROOT, "web", rel), encoding="utf-8").read()
+        out = shrink.trimmed(rel, src)
+        assert src.count("\n") == out.count("\n"), rel
+    src = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    out = shrink.trimmed("js/app.js", src)
+    find = lambda text: next(i for i, ln in enumerate(text.split("\n")) if "function reportCrash(" in ln)  # noqa: E731
+    assert find(src) == find(out)
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

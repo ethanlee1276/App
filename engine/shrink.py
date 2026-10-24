@@ -18,9 +18,10 @@ WHY A TOKENIZER AND NOT A REGEX. `//` sits inside URLs in strings, `/*`
 can sit inside a regular expression, and a template literal can hold a
 whole second template in its `${}`. So the stripper walks the source the
 way the language does — strings, templates (nested), regular expressions,
-comments — and removes only the comments. A block comment that spanned a
-line break becomes a line break, so automatic semicolon insertion reads
-the code exactly as before.
+comments — and removes only the comments. A block comment keeps every line
+break it spanned, so automatic semicolon insertion reads the code exactly as
+before and a script's line numbers are the repository's (2026-10-24: crash
+reports name the line).
 
 WHAT PROVES IT. `tests/test_the_served_code_is_the_same_code.py` parses
 the original and the trimmed copy with TypeScript's parser and requires
@@ -148,7 +149,11 @@ def strip_js(src: str) -> str:
             j = src.find("*/", i + 2)
             if j < 0:
                 raise Unreadable(f"unterminated comment at offset {i}")
-            out.append("\n" if "\n" in src[i:j] else " ")
+            # Every line break it spanned stays, so a line number in the
+            # served copy is the same line in the repository: a crash report
+            # (engine/bugscan) names app.js:45601 and that IS line 45601.
+            # About 1.5 KB gz on app.js; runs of breaks compress to nothing.
+            out.append("\n" * src.count("\n", i, j) if "\n" in src[i:j] else " ")
             i = j + 2
             continue
         if c in "'\"":

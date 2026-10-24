@@ -135,6 +135,75 @@ def test_the_badge_is_a_white_silhouette_on_clear():
     assert 'badge: "/icon-badge-96.png"' in READ("web", "sw.js")
 
 
+
+def test_a_shared_slip_and_the_icon_badge_are_wired():
+    st = MAN["share_target"]
+    assert st["action"] == "/share-slip" and st["method"] == "POST" and st["enctype"] == "multipart/form-data"
+    assert st["params"]["files"][0]["name"] == "slip"
+    sw = READ("web", "sw.js")
+    at = sw.index('pathname === "/share-slip"')
+    body = sw[at:at + 900]
+    assert "12 * 1024 * 1024" in body and "/^image\\//" in body and 'Response.redirect("/?shared=slip#ask", 303)' in body
+    assert 'k !== VERSION && k !== "qb-shared"' in sw, "an update must not drop a slip mid-share"
+    at = APP.index("async function sharedSlipIn() {")
+    fn = APP[at:APP.index("\n}\n", at)]
+    assert 'box.delete("/shared-slip")' in fn and "askSlipSend(new File(" in fn and 'switchView("ask")' in fn
+    assert "\nsharedSlipIn();\n" in APP
+    at = APP.index("function faviconBadge() {")
+    assert "navigator.setAppBadge(open)" in APP[at:at + 900] and "navigator.clearAppBadge()" in APP[at:at + 900]
+
+
+PNG_1PX = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+                        "1f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082")
+
+
+def test_in_a_browser_a_shared_slip_lands_in_ask():
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("      (skipped: no Playwright)")
+        return
+    sys.path.insert(0, os.path.join(ROOT, "tests"))
+    import rendercheck
+    srv, port = rendercheck._serve()
+    origin = f"http://127.0.0.1:{port}"
+    try:
+        with sync_playwright() as pw:
+            kw = {"args": ["--no-sandbox", "--disable-dev-shm-usage"]}
+            if os.path.exists("/opt/pw-browsers/chromium"):
+                kw["executable_path"] = "/opt/pw-browsers/chromium"
+            browser = pw.chromium.launch(**kw)
+            try:
+                ctx = browser.new_context()
+                page = ctx.new_page()
+                page.goto(origin + "/index.html", wait_until="load")
+                page.evaluate("navigator.serviceWorker.ready.then(() => true)")
+                page.reload(wait_until="load")          # the worker now controls the page
+                page.wait_for_timeout(800)
+                sent = page.evaluate("""async (bytes) => {
+                    const fd = new FormData();
+                    fd.append("slip", new Blob([new Uint8Array(bytes)], { type: "image/png" }), "slip.png");
+                    const r = await fetch("/share-slip", { method: "POST", body: fd });
+                    const box = await caches.open("qb-shared");
+                    const kept = await box.match("/shared-slip");
+                    return { url: r.url, kept: kept ? kept.headers.get("Content-Type") : null,
+                             size: kept ? (await kept.blob()).size : 0 };
+                }""", list(PNG_1PX))
+                page.goto(origin + "/index.html?shared=slip#ask", wait_until="load")
+                page.wait_for_timeout(1500)
+                after = page.evaluate("""async () => ({ left: !!(await (await caches.open("qb-shared")).match("/shared-slip")),
+                    view: (document.querySelector(".view.active") || {}).id || "", search: location.search })""")
+            finally:
+                browser.close()
+    finally:
+        srv.shutdown()
+    assert sent["url"].endswith("/?shared=slip#ask") or "shared=slip" in sent["url"], sent
+    assert sent["kept"] == "image/png" and sent["size"] == len(PNG_1PX), sent
+    assert after == {"left": False, "view": "view-ask", "search": ""}, after
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

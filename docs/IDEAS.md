@@ -11,6 +11,86 @@ Ordered by *value per unit of work*, not by size.
 
 ---
 
+## 2026-10-24: from other apps, for the stores — ranked
+
+Ethan: *"think like an app developer, think like a website developer ...
+look at other apps and look how they function and run and look at cool ideas
+and tools that can make our app better."* Looked at: Apple Sports (praised
+for restraint and speed; its standouts are widgets and Live Activities),
+Action Network (line alerts — "Line Watcher" — and automatic bet import),
+and what an installed web app can do now. Built today from this list: the
+app-icon badge, the share-a-slip target, push alerts, the first screen that
+holds still, Liquid Glass on the Duo. The rest, best value first:
+
+**Run better**
+
+1. **Shell from the cache, data from the network.** The service worker
+   fetches the app's own code network-first, so an installed app on a weak
+   signal waits for the network before it shows anything. Store apps open
+   instantly from what they have and update behind. The boards and prices
+   stay network-only (sw.js's first two rules); only the code would come
+   from the cache, refreshed in the background, renamed on every deploy by
+   the VERSION hash already there. *Half a day; the biggest felt speed-up
+   left for the store app.*
+2. **Split app.js further.** Measured today: evaluating it is a ~270 ms
+   freeze at phone speed, on every first visit. Rocket Radar moved out
+   today (~7 KB gz). Next, by size: the Fantasy room (draft kit, mock draft,
+   usage: ~20 KB gz), the account and paywall pages, the team pages — each
+   loaded the first time it opens, as the Feed and the Toolbox already are.
+   Target: under 400 KB gz. *A day or two; tests read the moved code.*
+3. **The first game's stadium photo** is the largest thing on the first
+   screen and lands last (3.3 s on a slow phone). Preload it as soon as the
+   board says which it is, or paint a 1 KB blurred copy first. *An hour.*
+4. **Style recalculation** is the next cost after the script (0.6 s at
+   phone speed): the stylesheet is 463 KB before trimming. Split the lazy
+   pages' styles out the way gamecast.css is, and drop selectors that match
+   nothing (Chromium's coverage tool lists them). *A day.*
+5. **Brotli** instead of gzip for the trimmed files: ~15% fewer bytes. Caddy
+   needs a plugin for it, or the files pre-compressed at build. *An hour on
+   the box.*
+
+**Look**
+
+6. **Liquid Glass for the iOS app itself**: a floating capsule tab bar (iOS
+   26's own look) and glass sheets for the More and Bet panels — the Duo's
+   material, carried to every iPhone in the store app. *Half a day.*
+7. **A lock-screen-style "riding" pill.** The riding tray (bets on games in
+   progress) as a Dynamic-Island-shaped pill pinned under the bar, live
+   score inside. *Half a day.*
+8. **Team colours for "my team".** Pick a club in settings; its colours tint
+   the bar, the glass rim and the Live disc. *Half a day.*
+
+**Features other apps have**
+
+9. **Watches by push** (Action's Line Watcher). The Alerts page already
+   matches player, team and edge watches against the feed
+   (engine/alerts.py), and phones can now be knocked. A watch that fires
+   becomes an alert for the member who set it. *A day; paid members only,
+   the feed is a paid file.*
+10. **Your own bets by push**: your game is starting, your bet just settled.
+    Needs My Bets kept on the server for signed-in members (the account sync
+    exists). *A day.*
+11. **iPhone widgets and Live Activities** (Apple Sports' two best things):
+    tonight's top pick and the record on the Home Screen; a bet's game on the
+    lock screen. Native code (WidgetKit, ActivityKit) in the iOS shell, fed by
+    the same APNs key. *Several days, on the Mac; after the app is accepted.*
+12. **Calendar**: an .ics feed of the games you have picks on. *Two hours.*
+13. **The record offline**: record.json and My Bets readable with no signal
+    (read-only, dated). *Two hours.*
+
+**Tools for building and testing**
+
+14. **Real devices.** Nothing here can run Xcode, Instruments or TestFlight:
+    those need a Mac and the Apple Developer Program, and they are worth it
+    once you have both — TestFlight for a beta group, Instruments for the
+    iPhone's own frame timings. For Android, Play's internal testing track
+    and Firebase Test Lab's free tier run the TWA on real phones. Until then
+    the nightly run opens every page in Chromium on five screen shapes and
+    measures the first screen at phone speed.
+15. **Lighthouse in the nightly run**, beside the probe added today, so a
+    slower night shows up as a number rather than a feeling. *An hour.*
+
+
 ## The rule this list is filtered through
 
 A feature earns a place only if its numbers can be **derived from

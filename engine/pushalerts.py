@@ -289,13 +289,18 @@ def main(argv=None) -> int:
     print(f"{len(msgs)} alert(s) owed now:" if msgs else "Nothing owed: every board and night is announced.")
     for m in msgs:
         print(f"  [{m['kind']}] {m['title']} — {m['body']}  ({m['url']})")
+    # Read-only: a box where nobody has subscribed has no table yet, and
+    # looking must not make one (the catch-up script runs this).
+    import sqlite3
     from engine import accounts
-    conn = accounts.connect()
     try:
-        ensure_tables(conn)
-        n = dict(conn.execute("SELECT kind, COUNT(*) FROM push_subs GROUP BY kind").fetchall())
-    finally:
-        conn.close()
+        conn = sqlite3.connect(f"file:{accounts.DB_PATH}?mode=ro", uri=True)
+        try:
+            n = dict(conn.execute("SELECT kind, COUNT(*) FROM push_subs GROUP BY kind").fetchall())
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        n = {}
     print(f"Subscribed: {n.get('web', 0)} browser(s), {n.get('apns', 0)} iPhone app(s). "
           f"Apple key: {'set' if webpush.apns_config() else 'not set (docs/APP_STORES.md)'}.")
     return 0

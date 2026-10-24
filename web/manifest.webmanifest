@@ -92,5 +92,26 @@
       ]
     }
   ],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "share_target": {
+    "action": "/share-slip",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "slip",
+          "accept": [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/heic",
+            "image/*"
+          ]
+        }
+      ]
+    }
+  }
 }

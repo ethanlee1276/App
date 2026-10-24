@@ -334,6 +334,9 @@ def test_the_server_the_worker_the_page_the_policy_and_the_play_build_carry_it()
     assert "<h3>2.7 Alerts on your phone</h3>" in READ("web", "privacy.html")
     assert json.loads(READ("deploy", "twa", "twa-manifest.json"))["enableNotifications"] is True
     assert '"ab"' not in json.dumps(PA.KINDS) and set(PA.KINDS) == {"posted", "settled"}
+    main = READ("engine", "pushalerts.py")
+    main = main[main.index("def main("):]
+    assert "?mode=ro" in main and "ensure_tables" not in main, "the status check never writes (the catch-up script runs it)"
 
 
 
