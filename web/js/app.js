@@ -1145,6 +1145,8 @@ const ICON_PATHS = {
          + '<path d="M3.6 2.6h8.8l2.1 5.8v4a1.2 1.2 0 01-1.2 1.2H2.7a1.2 1.2 0 01-1.2-1.2v-4z"/>',
   book: '<path d="M2.4 2.6h4a2.2 2.2 0 012.2 2.2v8.4a1.7 1.7 0 00-1.7-1.7H2.4z"/>'
         + '<path d="M13.6 2.6h-4a2.2 2.2 0 00-2.2 2.2v8.4a1.7 1.7 0 011.7-1.7h4.5z"/>',
+  // Alerts on the phone (renderPushZone, 2026-10-24).
+  bell: '<path d="M4 11V7.2a4 4 0 018 0V11l1.3 1.5H2.7z"/><path d="M6.5 14.2a1.6 1.6 0 003 0"/>',
   signal: '<path d="M8 12.6v.01"/><path d="M5.6 10.2a3.4 3.4 0 014.8 0"/>'
           + '<path d="M3.2 7.8a6.8 6.8 0 019.6 0"/>'
           + '<path d="M.9 5.4a10.1 10.1 0 0114.2 0"/>',
@@ -25790,6 +25792,113 @@ async function renderFeedZone() {
     <div class="card al-list">${rows}</div>`;
 }
 
+/* ALERTS ON THE PHONE (engine/pushalerts, 2026-10-24): tonight's picks
+   are up, last night is graded — counts and the public record, never a
+   pick. The browser gets an empty signed knock and asks the site what to
+   say (sw.js); the iOS shell's phones get Apple's own push (APNs) through
+   Capacitor's plugin. On an iPhone's Safari, Apple allows web alerts only
+   to a site added to the Home Screen, so it says that instead of a switch
+   that would do nothing. */
+const PUSH_KEY = "qb_push";
+function pushKind() {
+  const C = window.Capacitor;
+  if (C && C.isNativePlatform && C.isNativePlatform()) return (C.Plugins || {}).PushNotifications ? "native" : "";
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    return /iPhone|iPad/.test(navigator.userAgent || "") && !a2hsInstalled() ? "home-screen" : "";
+  }
+  return "web";
+}
+function pushSaved() {
+  try { return JSON.parse(localStorage.getItem(PUSH_KEY) || "null"); } catch (e) { return null; }
+}
+async function pushSend(path, body) {
+  const r = await fetch(`/api/push/${path}`, { method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || "The alert could not be saved.");
+  return out;
+}
+async function pushOn(topics) {
+  const kind = pushKind();
+  if (kind === "native") {
+    const PN = window.Capacitor.Plugins.PushNotifications;
+    let perm = await PN.checkPermissions();
+    if (perm.receive !== "granted") perm = await PN.requestPermissions();
+    if (perm.receive !== "granted") throw new Error("Alerts are off for Qellys in your phone’s Settings.");
+    const token = await new Promise((resolve, reject) => {
+      PN.addListener("registration", (t) => resolve(t.value));
+      PN.addListener("registrationError", () => reject(new Error("Apple did not hand this phone an alert address.")));
+      PN.register();
+    });
+    PN.addListener("pushNotificationActionPerformed", (a) => {
+      const u = ((a.notification || {}).data || {}).url;
+      if (u && u.charAt(0) === "/") location.href = u;
+    });
+    await pushSend("subscribe", { endpoint: token, kind: "apns", topics });
+    return { endpoint: token, topics };
+  }
+  if (Notification.permission === "denied") throw new Error("Alerts are blocked for this site in your browser’s settings.");
+  if ((await Notification.requestPermission()) !== "granted") throw new Error("Alerts stay off until you allow them.");
+  const reg = await navigator.serviceWorker.ready;
+  const key = (await (await fetch("/api/push/key")).json()).key;
+  const raw = atob(key.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - key.length % 4) % 4));
+  const sub = (await reg.pushManager.getSubscription())
+    || await reg.pushManager.subscribe({ userVisibleOnly: true,
+         applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)) });
+  await pushSend("subscribe", { endpoint: sub.endpoint, topics });
+  return { endpoint: sub.endpoint, topics };
+}
+async function pushOff(saved) {
+  if (pushKind() === "web") {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe().catch(() => {});
+  }
+  if (saved && saved.endpoint) await pushSend("unsubscribe", { endpoint: saved.endpoint }).catch(() => {});
+}
+function renderPushZone(note) {
+  const host = document.getElementById("push-zone");
+  if (!host) return;
+  const kind = pushKind(), saved = pushSaved();
+  if (!kind) { host.innerHTML = ""; return; }
+  const on = !!(saved && saved.endpoint);
+  const topics = (saved && saved.topics) || ["posted", "settled"];
+  const box = (t, label) => `<label class="push-t"><input type="checkbox" data-push-topic="${t}"${
+    topics.includes(t) ? " checked" : ""}${kind === "home-screen" ? " disabled" : ""}> ${label}</label>`;
+  host.innerHTML = `<div class="card push-card">
+      <div class="push-h">${icon("bell", 18)}<b>Alerts on this phone</b>
+        <span class="push-state${on ? " on" : ""}">${on ? "On" : "Off"}</span></div>
+      ${kind === "home-screen"
+        ? `<p class="push-sub">On iPhone, Apple sends a site’s alerts only once it is on your Home Screen:
+            tap Share, then <b>Add to Home Screen</b>, open Qellys from there and turn them on here.</p>`
+        : `<p class="push-sub">A tap on your lock screen when tonight’s picks go up and when last night is graded.
+            Counts and the record only — never a pick on a lock screen.</p>
+          <div class="push-ts">${box("posted", "Tonight’s picks are up")}${box("settled", "Last night is graded")}</div>
+          <button type="button" class="btn ${on ? "ghost" : "primary"}" data-push-go="${on ? "off" : "on"}">${
+            on ? "Turn alerts off" : "Turn alerts on"}</button>`}
+      ${note ? `<p class="push-note" role="status">${escapeHtml(note)}</p>` : ""}</div>`;
+  host.querySelectorAll("[data-push-go], [data-push-topic]").forEach((el) => el.addEventListener(
+    el.matches("[data-push-go]") ? "click" : "change", async () => {
+      const picked = [...host.querySelectorAll("[data-push-topic]:checked")].map((c) => c.dataset.pushTopic);
+      const turnOff = el.dataset.pushGo === "off" || (el.matches("[data-push-topic]") && !picked.length);
+      if (el.matches("[data-push-topic]") && !on) return;           // just a choice until it is on
+      try {
+        if (turnOff) {
+          await pushOff(saved);
+          try { localStorage.removeItem(PUSH_KEY); } catch (e) {}
+          renderPushZone("Alerts are off on this phone.");
+        } else {
+          const got = await pushOn(picked.length ? picked : ["posted", "settled"]);
+          try { localStorage.setItem(PUSH_KEY, JSON.stringify(got)); } catch (e) {}
+          buzz("tap");
+          renderPushZone(on ? "Saved." : "Alerts are on. The next one comes when a board goes up.");
+        }
+      } catch (err) {
+        renderPushZone(err && err.message ? err.message : "That did not work — try again.");
+      }
+    }));
+}
+
 function renderAlerts() {
   const host = document.getElementById("alerts-body");
   if (!host) return;
@@ -25881,7 +25990,7 @@ function renderAlerts() {
         `${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
          <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>`)).join("")}</div>`);
   }
-  host.innerHTML = `<div id="watch-zone"></div>`
+  host.innerHTML = `<div id="push-zone"></div><div id="watch-zone"></div>`
     + friendInboxHTML()
     + `<div id="feed-zone"></div>`
     + (moved.length + inj.length + recs.length ? chips : "")
@@ -25891,6 +26000,7 @@ function renderAlerts() {
       <div class="es-sub">Alerts fill from four real feeds — the live board diff,
       line movement on tonight’s picks, the injury watch, and the prediction
       desk. A quiet page means a quiet slate, not a broken one.</div></div>`);
+  renderPushZone();
   renderWatchZone();
   renderFeedZone();
   renderRailDesk();

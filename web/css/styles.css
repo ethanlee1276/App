@@ -13290,3 +13290,15 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    holds the place its quiet state takes, so the bets under it stay put. */
 .lv-hold { height: 172px; margin-bottom: 14px; }
 @media (max-width: 760px) { main { min-height: calc(100svh - var(--topbar-h)); } }
+
+/* Alerts on this phone (app.js renderPushZone, 2026-10-24). */
+.push-card { padding: 14px 16px; margin-bottom: 14px; }
+.push-h { display: flex; align-items: center; gap: 8px; }
+.push-h .ic { color: var(--brand-2); }
+.push-state { margin-left: auto; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-mute); padding: 3px 8px; border-radius: 999px; border: var(--hairline) solid var(--border-soft); }
+.push-state.on { color: var(--good); border-color: color-mix(in oklab, var(--good) 50%, var(--border)); }
+.push-sub { color: var(--text-dim); font-size: var(--fs-sm); margin: 8px 0 10px; }
+.push-ts { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 12px; font-size: var(--fs-sm); }
+.push-t { display: inline-flex; align-items: center; gap: 6px; }
+.push-note { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }

@@ -1660,6 +1660,20 @@ def _run_bugscan(log) -> list[str]:
     return _spawn_module("engine.bugscan", log, args=("--mail",))
 
 
+def _run_push(log) -> None:
+    """Push alerts owed now (engine/pushalerts), in this cycle: a few
+    signed requests, only when a board or a night is new and someone has
+    subscribed. Never in the suite's sandbox, never fatal to the cycle."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        return
+    try:
+        from . import pushalerts
+        pushalerts.scan_and_send(log)
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  push alerts skipped: {exc}")
+
+
 def _run_nflrefs(log) -> list[str]:
     """The NFL referees' tendencies (engine/nflrefs --fit), out of process
     and detached; never inside the suite's sandbox, as the inventions'."""
@@ -1712,6 +1726,9 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 f"{pr['freed'] / 1e6:,.0f} MB freed")
     except Exception as exc:                                  # noqa: BLE001
         log(f"  ⚠️  cache prune skipped: {exc}")
+    # And the phones' alerts, every cycle (throttled inside to one look in
+    # five minutes): a board's picks going up, last night graded.
+    _run_push(log)
     state = _load_state(state_path)
     if not force and state.get("last_done") == today.isoformat():
         # The day's chores are done, and they read the charts' plays; a

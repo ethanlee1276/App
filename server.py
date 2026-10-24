@@ -217,6 +217,9 @@ RATE_ASK_PER_MIN = 8
 RATE_EVENT_PER_MIN = 60
 #: Crash reports a minute from one caller (app.js sends at most 5 a page).
 RATE_CLIENTERR_PER_MIN = 10
+#: Push alert calls a minute from one caller: a subscribe, a change, and
+#: each knocked phone's one look for its words (engine/pushalerts).
+RATE_PUSH_PER_MIN = 20
 #: A question, a pick id and a few trimmed turns; anything larger is junk.
 MAX_ASK_BYTES = 32_000
 #: A parlay screenshot for Ask to grade (engine/slipgrade): the picture,
@@ -1215,6 +1218,10 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/alerts/"):
             return self._alerts_get(
                 parsed.path[len("/api/alerts/"):].strip("/"))
+        if parsed.path in ("/api/push/key", "/api/push/key/"):
+            # The server's public VAPID key: what a browser subscribes with.
+            from engine import webpush
+            return self._send(200, json.dumps({"key": webpush.keys()["pub"]}).encode(), ".json")
         if parsed.path.startswith("/api/billing/"):
             return self._billing_get(
                 parsed.path[len("/api/billing/"):].strip("/"),
@@ -1437,6 +1444,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._event()
         if parsed.path in ("/api/clienterror", "/api/clienterror/"):
             return self._client_error()
+        if parsed.path.startswith("/api/push/"):
+            return self._push_post(parsed.path[len("/api/push/"):].strip("/"))
         if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
             return self._zeno_import()
         if parsed.path in ("/api/research", "/api/research/"):
@@ -2112,6 +2121,45 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                    # noqa: BLE001
             pass
         return self._send(204, b"", ".json")
+
+    def _push_post(self, path: str):
+        """Push alerts (engine/pushalerts): `subscribe` and `unsubscribe` a
+        phone, and `latest` — what a knocked phone's service worker shows.
+        Open to signed-out readers (an alert carries counts and the public
+        record, never a pick); a signed-in one is noted so the account page
+        can show it. Nothing else about the caller is kept."""
+        if path not in ("subscribe", "unsubscribe", "latest"):
+            return self._send(404, b'{"error":"unknown push endpoint"}', ".json")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        raw = self.rfile.read(length) if 0 < length <= 4000 else b""
+        if self._rate_limited(RATE_PUSH_PER_MIN, "push"):
+            return
+        try:
+            body = json.loads(raw or b"{}")
+            assert isinstance(body, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+        from engine import pushalerts as PA
+        A = _acct()
+        conn = A.connect()
+        try:
+            endpoint = str(body.get("endpoint") or "")
+            if path == "latest":
+                out = PA.latest_for(PA.subscription(conn, endpoint) if endpoint else None)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "unsubscribe":
+                code, out = PA.unsubscribe(conn, endpoint)
+            else:
+                who = self._account(conn)
+                code, out = PA.subscribe(conn, endpoint, kind=str(body.get("kind") or "web"),
+                                         user_id=(who or {}).get("id"),
+                                         topics=body.get("topics") or PA.KINDS, leagues=body.get("leagues") or ())
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
 
     def _event(self):
         """One count for the analytics (engine/analytics.py). 204 whatever

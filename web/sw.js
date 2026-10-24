@@ -102,3 +102,39 @@ self.addEventListener("fetch", (e) => {
       .catch(() => caches.match(req).then((hit) => hit || caches.match("/index.html")))
   );
 });
+
+/* ALERTS (engine/pushalerts, 2026-10-24): tonight's picks are up, last
+ * night is graded. The push itself is an empty, signed knock — no words
+ * travel through Google's, Apple's or Mozilla's push service — so the
+ * worker asks the site what to say. A push must always show something, so
+ * if the site cannot be reached it still says the board has moved. A tap
+ * opens the page the alert is about, on this site and nowhere else. */
+self.addEventListener("push", (e) => {
+  e.waitUntil((async () => {
+    let msg = { title: "Qellys Book", body: "The board has moved — open it for the latest.", url: "/", tag: "qb" };
+    try {
+      const sub = await self.registration.pushManager.getSubscription();
+      const r = await fetch("/api/push/latest", {
+        method: "POST", credentials: "omit", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub ? sub.endpoint : "" }) });
+      if (r.ok) msg = Object.assign(msg, await r.json());
+    } catch (err) { /* the plain line above */ }
+    return self.registration.showNotification(String(msg.title).slice(0, 80), {
+      body: String(msg.body || "").slice(0, 200), tag: String(msg.tag || "qb").slice(0, 64),
+      icon: "/icon-192.png", badge: "/icon-192.png", data: { url: msg.url || "/" } });
+  })());
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  let url = self.location.origin + "/";
+  try {
+    const u = new URL((e.notification.data || {}).url || "/", self.location.origin);
+    if (u.origin === self.location.origin) url = u.href;
+  } catch (err) { /* home */ }
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+    const mine = wins.find((w) => w.url.startsWith(self.location.origin));
+    if (mine) return mine.navigate(url).then((w) => (w || mine).focus()).catch(() => mine.focus());
+    return self.clients.openWindow(url);
+  }));
+});

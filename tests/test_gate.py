@@ -950,6 +950,8 @@ NOT_A_BOARD_WRITER = {
                          "is (os.path.getmtime); its only write is its own "
                          "crash log, data/logs/client_errors.jsonl, which "
                          "tests/test_the_bug_scan.py pins",
+    "engine/pushalerts.py": "reads the boards through gate.board_source only to count picks "
+                            "for an alert, and writes only its own data/push/ files",
     "engine/askbot.py": "names every league's board so Ask can READ them "
                         "(the server resolves each through "
                         "gate.full_board_file); its only writes are its "

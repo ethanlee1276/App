@@ -8,7 +8,7 @@
   "themeColor": "#090705",
   "navigationColor": "#090705",
   "backgroundColor": "#090705",
-  "enableNotifications": false,
+  "enableNotifications": true,
   "startUrl": "/?sport=mlb&app=play#recommended",
   "iconUrl": "https://qellysbook.com/icon-512.png",
   "maskableIconUrl": "https://qellysbook.com/icon-maskable-512.png",
