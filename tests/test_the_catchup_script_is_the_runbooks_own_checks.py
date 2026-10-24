@@ -85,8 +85,10 @@ def test_every_block_is_a_runbook_block_and_the_timed_ones_wait():
     assert set(labels) <= letters, set(labels) - letters
     # The ones that need a moment that is not "any day" are named and left out.
     head = SCRIPT.read_text().split("set -u")[0]
-    for later in ("BG", "BH", "BI", "BJ", "BK"):
+    for later in ("BG", "BH", "BI", "BJ"):
         assert later not in labels and later in head, later
+    # BK waited for week 6 to settle; it has (2026-10-24), so it runs.
+    assert "BK" in labels
     # Done already, or answered: not run again.
     for done in ("I", "L", "AG", "AI", "BB", "BC", "BD"):
         assert done not in labels, done
@@ -114,6 +116,25 @@ def test_a_block_cannot_swallow_the_next_or_stop_the_rest():
     assert "after-cat" in out and "third-ran" in out, out
     assert "never" not in out and "(stopped after 1s)" in out, out
     assert out.index("===== X1.") < out.index("===== X2.") < out.index("===== X3."), out
+
+
+def test_letters_run_those_blocks_only():
+    """The runbook's DH (2026-10-24): `catchup.sh CT CU ...` runs the checks
+    from CT on and nothing else; a letter also runs its numbered twin."""
+    src = SCRIPT.read_text()
+    fn = re.search(r"^run\(\) \{.*?^\}", src, re.S | re.M).group(0)
+    demo = 'ONLY=" X1 DB "\n' + fn + "\n".join([
+        "", "run X1 \"asked\" 5 <<'SH'", "echo one-ran", "SH",
+        "run X2 \"not asked\" 5 <<'SH'", "echo two-ran", "SH",
+        "run DB2 \"a twin\" 5 <<'SH'", "echo twin-ran", "SH", ""])
+    out = subprocess.run(["bash", "-c", demo], capture_output=True, text=True, timeout=30).stdout
+    assert "one-ran" in out and "twin-ran" in out and "two-ran" not in out, out
+    assert '[ "$#" -gt 0 ] && ONLY=" $* "' in src
+    labels = [lab for lab, _t, _s, _l in _sections()]
+    for letter in ("CT", "CU", "CV", "CW", "CX", "CY", "CZ", "DA", "DB", "DC", "DE", "DH", "BK", "DB2", "DD", "DG"):
+        assert letter in labels, letter
+    assert not any("catchup.sh" in ln for _l, _t, _s, lines in _sections() for ln in lines), "it never calls itself"
+    assert src.rstrip().endswith('echo "===== done in $((SECONDS / 60)) min"'), "the last line says it is done"
 
 
 def test_it_refuses_to_run_without_root():

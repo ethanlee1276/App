@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA). Why Luther Burden III isn't on our boards: our fitted curve rates him under the books, receiving yards is shut on Edge, and his likeliest lines sit just past the −250 cap; a check, a re-test and your call (step 159; DB, corrected in DC). Your call on the cap: Most Likely now lists the bets we rate 70% or better priced −251 to −350, labelled and never staked or journaled; and the Burden numbers I gave you were the plain curve, not the box's (step 160; DC). Is our receiving curve too cautious on receivers like Burden? No: on six held-out seasons it is within four points at his kind of bet, the plain curve behind my 72% was ten points high, and nothing changes (step 161; DD). Why Most Likely shows the low line, and the bigger lines now under every pick: each with its price, our chance and what it's worth, marked when the price beats our chance, never staked (step 162; DE). The iPhone Duo: the phone layout on the front screen, the desktop view open either way you hold it, your place kept through every fold, and the half-open cases covered (step 163; DF).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA). Why Luther Burden III isn't on our boards: our fitted curve rates him under the books, receiving yards is shut on Edge, and his likeliest lines sit just past the −250 cap; a check, a re-test and your call (step 159; DB, corrected in DC). Your call on the cap: Most Likely now lists the bets we rate 70% or better priced −251 to −350, labelled and never staked or journaled; and the Burden numbers I gave you were the plain curve, not the box's (step 160; DC). Is our receiving curve too cautious on receivers like Burden? No: on six held-out seasons it is within four points at his kind of bet, the plain curve behind my 72% was ten points high, and nothing changes (step 161; DD). Why Most Likely shows the low line, and the bigger lines now under every pick: each with its price, our chance and what it's worth, marked when the price beats our chance, never staked (step 162; DE). The iPhone Duo: the phone layout on the front screen, the desktop view open either way you hold it, your place kept through every fold, and the half-open cases covered (step 163; DF). Our carry projections: no bias, they beat a plain three-game average, and the misses are game flow (step 164; DG). Tonight, home: confirm every change is on the box, then one command for every check from CT on (step 165; DH).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -3319,6 +3319,83 @@ at the bottom), scroll to a pick, unfold (sidebar on the left, the same
 pick at the top), turn it upright (still the sidebar), fold again (phone
 layout, same spot). If any step shows the wrong layout, send a screenshot
 of it and say how you were holding it.
+
+**DG. Are our carry projections right?** (step 164). Your "yes do the
+carry projection check", after Swift carried 22 times on our 15. I replayed
+every running back's game in 2025 and 2026 from week 3 (1,625 games), each
+projected only from the weeks before it, the way the board builds it:
+
+- No bias to fix. Lead backs land 0.4 carries under projection on average,
+  inside the noise, and the projection beats a plain average of a back's
+  last three games (3.3 carries off a game against 3.4).
+- Nothing left in the spread: lead backs on favourites and underdogs land
+  where we put them, so the game-script step is the right size.
+- The misses are game flow. A lead back whose team loses by a score or
+  more gets 3.4 fewer carries; one whose team wins big, 1.2 more. Swift's
+  22 (Bears won by 6) is that, and no number made before kickoff can know.
+- The biggest misses are backups starting for a hurt lead back. The live
+  board's injury step sees those; the replay can't.
+
+Nothing changes. To see it on the box (this season, a few minutes; add
+`--seasons 2025-2026` for both, about a quarter of an hour):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 carrycheck.py
+```
+
+**DH. Tonight, home: confirm everything took place, then one command**
+(step 165). Your "after that confirm all changes took place and also im
+home so i can run code". Five steps, all read-only; paste back anything
+that looks off.
+
+1. The box has every change. The top line should be the newest commit (the
+   one I named in chat), and `running:` the same short code. If `running:`
+   is older, the box restarts itself once it's idle (within 45 minutes):
+
+```
+cd /srv/qellys && git log --oneline -8 && sudo -u qellys python3 -c "import json; print('running:', json.load(open('web/data/heartbeat.json')).get('commit'))"
+```
+
+2. The page the box serves has the new pieces: four names (the past-cap
+   list, the bigger lines, the Duo's open screen, its fold keeper), then
+   three lines each counted 1 or more (the Duo's upright screen, the short
+   front screen, the header's date):
+
+```
+curl -s http://127.0.0.1:8000/js/app.js | grep -o -E "function likelyPastCapHTML|function likelyBiggerHTML|UNFOLDED_MQ =|function initFoldSeams" | sort -u
+curl -s http://127.0.0.1:8000/css/styles.css | grep -o -E "max-width: 720px\) and \(min-height: 700px\)|max-width: 760px\) and \(max-height: 700px\)|max-width: 999px" | sort | uniq -c
+```
+
+3. The engine on disk: `past cap to -350 · bigger lines 3 · replay rows True
+   · Thursday inventions True`:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import inspect; from engine import likely, backtest, maintenance; print('past cap to', likely.PAST_CAP_HEAVIEST, '· bigger lines', likely.BIGGER_SHOWN, '· replay rows', 'rows_out' in inspect.signature(backtest.backtest_from_stats).parameters, '· Thursday inventions', hasattr(maintenance, '_run_inventions'))"
+```
+
+4. After the next NFL build (they run through the day), the board carries
+   the new fields. "missing (an older build)" means it hasn't rebuilt yet:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/recommendations.json')); ml=d.get('most_likely') or []; pc=d.get('likely_past_cap'); print(len(ml), 'Most Likely picks,', sum(1 for r in ml if r.get('bigger_lines')), 'with bigger lines; past-cap list:', 'missing (an older build)' if pc is None else len(pc))"
+```
+
+5. Then every read-only check from CT on, in one go, and BK: its third
+   held-out week (week 6) has settled, so it can give its verdict on
+   trusting the price more where our chance runs far above it. About 40
+   minutes; the slow measurements run last, so stopping part-way keeps the
+   quick ones:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh CT CU CV CW CX CY CZ DA DB DC DD DE DG DH BK 2>&1 | tee /tmp/tonight.txt
+```
+
+Paste /tmp/tonight.txt back, or the parts that look wrong. Left out of the
+script because they write or need your hands: DA's inventions run (its
+first command, half an hour; it saves their verdicts, and runs itself
+every Thursday from the 29th anyway), the fantasy week's fit in CW (it
+saves), CV's reset-day setting (only if you want it), CT's NBA rebuilds,
+and the Duo checks in DF on your phone.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

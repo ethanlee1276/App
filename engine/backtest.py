@@ -695,7 +695,8 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                         team_context_mode: str = "level",
                         real_lines: dict | None = None,
                         usage_conn=None,
-                        log=None, carry: bool = False) -> BacktestReport:
+                        log=None, carry: bool = False,
+                        rows_out: list | None = None) -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
     For each week, projections are built from prior weeks only, then settled
@@ -719,6 +720,11 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     .SEASON_PRIOR_GAMES, 2026-10-12). Opt-in like ``usage_conn``, so a
     caller that does not ask keeps exactly the replay it had; propcal,
     which fits the corrections the live board applies, asks.
+
+    ``rows_out``, when given, is filled with one dict per settled prop —
+    week, player, team, position, market, projection, line, actual — for a
+    caller that grades the projection by role or game (carrycheck.py). The
+    report itself keeps only the totals.
     """
     from .models import ANYTIME_TD
     from .sources.nflverse import (
@@ -814,6 +820,14 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                  + _f(row, "receiving_tds", default=0.0)) > 0)
 
         all_settled.extend(settle_recommendations(result["recommendations"], actuals))
+        if rows_out is not None:
+            for rec in result["recommendations"]:
+                key = (_norm(rec["player"]), rec["market"])
+                if key in actuals:
+                    rows_out.append({"week": w, "player": rec["player"], "team": rec.get("team", ""),
+                                     "position": rec.get("position", ""), "market": rec["market"],
+                                     "projection": rec["projection"], "line": rec.get("line"),
+                                     "actual": actuals[key]})
         td_settled.extend(settle_recommendations(
             longshot_recs(result.get("long_shots")), actuals))
 

@@ -9,6 +9,11 @@
 #
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh 2>&1 | tee /tmp/catchup.txt
 #
+# Letters after it run those blocks only, in this file's order (2026-10-24,
+# the runbook's DH: every check from CT on, the night Ethan got home):
+#
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CT CU CV CW CX CY CZ DA DB DC DD DE DG DH BK 2>&1 | tee /tmp/tonight.txt
+#
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
 # ones on screen. Each block has its own time limit; one that stops or fails
@@ -28,13 +33,21 @@
 # NOT HERE, because they need a moment that is not now:
 #   BH, BI, BJ   during games (NBA, NHL, football and baseball live pages)
 #   BG           Friday and Monday, after Thursday night's game settles
-#   BK           Tuesday, once week 6 has settled
 #   N, S (second lines)  from the NBA's opening night, the 20th
 #   AX's second, AY      the morning after / the day of a UFC card
 #   C, D's Stripe settings, F, AE, AJ and the phone halves of the rest:
 #                your hands, not the box
+#   DF           the iPhone Duo, on the phone
+# BK waited for week 6 to settle (the third held-out week its bar needs); it
+# has, and it runs with the quick ones now.
+# AND NOT HERE BECAUSE THEY WRITE: CT's NBA rebuilds (one buys odds), CV's
+# reset-day setting, CW's fantasy fit (--save), DA's inventions run (it saves
+# their verdicts, and runs itself every Thursday), CZ's linemen study (it
+# fetches any old season's files it lacks; already run, nothing applied).
 set -u
 
+ONLY=""
+[ "$#" -gt 0 ] && ONLY=" $* "
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 1
 if [ "$(id -u)" != 0 ]; then
@@ -47,6 +60,10 @@ fi
 run() {
   local letter="$1" title="$2" limit="$3" cmds start rc
   cmds="$(cat)"
+  # Letters on the command line run those blocks only (DB also runs DB2).
+  if [ -n "${ONLY:-}" ] && [[ "$ONLY" != *" $letter "* && "$ONLY" != *" ${letter%%[0-9]*} "* ]]; then
+    return
+  fi
   start=$SECONDS
   echo
   echo "===== $letter. $title"
@@ -246,6 +263,87 @@ SH
 run BF "Every league's card gets its photo" 300 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 photocheck.py
 SH
+run CT "NBA opening night: the build, its odds calls, the board and live" 120 <<'SH'
+cd /srv/qellys && git log -1 --format='%h %ci %s' && journalctl -u qellys --since "2026-10-20 12:00" --no-pager | grep -E "nba_build|NBA " | tail -20
+cd /srv/qellys && sudo -u qellys python3 -c "import time; from engine.oddsbudget import decisions; [print(r['iso'][11:16], r['lane'], 'BUY' if r['ok'] else 'no ', r['reason'][:120]) for r in decisions(since=time.time()-16*3600) if r['lane'].startswith('nba')][-12:]"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine.gate import board_source; b=json.load(open(board_source('web/data/nba.json'))); print(b.get('generated_at'), b.get('status'), len(b.get('recommendations') or []), 'props'); [print(g['away'],'@',g['home'], g.get('spread'), g.get('total'), g.get('away_ml'), g.get('home_ml'), (g.get('live') or {}).get('state')) for g in b.get('games') or []]"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/data/live_nba.json')); print(d.get('generated_at'), d.get('note') or ''); [print(g.get('away'),'@',g.get('home'),(g.get('live') or {}).get('state'),(g.get('live') or {}).get('detail')) for g in d.get('games') or []]"
+SH
+run CU "The live scoreboard on a phone" 30 <<'SH'
+cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "hc-watch { grid-column: 1 / -1" web/css/hoopscast.css
+SH
+run CV "The month's odds plan" 60 <<'SH'
+cd /srv/qellys && git log -1 --format='%h %ci %s' && sudo -u qellys python3 -m engine.oddsplan
+SH
+run CW "Fantasy reads the NFL board: the saved week" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import fantasyweek as F; d=F.load(); print(F.summary_line(d)); print('week', d.get('week'), '· this week:', F.current(d), '· byes:', d.get('byes'))"
+SH
+run CX "The short version reads in sentences" 30 <<'SH'
+cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "Where the matchup tilts" engine/gamereport.py
+SH
+run CY "The box updates itself" 30 <<'SH'
+journalctl -u qellys --since "2 days ago" --no-pager | grep -i auto-update | tail -5
+SH
+run CZ "The Patriots-Bears fixes are in" 30 <<'SH'
+cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "def line_sentence" engine/gamereport.py
+SH
+run DA "The inventions in the picks" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.ideagate --sport nfl
+SH
+run DB "Burden on the board and his season" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json, sqlite3
+from engine.calibrate import shut_reason
+d = json.load(open('data/built/recommendations.json'))
+for r in d.get('recommendations') or []:
+    if 'Burden' in (r.get('player') or ''):
+        bad = [c.get('key') for c in r.get('checks') or [] if not c.get('passed')]
+        why = 'market shut' if shut_reason('nfl', r.get('market')) else ', '.join(bad or ['-'])
+        print('edge:', r.get('market'), r.get('side'), r.get('line'), r.get('odds'), 'ours', round(100 * (r.get('hit_prob') or 0)), 'pick' if r.get('recommended') else 'no pick: ' + why)
+print('most likely:', [(r.get('market'), r.get('side'), r.get('line'), r.get('odds')) for r in d.get('most_likely') or [] if 'Burden' in (r.get('player') or '')] or 'not on it')
+c = sqlite3.connect('data/ledger.db')
+print('season picks:', c.execute(\"SELECT category, COUNT(*) FROM bets WHERE sport='nfl' AND player LIKE '%Burden%' GROUP BY category\").fetchall())
+"
+SH
+run DC "The past-the-cap list and the box's curve on Burden" 60 <<'SH'
+cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "def past_cap_rows" engine/likely.py
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/recommendations.json'))
+rows = d.get('likely_past_cap')
+print('built by older code' if rows is None else f'{len(rows)} past the cap')
+for r in rows or []:
+    print(' ', r.get('player'), r.get('market'), r.get('side'), r.get('line'), r.get('odds'), r.get('book'), str(round(100 * r.get('model_prob', 0))) + '%')
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine.yardagefit import load_fits, display_prob
+f = load_fits()
+for m in ('rec_yds', 'receptions'):
+    print(m, {k: f.get(m, {}).get(k) for k in ('sigma', 'width_weight', 'typical_cv', 'rows')})
+print('40+ yards', round(100 * display_prob('rec_yds', 54.4, 39.5, [95, 47, 63, 61, 32, 63], fits=f)))
+print('4+ catches', round(100 * display_prob('receptions', 4.7, 3.5, [8, 4, 4, 7, 3, 5], fits=f)))
+"
+SH
+run DE "The bigger lines on the board" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/recommendations.json'))
+rows = [r for r in d.get('most_likely') or [] if r.get('bigger_lines')]
+print(len(rows), 'picks with bigger lines,', sum(1 for r in rows for c in r['bigger_lines'] if c.get('better')), 'marked')
+for r in rows[:5]:
+    print(' ', r.get('player'), r.get('side'), r.get('line'), r.get('odds'), '->', ', '.join(f\"{c['line']} {c['odds']} {round(100 * c['prob'])}%{' *' if c.get('better') else ''}\" for c in r['bigger_lines']))
+"
+SH
+run DH "Every change is on the box" 60 <<'SH'
+cd /srv/qellys && git log --oneline -8 && sudo -u qellys python3 -c "import json; print('running:', json.load(open('web/data/heartbeat.json')).get('commit'))"
+curl -s http://127.0.0.1:8000/js/app.js | grep -o -E "function likelyPastCapHTML|function likelyBiggerHTML|UNFOLDED_MQ =|function initFoldSeams" | sort -u
+curl -s http://127.0.0.1:8000/css/styles.css | grep -o -E "max-width: 720px\) and \(min-height: 700px\)|max-width: 760px\) and \(max-height: 700px\)|max-width: 999px" | sort | uniq -c
+cd /srv/qellys && sudo -u qellys python3 -c "import inspect; from engine import likely, backtest, maintenance; print('past cap to', likely.PAST_CAP_HEAVIEST, '· bigger lines', likely.BIGGER_SHOWN, '· replay rows', 'rows_out' in inspect.signature(backtest.backtest_from_stats).parameters, '· Thursday inventions', hasattr(maintenance, '_run_inventions'))"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/recommendations.json')); ml=d.get('most_likely') or []; pc=d.get('likely_past_cap'); print(len(ml), 'Most Likely picks,', sum(1 for r in ml if r.get('bigger_lines')), 'with bigger lines; past-cap list:', 'missing (an older build)' if pc is None else len(pc))"
+SH
+run BK "Trust the price more where our chance runs far above it?" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py 2>&1 | tail -150
+SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py
 SH
@@ -276,4 +374,14 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.slipreadfit --sport cfb --sea
 SH
 
 echo
+run DB2 "Receiving and rushing yards against this season's closes" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.yardagefit --real rec_yds rush_yds receptions
+SH
+run DD "The receiving curve by receiver volume" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 curvecheck.py
+SH
+run DG "The carry projections, every running back's game" 1500 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 carrycheck.py
+SH
+
 echo "===== done in $((SECONDS / 60)) min"
