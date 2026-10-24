@@ -3881,6 +3881,13 @@ The checks in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh DN 2>&1 | tee /tmp/dn.txt
 ```
 
+Or, if DK, DL and DM have not been pasted back yet, all four together (a
+minute or two, read-only):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN 2>&1 | tee /tmp/dn.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

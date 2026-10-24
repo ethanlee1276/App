@@ -19,6 +19,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DL 2>&1 | tee /tmp/dl.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DM 2>&1 | tee /tmp/dm.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DN 2>&1 | tee /tmp/dn.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN 2>&1 | tee /tmp/dn.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
