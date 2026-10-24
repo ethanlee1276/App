@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA). Why Luther Burden III isn't on our boards: our fitted curve rates him under the books, receiving yards is shut on Edge, and his likeliest lines sit just past the −250 cap; a check, a re-test and your call (step 159; DB, corrected in DC). Your call on the cap: Most Likely now lists the bets we rate 70% or better priced −251 to −350, labelled and never staked or journaled; and the Burden numbers I gave you were the plain curve, not the box's (step 160; DC). Is our receiving curve too cautious on receivers like Burden? No: on six held-out seasons it is within four points at his kind of bet, the plain curve behind my 72% was ten points high, and nothing changes (step 161; DD). Why Most Likely shows the low line, and the bigger lines now under every pick: each with its price, our chance and what it's worth, marked when the price beats our chance, never staked (step 162; DE). The iPhone Duo: the phone layout on the front screen, the desktop view open either way you hold it, your place kept through every fold, and the half-open cases covered (step 163; DF). Our carry projections: no bias, they beat a plain three-game average, and the misses are game flow (step 164; DG). Tonight, home: confirm every change is on the box, then one command for every check from CT on (step 165; DH). Your box run read: the yards re-test, a −9900 bigger line, the inventions' status and the update check fixed; Most Likely's past-cap list on every sport; and D: the referee before kickoff, our own grades (PFF's can't be shown on a paid site), and the public betting percentages, built and waiting on a key (step 166; DI). Your DI paste: a posted pick's stale bigger lines cleared, over-only rungs held to their own book's price, a `--why` for the referees, and SharpAPI's refusal said in its own words (step 167; DJ). Your DJ paste: splits need SharpAPI's Pro plan (your call), Football Zebras' prose post read sentence by sentence, the board's build stamp beside the marks, and the NBA and NHL boards waiting on the odds plan (step 168; DK). Every fold and flip built for, the way each phone's own apps lay out (the open Fold's desktop view, list beside detail, the hinge-split panes, Flex Mode, the cover glance); the bug scan, mailing you only when something breaks; and the app stores (no portrait lock, deletion page, screenshot sizes, two decisions for you) (step 169; DL).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA). Why Luther Burden III isn't on our boards: our fitted curve rates him under the books, receiving yards is shut on Edge, and his likeliest lines sit just past the −250 cap; a check, a re-test and your call (step 159; DB, corrected in DC). Your call on the cap: Most Likely now lists the bets we rate 70% or better priced −251 to −350, labelled and never staked or journaled; and the Burden numbers I gave you were the plain curve, not the box's (step 160; DC). Is our receiving curve too cautious on receivers like Burden? No: on six held-out seasons it is within four points at his kind of bet, the plain curve behind my 72% was ten points high, and nothing changes (step 161; DD). Why Most Likely shows the low line, and the bigger lines now under every pick: each with its price, our chance and what it's worth, marked when the price beats our chance, never staked (step 162; DE). The iPhone Duo: the phone layout on the front screen, the desktop view open either way you hold it, your place kept through every fold, and the half-open cases covered (step 163; DF). Our carry projections: no bias, they beat a plain three-game average, and the misses are game flow (step 164; DG). Tonight, home: confirm every change is on the box, then one command for every check from CT on (step 165; DH). Your box run read: the yards re-test, a −9900 bigger line, the inventions' status and the update check fixed; Most Likely's past-cap list on every sport; and D: the referee before kickoff, our own grades (PFF's can't be shown on a paid site), and the public betting percentages, built and waiting on a key (step 166; DI). Your DI paste: a posted pick's stale bigger lines cleared, over-only rungs held to their own book's price, a `--why` for the referees, and SharpAPI's refusal said in its own words (step 167; DJ). Your DJ paste: splits need SharpAPI's Pro plan (your call), Football Zebras' prose post read sentence by sentence, the board's build stamp beside the marks, and the NBA and NHL boards waiting on the odds plan (step 168; DK). Every fold and flip built for, the way each phone's own apps lay out (the open Fold's desktop view, list beside detail, the hinge-split panes, Flex Mode, the cover glance); the bug scan, mailing you only when something breaks; and the app stores (no portrait lock, deletion page, screenshot sizes, two decisions for you) (step 169; DL). Both your store calls, built: the store app (no sportsbook links, no league logos or photos, no meme or prediction pages, Play sells nothing yet), push alerts when picks post and nights settle, the first screen that no longer jumps on a phone, Liquid Glass on the Duo, the app opening in season, a slip shared from Photos to the grader, and the store checklist (step 170; DM).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -3736,6 +3736,71 @@ The checks in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh DL 2>&1 | tee /tmp/dl.txt
+```
+
+**DM. Both store calls built; push alerts; a first screen that holds still;
+Liquid Glass on the Duo** (step 170). Your "do both from my call ... we
+just need it to work with the app store", "make sure we can use logos and
+headshots", "more professional and more bug checks", the Duo's "liquid
+glass", and "make sure it's going to be sharp and running quickly".
+Everything is in docs/APP_STORES.md (top section and the checklist table)
+and docs/IDEAS.md (the ranked list at the top).
+
+- **The store app.** In the Play build (and the iOS one, when there is one)
+  the site leaves out the Bet it and Tail it sportsbook sheets, every league
+  logo and player photo (our drawn helmets, caps and initials instead), the
+  meme-coin radar and the prediction markets; the Play build sells nothing
+  until you enrol in Play's US external-links programme. The website keeps
+  everything. Logos and photos in an app need a licence; the website still
+  hotlinks ESPN's, which is your call.
+- **Push alerts:** "This week's NFL picks are up — 6 picks on the board",
+  "Last night: 8–3–1, +3.6u". Counts and the record, never a pick, nothing
+  overnight. Works in browsers and the Play app as soon as this deploys; the
+  box makes its own key. The iPhone app needs Apple's key
+  (deploy/ios/README.md).
+- **Speed:** on a slowed-down phone the page used to jump 0.78 of a screen
+  while loading and freeze for 765 ms; now 0.02 and about 370 ms. The logo
+  swelled to four times its width on every refresh (fixed), and the
+  Toolbox ran a 2,000-run simulation in the background on every load
+  (now only when you open it).
+- **The Duo:** a floating glass sidebar, a glass bar, glass cards and
+  capsule buttons when it's open; a glass tab bar on every phone. No blur
+  (the thing that crashed your iPhone).
+- The app opens on the league you were last on, or the one in season, not
+  on baseball all winter. A screenshot of a slip shared from Photos opens
+  Ask and grades it (Android). The installed app's icon shows your open bets.
+  Crash reports now name the right line of code.
+
+Read-only, any time:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.pushalerts
+curl -s https://qellysbook.com/js/app.js | wc -l; wc -l < /srv/qellys/web/js/app.js
+curl -s https://qellysbook.com/manifest.webmanifest | python3 -c "import json,sys; m=json.load(sys.stdin); print(m['start_url'], 'share_target' in m)"
+```
+
+The first says what alerts are owed now and how many phones have
+subscribed. The two line counts should match (the crash-line fix); the last
+should print `/#recommended True`.
+
+Then on your phone:
+
+1. **Turn alerts on:** the site → Alerts → *Alerts on this phone* → Turn
+   alerts on (on your iPhone, Add to Home Screen first and open it from
+   there; Apple's rule). To get one at once instead of at the next board
+   (this one writes: it records and sends what is owed, quiet hours or not):
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -m engine.pushalerts --send
+   ```
+2. **See the store app:** open `https://qellysbook.com/?app=play` in Chrome
+   on any phone: no Bet it buttons, drawn marks instead of logos, no Radar
+   or Predict. `https://qellysbook.com/?app=web` puts the website back.
+3. **The Duo:** open it on its side; the sidebar floats as glass.
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh DM 2>&1 | tee /tmp/dm.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

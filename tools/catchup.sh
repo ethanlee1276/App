@@ -17,6 +17,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DE DJ 2>&1 | tee /tmp/dj.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK 2>&1 | tee /tmp/dk.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DL 2>&1 | tee /tmp/dl.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DM 2>&1 | tee /tmp/dm.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -47,7 +48,8 @@
 # AND NOT HERE BECAUSE THEY WRITE: CT's NBA rebuilds (one buys odds), CV's
 # reset-day setting, CW's fantasy fit (--save), DA's inventions run (it saves
 # their verdicts, and runs itself every Thursday), CZ's linemen study (it
-# fetches any old season's files it lacks; already run, nothing applied).
+# fetches any old season's files it lacks; already run, nothing applied),
+# DM's pushalerts --send (it records and sends what is owed).
 set -u
 
 ONLY=""
@@ -389,6 +391,11 @@ print('built', d.get('built_at'), '·', len(rows), 'picks with bigger lines,', s
 SH
 run DL "The bug scan" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.bugscan
+SH
+run DM "Push alerts owed, the served lines, the manifest" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.pushalerts
+curl -s https://qellysbook.com/js/app.js | wc -l; wc -l < /srv/qellys/web/js/app.js
+curl -s https://qellysbook.com/manifest.webmanifest | python3 -c "import json,sys; m=json.load(sys.stdin); print(m['start_url'], 'share_target' in m)"
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py
