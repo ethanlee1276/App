@@ -4,7 +4,7 @@
   "name": "Qellys Book",
   "launcherName": "Qellys",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "themeColor": "#090705",
   "navigationColor": "#090705",
   "backgroundColor": "#090705",

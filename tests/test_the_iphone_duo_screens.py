@@ -38,6 +38,8 @@ APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 SIDE = "(min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4)"
 UPRIGHT = "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px)"
+#: The third open shape (tests/test_every_fold_and_flip.py): a Fold's inner screen.
+FOLD_INNER = "(pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5)"
 
 
 def _blocks(query_start):
@@ -61,15 +63,16 @@ def _duo_blocks():
 
 
 def test_the_open_shapes_are_the_same_in_the_stylesheet_and_the_script():
-    m = re.search(r'const UNFOLDED_MQ = "([^"]+)"\s*\+\s*"([^"]+)";', APP)
+    m = re.search(r'const UNFOLDED_MQ = ((?:"[^"]+"\s*\+?\s*)+);', APP)
     assert m, "UNFOLDED_MQ is defined in app.js"
-    js = (m.group(1) + m.group(2)).split(", ")
-    assert js == [SIDE, UPRIGHT], js
+    js = "".join(re.findall(r'"([^"]+)"', m.group(1))).split(", ")
+    assert js == [SIDE, UPRIGHT, FOLD_INNER], js
     for _i, block in _duo_blocks():
         query = block[:block.index("{")]
-        side, upright = [q.strip() for q in query[len("@media "):].split(",\n")]
+        side, upright, inner = [q.strip() for q in query[len("@media "):].split(",\n")]
         assert side.replace(" and (max-width: 900px)", "").replace(" and (max-width: 760px)", "") == SIDE, side
         assert upright == UPRIGHT, upright
+        assert inner.replace("(max-width: 760px)", "(max-width: 900px)") == FOLD_INNER, inner
 
 
 def test_the_overrides_are_plain_ands_an_old_safari_can_read():

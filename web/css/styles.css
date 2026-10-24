@@ -7675,7 +7675,9 @@ body.has-deck #rail-live { display: none; }
    Every pose reports a finger.
 
    Two shapes get the desktop shell where a phone or tablet would get
-   the drawer: the sidebar beside the page, no hamburger, no tab bar.
+   the drawer: the sidebar beside the page, no hamburger, no tab bar (a
+   third, the near-square inner screen of a Fold, is under "EVERY FOLD
+   AND FLIP" below).
      on its side  (min-width: 700px) and (min-height: 480px) and
                   (min-aspect-ratio: 5/4). Any pointer, so a small
                   laptop window gets the same; a phone on its side is
@@ -7692,7 +7694,8 @@ body.has-deck #rail-live { display: none; }
    would vanish on exactly the oldest phones. These are plain `and`s.
    ============================================================ */
 @media (min-width: 700px) and (max-width: 900px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
-       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px) {
+       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px),
+       (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
   .shell, body.has-rail .shell { display: grid; }
   .rail { padding: 0 26px 26px; }
   .menu-toggle { display: none; }
@@ -7707,7 +7710,8 @@ body.has-deck #rail-live { display: none; }
    bar and the riding tray that floats on it, the room kept for them, and
    the search, bell and theme buttons the tab bar's More sheet took over. */
 @media (min-width: 700px) and (max-width: 760px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
-       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px) {
+       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px),
+       (pointer: coarse) and (min-width: 721px) and (max-width: 760px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
   .tabbar, .riding-tray { display: none; }
   body, body.has-tray { padding-bottom: 0; }
   .sidebar { padding-bottom: 20px; }
@@ -13133,3 +13137,113 @@ body.betit-open { overflow: hidden; }
 .dc-live .dc-off { color: var(--text-mute); }
 /* A pick our own read argues against: kept, and the card says so. */
 .ob-warn { display: block; margin-top: 4px; color: var(--warn); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+
+/* ============================================================
+   EVERY FOLD AND FLIP (Ethan, 2026-10-24: "make it for, like, any Galaxy
+   Flip or Fold ... every single form factor", and "make it unique for
+   that phone").
+
+   What the apps built for these phones do, and so what this does — one
+   page that takes each shape the way the phone's own apps do, rather
+   than a page per phone:
+
+     the inner screen of a Fold,        the open Duo's desktop shell: the
+     a Pixel Fold, an OnePlus Open      sidebar beside the page. Near square,
+     (721-900 wide, 4:5 or wider)       so the third line of the shells above.
+     a wide open screen held by a       LIST BESIDE DETAIL: the board on the
+     finger (900+: the Duo on its       left, the pick or the game on the
+     side, a Surface Duo spanned, a     right — the Duo's Notes and Messages,
+     TriFold, a tablet on its side)     and every Fold mail and feed app.
+     a hinge folded like a book         the same two panes, split exactly at
+     (two segments side by side)        the hinge.
+     a hinge folded like a laptop       FLEX MODE: the page in the top half,
+     (two segments, one above the       the controls in the bottom half — the
+     other: a Flip on the table)        Duo's MLB app puts the game above the
+                                        stats, the camera rises to the top.
+     a Flip's or a Razr's cover         the glance: the slim chrome, icons
+     (under 480 square)                 only, the picks on arrival.
+     the narrowest covers (the first    each pick in two rows, so the name
+     Fold's 280, a Fold5's 344)         is never squeezed to a word a line.
+
+   The hinge is read from the standard Viewport Segments media features
+   and env() values: Chrome and Edge ship them on Galaxy and Pixel
+   foldables (138+), and Safari 27.1 on the Duo carries them behind a
+   feature flag. A browser without them reads each block as false and
+   keeps the shape-based layout.
+
+   LAST IN THE FILE ON PURPOSE: the phone's card and tab-bar rules above
+   carry the same weight, and the later rule wins.
+   ============================================================ */
+@media (max-width: 359px) {
+  .view { padding-left: 10px; padding-right: 10px; }
+  .ob-card { grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "who who" "odds ring" "checks checks"; }
+  .ob-odds { justify-self: start; }
+}
+@media (max-width: 480px) and (max-height: 480px) {
+  :root { --topbar-h: calc(50px + env(safe-area-inset-top)); }
+  .topbar { gap: 10px; padding-left: 10px; padding-right: 10px; }
+  .tabbar { padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
+  .tb-item { font-size: 0; gap: 0; padding: 6px 2px; }
+  .tb-item svg { width: 22px; height: 22px; }
+  .tb-badge { font-size: var(--fs-2xs); }
+  .tb-center-disc { width: 40px; height: 40px; margin-top: -12px; }
+  body { padding-bottom: 56px; }
+  .crash-note { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  .ob-hero, .venue-band { display: none; }
+  .sportbar-in .sport-btn .crest { width: 30px; height: 30px; }
+}
+/* LIST BESIDE DETAIL — body.two-pane and .pane-list are set by app.js
+   paneSplit, on TWO_PANE_MQ. The sidebar and the rail step aside while a
+   pick is open beside its board (the pick's own back link brings them
+   back); each pane scrolls on its own. */
+body.two-pane .sidebar, body.two-pane .rail { display: none; }
+body.two-pane .shell, body.two-pane.has-rail .shell { display: block; }
+body.two-pane main { display: grid; grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr);
+  align-items: start; max-width: none; }
+body.two-pane main > .sportbar { grid-column: 1 / -1; }
+body.two-pane .view.pane-list { display: block; grid-column: 1; grid-row: 2;
+  border-right: var(--hairline) solid var(--border-soft); }
+body.two-pane .view.active { grid-column: 2; grid-row: 2; }
+body.two-pane .view.pane-list, body.two-pane .view.active { position: sticky; top: var(--topbar-h);
+  max-height: calc(100vh - var(--topbar-h)); max-height: calc(100dvh - var(--topbar-h));
+  overflow-y: auto; overscroll-behavior: contain; padding-left: 18px; padding-right: 18px; }
+/* The list pane is a phone's width, so its picks wear the phone's card. */
+body.two-pane .pane-list .ob-card { position: relative; padding: 10px 10px 8px 12px; gap: 6px 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "who odds ring" "checks checks checks"; }
+body.two-pane .pane-list .ob-rank { position: absolute; top: 0; left: 0; padding: 1px 5px;
+  font-size: var(--fs-2xs); border-radius: var(--radius-lg) 0 var(--radius-sm) 0; z-index: 1; }
+body.two-pane .pane-list .ob-checkcol { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
+body.two-pane .pane-list .ob-door, body.two-pane .pane-list .ob-view { display: none; }
+body.two-pane .pane-list .ob-ring { width: 44px; height: 44px; }
+body.two-pane .pane-list .ob-ring small { display: none; }
+/* …and folded like a book, the two panes meet at the hinge. */
+@media (horizontal-viewport-segments: 2) {
+  body.two-pane main {
+    grid-template-columns: env(viewport-segment-width 0 0, 1fr) env(viewport-segment-width 1 0, 1fr);
+    column-gap: calc(env(viewport-segment-left 1 0, 0px) - env(viewport-segment-right 0 0, 0px)); }
+}
+/* FLEX MODE: folded like a laptop, the page keeps to the top half and the
+   bottom half is the controls — the tab bar, large, with the bets riding
+   above it, on any width (the open shells hide it otherwise). */
+@media (vertical-viewport-segments: 2) {
+  .tabbar { display: grid; position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
+    top: env(viewport-segment-bottom 0 0); grid-template-columns: repeat(5, 1fr);
+    align-content: center; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--panel); border-top: var(--hairline) solid var(--border-soft); }
+  /* The tab bar's own look lives in the phone block (under 761); a Fold
+     on the table is wider, so the deck carries it whole. */
+  .tb-item { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative;
+    border: 0; background: transparent; color: var(--text-mute); cursor: pointer; font: inherit;
+    font-size: var(--fs-sm); font-weight: 700; letter-spacing: .02em; text-transform: none; padding: 6px 2px; }
+  .tb-item.active { color: var(--brand-2); }
+  .tb-item svg { width: 28px; height: 28px; }
+  .tb-center { color: var(--text-dim); }
+  .tb-center-disc { display: grid; place-items: center; position: relative; width: 60px; height: 60px;
+    margin-top: 0; border-radius: 50%; background: var(--grad-brand); color: var(--brand-ink); box-shadow: var(--glow); }
+  .tb-center-disc svg { width: 26px; height: 26px; }
+  body, body.has-tray { padding-bottom: calc(100vh - env(viewport-segment-bottom 0 0, 100vh)); }
+  .riding-tray { bottom: auto; top: calc(env(viewport-segment-top 0 1, 50vh) + 8px); }
+  .sidebar { height: calc(env(viewport-segment-bottom 0 0, 100vh) - var(--topbar-h)); }
+  .crash-note { bottom: auto; top: calc(env(viewport-segment-bottom 0 0, 50vh) - 64px); }
+}

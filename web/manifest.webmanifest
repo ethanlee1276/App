@@ -8,7 +8,7 @@
   "start_url": "/?sport=mlb#recommended",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "background_color": "#090705",
   "theme_color": "#090705",
   "categories": [

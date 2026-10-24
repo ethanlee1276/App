@@ -4230,7 +4230,9 @@ function pageOfHost(id) {
 
 function drawOrDefer(id, draw, onVisit) {
   const view = pageOfHost(id);
-  if (!view || view.classList.contains("active")) { _stalePages.delete(id); draw(); return; }
+  if (!view || view.classList.contains("active") || view.classList.contains("pane-list")) {
+    _stalePages.delete(id); draw(); return;
+  }
   if (onVisit) { _stalePages.delete(id); return; }
   _stalePages.set(id, draw);
 }
@@ -41941,6 +41943,7 @@ function _switchViewNow(name, push, dir) {
   document.body.classList.toggle("off-league", OFF_LEAGUE_VIEWS.includes(name));
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
+  paneSplit(name, leaving);
   const target = document.getElementById(`view-${name}`);
   // Entering view slides in from the direction of travel between tabs.
   if (dir > 0) target.classList.add("from-right");
@@ -45572,14 +45575,35 @@ function showHeader() {
 const HEADER_TUCK_MQ =
   "(max-width: 760px), (pointer: coarse) and (max-width: 1024px)";
 
-/* THE OPEN iPHONE DUO, by its shape (styles.css, "THE OPEN iPHONE DUO"):
-   on its side, or upright on a screen no phone has. Safari tells a page
-   nothing about the fold, so these two lines are all there is to go on.
-   Where they match, the page wears the desktop shell: the header stays
-   put (a retracted header would leave the sticky sidebar a gap over it),
-   the phone's sheet is not the menu, and an open drawer closes. */
+/* EVERY OPEN FOLDABLE, by its shape (styles.css, "THE OPEN iPHONE DUO"
+   and "EVERY FOLD AND FLIP"): on its side, upright on a screen no phone
+   has, or the near-square inner screen of a Fold, a Pixel Fold or an
+   OnePlus Open. Where these match, the page wears the desktop shell: the
+   header stays put (a retracted header would leave the sticky sidebar a
+   gap over it), the phone's sheet is not the menu, an open drawer closes. */
 const UNFOLDED_MQ = "(min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4), "
-  + "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px)";
+  + "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px), "
+  + "(pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5)";
+/* LIST BESIDE DETAIL (Ethan, 2026-10-24: "make it unique for that phone").
+   The Duo's own Notes and Messages, Inoreader and every Fold app open a
+   list and its item side by side on the big screen; so does this, on a
+   wide open screen held by a finger or a book-folded hinge: the board you
+   came from stays on the left while the pick or the game opens on the
+   right, and the next tap on the list replaces the right. A desktop with
+   a mouse keeps its one page. styles.css "LIST BESIDE DETAIL". */
+const TWO_PANE_MQ = "(pointer: coarse) and (min-width: 900px) and (min-height: 480px), "
+  + "(horizontal-viewport-segments: 2)";
+const PANE_DETAILS = ["prop", "game", "team", "pbp"];
+const PANE_LISTS = ["likely", "recommended", "tonight", "live", "edge", "props", "longshots", "players"];
+let _paneList = "";
+function paneSplit(name, leaving) {
+  const on = !!(window.matchMedia && matchMedia(TWO_PANE_MQ).matches) && PANE_DETAILS.includes(name);
+  _paneList = !on ? "" : PANE_LISTS.includes(leaving) ? leaving : PANE_DETAILS.includes(leaving) ? _paneList : "";
+  document.querySelectorAll(".view.pane-list").forEach((v) => v.classList.remove("pane-list"));
+  const list = _paneList && document.getElementById(`view-${_paneList}`);
+  if (list) list.classList.add("pane-list");
+  document.body.classList.toggle("two-pane", !!list);
+}
 function unfolded() {
   return !!(window.matchMedia && matchMedia(UNFOLDED_MQ).matches);
 }
@@ -45730,8 +45754,12 @@ function initFoldSeams() {
       closeMobileMenu("the screen opened");
     }
     if (!isPhone() && document.body.classList.contains("more-open")) moreSheetOpen(false);
+    // Folded shut or turned narrow, the list beside the pick steps away
+    // and the pick is the page; opened again, the next tap splits it.
+    if (_paneList && !split.matches) paneSplit(state.view, "");
   };
-  [narrow, phone, open].forEach((mq) => { if (mq.addEventListener) mq.addEventListener("change", shut); });
+  const split = matchMedia(TWO_PANE_MQ);
+  [narrow, phone, open, split].forEach((mq) => { if (mq.addEventListener) mq.addEventListener("change", shut); });
 }
 
 /* ---------------- wiring ---------------- */

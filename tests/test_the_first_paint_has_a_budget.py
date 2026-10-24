@@ -128,7 +128,11 @@ HTML = (WEB / "index.html").read_text()
 #: view"): the open screen's shape, shared by the header, the phone test and
 #: the drawer, and the block at the top of the screen kept in place across a
 #: fold — +0.97 KB gz (497.965 -> 498.938). Told to Ethan.
-APP_JS_BUDGET_KB = 499
+#: 499 -> 500 on 2026-10-24 by every fold and flip (Ethan: "make it unique
+#: for that phone"): the list beside its pick on a wide open screen, the
+#: Fold's near-square inner screen as an open shape, and the split dropped
+#: when the screen folds — +0.30 KB gz (498.938 -> 499.24). Told to Ethan.
+APP_JS_BUDGET_KB = 500
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -203,7 +207,11 @@ APP_JS_BUDGET_KB = 499
 #: 616 -> 617 on 2026-10-23 by the iPhone Duo: the app.js bump above, the
 #: open shell's overrides, the short front screen's and the header date's
 #: (615.197 -> 616.506 KB gz). Told to Ethan.
-BOOT_BUDGET_KB = 617
+#: 617 -> 618 on 2026-10-24 by every fold and flip: the app.js bump above and
+#: the layouts for each shape — the list beside its pick, the panes at a
+#: book-folded hinge, Flex Mode's deck, the cover glance and the narrowest
+#: cover's card (616.506 -> 617.545 KB gz). Told to Ethan.
+BOOT_BUDGET_KB = 618
 
 
 def _gz_trimmed(rel: str) -> int:
