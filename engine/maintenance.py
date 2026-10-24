@@ -1651,6 +1651,15 @@ def _run_inventions(log) -> list[str]:
     return _spawn_module("engine.inventionfit", log)
 
 
+def _run_bugscan(log) -> list[str]:
+    """The day's bug scan (engine/bugscan --mail), out of process: the owner
+    gets a mail only when something is broken. Never in the suite's sandbox."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        return ["engine.bugscan: not started in the sandbox"]
+    return _spawn_module("engine.bugscan", log, args=("--mail",))
+
+
 def _run_nflrefs(log) -> list[str]:
     """The NFL referees' tendencies (engine/nflrefs --fit), out of process
     and detached; never inside the suite's sandbox, as the inventions'."""
@@ -2592,6 +2601,19 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 log(f"  {line}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  inventions re-measure skipped: {exc}")
+
+    # THE BUG SCAN, once a day (engine/bugscan; Ethan, 2026-10-24: "we need a
+    # debugging thing to scan for bugs"): crashes on people's screens, build
+    # warnings and tracebacks, stale boards, the self-update and the site's
+    # errors, mailed to the owner only when something needs a person.
+    if state.get("bugscan_attempted") != today.isoformat():
+        state["bugscan_attempted"] = today.isoformat()
+        _save_state(state_path, state)
+        try:
+            for line in _run_bugscan(log):
+                log(f"  {line}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  bug scan skipped: {exc}")
 
     # THE REFEREES' TENDENCIES (engine/nflrefs; Ethan's D, 2026-10-24),
     # Tuesdays: Monday night's game is in the play-by-play by then, and the

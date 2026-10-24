@@ -63,5 +63,26 @@ def run(unit: str, send=None, env=None, journal=None) -> str:
     return "sent"
 
 
+def send_text(subject: str, text: str, send=None, env=None) -> str:
+    """Mail the owner any report (the daily bug scan, engine/bugscan), by the
+    same address and relay as a failed unit's: ``"sent"``, ``"no-address"``,
+    ``"no-mailer"`` or ``"failed"``. Never raises."""
+    env = os.environ if env is None else env
+    to = str(env.get("QB_ALERT_EMAIL") or "").strip() or DEFAULT_TO
+    if to.lower() in ("off", "none", "no", "0"):
+        return "no-address"
+    if send is None:
+        from . import mailer
+        if not mailer.configured():
+            return "no-mailer"
+        send = mailer.send
+    try:
+        send(to, subject, text)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"alert: could not send ({type(exc).__name__}: {exc})")
+        return "failed"
+    return "sent"
+
+
 if __name__ == "__main__":
     run(sys.argv[1] if len(sys.argv) > 1 else "unknown unit")

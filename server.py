@@ -215,6 +215,8 @@ RATE_ASK_PER_MIN = 8
 #: Analytics counts (engine/analytics.py, off unless QB_ANALYTICS=1): a page
 #: sends a handful a minute; this bounds what a script could add to a count.
 RATE_EVENT_PER_MIN = 60
+#: Crash reports a minute from one caller (app.js sends at most 5 a page).
+RATE_CLIENTERR_PER_MIN = 10
 #: A question, a pick id and a few trimmed turns; anything larger is junk.
 MAX_ASK_BYTES = 32_000
 #: A parlay screenshot for Ask to grade (engine/slipgrade): the picture,
@@ -1433,6 +1435,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._ask(body)
         if parsed.path in ("/api/event", "/api/event/"):
             return self._event()
+        if parsed.path in ("/api/clienterror", "/api/clienterror/"):
+            return self._client_error()
         if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
             return self._zeno_import()
         if parsed.path in ("/api/research", "/api/research/"):
@@ -2087,6 +2091,27 @@ class Handler(BaseHTTPRequestHandler):
         if self._is_https():
             bits.append("Secure")
         return [("Set-Cookie", "; ".join(bits))]
+
+    def _client_error(self):
+        """A script error on someone's screen (app.js reportCrash), kept for
+        the bug scan (engine/bugscan). 204 whatever happens, and nothing
+        about the caller is kept but the browser's family: no IP address,
+        no account. Rate-limited, and at most 2 KB a report."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 2000 else b""
+        if self._rate_limited(RATE_CLIENTERR_PER_MIN, "clienterror"):
+            return
+        try:
+            from engine import bugscan
+            got = json.loads(body or b"{}")
+            bugscan.record_client(got, ua=self.headers.get("User-Agent") or "",
+                                  commit=bugscan.running_commit())
+        except Exception:                                    # noqa: BLE001
+            pass
+        return self._send(204, b"", ".json")
 
     def _event(self):
         """One count for the analytics (engine/analytics.py). 204 whatever

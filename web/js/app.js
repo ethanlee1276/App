@@ -3050,12 +3050,34 @@ addEventListener("error", (e) => {
   // the real one (Chrome's older wording: "ResizeObserver loop limit
   // exceeded").
   if (e && e.message && !(e.target && e.target.tagName)
-      && !/ResizeObserver loop/.test(e.message)) crashNote(e.message);
+      && !/ResizeObserver loop/.test(e.message)) {
+    crashNote(e.message);
+    reportCrash(e.message, e.filename ? `${String(e.filename).split("/").pop()}:${e.lineno}:${e.colno}` : "");
+  }
 });
 addEventListener("unhandledrejection", (e) => {
   const r = e && e.reason;
   crashNote(r && r.message ? r.message : r);
+  reportCrash(r && r.message ? r.message : r, ((r && r.stack) || "").split("\n").slice(1, 2).join("").trim());
 });
+/* AND THE BOX HEARS OF IT (engine/bugscan; Ethan, 2026-10-24: "we need a
+   debugging thing to scan for bugs"). The apology above was all a crash
+   ever produced: the one person who saw it knew, nobody who could fix it
+   did. Each distinct error is sent once, five at most a page, with where
+   in the script, the page and the screen's size — no account, no
+   identifier (privacy policy 2.6). */
+const _crashSent = new Set();
+function reportCrash(what, where) {
+  const m = String(what || "").slice(0, 200);
+  if (!m || _crashSent.has(m) || _crashSent.size >= 5) return;
+  _crashSent.add(m);
+  try {
+    fetch("/api/clienterror", { method: "POST", keepalive: true, credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ m, src: String(where || "").slice(0, 160), view: state.view || "",
+                             w: innerWidth, h: innerHeight }) }).catch(() => {});
+  } catch (err) { /* a report is never worth an error */ }
+}
 // The bar is the one place that says "you're offline", and losing a
 // connection fires no render of its own — without these it would only
 // appear on whatever happened to redraw next, which on a parked tab is

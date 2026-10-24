@@ -87,6 +87,9 @@ def test_the_controls_scroll_with_the_page_and_a_phone_starts_on_the_picks():
     assert '<div class="ob-sticky">' in board
     assert ".ob-sticky { position: static;" in CSS
     tail = CSS[CSS.rindex("THE MOST LIKELY PAGE, 2026-09-28"):]
+    # The fold-and-flip section rides last in the file (its panes are sticky
+    # by design, styles.css "LIST BESIDE DETAIL"); the filters are not in it.
+    tail = tail[:tail.find("EVERY FOLD AND FLIP (Ethan")] if "EVERY FOLD AND FLIP (Ethan" in tail else tail
     assert "position: sticky" not in tail, "the filters must not follow the page"
     tail = CSS[CSS.rindex("THE MOST LIKELY PAGE, 2026-09-28"):]
     assert ".ob-lede { display: none; }" in tail and ".ob-pills .ob-pill:first-child { display: none; }" in tail
