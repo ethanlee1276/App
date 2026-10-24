@@ -24,12 +24,13 @@ the failure mode this file exists to prevent.
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIS = open(os.path.join(ROOT, "web", "js", "visuals.js"), encoding="utf-8").read()
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 PA = VIS[VIS.index("function propAnalysis("):
          VIS.index("/* ---------------- Game-log bars")]
 

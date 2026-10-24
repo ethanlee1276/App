@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import slipreplay as SR                              # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 EXTRAS = ROOT / "web" / "js" / "extras.js"
 SLIP = ROOT / "web" / "js" / "slip.js"
@@ -137,7 +138,7 @@ def test_my_bets_plays_the_night_back():
     assert 'class="xr-path" pathLength="1"' in html and 'class="xr-end won"' in html
     assert "Before kickoff <b>31%</b>" in html and "Cashed" in html and "Our own number, not the book’s." in html
     assert "No replay for this slip yet" in got["none"]
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     assert 'const replayBtn = (b) => b.src === "slip" && b.result !== "pending"' in app
     assert app.count("${replayBtn(b)}") == 2, "the card and the table both offer it"
     assert 'if (t.dataset.xt === "replay") replayInto(t);' in EXTRAS.read_text(encoding="utf-8")

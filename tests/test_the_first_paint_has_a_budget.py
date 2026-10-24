@@ -138,7 +138,13 @@ HTML = (WEB / "index.html").read_text()
 #: desks — 186 declarations, chosen by TypeScript's own reading of which
 #: ones nothing outside Fantasy calls) moved to js/fantasy.js, loaded on
 #: first use, as Rocket Radar did to js/memes.js. 493.6 -> 450.5 KB gz.
-APP_JS_BUDGET_KB = 460
+#: 460 -> 290 on 2026-10-24 — DOWN again, and kept down. Ethan's "keep going
+#: and finish everything": the Record page (js/record.js), the game, pick
+#: and play-by-play pages (js/detail.js), the account pages (js/account.js)
+#: and the rest of the More menu (js/more.js) load on first use, each
+#: chosen the same way and checked to run on top of app.js
+#: (tests/test_app_loads.py). 450.5 -> 284.2 KB gz.
+APP_JS_BUDGET_KB = 290
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -219,7 +225,9 @@ APP_JS_BUDGET_KB = 460
 #: cover's card (616.506 -> 617.545 KB gz). Told to Ethan.
 #: 618 -> 580 the same day, for the same split: the first visit is
 #: 620 -> 570 KB gz.
-BOOT_BUDGET_KB = 580
+#: 580 -> 405 the same evening, for the rooms split above: the first visit
+#: is 570 -> 398.9 KB gz.
+BOOT_BUDGET_KB = 405
 
 
 def _gz_trimmed(rel: str) -> int:

@@ -33,8 +33,9 @@ sys.path.insert(0, str(ROOT))
 
 from engine import db                                    # noqa: E402
 from engine.ufc import markets as M, rounds as R         # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 
 
 def _fight(fighter, comp, method, rnd, clock, rounds=3):

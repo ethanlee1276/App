@@ -26,6 +26,7 @@ checked for. Every scan here strips comments first.
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -63,7 +64,7 @@ def _strip_js_comments(src):
 
 def _app():
     # app.js and the meme-coin page it loads on first use (js/memes.js, 2026-10-24).
-    return _strip_js_comments(_read("web", "js", "app.js") + "\n" + _read("web", "js", "memes.js"))
+    return _strip_js_comments(app_js())
 
 
 # --------------------------------------------------------------- the flag
@@ -97,7 +98,10 @@ def test_the_flag_is_declared_before_anything_reads_it():
     call above the declaration and the whole app is a blank page with a
     ReferenceError. Pin the ordering instead of relying on it.
     """
-    app = _app()
+    # app.js alone: the rooms that read the flag run after app.js has run to
+    # its end (app.js loadRoom), so only app.js's own order can put a read
+    # above the declaration — and the declaration must be app.js's.
+    app = _strip_js_comments(open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read())
     decl = app.index("const EXTERNAL_MARKET_LINKS") + len("const ")
     uses = [m.start() for m in re.finditer(r"EXTERNAL_MARKET_LINKS", app)]
     assert min(uses) == decl, (
@@ -199,7 +203,7 @@ def test_the_placeholder_does_not_pretend_the_numbers_changed():
 
 
 def test_the_restore_instruction_is_written_down():
-    app = _read("web", "js", "app.js")   # comments ARE the subject here
+    app = app_js()   # comments ARE the subject here
     i = app.index("PAYMENT REVIEW MODE")
     block = app[i:i + 2600]
     assert "TO RESTORE AFTER APPROVAL" in block, \

@@ -12,8 +12,9 @@ from engine import likelyboard as LB                                # noqa: E402
 from engine import matchpicks as MP                                 # noqa: E402
 from engine import tdscenarios as TS                                # noqa: E402
 from engine.likely import HEAVIEST_PRICE                            # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def _td(player, odds, prob, **kw):

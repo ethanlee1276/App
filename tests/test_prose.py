@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ledger
 from engine import prose as P
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TODAY = datetime.date.today().isoformat()
@@ -316,8 +317,7 @@ def test_both_settle_passes_run_the_lanes():
 
 
 def test_the_page_renders_the_night_desk_on_every_scope():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("function recProseSection(")
     fn = app[i:app.find("\nfunction ", i + 1)]
     for needle in ("The night desk", "never setting one", "by_sport",

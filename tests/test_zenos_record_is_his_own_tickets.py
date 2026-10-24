@@ -43,6 +43,7 @@ os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import zeno                                       # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _store():
@@ -563,7 +564,7 @@ def test_the_cli_refuses_to_create_a_root_owned_store():
 
 # --- the page --------------------------------------------------------------
 def _js():
-    return (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    return app_js()
 
 
 def test_the_record_page_draws_the_card_and_the_site_has_the_page():
@@ -584,7 +585,16 @@ def _render(kind, z, scope=""):
     if not shutil.which("node"):
         return None
     src = _js()
-    body = src[src.index("function zenoMoney"):src.index("function recPotdSection")]
+    # The card lives with the Record page (js/record.js) and the picks page
+    # with the More menu's (js/more.js) since 2026-10-24, their shared
+    # helpers in app.js: each declaration read whole wherever it is.
+    from _app import decl
+    body = "\n".join(decl(n) for n in (
+        "zenoMoney", "zenoTallyLine", "zenoTicketRow", "_zenoTix", "zenoOwnerToken", "zenoTickets",
+        "zenoLockedHTML", "recZenoSection", "zenoDay", "zenoSnapshotHTML", "zenoCalMoney", "zenoCalMonthHTML",
+        "_zenoCalMonth", "zenoCalendarHTML", "ZENO_POST_BOOKS", "ZENO_POST_SPORTS", "zenoPost",
+        "zenoGradePayload", "zenoGradeHTML", "zenoOwnerHTML", "researchBoxHTML", "bindResearchBox",
+        "bindZenoOwner", "renderZeno"))
     # v5: the page opens with the ribbon, which lives with the deck; the
     # sweep is a browser's business.
     r = src.index("function recordRibbonsHTML(")

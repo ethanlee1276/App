@@ -43,10 +43,11 @@ for _k in ("QB_SMTP_HOST", "QB_SMTP_USER", "QB_SMTP_PASS", "QB_MAIL_FROM"):
     os.environ.pop(_k, None)
 
 from engine import accounts as A                                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 GOOD = "correct horse battery"
 NEW = "a brand new passphrase"
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 SERVER = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
 
 

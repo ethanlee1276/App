@@ -175,11 +175,11 @@ def test_the_standalone_link_targets_name_classes_that_exist():
     Source-level and store-free on purpose: a tap-target claim that
     needed a browser, a database or a built slate to check would pass on
     CI and rot on the laptop, or the reverse."""
-    rendered = "\n".join(
+    from _app import app_js     # app.js and the rooms it loads on first use
+    rendered = "\n".join([app_js()] + [
         open(os.path.join(ROOT, *parts), encoding="utf-8").read()
-        for parts in (("web", "js", "app.js"),
-                      ("web", "js", "visuals.js"),
-                      ("web", "index.html")))
+        for parts in (("web", "js", "visuals.js"),
+                      ("web", "index.html"))])
 
     rules = _coarse_anchor_rules()
     assert rules, "the standalone-link tap target rule is gone"

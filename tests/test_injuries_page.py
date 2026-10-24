@@ -22,6 +22,7 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.sources import espninjuries as inj                 # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -106,7 +107,7 @@ def test_the_page_is_wired_end_to_end():
     html = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
     assert 'data-view="injuries"' in html
     assert 'id="view-injuries"' in html and 'id="injuries-body"' in html
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "async function renderInjuries" in js
     assert "data/injuries.json" in js
     assert 'if (name === "injuries") renderInjuries();' in js
@@ -140,7 +141,7 @@ def test_the_recommended_board_carries_an_injury_watch():
     re-judges the sub-tab rooms so the Watchlists tab tells the truth."""
     html = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
     assert 'id="injury-watch"' in html
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "async function renderInjuryWatch" in js
     assert "\n  renderInjuryWatch();" in js, "missing from the load() chain"
     rooms = js[js.index("const REC_ROOMS"):]
@@ -219,7 +220,7 @@ def test_availability_tone_is_keyword_not_exact_match():
     """ESPN's wordings drift ("Out", "Injured Reserve", "60-Day IL").
     The tone map must key on availability words so a new phrasing lands
     in a sane bucket instead of silently rendering unstyled."""
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = app_js()
     fn = js[js.index("function injTone"):]
     fn = fn[:fn.index("\n}")]
     for word in ("injured reserve", "questionable", "day-to-day",
@@ -390,7 +391,7 @@ def test_a_fresh_pull_raises_no_staleness_note():
 def test_both_surfaces_agree_on_what_a_row_means():
     """The page's fresh strip cut returns; the recommended board's injury
     watch did not, and read the same file. One helper, both callers."""
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "function isReturnRow(" in js
     i = js.index("async function renderInjuryWatch(")
     watch = js[i:i + 2000]
@@ -401,7 +402,7 @@ def test_both_surfaces_agree_on_what_a_row_means():
 
 
 def test_the_page_says_when_the_data_stopped_moving():
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = app_js()
     i = js.index("async function renderInjuries(")
     page = js[i:js.index("\nasync function ", i + 10)]
     assert "ages_s" in page and "stale_after_s" in page

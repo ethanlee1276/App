@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import contradictions as C                         # noqa: E402
 from engine import likelyboard as L                            # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -92,7 +93,7 @@ def test_the_builds_run_it_before_the_journal():
 
 
 def test_the_cards_draw_the_warning():
-    js = (ROOT / "web" / "js" / "app.js").read_text()
+    js = app_js()
     assert "${obWhyLine(r)}${pickWarnHTML(r)}" in js and "${pickWarnHTML(lk || r)}" in js
     fn = js[js.index("function pickWarnHTML("):js.index("function obCardHTML(")]
     assert "escapeHtml(" in fn and "matchup_warning" in fn and "avoid_warning" in fn

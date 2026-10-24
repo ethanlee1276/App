@@ -30,6 +30,7 @@ os.environ.pop("QB_LIKELY_CTX", None)
 from engine import boardlearn as B                                   # noqa: E402
 from engine import ledger as LG                                      # noqa: E402
 from engine import likelycal                                         # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _ledger(bold_hits_per_20: int):
@@ -133,7 +134,7 @@ def test_the_settle_pass_runs_it_and_the_record_page_draws_it():
         "on the box it runs in its own niced process, never the web server's"
     led = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
     assert '"board_learning": _board_learning_block()' in led
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     assert "recBoardLearningSection(d.board_learning, scoped ? scope : null)" in app
     node = shutil.which("node")
     if not node:

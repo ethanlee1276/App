@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ledger  # noqa: E402
 from engine import propcal  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -73,7 +74,7 @@ def test_the_export_carries_coverage_on_the_ladder():
 
 
 def test_the_page_shows_where_each_sport_stands():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     assert "function learningCoverageHTML(" in app
     i = app.index("function recSelfTuningSection(")
     j = app.index("function recHypothesisLab(")

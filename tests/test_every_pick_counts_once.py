@@ -47,8 +47,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from engine import ledger  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 
 _INS = ("INSERT INTO bets (ts, sport, date, game_day, player, market, side, line, odds, hit_prob, "
         "grade, stake_units, stake_dollars, status, category, pnl_units) "

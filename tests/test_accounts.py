@@ -35,9 +35,10 @@ from pathlib import Path
 import server
 from server import (profile_name_ok, profile_pin_ok, profile_get,
                     profile_sync, bet_sig, merge_sections)
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def _tmpdir():
@@ -174,8 +175,8 @@ def test_the_legacy_card_still_asks_only_for_a_name_and_a_pin():
     grew a password field, and it should not: it is a different store
     with a different key, and bolting one on would make two half-migrated
     login systems out of one working one and one new one."""
-    i = APP.index("function acctLegacyCardHTML")
-    block = APP[i:APP.index("\nwindow.acctGo", i)]
+    from _windows import function
+    block = function(APP, "function acctLegacyCardHTML")
     assert 'type="password"' not in block.lower()
     assert 'inputmode="numeric"' in block
 

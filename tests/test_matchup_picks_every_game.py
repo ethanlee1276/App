@@ -17,6 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import matchpicks as M                                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 GAME = {"home": "DET", "away": "BUF", "kickoff": "2026-09-27T17:00:00Z", "date": "2026-09-27",
         "scan": {"units": {"DET": {"def": {"passing": {"rank": 28}, "rushing": {"rank": 24}}},
@@ -154,7 +155,7 @@ def test_it_is_published_paywalled_journaled_and_drawn():
     assert "matchup_picks" in gate.PAID_KEYS
     build = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
     assert '("td", "matchup_td", "Matchup"), ("prop", "matchup_prop", "Matchup")' in build
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "${matchupPicksHTML()}${tdScenariosHTML()}" in js
     # Labelled "Most likely" once the one board (engine/likelyboard) is on.
     assert '["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`]' in js

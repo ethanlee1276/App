@@ -12,6 +12,7 @@ untouched.
 import re
 import sys
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / "web" / "index.html").read_text()
@@ -78,7 +79,7 @@ def test_most_views_actually_open_this_way():
     assert len(views) >= 38 and len(opens) >= 27, (len(views), len(opens))
 
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 PHONE = CSS[CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }")):]
 
 

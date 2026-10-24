@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from engine.sources import ftn as F                            # noqa: E402
 from engine.sources import ngs as NGS                          # noqa: E402
 from engine import gamescan as G                               # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _chart(game, play, week, **flags):
@@ -140,7 +141,7 @@ def test_the_reads_quote_the_charting_and_the_tracking_as_notes():
 def test_the_scan_carries_this_seasons_charting_and_the_page_draws_it():
     src = (ROOT / "engine" / "gamescan.py").read_text(encoding="utf-8")
     assert '"charting": {"season": (charting or {}).get("season")' in src
-    js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    js = app_js()
     card = js[js.index("function scanCoverageHTML"):js.index("function scanWhyList")]
     assert "const cd = (ch.defense || {})[team];" in card and "const co = (ch.offense || {})[team];" in card
     assert "<b>This season</b> ${nowLine}${when}" in card and "<b>On offense</b> ${offLine}" in card

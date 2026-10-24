@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import likely as K                               # noqa: E402
 from engine.yardagefit import display_prob            # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _prop(market="rec_yds", prob=0.62, odds=-115, player="A Wideout",
@@ -287,8 +288,7 @@ def test_the_reader_is_told_which_number_they_are_seeing():
     got = K.from_prop(_prop(), _always, fits=FITS)
     assert got["prob_source"] in ("model", "mixture")
     assert "raw_prob" in got
-    app = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "web", "js", "app.js")).read()
+    app = app_js()
     assert 'r.prob_source !== "mixture"' in app
     assert "raw read was" in app
 
@@ -551,10 +551,7 @@ def test_a_short_board_says_how_many_it_turned_down():
     large (18 NFL and 162 MLB refusals on 2026-09-02), so a reader
     looking at four cards could not know 162 rows were considered."""
     import os as _os
-    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
-            _os.path.abspath(__file__))), "web", "js", "app.js"),
-            encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     assert "function likelyRefusedNote(census, shown)" in js
     body = js[js.index("function likelyRefusedNote(census, shown)"):]
     body = body[:body.index("\n}")]
@@ -579,10 +576,7 @@ def test_the_page_never_labels_a_shrink_artefact_as_the_model():
     Computed from the row's own `raw_prob` and `fair_prob`, which ride
     on every prop row, so no reason text has to be matched."""
     import os as _os
-    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
-            _os.path.abspath(__file__))), "web", "js", "app.js"),
-            encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     import re as _re
     from engine.betting import MAX_CREDIBLE_EDGE as _cap
     # THE VALUE, NOT ITS SPELLING. Python renders the constant "0.1" and
@@ -612,10 +606,7 @@ def test_the_render_gate_catches_a_refused_row_from_a_stale_file():
     file that predates the rule — the way the -1200 unders outlived
     their own ban."""
     import os as _os
-    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
-            _os.path.abspath(__file__))), "web", "js", "app.js"),
-            encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     body = js[js.index("function showableLikelyRow(r)"):]
     body = body[:body.index("\n}")]
     assert "engine_raw_prob" in body and "shrinkArtefact" in body
@@ -630,10 +621,7 @@ def test_the_page_enforces_the_same_rules_a_stale_file_could_dodge():
     rule any stale file overrides; the page is the last gate, and its
     price cap is pinned equal to the engine's so they cannot drift."""
     import os as _os
-    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
-            _os.path.abspath(__file__))), "web", "js", "app.js"),
-            encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     assert "function showableLikelyRow(r)" in js
     assert f"const LIKELY_HEAVIEST_PRICE = {K.HEAVIEST_PRICE};" in js
     for anchor in (".filter(showableLikelyRow).filter((r) => !rowStarted(r))\n    .filter((r) => !likelyDropped(r)).slice(0, 10)",

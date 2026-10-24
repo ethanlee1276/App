@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ledger                                     # noqa: E402
 from engine import losspatterns as lp                         # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -242,8 +243,7 @@ def test_the_block_ships_in_the_record_export_and_cannot_sink_it():
 
 
 def test_the_page_renders_the_miner_with_its_discipline_stated():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("function recLossPatternsSection(")
     fn = app[i:app.find("\nfunction ", i + 1)]
     for needle in ("Learning from losses", "Record mined", "Slices tested",

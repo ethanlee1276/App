@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from engine import parlays as P                                  # noqa: E402
 from engine import risk as R                                     # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 EXTRAS = ROOT / "web" / "js" / "extras.js"
 
@@ -93,7 +94,7 @@ def test_the_endpoint_is_for_members_and_keeps_nothing():
 
 
 def test_my_bets_draws_the_card_on_the_open_tab():
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     assert '`<div id="mb-risk"></div>`' in app and '`<div id="mb-report"></div>`' in app
     assert 'X.riskView(document.getElementById("mb-risk"))' in app
     node = shutil.which("node")

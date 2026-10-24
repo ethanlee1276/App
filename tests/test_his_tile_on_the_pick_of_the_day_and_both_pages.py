@@ -30,11 +30,12 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
 PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
                     "1f15c4890000000d4944415478da63f8cfc0f01f0005000201a6a9b2fd"

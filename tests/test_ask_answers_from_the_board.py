@@ -34,12 +34,13 @@ sys.path.insert(0, str(ROOT))
 import server                                                  # noqa: E402
 from engine import askbot as AB                                # noqa: E402
 from engine import explainer as EX                             # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 _TMP = Path(tempfile.mkdtemp())
 AB.CACHE_PATH = _TMP / "ask_cache.json"
 AB.USAGE_PATH = _TMP / "ask_usage.json"
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 HTML = (ROOT / "web" / "index.html").read_text()
 SERVER = (ROOT / "server.py").read_text()
 TODAY = dt.date.today()

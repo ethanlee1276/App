@@ -28,6 +28,7 @@ Run directly: `python3 tests/test_the_likelihood_board_plays_for_money.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import sys
 import tempfile
 
@@ -160,9 +161,7 @@ def test_the_section_stops_promising_no_money_once_money_is_on_it():
     do."""
     import re
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    with open(os.path.join(root, "web", "js", "app.js"),
-              encoding="utf-8") as fh:
-        src = fh.read()
+    src = app_js()
     i = src.index("function recLikelySection")
     body = src[i:src.index("function recLikelyGameLines")]
     # COMMENTS OUT FIRST. The note above this function quotes the paper
@@ -279,9 +278,7 @@ def _render_likely(lk):
     if not shutil.which("node"):
         return None                       # node absent: caller skips
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    with open(os.path.join(root, "web", "js", "app.js"),
-              encoding="utf-8") as fh:
-        src = fh.read()
+    src = app_js()
     body = src[src.index("function recLikelySection"):
                src.index("function recLikelyGameLines")]
     harness = """

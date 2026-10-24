@@ -27,6 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import accounts                                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _read(*parts):
@@ -34,7 +35,7 @@ def _read(*parts):
         return fh.read()
 
 
-APP = _read("web", "js", "app.js")
+APP = app_js()
 CSS = _read("web", "css", "styles.css")
 SERVER = _read("server.py")
 

@@ -22,6 +22,7 @@ import os
 import re
 import sys
 import tempfile
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -207,7 +208,7 @@ def test_the_wall_is_not_what_protects_anything():
     variable in a console would open the site. The comment saying so is
     load-bearing documentation and is checked, because the next person to
     touch this needs to know which half is the lock."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     i = app.index("THE PRICING WALL")
     head = app[i:i + 1800]
     assert "curl" in head and "gate.py" in head, \
@@ -215,7 +216,7 @@ def test_the_wall_is_not_what_protects_anything():
 
 
 def test_the_client_asks_the_server_whether_it_is_walled():
-    app = _read("web", "js", "app.js")
+    app = app_js()
     fn = app[app.index("async function paywallCheck("):]
     fn = fn[:fn.index("\n}")]
     assert "/api/billing/status" in fn, \
@@ -614,7 +615,7 @@ def test_no_card_field_is_ever_served_by_us():
     typed into a field this repo serves puts us inside PCI scope, and this
     codebase's standing rule is that card details never touch this
     server. So the payment block is a SLOT."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     fn = app[app.index("function checkoutHTML("):]
     fn = fn[:fn.index("\nfunction renderCheckout(")]
     low = fn.lower()
@@ -650,7 +651,7 @@ def test_the_checkout_asks_for_a_card_and_never_for_a_code():
     Comp codes are NOT gone — `codeBoxHTML` still renders on the account
     page, which is in WALL_OPEN, so a code already handed out still
     redeems. What is gone is being asked for one while paying."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     body = app[app.index("function checkoutHTML("):]
     body = body[:body.index("\nfunction renderCheckout(")]
     for gone in ("co-codebox", "coTryCode", "coApplyFree", "_coCode",
@@ -665,7 +666,7 @@ def test_a_code_can_still_be_redeemed_somewhere_a_walled_visitor_can_reach():
     holding a comp code sees the wall, and if the only redeem box lived
     behind it they could never get in — and nobody would find out until a
     friend of Ethan's could not use the code he gave them."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     fn = app[app.index("async function renderBilling("):]
     fn = fn[:fn.index("\n/* \"Have a code?\"")]
     assert "codeBoxHTML(" in fn, "the account page lost the redeem box too"
@@ -681,7 +682,7 @@ def test_the_total_is_derived_and_never_asserted():
     the only thing that zeroes it is the trial. Either way the property
     is the same one, and it is why this survived the code box: the total
     is DERIVED from what the reader owes today, not typed."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     body = app[app.index("function checkoutHTML("):]
     body = body[:body.index("\nfunction renderCheckout(")]
     total = re.search(r"const total = ([^;]+);", body)
@@ -721,7 +722,7 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     out. This checks the exemptions and the escape hatch against each
     other, so adding a third exempt page without one fails here.
     """
-    app = _read("web", "js", "app.js")
+    app = app_js()
     html = _read("web", "index.html")
 
     assert 'id="wall-back"' in html, "the escape hatch is gone from the page"
@@ -798,7 +799,7 @@ def test_the_wall_does_not_bounce_a_reader_out_of_checkout():
     left. The exemption is a name in WALL_OPEN now, checked against the
     page being GONE TO, which is the thing the question was always about.
     """
-    app = _read("web", "js", "app.js")
+    app = app_js()
     m = re.search(r"const WALL_OPEN = \[([^\]]*)\]", app)
     assert m, "the wall no longer names its exemptions"
     exempt = set(re.findall(r'"([a-z]+)"', m.group(1)))

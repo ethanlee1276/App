@@ -28,6 +28,7 @@ one place nobody would think to look for the leak.
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -64,7 +65,7 @@ def test_no_invite_is_written_into_the_script_every_stranger_downloads():
     """Not a hypothetical: `QB_DISCORD_INVITE` exists precisely so that
     the link lives in the environment and can be rotated with a config
     line and a restart."""
-    src = _read(APP)
+    src = app_js()
     for m in re.finditer(r"discord\.(gg|com)/[A-Za-z0-9]", src):
         raise AssertionError(
             "an invite in app.js at offset %d: %r"
@@ -72,7 +73,7 @@ def test_no_invite_is_written_into_the_script_every_stranger_downloads():
 
 
 def test_the_page_takes_the_invite_from_the_server_or_draws_none():
-    body = _code(_fn(_read(APP), "discordPageHTML"))
+    body = _code(_fn(app_js(), "discordPageHTML"))
     assert "s.discord" in body, (
         "the page does not read the server's answer at all")
     i = body.index("const invite = s && s.discord")
@@ -85,7 +86,7 @@ def test_the_page_takes_the_invite_from_the_server_or_draws_none():
 
 
 def test_a_visitor_who_has_not_paid_is_sent_to_the_plans():
-    body = _code(_fn(_read(APP), "discordPageHTML"))
+    body = _code(_fn(app_js(), "discordPageHTML"))
     assert 'data-act="dcSeePlans"' in body, (
         "no way out of this page for somebody who has not subscribed")
 
@@ -94,7 +95,7 @@ def test_an_entitled_reader_with_no_invite_configured_is_told_so():
     """Rather than a button that goes nowhere. That state is a server
     somebody has not finished setting up, and a dead button spends the
     reader's click to say nothing."""
-    body = _code(_fn(_read(APP), "discordPageHTML"))
+    body = _code(_fn(app_js(), "discordPageHTML"))
     assert "dc-pending" in body
 
 
@@ -102,17 +103,17 @@ def test_an_entitled_reader_with_no_invite_configured_is_told_so():
 def test_the_welcome_is_a_one_shot_and_the_page_is_not():
     """A welcome you can only see once is a welcome you cannot go back to.
     The page stays; the confetti is spent."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     assert "function dcTakeWelcome()" in code
     assert "removeItem(DC_WELCOME_KEY)" in code, (
         "the welcome is never spent, so it greets a two-year member every "
         "time they open the tab")
-    body = _code(_fn(_read(APP), "discordPageHTML"))
+    body = _code(_fn(app_js(), "discordPageHTML"))
     assert "welcome ?" in body, "nothing distinguishes the two states"
 
 
 def test_the_welcome_is_armed_when_the_account_is_made():
-    code = _code(_read(APP))
+    code = _code(app_js())
     auth = code[code.index("acctAuth = async function"):]
     auth = auth[:auth.index("\n};")]
     assert "dcMarkWelcome()" in auth, (
@@ -125,7 +126,7 @@ def test_the_welcome_is_also_armed_by_a_payment_landing():
     and the second is the one where a subscriber first has an invite to
     be given. Stripe returns them to /?paid=1#account, which is a receipt,
     not a welcome."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     # rindex: the first hit is the function's own declaration, and the
     # boot block that calls it is the last.
     i = code.rindex("paidReturnWait()")
@@ -137,7 +138,7 @@ def test_the_welcome_is_also_armed_by_a_payment_landing():
 def test_localstorage_is_never_read_without_a_catch():
     """Private windows and blocked site data both throw on access, and an
     uncaught throw here happens during boot — which is a blank site."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     for m in re.finditer(r"localStorage\.(get|set|remove)Item\(DC_", code):
         head = code[max(0, m.start() - 220):m.start()]
         assert "try {" in head, (
@@ -157,7 +158,7 @@ def test_there_is_a_way_back_to_it_and_it_points_at_a_real_view():
     because the row was never the requirement. What would break the
     requirement is BOTH being gone, and that is what this catches."""
     html = _read(HTML)
-    code = _code(_read(APP))
+    code = _code(app_js())
     ways = [('id="nav-dc"' in html and 'barLink("nav-dc"' in code,
              "the top-bar icon"),
             ('data-view="discord"' in html, "a sidebar row")]
@@ -165,7 +166,7 @@ def test_there_is_a_way_back_to_it_and_it_points_at_a_real_view():
         "nothing on the site opens the Discord page any more: "
         + ", ".join(f"{name} missing" for ok, name in ways if not ok))
     assert 'id="view-discord"' in html, "the way in points at nothing"
-    code = _code(_read(APP))
+    code = _code(app_js())
     order = code[code.index("const VIEW_ORDER"):]
     assert '"discord"' in order[:order.index("\n")], (
         "a routable view missing from VIEW_ORDER animates backwards")
@@ -175,14 +176,14 @@ def test_the_router_draws_it():
     """The bug that shipped twice: a view switched to but never rendered
     is a blank section, and it only shows up when somebody navigates to it
     by URL instead of by the button that rendered it first."""
-    body = _code(_fn(_read(APP), "_switchViewNow"))
+    body = _code(_fn(app_js(), "_switchViewNow"))
     assert 'if (name === "discord") renderDiscord();' in body
 
 
 def test_it_is_reachable_from_behind_the_wall():
     """It is the sales page for the thing behind the wall. Blocking it
     would be blocking the pitch."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     m = re.search(r"const WALL_OPEN = \[([^\]]*)\]", code)
     assert '"discord"' in m.group(1)
 
@@ -191,7 +192,7 @@ def test_it_is_reachable_from_behind_the_wall():
 def test_the_page_says_what_the_server_is_for():
     """Ethan: "the main porpouse of this discord server is for me too
     select and pick out picks i think are winners"."""
-    body = _fn(_read(APP), "discordPageHTML")
+    body = _fn(app_js(), "discordPageHTML")
     assert "picks out the ones" in body and "Ethan" in body
 
 
@@ -200,7 +201,7 @@ def test_the_units_claim_is_attributed_rather_than_asserted():
     this site graded. The Record page is what this site stands behind, and
     the difference has to be on the page — a performance number stated
     flatly in the site's own voice is a claim the site is making."""
-    body = _fn(_read(APP), "discordPageHTML")
+    body = _fn(app_js(), "discordPageHTML")
     i = body.index("+400 units")
     around = body[max(0, i - 400):i + 400]
     assert "his own count" in around, (
@@ -213,7 +214,7 @@ def test_nothing_in_the_room_panel_is_an_invented_message():
     """An illustration of a chat room is fine. Inventing posts, members
     and reaction counts to sit inside it would be inventing a track
     record — which is the one thing this whole site is built not to do."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     m = re.search(r"const DISCORD_ROOMS = \[(.*?)\n\];", code, re.S)
     assert m, "the panel is not built from a declared list of channels"
     rooms = m.group(1)
@@ -222,7 +223,7 @@ def test_nothing_in_the_room_panel_is_an_invented_message():
     for bad in re.finditer(r"\b(\d+\.\d|OVER|UNDER|[+-]\d{2,})\b", rooms):
         raise AssertionError("a fabricated pick in the mock: %r"
                              % bad.group(0))
-    body = _fn(_read(APP), "discordRoomsHTML")
+    body = _fn(app_js(), "discordRoomsHTML")
     assert "aria-hidden" in body, (
         "a decorative mock read aloud to a screen reader as if it were "
         "content")

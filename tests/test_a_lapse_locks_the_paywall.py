@@ -33,6 +33,7 @@ sys.path.insert(0, ROOT)
 
 from engine import accounts as A      # noqa: E402
 from engine import billing as B       # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 DAY = 86400
 
@@ -43,7 +44,7 @@ def _read(*parts):
 
 
 SERVER = _read("server.py")
-APP = _read("web", "js", "app.js")
+APP = app_js()
 LAUNCH = _read("launch.py")
 
 

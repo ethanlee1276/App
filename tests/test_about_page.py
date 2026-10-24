@@ -15,6 +15,7 @@ undercut them is absent.
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -26,9 +27,8 @@ def _read(*parts):
 
 
 def _about_source() -> str:
-    app = _read("web", "js", "app.js")
-    start = app.index("function renderAbout()")
-    return app[start:app.index("\nasync function renderWhy()", start)]
+    from _windows import block
+    return block(app_js(), "function renderAbout()")
 
 
 # --- it exists and is reachable --------------------------------------------
@@ -36,7 +36,7 @@ def test_the_page_is_wired_end_to_end():
     html = _read("web", "index.html")
     assert 'id="view-about"' in html
     assert 'data-sport="about"' in html, "no way to reach it from the menu"
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert "function renderAbout()" in app
     assert "renderAbout();" in app, "defined but never called"
     assert '"about"' in app[app.index("const STANDALONE_MODES"):
@@ -46,7 +46,7 @@ def test_the_page_is_wired_end_to_end():
 def test_the_freshness_chip_hides_on_a_page_with_no_data():
     """"Stale — built 10h ago" over a page of prose that has no build at
     all is a lie of scope."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert "REFERENCE_VIEWS" in app
     block = app[app.index("const REFERENCE_VIEWS"):]
     assert '"about"' in block[:120] and '"why"' in block[:120]

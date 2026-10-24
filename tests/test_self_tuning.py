@@ -20,9 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine import calibrate as cal                           # noqa: E402
 from engine import db as hist_db                              # noqa: E402
 from engine import ledger                                     # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def _fn(src: str, name: str) -> str:

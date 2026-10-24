@@ -12,10 +12,11 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 QB = (ROOT / "engine" / "qbchange.py").read_text(encoding="utf-8")
 
 
@@ -85,7 +86,7 @@ def test_every_team_with_a_change_says_what_those_teams_did():
     fit = (ROOT / "engine" / "qbfit.py").read_text(encoding="utf-8")
     assert '"team_pass_att": ("attempts", "QB")' in fit and '"team_carries": ("carries", None)' in fit, \
         "the numbers are re-measurable, not typed in"
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     assert '${c.volume ? `<div class="mu-line">${escapeHtml(c.volume)}.</div>` : ""}' in app, "the pick card's QB box"
     if not shutil.which("node"):
         return

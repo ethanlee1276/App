@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import hoopsreplay as hr, lab  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _db(players=12, games=30, seed=7):
@@ -148,7 +149,7 @@ def test_the_public_summary_carries_calibration_numbers_only():
 def test_record_json_carries_the_replay_and_the_page_renders_it():
     src = (ROOT / "engine" / "ledger.py").read_text()
     assert '"replay": _replay_summary(),' in src
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    app = app_js()
     assert "+ recReplaySection(d.replay, scoped ? scope : null)" in app
     i = app.index("const REPLAY_SPORT = ")
     j = app.index("\n}\n", app.index("function recReplaySection(", i)) + 3

@@ -30,6 +30,7 @@ sys.path.insert(0, ROOT)
 
 from engine import accounts as A                             # noqa: E402
 from engine import social as SOC                             # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 GOOD = "correct-horse-battery"
 
@@ -746,7 +747,7 @@ def test_a_stranger_cannot_clear_a_thread_they_are_not_in():
 
 # --- the front end's half ----------------------------------------------------
 
-APPJS = _read("web", "js", "app.js")
+APPJS = app_js()
 
 
 def test_the_invite_travels_as_a_hash_route():

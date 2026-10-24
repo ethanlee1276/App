@@ -39,8 +39,9 @@ sys.path.insert(0, ROOT)
 from engine import gamereport as R                                 # noqa: E402
 from engine import gate                                             # noqa: E402
 from engine import lightboard                                       # noqa: E402
+from _app import app_js, section  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 REPORT_JS = os.path.join(ROOT, "web", "js", "report.js")
 REPORT_CSS = open(os.path.join(ROOT, "web", "css", "report.css"), encoding="utf-8").read()
@@ -395,7 +396,7 @@ def test_the_game_page_draws_it_and_steps_the_others_aside():
 
 
 def test_its_page_code_loads_on_first_use_and_a_failed_load_falls_back():
-    loader = APP[APP.index("function loadReport()"):APP.index("function gameReportHTML(g, extras)")]
+    loader = section("function loadReport()", "function gameReportHTML(g, extras)")
     assert 'css.href = "css/report.css"' in loader and 's.src = "js/report.js"' in loader
     # Both files, not the script alone: drawn before its rules land, the
     # report would flash unstyled.
@@ -404,9 +405,9 @@ def test_its_page_code_loads_on_first_use_and_a_failed_load_falls_back():
     # and the page draws without the report — no loading line forever, no
     # loop of loads.
     assert "if (!ok || !window.QBReport) _grFailed = true;" in loader
-    getter = APP[APP.index("function gameReportFor(g)"):APP.index("function loadReport()")]
+    getter = section("function gameReportFor(g)", "function loadReport()")
     assert "if (_grFailed) return null;" in getter
-    draw = APP[APP.index("function gameReportHTML(g, extras)"):APP.index("function matchupScanHTML(g)")]
+    draw = section("function gameReportHTML(g, extras)", "function matchupScanHTML(g)")
     assert "if (window.QBReport) return window.QBReport.html(r, extras);" in draw
     assert 'state.view === "game" && state.gameId === id' in draw, "it redraws only the game it loaded for"
     # Nothing of it rides the first paint.

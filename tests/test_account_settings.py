@@ -22,6 +22,7 @@ password you had no other reason to change.
 
 import os
 import re
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "web", "js", "app.js")
@@ -34,7 +35,8 @@ def _read(p):
 
 
 def _code(p=APP):
-    s = re.sub(r"/\*.*?\*/", " ", _read(p), flags=re.S)
+    # app.js and the rooms it loads on first use (the account pages live in one)
+    s = re.sub(r"/\*.*?\*/", " ", app_js() if p == APP else _read(p), flags=re.S)
     return re.sub(r"(?m)^\s*//.*$", "", s)
 
 

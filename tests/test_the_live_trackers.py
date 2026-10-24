@@ -45,6 +45,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import livescore_build as B                                  # noqa: E402
 from engine.mlb.sources import pbp as MP                     # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _G():
@@ -54,7 +55,7 @@ def _G():
     import test_gamecast
     return test_gamecast
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 GC = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
 GC_CSS = (ROOT / "web" / "css" / "gamecast.css").read_text(encoding="utf-8")
 RC_CSS = (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8")

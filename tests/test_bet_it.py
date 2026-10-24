@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import betlinks as B                               # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 DK = "https://sportsbook.draftkings.com/event/1?outcomes="
@@ -240,7 +241,7 @@ def test_the_odds_request_asks_for_links_and_banks_them():
 
 
 def test_the_page_draws_the_button_safely_where_the_picks_are():
-    js = (ROOT / "web" / "js" / "app.js").read_text()
+    js = app_js()
     fn = js[js.index("function bookTileHTML("):js.index("function escapeHtml(")]   # the tile, then Bet it
     assert 'href="${safeHref(url)}"' in fn and 'rel="noopener noreferrer nofollow"' in fn and 'target="_blank"' in fn
     assert "1-800-GAMBLER" in fn and "bet_links" in fn and "bet_pages" in fn, "every book, not one"
@@ -266,7 +267,7 @@ def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
     lives on its own layer at the end of <body>, sets every colour, and
     draws a tile per book — mark, name, price — from a <template> the card
     rendered beside the button."""
-    js = (ROOT / "web" / "js" / "app.js").read_text()
+    js = app_js()
     fn = js[js.index("const BOOKS = {"):js.index("function escapeHtml(")]
     assert '<template class="betit-tpl">' in fn and 'class="bk-tile"' in fn and "bookMarkHTML(title)" in fn
     assert 'document.body.appendChild(host)' in fn and 'role="dialog"' in fn, "its own layer, not the card's"
@@ -308,7 +309,7 @@ def test_every_pick_of_the_day_has_the_button_and_the_sheet_always_opens():
     always opens for a priced bet: slip links when the board has them,
     and under "Key it in at" every book's front door, the book that
     priced the pick first and tagged. Only an unpriced row has no button."""
-    js = (ROOT / "web" / "js" / "app.js").read_text()
+    js = app_js()
     fn = js[js.index("function betItHTML("):js.index("function betItOpen(")]
     assert 'if (!slips.length && !pages.length && r.odds == null) return "";' in fn
     assert "bookHomeTilesHTML([...slips, ...pages].map((x) => bookKey(x[0])), r.book_name || r.book)" in fn
@@ -341,14 +342,14 @@ def test_the_whole_bar_opens_the_sheet_not_just_the_word():
     assert ".betit-box.btn:has(.betit:focus-visible) { outline: var(--focus-w) solid var(--brand);" in css
     assert ".potd-hero .potd-betit { margin-top: 10px; display: flex; justify-content: center; }" in css
     assert ".betit-box.mini .betit::after" not in css and ".betit-box::after" not in css
-    js = (ROOT / "web" / "js" / "app.js").read_text()
+    js = app_js()
     at = js.index("function betItClose(")
     handler = js[js.index('window.addEventListener("click", (e) => {', at):js.index("function escapeHtml(")]
     assert 't.closest(".betit-box .betit") || t.closest(".betit-box.btn")' in handler
 
 
 def test_the_discord_page_shows_what_the_site_posts_and_nothing_private():
-    js = (ROOT / "web" / "js" / "app.js").read_text()
+    js = app_js()
     page = js[js.index("const DISCORD_FEED"):js.index("function dcFirstStop(")]
     assert 'boardFetch("data/community.json"' in js
     for ch in ("record", "picks", "anchors"):

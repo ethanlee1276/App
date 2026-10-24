@@ -46,14 +46,14 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8") + "\n" + \
-      (ROOT / "web" / "js" / "memes.js").read_text(encoding="utf-8")  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
+APP = app_js()  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
 GC = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
 HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 VARIANTS = ROOT / "web" / "img" / "venues" / "variants"

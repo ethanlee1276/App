@@ -25,9 +25,10 @@ from engine.sources import livescores as ls                           # noqa: E4
 from engine.mlb.sources import live as mlive                          # noqa: E402
 import livescore_build as LB                                          # noqa: E402
 import live_build as MB                                               # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 
 
 def _espn(broadcasts=None, geo=None):

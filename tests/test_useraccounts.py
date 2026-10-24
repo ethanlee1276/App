@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from engine import accounts as A                                # noqa: E402
+from _app import app_js, section  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _read(*parts):
@@ -47,7 +48,7 @@ def _read(*parts):
 
 
 SERVER = _read("server.py")
-APP = _read("web", "js", "app.js")
+APP = app_js()
 GOOD = "correct-horse-battery"
 #: The whole refusal message, from its assignment to the closing paren.
 _INSECURE = SERVER[SERVER.index("_INSECURE_LOGIN = ("):]
@@ -613,8 +614,7 @@ def test_the_override_removes_the_refusal_and_not_the_risk():
 def test_the_page_warns_before_the_password_is_typed():
     """A refusal arrives too late to help: by then it is in the box, and
     on a phone it is already in the keyboard's suggestion history."""
-    i = APP.index("function acctSignInHTML")
-    body = APP[i:APP.index("\nwindow.acctAuth", i)]
+    body = section("function acctSignInHTML", "\nwindow.acctAuth")
     assert "_acctUser.insecure" in body or "insecure" in body
     # It used to assert the copy printed `tailscale serve --bg 8000`,
     # which is an instruction only the operator can act on and came off
@@ -774,7 +774,7 @@ def test_the_privacy_policy_matches_what_is_actually_stored():
     # weeks after the buttons became "Download my data" and "Delete my
     # account", and passed the whole time, because it only ever compared
     # the policy against itself.
-    app = _read("web", "js", "app.js")
+    app = app_js()
     for control in ("Download my data", "Clear search history"):
         assert control in app, \
             f"the policy names a control that is not in the app: {control}"

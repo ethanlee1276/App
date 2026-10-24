@@ -27,12 +27,13 @@ import json
 import os
 import subprocess
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 READ = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()  # noqa: E731
-BOOT, APP, VIS, SOC = READ("web", "js", "boot.js"), READ("web", "js", "app.js"), READ("web", "js", "visuals.js"), READ("web", "js", "social.js")
+BOOT, APP, VIS, SOC = READ("web", "js", "boot.js"), app_js(), READ("web", "js", "visuals.js"), READ("web", "js", "social.js")
 PHOTO_HOSTS = ("espncdn.com", "cdn.nba.com", "nhle.com", "mlbstatic.com", "static.www.nfl.com")
 
 

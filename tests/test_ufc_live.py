@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.ufc import live
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _fighter(name, stats=None, winner=False):
@@ -145,7 +146,7 @@ def test_the_page_is_told_when_to_stop_calling_the_numbers_live():
     it, so the staleness bar travels with the payload."""
     blob = live.build(_payload(_comp(a_stats=LIVE_A, b_stats=LIVE_B)))
     assert blob["stale_after_s"] == live.STALE_S
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert "stale_after_s" in js and "STALLED" in js
     assert "generated_at" in js, "the age is measured from the fetch, not the data"
 
@@ -176,7 +177,7 @@ def test_the_figure_is_scaled_to_the_hottest_region_in_the_fight():
     """Share-of-own-total was the first attempt and it was useless: a
     fighter hit evenly in three places scores ~33% everywhere and comes
     out uniformly mid-red, so 41 to the head looked like 7 to the leg."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     fn = js[js.index("function regionFill("):js.index("function fighterPanelHTML(")]
     assert "peak" in fn, "the figure is not normalised across the fight"
     assert "b.fighters.flatMap" in js, "the peak is not taken across both corners"
@@ -184,14 +185,14 @@ def test_the_figure_is_scaled_to_the_hottest_region_in_the_fight():
 
 def test_an_untouched_region_is_flat_not_green():
     """Colour must never read as good news on a page about being hit."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     fn = js[js.index("function regionFill("):js.index("function bodySVG(")]
     assert "var(--panel-3)" in fn
     assert "--good" not in fn and "34, 197" not in fn
 
 
 def test_the_live_panel_polls_faster_than_the_page_and_stops_on_exit():
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert "_liveTimer" in js and "setInterval" in js
     fn = js[js.index("async function renderUFC() {"):]
     fn = fn[:2000]

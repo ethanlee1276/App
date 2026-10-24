@@ -24,6 +24,7 @@ from engine import db
 from engine.cfb import talent as T
 from engine.sources import cfbd
 from engine.teamrates import TeamRating
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 TALENT = {"BAMA": 980.0, "OSU": 975.0, "UGA": 960.0, "MICH": 930.0,
           "APP": 600.0, "TOL": 560.0, "BGSU": 520.0, "KENT": 480.0}
@@ -288,9 +289,13 @@ def test_the_page_says_which_inputs_actually_loaded():
     different number from a complete one, and nothing on the page could
     tell them apart."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    js = open(os.path.join(root, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "function renderTalent(" in js
-    fn = js[js.index("function renderTalent("):js.index("function renderAll(")]
+    # The panel and the card it draws (the card lives with the Status page,
+    # js/more.js, since 2026-10-24): each function read whole.
+    from _windows import block
+    fn = "\n".join(block(js, f"function {f}(") for f in (
+        "renderTalent", "talentStillMatters", "talentWeightLine", "talentWarnHTML", "talentCardHTML"))
     for layer in ("recruiting", "blue-chip", "returning", "portal"):
         assert layer in fn, f"{layer} is not shown"
     assert "missing_layers" in fn

@@ -48,6 +48,7 @@ sys.path.insert(0, str(ROOT))
 import hoopsprobe as P                                       # noqa: E402
 import livescore_build as B                                  # noqa: E402
 from engine.sources import espnplays as E                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 TEXT = "ESPN's own sentence about the play"
 SHORT = "ESPN's shorter sentence"
@@ -202,7 +203,7 @@ def test_the_probe_reports_the_four_answers_and_never_a_sentence():
 # --- the page: the readers --------------------------------------------------------
 HC = (ROOT / "web" / "js" / "hoopscast.js").read_text(encoding="utf-8")
 HC_CSS = (ROOT / "web" / "css" / "hoopscast.css").read_text(encoding="utf-8")
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 GC = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
 
 LAL5 = ["LeBron James", "Anthony Davis", "Austin Reaves", "D'Angelo Russell", "Rui Hachimura"]

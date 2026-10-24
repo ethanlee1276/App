@@ -21,6 +21,7 @@ sys.path.insert(0, ROOT)
 
 from engine import livewp                                    # noqa: E402
 from engine.gamebets import MARGIN_SD                        # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 # ------------------------------------------------------------- the shape
@@ -358,7 +359,7 @@ def test_the_reading_is_nested_so_absent_is_not_zero():
 
 # ------------------------------------------------ and onto the page itself
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 
 

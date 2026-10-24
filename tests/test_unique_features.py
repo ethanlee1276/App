@@ -25,6 +25,7 @@ sys.path.insert(0, ROOT)
 
 from engine import booksharp, gate                            # noqa: E402
 from engine.sources import kalshi as kx                       # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _read(*parts):
@@ -32,7 +33,7 @@ def _read(*parts):
         return fh.read()
 
 
-APP = _read("web", "js", "app.js")
+APP = app_js()
 
 
 # --- Kalshi vs the books -----------------------------------------------------

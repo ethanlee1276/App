@@ -13,9 +13,10 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 
 
 def _fn(name):
@@ -42,9 +43,13 @@ def test_back_names_and_goes_to_the_page():
     if not shutil.which("node"):
         print("  SKIP node is not installed")
         return
+    # The names and the label live with the detail pages (js/detail.js), the
+    # view with the router in app.js: each piece read whole wherever it is.
+    from _windows import block
     i = APP.index("const BACK_NAMES = ")
     prog = "let _boardReturn = null; const DETAIL_VIEWS = [\"prop\", \"game\", \"pbp\"];\n" + \
-        APP[i:APP.index("function detailBack() {", i)] + """
+        APP[i:APP.index("};", i) + 2] + "\n" + block(APP, "function detailBackLabel()") + "\n" + \
+        block(APP, "function detailBackView()") + """
 const out = [];
 out.push(detailBackView(), detailBackLabel());
 _boardReturn = {view: "likely", y: 900};

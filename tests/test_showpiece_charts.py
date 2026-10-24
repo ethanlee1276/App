@@ -19,6 +19,7 @@ Run directly: `python3 tests/test_showpiece_charts.py`
 
 import os
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -67,7 +68,7 @@ def test_a_missing_vendor_file_leaves_the_fallbacks_standing():
 
 
 def test_the_money_charts_wrap_their_svg_fallbacks():
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert app.count("data-gloss-curve=") >= 3, \
         "home perf, My Bets and Bankroll each carry an upgradeable curve"
     assert app.count("mountGlossCharts(host)") >= 3
@@ -79,7 +80,7 @@ def test_the_money_charts_wrap_their_svg_fallbacks():
 
 
 def test_the_replay_panel_upgrades_and_keeps_its_bars():
-    app = _read("web", "js", "app.js")
+    app = app_js()
     i = app.index("The replay")
     seg = app[i - 400:i + 2600]
     assert "data-echart-gauge" in seg and "data-echart-hist" in seg

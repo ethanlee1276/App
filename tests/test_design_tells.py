@@ -14,12 +14,13 @@ specific regressions found, so they cannot come back quietly.
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def _strip_js(text: str) -> str:
@@ -630,8 +631,7 @@ def test_the_selected_nav_is_announced_and_not_only_drawn():
     arrow-key contract, so it cannot be half-implemented into something
     worse than no ARIA at all.
     """
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     assert "function setSelected" in app
     assert 'setAttribute("aria-current", "page")' in app
     assert 'removeAttribute("aria-current")' in app
@@ -863,7 +863,7 @@ def test_the_indicator_scales_from_a_one_pixel_base():
     rule = css[css.index(".nav-indicator {"):]
     rule = rule[:rule.index("}")]
     assert "display: none" in rule
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     fn = app[app.index("function moveIndicator("):]
     fn = fn[:fn.index("\n}")]
     assert "translateX(${active.offsetLeft}px) scaleX(${active.offsetWidth})" in fn
@@ -873,7 +873,7 @@ def test_the_indicator_scales_from_a_one_pixel_base():
 def test_the_meter_converts_its_percentage_to_a_fraction():
     """data-w is a CSS percentage and scaleX wants the fraction. Passing
     "73%" straight into scaleX would be a no-op at best."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     fn = app[app.index("function fillMeters("):]
     fn = fn[:fn.index("\n}")]
     assert "parseFloat(el.dataset.w) || 0) / 100" in fn

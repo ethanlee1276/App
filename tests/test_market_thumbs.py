@@ -25,12 +25,13 @@ Run directly: `python3 tests/test_market_thumbs.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 from engine import predmarket as pm                             # noqa: E402
 

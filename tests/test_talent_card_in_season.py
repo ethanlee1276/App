@@ -26,6 +26,7 @@ Run directly: `python3 tests/test_talent_card_in_season.py`
 """
 
 import json
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import os
 import subprocess
 import sys
@@ -34,7 +35,7 @@ import shutil as _shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 BUILD = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
 MODEL_DOC = open(os.path.join(ROOT, "docs", "CFB_MODEL.md"), encoding="utf-8").read()
 CHECKS = open(os.path.join(ROOT, "docs", "DROPLET_CHECKS.md"), encoding="utf-8").read()
@@ -194,7 +195,8 @@ def _run():
         fh.write(_HARNESS)
         path = fh.name
     try:
-        res = subprocess.run([node, path, os.path.join(ROOT, "web", "js", "app.js")],
+        from _app import app_js_file
+        res = subprocess.run([node, path, app_js_file()],
                              capture_output=True, text=True, timeout=60)
     finally:
         os.unlink(path)

@@ -32,12 +32,15 @@ Run directly: `python3 tests/test_agate.py`
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+APP = app_js()
+# The sheet and every room's own sheet (css/memes.css, css/fantasy.css …).
+CSS = "\n".join(open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read()
+                for f in sorted(os.listdir(os.path.join(ROOT, "web", "css"))) if f.endswith(".css"))
 
 
 def _fn(src, name):

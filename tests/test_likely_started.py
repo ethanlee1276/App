@@ -36,11 +36,12 @@ import re
 import shutil
 import subprocess
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-JS = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+JS = app_js()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 
 

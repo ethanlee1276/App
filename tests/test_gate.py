@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import gate                                      # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -376,7 +377,7 @@ def test_the_live_endpoint_is_the_one_the_page_actually_calls():
     """A fix on an endpoint nobody calls is the shape of the original
     bug. SPORT_META.api is what load() fetches; that is what has to be
     entitlement-aware."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     i = app.index("const tag = _boardTags[")
     assert "meta.api" in app[i:i + 400], "load() no longer fetches meta.api"
     src = _server()
@@ -504,7 +505,7 @@ def test_every_wholly_paid_file_has_an_entitled_path_to_it():
     added to that tuple cannot quietly skip this."""
     import re
     from engine import gate
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     code = re.sub(r"/\*.*?\*/", " ", app, flags=re.S)
     offenders = []
     for name in gate.PAID_FILES:
@@ -522,7 +523,7 @@ def test_every_wholly_paid_file_has_an_entitled_path_to_it():
 def test_the_paid_fetch_helper_tries_the_entitled_endpoint_first():
     """One helper, because there were four of these and a fifth will be
     written by somebody who did not read the comment."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     i = app.index("async function paidFetch(")
     fn = app[i:app.index("\n}", i) + 2]
     assert '"/api/board/" + name' in fn, "it does not ask the entitled endpoint"
@@ -535,7 +536,7 @@ def test_the_prediction_market_record_asks_the_entitled_endpoint():
     """predmarkets.json is in PAID_FILES, so the copy on the public path
     is a locked stub with no `validation` key. The Record page read that
     stub and drew nothing."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     # The record page goes through the shared helper now — the entitled
     # endpoint and the fallback both live there, which is what
     # test_the_paid_fetch_helper_tries_the_entitled_endpoint_first pins.
@@ -693,8 +694,7 @@ def test_nothing_the_paywall_page_sells_is_published_free():
     because the trial funnel needs a site worth looking at before you
     hand over a card. The rule is only that the shop and the gate agree.
     """
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     features = re.search(r"const PLAN_FEATURES = \[(.*?)\n\];", app, re.S)
     assert features, "PLAN_FEATURES is not where this test thinks it is"
     copy = features.group(1)
@@ -770,8 +770,7 @@ def test_every_gated_board_the_page_reads_has_an_entitled_route():
     shipped bugs actually lived, which is a renderer calling fetch on a
     board it needs the paid half of.
     """
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     # Comments out first, both kinds. This module's docstring names
     # `curl https://qellysbook.com/data/recommendations.json` while
     # explaining the bypass, and a check that reads its own prose as

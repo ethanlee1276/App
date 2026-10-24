@@ -16,8 +16,9 @@ sys.path.insert(0, str(ROOT))
 
 import rosters_build                                          # noqa: E402
 from engine.sources import cfbdata                            # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 
 
 def _fake_payload(conn, sport, today):

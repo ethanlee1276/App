@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine.sources import fetch, nflverse  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 HEAD = "game_id,season,game_type,week,gameday,away_team,home_team\n"
 
@@ -141,7 +142,7 @@ def test_refresh_nfl_rereads_the_schedule_and_says_why_it_skipped():
 
 
 def test_the_status_page_shows_why_on_a_phone():
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    app = app_js()
     css = (ROOT / "web" / "css" / "styles.css").read_text()
     assert 'class="st-why"' in app
     i = css.index("@media (max-width: 640px) {\n  .cl-row")

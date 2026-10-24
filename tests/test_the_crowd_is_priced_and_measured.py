@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 from engine import crowd, crowdfit                                   # noqa: E402
 from engine.sources import polysports                                # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 GAMES = [{"home": "KC", "away": "BUF", "home_name": "Kansas City Chiefs", "away_name": "Buffalo Bills",
           "date": "2026-09-28", "kickoff": "2026-09-29T00:20:00Z", "home_ml": -150, "away_ml": 130},
@@ -288,7 +289,7 @@ def test_the_desk_reads_the_members_board_with_its_moneylines():
 
 
 def test_the_game_page_draws_the_venues_and_not_our_number():
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    app = app_js()
     i = app.index("function crowdStripHTML(")
     fn = app[i:app.index("\n}\n", i)]
     assert '["kalshi", "Kalshi"], ["polymarket", "Polymarket"], ["books", "Books"]]' in fn

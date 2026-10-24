@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from engine import ledger
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _src(*parts):
@@ -364,7 +365,7 @@ def test_the_record_payload_carries_it():
 
 
 def test_the_record_page_draws_it():
-    src = _src("web", "js", "app.js")
+    src = app_js()
     assert "function recLikelySection(lk, scope)" in src
     # On EVERY scope since 2026-09-10: the pooled report under "All bets",
     # that league's own under a league. It used to be omitted entirely on
@@ -375,7 +376,7 @@ def test_the_record_page_draws_it():
 
 
 def test_the_page_shows_the_verdict_rather_than_burying_it():
-    src = _src("web", "js", "app.js")
+    src = app_js()
     at = src.index("function recLikelySection(lk, scope)")
     body = src[at:src.index("function recLongshotSection(ls)", at)]
     assert "lk.verdict" in body
@@ -385,7 +386,7 @@ def test_the_page_shows_the_verdict_rather_than_burying_it():
 
 
 def test_the_page_says_calibration_is_not_profit():
-    src = _src("web", "js", "app.js")
+    src = app_js()
     at = src.index("function recLikelySection(lk, scope)")
     body = src[at:src.index("function recLongshotSection(ls)", at)]
     assert "still lose" in body and "money stays off" in body

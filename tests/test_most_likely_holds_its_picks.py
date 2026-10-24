@@ -27,12 +27,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import likely as K                               # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 FITS = {"rush_yds": {"zero": [-0.04, 0.82], "sigma": 0.54},
         "rec_yds": {"zero": [-0.39, 0.61], "sigma": 0.60},
         "receptions": {"zero": [-0.82, 0.48], "sigma": 0.46}}
 NOW = "2026-09-27T16:00:00Z"
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def _always(_market):

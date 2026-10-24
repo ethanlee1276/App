@@ -39,6 +39,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.longshots import scorer_form as _td_form
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -49,7 +50,7 @@ def _src(*parts):
 
 TD = _src("engine", "touchdowns.py")
 BUILD = _src("nfl_build.py")
-APP = _src("web", "js", "app.js")
+APP = app_js()
 
 
 def _watch_row():

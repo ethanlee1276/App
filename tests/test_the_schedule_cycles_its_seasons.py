@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 import server                                                # noqa: E402
 from engine import db, teamdex                               # noqa: E402
+from _app import app_js, section  # noqa: E402  (app.js and the rooms it loads on first use)
 
 _GAMES = (
     # (season, period, date, home, away, home_score, away_score, spread, total)
@@ -98,22 +99,22 @@ def test_the_endpoint_takes_a_season_and_can_answer_the_schedule_alone():
 
 
 def test_the_page_draws_the_chips_and_reads_one_season_at_a_time():
-    js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    chips = js[js.index("function teamSeasonChipsHTML"):js.index("function teamScheduleHTML")]
+    js = app_js()
+    chips = section("function teamSeasonChipsHTML", "function teamScheduleHTML")
     assert 'data-team-season="${escapeAttr(String(y))}"' in chips and "seasons.length < 2" in chips
-    load = js[js.index("async function teamLoadSeason"):js.index("function teamSeasonChipsHTML")]
+    load = section("async function teamLoadSeason", "function teamSeasonChipsHTML")
     assert "&season=${encodeURIComponent(season)}&only=schedule" in load
     assert "if (st.schedCache[season]) return renderTeamPage();" in load, "a season read once is kept"
     assert "if (_teamState !== st || st.sport !== who[0] || st.team !== who[1]) return;" in load
-    sched = js[js.index("function teamScheduleHTML"):js.index("function teamDepthHTML")]
+    sched = section("function teamScheduleHTML", "function teamDepthHTML")
     assert "const sch = teamSchedFor(d);" in sched and "${chips}" in sched
     assert 'if (seasonBtn) return teamLoadSeason(Number(seasonBtn.dataset.teamSeason));' in js
     assert "schedCache: same ? (_teamState.schedCache || {}) : {} };" in js, "a new team starts on its current season"
 
 
 def test_weeks_read_as_numbers_and_playoff_weeks_by_name():
-    js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    when = js[js.index("const NFL_ROUNDS"):js.index("function teamGameDate")]
+    js = app_js()
+    when = section("const NFL_ROUNDS", "function teamGameDate")
     assert 'const NFL_ROUNDS = { 19: "Wild Card", 20: "Divisional", 21: "Conference", 22: "Super Bowl" };' in when
     assert "return `Wk ${wk}`;" in when and "Number(g.period)" in when
 

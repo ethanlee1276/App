@@ -34,6 +34,7 @@ Run directly: `python3 tests/test_organization.py`
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -46,7 +47,7 @@ def _read(*parts):
 
 
 def _js():
-    return (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
+    return (app_js())
 
 
 def _fn(js, decl):

@@ -25,6 +25,7 @@ from engine import db                                             # noqa: E402
 from engine import parlays as P                                   # noqa: E402
 from engine.nhl import lines as LN                                # noqa: E402
 from engine.sources import nhlshifts as SH                        # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 POS = {"C1": "C", "L1": "L", "R1": "R", "C2": "C", "L2": "L", "R2": "R",
        "D1": "D", "D2": "D", "D3": "D", "D4": "D", "G1": "G", "Ghost": ""}
@@ -116,7 +117,7 @@ def test_rows_and_the_team_page_carry_the_lines():
     assert 'r["line_unit"] = f"{r[\'team\']}-{slot[\'unit\']}"' in src and "save_lines(" in src
     srv = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     assert 'nhl_lines.json' in srv and 'depth["lines"] = got' in srv
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "function teamLinesHTML(ln)" in js and "teamLinesHTML(pub && pub.lines)" in js
 
 

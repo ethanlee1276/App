@@ -22,6 +22,7 @@ Both hide when there is no link. Neither invents one.
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -136,7 +137,7 @@ def test_hiding_them_actually_hides_them():
 
 def test_one_function_mounts_both():
     """Two copies of "no link, no icon" is two places to get it wrong."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     mount = code[code.index("function igMount("):]
     mount = mount[:mount.index("\n}") + 2]
     assert mount.count("barLink(") == 2, (
@@ -145,7 +146,7 @@ def test_one_function_mounts_both():
 
 
 def test_neither_invents_a_link():
-    code = _code(_read(APP))
+    code = _code(app_js())
     bar = code[code.index("function barLink("):]
     bar = bar[:bar.index("\n}") + 2]
     assert "el.hidden = true" in bar
@@ -175,7 +176,7 @@ def test_the_invite_is_gated_and_the_profile_is_not():
 def test_the_browser_makes_no_entitlement_decision_about_the_icon():
     """If app.js decided, the answer would be in app.js — and app.js is
     served to every anonymous visitor."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     mount = code[code.index("function igMount("):]
     mount = mount[:mount.index("\n}") + 2]
     for word in ("entitled", "paywall", "walled"):
@@ -192,7 +193,7 @@ def test_no_invite_is_compiled_into_anything_public():
 
 # --- and it is gone from the account tab ------------------------------------
 def test_the_account_panel_no_longer_draws_its_own():
-    code = _code(_read(APP))
+    code = _code(app_js())
     assert "function discordHTML(" not in code, (
         'Ethan: "we can remove the discord button in the account tab"')
     i = code.index("async function renderBilling(")
@@ -210,7 +211,7 @@ def test_the_places_it_does_live_still_work():
     left is the top-bar icon and the #discord page it opens — and the
     page must stay REACHABLE, which is the thing a sidebar row was doing
     and now nothing in the markup does."""
-    code = _code(_read(APP))
+    code = _code(app_js())
     assert 'barLink("nav-dc"' in code, "the top-bar icon"
     assert "function discordPageHTML(" in code, "the #discord page"
     assert '"discord"' in code and "VIEW_ORDER" in code, \

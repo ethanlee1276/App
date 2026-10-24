@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from engine.cfb import talent as T
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _src(*parts):
@@ -97,14 +98,15 @@ def test_the_card_does_not_draw_a_success_on_the_empty_branch():
     """The warning is its own function since 2026-09-08 (the in-force
     card moved to the Status page, tests/test_talent_card_in_season.py);
     the empty branch of the home page hands off to it and nothing else."""
-    src = _src("web", "js", "app.js")
+    src = app_js()
     at = src.index("function renderTalent()")
     body = src[at:src.index("if (!t.available)", at)
                + src[at:].index("return;\n  }")]
     empty = body[body.index("if (!t.available)"):]
     assert "talentWarnHTML(t)" in empty
     assert 'iconMark("check")' not in empty and "talentCardHTML" not in empty
-    warn = src[src.index("function talentWarnHTML("):src.index("function talentCardHTML(")]
+    from _windows import block
+    warn = block(src, "function talentWarnHTML(")
     assert 'iconMark("warn")' in warn
     assert 'iconMark("check")' not in warn
     assert "--warn" in warn and "--good" not in warn
@@ -113,7 +115,7 @@ def test_the_card_does_not_draw_a_success_on_the_empty_branch():
 def test_the_card_says_which_feeds_answered_with_nothing():
     """A layer at zero fetched cleanly and had no rows, which is a
     different fault from one that failed and needs a different fix."""
-    src = _src("web", "js", "app.js")
+    src = app_js()
     assert "t.empty_layers" in src
     assert "not the same" in src
 

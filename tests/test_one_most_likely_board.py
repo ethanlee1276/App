@@ -15,6 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import likelyboard as B                                  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 GAME = {"home": "DET", "away": "NYJ",
         "scan": {"units": {"NYJ": {"def": {"passing": {"rank": 27}, "rushing": {"rank": 25}}},
@@ -122,7 +123,7 @@ def test_it_is_built_journaled_and_paywalled():
 
 
 def test_the_page_draws_one_board_everywhere():
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     # The Most Likely page and Home draw it when the build carries it…
     assert "host.innerHTML = oneBoardHTML() + likelyScriptsHTML(rows)" in js
     assert "${oneBoardHomeHTML()}" in js
@@ -165,7 +166,7 @@ def test_the_record_reads_the_board_back_by_tier():
     assert rep["settled"] == 4 and rep["open"] == 1
     src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
     assert '"board": board_report(conn, since=since),' in src and '"board_by_sport": {' in src
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "+ recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)" in js
     assert "Most Likely board · by tier" in js
 
@@ -175,7 +176,7 @@ def test_the_picks_tab_is_the_one_board_and_one_door_to_the_edge_picks():
     these are the bets I need to do'". The phone's Picks tab is the Pick of
     the Day, then Top picks, then Strong; the edge bets are one button to
     their own page, not a second copy of them."""
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     tn = js[js.index("function renderTonight() {"):]
     tn = tn[:tn.index("\nfunction ", 10)]
     branch = tn[tn.index("if (oneBoardOn()) {"):tn.index("/* The Picks page in the redesign's shape")]
@@ -196,7 +197,7 @@ def test_the_page_and_home_follow_the_render():
     each pick as a card: rank, face with the team mark, the bet and book,
     the tags, the four checks and Why?, the price, the ring (TOP on a Top
     pick), the door and View details. Home draws the same card."""
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
     hero = js[js.index("function obHeroHTML() {"):]
     hero = hero[:hero.index("\nfunction ", 10)]
@@ -226,7 +227,7 @@ def test_every_chip_counts_the_cards_it_shows():
     filters on one list; each chip counts what it would show with the other
     as it stands; every counted pick is drawn — no fold, no closed tier —
     and a line says how many are showing and how they split."""
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
     fn = lambda name: js[js.index(f"function {name}("):][:js[js.index(f"function {name}("):].index("\nfunction ", 10)]
     board, secs, games = fn("oneBoardHTML"), fn("obTierSections"), fn("obByGameHTML")
@@ -268,7 +269,7 @@ def test_the_record_check_says_its_numbers_and_every_check_is_coloured():
     assert B.record_seen(t, "anytime_td", "over", 0.66) == {"n": 0, "need": 20}
     src = open(os.path.join(ROOT, "engine", "likelyboard.py"), encoding="utf-8").read()
     assert '"record_seen": record_seen(record, r.get("market"), _side(r), prob),' in src
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
     # Reworded 2026-09-28 ("Record: 9 of 20 graded" read like a hit rate).
     assert "if (s.rate == null) return `Record: too new (${s.n} of ${s.need})`;" in js
@@ -350,7 +351,7 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
         assert f"_lb.attach({'result' if build == 'mlb_build.py' else 'out'}, {sport})" in src, build
         assert "_lb.journal(lconn, " in src, build
     # Off football the kind chips are the sport's own markets.
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "if (!obFootball()) return `m:${m}`;" in js and "const filters = obFilterList(all);" in js
     assert 'if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";' in js
 
@@ -410,7 +411,7 @@ def test_a_pick_corrected_under_even_comes_off_unless_the_matchup_backs_it():
     # A touchdown at 42% lives under 50% by nature.
     b = B.build(_result(most_likely=[_td(prob=0.42, odds=150)]))
     assert b["held"] == [] and len(b["rows"]) == 1
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "under 50% with nothing else behind it" in js
 
 

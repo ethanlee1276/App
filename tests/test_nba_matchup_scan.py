@@ -30,6 +30,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine.nba import scan as S, teams as T          # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _night(day, team, opp, **tot):
@@ -358,7 +359,7 @@ def test_the_build_wires_the_scan_before_most_likely_and_journals_the_matchup_pi
 
 
 def test_the_game_page_draws_the_nba_tape_and_its_reads():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     fn = app[app.index("function nbaScanHTML(g) {"):]
     fn = fn[:fn.index("\n}\n")]
     for want in ("g.nba_tape", "t.rows.map(", "tapeTier(r, n)", "t.edges", "scanReadHTML", "d.locked.scan_reads",

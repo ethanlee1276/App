@@ -35,6 +35,7 @@ os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine.sources import livescores as ls                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _event(name="STATUS_IN_PROGRESS", detail="4:12 - 2nd Quarter",
@@ -113,7 +114,7 @@ def test_the_page_gets_the_hold_only_when_there_is_one():
 
 # --- the page ---------------------------------------------------------------
 def _js():
-    return (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    return app_js()
 
 
 def test_every_place_that_draws_a_live_game_asks_about_the_hold():

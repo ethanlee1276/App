@@ -17,15 +17,32 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+APP = app_js()
 HTML = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
 
 
 def _slice(start_marker, end_marker):
-    i = APP.index(start_marker)
-    return APP[i:APP.index(end_marker, i + 1)]
+    """From the start marker to the end marker inside the same file. My Bets'
+    page moved to js/account.js on 2026-10-24 while some of its helpers stayed
+    in app.js, so a marker's old neighbour can be in the other file: then the
+    slice is the start marker's own function, read whole."""
+    from _app import rooms
+    from _windows import block
+    for f in rooms() + ["app.js"]:
+        src = open(os.path.join(ROOT, "web", "js", f), encoding="utf-8").read()
+        i = src.find(start_marker)
+        if i < 0:
+            continue
+        j = src.find(end_marker, i + 1)
+        if j >= 0:
+            return src[i:j]
+        # A function is read whole; a section runs to the end of its file
+        # (the room keeps the page's code in its original order).
+        return block(src, start_marker) if start_marker.startswith("function ") else src[i:]
+    raise ValueError(start_marker)
 
 
 def test_the_pnl_math_is_correct_on_known_answers():

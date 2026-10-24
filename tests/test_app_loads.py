@@ -176,6 +176,11 @@ try {
   // inside a function would hoist differently and hide the exact bug
   // this file exists for.
   vm.runInThisContext(src, { filename: "app.js" });
+  // THE ROOMS, on top of it, in the same context (app.js loadRoom): each
+  // must run after app.js and replace the stubs it was loaded for.
+  for (const room of JSON.parse(process.argv[7] || "[]")) {
+    vm.runInThisContext(fs.readFileSync(room, "utf8"), { filename: room });
+  }
   out.ok = true;
 } catch (e) {
   // MESSAGE FIRST, then the stack. V8 puts the offending SOURCE LINE at
@@ -189,6 +194,7 @@ if (out.ok) {
   for (const name of JSON.parse(process.argv[3])) {
     if (typeof globalThis[name] !== "function") out.missing.push(name);
   }
+  out.stubs = JSON.parse(process.argv[8] || "[]").filter((n) => String(globalThis[n]).includes("roomCall("));
   // A TOP-LEVEL `const` IS NOT A PROPERTY OF globalThis. That is correct
   // ES semantics — only `var` and function declarations go there — so
   // reading globalThis.PLANS reports every constant in the file as
@@ -220,8 +226,14 @@ setTimeout(() => {
 #: Scripts index.html loads before app.js that app.js calls into.
 PRELUDE = [os.path.join(ROOT, "web", "js", "visuals.js")]
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _app import rooms  # noqa: E402  (the rooms app.js loads on first use)
 
-def _run(hash_="", path=None):
+ROOMS = [os.path.join(ROOT, "web", "js", f) for f in rooms()]
+STUBS = re.findall(r'^function (\w+)\(\.\.\.a\) \{ return roomCall\(', open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read(), re.M)
+
+
+def _run(hash_="", path=None, with_rooms=False):
     with tempfile.TemporaryDirectory() as tmp:
         harness = os.path.join(tmp, "harness.js")
         with open(harness, "w", encoding="utf-8") as fh:
@@ -229,7 +241,8 @@ def _run(hash_="", path=None):
         proc = subprocess.run(
             [NODE, harness, path or os.path.join(ROOT, "web", "js", "app.js"),
              json.dumps(REQUIRED), json.dumps(REQUIRED_VALUES), hash_,
-             json.dumps([p for p in PRELUDE if os.path.isfile(p)])],
+             json.dumps([p for p in PRELUDE if os.path.isfile(p)]),
+             json.dumps(ROOMS if with_rooms else []), json.dumps(STUBS)],
             capture_output=True, text=True, timeout=120)
     if proc.returncode != 0:
         raise AssertionError(
@@ -249,15 +262,26 @@ def test_app_js_evaluates_without_throwing():
 def test_every_function_the_pages_need_exists_afterwards():
     """Evaluation reaching the end is necessary and not sufficient — a
     function defined inside a block that never executed is still
-    missing."""
-    got = _run()
+    missing. The paywall's and the account's builders live in their rooms
+    since 2026-10-24, so this reads the site with every room loaded."""
+    got = _run(with_rooms=True)
     assert got["ok"], got["error"]
     assert not got["missing"], \
         f"these are referenced by the pages and do not exist: {got['missing']}"
 
 
+def test_every_room_runs_on_top_of_app_js_and_replaces_its_stubs():
+    """A room is a classic script evaluated after app.js (app.js
+    loadRoom). One that throws, or that does not declare the renderer it
+    was loaded for, is a page that stays blank forever."""
+    assert len(ROOMS) >= 6 and len(STUBS) >= 24, (ROOMS, STUBS)
+    got = _run(with_rooms=True)
+    assert got["ok"], "a room throws when loaded on top of app.js: " + str(got["error"])
+    assert got["stubs"] == [], f"loaded, and still the stub: {got['stubs']}"
+
+
 def test_every_top_level_constant_the_pages_read_exists():
-    got = _run()
+    got = _run(with_rooms=True)
     assert got["ok"], got["error"]
     assert not got["missingValues"], \
         f"missing top-level constants: {got['missingValues']}"

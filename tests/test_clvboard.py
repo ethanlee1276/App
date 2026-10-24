@@ -30,6 +30,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import clvboard, ledger                           # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _read(*parts):
@@ -147,7 +148,7 @@ def test_the_gate_is_the_ledgers_own_number():
 
 # --- the page ----------------------------------------------------------------
 
-APP = _read("web", "js", "app.js")
+APP = app_js()
 
 
 def test_the_record_page_gives_it_a_room():

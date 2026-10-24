@@ -13,6 +13,7 @@ cannot drift into meaning different things.
 """
 
 import json
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import os
 import re
 import shutil
@@ -24,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 
 from engine import ledger  # noqa: E402
 

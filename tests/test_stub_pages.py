@@ -19,6 +19,7 @@ Run directly: `python3 tests/test_stub_pages.py`
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -32,7 +33,7 @@ def _read(*parts):
 NOT_FOUND = _read("web", "404.html")
 MAINT = _read("web", "maintenance.html")
 CSS = _read("web", "css", "styles.css")
-APP = _read("web", "js", "app.js")
+APP = app_js()
 SERVER = _read("server.py")
 
 
@@ -189,8 +190,8 @@ def test_every_market_row_opens_with_a_mark_not_a_word():
     assert "forecast_f" not in body.split('icon("sun"')[1][:200], \
         "the weather mark must not vary with the forecast"
     # The venue monogram is ours, and it is used on both surfaces.
-    j = APP.index("function venueMark(")
-    vm = APP[j:APP.index("\nfunction deskThumb(", j)]
+    from _app import section
+    vm = section("function venueMark(", "\nfunction deskThumb(")
     assert "vmark" in vm and "kalshi" in vm and "poly" in vm
     assert APP.count("venueMark(") >= 3, "board and detail panel both wear it"
     for sel in (".kx-thumb {", ".kx-thumb-ic {", ".vmark {", ".vmark.kalshi {"):

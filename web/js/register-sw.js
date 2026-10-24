@@ -50,6 +50,9 @@
   var reg = null;
   var stale = false;      // a newer shell is cached; this page is not it
   var reloading = false;  // one reload, ever — never a loop
+  // A page that opened with no worker is claimed by the first one: that is
+  // an install, not an update, and this page is already the new shell.
+  var hadWorker = !!navigator.serviceWorker.controller;
 
   function check() {
     var now = Date.now();
@@ -97,7 +100,11 @@
   });
 
   navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (!hadWorker) { hadWorker = true; return; }
     stale = true;
+    // app.js's rooms read this: a room fetched now would be the new
+    // version's, so a page asked for on this one reloads instead (loadRoom).
+    window.QB_STALE = true;
     refreshWhenHidden();
   });
 })();

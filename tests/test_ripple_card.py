@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import redistribute as rd                          # noqa: E402
 from engine.models import Injury, RUSH_YDS, REC_YDS, RECEPTIONS  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -176,7 +177,7 @@ def test_the_row_carries_it_and_the_projection_does_not_read_it():
 
 
 def test_the_page_says_it_on_the_card_the_prop_page_and_the_likely_card():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     for fn in ("function rippleChip(", "function rippleCardHTML(", "function rippleLine("):
         assert fn in app, fn
     i = app.index("function cardHTML(")

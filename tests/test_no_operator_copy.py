@@ -34,6 +34,7 @@ Run directly: `python3 tests/test_no_operator_copy.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import re
 import sys
 
@@ -67,8 +68,7 @@ FORBIDDEN = (
 
 def _js():
     # app.js and the meme-coin page it loads on first use (js/memes.js, 2026-10-24).
-    return "\n".join(open(os.path.join(ROOT, "web", "js", f), encoding="utf-8").read()
-                     for f in ("app.js", "memes.js", "fantasy.js"))
+    return app_js()
 
 
 def _strip_comments(src: str) -> str:

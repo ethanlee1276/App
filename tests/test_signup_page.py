@@ -17,6 +17,7 @@ one of them.
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +30,7 @@ def _read(p):
 
 
 def _code():
-    s = re.sub(r"/\*.*?\*/", " ", _read(APP), flags=re.S)
+    s = re.sub(r"/\*.*?\*/", " ", app_js(), flags=re.S)
     return re.sub(r"(?m)^\s*//.*$", "", s)
 
 

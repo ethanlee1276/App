@@ -20,6 +20,7 @@ import os
 import shutil
 import subprocess
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -39,7 +40,7 @@ T = _Fixture()
 
 REPORT_JS = os.path.join(ROOT, "web", "js", "report.js")
 REPORT_CSS = open(os.path.join(ROOT, "web", "css", "report.css"), encoding="utf-8").read()
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 URL = "https://qellysbook.com/game/gb-det-1025"
 
 

@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.db import connect, upsert_player_logs
 from engine import rosters as R
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _log(player, team, period, market="pa", season=2026, pos="OF"):
@@ -102,7 +103,7 @@ def _read(*parts):
 
 def test_rosters_is_a_sport_tab_not_a_tool_page():
     html = _read("web", "index.html")
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert 'data-sport="rosters"' not in html, "still a standalone tool page"
     assert 'data-view="rosters"' in html, "no per-sport tab"
     modes = re.search(r"const STANDALONE_MODES = \[([^\]]*)\]", js).group(1)
@@ -110,7 +111,7 @@ def test_rosters_is_a_sport_tab_not_a_tool_page():
 
 
 def test_each_sport_loads_its_own_payload():
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert "rosters_${key}.json" in js or "rosters_${sport}.json" in js, \
         "the page still loads one shared roster file"
 
@@ -119,7 +120,7 @@ def test_switching_leagues_redraws_the_roster_tab():
     """Rosters live outside the slate, so nothing in renderAll touched
     them — switching leagues left the old league's teams on screen under
     the new league's header."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     fn = js[js.index("function renderAll("):js.index("function renderEmptySlate(")]
     assert 'state.view === "rosters"' in fn
 
@@ -130,7 +131,7 @@ def test_every_roster_sport_describes_its_source():
     scoreboard reads — and appearance-built rosters shipped 2026-08-24.
     The claim that survives: every sport with a rosters tab says which
     KIND of roster it shows, and CFB is now one of them."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     hidden = js[js.index("const HIDDEN_VIEWS"):]
     hidden = hidden[:hidden.index("};")]
     cfb_line = hidden.split("cfb:")[1].split("]")[0]
@@ -144,7 +145,7 @@ def test_every_roster_sport_describes_its_source():
 def test_the_page_says_which_kind_of_roster_it_is_showing():
     """A published depth chart and a list of who happened to play are not
     the same claim, and the page must not present them as one."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     copy = js[js.index("const ROSTER_COPY"):js.index("function rosterPlayerHTML")]
     assert "depth chart" in copy, "the NFL's source is not described"
     for sport in ("mlb:", "nba:", "wnba:"):
@@ -155,7 +156,7 @@ def test_the_page_says_which_kind_of_roster_it_is_showing():
 def test_the_search_box_speaks_the_sport_it_is_sitting_on():
     """It shipped asking for "49ers, SF, Purdy" on every league, which on
     the MLB page is an example of nothing you can type."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     block = js[js.index("const ROSTER_PLACEHOLDER"):js.index("const ROSTER_COPY")]
     for sport, hint in (("nfl", "Purdy"), ("mlb", "Judge"),
                         ("nba", "Tatum"), ("wnba", "Stewart")):
@@ -286,8 +287,7 @@ def test_the_player_search_falls_back_to_the_roster_directory():
     profile IS a prop card — so a miss now consults the roster payload and
     says who he is, where he plays, and why there is no card."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    app = open(os.path.join(root, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     body = app[app.index("async function renderPlayers"):]
     body = body[:body.index("\nfunction profileHTML")]
     assert "rosterMatches(q)" in body

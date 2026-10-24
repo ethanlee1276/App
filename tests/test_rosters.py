@@ -23,6 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import rosters
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _p(full, team, pos="WR", order=None, status="Active", exp=3, age=25):
@@ -255,9 +256,7 @@ def test_the_page_shows_why_it_fell_back_instead_of_a_short_roster():
     is a wrong roster, which is the more expensive kind of wrong.
     """
     import os
-    app = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "web", "js", "app.js"),
-        encoding="utf-8").read()
+    app = app_js()
     assert 'const stale = d.feed === "unavailable"' not in app
     assert 'const stale = (d.note || "")' in app
 

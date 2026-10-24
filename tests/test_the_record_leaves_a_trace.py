@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import ledger                                          # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _ledger():
@@ -271,7 +272,7 @@ def test_the_integrity_report_and_the_doctor_check():
 
 
 def test_the_page_says_what_the_chain_covers_and_shows_the_changes():
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    app = app_js()
     i = app.index("function recForecastLog(f")
     body = app[i:i + 5000]
     assert "the lead time" in body and "unexplained" in body

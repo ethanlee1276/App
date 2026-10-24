@@ -47,6 +47,7 @@ sys.path.insert(0, str(ROOT))
 import livescore_build as B                                  # noqa: E402
 import rinkprobe as P                                        # noqa: E402
 from engine.sources import nhlrink as R                      # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 HOME_ID, AWAY_ID, GAME = 6, 3, 2026020123                    # BOS at home, NYR away
 PAST, MARCH, LIND, MCAVOY, SWAY = 8477956, 8473419, 8480000, 8479325, 8480280
@@ -349,7 +350,7 @@ def test_the_probe_reports_the_ends_the_table_the_ice_and_the_tracking():
 RC = (ROOT / "web" / "js" / "rinkcast.js").read_text(encoding="utf-8")
 RC_CSS = (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8")
 TEAMS = (ROOT / "web" / "js" / "teams_nhl.js").read_text(encoding="utf-8")
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 GC = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
 
 

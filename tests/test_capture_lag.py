@@ -246,8 +246,7 @@ def test_the_export_and_the_page_carry_the_restated_view():
     # restated block, per sport as well as overall.
     assert '"restated": {"overall": restated_performance(conn' in src
     assert "restated_performance(conn, sp" in src
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("function recRestatedSection(")
     fn = app[i:app.find("\nfunction ", i + 1)]
     # Apostrophe-agnostic: the guard is about the COPY, not about which
@@ -289,6 +288,7 @@ def test_the_export_and_the_page_carry_the_restated_view():
 from engine.fatigue import kickoff_instant                     # noqa: E402
 from engine.ledger import _kickoff_map, _lead_min              # noqa: E402
 
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 def test_the_date_and_the_eastern_clock_make_an_instant():
     assert kickoff_instant("2026-09-13", "13:00") == "2026-09-13T13:00:00-04:00"

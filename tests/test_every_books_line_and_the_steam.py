@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT))
 from engine import db as D                                       # noqa: E402
 from engine import linebooks as LB                               # noqa: E402
 from engine import proptape as PT                                # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 EXTRAS = ROOT / "web" / "js" / "extras.js"
 NOW = dt.datetime(2026, 10, 15, 20, 0, tzinfo=dt.timezone.utc)
@@ -171,7 +172,7 @@ def test_the_pick_page_draws_a_line_per_book_and_the_marks():
     assert "The line each book hung." in html and ">fanduel</td>" in html
     assert "the over’s price, as a chance" in got["flat"] and "Also quoting: z." in got["flat"]
     assert "No book-by-book history for this market yet" in got["none"]
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     assert '<div id="pp-books"></div>' in app
     assert 'X.bookLines(document.getElementById("pp-books"), state.sport, r.player, r.market)' in app
 

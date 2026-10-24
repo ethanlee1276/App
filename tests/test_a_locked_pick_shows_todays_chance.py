@@ -20,8 +20,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import likely as K                                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 FITS = {"rush_yds": {"zero": [-0.04, 0.82], "sigma": 0.54}}
 RUNG = [{"book": "Novig", "line": 69.5, "over_odds": 300, "under_odds": -212}]
 

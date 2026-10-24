@@ -35,11 +35,12 @@ Run directly: `python3 tests/test_cold_open.py`
 import json
 import os
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 VIEWS = ["recommended", "scanner", "longshots", "futures", "edge", "injuries",
          "weather", "players", "live", "trending", "rosters", "standings",

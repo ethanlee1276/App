@@ -30,8 +30,9 @@ sys.path.insert(0, ROOT)
 from engine import odds as O                                     # noqa: E402
 from engine.livepicks import TRACKER_COLS                        # noqa: E402
 from engine.models import SportsbookLine as L                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 LIVE = open(os.path.join(ROOT, "engine", "livepicks.py"), encoding="utf-8").read()
 
 

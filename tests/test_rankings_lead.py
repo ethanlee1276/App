@@ -34,10 +34,11 @@ import subprocess
 import sys
 import tempfile
 import shutil as _shutil
+from _app import app_js, app_js_file  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
 DOC = open(os.path.join(ROOT, "docs", "DROPLET_CHECKS.md"), encoding="utf-8").read()
 
@@ -169,7 +170,7 @@ def _run():
         fh.write(_HARNESS)
         path = fh.name
     try:
-        res = subprocess.run([node, path, os.path.join(ROOT, "web", "js", "app.js")],
+        res = subprocess.run([node, path, app_js_file()],
                              capture_output=True, text=True, timeout=60)
     finally:
         os.unlink(path)

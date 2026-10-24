@@ -26,6 +26,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ledger
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EPOCH = ledger.RECORD_EPOCH
@@ -58,8 +59,7 @@ def _journal():
 
 
 def _js():
-    return open(os.path.join(ROOT, "web", "js", "app.js"),
-                encoding="utf-8").read()
+    return app_js()
 
 
 def _fn(src, decl):

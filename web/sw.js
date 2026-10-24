@@ -70,7 +70,7 @@ const SHELL = [
  * so a one-time visitor on cellular never downloads every page; and in the
  * version's hash (server.py), so a change to any of them is a new version. */
 const LAZY = [
-  "/js/fantasy.js", "/css/fantasy.css", "/js/memes.js", "/css/memes.css", "/js/extras.js", "/css/extras.css", "/js/social.js", "/css/social.css",
+  "/js/fantasy.js", "/css/fantasy.css", "/js/record.js", "/js/detail.js", "/js/account.js", "/js/more.js", "/js/memes.js", "/css/memes.css", "/js/extras.js", "/css/extras.css", "/js/social.js", "/css/social.css",
   "/js/gamecast.js", "/css/gamecast.css", "/js/hoopscast.js", "/css/hoopscast.css",
   "/js/rinkcast.js", "/css/rinkcast.css", "/js/slip.js", "/css/slip.css",
   "/js/report.js", "/css/report.css", "/js/carrychart.js", "/css/carrychart.css",

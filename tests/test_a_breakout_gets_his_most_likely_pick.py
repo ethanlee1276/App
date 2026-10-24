@@ -27,6 +27,7 @@ sys.path.insert(0, ROOT)
 
 from engine import gamescan as G                                 # noqa: E402
 from engine import likely as K                                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 FITS = {"rush_yds": {"zero": [-0.04, 0.82], "sigma": 0.54}}
 
@@ -49,7 +50,7 @@ def _row(player, team="GB", opponent="ATL", projection=62.0, **kw):
     got.update(kw)
     return got
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 PIPE = open(os.path.join(ROOT, "engine", "pipeline.py"), encoding="utf-8").read()
 CFB = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
 

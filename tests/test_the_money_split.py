@@ -21,8 +21,9 @@ sys.path.insert(0, str(ROOT))
 
 from engine import crowd, moneysplit as M                     # noqa: E402
 from engine.sources import polysports as P                     # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 NOW = 1_790_000_000.0          # 2026-09-21 — every fixture game is still to come
 
 GAME = {"away": "BUF", "home": "KC", "away_name": "Buffalo Bills", "home_name": "Kansas City Chiefs",

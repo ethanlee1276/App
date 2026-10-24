@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine.ufc import moves as M                       # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 START = "2026-10-18T02:00:00Z"
 T0 = datetime.datetime(2026, 10, 18, 2, tzinfo=datetime.timezone.utc).timestamp()
@@ -159,7 +160,7 @@ def _fn(src, decl):
 
 
 def test_the_page_draws_the_line_escaped_on_both_cards():
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     code = re.sub(r"/\*.*?\*/", "", app, flags=re.S)
     assert "${ufcLineHTML(p.line_note)}" in code, "the pick card does not draw the line"
     assert "${ufcLineHTML(m.line_note)}" in code, "the pass card does not draw the line"

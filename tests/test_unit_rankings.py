@@ -10,6 +10,7 @@ Run directly: `python3 tests/test_unit_rankings.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import sys
 import tempfile
 
@@ -68,9 +69,7 @@ def test_the_build_attaches_it_and_the_page_draws_it():
     with open(os.path.join(ROOT, "standings_build.py"),
               encoding="utf-8") as f:
         assert 'table["unit_rankings"] = ur' in f.read()
-    with open(os.path.join(ROOT, "web", "js", "app.js"),
-              encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     # The page hands the whole table over too (2026-09-05): when there
     # are no rankings the section still renders on a football page and
     # needs the build's `season_wait`/`first_games`/`feed_error` to say

@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.sources import kalshi as kx                       # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -188,8 +189,7 @@ def test_the_model_probability_is_home_fixed_not_pick_relative():
 def test_the_page_shows_both_venues_and_names_their_roles():
     html = open(os.path.join(ROOT, "web", "index.html"),
                 encoding="utf-8").read()
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     # The sidebar item became a chip in the top Markets row (Ethan,
     # 2026-08-12: "the Polly market page ... up here"), renamed
     # 2026-08-18: "change the name of the polly market page to
@@ -239,8 +239,7 @@ def test_one_board_carries_both_venues_without_faking_symmetry():
     Kalshi runs a two-sided book we price against, Polymarket does not,
     so a Polymarket row shows a dash in the model and edge columns
     rather than a number nobody computed."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     fn = app[app.index("function pmVenueRows("):]
     fn = fn[:fn.index("\nconst PM_BOARD_SHOWN")]
     assert '"KALSHI"' in fn and '"POLY"' in fn
@@ -259,8 +258,7 @@ def test_the_prediction_page_is_rooms_not_one_long_scroll():
     """Three questions, three tabs: what to bet, who is betting, and
     whether the flow signal has ever been right. The scroll Ethan hit was
     all three stacked."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("async function renderIntel()")
     fn = app[i:app.index("\n/* =====", i)]
     assert 'subtabbedHTML("intel"' in fn, "the page is still one scroll"

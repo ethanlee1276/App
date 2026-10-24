@@ -24,6 +24,7 @@ an EDGE, and that the selected one is unmistakable.
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -36,8 +37,7 @@ def _css():
 
 
 def _read_js():
-    return open(os.path.join(HERE, "web", "js", "app.js"),
-                encoding="utf-8").read()
+    return app_js()
 
 
 def _rule(css, selector):

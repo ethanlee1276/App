@@ -43,6 +43,7 @@ Run directly: `python3 tests/test_nfl_week1_fallback.py`
 import ast
 import os
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -312,7 +313,7 @@ def test_the_edge_board_says_where_a_schedule_only_price_came_from():
     which prices off team ratings against the schedule's own spread and
     total at the standard −110 because no odds pull ran. Same board,
     different provenance; the line that describes it has to say which."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     i = app.index("const plays = rows.filter(")
     block = app[i:i + 1600]
     assert '"schedule-only"' in block, \
@@ -331,7 +332,7 @@ def test_the_board_does_not_claim_a_verdict_it_never_reached():
 
     The census branch above it already learned this lesson once, on the
     WNBA. This is the same lesson one step earlier in the season."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     # The heading stops asserting a verdict.
     i = app.index("function noMarketHeading()")
     head = app[i:app.index("\n}", i)]
@@ -419,7 +420,7 @@ def test_the_panel_does_not_trust_the_payload_shape_either():
 # it since the chart existed. Reproduced in a browser against the real
 # fallback payload, fixed, and pinned here.
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def test_the_fallback_ships_the_history_its_game_bets_open_onto():

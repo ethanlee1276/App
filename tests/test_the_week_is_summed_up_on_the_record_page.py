@@ -22,8 +22,9 @@ os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import ledger, recap                                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 NOW = dt.datetime(2026, 10, 5, 3, 0)          # 11 pm Sunday, Eastern
 _SEQ = [0]
 

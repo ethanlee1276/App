@@ -37,6 +37,7 @@ from engine import accounts as A                                # noqa: E402
 from engine import db as DB                                     # noqa: E402
 from engine import gate                                         # noqa: E402
 from engine import streak as S                                  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 NOW = dt.datetime(2026, 8, 24, 18, 0, tzinfo=dt.timezone.utc)
 TODAY = "2026-08-24"
@@ -431,7 +432,7 @@ def test_the_page_says_the_picks_landed():
     """The note under the card must switch to a confirmation once all
     picks are in — an empty string there is the silence that was
     reported as 'I made my picks and nothing happened'."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     i = app.index("async function renderStreak()")
     body = app[i:i + 6000]
     assert "You’re in for tonight" in body
@@ -487,7 +488,7 @@ def test_server_routes_and_launch_sweep_exist():
 
 
 def test_page_is_dispatched_and_outside_the_wall():
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert 'if (name === "streak") renderStreak();' in app, \
         "navigating to #streak would show a blank page — the futures lesson"
     wall = app[app.index("const WALL_OPEN"):]

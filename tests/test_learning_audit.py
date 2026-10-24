@@ -18,6 +18,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -340,8 +341,7 @@ def test_the_page_says_the_two_lines_are_already_added_up():
     what moved is which rows the headline counts."""
     import os
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    app = open(os.path.join(root, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     assert "already added" in app
     assert "dollars stay real-money-only" in app
     # The old framing called them "two books", which is the thing that is

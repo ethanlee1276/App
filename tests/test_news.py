@@ -10,6 +10,7 @@ Run directly: `python3 tests/test_news.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import sys
 import tempfile
 
@@ -78,9 +79,7 @@ def test_the_loop_builds_it_and_the_page_links_out_safely():
     with open(os.path.join(ROOT, "launch.py"), encoding="utf-8") as f:
         assert "news_build.py" in f.read()
     assert os.path.exists(os.path.join(ROOT, "news_build.py"))
-    with open(os.path.join(ROOT, "web", "js", "app.js"),
-              encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     assert "function newsSectionHTML(sport, news)" in js
     at = js.index("function newsSectionHTML")
     body = js[at:js.index("\nasync function renderInjuries", at)]

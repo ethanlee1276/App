@@ -27,6 +27,7 @@ Run directly: `python3 tests/test_class_collisions.py`
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -167,8 +168,7 @@ def test_the_ufc_legend_kept_its_own_names():
         assert f".urb-{suffix}" in NAKED, (
             f".urb-{suffix} is gone — the UFC legend is back on the "
             f"splits table's class names")
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("ufc-rb-legend")
     seg = app[i:i + 1400]
     assert 'class="rb-row"' not in seg, \

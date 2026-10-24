@@ -20,8 +20,9 @@ sys.path.insert(0, ROOT)
 
 from engine import pricedplayers as P                            # noqa: E402
 from engine import gamescan as G                                 # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def test_a_newer_pull_without_him_marks_him_pulled_and_a_repeat_does_not():

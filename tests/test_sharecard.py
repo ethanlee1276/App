@@ -15,6 +15,7 @@ Run directly: `python3 tests/test_sharecard.py`
 
 import os
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -25,7 +26,7 @@ def _read(*parts):
         return fh.read()
 
 
-APP = _read("web", "js", "app.js")
+APP = app_js()
 
 
 def test_a_tainted_canvas_cannot_happen():

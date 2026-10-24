@@ -33,6 +33,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import gamescan as G                                     # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 #: Jacksonville as Ethan read it: soft to receivers' yards (7th-most), stingy
 #: through the air overall (5th-fewest passing yards), few TDs to WRs.
@@ -74,7 +75,7 @@ def test_the_corners_carry_the_yards_they_allowed():
 
 
 def _js(names, consts):
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     out = []
     for c in consts:
         m = re.search(rf"^const {c} = .*?;$", app, re.M)
@@ -136,7 +137,7 @@ def test_the_page_sorts_the_case_for_the_under_and_says_why_it_stands():
 
 
 def test_the_game_script_names_a_back_and_forth_game():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     assert "Close · back-and-forth, high-scoring" in app
     assert "a close, back-and-forth game" in app
     fn = app[app.index("function whyLikelyHTML("):]

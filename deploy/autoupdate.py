@@ -196,7 +196,13 @@ def _trim(repo, clear=False) -> str:
         return ""
     said = [ln for ln in p.stdout.splitlines()
             if ln.strip() and not ln.endswith(": current")]
-    return f" · trimmed: {'; '.join(said)}" if said else ""
+    # A count, and the files it could not trim in full: the note keeps its
+    # last 400 characters, and fourteen files' sizes pushed the run's own
+    # word ("restarted") out of it (2026-10-24, the rooms split).
+    left = [ln for ln in said if "served as written" in ln]
+    done = len(said) - len(left)
+    return ((f" · trimmed {done} file(s)" if done else "")
+            + (f" · {'; '.join(left)}" if left else ""))
 
 
 #: THE RESTART WAITS FOR THE BOARD SWEEP IN PROGRESS (2026-10-14). This

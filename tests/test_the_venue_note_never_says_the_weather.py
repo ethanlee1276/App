@@ -25,8 +25,9 @@ from engine import askbot as A                                     # noqa: E402
 from engine.models import Weather                                  # noqa: E402
 from engine.stadiums import STADIUMS                               # noqa: E402
 from engine.weather import evaluate_weather                        # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 
 SEASONAL = re.compile(r"\b(cold|winter|december|january|november|late[- ]season|late in the|"
                       r"early[- ]season|heat|humid\w*|snow|freez\w*|thunderstorm\w*|climate)\b", re.I)

@@ -16,6 +16,7 @@ Run directly: `python3 tests/test_lab_cfb.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import sys
 import tempfile
 
@@ -102,9 +103,7 @@ def test_the_card_does_not_dress_outcomes_as_real_closes():
     """The chip ternary defaulted everything non-naive, non-mixed to the
     green "real closes" — the exact market-relative claim an
     outcomes-basis entry cannot make."""
-    with open(os.path.join(ROOT, "web", "js", "app.js"),
-              encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     assert 'outcomes ? "outcomes only"' in js
     assert 'outcomes ? "never priced — nothing here is a bet"' in js
 

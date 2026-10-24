@@ -13,6 +13,7 @@ Run directly: `python3 tests/test_leadtime_clv.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import sqlite3
 import sys
 import tempfile
@@ -106,9 +107,7 @@ def test_the_export_and_the_page_carry_it():
               encoding="utf-8") as f:
         led = f.read()
     assert '"clv_leadtime": _clv_leadtime(conn, since),' in led
-    with open(os.path.join(ROOT, "web", "js", "app.js"),
-              encoding="utf-8") as f:
-        app = f.read()
+    app = app_js()
     assert "function recLeadtimeSection(lt)" in app
     assert "recLeadtimeSection(d.clv_leadtime)" in app
     with open(os.path.join(ROOT, "engine", "maintenance.py"),

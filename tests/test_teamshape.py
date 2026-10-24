@@ -22,6 +22,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import teamshape
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -153,8 +154,7 @@ def test_the_build_ships_shapes_and_the_page_draws_them():
     assert "latest_shaped_season" in src and "_ts.blended_shapes(_sconn, \"nfl\", args.season," in src
     assert 'result["team_shapes_season"] = args.season' in src
     assert "except Exception" in block, "shapes must never fail a build"
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     j = app.index("Team shapes")
     seg = app[j - 200:j + 3600]
     assert "data-echart-radar" in seg

@@ -36,6 +36,7 @@ from _slate_clock import kickoff as _kickoff                 # noqa: E402  (path
 
 from engine import ledger, potd                               # noqa: E402
 from engine.odds import devig_two_way                         # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 #: NAIVE UTC, as the builds pass it (see test_the_days_pick_is_decided_once…):
 #: Saturday noon Eastern, a card that night.
@@ -242,7 +243,7 @@ def test_the_cards_price_is_one_you_can_bet_under_its_own_book():
 
 # --- the page ----------------------------------------------------------------------
 def test_the_ufc_page_draws_the_card_on_a_bet_day():
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     i = app.index("async function renderUFC()")
     body = app[i:app.index("\n}\n", i)]
     assert "${potdHeroHTML(d)}" in body

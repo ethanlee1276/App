@@ -26,9 +26,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import ledger, reportcard                            # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 EXTRAS = ROOT / "web" / "js" / "extras.js"
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 
 

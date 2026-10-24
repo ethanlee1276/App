@@ -31,6 +31,7 @@ for anyone who opens the network tab. And one per account — otherwise
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import re
 import sqlite3
 import sys
@@ -66,7 +67,7 @@ def _db():
 
 # --- the free plan is gone --------------------------------------------------
 def test_no_page_offers_a_free_plan():
-    app = _code(_read(APP))
+    app = _code(app_js())
     for phrase in ('"Free"', ">Free<", "$0<span>always",
                    "Everything in Free", "free half is free forever"):
         assert phrase not in app, "a free plan survives: %r" % phrase
@@ -76,7 +77,7 @@ def test_nothing_advertises_the_walled_pages_as_free():
     """The specific lie: the card listed pages the wall refuses. Whatever
     a page says is included has to be something an unpaid reader can
     actually reach."""
-    app = _code(_read(APP))
+    app = _code(app_js())
     m = re.search(r"const WALL_OPEN = \[([^\]]*)\]", app)
     openable = set(re.findall(r'"([a-z]+)"', m.group(1)))
     assert "record" in openable
@@ -89,7 +90,7 @@ def test_nothing_advertises_the_walled_pages_as_free():
 
 def test_the_account_page_still_says_what_a_subscription_costs():
     """Removing the free card must not remove the price list with it."""
-    app = _read(APP)
+    app = app_js()
     body = app[app.index("function billPlansHTML("):]
     body = body[:body.index("\n}\n")]
     assert "$25" in body
@@ -185,7 +186,7 @@ def test_a_trial_still_entitles_and_still_has_a_sentence():
 # --- what the reader is told ------------------------------------------------
 def _trial_copy():
     """Everything on the paywall and checkout that mentions the trial."""
-    app = _read(APP)
+    app = app_js()
     out = []
     for fn in ("paywallHTML", "checkoutHTML", "faqFor"):
         i = app.index("function " + fn + "(")
@@ -217,7 +218,7 @@ def test_the_offer_is_not_shown_to_somebody_who_cannot_have_it():
     """A card promising three days that checkout then refuses is worse
     than no offer."""
     for fn in ("paywallHTML", "checkoutHTML", "faqFor", "billPlansHTML"):
-        app = _read(APP)
+        app = app_js()
         i = app.index("function " + fn + "(")
         body = _code(app[i:app.index("\n}\n", i)])
         assert "trial_eligible" in body, (
@@ -225,7 +226,7 @@ def test_the_offer_is_not_shown_to_somebody_who_cannot_have_it():
 
 
 def test_the_client_never_invents_a_trial_the_server_did_not_offer():
-    app = _code(_read(APP))
+    app = _code(app_js())
     assert "trial_days" in app
     # No hardcoded 3 driving the offer.
     assert not re.search(r"trialDays\s*=\s*3\b", app)
@@ -272,7 +273,7 @@ def test_the_auto_renewal_answer_is_not_a_promise_we_do_not_keep():
     """It used to say "Nothing auto-renews without telling you first",
     which was never true of an ordinary subscription and is emphatically
     untrue of a trial that converts on day 4."""
-    app = _read(APP)
+    app = app_js()
     assert "auto-renews without telling you first" not in app
 
 

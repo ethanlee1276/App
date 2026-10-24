@@ -17,6 +17,7 @@ Run directly: `python3 tests/test_live_shelves.py`
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,8 +25,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _board_body():
-    src = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    src = app_js()
     i = src.index("async function renderLiveBoard()")
     return src[i:src.index("\n(function initNewLook", i)]
 
@@ -69,8 +69,7 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     cached body on a 304, which is most polls. The fast scoreboard file
     keeps `no-store`: it is tiny and changes every few seconds, so a
     304 there is the rare case, not the common one."""
-    src = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    src = app_js()
     i = src.index("async function fetchAllLive()")
     # Its own last line, not the next `function` — helpers grew between
     # the two on 2026-09-10 and this slice quietly swallowed them, which

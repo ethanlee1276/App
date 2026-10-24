@@ -12,10 +12,11 @@ Run directly: `python3 tests/test_one_root_and_shared_percents.py`
 
 import re
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
-APP = ((ROOT / "web" / "js" / "fantasy.js").read_text(encoding="utf-8") + "\n" + (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8"))
+APP = (app_js())
 NC = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
 
 FIXED = ("--ink-on-gold", "--ink-warm", "--ink-neutral", "--qbot-ground",

@@ -16,6 +16,7 @@ Run directly: `python3 tests/test_book_records.py`
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import sys
 import tempfile
 
@@ -81,9 +82,7 @@ def test_the_export_carries_it_and_the_page_renders_it():
               encoding="utf-8") as f:
         led = f.read()
     assert '"book_records": book_records(conn, since=since),' in led
-    with open(os.path.join(ROOT, "web", "js", "app.js"),
-              encoding="utf-8") as f:
-        js = f.read()
+    js = app_js()
     # `opts` added 2026-09-19 so the SHADOW books reuse this function
     # whole — the pooling loop, the thin-sample note and the ROI that
     # keeps a push out of its denominator. Two copies of that
@@ -98,9 +97,8 @@ def test_the_export_carries_it_and_the_page_renders_it():
 
 
 def _js():
-    with open(os.path.join(ROOT, "web", "js", "app.js"),
-              encoding="utf-8") as f:
-        return f.read()
+    from _app import app_js     # app.js and the rooms it loads (the Record page is one)
+    return app_js()
 
 
 def test_a_sports_record_leads_with_its_book_sections():

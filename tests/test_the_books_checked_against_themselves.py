@@ -37,6 +37,7 @@ sys.path.insert(0, str(ROOT))
 from engine import bookmenu as M                                 # noqa: E402
 from engine import db as D                                       # noqa: E402
 from engine import ideas as ID                                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 LAB = ROOT / "web" / "js" / "lab.js"
 
@@ -207,7 +208,7 @@ def test_the_endpoint_the_builds_and_the_pages():
     for build, sport in (("nfl_build.py", "nfl"), ("cfb_build.py", "cfb")):
         src_b = (ROOT / build).read_text(encoding="utf-8")
         assert f'_ideas.attach("{sport}",' in src_b and "out=args.out)" in src_b, "beside the build's own board"
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     assert '<div id="pp-lab"></div>' in app and '<div id="gp-lab"></div>' in app
     assert 'X.pickLab(document.getElementById("pp-lab"), state.sport, r)' in app
     assert 'X.gameLab(document.getElementById("gp-lab"), state.sport, g)' in app

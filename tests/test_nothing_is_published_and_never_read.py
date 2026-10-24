@@ -46,6 +46,10 @@ PUBLISHED_FOR_OTHERS: dict = {
 
 #: What counts as reading the file.
 READERS = ("web/js/app.js", "launch.py", "server.py", "homecheck.py")
+# The rooms app.js loads on first use read the page's keys too (2026-10-24).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _app import rooms as _rooms  # noqa: E402
+READERS += tuple(f"web/js/{f}" for f in _rooms())
 
 
 def _export_keys() -> list:

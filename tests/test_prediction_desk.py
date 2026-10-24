@@ -26,9 +26,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine import kalshiweather as kw            # noqa: E402
 from engine import ledger                          # noqa: E402
 from engine.sources import kalshi as kx            # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+APP = app_js()
 PM = open(os.path.join(ROOT, "pm_build.py"), encoding="utf-8").read()
 LAUNCH = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
 

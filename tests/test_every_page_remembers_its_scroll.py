@@ -11,9 +11,10 @@ and the landing retries while the page draws but never fights the reader.
 Run directly: `python3 tests/test_every_page_remembers_its_scroll.py`
 """
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 
 
 def _fn(name):

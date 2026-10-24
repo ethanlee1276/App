@@ -31,6 +31,7 @@ sys.path.insert(0, ROOT)
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 import launch                                                        # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _wait_for(cond, timeout=5.0):
@@ -173,7 +174,7 @@ def test_the_status_page_says_the_chore_is_stuck_and_where():
     node = shutil.which("node")
     if not node:
         return
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     i = app.index("function loopRowsHTML(")
     fn = app[i:app.index("\nfunction ", i + 10)]
     j = app.index("function ageText(")
@@ -342,7 +343,7 @@ def test_a_chore_the_system_kills_rests_and_says_so():
     assert launch._chore_cmd("daily")[1] == "-u"
     src = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").read()
     assert 'cmd = [sys.executable, "-u", "-m", module, *args]' in src
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     assert "killed by the system in ${c.killed.step" in app
 
 

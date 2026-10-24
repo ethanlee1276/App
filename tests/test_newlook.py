@@ -29,13 +29,13 @@ Run directly: `python3 tests/test_newlook.py`
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSS = open(os.path.join(ROOT, "web/css/styles.css"), encoding="utf-8").read()
-APP = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read() + "\n" + \
-      open(os.path.join(ROOT, "web/js/memes.js"), encoding="utf-8").read()  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
+APP = app_js()  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
 HTML = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
 
 
@@ -782,7 +782,7 @@ def test_a_dead_pipeline_cannot_hide_behind_a_small_number():
     identical. The check cannot live in the loop — the doctor runs INSIDE
     the refresh cycle, which is why nobody was told. It lives on the page,
     which is always holding the timestamp."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     i = app.index("function updateAgo()")
     body = app[i:app.index("\nfunction ", i + 10)]
     assert "86400" in body, "the age still tops out below days"

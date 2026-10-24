@@ -35,8 +35,9 @@ sys.path.insert(0, ROOT)
 import standings_build as SB                                     # noqa: E402
 from engine.db import connect                                    # noqa: E402
 from engine.sources import leaguestandings                       # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 AUG = "2026-08-24"     # the day Ethan was looking at the page
 

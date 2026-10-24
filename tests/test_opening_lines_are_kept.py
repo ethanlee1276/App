@@ -17,8 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import lineopen as L                               # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 NOW = 1_790_400_000.0                                            # 2026-09-25, a Friday
 G = {"away": "PHI", "home": "CHI", "date": "2026-09-28", "kickoff": "20:15",
      "spread": 4.5, "favorite": "PHI", "total": 46.5, "home_ml": 180, "away_ml": -215}

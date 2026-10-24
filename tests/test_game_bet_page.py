@@ -39,9 +39,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _windows import function as _js_fn  # noqa: E402  (path set above)
 
 from engine.teamlogs import recent_games
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 VIS = open(os.path.join(ROOT, "web", "js", "visuals.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()

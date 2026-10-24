@@ -16,8 +16,9 @@ sys.path.insert(0, ROOT)
 
 from engine import gamescan as G                               # noqa: E402
 from engine.sources import cfbd                                 # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 BUILD = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
 
 

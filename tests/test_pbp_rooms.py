@@ -24,8 +24,9 @@ sys.path.insert(0, str(ROOT))
 import livescore_build                                              # noqa: E402
 from engine.mlb import livestats                                    # noqa: E402
 from engine.sources import nflpreseason, cfbdata                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 CSS = (ROOT / "web" / "css" / "styles.css").read_text()
 LIVE_BUILD = (ROOT / "live_build.py").read_text()
 

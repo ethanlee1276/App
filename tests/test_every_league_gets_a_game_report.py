@@ -36,6 +36,7 @@ from engine import askbot                                           # noqa: E402
 from engine import gamereport as R                                  # noqa: E402
 from engine import gate                                             # noqa: E402
 from engine import leaguereport as L                                # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 REPORT_JS = os.path.join(ROOT, "web", "js", "report.js")
 
@@ -366,7 +367,7 @@ def test_ask_reads_a_league_report_whole_tables_and_cards_included():
 
 
 def test_the_page_teases_every_league_in_its_own_words():
-    app = _src("web/js/app.js")
+    app = app_js()
     assert "const locked = !r && !_grFailed && d.locked && d.locked.game_reports;" in app
     assert 'url: cleanURL("game", gameSlug(g)), sport: state.sport' in app
     node = shutil.which("node")

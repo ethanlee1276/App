@@ -44,6 +44,7 @@ composition is queue item 4.
 
 import os
 import re
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -54,7 +55,7 @@ def _read(*parts):
 
 
 CSS = _read("web", "css", "styles.css")
-APP = _read("web", "js", "app.js")
+APP = app_js()
 
 
 def _strip_comments(src):

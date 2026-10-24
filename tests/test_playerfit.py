@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ledger                                     # noqa: E402
 from engine import playerfit as pf                            # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -190,8 +191,7 @@ def test_the_memory_ships_with_the_self_tuning_story():
 
 
 def test_the_page_renders_player_memory_with_guards():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("function recSelfTuningSection(")
     fn = app[i:app.find("\nfunction ", i + 1)]
     for needle in ("Player memory", "st.players", "${playersBlock}",

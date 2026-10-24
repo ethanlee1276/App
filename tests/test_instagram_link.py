@@ -23,6 +23,7 @@ find. Showing it to somebody who has not subscribed is the point.
 """
 
 import os
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -103,7 +104,7 @@ def test_the_icon_is_hidden_until_the_server_says_there_is_one():
     # Instagram and once for Discord — the Discord icon needs exactly the
     # same "no link, no icon" behaviour, and two copies of it would be
     # two places to get it wrong.
-    body = _code(_fn(_code(_read(APP)), "barLink"))
+    body = _code(_fn(_code(app_js()), "barLink"))
     assert "el.hidden = true" in body, (
         "nothing hides it again if the link is removed")
     assert 'removeAttribute("href")' in body, (
@@ -120,7 +121,7 @@ def test_it_opens_away_from_the_site_without_handing_over_the_window():
     tag = html[html.rindex("<a", 0, i):html.index(">", i) + 1]
     assert 'target="_blank"' in tag
     assert "noopener" in tag and "noreferrer" in tag
-    wall = _fn(_read(APP), "paywallHTML")
+    wall = _fn(app_js(), "paywallHTML")
     j = wall.index("pw-ig")
     near = wall[j:j + 400]
     assert 'target="_blank"' in near
@@ -140,7 +141,7 @@ def test_it_is_a_link_and_not_a_button_with_a_click_handler():
 
 def test_the_address_is_escaped_where_it_is_interpolated():
     """It arrives from a config file somebody typed."""
-    wall = _fn(_read(APP), "paywallHTML")
+    wall = _fn(app_js(), "paywallHTML")
     j = wall.index("pw-ig")
     near = wall[j:j + 300]
     # safeHref escapes AND refuses a non-http(s) value (audit D-4).
@@ -155,12 +156,12 @@ def test_the_wall_carries_its_own_because_it_hides_the_top_bar():
                      css, re.S) or "body.walled .topbar" in css, (
         "this test assumes the wall hides the top bar; if that changed, "
         "the second icon may be redundant")
-    assert "pw-ig" in _read(APP), "the wall has no Instagram link"
+    assert "pw-ig" in app_js(), "the wall has no Instagram link"
     assert ".pw-ig" in css, "unstyled"
 
 
 def test_both_copies_point_at_the_same_configured_address():
-    app = _code(_read(APP))
+    app = _code(app_js())
     assert "_pwStatus.instagram" in app or "_pwStatus && _pwStatus.instagram" in app
     assert "status.instagram" in app
     # Neither invents a fallback.
@@ -171,12 +172,12 @@ def test_both_copies_point_at_the_same_configured_address():
 def test_drawing_it_costs_no_extra_request():
     """It is decoration. A fetch of its own would be a request per page
     load for an icon."""
-    body = _code(_fn(_code(_read(APP)), "igMount"))
+    body = _code(_fn(_code(app_js()), "igMount"))
     assert "fetch(" not in body, "the icon fetches its own configuration"
 
 
 def test_it_is_mounted_when_the_status_is_refreshed():
-    app = _code(_read(APP))
+    app = _code(app_js())
     check = _fn(app, "paywallCheck")
     assert "igMount()" in check, (
         "nothing calls it, so the icon never appears")

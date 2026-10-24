@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT))
 
 import livescore_build as B                                  # noqa: E402
 from engine.sources import livescores as L                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _event(hab, hname, aab, aname, *, eid="401", state="in",
@@ -227,7 +228,7 @@ def test_every_scoreboard_the_builder_writes_is_registered_with_the_gate():
 
 # --- the wiring -------------------------------------------------------------
 def _app():
-    return (ROOT / "web" / "js" / "app.js").read_text()
+    return app_js()
 
 
 def test_the_page_reads_all_five_fast_feeds():

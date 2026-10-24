@@ -52,6 +52,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import rendercheck as rc                                        # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 SOURCES = " ".join(
     open(os.path.join(ROOT, p), encoding="utf-8").read()
@@ -227,7 +228,7 @@ def test_the_board_tiles_claim_names_the_boards_own_strip():
               for c in checks if c[0] == "four-tiles")
     assert pm[2] == ".pm-tiles > *", \
         "the tiles claim is counting every stats strip on the page again"
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     assert 'class="stats pm-tiles"' in app, "the board's strip lost its name"
     assert app.count("pm-tiles") >= 2
 

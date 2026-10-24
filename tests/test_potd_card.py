@@ -23,9 +23,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 HTML = (ROOT / "web" / "index.html").read_text()
 
 

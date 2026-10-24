@@ -10,9 +10,10 @@ Run directly: `python3 tests/test_the_game_page_lists_injuries_once.py`
 """
 import re
 from pathlib import Path
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 PLAN = (ROOT / "engine" / "gameplan.py").read_text(encoding="utf-8")
 
 

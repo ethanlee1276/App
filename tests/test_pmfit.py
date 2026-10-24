@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import pmfit as F
 from engine import predmarket as P
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 @contextlib.contextmanager
@@ -306,8 +307,7 @@ def test_refresh_persists_and_is_readable_back():
 # --- the board says what changed ---------------------------------------------
 def _app_js():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return open(os.path.join(root, "web", "js", "app.js"),
-                encoding="utf-8").read()
+    return app_js()
 
 
 def test_the_report_card_renders_the_fitted_weights():

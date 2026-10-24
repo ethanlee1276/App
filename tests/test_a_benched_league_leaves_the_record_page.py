@@ -72,6 +72,7 @@ os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import ledger                                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 SRC = (ROOT / "engine" / "ledger.py").read_text(encoding="utf-8")
 SOON = (dt.datetime.utcnow() + dt.timedelta(days=1)).date().isoformat()
@@ -553,7 +554,7 @@ def test_the_page_is_TOLD_which_leagues_are_benched():
     got = _exported(conn)
     assert got["benched_sports"] == ["wnba"], got["benched_sports"]
     assert "wnba" not in got["tracked_sports"], got["tracked_sports"]
-    src = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    src = app_js()
     assert "benched_sports" in src, \
         "the page cannot tell 'none yet' from 'not published'"
     # The claim the page makes has to be the one the journal keeps.
@@ -677,7 +678,7 @@ def test_the_record_discloses_how_many_bets_the_bench_keeps_out():
 
 def test_the_page_prints_that_number_rather_than_shipping_it_unread():
     """A disclosure nothing renders is not a disclosure."""
-    src = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    src = app_js()
     i = src.index("function recEpochHTML")
     body = src[i:src.index("function recTile")]
     assert "benched_settled" in body, "the export ships it and nothing reads it"

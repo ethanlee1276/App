@@ -26,6 +26,7 @@ Run directly: `python3 tests/test_team_page.py`
 """
 
 import json
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 import os
 import shutil
 import subprocess
@@ -35,7 +36,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
 
 
@@ -87,8 +88,7 @@ import _windows                                             # noqa: E402
 
 
 def _app():
-    return open(os.path.join(ROOT, "web", "js", "app.js"),
-                encoding="utf-8").read()
+    return app_js()
 
 
 def _run(script, fns, consts=()):

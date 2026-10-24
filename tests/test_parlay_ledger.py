@@ -20,6 +20,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ledger, parlayledger
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 D = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
@@ -569,8 +570,7 @@ def test_the_settle_grades_parlays_after_the_singles():
 
 # --- the Record page --------------------------------------------------------
 def _app_js():
-    return open(os.path.join(ROOT, "web", "js", "app.js"),
-                encoding="utf-8").read()
+    return app_js()
 
 
 def test_the_record_page_renders_the_parlay_bucket():

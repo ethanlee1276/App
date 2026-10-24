@@ -26,6 +26,7 @@ from engine.mlb.models import (MLBGame, MLBProp, MLBWeather,  # noqa: E402
 from engine.mlb.data_loader import MLBSlate                    # noqa: E402
 from engine import likelyboard as LB                          # noqa: E402
 from engine import matchpicks as MP                           # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 BUILD = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()
 
@@ -109,7 +110,7 @@ def test_the_reads_reach_most_likely_the_board_and_the_matchup_picks():
 
 
 def test_the_game_page_draws_the_tape_and_the_reads():
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
     fn = js[js.index("function mlbScanHTML(g) {"):]
     fn = fn[:fn.index("\nfunction ", 10)]
@@ -155,7 +156,7 @@ def test_pitch_type_matchups_and_the_lineup_against_his_hand():
     assert SC.lineup_vs_hand(props[:3], "BOS", "R") is None
     for bit in ("_ars = _mscan.arsenal_context(slate, int(args.date[:4]))", "_ms = _mscan.scan(slate, _ars)"):
         assert bit in BUILD, bit
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     assert "Throws ${escapeHtml(s.mix)}" in js and "hitters measured)" in js
 
 
@@ -163,7 +164,7 @@ def test_pending_lineups_say_when_they_usually_post():
     """Ethan, 2026-09-26: "it says every linup for every game isnt confirmed."
     A morning board is all pending — clubs post about three hours before
     first pitch — so the label says when, and what the board does until then."""
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    js = app_js()
     fn = js[js.index("function lineupPendingWords(g, short) {"):]
     fn = fn[:fn.index("\nfunction ", 10)]
     assert "const LINEUP_LEAD_H = 3;" in js and "tzTime(t - LINEUP_LEAD_H * 3600e3)" in fn

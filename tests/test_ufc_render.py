@@ -26,6 +26,7 @@ by someone doing the obvious thing:
 import os
 import re
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -36,7 +37,7 @@ def _read(*parts):
     return open(os.path.join(ROOT, *parts), encoding="utf-8").read()
 
 
-APP = _read("web", "js", "app.js")
+APP = app_js()
 VIS = _read("web", "js", "visuals.js")
 CSS = _read("web", "css", "styles.css")
 

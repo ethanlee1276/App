@@ -29,6 +29,7 @@ Run directly: `python3 tests/test_social_page.py`
 
 import os
 import re
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,7 +41,7 @@ def _read(*parts):
 
 SOC = _read("web", "js", "social.js")
 CSS = _read("web", "css", "social.css")
-APP = _read("web", "js", "app.js")
+APP = app_js()
 HTML = _read("web", "index.html")
 
 
@@ -203,7 +204,7 @@ def test_tail_opens_the_bet_it_sheet_with_a_tile_per_book():
     and every other book's front door so the reader can key the legs in
     wherever they bet. The links still come only from the tail call."""
     js = _read("web", "js", "social.js")
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert "fd-tailbox" not in js and "fd-tailbox" not in _read("web", "css", "social.css"), "the in-card box is gone"
     tail = js[js.index('if (act === "tail") {'):js.index('if (act === "share" || act === "copy")')]
     assert 'await api("tail"' in tail and 'betSheetShow(tailSheetHTML(res.out, post), "Tail it")' in tail
@@ -234,7 +235,7 @@ def test_posting_a_parlay_from_the_slip_neither_zooms_the_page_nor_leaves_the_tr
     css = _read("web", "css", "styles.css")
     phone = css[css.index("iOS Safari zooms"):][:1500]
     assert 'input:not([type="range"]), select, textarea { font-size: var(--fs-xl) !important; }' in phone
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert "function slipReset() {" in app
     clear = app[app.index('e.target.closest("#slip-clear")'):]
     assert "slipReset();" in clear[:120], "the Clear button is the same reset"

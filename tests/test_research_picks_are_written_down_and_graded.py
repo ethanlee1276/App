@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 from engine import researchlog as R                                  # noqa: E402
 from engine import scancard as S                                     # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def test_one_pick_a_line_reads_the_way_reports_write():
@@ -70,7 +71,7 @@ def test_the_door_is_the_owner_token_and_nothing_else():
 
 
 def test_the_box_lives_in_the_owners_panel_only():
-    js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    js = app_js()
     i = js.index("function zenoOwnerHTML(tix)")
     panel = js[i:js.index("\nfunction ", i + 10)]
     assert panel.index("if (!tix.owner)") < panel.index("researchBoxHTML()"), \

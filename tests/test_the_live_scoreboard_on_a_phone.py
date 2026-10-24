@@ -36,8 +36,9 @@ sys.path.insert(0, str(ROOT))
 from tests import test_the_live_trackers as FB              # noqa: E402
 from tests import test_the_nba_live_page as NBA             # noqa: E402
 from tests import test_the_nhl_live_page as NHL             # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = app_js()
 STYLES = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
 SHEETS = {"hc": (ROOT / "web" / "css" / "hoopscast.css").read_text(encoding="utf-8"),
           "rc": (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8")}

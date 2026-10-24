@@ -37,6 +37,7 @@ from engine import db, lab
 # fails for a reason that has nothing to do with what it tests. Switched
 # off here, deliberately and visibly — see engine/selectionfit.set_enabled.
 from engine import selectionfit as _sf                          # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 _sf.set_enabled(False)
 
 
@@ -203,7 +204,7 @@ def test_the_published_path_is_absolute():
 
 # --- the page ----------------------------------------------------------------
 def test_the_lab_is_wired_into_the_site():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     assert 'id="view-lab"' in html and 'data-sport="lab"' in html
     assert 'if (name === "lab") renderLab();' in app
@@ -217,7 +218,7 @@ def test_the_lab_is_wired_into_the_site():
 def test_the_page_refuses_to_headline_a_thin_or_naive_roi():
     """The two ways a backtest ROI lies: too few bets, or priced against a
     baseline nobody could have bet. Both must reach the reader."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     assert "LAB_ROI_MIN_BETS = 100" in app
     # The whole function, not a fixed byte window — a window measures how
     # long the comments are, which is not a property worth pinning.
@@ -234,7 +235,7 @@ def test_the_page_refuses_to_headline_a_thin_or_naive_roi():
 def test_the_page_calls_out_a_hedging_model():
     """Perfect calibration with no sharpness is the failure that looks like
     success — a model answering "about average" to everything."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     # The whole function, not a fixed byte window from its start — a window
     # measures how long the comments are, and this one broke the first time
     # the card grew an explanatory block.
@@ -356,7 +357,7 @@ def test_a_section_that_measured_nothing_keeps_the_last_one_that_did():
 
 
 def test_the_page_says_a_kept_section_is_kept_and_when():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     i = app.index("function labCarried(")
     j = app.index("function labGameTable(")
     body = app[i:j]
@@ -384,7 +385,7 @@ def test_the_lab_measures_the_usage_ripple_and_the_page_shows_the_verdict():
     got = lab.ripple_section(_Exploding(), log=_quiet)
     assert "unavailable" in got and "on fire" in got["unavailable"]
 
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     assert "function labRippleHTML(" in app
     k = app.index("async function renderLab(")
     assert "${labRippleHTML(s.ripple)}" in app[k:k + 4000]

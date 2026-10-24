@@ -30,6 +30,7 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import drivesim
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -125,8 +126,7 @@ def test_attach_stamps_the_page_and_returns_the_journal():
 
 
 def test_the_replay_panel_is_shares_not_picks():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("The replay")
     block = app[i - 400:i + 2600]
     assert "not a pick" in block, "the panel must disclaim itself"

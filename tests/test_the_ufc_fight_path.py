@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from engine import db as D                                       # noqa: E402
 from engine.ufc import fightpath as FP                           # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 EXTRAS = ROOT / "web" / "js" / "extras.js"
 
@@ -121,7 +122,7 @@ def test_the_toolbox_card_reads_corner_a_first_and_says_what_it_is():
     assert "membership" in got["locked"] and "No fights read on the card yet" in got["none"]
     # UFC is its own page, not a sport the Toolbox switches to: the paths
     # draw under the card that page has already read (members' copy or sealed).
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    app = app_js()
     assert '<div id="ufc-paths"></div>' in app
     assert 'el = document.getElementById("ufc-paths"); if (X && el) el.innerHTML = X.pathsHTML(d);' in app
 

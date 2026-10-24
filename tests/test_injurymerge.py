@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import injurymerge as im                          # noqa: E402
 from engine import rosters as r                               # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _sleeper(name, team="DET", pos="WR", status="Active", desig=None, part=""):
@@ -253,7 +254,7 @@ def test_junk_rows_do_not_break_the_index():
 
 # --- the page ---------------------------------------------------------------
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def _row_fn():

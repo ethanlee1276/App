@@ -31,6 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import billing                                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _read(*parts):
@@ -160,7 +161,7 @@ def test_no_refund_guarantee_survives_anywhere():
     Terms now say the opposite. So this looks across everything a reader
     sees, not just the page it was removed from.
     """
-    app = _read("web", "js", "app.js")
+    app = app_js()
     for surface, blob in (("app.js", app), ("Terms", TERMS_TEXT),
                           ("Privacy", PRIVACY_TEXT)):
         # "7-day" ALONE IS NOT A CANDIDATE. app.js carries "7-day" and
@@ -177,7 +178,7 @@ def test_no_refund_guarantee_survives_anywhere():
 
 def test_the_site_and_the_terms_agree_that_there_are_no_refunds():
     """Two surfaces, one policy. The FAQ is what people actually read."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert "Payments are not refundable" in TERMS_TEXT
     assert "not refundable" in app, \
         "the FAQ no longer states the refund policy the Terms bind us to"
@@ -210,7 +211,7 @@ def test_the_privacy_policy_names_every_table_that_holds_personal_data():
 def test_the_policy_does_not_claim_we_avoid_something_we_do():
     """Each of these is checkable against the code, and each would be a
     false statement if the code changed underneath it."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     # "no third-party scripts"
     index = _read("web", "index.html")
     external = re.findall(r'<script[^>]+src="(https?://[^"]+)"', index)
@@ -314,7 +315,7 @@ def test_the_discord_invite_is_never_shipped_to_a_non_member():
     So: not in the repository at all, sent by the server, inside the
     branch that has already established who is asking.
     """
-    app = _read("web", "js", "app.js")
+    app = app_js()
     assert "discord.gg" not in app, (
         "the invite is compiled into app.js, which is served to every "
         "anonymous visitor — the render gate cannot help with that")

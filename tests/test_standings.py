@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import divisions, playoffs, standings
 from engine.db import connect, upsert_games
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _seed(sport="nfl", season=2025, games=None):
@@ -201,14 +202,14 @@ def test_standings_is_a_per_sport_tab():
     html = _read("web", "index.html")
     assert 'data-view="standings"' in html
     assert 'id="view-standings"' in html
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert "standings_${key}.json" in js, "the page loads one shared file"
     assert '"standings"' in js[js.index("const VIEW_ORDER"):
                                js.index("const VIEW_ORDER") + 300]
 
 
 def test_switching_leagues_redraws_the_table():
-    js = _read("web", "js", "app.js")
+    js = app_js()
     fn = js[js.index("function renderAll("):js.index("function renderEmptySlate(")]
     assert 'state.view === "standings"' in fn
 
@@ -218,7 +219,7 @@ def test_the_bracket_round_names_share_one_line():
     the headings diagonally down the page — the later the round, the lower
     its label. Only the matchups spread out to meet the next round."""
     css = _read("web", "css", "styles.css")
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert ".brk-matches" in css and "brk-matches" in js, \
         "the matchups have no wrapper, so the heading still spreads"
     block = css[css.index(".brk-round {"):]
@@ -370,9 +371,7 @@ def test_the_build_falls_back_loudly_when_the_feed_is_down():
 
 
 def test_the_page_reports_which_source_it_is_showing():
-    app = open(os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     i = app.index("async function renderStandings()")
     fn = app[i:app.index("\nasync function ", i + 10)]
     assert 'd.source === "league"' in fn
@@ -404,7 +403,7 @@ def test_the_division_chips_filter_and_cannot_strand_the_page():
     scrolling, so chips cut it to one tap. The guard matters as much as
     the chips: a division name remembered from another sport must fall
     back to All rather than filter the page to nothing."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     i = js.index("async function renderStandings()")
     body = js[i:i + 6000]
     assert "std-chips" in body and 'data-act="stdSet"' in body
@@ -419,7 +418,7 @@ def test_the_weather_rows_read_as_columns():
     """Render pack 2026-08-25: matchup · park · temp · wind, with the
     direction word the model actually prices and Dome where numbers
     would be — not a chip pile."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     i = js.index("function renderWeather()")
     body = js[i:i + 3000]
     assert '<span class="wx-temp">' in body and '<span class="wx-wind' in body

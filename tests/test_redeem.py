@@ -30,6 +30,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import redeem as RD
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = {"QB_CODES": "USFARATHANE:12:100, FRIENDS:1:2, SOLO:3:1"}
@@ -225,7 +226,7 @@ def test_the_code_box_survives_an_unconfigured_processor():
     everything with it. Codes involve no processor, and while Paddle is
     still being set up they are the ONLY way in — which is exactly the
     state the site is in today."""
-    app = _read("web", "js", "app.js")
+    app = app_js()
     fn = app[app.index("async function renderBilling("):]
     fn = fn[:fn.index("\n/* \"Have a code?\"")]
     assert "codeBoxHTML(" in fn

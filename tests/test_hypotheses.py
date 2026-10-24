@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine import hypotheses as hyp                          # noqa: E402
 from engine import ledger                                     # noqa: E402
 from engine import losspatterns as lp                         # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HEAVY = lp.odds_band(-160)
@@ -406,8 +407,7 @@ def test_the_lab_ships_in_the_record_export_without_calling_any_api():
 
 
 def test_the_page_renders_the_lab_with_the_authority_stated():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("function recHypothesisLab(")
     fn = app[i:app.find("\nfunction ", i + 1)]
     for needle in ("The hypothesis lab", "Confirmed", "Rejected",

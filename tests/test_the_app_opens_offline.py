@@ -26,7 +26,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 READ = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()  # noqa: E731
-SW, REG, APP = READ("web", "sw.js"), READ("web", "js", "register-sw.js"), READ("web", "js", "app.js")
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+SW, REG, APP = READ("web", "sw.js"), READ("web", "js", "register-sw.js"), app_js()
 
 
 def _list(name):
@@ -38,6 +39,14 @@ def test_every_file_the_app_loads_is_in_the_version():
     for src in (APP, READ("web", "js", "visuals.js"), READ("web", "js", "extras.js"), READ("web", "js", "gamecast.js")):
         for f in re.findall(r'(?:s|el)\.src = "(js/[a-z0-9_-]+\.js)"', src) + re.findall(r'css\.href = "(css/[a-z0-9_-]+\.css)"', src):
             assert "/" + f in lazy, f"{f} loads on first use but is not in the version"
+    # The rooms (app.js loadRoom): each stub names its script and its styles.
+    rooms = re.findall(r'roomCall\((\w+), "(\w+)", "(js/[a-z0-9_-]+\.js)", (?:"(css/[a-z0-9_-]+\.css)"|null), a\)', APP)
+    assert len(rooms) >= 24, len(rooms)
+    for stub, name, js, css in rooms:
+        assert stub == name, (stub, name)
+        assert "/" + js in lazy, f"{js} loads on first use but is not in the version"
+        assert not css or "/" + css in lazy, f"{css} loads on first use but is not in the version"
+        assert f"function {name}(" in READ("web", *js.split("/")), f"{js} does not replace the stub {name}"
     for f in re.findall(r"js/chart-\$\{f\}\.js", READ("web", "js", "carrychart.js")):
         pass
     charts = {f"/js/{n}" for n in os.listdir(os.path.join(ROOT, "web", "js")) if n.startswith("chart-")}

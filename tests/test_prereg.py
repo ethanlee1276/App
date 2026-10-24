@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from engine import prereg                                   # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 
 def _t(**kw):
@@ -119,7 +120,7 @@ def test_the_lab_page_shows_progress_without_a_number():
     """The page must not let a collecting test look like a finding —
     that is the whole point, and it is a rendering decision as much as a
     statistical one."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = app_js()
     fn = app[app.index("function recPrereg("):app.index("function recHypothesisLab(")]
     assert 'status === "collecting"' in fn
     assert "pr-prog" in fn and "t.min_n" in fn

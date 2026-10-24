@@ -25,8 +25,9 @@ os.environ.pop("ANTHROPIC_API_KEY", None)
 os.environ.pop("QB_EXPLAIN_MODEL", None)
 
 from engine import explainer as EX                                       # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()
 SERVER = (ROOT / "server.py").read_text()
 CSS = (ROOT / "web" / "css" / "styles.css").read_text()
 

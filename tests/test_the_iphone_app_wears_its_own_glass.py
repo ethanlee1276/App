@@ -23,11 +23,12 @@ import os
 import re
 import subprocess
 import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 READ = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()  # noqa: E731
-CSS, APP, BOOT = READ("web", "css", "styles.css"), READ("web", "js", "app.js"), READ("web", "js", "boot.js")
+CSS, APP, BOOT = READ("web", "css", "styles.css"), app_js(), READ("web", "js", "boot.js")
 LOOK = CSS[CSS.index("THE iPHONE APP'S GLASS, THE RIDING PILL"):]
 SHOTS = os.environ.get("QB_SHOTS_DIR", "")
 

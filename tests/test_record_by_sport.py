@@ -20,6 +20,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ledger
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 # (win rate, bets) — chosen so the combined number tells you nothing.
 PLAN = {"mlb": (0.75, 40), "nfl": (0.25, 40), "nba": (0.50, 20)}
@@ -171,7 +172,7 @@ def test_every_scope_chip_counts_the_same_thing():
     every chip is the same quantity — rows journaled in that scope — the
     sports add to All bets, and it only ever climbs."""
     import re
-    js = _read("web", "js", "app.js")
+    js = app_js()
     fn = js[js.index("function recordScopeHTML(d, scope)"):]
     fn = fn[:fn.index("\n}")]
     assert "const journaled = (o) => ((o || {}).settled || 0) + ((o || {}).open || 0);" in fn
@@ -196,7 +197,7 @@ def test_every_scope_chip_counts_the_same_thing():
 
 
 def test_the_record_page_defaults_to_the_sport_you_came_from():
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert "_recordScope" in js
     fn = js[js.index("async function renderRecord()"):]
     assert "tracked.includes(state.sport) ? state.sport : \"all\"" in fn
@@ -205,7 +206,7 @@ def test_the_record_page_defaults_to_the_sport_you_came_from():
 def test_panels_read_one_source_rather_than_being_filtered_each_time():
     """Scoping by swapping the source means a panel cannot quietly keep
     showing the combined number next to a per-sport one."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     fn = js[js.index("async function renderRecord()"):
             js.index("function recStaleSection(")]
     assert "const src = scoped || d;" in fn
@@ -219,7 +220,7 @@ def test_whole_journal_panels_do_not_repeat_under_a_sport():
     """A per-book limit risk and a cross-sport promotion bar are not
     per-sport questions, so they must not appear with an unscoped number
     under a sport's name."""
-    js = _read("web", "js", "app.js")
+    js = app_js()
     fn = js[js.index("async function renderRecord()"):
             js.index("function recStaleSection(")]
     for panel in ("recHealthSection", "recLongshotSection", "recStaleSection",
@@ -230,7 +231,7 @@ def test_whole_journal_panels_do_not_repeat_under_a_sport():
 
 
 def test_polymarket_has_its_own_scope_and_is_not_a_betting_pnl():
-    js = _read("web", "js", "app.js")
+    js = app_js()
     # Renamed 2026-08-18 — Ethan: "change the name of the polly market
     # page to 'prediction market'". Scope id stays "intel".
     assert 'btn("intel", "Prediction Market"' in js
@@ -245,7 +246,7 @@ def test_polymarket_has_its_own_scope_and_is_not_a_betting_pnl():
 
 def test_ufc_gets_a_scope_like_every_other_board():
     assert "ufc" in ledger.TRACKED_SPORTS
-    js = _read("web", "js", "app.js")
+    js = app_js()
     assert 'scope !== "ufc"' in js, "the UFC bucket ignores the scope"
 
 
@@ -267,8 +268,7 @@ def test_the_running_pnl_marks_where_the_model_changed():
     if not node:
         return
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    app = open(os.path.join(root, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
 
     # Past the PARAMETER LIST before hunting the body: `opts = {}` is a
     # brace too, and starting at the first `{` after the name lands on
@@ -337,8 +337,7 @@ def test_the_chart_is_handed_the_eras_it_draws():
     already carried model_eras for the table underneath, and the chart
     was never given them."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    app = open(os.path.join(root, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     assert "recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])" in app
     assert "recCurveChart(sliced, { head: false, eras })" in app
 
@@ -349,8 +348,7 @@ def test_the_era_row_shows_whether_the_claims_came_true():
     gap converges on every settled bet, so it is the one number that can
     answer the question the heading asks."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    app = open(os.path.join(root, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("function recEraSection(")
     body = app[i:app.index("\nfunction ", i + 10)]
     assert "e.claim" in body, "the row never reads the claim gap"

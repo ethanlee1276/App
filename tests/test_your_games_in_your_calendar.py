@@ -35,6 +35,7 @@ os.environ["QB_SITE_URL"] = "https://qellysbook.example"
 
 from engine import accounts as A                                  # noqa: E402
 from engine import calfeed as CF                                  # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 READ = lambda *p: (ROOT.joinpath(*p)).read_text(encoding="utf-8")  # noqa: E731
 GOOD = "correct horse battery"
@@ -160,7 +161,7 @@ def test_the_server_answers_by_address_and_settings_carries_the_row():
         assert get("/api/calendar/new", "POST")[0] == 401
     finally:
         srv.shutdown()
-    app = READ("web", "js", "app.js")
+    app = app_js()
     assert '<div class="set-row" id="set-cal">' in app and "${calRowHTML()}" in app
     at = app.index("function bindSettings() {")
     assert "bindCalRow();" in app[at:at + 300]

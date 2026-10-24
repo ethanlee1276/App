@@ -24,8 +24,9 @@ sys.path.insert(0, ROOT)
 from engine import gameplan as P                                  # noqa: E402
 from engine import gate                                            # noqa: E402
 from engine.touchdowns import RedZoneUsage                         # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = app_js()
 
 
 def test_goal_line_work_reads_as_counts():

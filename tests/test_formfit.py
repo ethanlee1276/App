@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine import formfit as ff                              # noqa: E402
 from engine import ledger                                     # noqa: E402
 from engine.form import MLB_WINDOW_WEIGHTS                    # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = MLB_WINDOW_WEIGHTS
@@ -262,8 +263,7 @@ def test_an_unadopted_dial_shows_the_margin_that_rejected_it():
     """Same defect as the player-memory rows: the verdict was shown and
     the evidence behind it was gated on adoption, so the only row anyone
     questions — "default kept" — was the one with no number on it."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("const weightRows")
     body = app[i:app.index("const weightsBlock")]
     assert "w.adopted &&" not in body, "the Brier pair is gated again"
@@ -273,8 +273,7 @@ def test_an_unadopted_dial_shows_the_margin_that_rejected_it():
 
 
 def test_the_page_renders_the_recipe_rows_with_guards():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    app = app_js()
     i = app.index("function recSelfTuningSection(")
     fn = app[i:app.find("\nfunction ", i + 1)]
     for needle in ("The recipe itself, refit", "st.weights",

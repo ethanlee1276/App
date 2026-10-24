@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine import boards, ledger                              # noqa: E402
 from engine import likely as K                                 # noqa: E402
 from engine.rankfit import auc                                 # noqa: E402
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -532,7 +533,7 @@ def test_the_game_page_says_when_it_turned_a_priced_market_down():
     book had posted. The props beside it have carried a held-count line
     for as long as they have had one; the game markets never did.
     """
-    app = _src("web", "js", "app.js")
+    app = app_js()
     at = app.index("function renderGamePage(")
     body = app[at:app.index("\nfunction ", at + 1)]
     assert "bets.length > betsShown.length" in body, \
@@ -672,7 +673,7 @@ def test_the_page_shows_that_cut_where_a_reader_will_see_it():
     """A measurement nobody can read is not a measurement — the rule
     that got `likely_report` written in the first place. The weekly log
     is for whoever reads logs; the Record page is where a reader goes."""
-    js = _src("web", "js", "app.js")
+    js = app_js()
     assert "function recLikelyGameLines(lk, sp)" in js
     body = _fn(js, "recLikelyGameLines")
     assert "by_sport_market" in body
@@ -755,7 +756,7 @@ def test_the_store_writer_keeps_and_retires_honestly(monkeypatch=None):
 # --- the page ---------------------------------------------------------------
 def test_the_render_gate_no_longer_drops_unders():
     import re
-    js = _src("web", "js", "app.js")
+    js = app_js()
     gate = _fn(js, "showableLikelyRow")
     # CODE ONLY. The gate's comment now tells the story of the -1200
     # unders that outlived their own ban, and a check that reads
@@ -768,7 +769,7 @@ def test_the_render_gate_no_longer_drops_unders():
 
 
 def test_a_game_row_is_drawn_as_the_pick_it_is_and_opens_the_game_page():
-    js = _src("web", "js", "app.js")
+    js = app_js()
     door = _fn(js, "likelyDoor")
     assert 'r.kind === "game"' in door and "gameBetAttrs(r)" in door
     opn = _fn(js, "likelyOpen")
@@ -791,7 +792,7 @@ def test_the_game_page_finds_the_row_by_the_same_id():
     2026-09-02: the two lookups (edge cards, and the likelihood board
     for a FLIPPED row the edge board never published) became one shared
     `findGameRow`, which the slip and the share card use too."""
-    js = _src("web", "js", "app.js")
+    js = app_js()
     assert "const b = findGameRow(state.propId);" in js
     i = js.index("function findGameRow(id)")
     body = js[i:js.index("\n}", i)]
