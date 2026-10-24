@@ -13,6 +13,7 @@
 # the runbook's DH: every check from CT on, the night Ethan got home):
 #
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CT CU CV CW CX CY CZ DA DB DC DD DE DG DH BK 2>&1 | tee /tmp/tonight.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CY DA DE DB2 DI 2>&1 | tee /tmp/di.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -343,6 +344,26 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data
 SH
 run BK "Trust the price more where our chance runs far above it?" 300 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py 2>&1 | tail -150
+SH
+run DI "Past cap on every sport; the referee, the grades, the splits" 300 <<'SH'
+cd /srv/qellys && git log --oneline -4 && sudo -u qellys python3 -c "from engine import nflrefs, grades, splits, gate; print('referee', hasattr(nflrefs, 'attach'), '· grades', hasattr(grades, 'table'), '· splits', 'betting_splits' in gate.PAID_KEYS)"
+cd /srv/qellys && sudo -u qellys python3 -m engine.nflrefs
+cd /srv/qellys && sudo -u qellys python3 -m engine.grades | head -40
+cd /srv/qellys && grep -A9 "could not be placed" data/logs/nba_build.log | tail -10
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+from engine import gate
+for sp, f in (('nfl', 'web/data/recommendations.json'), ('cfb', 'web/data/cfb.json'), ('mlb', 'web/data/mlb_recommendations.json'), ('nba', 'web/data/nba.json'), ('wnba', 'web/data/wnba.json'), ('nhl', 'web/data/nhl.json')):
+    try:
+        d = json.load(open(gate.board_source(f)))
+    except Exception as e:
+        print(sp, 'no board', type(e).__name__)
+        continue
+    pc = d.get('likely_past_cap')
+    print(sp, 'past-cap list:', 'missing (an older build)' if pc is None else len(pc), '· Most Likely', len(d.get('most_likely') or []))
+games = json.load(open(gate.board_source('web/data/recommendations.json'))).get('games') or []
+print(sum(1 for g in games if g.get('officials')), 'of', len(games), 'NFL games have a referee named')
+"
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

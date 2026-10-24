@@ -59,7 +59,7 @@ MONEY_KEYS = ("handle_pct", "money_pct", "handle", "money")
 
 def _cache_path(league: str) -> str:
     from .sources.fetch import CACHE_DIR
-    return os.path.join(str(CACHE_DIR), f"splits_{league}.json")
+    return os.path.join(str(CACHE_DIR), f"sharpsplits_{league}.json")
 
 
 def fetch(league: str, key: str | None = None, ttl: int = TTL, now: float | None = None):

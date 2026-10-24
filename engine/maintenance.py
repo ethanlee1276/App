@@ -604,6 +604,12 @@ PRUNABLE_CACHE_PREFIXES = (
     # back for three days, and re-banked by the next pull. betlinks
     # prunes its own after three days; this is the backstop.
     "betlinks_",
+    # The public betting splits (engine/splits): ten minutes old at most
+    # when read, refetched by the next build; the history is kept below.
+    "sharpsplits_",
+    # Football Zebras' weekly assignments post (engine/nflrefs): six hours,
+    # one small file a week.
+    "fz_assignments_",
 )
 
 #: DELIBERATELY KEPT, each for a reason that costs something to ignore.
@@ -632,6 +638,8 @@ KEEP_CACHE_PREFIXES = {
              "files, bounded, six-hour TTL (engine/sources/ngs)"),
     "ftn_charting_": "nflverse per-season FTN charting bulk, one file a season (engine/sources/ftn)",
     "line_": "line_history.jsonl is accumulated history, not a fetch cache",
+    "splits_history": ("every public-betting reading (engine/splits), accumulated so fading "
+                       "the public can be measured on our own record; not a fetch cache"),
     "maintenance": "this module's own state",
 }
 CACHE_KEEP_DAYS = 30

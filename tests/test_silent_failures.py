@@ -229,6 +229,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # changed not kept (<error>)"; a quiet slate prints nothing. A log
         # that cannot be kept must never cost the build its reports.
         "update",
+        # THE PUBLIC BETTING PERCENTAGES (engine/splits.attach_to_board,
+        # 2026-10-24), caught by this sweep the hour it was written. A
+        # failure returns "Public betting unavailable (<error>)" and leaves
+        # no key on the board; a quiet day says "off" (no key) or "N of M
+        # game(s)". The three never read alike, and a feed must never cost
+        # the build its board.
+        "attach_to_board",
     }
 
     def broad(h):
