@@ -367,7 +367,7 @@ def test_the_launcher_actually_refreshes_the_board():
 def _page_js():
     """The meme-coin page's code: js/memes.js (loaded on first use since
     2026-10-24) ahead of app.js, which keeps the loader and the router."""
-    return "\n".join(open(os.path.join(ROOT, "web/js", f), encoding="utf-8").read() for f in ("memes.js", "app.js"))
+    return "\n".join(open(os.path.join(ROOT, "web/js", f), encoding="utf-8").read() for f in ("memes.js", "fantasy.js", "app.js"))
 
 
 def test_the_page_is_wired_end_to_end():

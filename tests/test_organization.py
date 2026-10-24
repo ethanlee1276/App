@@ -46,7 +46,7 @@ def _read(*parts):
 
 
 def _js():
-    return _read("web", "js", "app.js")
+    return (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
 
 
 def _fn(js, decl):
@@ -352,7 +352,7 @@ def test_a_browser_without_matchmedia_gets_the_desktop_cap():
 def test_section_titles_have_more_than_one_rank():
     """81 of them, all identical — so "Running P&L" and "Team-form sampler —
     measurement in progress" were the same announcement typographically."""
-    css = _read("web", "css", "styles.css")
+    css = (_read("web", "css", "styles.css") + _read("web", "css", "fantasy.css") + _read("web", "css", "memes.css"))
     assert ".section-title.lead" in css
     assert ".section-title.minor" in css
 
@@ -374,7 +374,7 @@ def test_the_quarantined_samplers_are_the_minor_rank():
 def test_the_ranks_differ_by_size_and_weight_not_only_colour():
     """The mute tokens are already at the bottom of what stays legible —
     see the contrast ratchet — so rank cannot be spent on colour."""
-    css = _read("web", "css", "styles.css")
+    css = (_read("web", "css", "styles.css") + _read("web", "css", "fantasy.css") + _read("web", "css", "memes.css"))
     block = _rule(css, ".section-title.minor {")
     assert "font-size" in block
     assert "text-transform" in block or "letter-spacing" in block
@@ -408,7 +408,7 @@ def test_the_hint_sits_under_the_tabs_rather_than_wherever_flex_put_it():
     sidebar now (NEW LOOK, 2026-08-11): every page item carries its
     data-hint, and the bar's running hint line retired — display:none,
     not deleted, so syncNavHint keeps a target and nothing null-crashes."""
-    css = _read("web", "css", "styles.css")
+    css = (_read("web", "css", "styles.css") + _read("web", "css", "fantasy.css") + _read("web", "css", "memes.css"))
     assert "display: none" in _rule(css, ".nav-hint {")
     html = _read("web", "index.html")
     assert html.count("data-hint=") >= 10, "the per-page hints are gone"
@@ -564,7 +564,7 @@ def test_the_tab_bar_cannot_be_dragged_on_a_phone():
     clipped at the screen edge and whole rooms hidden with no hint they
     exist. The row wraps now, so no .subnav rule may bring the scroller
     back. Checked on every .subnav rule, not just the one that had it."""
-    css = _read("web", "css", "styles.css")
+    css = (_read("web", "css", "styles.css") + _read("web", "css", "fantasy.css") + _read("web", "css", "memes.css"))
     starts = [m.start() for m in re.finditer(r"\.subnav\s*\{", css)]
     assert starts, "the subnav styles are gone entirely"
     for i in starts:
@@ -610,7 +610,7 @@ def test_game_script_cards_wear_the_clubs_marks_and_one_grid():
     # The stat columns each explain themselves where a finger can ask.
     for col in (">Implied<", ">PROE<", ">EPA/play<", ">Pace<"):
         assert col in block, f"the {col} column lost its header"
-    css = _read("web", "css", "styles.css")
+    css = (_read("web", "css", "styles.css") + _read("web", "css", "fantasy.css") + _read("web", "css", "memes.css"))
     for sel in (".gs-match {", ".gs-grid {", ".gs-tm {"):
         assert sel in css, f"{sel} is unstyled"
 
@@ -644,7 +644,7 @@ def test_injury_rows_are_lines_not_columns():
         "the by-team list no longer shares the one row layout"
     # The column headers died with the columns.
     assert "INJ_HEAD" not in js
-    css = _read("web", "css", "styles.css")
+    css = (_read("web", "css", "styles.css") + _read("web", "css", "fantasy.css") + _read("web", "css", "memes.css"))
     for sel in (".inj-line {", ".inj-line-sub {", ".inj-line-right {"):
         assert sel in css, f"{sel} is unstyled"
 

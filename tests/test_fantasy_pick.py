@@ -285,7 +285,8 @@ def test_the_starter_slots_come_from_the_draft_not_a_default():
 
 
 def test_a_spectator_is_told_so_rather_than_advised():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"),
+               encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
     i = app.index("async function dkAdvice(")
     body = app[i:app.index("\n}", i)]
@@ -294,7 +295,8 @@ def test_a_spectator_is_told_so_rather_than_advised():
 
 
 def test_the_advice_panel_is_polled_with_the_picks():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"),
+               encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
     i = app.index("function dkStart(")
     body = app[i:app.index("\nfunction ", i + 1)]
@@ -304,7 +306,8 @@ def test_the_advice_panel_is_polled_with_the_picks():
 def test_the_panel_shows_the_survival_number_not_just_a_name():
     """"Take him now" without "12% to last" is an instruction with no
     reason attached, and the reason is the whole feature."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"),
+               encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
     i = app.index("async function dkAdvice(")
     body = app[i:app.index("\n}", i)]

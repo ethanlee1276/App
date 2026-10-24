@@ -312,7 +312,8 @@ def test_unmapped_scoring_reaches_the_page():
 # --- the door somebody can actually open ------------------------------------
 
 def _app():
-    return open(os.path.join(ROOT, "web", "js", "app.js"),
+    return open(os.path.join(ROOT, "web", "js", "fantasy.js"),
+                encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"),
                 encoding="utf-8").read()
 
 
@@ -448,7 +449,7 @@ def test_the_empty_state_still_says_what_is_missing():
         "the leagues render above the reason the rest of the page is empty")
     assert "ff-sync-alone" in head
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+               encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
     assert ".ff-sync-alone" in css, "unstyled section"
 
 

@@ -1,0 +1,354 @@
+/* ROCKET RADAR's own styles (2026-10-24), loaded with js/memes.js the first
+   time the page opens. Every rule here names only classes the radar draws;
+   they were moved whole, in order, out of styles.css. */
+/* ---------------- Polymarket — polished cards ---------------- */
+.score-ring {
+  width: 48px; height: 48px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center;
+}
+
+.score-ring span {
+  width: 38px; height: 38px; border-radius: 50%; background: var(--panel);
+  display: grid; place-items: center; font-weight: 800; font-size: var(--fs-md);
+}
+
+/* Rocket Radar (meme coins).
+   ------------------------------------------------------------------
+   The honesty card renders ABOVE every score on the page and borrows
+   the warn colour for its rule: the base rates are the one thing a
+   visitor must not scroll past. Everything else on the page reuses the
+   shared kit (.stats, .card, .chip, .agate) — the only new furniture is
+   the rates strip, the exit-reason list, and the gated-row treatment. */
+/* One line closed, the whole card on demand — the base rates must be
+   unskippable without owning the fold ("you can barely see the charts").
+   The summary line carries all five numbers itself. */
+.mc-honesty {
+  border-left: 3px solid var(--warn);
+  margin-bottom: 12px; padding: 9px 14px;
+}
+
+.mc-honesty summary { cursor: pointer; display: flex; flex-wrap: wrap;
+  align-items: baseline; gap: 6px 14px; list-style: none; }
+
+.mc-honesty summary::-webkit-details-marker { display: none; }
+
+/* NOT nowrap. "How to read this page — and the base rates", uppercase at
+   .08em tracking, measures 278px — so on a 320px phone it ran 14px past
+   a card with `overflow: hidden` and the reader lost the end of the
+   heading. The flex row already wraps the head and the stats line onto
+   separate lines when it has to; the head itself must be allowed to
+   break too. It only wraps under pressure, so nothing changes at any
+   width where it fits. */
+.mc-honesty-head {
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--warn);
+}
+
+.mc-honesty-line { color: var(--text-dim); font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; }
+
+.mc-honesty[open] .mc-honesty-line { display: none; }
+
+.mc-rates { display: grid; margin-top: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+  gap: 6px 14px; }
+
+.mc-rate { display: flex; align-items: baseline; gap: 7px;
+  font-size: var(--fs-xs); color: var(--text-dim); }
+
+.mc-rate-n { font-weight: 800; font-size: var(--fs-md); color: var(--text);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.mc-honesty-foot { margin-top: 8px; color: var(--text-mute);
+  font-size: var(--fs-xs); }
+
+/* The terminal: a strip of coin buttons over one live chart. ONE ROW,
+   scrolling sideways — twenty-seven buttons wrapping to three rows put
+   another 100px between the reader and the candles. Active pick carries
+   the brand ring; the rocket tag says who cleared the risk gate. */
+.mc-picker { display: flex; flex-wrap: nowrap; overflow-x: auto;
+  gap: 6px; margin-bottom: 12px; padding-bottom: 4px;
+  scrollbar-width: thin; }
+
+.mc-picker .mc-pick { flex: none; white-space: nowrap; }
+
+.mc-pick { display: inline-flex; align-items: baseline; gap: 7px;
+  padding: 6px 10px; background: none; cursor: pointer;
+  border: var(--hairline) solid var(--border); color: var(--text-dim);
+  font: inherit; font-size: var(--fs-sm); }
+
+.mc-pick b { color: var(--text); font-weight: 700; }
+
+.mc-pick:hover { border-color: var(--text-mute); }
+
+.mc-pick-tag { font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--good); }
+
+.mc-pick-pct { font-variant-numeric: tabular-nums; }
+
+/* "Just landed" — first sighting on our tape under ten minutes ago. */
+.mc-new { font-size: var(--fs-xs); font-weight: 800; color: var(--brand-2);
+  letter-spacing: .06em; text-transform: uppercase; margin-left: 6px; }
+
+.mc-exit-why { margin: 10px 0 0; padding-left: 18px;
+  font-size: var(--fs-sm); color: var(--text-body); }
+
+.mc-exit-why li { margin-top: 4px; }
+
+.mc-exit-why li::marker { color: var(--bad); }
+
+/* Gated rows stay READABLE — hiding them would make "filtered out" and
+   "never seen" look identical, and the reasons live in the hover. */
+.mc-board tr.mc-gated td { opacity: .5; }
+
+.mc-gate-tag { font-size: var(--fs-xs); font-weight: 800; color: var(--bad);
+  letter-spacing: .06em; text-transform: uppercase; margin-left: 6px; }
+
+/* The sparkline is OUR tape (poll-resolution, honest about it); the live
+   candle chart is the venue's own embed, one at a time in a dock — sixty
+   live iframes is a tab-killer, one where you asked for it is a terminal. */
+.mc-spark-wrap { margin-top: 10px; border-top: var(--hairline) solid
+  var(--border-soft); padding-top: 8px; }
+
+.mc-spark { display: block; width: 100%; height: 44px; }
+
+/* The chart IS the product — give it the screen. 78vh with floors and
+   ceilings: DexScreener's embed carries its own txns panel at the
+   bottom, so anything under ~520px leaves the candles a letterbox
+   ("you can barely see the charts, it's so crunched"). */
+.mc-chart-card iframe { display: block; width: 100%;
+  height: clamp(520px, 78vh, 1000px);
+  border: 0; margin-top: 8px; background: var(--bg-2); }
+
+/* Chart dock with the venue embed switched off (EXTERNAL_MARKET_LINKS
+   false in app.js). Same footprint as the iframe so the dock does not
+   collapse to a sliver — the reader should see a deliberate blank, not
+   a broken one. */
+.mc-chart-off { display: flex; align-items: center; justify-content: center;
+  text-align: center; min-height: clamp(220px, 30vh, 340px);
+  margin-top: 8px; padding: 24px 20px; background: var(--bg-2);
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-sm); color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug);
+  max-width: var(--measure); margin-left: auto; margin-right: auto; }
+
+/* The dock's numbers ride the TITLE line — a separate stats band was
+   ~60px between the reader and the candles. Wraps on a phone. */
+.mc-dock-head { flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+
+.mc-dock-stats { display: flex; flex-wrap: wrap; gap: 2px 16px;
+  margin: 0; flex: 1; justify-content: flex-end; }
+
+.mc-chart-link { background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--brand-2); font: inherit; font-size: var(--fs-xs);
+  font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+
+.mc-chart-link:hover { text-decoration: underline; }
+
+.mc-board td, .mc-board th { white-space: nowrap; }
+
+.mc-board td:nth-child(2) { max-width: 220px; overflow: hidden;
+  text-overflow: ellipsis; }
+
+/* ---------------- The meme verdict's distribution bars ----------------- */
+.md-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.md-read { grid-template-columns: minmax(280px, 1fr) minmax(0, 1fr); }
+
+.md-bars { display: grid; gap: 5px; }
+
+.md-row { display: grid; grid-template-columns: 106px minmax(0, 1fr) 30px;
+  gap: 9px; align-items: center; }
+
+.md-lab { font-size: var(--fs-2xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.md-track { height: 14px; background: var(--panel-2); border-radius: 3px;
+  overflow: hidden; }
+
+.md-fill { display: block; height: 100%; border-radius: 3px; }
+
+.md-n { font-family: var(--font-mono); font-size: var(--fs-xs);
+  color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+
+.md-cap { margin: 10px 0 0; font-size: var(--fs-xs); color: var(--text-mute);
+  line-height: var(--lh-snug); }
+
+.md-warn { color: var(--text-mute) !important; font-size: var(--fs-xs) !important;
+  border-top: var(--hairline) solid var(--border-soft); padding-top: 10px; }
+
+@media (max-width: 900px) {
+  .md-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .md-read { grid-template-columns: minmax(0, 1fr); }
+  .md-row { grid-template-columns: 96px minmax(0, 1fr) 26px; gap: 7px; }
+}
+
+/* ---------------- Rocket Radar, given direction (2026-08-10) -----------
+   Ethan: "Meme coin page has no direction. I have no clue what I'm
+   looking at. It just shows coin names with 'rocket' next to it."
+   The hero says what the page is; the watchlist says why each coin is
+   listed; the legend says how the three systems work. */
+.mc-hero { display: flex; flex-direction: row; gap: 18px 26px;
+  align-items: center; flex-wrap: wrap;
+  padding: 18px 20px; margin-bottom: 12px; background-image: var(--grad-card); }
+
+.mc-hero-words { flex: 1 1 420px; min-width: 0; }
+
+.mc-hero-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; }
+
+.mc-hero-live { color: var(--good); font-family: var(--font-sans);
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; }
+
+.mc-hero-words p { margin: 8px 0 0; color: var(--text-body); font-size: var(--fs-sm);
+  line-height: var(--lh-body); max-width: var(--measure); }
+
+.mc-hero-words b { color: var(--text); }
+
+.mc-hero-stats { display: grid; grid-template-columns: repeat(5, auto);
+  gap: 8px 18px; align-items: center; align-content: center;
+  flex: 0 0 auto; margin-left: auto; }
+
+.mc-hs { text-align: center; }
+
+.mc-hs b { display: block; font-family: var(--font-mono); font-size: var(--fs-xl); }
+
+.mc-hs span { display: block; margin-top: 2px; color: var(--text-mute);
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; white-space: nowrap; }
+
+.mc-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px; margin-top: 12px; }
+
+.mc-leg b { display: block; font-size: var(--fs-sm); margin-bottom: 3px; }
+
+.mc-leg span { color: var(--text-mute); font-size: var(--fs-xs);
+  line-height: var(--lh-snug); display: block; }
+
+/* The terminal: watchlist beside the chart, stacked on phones. */
+.mc-term { display: grid; grid-template-columns: 348px minmax(0, 1fr);
+  gap: 14px; align-items: start; }
+
+.mc-watch { border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  background: var(--panel); overflow: hidden; }
+
+.mc-watch-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 11px 13px; border-bottom: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-dim); }
+
+.mc-watch-head span { color: var(--text-mute); font-weight: 600;
+  letter-spacing: .02em; text-transform: none; }
+
+.mc-picker { display: flex; flex-direction: column; max-height: 640px;
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
+  padding: 4px; gap: 2px; background: none; border: 0; }
+
+.mc-pick { display: flex; align-items: center; gap: 10px; width: 100%;
+  border: 0; background: transparent; cursor: pointer; text-align: left;
+  color: var(--text-dim); font: inherit; padding: 8px 9px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-out); }
+
+.mc-pick:hover { background: var(--panel-2); }
+
+.mc-rank { flex: 0 0 16px; color: var(--text-mute); font-family: var(--font-mono);
+  font-size: var(--fs-2xs); text-align: right; }
+
+.mc-tile { display: inline-grid; place-items: center; flex: 0 0 auto;
+  border-radius: var(--radius-sm); font-weight: 800; font-size: var(--fs-2xs);
+  letter-spacing: .04em; }
+
+.mc-pick-id { min-width: 0; flex: 1 1 auto; line-height: var(--lh-tight); }
+
+.mc-pick-id b { display: block; color: var(--text); font-size: var(--fs-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mc-pick-id em { display: block; font-style: normal; color: var(--text-mute);
+  font-size: var(--fs-2xs); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+
+.mc-pick-nums { flex: 0 0 auto; text-align: right; line-height: var(--lh-tight); }
+
+.mc-pick-nums b { display: block; font-family: var(--font-mono);
+  font-size: var(--fs-xs); color: var(--text); font-weight: 600; }
+
+.mc-pick-pct { font-family: var(--font-mono); font-size: var(--fs-2xs); }
+
+.mc-mom { flex: 0 0 58px; display: inline-flex; align-items: center; gap: 6px; }
+
+.mc-mom i { display: block; flex: 1 1 auto; height: 4px; border-radius: 2px;
+  background: var(--text-mute); max-width: 34px; min-width: 2px; }
+
+.mc-mom b { font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: 600; }
+
+.mc-riskb { display: inline-block; border: var(--hairline) solid; border-radius: 999px;
+  padding: 2px 8px; font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .06em; white-space: nowrap; }
+
+.mc-dock-id { display: flex; align-items: center; gap: 9px; }
+
+@media (max-width: 1000px) {
+  .mc-term { grid-template-columns: minmax(0, 1fr); }
+  .mc-picker { max-height: 300px; }
+  /* FIVE TRACKS THAT CANNOT SHRINK IS NOT FIVE TRACKS THAT FIT. `1fr`
+     is `minmax(auto, 1fr)`, and `auto` floors at the content — so with
+     `white-space: nowrap` on the labels, "flashing exit" set a minimum
+     the track could not go under and the row ran 15px out of a 390px
+     screen. Same min-width:auto trap this stylesheet has been caught by
+     before, and it only showed once the board had coins in it: with an
+     empty payload the hero draws no stats at all.
+
+     So the row wraps instead of insisting on one line, and the labels
+     are allowed to wrap with it. Three-then-two reads better at this
+     width than five columns of five-pixel type. */
+  .mc-hero-stats {
+    grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr));
+    gap: 10px 6px; width: 100%;
+  }
+  .mc-hs span { white-space: normal; }
+}
+
+/* ── Rocket Radar's record ─────────────────────────────────────────────
+   The receipts table. Seven columns on a desktop, and on a phone the
+   peak/now pair drops below the row rather than shrinking to four
+   illegible characters each — the two numbers whose disagreement is the
+   whole point of the page. */
+.mr-head, .mr-row { display: grid; gap: 8px; align-items: center;
+  grid-template-columns: 74px minmax(0, 1fr) 62px 62px 62px 62px 54px;
+  padding: 7px 12px; }
+
+.mr-head { color: var(--text-mute); font-size: var(--fs-2xs);
+  letter-spacing: .08em; text-transform: uppercase; }
+
+.mr-head > *:nth-child(n+3) { text-align: right; }
+
+.mr-row { border-top: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); }
+
+.mr-row > .mr-n { text-align: right; font-variant-numeric: tabular-nums; }
+
+.mr-when { color: var(--text-mute); font-size: var(--fs-2xs); }
+
+.mr-sym { font-weight: 700; display: flex; align-items: center; gap: 6px;
+  min-width: 0; }
+
+.mr-tag { text-align: right; }
+
+.mr-path { color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); margin: 10px 0 0; }
+
+.mr-note { color: var(--text-mute); font-size: var(--fs-2xs);
+  line-height: var(--lh-body); margin: 12px 0 0; }
+
+.mr-tbl td, .mr-tbl th { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 700px) {
+  .mr-head { display: none; }
+  .mr-row { grid-template-columns: minmax(0, 1fr) 60px 60px;
+    row-gap: 2px; }
+  .mr-when { grid-column: 1 / -1; }
+  .mr-tag { grid-column: 1 / -1; text-align: left; }
+}

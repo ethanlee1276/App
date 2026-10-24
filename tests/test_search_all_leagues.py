@@ -71,7 +71,8 @@ def _db_with_all_leagues():
 
 
 def _js():
-    return open(os.path.join(ROOT, "web", "js", "app.js"),
+    return open(os.path.join(ROOT, "web", "js", "fantasy.js"),
+                encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"),
                 encoding="utf-8").read()
 
 

@@ -176,7 +176,7 @@ def test_the_kit_prices_every_surface_and_leaves_the_snake_board_alone():
 
 # --- the page ---------------------------------------------------------------
 
-APP = _read("web", "js", "app.js")
+APP = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
 
 
 def test_the_page_and_the_module_agree_on_the_budget_rails():

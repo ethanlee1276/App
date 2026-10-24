@@ -273,7 +273,7 @@ qellysbook.com {
 		# markers the preview pages splice into are kept. An unknown path's
 		# SPA fallback still gets the original — the same page, longer.
 		@trimmed {
-			path /js/app.js /js/visuals.js /css/styles.css /index.html /js/gamecast.js /css/gamecast.css /js/boot.js /js/register-sw.js
+			path /js/app.js /js/visuals.js /css/styles.css /index.html /js/gamecast.js /css/gamecast.css /js/boot.js /js/register-sw.js /js/fantasy.js /js/memes.js
 			file /min{path}
 		}
 		rewrite @trimmed /min{path}

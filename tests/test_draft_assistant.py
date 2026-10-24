@@ -99,7 +99,7 @@ def test_the_live_room_and_the_marked_room_read_one_kit():
 
 
 def _app():
-    return open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    return open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 
 def test_the_page_draws_the_plan_and_the_assistant_inside_the_kit():

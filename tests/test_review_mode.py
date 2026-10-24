@@ -177,7 +177,7 @@ def test_the_market_row_url_is_gated_at_the_source():
 # ---------------------------------------------------------------- the dress
 
 def test_the_placeholder_has_a_rule_so_the_dock_does_not_collapse():
-    css = _read("web", "css", "styles.css")
+    css = (_read("web", "css", "styles.css") + _read("web", "css", "fantasy.css") + _read("web", "css", "memes.css"))
     assert ".mc-chart-off {" in css, \
         "mc-chart-off is rendered but unstyled — the dock collapses"
     i = css.index(".mc-chart-off {")

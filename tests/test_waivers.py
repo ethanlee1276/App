@@ -153,7 +153,7 @@ def test_the_board_never_claims_a_player_is_available():
         assert word not in blob, \
             f"the board claims {word!r} — it cannot see the reader's league"
     assert "cannot see your league" in board["note"]
-    src = _read("web", "js", "app.js")
+    src = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     i = src.index("function waiverBoardHTML(w)")
     assert "free agent" not in src[i:i + 2500].lower()
 
@@ -280,7 +280,7 @@ def test_a_rounding_artefact_is_not_reported_as_a_pass_lean():
 
 
 def test_the_panel_says_it_ranks_spots_and_not_points():
-    src = _read("web", "js", "app.js")
+    src = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     i = src.index("function streamerHTML(st)")
     body = src[i:src.index("\nfunction ", i + 10)]
     assert "not a projection of points" in body.lower() \
@@ -304,7 +304,7 @@ def test_the_build_publishes_it_and_survives_a_missing_injury_file():
 
 
 def test_the_page_gives_it_a_tab_of_its_own():
-    src = _read("web", "js", "app.js")
+    src = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     assert '["waivers", "Waivers & starts",' in src
     assert "streamerHTML(d.streamers)" in src
     assert "waiverBoardHTML(d.waivers)" in src

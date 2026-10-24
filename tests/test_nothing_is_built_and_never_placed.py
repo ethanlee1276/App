@@ -95,7 +95,7 @@ def _py_unread():
 def _js_unread():
     """Locals declared with const/let inside a top-level function in
     app.js and never named again in that function."""
-    src = (ROOT / "web" / "js" / "app.js").read_text()
+    src = ((ROOT / "web" / "js" / "fantasy.js").read_text() + "\n" + (ROOT / "web" / "js" / "app.js").read_text())
     lines = src.split("\n")
     out, i = [], 0
     while i < len(lines):
@@ -178,7 +178,7 @@ def test_the_exchange_report_reaches_the_board():
 
 
 def test_the_mock_draft_does_not_rebuild_the_lists_it_replaced():
-    src = (ROOT / "web" / "js" / "app.js").read_text()
+    src = ((ROOT / "web" / "js" / "fantasy.js").read_text() + "\n" + (ROOT / "web" / "js" / "app.js").read_text())
     i = src.index("function mockDraftHTML")
     body = src[i:i + 9000]
     assert "const avail = sheet.slice(0, 12)" not in body, \

@@ -305,7 +305,7 @@ def test_this_module_cannot_fetch_anything_at_all():
 
 # --- the two columns that only exist in the browser -------------------------
 def _js(name):
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     i = app.index(f"function {name}(")
     return app[i:app.index("\n}", i)]
 
@@ -357,7 +357,7 @@ def test_a_finished_draft_stops_claiming_to_be_live():
 
 
 def test_the_pick_order_is_recorded_as_it_arrives():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     i = app.index("function dkStart(")
     body = app[i:app.index("\nfunction ", i + 1)]
     assert "dkState.adp" in body and "pick_no" in body
@@ -375,7 +375,7 @@ def test_the_paste_box_says_why_it_exists():
 
 def test_the_board_is_a_pane_rather_than_a_page():
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+               encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
     i = css.index(".rank-scroll {")
     block = css[i:css.index("}", i)]
     assert "max-height" in block
@@ -386,7 +386,7 @@ def test_the_board_is_a_pane_rather_than_a_page():
 def test_the_pasted_list_follows_the_account_to_the_phone():
     """It is typed once and wanted at the draft table, which is the whole
     reason accounts exist on this site."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     i = app.index("function acctGather(")
     assert "FF_IMPORT_KEY" in app[i:app.index("\n}", i)]
     j = app.index("function acctApplySection(")
@@ -394,7 +394,7 @@ def test_the_pasted_list_follows_the_account_to_the_phone():
 
 
 def test_the_sub_tab_exists_and_is_wired():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert '["ranks", "Rankings"' in app
     assert "rankBoardHTML(d.ranks)" in app
     assert "initRankBoard();" in app
@@ -416,7 +416,7 @@ def test_the_board_says_what_it_is_ordered_by():
     `consensus`, the median across every source — and nothing on the
     page said so. Two of the columns he could see are sources, neither of
     which is sorted, so the list looked arbitrary."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    app = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     head = app[app.index("function rankBoardHTML("):]
     head = head[:head.index("\n}")]
     assert "Ordered by <b>consensus</b>" in head, (
@@ -439,7 +439,7 @@ def test_the_position_leads_the_row():
     assert "rows.slice(0, 200).map((r, i)" in render, (
         "the map has no index, so there is no position to print")
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+               encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
     assert ".rank-ord {" in css, "the ordinal is unstyled"
 
 
@@ -463,7 +463,7 @@ def test_the_name_column_is_pinned_and_matches_its_own_row():
     seam down the middle — which is what `--panel` against the card's
     `--grad-card` wash actually looked like."""
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+               encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
     i = css.index(".rank-table tbody td { background:")
     block = css[i:i + 400]
     assert "position: sticky; left: 0" in block

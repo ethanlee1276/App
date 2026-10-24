@@ -27,9 +27,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+# + the Fantasy room app.js loads on first use (js/fantasy.js, 2026-10-24)
+APP = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"),
-           encoding="utf-8").read()
+           encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
 
 
 def _kit_region():

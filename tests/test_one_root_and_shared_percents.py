@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = ((ROOT / "web" / "js" / "fantasy.js").read_text(encoding="utf-8") + "\n" + (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8"))
 NC = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
 
 FIXED = ("--ink-on-gold", "--ink-warm", "--ink-neutral", "--qbot-ground",

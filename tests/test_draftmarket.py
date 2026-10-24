@@ -242,7 +242,7 @@ def test_a_placed_player_can_never_be_a_sleeper():
 
 
 def test_the_page_says_whose_opinion_each_row_is():
-    app = _read("web", "js", "app.js")
+    app = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     assert "function marketLine(" in app, "the board never explains the placements"
     assert "dk-market" in app, "placed rows carry no marker"
     i = app.index("function marketLine(")
@@ -282,7 +282,7 @@ def test_a_placed_player_never_claims_he_averaged_zero():
         _sleeper("Rookie", "Back", "RB", 4, exp=0)]))[0]
     assert r["ppg"] is None and r["xppg"] is None, \
         "a zero here reads as 'measured zero points', which is a lie"
-    app = _read("web", "js", "app.js")
+    app = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     assert "r.ppg != null ?" in app, \
         "the calendar card no longer guards on null before captioning FPPG"
 
@@ -316,7 +316,7 @@ def test_one_marker_reads_both_row_shapes():
     raw kit rows (source:"market") and the advice box reads the server's
     rows (market:true). A marker that knew only one would go silently
     missing on whichever surface was refactored last."""
-    app = _read("web", "js", "app.js")
+    app = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     i = app.index("function mkt(")
     body = app[i:app.index("\n}", i)]
     assert 'source === "market"' in body and "market === true" in body, \
@@ -330,7 +330,7 @@ def test_an_empty_game_log_does_not_promise_data_that_cannot_exist():
     Rookies are on this board now, so that promise would be made about
     players for whom no log exists anywhere. Both branches verified in
     Chromium."""
-    app = _read("web", "js", "app.js")
+    app = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     i = app.index("async function _ffDossierCharts(")
     body = app[i:i + 2200]
     assert 'source === "market"' in body, \

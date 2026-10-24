@@ -132,7 +132,13 @@ HTML = (WEB / "index.html").read_text()
 #: for that phone"): the list beside its pick on a wide open screen, the
 #: Fold's near-square inner screen as an open shape, and the split dropped
 #: when the screen folds — +0.30 KB gz (498.938 -> 499.24). Told to Ethan.
-APP_JS_BUDGET_KB = 500
+#: 500 -> 460 on 2026-10-24 — DOWN, and kept down. Ethan's "build
+#: everything" (docs/IDEAS.md, "split app.js further"): the Fantasy room
+#: (draft kit, mock draft, cheat sheet, waivers, the calendar, the league
+#: desks — 186 declarations, chosen by TypeScript's own reading of which
+#: ones nothing outside Fantasy calls) moved to js/fantasy.js, loaded on
+#: first use, as Rocket Radar did to js/memes.js. 493.6 -> 450.5 KB gz.
+APP_JS_BUDGET_KB = 460
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -211,7 +217,9 @@ APP_JS_BUDGET_KB = 500
 #: the layouts for each shape — the list beside its pick, the panes at a
 #: book-folded hinge, Flex Mode's deck, the cover glance and the narrowest
 #: cover's card (616.506 -> 617.545 KB gz). Told to Ethan.
-BOOT_BUDGET_KB = 618
+#: 618 -> 580 the same day, for the same split: the first visit is
+#: 620 -> 570 KB gz.
+BOOT_BUDGET_KB = 580
 
 
 def _gz_trimmed(rel: str) -> int:

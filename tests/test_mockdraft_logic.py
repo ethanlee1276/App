@@ -32,7 +32,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _HARNESS = r"""
 const fs = require("fs");
-const src = fs.readFileSync(process.argv[2], "utf8");
+// The mock draft moved to js/fantasy.js (2026-10-24); it reads app.js helpers too.
+const src = process.argv.slice(2).map((f) => fs.readFileSync(f, "utf8")).join("\n");
 // Slice the pure functions out by their declarations — no DOM needed.
 function grab(name, end) {
   const i = src.indexOf(name);
@@ -121,7 +122,7 @@ def _run():
         path = fh.name
     try:
         res = subprocess.run(
-            [node, path, os.path.join(ROOT, "web", "js", "app.js")],
+            [node, path, os.path.join(ROOT, "web", "js", "fantasy.js"), os.path.join(ROOT, "web", "js", "app.js")],
             capture_output=True, text=True, timeout=60)
     finally:
         os.unlink(path)

@@ -44,8 +44,8 @@ import shutil as _shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+APP = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
 DOC = open(os.path.join(ROOT, "docs", "DRAFT_PLAN.md"), encoding="utf-8").read()
 
 
@@ -127,7 +127,8 @@ if not _shutil.which("node"):
 
 _HARNESS = r"""
 const fs = require("fs");
-const src = fs.readFileSync(process.argv[2], "utf8");
+// The mock draft moved to js/fantasy.js (2026-10-24); it reads app.js helpers too.
+const src = process.argv.slice(2).map((f) => fs.readFileSync(f, "utf8")).join("\n");
 function grab(name, end) {
   const i = src.indexOf(name);
   if (i < 0) throw new Error("missing: " + name);
@@ -277,7 +278,7 @@ def _run():
         fh.write(_HARNESS)
         path = fh.name
     try:
-        res = subprocess.run([node, path, os.path.join(ROOT, "web", "js", "app.js")],
+        res = subprocess.run([node, path, os.path.join(ROOT, "web", "js", "fantasy.js"), os.path.join(ROOT, "web", "js", "app.js")],
                              capture_output=True, text=True, timeout=60)
     finally:
         os.unlink(path)

@@ -49,7 +49,7 @@ from engine import memeledger as ml                             # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # app.js and the meme-coin page it loads on first use (js/memes.js, 2026-10-24).
 APP = "\n".join(open(os.path.join(ROOT, "web", "js", f), encoding="utf-8").read() for f in ("app.js", "memes.js"))
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
 
 
 def _fn(name):

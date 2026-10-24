@@ -31,7 +31,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read() + "".join("\n" + open(os.path.join(ROOT, "web", "css", f), encoding="utf-8").read() for f in ("fantasy.css", "memes.css"))
 NAKED = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
 
 

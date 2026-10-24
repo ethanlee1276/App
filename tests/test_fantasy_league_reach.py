@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import _windows                                             # noqa: E402
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 SRV = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
 

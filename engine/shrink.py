@@ -49,7 +49,9 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/gamecast.js", "css/gamecast.css",
          # The two small boot scripts (2026-10-24): half and three-quarters
          # comment, 2.8 KB gz of every first visit between them.
-         "js/boot.js", "js/register-sw.js")
+         "js/boot.js", "js/register-sw.js",
+         # The pages split out of app.js (2026-10-24), trimmed the same way.
+         "js/fantasy.js", "js/memes.js")
 
 #: HTML comments that are not commentary: `engine/routes.document` splices
 #: an entity's preview tags between these two markers, so they stay.

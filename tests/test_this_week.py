@@ -40,7 +40,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 #: The week's drawing (js/fantasyweek.js), loaded on first use beside
 #: app.js; the harness loads it whole, as the page does.
 WEEK_JS = open(os.path.join(ROOT, "web", "js", "fantasyweek.js"), encoding="utf-8").read()

@@ -162,7 +162,7 @@ def test_the_college_team_map_reaches_the_page():
     stale, and that only works if the build keeps writing them."""
     build = _read("cfb_build.py")
     assert 'out["teams"] = teams' in build
-    app = _read("web", "js", "app.js")
+    app = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     i = app.index("function teamsForSport(")
     assert "state.data && state.data.teams" in app[i:i + 400]
 
@@ -202,7 +202,7 @@ def test_no_call_site_passes_a_map_without_saying_which_sport():
     dictionary and NO sport silently falls back to whatever tab the visitor
     is on. offseasonHTML is always NFL however you got there — that is why
     it passes its own map in the first place."""
-    app = _read("web", "js", "app.js")
+    app = (_read("web", "js", "fantasy.js") + "\n" + _read("web", "js", "app.js"))
     for m in re.finditer(r"teamMark\(", app):
         args, depth, k = [], 0, m.end()
         cur = ""
