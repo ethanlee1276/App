@@ -144,6 +144,18 @@ def test_the_fold_names_it_and_shows_todays_chance():
     assert "Held" not in text
 
 
+def test_a_posted_pick_carries_todays_bigger_lines_or_none():
+    # Box run, 2026-10-24: a posted under 19.5 still showed an under 14.5 at
+    # -9900 that today's ladder refuses — last build's lines rode in on the
+    # carried-forward row, and an empty answer today left them in place.
+    b0, t0, _then = _posted()
+    b0[0]["bigger_lines"] = [{"side": "under", "line": 14.5, "odds": -9900, "book": "DK", "prob": 0.64,
+                              "worth_at": -178, "better": False}]
+    prev = {"rows": b0, "day": t0.get("day") or {}, "earlier": []}
+    (r,) = _board([_row(90.0)], previous=prev)[0]
+    assert r["locked"] and "bigger_lines" not in r, r.get("bigger_lines")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

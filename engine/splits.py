@@ -39,6 +39,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 
 ENV = "SHARPAPI_KEY"
@@ -62,6 +63,44 @@ def _cache_path(league: str) -> str:
     return os.path.join(str(CACHE_DIR), f"sharpsplits_{league}.json")
 
 
+#: Who is asking. With none, urllib says "Python-urllib/3.x", which API
+#: firewalls commonly refuse with a 403 before the key is read — the box's
+#: first probe, 2026-10-24, got exactly a bare 403.
+AGENT = "qellys-book/0.1 (+splits)"
+
+
+class Refused(Exception):
+    """The API said no: its status and what it said (never the key, which
+    rides in a header the reply does not echo)."""
+
+    def __init__(self, status: int, said: str):
+        super().__init__(f"HTTP {status}: {said}" if said else f"HTTP {status}")
+        self.status, self.said = status, said
+
+
+def _said(exc) -> str:
+    """The reply's own reason, short: a JSON error's message, else the
+    body's first words; "a web firewall" when the body is a page."""
+    try:
+        body = exc.read().decode("utf-8", "replace")
+    except Exception:                                        # noqa: BLE001
+        return ""
+    try:
+        got = json.loads(body)
+        if isinstance(got, dict):
+            for k in ("message", "error", "detail", "msg"):
+                v = got.get(k)
+                if isinstance(v, dict):
+                    v = v.get("message") or v.get("code")
+                if v:
+                    return str(v)[:240]
+    except ValueError:
+        pass
+    if "<html" in body[:400].lower():
+        return "a web page came back, not the API (a firewall in front of it)"
+    return " ".join(body.split())[:240]
+
+
 def fetch(league: str, key: str | None = None, ttl: int = TTL, now: float | None = None):
     """The league's reply, cached for ``ttl``; None with no key. The key
     rides in a header, never the URL, so no log line can carry it."""
@@ -76,9 +115,13 @@ def fetch(league: str, key: str | None = None, ttl: int = TTL, now: float | None
     except (OSError, ValueError):
         pass
     req = urllib.request.Request(URL.format(league=league),
-                                 headers={"X-API-Key": key, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
+                                 headers={"X-API-Key": key, "Accept": "application/json",
+                                          "User-Agent": AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise Refused(exc.code, _said(exc)) from None
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path + ".tmp", "w", encoding="utf-8") as fh:
         json.dump(payload, fh)
@@ -225,6 +268,8 @@ def attach_to_board(result: dict, sport: str, fetcher=None, history: str = HISTO
         result["betting_splits"] = got
         record(got, sport, history)
         return f"Public betting: {len(got)} of {len(result.get('games') or [])} game(s)"
+    except Refused as exc:
+        return f"Public betting unavailable (SharpAPI {exc})"
     except Exception as exc:                                 # noqa: BLE001
         return f"Public betting unavailable ({type(exc).__name__})"
 
@@ -282,7 +327,13 @@ def main(argv=None) -> int:
     if not os.environ.get(ENV):
         print(f"  {ENV} is not set: sudo ./deploy/setenv.sh {ENV}, then run with the service's env")
         return 1
-    payload = fetch(a.league, ttl=0 if a.probe else TTL)
+    try:
+        payload = fetch(a.league, ttl=0 if a.probe else TTL)
+    except Refused as exc:
+        print(f"  SharpAPI refused: {exc}")
+        print("  401 or 403 naming the key: the key is wrong or not active yet. Naming the plan or a tier: "
+              "splits are not in this plan. A web page: their firewall refused the box.")
+        return 2
     if a.probe:
         evs = _events(payload)
         print(f"  reply: {type(payload).__name__}"

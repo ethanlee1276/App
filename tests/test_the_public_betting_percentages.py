@@ -11,8 +11,8 @@ read, 0-100 as 0-1, and a number that is not a share is dropped rather than
 shown; the board's games are matched by full name or code; the sentence
 leads with DraftKings, the spread before the moneyline, adds the total and
 Circa's money, and calls it context; with no key nothing is fetched and the
-board says it is off; the key rides in a header and never the URL; the
-splits are a paid key, kept in the history, and the report and the NFL
+board says it is off; the key rides in a header and never the URL, the client names
+itself, and a refusal says what the API said; the splits are a paid key, kept in the history, and the report and the NFL
 build carry them.
 
 Run directly: `python3 tests/test_the_public_betting_percentages.py`
@@ -101,6 +101,40 @@ def test_off_until_the_key_is_set_and_the_key_never_in_the_url():
             os.environ[SP.ENV] = saved
     src = open(os.path.join(ROOT, "engine", "splits.py"), encoding="utf-8").read()
     assert '"X-API-Key": key' in src and "{key}" not in SP.URL and "api_key" not in SP.URL
+
+
+def test_a_refusal_says_why_and_the_client_says_who_it_is():
+    import io
+    import urllib.error
+    import urllib.request
+    seen = []
+
+    def refuse(body):
+        def opener(req, timeout=0):
+            seen.append(req)
+            raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(body.encode()))
+        return opener
+    real, real_path = urllib.request.urlopen, SP._cache_path
+    SP._cache_path = (lambda league, _d=tempfile.mkdtemp(): os.path.join(_d, f"sharpsplits_{league}.json"))
+    try:
+        urllib.request.urlopen = refuse('{"error": {"message": "Betting splits require the Pro plan"}}')
+        try:
+            SP.fetch("nfl", key="sk-test-secret", ttl=0)
+            raise AssertionError("a 403 must raise")
+        except SP.Refused as exc:
+            assert exc.status == 403 and "require the Pro plan" in str(exc) and "sk-test" not in str(exc)
+        req = seen[-1]
+        assert req.get_header("X-api-key") == "sk-test-secret" and "sk-test" not in req.full_url
+        assert req.get_header("User-agent") == SP.AGENT, "never urllib's default name"
+        msg = SP.attach_to_board({"games": []}, "nfl", fetcher=lambda lg: SP.fetch(lg, key="sk-test-secret", ttl=0))
+        assert msg == "Public betting unavailable (SharpAPI HTTP 403: Betting splits require the Pro plan)", msg
+        urllib.request.urlopen = refuse("<html><head><title>Attention Required</title></head></html>")
+        try:
+            SP.fetch("nfl", key="k", ttl=0)
+        except SP.Refused as exc:
+            assert "a firewall in front of it" in str(exc)
+    finally:
+        urllib.request.urlopen, SP._cache_path = real, real_path
 
 
 def test_a_reading_is_on_the_board_kept_in_the_history_and_paid():

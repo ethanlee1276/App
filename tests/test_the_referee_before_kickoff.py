@@ -174,6 +174,29 @@ def test_attach_stamps_the_named_games_and_never_raises():
     assert R.attach(None, 2026, 9).startswith("Referees skipped:")
 
 
+def test_why_says_what_each_source_answered():
+    # The box, 2026-10-24: 0 of 14 named, and nothing said which link broke.
+    games = [{"away": "PIT", "home": "NO", "date": "2026-10-25"}, {"away": "SF", "home": "ATL", "date": "2026-10-25"}]
+
+    def espn(g):
+        if g["away"] == "SF":
+            raise TimeoutError("slow")
+        return {"gameInfo": {"venue": {}, "attendance": 0}}
+    posts = [{"title": {"rendered": "Week 7 referee assignments"}, "date": "2026-10-23", "content": {"rendered": POST_TABLE}},
+             {"title": {"rendered": "Officiating crews for the 2026 season"}, "date": "2026-08-01", "content": {"rendered": ""}}]
+    lines = R.diagnose(games, 2026, 7, store={"refs": {n: {} for n in REFS}}, espn=espn, posts_fetch=lambda: posts)
+    text = "\n".join(lines)
+    assert "ESPN PIT@NO: no officials listed yet (gameInfo keys: ['attendance', 'venue'])" in text
+    assert "ESPN SF@ATL: TimeoutError: slow" in text
+    assert "the feed returned 2 post(s)" in text and "the week's post, 2 game(s) named" in text
+    assert "'Officiating crews for the 2026 season': not the week's post" in text
+
+    def blocked():
+        raise OSError("HTTP Error 403: Forbidden")
+    assert R.diagnose([], 2026, 7, store={}, posts_fetch=blocked)[-1] == \
+        "  Football Zebras: OSError: HTTP Error 403: Forbidden"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

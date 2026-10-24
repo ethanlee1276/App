@@ -447,8 +447,10 @@ def trust_bigger(r: dict, rule, quotes: dict) -> int:
     whenever it runs above (15+ points above: we said 76%, they hit 36%).
     Each line's chance is held to the market's at its own number — the
     books' field where three or more quote both sides, else its own book
-    de-vigged — then its worth-it price and its mark are read again, and a
-    line listed only for its mark goes when the mark does. In place, so the
+    de-vigged (one side at the assumed hold where that is all it quotes:
+    the box's second run kept 161 marks, nearly all on over-only rungs) —
+    then its worth-it price and its mark are read again, and a line listed
+    only for its mark goes when the mark does. In place, so the
     shelf card and the board's card read the same lines. Returns the marks
     the rule took away."""
     lines = r.get("bigger_lines")

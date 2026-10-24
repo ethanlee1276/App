@@ -162,6 +162,21 @@ def test_a_broken_or_stale_quote_is_not_a_bigger_line():
     assert lines(stale, at=dict(pick, odds=150)) == [], "less likely than a +150 pick and pays less"
 
 
+def test_each_line_carries_its_own_books_market_chance_even_over_only():
+    from engine.odds import devig_two_way
+    from engine import likelyboard as LB
+    pick = {"side": "over", "line": 39.5, "odds": -240, "model_prob": 0.74, "market": "rec_yds"}
+    both, one = _ln("DraftKings", 59.5, -120, -105), _ln("DraftKings", 69.5, 125, 0)
+    got = {c["line"]: c for c in K.bigger_lines(_receiver(alt_lines=[both, one], all_lines=[]), pick, FITS)}
+    assert got[59.5]["fair"] == round(devig_two_way(-120, -105)[0], 4)
+    assert got[69.5]["fair"] == round(devig_two_way(125, 0)[0], 4), "an over-only rung at the assumed hold"
+    # The box's second run kept 161 marks, nearly all on over-only rungs:
+    # held to their own book's price, a book's own number is no bargain.
+    r = dict(pick, kind="prop", player="A Receiver", bigger_lines=[dict(got[69.5], better=True)])
+    LB.trust_bigger(r, (1.0, 0.0), {})
+    assert r["bigger_lines"][0]["better"] is False
+
+
 def test_the_journal_stakes_the_pick_and_nothing_else():
     r = _pick(_receiver())
     assert r["bigger_lines"]

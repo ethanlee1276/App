@@ -2861,10 +2861,11 @@ def bigger_lines(prop: dict, pick: dict, fits=None) -> list:
         own = fair_under if side == "under" else fair_over
         cands.append((ev, {"side": side, "line": line, "odds": odds, "book": book, "prob": round(p, 4),
                            "worth_at": _worth_at(p), "better": ev >= MIN_EV,
-                           # the rung's own book, de-vigged, where it quotes both sides
-                           # (the board's price rule reads it: likelyboard.trust_bigger)
-                           "fair": round(own, 4) if own is not None and int(ln.get(
-                               "under_odds" if side == "over" else "over_odds") or 0) else None}))
+                           # The rung's own book, de-vigged: both sides where it quotes
+                           # both, else the one side at odds.ONE_SIDED_HOLD — most alt
+                           # ladders are over-only (the board's price rule reads it:
+                           # likelyboard.trust_bigger).
+                           "fair": round(own, 4) if own is not None else None}))
     out = []
     for _ev, c in cands:
         if len(out) < BIGGER_SHOWN and last - c["prob"] >= BIGGER_STEP:
@@ -3357,6 +3358,11 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     for r in out:
         if (r.get("kind") or "prop") != "prop":
             continue
+        # A POSTED PICK IS LAST BUILD'S ROW CARRIED FORWARD (`_locked`), and
+        # it carried last build's lines with it: on the box, 2026-10-24, an
+        # under 14.5 at -9900 that today's ladder refuses sat under a posted
+        # 19.5 because nothing replaced it. Today's lines, or none.
+        r.pop("bigger_lines", None)
         src = ladders.get((r.get("player") or "", r.get("team") or "", str(r.get("market") or "")))
         if src is None:
             continue

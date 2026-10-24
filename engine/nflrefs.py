@@ -303,6 +303,51 @@ def from_footballzebras(season: int, week: int, referees) -> dict:
     return {}
 
 
+def diagnose(games: list, season: int, week: int, store: dict | None = None,
+             espn=None, posts_fetch=None) -> list:
+    """What each source answered for the week, as lines: ESPN game by game
+    (the officials it lists, by role), then Football Zebras (the posts the
+    feed returned, which one is the week's, and what its rows named). For
+    the box's run where nothing was named (2026-10-24): which link broke."""
+    store = load() if store is None else store
+    out = []
+    espn = espn or _espn_summary
+    for g in games:
+        key = _key(g.get("away", ""), g.get("home", ""))
+        try:
+            summ = espn(g) or {}
+            from .officials import parse
+            crew = parse(summ)
+            info = summ.get("gameInfo") or {}
+            out.append(f"  ESPN {key}: " + (", ".join(f"{o['role'] or '?'} {o['name']}" for o in crew) if crew else
+                                           ("no summary (no ESPN id for the game)" if not summ else
+                                            f"no officials listed yet (gameInfo keys: {sorted(info)[:8]})")))
+        except Exception as exc:                             # noqa: BLE001
+            out.append(f"  ESPN {key}: {type(exc).__name__}: {str(exc)[:160]}")
+    url = FZ_FEED.format(week=int(week))
+    try:
+        posts = (posts_fetch or (lambda: _cached_json(url, f"fz_assignments_{season}_w{int(week):02d}.json")))()
+    except Exception as exc:                                 # noqa: BLE001
+        out.append(f"  Football Zebras: {type(exc).__name__}: {str(exc)[:200]}")
+        return out
+    posts = posts if isinstance(posts, list) else []
+    out.append(f"  Football Zebras: the feed returned {len(posts)} post(s)")
+    refs = _known_referees(store)
+    for p in posts[:5]:
+        title = _html.unescape(str(((p or {}).get("title") or {}).get("rendered") or ""))
+        content = str(((p or {}).get("content") or {}).get("rendered") or "")
+        wk = bool(re.search(rf"(?i)\bweek\s*{int(week)}\b", title)) and "assign" in title.lower()
+        this = str(season) in str(p.get("date") or "") + title + str(p.get("link") or "")
+        got = parse_post(content, refs) if wk and this else {}
+        out.append(f"    {str(p.get('date') or '')[:10]} {title[:70]!r}: "
+                   + ("the week's post, " + (f"{len(got)} game(s) named" if got else
+                                             f"no rows read ({len(_rows(content))} rows, e.g. "
+                                             f"{[r[:60] for r in _rows(content)[:3]]})")
+                      if wk and this else "not the week's post"))
+    out.append(f"  {len(refs)} referee names known to match against")
+    return out
+
+
 def _known_referees(store: dict) -> set:
     names = set((store.get("refs") or {}).keys())
     try:
@@ -433,6 +478,7 @@ def main(argv=None) -> int:
     ap.add_argument("--set", nargs="+", metavar="AWAY@HOME=Name", help="name this week's referee(s) by hand")
     ap.add_argument("--season", type=int, default=0)
     ap.add_argument("--week", type=int, default=0)
+    ap.add_argument("--why", action="store_true", help="say what each source answered this week")
     a = ap.parse_args(argv)
     if a.fit:
         out = fit()
@@ -454,6 +500,10 @@ def main(argv=None) -> int:
         print(f"  {week_key(season, week)}: {set_by_hand(season, week, a.set)}")
     games = [{"away": r["away_team"], "home": r["home_team"], "date": r["gameday"]}
              for r in sched if str(r.get("season")) == str(season) and str(r.get("week")) == str(week)]
+    if a.why:
+        soon = [g for g in games if str(g["date"]) >= today]
+        for line in diagnose(soon, int(season), int(week)):
+            print(line)
     got = assigned(games, int(season), int(week))
     print(f"  {week_key(season, week)}: {len(got)} of {len(games)} game(s) have a referee named")
     for g in games:

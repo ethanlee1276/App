@@ -14,6 +14,7 @@
 #
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CT CU CV CW CX CY CZ DA DB DC DD DE DG DH BK 2>&1 | tee /tmp/tonight.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh CY DA DE DB2 DI 2>&1 | tee /tmp/di.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DE DJ 2>&1 | tee /tmp/dj.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -363,6 +364,16 @@ for sp, f in (('nfl', 'web/data/recommendations.json'), ('cfb', 'web/data/cfb.js
     print(sp, 'past-cap list:', 'missing (an older build)' if pc is None else len(pc), '· Most Likely', len(d.get('most_likely') or []))
 games = json.load(open(gate.board_source('web/data/recommendations.json'))).get('games') or []
 print(sum(1 for g in games if g.get('officials')), 'of', len(games), 'NFL games have a referee named')
+"
+SH
+run DJ "Why no referee yet, and why the NBA and NHL boards are empty" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.nflrefs --why
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+from engine import gate
+for sp, f in (('nba', 'web/data/nba.json'), ('nhl', 'web/data/nhl.json')):
+    d = json.load(open(gate.board_source(f)))
+    print(sp, len(d.get('recommendations') or []), 'props priced;', d.get('likely_census'))
 "
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
