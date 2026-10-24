@@ -199,7 +199,7 @@ def test_sync_talks_only_to_our_own_endpoints():
     unchanged: nothing in the account block may talk to a third party,
     because that is the block holding the personal data."""
     i = APP.index("ACCOUNTS — one name, every device")
-    block = APP[i:APP.index("Offseason panel", i)]
+    block = APP[i:APP.index("Active rosters — every team as it stands today", i)]
     import re
     targets = re.findall(r'fetch\(\s*[`"]([^`"]+)[`"]', block)
     assert targets, "the account block stopped talking to the server at all"
@@ -236,7 +236,7 @@ def test_adopting_a_server_copy_does_not_echo_back():
 
 def test_the_heartbeat_respects_hidden_tabs():
     i = APP.index("ACCOUNTS — one name, every device")
-    block = APP[i:APP.index("Offseason panel", i)]
+    block = APP[i:APP.index("Active rosters — every team as it stands today", i)]
     assert "document.hidden" in block
 
 

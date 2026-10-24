@@ -111,7 +111,7 @@ def test_e15_permissions_policy_hide_list_and_unit_filters():
     pp = dict(srv.SECURITY_HEADERS)["Permissions-Policy"]
     assert "camera=()" in pp and "geolocation=()" in pp
     assert f'Permissions-Policy "{pp}"' in CADDY, "Caddy and the app send the same policy"
-    assert re.search(r"file_server \{\s*hide [^\n]*\.env", CADDY) and "hide .well-known" not in CADDY
+    assert re.search(r"file_server \{\s*(?:precompressed [^\n]*\s*)?hide [^\n]*\.env", CADDY) and "hide .well-known" not in CADDY
     assert "CapabilityBoundingSet=\n" in UNIT and "SystemCallFilter=@system-service" in UNIT
     assert "~@resources" not in UNIT, "os.nice is a @resources call"
 

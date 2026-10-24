@@ -29,7 +29,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"),
            encoding="utf-8").read()
 
@@ -56,8 +56,8 @@ def test_the_kit_cross_off_and_the_dossier_coexist():
 
 def test_one_binding_at_the_document():
     i = APP.index("function openFfDossier(")
-    block = APP[APP.index("The fantasy player dossier"):
-                APP.index("/* ---------------- Mock draft simulator ")]
+    at = APP.index("The fantasy player dossier")
+    block = APP[at:APP.index("/* ---------------- The team page ", at)]
     assert 'document.addEventListener("click"' in block
     assert 'closest("[data-dossier]")' in block.replace("&& e.target.", "")
     # And NOT rebound inside the fantasy renderer.
@@ -92,8 +92,8 @@ def test_the_charts_degrade_honestly_without_a_db():
 
 
 def test_the_overlay_closes_three_ways():
-    block = APP[APP.index("The fantasy player dossier"):
-                APP.index("/* ---------------- Mock draft simulator ")]
+    at = APP.index("The fantasy player dossier")
+    block = APP[at:APP.index("/* ---------------- The team page ", at)]
     assert "e.target === ov" in block, "scrim tap must close"
     assert 'closest(".ffd-close")' in block, "the button must close"
     # THE BEHAVIOUR, NOT THE CHARACTERS. This pinned the exact string

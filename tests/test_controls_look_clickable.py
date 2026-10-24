@@ -100,8 +100,9 @@ def test_hover_moves_the_surface_not_only_the_ink():
 
 
 def _js():
-    return open(os.path.join(HERE, "web", "js", "app.js"),
-                encoding="utf-8").read()
+    # The Fantasy page's own code is in fantasy.js since 2026-10-24.
+    return "\n".join(open(os.path.join(HERE, "web", "js", f), encoding="utf-8").read()
+                     for f in ("fantasy.js", "app.js"))
 
 
 def _fn(js, name):

@@ -60,7 +60,7 @@ def test_only_the_installed_app_asks_and_the_worker_keeps_the_mark():
     assert 'postMessage({ type: "app-mode" })' in block
     assert 'e.data.type !== "app-mode"' in SW and '.put("/app", new Response("1"))' in SW
     at = SW.index('self.addEventListener("install"')
-    assert "(await appMode()) ? [...SHELL, ...LAZY] : SHELL" in SW[at:at + 400]
+    assert "(await appMode()) ? [...SHELL, ...LAZY] : SHELL" in SW[at:SW.index("\n});", at)]
     assert 'new Request(u, { cache: "reload" })' in SW, "a new version is fetched past the browser's cache"
 
 

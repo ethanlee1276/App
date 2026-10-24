@@ -413,7 +413,8 @@ def test_its_page_code_loads_on_first_use_and_a_failed_load_falls_back():
     index = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     sw = open(os.path.join(ROOT, "web", "sw.js"), encoding="utf-8").read()
     assert 'src="js/report.js"' not in index and "report.css" not in index
-    assert "/js/report.js" not in sw
+    shell = sw[sw.index("const SHELL = ["):sw.index("];", sw.index("const SHELL = ["))]
+    assert "/js/report.js" not in shell, "not in the first paint (the installed app keeps it with its pages, LAZY)"
     assert ".gr-" not in CSS, "the report's rules live in css/report.css"
     assert "function grBlockHTML" not in APP and "GR_TONE" not in APP
 

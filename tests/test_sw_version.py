@@ -66,11 +66,14 @@ def test_the_hash_covers_exactly_what_the_worker_caches():
         f"the shell hash is missing the files most likely to change: {sorted(names)}"
     # Every entry in SHELL that exists on disk is covered — nothing is
     # cached by the worker that the version does not describe.
+    # SHELL and, since 2026-10-24, LAZY: the installed app serves the pages'
+    # files from the version's copy too, so they are part of what it names.
     urls = re.findall(r'"([^"]+)"', re.search(r"const SHELL = \[(.*?)\];", SW, re.S).group(1))
+    urls += re.findall(r'"([^"]+)"', re.search(r"const LAZY = \[(.*?)\];", SW, re.S).group(1))
     on_disk = [u for u in urls
                if (ROOT / "web" / ("index.html" if u == "/" else u.lstrip("/"))).is_file()]
     assert len(listed) == len(on_disk), \
-        f"{len(on_disk)} shell files exist, {len(listed)} are hashed"
+        f"{len(on_disk)} shell and page files exist, {len(listed)} are hashed"
 
 
 def test_changing_a_shell_file_changes_the_cache_name():

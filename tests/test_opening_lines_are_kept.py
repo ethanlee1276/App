@@ -76,7 +76,7 @@ def test_the_hook_never_raises_and_the_builds_call_it_after_the_crowd():
 def test_the_game_page_draws_it_and_the_home_card_does_not():
     assert "${o.open && !L ? lineOpenHTML(g, spTxt) : \"\"}" in APP
     assert "gameMarketsHTML(g, { mlb, isFinal, open: true })" in APP, "the game page asks for it"
-    i = APP.index("function gameCard(g)")
+    i = APP.index("function gameCard(g, i)")
     assert "open: true" not in APP[i:i + 600], "the Home card stays the three columns"
     fn = APP[APP.index("function lineOpenHTML("):]
     fn = fn[:fn.index("\nfunction ")]

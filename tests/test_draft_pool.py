@@ -47,7 +47,7 @@ from engine import db                                        # noqa: E402
 from engine.fantasy import usage_freshness                   # noqa: E402
 from engine.fantasy_draft import build_draft_kit             # noqa: E402
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+APP = open(os.path.join(ROOT, "web", "js", "fantasy.js"), encoding="utf-8").read() + "\n" + open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 
 def _row(player, team, pos, wk, market, value):
