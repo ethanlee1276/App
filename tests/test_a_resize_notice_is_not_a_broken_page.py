@@ -54,18 +54,22 @@ def test_only_a_real_throw_gets_the_apology():
         ("", "IMG", False),
         ("Script error.", "IMG", False),
     ]
-    prog = ("const said = []; const crashNote = (m) => said.push(m); let handler = null;"
+    # The listener also reports a real crash to the box (engine/bugscan,
+    # app.js reportCrash): a notice that is not an apology is not a report.
+    prog = ("const said = [], sent = []; const crashNote = (m) => said.push(m);"
+            "const reportCrash = (m) => sent.push(m); let handler = null;"
             "const addEventListener = (type, fn) => { if (type === 'error') handler = fn; };\n"
             + _listener() + "\n"
             + "const out = " + json.dumps(cases) + ".map(([message, tag]) => {"
-            "  said.length = 0; handler({ message, target: tag ? { tagName: tag } : null });"
-            "  return said.length; });"
+            "  said.length = 0; sent.length = 0; handler({ message, target: tag ? { tagName: tag } : null });"
+            "  return [said.length, sent.length]; });"
             "process.stdout.write(JSON.stringify(out));")
     got = subprocess.run(["node", "-e", prog], capture_output=True, text=True, timeout=30)
     assert got.returncode == 0, got.stderr
     said = json.loads(got.stdout)
-    for (message, tag, want), n in zip(cases, said):
+    for (message, tag, want), (n, sent) in zip(cases, said):
         assert (n == 1) == want, (message, tag, n)
+        assert sent == n, (message, "reported exactly when apologised for")
 
 
 if __name__ == "__main__":
