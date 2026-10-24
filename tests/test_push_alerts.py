@@ -51,7 +51,7 @@ def test_the_signature_is_rfc_6979s_own():
     import hashlib
     assert W._rfc6979_k(d, hashlib.sha256(b"sample").digest()) == \
         0xA6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60
-    sig = W.sign(d, b"sample")
+    sig = W.sign_plain(d, b"sample")
     assert sig.hex().upper() == ("EFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716"
                                  "F7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8")
     assert W.verify(pub, b"sample", sig) and not W.verify(pub, b"samplf", sig)
@@ -75,7 +75,8 @@ def test_another_library_agrees_where_one_is_installed():
     nums = theirs.public_key().public_numbers()
     assert raw == b"\x04" + nums.x.to_bytes(32, "big") + nums.y.to_bytes(32, "big")
     msg = b"header.claims"
-    ours = W.sign(d, msg)
+    ours = W.sign_plain(d, msg)
+    assert W.verify((nums.x, nums.y), msg, W.sign(d, msg)), "the library path signs the same key"
     theirs.public_key().verify(encode_dss_signature(int.from_bytes(ours[:32], "big"), int.from_bytes(ours[32:], "big")),
                                msg, ec.ECDSA(hashes.SHA256()))
     r, s = decode_dss_signature(theirs.sign(msg, ec.ECDSA(hashes.SHA256())))

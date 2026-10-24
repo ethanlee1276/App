@@ -113,23 +113,24 @@ def test_the_banner_counts_off_the_feed_and_links_to_it():
 
 def test_the_push_refusal_is_written_down_where_ideas_live():
     ideas = _read("docs", "IDEAS.md")
-    assert "Web push — measured and refused" in ideas
+    assert "Web push — measured and refused" in ideas and "shipped without a payload, 2026-10-24" in ideas
     assert "P-256" in ideas and "stdlib" in ideas
 
 
-def test_no_half_shipped_push_code_exists():
-    """The worst outcome is a subscribe button wired to nothing. If push
-    ever ships it arrives whole (see the IDEAS entry); until then the
-    words must not appear in anything a browser runs."""
-    assert "pushManager" not in APP
-    assert "applicationServerKey" not in APP
-    for name in ("sw.js", "service-worker.js", "serviceworker.js"):
-        p = os.path.join(ROOT, "web", name)
-        if os.path.exists(p):
-            src = open(p, encoding="utf-8").read()
-            assert "push" not in src.lower() or "pushState" in src, \
-                f"{name} carries a push handler nothing can send to"
-
+def test_push_arrived_whole():
+    """The worst outcome was always a subscribe button wired to nothing,
+    so push was to arrive whole or not at all. It arrived (2026-10-24,
+    tests/test_push_alerts.py): the button subscribes, the server keeps the
+    subscription and says what to show, a sender knocks, and the worker
+    shows the alert. Each half without the other fails here."""
+    assert "pushManager" in APP and "applicationServerKey" in APP
+    assert 'pushSend("subscribe"' in APP
+    srv = _read("server.py")
+    assert "def _push_post(self, path: str):" in srv and "/api/push/key" in srv
+    assert os.path.exists(os.path.join(ROOT, "engine", "pushalerts.py"))
+    assert "def knock(" in _read("engine", "webpush.py")
+    sw = _read("web", "sw.js")
+    assert 'addEventListener("push"' in sw and "showNotification" in sw
 
 if __name__ == "__main__":
     fails = ran = 0

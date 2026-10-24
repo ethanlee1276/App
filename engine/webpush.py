@@ -12,7 +12,8 @@ the browser. It is not true of a push that carries nothing:
     the worker asks OUR server what to say (/api/push/latest) and shows it.
 
 ECDSA signing is a page of integer arithmetic, written out below and checked
-against RFC 6979's own test vectors (tests/test_push_alerts.py). Nothing is
+against RFC 6979's own test vectors (tests/test_push_alerts.py); where the
+box has the `cryptography` package, that signs instead (`sign`). Nothing is
 encrypted because nothing secret travels: the words come over the site's own
 HTTPS, from the same server that would have encrypted them.
 
@@ -135,8 +136,50 @@ def _rfc6979_k(d: int, digest: bytes) -> int:
         v = hmac.new(k, v, hashlib.sha256).digest()
 
 
+def _library_signer():
+    """The `cryptography` package's ECDSA where the box has a working one —
+    a vetted implementation is preferred to this page whenever it exists.
+    None otherwise (a broken install panics rather than failing to import,
+    hence the broad catch)."""
+    try:
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+    except BaseException as exc:                              # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+    def lib_sign(d: int, message: bytes) -> bytes:
+        r, s = decode_dss_signature(ec.derive_private_key(d, ec.SECP256R1()).sign(message, ec.ECDSA(hashes.SHA256())))
+        return r.to_bytes(32, "big") + s.to_bytes(32, "big")
+    return lib_sign
+
+
+_LIB = None
+
+
 def sign(d: int, message: bytes) -> bytes:
-    """ECDSA P-256 / SHA-256: r‖s, 64 bytes (the JWS ES256 form)."""
+    """ECDSA P-256 / SHA-256: r‖s, 64 bytes (the JWS ES256 form) — by the
+    `cryptography` package when the box has it, else by `sign_plain`."""
+    global _LIB
+    if _LIB is None:
+        _LIB = _library_signer() or False
+    if _LIB:
+        try:
+            return _LIB(d, message)
+        except Exception:                                     # noqa: BLE001
+            pass
+    return sign_plain(d, message)
+
+
+def sign_plain(d: int, message: bytes) -> bytes:
+    """The same signature in plain Python, with RFC 6979's deterministic
+    nonce (no random number to get wrong). Checked digit for digit against
+    the RFC's own vector in tests/test_push_alerts.py. It signs only on the
+    box's background cycle, never on a request, so its timing is never
+    something a stranger can measure; and the key it guards can send our
+    subscribers an empty knock and nothing more."""
     digest = hashlib.sha256(message).digest()
     z = int.from_bytes(digest, "big")
     while True:

@@ -385,7 +385,23 @@ TWO THINGS THE PLAN DID NOT SEE, both found while building it:
 
 ---
 
-## Web push — measured and refused, 2026-08-26
+## Web push — measured and refused, 2026-08-26; shipped without a payload, 2026-10-24
+
+**2026-10-24: it shipped** (engine/webpush, engine/pushalerts, sw.js), for
+the app stores — Ethan's call, the native feature iOS review asks for. The
+refusal below was right about a push that CARRIES its words: those must be
+ECDH-agreed and AES-GCM-encrypted to the browser. This push carries none.
+The box signs an empty request (VAPID: one ES256 signature) and the phone's
+service worker asks the site what to say over the site's own HTTPS. So of
+the three primitives only the signature is needed; it is written out in
+plain Python (RFC 6979 deterministic nonce, the RFC's own vector in the
+tests, cross-checked against the `cryptography` package) and the box uses
+`cryptography` instead whenever it has a working copy. What the key guards
+is small — it can send our subscribers an empty knock — and it signs only on
+the background cycle, never on a request a stranger can time.
+
+The original entry, as written:
+
 
 Roadmap #8 asked for it ("an edge alert that hits a lock screen") and it
 is the one delivery mechanic that did NOT ship with the others, on

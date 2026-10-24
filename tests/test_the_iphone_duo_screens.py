@@ -56,10 +56,20 @@ def _blocks(query_start):
     return out
 
 
+#: The two layout blocks among the open shapes' blocks, told by what they do.
+#: Others may use the same shapes (the Liquid Glass look, 2026-10-24); every
+#: one of them must spell the shapes exactly as UNFOLDED_MQ does.
+LAYOUT_MARKS = (".shell, body.has-rail .shell { display: grid; }", ".tabbar, .riding-tray { display: none; }")
+
+
+def _open_shape_blocks():
+    return sorted(_blocks("(min-width: 700px) and (max-width: 9") + _blocks("(min-width: 700px) and (max-width: 7"))
+
+
 def _duo_blocks():
-    got = _blocks("(min-width: 700px) and (max-width: 9") + _blocks("(min-width: 700px) and (max-width: 7")
+    got = [(i, b) for i, b in _open_shape_blocks() if any(m in b for m in LAYOUT_MARKS)]
     assert len(got) == 2, [b[:90] for _i, b in got]
-    return sorted(got)
+    return got
 
 
 def test_the_open_shapes_are_the_same_in_the_stylesheet_and_the_script():
@@ -67,7 +77,7 @@ def test_the_open_shapes_are_the_same_in_the_stylesheet_and_the_script():
     assert m, "UNFOLDED_MQ is defined in app.js"
     js = "".join(re.findall(r'"([^"]+)"', m.group(1))).split(", ")
     assert js == [SIDE, UPRIGHT, FOLD_INNER], js
-    for _i, block in _duo_blocks():
+    for _i, block in _open_shape_blocks():
         query = block[:block.index("{")]
         side, upright, inner = [q.strip() for q in query[len("@media "):].split(",\n")]
         assert side.replace(" and (max-width: 900px)", "").replace(" and (max-width: 760px)", "") == SIDE, side
@@ -76,7 +86,7 @@ def test_the_open_shapes_are_the_same_in_the_stylesheet_and_the_script():
 
 
 def test_the_overrides_are_plain_ands_an_old_safari_can_read():
-    for _i, block in _duo_blocks():
+    for _i, block in _open_shape_blocks():
         query = block[:block.index("{")]
         assert " not " not in query and "<" not in query and ">" not in query, query
 

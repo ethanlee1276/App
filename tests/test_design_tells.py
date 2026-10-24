@@ -916,9 +916,13 @@ def test_nothing_transitions_a_shadow_that_never_exists():
     # sign-in fields from rendering pale yellow on a near-black page. It
     # is a paint-over wearing a shadow's property name. It still has to
     # be a token so there is exactly one of it.
+    # The Liquid Glass panes (2026-10-24) are the same discipline: their lit
+    # rim and their depth are tokens, defined once per theme, and a pane may
+    # stack them with the glow — never a hand-mixed shadow.
+    token = r"var\(--(?:glow|glow-soft|glass-rim|glass-rim-soft|glass-depth)\)"
     allowed = re.compile(
-        r"^(none|var\(--glow\)|var\(--glow-soft\)|var\(--autofill-cover\)"
-        r"|inset [0-9. px-]+ var\(--brand\))$")
+        r"^(none|var\(--autofill-cover\)|inset [0-9. px-]+ var\(--brand\)"
+        rf"|{token}(?:, {token})*)$")
     values = [v.strip() for v in re.findall(r"box-shadow:\s*([^;]+);", css)]
     stray = [v for v in values
              if not allowed.match(v) and "rgba" not in v[:0]]
