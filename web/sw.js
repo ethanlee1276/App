@@ -108,7 +108,9 @@ self.addEventListener("fetch", (e) => {
  * travel through Google's, Apple's or Mozilla's push service — so the
  * worker asks the site what to say. A push must always show something, so
  * if the site cannot be reached it still says the board has moved. A tap
- * opens the page the alert is about, on this site and nowhere else. */
+ * opens the page the alert is about, on this site and nowhere else. The
+ * badge is the white mark Android draws in the status bar (a colour icon
+ * there is a blank white square). */
 self.addEventListener("push", (e) => {
   e.waitUntil((async () => {
     let msg = { title: "Qellys Book", body: "The board has moved — open it for the latest.", url: "/", tag: "qb" };
@@ -121,7 +123,7 @@ self.addEventListener("push", (e) => {
     } catch (err) { /* the plain line above */ }
     return self.registration.showNotification(String(msg.title).slice(0, 80), {
       body: String(msg.body || "").slice(0, 200), tag: String(msg.tag || "qb").slice(0, 64),
-      icon: "/icon-192.png", badge: "/icon-192.png", data: { url: msg.url || "/" } });
+      icon: "/icon-192.png", badge: "/icon-badge-96.png", data: { url: msg.url || "/" } });
   })());
 });
 

@@ -45,6 +45,23 @@ let _pbpStrip = { at: 0, league: "", games: [] };
    default board is exactly the board that shipped. */
 const BARS = Object.freeze({ conf: 6.0, edge: 2.0, juice: -350 });
 
+/* WHERE THE APP OPENS (2026-10-24). A link that names a league opens it
+   (?sport=nfl among them). Otherwise the league you were last on, kept on
+   this phone by applySport; and the very first time, the league in season.
+   The installed app used to open on baseball all winter, because its start
+   address said ?sport=mlb. */
+function startSport(today) {
+  const leagues = ["nfl", "mlb", "nba", "wnba", "cfb", "nhl"];
+  const asked = new URLSearchParams(location.search).get("sport");
+  if (leagues.includes(asked)) return asked;
+  try {
+    const kept = localStorage.getItem("qb.sport");
+    if (leagues.includes(kept)) return kept;
+  } catch (e) { /* the season decides */ }
+  const d = today || new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
+  return md >= 901 || md < 215 ? "nfl" : md < 326 ? "nba" : "mlb";
+}
+
 const state = {
   data: null, minConf: BARS.conf, minEdge: BARS.edge, maxJuice: BARS.juice,
   // The one Most Likely board's view (Best of the slate / By game), kept
@@ -61,7 +78,7 @@ const state = {
   // silently fell back to NFL — a new league has to be added here too, or
   // the deep link and the launcher's own preflight URLs quietly lie.
   sport: (["mlb", "nba", "wnba", "cfb", "nhl"].includes(new URLSearchParams(location.search).get("sport"))
-    ? new URLSearchParams(location.search).get("sport") : "nfl"),
+    ? new URLSearchParams(location.search).get("sport") : startSport()),
   static: new URLSearchParams(location.search).has("static"),
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
   lightBoard: false,                 // `data` is the light copy; the full board is still coming
@@ -572,6 +589,7 @@ function applySport() {
   // league's page on screen under the new league's branding.
   const meta = SPORT_META[state.sport] || SPORT_META.nfl;
   window.ACTIVE_SPORT = state.sport;
+  try { localStorage.setItem("qb.sport", state.sport); } catch (e) { /* opens in season next time */ }
   window.ACTIVE_TEAMS = teamsForSport(state.sport);
   // A page with no engine behind it hides rather than rendering empty. No
   // NBA/WNBA long-shot market exists (nothing like HR / anytime-TD), and

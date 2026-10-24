@@ -491,6 +491,17 @@
   --night-2: #08101F;
   --night-3: #05060F;
   --night-text: #DFE4F5;
+  /* Liquid Glass on the Duo (the section near the end of the sheet). */
+
+  --glass-tint: color-mix(in oklab, var(--panel) 74%, transparent);
+  --glass-tint-strong: color-mix(in oklab, var(--bg) 82%, transparent);
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 -1px 0 rgba(0, 0, 0, .38),
+               inset 0 0 0 1px rgba(255, 255, 255, .07);
+  --glass-rim-soft: inset 0 1px 0 rgba(255, 255, 255, .10), inset 0 0 0 1px rgba(255, 255, 255, .04);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .03) 34%, rgba(255, 255, 255, 0) 58%);
+  --glass-sheen-soft: linear-gradient(170deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0) 42%);
+  --glass-depth: 0 14px 34px rgba(0, 0, 0, .46);
+  --glass-gold: linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, .06) 48%, rgba(255, 255, 255, 0) 52%);
 }
 
 * { box-sizing: border-box; }
@@ -6015,6 +6026,16 @@ body.pk-open { overflow: hidden; }
   --glow-soft: 0 10px 26px rgba(23, 23, 42, .10);
   --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(154, 106, 0, .10), rgba(244, 244, 251, 0) 62%);
   --grad-chip: linear-gradient(180deg, rgba(154, 106, 0, .16), rgba(154, 106, 0, .05));
+  /* Liquid Glass on the Duo, in paper. */
+
+  --glass-tint: color-mix(in oklab, var(--panel) 72%, transparent);
+  --glass-tint-strong: color-mix(in oklab, var(--bg) 80%, transparent);
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(23, 23, 42, .10),
+               inset 0 0 0 1px rgba(23, 23, 42, .07);
+  --glass-rim-soft: inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(23, 23, 42, .05);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .85), rgba(255, 255, 255, .35) 34%, rgba(255, 255, 255, 0) 60%);
+  --glass-sheen-soft: linear-gradient(170deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, 0) 45%);
+  --glass-depth: 0 14px 30px rgba(23, 23, 42, .14);
 }
 
 /* The page never scrolls sideways — Ethan's screen recording
@@ -13324,28 +13345,8 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    tablet held the same way — gets the whole set: floating glass sidebar,
    glass bar, glass cards and capsules. A mouse keeps the plain desktop. Every touch phone's tab bar, the Duo's front screen
    among them, gets the glass bar material, same size and place.
+   The glass tokens (--glass-*) live in the two theme blocks at the top.
    ========================================================================== */
-:root {
-  --glass-tint: color-mix(in oklab, var(--panel) 74%, transparent);
-  --glass-tint-strong: color-mix(in oklab, var(--bg) 82%, transparent);
-  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 -1px 0 rgba(0, 0, 0, .38),
-               inset 0 0 0 1px rgba(255, 255, 255, .07);
-  --glass-rim-soft: inset 0 1px 0 rgba(255, 255, 255, .10), inset 0 0 0 1px rgba(255, 255, 255, .04);
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .03) 34%, rgba(255, 255, 255, 0) 58%);
-  --glass-sheen-soft: linear-gradient(170deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0) 42%);
-  --glass-depth: 0 14px 34px rgba(0, 0, 0, .46);
-  --glass-gold: linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, .06) 48%, rgba(255, 255, 255, 0) 52%);
-}
-:root[data-theme="light"] {
-  --glass-tint: color-mix(in oklab, var(--panel) 72%, transparent);
-  --glass-tint-strong: color-mix(in oklab, var(--bg) 80%, transparent);
-  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(23, 23, 42, .10),
-               inset 0 0 0 1px rgba(23, 23, 42, .07);
-  --glass-rim-soft: inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(23, 23, 42, .05);
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .85), rgba(255, 255, 255, .35) 34%, rgba(255, 255, 255, 0) 60%);
-  --glass-sheen-soft: linear-gradient(170deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, 0) 45%);
-  --glass-depth: 0 14px 30px rgba(23, 23, 42, .14);
-}
 
 /* Every touch phone's tab bar: the glass bar material, nothing moved. */
 @media (max-width: 760px) and (pointer: coarse) {
@@ -13394,4 +13395,17 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   .tabbar { background-color: var(--panel); }
   .topbar { background-color: var(--topbar-bg); }
   .sidebar { background-color: var(--bg-2); }
+}
+
+/* THE APP'S HANDS (2026-10-24, Ethan: "more like an app that's supposed to
+   be on the app store"). A store app does not flash a grey box under a
+   tapped button, start selecting a tab's label on a long press, or offer
+   "Save Image" on its own logo; the press feedback (the :active rules) is
+   what answers a finger. Only the chrome: picks, reports and the record
+   stay selectable, because people copy them. */
+@media (pointer: coarse) {
+  html { -webkit-tap-highlight-color: transparent; }
+  .topbar, .tabbar, .sidebar, .sportbar, .more-sheet, .btn, .chip, .tb-item, .sb-item,
+  .qt-chip, .sport-btn, .nav-btn, .al-cat, .seg button {
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 }

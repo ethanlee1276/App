@@ -29,7 +29,7 @@ def test_the_wrapper_and_the_manifest_agree():
     # The same start address plus the store app's mark (web/js/boot.js
     # QB_STORE_APP): the Play build opens no sportsbook and draws no league art.
     base, _, frag = MAN["start_url"].partition("#")
-    assert TWA["startUrl"] == f"{base}&app=play#{frag}", TWA["startUrl"]
+    assert TWA["startUrl"] == f"{base}{'&' if '?' in base else '?'}app=play#{frag}", TWA["startUrl"]
     assert TWA["themeColor"] == MAN["theme_color"] and TWA["backgroundColor"] == MAN["background_color"]
     assert TWA["webManifestUrl"].endswith("/manifest.webmanifest")
     assert TWA["maskableIconUrl"].endswith("/icon-maskable-512.png")

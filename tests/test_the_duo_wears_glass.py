@@ -41,9 +41,12 @@ def test_nothing_in_the_glass_blurs():
 
 
 def test_every_rim_and_sheen_is_a_token_with_a_light_twin():
-    dark = GLASS_CODE[GLASS_CODE.index(":root {"):GLASS_CODE.index("}", GLASS_CODE.index(":root {"))]
-    light = GLASS_CODE[GLASS_CODE.index(':root[data-theme="light"] {'):]
-    light = light[:light.index("}")]
+    # In the sheet's one :root and its one light block (test_one_root_and_shared_percents).
+    nc = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    i = nc.index(":root {")
+    dark = nc[i:nc.index("\n}", i)]
+    j = nc.index(':root[data-theme="light"] {')
+    light = nc[j:nc.index("\n}", j)]
     for t in TOKENS:
         assert f"{t}:" in dark, t
     for t in TOKENS[:-1]:

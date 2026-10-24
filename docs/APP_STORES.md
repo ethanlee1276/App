@@ -6,6 +6,85 @@ reviewed by Apple or Google.** Whether either store accepts the app is a
 guess [Guessing] until a person has read both policies in full and
 decided.
 
+## Update, 2026-10-24 (evening): both calls made, and what is left for you
+
+Ethan: "do both from my call. we just need it to work with the app store",
+then "make sure we can use logos and headshots ... make sure we're ready to
+go". Both calls below are built and on the branch; nothing is submitted.
+
+**Call 1 — the store builds open no sportsbook.** Built as the *store app*
+(`web/js/boot.js` QB_STORE_APP), for Play *and* iOS: the fresh read added
+Apple, whose 5.3.4 has refused odds apps that link out to licensed books.
+The app is told apart by its start address (`?app=play`, which
+`deploy/twa/twa-manifest.json` now uses), Chrome's `android-app://`
+referrer, or the iOS shell's user agent (`QellysApp/<v> (ios)`). Inside it:
+
+- no **Bet it** and no **Tail it** sheet — no sportsbook link anywhere;
+- no **league logos or player photos** (below);
+- no **Rocket Radar** (meme coins) and no **Prediction Market** pages —
+  real-money venues, one of them on crypto (Apple 5.3.4 and 3.1.5, Play's
+  gambling and financial-services policies);
+- the **Play build sells nothing** for now: its paywall is a sign-in page
+  with no price and no link (`QB_STORE_CHECKOUT = { ios: true, play: false }`).
+  Apple's US storefront allows the link out to Stripe (3.1.1(a)); Play's US
+  external-links programme needs enrolling in Play Console first, and
+  reports and fees apply from 1 October 2026. Enrol, then flip `play` to
+  true. Or leave it: members who joined on the website sign in and see
+  everything.
+
+The website keeps all of it. `?app=web` on a phone forgets the app.
+
+**Call 2 — push alerts, the native feature for 4.2.** Built
+(`engine/webpush.py`, `engine/pushalerts.py`, `web/sw.js`, the Alerts page's
+"Alerts on this phone"): "This week's NFL picks are up — 6 picks on the
+board" once per board, "Last night: 8–3–1, +3.6u" once per night, never a
+pick's name, nothing from 23:00 to 09:00 Eastern. Web browsers and the Play
+app (Chrome's notification delegation is now on in the TWA manifest) work
+as soon as this deploys — no key to set, the box makes its own. The iOS app
+needs Apple's push key: steps in `deploy/ios/README.md`.
+
+**Logos and headshots — the answer.** Not in the store builds. Team logos
+and player photos belong to the leagues, the clubs and the players (and,
+for the photos the site uses, to ESPN, the NBA, the NHL and MLB, whose CDNs
+serve them). Apple rejects apps under 5.2.1 and 4.1 for exactly this, and a
+"not affiliated" line does not cure it. In the store app every logo and photo
+gives way to the site's own drawn marks — helmets, caps and balls in team
+colours with the player's initials — which were already what showed when a
+photo failed to load. Team names and abbreviations are used to say which
+team; that is ordinary. To have real logos and faces in the app, the path is
+a licence: a sports-data provider whose plan includes logo and headshot
+rights for app display (SportsDataIO, Sportradar and Genius Sports sell
+these; headshot rights are often a separate Getty-backed add-on), or the
+leagues' own licensing. Then `storeArt()` in `web/js/visuals.js` is the one
+switch. **The website still hotlinks ESPN's logos and photos.** That is the
+same question at lower odds of anyone asking; it is yours to decide whether
+the site should use the drawn marks too.
+
+**Also built today:** the first screen no longer jumps while it loads
+(measured on a throttled phone: layout shift 0.78 → 0.02, blocked time
+765 → ~370 ms; tests/test_the_first_screen_holds_still.py); Liquid Glass on
+the open Duo and a glass tab bar on phones (styles.css "LIQUID GLASS ON THE
+DUO", no blur); the app opens on the league you were last on (or the one in
+season), not on baseball all winter; a monochrome notification badge; the
+iOS shell's config (`deploy/ios/`).
+
+### Before you submit: the checklist
+
+| | Play | App Store |
+|---|---|---|
+| Developer account | Play Console ($25 once) | Apple Developer Program ($99/yr) |
+| Build | `bubblewrap` (below), start URL `/?app=play#recommended`, notifications on | `deploy/ios/README.md`, on a Mac |
+| Sportsbook links | off in the app ✓ | off in the app ✓ |
+| Logos / photos | drawn marks in the app ✓ | drawn marks in the app ✓ |
+| Native feature | push alerts ✓ | push alerts ✓ once the APNs key is set |
+| Selling | off until US external-links enrolment | Stripe link allowed on the US storefront |
+| Where | **United States only** (the site is US, 21+, and both stores' payment rules differ outside it) | United States only |
+| Age rating | IARC questionnaire: gambling themes, no real-money gambling *in* the app → expect Mature/18+ | 18+ (frequent gambling themes) |
+| Data forms | Data safety: account email (account management), purchase history (Stripe, on the web), crash diagnostics (not linked to the user), push token (app functionality); no ads, no tracking, data deletable (in-app and the web page) | Privacy "nutrition" labels: the same four; "Data not used to track you" |
+| Account deletion | in the app, and `https://qellysbook.com/privacy.html#delete-account` ✓ | in the app ✓ |
+| Screenshots | `tools/store_screenshots.cjs` against the live site; phone, 7″, 10″, foldable | 6.9″ iPhone, 13″ iPad |
+| Review notes | "A picks and analysis app. It takes no bets, links to no sportsbook, and holds no money. Members who joined on the website sign in." Give a test login with a membership. | same, plus: "Push alerts are the native feature: Alerts → Alerts on this phone." |
+
 ## Update, 2026-10-24: what changed, what was built, what is yours to decide
 
 Ethan: "we need to optimize it for the App Store and the Google Play Store
@@ -148,7 +227,8 @@ page**. Before building, a person should read it and answer:
    content-rating questionnaire need a gambling answer?
 4. Does the Kalshi and Polymarket material (prediction markets) or the
    meme-coin radar fall under the financial-services or crypto
-   declarations? The manifest's description mentions the radar.
+   declarations? (Settled 2026-10-24: the store app leaves the radar and
+   the prediction markets out, and the manifest no longer mentions them.)
 
 ## Android build steps (laptop, not the droplet)
 
@@ -157,7 +237,9 @@ These are also listed in `docs/WHEN_YOU_ARE_HOME.md` as P45-a.
 ```
 npm i -g @bubblewrap/cli
 cd deploy/twa && bubblewrap init --manifest https://qellysbook.com/manifest.webmanifest
-#   accept the values twa-manifest.json already holds; it creates the upload key
+#   it reads the WEBSITE's manifest, so when it asks: start URL /?app=play#recommended
+#   (the store app's mark), notification delegation yes; afterwards its
+#   twa-manifest.json should match the one in the repo. It creates the upload key.
 bubblewrap build
 keytool -list -v -keystore qellys-upload.keystore | grep SHA256
 python3 ../../tools/assetlinks.py <that SHA256>    # writes web/.well-known/assetlinks.json
