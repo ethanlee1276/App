@@ -19,6 +19,9 @@
 #cc-overlay.open { display: flex; }
 .cc { position: relative; width: 100%; max-width: 880px; padding: 18px 18px 20px; border-radius: var(--radius-lg);
   border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text); }
+/* It floats, so it is glass (styles.css "GLASS FOR WHAT FLOATS"); solid when less transparency is asked for. */
+.cc { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { .cc { background-image: none; } }
 /* Sticky, not absolute: in the flow at the card's top right (the negative
    margins put it 10px in from the corner and take back the room it would
    push the header down by), and held near the top once the chart scrolls,

@@ -12645,3 +12645,37 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   background: var(--grad-team); pointer-events: none; }
 .team-tint .tb-center-disc { background-image: var(--glass-gold), var(--grad-team-disc); color: white; }
 .team-tint .tb-item.active { color: color-mix(in oklab, var(--team-1) 60%, var(--text)); }
+
+/* ==========================================================================
+   GLASS FOR WHAT FLOATS (2026-10-24, Ethan: "carry the Liquid Glass look onto
+   more stuff without overdoing it"). The rule Apple's own apps follow: glass
+   is the layer that floats over the page — bars, sheets, dialogs, toasts —
+   and never the page itself. The cards, tables and words stay as solid as
+   ever, so nothing anybody reads changes. What floats, and now wears it: the
+   toasts and the crash note, the slip's pill and its sheet, the
+   pull-to-refresh pill, a chart's tooltip, the dialogs (a player, a fantasy
+   dossier, the tour, the install prompt; the chart card in css/carrychart.css), and the iPhone
+   app's top bar, the capsule tab bar's twin. The Duo's tokens, both themes,
+   no blur; solid for anyone asking for less transparency or more contrast.
+   ========================================================================== */
+.tf-toast, .crash-note, .slip-bar, [id="ptr"] {
+  background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
+.tf-toast { border-radius: 999px; }   /* a capsule, like the pill and the bar it floats over */
+.slip-panel, .pk-card, .ffd-card, .tour-card, .a2hs-card {
+  background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
+.graph-tip { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim-soft), var(--glass-depth); }
+@media (max-width: 760px) {
+  html.store-ios .topbar, html.ios-home .topbar {
+    background: var(--glass-sheen), var(--glass-tint-strong); box-shadow: var(--glass-rim);
+    border-bottom-color: transparent; }
+  /* A toast floats above the tab bar, never on it (it sat 26px up, over
+     the Live button); above the capsule in the iPhone app. */
+  .tf-toast { bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
+  html.store-ios .tf-toast, html.ios-home .tf-toast,
+  html.store-ios .crash-note, html.ios-home .crash-note { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .tf-toast, .crash-note, .slip-bar, [id="ptr"], .slip-panel, .pk-card, .ffd-card, .tour-card, .a2hs-card,
+  .graph-tip { background-image: none; }
+  html.store-ios .topbar, html.ios-home .topbar { background: var(--topbar-bg); }
+}
