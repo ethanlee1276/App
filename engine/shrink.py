@@ -45,7 +45,10 @@ from pathlib import Path
 #: 29 KB gzipped) that every first visit downloaded.
 FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          # The lazy rooms, served trimmed the same way (2026-10-08).
-         "js/gamecast.js", "css/gamecast.css")
+         "js/gamecast.js", "css/gamecast.css",
+         # The two small boot scripts (2026-10-24): half and three-quarters
+         # comment, 2.8 KB gz of every first visit between them.
+         "js/boot.js", "js/register-sw.js")
 
 #: HTML comments that are not commentary: `engine/routes.document` splices
 #: an entity's preview tags between these two markers, so they stay.

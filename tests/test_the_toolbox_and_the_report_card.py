@@ -350,7 +350,10 @@ def test_the_page_reaches_the_toolbox_and_the_card():
     assert 'data-view="tools"' in HTML
     assert '"mybets", "tools", "account"' in APP, "VIEW_ORDER names the page"
     assert 'if (name === "tools") renderTools();' in APP
-    assert '["tools-body", () => renderTools()]' in APP, "a board load redraws it for the new sport"
+    # On screen, a board load redraws it for the new sport; off screen it
+    # waits for the visit, which redraws it anyway — its simulation was a
+    # 600 ms block at phone speed when drawn in the background.
+    assert '["tools-body", () => renderTools(), true]' in APP
     assert '"view:tools"' in APP, "the phone's More sheet lists it"
     assert 's.src = "js/extras.js"' in APP and 'css.href = "css/extras.css"' in APP
     assert "X.reportCard(document.getElementById(\"mb-report\"))" in APP

@@ -364,6 +364,12 @@ def test_the_launcher_actually_refreshes_the_board():
     assert '"--memes" in argv' in src
 
 
+def _page_js():
+    """The meme-coin page's code: js/memes.js (loaded on first use since
+    2026-10-24) ahead of app.js, which keeps the loader and the router."""
+    return "\n".join(open(os.path.join(ROOT, "web/js", f), encoding="utf-8").read() for f in ("memes.js", "app.js"))
+
+
 def test_the_page_is_wired_end_to_end():
     """The nav button, the view section, the standalone-mode entry, the
     router line and the renderer must all exist and agree on the name —
@@ -372,7 +378,7 @@ def test_the_page_is_wired_end_to_end():
     assert 'data-sport="memes"' in html
     assert 'id="view-memes"' in html
     assert 'id="memes-body"' in html
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = _page_js()
     assert "async function renderMemes" in js
     # Through paidFetch since 2026-08-22: `coins`, `rocket` and `exits`
     # are stripped from the copy Caddy serves off disk, so a straight
@@ -397,7 +403,7 @@ def test_holders_and_charts_are_wired_end_to_end():
     dx = open(os.path.join(ROOT, "engine/sources/dexes.py"),
               encoding="utf-8").read()
     assert '"pair": prime.get("pairAddress")' in dx
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = _page_js()
     assert "function mcSpark" in js
     fn = js[js.index("window.mcShowChart"):]
     fn = fn[:fn.index("\n};")]
@@ -580,7 +586,7 @@ def test_new_and_carried_reach_the_page():
     build = open(os.path.join(ROOT, "memes_build.py"), encoding="utf-8").read()
     assert '"first_seen"' in build
     assert 'row["carried"]' in build
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = _page_js()
     assert "function mcNewTag" in js
     assert "mcNewTag(c)" in js
     assert "off-trending" in js
@@ -618,7 +624,7 @@ def test_the_page_polls_on_a_matching_clock_without_yanking_charts():
     """A self-refreshing terminal that reloads the chart you are reading
     every tick is worse than a stale one. The poll must refuse hidden
     tabs and open charts, and a re-render must restore the user's coin."""
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = _page_js()
     i = js.index("const MEMES_POLL_MS")
     block = js[i:i + 900]
     assert 'state.view !== "memes"' in block, "polls every page, not just this one"
@@ -636,7 +642,7 @@ def test_the_meme_page_is_a_charts_first_terminal():
     a coin picker, and the top coin's chart auto-opens — landing on live
     candles, not on a menu. The preflight must probe all three hosts so
     --check answers 'can this machine even see the feeds'."""
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = _page_js()
     body = js[js.index("async function renderMemes"):]
     body = body[:body.index("\nasync function renderFantasy")]
     assert 'subtabbedHTML("memes"' in body
@@ -660,7 +666,7 @@ def test_the_page_shows_the_base_rates_not_just_the_scores():
     """The spec's most important content is the honesty block — the page
     must carry the base rates and the not-advice framing, and they must
     render before an empty-state return can cut the function short."""
-    js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+    js = _page_js()
     i = js.index("MC_BASE_RATES")
     body = js[i:js.index("\nasync function renderFantasy", i)]
     for fact in ("1.4%", "82.8%", "wash trading", "62 seconds"):

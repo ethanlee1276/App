@@ -23,7 +23,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+# The meme-coin page moved to js/memes.js (2026-10-24); its renderMemes
+# is read first, ahead of app.js's loader of the same name.
+APP = (ROOT / "web" / "js" / "memes.js").read_text() + "\n" + (ROOT / "web" / "js" / "app.js").read_text()
 CSS = (ROOT / "web" / "css" / "styles.css").read_text()
 
 

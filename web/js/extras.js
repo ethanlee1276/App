@@ -1303,7 +1303,14 @@
     host.innerHTML = `${own ? `<h2 class="xt-sec">${esc(SPORT_NAME[sport] || sport.toUpperCase())}</h2><div class="xt-grid">${own}</div>` : ""}
       <h2 class="xt-sec">Every sport · calculators</h2>${calculatorsHTML()}
       <h2 class="xt-sec">The record · strategy lab</h2><div class="xt-grid">${labCardHTML()}</div>`;
-    host.querySelectorAll("[data-calc]").forEach(calc);
+    // The bankroll simulation (2,000 runs) goes after the page has painted,
+    // so opening the Toolbox shows the Toolbox at once rather than after it.
+    host.querySelectorAll("[data-calc]").forEach((box) => {
+      if (box.dataset.calc !== "roll") { calc(box); return; }
+      const out = box.querySelector(".xt-out");
+      if (out) out.innerHTML = `<p class="xt-hint">Running the simulation…</p>`;
+      setTimeout(() => calc(box), 80);
+    });
   }
 
   // ---- My Bets' report card ---------------------------------------------

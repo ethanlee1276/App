@@ -45,6 +45,7 @@
 
   /* ---------------- faces ---------------- */
   function faceURL(league, row, faces) {
+    if (typeof QB_STORE_APP !== "undefined" && QB_STORE_APP) return "";   // the store app draws no photos (boot.js)
     const own = row && row.name ? (faces || {})[lower(row.name)] : "";
     if (own) return own;
     const dir = FACE_DIR[league];

@@ -259,7 +259,9 @@
            theme) at the far end — the corner every app keeps identity
            in. -->
       <span id="data-source" class="data-source" title=""></span>
-      <span id="live-refresh" class="live-refresh" style="display:none"></span>
+      <!-- Holds its width from the first frame (hidden until the first board
+           lands, app.js updateAgo): appearing later slid the logo sideways. -->
+      <span id="live-refresh" class="live-refresh" style="visibility:hidden"><span class="lr-full">Updated 0s ago</span><span class="lr-short">Updated 0s · LIVE</span></span>
       <span id="slate-date">—</span>
       <!-- The render's avatar chip, minus the balance chip beside it (the
            site never holds money). Initials when signed in; when signed

@@ -1977,6 +1977,12 @@ main { view-transition-name: page; }
 /* Loading feedback moved to the brand when the Refresh button retired:
    a tap on the logo visibly pulses while the new numbers land. */
 #brand-home.loading .logo { animation: pulseLogo .9s ease-in-out infinite; }
+/* …and only the mark pulses. The generic `.loading` above (text that is
+   loading: 60px of padding, centred, a full grid row) matched the brand
+   too, so every load swelled the logo from 38px to ~150 and shoved the
+   whole bar sideways and down — measured 2026-10-24 as most of what was
+   left of the first screen's jump, and it came back on every refresh. */
+#brand-home.loading { padding: 0; grid-column: auto; text-align: inherit; color: inherit; }
 @keyframes pulseLogo {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: .55; transform: scale(.94); }
@@ -13247,3 +13253,40 @@ body.two-pane .pane-list .ob-ring small { display: none; }
   .sidebar { height: calc(env(viewport-segment-bottom 0 0, 100vh) - var(--topbar-h)); }
   .crash-note { bottom: auto; top: calc(env(viewport-segment-bottom 0 0, 50vh) - 64px); }
 }
+
+/* ==========================================================================
+   THE STORE APP (Ethan, 2026-10-24: "do both from my call ... we just need
+   it to work with the app store"). boot.js marks <html> `store-app` in the
+   Play and iOS builds: the prediction-market and meme-coin doors come off
+   (app.js STORE_APP_SKIPS turns the pages themselves away), and a build
+   that sells nothing (`store-nobuy`) shows no price anywhere.
+   ========================================================================== */
+.store-app .sb-app[data-sport="intel"], .store-app .sb-app[data-sport="memes"],
+.store-app [data-view="intel"], .store-app [data-view="memes"],
+.store-nobuy .pw-buy, .store-nobuy .pw-unlock-go[data-act="coStart"] { display: none !important; }
+.pw-store .pw-hero { text-align: center; padding: 32px 16px 8px; }
+.pw-store .pw-store-go { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+
+/* ==========================================================================
+   THE FIRST SCREEN DOES NOT JUMP (2026-10-24). boot.js marks <html>
+   `booting` before the first paint; app.js lifts it the frame after it has
+   drawn the real page. Until then the markup's placeholder board — another
+   league's wording, no crests, the footer showing under it — is invisible,
+   and a shimmer holds the board's place: nothing the reader saw moves. If
+   the script never arrives, the page shows itself after 4s regardless.
+   On a phone the page is never shorter than the screen, so the footer
+   cannot show under a board that is still filling and then be pushed off.
+   ========================================================================== */
+html.booting main > *, html.booting .footer, html.booting #rail {
+  visibility: hidden; animation: qb-boot-reveal 0s linear 4s forwards; }
+@keyframes qb-boot-reveal { to { visibility: visible; } }
+html.booting main::before { content: ""; display: block; height: min(70vh, 640px); margin: 14px;
+  border-radius: var(--radius); border: var(--hairline) solid var(--border-soft);
+  background: var(--skeleton); background-size: 220% 100%;
+  animation: qb-boot-hide 0s linear 4s forwards, shimmer 1.3s ease-in-out infinite; }
+@keyframes qb-boot-hide { to { display: none; height: 0; margin: 0; } }
+@media (prefers-reduced-motion: reduce) { html.booting main::before { animation: qb-boot-hide 0s linear 4s forwards; } }
+/* The Live page's scoreboard waits on the live feeds; until they answer it
+   holds the place its quiet state takes, so the bets under it stay put. */
+.lv-hold { height: 172px; margin-bottom: 14px; }
+@media (max-width: 760px) { main { min-height: calc(100svh - var(--topbar-h, 64px)); } }

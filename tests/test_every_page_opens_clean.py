@@ -4,7 +4,7 @@ Ethan, 2026-10-24: "more professional and more bug checks and all that". The
 bug scan (engine/bugscan) hears of a crash after someone hits it; this finds
 it first. Each page the navigation can open, plus the Record, My Bets,
 Fantasy, Prediction Market and Account pages, is opened on a phone, a Flip's
-cover, a Fold's inner screen, the open Duo on its side and a desktop, on a
+cover, a Fold's inner screen, the open Duo on its side, a desktop and the Play app, on a
 board with picks on it, and must raise nothing: no uncaught error, no
 rejected promise. Network refusals (the test serves only the site itself)
 are not errors of the page's own.
@@ -26,7 +26,9 @@ HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
 #: Pages reached other than through a nav button's data-view.
 EXTRA = ["record", "mybets", "fantasy", "intel", "account", "memes", "ufc", "methodology", "about"]
 SCREENS = {"phone": (390, 844, True), "flip cover": (360, 374, True), "fold inner": (750, 832, True),
-           "duo open": (951, 543, True), "desktop": (1280, 800, False)}
+           "duo open": (951, 543, True), "desktop": (1280, 800, False),
+           # The Play build (web/js/boot.js QB_STORE_APP): no sportsbook, no league art.
+           "play app": (390, 844, True)}
 
 
 def pages() -> list:
@@ -83,7 +85,8 @@ def test_in_a_browser_every_page_opens_clean_on_every_screen():
                     page.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
                     for pat in ("**/api/recommendations*", "**/data/recommendations*.json*"):
                         page.route(pat, lambda r: r.fulfill(status=200, content_type="application/json", body=body))
-                    page.goto(f"http://127.0.0.1:{port}/index.html", wait_until="load")
+                    app = "?app=play" if screen == "play app" else ""
+                    page.goto(f"http://127.0.0.1:{port}/index.html{app}", wait_until="load")
                     page.wait_for_timeout(1000)
                     for name in pages():
                         errors.clear()

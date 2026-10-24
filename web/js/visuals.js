@@ -152,8 +152,15 @@ function espnFacePreview(url, px) {
   return `https://${host}/combiner/i?img=${path}&w=${w}&h=${w}`;
 }
 
+/* In the store app (boot.js QB_STORE_APP) no league logo and no player
+   photo is asked for: the drawn mark under every one of them is the art
+   there (Apple 5.2.1 — someone else's marks and likenesses). */
+function storeArt() {
+  return typeof QB_STORE_APP !== "undefined" && !!QB_STORE_APP;
+}
+
 function facePreview(url, px) {
-  if (!url) return url;
+  if (!url || storeArt()) return "";
   if (url.indexOf("a.espncdn.com") >= 0) return espnFacePreview(url, px);
   const marker = "/image/upload/";
   if (url.indexOf(marker) < 0) return url;           // not a Cloudinary URL
@@ -166,7 +173,7 @@ function facePreview(url, px) {
 
 function playerAvatar(name, abbr, opts = {}) {
   const size = opts.size || 56;
-  if (opts.headshot) {
+  if (opts.headshot && !storeArt()) {
     const inner = playerAvatar(name, abbr, { ...opts, headshot: null });
     const small = facePreview(opts.headshot, size);
     const swap = small === opts.headshot ? "remove" : "swapFull";
@@ -342,7 +349,7 @@ const ESPN_ABBR = {
 
 function logoUrl(abbr, sport, size = 48) {
   const key = ESPN_LEAGUE[(sport || "").toLowerCase()];
-  if (!key || !abbr) return "";
+  if (!key || !abbr || storeArt()) return "";
   const a = (ESPN_ABBR[sport.toLowerCase()] || {})[String(abbr).toUpperCase()]
             || String(abbr).toLowerCase();
   return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${key}/500/${
@@ -412,7 +419,7 @@ function leagueMark(sport, size = 20) {
   const key = ESPN_LEAGUE[s];
   const uid = "lm" + Math.random().toString(36).slice(2, 7);
   const label = (key === "ncaa" ? "NCAA" : s.toUpperCase() || "?");
-  const img = key
+  const img = key && !storeArt()
     ? `<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/${key}.png&w=${size * 2}&h=${size * 2}"
             width="${size}" height="${size}" alt="" loading="lazy"
             decoding="async" data-onload="art-on"

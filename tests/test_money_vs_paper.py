@@ -29,7 +29,8 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _js():
-    return open(os.path.join(HERE, "web", "js", "app.js"), encoding="utf-8").read()
+    # app.js and the meme-coin page it loads on first use (js/memes.js, 2026-10-24).
+    return "\n".join(open(os.path.join(HERE, "web", "js", f), encoding="utf-8").read() for f in ("app.js", "memes.js"))
 
 
 def _fn(js, name):

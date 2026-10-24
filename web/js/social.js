@@ -1285,6 +1285,9 @@
       sameAll(id, (p) => { p.tails = res.out.tails; p.tailed = true; post = p; });
       buzz("tap");
       redraw(id);
+      // The store app opens no sportsbook (boot.js): the tail is counted
+      // and the legs stay on the post to read.
+      if (typeof storeApp === "function" && storeApp()) { tfToast("Tailed. The legs are on the post."); return; }
       betSheetShow(tailSheetHTML(res.out, post), "Tail it");
       return;
     }
