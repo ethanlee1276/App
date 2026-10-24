@@ -192,3 +192,7 @@ web/img/books/manifest.json
 # Push alerts (engine/pushalerts, 2026-10-24): the VAPID private key, who has
 # subscribed, and what was said. The key is a secret; none of it is code.
 data/push/
+
+# The iOS shell's own manifest (deploy/ios/README.md) is source, unlike the
+# throwaway package.json files ignored above.
+!deploy/ios/package.json
