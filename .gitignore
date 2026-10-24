@@ -196,3 +196,4 @@ data/push/
 # The iOS shell's own manifest (deploy/ios/README.md) is source, unlike the
 # throwaway package.json files ignored above.
 !deploy/ios/package.json
+!deploy/ios/package-lock.json
