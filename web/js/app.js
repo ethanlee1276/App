@@ -29732,7 +29732,10 @@ function calRowHTML() {
     return `<button type="button" class="set-opt" data-cal="get">Add my games to my calendar</button>
       <span class="set-note wide">Your teams’ games this week and every game in a parlay you saved — never a pick.</span>`;
   }
-  return `<a class="set-opt on" href="${escapeAttr(_calLink.webcal)}">Open in Calendar</a>
+  // webcal:// is the same address, which a phone hands to its calendar;
+  // built from the https one through safeHref, never taken on trust.
+  const web = safeHref(_calLink.url), cal = web === "#" ? "#" : "webcal://" + web.replace(/^https?:\/\//i, "");
+  return `<a class="set-opt on" href="${cal}">Open in Calendar</a>
     <button type="button" class="set-opt" data-cal="copy">Copy link</button>
     <button type="button" class="set-opt" data-cal="new">New link</button>
     <span class="set-note wide">Google Calendar: Other calendars → From URL, and paste the link.
