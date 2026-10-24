@@ -16,6 +16,9 @@ try {
    styles.css reveals the page on its own after a few seconds, so a script
    that never arrives can never leave it blank. */
 document.documentElement.classList.add("booting");
+/* An iPhone Home Screen app (Safari's own standalone flag): it wears the
+   iOS capsule tab bar, like the store's iOS build (styles.css). */
+if (navigator.standalone === true) document.documentElement.classList.add("ios-home");
 
 /* THE STORE APP (Ethan, 2026-10-24: "do both from my call ... we just need
    it to work with the app store"). The same site runs in the Play build (a

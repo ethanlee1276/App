@@ -19,7 +19,7 @@ APP = ((ROOT / "web" / "js" / "fantasy.js").read_text(encoding="utf-8") + "\n" +
 NC = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
 
 FIXED = ("--ink-on-gold", "--ink-warm", "--ink-neutral", "--qbot-ground",
-         "--night", "--night-2", "--night-3", "--night-text")
+         "--night", "--night-2", "--night-3", "--night-text", "--night-gold", "--night-red")
 
 
 def test_one_bare_root_and_one_light_block():

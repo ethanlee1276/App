@@ -491,6 +491,14 @@
   --night-2: #08101F;
   --night-3: #05060F;
   --night-text: #DFE4F5;
+  --night-gold: #FFC94D;   /* the riding pill is night glass in both themes */
+  --night-red: #FF766E;
+  /* Your team's colours (app.js applyTeamColors sets them on <html> when the
+     setting is on); the site's own gold until then. */
+  --team-1: var(--brand);
+  --team-2: var(--brand-2);
+  --grad-team: linear-gradient(90deg, var(--team-1), var(--team-2));
+  --grad-team-disc: linear-gradient(160deg, var(--team-1), color-mix(in oklab, var(--team-1) 70%, black));
   /* Liquid Glass on the Duo (the section near the end of the sheet). */
 
   --glass-tint: color-mix(in oklab, var(--panel) 74%, transparent);
@@ -12593,3 +12601,47 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   border-radius: var(--radius-sm); border: var(--hairline) solid color-mix(in oklab, var(--warn) 50%, var(--border));
   background: color-mix(in oklab, var(--warn) 10%, var(--panel)); font-size: var(--fs-sm); }
 .rec-offline .ic { color: var(--warn); flex: none; margin-top: 2px; }
+
+/* ==========================================================================
+   THE iPHONE APP'S GLASS, THE RIDING PILL, YOUR TEAM'S COLOURS (docs/IDEAS.md,
+   2026-10-24: "build everything").
+   - The iOS build and an iPhone Home Screen app (boot.js `store-ios`,
+     `ios-home`) float the tab bar as a glass capsule above the home
+     indicator, the way iOS 26's own apps do; the page keeps room for it.
+   - The More and Bet sheets are glass panes on every touch screen.
+   - The riding tray is a pill like the Dynamic Island: dark glass whatever
+     the theme, its live dot breathing (only for readers who allow motion).
+   - With the Team colours setting on (app.js applyTeamColors) the bar's
+     lower edge wears the team's two colours, and the Live disc and the lit
+     tab its first (deepened under white, pulled toward the text colour,
+     so a pale or a black colour still reads on either theme).
+   ========================================================================== */
+@media (max-width: 760px) {
+  html.store-ios .tabbar, html.ios-home .tabbar {
+    left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 6px 4px; border-radius: 999px; border-top: 0;
+    box-shadow: var(--glass-rim), var(--glass-depth); }
+  html.store-ios body, html.ios-home body { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  html.store-ios body.has-tray, html.ios-home body.has-tray { padding-bottom: calc(156px + env(safe-area-inset-bottom)); }
+  html.store-ios .riding-tray, html.ios-home .riding-tray { bottom: calc(98px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (pointer: coarse) {
+  .more-sheet, .betit-panel { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
+}
+@media (max-width: 760px) {
+  .riding-tray { left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px);
+    background: color-mix(in oklab, black 86%, var(--panel)); color: white; border-color: transparent;
+    box-shadow: var(--glass-rim), var(--glass-depth); }
+  .riding-tray .rt-sub { color: color-mix(in oklab, white 70%, transparent); }
+  .riding-tray .rt-go { color: var(--night-gold); }
+  .riding-tray .rt-dot { background: var(--night-red); }
+  .riding-tray .rt-x { background: color-mix(in oklab, white 12%, transparent); color: color-mix(in oklab, white 75%, transparent); }
+}
+@media (max-width: 760px) and (prefers-reduced-motion: no-preference) {
+  .rt-dot { animation: rt-breathe 1.6s ease-in-out infinite; }
+}
+@keyframes rt-breathe { 50% { opacity: .35; transform: scale(.8); } }
+.team-tint .topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--grad-team); pointer-events: none; }
+.team-tint .tb-center-disc { background-image: var(--glass-gold), var(--grad-team-disc); color: white; }
+.team-tint .tb-item.active { color: color-mix(in oklab, var(--team-1) 60%, var(--text)); }

@@ -208,6 +208,7 @@ const SETTINGS_DEFAULTS = {
   tz: "",               // "" = this device's own zone
   teams: [],            // "nfl:DET" — sport-tagged, because CIN is two teams
   leagues: [],          // [] = every league in the nav
+  teamColors: "off",    // "on": the bar, the Live disc and the tab wear your first team's colours
 };
 let _settings = null;
 
@@ -584,10 +585,28 @@ function markMoreMenu() {
   btn.classList.toggle("has-active", inTools);
 }
 
+/* YOUR TEAM'S COLOURS (docs/IDEAS.md, 2026-10-24): with the setting on,
+   the bar's edge, the Live disc and the lit tab wear your team's two
+   colours — the team you follow in this league, else the first you follow.
+   Off, or nobody followed, the site's own gold. */
+function applyTeamColors() {
+  const root = document.documentElement, s = settings();
+  const mine = s.teamColors === "on"
+    ? (s.teams.find((t) => t.startsWith(`${state.sport}:`)) || s.teams[0]) : "";
+  const [sport, abbr] = String(mine || "").split(":");
+  const t = abbr ? (teamsForSport(sport) || {})[abbr] : null;
+  root.classList.toggle("team-tint", !!(t && t.primary));
+  if (t && t.primary) {
+    root.style.setProperty("--team-1", t.primary);
+    root.style.setProperty("--team-2", t.secondary || t.primary);
+  }
+}
+
 function applySport() {
   // A sport with no metadata used to throw here and leave the previous
   // league's page on screen under the new league's branding.
   const meta = SPORT_META[state.sport] || SPORT_META.nfl;
+  applyTeamColors();
   window.ACTIVE_SPORT = state.sport;
   try { localStorage.setItem("qb.sport", state.sport); } catch (e) { /* opens in season next time */ }
   window.ACTIVE_TEAMS = teamsForSport(state.sport);
@@ -29644,6 +29663,8 @@ function settingsHTML() {
                                        ["units", "Units", "1.4u"],
                                        ["dollars", "Dollars", "$28"]])}
     ${pick("tz", "Times", s.tz, TZ_CHOICES.map(([v, l]) => [v, l]))}
+    ${pick("teamColors", "Team colours", s.teamColors, [["off", "Off"],
+      ["on", "Your team", s.teams.length ? teamNameIn(...s.teams[0].split(":")) : "follow one below"]])}
     <div class="set-row">
       <div class="set-k">Leagues in the nav</div>
       <div class="set-v">${leagues}
