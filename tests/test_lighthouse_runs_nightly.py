@@ -23,10 +23,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT))
 
-import lighthouse_check as LC  # noqa: E402
+from tools import lighthouse_check as LC  # noqa: E402
 
 BASE = {"score": 67, "lcp_ms": 6195, "tbt_ms": 327, "cls": 0.016, "tti_ms": 6566, "fcp_ms": 1367, "si_ms": 3066}
 
