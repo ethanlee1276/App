@@ -58,8 +58,8 @@ def test_the_page_is_hidden_until_drawn_and_never_left_blank():
     tail = APP[at:at + 300]
     assert 'requestAnimationFrame(() => document.documentElement.classList.remove("booting"));' in tail
     block = CSS[CSS.index("html.booting main > *"):]
-    assert "animation: qb-boot-reveal 0s linear 4s forwards" in block[:200], "a script that never lands cannot leave it blank"
-    assert "@keyframes qb-boot-reveal { to { visibility: visible; } }" in CSS
+    assert "animation: boot-reveal 0s linear 4s forwards" in block[:200], "a script that never lands cannot leave it blank"
+    assert "@keyframes boot-reveal { to { visibility: visible; } }" in CSS
     assert "@media (max-width: 760px) { main { min-height: calc(100svh" in CSS
 
 

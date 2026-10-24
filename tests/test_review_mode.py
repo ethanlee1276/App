@@ -62,7 +62,8 @@ def _strip_js_comments(src):
 
 
 def _app():
-    return _strip_js_comments(_read("web", "js", "app.js"))
+    # app.js and the meme-coin page it loads on first use (js/memes.js, 2026-10-24).
+    return _strip_js_comments(_read("web", "js", "app.js") + "\n" + _read("web", "js", "memes.js"))
 
 
 # --------------------------------------------------------------- the flag
@@ -190,7 +191,7 @@ def test_the_placeholder_does_not_pretend_the_numbers_changed():
 
     Said plainly, or a reader assumes the page is degraded.
     """
-    app = _read("web", "js", "app.js")
+    app = _read("web", "js", "memes.js")       # the meme-coin page, loaded on first use (2026-10-24)
     i = app.index("mc-chart-off")
     copy = app[i:i + 400]
     assert "unaffected" in copy, \

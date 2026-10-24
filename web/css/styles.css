@@ -13277,16 +13277,16 @@ body.two-pane .pane-list .ob-ring small { display: none; }
    On a phone the page is never shorter than the screen, so the footer
    cannot show under a board that is still filling and then be pushed off.
    ========================================================================== */
-html.booting main > *, html.booting .footer, html.booting #rail {
-  visibility: hidden; animation: qb-boot-reveal 0s linear 4s forwards; }
-@keyframes qb-boot-reveal { to { visibility: visible; } }
+html.booting main > *, html.booting .footer, html.booting .rail {
+  visibility: hidden; animation: boot-reveal 0s linear 4s forwards; }
+@keyframes boot-reveal { to { visibility: visible; } }
 html.booting main::before { content: ""; display: block; height: min(70vh, 640px); margin: 14px;
   border-radius: var(--radius); border: var(--hairline) solid var(--border-soft);
   background: var(--skeleton); background-size: 220% 100%;
-  animation: qb-boot-hide 0s linear 4s forwards, shimmer 1.3s ease-in-out infinite; }
-@keyframes qb-boot-hide { to { display: none; height: 0; margin: 0; } }
-@media (prefers-reduced-motion: reduce) { html.booting main::before { animation: qb-boot-hide 0s linear 4s forwards; } }
+  animation: boot-hide 0s linear 4s forwards, shimmer 1.3s ease-in-out infinite; }
+@keyframes boot-hide { to { display: none; height: 0; margin: 0; } }
+@media (prefers-reduced-motion: reduce) { html.booting main::before { animation: boot-hide 0s linear 4s forwards; } }
 /* The Live page's scoreboard waits on the live feeds; until they answer it
    holds the place its quiet state takes, so the bets under it stay put. */
 .lv-hold { height: 172px; margin-bottom: 14px; }
-@media (max-width: 760px) { main { min-height: calc(100svh - var(--topbar-h, 64px)); } }
+@media (max-width: 760px) { main { min-height: calc(100svh - var(--topbar-h)); } }

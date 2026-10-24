@@ -43,7 +43,7 @@ def _shell_blocks(md):
 
 
 SERVER = _read("server.py")
-APP = _read("web", "js", "app.js")
+APP = _read("web", "js", "app.js") + "\n" + _read("web", "js", "memes.js")  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
 PLAN = _read("docs", "LAUNCH.md")
 
 

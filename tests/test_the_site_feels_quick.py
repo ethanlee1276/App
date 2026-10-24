@@ -52,7 +52,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8") + "\n" + \
+      (ROOT / "web" / "js" / "memes.js").read_text(encoding="utf-8")  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
 GC = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
 HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 VARIANTS = ROOT / "web" / "img" / "venues" / "variants"

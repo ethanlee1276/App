@@ -173,7 +173,8 @@ function facePreview(url, px) {
 
 function playerAvatar(name, abbr, opts = {}) {
   const size = opts.size || 56;
-  if (opts.headshot && !storeArt()) {
+  if (storeArt()) opts = { ...opts, headshot: null };      // the store app draws no photos
+  if (opts.headshot) {
     const inner = playerAvatar(name, abbr, { ...opts, headshot: null });
     const small = facePreview(opts.headshot, size);
     const swap = small === opts.headshot ? "remove" : "swapFull";

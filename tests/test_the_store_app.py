@@ -81,7 +81,7 @@ def test_the_store_app_opens_no_sportsbook():
 
 def test_the_store_app_draws_no_league_logo_and_no_photo():
     assert 'if (!key || !abbr || storeArt()) return "";' in VIS, "logoUrl"
-    assert "if (opts.headshot && !storeArt()) {" in VIS, "playerAvatar"
+    assert "if (storeArt()) opts = { ...opts, headshot: null };" in VIS, "playerAvatar"
     assert 'if (!url || storeArt()) return "";' in VIS, "facePreview"
     assert "const img = key && !storeArt()" in VIS, "leagueMark"
     assert "QB_STORE_APP" in READ("web", "js", "gamecast.js")

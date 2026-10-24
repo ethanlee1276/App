@@ -19,6 +19,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+#: The pages app.js loads on first use, whose actions it registers (2026-10-24).
+LAZY = (ROOT / "web" / "js" / "memes.js").read_text(encoding="utf-8")
 VIS = (ROOT / "web" / "js" / "visuals.js").read_text(encoding="utf-8")
 PAGES = APP + VIS + (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 
@@ -51,7 +53,7 @@ def test_every_registered_action_calls_something_that_exists():
                 called.add(fn)
         called |= set(re.findall(r"window\.(\w+)\(", line))
     for fn in sorted(called):
-        defined = re.search(rf"(?:function {fn}\(|window\.{fn} = |const {fn} = |let {fn} = )", APP + VIS)
+        defined = re.search(rf"(?:function {fn}\(|window\.{fn} = |const {fn} = |let {fn} = )", APP + VIS + LAZY)
         assert defined, f"ACTS calls {fn}, which is defined nowhere"
 
 

@@ -99,7 +99,8 @@ def test_the_prediction_page_shows_no_league_chrome():
     assert off < bar.index("slateNotice(state.data)") < bar.index("withholdAfterMs()"), \
         "the slate's demo, stale and withheld bars never reach a page off the league"
     i = APP.index("function updateAgo(")
-    assert 'OFF_LEAGUE_VIEWS.includes(state.view) ? "hidden" : ""' in APP[i:i + 900], "nor does the slate's age chip"
+    assert 'OFF_LEAGUE_VIEWS.includes(state.view) || !state.lastLoad ? "hidden" : ""' in APP[i:i + 900], \
+        "nor does the slate's age chip"
 
 
 def test_the_board_stacks_on_a_phone_instead_of_squeezing():

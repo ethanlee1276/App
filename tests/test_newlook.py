@@ -34,7 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSS = open(os.path.join(ROOT, "web/css/styles.css"), encoding="utf-8").read()
-APP = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
+APP = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read() + "\n" + \
+      open(os.path.join(ROOT, "web/js/memes.js"), encoding="utf-8").read()  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
 HTML = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
 
 
