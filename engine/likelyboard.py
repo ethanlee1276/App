@@ -439,6 +439,43 @@ def give_back(r: dict) -> bool:
     return True
 
 
+def trust_bigger(r: dict, rule, quotes: dict) -> int:
+    """THE SAME RULE ON THE PICK'S BIGGER LINES (likely.bigger_lines). On
+    the box, 2026-10-24, the NFL board marked 196 of them "priced better
+    than its chance": their chances were our curve's, above the market's,
+    on the board where pricetrust had already shown that ours runs high
+    whenever it runs above (15+ points above: we said 76%, they hit 36%).
+    Each line's chance is held to the market's at its own number — the
+    books' field where three or more quote both sides, else its own book
+    de-vigged — then its worth-it price and its mark are read again, and a
+    line listed only for its mark goes when the mark does. In place, so the
+    shelf card and the board's card read the same lines. Returns the marks
+    the rule took away."""
+    lines = r.get("bigger_lines")
+    if not rule or not isinstance(lines, list):
+        return 0
+    from .likely import _worth_at
+    from .odds import expected_value
+    from .potd import MIN_EV
+    w, t = rule
+    lost = 0
+    for c in lines:
+        got = market_chance(dict(r, line=c.get("line"), side=c.get("side")), quotes)
+        market = got[0] if got else c.get("fair")
+        if market is None or c.get("prob") is None:
+            continue
+        p = float(c.get("raw_prob", c["prob"]))
+        shown = p - w * max(0.0, p - float(market) - t)
+        c["market_prob"] = round(float(market), 4)
+        if shown < p - 1e-9:
+            c["raw_prob"], c["prob"], c["worth_at"] = round(p, 4), round(shown, 4), _worth_at(shown)
+        was = bool(c.get("better"))
+        c["better"] = expected_value(float(c["prob"]), int(c["odds"])) >= MIN_EV
+        lost += was and not c["better"]
+    lines[:] = [c for c in lines if c.get("better") or not c.get("extra")]
+    return lost
+
+
 def trust_price(rows: list, result: dict, sport: str, stats: dict | None = None) -> int:
     """Give the price back the part of our chance above it (PRICE_TRUST);
     returns how many moved. ``stats`` (optional) is filled with what the
@@ -455,7 +492,8 @@ def trust_price(rows: list, result: dict, sport: str, stats: dict | None = None)
     after the board takes a posted pick's number back from the list."""
     rule = price_trust_rule(sport)
     if stats is not None:
-        stats.update(on=bool(rule), rows=0, no_quotes=0, thin=0, fielded=0, above=0, moved=0, posted=0)
+        stats.update(on=bool(rule), rows=0, no_quotes=0, thin=0, fielded=0, above=0, moved=0, posted=0,
+                     bigger_unmarked=0)
     if not rule:
         return 0
     from .sources.oddsapi import normalize_name
@@ -466,6 +504,9 @@ def trust_price(rows: list, result: dict, sport: str, stats: dict | None = None)
             continue
         if stats is not None:
             stats["rows"] += 1
+        unmarked = trust_bigger(r, rule, quotes)
+        if stats is not None:
+            stats["bigger_unmarked"] += unmarked
         got = market_chance(r, quotes)
         if got is None:
             if stats is not None:

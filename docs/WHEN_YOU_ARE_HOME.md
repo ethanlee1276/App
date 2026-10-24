@@ -3414,7 +3414,8 @@ What your paste showed, and what changed from it:
 - DE listed an under 14.5 at −9900 beneath a 19.5 at −114. A bigger line
   now has to be a sane pair (both sides inside a book's possible margin)
   and pay more than the pick itself, since a number further out is less
-  likely.
+  likely. And its 196 marks were mostly our curve running above the
+  market (BK, at the end of this block).
 - DA said "waiting on its verdict" for inventions that had just been
   measured and failed. It now says one of three things: holds, measured
   and does not hold, or not measured yet ("NHL only" for the endgame on
@@ -3524,9 +3525,19 @@ rebuilt; DB2 takes about a minute):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh CY DA DE DB2 DI 2>&1 | tee /tmp/di.txt
 ```
 
-Your call, from BK (in chat): trust the price on the NFL one board where
-our chance runs above it. It passed its bar on four held-out weeks (278
-picks).
+BK, read: it re-tests the rule the NFL one board has used since your
+"yes nfl board" on 10-17 (never a chance above the books' de-vigged
+number), scored on each pick's chance from before the rule. It passed
+again: four held-out weeks, all no worse, 278 picks, log loss 0.7015 →
+0.6882. The picks 15+ points above the market went 36% where we said
+76%. So nothing new to decide; the rule stays. The same paste showed
+the bigger lines skipping that rule: their chances were our raw curve,
+which is how 196 got marked "priced better than its chance". Each
+bigger line on the NFL board is now held to the market's chance at its
+own number, the same as its pick. The mark stays only where a book's
+price beats the market (a real line-shop), and a line listed only for
+its mark goes with the mark. The board's own check line counts the
+marks it took away (`bigger_unmarked` under `price_trust`).
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.

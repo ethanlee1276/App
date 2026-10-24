@@ -170,9 +170,15 @@ def test_the_journal_stakes_the_pick_and_nothing_else():
     ledger.log_most_likely(conn, {"sport": "nfl", "date": "2026-W08", "most_likely": [r]})
     got = conn.execute("SELECT side, line, odds FROM bets WHERE player = 'A Receiver'").fetchall()
     assert [(str(s).lower(), float(ln), int(o)) for s, ln, o in got] == [("over", 39.5, -240)], got
-    for path in ("engine/ledger.py", "engine/likelyboard.py", "engine/potd.py", "engine/parlays.py",
+    for path in ("engine/ledger.py", "engine/potd.py", "engine/parlays.py",
                  "engine/likelysize.py", "nfl_build.py"):
         assert "bigger_lines" not in open(os.path.join(ROOT, path), encoding="utf-8").read(), path
+    # The board reads them for one thing: holding their chances to its price
+    # rule (likelyboard.trust_bigger), never to stake or rank them.
+    board = open(os.path.join(ROOT, "engine", "likelyboard.py"), encoding="utf-8").read()
+    at = board.index("def trust_bigger(")
+    body = board[at:board.index("\ndef ", at + 1)]
+    assert board.count('"bigger_lines"') == body.count('"bigger_lines"') == 1
 
 
 def test_both_layouts_draw_the_fold_and_it_opens_in_place():

@@ -5,6 +5,10 @@ choice never saw: on the NFL board the weeks chose w = 1, T = 0 — never a
 chance above the books' de-vigged price — and held-out log loss fell from
 0.6966 to 0.6852 over 199 picks, every week better. Ethan, 2026-10-17:
 "yes nfl board". engine/likelyboard.trust_price, behind QB_PRICE_TRUST.
+
+The same rule holds each pick's bigger lines (likelyboard.trust_bigger,
+2026-10-24): the box marked 196 of them "priced better than its chance" on
+our curve's numbers, above the market's.
 """
 import os
 import sys
@@ -88,7 +92,7 @@ def test_a_posted_pick_is_judged_by_the_price_too():
     assert LB.trust_price([r], _result([]), "nfl", stats=stats) == 1
     assert abs(r["model_prob"] - round(_field_over(), 4)) < 1e-9 and r["line"] == 6.5 and r["odds"] == -190
     assert stats == {"on": True, "rows": 1, "no_quotes": 0, "thin": 0, "fielded": 1, "above": 1, "moved": 1,
-                     "posted": 1}
+                     "posted": 1, "bigger_unmarked": 0}
 
 
 def test_the_handoff_keeps_the_price_on_a_posted_pick_and_the_list_shows_it():
@@ -125,7 +129,7 @@ def test_switched_off_the_build_says_so():
         else:
             os.environ[LB.PRICE_TRUST_ENV] = was
     assert board["price_trust"] == {"on": False, "rows": 0, "no_quotes": 0, "thin": 0, "fielded": 0, "above": 0,
-                                    "moved": 0, "posted": 0}
+                                    "moved": 0, "posted": 0, "bigger_unmarked": 0}
     assert board["rows"][0]["model_prob"] == 0.80
 
 
@@ -163,6 +167,45 @@ def test_pricetrust_re_tests_the_rule_on_what_it_was_applied_to():
             {"id": 2, "date": "2030-W04", "hit_prob": 0.58, "trust_from": None, "market_p": 0.55, "status": "lost"}]
     ours = {r["id"]: r["ours"] for r in PT.scorable(bets)}
     assert ours == {1: 0.74, 2: 0.58}
+
+
+LADDER = [{"book": b, "line": 8.5, "over_odds": o, "under_odds": u}
+          for b, o, u in (("draftkings", 140, -175), ("fanduel", 135, -170), ("betmgm", 145, -180))]
+
+
+def _bigger(prob, odds=145, extra=False, fair=None):
+    return {"side": "over", "line": 8.5, "odds": odds, "book": "BetMGM", "prob": prob, "worth_at": 0,
+            "better": True, "fair": fair, **({"extra": True} if extra else {})}
+
+
+def test_the_bigger_lines_are_held_to_the_market_at_their_own_number():
+    field = sorted(devig_two_way(q["over_odds"], q["under_odds"])[0] for q in LADDER)[1]
+    r = _row(prob=0.80, bigger_lines=[_bigger(0.55), _bigger(0.52, extra=True)])
+    res = _result([], QUOTES + LADDER)
+    LB.trust_price([r], res, "nfl", stats=(st := {}))
+    got = r["bigger_lines"]
+    assert len(got) == 1, "the line listed only for its mark goes with the mark"
+    c = got[0]
+    assert c["raw_prob"] == 0.55 and abs(c["prob"] - round(field, 4)) < 1e-9
+    assert c["better"] is False, "at the market's own chance, a book's price is no bargain"
+    assert c["worth_at"] > 145, "and the worth-it price is read off the shown chance"
+    assert st["bigger_unmarked"] == 2
+    # Where the books' field is thin, the line's own book, de-vigged.
+    lone = _row(prob=0.80, bigger_lines=[_bigger(0.55, fair=0.38)])
+    LB.trust_price([lone], _result([]), "nfl")
+    assert lone["bigger_lines"][0]["prob"] == 0.38
+    # No market at all: our chance stands, as a pick's does.
+    bare = _row(prob=0.80, bigger_lines=[_bigger(0.55)])
+    LB.trust_price([bare], _result([]), "nfl")
+    assert bare["bigger_lines"][0]["prob"] == 0.55 and bare["bigger_lines"][0]["better"] is True
+    # A true line-shop survives: the market's chance at a price better than the field's.
+    shop = _row(prob=0.80, bigger_lines=[_bigger(0.55, odds=230)])
+    LB.trust_price([shop], res, "nfl")
+    assert shop["bigger_lines"][0]["better"] is True
+    # The other leagues, and the switch, leave them alone.
+    other = _row(prob=0.80, bigger_lines=[_bigger(0.55)])
+    LB.trust_price([other], res, "mlb")
+    assert other["bigger_lines"][0]["prob"] == 0.55
 
 
 if __name__ == "__main__":

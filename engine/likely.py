@@ -2858,15 +2858,20 @@ def bigger_lines(prop: dict, pick: dict, fits=None) -> list:
         if not _credible(p, fair_under if side == "under" else fair_over):
             continue
         ev = expected_value(p, odds)
+        own = fair_under if side == "under" else fair_over
         cands.append((ev, {"side": side, "line": line, "odds": odds, "book": book, "prob": round(p, 4),
-                           "worth_at": _worth_at(p), "better": ev >= MIN_EV}))
+                           "worth_at": _worth_at(p), "better": ev >= MIN_EV,
+                           # the rung's own book, de-vigged, where it quotes both sides
+                           # (the board's price rule reads it: likelyboard.trust_bigger)
+                           "fair": round(own, 4) if own is not None and int(ln.get(
+                               "under_odds" if side == "over" else "over_odds") or 0) else None}))
     out = []
     for _ev, c in cands:
         if len(out) < BIGGER_SHOWN and last - c["prob"] >= BIGGER_STEP:
             out.append(c)
             last = c["prob"]
     extra = sorted((t for t in cands if t[1]["better"] and t[1] not in out), key=lambda t: -t[0])
-    out += [c for _ev, c in extra[:BIGGER_MARKED]]
+    out += [dict(c, extra=True) for _ev, c in extra[:BIGGER_MARKED]]
     return sorted(out, key=lambda c: c["line"], reverse=side == "under")
 
 
