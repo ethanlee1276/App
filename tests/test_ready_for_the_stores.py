@@ -141,8 +141,10 @@ def test_a_shared_slip_and_the_icon_badge_are_wired():
     assert st["action"] == "/share-slip" and st["method"] == "POST" and st["enctype"] == "multipart/form-data"
     assert st["params"]["files"][0]["name"] == "slip"
     sw = READ("web", "sw.js")
-    at = sw.index('pathname === "/share-slip"')
+    at = sw.index('pathname !== "/share-slip"')
     body = sw[at:at + 900]
+    assert sw.index('self.addEventListener("fetch", (e) => {\n  const req = e.request;\n  if (req.method !== "POST"') > \
+        sw.index('if (req.method !== "GET") return;'), "its own listener, after the one that leaves writes alone"
     assert "12 * 1024 * 1024" in body and "/^image\\//" in body and 'Response.redirect("/?shared=slip#ask", 303)' in body
     assert 'k !== VERSION && k !== "qb-shared"' in sw, "an update must not drop a slip mid-share"
     at = APP.index("async function sharedSlipIn() {")

@@ -74,23 +74,6 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-  // A SLIP SHARED IN (manifest share_target): the one post this worker
-  // answers itself. The picture is kept for the page to collect (app.js
-  // sharedSlipIn) and Ask opens; nothing goes to the server here.
-  if (req.method === "POST" && new URL(req.url).pathname === "/share-slip") {
-    e.respondWith((async () => {
-      try {
-        const form = await req.formData();
-        const file = form.get("slip");
-        if (file && file.size && file.size <= 12 * 1024 * 1024 && /^image\//.test(file.type || "image/")) {
-          const box = await caches.open("qb-shared");
-          await box.put("/shared-slip", new Response(file, { headers: { "Content-Type": file.type || "image/jpeg" } }));
-        }
-      } catch (err) { /* Ask opens either way */ }
-      return Response.redirect("/?shared=slip#ask", 303);
-    })());
-    return;
-  }
   if (req.method !== "GET") return;                 // never touch writes
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;  // embeds are theirs
@@ -118,6 +101,26 @@ self.addEventListener("fetch", (e) => {
       })
       .catch(() => caches.match(req).then((hit) => hit || caches.match("/index.html")))
   );
+});
+
+/* A SLIP SHARED IN (manifest share_target, 2026-10-24): the one post this
+ * worker answers itself, in a listener of its own after the main one (which
+ * leaves every write alone). The picture is kept for the page to collect
+ * (app.js sharedSlipIn) and Ask opens; nothing goes to the server here. */
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "POST" || new URL(req.url).pathname !== "/share-slip") return;
+  e.respondWith((async () => {
+    try {
+      const form = await req.formData();
+      const file = form.get("slip");
+      if (file && file.size && file.size <= 12 * 1024 * 1024 && /^image\//.test(file.type || "image/")) {
+        const box = await caches.open("qb-shared");
+        await box.put("/shared-slip", new Response(file, { headers: { "Content-Type": file.type || "image/jpeg" } }));
+      }
+    } catch (err) { /* Ask opens either way */ }
+    return Response.redirect("/?shared=slip#ask", 303);
+  })());
 });
 
 /* ALERTS (engine/pushalerts, 2026-10-24): tonight's picks are up, last
