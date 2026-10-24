@@ -172,15 +172,21 @@ def test_build_writes_once_leaves_a_misread_to_the_original_and_clears():
     notes = shrink.build(web)
     target = web / "min" / "js" / "app.js"
     assert target.read_text() == "const a = 1; \n" and all("KB" in n for n in notes), notes
+    import gzip
+    twin = web / "min" / "js" / "app.js.gz"
+    assert gzip.decompress(twin.read_bytes()).decode() == target.read_text(), "the compressed twin is the same file"
+    twin.unlink()
+    shrink.build(web)
+    assert twin.exists(), "a missing twin is made again even when the copy is current"
     stamp = target.stat().st_mtime_ns
     time.sleep(0.01)
     assert all(n.endswith(": current") for n in shrink.build(web)), "an unchanged file is not rewritten"
     assert target.stat().st_mtime_ns == stamp, "or its ETag moves and every phone downloads it again"
     (web / "js" / "app.js").write_text('const a = "unclosed;\n')
     notes = shrink.build(web)
-    assert not target.exists() and any("served as written" in n for n in notes), notes
+    assert not target.exists() and not twin.exists() and any("served as written" in n for n in notes), notes
     shrink.clear(web)
-    assert not any((web / "min" / rel).exists() for rel in shrink.FILES)
+    assert not any((web / "min" / rel).exists() or (web / "min" / (rel + ".gz")).exists() for rel in shrink.FILES)
 
 
 def test_the_updater_clears_before_new_code_and_builds_after():
@@ -230,6 +236,7 @@ def test_caddy_serves_the_trimmed_copy_only_when_it_exists():
     assert "web/min/" in (ROOT / ".gitignore").read_text()
     for rel in shrink.FILES:
         assert f"/{rel}" in block, rel
+    assert "precompressed gzip" in conf and "\tencode zstd gzip\n" in conf
 
 
 if __name__ == "__main__":

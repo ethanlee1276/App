@@ -297,13 +297,35 @@ def trimmed(rel: str, src: str) -> str:
 
 
 def clear(web: Path) -> None:
-    """Remove every trimmed copy, so the originals are what is served."""
+    """Remove every trimmed copy, and its compressed twin, so the originals
+    are what is served."""
     root = Path(web) / MIN_DIR
     for rel in FILES:
-        try:
-            (root / rel).unlink()
-        except FileNotFoundError:
-            pass
+        for path in (root / rel, root / (rel + ".gz")):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def _gz_twin(dst: Path, text: str) -> None:
+    """The trimmed copy compressed once, at the strongest level, beside it
+    (`app.js.gz`): Caddy serves it as it stands (`precompressed gzip`)
+    rather than compressing 1.7 MB on its one CPU for every visitor, and
+    level 9 is a few per cent smaller than what it does on the fly. Written
+    with the copy every time and checked when the copy is unchanged, so it
+    can never be an older version than the file beside it."""
+    import gzip
+    twin = dst.with_name(dst.name + ".gz")
+    try:
+        if twin.stat().st_mtime_ns >= dst.stat().st_mtime_ns and gzip.decompress(twin.read_bytes()) == text.encode("utf-8"):
+            return
+    except (OSError, EOFError, ValueError):
+        pass
+    tmp = twin.with_name(twin.name + ".tmp")
+    tmp.write_bytes(gzip.compress(text.encode("utf-8"), 9, mtime=0))
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, twin)
 
 
 def build(web: Path) -> list:
@@ -321,10 +343,11 @@ def build(web: Path) -> list:
             if len(text) < 0.25 * len(src):
                 raise Unreadable(f"trimmed to {len(text)} of {len(src)} characters")
         except (OSError, Unreadable) as exc:
-            try:
-                dst.unlink()
-            except FileNotFoundError:
-                pass
+            for path in (dst, dst.with_name(dst.name + ".gz")):
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
             notes.append(f"{rel}: served as written — {exc}")
             continue
         # UNCHANGED IS LEFT ALONE. The updater runs this every five minutes;
@@ -332,6 +355,7 @@ def build(web: Path) -> list:
         # with it, and every phone would download the script again.
         try:
             if dst.read_text(encoding="utf-8") == text:
+                _gz_twin(dst, text)
                 notes.append(f"{rel}: current")
                 continue
         except (OSError, UnicodeDecodeError):
@@ -341,6 +365,7 @@ def build(web: Path) -> list:
         tmp.write_text(text, encoding="utf-8")
         os.chmod(tmp, 0o644)
         os.replace(tmp, dst)
+        _gz_twin(dst, text)
         notes.append(f"{rel}: {len(src) // 1024} KB -> {len(text) // 1024} KB")
     return notes
 

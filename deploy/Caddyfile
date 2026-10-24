@@ -36,7 +36,9 @@
 # the bare name looks like being signed out) and gives search engines two
 # copies of everything.
 qellysbook.com {
-	encode gzip zstd
+	# zstd first (2026-10-24): Caddy breaks a tie in the order listed, and
+	# browsers send no preference, so `gzip zstd` meant gzip for everyone.
+	encode zstd gzip
 	request_body {
 		max_size 1MB
 	}
@@ -284,7 +286,11 @@ qellysbook.com {
 		# Editor and OS leftovers are never served (audit E-15). Not a
 		# blanket dot-file rule: /.well-known/assetlinks.json must stay
 		# reachable for the Android app (#45).
+		# The trimmed copies come with a gzip twin made once at level 9
+		# (engine/shrink._gz_twin): served as it stands, never compressed
+		# again per request on the box's one CPU.
 		file_server {
+			precompressed gzip
 			hide .DS_Store *.bak *.orig *.swp *.tmp *~ .env .env.* .git .gitignore *.py *.pyc
 		}
 	}

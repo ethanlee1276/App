@@ -7251,13 +7251,17 @@ const VENUE_TEAM_PHOTOS = new Set([]);
    stays. `vp-on` drops the drawing under a painted photo (.vp-on in the
    stylesheet): its blur filters rasterising under a photo that covers
    them was GPU load helping crash iPhones (2026-08-26). */
-function venuePhotoTag(sport, home, homeTeam) {
+function venuePhotoTag(sport, home, homeTeam, lead) {
   const fam = VENUE_FAMILY[sport];
   const render = fam ? venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`) : "";
   const own = VENUE_TEAM_PHOTOS.has(`${sport}/${home}`)
     ? venueSrc(`img/venues/${escapeHtml(sport)}/${escapeHtml(home)}.jpg`) : "";
   if (!own && !render) return "";
-  return `<img class="venue-photo" alt="" loading="lazy" decoding="async"
+  /* THE FIRST CARD'S PHOTO IS THE FIRST SCREEN'S LARGEST THING (measured
+     2026-10-24: it painted last, 3.3 s into a slow phone's load, because
+     `lazy` told the browser to wait). The strip's first card asks for it
+     at once and ahead of everything else; the rest stay lazy. */
+  return `<img class="venue-photo" alt="" ${lead ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"
     data-onload="vp-on" src="${own || render}"${own && render ? ` data-alt="${render}"` : ""}
     data-onerr="vpFall"/>`;
 }
@@ -7459,7 +7463,7 @@ function liveLineTitle(L) {
   return `Live line${clock ? ` as of ${clock}` : ""}${books ? ` · best price across ${books} book${books === 1 ? "" : "s"}` : ""}`;
 }
 
-function gameCard(g) {
+function gameCard(g, i) {
   const mlb = state.sport === "mlb";
   // The market row carries the spread and the total in columns, so the
   // sub-line under the name stops repeating them where the row draws.
@@ -7644,7 +7648,7 @@ function gameCard(g) {
         // one neither the cache token nor the one-generation gate could
         // reach. He chose photo-everywhere with the runners kept on top;
         // `runnerOverlay` is that, and it is why nothing is lost here.
-        venuePhotoTag(state.sport, g.home, homeTeam)}${
+        venuePhotoTag(state.sport, g.home, homeTeam, i === 0)}${
         // The one thing the drawing carried that a photo cannot.
         mlb && isLive ? runnerOverlay(g) : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
