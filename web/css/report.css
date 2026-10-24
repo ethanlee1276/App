@@ -1,0 +1,57 @@
+/* Qellys Book — THE GAME REPORT (engine/gamereport, js/report.js), loaded
+   with its script the first time a game page has one (app.js loadReport).
+   The game written out — a reading column, not a dashboard. Body at reading
+   size with room between lines, each section under a rule, tables that
+   scroll inside themselves on a phone, and the players in the scan's own
+   card shape. */
+.gr-toc { margin: 0 0 12px; }
+/* Copy the report, share the game: two quiet buttons over the contents. */
+.gr-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.gr-card { padding: 18px 20px; }
+@media (max-width: 600px) { .gr-card { padding: 14px; } }
+.gr-sec { padding: 16px 0; border-top: var(--hairline) solid var(--border-soft);
+  scroll-margin-top: calc(var(--topbar-h) + 64px); }
+.gr-sec:first-child { border-top: 0; padding-top: 2px; }
+.gr-title { margin: 0 0 8px; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
+.gr-h { margin: 16px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-dim); }
+.gr-p { margin: 8px 0; font-size: var(--fs-lg); line-height: var(--lh-body); color: var(--text);
+  max-width: var(--measure-wide); }
+.gr-list { margin: 6px 0; padding-left: 20px; display: grid; gap: 7px; font-size: var(--fs-lg);
+  line-height: var(--lh-snug); color: var(--text); max-width: var(--measure-wide); }
+.gr-list li::marker { color: var(--brand); }
+.gr-table-wrap { margin: 12px 0; overflow-x: auto; }
+.gr-table-title { font-size: var(--fs-sm); font-weight: 700; color: var(--text); margin-bottom: 4px; }
+/* The row label is a phrase, not a name: it wraps instead of truncating. */
+.gr-table td:first-child { white-space: normal; max-width: none; min-width: 6.5em; font-weight: 600; }
+.gr-table th, .gr-table td { padding: 8px 10px; }
+@media (max-width: 600px) { .gr-table th, .gr-table td { padding: 7px 5px; } }
+.gr-note { margin: 4px 0 0; color: var(--text-mute); font-size: var(--fs-xs); }
+.gr-people { display: grid; gap: 10px; margin: 10px 0; grid-template-columns: 1fr; }
+@media (min-width: 861px) { .gr-people { grid-template-columns: 1fr 1fr; } }
+.gr-person { padding: 12px 14px; border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  background: var(--panel); min-width: 0; }
+.gr-person.up { border-color: var(--good); }
+.gr-person.down { border-color: color-mix(in oklab, var(--bad) 60%, var(--border)); }
+.gr-person[data-open] { cursor: pointer; }
+/* The verdict can run to four words ("Favorable — breakout candidate"), so
+   it sits under the name, never beside it: beside it, a long one squeezed
+   the name to a letter or two a line on a phone. */
+.gr-person-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+  column-gap: 10px; row-gap: 6px; }
+.gr-person-head .ms-read-tag { grid-column: 2; justify-self: start; }
+.gr-person-who { display: grid; min-width: 0; }
+.gr-person-who b { overflow-wrap: anywhere; }
+.gr-person-who span { color: var(--text-mute); font-size: var(--fs-xs); }
+.gr-why { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm);
+  color: var(--text-dim); }
+.gr-person-text { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.gr-extra { margin-top: 12px; }
+/* His form (engine/gamereport.form_lines): a label column and the lines
+   beside it; on a phone the label sits over its lines. */
+.gr-form { margin: 10px 0 0; padding-top: 8px; border-top: var(--hairline) solid var(--border);
+  display: grid; gap: 6px; font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.gr-form-row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); column-gap: 10px; }
+.gr-form dt { color: var(--text-mute); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.gr-form dd { margin: 0; display: grid; gap: 2px; color: var(--text-dim); min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 420px) { .gr-form-row { grid-template-columns: 1fr; row-gap: 2px; } }

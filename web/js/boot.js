@@ -1,0 +1,86 @@
+/* Decided BEFORE first paint, or the full masthead renders and then
+   collapses — a 790px jump on every load. A file rather than an inline
+   <script> since the site audit (2026-09-24, M-4): the content policy
+   refuses inline script, and this is loaded in <head>, blocking, exactly
+   where the inline block ran. */
+try {
+  if (localStorage.getItem("qb-seen-intro"))
+    document.documentElement.classList.add("intro-seen");
+} catch (e) {}
+
+/* THE FIRST SCREEN DOES NOT JUMP (2026-10-24, measured on a mid phone: the
+   page moved 0.42 of a screen while it loaded — Google calls 0.1 good).
+   Until app.js has drawn the real page, the markup's placeholder board is
+   kept invisible and a quiet shimmer holds its place, the way an app's
+   launch screen does; app.js lifts `booting` the frame after it draws.
+   styles.css reveals the page on its own after a few seconds, so a script
+   that never arrives can never leave it blank. */
+document.documentElement.classList.add("booting");
+
+/* THE STORE APP (Ethan, 2026-10-24: "do both from my call ... we just need
+   it to work with the app store"). The same site runs in the Play build (a
+   Trusted Web Activity started at ?app=play, which Chrome also announces
+   with an android-app:// referrer) and the iOS shell (Capacitor, its user
+   agent ending "QellysApp/<version> (ios)"). In there the page leaves out
+   what a store reviewer reads as facilitating wagering — the Bet it and
+   Tail it sportsbook links (Play's gambling policy; Apple 5.3.4) — or as
+   someone else's property — league logos and player photos (Apple 5.2.1,
+   4.1) — and the meme-coin page. Our own drawn helmets, caps and team-
+   colour marks stand in, the same art every photo already falls back to.
+   The website keeps all of it. ?app=web forgets the app on this phone.
+
+   The Android app shares Chrome's storage with the browser, so a stored
+   "play" counts only in an app window: a Chrome tab on the same phone is
+   the website. Checkout: Apple's US storefront allows the link out to buy
+   (3.1.1(a)); Play needs the US external-links enrolment first
+   (docs/APP_STORES.md), so the Play build sells nothing until it is on. */
+var QB_STORE_APP = "";
+var QB_STORE_CHECKOUT = { ios: true, play: false };
+try {
+  var qbQ = (location.search.match(/[?&]app=([a-z]+)/) || [])[1] || "";
+  var qbUA = navigator.userAgent || "";
+  var qbGot = /^(play|ios)$/.test(qbQ) ? qbQ
+    : (document.referrer || "").indexOf("android-app://com.qellysbook.app") === 0 ? "play"
+    : /QellysApp\/[\d.]+ \(ios\)/.test(qbUA) ? "ios" : "";
+  if (qbQ === "web") localStorage.removeItem("qb-store-app");
+  else if (qbGot) localStorage.setItem("qb-store-app", qbGot);
+  else qbGot = localStorage.getItem("qb-store-app") || "";
+  if (qbGot === "play" && qbQ !== "play"
+      && !matchMedia("(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui)").matches)
+    qbGot = "";
+  QB_STORE_APP = qbGot;
+  if (qbGot) {
+    document.documentElement.classList.add("store-app", "store-" + qbGot);
+    if (!QB_STORE_CHECKOUT[qbGot]) document.documentElement.classList.add("store-nobuy");
+  }
+} catch (e) {}
+
+/* The net under the art rule. visuals.js asks for no league logo or player
+   photo in the app, but a picture can arrive by a road it does not cover
+   (a board's own image field, a chart's photo). Any <img> from another
+   host is taken out the moment it lands, before it paints, and the drawn
+   mark beneath it shows — exactly what a photo that fails to load does. */
+if (QB_STORE_APP && window.MutationObserver) {
+  (function () {
+    function foreign(img) {
+      var s = img.getAttribute("src") || "";
+      if (!s || /^(data:|blob:)/.test(s)) return false;
+      try { return new URL(s, location.href).origin !== location.origin; } catch (e) { return true; }
+    }
+    function check(n) {
+      if (n.nodeType !== 1) return;
+      if (n.tagName === "IMG") { if (foreign(n)) n.remove(); return; }
+      if (n.getElementsByTagName) {
+        var imgs = n.getElementsByTagName("img");
+        for (var i = imgs.length - 1; i >= 0; i--) if (foreign(imgs[i])) imgs[i].remove();
+      }
+    }
+    new MutationObserver(function (rs) {
+      for (var i = 0; i < rs.length; i++) {
+        var r = rs[i];
+        if (r.type === "attributes") check(r.target);
+        else for (var j = 0; j < r.addedNodes.length; j++) check(r.addedNodes[j]);
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
+  })();
+}

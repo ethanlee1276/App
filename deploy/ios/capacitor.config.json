@@ -1,0 +1,29 @@
+{
+  "appId": "com.qellysbook.app",
+  "appName": "Qellys Book",
+  "webDir": "www",
+  "server": {
+    "url": "https://qellysbook.com/?app=ios",
+    "allowNavigation": [
+      "qellysbook.com"
+    ]
+  },
+  "appendUserAgent": "QellysApp/1.0 (ios)",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#090705"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
+    },
+    "SplashScreen": {
+      "backgroundColor": "#090705",
+      "launchAutoHide": true
+    }
+  }
+}

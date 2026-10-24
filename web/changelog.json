@@ -1,0 +1,299 @@
+{
+  "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
+  "entries": [
+    {
+      "date": "2026-08-27",
+      "kind": "model",
+      "title": "The touchdown model was graded for the first time",
+      "body": "Every anytime-touchdown pick and every longshot on the football boards comes from one model, and until today nothing had ever checked whether its probabilities were true. The prop backtest walks passing, rushing, receiving and receptions; touchdowns appear nowhere in it. The board shipped, settled itself against results, and the question was never asked.\n\nIt has to be answered in a particular place. A longshot lives in the tail — a +450 price is asking whether an 18% shot is really 18% — so a model that is well behaved at 40% and quietly over-eager at 15% looks healthy on average while losing money on every longshot it prints. Replaying four seasons and 17,775 player-weeks, the answer was the opposite of what a longshot board wants: it claimed 4.8% in its bottom band where 9.5% actually scored, and 65.7% at the top where 58.4% did. It was under-rating longshots by about half — passing over the very picks it exists to find — while over-rating the chalk.\n\nTwo things changed. The model now leans much less on a player's own touchdown record and more on his role and opportunity: touchdowns are rare enough that six games of them is mostly luck, while snaps and red-zone work are steady. That was swept against two independent halves of the record, which agreed on where the balance sits — and agreed that a player's own history still counts for something, just far less than was assumed. On top of it the market carries a correction fitted from the same record.\n\nWHAT MOVED ON THE BOARD: every touchdown probability on NFL and college football. Across the whole four seasons the model now claims 20.1% where 19.9% actually score, and no band with real volume sits more than 1.6 points off. The longshot band, which was 4.4 points light, is now 0.4. It refits weekly.\n\nThe odds ceiling moved with it. Longshots were capped at +450 because a longer price implies an event the model — fed on proxies at the time — could not tell apart from noise. It is not fed on proxies any more, and inside exactly that region its top fifth of picks out-scores its bottom fifth by 7.4 points, which is that separation, measured. So the cap moves out and the value test decides, rather than the cap deciding first. Widening is not removing: past the measured region it still stops."
+    },
+    {
+      "date": "2026-08-27",
+      "kind": "fix",
+      "title": "A model that earns its promotion can now receive it",
+      "body": "Several models here are on probation: they publish and grade picks, and stake nothing, until their own record clears a bar. For parlays that bar is written down precisely — a hundred graded tickets, positive flat-stake ROI, aggregate closing-line value at or above zero, and a z-score of at least two — and the engine computes all four and prints them off one by one.\n\nNone of them could ever fire. The flag that decides whether a model stakes was a fixed value in the source code, so every condition could hold and nothing would happen; the only way through was for somebody to edit a file. The page meanwhile said the bar lifts itself. This is the twin of the probation bug fixed earlier today — that one did something it said it would not, and this refused to do something it said it would.\n\nPromotions are now recorded, with the date and the evidence behind them, and the gate reads that record. What it deliberately is not is automatic. Every other number here adjusts itself, because the worst case is a slightly wrong price; the worst case of a wrong promotion is money at risk that was not at risk before, decided by a threshold nobody looked at. So the record decides when promotion is AVAILABLE, and promoting is an explicit logged act — while demotion needs no bar at all, because withdrawing risk should never be harder than taking it. The health check now says when a bar is met and nobody has acted, so an earned promotion cannot sit unnoticed."
+    },
+    {
+      "date": "2026-08-27",
+      "kind": "fix",
+      "title": "“Graded, not bet” now means it",
+      "body": "Two boards carry a banner saying a league is on probation — journaled and graded, but not staked — while its numbers are still being fitted to its own results. The code says it in four places, in almost the same words. None of them were enforcing it. The sizing ran Kelly and wrote a stake regardless, so an uncalibrated board could grade a play A+ and size it at 2% of a bankroll underneath a banner promising it was doing no such thing. College football and the WNBA were both affected.\n\nThat is the mirror image of showing a number that isn’t real: doing something while saying you aren’t. It is fixed in one shared place rather than four, so the promise and the behaviour cannot drift apart again. A probation board still publishes, still ranks, still grades and still keeps its record — only the size is withheld, and what it would have been rides alongside on the card, the same way a play waiting on a starter already works. It returns on its own the moment the measurement exists.\n\nSeparately, and quieter: where a board IS staking, the haircut behind the size — how much of a disagreement with the closing number we trust — has never been measured for most sports. That now says so on the board instead of sitting in a comment. It is not the same claim as probation and does not stop a bet; it is the difference between a size that rests on a measurement and one that rests on an estimate, and you should be able to see which you are looking at."
+    },
+    {
+      "date": "2026-08-27",
+      "kind": "model",
+      "title": "The NFL game model was graded against four seasons, and it lost",
+      "body": "Spreads and totals could be argued about and never measured, because no closing number was ever stored — the build asked for them, priced off them, and journaled only the moneyline. The schedule feed had been carrying the closing consensus the whole time. Replaying 899 completed games through the pricer that actually ships: on totals the model’s side beat the close 50.7% of the time, on spreads 49.6%, against the 52.4% a −110 line needs. Regress the market’s own error on our disagreement with it and the coefficient — the share of a disagreement that is real — comes back within a standard error of zero on all three game markets.\n\nWHAT MOVED ON THE BOARD: NFL spreads, totals, team totals and moneylines. The market haircut used to keep half of any disagreement, a number chosen when nothing could be checked; it is now the measured one, which on NFL game lines prices at the market and grades almost everything Pass. Over those four seasons this would have declined 458 bets that lost 22.2 units. Every affected card says on its face that the haircut was measured and on how many games. Where a model earns a measured edge the haircut widens again — a fit is allowed to withdraw trust on its own, never to add it."
+    },
+    {
+      "date": "2026-08-27",
+      "kind": "model",
+      "title": "College football is measured now, not assumed",
+      "body": "The CFB model fits its own scoring baseline, home-field edge and margin spread from finished games, and falls back to a prior when there are too few. There was one completed college game in the database, so the prior had been in force for the sport’s whole life here — which is why every college board carried the line about being graded but not staked. Four seasons and 3,132 games are ingested.\n\nMeasuring immediately found a bug in the measurement. Home field was read as the plain average home margin, which in this sport is not the home-field advantage: good teams host bad ones far more often than the reverse. That estimator said +4.73 points. Solving for home field and team strength together says +2.71, and the home-and-home games — where two teams played at both venues, so strength cancels exactly — say +2.62.\n\nWHAT MOVED ON THE BOARD: every CFB spread, total and team total. Home field goes from an assumed 2.4 to a measured 2.71, and the scoring baseline from 28.5 to 26.70 — which had been putting every college total 3.6 points high. Had the old estimator been trusted it would have pushed every projected margin two points toward the home side on every game, wearing the word “fitted”. Both readings now appear on the board so a drift between them is visible."
+    },
+    {
+      "date": "2026-08-27",
+      "kind": "ship",
+      "title": "The flow desk can finally grade its own signals",
+      "body": "Every Polymarket trade in the flow feed scores out of 100 by adding up whichever signals fired — position size, order-book impact, a thin market, a fresh wallet. Those weights were professional estimates, and the report card could grade the total and never a component, because a stored flag only recorded its total. A year of resolutions would still not have said which signal earned it.\n\nFlags now record which signals fired, and the weights are refit against the ones whose markets resolved — each measured against the price the market was already charging, so a signal only scores for what it adds on top of what the market knew. The report card shows what each is worth. A signal that measures at nothing keeps firing and keeps showing, at zero: “we looked and this one does not predict anything” is a finding, not a reason to hide a row. Nothing changes until the record is thick enough to say so."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
+      "title": "The health check now spots a market going ungraded",
+      "body": "Twice today a betting market turned out to have been settling with no closing line at all — college football's whole board, and NFL touchdowns since the day they launched — and both were found only because somebody went looking. The reason they hid so long: the health check read closing-line coverage as one total per sport, and a total is exactly where a dead market hides. One broken market at zero disappears behind its neighbours' 90%. The check now reads the journal one market at a time and names any market with real volume that is settling without closes, along with where to look. It is a small change that would have caught both of today's findings on the night they started."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Delete a message, or clear a whole conversation",
+      "body": "Every message and shared pick in a thread now carries a quiet delete, and the conversation header carries Clear for the whole thing. One rule shapes all of it: deleting takes YOUR copy and never theirs. A message is a single record shared between two people, so removing it outright would reach into somebody else's account and take a conversation off their phone — the site does not do that, and both controls say so plainly rather than letting anyone believe they have unsent something. Clearing a thread is not blocking either: anything sent afterwards arrives as a new conversation. Deleted messages take their unread dots with them, so a badge can never point at something you cannot open, and once both people have cleared an item it is deleted from the database for real."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Model versus market, in public",
+      "body": "The Record page gets the number that matters earliest: does the line move our way after we bet it? A win-loss record over a few hundred picks is mostly variance wearing a percentage sign, but closing-line value grades the decision at kickoff and accrues on every settled pick rather than only the winners. The new panel cuts it by sport and market with the sample size beside every number, because a strong average over nine bets and the same average over four hundred are different facts. Two rules keep it honest: under the sample bar a row still shows its average and declines to call it — hiding a figure until it looks good is the exact failure this page exists to refuse — and a market with settled picks but no stored closing lines gets a row saying it cannot be graded, rather than quietly not appearing. That kind of silent absence is how the touchdown board hid a broken harvest for its whole existence. This panel can come out badly in public, which is the point of publishing it."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Copy a pick as text, for your own book",
+      "body": "The gap between reading a pick here and placing it at your sportsbook was re-typing it off the screen. Tonight's picks and your parlay slip now both carry a Copy as text button: the player, the side, the line, the price we saw and the book we saw it at, plus the time those prices were read, in plain text you can paste anywhere. This site takes no wagers and the export is built so it cannot pretend otherwise — no stake enters it, so no payout can come out of it, and the text says so itself in case it travels somewhere we do not control. One refusal worth naming: a leg with only our own placeholder line copies as 'no book price yet' rather than a number, and a parlay containing one shows no combined price at all — a price nobody offered is not something to hand somebody on their way to a betting slip."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Start/sit: whose spot is best this week",
+      "body": "The waiver board answers who to add; this answers who to start, which is a different question — the same player is a different play against a shootout than against a team that will run the clock out on him. Each position now ranks by opportunity times environment: a player's share of his team's work multiplied by the points the market expects that offense to score, tilted by how much it throws relative to its situation (a run-lean offense helps its back and costs its receivers). Both numbers show on every row so the ranking can be argued with. It is explicitly NOT a fantasy-points projection — there is no per-week points model here and printing one would be invented precision. Quarterbacks are absent and the panel says why: every share in this data is targets or carries, which a quarterback has neither of."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "The waiver board: whose job just changed",
+      "body": "The draft kit is a two-week product. This is the one a fantasy manager opens every Tuesday from September to December, and the question is always the same — whose job just changed? Two lists answer it, both measured from our own usage data. Jobs just vacated: somebody is Out, Doubtful or on IR, so his team's work at that position has to go somewhere, and the beneficiaries are ranked by the share they ALREADY hold, because the man second in line inherits the job rather than the biggest name on the depth chart. Roles on the rise: last week's target or carry share against the prior four weeks, since volume is far stickier week to week than the yards it produces. What the board never says is that anyone is a free agent — the site cannot see your league, so it measures role change and leaves availability to the person who can actually check. The Sleeper add/drop pulse sits beside it, because the name everybody grabbed and the name whose share moved are often not the same name."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Football boards say where the picks went",
+      "body": "A board reading 'no qualifying plays' asks you to take its word for it. Baseball and basketball have long answered the follow-up — a funnel counting exactly where each pick died, gate by gate — but football never did, which with the season opening is the worst place for it to be missing. NFL and college football now publish the same breakdown under the count: how many had no book price yet (and in which markets), how many the model graded a Pass, how many missed the edge bar, how many were too juiced to be worth laying. The football funnel reads the actual rule decisions rather than recomputing the thresholds beside them, so it can never disagree with the ruling it is explaining, and a gate added later shows up in it the day it is added."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "model",
+      "title": "Home runs and college touchdowns start measuring their own vig",
+      "body": "Bookmakers never offer the 'no' side of a home-run or touchdown market, so the house's cut cannot be read off a pair of prices the way it can everywhere else — it has to be assumed. The NFL touchdown board started measuring it instead, by keeping every quote on the board and settling it against who actually scored; MLB home runs and college football touchdowns now do the same, each fitting its own number, because a home-run book and a touchdown book do not charge the same juice. Until each has enough settled quotes the conservative assumption still prices, and the card says which of the two it is wearing. What moves on the board: once measured, every edge and stake on those markets rests on the real hold instead of a placeholder."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
+      "title": "College football starts earning a closing-line record",
+      "body": "Every pick this site makes is graded twice: did it win, and did it beat the closing number — the second being the honest test of whether a model has an edge at all. College football was the one board with no closing line, because the harvest identifies teams through a name table and CFB's 134 schools are resolved live from the feed rather than hardcoded, so harvested prices could not be matched back to bets. The site now writes down every school name it resolves while pricing a board, accumulating through the season, and college football joins the nightly harvest. Two further gaps turned up while fixing it and are also closed: CFB game lines were never being kept from each build even though they cost nothing and needed no name table, and the harvest had been requesting touchdown prices under a name the odds provider does not use — which means the anytime-touchdown board, in the NFL as well, has been settling with no closing line since it launched. Both now work."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "refuse",
+      "title": "No fake numbers — the model-line strip lived three hours",
+      "body": "The first cut of the on-deck board included a second strip: for hitters the books had not priced yet, it showed the model's own baseline lines, labelled as such. Ethan killed it the day it shipped: 'We should never ever display fake numbers on the site. If the props price are not fully available then we don't make the pick till then.' He is right — a labelled proxy is still a number on a betting site, and someone will bet it. The rule is now pinned by a test: no real book price, no row, anywhere. The morning board fills from real prices instead — books post batter props from early morning, and the odds pulls price everything posted on the day's budgeted cadence."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Hitter props all day: the on-deck board",
+      "body": "The MLB board was structurally pitcher-only until late afternoon: hitter props are held until the official lineup card posts (correct — a bet on a hitter who might not play is a bet on a guess), but the hold also made them invisible, so mornings read as 'the model has nothing on batters' when the truth was 'the model is waiting'. The on-deck section fixes the reading without touching the money rule: every hitter lean at a real book price that cleared every gate but the card shows with its grade, edge and projected batting spot, marked LINEUP PENDING — it becomes an official, journaled pick on the refresh after his card posts, and a scratch never does. Nothing on-deck is journaled, counted, or called a pick — the record stays exactly as honest as it was."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Nicknames for friends",
+      "body": "Tap Nickname in any conversation and your friend shows up as whatever you call them — in the chat, the conversation list, the inbox, everywhere you read their name. The label is yours alone: it is stored against your account, the friend never sees it or learns it exists, and their real username stays visible next to the nickname in the thread header so you always know who you are talking to. An empty nickname brings the real name back, and labels are cleaned up with the friendship if you part ways."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "The thread becomes a full message page",
+      "body": "A conversation now takes the whole screen — the site footer steps out while a thread is open and only the messages scroll, with the composer pinned at the foot. Bubbles carry the sender's name and time, days get separators, and your own messages show a real read receipt — the second check lights when your friend's screen has actually shown it. Shared picks draw as proper tickets: legs with the odds read off YOUR board under YOUR subscription (the share itself still carries no numbers), a combined price when every parlay leg prices, and every leg still opens its charts. Filter tabs find the parlays and picks buried in the talk."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "model",
+      "title": "The TD card's three confessions get answered",
+      "body": "Every anytime-TD card carried three caveats naming its own data gaps, and each one now has a fix. Red-zone usage: the nightly chores backfill last season's play-by-play once per machine at the season boundary, so the model reads measured red-zone touch shares for six hundred players instead of inferring them from volume. Touchdown history: week-one cards no longer say '0 games' — a thin history tops up from last season's real touchdowns, capped where the model's own blend stops trusting bigger samples, and stands down once four real games exist. The assumed 6% vig: books never offer 'no touchdown', so the number could not be read off a pair — instead the full quoted board is now journaled at every build and settled against who actually scored, and once enough quotes grade, the card switches from 'assumed' to a measured hold with the sample size shown. What moved on the board: TD probabilities now rest on measured roles and real histories from the first kickoff, not baselines."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Messages become conversations",
+      "body": "The Messages page is real threads now: one row per friend, and inside it your texts and shared picks interleaved the way they happened, with a box at the bottom to talk it over. Every shared pick is a tappable door onto its charts — a pick from another league switches the board first, and one that is off tonight's board opens the player's page, which carries his history either way. Texts go only between friends, each conversation keeps its own unread dot, and what travels in a share is still only the pick's identity — the words are yours, the numbers stay behind each reader's own subscription."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
+      "title": "The stadiums come back",
+      "body": "The GPU diet's first cut hid the drawn stadium scene with a property that also removed the box it was holding open — and the photos, which stack on top of that box, had nothing left to fill. Every stadium card collapsed for about an hour. The drawing now keeps its box and simply doesn't paint, which was the entire point: same crash fix, stadiums intact."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
+      "title": "The iPhone crash, found: page transitions were the trigger",
+      "body": "Third and final part of the phone-reboot hunt, and the one that matches the symptom. Every navigation tap ran a page-transition effect that photographs the ENTIRE page — every card, every chart, tens of thousands of pixels — into graphics memory twice, at full device resolution, before playing a quarter-second fade. That allocation on every single tap is why the crash struck 'any menu, anything': it was the only cost that scaled with every navigation no matter the destination. Phones now switch pages instantly — which is what every native app does anyway — and desktops keep the fade. The blur and graphics-layer removals that preceded this were real weight off the same phones, but this was the trigger."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
+      "title": "The iPhone crash, part two: the stadium strip goes on a GPU diet",
+      "body": "Removing the top bar's glass blur was necessary but not sufficient — the phone was still rebooting on taps. Two more heavy costs lived on the stadium cards: every card was permanently promoted into its own graphics layer for a mouse-hover tilt effect a phone can never show, and under (or in place of) every photo a drawn stadium scene was rendering with real blur filters — sixteen of each on an NFL slate. Phones now skip the tilt machinery entirely, and the drawn scene only renders when a card genuinely has no photo, where it has always been the fallback. Nothing looks different; the phone just stops paying for invisible work."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
+      "title": "The menu no longer reboots iPhones",
+      "body": "Opening a menu on some iPhones could black-screen the whole phone — the spinning-gear-then-lock-screen crash. That is iOS's graphics process dying, and the trigger was ours: the top bar kept a heavy glass-blur effect that, the moment a menu opened, was re-composited as a pinned layer over the sliding drawer and the stadium photography beneath it. Three smaller versions of this same failure had already retired the blur on the scrim, the phone bars and the menu button; the top bar's was the last one standing and the most expensive. The blur is gone everywhere now — the bar wears a near-solid wash that reads the same — and a test forbids the property from ever coming back."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "Game bets parlay too, and the card buttons calmed down",
+      "body": "The parlay slip only took player props — a team total or a spread had no way in. Now anything priced can be a leg: game lines join props on the same ticket, with the combined price multiplying the same way. When a ticket with a game leg goes to a friend, what travels is the matchup and the market — never the line, same rule as everything else. The + Parlay and + My Bets buttons also stopped being green blocks: a pick card's controls are furniture, and the pick is the loud thing."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Find friends by name, and a Messages page that earns the word",
+      "body": "You can now look a player up by their display name and send a friend request — it lands in their Messages inbox, they accept or quietly decline, and declining is never announced. Search finds the name a player chose to wear in public, never an email address, so nobody can be found who didn't name themselves; the invite link still works and remains the only way to add someone unnamed. Messages grew into a real page: Inbox, Sent, Parlays and Picks tabs, an unread filter, search, and friend requests answerable in place. Invite links also stopped dying at the paywall — a friend who opens yours now lands on the sign-in page with the invite held for them, and can read what you sent without a subscription, because shares carry names and never picks."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "The pick page's buttons learned their place",
+      "body": "Six pill buttons were piled above every pick, wrapping into two rows on a phone. Navigation — back to the board, the player page — is now two quiet links above the card, and the things you do WITH the pick (parlay, send, copy link, share card) are one clean strip inside it, right under the pick's name. The Instagram and Discord links also left the crowded top bar for the bottom of the menu, labeled properly. Nothing was removed anywhere — everything just moved to where you'd expect to find it."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "Football learns from its bets from week one",
+      "body": "A season-readiness audit walked every self-tuning system MLB runs — loss-pattern vetoes, the hypothesis tribunal, temperature calibration, the selection haircut, line-move detection, the autopsy — and confirmed each is wired for NFL and college football too. It found one real hole: the nightly harvest of closing odds was hardcoded to baseball, so every football bet would have settled without a closing line — no CLV, no process grades, none of the learning. The harvest now follows the journal: any sport that bet that day gets its closes pulled, for exactly the markets it bet. Weather rows and standings also picked up the cleaner layouts, with division chips to cut the scrolling."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Build a parlay, send it to a friend",
+      "body": "Tap + Parlay on any priced prop and it collects in a slip docked at the bottom of the screen, the way a sportsbook does it. The slip multiplies the prices into a combined number and says plainly that it assumes the legs are independent — same-game correlation stays the business of the engine's own screened tickets. Send the ticket to a friend and what travels is the legs' names only: they open it on the board under their own account, priced by their own subscription. A messages envelope now sits in the top bar with an honest unread count, and everything friends send — picks and parlays — lands on one Messages page."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "The spread chart earns its baseline",
+      "body": "The last-10 chart under a spread bet plotted raw margins with the handicap floating as a dashed line near the bottom — half the plot was empty air and the labels piled into each other. It now plots each game's distance from the number itself: covered by how much above the dashes, missed by how much below, with the handicap named on the baseline. Standings also show real team crests now instead of coloured abbreviations."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "The share card, dressed properly",
+      "body": "The pick card and the parlay ticket were redrawn from scratch: the masthead's own serif for the name, a warm lamp behind the face instead of a flat wash, a double frame with corner ticks, the price in a chip, the model's numbers in ruled columns with the edge colored by its sign, and numbered legs on the ticket. Both cards now share one frame and one footer by construction, so they cannot drift into looking like different products. Same facts as before — nothing was added to the card, everything on it just learned to stand up straight."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "The Streak says your picks landed",
+      "body": "Making your three picks was met with silence — the count ticked up, nothing else moved, and it read as a failed save. The page now says plainly that you're in for tonight and when results grade. The leaderboard had the same day-one problem: it only lists survived nights, so the first players saw \"Nobody on the board yet\" right after playing. It now shows how many players are in tonight — a count, never names, because playing is not the same consent as being ranked in public."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "A menu organized like it means it",
+      "body": "Everything that argues this site's case — the public record, the backtests, how every number is made, whether the feeds are up, and what this site is and isn't — now lives under one Proof heading in the menu, as full named rows. Four of those pages had been six-character chips at the bottom of the drawer, which is where a page goes to be technically present. My Book now means your book: your bets, your alerts, your streak, your bankroll."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Friends, and picks sent between them",
+      "body": "You can now send a pick to a friend. Friends are made with an invite link from your Account page — there is no search, so nobody can look your account up and nobody you didn't invite can message you. What travels is the pick's identity, never its contents: your friend opens it on the board under their own account, so what is behind the paywall stays there. Sent picks arrive at the top of Alerts, with your note on them."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "model",
+      "title": "NFL probabilities calibrated against 80,000 settled games",
+      "body": "The deep NFL fit ran for the first time, and it found the projection honest about passing yards and optimistic about everything a broken tackle can inflate: rushing yards claimed 50% where 27% landed, receiving yards 50% where 36% landed, receptions 50% where 43%. The cause is the distribution's shape — a season's rushing mean is dragged up by a few long runs, so most games land under it, and the model priced around the mean. Every rushing and receiving probability on the board comes down accordingly, which will read as far fewer overs and more unders on those markets. That is the correction working, not the model losing its nerve."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "Retired and unsigned players off the draft board, second pass",
+      "body": "The first pass dropped only players the roster feed positively marked inactive, and kept anyone the name-join missed or who was active without a team — which is how Tom Brady and Kenny Gainwell survived it and turned up in a mock pool the next day. A draft projection is conditional on a job: when the roster feed is present and healthy, a player now has to be matched, active and on a team to hold a rank. A signing restores him the next day automatically, and a missing or broken feed keeps the old board whole rather than emptying it."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Real addresses",
+      "body": "Every player, game and pick now has a URL you can send somebody — /player/juan-soto, /game/ne-sea-0909, /pick/juan-soto-home-runs — and links unfurl as that player or that game rather than as the site. A preview never carries the pick itself: the player, the market and the matchup, and never the side, the line or the price."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "This page, and the receipts behind it",
+      "body": "A methodology page saying how every number on the board is made — the five steps, what is fitted against results, what is still an assumption, and what we deliberately do not model. A status page that asks every published board when it last rebuilt. And every settled pick ever, downloadable as a spreadsheet: long shots and prediction markets included, with the bucket on the row rather than quietly left out."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Share cards, and email digests that are ready but not switched on",
+      "body": "Every pick can be drawn as a card to post — player, the pick, the price and the model's own numbers, with the domain on it. The morning card and the nightly recap are built and can be previewed from the command line; sending them needs a delivery provider and DNS records that do not exist yet, so the site says so instead of offering a subscription to nothing."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "It behaves like an app",
+      "body": "Skeletons instead of blank-then-pop, a board that is days out counting down to first kickoff, a tab icon badged with how many of your bets are still running, and an offline state that names which board you are looking at rather than breaking. When a render throws, the page now says so — this site's characteristic failure is a silent one, where the page merely looks quiet."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Settings that stick",
+      "body": "Prices in American or decimal, stakes in units or dollars, one time zone for every clock on the site, favourite teams, and which leagues show in the nav. They follow your account to every device. Favourites reorder the schedule and never the board — the picks stay ordered by edge, because that order is the product."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "A pick link kept its own address",
+      "body": "Opening a pick wrote its permalink and then overwrote it with a bare #prop a few statements later, so every pick link flattened itself before anybody could copy it — and refreshing one said \"that pick is not on tonight's board\" for a pick that was."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "An unposted total no longer blanks the MLB board",
+      "body": "A morning slate has games before it has totals, and one missing number threw inside the game-card renderer — which runs from the main render, so Top Picks, the board, the rail and the long shots never drew at all. One unguarded number, the whole page."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "The streak game, tail-or-fade, and the feed's last three events",
+      "body": "A free daily streak game with no stake on it; a tail-or-fade call on every pick, scored against the journal at the end of the month; and velocity flags, stale-line snipes and the nightly autopsy in the feed."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "refuse",
+      "title": "Web push, measured and refused",
+      "body": "The one delivery mechanic that did not ship. Web Push needs P-256 key agreement and AES-128-GCM payload encryption; the Python standard library has neither, and hand-rolling elliptic-curve cryptography on a site that holds accounts is the wrong risk to take for a notification. The feed and the return banner cover most of the distance. Written down in docs/IDEAS.md so it is not re-attempted by somebody who has not seen the reasoning."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "The preseason board retired",
+      "body": "Nothing builds it any more and the stale copy is swept off the public path. The regular season is what the NFL model is now pointed at."
+    },
+    {
+      "date": "2026-08-13",
+      "kind": "model",
+      "title": "Claims cut to what our picks actually land",
+      "body": "The biggest change this model has had to its own numbers. Measured against the journal, the model was over-claiming by nine to ten points on the props it PICKS — 51.5% claimed against 42.5% landed. Every claim now comes down before an edge, an EV or a stake is derived from it, so every one of those figures moved. The price sets the stake rather than the grade. Picks journaled from this date are a different animal from the ones before it, which is why the Record page keeps the eras apart."
+    },
+    {
+      "date": "2026-07-29",
+      "kind": "model",
+      "title": "Re-tuned gates",
+      "body": "Scalpy 2.0 and the pro NFL model. Approval gates and pick caps re-cut around them."
+    }
+  ]
+}

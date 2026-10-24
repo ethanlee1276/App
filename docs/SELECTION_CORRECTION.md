@@ -1,0 +1,616 @@
+# The selection correction — built, gated, live
+
+**Status: SHIPPED 2026-08-12 as `engine/selectionfit.py`. Sections 1–11
+below are the design as written before anything existed; §12 records what
+was actually built, which of the pre-registered gates it passed, and the
+two places it deliberately departs from this plan.**
+
+---
+
+## 1. The thing that needs explaining
+
+`guardfit` measured the shipped claim against what landed, by price band:
+
+| | weighted gap | bets |
+|---|---|---|
+| below the 55% hinge | **+10.0%** | 99 |
+| above it | **+13.8%** | 138 |
+
+Positive means the model claimed more than it delivered. It is roughly the
+same size at every price — about **+12 points, everywhere**. That is not a
+favourite problem, a market problem, or a recent problem: `bleed --split`
+shows both halves of the journal losing significantly on their own
+(z −2.27 before August, z −2.56 after), through a product mix that changed
+enormously in between (break-even 62.7% → 49.5%).
+
+Meanwhile the deep fitter says the model is roughly fine. It calibrated
+`mlb:hits` on **282,862** player-game outcomes and asked for T=1.42;
+`home_runs` on 293,469 and asked for T=1.04.
+
+Both can be true at once, and the reason they can is the whole proposal.
+
+## 2. Why a fit on all of history cannot see this
+
+The deep fitter calibrates over **every prop**. We bet a **subset** — the
+ones where our number disagrees with the book enough to clear the edge bar.
+
+Write our corrected estimate as `p̂ = p* + ε`: the true probability plus
+estimation error. Over the whole population ε averages to zero, which is
+exactly what the deep fit verifies and what it is good at.
+
+But we do not choose bets at random. We choose them where `p̂` sits far
+above the book's implied `q` — and a big gap happens either because we
+know something, or because **ε happened to be positive**. Conditional on
+being selected, ε no longer averages to zero:
+
+> **E[ε | selected] > 0**, so **E[p* | selected] < E[p̂ | selected]**.
+
+The claim runs hot on the bets we place, while remaining unbiased on the
+population the deep fitter measured. This is the winner's curse, and it is
+structural: **no amount of refitting on unselected history can remove it,
+because the bias does not exist until selection happens.** It only shows
+up in the journal, which is the one place we were not fitting.
+
+The size of the effect is the ratio of estimation variance to the variance
+of the disagreement. If the edge signal is mostly noise, the shrink needed
+is large. A +12-point gap says it is large.
+
+## 3. First: the test that could kill this
+
+**Do not build the correction before running this.** Several other faults
+produce the same +12 signature and would be mis-treated by a shrink:
+
+- pricing against a line that has already moved (stale quotes)
+- a de-vig or `fair` construction that is wrong
+- grading errors
+- a market-shrink weight that is simply too weak
+
+Selection makes a prediction none of those do. **The curse grows with the
+size of the claimed edge.** A bet we thought had 2 points of edge was
+barely selected; one we thought had 12 was selected precisely because ε was
+large. So:
+
+> Bucket the settled journal by the `edge` column and measure the
+> calibration gap in each bucket.
+>
+> - **Gap rising with claimed edge** → selection. Proceed.
+> - **Gap flat in claimed edge** → it is a level error from something
+>   else, and a selection shrink is the wrong instrument. Stop and find it.
+
+This runs on data already in the journal, needs no new capture, and
+changes nothing. It is one script (`selcheck.py`, unwritten).
+
+A second, cheaper corroboration: the effect should be **weaker on bets
+where the model and the book already agreed** and strongest on the
+longest-priced disagreements.
+
+## 4. The correction, if the test passes
+
+One extra parameter pair, applied **after** the deep correction, fitted
+**only** on journaled bets:
+
+```
+p_deep  = apply_temperature(p_raw,  T_deep, b_deep)   # unchanged, deep fitter's
+p_final = apply_temperature(p_deep, S_sel,  c_sel)    # new, journal's
+```
+
+The fitting machinery already exists and is already right —
+`journalfit.fit_temperatures` running `as_over` over settled bets is
+exactly this fit. The only thing that was wrong was *where the answer
+went*: it tried to overwrite the deep correction instead of composing with
+it. Composition is the entire change.
+
+**Storage.** A separate store, `data/models/selection.json`, keyed
+`sport:market` like the other. Separate rather than a field on the existing
+entry, so that the two can never be confused by a future reader — the
+mistake that nearly overwrote 282,862 samples with 479 was exactly a
+confusion about which fitter owned a number.
+
+**Refitting it is safe, and this is where `undo_temperature` finally earns
+its keep.** Each bet already journals `cal_temp` / `cal_bias`; the
+selection layer would journal its own alongside them. A refit un-corrects
+only the selection layer, leaves the deep layer alone, and fits again — no
+compounding, and the deep fitter is never touched.
+
+## 5. Pooled first, per-market later
+
+Selection bias is a property of **the selection process** — the edge bar,
+the shopping, the grade filter — not of the market. It should be roughly
+common across markets, and `guardfit`'s table agrees: the gap is flat
+across price bands rather than concentrated anywhere.
+
+The journal currently holds **2,871 settled MLB bets** (1,860 home runs,
+491 total bases, 481 hits, 39 strikeouts). That is a comfortable sample for
+**one pooled parameter pair per sport**, and a thin-to-useless one for four
+separate ones. So:
+
+- **Ship pooled per sport.** One `(S, c)` for `mlb`.
+- Let a per-market correction earn its way in later, when its own record
+  convicts it — the house rule everywhere else.
+
+## 6. The hazard I would not hand-wave
+
+**This correction feeds back on its own training set.** Shrinking claims
+toward 50% shrinks edges; fewer bets clear the bar; the ones that still do
+are the most extreme disagreements — which carry *more* curse, not less.
+The next fit could ask for a bigger shrink, and so on.
+
+That loop may converge or may run away. Nothing in the current design
+proves which. Three guards, all cheap:
+
+1. **Cap it.** A maximum shrink per refit, and a hard floor on `S`.
+2. **Refit on a fixed window**, not on the post-correction board only, so
+   the training population does not chase the correction.
+3. **Watch it.** If `S` climbs on consecutive refits without the measured
+   gap closing, that is the runaway signature — stop and re-diagnose.
+
+## 7. The bar before it prices anything
+
+Fitted is not validated. The bar is out-of-sample, and it should be:
+
+- Split the journal by date. Fit `(S, c)` on the earlier part only.
+- Measure the calibration gap on the **later** part, with and without.
+- Ship only if the held-out gap closes materially. A correction that only
+  improves the data it was fitted on has demonstrated nothing.
+
+`bleed.py --split` already does the date-splitting arithmetic and can host
+the comparison.
+
+## 8. What it will do to the board — read this before agreeing
+
+A 12-point over-claim means bets claiming 60% are landing near 48%. At
+−110 the break-even is 52.4%, so a claim of 60% shows **+7.6 points of
+edge** and is really **−4.4**.
+
+Correcting that honestly will not trim the board. **It may empty it.**
+
+That is the correct outcome if the measurement is right — those bets were
+losing money, which is what the −15.6% ROI has been saying all along. But
+it means the visible result of shipping this is a site that recommends far
+less, possibly nothing, for a while. Worth deciding that you want that
+before it happens, rather than discovering it on a Tuesday.
+
+## 9. What would make me abandon this
+
+- The edge-bucket test in §3 comes back flat. Then it is not selection.
+- The held-out gap in §7 does not close. Then the correction is fitting
+  noise.
+- `S` runs away across refits. Then the feedback loop is real and the
+  design needs a fixed reference population before it can ship.
+- The gap turns out to be concentrated in one market or one book after
+  all — `bookcheck`'s field reconstruction is currently too noisy to rule
+  this out (its field spread is 23.33%, five times the effect it measures).
+
+  **This is now testable.** `selcheck --across` reports a per-book gap
+  table, a within-book pooled difference, and the selected side split by
+  whether its book appears on the rejected side at all. The within-book
+  number is a FLOOR, not an estimate: book is a mediator, so conditioning
+  on it removes part of the effect deliberately. Read it one way only — if
+  the difference survives inside books, composition is not the
+  explanation; if it fades, mediated selection and a broken price feed
+  both predict that and the test cannot separate them.
+
+## 10. Order
+
+1. `selcheck.py` — the edge-bucket test. Diagnostic only, ships nothing.
+   **Run. Flat in claimed edge (z −0.66), which §9 lists as a reason to
+   abandon — but at 47% power, and the between-group contrast in
+   `--across` spans a far longer lever arm than the 2–6% band inside the
+   selected set. Not resolved; see §11.**
+2. If it passes: fit pooled `(S, c)` per sport, store separately, journal
+   the applied values, **do not apply yet**.
+3. Out-of-sample check per §7.
+4. Only then compose it into pricing, capped, behind the existing
+   evidence gate.
+
+Steps 2 and 3 are `selfit.py`. It writes nothing, and its bars are module
+constants so that a diff shows them moving.
+
+## 10a. The instrument that is not available: a higher bar
+
+§8 said correcting the over-claim honestly "may not trim the board but
+empty it", and treated that as a cost to accept. It is worse than a cost,
+and `barcheck.py` shows why in two constants that were already in the code.
+
+The gate accepts a post-haircut edge inside a window. The floor is
+`TIER_MIN_EDGE`; the ceiling is `MAX_CREDIBLE_EDGE` (0.10) times the
+tier's shrink, beyond which a disagreement is treated as bad data rather
+than alpha:
+
+| tier | floor | ceiling | window |
+|---|---|---|---|
+| 1 | 2.5% | 5.0% | 2.5 points |
+| 2 | 3.0% | 4.5% | 1.5 points |
+
+An honest floor has to cover the over-claim — `floor + gap`:
+
+| tier | needs | ceiling | |
+|---|---|---|---|
+| 1 | **14.5%** | 5.0% | short by 9.5 points |
+| 2 | **15.0%** | 4.5% | short by 10.5 points |
+
+**The required floor is about three times the largest edge the model is
+permitted to claim.** The window is not narrowed by this; it is inverted.
+No edge is simultaneously big enough to survive an honest floor and small
+enough to be believed, so every candidate fails one end or the other.
+
+The journal agrees without being asked: sweeping bars over the settled
+board, no bet survives past roughly 7.5%, because the credibility ceiling
+caps edges below where an honest floor would have to sit.
+
+So "raise the edge bar" is not a conservative version of the current
+system. It is arithmetically switching the board off, and it is not a
+third branch beside the two real ones:
+
+  1. the CLAIMS come down — the correction in §4, which §7's hold-out
+     cannot yet validate on 13 days of a drifting board, or
+  2. there is nothing on this board worth betting.
+
+`barcheck.py` recomputes this from the live constants and the journal's own
+measured gap, so it stays true if either moves. It deliberately does not
+name a recommended bar: sweeping bars over 247 settled bets and taking the
+best ROI is a maximum-of-draws against a ±6.3-point noise floor, and would
+produce a "finding" on data with no signal in it.
+
+## 10b. The question that decides where the repair goes
+
+Everything above measures baseball. guardfit, bleed, selcheck, selfit and
+barcheck all take `--sport` and all default to `mlb`, so the +12 has been
+measured six ways against one sport.
+
+`gapcheck.py` asks whether the other sports miss by the same share:
+
+  * **Same share** → the fault is in what every sport SHARES — the market
+    shrink, the de-vig, the credibility guard, the edge gate. NFL inherits
+    it at kickoff and the correction belongs at engine level.
+  * **Different** → it is baseball's projection layer. NFL may launch
+    clean, and one engine-wide correction would damage the sports that are
+    already honest.
+
+The test is Cochran's Q on the RELATIVE gap, not the absolute one — a sport
+claiming 15% and one claiming 58% cannot be ranked on points. Sports under
+60 settled bets are shown but excluded, because their bars would reconcile
+anything with anything.
+
+On the current journal this probably returns **cannot be answered yet**,
+with only baseball clearing the floor. That is the honest state and it has
+a consequence: until a second sport gets there, the +12 cannot be told
+apart from an engine-wide fault, so NFL must be treated as exposed to it.
+`nflguard.py` is the standing bet on that being wrong, and §10a is what
+happens if it is not.
+
+## 11. What the run actually settled, and what it did not
+
+`selcheck --across` on 247 selected against 570 rejected:
+
+| adjusted for | difference | z | coverage |
+|---|---|---|---|
+| raw | +13.2% | +3.61 | 100% |
+| market | +11.2% | +2.86 | 93% |
+| claim band | +12.4% | +3.18 | 84% |
+| market × claim band | +9.1% | +2.01 | 63% |
+| **within book (a floor)** | **+13.6%** | **+2.84** | **85%** |
+
+**Settled: it is not one book.** The within-book difference survives at
+z 2.84, and splitting the selected side by whether its book appears on the
+rejected side at all gives +12.1% (154 bets) against +12.3% (93 bets), a
+difference of +0.2%. ESPN BET's 76 unpaired bets are not carrying the
+finding. §9's book clause is cleared.
+
+**A prediction of mine that failed.** The within-book number was supposed
+to be attenuated — book is a mediator, so conditioning on it should
+subtract part of the effect. It came back the LARGEST of the five, not the
+smallest. The honest reading is that book-shopping is a smaller part of
+the selection mechanism than the mediator argument assumed: the gate is
+winning by picking props, not by picking books. Caveat, because it matters:
+the schemes cover different samples (85% against 63%), so they are not a
+clean comparison.
+
+**Do not read +9.1% as "the real answer".** Four of the five estimates sit
+between +11.2% and +13.6%. The outlier is the finest scheme, which is also
+the one with the widest bar (±9.1%) and the worst coverage (63%). Finest
+is not most trustworthy — it controls the most and knows the least.
+
+**Not settled: which selection-like mechanism this is.** §3 named three
+alternatives that a flat edge-slope is consistent with. Two of them survive
+the between-group test, because they are also selection on a noisy
+quantity:
+
+- **stale quotes** — a line that has already moved is exactly what makes a
+  prop clear the bar, so it predicts a selected-vs-rejected difference too;
+- **a market-shrink weight that is too weak** — bets clear when our number
+  sits furthest from the book's, i.e. where the shrink failed hardest.
+
+A bad de-vig does not survive: it applies to selected and rejected alike
+and cannot produce a between-group difference.
+
+The remedy is the same shrink for all of them, so this does not block
+steps 2–3. It matters for step 4, because stale quotes are fixable at the
+source and fixing a source beats shrinking after the fact. The CLV
+machinery is the place to look.
+
+
+---
+
+## §11 — the third estimator, and the premise it refuted (2026-08-07)
+
+Written up because this is the one section a future reader most needs and
+is least likely to reconstruct: **the reason the hold-out failed is still
+not known, and the leading explanation has now been ruled out.**
+
+### What was believed
+
+§10 recorded that the correction could not be validated because the board
+drifted — claim level 64.9% to 51.2%, UNDER share 44% to 25%, over 13 days.
+The reasoning was that the pre-registered single split trains on the early
+half and tests on the late one, so under drift it compares two different
+populations; and `crossval` interleaves dates, so every test night has
+training nights on both sides of it in time, which leaks the future.
+
+`walkforward()` was built on that: fit on every date **before** d, judge
+date d, roll forward. Strictly causal, refit nightly — what a live board
+would actually have done.
+
+### What the simulation said
+
+60 synthetic journals per world, 14 dates, 20 bets a date, PASS counted
+against the same pre-registered bars:
+
+| world | split | interleaved | walk-forward |
+|---|---|---|---|
+| honest, drift 14 pts | 4 PASS / 20 FAIL | 10 / 0 | 9 / 3 |
+| honest, no drift | 4 / 23 | 7 / 0 | 7 / 11 |
+| over-claim +12, drift | 24 / 20 | 59 / 0 | 42 / 4 |
+| over-claim +6, drift | 12 / 17 | 36 / 0 | 24 / 3 |
+
+**Drift moves the false-alarm rate by a point or two, not by the margin
+needed to explain a FAIL** — 4→4, 7→10, 7→9. The drift explanation for the
+failed hold-out is not supported.
+
+That is a refutation of the reason §10 gave, and it is recorded rather than
+quietly dropped. The door is not fully closed: the simulation drifts claim
+level only, and the real board also moved its UNDER share, which is not
+modelled.
+
+### Three things the table settles
+
+**Walk-forward is not the better test.** Similar false alarms to the
+interleaved CV, less power (42 vs 59 on a real +12). It is kept for one
+property: **the interleaved CV returns FAIL in zero simulated worlds**,
+including worlds where the correction damages the held-out half. It cannot
+convict. Walk-forward can.
+
+**None of these is a significance test.** `PASS_GAP` and `FAIL_GAP` are
+absolute thresholds on a gap. Measured, each estimator hands a PASS to an
+honest journal 7-17% of the time. A lone PASS is roughly what luck
+produces; agreement across all three is the only actionable reading, and
+`selfit.py` now prints all three side by side and says so.
+
+**The single split is the harshest and the least powerful** — 24 PASS on a
+real +12, against 59 for the CV. Its FAIL was always weaker evidence than
+it read, in the other direction.
+
+### What is now the leading explanation
+
+Not drift. The candidate is **shape**: a single temperature-plus-intercept
+assumes the over-claim is uniform in claim level. `by_claim()` splits the
+held-out gap into claim bands and reports the spread. If the gap is
+concentrated at high claims, one temperature is being asked to average two
+different faults, and that would fail a hold-out with no drift at all.
+
+That is a measurement Ethan's journal can answer and this container cannot.
+
+
+---
+
+## §12 — resolved, and not in the direction this document assumed (2026-08-07)
+
+**The correction does not work on this board, the journal is now big
+enough to say so, and both explanations offered for the earlier failures
+were wrong.** Recording all three together because the wrong turns are the
+part a future reader will otherwise repeat.
+
+### The run
+
+255 settled bets, two functional forms, three estimators:
+
+| | split | interleaved CV | walk-forward |
+|---|---|---|---|
+| temperature + intercept | FAIL | INCONCLUSIVE | FAIL |
+| intercept only | FAIL | FAIL | FAIL |
+
+Six cells, zero passes.
+
+### Why that is a conclusion rather than a shrug
+
+From this file's own simulation, at 250 bets against a real **correctable**
+12-point over-claim, the pre-registered split returns:
+
+    PASS 70%   INCONCLUSIVE 20%   FAIL 9%
+
+It returned FAIL. That is the 9% branch once, or it is the likelier
+reading: there is no correctable distortion here to find. Five of six
+looks agreeing pushes it further the same way.
+
+The earlier position — "the journal cannot yet tell a working correction
+from a lucky one" — was right at 124 bets and is no longer right at 255.
+
+### Both diagnoses were wrong
+
+**Drift (§10, §11).** Claim level fell 64.9% to 51.2%, and the failure was
+attributed to the halves being different populations. Simulated over 60
+synthetic journals, drift moves each estimator's false-alarm rate by a
+point or two. Refuted.
+
+**Shape (§11).** The temperature has 50% as a fixed point, and 92 of 123
+held-out bets claim under 55%, so the instrument was inert exactly where
+the board lives — the biggest band moved 15.2% to 15.3%. That diagnosis
+was *correct about the mechanism* and still did not fix anything: the
+intercept-only form, which can move a claim at even money, closed 2.6
+points against the joint fit's 1.9. Refuted as the explanation, though the
+mechanism it identified is real and stays documented.
+
+### What it actually is
+
+`watch.py` had the answer before any of this: of the +12.1 point
+calibration gap, **+10.5 points is the selection effect** — the difference
+between the bets the gate took (255) and the ones it rejected (638), at
+z 2.44. The rejected population runs at roughly +1.6.
+
+A probability map that is near-calibrated on the bets you did not take and
+12 points off on the ones you did is not a miscalibrated map. It is a
+**selection** problem, and no rescaling of probabilities can fix it,
+because the same numbers are already right on the unselected population.
+`E[ε | selected] > 0` is a property of the choosing, not of the estimate.
+
+That is why every functional form fails and why a wider search would keep
+failing. The instrument is aimed at the wrong object.
+
+### What this closes and what it opens
+
+**Closed:** steps 2-4 of §10. Do not fit, do not apply, and do not add a
+seventh look. Two forms by three estimators is already six, each with a
+7-17% false-alarm rate, and the honest reading of a table that wide is
+that one stray PASS would have meant nothing.
+
+**Open:** the selection rule itself — the edge gate, the shrink, the
+grade thresholds. That is where the +10.5 lives. §8's two branches are
+unchanged and now sharper: either selection stops picking the spots where
+its own error points favourably, or there is nothing on this board worth
+betting. Neither is a calibration change.
+
+---
+
+## The same blind spot in the loss miner, and the measurement that settles it
+
+§2's argument is general: a fit over the whole population cannot see a
+miscalibration that exists **conditional on being selected**. That is why
+`calibrate.py`'s 282,862-sample fit says the model is fine while the
+journal runs +12 hot.
+
+`engine/losspatterns.py` has the same shape of exposure, in both
+directions at once. `records_from_ledger` pools every graded single across
+every journal category — on the real journal roughly 300 `main` against
+3,100 measurement rows — while `veto()` blocks **recommendations**, which
+are `main` and only `main`. So:
+
+- a real selection effect inside `main` gets averaged against ten times as
+  much unselected material and diluted toward nothing, and
+- a slice that happens to be `main`-heavy inherits the curse and reads as
+  a property of the *slice*.
+
+**What is already enforced.** A closure the `main` book does not support
+is demoted to a watch (`main_only_check`, commit e322749). It keeps
+appearing and keeps accruing evidence, and it stops blocking picks on the
+strength of a different book. That fixes the second direction: nothing is
+refused on evidence `main` does not carry.
+
+**What that cannot fix** is the first direction. A finding diluted below
+the bar never surfaces, so it is never demoted — there is nothing to
+demote. Only mining `main` on its own can see it.
+
+### The open question, and why it is not settled by argument
+
+Should a veto that lands on recommendations be *convicted* on rows that
+would have been recommendations?
+
+*Pooling* is defensible: the veto runs at pricing time on every candidate
+prop (`engine/mlb/betting.py`, inside `gate_ok`), so the population it
+sees really is all of them.
+
+*Filtering* is defensible: blocking a prop that would have been `loose`
+changes nothing — it was never bet — so every real-world consequence of
+the veto lands on the main-eligible population, and §2 says that is the
+population where the miscalibration exists at all.
+
+Both are reasonable and neither wins on reasoning. `losspatterns.both_ways`
+mines the pool and mines `main` alone and compares the convictions:
+
+    python3 launch.py --both-ways
+
+- **`main only` non-empty** → the pool is hiding real findings. That is the
+  argument for filtering, made out of data.
+- **`main only` empty, at a sample big enough to have found something** →
+  the argument for leaving it pooled.
+
+It compares **convictions**, not enforced closures, because `mine` already
+demotes what `main` will not support — reading `closed` on the pooled side
+would compare against a list the demotion has emptied, and report the
+guard working as agreement.
+
+`ready` is about the SAMPLE and never about the result: below
+`BOTH_WAYS_MIN_MAIN` (500 `main` rows) the report says how far short it is
+and prints no verdict, because an underpowered comparison that reads as
+agreement is the mistake this whole document exists to avoid. The nightly
+settle announces the milestone once it is crossed.
+
+Either answer is a **pricing change** and wants a human. The command
+reports and stops; there is deliberately no `--apply` on that path.
+
+
+---
+
+## 12. What shipped — 2026-08-12
+
+Ethan, reading `stakecheck.py`'s verdict: *"well we should make it where we
+get a lower roi then and fix it on the website so it would display the new
+number."* That is this document's §4, so it got built:
+`engine/selectionfit.py`, with `launch.py --haircut` as the probe and its
+own block on the Record page.
+
+### The four pre-registered gates
+
+| gate | where | verdict |
+|---|---|---|
+| §3 edge-slope | `selcheck.py` | flat (z −0.66) at 47% power — **not fatal, see below** |
+| §9 one book? | `selcheck --across` | cleared: survives within book at z 2.84 (§11) |
+| §7 out-of-sample | **now `_holdout()`, a hard gate in code** | required to apply |
+| §6 runaway | cap + shrinkage + un-shift on refit | three guards, all tested |
+
+**§3 came back flat, and the instrument changed because of it.** A flat gap
+across claimed-edge buckets says the miss is a LEVEL error on the selected
+population, not one that grows with the size of the disagreement. §4
+proposed a temperature-and-bias pair — a shrink toward 50%. A shrink is the
+wrong shape for a flat error; an intercept is exactly the right one. So
+what shipped is **bias only**: one log-odds shift, no temperature. That
+change is the diagnostic being obeyed rather than argued with, and it is
+why the flat result is not the abandonment §9 anticipated. §11's
+between-group difference (+9.1% to +13.6% across five adjustment schemes,
+all positive, four of five above +11%) is the evidence that the level error
+is a property of *selection* rather than of the model everywhere.
+
+**§7 is no longer a step someone has to remember.** `_holdout()` splits the
+journal chronologically, fits on the first 70%, and scores the last 30%
+with and without the correction. **Both** the claimed-vs-landed gap and the
+Brier score must improve on bets the fit never saw, or `applied` stays
+false and the store says which test refused it. On 40 simulated journals
+at the size of the real one, the gate fires 28+ times on a genuine
+nine-point bias and ≤6 times on an unbiased journal — it has power and it
+does not invent corrections.
+
+### Departures from the plan above
+
+1. **Pooled per sport, not keyed `sport:market`.** §5 already argued for
+   pooling first; the store is keyed by sport with a cross-sport pool
+   underneath it, and a sport below the 100-bet floor borrows the pool.
+   Selection is a property of the procedure, and the procedure is shared.
+2. **Applied downward only.** A fit saying we UNDER-claim is measured,
+   stored and shown on the site, and never used. Haircutting a model that
+   turns out to be fine costs some winners; inflating one on a hundred rows
+   of good luck raises stakes on an edge that may not exist.
+
+### §8 was right and it is worth re-reading
+
+"Correcting that honestly will not trim the board. **It may empty it.**"
+On the sandbox board the one recommended pick — Zack Wheeler UNDER 8.5 at
++105, hit 0.5009, edge +4.17%, 0.64u — comes out the other side at hit
+0.4181, edge −4.11%, **no bet**. That is the intended behaviour of a
+correct measurement, and the site now says so in as many words rather than
+quietly showing a shorter list.
+
+### The switch
+
+`selectionfit.set_enabled(False)` / `with selectionfit.disabled():` turns
+it off process-wide, exactly as `calibrate.disabled` does. Three test files
+that price synthetic slates use it, because otherwise they assert on
+whatever last night's settle pass fitted from a real journal.
