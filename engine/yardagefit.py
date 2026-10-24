@@ -606,7 +606,12 @@ def matched(rows, closes) -> tuple[list, dict]:
 
 
 def _american_prob(odds) -> float | None:
-    if odds is None:
+    """None for a side no book quoted. A one-sided close is stored with
+    the missing side as 0 (odds.shoppable's sentinel), and read as a price
+    it was a 0% chance — every row's best bet — then paid 100 / 0: the
+    re-test crashed on the box, 2026-10-24."""
+    from .odds import is_quotable
+    if odds is None or not is_quotable(odds):
         return None
     o = float(odds)
     return (100.0 / (o + 100.0)) if o > 0 else ((-o) / (-o + 100.0))

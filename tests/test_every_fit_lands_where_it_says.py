@@ -85,7 +85,7 @@ def test_the_lanes_and_the_report():
     assert ln["engine.projection"] == "number" and ln["engine.ideagate"] == "number"
     assert ln["engine.wiremap"] == "cli"
     text = W.report("nfl")
-    assert "THE INVENTIONS' GATES — nfl" in text and "waiting on its verdict" in text
+    assert "THE INVENTIONS' GATES — nfl" in text and "not measured yet" in text
     assert "FINDINGS FOR A PERSON" in text and "engine.haircut" in text
     assert "NO PROBLEMS: every fit lands where the map says" in text
 

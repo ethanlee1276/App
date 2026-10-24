@@ -886,13 +886,16 @@ def main() -> None:
         # THE BOARD THIS BUILD REPLACES, for the hold (likely.HOLD_MARGIN).
         from engine.likely import previous_board as _likely_prev
         _ml_turn: dict = {}
+        # The likely legs the −250 cap keeps off — see cfb_build.
+        _ml_past_cap: list = []
         result["most_likely"] = _likely_build(
             result["recommendations"], sport="mlb", census=_ml_census,
             game_bets=result.get("game_bets") or [],
             census_by_kind=_ml_kinds, cut=_ml_cut,
             previous=_likely_prev(args.out, result.get("date"))
             if args.out else None, turnover=_ml_turn,
-            leans=_mlb_leans, lean_report=_mlb_lean_report)
+            leans=_mlb_leans, lean_report=_mlb_lean_report, past_cap=_ml_past_cap)
+        result["likely_past_cap"] = _ml_past_cap
         if result.get("scan_reads"):
             from engine.gamescan import stamp_picks as _stamp_mlb
             _stamp_mlb(result["scan_reads"], _mlb_lean_report, board=result["most_likely"])

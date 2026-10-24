@@ -2391,6 +2391,10 @@ def main() -> None:
             # (likely.HOLD_MARGIN).
             from engine.likely import previous_board as _likely_prev
             _ml_turn: dict = {}
+            # THE LIKELY LEGS THE −250 CAP KEEPS OFF, listed beside the
+            # board and never picks (likely.past_cap_rows) — every sport's,
+            # as the NFL's (Ethan, 2026-10-24: "put past cap on every sport").
+            _ml_past_cap: list = []
             out["most_likely"] = _likely(out.get("recommendations") or [],
                                          rows, watch, sport="cfb",
                                          limit=_player_limit,
@@ -2404,7 +2408,9 @@ def main() -> None:
                                          previous=_likely_prev(args.out, out.get("date")),
                                          turnover=_ml_turn,
                                          leans=_cfb_leans,
-                                         lean_report=_cfb_lean_report)
+                                         lean_report=_cfb_lean_report,
+                                         past_cap=_ml_past_cap)
+            out["likely_past_cap"] = _ml_past_cap
             if out.get("scan_reads"):
                 _scan.stamp_picks(out["scan_reads"], _cfb_lean_report, board=out["most_likely"])
             out["likely_turnover"] = _ml_turn

@@ -13,8 +13,9 @@ What these hold: the bigger lines run further out on the pick's own side,
 nearest first, shopped to the best bettable price; they span the ladder
 rather than crowding its next half-yard; a marked line clears the Pick of
 the Day's own EV floor and is never the one left off; a long shot, a
-number our curve and the book's own price disagree on, and a price nobody
-can bet are not listed; the pick itself does not move; the journal stakes
+number our curve and the book's own price disagree on, a price nobody can
+bet, a broken two-sided quote and a further-out number paying less than the
+pick (the box's under 14.5 at -9900, 2026-10-24) are not listed; the pick itself does not move; the journal stakes
 the pick and nothing else; and both card layouts draw the fold, which
 opens without leaving the board.
 
@@ -143,6 +144,22 @@ def test_what_is_never_listed():
     assert lines(_ln("DraftKings", 59.5, -400, 300)) == [], "our chance and the book's own price disagree"
     assert lines(_ln("DraftKings", 29.5, -500, 350)) == [], "a smaller line is not a bigger one"
     assert lines(_ln("DraftKings", 59.5, -120, -105)) == [59.5], "and the same number, sanely priced, is"
+
+
+def test_a_broken_or_stale_quote_is_not_a_bigger_line():
+    pick = {"side": "under", "line": 19.5, "odds": -114, "model_prob": 0.56, "market": "rec_yds"}
+    base = _receiver(projection=20.0, recent_values=[18, 25, 12, 30, 15, 22], all_lines=[])
+
+    def lines(*ladder, at=pick):
+        return [(c["line"], c["odds"]) for c in K.bigger_lines(dict(base, alt_lines=list(ladder)), at, FITS)]
+    p = K._prob_at(base, "rec_yds", "under", 14.5, FITS)
+    fair = _ln("DraftKings", 14.5, _american(1 - p + 0.025), _american(p + 0.025))
+    assert lines(fair) == [(14.5, fair["under_odds"])], "the sane price is listed"
+    assert lines(_ln("DraftKings", 14.5, -110, -9900)) == [], "both sides heavy: a suspended pair"
+    assert lines(_ln("DraftKings", 14.5, 0, -9900)) == [], "one side, far from our chance"
+    stale = _ln("DraftKings", 14.5, -150, 120)
+    assert lines(stale) == [(14.5, 120)], "pays more than a -114 pick"
+    assert lines(stale, at=dict(pick, odds=150)) == [], "less likely than a +150 pick and pays less"
 
 
 def test_the_journal_stakes_the_pick_and_nothing_else():

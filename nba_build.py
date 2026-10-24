@@ -1404,11 +1404,14 @@ def main() -> None:
             # THE BOARD THIS BUILD REPLACES, for the hold (likely.HOLD_MARGIN).
             from engine.likely import previous_board as _likely_prev
             _ml_turn: dict = {}
+            # The likely legs the −250 cap keeps off — see cfb_build.
+            _ml_past_cap: list = []
             out["most_likely"] = _likely_build(
                 out.get("recommendations") or [], sport=args.league,
                 census=_ml_census, census_by_kind=_ml_kinds, cut=_ml_cut,
                 previous=_likely_prev(args.out, args.date), turnover=_ml_turn,
-                leans=_nba_leans, lean_report=_nba_lean_report)
+                leans=_nba_leans, lean_report=_nba_lean_report, past_cap=_ml_past_cap)
+            out["likely_past_cap"] = _ml_past_cap
             # EVERY READ SAYS WHAT THE BOARD DID WITH IT (engine/gamescan
             # .stamp_picks): his pick on the read's side, the other side, or
             # why there is none — as the NFL's and MLB's reads do.

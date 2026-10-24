@@ -2809,7 +2809,8 @@ def bigger_lines(prop: dict, pick: dict, fits=None) -> list:
     own de-vigged price and to BIGGER_MIN_PROB. Each says its chance, the
     price that would make it worth betting, and ``better`` when its price
     beats that by potd.MIN_EV or more."""
-    from .odds import devig_two_way, expected_value, is_sharp_book
+    from .bookvig import pair_overround
+    from .odds import american_to_decimal, devig_two_way, expected_value, is_sharp_book
     from .potd import MIN_EV
     side = _side(pick.get("side"))
     market = str(pick.get("market") or prop.get("market") or "")
@@ -2819,6 +2820,10 @@ def bigger_lines(prop: dict, pick: dict, fits=None) -> list:
         return []
     if side not in ("over", "under"):
         return []
+    try:
+        pays = american_to_decimal(int(pick.get("odds") or 0)) if pick.get("odds") else None
+    except (TypeError, ValueError, ZeroDivisionError):
+        pays = None
     key = "under_odds" if side == "under" else "over_odds"
     best: dict = {}
     for ln in (prop.get("alt_lines") or []) + (prop.get("all_lines") or []):
@@ -2830,6 +2835,16 @@ def bigger_lines(prop: dict, pick: dict, fits=None) -> list:
         if not ((line > base) if side == "over" else (line < base)):
             continue
         if not odds or not _sane(odds) or not book or book.lower() == "proxy" or is_sharp_book(book):
+            continue
+        # A BROKEN QUOTE IS NOT A PRICE (the box, 2026-10-24: an under 14.5
+        # at -9900 under a 19.5 at -114). Both sides posted and summing
+        # outside a book's possible margin is a suspended or mis-posted
+        # pair; and a number further out on the pick's side is less likely
+        # than the pick, so a price paying less than the pick's is stale.
+        other = int(ln.get("over_odds" if side == "under" else "under_odds") or 0)
+        if other and pair_overround(odds, other) is None:
+            continue
+        if pays is not None and american_to_decimal(odds) <= pays:
             continue
         if line not in best or odds > best[line][0]:
             best[line] = (odds, book, ln)

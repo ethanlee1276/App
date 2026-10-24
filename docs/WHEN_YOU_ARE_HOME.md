@@ -2988,10 +2988,12 @@ buttons beside the clock, the box doesn't have the code. Check with this
 cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "hc-watch { grid-column: 1 / -1" web/css/hoopscast.css
 ```
 
-If it prints `0`, the auto-update is stuck. Paste its last words:
+If it prints `0`, the auto-update is stuck. Paste its last words (corrected
+2026-10-24: the updater is its own unit, `qellys-update`, and this used to
+search the site's log, where it never writes):
 
 ```
-journalctl -u qellys --since "2 days ago" --no-pager | grep -i auto-update | tail -5
+cd /srv/qellys && cat data/autoupdate.json; echo; journalctl -u qellys-update --since "1 day ago" --no-pager | grep -E "ok: |FAILED: " | tail -3
 ```
 
 Also in the same box: "updated 11264 min ago" on a game opened days

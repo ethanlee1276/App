@@ -346,7 +346,7 @@ def test_the_build_wires_the_scan_before_most_likely_and_journals_the_matchup_pi
     src = open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8").read()
     scan = src.index("_nscan.scan(out.get(\"games\") or [], hist, _prof,")
     assert src.index("out[\"recommendations\"] = recs") < scan < src.index("out[\"most_likely\"] = _likely_build(")
-    assert "leans=_nba_leans, lean_report=_nba_lean_report)" in src
+    assert "leans=_nba_leans, lean_report=_nba_lean_report" in src
     assert src.index("_stamp_nba(out[\"scan_reads\"], _nba_lean_report, board=out[\"most_likely\"])") \
         < src.index("print(f\"  {_lb.attach(out, args.league)}\")")
     assert src.index("out[\"matchup_picks\"] = _mp_build(") < src.index("print(f\"  {_lb.attach(out, args.league)}\")")

@@ -884,11 +884,13 @@ def attach_most_likely(out: dict, out_path: str, date: str) -> None:
         census[f"Scalpy pass — {len(passed)} prop(s): unstable role or blowout risk"] = len(passed)
     from engine.gamescan import leans_from_reads, stamp_picks
     lean_report: dict = {}
+    past_cap: list = []      # the likely legs the −250 cap keeps off — see cfb_build
     out["most_likely"] = likely_build([r for r in recs if not r.get("scalpy_pass")], sport=SPORT,
                                       census=census, census_by_kind=kinds, cut=cut,
                                       previous=previous_board(out_path, date), turnover=turn,
                                       leans=leans_from_reads(out.get("scan_reads") or {}),
-                                      lean_report=lean_report)
+                                      lean_report=lean_report, past_cap=past_cap)
+    out["likely_past_cap"] = past_cap
     if out.get("scan_reads"):
         stamp_picks(out["scan_reads"], lean_report, board=out["most_likely"])
     by_key = {(r["player"], r["market"]): r for r in recs}

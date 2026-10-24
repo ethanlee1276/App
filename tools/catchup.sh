@@ -282,7 +282,7 @@ run CX "The short version reads in sentences" 30 <<'SH'
 cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "Where the matchup tilts" engine/gamereport.py
 SH
 run CY "The box updates itself" 30 <<'SH'
-journalctl -u qellys --since "2 days ago" --no-pager | grep -i auto-update | tail -5
+cd /srv/qellys && cat data/autoupdate.json; echo; journalctl -u qellys-update --since "1 day ago" --no-pager | grep -E "ok: |FAILED: " | tail -3
 SH
 run CZ "The Patriots-Bears fixes are in" 30 <<'SH'
 cd /srv/qellys && git log -1 --format='%h %ci %s' && grep -c "def line_sentence" engine/gamereport.py

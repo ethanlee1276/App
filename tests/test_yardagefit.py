@@ -293,6 +293,18 @@ def test_a_model_that_never_disagrees_places_no_bets():
     assert got["bets"] == 0 and got["roi"] is None
 
 
+def test_a_side_no_book_quoted_is_skipped_not_divided_by():
+    """The box, 2026-10-24: a close stored with one side 0 (unquoted) was
+    read as a 0% price, bet, and paid 100 / 0 — ZeroDivisionError, and the
+    whole re-test lost. A row without both sides quoted is not scored."""
+    rows = _joined(n=10, over=-110, under=0) + _joined(n=10, over=-110, under=-110)
+    for prob in (lambda r, L: 0.01, lambda r, L: 0.99):
+        assert Y.bet_record(rows, prob)["bets"] == 10
+        assert Y.ranked_record(rows, prob, take=1.0)["bets"] == 10
+    assert Y._american_prob(0) is None and Y._american_prob(-97) is None
+    assert abs(Y._american_prob(-110) - 110 / 210) < 1e-12
+
+
 def test_the_edge_bar_is_applied_to_both_sides():
     rows = _joined(n=40, over=-110, under=-110)
     p = Y._american_prob(-110) + Y.MIN_EDGE / 2.0

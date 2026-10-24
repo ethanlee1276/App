@@ -8,8 +8,8 @@ right way."
 THE RULE. A reading joins a pick the moment the box measures it and it
 holds — no hand-wiring after the result, which is how a passing measurement
 could sit unread. Until a verdict says HOLDS nothing here changes a number,
-and `state()` says, gate by gate, which verdict it waits on and what it
-will move (`python3 -m engine.ideagate` on the box).
+and `state()` says, gate by gate, whether it holds, was measured and does
+not, or has not been measured yet, and what it will move (`python3 -m engine.ideagate` on the box).
 
 WHERE EACH ONE LANDS — at the earliest point it belongs, so Edge and Most
 Likely read the same number:
@@ -505,16 +505,45 @@ GATES = (
      lambda s: any(range_proven(v) for k, v in ((_load("range", __import__("engine.conformal", fromlist=["x"]).load)
                                                 .get("held_out") or {}).items()) if k.startswith(f"{s}|"))),
 )
+#: Has the gate a saved verdict at all? "Waiting on its verdict" read the
+#: same for a reading measured and failed as for one never measured; on the
+#: box, 2026-10-24, the rookie translator had just printed "does not hold"
+#: and its line still said it was waiting.
+SEEN = {
+    "rookie": lambda s: any(rookie_verdict(m) for m in ("rec_yds", "receptions", "rush_yds")),
+    "role": lambda s: any(role_verdict(k).get("verdict") for k in ("tgt", "car", "snap")),
+    "kicks": lambda s: bool(kicks_verdict(s)),
+    "sim": lambda s: bool(sim_verdict()),
+    "menu": lambda s: bool(menu_verdict(s)),
+    "recipe": lambda s: any(recipe_verdict(s, m) for m in ("rec_yds", "receptions", "rush_yds", "pass_yds")),
+    "attention": lambda s: bool(attention_verdict(s)),
+    "copies": lambda s: bool(copies_verdict(s)),
+    "practice": lambda s: bool(practice_verdict(s)),
+    "endgame": lambda s: bool(endgame_verdict()),
+    "range": lambda s: any(k.startswith(f"{s}|") for k in (
+        _load("range", __import__("engine.conformal", fromlist=["x"]).load).get("held_out") or {})),
+}
+HOLDS, MEASURED, UNMEASURED, ELSEWHERE = ("HOLDS — applied", "measured, does not hold", "not measured yet",
+                                          "NHL only")
 NEVER = (("curve", "altcurve", "picks sit at the main line, where the curves agree by construction"),
          ("autopsy", "autopsy", "it names the step that is wrong; it is not a step"),
          ("risk", "risk", "My Bets only"))
 
 
 def state(sport: str = "nfl") -> list:
-    """[(name, module, what it moves, "HOLDS — applied" | "waiting on its verdict")]."""
+    """[(name, module, what it moves, HOLDS | MEASURED | UNMEASURED | ELSEWHERE)]."""
     out = []
     for name, mod, moves, fn in GATES:
-        out.append((name, mod, moves, "HOLDS — applied" if fn(sport) else "waiting on its verdict"))
+        if name == "endgame" and sport != "nhl":
+            st = ELSEWHERE
+        elif fn(sport):
+            st = HOLDS
+        else:
+            try:
+                st = MEASURED if SEEN[name](sport) else UNMEASURED
+            except Exception:                                    # noqa: BLE001
+                st = UNMEASURED
+        out.append((name, mod, moves, st))
     for name, mod, why in NEVER:
         out.append((name, mod, why, "never a number, by design"))
     return out
@@ -522,7 +551,7 @@ def state(sport: str = "nfl") -> list:
 
 def main(argv=None) -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="Which of the inventions are moving picks, and which wait on their verdict")
+    ap = argparse.ArgumentParser(description="Which of the inventions are moving picks, and which are not and why")
     ap.add_argument("--sport", default="nfl", help="nfl, cfb or nhl (default nfl)")
     a = ap.parse_args(argv)
     print(f"The inventions in the picks — {a.sport}")

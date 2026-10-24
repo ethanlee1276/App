@@ -104,7 +104,7 @@ def _proven(m, practice=False):
 
 def test_nothing_moves_without_a_verdict():
     with _Models():
-        assert all(st in ("waiting on its verdict", "never a number, by design") for *_x, st in G.state("nfl"))
+        assert all(st in (G.UNMEASURED, G.ELSEWHERE, "never a number, by design") for *_x, st in G.state("nfl"))
         rows = [_row(), _row(side="Over", prob=0.58)]
         assert G.most_likely(rows, "nfl", _secs()) == 0
         assert [r["model_prob"] for r in rows] == [0.60, 0.58]
@@ -117,6 +117,17 @@ def test_nothing_moves_without_a_verdict():
         assert G.kick_factor("fg_made", den, "nfl", "DEN") == (1.0, "")
         assert G.sim_rho("nfl", {"player": "Josh Allen", "market": "pass_yds"},
                          {"player": "Khalil Shakir", "market": "rec_yds"}) is None
+
+
+def test_the_state_tells_measured_and_failed_from_never_measured():
+    with _Models() as m:
+        m.put("attention_verdict.json", {"nfl": {"holds": False, "under_when_spiked": {"excess": 0.01}}})
+        got = dict((n, st) for n, _mod, _w, st in G.state("nfl"))
+        assert got["attention"] == G.MEASURED, "measured, and it did not hold"
+        assert got["menu"] == G.UNMEASURED, "no verdict on disk"
+        assert got["endgame"] == G.ELSEWHERE and dict(
+            (n, st) for n, _mod, _w, st in G.state("nhl"))["endgame"] in (G.MEASURED, G.UNMEASURED)
+        assert G.state("nfl") and G.most_likely([_row()], "nfl", _secs()) == 0, "a failed verdict moves nothing"
 
 
 def test_the_readings_move_the_chance_by_what_they_measured_capped():

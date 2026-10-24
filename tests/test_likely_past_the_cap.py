@@ -13,6 +13,11 @@ leg past −350 or under 70% is not listed; another number of a prop the board
 already seats is; the board itself still never carries a row heavier than
 −250; and the list rides its own paid key that nothing journals or stakes.
 
+Ethan, 2026-10-24: "put past cap on every sport". Every league's build hands
+likely.build the list and publishes it under the same key, which the page
+already reads whatever the sport; a market a league has measured to rank is
+listed there exactly as the NFL's is.
+
 Run directly: `python3 tests/test_likely_past_the_cap.py`
 """
 import os
@@ -114,6 +119,31 @@ def test_its_own_paid_key_that_nothing_journals():
                  "engine/parlays.py", "engine/served.py"):
         src = open(os.path.join(ROOT, path), encoding="utf-8").read()
         assert "likely_past_cap" not in src and "past_cap" not in src, f"{path} reads the past-cap list"
+
+
+BUILDS = {"cfb_build.py": "out", "mlb_build.py": "result", "nba_build.py": "out", "nhl_build.py": "out"}
+
+
+def test_every_sport_lists_its_own():
+    row = _catches(player="A Guard", team="NYL", market="assists", market_label="Assists")
+    measured, K.rank_auc = K.rank_auc, (lambda sport, market: 0.70)
+    try:
+        for sport in ("cfb", "nba", "wnba", "mlb", "nhl"):
+            pc: list = []
+            K.build([dict(row)], sport=sport, fits={"assists": FITS["receptions"]}, past_cap=pc)
+            assert [(r["line"], r["odds"]) for r in pc] == [(3.5, -260)], (sport, pc)
+    finally:
+        K.rank_auc = measured
+    assert K.past_cap_rows([dict(row)], sport="nba", fits={"assists": FITS["receptions"]}) == [], \
+        "a market the league has not measured to rank lists nothing"
+
+
+def test_every_build_hands_it_over_and_publishes_it_untouched():
+    for path, out in BUILDS.items():
+        src = open(os.path.join(ROOT, path), encoding="utf-8").read()
+        assert "past_cap=_ml_past_cap" in src or "past_cap=past_cap" in src, path
+        assert src.count("likely_past_cap") == 1, f"{path}: published once, read by nothing after"
+        assert f'{out}["likely_past_cap"] = ' in src, path
 
 
 def test_the_page_draws_it_labelled():

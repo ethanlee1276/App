@@ -83,7 +83,7 @@ def test_every_hitter_and_starter_gets_a_read_in_the_football_shape():
 
 def test_the_reads_reach_most_likely_the_board_and_the_matchup_picks():
     for bit in ("_ms = _mscan.scan(slate, _ars)", 'result["scan_reads"] = _ms["reads"]',
-                "leans=_mlb_leans, lean_report=_mlb_lean_report)",
+                "leans=_mlb_leans, lean_report=_mlb_lean_report",
                 '_stamp_mlb(result["scan_reads"], _mlb_lean_report, board=result["most_likely"])',
                 'sport="mlb")', 'category="matchup_prop", grade_label="Matchup")'):
         assert bit in BUILD, bit
