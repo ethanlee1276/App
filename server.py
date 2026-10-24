@@ -220,6 +220,9 @@ RATE_CLIENTERR_PER_MIN = 10
 #: Push alert calls a minute from one caller: a subscribe, a change, and
 #: each knocked phone's one look for its words (engine/pushalerts).
 RATE_PUSH_PER_MIN = 20
+#: Calendar fetches a minute from one caller: a calendar app polls hourly at
+#: most, and a member making a new link asks once (engine/calfeed).
+RATE_CALENDAR_PER_MIN = 12
 #: A question, a pick id and a few trimmed turns; anything larger is junk.
 MAX_ASK_BYTES = 32_000
 #: A parlay screenshot for Ask to grade (engine/slipgrade): the picture,
@@ -626,6 +629,8 @@ CONTENT_TYPES = {
     # phone offers "open in Numbers" instead of asking what to do with it.
     ".csv": "text/csv; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",
+    # A member's games for their calendar (engine/calfeed).
+    ".ics": "text/calendar; charset=utf-8",
 }
 
 
@@ -792,6 +797,13 @@ def _send_reset(email: str) -> None:
     except Exception as exc:                                  # noqa: BLE001
         _seclog("password_reset_mail", "failed", email=email,
                 error=type(exc).__name__)
+
+
+def _calendar_link(conn, user_id) -> dict:
+    """The member's calendar address, https and webcal (engine/calfeed)."""
+    from engine import accounts as A, calfeed as CF
+    url = f"{A.site_url().rstrip('/')}/api/calendar/{CF.token_for(conn, user_id)}.ics"
+    return {"url": url, "webcal": "webcal://" + url.split("://", 1)[-1]}
 
 
 def account_entitled(conn, who) -> bool:
@@ -1222,6 +1234,8 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/alerts/"):
             return self._alerts_get(
                 parsed.path[len("/api/alerts/"):].strip("/"))
+        if parsed.path.startswith("/api/calendar/"):
+            return self._calendar_get(parsed.path[len("/api/calendar/"):].strip("/"))
         if parsed.path in ("/api/push/key", "/api/push/key/"):
             # The server's public VAPID key: what a browser subscribes with.
             from engine import webpush
@@ -1450,6 +1464,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._client_error()
         if parsed.path.startswith("/api/push/"):
             return self._push_post(parsed.path[len("/api/push/"):].strip("/"))
+        if parsed.path.startswith("/api/calendar/"):
+            return self._calendar_post(parsed.path[len("/api/calendar/"):].strip("/"))
         if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
             return self._zeno_import()
         if parsed.path in ("/api/research", "/api/research/"):
@@ -2131,7 +2147,11 @@ class Handler(BaseHTTPRequestHandler):
         phone, and `latest` — what a knocked phone's service worker shows.
         Open to signed-out readers (an alert carries counts and the public
         record, never a pick); a signed-in one is noted so the account page
-        can show it. Nothing else about the caller is kept."""
+        can show it, and may ask for its own alerts too (engine/pushmine:
+        its watches, its tickets) — which `latest` shows only to that
+        phone, by the push service's address it alone was given. A phone
+        that subscribes signed out is detached from any account. Nothing
+        else about the caller is kept."""
         if path not in ("subscribe", "unsubscribe", "latest"):
             return self._send(404, b'{"error":"unknown push endpoint"}', ".json")
         try:
@@ -2152,7 +2172,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             endpoint = str(body.get("endpoint") or "")
             if path == "latest":
-                out = PA.latest_for(PA.subscription(conn, endpoint) if endpoint else None)
+                from engine import pushmine as PM
+                sub = PA.subscription(conn, endpoint) if endpoint else None
+                out = PA.latest_for(sub, mine=PM.mine(conn, (sub or {}).get("user_id")))
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "unsubscribe":
                 code, out = PA.unsubscribe(conn, endpoint)
@@ -2162,6 +2184,59 @@ class Handler(BaseHTTPRequestHandler):
                                          user_id=(who or {}).get("id"),
                                          topics=body.get("topics") or PA.KINDS, leagues=body.get("leagues") or ())
             return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _calendar_get(self, path: str):
+        """A member's games for their calendar (engine/calfeed).
+
+        `link` (signed in) answers with the member's calendar address,
+        `link?new` is not a thing: a fresh one is POST /api/calendar/new.
+        `<user>.<mac>.ics` is the feed itself, fetched by a calendar app that
+        cannot sign in — the address is the key, so a wrong one is a plain
+        404, the same as an address that was replaced."""
+        from engine import calfeed as CF
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "calendar"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            if path == "link":
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                return self._send(200, json.dumps(_calendar_link(conn, who["id"])).encode(), ".json")
+            if not path.endswith(".ics"):
+                return self._send(404, b'{"error":"unknown calendar endpoint"}', ".json")
+            body = CF.feed(conn, path[:-4], site=A.site_url())
+            if body is None:
+                return self._send(404, b"Not a calendar address (a new link replaces the old one).\n", ".txt")
+            return self._send(200, body.encode("utf-8"), ".ics",
+                              headers=[("Content-Disposition", 'inline; filename="qellys-games.ics"')])
+        finally:
+            conn.close()
+
+    def _calendar_post(self, path: str):
+        """POST /api/calendar/new: a fresh address; the old one stops."""
+        from engine import calfeed as CF
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if 0 < length <= 4000:
+            self.rfile.read(length)              # nothing in it is read
+        if path != "new":
+            return self._send(404, b'{"error":"unknown calendar endpoint"}', ".json")
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "calendar"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            CF.token_for(conn, who["id"], new=True)
+            return self._send(200, json.dumps(_calendar_link(conn, who["id"])).encode(), ".json")
         finally:
             conn.close()
 

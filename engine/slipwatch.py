@@ -32,9 +32,11 @@ link turns off only THIS mail (server._unsubscribe routes the "slip-"
 prefix here). The token is an HMAC over (user, this list's own salt)
 under the digest's key — nothing at rest unsubscribes anybody.
 
-NOT PUSH — the site has none, and engine/alerts says why. The Live tab
-draws the same alert from its own read and buzzes once (web/js/slip.js
-`lastLeg`); this is the half that works with the phone in a pocket.
+THE PHONE TOO (2026-10-24). The Live tab draws the same alert from its own
+read and buzzes once (web/js/slip.js `lastLeg`); the email is the half that
+works with the phone in a pocket, and now so is a push: the same pass queues
+"your parlay is on", "down to the last leg" and its result for the member's
+phones that asked for their bets (engine/pushmine), once each.
 
 THE BOX SETTLES THEM TOO (2026-10-14, Ethan: "do 1-11", the call "saved
 slips settled by the server?"). A saved slip used to settle only while
@@ -364,6 +366,7 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
         from . import mailer
         send = mailer.send
     settles: dict = {}
+    tickets: dict = {}
     for r in rows:
         bet = r["bet"]
         bid = str(bet["id"])[:40]
@@ -387,13 +390,21 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
         done = settled(bet, card)
         if done is not None:
             settles.setdefault(r["user_id"], {})[str(bet["id"])] = done
+            tickets[(r["user_id"], str(bet["id"]))] = bet
             continue
+        # YOUR TICKET ON YOUR PHONE (engine/pushmine, 2026-10-24): its first
+        # game live, then its last leg, then its result — once each, to the
+        # member's phones that asked for their bets.
+        on = next((l for l in card.get("legs") or [] if (l.get("live") or {}).get("state") == "live"), None)
+        if on is not None:
+            _tell("bet_on", conn, r["user_id"], bid, where(on), now=t, log=log)
         if noted(conn, r["user_id"], bid) or not last_leg(card):
             continue
         conn.execute("INSERT OR IGNORE INTO slip_alerts (user_id, bet_id, fired_at, mailed, leg) "
                      "VALUES (?,?,?,0,?)", (r["user_id"], bid, t, leg_name(card)[:120]))
         conn.commit()
         out["noted"] += 1
+        _tell("bet_last", conn, r["user_id"], bid, leg_name(card), now=t, log=log)
         if not (mail_on and entitled is not None and optin_get(conn, r["user_id"])["on"]):
             continue
         who = {"id": r["user_id"], "email": r["email"]}
@@ -419,7 +430,10 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
         out["mailed"] += 1
     for uid, done in settles.items():
         try:
-            out["settled"] += write_settles(conn, uid, done, _stamp(t))
+            n = write_settles(conn, uid, done, _stamp(t))
+            out["settled"] += n
+            for bet_id, got in (done.items() if n else ()):
+                _tell("bet_settled", conn, uid, tickets[(uid, bet_id)], got, now=t, log=log)
         except sqlite3.Error as exc:
             log(f"  slip watch: a member's My Bets could not be written ({type(exc).__name__}); "
                 f"settled next minute")
@@ -428,6 +442,16 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
     if out["settled"]:
         log(f"  slip watch: {out['settled']} saved slip(s) settled in My Bets off the box score")
     return out
+
+
+def _tell(what: str, *args, log=print, **kw) -> None:
+    """A line for the member's phones (engine/pushmine); never in the way
+    of the sweep it rides on."""
+    try:
+        from . import pushmine
+        getattr(pushmine, what)(*args, **kw)
+    except Exception as exc:                                       # noqa: BLE001
+        log(f"  slip watch: a phone alert could not be queued ({type(exc).__name__})")
 
 
 #: What the bell's row tells the member to do next.

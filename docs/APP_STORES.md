@@ -43,6 +43,12 @@ app (Chrome's notification delegation is now on in the TWA manifest) work
 as soon as this deploys — no key to set, the box makes its own. The iOS app
 needs Apple's push key: steps in `deploy/ios/README.md`.
 
+Since 2026-10-24 a signed-in member can add **their own** alerts on the same
+card (`engine/pushmine.py`): a watch that caught something (their words and a
+count, members only — the feed is paid) and a saved parlay starting, down to
+its last leg, or settled (from the slip watch's minute). Signing out on a
+phone detaches it. Privacy policy §2.7 says so.
+
 **Logos and headshots — the answer.** Not in the store builds. Team logos
 and player photos belong to the leagues, the clubs and the players (and,
 for the photos the site uses, to ESPN, the NBA, the NHL and MLB, whose CDNs

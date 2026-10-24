@@ -200,7 +200,7 @@ def test_a_subscription_is_checked_before_it_is_kept():
     assert PA.subscribe(c, "zz", kind="apns")[0] == 400
     code, out = PA.subscribe(c, FCM, topics=["settled", "posted", "bogus"], leagues=["nfl", "xfl"], user_id=7)
     assert code == 200 and out["topics"] == ["posted", "settled"] and out["leagues"] == ["nfl"]
-    assert PA.subscription(c, FCM) == {"topics": ["posted", "settled"], "leagues": ["nfl"]}
+    assert PA.subscription(c, FCM) == {"topics": ["posted", "settled"], "leagues": ["nfl"], "user_id": 7}
     assert PA.subscribe(c, "ab" * 32, kind="apns")[0] == 200
     PA.unsubscribe(c, FCM)
     assert PA.subscription(c, FCM) is None

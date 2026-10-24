@@ -25900,6 +25900,19 @@ async function pushOn(topics) {
   await pushSend("subscribe", { endpoint: sub.endpoint, topics });
   return { endpoint: sub.endpoint, topics };
 }
+/* YOUR OWN ALERTS (engine/pushmine): a phone signed in when it subscribes
+   may ask for its member's watches and tickets. Signing in or out says so
+   again, so a shared phone stops showing the last person's bets. */
+async function pushRelink() {
+  const saved = pushSaved();
+  if (!saved || !saved.endpoint) return;
+  const signedIn = !!(_acctUser && _acctUser.signed_in);
+  const topics = (saved.topics || []).concat(signedIn ? saved.mine || [] : []);
+  // Signed out with only your own alerts chosen, the box drops this phone
+  // (engine/pushalerts.subscribe); signing back in adds it again.
+  await pushSend("subscribe", { endpoint: saved.endpoint, kind: pushKind() === "native" ? "apns" : "web",
+    topics: topics.length ? topics : saved.mine || [] }).catch(() => {});
+}
 async function pushOff(saved) {
   if (pushKind() === "web") {
     const reg = await navigator.serviceWorker.ready;
@@ -25914,9 +25927,10 @@ function renderPushZone(note) {
   const kind = pushKind(), saved = pushSaved();
   if (!kind) { host.innerHTML = ""; return; }
   const on = !!(saved && saved.endpoint);
-  const topics = (saved && saved.topics) || ["posted", "settled"];
-  const box = (t, label) => `<label class="push-t"><input type="checkbox" data-push-topic="${t}"${
-    topics.includes(t) ? " checked" : ""}${kind === "home-screen" ? " disabled" : ""}> ${label}</label>`;
+  const signedIn = !!(_acctUser && _acctUser.signed_in);
+  const topics = ((saved && saved.topics) || ["posted", "settled"]).concat((saved && saved.mine) || []);
+  const box = (t, label, off) => `<label class="push-t"><input type="checkbox" data-push-topic="${t}"${
+    topics.includes(t) ? " checked" : ""}${kind === "home-screen" || off ? " disabled" : ""}> ${label}</label>`;
   host.innerHTML = `<div class="card push-card">
       <div class="push-h">${icon("bell", 18)}<b>Alerts on this phone</b>
         <span class="push-state${on ? " on" : ""}">${on ? "On" : "Off"}</span></div>
@@ -25926,6 +25940,11 @@ function renderPushZone(note) {
         : `<p class="push-sub">A tap on your lock screen when tonight’s picks go up and when last night is graded.
             Counts and the record only — never a pick on a lock screen.</p>
           <div class="push-ts">${box("posted", "Tonight’s picks are up")}${box("settled", "Last night is graded")}</div>
+          <p class="push-sub push-mine-h"><b>Yours</b> — ${signedIn
+            ? "your own watches and saved parlays. Only your words and your ticket, only on phones you are signed in on."
+            : "sign in for alerts on your own watches and saved parlays."}</p>
+          <div class="push-ts">${box("watches", "A watch of mine catches something (members)", !signedIn)}${
+            box("bets", "My parlay: on, last leg, settled", !signedIn)}</div>
           <button type="button" class="btn ${on ? "ghost" : "primary"}" data-push-go="${on ? "off" : "on"}">${
             on ? "Turn alerts off" : "Turn alerts on"}</button>`}
       ${note ? `<p class="push-note" role="status">${escapeHtml(note)}</p>` : ""}</div>`;
@@ -25941,7 +25960,9 @@ function renderPushZone(note) {
           renderPushZone("Alerts are off on this phone.");
         } else {
           const got = await pushOn(picked.length ? picked : ["posted", "settled"]);
-          try { localStorage.setItem(PUSH_KEY, JSON.stringify(got)); } catch (e) {}
+          const mineT = (t) => t === "watches" || t === "bets";
+          try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
+            topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
           buzz("tap");
           renderPushZone(on ? "Saved." : "Alerts are on. The next one comes when a board goes up.");
         }
@@ -27336,6 +27357,7 @@ window.acctResetSave = async function (btn) {
     card.querySelectorAll(".acct-pw, .acct-pw2").forEach((i) => { i.value = ""; });
     _resetToken = "";
     _acctUser = { signed_in: true, email: body.email };
+    pushRelink();
     _resetNote = "";
     _acctNote = "Password changed — you are signed in.";
     say(_acctNote);
@@ -27379,6 +27401,7 @@ window.acctAuth = async function (btn, mode) {
     const body = await r.json().catch(() => null);
     if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
     _acctUser = { signed_in: true, email: body.email };
+    pushRelink();
     // The typed password is not kept anywhere. What we hold now is a
     // session cookie this script cannot even read.
     card.querySelectorAll(".acct-pw, .acct-pw2").forEach((i) => { i.value = ""; });
@@ -29683,6 +29706,10 @@ function settingsHTML() {
         teams up a ranked board would say the model likes them more than
         it does.</span></div>
     </div>
+    <div class="set-row" id="set-cal">
+      <div class="set-k">Calendar</div>
+      <div class="set-v">${calRowHTML()}</div>
+    </div>
     <div class="set-row">
       <div class="set-k">Walkthrough</div>
       <div class="set-v"><button type="button" class="set-opt" data-set-tour="1">Show me around</button>
@@ -29690,6 +29717,45 @@ function settingsHTML() {
         pick card is, what RIDING means, why the Record keeps two books.</span></div>
     </div>
   </section>`;
+}
+
+/* YOUR GAMES IN YOUR CALENDAR (engine/calfeed, docs/IDEAS.md 12): your
+   teams' games this week and every game in a parlay you saved, in the
+   phone's own calendar. A calendar app cannot sign in, so the address is
+   the key — "New link" replaces it and the old one stops answering. */
+let _calLink = null;
+function calRowHTML() {
+  if (!(_acctUser && _acctUser.signed_in)) {
+    return `<span class="set-empty">Sign in to put your teams’ games and your saved parlays in your calendar.</span>`;
+  }
+  if (!_calLink) {
+    return `<button type="button" class="set-opt" data-cal="get">Add my games to my calendar</button>
+      <span class="set-note wide">Your teams’ games this week and every game in a parlay you saved — never a pick.</span>`;
+  }
+  return `<a class="set-opt on" href="${escapeAttr(_calLink.webcal)}">Open in Calendar</a>
+    <button type="button" class="set-opt" data-cal="copy">Copy link</button>
+    <button type="button" class="set-opt" data-cal="new">New link</button>
+    <span class="set-note wide">Google Calendar: Other calendars → From URL, and paste the link.
+      Anyone with the link sees your games; New link stops the old one.</span>`;
+}
+function bindCalRow() {
+  const row = document.getElementById("set-cal");
+  if (!row) return;
+  row.querySelectorAll("[data-cal]").forEach((b) => b.addEventListener("click", async () => {
+    const what = b.dataset.cal;
+    if (what === "copy") {
+      try { await navigator.clipboard.writeText(_calLink.url); b.textContent = "Copied"; } catch (e) { b.textContent = _calLink.url; }
+      return;
+    }
+    try {
+      const r = await fetch(what === "new" ? "/api/calendar/new" : "/api/calendar/link",
+        what === "new" ? { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" }
+          : { credentials: "same-origin" });
+      if (r.ok) _calLink = await r.json();
+    } catch (e) { /* the button stays; a tap tries again */ }
+    row.querySelector(".set-v").innerHTML = calRowHTML();
+    bindCalRow();
+  }));
 }
 
 /* THE EMAIL ROW IS THE ONE SETTING THAT IS NOT LOCAL.
@@ -29750,6 +29816,7 @@ function bindSettings() {
   const host = document.querySelector(".qb-settings");
   if (!host) return;
   renderMailRow();
+  bindCalRow();
   const redraw = () => {
     // Prices, stakes and times are read by every renderer on the site,
     // so the whole board redraws rather than the panel patching the two
@@ -30093,6 +30160,7 @@ window.acctSignOut = async function () {
     _acctUser = { signed_in: false };
   }
   try { localStorage.removeItem(ACCT_KEY); } catch (e) {}
+  pushRelink();
   if (typeof renderGreeting === "function") renderGreeting();
   _acctNote = "Signed out — everything stays on this device; sign back in anytime.";
   if (state.view === "mybets") renderMyBets();

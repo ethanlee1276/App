@@ -44,6 +44,9 @@ WEB = ROOT / "web"
 STATE = ROOT / "data" / "push" / "state.json"
 LATEST = ROOT / "data" / "push" / "latest.json"
 KINDS = ("posted", "settled")
+#: A member's own alerts (engine/pushmine): a phone signed in when it
+#: subscribed may ask for these too.
+PERSONAL = ("watches", "bets")
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300
@@ -81,7 +84,15 @@ def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=KINDS
         return 400, {"error": "that is not a push service address"}
     if kind == "apns" and not (8 <= len(endpoint) <= 200 and all(c in "0123456789abcdefABCDEF" for c in endpoint)):
         return 400, {"error": "that is not a device token"}
-    t = _clean_list(topics, KINDS)
+    # A member's own alerts need the member: a phone subscribed signed out
+    # carries the shared two only, and its link to an account is whatever
+    # its latest subscribe said (signing out re-subscribes, detaching it).
+    t = _clean_list(topics, KINDS + (PERSONAL if user_id else ()))
+    if not t and not user_id and _clean_list(topics, PERSONAL):
+        # Signed out with only their own alerts chosen: nothing left for
+        # this phone, and it must not keep the last member's.
+        unsubscribe(conn, endpoint)
+        return 200, {"ok": True, "topics": [], "leagues": [], "detached": True}
     if not t:
         return 400, {"error": "choose at least one alert"}
     lg = _clean_list(leagues, [s for s, _, _ in LEAGUES])
@@ -93,7 +104,7 @@ def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=KINDS
     conn.execute("""INSERT INTO push_subs (endpoint, kind, user_id, topics, leagues, created, fails)
                     VALUES (?, ?, ?, ?, ?, ?, 0)
                     ON CONFLICT(endpoint) DO UPDATE SET kind = excluded.kind, topics = excluded.topics,
-                      leagues = excluded.leagues, user_id = COALESCE(excluded.user_id, push_subs.user_id), fails = 0""",
+                      leagues = excluded.leagues, user_id = excluded.user_id, fails = 0""",
                  (endpoint, kind, user_id, t, lg, now))
     conn.commit()
     return 200, {"ok": True, "topics": t.split(","), "leagues": [x for x in lg.split(",") if x]}
@@ -108,10 +119,12 @@ def unsubscribe(conn, endpoint: str) -> tuple[int, dict]:
 
 def subscription(conn, endpoint: str) -> dict | None:
     ensure_tables(conn)
-    row = conn.execute("SELECT topics, leagues FROM push_subs WHERE endpoint = ?", (str(endpoint or ""),)).fetchone()
+    row = conn.execute("SELECT topics, leagues, user_id FROM push_subs WHERE endpoint = ?",
+                       (str(endpoint or ""),)).fetchone()
     if not row:
         return None
-    return {"topics": [x for x in row[0].split(",") if x], "leagues": [x for x in row[1].split(",") if x]}
+    return {"topics": [x for x in row[0].split(",") if x], "leagues": [x for x in row[1].split(",") if x],
+            "user_id": row[2]}
 
 
 def wants(sub_topics: str, sub_leagues: str, msg: dict) -> bool:
@@ -184,10 +197,14 @@ def quiet_now(now: _dt.datetime | None = None) -> bool:
     return h >= QUIET[0] or h < QUIET[1]
 
 
-def latest_for(sub: dict | None, path: Path | None = None, now: float | None = None) -> dict:
+def latest_for(sub: dict | None, path: Path | None = None, now: float | None = None,
+               mine: list | None = None) -> dict:
     """What a knocked phone shows: its newest wanted message, fresh; the
-    newest of all when it is not subscribed here; a plain line otherwise."""
-    msgs = (_load(path or LATEST).get("messages") or [])[::-1]
+    newest of all when it is not subscribed here; a plain line otherwise.
+    ``mine`` is the member's own queue (engine/pushmine.mine), read with
+    the shared one, newest first."""
+    msgs = sorted((_load(path or LATEST).get("messages") or []) + list(mine or []),
+                  key=lambda m: float(m.get("at") or 0))[::-1]
     now = now or time.time()
     fresh = [m for m in msgs if now - float(m.get("at") or 0) < FRESH_S]
     for m in fresh:

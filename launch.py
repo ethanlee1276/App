@@ -5130,6 +5130,13 @@ def _slip_watcher() -> None:
             _sw.run_once(entitled=_srv.account_entitled)
         except Exception as exc:      # noqa: BLE001 — never let this stop the site
             print(f"  ⚠️  slip watch: {type(exc).__name__}: {exc}")
+        # A member's own phone alerts (engine/pushmine): their watches, and
+        # the tickets the pass above just queued. Same gate, same minute.
+        try:
+            from engine import pushmine as _pm
+            _pm.run_once(entitled=_srv.account_entitled)
+        except Exception as exc:      # noqa: BLE001 — never let this stop the site
+            print(f"  ⚠️  push (yours): {type(exc).__name__}: {exc}")
 
 
 def _live_ufc_refresher() -> None:
