@@ -126,12 +126,15 @@ def test_the_paid_landing_is_a_real_view():
             "lands on #%s, which is not in VIEW_ORDER" % name)
 
 
-def test_the_unpaid_landing_is_the_paywall():
+def test_the_unpaid_landing_is_the_free_tier_unless_a_plan_was_chosen():
+    """Until 2026-10-25 an unpaid sign-in ended on the plans. With the free
+    tier it ends on Live; a reader who chose a plan before signing up is
+    still carried to it (#paywall on the reload, which the boot draws, or
+    straight to checkout)."""
     body = _decomment(_body(_src(), "acctLandAfterAuth"))
-    assert "paywall" in body, "an unpaid sign-in has to end on the plans"
-    assert "renderPaywall" in body, (
-        "switching to #paywall without rendering it shows a blank section "
-        "— the exact bug Ethan hit typing the URL by hand")
+    assert 'switchView("live", true)' in body, "an unpaid sign-in lands on the plans again"
+    assert '_pendingPlanPeek() ? "#paywall" : "#live"' in body
+    assert '_switchViewNow("checkout"' in body, "a chosen plan is no longer carried on"
 
 
 def test_the_lander_survives_being_called_without_a_note_to_write_to():

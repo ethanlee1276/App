@@ -289,6 +289,12 @@
    basketball and hockey pages (2026-10-20): in the middle column they set
    its width, and on a phone they stacked beside the live state. */
 .pbp-hero > .pbp-watch { grid-column: 1 / -1; margin-top: 0; }
+.pbp-inj-new { grid-column: 1 / -1; margin: 0; text-align: center; font-size: var(--fs-sm); color: var(--text-dim); }
+.pbp-inj-new b { color: var(--text); }
+.pbp-inj-tag { padding: 1px 7px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text); background: color-mix(in oklab, var(--bad) 30%, var(--panel)); }
+.pbp-bday { grid-column: 1 / -1; margin: 0; text-align: center; font-size: var(--fs-sm); color: var(--text-dim); }
+.pbp-bday b { color: var(--text); }
 .pbp-hero-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid var(--border);
   border-radius: 999px; color: var(--text-dim); }
 /* FOUR ITEMS NEED FOUR COLUMNS (Ethan, 2026-09-06: "this area on the

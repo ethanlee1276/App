@@ -691,6 +691,9 @@ def _roster_entry(e: dict) -> dict:
         "number": e.get("jerseyNumber") or None,
         "status": ((e.get("status") or {}).get("description") or ""),
         "person_id": person.get("id") or 0,
+        # The hydrated person carries his birth date (the birthday line on
+        # a game's page, engine/rosters); the per-team fallback may not.
+        "born": str(person.get("birthDate") or "")[:10],
     }
 
 

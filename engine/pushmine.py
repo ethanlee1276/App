@@ -153,9 +153,18 @@ def watch_line(hits: list) -> tuple[str, str]:
     return title, (f"On {said}. " if said else "") + "Open Alerts to see what moved."
 
 
+def teaser_line(hits: list) -> tuple[str, str]:
+    """``(title, body)`` for an account without a plan: a count of the new
+    picks on what it follows — no name, no market, no side."""
+    n = len(hits)
+    return (("Your players are on tonight’s board" if n != 1 else "One of yours is on tonight’s board"),
+            f"{n} new pick{'s' if n != 1 else ''} on the teams and players you follow. Members see them.")
+
+
 def watch_pass(conn, events: list, entitled=None, now: float | None = None) -> int:
-    """Queue one alert per member whose watches caught something since
-    their last look. Returns how many members were told."""
+    """Queue one alert per account whose watches caught something since
+    its last look — a member's in its own words, anybody else's as a count
+    (teaser_line). Returns how many were told."""
     from engine import gate
     ensure_tables(conn)
     newest = AL.newest_ts(events)
@@ -163,13 +172,17 @@ def watch_pass(conn, events: list, entitled=None, now: float | None = None) -> i
     users = conn.execute("SELECT DISTINCT s.user_id, u.email FROM push_subs s JOIN users u ON u.id = s.user_id "
                          "WHERE s.user_id IS NOT NULL AND (',' || s.topics || ',') LIKE '%,watches,%'").fetchall()
     for uid, email in users:
+        # AN ACCOUNT WITHOUT A PLAN IS TOLD HOW MANY, never who or what
+        # (2026-10-25, the free tier: Ethan's "notifications about your
+        # favorite players' props being posted", with picks kept for
+        # members). The teams and players it follows are its own words;
+        # which of them have a pick, and the pick, are the product.
+        member = True
         if gate.enabled():
             try:
-                ok = bool(entitled and entitled(conn, {"id": uid, "email": email}))
+                member = bool(entitled and entitled(conn, {"id": uid, "email": email}))
             except Exception:                                    # noqa: BLE001
-                ok = False
-            if not ok:
-                continue
+                member = False
         watches = AL.list_watches(conn, uid)
         row = conn.execute("SELECT ts FROM push_watch_seen WHERE user_id = ?", (uid,)).fetchone()
         since = row[0] if row else ""
@@ -181,8 +194,9 @@ def watch_pass(conn, events: list, entitled=None, now: float | None = None) -> i
             continue                              # the first look starts from now
         hits = AL.fired(events, watches, since=since)
         if hits:
-            title, body = watch_line(hits)
-            told += tell(conn, uid, f"watches:{newest}", "watches", title, body, "/#alerts", now=now)
+            title, body = watch_line(hits) if member else teaser_line(hits)
+            told += tell(conn, uid, f"watches:{newest}", "watches", title, body,
+                         "/#alerts" if member else "/#paywall", now=now)
     return told
 
 

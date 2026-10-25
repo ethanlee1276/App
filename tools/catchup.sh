@@ -37,6 +37,8 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX 2>&1 | tee /tmp/dx.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DY 2>&1 | tee /tmp/dy.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DZ 2>&1 | tee /tmp/dz.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EA 2>&1 | tee /tmp/ea.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EB 2>&1 | tee /tmp/eb.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -475,6 +477,15 @@ SH
 run DZ "Referral codes: $6.25 off for both sides" 60 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'async function invFill('
 curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/api/account/referral
+SH
+run EA "Follow your teams and players after sign-up (count-only alerts for free accounts)" 60 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'function followStep('
+curl -s https://qellysbook.com/js/app.js | grep -c 'My teams and players make the board'
+SH
+run EB "Live injuries and birthdays on the game" 60 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpNewInjuriesHTML('
+python3 -c "import json,glob;print(' '.join(f.split('rosters_')[1][:-5]+'='+str(sum(1 for t in json.load(open(f)).get('teams',{}).values() for q in t.get('players',[]) if q.get('born'))) for f in sorted(glob.glob('/srv/qellys/web/data/rosters_*.json'))))"
+python3 -c "import json,glob;fs=glob.glob('/srv/qellys/web/data/pbp/*.json');print(len(fs),sum(1 for f in fs if json.load(open(f)).get('injuries_live')))"
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

@@ -262,6 +262,13 @@ def build(league: str, pbp_dir: Path | None = None,
     games = [_row(r, league) for r in rows]
     games.sort(key=lambda g: (g["live"]["start_time"] or "", g["event_id"]))
     out = {"generated_at": now, "league": league, "games": games}
+    # A player's birthday on his game (engine/rosters.attach_birthdays,
+    # Real's touch) — first, so the deep files written below carry it too.
+    try:
+        from engine.rosters import attach_birthdays
+        attach_birthdays(games, league, Path(pbp_dir).parent if pbp_dir else OUT)
+    except Exception:                                        # noqa: BLE001
+        pass
     out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir,
                                      prev=prev)
     return out
@@ -579,6 +586,8 @@ def pbp_doc(league: str, g: dict, payload: dict,
     }
     if g.get("tv") or g.get("tv_local"):
         doc["tv"], doc["tv_local"] = list(g.get("tv") or []), list(g.get("tv_local") or [])
+    if g.get("birthdays"):
+        doc["birthdays"] = list(g["birthdays"])
     if league in espnplays.FOOTBALL:
         drives = espnplays.football_drives(
             payload, league, home=doc["home"] or "", away=doc["away"] or "")
@@ -601,7 +610,8 @@ def pbp_doc(league: str, g: dict, payload: dict,
     # its own so a shape this box has not seen costs that key alone.
     for key, read in (("box", lambda: espnplays.summary_box(payload, league)),
                       ("team_stats", lambda: espnplays.summary_team_stats(payload, league)),
-                      ("records", lambda: espnplays.team_records(payload, league))):
+                      ("records", lambda: espnplays.team_records(payload, league)),
+                      ("injuries_live", lambda: espnplays.summary_injuries(payload, league))):
         try:
             got = read()
         except Exception:                                    # noqa: BLE001
@@ -638,10 +648,38 @@ def write_pbp(league: str, g: dict, payload: dict, pbp_dir: Path,
     pbp_dir = Path(pbp_dir)
     pbp_dir.mkdir(parents=True, exist_ok=True)
     out = pbp_dir / f"{league}_{g['event_id']}.json"
+    doc = pbp_doc(league, g, payload, sides=sides)
+    _injuries_since(doc, out)
     tmp = out.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(pbp_doc(league, g, payload, sides=sides)))
+    tmp.write_text(json.dumps(doc))
     os.replace(tmp, out)
     return out
+
+
+def _injuries_since(doc: dict, path: Path) -> None:
+    """Stamp each injury with when this box first saw it (``seen``), off the
+    deep file it is about to replace. THE FIRST LOOK IS THE BASELINE: what
+    the list held when we started watching this game gets no stamp, so a
+    file first written in the third quarter cannot call the whole list new.
+    Only a status that appears on a later pass — a man who went down, or
+    one whose status changed — carries the time it appeared, which is what
+    the page calls new."""
+    rows = doc.get("injuries_live")
+    if not rows:
+        return
+    try:
+        prev = json.loads(Path(path).read_text())
+        before = prev.get("injuries_live")
+    except (OSError, ValueError, AttributeError):
+        before = None
+    if before is None:
+        return                                   # the baseline: nothing stamped
+    known = {(r.get("team"), r.get("player"), r.get("status")): r.get("seen", "")
+             for r in before if isinstance(r, dict)}
+    now = utc_stamp()
+    for r in rows:
+        k = (r.get("team"), r.get("player"), r.get("status"))
+        r["seen"] = known[k] if k in known else now
 
 
 def prune_pbp(pbp_dir: Path, max_age_s: int = PBP_MAX_AGE_S,

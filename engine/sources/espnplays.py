@@ -574,6 +574,34 @@ def summary_team_stats(payload: dict, league: str = "nfl") -> dict:
     return out
 
 
+def summary_injuries(payload: dict, league: str = "nfl") -> list[dict]:
+    """``[{team, player, status, detail}]`` — the injury list on the game's
+    summary, each side's, as ESPN keeps it (Ethan, 2026-10-25, on Real:
+    "It has live injuries"). Fields only — the status word and the body
+    part ESPN files it under — never a written note. Read tolerantly:
+    a block this box has not seen costs that block alone."""
+    out: list[dict] = []
+    for block in (payload or {}).get("injuries") or []:
+        if not isinstance(block, dict):
+            continue
+        tinfo = block.get("team") or {}
+        team = _side_key(tinfo, league) or str(tinfo.get("abbreviation") or "")
+        for i in block.get("injuries") or []:
+            if not isinstance(i, dict):
+                continue
+            ath = i.get("athlete") or {}
+            name = str(ath.get("displayName") or ath.get("fullName") or "").strip()
+            status = str(i.get("status") or (i.get("type") or {}).get("description") or "").strip()
+            det = i.get("details") if isinstance(i.get("details"), dict) else {}
+            side = str(det.get("side") or "")
+            part = " ".join(x for x in ("" if side.lower() in ("", "not specified") else side,
+                                        str(det.get("type") or "")) if x).strip()
+            if name and status:
+                out.append({"team": team, "player": name,
+                            "status": status[:1].upper() + status[1:], "detail": part})
+    return out[:60]
+
+
 def team_records(payload: dict, league: str = "nfl") -> dict:
     """``{team: "2-2"}`` from the summary's header, where ESPN carries each
     side's season record. Empty when it does not."""

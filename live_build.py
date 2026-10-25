@@ -145,6 +145,13 @@ def build(date: str, pbp_dir: Path | None = None) -> dict:
             games.append(row)
     games.sort(key=lambda r: (r["live"]["start_time"] or "", r["game_pk"]))
     out = {"generated_at": now, "date": date, "games": games}
+    # A player's birthday on his game (engine/rosters.attach_birthdays) —
+    # first, so the deep files written below carry it too.
+    try:
+        from engine.rosters import attach_birthdays
+        attach_birthdays(games, "mlb", Path(pbp_dir).parent if pbp_dir else OUT.parent)
+    except Exception:                                        # noqa: BLE001
+        pass
     out["plays_note"] = attach_plays(games, pbp_dir=pbp_dir)
     return out
 
@@ -300,6 +307,7 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path,
            if g.get("tv") or g.get("tv_local") else {}),
         "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
         "live": g.get("live") or {},
+        **({"birthdays": list(g["birthdays"])} if g.get("birthdays") else {}),
         "plays": plays,
         # THE RENDER'S RAIL (2026-09-05): every pitch and every at-bat in
         # order, with the batted-ball data the park animation draws from

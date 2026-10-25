@@ -18007,7 +18007,7 @@ function renderPushZone(note) {
       ], "A tap on your lock screen when tonight’s picks go up and when last night is graded. "
         + "Counts and the record only — never a pick on a lock screen.")
       + setGroup("Yours", [
-        box("watches", "A watch of mine catches something (members)", !signedIn),
+        box("watches", "My teams and players make the board (members see which)", !signedIn),
         box("bets", "My parlay: on, last leg, settled", !signedIn),
       ], signedIn ? "Your own watches and saved parlays. Only your words and your ticket, only on phones you are signed in on."
         : "Sign in for alerts on your own watches and saved parlays."))
@@ -19161,7 +19161,9 @@ window.acctAuth = async function (btn, mode) {
     // take you to the main website pages."
     //
     // Where to is not a preference, it is the entitlement question, and
-    // the server has just been asked it as part of the sync.
+    // the server has just been asked it as part of the sync. A new account
+    // picks its teams and players first (js/account.js followStep).
+    if (mode === "signup" && window.followStep) return followStep(() => acctLandAfterAuth(say));
     await acctLandAfterAuth(say);
   } catch (e) {
     say("The server is not reachable right now — try again in a moment.");
@@ -19235,10 +19237,10 @@ async function acctLandAfterAuth(say = () => {}) {
       window.scrollTo({ top: 0, behavior: "auto" });
       return;
     }
-    say("Signed in. This account does not have a plan yet — here are the "
-        + "options.");
-    renderPaywall();
-    _switchViewNow("paywall", false, 0);
+    // THE FREE TIER (2026-10-25): an account without a plan lands on the
+    // games, with the plans a locked tab away — not on a price list it
+    // did not ask for.
+    switchView("live", true);
   } else {
     // Paid already, so a plan they were part-way through buying is moot.
     // Left behind it would ambush the next sign-in on this device.

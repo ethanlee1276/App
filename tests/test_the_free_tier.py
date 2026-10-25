@@ -271,6 +271,26 @@ def test_the_records_numbers_on_the_welcome_are_the_records_own():
     assert not _re.search(r"\b\d{3,},?\d*–\d", steps.replace("${", "")), "a won-lost written into the code"
 
 
+def test_a_new_account_picks_its_teams_and_players_next():
+    """Ethan, 2026-10-25: after making an account on Real "you're allowed to
+    select your favorite players ... and teams you want to follow ... so
+    you can get notifications about your favorite players' props being
+    posted". Sign-up goes through followStep before it lands; every team
+    and player becomes a watch (engine/alerts), which is what the Alerts
+    page and the phone already read."""
+    app_auth = APP[APP.index("window.acctAuth = async function"):]
+    app_auth = app_auth[:app_auth.index("\n};\n")]
+    assert 'if (mode === "signup" && window.followStep) return followStep(() => acctLandAfterAuth(say));' in app_auth
+    save = ACCOUNT[ACCOUNT.index("async function followSave("):]
+    save = save[:save.index("\n}\n")]
+    assert 'fetch("/api/alerts/watch"' in save and 'setSetting("teams"' in save
+    assert '{ kind: "team", value: t.split(":")[1] }' in save and '{ kind: "player", value: p.name }' in save
+    from engine import alerts
+    assert f"const FOLLOW_MAX = {alerts.MAX_WATCHES};" in ACCOUNT, "the picker's cap and the watches' cap disagree"
+    step = _fn(ACCOUNT, "followStep")
+    assert 'state.view !== "signup") return done();' in step, "off the sign-up page it lands as before"
+
+
 def test_a_username_is_checked_before_the_account_exists():
     """Real asks for the username first, so a taken or rude one has to be
     refused before the account is made, not after."""

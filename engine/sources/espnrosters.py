@@ -65,6 +65,7 @@ def parse_roster(payload: dict) -> list[dict]:
             "position": str(pos).upper(),
             "number": str(a.get("jersey") or "").strip() or None,
             "age": a.get("age") if isinstance(a.get("age"), int) else None,
+            "born": str(a.get("dateOfBirth") or "")[:10],
             "height": a.get("displayHeight") or None,
             "weight": a.get("displayWeight") or None,
             "birthplace": ", ".join(x for x in (born.get("city"), born.get("state") or born.get("country")) if x)

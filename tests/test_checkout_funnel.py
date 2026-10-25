@@ -78,9 +78,10 @@ def test_signing_up_comes_back_to_that_plan_and_not_to_the_list():
     assert "takePendingPlan()" in body, \
         "a reader who chose a plan is still sent back to choose one"
     i = body.index("takePendingPlan()")
-    j = body.index("renderPaywall()")
+    # Without a plan chosen, the free tier's landing (Live) since 2026-10-25.
+    j = body.index('switchView("live", true)')
     assert i < j, \
-        "the plans page is drawn before the pending plan is even looked at"
+        "the free landing happens before the pending plan is even looked at"
     resume = body[i:j]
     assert "_switchViewNow(\"checkout\"" in resume, \
         "the plan is read and then not used to go anywhere"

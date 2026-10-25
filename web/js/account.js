@@ -2341,6 +2341,129 @@ function introBind(host) {
   }, { passive: true });
 }
 
+/* AFTER THE ACCOUNT, YOUR TEAMS AND PLAYERS (Ethan, 2026-10-25: "when you
+   first go on the Real app after you create an account, you're allowed to
+   select your favorite players ... and teams you want to follow ... so you
+   can get notifications about your favorite players' props being posted").
+   One screen between sign-up and the site: tap teams, search players.
+   A team joins the ones the site already brings to the front (settings
+   `teams`); every team and player is also a watch (engine/alerts), so the
+   Alerts page — and the phone, once alerts are on — says when they're on
+   tonight's board. Skippable, and all of it changes later in Settings and
+   Alerts. */
+const FOLLOW_LEAGUES = [["nfl", "NFL", () => (typeof TEAMS !== "undefined" ? TEAMS : {})],
+  ["nba", "NBA", () => (typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {})],
+  ["mlb", "MLB", () => (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {})],
+  ["nhl", "NHL", () => (typeof NHL_TEAMS !== "undefined" ? NHL_TEAMS : {})],
+  ["wnba", "WNBA", () => (typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {})]];
+const FOLLOW_MAX = 20;          // engine/alerts.MAX_WATCHES
+let _fol = { lg: "nfl", teams: [], players: [], hits: [], q: "", done: null };
+
+function followHTML() {
+  const f = _fol;
+  const [lg, , map] = FOLLOW_LEAGUES.find(([k]) => k === f.lg) || FOLLOW_LEAGUES[0];
+  // One button a team: the maps carry old codes beside the current one
+  // (ARI and ARZ are both Arizona), so the first code for a name wins.
+  const seen = new Set();
+  const teams = Object.entries(map()).filter(([, t]) => !seen.has(t.name) && seen.add(t.name))
+    .sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
+  const n = f.teams.length + f.players.length;
+  return `<div class="fol">
+    <div class="fol-head"><h1 class="wi-h">Follow your teams and players</h1>
+      <p>Their games come first on Live, and we’ll tell you when they’re on tonight’s board.</p></div>
+    <div class="fol-tabs" role="tablist">${FOLLOW_LEAGUES.map(([k, label]) =>
+      `<button type="button" class="fol-tab${k === lg ? " on" : ""}" data-fol="lg" data-lg="${k}" role="tab" aria-selected="${k === lg}">${label}</button>`).join("")}</div>
+    <div class="fol-grid">${teams.map(([abbr, t]) => {
+      const key = `${lg}:${abbr}`;
+      const on = f.teams.includes(key);
+      return `<button type="button" class="fol-team${on ? " on" : ""}" data-fol="team" data-key="${escapeAttr(key)}" aria-pressed="${on}">
+        ${typeof teamMark === "function" ? teamMark(abbr, 30, null, lg) : ""}<span>${escapeHtml(t.nick || t.name || abbr)}</span></button>`;
+    }).join("")}</div>
+    <form class="fol-find" data-fol-form><input name="q" value="${escapeAttr(f.q)}" placeholder="Search a ${FOLLOW_LEAGUES.find(([k]) => k === lg)[1]} player"
+      autocomplete="off" aria-label="Search a player"><button class="btn ghost" type="submit">Search</button></form>
+    ${f.hits.length ? `<div class="fol-hits">${f.hits.map((p) => {
+      const name = p.player || p.name || "";
+      const on = f.players.some((x) => x.name === name);
+      return `<button type="button" class="fol-hit${on ? " on" : ""}" data-fol="player" data-name="${escapeAttr(name)}">
+        <b>${escapeHtml(name)}</b><span>${escapeHtml([p.team, p.position].filter(Boolean).join(" · "))}</span><i>${on ? "Following" : "Follow"}</i></button>`;
+    }).join("")}</div>` : ""}
+    ${f.players.length ? `<div class="fol-chips">${f.players.map((x) =>
+      `<button type="button" class="fol-chip" data-fol="player" data-name="${escapeAttr(x.name)}">${escapeHtml(x.name)} ×</button>`).join("")}</div>` : ""}
+    <p class="fol-n">${n ? `${n} followed` : "Nothing yet"} · up to ${FOLLOW_MAX}</p>
+    <button type="button" class="btn primary wi-go" data-fol="save">${n ? "Done" : "Skip for now"}</button>
+  </div>`;
+}
+
+async function followSave() {
+  const f = _fol;
+  const keep = settings().teams.filter((t) => !f.teams.includes(t));
+  setSetting("teams", [...f.teams, ...keep]);
+  // Each one a watch, so the Alerts page and the phone know it. A watch the
+  // server refuses (the cap, a name it can't read) costs that one only.
+  const add = [...f.teams.map((t) => ({ kind: "team", value: t.split(":")[1] })),
+               ...f.players.map((p) => ({ kind: "player", value: p.name }))].slice(0, FOLLOW_MAX);
+  for (const w of add) {
+    try {
+      await fetch("/api/alerts/watch", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(w) });
+    } catch (e) {}
+  }
+}
+
+function followBind(host) {
+  if (host.dataset.folBound) return;
+  host.dataset.folBound = "1";
+  host.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("[data-fol]");
+    if (!b || !_fol.done) return;
+    const f = _fol, act = b.dataset.fol;
+    const full = f.teams.length + f.players.length >= FOLLOW_MAX;
+    if (act === "lg") { f.lg = b.dataset.lg; f.hits = []; f.q = ""; }
+    else if (act === "team") {
+      const k = b.dataset.key;
+      if (f.teams.includes(k)) f.teams = f.teams.filter((x) => x !== k);
+      else if (!full) f.teams.push(k);
+    } else if (act === "player") {
+      const name = b.dataset.name;
+      if (f.players.some((x) => x.name === name)) f.players = f.players.filter((x) => x.name !== name);
+      else if (!full) f.players.push({ name, sport: f.lg });
+    } else if (act === "save") {
+      b.disabled = true;
+      const done = f.done;
+      f.done = null;
+      if (f.teams.length || f.players.length) await followSave();
+      return done();
+    }
+    host.innerHTML = followHTML();
+  });
+  host.addEventListener("submit", async (e) => {
+    const form = e.target.closest && e.target.closest("[data-fol-form]");
+    if (!form || !_fol.done) return;
+    e.preventDefault();
+    const q = String(new FormData(form).get("q") || "").trim();
+    _fol.q = q;
+    if (q.length < 2) return;
+    try {
+      const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(_fol.lg)}&scope=sport`);
+      _fol.hits = r.ok ? ((await r.json()).players || []).slice(0, 8) : [];
+    } catch (err) { _fol.hits = []; }
+    host.innerHTML = followHTML();
+  });
+}
+
+/* Called by app.js acctAuth the moment a new account exists; `done` is the
+   landing it would have gone to. Off the sign-up page, it simply lands. */
+function followStep(done) {
+  const host = document.getElementById("view-signup");
+  if (!host || state.view !== "signup") return done();
+  _fol = { lg: FOLLOW_LEAGUES.some(([k]) => k === state.sport) ? state.sport : "nfl",
+           teams: settings().teams.filter((t) => FOLLOW_LEAGUES.some(([k]) => t.startsWith(`${k}:`))).slice(0, FOLLOW_MAX),
+           players: [], hits: [], q: "", done };
+  followBind(host);
+  host.innerHTML = followHTML();
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
 async function renderSignup() {
   const host = document.getElementById("view-signup");
   if (!host) return;

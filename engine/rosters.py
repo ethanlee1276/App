@@ -20,6 +20,9 @@ Two decisions worth stating, because they're what makes the page honest:
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 # The fantasy skill positions plus the rest of an actual roster. A page
 # called "active roster" that only lists four positions is not one.
 OFFENCE = ("QB", "RB", "FB", "WR", "TE", "OL", "OT", "OG", "C")
@@ -115,7 +118,73 @@ def _player_row(p: dict) -> dict | None:
         "weight": (f"{p['weight']} lb"
                    if str(p.get("weight") or "").isdigit() else None),
         "college": (p.get("college") or "").strip() or None,
+        # His birth date, for a birthday on a game's page (birthdays()).
+        "born": _born(p.get("birth_date")),
     }
+
+
+def _born(v) -> str:
+    """An ISO birth date (YYYY-MM-DD) or "" — whatever the feed wrote."""
+    s = str(v or "").strip()[:10]
+    return s if re.match(r"^\d{4}-\d{2}-\d{2}$", s) else ""
+
+
+def birthdays(roster: dict, teams, on: str) -> list[dict]:
+    """``[{player, team, age}]`` — the men on these teams' rosters born on
+    this month and day, oldest first. Real puts a player's birthday on the
+    game (Ethan, 2026-10-25: "It shows players' birthdays and stuff like
+    that"). ``on`` is the game's own date, YYYY-MM-DD."""
+    want = str(on or "")[5:10]
+    if len(want) != 5:
+        return []
+    out = []
+    for ab in teams or []:
+        for r in ((roster or {}).get("teams") or {}).get(ab, {}).get("players") or []:
+            born = _born(r.get("born"))
+            if born and born[5:10] == want:
+                out.append({"player": r.get("player") or "", "team": ab,
+                            "age": int(on[:4]) - int(born[:4])})
+    return sorted(out, key=lambda x: -x["age"])
+
+
+_ROSTER_CACHE: dict = {}
+
+
+def attach_birthdays(games: list[dict], league: str, data_dir="web/data") -> int:
+    """Put today's birthdays on each game's row (``g["birthdays"]``), off
+    the league's published roster file — read once per change, never
+    fetched. A game's day is its first pitch or kickoff in US Eastern time,
+    the day the broadcast calls it. Returns how many games got one; a
+    roster that will not read costs the line and nothing else."""
+    import json
+    import datetime as dt
+    path = Path(data_dir) / f"rosters_{league}.json"
+    try:
+        mtime = path.stat().st_mtime
+        hit = _ROSTER_CACHE.get(str(path))
+        if not hit or hit[0] != mtime:
+            hit = (mtime, json.loads(path.read_text()))
+            _ROSTER_CACHE[str(path)] = hit
+        roster = hit[1]
+    except Exception:                                        # noqa: BLE001
+        return 0
+    try:
+        from zoneinfo import ZoneInfo
+        east = ZoneInfo("America/New_York")
+    except Exception:                                        # noqa: BLE001
+        east = dt.timezone(dt.timedelta(hours=-5))
+    n = 0
+    for g in games or []:
+        start = str(((g.get("live") or {}).get("start_time")) or "")
+        try:
+            day = dt.datetime.fromisoformat(start.replace("Z", "+00:00")).astimezone(east).date().isoformat()
+        except ValueError:
+            continue
+        got = birthdays(roster, [g.get("away"), g.get("home")], day)
+        if got:
+            g["birthdays"] = got[:6]
+            n += 1
+    return n
 
 
 def _height_say(v) -> str | None:
@@ -322,6 +391,7 @@ def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None,
                 "years_exp": None,
                 "number": p.get("number"),
                 "age": None,
+                "born": _born(p.get("born")),
                 "games": int(games.get((ab, p.get("name", "")), 0)),
                 "last_seen": "",
                 # The id is RIGHT HERE, so this path needs no name join at
@@ -508,6 +578,7 @@ def feed_rosters(sport: str, feed: dict, games_by: dict | None = None,
                 "age": p.get("age") if isinstance(p.get("age"), int) else _age_on(p.get("born") or "", today),
                 "height": p.get("height") or None, "weight": p.get("weight") or None,
                 "shoots": p.get("shoots") or None, "birthplace": p.get("birthplace") or None,
+                "born": _born(p.get("born")),
                 "games": int(played[0]) if played else 0,
                 "last_seen": str(played[1]) if played else "",
                 "headshot": str(p.get("headshot") or "") or face_of(faces, name),

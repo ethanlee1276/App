@@ -99,7 +99,7 @@ def _events(*items):
     return [dict({"kind": "line_move", "edge": 0.07, "market": "receiving yards", "line": 71.5}, **e) for e in items]
 
 
-def test_a_watch_alert_is_your_words_and_a_count_once_and_only_for_members():
+def test_a_watch_alert_is_a_members_words_and_a_count_for_anybody_else():
     uid = _member()
     conn = _conn()
     try:
@@ -111,10 +111,23 @@ def test_a_watch_alert_is_your_words_and_a_count_once_and_only_for_members():
             "a first look starts from now, not the whole window"
         more = first + _events({"id": "b", "ts": "2026-10-24T18:05:00Z", "player": "Ja'Marr Chase"},
                                {"id": "c", "ts": "2026-10-24T18:06:00Z", "player": "Tee Higgins"})
-        if gate.enabled():
-            assert PM.watch_pass(conn, more, entitled=lambda c, w: False, now=NOW) == 0, "the feed is paid"
-            conn.execute("DELETE FROM push_watch_seen WHERE user_id = ?", (uid,))
-            conn.execute("INSERT INTO push_watch_seen (user_id, ts) VALUES (?, ?)", (uid, "2026-10-24T18:00:00Z"))
+        # BEHIND THE WALL, AN ACCOUNT WITHOUT A PLAN IS TOLD HOW MANY (the
+        # free tier, 2026-10-25) — not who, not what: the picks are paid.
+        # Run with the wall up whatever this box's own switch says.
+        keep = gate.enabled
+        gate.enabled = lambda: True
+        try:
+            assert PM.watch_pass(conn, more, entitled=lambda c, w: False, now=NOW) == 1
+            t = PM.mine(conn, uid, now=NOW)[0]
+            assert t["url"] == "/#paywall" and "2 new picks" in t["body"] and "Members see them" in t["body"], t
+            words = (t["title"] + t["body"]).lower()
+            for leak in ("chase", "higgins", "edge", "receiving", "over", "under"):
+                assert leak not in words, f"a free account's alert names {leak}"
+        finally:
+            gate.enabled = keep
+        conn.execute("DELETE FROM push_mine WHERE user_id = ?", (uid,))
+        conn.execute("DELETE FROM push_watch_seen WHERE user_id = ?", (uid,))
+        conn.execute("INSERT INTO push_watch_seen (user_id, ts) VALUES (?, ?)", (uid, "2026-10-24T18:00:00Z"))
         assert PM.watch_pass(conn, more, entitled=lambda c, w: True, now=NOW) == 1
         msgs = PM.mine(conn, uid, now=NOW)
         assert len(msgs) == 1 and msgs[0]["kind"] == "watches" and msgs[0]["url"] == "/#alerts", msgs
@@ -269,7 +282,7 @@ def test_the_box_the_server_and_the_page_carry_it():
     at = srv.index("def _push_post(self, path: str):")
     assert "PA.latest_for(sub, mine=PM.mine(conn, (sub or {}).get(\"user_id\")))" in srv[at:at + 3000]
     app = READ("web", "js", "app.js")
-    assert 'box("watches", "A watch of mine catches something (members)", !signedIn)' in app
+    assert 'box("watches", "My teams and players make the board (members see which)", !signedIn)' in app
     assert 'box("bets", "My parlay: on, last leg, settled", !signedIn)' in app
     assert app.count("    _acctUser = { signed_in: true, email: body.email };\n    pushRelink();\n") == 2
     at = app.index("window.acctSignOut = async function () {")

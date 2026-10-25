@@ -2454,6 +2454,30 @@ const PBP_SURFACE_WORD = { fieldturf: "FieldTurf", grass: "Grass", turf: "Turf",
 const pbpTitleCase = (v) => String(v || "").replace(/[_-]+/g, " ")
   .replace(/\b\w/g, (c) => c.toUpperCase());
 
+/* A PLAYER'S BIRTHDAY ON HIS GAME (Ethan, 2026-10-25, on Real: "It shows
+   players' birthdays and stuff like that"). Off the published rosters by
+   the box (engine/rosters.attach_birthdays), never guessed; absent when
+   nobody on either side was born on the day. */
+function pbpBirthdaysHTML(d) {
+  const b = (d && d.birthdays) || [];
+  if (!b.length) return "";
+  return `<p class="pbp-bday"><span aria-hidden="true">🎂</span> ${b.slice(0, 3).map((x) =>
+    `<b>${escapeHtml(x.player)}</b> (${escapeHtml(x.team)}) turns ${Number(x.age)}`).join(" · ")} today</p>`;
+}
+
+/* LIVE INJURIES (Ethan, 2026-10-25, on Real: "It has live injuries"): a
+   status that came onto ESPN's injury list for this game after the box
+   first looked at it (livescore_build._injuries_since) — a man who went
+   down, or whose status changed — and when. The full lists stay on the
+   Injuries tab. */
+function pbpNewInjuriesHTML(d) {
+  const rows = ((d && d.injuries_live) || []).filter((r) => r && r.seen).slice(-3).reverse();
+  if (!rows.length) return "";
+  return `<p class="pbp-inj-new"><span class="pbp-inj-tag">Injury</span> ${rows.map((r) =>
+    `<b>${escapeHtml(r.player)}</b> (${escapeHtml(r.team)}) — ${escapeHtml(r.status)}${r.detail ? `, ${escapeHtml(r.detail)}` : ""}${
+      pbpTime(r.seen) ? ` · ${escapeHtml(pbpTime(r.seen))}` : ""}`).join(" · ")}</p>`;
+}
+
 function pbpInjuriesHTML(d, league) {
   const rows = pbpInjuryRows((((_injBoard || {}).sports) || {})[league], league, d);
   if (!rows.length) return `<p class="rail-quiet">No designations listed for either club on the injury board.</p>`;
@@ -3598,6 +3622,7 @@ async function renderPbpPage(tick) {
           <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
             <b>${name(d.home, d.home_name)}</b>${rec(d.home)}</div>${mark(d.home)}</div>
           ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
+          ${pbpNewInjuriesHTML(d)}${pbpBirthdaysHTML(d)}
         </div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
