@@ -633,7 +633,7 @@ def test_the_views_draw_the_shots_the_ice_the_men_and_the_race():
 # --- the page: the wiring ----------------------------------------------------------
 def test_the_page_is_handed_over_and_loaded_the_way_the_basketball_one_is():
     assert ('if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, '
-            'callit: pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) '
+            'callit: pbpTvHTML(d) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) '
             '{ if (lv.state === "live") again(); return; }') in APP
     assert 'if (host && ctx && ctx.league === "nhl") return rink(host, ctx);' in GC
     assert "function rink(host, ctx)" in GC and 'css.href = "css/rinkcast.css";' in GC and 'el.src = "js/rinkcast.js";' in GC

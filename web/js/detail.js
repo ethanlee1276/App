@@ -2657,6 +2657,56 @@ function pbpTotalsHTML(d, league) {
       nothing fetched, nothing estimated.</p></div>`;
 }
 
+/* WATCHING ON TV (2026-10-25). A broadcast runs ten to sixty seconds
+   behind the feed, so the page and its chat told a reader about a
+   touchdown their TV had not shown yet. "Watching on TV" holds both back
+   by the delay they pick: the page keeps the last three minutes of the
+   game's file as it fetched it and draws the copy from that long ago (the
+   strip's chip for this game too), and the chat (js/chat.js chatReady)
+   holds any message younger than the delay, the reader's own excepted.
+   Kept on this device. The phone's alerts come from the box and are not
+   held. */
+const TV_KEY = "qb_tv_delay_v1";
+const TV_CHOICES = [0, 10, 30, 60];
+let _tv = { key: "", list: [] };
+function tvDelay() {
+  let n = 0;
+  try { n = Number(localStorage.getItem(TV_KEY)) || 0; } catch (e) { n = 0; }
+  n = TV_CHOICES.includes(n) ? n : 0;
+  if (typeof window !== "undefined") window.QB_TV_DELAY = n;
+  return n;
+}
+/* The copy to draw: the newest fetched at least the delay ago, or the
+   oldest kept until the buffer is that deep. */
+function tvPick(key, raw, d, now = Date.now()) {
+  if (_tv.key !== key) _tv = { key, list: [] };
+  if (raw && d && (!_tv.list.length || _tv.list[_tv.list.length - 1].raw !== raw)) _tv.list.push({ t: now, raw, d });
+  _tv.list = _tv.list.filter((x, i, all) => now - x.t < 180000 || i === all.length - 1);
+  const dl = tvDelay();
+  if (!dl || !_tv.list.length) return { raw, d, held: 0 };
+  const old = _tv.list.filter((x) => x.t <= now - dl * 1000);
+  const use = old.length ? old[old.length - 1] : _tv.list[0];
+  return { raw: use.raw, d: use.d, held: dl };
+}
+function pbpTvHTML(d) {
+  if (!d || (d.live || {}).state !== "live") return "";
+  const dl = tvDelay();
+  return `<div class="pbp-tv" role="group" aria-label="Watching on TV: hold the page back"><span class="pbp-tv-q">Watching on TV? Delay</span>${
+    TV_CHOICES.map((n) => `<button type="button" class="pbp-tv-b${n === dl ? " on" : ""}" data-tv="${n}" aria-pressed="${n === dl}"${
+      n ? ` aria-label="${n} seconds behind"` : ""}>${n ? `${n}s` : "Off"}</button>`).join("")}${
+    dl ? `<span class="pbp-tv-note">Plays and chat held ${dl}s so nothing spoils your TV</span>` : ""}</div>`;
+}
+if (typeof window !== "undefined" && !window._tvBound) {
+  window._tvBound = true;
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-tv]");
+    if (!b) return;
+    try { localStorage.setItem(TV_KEY, String(Number(b.dataset.tv) || 0)); } catch (err) {}
+    tvDelay();
+    if (typeof renderPbpPage === "function") renderPbpPage();
+  });
+}
+
 /* WHILE YOU WERE AWAY (2026-10-25). Come back to a live game after a few
    minutes away and the page says what you missed before anything else:
    the score then and now, how far the win chance swung, and the biggest
@@ -3907,6 +3957,15 @@ async function renderPbpPage(tick) {
     if (res.ok) { raw = await res.text(); d = JSON.parse(raw); }
   } catch (e) { d = null; }
   if (state.view !== "pbp") return;                // moved on while fetching
+  // Watching on TV: the copy from the reader's delay ago, and this game's
+  // chip on the strip with it (tvPick).
+  const tvHeld = tvPick(`${league}_${event}`, raw, d);
+  raw = tvHeld.raw;
+  d = tvHeld.d;
+  if (tvHeld.held && d) {
+    strip = (strip || []).map((g) => (String(g.event_id) === String(event)
+      ? { ...g, live: { ...(g.live || {}), ...(d.live || {}) } } : g));
+  }
   // The game's chat: its button on every game page, whichever layout draws
   // below (js/chat.js keeps the conversation across redraws).
   chatMount(league, event, d);
@@ -3955,7 +4014,7 @@ async function renderPbpPage(tick) {
      final; so does a play list whose last entry is the end of the game. */
   const fast = (strip || []).find((g) => String(g.event_id) === String(event));
   const ended = ((d.plays || []).slice(-1)[0] || {}).event === "End of Game";
-  if ((d.live || {}).state === "live" && ((fast && (fast.live || {}).state === "final") || ended)) {
+  if ((d.live || {}).state === "live" && ((!tvHeld.held && fast && (fast.live || {}).state === "final") || ended)) {
     // The in-game win chance goes with the clock it was read at: a final
     // has no "99.9% with 0:34 left".
     d.live = { ...d.live, ...((fast || {}).live || {}), state: "final", period: "Final", clock: "", detail: "",
@@ -4050,7 +4109,7 @@ async function renderPbpPage(tick) {
   }
   // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
   // Call it rides in on the basketball and hockey pages too, under the arena (pbpCallItHTML).
-  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) { if (lv.state === "live") again(); return; }
+  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) { if (lv.state === "live") again(); return; }
   const panel = tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
@@ -4083,7 +4142,7 @@ async function renderPbpPage(tick) {
           ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
           ${pbpNewInjuriesHTML(d)}${pbpBirthdaysHTML(d)}
         </div>
-        ${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
+        ${pbpTvHTML(d)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
         <div class="gch-entry-slot"></div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}

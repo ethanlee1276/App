@@ -42,7 +42,8 @@ def test_every_game_page_leaves_the_card_a_slot_under_the_scoreboard():
 def test_the_card_and_the_bar_say_who_is_here_and_what_was_said():
     fn = CHAT[CHAT.index("function chatEntryPaint("):]
     fn = fn[:fn.index("\n}\n")]
-    assert "CH.msgs.filter((m) => m.body).slice(-3)" in fn and "watching" in fn and "Join</span>" in fn
+    # Held back with the page while "Watching on TV" is on (chatReady).
+    assert "CH.msgs.filter((m) => m.body && chatReady(m)).slice(-3)" in fn and "watching" in fn and "Join</span>" in fn
     assert "chEsc(String(m.body).slice(0, 90))" in fn and "chEsc((m.by || {}).handle" in fn
     assert 'document.body.classList.toggle("gch-card-in"' in fn
     fab = CHAT[CHAT.index("function chatFab("):CHAT.index("function chatEntryPaint(")]

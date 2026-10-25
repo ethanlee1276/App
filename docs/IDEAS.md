@@ -11,6 +11,57 @@ Ordered by *value per unit of work*, not by size.
 
 ---
 
+## 2026-10-25: the live game as a place to be — next, ranked
+
+Ethan: *"keep diving deeper into that ideas ... think of things that I
+haven't told you and that I haven't thought of."* Built today: your players
+live on one strip, on the iPhone widget and the lock screen; big-moment
+alerts; Call it on every live game (at-bats, drives, baskets, shots); your
+ticket in the game's chat; the chat out of the corner and rebuilt; while
+you were away; the game in 30 seconds. What comes next, best value per unit
+of work first, each with what it is built from:
+
+1. **Spoiler guard for TV delay — BUILT 2026-10-25 (runbook EL).** "Watching
+   on TV? Delay" holds the game page and its chat back 10, 30 or 60
+   seconds. The push alerts are the box's and are not held; holding them
+   would need the delay on the account, read by engine/pushmine.
+2. **The house posts the moment.** A play rated 8 or more drops its card
+   into the game's chat as a message from the house account, so the whole
+   room reacts to the same thing at the same time (Real's core loop).
+   Built from: engine/playmoments + engine/gamechat. Small.
+3. **Call it ladders and badges.** A week's and a season's leaderboard
+   across every game, a streak flame beside a handle in the chat, a
+   "Called it" card to share at five in a row. Built from: callit_calls.
+   Small.
+4. **The room against the math.** The who-wins vote charted through the
+   game against the live win chance: "the room had CIN at 30% when the
+   math had them at 70%". Built from: chat_votes snapshotted every few
+   minutes (one new table) + the deep file's `wp`. Small to medium.
+5. **What has to happen.** Under each live leg of a saved ticket, one
+   sentence from the box: "Chase needs 14 more yards; he's at 9.7 a catch
+   tonight." Free (box facts); the chance stays the membership's. Small.
+6. **Recap by push.** "The game in 30 seconds" sent when a followed team's
+   game ends, the play of the game and the best line. Built from: the
+   recap logic ported to the box + engine/pushmine's topics. Small.
+7. **Your fantasy lineup, live.** Sleeper and ESPN leagues are linked
+   already: the starters' lines on the Your players strip and the matchup's
+   live score. Built from: the linked rosters + engine/yourplayers. Medium.
+8. **Watch-party rooms.** A private thread inside a game's chat for a
+   friend group, by invite link. Built from: engine/gamechat rooms + an
+   invite token; the moderation is already there. Medium.
+9. **Spoiler-free later.** Hide scores across the site for chosen games
+   until tapped, for watching a recording. Built from: a per-game flag on
+   the device. Small to medium.
+10. **Crew watch.** Penalties and the strike zone tallied live against the
+    crew's season norm. Built from: the plays' penalty rows + the referee
+    assignments already read. Medium.
+11. **Trivia in the stoppages.** At a timeout or between innings, one
+    question off the season logs ("Who leads CIN in receiving yards?"),
+    answered in the chat. Built from: the season logs the boards read.
+    Medium.
+
+---
+
 ## 2026-10-24: from other apps, for the stores — ranked
 
 Ethan: *"think like an app developer, think like a website developer ...

@@ -552,8 +552,8 @@ async function chatPost(path, body) {
        newest message in it (YouTube's collapsed live chat), not a pill in
        the corner. On a computer the same bar is a labelled button. */
 function chatLast() {
-  const m = CH.msgs.length ? CH.msgs[CH.msgs.length - 1] : null;
-  return m && m.body ? m : null;
+  const ok = CH.msgs.filter((m) => m.body && chatReady(m));
+  return ok.length ? ok[ok.length - 1] : null;
 }
 function chatFab() {
   let f = document.getElementById("gch-fab");
@@ -582,7 +582,7 @@ function chatFab() {
 function chatEntryPaint() {
   const slots = document.querySelectorAll(".gch-entry-slot");
   if (!slots.length) return;
-  const rows = CH.msgs.filter((m) => m.body).slice(-3);
+  const rows = CH.msgs.filter((m) => m.body && chatReady(m)).slice(-3);
   const d = CH.d || {}, v = CH.votes;
   const total = v ? (v.away || 0) + (v.home || 0) : 0;
   const pct = (x) => (total ? Math.round((100 * x) / total) : 50);
@@ -797,11 +797,14 @@ function chatAppend(fresh, v) {
   }
   const near = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
   const want = CH.thread ? (m) => m.play === CH.thread : CH.tab === "game" ? (m) => !m.play : () => true;
-  const add = fresh.filter(want);
+  // Held for a TV delay (chatReady) until their time, then appended once.
+  const pool = [...(CH.held || []), ...fresh];
+  CH.held = pool.filter((m) => !chatReady(m));
+  const add = pool.filter((m) => chatReady(m) && want(m) && !body.querySelector(`.gch-msg[data-id="${Number(m.id)}"]`));
   if (add.length) {
     const empty = body.querySelector(".gch-empty");
     if (empty) empty.remove();
-    const shown = CH.msgs.filter(want);
+    const shown = CH.msgs.filter(want).filter(chatReady);
     body.insertAdjacentHTML("beforeend", add.map((m) => chatMsgHTML(m, shown[shown.indexOf(m) - 1])).join(""));
   }
   for (const id of Object.keys(v.reacts || {})) {
@@ -835,7 +838,7 @@ function chatPill(add) {
 }
 
 function chatListHTML(want) {
-  const rows = CH.msgs.filter(want);
+  const rows = CH.msgs.filter(want).filter(chatReady);
   const more = CH.older ? `<button type="button" class="gch-older" data-gch="older">Load earlier messages</button>` : "";
   if (!rows.length) {
     return `${more}<div class="gch-empty">${CH.loaded
@@ -893,6 +896,13 @@ function chatSel(id) {
     const el = document.querySelector(`#gch-sheet .gch-msg[data-id="${CH.sel}"]`);
     if (el) el.classList.add("sel");
   }
+}
+/* WATCHING ON TV (js/detail.js tvPick): a message younger than the reader's
+   delay waits, their own excepted, so the room cannot spoil a play their
+   TV has not shown. */
+function chatReady(m) {
+  const dl = Number((typeof window !== "undefined" && window.QB_TV_DELAY) || 0);
+  return !dl || !m || m.own || Date.now() / 1000 - Number(m.at || 0) >= dl;
 }
 /* The message before this one in what the list shows, for grouping. */
 function chatPrevOf(id) {

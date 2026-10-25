@@ -727,3 +727,11 @@
   font-size: var(--fs-sm); color: var(--text-body); }
 .pbp-recap-list li span { font-size: var(--fs-2xs); font-weight: 800; color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
 .pbp-recap-list li em { font-style: normal; font-family: var(--font-mono); font-weight: 800; color: var(--brand-2); }
+
+/* Watching on TV (pbpTvHTML): the delay the page and its chat are held by. */
+.pbp-tv { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 2px 2px 0; }
+.pbp-tv-q { font-size: var(--fs-xs); font-weight: 800; color: var(--text-dim); margin-right: 2px; }
+.pbp-tv-b { padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid var(--border); background: transparent;
+  color: var(--text-mute); font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+.pbp-tv-b.on { border-color: var(--brand); color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, transparent); }
+.pbp-tv-note { flex-basis: 100%; font-size: var(--fs-2xs); color: var(--text-mute); }

@@ -63,7 +63,7 @@ def test_it_waits_for_a_real_absence_a_live_game_and_reaches_every_page():
     assert "AWAY_MIN_MS = 4 * 60 * 1000" in DET
     assert "localStorage.setItem(AWAY_KEY" in fn and ".slice(40)" in fn, "kept on this device, forty games"
     assert "${pbpAwayHTML(d, league)}" in DET
-    assert "callit: pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league)" in DET, \
+    assert "pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league)" in DET, \
         "basketball and hockey too"
 
 
