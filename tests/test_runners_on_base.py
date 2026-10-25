@@ -169,7 +169,9 @@ def test_runners_are_baseball_only_and_ride_the_photograph():
     gridiron."""
     art = _fn("pbpParkHTML")
     assert 'const runners = league === "mlb" ? pbpBasesSVG(d.live) : "";' in art
-    assert "${art}${runners}${arc}" in art, "under the flight, over the photo"
+    # The board's live score (2026-10-25, detail.js pbpBoardSVG) is painted
+    # on the photo too, so it sits with it, under the runners and the flight.
+    assert "${art}${board}${runners}${arc}" in art, "under the flight, over the photo"
 
 
 if __name__ == "__main__":

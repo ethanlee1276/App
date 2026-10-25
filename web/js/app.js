@@ -29658,9 +29658,11 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   const chip = !photo && (park.name || (boardGame || {}).park_name || wx)
     ? `<div class="pbp-parkchip">${escapeHtml(park.name || (boardGame || {}).park_name || "")}${
         wx ? `<span>${wx}</span>` : ""}</div>` : "";
-  // Runners are baseball's, and the coordinates are the photograph's.
+  // Runners are baseball's, and the coordinates are the photograph's; so
+  // is the board's live score (detail.js pbpBoardSVG, the page's own file).
   const runners = league === "mlb" ? pbpBasesSVG(d.live) : "";
-  return `<div class="pbp-park">${art}${runners}${arc}${chip}</div>
+  const board = league === "mlb" && typeof pbpBoardSVG === "function" ? pbpBoardSVG(d) : "";
+  return `<div class="pbp-park">${art}${board}${runners}${arc}${chip}</div>
     ${isFootball ? pbpFieldPosHTML(d, hitRow) : ""}
     ${isFootball ? pbpPlayTilesHTML(hitRow) : pbpBattedHTML(hitRow)}
     ${pbpParkFactsHTML(park, boardGame)}`;

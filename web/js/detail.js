@@ -2599,6 +2599,151 @@ function pbpRailHTML(d, league) {
     ${more > 0 ? `<button class="btn ghost" type="button" id="pbp-more">View full play by play (${total}) →</button>` : ""}`;
 }
 
+/* THE PARK'S SCOREBOARD, LIT (Ethan, 2026-10-25, circling the blank board
+   on the photograph: "for the mlb live view, we should display the live
+   score where I circled … make it look good and blend it and make it look
+   like it's a real mlb score board").
+
+   THE SCREEN IS MEASURED OFF THE PHOTOGRAPH, like the wall marks and the
+   bags (app.js PBP_PHOTO, PBP_BASES): the inside of the board's white
+   frame, corner by corner, read off a half-unit grid in the same 240x150
+   box at twelve times zoom, then drawn back over the picture to check it
+   sits on the frame. The board faces a little to the right, so its left
+   edge stands taller than its right (16.6 units to 15.1).
+
+   SO IT IS DRAWN IN PERSPECTIVE, not pasted flat on top. SVG has no
+   projective transform, so the board is laid out in a flat 100x50 face
+   and every piece of it rides the screen's own projective map: a point
+   goes through it exactly, and each piece of text takes the map's local
+   slope at its anchor — the way a painter's lettering leans with the
+   wall it is painted on. Lines between two points are exact (a
+   projective map keeps straight lines straight).
+
+   WHAT IT SHOWS IS WHAT THE LIVE FEED HOLDS: both teams and their runs,
+   the inning and its half, balls, strikes and outs, and a lamp beside
+   the team at bat. A real board's hits and errors are not in our live
+   state, so they are not drawn rather than drawn as zeros. Before the
+   first pitch it shows the first pitch; at the end, FINAL; in a delay,
+   the delay. A run that has just scored flashes once, as boards do.
+   Decorative to a screen reader: the score above the photograph says
+   all of this in words. */
+const PBP_BOARD = [[20.3, 24.1], [52.9, 24.7], [52.9, 39.8], [21.0, 40.7]];   // TL TR BR BL
+const PBP_BOARD_LED = { amber: "#FFC94A", white: "#F4F6FA", dim: "#8C95A8", off: "#262B36",
+                        ball: "#3DDC84", strike: "#FF5A4E", panel: "#05070C", rule: "#FFFFFF" };
+let _pbpBoardLast = null;
+
+/* The projective map from the board's flat face (0..1 by 0..1) onto the
+   screen's four corners, with its slope at the point (Heckbert's square
+   to quad). */
+function pbpBoardMap() {
+  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = PBP_BOARD;
+  const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3;
+  const dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+  const den = dx1 * dy2 - dx2 * dy1;
+  const g = (dx3 * dy2 - dx2 * dy3) / den, h = (dx1 * dy3 - dx3 * dy1) / den;
+  const a = x1 - x0 + g * x1, b = x3 - x0 + h * x3, d = y1 - y0 + g * y1, e = y3 - y0 + h * y3;
+  return (u, v) => {
+    const w = g * u + h * v + 1, X = (a * u + b * v + x0) / w, Y = (d * u + e * v + y0) / w;
+    return { X, Y, xu: (a - X * g) / w, yu: (d - Y * g) / w, xv: (b - X * h) / w, yv: (e - Y * h) / w };
+  };
+}
+
+/* A team's colour that shows on a black board: its primary, or its
+   secondary when the primary is a navy or a black that would vanish. */
+function pbpBoardColor(abbr) {
+  const t = (typeof MLB_TEAMS !== "undefined" && MLB_TEAMS[abbr]) || {};
+  const lum = (hex) => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+    if (!m) return 0;
+    const n = parseInt(m[1], 16);
+    return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  };
+  const pick = [t.primary, t.secondary, t.tertiary].find((c) => lum(c) > 0.28);
+  return pick || PBP_BOARD_LED.dim;
+}
+
+function pbpBoardSVG(d) {
+  const lv = (d && d.live) || {};
+  const away = String(d.away || ""), home = String(d.home || "");
+  if (!away || !home) return "";
+  const L = PBP_BOARD_LED, map = pbpBoardMap();
+  const W = 100, H = 50;
+  const f = (n) => n.toFixed(2);
+  const pt = (x, y) => { const m = map(x / W, y / H); return `${f(m.X)},${f(m.Y)}`; };
+  const at = (x, y, inner) => {
+    const m = map(x / W, y / H);
+    return `<g transform="matrix(${f(m.xu / W)} ${f(m.yu / W)} ${f(m.xv / H)} ${f(m.yv / H)} ${f(m.X)} ${f(m.Y)})">${inner}</g>`;
+  };
+  const line = (x1, y1, x2, y2) => {
+    const [a, b] = [pt(x1, y1).split(","), pt(x2, y2).split(",")];
+    return `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${L.rule}" stroke-opacity=".12" stroke-width=".18"/>`;
+  };
+  const live = lv.state === "live", final = lv.state === "final";
+  const per = String(lv.period || "");
+  const inn = /^(top|bottom|bot|middle|mid|end)\b\D*(\d+)/i.exec(per);
+  const half = inn ? inn[1].toLowerCase().slice(0, 3) : "";
+  const batting = live && half === "top" ? "away" : live && half === "bot" ? "home" : "";
+  // A run that scored since the last time this board was drawn flashes.
+  const id = `${away}@${home}`;
+  const prev = _pbpBoardLast && _pbpBoardLast.id === id ? _pbpBoardLast : null;
+  _pbpBoardLast = { id, away: lv.away_score, home: lv.home_score };
+  const row = (side, abbr, runs, cy) => {
+    const fresh = prev && runs != null && prev[side] != null && runs !== prev[side];
+    // Two digits step down a size, so a twelve keeps clear of "ARI".
+    const r = runs != null ? String(runs) : "", rs = r.length > 1 ? 15 : 21;
+    return (batting === side ? at(3.2, cy, `<path d="M-1.4 -2.2 L1.8 0 L-1.4 2.2 Z" fill="${L.amber}"/>`) : "")
+      + at(6.6, cy, `<rect x="-1.2" y="-6" width="2.4" height="12" rx=".6" fill="${pbpBoardColor(abbr)}"/>`)
+      + at(10.5, cy, `<text y="5.4" font-size="15.5" fill="${L.white}" letter-spacing=".5">${escapeHtml(abbr)}</text>`)
+      + (r ? at(62, cy, `<text class="pbp-sb-num${fresh ? " pbp-sb-new" : ""}" y="${f(rs * 0.35)}" font-size="${rs}"
+          text-anchor="end" fill="${L.amber}" filter="url(#pbp-sb-glow)">${escapeHtml(r)}</text>`) : "");
+  };
+  // The right side: the inning and the count, or what stands in for them.
+  // A word is sized to the column (30 of its 36 units), never past it.
+  let side = "";
+  const word = (txt, y, max, fill, mono) => {
+    const size = Math.min(max, 30 / (Math.max(1, txt.length) * 0.62));
+    return at(82, y, `<text${mono ? ' class="pbp-sb-num"' : ""} font-size="${f(size)}" text-anchor="middle"
+      fill="${fill}"${mono ? ' filter="url(#pbp-sb-glow)"' : ""}>${escapeHtml(txt)}</text>`);
+  };
+  const hold = typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
+  if (live && hold) {
+    // "Delayed — Rain": the state, and under it why.
+    const [what, why] = hold.split(/\s[—-]\s/);
+    side = word(what.toUpperCase(), why ? 24 : 28, 8, L.amber) + (why ? word(why.toUpperCase(), 33.5, 6.4, L.dim) : "");
+  } else if (live && inn) {
+    const n = inn[2], two = n.length > 1;
+    side = half === "top" || half === "bot"
+      ? at(two ? 72.5 : 75.5, 13, `<path d="${half === "top" ? "M-3 2.2 L0 -2.6 L3 2.2 Z" : "M-3 -2.2 L0 2.6 L3 -2.2 Z"}"
+          fill="${L.amber}"/>`) + at(86, 13, `<text class="pbp-sb-num" y="${two ? 4.6 : 6.2}" font-size="${two ? 13 : 17}"
+            text-anchor="middle" fill="${L.amber}" filter="url(#pbp-sb-glow)">${escapeHtml(n)}</text>`)
+      : word(half === "mid" ? "MID" : "END", 9.6, 7, L.dim) + word(n, 22.4, 13, L.amber, true);
+    const lamps = (label, cy, lit, of, color) => at(69, cy, `<text y="2.3" font-size="6.4" text-anchor="middle"
+        fill="${L.dim}">${label}</text>`) + Array.from({ length: of }, (_, i) => at(75 + i * 6.5, cy,
+        `<circle r="2.2" fill="${i < (lit || 0) ? color : L.off}"/>`)).join("");
+    side += lamps("B", 30, lv.balls, 3, L.ball) + lamps("S", 37.5, lv.strikes, 2, L.strike)
+      + lamps("O", 45, lv.outs, 2, L.strike);
+  } else if (final) {
+    side = word("FINAL", 28.5, 11, L.white);
+  } else if (!live && lv.start_time && typeof tzTime === "function") {
+    // "7:10 PM": the time lit, its half of the day small under it.
+    const [clock, ampm] = String(tzTime(lv.start_time)).split(/\s+/);
+    side = word("FIRST", 12.5, 6, L.dim) + word("PITCH", 19, 6, L.dim) + word(clock || "", 31.5, 11, L.amber, true)
+      + (ampm ? word(ampm.toUpperCase(), 40.5, 6, L.dim) : "");
+  }
+  return `<svg class="pbp-board" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <defs><filter id="pbp-sb-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation=".9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter><linearGradient id="pbp-sb-sheen" x1="0" y1="0" x2=".35" y2="1">
+      <stop offset="0" stop-color="${L.rule}" stop-opacity=".07"/><stop offset=".5" stop-color="${L.rule}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <polygon points="${PBP_BOARD.map(([x, y]) => `${x},${y}`).join(" ")}" fill="${L.panel}" fill-opacity=".9"/>
+    <polygon points="${PBP_BOARD.map(([x, y]) => `${x},${y}`).join(" ")}" fill="url(#pbp-sb-sheen)"/>
+    ${line(3, 25, 61, 25)}${line(64, 4, 64, 46)}
+    ${row("away", away, lv.away_score, 13.5)}${row("home", home, lv.home_score, 36.5)}
+    ${side}
+  </svg>`;
+}
+
 async function renderPbpPage() {
   const host = document.getElementById("pbp-body");
   if (!host) return;

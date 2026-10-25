@@ -613,3 +613,10 @@
 .gp-crowd-t thead th { color: var(--text-mute); font-weight: 600; }
 .gp-crowd-gap { margin: 6px 0 0; color: var(--text-mute); }
 .pp-actions .betit-box { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
+/* The park's scoreboard, lit (detail.js pbpBoardSVG, 2026-10-25): the
+   board's own faces — condensed capitals for the teams, the mono face for
+   the lit digits — and a run that has just scored flashing once. */
+.pbp-board { pointer-events: none; }
+.pbp-board text { font-family: var(--font-display); font-weight: 800; }
+.pbp-board .pbp-sb-num { font-family: var(--font-mono); font-weight: 700; }
+.pbp-sb-new { animation: pbp-sb-flash 1.4s linear 1; }
