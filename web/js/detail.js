@@ -2822,7 +2822,7 @@ function pbpBoomSVG(spots, color, since = 0, unit = 1, inline = false) {
       stroke-width="${f(.45 * unit)}" stroke-linecap="round">${sparks}</g></g>`;
   }).join("");
   return inline ? `<g class="pbp-boom" style="--t:${Math.round(since)}ms">${bursts}</g>`
-    : `<svg class="pbp-boom" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+    : `<svg class="pbp-boom" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true"
     style="--t:${Math.round(since)}ms">${bursts}</svg>`;
 }
 
@@ -2887,7 +2887,7 @@ function pbpWindSVG(w) {
   const band = mph < 10 ? "pbp-wind-light" : mph < 15 ? "pbp-wind-brisk" : "pbp-wind-strong";
   const gusts = PBP_GUSTS.slice(0, band === "pbp-wind-light" ? 3 : 5).map(([x0, y0, cx, cy, x1, y1]) => dir === "out"
     ? `<path d="M${x0} ${y0}Q${cx} ${cy} ${x1} ${y1}"/>` : `<path d="M${x1} ${y1}Q${cx} ${cy} ${x0} ${y0}"/>`).join("");
-  return `<svg class="pbp-wind ${band}" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+  return `<svg class="pbp-wind ${band}" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true"
     fill="none" stroke="${PBP_BOARD_LED.white}" stroke-linecap="round">${gusts}</svg>`;
 }
 
@@ -2922,20 +2922,25 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
     const fresh = prev && runs != null && prev[side] != null && runs !== prev[side];
     // Two digits step down a size, so a twelve keeps clear of "ARI".
     const r = runs != null ? String(runs) : "", rs = r.length > 1 ? 15 : 21;
-    return (batting === side ? at(3.2, cy, `<path d="M-1.4 -2.2 L1.8 0 L-1.4 2.2 Z" fill="${L.amber}"/>`) : "")
-      + at(6.6, cy, `<rect x="-1.2" y="-6" width="2.4" height="12" rx=".6" fill="${pbpBoardColor(abbr)}"/>`)
-      + at(10.5, cy, `<text y="5.4" font-size="15.5" fill="${L.white}" letter-spacing=".5">${escapeHtml(abbr)}</text>`)
-      + (r ? at(62, cy, `<text class="pbp-sb-num${fresh ? " pbp-sb-new" : ""}" y="${f(rs * 0.35)}" font-size="${rs}"
-          text-anchor="end" fill="${L.amber}" filter="url(#pbp-sb-glow)">${escapeHtml(r)}</text>`) : "");
+    return (batting === side ? at(3.2, cy, `<path d="M-1.4 -2.2 L1.8 0 L-1.4 2.2 Z" fill="url(#pbp-mlb-gold)"/>`) : "")
+      + at(6.6, cy, `<rect x="-1.2" y="-6" width="2.4" height="12" rx=".6" fill="${pbpBoardColor(abbr)}"
+          filter="url(#pbp-mlb-glow)"/>`)
+      + at(10.5, cy, `<text y="5.4" font-size="15.5" fill="url(#pbp-mlb-silver)" letter-spacing=".5"
+          filter="url(#pbp-mlb-glow)">${escapeHtml(abbr)}</text>`)
+      + (r ? at(62, cy, `<text class="pbp-lit-num${fresh ? " pbp-sb-new" : ""}" y="${f(rs * 0.35)}" font-size="${rs}"
+          text-anchor="end" fill="url(#pbp-mlb-gold)" filter="url(#pbp-mlb-glow)">${escapeHtml(r)}</text>`) : "");
   };
   // The right side: the inning and the count, or what stands in for them.
   // A word is sized to its room (the column's 30 of 36 units unless told
   // otherwise), never past it.
   let side = "";
+  // Lit words wear the photograph's gold or silver and glow; a dim one is
+  // the board's grey.
   const word = (txt, y, max, fill, mono, cx = 82, room = 30, attrs = "") => {
     const size = Math.min(max, room / (Math.max(1, txt.length) * 0.62));
-    return at(cx, y, `<text${mono ? ' class="pbp-sb-num"' : ""} font-size="${f(size)}" text-anchor="middle"
-      fill="${fill}"${mono ? ' filter="url(#pbp-sb-glow)"' : ""}${attrs}>${escapeHtml(txt)}</text>`);
+    const ink = fill === L.amber ? "url(#pbp-mlb-gold)" : fill === L.white ? "url(#pbp-mlb-silver)" : fill;
+    return at(cx, y, `<text${mono ? ' class="pbp-lit-num"' : ""} font-size="${f(size)}" text-anchor="middle"
+      fill="${ink}"${fill !== L.dim ? ' filter="url(#pbp-mlb-glow)"' : ""}${attrs}>${escapeHtml(txt)}</text>`);
   };
   const hold = typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
   if (moment.word) {
@@ -2954,9 +2959,9 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
     const n = inn[2], two = n.length > 1;
     side = half === "top" || half === "bot"
       ? at(two ? 67.3 : 67.8, 13, `<path d="${half === "top" ? "M-3 2.2 L0 -2.6 L3 2.2 Z" : "M-3 -2.2 L0 2.6 L3 -2.2 Z"}"
-          fill="${L.amber}"${two ? ' transform="scale(.8)"' : ""}/>`) + at(two ? 76 : 75.6, 13, `<text class="pbp-sb-num"
-            y="${two ? 3.5 : 5.1}" font-size="${two ? 10 : 14.5}" text-anchor="middle" fill="${L.amber}"
-            filter="url(#pbp-sb-glow)">${escapeHtml(n)}</text>`)
+          fill="url(#pbp-mlb-gold)"${two ? ' transform="scale(.8)"' : ""}/>`) + at(two ? 76 : 75.6, 13, `<text class="pbp-lit-num"
+            y="${two ? 3.5 : 5.1}" font-size="${two ? 10 : 14.5}" text-anchor="middle" fill="url(#pbp-mlb-gold)"
+            filter="url(#pbp-mlb-glow)">${escapeHtml(n)}</text>`)
       : word(half === "mid" ? "MID" : "END", 9.6, 6.4, L.dim, false, 74.5, 15)
         + word(n, 22.4, 12, L.amber, true, 74.5, 15);
     // THE RUNNERS (Ethan, 2026-10-25: "next to the score we added on the
@@ -2967,12 +2972,12 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
     const on = new Set(lv.bases || []);
     side += PBP_BOARD_BASES.map(([bag, x, y]) => at(x, y, `<rect x="-2.2" y="-2.2" width="4.4" height="4.4"
         transform="rotate(45)" fill="${on.has(bag) ? L.amber : L.off}"${
-        on.has(bag) ? ' filter="url(#pbp-sb-glow)"' : ""}/>`)).join("");
+        on.has(bag) ? ' filter="url(#pbp-mlb-glow)"' : ""}/>`)).join("");
     const lamps = (label, cy, lit, of, color) => at(69, cy, `<text y="2.3" font-size="6.4" text-anchor="middle"
         fill="${L.dim}">${label}</text>`) + Array.from({ length: of }, (_, i) => at(75 + i * 6.5, cy,
         `<circle r="2.2" fill="${i < (lit || 0) ? color : L.off}"/>`)).join("");
-    side += lamps("B", 30, lv.balls, 3, L.ball) + lamps("S", 37.5, lv.strikes, 2, L.strike)
-      + lamps("O", 45, lv.outs, 2, L.strike);
+    side += `<g filter="url(#pbp-mlb-glow)">${lamps("B", 30, lv.balls, 3, L.ball) + lamps("S", 37.5, lv.strikes, 2, L.strike)
+      + lamps("O", 45, lv.outs, 2, L.strike)}</g>`;
   } else if (final) {
     side = word("FINAL", 28.5, 11, L.white);
   } else if (!live && lv.start_time && typeof tzTime === "function") {
@@ -2987,10 +2992,8 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
         + (ampm ? word(ampm.toUpperCase(), 40.5, 6, L.dim) : "");
     }
   }
-  return `<svg class="pbp-board" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-    <defs><filter id="pbp-sb-glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation=".9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter><linearGradient id="pbp-sb-sheen" x1="0" y1="0" x2=".35" y2="1">
+  return `<svg class="pbp-board" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <defs>${pbpLitDefs("pbp-mlb", 0.75, 0.12)}<linearGradient id="pbp-sb-sheen" x1="0" y1="0" x2=".35" y2="1">
       <stop offset="0" stop-color="${L.rule}" stop-opacity=".07"/><stop offset=".5" stop-color="${L.rule}" stop-opacity="0"/>
     </linearGradient></defs>
     <polygon points="${PBP_BOARD.map(([x, y]) => `${x},${y}`).join(" ")}" fill="${L.panel}" fill-opacity=".9"/>
@@ -3016,22 +3019,59 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
    quarter and the clock and the down ("Q3 4:12 · 3RD & 8"), HALFTIME,
    FINAL, or the kickoff before it.
 
-   MEASURED ON ALL FOUR FRAMES, which are four renders and not one picture
-   copied: the side screens' frame lines sit within half a unit of each
-   other across them (left 85.5-99.0 x 13.0-26.7, right 140.3-153.8 x
-   13.0-26.7), so each screen here is drawn a touch larger than any of
-   them, with a bezel of its own, and no frame's edge shows past it. The
-   board faces the camera, so these are rectangles. The wordmark lies in
-   106.5-132.5 x 21-25.4 on every frame; its cover is the board's own
-   black, sampled off the four (#07080C).
-
    What it shows is what the live state holds, and a score that has just
-   changed flashes, as on the ballpark's board. */
+   changed flashes, as on the ballpark's board. How it is drawn into the
+   photograph is the note under this one. */
+/* PART OF THE BOARD, NOT ON IT (Ethan, 2026-10-25, his phone's screenshot:
+   "it looks ugly ... It looks like you place stickers or something on top
+   of it ... Make sure it looks real and blended in"). Two things made the
+   first draft a sticker. Its panels were cards of our own (a grey border,
+   rounded corners, a code font's digits) laid over the photograph's
+   screens; and on his phone the picture's box came out 1.5:1, where every
+   drawing kept the picture's 1.6:1 and slid off it (all of them now cover
+   and sit on the bottom, as the photograph does: preserveAspectRatio
+   "xMidYMax slice", css/styles.css .pbp-photo says the same).
+
+   So the screens here are the photograph's own. Its gold frames stay; only
+   the face inside each is painted, in that face's own black (sampled off
+   each of the four renders), its edge feathered into the picture. On it,
+   the board's own lettering: the team in the wordmark's silver, the score
+   in the logo's gold, both glowing as the logo does. The wordmark's line
+   on the main screen becomes the game in the wordmark's own hand.
+
+   THE FOUR RENDERS AGREE on the frames to a pixel or two (the side
+   screens' gold lines at 85.6-98.7 and 140.4-153.8, 13.1 to 26.6 down)
+   and on the wordmark (107.6-132.0 x 22.3-25.3 between them). The faces
+   painted sit half a unit inside the lines; the logo they cover is
+   88.1-96.0 x 15.6-23.1. Which render is up is app.js pbpFieldHTML's
+   choice: the newest play's team, else the possession. */
 const PBP_FIELD_BOARD = {
-  away: [85.1, 12.6, 99.1, 27],          // x0 y0 x1 y1
-  home: [140.2, 12.6, 154, 27],
-  line: [105.5, 20.9, 134.5, 25.9],      // where the wordmark was
+  away: [86.3, 13.8, 98, 26],            // a side screen's face: x0 y0 x1 y1
+  home: [141.1, 13.8, 153.1, 26],
+  line: [107, 21.7, 132.6, 25.9],        // the wordmark's line, with a margin
 };
+// Each render's screens' own black: the side faces, the main face.
+const PBP_FIELD_FACES = {
+  "nfl-home": ["#07090E", "#080A0E"], "nfl-away": ["#08080D", "#0C0D11"],
+  "cfb-home": ["#04080D", "#08090D"], "cfb-away": ["#04060A", "#07080D"],
+};
+// The boards' lit lettering, in the photographs' own colours: the logo's
+// gold, the wordmark's silver, the glow both have, a painted face's edge.
+// The filters work in sRGB: in the default linear space, at eight bits, a
+// face as dark as (8, 10, 14) comes back (13, 13, 13), a grey box on the
+// screen it was painted to match.
+function pbpLitDefs(id = "pbp-lit", glow = 0.28, soft = 0.2) {
+  return `<linearGradient id="${id}-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF3C8"/>
+      <stop offset=".52" stop-color="#F3C24E"/><stop offset="1" stop-color="#BD8428"/></linearGradient>
+    <linearGradient id="${id}-silver" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C3C8D0"/></linearGradient>
+    <filter id="${id}-glow" x="-25%" y="-45%" width="150%" height="190%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="${glow}" result="b"/>
+      <feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".6"/></feComponentTransfer>
+      <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="${id}-soft" x="-10%" y="-25%" width="120%" height="150%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="${soft}"/></filter>`;
+}
 
 function pbpFieldBoardSVG(d, league) {
   const lv = (d && d.live) || {};
@@ -3044,22 +3084,24 @@ function pbpFieldBoardSVG(d, league) {
   const moment = pbpMoment(d, league, prev);
   _pbpBoardLast = pbpBoardKeep(id, lv, moment);
   const hold = live && typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
+  const last = (d.plays || []).filter((r) => r && r.kind === "football").pop();
+  const who = (last && last.team) || lv.possession || "";
+  const [faceInk, mainInk] = PBP_FIELD_FACES[`${league === "cfb" ? "cfb" : "nfl"}-${who && who === away ? "away" : "home"}`];
   const screen = (side, abbr, pts) => {
-    const [x0, y0, x1, y1] = PBP_FIELD_BOARD[side], cx = f((x0 + x1) / 2);
+    const [x0, y0, x1, y1] = PBP_FIELD_BOARD[side], cx = (x0 + x1) / 2;
     const fresh = prev && pts != null && prev[side] != null && pts !== prev[side];
     const ball = live && !hold && lv.possession && lv.possession === abbr;     // no one has it at the half
     const s = pts != null ? String(pts) : "";
-    return `<rect x="${x0}" y="${y0}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" rx=".5" fill="${L.panel}"
-        stroke="${L.rule}" stroke-opacity=".22" stroke-width=".25"/>
-      <rect x="${f(x0 + .9)}" y="${f(y0 + .9)}" width="${f(x1 - x0 - 1.8)}" height=".8" rx=".3"
-        fill="${pbpBoardColor(abbr, league)}"/>
-      <text x="${cx}" y="${f(y0 + 5)}" font-size="3.4" text-anchor="middle" fill="${L.white}"
-        letter-spacing=".2">${escapeHtml(abbr)}</text>${s ? `
-      <text class="pbp-sb-num${fresh ? " pbp-sb-new" : ""}" x="${cx}" y="${f(y0 + 10.8)}"
-        font-size="${s.length > 2 ? 4.6 : 6.2}" text-anchor="middle" fill="${L.amber}"
-        filter="url(#pbp-sb-glow)">${escapeHtml(s)}</text>` : ""}${ball ? `
-      <g class="pbp-sb-ball" transform="translate(${cx} ${f(y1 - 1.4)})"><ellipse rx="1.6" ry=".85" fill="${L.amber}"/>
-        <path d="M-.75 0H.75M-.4 -.32V.32M0 -.32V.32M.4 -.32V.32" stroke="${L.panel}" stroke-width=".2"/></g>` : ""}`;
+    return `<rect x="${x0}" y="${y0}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" fill="${faceInk}" filter="url(#pbp-lit-soft)"/>
+      <text class="pbp-lit-name" x="${f(cx)}" y="${f(y0 + 3.6)}" font-size="2.7" text-anchor="middle" letter-spacing=".3"
+        fill="url(#pbp-lit-silver)" filter="url(#pbp-lit-glow)">${escapeHtml(abbr)}</text>
+      <rect x="${f(cx - 2.6)}" y="${f(y0 + 4.5)}" width="5.2" height=".32" rx=".16" fill="${pbpBoardColor(abbr, league)}"
+        filter="url(#pbp-lit-glow)"/>${s ? `
+      <text class="pbp-lit-num${fresh ? " pbp-sb-new" : ""}" x="${f(cx)}" y="${f(y0 + 10.5)}"
+        font-size="${s.length > 2 ? 5 : 6.6}" text-anchor="middle" fill="url(#pbp-lit-gold)" filter="url(#pbp-lit-glow)">${
+        escapeHtml(s)}</text>` : ""}${ball ? `
+      <g class="pbp-sb-ball" transform="translate(${f(cx)} ${f(y1 - .7)})" filter="url(#pbp-lit-glow)"><ellipse rx="1" ry=".55"
+        fill="url(#pbp-lit-gold)"/><path d="M-.45 0H.45M-.22 -.2V.2M0 -.2V.2M.22 -.2V.2" stroke="${faceInk}" stroke-width=".13"/></g>` : ""}`;
   };
   // The main screen's line: what the game is doing now.
   const per = String(lv.period || "");
@@ -3081,15 +3123,20 @@ function pbpFieldBoardSVG(d, league) {
     msg = left > 0 && left <= PBP_COUNT_MS ? `KICKOFF IN ${pbpCountdown(left)}` : `KICKOFF ${tzTime(lv.start_time)}`;
     if (left > 0 && left <= PBP_COUNT_MS) count = ` data-pbp-count="${start}" data-pbp-pre="KICKOFF IN " data-pbp-done="KICKOFF"`;
   }
+  // In the wordmark's hand: its height (3.4) and its wide spacing for a
+  // short line, set closer and smaller for a long one so it keeps to the
+  // wordmark's width.
   const [lx0, ly0, lx1, ly1] = PBP_FIELD_BOARD.line;
-  const size = Math.min(3.6, (lx1 - lx0 - 2) / (Math.max(1, msg.length) * 0.6));
-  const line = msg ? `<rect x="${lx0}" y="${ly0}" width="${f(lx1 - lx0)}" height="${f(ly1 - ly0)}" fill="${L.face}"/>
-    <text class="pbp-sb-num${moment.word ? ` pbp-sb-moment" style="--t:${Date.now() - moment.at}ms` : ""}" x="${f((lx0 + lx1) / 2)}" y="${f(ly1 - 1.25)}"
-      font-size="${f(size)}" text-anchor="middle" fill="${L.amber}" filter="url(#pbp-sb-glow)"${count}>${escapeHtml(msg)}</text>` : "";
-  return `<svg class="pbp-board" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-    <defs><filter id="pbp-sb-glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation=".35" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter></defs>
+  const ls = msg.length <= 12 ? 0.3 : 0.1;
+  const size = Math.min(3.4, (lx1 - lx0 - 1.4) / (Math.max(1, msg.length) * (0.5 + ls)));
+  const line = msg ? `<rect x="${lx0}" y="${ly0}" width="${f(lx1 - lx0)}" height="${f(ly1 - ly0)}" fill="${mainInk}"
+      filter="url(#pbp-lit-soft)"/>
+    <text class="pbp-lit-line${moment.word ? ` pbp-sb-moment" style="--t:${Date.now() - moment.at}ms` : ""}"
+      x="${f((lx0 + lx1) / 2 + size * ls / 2)}" y="25.1" font-size="${f(size)}" letter-spacing="${f(size * ls)}"
+      text-anchor="middle" fill="url(#pbp-lit-${moment.word ? "gold" : "silver"})" filter="url(#pbp-lit-glow)"${count}>${
+      escapeHtml(msg)}</text>` : "";
+  return `<svg class="pbp-board" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <defs>${pbpLitDefs()}</defs>
     ${screen("away", away, lv.away_score)}${screen("home", home, lv.home_score)}
     ${line}
   </svg>${moment.big && Date.now() - moment.at < PBP_BOOM_MS
@@ -3138,6 +3185,9 @@ const PBP_ARENA = {
     clocks: [[[314.8, 460], [347.5, 454.2], [347.5, 499.9], [316.1, 511]],
              [[1328.5, 454.2], [1359.9, 460], [1358.5, 510.4], [1327.2, 499.9]]],
     boom: [[260, 430, 70], [1410, 430, 70], [520, 470, 56], [1150, 470, 56], [836, 480, 60]],
+    // Each surface's own dark, sampled off the render: the band, the table,
+    // the shot clocks' red-black faces.
+    ink: { ring: "#090807", table: "#14100E", clock: "#330600" },
   },
   hockey: {
     ring: [708, 289, 961, 323],
@@ -3146,6 +3196,7 @@ const PBP_ARENA = {
     screen: [[663.6, 115], [1009.7, 115], [994.1, 283.6], [679.3, 283.6]],
     nets: { away: [294, 682, 252], home: [1391, 682, 1433] },  // the goal line, and the lamp's x behind it
     boom: [[260, 340, 70], [1410, 340, 70], [500, 420, 56], [1170, 420, 56], [836, 505, 50]],
+    ink: { ring: "#080400", halo: "#1A0A00", boards: "#1E1307", screen: "#171009" },
   },
 };
 // The period as an arena's boards say it: Q2, OT, 2OT; 1ST, 3RD, OT, SO.
@@ -3177,14 +3228,14 @@ function pbpArenaStatus(d, league) {
 // One lit line across a rectangle of the picture: the board's own black
 // over what was painted there, the words centred and sized to fit (the
 // face is mono, so a character is 0.6 of its size). `parts` colour it.
-function pbpLedLine([x0, y0, x1, y1], parts, max, blink = null) {
-  const L = PBP_BOARD_LED, f = (n) => n.toFixed(1);
+function pbpLedLine([x0, y0, x1, y1], parts, max, blink = null, ink = PBP_BOARD_LED.face) {
+  const f = (n) => n.toFixed(1);
   const n = parts.map((p) => p.t).join("").length;
-  const size = Math.min(max, (x1 - x0) * 0.92 / (Math.max(1, n) * 0.6));
-  return `<rect x="${x0}" y="${y0}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" rx="3" fill="${L.face}" fill-opacity=".97"/>
-    <text class="pbp-sb-num${blink != null ? ` pbp-sb-moment" style="--t:${blink}ms` : ""}" x="${f((x0 + x1) / 2)}"
-      y="${f((y0 + y1) / 2 + size * 0.36)}" font-size="${f(size)}" text-anchor="middle" filter="url(#pbp-ar-glow)">${
-      parts.map((p) => `<tspan fill="${p.c || L.white}"${p.a || ""}>${escapeHtml(p.t)}</tspan>`).join("")}</text>`;
+  const size = Math.min(max, (x1 - x0) * 0.92 / (Math.max(1, n) * 0.58));
+  return `<rect x="${x0}" y="${y0}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" fill="${ink}" filter="url(#pbp-ar-soft)"/>
+    <text class="pbp-ar-line${blink != null ? ` pbp-sb-moment" style="--t:${blink}ms` : ""}" x="${f((x0 + x1) / 2)}"
+      y="${f((y0 + y1) / 2 + size * 0.36)}" font-size="${f(size)}" letter-spacing="${f(size * 0.05)}" text-anchor="middle"
+      filter="url(#pbp-ar-glow)">${parts.map((p) => `<tspan fill="${p.c}"${p.a || ""}>${escapeHtml(p.t)}</tspan>`).join("")}</text>`;
 }
 // Words on a screen the picture sees at an angle, drawn on its own face
 // (W 100 by H across) and carried onto the picture by its four corners.
@@ -3195,12 +3246,13 @@ function pbpOnQuad(quad, H, inner) {
     return `<g transform="matrix(${f(m.xu / W)} ${f(m.yu / W)} ${f(m.xv / H)} ${f(m.yv / H)} ${f(m.X)} ${f(m.Y)})">${svg}</g>`;
   }).join("");
 }
-// A shot clock: the game clock in yellow over the period in red.
-function pbpShotClockSVG(quad, top, bottom) {
+// A shot clock: the game clock in yellow over the period in red, LED
+// digits on the clock's own red-black face.
+function pbpShotClockSVG(quad, top, bottom, ink = PBP_BOARD_LED.shot) {
   const L = PBP_BOARD_LED, fit = (s, max) => Math.min(max, 92 / (Math.max(1, s.length) * 0.6)).toFixed(1);
   const glyph = (s, max, fill) => `<text class="pbp-sb-num" font-size="${fit(s, max)}" text-anchor="middle" fill="${fill}"
     filter="url(#pbp-ar-glow)">${escapeHtml(s)}</text>`;
-  return `<polygon points="${quad.map(([x, y]) => `${x},${y}`).join(" ")}" fill="${L.shot}"/>` + pbpOnQuad(quad, 150, [
+  return `<polygon points="${quad.map(([x, y]) => `${x},${y}`).join(" ")}" fill="${ink}" filter="url(#pbp-ar-soft)"/>` + pbpOnQuad(quad, 150, [
     ...(top ? [[50, 52, glyph(top, 40, L.clock)]] : []), ...(bottom ? [[50, 124, glyph(bottom, 56, L.strike)]] : [])]);
 }
 function pbpArenaSVG(d, league, opt = {}) {
@@ -3217,19 +3269,20 @@ function pbpArenaSVG(d, league, opt = {}) {
   // A count drawn here ticks on the page's one timer (renderPbpPage hands
   // these pages over before it would start it).
   if (st.start && typeof document !== "undefined") pbpCountStart();
-  const T = (t) => ({ t, c: L.white }), N = (n) => ({ t: String(n), c: L.amber }), S = (t) => ({ t, c: L.dim });
-  const now = st.text ? { t: st.text, c: L.amber,
+  const T = (t) => ({ t, c: "url(#pbp-ar-silver)" }), N = (n) => ({ t: String(n), c: "url(#pbp-ar-gold)" });
+  const S = (t) => ({ t, c: L.dim });
+  const now = st.text ? { t: st.text, c: "url(#pbp-ar-gold)",
     a: st.start ? ` data-pbp-count="${st.start}" data-pbp-pre="${st.pre}" data-pbp-done="${st.done}"` : "" } : null;
   const scored = lv.away_score != null && lv.home_score != null;
-  const shout = moment.word ? [{ t: moment.word, c: L.amber }, ...(moment.side ? [S(" · "), T(d[moment.side])] : [])] : null;
+  const shout = moment.word ? [{ t: moment.word, c: "url(#pbp-ar-gold)" }, ...(moment.side ? [S(" · "), T(d[moment.side])] : [])] : null;
   let out = "";
   if (!hockey) {
     const game = shout || [T(scored ? `${away} ` : away), ...(scored ? [N(lv.away_score)] : []),
       ...(now ? [S(" · "), now] : []), S(" · "), T(scored ? `${home} ` : home), ...(scored ? [N(lv.home_score)] : [])];
     const top = lv.state === "live" ? String(lv.clock || "") : lv.state === "final" ? "0.0" : "";
     const bottom = lv.state === "live" ? pbpArenaPeriod(lv, league, d) : lv.state === "final" ? "FINAL" : "";
-    out = pbpLedLine(A.ring, game, 22, blink) + pbpLedLine(A.table, game, 19, blink)
-      + A.clocks.map((q) => pbpShotClockSVG(q, top, bottom)).join("");
+    out = pbpLedLine(A.ring, game, 22, blink, A.ink.ring) + pbpLedLine(A.table, game, 19, blink, A.ink.table)
+      + A.clocks.map((q) => pbpShotClockSVG(q, top, bottom, A.ink.clock)).join("");
   } else {
     const score = shout || (scored ? [T(`${away} `), N(lv.away_score), S(" – "), N(lv.home_score), T(` ${home}`)]
       : [T(away), S(" · "), T(home)]);
@@ -3237,27 +3290,26 @@ function pbpArenaSVG(d, league, opt = {}) {
     const strength = lv.state !== "live" ? "" : sit.en ? `${d[sit.en]} EMPTY NET`
       : sit.pp ? `${d[sit.pp]} POWER PLAY${sit.left ? ` ${sit.left}` : ""}` : "";
     const fit = (s, room, max) => Math.min(max, room / (Math.max(1, s.length) * 0.6)).toFixed(1);
-    const halo = `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${L.face}" fill-opacity=".97"/>${now
-      ? `<text class="pbp-sb-num" x="${cx}" y="${(strength ? cy - 2 : cy + 8).toFixed(1)}" font-size="${fit(now.t, 168, 24)}"
-        text-anchor="middle" fill="${L.amber}" filter="url(#pbp-ar-glow)"${now.a}>${escapeHtml(now.t)}</text>` : ""}${strength
-      ? `<text class="pbp-sb-num" x="${cx}" y="${cy + 16}" font-size="${fit(strength, 156, 15)}" text-anchor="middle"
-        fill="${L.white}">${escapeHtml(strength)}</text>` : ""}`;
-    out = pbpLedLine(A.ring, score, 24, blink) + halo + pbpLedLine(A.boards, score, 15, blink);
+    const halo = `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${A.ink.halo}" filter="url(#pbp-ar-soft)"/>${now
+      ? `<text class="pbp-lit-num" x="${cx}" y="${(strength ? cy - 2 : cy + 8).toFixed(1)}" font-size="${fit(now.t, 168, 25)}"
+        text-anchor="middle" fill="url(#pbp-ar-gold)" filter="url(#pbp-ar-glow)"${now.a}>${escapeHtml(now.t)}</text>` : ""}${strength
+      ? `<text x="${cx}" y="${cy + 16}" font-size="${fit(strength, 156, 15)}" text-anchor="middle" letter-spacing=".6"
+        fill="url(#pbp-ar-silver)" filter="url(#pbp-ar-glow)">${escapeHtml(strength)}</text>` : ""}`;
+    out = pbpLedLine(A.ring, score, 24, blink, A.ink.ring) + halo + pbpLedLine(A.boards, score, 15, blink, A.ink.boards);
     if (moment.word === "GOAL" && moment.side) {
       // The main screen says it, and the lamp behind the net it went in burns.
       const [x, y, lx] = A.nets[moment.side];
-      out += `<polygon points="${A.screen.map(([px, py]) => `${px},${py}`).join(" ")}" fill="${L.face}"/>
+      out += `<polygon points="${A.screen.map(([px, py]) => `${px},${py}`).join(" ")}" fill="${A.ink.screen}"
+        filter="url(#pbp-ar-soft)"/>
         <g class="pbp-sb-moment" style="--t:${since}ms">${pbpOnQuad(A.screen, 50, [
-          [50, 31, `<text class="pbp-sb-num" font-size="27" text-anchor="middle" fill="${L.amber}">GOAL</text>`],
+          [50, 31, `<text class="pbp-lit-num" font-size="27" text-anchor="middle" fill="url(#pbp-ar-gold)">GOAL</text>`],
           [50, 44, `<text font-size="9" text-anchor="middle" fill="${pbpBoardColor(d[moment.side], league)}" letter-spacing=".8">${
             escapeHtml(d[moment.side])}</text>`]])}</g>
         <g class="pbp-lamp" style="--t:${since}ms"><ellipse cx="${x}" cy="${y - 18}" rx="110" ry="70" fill="url(#pbp-ar-lamp)"/>
           <rect x="${lx - 10}" y="${y - 84}" width="20" height="14" rx="5" fill="${L.lamp}" filter="url(#pbp-ar-glow)"/></g>`;
     }
   }
-  return `<defs><filter id="pbp-ar-glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter><radialGradient id="pbp-ar-lamp"><stop offset="0" stop-color="${L.lamp}" stop-opacity=".6"/>
+  return `<defs>${pbpLitDefs("pbp-ar", 2.2, 1.6)}<radialGradient id="pbp-ar-lamp"><stop offset="0" stop-color="${L.lamp}" stop-opacity=".6"/>
       <stop offset="1" stop-color="${L.lamp}" stop-opacity="0"/></radialGradient></defs>
     <g class="pbp-board pbp-arena">${out}</g>${moment.big && since < PBP_BOOM_MS
       ? pbpBoomSVG(A.boom, moment.side ? pbpBoardColor(d[moment.side], league) : "", since, 6.5, true) : ""}`;

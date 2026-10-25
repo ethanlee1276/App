@@ -29593,7 +29593,7 @@ function pbpArcSVG(hit, park, opts) {
   const ch = title && detail ? 19 : 12;
   const [chipX, chipY] = pbpCalloutBox(f.L, cw, ch);
   return `
-  <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+  <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
     <path id="${id}" d="${d}" fill="none" stroke="#ffd24a" stroke-width="1.6"
       stroke-linecap="round" opacity="0.95"${still ? "" : ` stroke-dasharray="${f.len.toFixed(1)}" stroke-dashoffset="${f.len.toFixed(1)}"`}>
       ${still ? "" : `<animate attributeName="stroke-dashoffset" from="${f.len.toFixed(1)}" to="0" dur="1.2s" fill="freeze"/>`}
@@ -29880,7 +29880,7 @@ function pbpPlaySVG(play) {
   const ch = title && detail ? 19 : 12;
   const [bx, by] = pbpCalloutBox([x0, y1], cw, ch);
   return `
-  <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+  <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
     ${yards > 0 ? `<path id="${id}" d="M${x0} ${y0.toFixed(1)} L${x0} ${y1.toFixed(1)}"
       fill="none" stroke="${hue}" stroke-width="1.6" stroke-linecap="round" opacity="0.95"${
       still ? "" : ` stroke-dasharray="${len.toFixed(1)}" stroke-dashoffset="${len.toFixed(1)}"`}>
@@ -30047,7 +30047,7 @@ function pbpBasesSVG(live) {
   }).join("");
   if (!marks) return "";
   return `<svg class="pbp-runners" viewBox="0 0 240 150"
-    preserveAspectRatio="xMidYMid meet" aria-hidden="true">${marks}</svg>`;
+    preserveAspectRatio="xMidYMax slice" aria-hidden="true">${marks}</svg>`;
 }
 
 function pbpPhotoHTML(game) {
@@ -30081,7 +30081,7 @@ function pbpPhotoHTML(game) {
         srcset="img/park/park-night@640.jpg 640w, img/park/park-night.jpg 1280w"
         sizes="(max-width: 700px) 100vw, 700px" alt="" decoding="async">
     </picture>
-    <svg class="pbp-photomarks" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid slice"
+    <svg class="pbp-photomarks" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice"
          aria-hidden="true">
       ${mark("lf", PBP_PHOTO.lf, 0)}${mark("cf", PBP_PHOTO.cf, -2)}${mark("rf", PBP_PHOTO.rf, 0)}
     </svg>`;

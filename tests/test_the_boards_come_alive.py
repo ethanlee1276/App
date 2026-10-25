@@ -105,13 +105,27 @@ def test_the_football_board_rides_the_park_on_its_own_measured_screens():
     assert 'if (league === "nfl" || league === "cfb") return pbpFieldBoardSVG(d, league);' in DETAIL
     m = re.search(r"const PBP_FIELD_BOARD = \{\s*away: (\[.*?\]),.*?home: (\[.*?\]),.*?line: (\[.*?\]),", DETAIL, re.S)
     away, home, line = (json.loads(g) for g in m.groups())
-    # Drawn a touch larger than the frames measured on all four photographs
-    # (left 85.5-99.0 x 13.0-26.7, right 140.3-153.8 x 13.0-26.7), so no
-    # frame's edge shows past them; the line covers the wordmark (106.5-132.5).
-    assert away[0] < 85.5 and away[2] > 99.0 and away[1] < 13.0 and away[3] > 26.7, away
-    assert home[0] < 140.3 and home[2] > 153.8 and home[1] < 13.0 and home[3] > 26.7, home
-    assert line[0] < 106.5 and line[2] > 132.5 and line[1] < 21.3 and line[3] > 25.3, line
-    assert line[3] < 27.6, "the board's lit ring under it stays the photograph's"
+    # PART OF THE BOARD (Ethan, 2026-10-25: "It looks like you place stickers
+    # or something on top of it"): the faces painted sit INSIDE the gold
+    # frames all four renders share (85.6-98.7 and 140.4-153.8, 13.1-26.6),
+    # so the photograph's own bezel shows, and cover each side's logo
+    # (88.1-96.0 / 143.1-151.1 x 15.6-23.1).
+    for (x0, y0, x1, y1), (fx0, fx1), (lx0, lx1) in ((away, (85.6, 98.7), (88.1, 96.0)), (home, (140.4, 153.8), (143.1, 151.1))):
+        assert fx0 < x0 < lx0 and lx1 < x1 < fx1, (x0, x1)
+        assert 13.1 < y0 < 15.6 and 23.1 < y1 < 26.6, (y0, y1)
+    # The line covers the wordmark on all four (107.6-132.0 x 22.3-25.3),
+    # clear of the logo above and the frame below.
+    assert line[0] < 107.6 and line[2] > 132.0 and 20.3 < line[1] < 22.3 and 25.3 < line[3] < 26.6, line
+    faces = re.search(r"const PBP_FIELD_FACES = \{(.*?)\};", DETAIL, re.S).group(1)
+    assert all(k in faces for k in ('"nfl-home"', '"nfl-away"', '"cfb-home"', '"cfb-away"')), "each render's own black"
+    assert DETAIL.count('color-interpolation-filters="sRGB"') >= 2, \
+        "linear filtering crushed (8, 10, 14) to a grey box at eight bits"
+    # And every drawing over a photograph covers and sits on the bottom as
+    # the photograph does, so a box of any shape keeps them on it.
+    for src in (APP, DETAIL, open(os.path.join(ROOT, "web", "js", "gamecast.js"), encoding="utf-8").read()):
+        for tag in re.findall(r'<svg class="(?:pbp-board|pbp-arc|pbp-runners|pbp-photomarks|pbp-wind|pbp-boom|gc-art)[^"]*"[^>]*', src):
+            assert 'preserveAspectRatio="xMidYMax slice"' in tag, tag[:120]
+    assert ".pbp-photo { object-fit: cover; object-position: center bottom; }" in CSS
 
 
 def test_live_the_screens_carry_the_teams_the_scores_and_the_ball_and_the_line_the_game():
@@ -414,6 +428,13 @@ def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
                                words: [...document.querySelectorAll('.pbp-board text')].map((t) => t.textContent.trim()),
                                wide: document.scrollingElement.scrollWidth - innerWidth };
                     }""")
+                    # ETHAN'S PHONE drew this box 1.5:1, not the picture's 1.6:1;
+                    # the face must still land on the photograph's own screen.
+                    page.add_style_tag(content=".pbp-park { aspect-ratio: 1.5 !important; }")
+                    page.wait_for_timeout(150)
+                    g["tall"] = page.evaluate("""() => {
+                      const b = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
+                      return { photo: b('.pbp-park .pbp-photo'), face: b('.pbp-board > rect') }; }""")
                     # The touchdown: a new play, six more points, the page's next pass.
                     d = json.loads(json.dumps(fb))
                     last = [p for p in d["plays"] if p.get("kind") == "football"][-1]
@@ -442,6 +463,15 @@ def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
             want = [x0 / 240 * pw_, y0 / 150 * ph, (x1 - x0) / 240 * pw_, (y1 - y0) / 150 * ph]
             assert all(abs(a - b) <= 1.5 for a, b in zip(r, want)), (width, r, want)
         assert g["words"][:4] == ["TB", "10", "DAL", "17"], (width, g["words"])
+        # In the taller box, where the photograph covers and sits on the
+        # bottom, the away face is where that photograph puts its screen.
+        px, py, pw_, ph = g["tall"]["photo"]
+        assert pw_ / ph < 1.55, ("the box really is taller", pw_ / ph)
+        s = max(pw_ / 1280, ph / 800)
+        ox, oy = px + (pw_ - 1280 * s) / 2, py + ph - 800 * s
+        x0, y0, x1, y1 = away
+        want = [ox + x0 / 240 * 1280 * s, oy + y0 / 150 * 800 * s, (x1 - x0) / 240 * 1280 * s, (y1 - y0) / 150 * 800 * s]
+        assert all(abs(a - b) <= 1.5 for a, b in zip(g["tall"]["face"], want)), (width, g["tall"]["face"], want)
         assert g["moment"] == "TOUCHDOWN" and g["bursts"] == 5 and g["anim"] == "pbp-boom", (width, g)
         a, b = g["tick"]
         assert re.fullmatch(r"in 2[23]:\d\d", a) and re.fullmatch(r"in 2[23]:\d\d", b) and a != b, ("it ticks", g["tick"])

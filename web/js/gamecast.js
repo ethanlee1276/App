@@ -788,7 +788,7 @@
       rest = [at[0], at[1], sz(at[1])];
     }
     // Replay on the photograph too: the card's button is a tab away.
-    return `<svg class="gc-art" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true" data-gc-art>`
+    return `<svg class="gc-art" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true" data-gc-art>`
       + `${body}${artBall(rest[0], rest[1], rest[2], moving ? T.motion : "")}${top}</svg>`
       + `<button type="button" class="gc-replay gc-art-replay" data-gc-replay aria-label="Replay the drive">${REPLAY}</button>`;
   }
@@ -886,7 +886,7 @@
     };
     if (done && done.hit) body += flight(done.hit, endAt != null ? endAt + 0.1 : null, false);
     else if (hitRow && hitRow.hit && hitRow.at_bat !== ab) body = flight(hitRow.hit, null, true) + body;
-    return `<svg class="gc-art" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true" data-gc-art>${body}</svg>`
+    return `<svg class="gc-art" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true" data-gc-art>${body}</svg>`
       + `<button type="button" class="gc-replay gc-art-replay" data-gc-pz-replay aria-label="Replay the at-bat">${REPLAY}</button>`;
   }
   const lastWord = (p) => p.call || PZ_WORDS[pzOutcome(p.code)];

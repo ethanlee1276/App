@@ -619,6 +619,12 @@
 .pbp-board { pointer-events: none; }
 .pbp-board text { font-family: var(--font-display); font-weight: 800; }
 .pbp-board .pbp-sb-num { font-family: var(--font-mono); font-weight: 700; }
+/* The boards' lit lettering in the photographs' own hand (detail.js
+   pbpLitDefs): a team and a score in the display face, bold; a status line
+   in its regular weight, as the renders' wordmark is set. */
+.pbp-board .pbp-lit-line { font-weight: 400; }
+.pbp-board .pbp-lit-num { font-variant-numeric: tabular-nums; }
+.pbp-board .pbp-ar-line { font-variant-numeric: tabular-nums; }
 .pbp-sb-new { animation: pbp-sb-flash 1.4s linear 1; }
 /* The big moment (detail.js pbpMoment): HOME RUN or TOUCHDOWN on the board
    blinks three times, then holds until the next pass redraws the board. */

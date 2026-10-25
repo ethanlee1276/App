@@ -149,7 +149,8 @@ def test_basketball_lights_the_ring_the_table_and_both_shot_clocks():
     line = "LAL 10 · Q2 5:10 · BOS 8"
     assert live.count(line) == 2, ("the ring and the table", live)
     assert live.count("5:10") == 2 and live.count("Q2") == 2, "both shot clocks: the game clock over the quarter"
-    assert got[0].count('fill="#120707"') == 2, "each clock's painted 5:24 and 18 under its own face"
+    assert got[0].count('fill="#330600" filter="url(#pbp-ar-soft)"') == 2, \
+        "each clock's painted 5:24 and 18 under a face of the clock's own red-black (51, 6, 0), feathered"
     assert "LAL 10 · OT 3:12 · BOS 8" in ot and ot.count("OT") == 2
     assert "LVA 10 · 2OT 45.2 · NYL 8" in two_ot and "45.2" in two_ot
     assert "LAL 110 · FINAL/OT · BOS 112" in final and final.count("FINAL") == 2 and final.count("0.0") == 2

@@ -8510,6 +8510,11 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-park picture, .pbp-photo { position: absolute; inset: 0; display: block;
   width: 100%; height: 100%; }
 .pbp-photo { object-fit: cover; object-position: center bottom; }
+/* Everything drawn over a photograph (the boards, the arc, the runners,
+   the drive, the wall marks, the wind, the fireworks) is an SVG set to
+   preserveAspectRatio="xMidYMax slice": this same cover-and-bottom, so the
+   two agree on a box of any shape. Ethan's phone drew the box at 1.5:1,
+   and every drawing that kept the picture's own 1.6:1 slid off it. */
 .pbp-photomarks { position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; }
 .pbp-park .pbp-arc { pointer-events: none; }

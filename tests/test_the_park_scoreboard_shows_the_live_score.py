@@ -173,7 +173,8 @@ def test_nothing_spills_off_the_board():
     word = _board_src()
     assert "const size = Math.min(max, room / (Math.max(1, txt.length) * 0.62));" in word, "a word fits its room"
     assert 'const word = (txt, y, max, fill, mono, cx = 82, room = 30, attrs = "") => {' in word
-    sizes = [float(s) for s in re.findall(r'font-size="([0-9.]+)" text-anchor="middle"\s*fill="#FFC94A">SUSPENDED', suspended)]
+    sizes = [float(s) for s in re.findall(r'font-size="([0-9.]+)" text-anchor="middle"\s*fill="url\(#pbp-mlb-gold\)"[^>]*>SUSPENDED',
+                                          suspended)]
     assert sizes and sizes[0] * 0.62 * len("SUSPENDED") <= 30.1, sizes   # printed to two places
 
 
