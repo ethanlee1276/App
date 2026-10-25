@@ -10244,7 +10244,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   /* Cards keep their own colour and stripe; the light catches their edge. */
   .card { background-image: var(--glass-sheen-soft), var(--grad-card); box-shadow: var(--glass-rim-soft), var(--glow-soft); }
   /* Controls become capsules of glass. */
-  .btn, .chip, .seg button, .al-cat, .ob-tab { border-radius: 999px; }
+  .btn, .chip, .seg button, .al-cat { border-radius: 999px; }
   .btn, .chip { box-shadow: var(--glass-rim-soft); }
   .btn.primary { background-image: var(--glass-gold), var(--grad-brand); box-shadow: var(--glass-rim), var(--glow); }
   /* The launcher tiles are panes, not capsules: two lines of words. */
