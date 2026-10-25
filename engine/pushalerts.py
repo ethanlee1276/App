@@ -46,7 +46,7 @@ LATEST = ROOT / "data" / "push" / "latest.json"
 KINDS = ("posted", "settled")
 #: A member's own alerts (engine/pushmine): a phone signed in when it
 #: subscribed may ask for these too.
-PERSONAL = ("watches", "bets")
+PERSONAL = ("watches", "bets", "clutch")
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300

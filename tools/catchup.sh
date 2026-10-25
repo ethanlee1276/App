@@ -41,6 +41,9 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EB 2>&1 | tee /tmp/eb.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EC 2>&1 | tee /tmp/ec.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh ED 2>&1 | tee /tmp/ed.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EE 2>&1 | tee /tmp/ee.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EF 2>&1 | tee /tmp/ef.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EG 2>&1 | tee /tmp/eg.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -494,6 +497,20 @@ curl -s https://qellysbook.com/api/account/me | grep -o '"phone_signup": [a-z]*'
 SH
 run ED "The game's win chance, drawn play by play" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpWinChartHTML('
+SH
+run EE "Your players, live (a strip on the Live tab)" 60 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'async function yourPlayersMount('
+curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/api/alerts/live
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import yourplayers as YP; print(len(YP.index()), 'players with a line right now')"
+SH
+run EF "Big moments by push (the clutch switch in Alerts)" 60 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'Big moments in my teams'
+cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
+SH
+run EG "Call it on live games" 60 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpCallItHTML('
+curl -s https://qellysbook.com/api/callit/nba/1
+cd /srv/qellys && sudo -u qellys python3 -c "import sqlite3; from engine import accounts as A; c=sqlite3.connect(f'file:{A.DB_PATH}?mode=ro', uri=True); t=c.execute(\"SELECT 1 FROM sqlite_master WHERE name='callit_calls'\").fetchone(); print(c.execute('SELECT COUNT(*), COUNT(won), COALESCE(SUM(won), 0) FROM callit_calls').fetchone() if t else 'no calls yet')"
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

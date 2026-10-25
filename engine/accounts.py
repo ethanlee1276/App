@@ -902,7 +902,9 @@ def delete_user(conn, user_id: int) -> None:
                   "alert_watches", "alert_seen",
                   # Codes redeemed and the guesses counted against them
                   # (engine/redeem), likewise cascade-only until now.
-                  "code_redemptions", "code_attempts"):
+                  "code_redemptions", "code_attempts",
+                  # Call it's calls on live games (engine/callit).
+                  "callit_calls"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     if "chat_msgs" in have:
@@ -1050,6 +1052,11 @@ def export_user(conn, user_id: int) -> dict:
         if row:
             out["joined_with_referral_code"] = {"code": row["code"], "at": row["attached_at"],
                                                 "first_payment_at": row["paid_at"]}
+    if "callit_calls" in have:
+        calls = [dict(r) for r in conn.execute("SELECT game, unit, call, result, won, at FROM callit_calls "
+                                               "WHERE user_id=? ORDER BY at", (int(user_id),))]
+        if calls:
+            out["call_it_calls"] = calls
     return out
 
 

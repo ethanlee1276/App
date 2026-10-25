@@ -2460,6 +2460,276 @@ const pbpTitleCase = (v) => String(v || "").replace(/[_-]+/g, " ")
    middle, the swings of fifteen points or more dotted. Nothing here is our
    model's: it is the game's own win chance, free like the score. Absent
    until the feed has given a handful of plays a number. */
+/* THE BOX SCORE AND THE TEAM TOTALS (moved here from app.js 2026-10-25:
+   only this page and the gamecast it loads draw them). */
+//: What leads a player's line, by league; the rest follow in the order the parser gave them.
+const PBP_LEAD_STAT = { nfl: ["pass_yds", "rush_yds", "rec_yds", "receptions"], cfb: ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+                        mlb: ["total_bases", "hits", "home_runs", "strikeouts"], nba: ["points", "rebounds", "assists"], wnba: ["points", "rebounds", "assists"] };
+
+/* A BOX SCORE IS A TABLE, and this room was drawing it as prose.
+
+   Ethan, 2026-09-10, looking at the Player stats room during Patriots
+   at Seahawks: "make this look better and more organized and just more
+   visually appealing."
+
+   It read `Rec Yds 19 · Receptions 4 · Targets 5` — every stat carrying
+   its own label, on one wrapped line, in a different order for every
+   player depending on which fields the parser happened to fill. Nothing
+   was wrong with the numbers and nothing could be compared: finding who
+   had the most targets meant reading eleven lines of prose and holding
+   the figures in your head. That is what columns are for.
+
+   FOOTBALL SPLITS INTO THREE, the way every box score has since box
+   scores existed: who threw it, who ran it, who caught it. A passer and
+   a slot receiver share almost no statistics, so one table with every
+   column is mostly dashes; three tables are each four columns wide and
+   each sorted by the number that matters in it.
+
+   The groups are keyed on the market names the parsers already write
+   (`engine/sources/nflpreseason.parse_boxscore`, `cfbdata`), so this
+   invents no field and no number. */
+const PBP_BOX_FOOTBALL = [
+  ["Passing", ["pass_cmp", "pass_att", "pass_yds", "pass_td", "pass_int"], "pass_yds"],
+  ["Rushing", ["carries", "rush_yds", "rush_td"], "rush_yds"],
+  ["Receiving", ["receptions", "targets", "rec_yds", "rec_td"], "rec_yds"],
+];
+
+//: The short heads a box score uses. Anything not here falls back to
+//: `marketWord`, which is the long form and is what the other leagues
+//: get — their stat keys have not been read, and a column head invented
+//: for a key nobody has looked at is the fabricated number this site
+//: exists not to print.
+const PBP_BOX_HEAD = {
+  pass_cmp: "CMP", pass_att: "ATT", pass_yds: "YDS", pass_td: "TD", pass_int: "INT",
+  carries: "CAR", rush_yds: "YDS", rush_td: "TD",
+  receptions: "REC", targets: "TGT", rec_yds: "YDS", rec_td: "TD",
+};
+
+const pbpStat = (r, k) => Number(((r || {}).stats || {})[k]);
+
+/* One table: the players who did this thing, and only the columns
+   somebody filled.
+
+   A COLUMN NOBODY FILLED IS NOT DRAWN. A rushing table on a night when
+   nobody scored on the ground should not carry an all-zero TD column —
+   the reader cannot tell an empty column from a column of real zeroes,
+   and the second is a fact while the first is furniture. Same rule the
+   scoreboard follows for `yard_line`: absent, never null. */
+function pbpBoxGroupHTML(rows, group) {
+  const [title, keys, sortKey] = group;
+  const mine = rows.filter((r) => keys.some((k) => Number.isFinite(pbpStat(r, k))));
+  if (!mine.length) return "";
+  const cols = keys.filter((k) => mine.some((r) => Number.isFinite(pbpStat(r, k))));
+  if (!cols.length) return "";
+  const sorted = mine.slice().sort((a, b) =>
+    (pbpStat(b, sortKey) || 0) - (pbpStat(a, sortKey) || 0));
+  const head = (k) => PBP_BOX_HEAD[k] || marketWord(k);
+  return `<div class="pbp-bx-wrap"><table class="pbp-bx">
+    <thead><tr><th scope="col" class="pbp-bx-who">${escapeHtml(title)}</th>${
+      cols.map((k) => `<th scope="col">${escapeHtml(head(k))}</th>`).join("")}</tr></thead>
+    <tbody>${sorted.map((r) => `<tr>
+      <th scope="row" class="pbp-bx-who">${escapeHtml(r.player || "")}${
+        r.position ? ` <span class="mini">${escapeHtml(r.position)}</span>` : ""}</th>${
+      cols.map((k) => {
+        const v = pbpStat(r, k);
+        return `<td>${Number.isFinite(v) ? escapeHtml(String(v)) : "—"}</td>`;
+      }).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+/* THE OTHER LEAGUES GET A TABLE TOO, built from whatever keys their own
+   parser filled rather than from a grouping I have not verified. The
+   columns are the six most-filled stats for that club, in that order,
+   headed by `marketWord` — so hoops reads as a table without this file
+   claiming to know what a hoops box score is shaped like. */
+function pbpBoxGenericHTML(rows, league) {
+  if (!rows.length) return "";
+  const filled = {};
+  rows.forEach((r) => Object.keys((r || {}).stats || {}).forEach((k) => {
+    if (Number.isFinite(pbpStat(r, k))) filled[k] = (filled[k] || 0) + 1;
+  }));
+  const cols = Object.keys(filled).sort((a, b) => filled[b] - filled[a]).slice(0, 6);
+  if (!cols.length) return "";
+  const lead = (PBP_LEAD_STAT[league] || [])[0] || cols[0];
+  const sorted = rows.slice().sort((a, b) => (pbpStat(b, lead) || 0) - (pbpStat(a, lead) || 0))
+    .slice(0, 14);
+  return `<div class="pbp-bx-wrap"><table class="pbp-bx">
+    <thead><tr><th scope="col" class="pbp-bx-who">Player</th>${
+      cols.map((k) => `<th scope="col">${escapeHtml(marketWord(k))}</th>`).join("")}</tr></thead>
+    <tbody>${sorted.map((r) => `<tr>
+      <th scope="row" class="pbp-bx-who">${escapeHtml(r.player || "")}${
+        r.position ? ` <span class="mini">${escapeHtml(r.position)}</span>` : ""}</th>${
+      cols.map((k) => {
+        const v = pbpStat(r, k);
+        return `<td>${Number.isFinite(v) ? escapeHtml(String(v)) : "—"}</td>`;
+      }).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+function pbpPlayersHTML(d, league) {
+  const rows = d.players || [];
+  if (!rows.length) return `<p class="rail-quiet">No box score on file yet — the fast loop writes one each cycle for a game in progress.</p>`;
+  const block = (abbr) => {
+    const mine = rows.filter((r) => r.team === abbr);
+    const body = PBP_FOOTBALL.has(league)
+      ? PBP_BOX_FOOTBALL.map((g) => pbpBoxGroupHTML(mine, g)).join("")
+      : pbpBoxGenericHTML(mine, league);
+    return `<div class="pbp-box"><div class="pbp-box-head">${teamMarkIn(league, abbr, 18)} ${
+      escapeHtml(teamNameIn(league, abbr))}</div>${
+      body || `<p class="rail-quiet">Nothing logged for this club yet.</p>`}</div>`;
+  };
+  return `${block(d.away)}${block(d.home)}<p class="mini" style="opacity:.6">Box score ${
+    escapeHtml(pbpAgo(d.generated_at))} — the fields the open-bet tracker reads, nothing more.</p>`;
+}
+
+/* Seconds from a "2:44" clock, or 0. The drive's `elapsed` is ESPN's
+   own `timeElapsed.displayValue`, so it is minutes and seconds and
+   nothing else. */
+function pbpClockSecs(txt) {
+  const m = /^(\d+):(\d{2})$/.exec(String(txt || "").trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+}
+const pbpSecsClock = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+
+/* TEAM TOTALS, ADDED UP FROM THE DRIVES ALREADY ON THE PAGE.
+
+   The Game info room was three weather chips and a Back button under
+   half a screen of nothing (Ethan, 2026-09-10: "we should be showing
+   more information"). Everything here is arithmetic over `d.drives` —
+   the same block the rail renders play by play — so it needs no fetch,
+   no second source and no estimate: drives, snaps, yards, the clock
+   they burned, and the plays the parser already flagged as turnovers,
+   penalties and scores.
+
+   Returns null off football, where there are no drives to add up and
+   inventing a shape for a payload nobody has probed is the failure this
+   file keeps warning about. */
+function pbpTeamTotals(d, league) {
+  if (!PBP_FOOTBALL.has(league)) return null;
+  const drives = d.drives || [];
+  if (!drives.length) return null;
+  const per = {};
+  const of = (t) => (per[t] = per[t] || { drives: 0, plays: 0, yards: 0, secs: 0,
+                                          turnovers: 0, penalties: 0, scores: 0 });
+  drives.forEach((dr) => {
+    if (!dr || !dr.team) return;
+    const t = of(dr.team);
+    t.drives += 1;
+    // The drive's own count when it has one, the play list otherwise —
+    // `offensive_plays` is ESPN's and excludes penalties, which is the
+    // number a box score means by "plays".
+    t.plays += Number(dr.offensive_plays) || (dr.plays || []).length;
+    t.yards += Number(dr.yards) || 0;
+    t.secs += pbpClockSecs(dr.elapsed);
+    (dr.plays || []).forEach((pl) => {
+      if (pl && pl.turnover) t.turnovers += 1;
+      if (pl && pl.penalty) t.penalties += 1;
+      if (pl && pl.scoring) t.scores += 1;
+    });
+  });
+  return per;
+}
+
+function pbpTotalsHTML(d, league) {
+  const per = pbpTeamTotals(d, league);
+  if (!per) return "";
+  const a = per[d.away], h = per[d.home];
+  if (!a && !h) return "";
+  const z = { drives: 0, plays: 0, yards: 0, secs: 0, turnovers: 0, penalties: 0, scores: 0 };
+  const A = a || z, H = h || z;
+  const rows = [
+    ["Drives", A.drives, H.drives],
+    ["Plays", A.plays, H.plays],
+    ["Yards", A.yards, H.yards],
+    ["Time of possession", pbpSecsClock(A.secs), pbpSecsClock(H.secs)],
+    ["Scoring plays", A.scores, H.scores],
+    ["Turnovers", A.turnovers, H.turnovers],
+    ["Penalties", A.penalties, H.penalties],
+  ];
+  return `<div class="pbp-bx-wrap"><table class="pbp-bx pbp-tot">
+    <thead><tr><th scope="col" class="pbp-bx-who">Team totals</th>
+      <th scope="col">${escapeHtml(d.away || "")}</th>
+      <th scope="col">${escapeHtml(d.home || "")}</th></tr></thead>
+    <tbody>${rows.map(([label, x, y]) => `<tr>
+      <th scope="row" class="pbp-bx-who">${escapeHtml(label)}</th>
+      <td>${escapeHtml(String(x))}</td><td>${escapeHtml(String(y))}</td></tr>`).join("")}
+    </tbody></table>
+    <p class="mini" style="opacity:.6">Added up from the ${
+      (d.drives || []).length} drive${(d.drives || []).length === 1 ? "" : "s"} on this page —
+      nothing fetched, nothing estimated.</p></div>`;
+}
+
+/* CALL IT (2026-10-25, engine/callit). Before each at-bat or drive the
+   reader calls how it ends; the box grades it off this game's own file a
+   few seconds later, and the room keeps score. Free — no money, no prices,
+   nothing the model thinks. The card is drawn from the last answer on every
+   redraw, so it never blinks, and asks again at most every five seconds. */
+const _ci = { key: "", at: 0, v: null, note: "" };
+const CI_LEAGUES = new Set(["mlb", "nfl", "cfb"]);
+const CI_WORD = { hit: "Hit", out: "Out", k: "Strikeout", walk: "Walk",
+                  td: "Touchdown", fg: "Field goal", punt: "Punt", turnover: "Turnover" };
+function pbpCallItHTML(d, league) {
+  if (!CI_LEAGUES.has(league) || (d.live || {}).state !== "live") return "";
+  const key = `${league}/${d.event_id}`;
+  if (_ci.key !== key) Object.assign(_ci, { key, at: 0, v: null, note: "" });
+  if (Date.now() - _ci.at > 5000) ciFetch(key);
+  return `<div class="card ci-card" data-ci-key="${escapeAttr(key)}">${ciBodyHTML(_ci.v)}</div>`;
+}
+function ciBodyHTML(v) {
+  const head = `<div class="pbp-rail-head">Call it <span class="mini">free · how does the next one end?</span></div>`;
+  if (!v) return `${head}<p class="rail-quiet">Opening the next call…</p>`;
+  const L = v.last;
+  const last = !L ? "" : `<p class="ci-last${L.right === true ? " is-right" : L.right === false ? " is-wrong" : ""}">Last call: ${
+    escapeHtml(CI_WORD[L.call] || L.call)} — ${L.right === true ? "right" : L.right === false
+    ? `it was ${escapeHtml(CI_WORD[L.result] || L.result)}` : "no result, it doesn’t count"}</p>`;
+  let body;
+  if (!v.open) body = `<p class="rail-quiet">Locked — the next call opens when this one ends.</p>`;
+  else if (!v.signed_in) {
+    body = `<p class="ci-q">${escapeHtml(v.open.prompt)}</p>
+      <button type="button" class="ci-pick ci-join" data-ci-join="1">Make a free account to play</button>`;
+  } else {
+    body = `<p class="ci-q">${escapeHtml(v.open.prompt)}</p><div class="ci-choices" role="group" aria-label="Your call">${
+      v.open.choices.map(([k, label]) => `<button type="button" class="ci-pick${v.mine === k ? " is-mine" : ""}"
+        data-ci-call="${escapeAttr(k)}" data-ci-unit="${escapeAttr(v.open.unit)}" aria-pressed="${v.mine === k}">${
+        escapeHtml(label)}</button>`).join("")}</div>`;
+  }
+  const g = v.game || {};
+  const meta = [g.total ? `${g.right} of ${g.total} right this game` : "", v.streak ? `${v.streak} in a row` : "",
+    v.best > 1 ? `best ${v.best}` : ""].filter(Boolean);
+  const board = (v.board || []).length ? `<ol class="ci-board">${v.board.map((r) =>
+    `<li><b>${escapeHtml(r.handle)}</b> ${r.right} of ${r.total}</li>`).join("")}</ol>` : "";
+  return `${head}${last}${body}${_ci.note ? `<p class="mini ci-note" role="status">${escapeHtml(_ci.note)}</p>` : ""}${
+    meta.length ? `<p class="mini ci-meta">${escapeHtml(meta.join(" · "))}</p>` : ""}${board}`;
+}
+function ciPaint(key) {
+  document.querySelectorAll(".ci-card").forEach((el) => {
+    if (el.dataset.ciKey === key) el.innerHTML = ciBodyHTML(_ci.v);
+  });
+}
+function ciFetch(key) {
+  _ci.at = Date.now();
+  fetch(`/api/callit/${key}`, { credentials: "same-origin", cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    .then((v) => { if (v && _ci.key === key) { _ci.v = v; ciPaint(key); } });
+}
+if (typeof window !== "undefined" && !window._ciBound) {
+  window._ciBound = true;
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("[data-ci-call], [data-ci-join]");
+    const card = b && b.closest(".ci-card");
+    if (!card) return;
+    if (b.dataset.ciJoin) { switchView("signup"); return; }
+    const key = card.dataset.ciKey;
+    if (_ci.v && _ci.key === key) { _ci.v.mine = b.dataset.ciCall; _ci.note = ""; ciPaint(key); }
+    try {
+      const r = await fetch(`/api/callit/${key}`, { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unit: b.dataset.ciUnit, call: b.dataset.ciCall }) });
+      if (!r.ok) _ci.note = ((await r.json().catch(() => ({}))).error) || "That didn’t go through — try again.";
+      else if (typeof buzz === "function") buzz("tap");
+    } catch (err) { _ci.note = "That didn’t go through — try again."; }
+    ciFetch(key);
+  });
+}
+
 function pbpWinChartHTML(d, league) {
   const rows = (league === "mlb" ? (d.events || []).filter((e) => e && e.kind === "atbat") : (d.plays || []))
     .filter((r) => r && typeof r.wp === "number");
@@ -3657,6 +3927,7 @@ async function renderPbpPage(tick) {
           ${pbpParkHTML(d, league, boardGame, lastPlay)}
           ${pbpSituationHTML(d, league, faces)}${league === "mlb" && window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}
         </div>
+        ${pbpCallItHTML(d, league)}
         ${infoHTML}
         ${back}
       </div>

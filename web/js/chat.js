@@ -323,6 +323,41 @@ async function liveChatCounts(games) {
   });
 }
 
+/* YOUR PLAYERS, LIVE (2026-10-25). Each player the reader follows, his
+   line in the game he is in right now, every league on one strip at the
+   top of the Live tab (engine/yourplayers, GET /api/alerts/live). The
+   last strip is drawn at once on each poll's redraw, then refreshed, so
+   it never blinks out while the tab repaints. */
+let _ypLast = "";
+function ypHTML(rows) {
+  if (!rows.length) return "";
+  return `<div class="yp"><div class="section-title">Your players
+      <span class="sub">— their lines right now, from every game</span></div>
+    <div class="yp-row">${rows.map((r) => `<button type="button" class="yp-item${r.state === "final" ? " is-final" : ""}"
+        data-yp-sport="${chEsc(r.league)}" data-yp-event="${chEsc(r.event_id)}">
+      <span class="yp-who">${chEsc(r.player)}</span>
+      <span class="yp-line">${chEsc(r.line)}</span>
+      <span class="yp-when">${chEsc(r.team)}${r.opp ? ` vs ${chEsc(r.opp)}` : ""} · ${chEsc(r.status)}</span>
+    </button>`).join("")}</div></div>`;
+}
+function ypBind(host) {
+  host.querySelectorAll(".yp-item").forEach((b) =>
+    b.addEventListener("click", () => openPbp(b.dataset.ypSport, b.dataset.ypEvent)));
+}
+async function yourPlayersMount(host) {
+  if (!host || !(typeof _acctUser !== "undefined" && _acctUser && _acctUser.signed_in)) return;
+  if (_ypLast) { host.innerHTML = _ypLast; ypBind(host); }
+  let v = null;
+  try {
+    const r = await fetch("/api/alerts/live", { credentials: "same-origin", cache: "no-store" });
+    if (r.ok) v = await r.json();
+  } catch (e) { v = null; }
+  if (!v || !host.isConnected) return;
+  _ypLast = ypHTML(v.players || []);
+  host.innerHTML = _ypLast;
+  ypBind(host);
+}
+
 /* The fast scoreboard's row for a room, so a thread opened from the Live
    tab can name its play before the game's own file is open. */
 function chatRowFor(room) {

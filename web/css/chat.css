@@ -218,6 +218,18 @@ body.gch-on { overflow: hidden; }
   font-weight: 800; cursor: pointer; padding: 4px 0; }
 .pf-quiet { margin-top: 10px; }
 
+/* ── your players, live (ypHTML): one line per followed player ─────────── */
+.yp { margin-bottom: 18px; }
+.yp-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch; }
+.yp-item { flex: 0 0 auto; min-width: 168px; max-width: 240px; scroll-snap-align: start; display: grid; gap: 3px;
+  text-align: left; padding: 10px 12px; border-radius: var(--radius); border: var(--hairline) solid var(--border);
+  background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+.yp-item.is-final { opacity: .72; }
+.yp-who { font-weight: 800; font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.yp-line { font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.yp-when { font-size: var(--fs-xs); color: var(--text-mute); }
+
 /* ── the play card's body, Real's and then some (pcBodyHTML) ────────────── */
 .pcard-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 4px; }
 .pcard-row:not(:has(.pcard-face)) { grid-template-columns: minmax(0, 1fr); }

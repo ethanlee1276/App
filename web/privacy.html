@@ -158,8 +158,10 @@
       were signed in, your account. An alert says that a league’s picks are
       up or how last night graded — never a pick. If you were signed in and
       chose them, your own alerts too: that one of your watches caught
-      something (your words and a count, never the pick), and a parlay you
-      saved to My Bets starting, down to its last leg, or settled. We keep
+      something (your words and a count, never the pick), a parlay you
+      saved to My Bets starting, down to its last leg, or settled, and a big
+      moment in a game of a team or player you follow (the score and who
+      did it). We keep
       those for at most a day, and only that phone can read them. Signing
       out on a phone stops them there. If you put a saved parlay on your
       iPhone’s lock screen, we keep that lock-screen card’s token until the
@@ -224,9 +226,12 @@
         Alerts page to watch, and when you last looked, so it can say what
         is new. (<code>alert_watches</code>, <code>alert_seen</code>)</li>
       <li><b>The free games</b> — your daily streak picks with your streak
-        and its name, and your tail-or-fade calls with how they graded.
+        and its name, your tail-or-fade calls with how they graded, and your
+        Call it calls on live games (each at-bat or drive you called, what
+        you called and how it ended). Your username and how many you got
+        right in a game show on that game's leaderboard.
         (<code>streak_picks</code>, <code>streak_state</code>,
-        <code>tf_calls</code>)</li>
+        <code>tf_calls</code>, <code>callit_calls</code>)</li>
       <li><b>Emails you asked for</b> — the weekly digest and the last-leg
         email: whether each is on, and a token for its unsubscribe link.
         (<code>digest_optin</code>, <code>slip_alert_optin</code>,
@@ -235,7 +240,9 @@
     <p>The phone alerts in §2.7 keep their rows in
       <code>push_subs</code> (the phone), and, for your own alerts,
       <code>push_mine</code>, <code>push_watch_seen</code> and
-      <code>push_activities</code>.</p>
+      <code>push_activities</code>. Which plays of a game were already told
+      is kept in <code>push_clutch_seen</code>, two days at most, with no
+      account on it.</p>
 
     <h2>3. What we do NOT collect</h2>
     <ul>

@@ -687,3 +687,19 @@
 .pbp-wp-line { stroke: var(--brand-2); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .pbp-wp-dot { fill: var(--brand-2); stroke: var(--panel); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .pbp-wp-key { display: flex; justify-content: space-between; margin-top: 4px; font-size: var(--fs-2xs); color: var(--text-mute); }
+
+/* Call it (pbpCallItHTML): the next at-bat or drive, four calls, the room's best. */
+.ci-card { display: grid; gap: 8px; }
+.ci-q { margin: 0; font-weight: 700; font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text); }
+.ci-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ci-pick { min-height: 44px; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border);
+  background: var(--panel-2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+.ci-pick.is-mine { border-color: var(--brand-2); color: var(--brand-2);
+  background: color-mix(in oklab, var(--brand-2) 12%, var(--panel-2)); }
+.ci-join { width: 100%; }
+.ci-last { margin: 0; font-size: var(--fs-sm); color: var(--text-mute); }
+.ci-last.is-right { color: var(--good); }
+.ci-last.is-wrong { color: var(--bad); }
+.ci-meta, .ci-note { margin: 0; }
+.ci-board { margin: 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--text-mute); }
+.ci-board b { color: var(--text); }

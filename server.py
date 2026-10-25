@@ -1242,6 +1242,8 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/alerts/"):
             return self._alerts_get(
                 parsed.path[len("/api/alerts/"):].strip("/"))
+        if parsed.path.startswith("/api/callit/"):
+            return self._callit(parsed.path[len("/api/callit/"):].strip("/"))
         if parsed.path.startswith("/api/calendar/"):
             return self._calendar_get(parsed.path[len("/api/calendar/"):].strip("/"))
         if parsed.path in ("/api/widget", "/api/widget/"):
@@ -1394,6 +1396,7 @@ class Handler(BaseHTTPRequestHandler):
                 or parsed.path.startswith("/api/feed/")
                 or parsed.path.startswith("/api/chat/")
                 or parsed.path.startswith("/api/alerts/")
+                or parsed.path.startswith("/api/callit/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
                 or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
                 or parsed.path in ("/api/mybets/closes", "/api/mybets/closes/")
@@ -1415,6 +1418,8 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path.startswith("/api/alerts/"):
                 return self._alerts_post(
                     parsed.path[len("/api/alerts/"):].strip("/"), body)
+            if parsed.path.startswith("/api/callit/"):
+                return self._callit(parsed.path[len("/api/callit/"):].strip("/"), body)
             if parsed.path.startswith("/api/parlay/check"):
                 return self._parlay_check(body)
             if parsed.path.startswith("/api/parlay/build"):
@@ -3000,6 +3005,13 @@ class Handler(BaseHTTPRequestHandler):
             who = self._account(conn)
             if not who:
                 return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "live":
+                # YOUR PLAYERS, LIVE (engine/yourplayers): each followed
+                # player's box-score line in the game he is in now. Public
+                # box scores and the member's own watches — free.
+                from engine import yourplayers as YP
+                lines = YP.mine(AL.list_watches(conn, who["id"]))
+                return self._send(200, json.dumps({"players": lines}).encode(), ".json")
             if path != "me":
                 return self._send(404, b'{"error":"unknown alerts endpoint"}',
                                   ".json")
@@ -3029,6 +3041,35 @@ class Handler(BaseHTTPRequestHandler):
                 "feed_n": len(events),
             }
             return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _callit(self, path: str, body: dict | None = None):
+        """CALL IT (engine/callit): GET the game's open call, its grades and
+        the room's best; POST a call. ``path`` is ``{league}/{event id}``,
+        read off the deep file the live loop writes — a league it plays
+        and an id of digits, nothing else reaches the disk."""
+        from engine import callit as CI
+        league, _, event = path.partition("/")
+        if (league not in ("mlb",) + CI.FOOTBALL) or not event.isdigit() or len(event) > 14:
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        try:
+            doc = json.loads((WEB / "data" / "pbp" / f"{league}_{event}.json").read_text())
+            assert isinstance(doc, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if body is None:
+                out = CI.state(conn, who["id"] if who else None, doc)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to play Call it."}', ".json")
+            code, out = CI.call(conn, who["id"], doc, str(body.get("unit") or "")[:12],
+                                str(body.get("call") or "")[:12])
+            return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()
 

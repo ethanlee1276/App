@@ -29,6 +29,12 @@ ticket, so they go at any hour: a game that ends at one in the morning is
 the game they are watching. A bet logged by hand has no games to follow and
 is not one of them.
 
+BIG MOMENTS (topic "clutch"). A play rated 8.5 or more by engine/
+playmoments, or any walk-off, in a game of a team the account follows or
+by a player it follows: the score and who did it, a tap into the game.
+Public facts, so anyone who follows gets it; quiet hours hold it and its
+twenty minutes run out, so a moment from the night is never sent at nine.
+
 WHAT TRAVELS AND WHERE IT WAITS. A message is queued here (`push_mine`,
 beside the accounts) and sent by `flush`; a phone's service worker then asks
 POST /api/push/latest what to say, and `pushalerts.latest_for` reads the
@@ -59,7 +65,7 @@ TOPICS = PA.PERSONAL
 WATCH_EVERY_S = 120
 #: How long each kind stays worth showing. A "your game is on" an hour late
 #: is noise; a settled ticket is still news the next morning.
-TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 3600}
+TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 3600, "clutch": 20 * 60}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0}
@@ -79,6 +85,9 @@ def ensure_tables(conn) -> None:
         user_id INTEGER NOT NULL, bet_id TEXT NOT NULL, token TEXT NOT NULL,
         last TEXT NOT NULL DEFAULT '', started REAL NOT NULL,
         PRIMARY KEY (user_id, bet_id));
+      CREATE TABLE IF NOT EXISTS push_clutch_seen (
+        game TEXT NOT NULL, play TEXT NOT NULL, at REAL NOT NULL,
+        PRIMARY KEY (game, play));
     """)
     conn.commit()
 
@@ -358,11 +367,151 @@ def _has_activities(conn) -> bool:
         return False
 
 
+# --- clutch: the big moment in a game you follow ------------------------------
+# Ethan, 2026-10-25: "create things I've never even thought of." Every play
+# on a live game's deep file already carries its moment (engine/playmoments:
+# a 0-10 rating from the win chance it moved, and a tie, a lead or a
+# walk-off). A play this big in a game of a team you follow, or by a player
+# you follow, knocks your phone with the score and who did it, and the tap
+# opens the game. The score is public, so this is anybody's who follows,
+# member or not; it carries no pick.
+#: A play rated this high is a moment (about a 35-point swing in the win
+#: chance where the feed has one); a walk-off always is.
+CLUTCH_MIN = 8.5
+#: A deep file not written for this long is not a game in progress.
+CLUTCH_FRESH_S = 15 * 60
+#: The most moments one game sends one account (a wild finish is one tap
+#: per swing, not a stream).
+CLUTCH_PER_GAME = 4
+CLUTCH_KEEP_S = 2 * 86400
+SWING_WORD = {"walkoff": "Walk-off", "go_ahead": "Go-ahead", "tying": "Game-tying"}
+_clutch_mtimes: dict = {}
+
+
+def clutch_plays(doc: dict) -> list:
+    """``[(key, play)]`` for each play on a deep file big enough to tell."""
+    if doc.get("league") == "mlb":
+        rows = [e for e in doc.get("events") or [] if isinstance(e, dict) and e.get("kind") == "atbat"]
+        key = (lambda r: f"ab{r.get('at_bat')}")
+    else:
+        rows = [p for p in doc.get("plays") or [] if isinstance(p, dict)]
+        key = (lambda r: str(r.get("id") or f"{r.get('period')}|{r.get('clock')}|{r.get('event')}"))
+    out = []
+    for r in rows:
+        try:
+            big = float(r.get("rating") or 0) >= CLUTCH_MIN
+        except (TypeError, ValueError):
+            big = False
+        if big or r.get("swing") == "walkoff":
+            out.append((key(r), r))
+    return out
+
+
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def clutch_line(doc: dict, play: dict) -> tuple:
+    """``(title, body)``: the moment, the score after it, who and when."""
+    home, away = str(doc.get("home") or ""), str(doc.get("away") or "")
+    a, h = play.get("away_score"), play.get("home_score")
+    score = f"{away} {a}\u2013{h} {home}" if isinstance(a, int) and isinstance(h, int) else f"{away} at {home}"
+    who = play.get("batter") or next(iter(play.get("players") or []), "") or ""
+    if play.get("inning"):
+        when = f"{'bottom' if play.get('half') == 'B' else 'top'} of the {_ordinal(int(play['inning']))}"
+    elif play.get("period"):
+        per = int(play["period"])
+        lg = doc.get("league")
+        when = (f"overtime" if (lg == "nhl" and per > 3) or (lg != "nhl" and per > 4)
+                else f"period {per}" if lg == "nhl" else f"Q{per}")
+        if play.get("clock"):
+            when += f", {play['clock']}"
+    else:
+        when = ""
+    what = str(play.get("event") or "Big play")
+    try:
+        rated = f" Rated {float(play.get('rating')):.1f}."
+    except (TypeError, ValueError):
+        rated = ""
+    title = f"{SWING_WORD.get(play.get('swing'), 'Big moment')}: {score}"
+    body = ", ".join(x for x in (f"{who} \u2014 {what}" if who else what, when) if x) + "." + rated
+    return title, body
+
+
+def _follows(watches: list, doc: dict, play: dict) -> bool:
+    sides = {str(doc.get("home") or "").upper(), str(doc.get("away") or "").upper()} - {""}
+    names = [play.get("batter"), play.get("pitcher")] + list(play.get("players") or [])
+    folded = {AL._fold(n) for n in names if n}
+    for w in watches:
+        if w.get("kind") == "team" and str(w.get("value") or "").upper() in sides:
+            return True
+        if w.get("kind") == "player" and AL._fold(w.get("value")) in folded:
+            return True
+    return False
+
+
+def clutch_pass(conn, pbp_dir: Path | None = None, now: float | None = None) -> int:
+    """Tell everyone following a side or a player in a new big moment.
+    THE FIRST LOOK AT A GAME IS ITS BASELINE: the moments already on it
+    when this pass first reads it are marked told, not sent, so a restart
+    in the fourth quarter does not replay the first three. Returns how
+    many were told."""
+    ensure_tables(conn)
+    t = time.time() if now is None else now
+    users = conn.execute("SELECT DISTINCT user_id FROM push_subs WHERE user_id IS NOT NULL "
+                         "AND (',' || topics || ',') LIKE '%,clutch,%'").fetchall()
+    conn.execute("DELETE FROM push_clutch_seen WHERE at < ?", (t - CLUTCH_KEEP_S,))
+    if not users:
+        conn.commit()
+        return 0
+    watching = {uid: AL.list_watches(conn, uid) for (uid,) in users}
+    watching = {u: w for u, w in watching.items() if w}
+    told = 0
+    base = Path(pbp_dir) if pbp_dir else WEB / "data" / "pbp"
+    for path in sorted(base.glob("*.json")) if base.is_dir() else []:
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+        if t - mtime > CLUTCH_FRESH_S or _clutch_mtimes.get(str(path)) == mtime:
+            continue
+        try:
+            doc = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        _clutch_mtimes[str(path)] = mtime
+        game = f"{doc.get('league')}_{doc.get('event_id')}"
+        first = conn.execute("SELECT 1 FROM push_clutch_seen WHERE game = ? LIMIT 1", (game,)).fetchone() is None
+        plays = clutch_plays(doc)
+        seen = {r[0] for r in conn.execute("SELECT play FROM push_clutch_seen WHERE game = ?", (game,))}
+        # The game's own row, so a game with no moment yet still has its baseline.
+        conn.execute("INSERT OR IGNORE INTO push_clutch_seen (game, play, at) VALUES (?, '', ?)", (game, t))
+        for key, play in plays:
+            if key in seen:
+                continue
+            conn.execute("INSERT OR IGNORE INTO push_clutch_seen (game, play, at) VALUES (?, ?, ?)", (game, key, t))
+            if first:
+                continue
+            title, body = clutch_line(doc, play)
+            url = f"/#pbp/{doc.get('league')}/{doc.get('event_id')}"
+            for uid, watches in watching.items():
+                if not _follows(watches, doc, play):
+                    continue
+                sent = conn.execute("SELECT COUNT(*) FROM push_mine WHERE user_id = ? AND id LIKE ?",
+                                    (uid, f"clutch:{game}:%")).fetchone()[0]
+                if sent < CLUTCH_PER_GAME:
+                    told += tell(conn, uid, f"clutch:{game}:{key}", "clutch", title, body, url, now=t)
+        conn.commit()
+    return told
+
+
 # --- sending -----------------------------------------------------------------
 def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None = None, apns_cfg=None,
           now: float | None = None, quiet: bool | None = None) -> dict:
     """Send what is queued: each member's phones that want each message.
-    Watches wait out quiet hours; a member's bets do not. Every message is
+    Watches and big moments wait out quiet hours (a moment's twenty
+    minutes run out first, so the night's are dropped, not sent at nine);
+    a member's bets do not. Every message is
     tried once (a phone that misses it reads it from latest_for)."""
     ensure_tables(conn)
     t = time.time() if now is None else now
@@ -371,7 +520,7 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     # Kept a day at most (the privacy policy, 2.7): long enough for a late
     # knock to read it, no longer.
     conn.execute("DELETE FROM push_mine WHERE at < ?", (t - KEEP_S,))
-    held = " AND kind != 'watches'" if quiet else ""
+    held = " AND kind NOT IN ('watches', 'clutch')" if quiet else ""
     rows = conn.execute("SELECT user_id, id, kind, title, body, url FROM push_mine WHERE sent = 0" + held +
                         " ORDER BY at").fetchall()
     stats = {"messages": len(rows), "sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
@@ -435,11 +584,12 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
         if t - _looked["watches"] >= WATCH_EVERY_S:
             _looked["watches"] = t
             told = watch_pass(conn, _feed(web), entitled=entitled, now=t)
+        moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         stats = flush(conn, now=t, **flush_kw)
         if stats["messages"]:
-            log(f"  push (yours): {stats['messages']} alert(s), {told} from watches · {stats['sent']} phone(s), "
-                f"{stats['gone']} gone, {stats['failed']} failed")
-        return dict(stats, watches=told)
+            log(f"  push (yours): {stats['messages']} alert(s), {told} from watches, {moments} big moment(s) · "
+                f"{stats['sent']} phone(s), {stats['gone']} gone, {stats['failed']} failed")
+        return dict(stats, watches=told, clutch=moments)
     finally:
         conn.close()
 
@@ -464,7 +614,8 @@ def main(argv=None) -> int:
             q = []
     finally:
         conn.close()
-    print(f"Signed-in phones asking: {n['watches']} for watches, {n['bets']} for their bets.")
+    print(f"Signed-in phones asking: {n['watches']} for watches, {n['bets']} for their bets, "
+          f"{n['clutch']} for big moments.")
     print("Queued (unsent / kept): " + (", ".join(f"{k} {u}/{c}" for k, u, c in q) if q else "nothing yet."))
     return 0
 

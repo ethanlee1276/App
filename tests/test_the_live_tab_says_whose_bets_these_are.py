@@ -86,13 +86,14 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     async function pressureWarm() {{}}
     function renderSweatZone() {{}}
     function liveSlips() {{}}
-    // The tab's own five-second clock (liveTickArm), the play feed and the
-    // threads' counts are not under test here.
+    // The tab's own five-second clock (liveTickArm), the play feed, your
+    // players' strip and the threads' counts are not under test here.
     const liveSig = () => "";
     let _liveDrawnSig = "";
     function liveTickArm() {{}}
     let _liveView = "games";
     function liveChatCounts() {{}}
+    function ypMount() {{}}
     function loadRoom() {{ return Promise.resolve(false); }}
     // A member's view: the free tier's lock is tests/test_the_free_tier.py's.
     const isWalled = () => false;
