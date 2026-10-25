@@ -196,9 +196,14 @@ def test_the_privacy_policy_names_every_table_that_holds_personal_data():
     player logs. Nothing in them is about a subscriber. Anything new that
     is keyed by user_id has to be disclosed, and this fails until it is.
     """
+    # Every module that keeps rows about an account (2026-10-25: the feed,
+    # friends, phone alerts, the emails, the game chat and referrals joined
+    # — the first four had shipped without the policy naming them).
     schema = "\n".join(
         _read("engine", name) for name in
-        ("accounts.py", "billing.py", "redeem.py"))
+        ("accounts.py", "billing.py", "redeem.py", "socialfeed.py", "social.py",
+         "pushalerts.py", "pushmine.py", "slipwatch.py", "digest.py", "gamechat.py",
+         "referrals.py", "alerts.py", "streak.py", "tailfade.py"))
     tables = set(re.findall(r"CREATE TABLE IF NOT EXISTS ([a-z_]+)", schema))
     assert tables, "no schema found — this test has stopped checking anything"
     for table in sorted(tables):
@@ -206,6 +211,30 @@ def test_the_privacy_policy_names_every_table_that_holds_personal_data():
             f"the table `{table}` stores something about a person and the "
             "Privacy Policy does not name it. Add it to §2, or explain in "
             "this test why it holds nothing personal.")
+
+
+def test_deleting_an_account_names_every_table_that_holds_a_person():
+    """§7 promises an account's rows go with it. engine/accounts.delete_user
+    names each table rather than trusting ON DELETE CASCADE (its docstring
+    says why), so every per-person table in every module that keeps one has
+    to appear there — or in socialfeed.delete_user, which it calls. The game
+    chat, the Alerts page's watches and the referral tables were the ones it
+    had never heard of (2026-10-25)."""
+    mods = ("accounts.py", "billing.py", "redeem.py", "socialfeed.py", "social.py", "pushalerts.py",
+            "pushmine.py", "slipwatch.py", "digest.py", "gamechat.py", "referrals.py", "alerts.py",
+            "streak.py", "tailfade.py")
+    tables = set()
+    for m in mods:
+        for t in re.finditer(r"CREATE TABLE IF NOT EXISTS ([a-z_]+)\s*\((.*?)\);", _read("engine", m), re.S):
+            if re.search(r"\b(user_id|from_id|to_id|referred_id|referrer_id)\b", t.group(2)):
+                tables.add(t.group(1))
+    acc = _read("engine", "accounts.py")
+    gone = acc[acc.index("def delete_user("):acc.index("def export_user(")]
+    feed = _read("engine", "socialfeed.py")
+    feed = feed[feed.index("def delete_user("):]
+    gone += feed[:feed.index("\ndef ", 10)]
+    missing = sorted(t for t in tables if t not in gone)
+    assert not missing, f"deleting an account leaves these behind: {missing}"
 
 
 def test_the_policy_does_not_claim_we_avoid_something_we_do():

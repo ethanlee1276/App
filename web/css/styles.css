@@ -10577,10 +10577,3 @@ button.set-item:active, a.set-item:active, label.set-item:active { background: v
   html.store-ios .topbar, html.ios-home .topbar { background: var(--topbar-bg); }
 }
 
-/* The sign-up screen's two promises (signupHTML): a mark and a sentence a
-   row, set like a settings list's footnotes. */
-.acct-promises { list-style: none; margin: 16px 0 0; padding: 12px 0 0; display: grid; gap: 10px;
-  border-top: var(--hairline) solid var(--border); }
-.acct-promises li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
-  font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); }
-.acct-promises li > :first-child { color: var(--brand); margin-top: 2px; }

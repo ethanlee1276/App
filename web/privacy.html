@@ -21,7 +21,7 @@
     
 
     <h1>Privacy Policy</h1>
-    <p class="legal-date">Last updated 24 October 2026</p>
+    <p class="legal-date">Last updated 25 October 2026</p>
 
     <h2>1. The short version</h2>
     <ul>
@@ -86,11 +86,17 @@
         account page to clear it.
         (<code>user_data</code>, section <code>search</code>)</li>
     </ul>
-    <p>Those four sections — <code>mybets</code>, <code>fantasy</code>,
-      <code>bankroll</code>, <code>search</code> — are the complete list of
-      what an account can hold. It is the same list the code enforces
-      (<code>accounts.SECTIONS</code>); nothing else can be written against
-      your account.</p>
+    <ul>
+      <li><b>Your preferences</b> — how prices and stakes are shown, your
+        time zone, the leagues in your menu, the teams and players you
+        follow, and whether the bar wears your team’s colours.
+        (<code>user_data</code>, section <code>settings</code>)</li>
+    </ul>
+    <p>Those five sections — <code>mybets</code>, <code>fantasy</code>,
+      <code>bankroll</code>, <code>search</code>, <code>settings</code> — are
+      the complete list of what the synced part of an account holds. It is
+      the same list the code enforces (<code>accounts.SECTIONS</code>). The
+      features in §2.7–2.9 keep their own rows, each named there.</p>
 
     <h3>2.3 Subscription</h3>
     <ul>
@@ -165,6 +171,66 @@
       give the link to can see those games; New link replaces it and the old
       one stops working.</p>
 
+    <h3>2.9 What you post, and who you follow</h3>
+    <p>Only what you choose to put there. Each is shown to other people on
+      the site, as the line says.</p>
+    <ul>
+      <li><b>Your username and profile</b> — the username you pick when you
+        sign up (or later), and a short bio if you write one. Shown beside
+        everything you post. (<code>feed_profiles</code>)</li>
+      <li><b>The Feed</b> — parlays you post, and the likes, tails,
+        comments, polls and votes, tags and pins you add; who you follow and
+        who you block; reports you file; and the notifications the Feed
+        keeps for you (the latest 200). Posts are public to everyone on the
+        site and are kept 120 days, or until you delete them.
+        (<code>feed_posts</code>, <code>feed_likes</code>,
+        <code>feed_tails</code>, <code>feed_comments</code>,
+        <code>feed_comment_likes</code>, <code>feed_polls</code>,
+        <code>feed_votes</code>, <code>feed_tags</code>,
+        <code>feed_pins</code>, <code>feed_follows</code>,
+        <code>feed_blocks</code>, <code>feed_reports</code>,
+        <code>feed_notifs</code>)</li>
+      <li><b>Friends and messages</b> — your friends and friend requests,
+        the invite links you make, the picks and parlays you send a friend
+        (a share names the pick; the friend’s own membership decides what
+        they see of it), your direct messages (the latest 500 between two
+        people), the messages you deleted (a marker, so they stay deleted)
+        and nicknames you give friends. Seen only by you and the friend
+        concerned. (<code>friendships</code>, <code>friend_requests</code>,
+        <code>friend_invites</code>, <code>pick_shares</code>,
+        <code>parlay_shares</code>, <code>dm_messages</code>,
+        <code>message_deletes</code>, <code>friend_nicknames</code>)</li>
+      <li><b>A game’s chat</b> — messages you post in a game’s room, with the
+        play or message they answer and any bet you chose to attach (your
+        words, typed by you); the reactions, the who-wins vote and any
+        reports you make. Anyone viewing that game can read its room.
+        Kept 14 days. A count of who is in a room is kept in memory for
+        under a minute — an account, or a scrambled form of the address of
+        a visitor who isn’t signed in — and never written down.
+        (<code>chat_msgs</code>, <code>chat_reacts</code>,
+        <code>chat_play_reacts</code>, <code>chat_votes</code>,
+        <code>chat_reports</code>)</li>
+      <li><b>Referrals</b> — a member’s referral code, and which account
+        joined with whose code, whether its first payment went through and
+        when the $6.25 credit was paid, so each side’s discount can be given
+        once. (<code>referral_codes</code>, <code>referrals</code>)</li>
+      <li><b>Your watches</b> — the players, teams and edges you ask the
+        Alerts page to watch, and when you last looked, so it can say what
+        is new. (<code>alert_watches</code>, <code>alert_seen</code>)</li>
+      <li><b>The free games</b> — your daily streak picks with your streak
+        and its name, and your tail-or-fade calls with how they graded.
+        (<code>streak_picks</code>, <code>streak_state</code>,
+        <code>tf_calls</code>)</li>
+      <li><b>Emails you asked for</b> — the weekly digest and the last-leg
+        email: whether each is on, and a token for its unsubscribe link.
+        (<code>digest_optin</code>, <code>slip_alert_optin</code>,
+        <code>slip_alerts</code>)</li>
+    </ul>
+    <p>The phone alerts in §2.7 keep their rows in
+      <code>push_subs</code> (the phone), and, for your own alerts,
+      <code>push_mine</code>, <code>push_watch_seen</code> and
+      <code>push_activities</code>.</p>
+
     <h2>3. What we do NOT collect</h2>
     <ul>
       <li><b>Your sportsbook password</b>, or any betting-account
@@ -226,6 +292,10 @@
     <p>Each of these because they have to be involved, and each
       receiving the minimum:</p>
     <ul>
+      <li><b>Other people on this site</b> — only what you make public: your
+        username and profile, your Feed posts and comments, and your
+        messages in a game’s chat. A direct message is seen by the friend
+        you send it to.</li>
       <li><b>Stripe, Inc.</b> — if you subscribe. They receive your email
         address and payment details (entered on their page) so they can
         take the payment and send you a receipt. They hold the card
@@ -295,6 +365,9 @@
         comes first; deleted when you change your password.</li>
       <li><b>Failed code attempts</b> — rolled off after one hour.</li>
       <li><b>Processed webhook ids</b> — 60 days.</li>
+      <li><b>Feed posts</b> — 120 days, or until you delete them or your
+        account. <b>A game’s chat</b> — 14 days. <b>Direct messages</b> — the
+        latest 500 between two people, until either account is deleted.</li>
       <li><b>Server logs</b> — a short rolling window for security and
         debugging.</li>
     </ul>

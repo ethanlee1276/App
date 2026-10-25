@@ -856,6 +856,33 @@ def delete_user(conn, user_id: int) -> None:
     # like, tail and comment under them, and your marks on other posts.
     from . import socialfeed as _feed
     _feed.delete_user(conn, user_id)
+    # THE GAME CHAT, YOUR OWN PHONE ALERTS AND REFERRALS (2026-10-25):
+    # your messages and every reaction, vote and report you made
+    # (engine/gamechat), the reactions and reports other people left on
+    # the messages that just went, the per-account alert rows
+    # (engine/pushmine), and both sides of a referral (engine/referrals).
+    # A phone's own subscription is the device's: it keeps the public
+    # alerts it asked for, with this account unlinked from it.
+    for table in ("chat_msgs", "chat_reacts", "chat_play_reacts", "chat_votes", "chat_reports",
+                  "push_mine", "push_watch_seen", "push_activities", "referral_codes",
+                  # The Alerts page's watches (engine/alerts), which had
+                  # leaned on ON DELETE CASCADE alone — the very thing this
+                  # function's docstring says not to trust.
+                  "alert_watches", "alert_seen",
+                  # Codes redeemed and the guesses counted against them
+                  # (engine/redeem), likewise cascade-only until now.
+                  "code_redemptions", "code_attempts"):
+        if table in have:
+            conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
+    if "chat_msgs" in have:
+        for table in ("chat_reacts", "chat_reports"):
+            if table in have:
+                conn.execute(f"DELETE FROM {table} WHERE msg_id NOT IN (SELECT id FROM chat_msgs)")
+    if "referrals" in have:
+        conn.execute("DELETE FROM referrals WHERE referred_id=? OR referrer_id=?",
+                     (int(user_id), int(user_id)))
+    if "push_subs" in have:
+        conn.execute("UPDATE push_subs SET user_id=NULL WHERE user_id=?", (int(user_id),))
     conn.execute("DELETE FROM users WHERE id=?", (int(user_id),))
     conn.commit()
 
@@ -972,6 +999,26 @@ def export_user(conn, user_id: int) -> dict:
     if mine and (mine.get("profile") or mine.get("posts") or mine.get("comments")
                  or mine.get("likes") or mine.get("tails")):
         out["public_feed"] = mine
+    # The game chat and referrals (2026-10-25): every message you posted in
+    # a game's room, with the play it answered and the bet you attached;
+    # your referral code and the referral your account came in on.
+    if "chat_msgs" in have:
+        msgs = [{"room": r["room"], "body": r["body"], "play": r["play"], "bet": r["bet"],
+                 "at": r["created_at"]}
+                for r in conn.execute("SELECT room, body, play, bet, created_at FROM chat_msgs "
+                                      "WHERE user_id=? ORDER BY id", (int(user_id),))]
+        if msgs:
+            out["game_chat_messages"] = msgs
+    if "referral_codes" in have:
+        row = conn.execute("SELECT code FROM referral_codes WHERE user_id=?", (int(user_id),)).fetchone()
+        if row:
+            out["referral_code"] = row["code"]
+    if "referrals" in have:
+        row = conn.execute("SELECT code, attached_at, paid_at FROM referrals WHERE referred_id=?",
+                           (int(user_id),)).fetchone()
+        if row:
+            out["joined_with_referral_code"] = {"code": row["code"], "at": row["attached_at"],
+                                                "first_payment_at": row["paid_at"]}
     return out
 
 

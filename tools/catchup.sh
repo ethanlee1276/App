@@ -35,6 +35,8 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DV 2>&1 | tee /tmp/dv.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DW 2>&1 | tee /tmp/dw.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX 2>&1 | tee /tmp/dx.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DY 2>&1 | tee /tmp/dy.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DZ 2>&1 | tee /tmp/dz.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -464,6 +466,15 @@ run DX "A chat on every game, plays like Real, and the site free to look around"
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatMount('
 curl -s https://qellysbook.com/js/app.js | grep -c '"live", "pbp", "game", "fantasy", "mybets",'
 curl -s -o /dev/null -w '%{http_code}\n' 'https://qellysbook.com/api/chat/room?room=nfl_1'
+SH
+run DY "Real's first screens and play cards (rating, lines, win chance, share)" 60 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function pcBodyHTML('
+curl -s https://qellysbook.com/js/account.js | grep -c 'function introHTML('
+python3 -c "import json,glob;rows=[r for f in glob.glob('/srv/qellys/web/data/live_*.json') if '_box' not in f for g in json.load(open(f)).get('games',[]) for r in (g.get('plays') or [])+(g.get('big') or [])];print(len(rows),sum('rating' in r for r in rows),sum('wp' in r for r in rows))"
+SH
+run DZ "Referral codes: $6.25 off for both sides" 60 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'async function invFill('
+curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/api/account/referral
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

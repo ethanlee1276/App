@@ -1946,6 +1946,23 @@ async function renderPaywall() {
   host.innerHTML = paywallHTML(rec, _pwStatus);
   sweepRings(host);                 // the ribbon's ring sweeps in and its numbers count
   pwDock(host);
+  pwReferral(host);
+}
+
+/* A FRIEND'S CODE ON THE ACCOUNT (engine/referrals): said at the top of the
+   plans, where the $6.25 will be taken off — Stripe's page shows it as the
+   coupon, and nobody should meet it there for the first time. */
+async function pwReferral(host) {
+  if (!(_pwStatus && _pwStatus.email)) return;
+  let v = null;
+  try {
+    const r = await fetch("/api/account/referral", { credentials: "same-origin", cache: "no-store" });
+    if (r.ok) v = await r.json();
+  } catch (e) { v = null; }
+  if (!v || !v.used_code || host.querySelector(".pw-ref")) return;
+  const top = host.querySelector(".pw-hero, .pw") || host.firstElementChild;
+  if (top) top.insertAdjacentHTML("afterbegin", `<p class="pw-ref">${icon("people", 15)} Your friend’s code
+    <b>${escapeHtml(v.used_code)}</b> takes $6.25 off your first payment — you’ll see it on the payment page.</p>`);
 }
 
 /* THE BUTTON STAYS IN REACH (2026-10-25; Ethan: "the paywall page and all
@@ -2197,6 +2214,9 @@ function signupHTML() {
       network readable by anyone on it.</div>` : ""}
 
     ${acctFieldsHTML("signup", `
+    <label class="acct-field"><span class="acct-field-k">Friend’s referral code <i>optional</i></span>
+      <input class="acct-ref" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false"
+        value="${escapeAttr(referralTyped())}" placeholder="$6.25 off your first payment"></label>
     <label class="acct-confirm">
       <input type="checkbox" class="acct-age">
       <span>I am 21 or older, and I accept the
@@ -2231,6 +2251,96 @@ function signupHTML() {
   <p class="pw-legal">21+ · Not betting advice · Gambling problem? Call <b>1-800-GAMBLER</b></p>`;
 }
 
+/* REAL'S FIRST SCREENS, OURS (Ethan's screenshot, 2026-10-25: "Welcome to
+   Real · This is a play ↓", a play's card, "Every big moment in a game
+   becomes one of these.", four bars and Continue). Four steps before the
+   sign-up — a play, its thread, the game's room, the Record — once per
+   device, with a way past on every one. The cards are examples and say so;
+   the Record's numbers are the real ones, read off the public file. */
+const INTRO_KEY = "qb_intro_v1";
+let _introStep = 0;
+let _introRecord = null;
+const introSeen = () => { try { return localStorage.getItem(INTRO_KEY) === "1"; } catch (e) { return true; } };
+const introDone = () => { try { localStorage.setItem(INTRO_KEY, "1"); } catch (e) {} };
+
+const INTRO_CARD = `<div class="wi-card" aria-hidden="true">
+    <div class="wi-top"><b>PIT 24–21 BAL</b><span>Q4 1:52</span><span class="wi-rate">9.4</span></div>
+    <span class="wi-chip">Go-ahead</span>
+    <p class="wi-title">Touchdown pass, 38 yds</p>
+    <span class="wi-line"><b>Quarterback</b> · 22/31, 264 yds, 2 TD</span>
+    <span class="wi-line"><b>Receiver</b> · 6 rec, 98 yds, 1 TD</span>
+    <span class="wi-win">PIT win chance 31% → 78%</span>
+    <div class="wi-acts"><span>🔥 2.8k</span><span>😮 640</span><span class="wi-n">💬 1.2k</span></div>
+  </div>`;
+
+function introSteps() {
+  const r = ((_introRecord || {}).all_time || {}).overall || {};
+  const since = Date.parse(`${(_introRecord || {}).record_epoch || ""}T12:00:00`);
+  const wl = r.settled ? `<div class="wi-record" aria-hidden="true"><b>${Number(r.wins).toLocaleString()}–${
+    Number(r.losses).toLocaleString()}</b><span>${Number(r.settled).toLocaleString()} picks graded${isFinite(since)
+    ? ` since ${new Date(since).toLocaleDateString(undefined, { month: "long", day: "numeric" })}` : ""}</span></div>` : "";
+  return [
+    { lead: "This is a play", art: INTRO_CARD,
+      say: "Every big moment in every game becomes one of these — the second it happens, with how much it moved the game." },
+    { lead: "Every play has its own thread", art: `<div class="wi-thread" aria-hidden="true">
+        <p class="wi-title">Touchdown pass, 38 yds</p>
+        <div class="wi-msg"><b>@steelcurtain</b> That’s the game right there</div>
+        <div class="wi-msg"><b>@whodat</b> Need one stop. I’m on the under 44.5 😬</div></div>`,
+      say: "Tap the bubble on any play to talk about it — or share the bet you’re on." },
+    { lead: "Every game has a room", art: `<div class="wi-room" aria-hidden="true">
+        <div class="wi-top"><b>PIT 24–21 BAL</b><span>213 here now</span></div>
+        <div class="wi-vote"><span>Who wins?</span><i style="--w:63%">PIT 63%</i><i style="--w:37%">BAL 37%</i></div></div>`,
+      say: "Live scores, play-by-play, stats and a chat for every game — free." },
+    { lead: "Every pick, graded in public", art: wl || `<div class="wi-record" aria-hidden="true"><b>The Record</b></div>`,
+      say: "Members get our picks. Everyone gets the Record: every pick we post, won or lost, and nothing deleted." },
+  ];
+}
+
+function introHTML() {
+  const steps = introSteps();
+  const i = Math.min(_introStep, steps.length - 1);
+  const st = steps[i];
+  const last = i === steps.length - 1;
+  return `<div class="wiz">
+    <div class="wi-head"><img class="welcome-mark" src="logo-qb.png" alt="" width="40" height="40" decoding="async">
+      <h1 class="wi-h">Welcome to Qellys Book</h1>
+      <button type="button" class="wi-skip" data-intro="skip">${last ? "" : "Skip"}</button></div>
+    <div class="wi-stage"><p class="wi-lead">${st.lead}</p>
+      ${i === 0 ? `<span class="wi-arrow" aria-hidden="true">↓</span>` : ""}
+      ${st.art}<p class="wi-ex">${i < 3 ? "Example" : ""}</p>
+      <p class="wi-say">${st.say}</p></div>
+    <div class="wi-bars" role="tablist" aria-label="Step ${i + 1} of ${steps.length}">${steps.map((_, k) =>
+      `<button type="button" class="wi-bar${k <= i ? " on" : ""}" data-intro="go" data-step="${k}" aria-label="Step ${k + 1}"></button>`).join("")}</div>
+    <button type="button" class="btn primary wi-go" data-intro="${last ? "done" : "next"}">${last ? "Create your free account" : "Continue"}</button>
+    <div class="wi-foot"><span>Have an account?</span><button type="button" class="btn ghost" data-act="acctGoLogin">Log in</button></div>
+  </div>`;
+}
+
+function introBind(host) {
+  if (host.dataset.introBound) return;
+  host.dataset.introBound = "1";
+  host.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-intro]");
+    if (!b || introSeen()) return;
+    const act = b.dataset.intro;
+    if (act === "next") _introStep += 1;
+    else if (act === "go") _introStep = Number(b.dataset.step) || 0;
+    else { introDone(); host.innerHTML = signupHTML(); host.scrollTop = 0; return; }
+    host.innerHTML = introHTML();
+  });
+  // A swipe moves a step either way, as Real's does.
+  let x0 = null;
+  host.addEventListener("pointerdown", (e) => { x0 = introSeen() ? null : e.clientX; }, { passive: true });
+  host.addEventListener("pointerup", (e) => {
+    if (x0 == null) return;
+    const dx = e.clientX - x0;
+    x0 = null;
+    if (Math.abs(dx) < 50) return;
+    _introStep = Math.max(0, Math.min(introSteps().length - 1, _introStep + (dx < 0 ? 1 : -1)));
+    host.innerHTML = introHTML();
+  }, { passive: true });
+}
+
 async function renderSignup() {
   const host = document.getElementById("view-signup");
   if (!host) return;
@@ -2239,6 +2349,17 @@ async function renderSignup() {
   await acctWho();
   if (_acctUser && _acctUser.signed_in) {
     switchView("account", false);
+    return;
+  }
+  if (!introSeen()) {
+    introBind(host);
+    host.innerHTML = introHTML();
+    if (!_introRecord) {
+      fetch("data/record_head.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+        _introRecord = d;
+        if (d && !introSeen() && _introStep === 3) host.innerHTML = introHTML();
+      }).catch(() => {});
+    }
     return;
   }
   host.innerHTML = signupHTML();
@@ -2484,10 +2605,75 @@ function setPageHTML(page) {
   if (page === "code") {
     return head("Redeem a code") + `<div class="set-code">${codeBoxHTML((_billStatus && _billStatus.codes) || {})}</div>`;
   }
+  if (page === "invite") {
+    setTimeout(invFill, 0);
+    return head("Invite friends") + `<div id="set-invite" class="inv-screen"><p class="set-foot">Loading…</p></div>`;
+  }
   if (page === "fantasy") return head("Fantasy leagues") + ffLinksHTML();
   if (page === "calendar") return head("Calendar") + `<div id="set-cal">${calRowHTML()}</div>`;
   _setPage = "";
   return setListHTML();
+}
+
+/* INVITE FRIENDS (Ethan, 2026-10-25: a paid member's code gives a new
+   member 25% off a month and the member 25% off their next — both $6.25,
+   engine/referrals says why never a percentage). A member sees their code,
+   a link to share and how it has done; anybody else can add a friend's
+   code before their first membership. */
+async function invFill() {
+  const host = document.getElementById("set-invite");
+  if (!host) return;
+  let v = null;
+  try {
+    const r = await fetch("/api/account/referral", { credentials: "same-origin", cache: "no-store" });
+    if (r.ok) v = await r.json();
+  } catch (e) { v = null; }
+  if (!v) { host.innerHTML = `<p class="set-foot">Sign in to see your code.</p>`; return; }
+  const $ = (c) => `$${(c / 100).toFixed(2)}`;
+  host.innerHTML = v.code ? `
+    <div class="inv-hero"><b>Give $6.25, get $6.25</b>
+      <p>A friend who joins with your code gets $6.25 off their first payment — a quarter of a month. When they pay,
+        $6.25 comes off your next bill. Every friend, no limit.</p></div>
+    <div class="inv-code"><span class="inv-k">Your code</span><b>${escapeHtml(v.code)}</b>
+      <button type="button" class="btn primary" data-inv="share">Share your link</button>
+      <button type="button" class="btn ghost" data-inv="copy">Copy</button></div>
+    <p class="set-foot inv-note" role="status"></p>
+    ${setGroup("How it’s gone", [
+      setItem({ tag: "div", ico: "people", tone: "gold", title: "Joined with your code", val: String(v.joined || 0) }),
+      setItem({ tag: "div", ico: "card", tone: "gold", title: "Paid", val: String(v.paid || 0) }),
+      setItem({ tag: "div", ico: "gem", tone: "gold", title: "Credited to you", val: $(v.credited_cents || 0) }),
+      ...(v.waiting_cents ? [setItem({ tag: "div", ico: "clock", tone: "gold", title: "Waiting",
+        val: $(v.waiting_cents), sub: "Lands on your next bill once you’re on a plan." })] : []),
+    ], "A credit comes off your next invoice by itself; more than one bill’s worth carries to the next.")}`
+    : v.used_code ? `<div class="inv-hero"><b>Your friend’s code is on</b>
+        <p>${escapeHtml(v.used_code)} takes $6.25 off your first payment when you pick a plan.</p>
+        <a class="btn primary" href="#paywall">See the plans</a></div>`
+    : `<div class="inv-hero"><b>Have a friend’s code?</b>
+        <p>It takes $6.25 off your first payment. Members get their own code to share once they join.</p></div>
+      <form class="inv-add" data-inv-form><input name="code" maxlength="16" autocomplete="off" autocapitalize="characters"
+        placeholder="Referral code" aria-label="Referral code"><button class="btn primary" type="submit">Add</button></form>
+      <p class="set-foot inv-note" role="status"></p>`;
+  const note = (t) => { const n = host.querySelector(".inv-note"); if (n) n.textContent = t; };
+  host.querySelectorAll("[data-inv]").forEach((b) => b.addEventListener("click", async () => {
+    const text = "Live scores, a chat in every game, and the picks graded in public. $6.25 off your first month:";
+    if (b.dataset.inv === "share" && navigator.share) {
+      try { await navigator.share({ title: "Qellys Book", text, url: v.link }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    try { await navigator.clipboard.writeText(v.link); note("Link copied."); } catch (e) { note(v.link); }
+  }));
+  const form = host.querySelector("[data-inv-form]");
+  if (form) form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = String(new FormData(form).get("code") || "").trim();
+    if (!code) return;
+    try {
+      const r = await fetch("/api/account/referral", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const out = await r.json().catch(() => ({}));
+      if (r.ok) { invFill(); return; }
+      note(out.error || "That code didn’t take.");
+    } catch (err) { note("Couldn’t reach the server. Try again."); }
+  });
 }
 
 /* The Membership group, from the billing status (renderBilling). */
@@ -2519,6 +2705,8 @@ function planRowsHTML(s) {
                                           attrs: 'data-act="billSeePlans"' }));
   }
   rows.push(setItem({ ico: "ticket", tone: "gold", title: "Redeem a code", chev: true, attrs: 'data-set-open="code"' }));
+  rows.push(setItem({ ico: "people", tone: "gold", title: "Invite friends",
+                      val: s.entitled ? "Give $6.25, get $6.25" : "Have a friend’s code?", chev: true, attrs: 'data-set-open="invite"' }));
   return setGroup("Membership", rows, s.live === false ? "Stripe test mode — no real money moves."
     : "Card details go to Stripe, never to this server.") + `<p class="set-foot bill-note" role="status"></p>`;
 }

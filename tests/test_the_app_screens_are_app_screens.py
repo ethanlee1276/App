@@ -63,7 +63,8 @@ def test_the_sign_up_screen_says_its_promises_as_rows():
     assert promises.count("<li>") == 2, "the welcome's three free things are their own list"
     assert "one-way" in body and "scramble" in body and "sportsbook or ESPN password" in body
     assert "it takes no card and subscribes you to nothing" in body
-    assert ".acct-promises li { display: grid;" in STYLES
+    # With the screen, in the account room's own sheet since 2026-10-25.
+    assert ".acct-promises li { display: grid;" in ACCOUNT_CSS
 
 
 def test_an_empty_edge_page_says_nothing_qualified_once():

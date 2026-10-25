@@ -2351,6 +2351,14 @@ class Handler(BaseHTTPRequestHandler):
                     {"email": who["email"],
                      "sections": A.get_sections(conn, who["id"])}).encode(),
                     ".json")
+            if path == "referral":
+                # The member's code and how it has done; for anybody else,
+                # the code their account came in on, if any (engine/referrals).
+                from engine import referrals as RF
+                out = RF.summary(conn, who["id"], member=self._entitled(conn, who))
+                if out.get("code"):
+                    out["link"] = f"{self._site_base()}/?ref={out['code']}"
+                return self._send(200, json.dumps(out).encode(), ".json")
             if path == "export":
                 # Everything we hold, on request. If we are going to keep
                 # people's data we have to be able to hand it back.
@@ -2473,7 +2481,7 @@ class Handler(BaseHTTPRequestHandler):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
                         "delete", "signout-all", "digest", "forgot", "reset",
-                        "lastleg"):
+                        "lastleg", "referral"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         if path in self.PASSWORD_PATHS and not self._password_transport_ok():
@@ -2502,6 +2510,7 @@ class Handler(BaseHTTPRequestHandler):
                     ".json", headers=self._session_cookie(token))
             if path in ("signup", "login"):
                 handle = ""
+                ref_note = ""
                 if path == "signup":
                     # THE USERNAME COMES WITH THE ACCOUNT (2026-10-25, Real's
                     # first screen): checked BEFORE the account exists, so a
@@ -2518,6 +2527,15 @@ class Handler(BaseHTTPRequestHandler):
                         confirmed=bool(body.get("confirmed")))
                     if code == 200 and handle:
                         SF.profile_set(conn, out["id"], handle, "")
+                    # A FRIEND'S REFERRAL CODE (engine/referrals), typed or
+                    # carried in on a ?ref= link. It never costs the account:
+                    # a code that does not take is a sentence on the page.
+                    if code == 200 and body.get("ref"):
+                        try:
+                            from engine import referrals as RF
+                            _ok, ref_note = RF.attach(conn, out["id"], body.get("ref"))
+                        except Exception:                    # noqa: BLE001
+                            ref_note = ""
                 else:
                     code, out = A.authenticate(
                         conn, body.get("email"), body.get("password"),
@@ -2533,7 +2551,8 @@ class Handler(BaseHTTPRequestHandler):
                 # page script that can read it can also exfiltrate it, and
                 # HttpOnly is only a promise if we keep it.
                 return self._send(200, json.dumps(
-                    {"signed_in": True, "email": out["email"]}).encode(),
+                    {"signed_in": True, "email": out["email"],
+                     **({"ref_note": ref_note} if ref_note and ref_note != "no code" else {})}).encode(),
                     ".json", headers=self._session_cookie(token))
             token = self._cookie(SESSION_COOKIE)
             if path == "logout":
@@ -2543,6 +2562,13 @@ class Handler(BaseHTTPRequestHandler):
             who = A.session_user(conn, token)
             if not who:
                 return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "referral":
+                # A code typed after signing up, before a first membership.
+                from engine import billing as BI, referrals as RF
+                ok, why = RF.attach(conn, who["id"], body.get("code"),
+                                    subscribed_before=BI.has_subscribed_before(conn, who["id"]))
+                return self._send(200 if ok else 400, json.dumps(
+                    {"ok": ok, "note" if ok else "error": why}).encode(), ".json")
             if path == "signout-all":
                 # THIS session too, so the browser is told to forget
                 # itself as well — anything else leaves a page showing an
@@ -4295,6 +4321,14 @@ class Handler(BaseHTTPRequestHandler):
                             "portal": True}).encode(), ".json")
                     fresh = not BI.has_subscribed_before(conn, who["id"])
                     trial = BI.trial_days_for(plan, fresh)
+                    # A FRIEND'S CODE, $6.25 OFF THE FIRST PAYMENT
+                    # (engine/referrals), decided here like the trial: from
+                    # the database, for an account that has never held a
+                    # membership. A coupon Stripe will not make is a 502,
+                    # not a purchase quietly at full price.
+                    from engine import referrals as RF
+                    coupon = (BI.ensure_referral_coupon()
+                              if RF.discount_for(conn, who["id"], not fresh) else "")
                     # ONE PROMO PER ACCOUNT, decided here for the same
                     # reason the trial is: an account that has already
                     # held a subscription is not offered the promo box at
@@ -4313,7 +4347,7 @@ class Handler(BaseHTTPRequestHandler):
                         # thing they just bought.
                         f"{base}/?paid=1&s={{CHECKOUT_SESSION_ID}}#account",
                         f"{base}/#paywall", plan, trial_days=trial,
-                        allow_promo=fresh)
+                        allow_promo=fresh and not coupon, coupon=coupon)
                 else:
                     cust = BI.status_for(conn, who["id"]).get("customer_id")
                     if not cust:

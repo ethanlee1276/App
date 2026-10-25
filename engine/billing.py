@@ -651,7 +651,8 @@ def checkout_request(secret_key: str, price_id: str, user_id: int,
                      plan_id: str = DEFAULT_PLAN,
                      now: float | None = None,
                      trial_days: int = 0,
-                     allow_promo: bool = True) -> tuple[str, dict, bytes]:
+                     allow_promo: bool = True,
+                     coupon: str = "") -> tuple[str, dict, bytes]:
     """``(url, headers, body)`` for a Checkout Session.
 
     `client_reference_id` is how the webhook finds its way back to a row
@@ -692,7 +693,13 @@ def checkout_request(secret_key: str, price_id: str, user_id: int,
     # that typing a checkout code into the account page's redeem box now
     # gets told where it actually goes, instead of "that code is not
     # valid".
-    if allow_promo and promos_for(plan_id):
+    # A REFERRAL'S DISCOUNT (engine/referrals) rides in as the session's
+    # own coupon, chosen by the caller from the database. Stripe takes a
+    # coupon or the promo box, never both, so a referred first purchase
+    # gets its $6.25 and no box.
+    if coupon:
+        body += b"&" + _form({"discounts[0][coupon]": str(coupon)})
+    elif allow_promo and promos_for(plan_id):
         body += b"&" + _form({"allow_promotion_codes": "true"})
     if int(trial_days or 0) > 0:
         # PAYMENT METHOD STILL COLLECTED. Stripe's default for a
@@ -783,7 +790,8 @@ def _get(url: str, secret_key: str, timeout: int = 20,
 
 def start_checkout(user_id: int, email: str, success_url: str,
                    cancel_url: str, plan_id: str = DEFAULT_PLAN,
-                   trial_days: int = 0, allow_promo: bool = True) -> str:
+                   trial_days: int = 0, allow_promo: bool = True,
+                   coupon: str = "") -> str:
     """The Stripe-hosted URL to send the customer to.
 
     `trial_days` and `allow_promo` are decided by the CALLER, from the
@@ -797,12 +805,87 @@ def start_checkout(user_id: int, email: str, success_url: str,
     url, headers, body = checkout_request(sk, price, user_id, email,
                                           success_url, cancel_url, plan_id,
                                           trial_days=int(trial_days or 0),
-                                          allow_promo=bool(allow_promo))
+                                          allow_promo=bool(allow_promo),
+                                          coupon=str(coupon or ""))
     out = _post(url, headers, body)
     got = out.get("url")
     if not got:
         raise BillingUnavailable("Stripe did not return a Checkout URL.")
     return str(got)
+
+
+def referral_coupon_request(secret_key: str) -> tuple[str, dict, bytes]:
+    """The referral's Stripe coupon (engine/referrals.COUPON_ID): $6.25 off,
+    as an AMOUNT — never a percentage, see that module — repeating for one
+    month, which covers the first payment whether or not a trial comes
+    first (a 3-day trial's first charge lands inside the month; the next
+    renewal does not)."""
+    from engine import referrals as RF
+    body = _form({"id": RF.COUPON_ID, "amount_off": str(RF.NEW_MEMBER_OFF_CENTS), "currency": "usd",
+                  "duration": "repeating", "duration_in_months": "1",
+                  "name": "Referral — $6.25 off your first payment"})
+    return f"{API}/coupons", {"Authorization": f"Bearer {secret_key}",
+                              "Content-Type": "application/x-www-form-urlencoded",
+                              "Idempotency-Key": f"qb-{RF.COUPON_ID}"}, body
+
+
+_referral_coupon_ok = False
+
+
+def ensure_referral_coupon() -> str:
+    """The coupon's id, made in Stripe the first time a referred account
+    checks out. Already there is fine; anything else raises
+    BillingUnavailable and the caller checks out without it."""
+    global _referral_coupon_ok
+    from engine import referrals as RF
+    if _referral_coupon_ok:
+        return RF.COUPON_ID
+    sk, _wh, _m = keys()
+    try:
+        got = _get(f"{API}/coupons/{RF.COUPON_ID}", sk)
+        if got.get("id") == RF.COUPON_ID:
+            _referral_coupon_ok = True
+            return RF.COUPON_ID
+    except BillingUnavailable:
+        pass
+    url, headers, body = referral_coupon_request(sk)
+    try:
+        _post(url, headers, body)
+    except BillingUnavailable as exc:
+        if "already exists" not in str(exc).lower():
+            raise
+    _referral_coupon_ok = True
+    return RF.COUPON_ID
+
+
+def credit_request(secret_key: str, customer_id: str, cents: int, key: str,
+                   note: str) -> tuple[str, dict, bytes]:
+    """A credit on a customer's Stripe balance, which Stripe takes off
+    their next invoice by itself. NEGATIVE is a credit in Stripe's
+    terms. The Idempotency-Key is the referral's own, so a retry is the
+    same credit, never a second one."""
+    body = _form({"amount": str(-abs(int(cents))), "currency": "usd", "description": note})
+    return (f"{API}/customers/{customer_id}/balance_transactions",
+            {"Authorization": f"Bearer {secret_key}",
+             "Content-Type": "application/x-www-form-urlencoded",
+             "Idempotency-Key": str(key)}, body)
+
+
+def credit_balance(customer_id: str, cents: int, key: str, note: str) -> str:
+    sk, _wh, _m = keys()
+    url, headers, body = credit_request(sk, customer_id, cents, key, note)
+    return str(_post(url, headers, body).get("id") or "")
+
+
+def settle_referrals(conn) -> int:
+    """Pay every referral credit owed to a member Stripe knows, now —
+    from the webhook the moment a friend's membership goes active, and
+    from the sweep for any the webhook could not pay. Never raises."""
+    try:
+        from engine import referrals as RF
+        return RF.settle(conn, lambda uid: status_for(conn, uid).get("customer_id"), credit_balance)
+    except Exception:                                        # noqa: BLE001
+        return 0
 
 
 def open_portal(customer_id: str, return_url: str) -> str:
@@ -1083,6 +1166,19 @@ def apply_event(conn, event: dict) -> bool:
                          event.get("status"), event.get("period_end"))
     if kind:
         AN.record(kind)
+    # A REFERRED ACCOUNT'S FIRST MEMBERSHIP, PAID (engine/referrals): the
+    # member whose code it came in on is owed $6.25 on their next bill.
+    # `active` is a paid invoice — a trial is `trialing`, and a failed
+    # first charge is `incomplete` or `past_due` — so a referral that
+    # never pays never earns. Once per referred account, however often
+    # Stripe repeats itself.
+    if str(event.get("status") or "") == "active":
+        try:
+            from engine import referrals as RF
+            if RF.first_payment(conn, int(uid)) is not None and configured():
+                settle_referrals(conn)
+        except Exception:                                    # noqa: BLE001
+            pass
     return True
 
 

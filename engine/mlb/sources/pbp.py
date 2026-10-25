@@ -70,6 +70,20 @@ def fetch_live_playbyplay(game_pk, ttl: int = LIVE_TTL) -> dict:
                      f"mlb_pbp_live_{game_pk}.json", ttl=ttl)
 
 
+#: MLB's win chance after every at-bat (engine/playmoments), for a game in
+#: progress. Its own cache name under the same prunable `mlb_pbp_` prefix,
+#: and a little longer than the plays': the number moves once an at-bat.
+WP_TTL = 10
+
+
+def fetch_live_win_probability(game_pk, ttl: int = WP_TTL) -> list:
+    """``[{atBatIndex, homeTeamWinProbability, ...}]`` — one entry per
+    completed at-bat. A top-level list, read by playmoments.mlb_win_chances."""
+    got = _get_json(f"{STATS_BASE}/game/{game_pk}/winProbability",
+                    f"mlb_pbp_live_wp_{game_pk}.json", ttl=ttl)
+    return got if isinstance(got, list) else []
+
+
 #: Half-inning codes, so the front end never has to parse prose.
 _HALF = {"top": "T", "bottom": "B"}
 
@@ -102,7 +116,7 @@ def recent_plays(payload: dict, limit: int = 6) -> list[dict]:
         matchup = p.get("matchup") or {}
         inning = about.get("inning")
         rbi = result.get("rbi")
-        plays.append({
+        row = {
             "inning": int(inning) if isinstance(inning, int) else None,
             "half": _HALF.get(str(about.get("halfInning") or "").lower(), ""),
             "batter": ((matchup.get("batter") or {}).get("fullName") or ""),
@@ -113,7 +127,22 @@ def recent_plays(payload: dict, limit: int = 6) -> list[dict]:
             "scoring": bool(about.get("isScoringPlay")),
             "away_score": result.get("awayScore"),
             "home_score": result.get("homeScore"),
-        })
+        }
+        # THE PLAY CARD'S FACTS (2026-10-25, Real's card): the at-bat's
+        # index (MLB's win chance is keyed by it), the outs after it, and
+        # how far a ball in play went — the "416 ft" in a headline. Absent,
+        # never null, when the feed has none.
+        if isinstance(about.get("atBatIndex"), int):
+            row["at_bat"] = about["atBatIndex"]
+        outs = (p.get("count") or {}).get("outs")
+        if isinstance(outs, int):
+            row["outs"] = outs
+        for ev in reversed(p.get("playEvents") or []):
+            h = _hit(ev)
+            if h and h.get("distance"):
+                row["distance"] = int(h["distance"])
+                break
+        plays.append(row)
     return plays[-limit:] if limit and limit > 0 else plays
 
 

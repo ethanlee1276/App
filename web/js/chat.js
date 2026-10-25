@@ -61,16 +61,167 @@ function playTitleOf(p, d) {
 }
 function playIsBig(p) {
   if (!p) return false;
+  // Any play that moved the game, whatever kind (engine/playmoments.BIG).
+  if (Number(p.rating) >= 4.5) return true;
   const e = String(p.event || "");
   if (p.kind === "football") {
     const gain = /rush|run|pass|reception|scramble/i.test(e) && !p.penalty ? Math.abs(Number(p.yards) || 0) : 0;
     const ret = /return|punt|kickoff/i.test(e) ? Number(p.yards) || 0 : 0;
     return !!(p.scoring || p.turnover || gain >= 20 || ret >= 40 || /sack|interception|fumble|blocked|safety/i.test(e));
   }
-  if (p.kind === "atbat") return !!(p.hit || Number(p.rbi) > 0 || /home run|strikeout|double play/i.test(e));
+  // NOT `p.hit`: the rail's at-bats carry batted-ball data on every ball in
+  // play, a groundout too. A run in, a homer, an extra-base hit, a double play.
+  if (p.kind === "atbat") return !!(Number(p.rbi) > 0 || /home run|double play|triple play|^double$|^triple$/i.test(e));
   if (p.kind === "hoops") return !!((p.scoring && Number(p.points) === 3) || /dunk|block|steal|alley|technical|flagrant/i.test(e));
   if (PLAY_RINK_WORD[p.kind]) return p.kind === "goal" || p.kind === "penalty";
   return !!(p.scoring || /goal|penalty|fight/i.test(e));
+}
+
+/* REAL'S PLAY CARD, AND TWO THINGS IT DOESN'T SAY (Ethan's screenshot of
+   Real, 2026-10-25: a walk-off homer's card — the score and the inning, a
+   9.8 in the corner, "Walk-off 3-run 416' homer", the batter's and the
+   pitcher's lines so far, "15th homer this season", the reactions, the
+   comments, a share). Ours carries each of those where the feed has it,
+   and adds the win chance before and after the play (the feed's own number,
+   engine/playmoments) and whether it tied the game, put a side ahead or
+   ended it. Every fact is counted off the game's own plays and box score;
+   none is the model's. */
+const PC_SWING = { walkoff: "Walk-off", go_ahead: "Go-ahead", tying: "Ties it" };
+const PC_SFX = ["th", "st", "nd", "rd"];
+const pcOrd = (n) => { const v = n % 100; return n + (PC_SFX[(v - 20) % 10] || PC_SFX[v] || "th"); };
+const pcShort = (n) => { const w = String(n || "").trim().split(/\s+/); return w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(" ")}` : w[0] || ""; };
+const pcNorm = (n) => String(n || "").toLowerCase().replace(/[^a-z]/g, "");
+function pcBox(players, name) {
+  const k = pcNorm(name);
+  return k ? (players || []).find((r) => pcNorm(r && r.player) === k) || null : null;
+}
+
+// His line so far, the way a box score says it: "1/5, 3 RBI", "0.1 IP, 1 K, 2 ER, 11 P".
+function pcLine(r) {
+  if (!r) return "";
+  const L = r.line || {}, s = r.stats || {};
+  const n = (v) => Math.round(Number(v) || 0);
+  const join = (a) => a.filter(Boolean).join(", ");
+  if (L.batting) { const b = L.batting; return join([`${n(b.h)}/${n(b.ab)}`, b.hr ? `${b.hr} HR` : "", b.rbi ? `${b.rbi} RBI` : "", b.bb ? `${b.bb} BB` : ""]); }
+  if (L.pitching) { const q = L.pitching; return join([q.ip ? `${q.ip} IP` : "", `${n(q.k)} K`, q.er != null ? `${n(q.er)} ER` : "", q.p ? `${q.p} P` : ""]); }
+  if (s.pass_att) return join([`${n(s.pass_cmp)}/${n(s.pass_att)}, ${n(s.pass_yds)} yds`, s.pass_td ? `${n(s.pass_td)} TD` : "", s.pass_int ? `${n(s.pass_int)} INT` : ""]);
+  if (s.carries) return join([`${n(s.carries)} car, ${n(s.rush_yds)} yds`, s.rush_td ? `${n(s.rush_td)} TD` : ""]);
+  if (s.receptions || s.rec_yds) return join([`${n(s.receptions)} rec, ${n(s.rec_yds)} yds`, s.rec_td ? `${n(s.rec_td)} TD` : ""]);
+  if (s.pts != null) return join([`${n(s.pts)} pts`, s.reb ? `${n(s.reb)} reb` : "", s.ast ? `${n(s.ast)} ast` : ""]);
+  return "";
+}
+
+// Who the card is about: the batter and the pitcher; a passer and his
+// receiver; otherwise the one who did it (a kick's holder is not news).
+function pcPeople(p) {
+  if (p.kind === "atbat") return [p.batter, p.pitcher].filter(Boolean);
+  const who = Array.isArray(p.players) && p.players.length ? p.players : p.player ? [p.player] : [];
+  return /pass|reception/i.test(String(p.event || "")) ? who.slice(0, 2) : who.slice(0, 1);
+}
+
+function pcTitle(p, d) {
+  const e = String(p.event || "");
+  if (p.kind === "atbat" && /home run/i.test(e)) {
+    const runs = Number(p.rbi) || 1;
+    const t = [{ walkoff: "walk-off", go_ahead: "go-ahead", tying: "game-tying" }[p.swing] || "",
+      p.distance ? `${p.distance}-ft` : "", runs >= 4 ? "grand slam" : `${runs > 1 ? `${runs}-run` : "solo"} homer`].filter(Boolean).join(" ");
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  if (p.kind === "atbat") return `${e}${Number(p.rbi) ? `, ${p.rbi} run${p.rbi > 1 ? "s" : ""} in` : ""}`;
+  return playTitleOf(p, d);
+}
+
+// The win chance it moved, for the side that made the play — only where the
+// feed gave one and the move is worth a line.
+function pcWin(p, d) {
+  if (typeof p.wp !== "number" || typeof p.wpa !== "number") return "";
+  const side = p.kind === "atbat" ? (p.half === "T" ? "away" : "home")
+    : p.team && p.team === d.away ? "away" : p.team && p.team === d.home ? "home" : p.wpa >= 0 ? "home" : "away";
+  const was = p.wp - p.wpa;
+  const [before, after] = side === "home" ? [was, p.wp] : [100 - was, 100 - p.wp];
+  if (Math.abs(after - before) < 3) return "";
+  return `${d[side] || ""} win chance ${Math.round(before)}% → ${Math.round(after)}%`.trim();
+}
+
+// The facts under it: a season count, a night's count, a run of points.
+// `plays` is the game's list when the whole of it is in hand (the room);
+// the Live tab's feed has only the recent big plays, which still hold
+// every homer and touchdown.
+function pcFacts(p, d, plays, full) {
+  const out = [];
+  const key = chatPlayKey(p);
+  const i = (plays || []).findIndex((q) => chatPlayKey(q) === key);
+  const upTo = i >= 0 ? plays.slice(0, i + 1) : [p];
+  const e = String(p.event || "");
+  if (p.kind === "atbat" && /home run/i.test(e)) {
+    const tonight = upTo.filter((q) => q.batter === p.batter && /home run/i.test(q.event || "")).length || 1;
+    const r = pcBox(d.players, p.batter);
+    if (r && Number.isInteger(r.season_hr)) {
+      // The box may be a pass behind the play, or ahead of it: his season as
+      // of this homer is the box's season less the box's game, plus tonight's.
+      const season = r.season_hr - Number(((r.line || {}).batting || {}).hr || 0) + tonight;
+      if (season > 0) out.push(`${pcOrd(season)} homer this season`);
+    }
+    if (tonight >= 2) out.push(`${pcOrd(tonight)} homer tonight`);
+  } else if (full && p.kind === "atbat" && /strikeout/i.test(e)) {
+    const k = upTo.filter((q) => q.pitcher === p.pitcher && /strikeout/i.test(q.event || "")).length;
+    if (k >= 5) out.push(`${pcShort(p.pitcher)}’s ${pcOrd(k)} strikeout tonight`);
+  } else if (p.kind === "football" && p.scoring && /touchdown/i.test(e)) {
+    const who = (p.players || [])[/pass/i.test(e) ? 1 : 0];
+    const n = who ? upTo.filter((q) => q.scoring && /touchdown/i.test(q.event || "") && (q.players || []).includes(who)).length : 0;
+    if (n >= 2) out.push(`${pcShort(who)}’s ${pcOrd(n)} touchdown today`);
+  } else if (p.kind === "hoops" && p.scoring) {
+    const pts = Number(((pcBox(d.players, p.player) || {}).stats || {}).pts);
+    if (pts >= 20) out.push(`${pcShort(p.player)} has ${Math.round(pts)} points`);
+  }
+  return out;
+}
+
+function pcBodyHTML(p, d, plays, full) {
+  d = d || {};
+  const people = pcPeople(p);
+  // Football and baseball name the player whether or not the box has his
+  // line yet (a kicker's often has none); basketball's and hockey's
+  // headlines carry the name already.
+  const named = p.kind === "football" || p.kind === "atbat";
+  const lines = people.map((n) => {
+    const ln = pcLine(pcBox(d.players, n));
+    return ln || named ? `<span class="pcard-line"><b>${chEsc(pcShort(n))}</b>${ln ? ` · ${chEsc(ln)}` : ""}</span>` : "";
+  }).join("");
+  const team = p.kind === "atbat" ? (p.half === "T" ? d.away : d.home) : p.team;
+  const face = people[0] && typeof playerAvatar === "function" ? playerAvatar(people[0], team, { size: 40 }) : "";
+  const win = pcWin(p, d);
+  const chip = p.swing && !(p.kind === "atbat" && /home run/i.test(String(p.event || ""))) ? PC_SWING[p.swing] : "";
+  return `<div class="pcard-row">${face ? `<span class="pcard-face">${face}</span>` : ""}<div class="pcard-main">
+      ${chip ? `<span class="pcard-swing" data-swing="${chEsc(p.swing)}">${chip}</span>` : ""}
+      <p class="pcard-title">${chEsc(pcTitle(p, d))}</p>${lines}
+      ${win ? `<span class="pcard-win">${chEsc(win)}</span>` : ""}
+      ${pcFacts(p, d, plays, full).map((f) => `<span class="pcard-fact">${chEsc(f)}</span>`).join("")}</div></div>`;
+}
+
+const pcRate = (p) => (p.rating != null
+  ? `<span class="pcard-rate" title="How much this play moved the game, out of 10">${Number(p.rating).toFixed(1)}</span>` : "");
+const PC_SHARE = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 13.5 3l-3 10.5-2.5-4.5z"/></svg>`;
+function pcShareHTML(league, event, p, text) {
+  return `<button type="button" class="pcard-share" data-pc-share data-league="${chEsc(league)}" data-event="${chEsc(event)}"
+    data-play="${chEsc(chatPlayKey(p))}" data-text="${chEsc(text)}" aria-label="Share this play">${PC_SHARE}</button>`;
+}
+
+/* A play's own link — the game, opened on that play's thread (app.js
+   openPbpHash keeps the play for chatMount) — by the phone's own share
+   sheet, or copied where there is none. */
+async function pcShare(btn) {
+  const b = btn.dataset;
+  const url = `${location.origin}/#pbp/${encodeURIComponent(b.league)}/${encodeURIComponent(b.event)}/play/${encodeURIComponent(b.play)}`;
+  try {
+    if (navigator.share) { await navigator.share({ title: b.text, text: b.text, url }); return; }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  try {
+    await navigator.clipboard.writeText(`${b.text} ${url}`);
+    btn.classList.add("done");
+    btn.setAttribute("aria-label", "Link copied");
+    setTimeout(() => { btn.classList.remove("done"); btn.setAttribute("aria-label", "Share this play"); }, 1600);
+  } catch (e) {}
 }
 
 /* THE PLAY FEED (Real's main screen, 2026-10-25 — Ethan: "look at all
@@ -112,13 +263,15 @@ function pfItemHTML(x) {
   const when = [per, p.kind === "football" ? fbClock(p.clock) : p.clock].filter(Boolean).join(" ");
   const secs = p.at ? Math.max(0, Math.round((Date.now() - Date.parse(p.at)) / 1000)) : null;
   const ago = secs == null || isNaN(secs) ? "" : secs < 60 ? "now" : secs < 3600 ? `${Math.round(secs / 60)}m` : `${Math.round(secs / 3600)}h`;
+  const event = String(g.event_id || g.game_pk);
+  const score = `${g.away || ""} ${a != null ? a : ""}–${h != null ? h : ""} ${g.home || ""}`;
   return `<article class="pf-item${p.scoring || p.kind === "goal" ? " pf-scored" : ""}${p.turnover ? " pf-turned" : ""}"
-      data-pf-sport="${escapeAttr(sport)}" data-pf-event="${escapeAttr(String(g.event_id || g.game_pk))}">
+      data-pf-sport="${escapeAttr(sport)}" data-pf-event="${escapeAttr(event)}">
     <div class="pf-top"><span class="pf-lg">${(SPORT_META[sport] || {}).logo || ""}</span>
-      <b>${escapeHtml(g.away || "")} ${a != null ? a : ""}–${h != null ? h : ""} ${escapeHtml(g.home || "")}</b>
-      <span class="pf-when">${escapeHtml(when)}</span>${ago ? `<time class="pf-ago">${ago}</time>` : ""}</div>
-    <p class="pf-title">${p.team && !String(p.team).startsWith("espn:") ? teamMarkIn(sport, p.team, 20) : ""}<span>${escapeHtml(playTitleOf(p, g))}</span></p>
-    <div class="pf-acts">${chatPlayBadge(room, p)}<button type="button" class="pf-open">Open the game →</button></div>
+      <b>${escapeHtml(score)}</b>
+      <span class="pf-when">${escapeHtml(when)}</span>${ago ? `<time class="pf-ago">${ago}</time>` : ""}${pcRate(p)}</div>
+    ${pcBodyHTML(p, g, g.big || [], false)}
+    <div class="pf-acts">${chatPlayBadge(room, p)}${pcShareHTML(sport, event, p, `${pcTitle(p, g)} · ${score}`)}<button type="button" class="pf-open">Open the game →</button></div>
   </article>`;
 }
 
@@ -136,7 +289,11 @@ function playFeedHTML(games) {
 function playFeedMount(host, games) {
   host.innerHTML = playFeedHTML(games);
   host.querySelectorAll(".pf-item").forEach((el) =>
-    el.addEventListener("click", () => openPbp(el.dataset.pfSport, el.dataset.pfEvent)));
+    el.addEventListener("click", (e) => {
+      const share = e.target.closest && e.target.closest("[data-pc-share]");
+      if (share) { e.stopPropagation(); pcShare(share); return; }
+      openPbp(el.dataset.pfSport, el.dataset.pfEvent);
+    }));
 }
 
 let _pfCountsAt = 0;
@@ -191,6 +348,9 @@ function chatMount(league, event, d) {
   chatFab();
   if (CH.open) { chatDrawHead(); if (CH.tab === "plays" || CH.thread) chatDrawBody(); }
   if (!CH.timer) chatSchedule(0);
+  // A shared play's link lands on its thread (pcShare; app.js openPbpHash).
+  const want = window._chatWantPlay;
+  if (want && want.room === room) { window._chatWantPlay = null; chatOpen({ play: want.play }); }
 }
 
 /* Open the sheet — on a play's thread when one is named. */
@@ -650,11 +810,12 @@ function chatPlayCardHTML(p, inThread) {
   const n = CH.threads[key] || 0;
   const [sa, sh] = p.away_score != null ? [p.away_score, p.home_score] : (p.score || []);
   const score = sa != null && sh != null && (CH.d || {}).away ? `${CH.d.away} ${sa} – ${sh} ${CH.d.home}` : "";
+  const d = CH.d || {};
   return `<article class="gch-playcard${p.scoring || p.kind === "goal" ? " gch-scored" : ""}${p.turnover ? " gch-turned" : ""}" data-play="${chEsc(key)}">
-    <div class="gch-play-when">${chEsc(chatPlayWhen(p))}${score ? `<span>${chEsc(score)}</span>` : ""}</div>
-    <p class="gch-play-title">${chEsc(chatPlayTitle(p))}</p>
+    <div class="gch-play-when">${chEsc(chatPlayWhen(p))}${score ? `<span>${chEsc(score)}</span>` : ""}${pcRate(p)}</div>
+    ${pcBodyHTML(p, d, chatAllPlays(), true)}
     <div class="gch-acts">${chatPlayFacesHTML(key)}${inThread ? "" : `<button type="button" class="gch-act gch-thread-btn" data-gch="thread" data-play="${chEsc(key)}">${
-      n ? `${n} repl${n === 1 ? "y" : "ies"}` : "Talk about it"}</button>`}</div></article>`;
+      n ? `${n} repl${n === 1 ? "y" : "ies"}` : "Talk about it"}</button>`}${pcShareHTML(CH.league, CH.event, p, `${pcTitle(p, d)}${score ? ` · ${score}` : ""}`)}</div></article>`;
 }
 
 /* Real's feed, for this game: the big plays, newest first, each with its
@@ -764,6 +925,8 @@ async function chatSend(form) {
 /* ---------------- taps ---------------- */
 
 async function chatClick(e) {
+  const share = e.target.closest("[data-pc-share]");
+  if (share) return pcShare(share);
   const t = e.target.closest("[data-gch]");
   if (!t) return;
   const act = t.dataset.gch;

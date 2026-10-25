@@ -193,9 +193,17 @@ def big_play(row: dict) -> bool:
     reads the same rows: a score, a turnover, a run or pass of twenty
     yards (a flag on a kick carries the try's distance, so a gain counts
     only on a run or a pass), a return of forty, a sack; a three, a dunk,
-    a block or a steal; a goal or a penalty."""
+    a block or a steal; a goal or a penalty — and, since 2026-10-25, any
+    play that moved the game (its rating, engine/playmoments), whatever
+    kind it is: a late basket that swings a close game is a big play."""
     e = str((row or {}).get("event") or "")
     kind = (row or {}).get("kind")
+    try:
+        from engine.playmoments import BIG
+        if float((row or {}).get("rating") or 0) >= BIG:
+            return True
+    except (TypeError, ValueError, ImportError):
+        pass
     if kind == "football":
         gain = abs(_int(row.get("yards")) or 0) if _BIG_RUNPASS.search(e) and not row.get("penalty") else 0
         ret = (_int(row.get("yards")) or 0) if _BIG_RETURN.search(e) else 0
@@ -261,7 +269,19 @@ def football_plays(payload: dict, league: str = "cfb",
             if pid:
                 seen.add(pid)
             rows.append(_football_row(p, team, home, away, roster))
+    _rate(rows, league, payload)
     return rows[-limit:] if limit and limit > 0 else rows
+
+
+def _rate(rows: list[dict], league: str, payload: dict) -> None:
+    """Each play's moment — the rating, the win chance it moved, and a
+    tie, a lead or a walk-off (engine/playmoments) — over every row, oldest
+    first, before the caller keeps its slice. It never costs the plays."""
+    try:
+        from engine import playmoments
+        playmoments.enrich(rows, league, playmoments.espn_win_chances(payload))
+    except Exception:                                        # noqa: BLE001
+        pass
 
 
 def _football_row(p: dict, team: str, home: str = "",
@@ -765,6 +785,7 @@ def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,
             if spot:
                 row["x"], row["y"] = spot
         rows.append(row)
+    _rate(rows, league, payload)
     return rows[-limit:] if limit and limit > 0 else rows
 
 

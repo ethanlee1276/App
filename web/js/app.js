@@ -19124,7 +19124,7 @@ window.acctAuth = async function (btn, mode) {
     const r = await fetch(`/api/account/${mode}`, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, confirmed, ...(mode === "signup" ? { handle, ref: referralTyped() } : {}) }),
+      body: JSON.stringify({ email, password, confirmed, ...(mode === "signup" ? { handle, ref: ((card.querySelector(".acct-ref") || {}).value || referralTyped()).trim() } : {}) }),
     });
     const body = await r.json().catch(() => null);
     if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
@@ -29490,6 +29490,8 @@ function openPbpHash(rest) {
     try { return decodeURIComponent(x); } catch (e) { return x; }
   });
   if (parts.length < 2 || !parts[0] || !parts[1]) { switchView("live"); return; }
+  // A shared play (js/chat.js pcShare): the game, opened on its thread.
+  if (parts[2] === "play" && parts[3]) window._chatWantPlay = { room: `${parts[0]}_${parts[1]}`, play: parts[3] };
   openPbp(parts[0], parts[1], "live");
 }
 

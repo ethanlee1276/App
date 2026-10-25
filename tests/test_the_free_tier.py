@@ -241,6 +241,36 @@ def test_the_sign_up_screen_leads_with_the_free_account_and_a_way_past():
     assert "welcomeDone();" in browse and 'location.hash = "#live";' in browse
 
 
+def test_reals_first_screens_come_before_the_form_once():
+    """Ethan's screenshot of Real's first screen: "This is a play", a card,
+    "Every big moment in a game becomes one of these", four bars and
+    Continue. Four steps, a way past on each, and the form after."""
+    steps = ACCOUNT[ACCOUNT.index("function introSteps("):ACCOUNT.index("function introHTML(")]
+    for lead in ("This is a play", "Every play has its own thread", "Every game has a room",
+                 "Every pick, graded in public"):
+        assert lead in steps, lead
+    html = _fn(ACCOUNT, "introHTML")
+    assert 'data-intro="${last ? "done" : "next"}"' in html and "Create your free account" in html
+    assert 'data-act="acctGoLogin"' in html and 'data-intro="skip"' in html
+    assert '${i < 3 ? "Example" : ""}' in html, "the example cards say they are examples"
+    render = ACCOUNT[ACCOUNT.index("async function renderSignup("):]
+    render = render[:render.index("\n}\n")]
+    assert render.index("if (!introSeen())") < render.index("host.innerHTML = signupHTML();")
+    bind = _fn(ACCOUNT, "introBind")
+    assert "introDone(); host.innerHTML = signupHTML();" in bind, "skip and the last step land on the form for good"
+
+
+def test_the_records_numbers_on_the_welcome_are_the_records_own():
+    """No invented proof: the last step's numbers are read off the public
+    Record file, and with no file it says "The Record" and no number."""
+    steps = ACCOUNT[ACCOUNT.index("function introSteps("):ACCOUNT.index("function introHTML(")]
+    assert "((_introRecord || {}).all_time || {}).overall" in steps
+    assert 'fetch("data/record_head.json"' in ACCOUNT
+    assert '<div class="wi-record" aria-hidden="true"><b>The Record</b></div>' in steps
+    import re as _re
+    assert not _re.search(r"\b\d{3,},?\d*–\d", steps.replace("${", "")), "a won-lost written into the code"
+
+
 def test_a_username_is_checked_before_the_account_exists():
     """Real asks for the username first, so a taken or rude one has to be
     refused before the account is made, not after."""

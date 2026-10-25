@@ -614,3 +614,74 @@
 .welcome-free { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; text-align: left; }
 .welcome-free li { display: flex; align-items: flex-start; gap: 10px; color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-snug); }
 .welcome-skip { margin-left: auto; color: var(--brand-2); }
+
+/* Real's first screens, ours (introHTML). */
+.wiz { display: grid; gap: 14px; max-width: 460px; margin: 0 auto; min-height: calc(100dvh - 48px); grid-template-rows: auto 1fr auto auto auto; }
+.wi-head { display: grid; grid-template-columns: 40px 1fr 56px; align-items: center; gap: 10px; padding-bottom: 12px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.wi-head .welcome-mark { width: 40px; height: 40px; }
+.wi-h { margin: 0; text-align: center; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
+.wi-skip { justify-self: end; border: 0; background: transparent; color: var(--text-mute); font: inherit; font-size: var(--fs-sm);
+  font-weight: 700; cursor: pointer; }
+.wi-stage { display: grid; align-content: start; justify-items: center; gap: 10px; text-align: center; padding-top: 10px; }
+.wi-lead { margin: 0; font-size: var(--fs-xl); color: var(--text); }
+.wi-arrow { color: var(--text-mute); font-size: var(--fs-xl); line-height: var(--lh-tight); }
+.wi-say { margin: 4px 0 0; max-width: var(--measure-tight); font-size: var(--fs-lg); line-height: var(--lh-snug); color: var(--text); }
+.wi-ex { margin: -4px 0 0; min-height: 1em; font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+.wi-card, .wi-thread, .wi-room { width: 100%; display: grid; gap: 4px; padding: 12px 14px; text-align: left; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border); background: var(--panel); }
+.wi-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-mute); }
+.wi-top b { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text); }
+.wi-rate { margin-left: auto; padding: 1px 7px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-weight: 800;
+  color: var(--text); background: color-mix(in oklab, var(--brand-2) 18%, var(--panel)); }
+.wi-chip { justify-self: start; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--brand-ink); background: var(--brand-2); }
+.wi-title { margin: 0; color: var(--brand-2); font-size: var(--fs-md); font-weight: 800; line-height: var(--lh-snug); }
+.wi-line { font-size: var(--fs-sm); color: var(--text-dim); }
+.wi-line b { color: var(--text); }
+.wi-win { font-size: var(--fs-xs); font-weight: 700; color: var(--text); }
+.wi-acts { display: flex; gap: 12px; margin-top: 4px; font-size: var(--fs-sm); color: var(--text-dim); }
+.wi-n { margin-left: auto; }
+.wi-msg { padding: 7px 10px; border-radius: var(--radius-sm); background: var(--bg); font-size: var(--fs-sm); color: var(--text); }
+.wi-msg b { color: var(--brand-2); margin-right: 4px; }
+.wi-vote { display: grid; grid-template-columns: auto 1fr 1fr; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-mute); }
+.wi-vote i { position: relative; overflow: hidden; isolation: isolate; font-style: normal; padding: 6px 8px; border-radius: 999px;
+  border: var(--hairline) solid var(--border); color: var(--text); }
+.wi-vote i::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); z-index: -1;
+  background: color-mix(in oklab, var(--brand-2) 26%, transparent); }
+.wi-record { display: grid; justify-items: center; gap: 4px; padding: 18px 14px; width: 100%; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border); background: var(--panel); }
+.wi-record b { font-family: var(--font-mono); font-size: var(--fs-3xl); color: var(--text); }
+.wi-record span { font-size: var(--fs-sm); color: var(--text-mute); }
+.wi-bars { display: grid; grid-auto-flow: column; justify-content: center; gap: 8px; }
+.wi-bar { width: 44px; height: 4px; padding: 0; border: 0; border-radius: 999px; background: var(--border); cursor: pointer; }
+.wi-bar.on { background: var(--brand-2); }
+.wi-go { width: 100%; min-height: 50px; border-radius: 999px; font-size: var(--fs-md); }
+.wi-foot { display: flex; justify-content: center; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-mute); }
+
+/* Invite friends (invFill). */
+.inv-screen { display: grid; gap: 12px; }
+.inv-hero { display: grid; gap: 6px; padding: 14px; border-radius: var(--radius); border: var(--hairline) solid var(--border);
+  background: var(--panel); }
+.inv-hero b { font-size: var(--fs-lg); color: var(--text); }
+.inv-hero p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.inv-hero .btn { justify-self: start; margin-top: 4px; }
+.inv-code { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 14px; border-radius: var(--radius);
+  border: var(--hairline) dashed color-mix(in oklab, var(--brand-2) 55%, var(--border)); }
+.inv-k { grid-column: 1 / -1; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+.inv-code b { grid-column: 1 / -1; font-family: var(--font-mono); font-size: var(--fs-3xl); letter-spacing: .12em; color: var(--brand-2); }
+.inv-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.inv-add input { min-height: 44px; padding: 8px 12px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border);
+  background: var(--panel); color: var(--text); font: inherit; letter-spacing: .08em; text-transform: uppercase; }
+
+/* The sign-up screen's two promises (signupHTML, js/account.js): a mark and a sentence a
+   row, set like a settings list's footnotes. */
+.acct-promises { list-style: none; margin: 16px 0 0; padding: 12px 0 0; display: grid; gap: 10px;
+  border-top: var(--hairline) solid var(--border); }
+.acct-promises li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
+  font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); }
+.acct-promises li > :first-child { color: var(--brand); margin-top: 2px; }
+.pw-ref { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid color-mix(in oklab, var(--brand-2) 45%, var(--border)); background: var(--panel);
+  color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pw-ref b { color: var(--brand-2); font-family: var(--font-mono); }

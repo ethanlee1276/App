@@ -185,18 +185,29 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
         g["plays_state"] = "capped"
     if not live:
         return "no games in progress — no plays fetched"
-    from engine.mlb.sources.pbp import fetch_live_playbyplay, recent_plays
+    from engine.mlb.sources.pbp import fetch_live_playbyplay, fetch_live_win_probability, recent_plays
+    from engine import playmoments as _pm
     got = failed = deep = boxes = 0
     for g in live[:PLAYS_MAX_GAMES]:
         try:
             payload = fetch_live_playbyplay(g["game_pk"])
             every = recent_plays(payload, 0)
+            # EACH AT-BAT'S MOMENT (engine/playmoments, Real's 0–10): the
+            # win chance it moved, off MLB's own per-at-bat feed. A feed
+            # that does not answer costs the win chance and nothing else —
+            # the rating falls back to a reading of the play.
+            try:
+                chances = _pm.mlb_win_chances(fetch_live_win_probability(g["game_pk"]))
+            except Exception:                                # noqa: BLE001
+                chances = {}
+            _pm.enrich(every, "mlb", chances, key=lambda r: r.get("at_bat"))
             g["plays"] = every[-PLAYS_PER_GAME:]
             # The game's recent big at-bats too, for the Live tab's play
-            # feed (livescore_build.BIG_PER_GAME says why): a hit that
-            # drove a run in, a home run, a strikeout, a double play.
-            big = [r for r in every if r.get("hit") or (r.get("rbi") or 0) > 0
-                   or re.search(r"home run|strikeout|double play", str(r.get("event") or ""), re.I)][-8:]
+            # feed (livescore_build.BIG_PER_GAME says why): a run driven
+            # in, a home run, an extra-base hit, a double play, or any
+            # at-bat that moved the game (its rating).
+            big = [r for r in every if (r.get("rbi") or 0) > 0 or (r.get("rating") or 0) >= _pm.BIG
+                   or re.search(r"home run|double play|triple play|double|triple", str(r.get("event") or ""), re.I)][-8:]
             if big:
                 g["big"] = big
             g["plays_state"] = "ok"
@@ -226,7 +237,7 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
         # costs nothing but itself.
         if pbp_dir is not None:
             try:
-                write_pbp(g, payload, recent_plays(payload, 0), pbp_dir)
+                write_pbp(g, payload, every, pbp_dir, chances=chances)
                 deep += 1
             except Exception:                                # noqa: BLE001
                 pass
@@ -267,7 +278,8 @@ def _utc() -> str:
     return utc_stamp()
 
 
-def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
+def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path,
+              chances: dict | None = None) -> Path:
     """One MLB game's whole play-by-play, atomically, as the page reads it.
 
     The header rides along from the fast row — sides, live state — so
@@ -296,6 +308,14 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
         "events": game_events(payload),
         "current": current_at_bat(payload),
     }
+    # The at-bats on the rail carry the same moments as the card's rows
+    # (engine/playmoments), keyed by the at-bat's index.
+    try:
+        from engine import playmoments
+        playmoments.enrich([e for e in doc["events"] if e.get("kind") == "atbat"], "mlb",
+                           chances, key=lambda r: r.get("at_bat"))
+    except Exception:                                        # noqa: BLE001
+        pass
     # THE NEXT PITCH (2026-10-15): the man on the mound's own mix in each
     # count against this batter's side, off our stored pitches, read-only.
     # A table that will not read costs the card and nothing else.

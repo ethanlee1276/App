@@ -92,8 +92,39 @@ def box_rows(boxscore: dict, home: str = "home", away: str = "away") -> list[dic
                     entry["spot"] = int(order) // 100
                 if pit.get("strikeOuts") is not None or pit.get("inningsPitched"):
                     entry["on_mound"] = normalize_name(name) in mound
+                # HIS LINE SO FAR AND HIS SEASON, for a play card (Real's
+                # "P. Alonso · 1/5, 3 rbi", "15th homer this season";
+                # 2026-10-25). Beside `stats` for the same reason as the
+                # spot: the box table draws every key in there.
+                line = _card_line(bat, pit)
+                if line:
+                    entry["line"] = line
+                season_hr = ((p.get("seasonStats") or {}).get("batting") or {}).get("homeRuns")
+                if bat and isinstance(season_hr, int):
+                    entry["season_hr"] = season_hr
                 out.append(entry)
     return out
+
+
+def _card_line(bat: dict, pit: dict) -> dict:
+    """A batter's ``{ab, h, rbi, bb, k}`` and a pitcher's ``{ip, k, er,
+    bb, p}`` from the box's own fields, each only when the feed has it."""
+    out: dict = {}
+    if pit.get("inningsPitched") or pit.get("battersFaced"):
+        for key, src in (("k", "strikeOuts"), ("er", "earnedRuns"), ("bb", "baseOnBalls"),
+                         ("p", "numberOfPitches")):
+            if isinstance(pit.get(src), int):
+                out[key] = pit[src]
+        if pit.get("inningsPitched"):
+            out["ip"] = str(pit["inningsPitched"])
+        return {"pitching": out} if out else {}
+    if bat and isinstance(bat.get("atBats"), int):
+        for key, src in (("ab", "atBats"), ("h", "hits"), ("rbi", "rbi"), ("bb", "baseOnBalls"),
+                         ("k", "strikeOuts"), ("hr", "homeRuns")):
+            if isinstance(bat.get(src), int):
+                out[key] = bat[src]
+        return {"batting": out}
+    return {}
 
 
 def parse_live_stats(boxscore: dict) -> dict[str, dict]:

@@ -217,3 +217,27 @@ body.gch-on { overflow: hidden; }
 .pf-open { border: 0; background: transparent; color: var(--brand-2); font: inherit; font-size: var(--fs-xs);
   font-weight: 800; cursor: pointer; padding: 4px 0; }
 .pf-quiet { margin-top: 10px; }
+
+/* ── the play card's body, Real's and then some (pcBodyHTML) ────────────── */
+.pcard-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 4px; }
+.pcard-row:not(:has(.pcard-face)) { grid-template-columns: minmax(0, 1fr); }
+.pcard-face { display: inline-flex; width: 40px; height: 40px; }
+.pcard-main { display: grid; gap: 3px; min-width: 0; }
+.pcard-title { margin: 0; color: var(--brand-2); font-size: var(--fs-md); font-weight: 800; line-height: var(--lh-snug); }
+.pcard-line { font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); }
+.pcard-line b { color: var(--text); font-weight: 700; }
+.pcard-win { font-size: var(--fs-xs); font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.pcard-fact { font-size: var(--fs-xs); color: var(--text-mute); }
+.pcard-fact::before { content: "★ "; color: var(--brand-2); }
+.pcard-swing { justify-self: start; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 900;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--brand-ink); background: var(--brand-2); }
+.pcard-swing[data-swing="tying"] { color: var(--text); background: color-mix(in oklab, var(--brand-2) 22%, var(--panel)); }
+.pcard-rate { margin-left: auto; padding: 1px 7px; border-radius: var(--radius-sm); font-family: var(--font-mono);
+  font-size: var(--fs-xs); font-weight: 800; color: var(--text); background: color-mix(in oklab, var(--brand-2) 18%, var(--panel)); }
+.pf-ago + .pcard-rate { margin-left: 6px; }
+.gch-play-when .pcard-rate { text-transform: none; letter-spacing: 0; }
+.pcard-share { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; border: 0;
+  background: transparent; color: var(--text-mute); cursor: pointer; }
+.pcard-share.done { color: var(--good); }
+.pf-acts .pcard-share { margin-left: auto; }
+.pf-acts .pcard-share + .pf-open { margin-left: 4px; }
