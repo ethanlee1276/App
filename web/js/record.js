@@ -3285,9 +3285,18 @@ async function renderRecord() {
      six panels. Scoped correctly by construction — `src` is already the
      scoped object, so a per-sport verdict cannot quietly print the
      combined number. */
+  // SAID ONCE (2026-10-25, the live NFL record): the ribbon at the top
+  // carries the combined total whenever it is not cut to a window with
+  // rows in it (the same test the ribbon makes below, `winO`), and the
+  // Most Likely section in this same room prints that book's verdict
+  // sentence whenever it is drawn at all (recLikelySection). Either one
+  // absent, the verdict keeps its copy.
+  const lkHere = scoped ? (d.likely_by_sport || {})[scope] : d.likely;
+  const winAvail = recRangesFor(src.curve), winFrom = recRangeFrom(winAvail, recRangeKey(winAvail));
   const verdict = recordVerdictHTML(src, scope === "all"
     ? "all sports" : ((SPORT_META[scope] || {}).name || scope.toUpperCase()),
-    scoped ? (d.likely_by_sport || {})[scope] : d.likely);
+    lkHere, { combinedShown: !(winFrom && recRangeTotals(src.curve, winFrom)),
+              likelySaid: !!(lkHere && (lkHere.settled || lkHere.open)) });
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.

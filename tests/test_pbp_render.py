@@ -41,7 +41,7 @@ def _fn(name):
 def test_the_strip_reads_the_leagues_fast_scoreboard_live_first():
     body = _fn("pbpStripGames")
     assert "const url = LIVE_FAST[league];" in body
-    assert "await boardFetch(url, { cache: \"no-store\" })" in body, "counted toward the wire-down banner"
+    assert "await boardFetch(url, { cache: \"no-cache\" })" in body, "counted toward the wire-down banner"
     assert "({ live: 0, scheduled: 1, final: 2 })" in body, "live first, then by first pitch, then finals"
     assert "start_time" in body
 

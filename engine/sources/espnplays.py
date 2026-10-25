@@ -145,7 +145,14 @@ HOCKEY = ("nhl",)
 #: lever is the CAP, not this — a game past the cap keeps its score and
 #: says so, which is a better failure than every game running a minute
 #: behind.
-LIVE_TTL = 12
+#:
+#: FOUR, NOT TWELVE (2026-10-25). Twelve was "the loop's period", and the
+#: loop got faster (launch.SCORES_FAST_S, five asleep plus the pass) when
+#: Ethan timed the site against his television at about forty-five
+#: seconds behind. The rule above is unchanged: under one pass, so every
+#: pass reads the play list afresh. The other readers of this cache (the
+#: live-bet tracker, the settle) get a summary at most four seconds old.
+LIVE_TTL = 4
 
 
 def fetch_summary(league: str, event_id: str, ttl: int = LIVE_TTL) -> dict:

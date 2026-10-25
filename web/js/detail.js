@@ -2250,7 +2250,7 @@ function pressurePairHTML(sport, g) {
    The rates are season counts (engine/pressure.py) and do not change
    during a game. What changes is the QUESTION the scoreboard asks of
    them — which is what `pressureSituation` reads for the live card's one
-   line, and what this reads every twelve seconds off the deep file's
+   line, and what this reads on every poll (PBP_POLL_MS) off the deep file's
    live block: the score, the period, the clock, who has the ball. It
    says which rate is being asked of whom and lights those two cells in
    the table; beside them sits the one live number this site holds that
@@ -2704,7 +2704,8 @@ function pbpBoardColor(abbr, league = "mlb") {
 
    Only a play that lands while the page is open counts. The board keeps
    the newest play it drew and when it drew it; the page asks again every
-   twelve seconds, so a newer play drawn under forty seconds later is news.
+   five seconds and redraws at least every thirty (PBP_POLL_MS, _pbpDrawn),
+   so a newer play drawn under forty seconds later is news.
    A page left and come back to does not celebrate what it missed, and a
    first drawing celebrates nothing. Every play since the last drawing is
    read, not only the newest, so a touchdown and its extra point landing
@@ -2850,7 +2851,7 @@ function pbpBoomSVG(spots, color, since = 0, unit = 1, inline = false) {
    with the moment it counts to, and one timer for the page (pbpCountStart,
    started by renderPbpPage when there is one to run) ticks every number on
    it. At zero the page asks for the games again; from ten minutes out a
-   game's own page asks every twelve seconds (pbpStartsSoon), so its board
+   game's own page asks every five seconds (pbpStartsSoon), so its board
    goes live without a refresh. */
 const PBP_COUNT_MS = 60 * 60000;
 let _pbpCountTimer = null;
@@ -3345,7 +3346,7 @@ function pbpMomentBannerHTML(d, league) {
     escapeHtml(m.word)}</b>${team ? `<span>${escapeHtml(team)}</span>` : ""}</div>`;
 }
 
-async function renderPbpPage() {
+async function renderPbpPage(tick) {
   const host = document.getElementById("pbp-body");
   if (!host) return;
   if (_pbpTimer) { clearTimeout(_pbpTimer); _pbpTimer = null; }
@@ -3379,12 +3380,15 @@ async function renderPbpPage() {
   }
   let d = null;
   let strip = [];
+  let raw = "";
   try {
     // Through boardFetch, like every other board file: a fetch that
     // fails here must count toward the wire-down banner, not vanish.
+    // `no-cache`: asked of the server every time, and a 304 with no body
+    // when the file has not been rewritten since the last ask.
     const [res, games] = await Promise.all([
       boardFetch(`data/pbp/${encodeURIComponent(league)}_${encodeURIComponent(event)}.json`,
-                 { cache: "no-store" }),
+                 { cache: "no-cache" }),
       pbpStripGames(league),
       // The league's standings, for the two teams' under-pressure rates
       // (2026-09-08): cached after the first read, so the card draws
@@ -3392,15 +3396,33 @@ async function renderPbpPage() {
       pressureWarm([league]),
     ]);
     strip = games;
-    if (res.ok) d = await res.json();
+    if (res.ok) { raw = await res.text(); d = JSON.parse(raw); }
   } catch (e) { d = null; }
   if (state.view !== "pbp") return;                // moved on while fetching
+  // ONE CLOCK. Two draws in flight at once (the slate's own reload lands
+  // while a poll is fetching) each armed a timer of their own, and from
+  // then on the page polled twice as often as it said; the newest arming
+  // replaces any other.
   const again = () => {
+    if (_pbpTimer) clearTimeout(_pbpTimer);
     _pbpTimer = setTimeout(() => {
       _pbpTimer = null;
-      if (state.view === "pbp") renderPbpPage();
-    }, 12000);
+      if (state.view === "pbp") renderPbpPage(true);
+    }, PBP_POLL_MS);
   };
+  /* NOTHING NEW, NOTHING REDRAWN. The poll runs every five seconds and the
+     box rewrites the file every eight to ten, so about every other poll
+     brings back exactly what is on the screen; redrawing it anyway would
+     reset the page under a reader's thumb for nothing. Only the timer's
+     own polls skip — a tab, a toggle or "show all" always draws — and
+     never for longer than half a minute, so the "updated … ago" line
+     still shows a loop that has stopped writing. */
+  const drawn = `${league}|${event}|${raw}|${JSON.stringify(strip)}`;
+  if (tick === true && d && drawn === _pbpDrawn.key && Date.now() - _pbpDrawn.at < 30000) {
+    again();
+    return;
+  }
+  _pbpDrawn = { key: drawn, at: Date.now() };
   const stripHTML = pbpStripHTML(league, strip, event);
   // A chip counting down its last hour: the page's timer ticks it, whichever
   // way the page goes on to draw itself (each draws it synchronously).

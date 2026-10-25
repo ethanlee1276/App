@@ -33,6 +33,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DT 2>&1 | tee /tmp/dt.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DU 2>&1 | tee /tmp/du.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DV 2>&1 | tee /tmp/dv.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DW 2>&1 | tee /tmp/dw.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -452,6 +453,11 @@ run DV "Every page, read like an app (plain play words, said once, the record fo
 curl -s https://qellysbook.com/js/app.js | grep -c 'function footballWords('
 curl -s https://qellysbook.com/js/detail.js | grep -c 'pbp-has-tabs'
 grep -c 'could not be placed on the slate' /srv/qellys/data/logs/nba_build.log
+SH
+run DW "The live pages, caught up with the game (fresh every pass, a 5-second loop, 5-second pages)" 120 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'const PBP_POLL_MS = 5000;'
+grep -c '^SCORES_FAST_S = 5' /srv/qellys/launch.py
+python3 -c "import json,time,glob;fs=[f for f in sorted(glob.glob('/srv/qellys/web/data/live_*.json')) if '_box' not in f];g=lambda f:json.load(open(f)).get('generated_at');s={f:{g(f)} for f in fs};[time.sleep(2) or [s[f].add(g(f)) for f in fs] for _ in range(15)];print(' '.join(f.split('live_')[1][:-5]+'='+str(len(v)-1) for f,v in s.items()))"
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

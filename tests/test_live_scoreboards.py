@@ -250,7 +250,7 @@ def test_the_launcher_actually_runs_it():
     i = src.index("def _live_scores_refresher")
     seg = src[i:src.index("\ndef ", i + 1)]
     assert '"livescore_build.py"' in seg, seg[:200]
-    assert "LIVE_FAST_S" in seg and "LIVE_IDLE_S" in seg, \
+    assert "SCORES_FAST_S" in seg and "LIVE_IDLE_S" in seg, \
         "it no longer chooses its cadence from what came back"
 
 

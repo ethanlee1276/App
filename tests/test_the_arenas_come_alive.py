@@ -50,7 +50,7 @@ NOW = 1_800_000_000_000
 
 def _board_src():
     i = DETAIL.index("const PBP_BOARD = ")
-    return DETAIL[i:DETAIL.index("async function renderPbpPage()", i)]
+    return DETAIL[i:DETAIL.index("async function renderPbpPage(", i)]
 
 
 def _node(body):

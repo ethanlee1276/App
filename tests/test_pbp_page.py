@@ -111,10 +111,12 @@ def test_groups_are_the_way_each_sport_is_read_newest_first():
 def test_it_refreshes_while_live_and_stops_when_the_reader_leaves():
     body = _fn("renderPbpPage")
     assert 'if (lv.state === "live") again();' in body
-    assert 'if (state.view === "pbp") renderPbpPage();' in body, "the timer checks the view before redrawing"
+    assert 'if (state.view === "pbp") renderPbpPage(true);' in body, "the timer checks the view before redrawing"
     assert 'if (state.view !== "pbp") return;' in body, "a fetch that lands after leaving draws nothing"
     assert "clearTimeout(_pbpTimer)" in body
-    assert "}, 12000);" in body
+    # Every five seconds since 2026-10-25 (tests/test_live_delay_budget.py
+    # adds the whole delay up).
+    assert "}, PBP_POLL_MS);" in body
 
 
 def test_a_missing_file_says_why_and_offers_the_way_back():

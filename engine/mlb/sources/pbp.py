@@ -40,11 +40,15 @@ def fetch_playbyplay(game_pk, ttl: int = FINAL_TTL) -> dict:
                      f"mlb_pbp_{game_pk}.json", ttl=ttl)
 
 
-#: How long a live game's plays may sit. The scoreboard runs on a
-#: twelve-second clock; a half-minute-old at-bat is still the current
-#: at-bat, and 640 KB a game is not something to re-fetch every twelve
-#: seconds on a one-vCPU box.
-LIVE_TTL = 30
+#: How long a live game's plays may sit. Was thirty — "a half-minute-old
+#: at-bat is still the current at-bat" — which on the loop's clock meant
+#: a pitch could be most of a minute old before the page heard of it.
+#: Under the score loop's cycle now (launch.SCORES_FAST_S, 2026-10-25),
+#: so a game in progress is re-read on every pass. The cost the thirty
+#: was chosen for is real: 640 KB a game, and fifteen games on a July
+#: night. If that night shows on the one-vCPU box, raise THIS — the
+#: score and the count ride the light schedule call, which stays fresh.
+LIVE_TTL = 5
 
 
 def fetch_live_playbyplay(game_pk, ttl: int = LIVE_TTL) -> dict:

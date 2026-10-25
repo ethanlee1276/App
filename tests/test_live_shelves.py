@@ -67,8 +67,10 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     of it even when the build had not moved. `no-cache` keeps the exact
     freshness guarantee (the server is asked every time) and reuses the
     cached body on a 304, which is most polls. The fast scoreboard file
-    keeps `no-store`: it is tiny and changes every few seconds, so a
-    304 there is the rare case, not the common one."""
+    kept `no-store` until 2026-10-25, when the Live tab began asking
+    every five seconds against a file rewritten every eight to ten: a 304
+    is now about every other poll, so it revalidates too (and the boards
+    themselves are asked at most every thirty, LIVE_BOARD_MS)."""
     src = app_js()
     i = src.index("async function fetchAllLive()")
     # Its own last line, not the next `function` — helpers grew between
@@ -76,7 +78,7 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     # would let a deleted line here pass on a match down there.
     body = src[i:src.index("_liveAll = { at: Date.now(), games: out, finals: done };", i)]
     assert 'await fetch(url, { cache: "no-cache" })' in body
-    assert 'fetch(LIVE_FAST[sport], { cache: "no-store" })' in body
+    assert 'fetch(LIVE_FAST[sport], { cache: "no-cache" })' in body
     # A cache-busting query string would defeat every 304 — the URL must
     # stay byte-identical between polls. (The Date.now() at the top of
     # the function is the 30-second memory cache, not a buster.)

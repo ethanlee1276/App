@@ -1442,8 +1442,8 @@
      (`at`), so a page can show each event's mark as the moving one gets
      there; how long the run is; and the SVG to put inside the moving
      element — SVG's own animation, nothing running in script. `elapsed`
-     is how far into the run the page already is: the redraw every twelve
-     seconds rebuilds the drawing, and a run begun before it carries on
+     is how far into the run the page already is: each redraw (the page
+     polls every five seconds and redraws when the file moves) rebuilds the drawing, and a run begun before it carries on
      from where it was. The animation is cut at that moment and starts
      from the mark's position then, rather than with a negative begin: a
      browser does not hold the end of an animation that finished before

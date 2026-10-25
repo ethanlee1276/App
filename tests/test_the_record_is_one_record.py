@@ -184,7 +184,11 @@ def test_the_site_seats_the_pooled_book_where_the_edge_book_sat():
     assert "adoptPooledRecord(await res.json())" in load, "every surface reading the record file gets the pooled book"
     rr = _fn("renderRecord")
     assert "if (res.ok) d = adoptPooledRecord(await res.json());" in rr, "the Record page reads the file on its own"
-    assert 'recordVerdictHTML(src, scope === "all"' in rr and "scoped ? (d.likely_by_sport || {})[scope] : d.likely);" in rr
+    assert 'recordVerdictHTML(src, scope === "all"' in rr
+    # The scope's own Most Likely report, read once and handed on
+    # (tests/test_the_record_says_each_number_once.py for the options).
+    assert "const lkHere = scoped ? (d.likely_by_sport || {})[scope] : d.likely;" in rr
+    assert "lkHere, { combinedShown:" in rr
     assert "recEdgePanel(d.edge_now, d.edge_trend, (d.edge || d).overall)" in rr, "the edge measurement stays over the edge book"
 
 
@@ -204,15 +208,17 @@ def test_every_reader_of_the_record_file_seats_the_pooled_book():
 
 def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     v = _fn("recordVerdictHTML")
-    assert "function recordVerdictHTML(src, scopeLabel, lk)" in v
+    assert "function recordVerdictHTML(src, scopeLabel, lk, opts)" in v
     assert "const pooled = !!(src && src.edge && src.edge.overall);" in v
     assert "const edge = pooled ? (src.edge_board || src.edge.overall) : o;" in v, \
         "the edge card is the edge board alone, so the two cards add up to the number above them"
     assert "the model’s edge board, " in v, "the sub-line says whose number it is"
     # The pooled total, named, beneath it — when it is not the tiles again
     # (sameTally, 2026-10-25).
-    assert "combinedLineHTML(src.pooled_overall, need, o)" in v, "the pooled total, named, beneath it"
-    assert ": pooled ? verdictBooksHTML(edge, lk, chart, lines, o)" in v
+    # Unless the ribbon at the top of the same page already carries it.
+    assert '${opts.combinedShown ? "" : combinedLineHTML(src.pooled_overall, need, o)}' in v, \
+        "the pooled total, named, beneath it"
+    assert ": pooled ? verdictBooksHTML(edge, lk, chart, lines, o, opts)" in v
     assert '<div class="rv-read">${chart}' in v, "an unpooled file still gets the old reading"
     b = _fn("verdictBooksHTML")
     assert '<span class="hd-eyebrow">Edge bets</span>' in b and '<span class="hd-eyebrow">Most likely</span>' in b
@@ -220,7 +226,8 @@ def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     assert "reliabilityDiagram(likelyBuckets)" in b and "predicted: b.claimed, actual: b.actual, n: b.n, ci," in b, \
         "the Most Likely diagram is drawn from its bands, in the edge diagram's shape"
     assert "2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n)" in b, "the same two-standard-error band"
-    assert 'lk && lk.verdict ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""' in b
+    # The book's sentence, unless its own section on the page says it.
+    assert 'lk && lk.verdict && !opts.likelySaid ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""' in b
     assert ".rv-books { display: grid; gap: 14px; margin-top: 18px; }" in CSS
     assert "@media (min-width: 900px) { .rv-books { grid-template-columns: 1fr 1fr; } }" in CSS
     assert ".rv-book svg { display: block; max-width: 100%; height: auto; margin-bottom: 10px; }" in CSS

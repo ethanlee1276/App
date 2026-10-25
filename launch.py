@@ -4975,6 +4975,23 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
 LIVE_FAST_S = 12
 LIVE_IDLE_S = 180
 
+#: THE SCORE LOOPS' OWN CLOCK — MLB's and the five ESPN leagues'. Ethan,
+#: 2026-10-25, watching football: "I'd say there's about a 45-second
+#: delay between what actually happens on the TV compared to ... our
+#: app." Measured on the live site that afternoon: the files were
+#: rewritten every 16.5 seconds (twelve asleep, four and a half working)
+#: but the score and clock only moved every other write, because the
+#: scoreboard cache under them was twenty seconds and so outlived one
+#: pass. The fight card keeps twelve; a score moves every snap.
+#:
+#: Five asleep plus the pass is a fresh file every eight to ten seconds
+#: while a game is on, and the caches under it (livescore_build.TTL,
+#: espnplays.LIVE_TTL, the MLB feed's) are SHORTER than that cycle on
+#: purpose, so every pass reads ESPN and MLB afresh rather than its own
+#: last copy. Nothing changes when no game is on: LIVE_IDLE_S still
+#: applies, and the pass still costs no odds credits.
+SCORES_FAST_S = 5
+
 
 #: The meme board's own clock. Ethan: "we need that to check like every
 #: 5 seconds or whatever you think is good bc coins move in and out
@@ -5030,7 +5047,7 @@ def _live_mlb_refresher() -> None:
                                     "live_mlb.json").read_text())
                 if any((g.get("live") or {}).get("state") == "live"
                        for g in blob.get("games", [])):
-                    wait = LIVE_FAST_S
+                    wait = SCORES_FAST_S
         except Exception:      # noqa: BLE001 — never let this stop the site
             pass
         time.sleep(wait)
@@ -5070,7 +5087,7 @@ def _live_scores_refresher() -> None:
                     blob = _json.loads(f.read_text())
                     if any((g.get("live") or {}).get("state") == "live"
                            for g in blob.get("games", [])):
-                        wait = LIVE_FAST_S
+                        wait = SCORES_FAST_S
                         break
         except Exception:      # noqa: BLE001 — never let this stop the site
             pass
@@ -11299,7 +11316,8 @@ def main() -> None:
               f"clock runs whatever the boards are doing.")
         print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
               f"{LIVE_IDLE_S}s otherwise.")
-        print(f"  NFL/CFB/NBA/WNBA live scores: same clock, one process, "
+        print(f"  MLB and NFL/CFB/NBA/WNBA/NHL live scores: every {SCORES_FAST_S}s "
+              f"asleep between passes while a game is on, one process, "
               f"keyless — no odds credits.")
         # Members' saved slips: the last leg noted, and emailed where asked.
         threading.Thread(target=_slip_watcher, daemon=True, name="slipwatch").start()

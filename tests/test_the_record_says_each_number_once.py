@@ -58,9 +58,53 @@ def test_the_combined_lines_draw_only_when_they_add_something():
     assert "if (po && po.settled && !sameTally(po, ov))" in ribbons
     combined = _fn(APP, "combinedLineHTML")
     assert "sameTally(po, o)" in combined
-    assert "combinedLineHTML(src.pooled_overall, need, o)" in _fn(APP, "recordVerdictHTML")
+    assert '${opts.combinedShown ? "" : combinedLineHTML(src.pooled_overall, need, o)}' in _fn(APP, "recordVerdictHTML")
     books = _fn(APP, "verdictBooksHTML")
     assert 'sameTally(edge, o) ? ""' in books, "the Edge bets box keeps its reading, not the tiles' numbers"
+
+
+def test_the_verdict_leaves_out_what_the_same_room_already_says():
+    """The live NFL record, 2026-10-25, after the first pass: the verdict
+    still printed "Combined with the Most Likely board: 45-33-2 · +2.9u" a
+    screen below the Combined ribbon showing 45-33-2, and the Most Likely
+    box printed that book's verdict sentence word for word above the Most
+    Likely section that leads with it. Each goes only where the other
+    copy is actually drawn: the ribbon carries the combined total unless
+    it is cut to a window with rows in it, and the section is drawn
+    whenever the book has a settled or open row."""
+    body = REC[REC.index("async function renderRecord("):]
+    assert "lkHere, { combinedShown: !(winFrom && recRangeTotals(src.curve, winFrom))," in body
+    assert "likelySaid: !!(lkHere && (lkHere.settled || lkHere.open)) });" in body
+    # The same window test the ribbon makes, and the same draw test the
+    # section makes — so neither copy can go missing on its own.
+    assert "const winO = from ? recRangeTotals(src.curve, from) : null;" in body
+    assert "pooled_overall: winO ? null : src.pooled_overall," in body
+    assert "if (!lk || (!lk.settled && !lk.open)) return \"\";" in _fn(REC, "recLikelySection")
+    books = _fn(APP, "verdictBooksHTML")
+    assert "lk && lk.verdict && !opts.likelySaid ?" in books
+    assert "verdictBooksHTML(edge, lk, chart, lines, o, opts)" in _fn(APP, "recordVerdictHTML")
+
+
+def test_the_verdict_drops_each_copy_only_when_told():
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed")
+        return
+    js = "\n".join(_fn(APP, n) for n in ("sameTally", "combinedLineHTML")) + """
+      const fmtRoi = (r) => `${(r * 100).toFixed(1)}%`;
+      const po = {wins: 45, losses: 33, pushes: 2, net_units: 2.9, roi: 0.035, settled: 80};
+      const o = {wins: 18, losses: 19, pushes: 1, net_units: -1.13, roi: -0.031, settled: 38};
+      const draw = (opts) => (opts.combinedShown ? "" : combinedLineHTML(po, 30, o));
+      console.log(JSON.stringify([draw({}).includes("45"), draw({combinedShown: true})]));"""
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(js)
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout) == [True, ""]
 
 
 def test_the_most_likely_box_does_not_contradict_the_paper_book():

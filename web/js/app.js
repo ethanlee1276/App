@@ -27,6 +27,15 @@
 let _pbpShowAll = false;
 let _pbpTimer = null;
 let _pbpStrip = { at: 0, league: "", games: [] };
+/* HOW OFTEN AN OPEN LIVE GAME ASKS FOR NEWS (2026-10-25). Ethan, timing
+   the site against his television: "about a 45-second delay". The box
+   now writes a fresh file every eight to ten seconds while a game is on
+   (launch.SCORES_FAST_S); a page that asked every twelve could add most
+   of another twelve on top. Five, and the asking is cheap: `no-cache`
+   gets a 304 with no body when the file has not moved since, and the
+   page skips the redraw when nothing it shows has changed (`_pbpDrawn`). */
+const PBP_POLL_MS = 5000;
+let _pbpDrawn = { key: "", at: 0 };
 
 /* THE BARS A PROP CLEARS TO BE DRAWN, mirrored from the engine's own
    gate (`server.py` defaults these same three on /api/recommendations,
@@ -5515,7 +5524,7 @@ function censusFunnelHTML() {
    comes from a box score fetched when the BOARD is built, and the page
    only ever promoted a row's phase. The fast scoreboard now carries each
    live game's box rows (`livescore_build.attach_plays`, `live_build` for
-   baseball), written every twelve seconds while a game is on — so a
+   baseball), rewritten every pass while a game is on — so a
    prop's number, a team market's score, and the verdict that follows
    from either move on the game card's clock, by the same arithmetic
    `assemble_live_picks` does at build time. */
@@ -15403,7 +15412,12 @@ function moneySplitHTML(o) {
   return `<p class="rv-split">${body}</p>`;
 }
 
-function recordVerdictHTML(src, scopeLabel, lk) {
+/* `opts.combinedShown`: the page's ribbon already carries the combined
+   total; `opts.likelySaid`: the Most Likely section on the same page prints
+   that book's verdict sentence (2026-10-25, the real NFL record: both were
+   said twice, word for word). */
+function recordVerdictHTML(src, scopeLabel, lk, opts) {
+  opts = opts || {};
   const o = (src && src.overall) || {};
   /* v5: ONE NUMBER, TWO BOOKS. When the record is pooled (adoptPooledRecord)
      `o` is the whole journal and `edge` the edge board alone (EDGE_BOOKS —
@@ -15536,13 +15550,13 @@ function recordVerdictHTML(src, scopeLabel, lk) {
              claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
     </div>
     ${moneySplitHTML(o)}
-    ${combinedLineHTML(src.pooled_overall, need, o)}
+    ${opts.combinedShown ? "" : combinedLineHTML(src.pooled_overall, need, o)}
     ${thin ? `<p class="rv-early">${icon("warn", 14)}
         <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
         against the ${need} this page needs before a rate means anything.
         The numbers above are real and they are not yet a verdict — judge the
         process by CLV until the count catches up.</p>`
-      : pooled ? verdictBooksHTML(edge, lk, chart, lines, o)
+      : pooled ? verdictBooksHTML(edge, lk, chart, lines, o, opts)
       : `<div class="rv-read">${chart}
           <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div>
         </div>`}
@@ -15573,7 +15587,8 @@ function combinedLineHTML(po, need, o) {
    report's claimed-probability bands, with the same two-standard-error
    band the edge diagram carries, so the two pictures are read the same
    way. Nothing here is a number the page did not already hold. */
-function verdictBooksHTML(edge, lk, chart, lines, o) {
+function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
+  opts = opts || {};
   const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
   const line = (b) => {
     const n = ((b || {}).wins || 0) + ((b || {}).losses || 0);
@@ -15593,7 +15608,7 @@ function verdictBooksHTML(edge, lk, chart, lines, o) {
       <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div></div>
     <div class="rv-book"><span class="hd-eyebrow">Most likely</span>
       <div class="rv-book-line">${lk ? line(lk) : "nothing staked yet — its paper picks are under Records by book"}</div>${likelyChart}
-      <div class="rv-says">${lk && lk.verdict ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""}</div></div>
+      <div class="rv-says">${lk && lk.verdict && !opts.likelySaid ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""}</div></div>
   </div>`;
 }
 
@@ -20543,7 +20558,7 @@ window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings()
    a line on the live card that reads the situation — a one-score
    game late, a favourite trailing — against the two teams' rates, and
    (2026-09-08) a card on the play-by-play page that makes the same
-   reading every twelve seconds off the deep file and lights the two
+   reading on every poll off the deep file and lights the two
    cells being asked. The live readings are the only things that change
    during a game; the rates under them are season counts and do not
    pretend otherwise. */
@@ -28599,8 +28614,25 @@ let _liveChipSport = null;
    the failure this site keeps hitting and the one he keeps naming. */
 let _liveFeedState = {};
 
+/* HOW LONG ONE READ OF THE SCOREBOARDS SERVES (2026-10-25). Ethan,
+   watching football: "everything's delayed compared to what is actually
+   going on." This answered every caller from one read for THIRTY
+   seconds, and the Live tab only asked again on the board's own
+   thirty-second reload, so a score could be most of a minute old on the
+   page before the box's own lag was counted. Now four seconds while a
+   game is in progress (the Live tab asks every five, `liveTickArm`) and
+   thirty when nothing is. THE MODEL BOARDS ARE NOT RE-READ THAT OFTEN:
+   they carry the odds grid and the win-probability track, rebuilt on a
+   cycle of minutes, so each is kept for LIVE_BOARD_MS and only the
+   small fast scoreboards are asked again. */
+const LIVE_READ_MS = 4000;
+const LIVE_IDLE_READ_MS = 30000;
+const LIVE_BOARD_MS = 30000;
+let _liveBoards = {};
+
 async function fetchAllLive() {
-  if (Date.now() - _liveAll.at < 30000) return _liveAll.games;
+  const keep = _liveAll.games.length ? LIVE_READ_MS : LIVE_IDLE_READ_MS;
+  if (Date.now() - _liveAll.at < keep) return _liveAll.games;
   const out = [];
   /* THE GAMES THAT HAVE ENDED, kept beside the ones in progress. The
      tracker (`liveTrackerRows`) moves a bet to FINAL off this list; the
@@ -28634,7 +28666,9 @@ async function fetchAllLive() {
        the thing somebody watching a game came for. */
     let d = {};
     let board = "";
-    try {
+    const kept = _liveBoards[sport];
+    if (kept && Date.now() - kept.at < LIVE_BOARD_MS) ({ d, board } = kept);
+    else try {
       /* REVALIDATE, NEVER TRUST BLIND, NEVER RE-DOWNLOAD BLIND. This
          fires every 30 seconds on the Live tab for every league's board
          — the MLB file is 8MB — and `no-store` re-downloaded all of it
@@ -28648,10 +28682,12 @@ async function fetchAllLive() {
       const r = await fetch(url, { cache: "no-cache" });
       if (r.ok) d = await r.json();
       else board = `HTTP ${r.status}`;
+      _liveBoards[sport] = { at: Date.now(), d, board };
     } catch (e) {
       // A body that will not parse is a board that did not load. Naming
       // it "unreadable" rather than swallowing it is the whole point.
       board = "unreadable";
+      _liveBoards[sport] = { at: Date.now(), d, board };
     }
     try {
       if (sport === "cfb" && d.teams) _cfbTeams = d.teams;
@@ -28667,7 +28703,8 @@ async function fetchAllLive() {
         // that says nothing.
         let feed = { ok: false, note: "", stamp: "", board };
         try {
-          const rf = await fetch(LIVE_FAST[sport], { cache: "no-store" });
+          // `no-cache`: asked every time, a 304 when it has not moved.
+          const rf = await fetch(LIVE_FAST[sport], { cache: "no-cache" });
           if (rf.ok) {
             const df = await rf.json();
             feed = { ok: true, note: String(df.note || ""),
@@ -28708,8 +28745,8 @@ async function fetchAllLive() {
 
 /*: A fast scoreboard file older than this is not a quiet afternoon, it
     is a stopped loop. `launch._live_scores_refresher` writes every
-    LIVE_FAST_S (12s) while anything is on and every LIVE_IDLE_S (180s)
-    when nothing is, and `_run_build`'s guillotine falls at 180s — so
+    pass, SCORES_FAST_S (5s) apart, while anything is on and every
+    LIVE_IDLE_S (180s) when nothing is, and `_run_build`'s guillotine falls at 180s — so
     the widest honest gap between two writes is about six minutes. Ten
     leaves room for a slow box without letting a loop that died last
     week read as an evening with no games. */
@@ -29487,10 +29524,12 @@ const pbpOrd = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n
 async function pbpStripGames(league) {
   const url = LIVE_FAST[league];
   if (!url) return [];
-  if (_pbpStrip.league === league && Date.now() - _pbpStrip.at < 15000) return _pbpStrip.games;
+  // Under the page's own poll, so each poll reads the strip afresh; a 304
+  // when the scoreboard has not moved (see PBP_POLL_MS).
+  if (_pbpStrip.league === league && Date.now() - _pbpStrip.at < PBP_POLL_MS - 1000) return _pbpStrip.games;
   let games = [];
   try {
-    const r = await boardFetch(url, { cache: "no-store" });
+    const r = await boardFetch(url, { cache: "no-cache" });
     if (r.ok) games = ((await r.json()).games || []);
   } catch (e) { games = []; }
   const rank = (g) => ({ live: 0, scheduled: 1, final: 2 })[(g.live || {}).state] ?? 1;
@@ -30784,6 +30823,34 @@ function liveQuietLine() {
   return bits.join(" ");
 }
 
+/* THE LIVE TAB'S OWN CLOCK (2026-10-25). The tab redrew when the board
+   reloaded — every thirty seconds with a game on — so a touchdown could
+   sit off the page for half a minute after the box had it. While a game
+   is in progress this asks the fast scoreboards every five seconds
+   (`fetchAllLive` keeps one read for four) and redraws only when
+   something the cards or the bets read has moved: the score and clock,
+   the plays, the drive, the box score a live bet counts from. Nothing
+   in progress, nothing armed; the board's own reload carries on. */
+const LIVE_TICK_MS = 5000;
+let _liveTick = null;
+let _liveDrawnSig = "";
+const liveSig = (games) => JSON.stringify((games || []).map(({ sport, g }) =>
+  [sport, g.away, g.home, g.live, g.plays, g.drive, g.players]).concat([(_liveAll.finals || []).length]));
+function liveTickArm(games) {
+  clearTimeout(_liveTick);
+  _liveTick = null;
+  if (!(games || []).length) return;
+  _liveTick = setTimeout(async () => {
+    _liveTick = null;
+    if (state.view !== "live") return;
+    if (document.hidden) { liveTickArm(_liveAll.games); return; }
+    const now = await fetchAllLive().catch(() => _liveAll.games);
+    if (state.view !== "live") return;
+    if (liveSig(now) !== _liveDrawnSig) renderLiveBoard();
+    else liveTickArm(now);
+  }, LIVE_TICK_MS);
+}
+
 async function renderLiveBoard() {
   const host = document.getElementById("live-board");
   if (!host) return;
@@ -30793,6 +30860,8 @@ async function renderLiveBoard() {
   // filled after the bets below it were drawn, it pushed them 188px down.
   if (!host.firstElementChild) host.innerHTML = `<div class="skeleton-card lv-hold" aria-hidden="true"></div>`;
   const games = await fetchAllLive();
+  _liveDrawnSig = liveSig(games);
+  liveTickArm(games);
   /* THE BETS REDRAW THE MOMENT THE SCOREBOARD LANDS. `renderAll` draws
      the tracker (renderLivePicks) BEFORE it reaches this function, so on
      the first paint of the Live tab `_liveAll` is still empty and every

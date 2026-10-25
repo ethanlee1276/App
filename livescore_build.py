@@ -46,10 +46,24 @@ from pathlib import Path
 from engine.sources.fetch import DataUnavailable
 from engine.sources.livescores import ESPN_SCOREBOARD, fetch_rows
 
-#: Cached for the launcher's fast cadence. Shorter than this buys nothing
-#: — `LIVE_FAST_S` is 12 seconds and the scoreboard does not move faster
-#: than the clock on the screen.
-TTL = 20
+#: The scoreboard's cache: the score, the clock, the down and distance.
+#: SHORTER THAN ONE PASS OF THE LOOP, so every pass reads ESPN rather
+#: than its own last copy. This was twenty, on the argument that shorter
+#: buys nothing under a twelve-second loop — but twenty outlived a pass,
+#: so the score and clock moved on every OTHER write, about every
+#: thirty-three seconds, while the plays beside them moved every sixteen.
+#: Ethan, 2026-10-25: "the play-by-play, the score, all of it is very
+#: delayed." One keyless request per league per pass.
+TTL = 4
+
+#: How many game summaries one pass fetches AT ONCE. A pass read them one
+#: after another, so on a Sunday at one o'clock — eight games under the
+#: cap — the last game's plays waited on the seven before it, and the
+#: whole pass (and so the next one) waited on all eight. Four at a time,
+#: and processed four at a time, so no more than four summaries are ever
+#: in memory together on this one-vCPU box (it was one before; the cap
+#: that keeps the requests bounded is PLAYS_MAX_GAMES, unchanged).
+SUMMARY_WORKERS = 4
 
 #: Plays on a card: about one drive's worth.
 PLAYS_PER_GAME = 6
@@ -268,7 +282,7 @@ def _round_robin(live: list[dict], league: str,
     sorts last. Nothing is stored between passes and nothing has to be:
     the answer is already on disk. Thirty live games against a cap of
     eight now means every game is refreshed about every four passes,
-    which on a twelve-second clock is under a minute, rather than
+    which on the loop's fast clock is well under a minute, rather than
     twenty-two games never being fetched at all.
 
     Same ceiling, same requests per pass, all of the slate.
@@ -320,6 +334,34 @@ def _carry_forward(waiting: list[dict], league: str,
         g["plays_state"] = "carried"
         n += 1
     return n
+
+
+def _summaries(league: str, games: list[dict]):
+    """Each game's summary, IN ORDER, fetched SUMMARY_WORKERS at a time.
+
+    Yields the payload, or the exception its fetch raised — the caller
+    counts a failure against that game alone, exactly as it did when it
+    called `fetch_summary` itself. A batch is fetched together and handed
+    over before the next batch starts, so memory holds one batch.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from engine.sources import espnplays
+
+    def one(g):
+        try:
+            return espnplays.fetch_summary(league, g["event_id"])
+        except Exception as exc:                             # noqa: BLE001
+            return exc
+
+    if len(games) <= 1:
+        for g in games:
+            yield one(g)
+        return
+    with ThreadPoolExecutor(max_workers=min(SUMMARY_WORKERS, len(games))) as pool:
+        for i in range(0, len(games), SUMMARY_WORKERS):
+            batch = list(pool.map(one, games[i:i + SUMMARY_WORKERS]))
+            while batch:
+                yield batch.pop(0)
 
 
 def attach_plays(games: list[dict], league: str,
@@ -384,9 +426,12 @@ def attach_plays(games: list[dict], league: str,
     for g in waiting:
         g["plays_state"] = "capped"
     got = failed = deep = boxes = nofeed = 0
+    fetched = _summaries(league, served)
     for g in served:
         try:
-            payload = espnplays.fetch_summary(league, g["event_id"])
+            payload = next(fetched)
+            if isinstance(payload, Exception):
+                raise payload
             sides = {str(g.get("home_id") or ""): g["home"],
                      str(g.get("away_id") or ""): g["away"]}
             sides.pop("", None)
@@ -420,7 +465,7 @@ def attach_plays(games: list[dict], league: str,
         # tracker's number came from `livepicks.espn_progress` at BOARD
         # build time — every forty-five minutes or so on the football
         # boards — and the page had nothing fresher to read. This file is
-        # written every twelve seconds while a game is on, and the summary
+        # rewritten every pass while a game is on, and the summary
         # it already fetches for the plays carries the box; the parser the
         # deep file's Player stats room trusts (`pbp_players`) reads it
         # here, so the bet under a game card counts on the game card's
@@ -670,7 +715,10 @@ def write(league: str, out_dir: Path = OUT) -> dict:
 #: snapshot written under that name would be graded as the final.
 NHL_BOX_FILE = "live_nhl_box.json"
 #: A game in progress is re-read at most this often; a final, this often.
-NHL_BOX_TTL = 30
+#: Fifteen (it was thirty, 2026-10-25): the skaters' lines a live prop
+#: counts from, and the score feed that joins each game to the league's
+#: id. Not every pass — the rink below is what is on the screen.
+NHL_BOX_TTL = 15
 NHL_FINAL_TTL = 600
 #: The most games one pass reads a box for — in progress first. A full
 #: hockey night is sixteen; they start over three hours.
@@ -778,7 +826,10 @@ def nhl_box_pass(games: list[dict], out_dir: Path, fetch_day=None,
 #: under its own cache name, like the box: the shot ingest reads
 #: `nhl_pbp_{id}` for a month, and a mid-game snapshot under that name
 #: would be read as the final's.
-NHL_PBP_TTL = 15
+#: Under one pass of the loop (2026-10-25; it was fifteen), like the
+#: scoreboard's TTL: the rink draws these events, so they are re-read on
+#: every pass while a game is on.
+NHL_PBP_TTL = 4
 
 
 def _nhl_feed(fetch_day, today: _dt.date | None = None) -> dict:

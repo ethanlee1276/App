@@ -175,8 +175,9 @@ def test_the_launcher_actually_runs_it():
     fn = fn[:fn.index("\ndef ")]
     assert '_run_build(["live_build.py"])' in fn
     # Fast while a game is on, idle otherwise — same shape as the fight
-    # poller it was modelled on.
-    assert "LIVE_FAST_S" in fn and "LIVE_IDLE_S" in fn
+    # poller it was modelled on, on the score loops' own clock since
+    # 2026-10-25 (tests/test_live_delay_budget.py).
+    assert "SCORES_FAST_S" in fn and "LIVE_IDLE_S" in fn
 
 
 def test_the_mlb_build_is_not_guillotined_at_the_default_timeout():

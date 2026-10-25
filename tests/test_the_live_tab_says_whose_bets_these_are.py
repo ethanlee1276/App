@@ -86,6 +86,10 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     async function pressureWarm() {{}}
     function renderSweatZone() {{}}
     function liveSlips() {{}}
+    // The tab's own five-second clock (liveTickArm) is not under test here.
+    const liveSig = () => "";
+    let _liveDrawnSig = "";
+    function liveTickArm() {{}}
     const betsDrawnFor = [];
     function renderLivePicks() {{ betsDrawnFor.push(state.sport); }}
 

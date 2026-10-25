@@ -59,6 +59,12 @@ PLAYS_PER_GAME = 6
 #: has not thrown a pitch are different facts.
 PLAYS_MAX_GAMES = 15
 
+#: The schedule call's cache — score, inning, outs, the count. Under one
+#: pass of the loop, so every pass reads it afresh: it was thirty, which
+#: outlived two passes of the twelve-second loop (2026-10-25, Ethan timing
+#: the site against his television). One small request per pass.
+SCOREBOARD_TTL = 4
+
 
 def _row(pk: int, st) -> dict:
     """One game, in the shape web/js/app.js already renders.
@@ -113,7 +119,7 @@ def build(date: str, pbp_dir: Path | None = None) -> dict:
     try:
         raw = _get_json(
             f"{STATS_BASE}/schedule?sportId=1&date={date}&hydrate=linescore,broadcasts(all)",
-            f"mlb_live_{date}.json", ttl=30)
+            f"mlb_live_{date}.json", ttl=SCOREBOARD_TTL)
     except DataUnavailable as exc:
         return {"generated_at": now, "date": date, "games": [],
                 "note": f"MLB scoreboard unreachable — {exc}"}

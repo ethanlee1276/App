@@ -61,7 +61,7 @@ def test_the_page_warms_the_leagues_standings_and_draws_the_card_in_the_rail():
     page = page[:page.index("\n}\n")]
     assert "pressureWarm([league])," in page, "the rates are never loaded for the page"
     i = page.index("pressureWarm([league]),")
-    assert i < page.index("if (res.ok) d = await res.json();"), "warmed after the render"
+    assert i < page.index("if (res.ok) { raw = await res.text(); d = JSON.parse(raw); }"), "warmed after the render"
     # THE CARD IS IN THE RAIL AND THE MARKET'S NUMBER IS ABOVE IT, which
     # is what this ever meant. Pinning the two lines as ADJACENT broke on
     # 2026-09-09 when our own live win probability landed between them —

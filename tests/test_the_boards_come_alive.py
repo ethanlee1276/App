@@ -52,7 +52,7 @@ NOW = 1_800_000_000_000            # the clock the board code reads, held still
 
 def _board_src():
     i = DETAIL.index("const PBP_BOARD = ")
-    return DETAIL[i:DETAIL.index("async function renderPbpPage()", i)]
+    return DETAIL[i:DETAIL.index("async function renderPbpPage(", i)]
 
 
 def _node(body):
@@ -352,7 +352,7 @@ def test_the_last_hour_counts_down_on_both_boards():
 
 
 def test_the_page_ticks_the_count_and_asks_again_before_the_start():
-    page = DETAIL[DETAIL.index("async function renderPbpPage()"):]
+    page = DETAIL[DETAIL.index("async function renderPbpPage("):]
     page = page[:page.index("\n}\n")]
     # The strip's chips start the timer whichever way the page then draws
     # itself (no file yet, the basketball page, the whole page); the boards'

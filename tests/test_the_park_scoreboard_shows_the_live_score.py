@@ -45,7 +45,7 @@ MEASURED = [[20.3, 24.1], [52.9, 24.7], [52.9, 39.8], [21.0, 40.7]]
 
 def _board_src():
     i = DETAIL.index("const PBP_BOARD = ")
-    return DETAIL[i:DETAIL.index("async function renderPbpPage()", i)]
+    return DETAIL[i:DETAIL.index("async function renderPbpPage(", i)]
 
 
 def _node(body):
