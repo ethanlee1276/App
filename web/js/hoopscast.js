@@ -861,7 +861,7 @@
   function pageHTML(d, league, ctx) {
     const k = facts(d, league, ctx);
     return `<div class="hc" data-league="${escapeAttr(league)}">
-      ${scoreboardHTML(d, league, k)}${stageHTML(d, league, k)}
+      ${scoreboardHTML(d, league, k)}<div class="gch-entry-slot"></div>${stageHTML(d, league, k)}${(ctx && ctx.callit) || ""}
       <div class="hc-row">${playsCardHTML(d, league, k)}${statsCardHTML(d, league, k)}${oddsCardHTML(d, league, k)}</div></div>`;
   }
   function wire(host) {

@@ -13,14 +13,20 @@ deep file (web/data/pbp/{league}_{id}.json):
     open until its second pitch is thrown, and between at-bats for the one
     coming up;
   * football — the next drive to finish (``dr{n}``, n the drives already
-    ended), open between drives and through the drive's first two plays.
+    ended), open between drives and through the drive's first two plays;
+  * basketball — how the next points come (Three, Two, Free throw), the
+    unit named for the last score (``sc{play id}``, ``sc0`` before any);
+  * hockey — how the next shot ends (Goal, Save, Blocked, Missed), named
+    for the last shot attempt (``sh{play id}``);
+    both open for the first FLOW_OPEN_PLAYS plays after the one before.
 A call can be changed while its unit is open and never after. A unit the
 game ends without (the half runs out, a batter reaches on an error) is
 void: it counts for nobody and breaks nobody's streak.
 
 GRADED LAZILY. Anybody looking at a game grades that game's open calls off
 the file in hand, so no clock runs for it and a call is graded the first
-time someone looks after the play.
+time someone looks after the play. A call still open when the game ends is
+void.
 
 KEPT: each call with its account (``callit_calls``), named in the Privacy
 Policy and deleted with the account. Standard library only.
@@ -30,10 +36,18 @@ from __future__ import annotations
 import time
 
 FOOTBALL = ("nfl", "cfb")
+HOOPS = ("nba", "wnba")
+HOCKEY = ("nhl",)
+LEAGUES = ("mlb",) + FOOTBALL + HOOPS + HOCKEY
 CHOICES = {
     "mlb": (("hit", "Hit"), ("out", "Out"), ("k", "Strikeout"), ("walk", "Walk")),
     "football": (("td", "Touchdown"), ("fg", "Field goal"), ("punt", "Punt"), ("turnover", "Turnover")),
+    "hoops": (("three", "Three"), ("two", "Two"), ("ft", "Free throw")),
+    "hockey": (("goal", "Goal"), ("save", "Save"), ("block", "Blocked"), ("miss", "Missed")),
 }
+#: The next points (basketball) or the next shot (hockey) stays open through
+#: this many plays after the score or shot before it.
+FLOW_OPEN_PLAYS = 2
 #: An at-bat stays open through this many pitches.
 AB_OPEN_PITCHES = 1
 #: A drive stays open through this many plays.
@@ -63,7 +77,8 @@ def ensure_tables(conn) -> None:
 
 
 def _kind(league: str) -> str:
-    return "mlb" if league == "mlb" else "football" if league in FOOTBALL else ""
+    return ("mlb" if league == "mlb" else "football" if league in FOOTBALL
+            else "hoops" if league in HOOPS else "hockey" if league in HOCKEY else "")
 
 
 def game_key(doc: dict) -> str:
@@ -76,6 +91,36 @@ def _atbats(doc: dict) -> list:
 
 def _ended_drives(doc: dict) -> list:
     return [d for d in doc.get("drives") or [] if isinstance(d, dict) and d.get("result")]
+
+
+def _scored(r: dict) -> bool:
+    return bool(r.get("scoring")) and int(r.get("points") or 0) > 0
+
+
+def _shot(r: dict) -> bool:
+    e = str(r.get("event") or "").lower()
+    return bool(r.get("shot")) or bool(r.get("scoring")) or "shot" in e or e == "goal"
+
+
+def _shot_word(r: dict) -> str:
+    e = str(r.get("event") or "").lower()
+    if r.get("scoring") or (e == "goal"):
+        return "goal"
+    if "block" in e:
+        return "block"
+    if "miss" in e or "wide" in e or "post" in e:
+        return "miss"
+    return "save"
+
+
+def _hoops_word(r: dict) -> str:
+    return {3: "three", 2: "two", 1: "ft"}.get(int(r.get("points") or 0), "void")
+
+
+def _flow(doc: dict, kind: str) -> tuple:
+    """``(plays, mark, word)`` for basketball's points or hockey's shots."""
+    rows = [p for p in doc.get("plays") or [] if isinstance(p, dict)]
+    return (rows, _scored, _hoops_word) if kind == "hoops" else (rows, _shot, _shot_word)
 
 
 def open_unit(doc: dict) -> dict | None:
@@ -93,6 +138,17 @@ def open_unit(doc: dict) -> dict | None:
         prompt = (f"{cur['batter']} up against {cur['pitcher']}" if cur.get("batter") and cur.get("pitcher")
                   else "The next batter")
         return {"unit": f"ab{nxt}", "prompt": prompt, "choices": [list(c) for c in CHOICES[kind]]}
+    if kind in ("hoops", "hockey"):
+        rows, mark, _ = _flow(doc, kind)
+        last = max((i for i, r in enumerate(rows) if mark(r)), default=-1)
+        if len(rows) - 1 - last > FLOW_OPEN_PLAYS:
+            return None
+        pid = str(rows[last].get("id") or "") if last >= 0 else "0"
+        if not pid:
+            return None
+        unit = ("sc" if kind == "hoops" else "sh") + pid
+        prompt = "How the next points come" if kind == "hoops" else "How the next shot ends"
+        return {"unit": unit, "prompt": prompt, "choices": [list(c) for c in CHOICES[kind]]}
     cur = doc.get("drive") or {}
     if cur and int(cur.get("plays") or 0) > DRIVE_OPEN_PLAYS:
         return None
@@ -120,6 +176,17 @@ def _drive_word(label: str) -> str:
 def result_of(doc: dict, unit: str) -> str:
     """How a unit ended — a choice's key, "void", or "" while it hasn't."""
     league = str(doc.get("league") or "")
+    kind = _kind(league)
+    if kind in ("hoops", "hockey") and str(unit)[:2] == ("sc" if kind == "hoops" else "sh"):
+        rows, mark, word = _flow(doc, kind)
+        pid = str(unit)[2:]
+        start = -1
+        if pid != "0":
+            start = next((i for i, r in enumerate(rows) if str(r.get("id") or "") == pid), None)
+            if start is None:
+                return "void"
+        nxt = next((r for r in rows[start + 1:] if mark(r)), None)
+        return word(nxt) if nxt else ""
     try:
         idx = int(str(unit)[2:])
     except ValueError:
@@ -145,8 +212,9 @@ def grade(conn, doc: dict) -> int:
     pending = conn.execute("SELECT DISTINCT unit FROM callit_calls WHERE game = ? AND result IS NULL",
                            (game,)).fetchall()
     n = 0
+    over = str((doc.get("live") or {}).get("state") or "") in ("final", "post")
     for (unit,) in pending:
-        res = result_of(doc, unit)
+        res = result_of(doc, unit) or ("void" if over else "")
         if not res:
             continue
         if res == "void":
@@ -167,7 +235,7 @@ def call(conn, user_id, doc: dict, unit: str, choice: str, now: float | None = N
     if not op or str(unit) != op["unit"]:
         return 409, {"error": "That one is locked — the next call opens in a moment."}
     if choice not in {k for k, _ in op["choices"]}:
-        return 400, {"error": "Pick one of the four."}
+        return 400, {"error": "Pick one of the calls shown."}
     t = time.time() if now is None else now
     conn.execute("INSERT INTO callit_calls (user_id, game, unit, call, at) VALUES (?, ?, ?, ?, ?) "
                  "ON CONFLICT(user_id, game, unit) DO UPDATE SET call = excluded.call, at = excluded.at "

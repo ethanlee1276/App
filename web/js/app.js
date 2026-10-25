@@ -20269,6 +20269,8 @@ window.acctSignOut = async function () {
     _acctUser = { signed_in: false };
   }
   try { localStorage.removeItem(ACCT_KEY); } catch (e) {}
+  // The iPhone widget's key leaves the phone with the account (account.js).
+  try { window.Capacitor.Plugins.WidgetKey.clear(); } catch (e) {}
   pushRelink();
   if (typeof renderGreeting === "function") renderGreeting();
   _acctNote = "Signed out — everything stays on this device; sign back in anytime.";

@@ -311,7 +311,7 @@ again (step 136; CE); and what that run found, fixed, with what to run
 next (step 137; CF), the round after (step 138; CG), the closing
 lines for baseball's run lines and moneylines (step 139; CH), and the
 new-models round: the NHL endgame and the referee check (step 140; CI).
-The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA). Why Luther Burden III isn't on our boards: our fitted curve rates him under the books, receiving yards is shut on Edge, and his likeliest lines sit just past the −250 cap; a check, a re-test and your call (step 159; DB, corrected in DC). Your call on the cap: Most Likely now lists the bets we rate 70% or better priced −251 to −350, labelled and never staked or journaled; and the Burden numbers I gave you were the plain curve, not the box's (step 160; DC). Is our receiving curve too cautious on receivers like Burden? No: on six held-out seasons it is within four points at his kind of bet, the plain curve behind my 72% was ten points high, and nothing changes (step 161; DD). Why Most Likely shows the low line, and the bigger lines now under every pick: each with its price, our chance and what it's worth, marked when the price beats our chance, never staked (step 162; DE). The iPhone Duo: the phone layout on the front screen, the desktop view open either way you hold it, your place kept through every fold, and the half-open cases covered (step 163; DF). Our carry projections: no bias, they beat a plain three-game average, and the misses are game flow (step 164; DG). Tonight, home: confirm every change is on the box, then one command for every check from CT on (step 165; DH). Your box run read: the yards re-test, a −9900 bigger line, the inventions' status and the update check fixed; Most Likely's past-cap list on every sport; and D: the referee before kickoff, our own grades (PFF's can't be shown on a paid site), and the public betting percentages, built and waiting on a key (step 166; DI). Your DI paste: a posted pick's stale bigger lines cleared, over-only rungs held to their own book's price, a `--why` for the referees, and SharpAPI's refusal said in its own words (step 167; DJ). Your DJ paste: splits need SharpAPI's Pro plan (your call), Football Zebras' prose post read sentence by sentence, the board's build stamp beside the marks, and the NBA and NHL boards waiting on the odds plan (step 168; DK). Every fold and flip built for, the way each phone's own apps lay out (the open Fold's desktop view, list beside detail, the hinge-split panes, Flex Mode, the cover glance); the bug scan, mailing you only when something breaks; and the app stores (no portrait lock, deletion page, screenshot sizes, two decisions for you) (step 169; DL). Both your store calls, built: the store app (no sportsbook links, no league logos or photos, no meme or prediction pages, Play sells nothing yet), push alerts when picks post and nights settle, the first screen that no longer jumps on a phone, Liquid Glass on the Duo, the app opening in season, a slip shared from Photos to the grader, and the store checklist (step 170; DM). Everything on the ideas list: the installed app opening from its own copy with no signal, the Fantasy room loaded when it opens, the iPhone's floating glass tab bar, the riding pill and your team's colours, your own watches and parlays by push, your games in your calendar, the record offline, the iPhone widget and lock-screen feeds with their Swift, and Lighthouse every night (step 171; DN). Finishing it: every page loads when it first opens, with its own styles (a first visit 570 → 383 KB); glass on what floats over the page and nothing else; and Lighthouse's audit fixed: accessibility 100, nothing moving as a page loads, a link to a page opening at its top (step 172; DO). The look, audited screen by screen and fixed: Settings rebuilt the way a phone draws its own (groups of rows, switches, a screen per row with a way back), Membership and Friends as rows, a labelled sign-in with a gold Log in, Alerts as switches, sentence-case buttons and one field style everywhere, and signed-out Fantasy leagues no longer opening empty (step 173; DP). The live score on the ballpark photograph's scoreboard, drawn in the board's own perspective: teams, runs, the inning and the count, a blink when a run scores (step 174; DQ). The runners on that scoreboard too: three bags beside the inning, lit where a runner stands (step 175; DR). The stadiums come alive: the football field's big board lit with both scores and the game, big moments on both boards (TOUCHDOWN, HOME RUN, fireworks over the stands), the wind over the ballpark's outfield, and a game's last hour counted down (step 176; DS). The arenas come alive and every sport has it all: the basketball and hockey arenas' own screens lit with the game (the shot clocks with the real clock), their big moments, the final horn with fireworks in every sport, a banner for a phone, college's team colours (step 177; DT). The boards blended into the photographs on every sport: drawn on the photos' own screens in their own colours and lettering, and kept on them on any phone (step 178; DU). Every page read like an app: the live football plays in plain words with each drive's ending, the field section and a game before kickoff saying each thing once, the Record's repeated totals folded, the league row off the account screens, the plans button pinned on a phone, the NBA's false "could not be placed" warning, and hockey's big screen cleared (step 179; DV). The live pages caught up with the game: every pass reads ESPN fresh, the loop sleeps 5 seconds instead of 12, a game's plays fetched four at a time, the live game page and the Live tab asking every 5 seconds and redrawing only on news, and the Record's last two repeats folded (step 180; DW). A chat in every game with a thread on every play, reactions and a who-wins vote, a play feed across every game, and the site free to look around: the live games, their chat and stats, a game's facts, the Record, Fantasy and My Bets, with every pick still for members, and Real's first screen (step 181; DX). Real's first screens before the sign-up, with our real Record on the last, and every big play's card like Real's: a 0–10 rating from the win chance it moved, a go-ahead, tie or walk-off tag, the players' lines so far, the season and night counts, the win chance before and after, and a share (step 182; DY). Referral codes: every member's code gives a friend $6.25 off their first payment and the member $6.25 off their next bill when the friend pays (a quarter of a month, as an amount on every plan), with a link, a share, and how it's gone (step 183; DZ). Right after sign-up, Real's next screen: follow your teams and players, each one a watch, so members hear when a pick on them posts and free accounts hear only how many; a new account lands on Live, not the plans (step 184; EA). Live injuries and birthdays on the game: a status that came onto ESPN's injury list during the game, under the score with the time, and a player's birthday from every league's roster feed (step 185; EB). Sign up or in with a phone number and a texted code, no password, through Twilio Verify; off until you set its three values, US and Canadian numbers only, with caps per number and address (step 186; EC). Each live game's win chance drawn play by play, the big swings dotted, from the feed's own number (step 187; ED). Your players, live: each player you follow, his line right now from whichever game he is in, on one strip at the top of Live (step 188; EE). Big moments by push: a walk-off, a late go-ahead or any play rated 8.5+ in a game of a team or player you follow, the score and who did it, a tap into the game (step 189; EF). Call it: on a live MLB, NFL or college game, call how the next at-bat or drive ends, graded off the game's own file, with your streak and the room's best (step 190; EG).
+The research lab, session one: four read-only lines (step 141; CJ), round two (step 142; CK), three (step 143; CL) and the wait (step 144; CM); session two: the NFL board at the market's price, college and the equation search (step 145; CN); the board fix for posted picks (step 146; CO); session three: thin picks, MLB strikeouts, college at real lines and the NBA spread (step 147; CP). Every NFL game page now opens on a written game report, the way the research reports read, with no prop picks in it, and this Sunday's Paris game is no longer read as a dome (step 148; CQ). Then everything on the list but D: the report reads each player's form, the practice report, role changes, the last meetings, turnovers and tempo, the kicking air and the coaches' calls; college, MLB, NHL, NBA and WNBA games get their own reports; Ask reads them; every report says what changed since it was first written; and a report can be copied and a game shared (step 149; CR). The NBA, ready with what the NFL has: Edge and Most Likely posted and recorded (checked), offense against defense per 100 possessions with pace and the four factors, key matchups, a read on every key player with a breakout watch, the reads leaning Most Likely, matchup picks on paper, the scan on every NBA game page and in its report; the box score keeps the shooting columns, and the history reads ESPN's old club codes (step 150; CS). NBA opening night: the build cut off at three minutes (now ten), a 3-credit game-lines tier for the NBA and WNBA, and a Pick of the Day that no longer keeps a decline that saw no games (step 151; CT). The live scoreboard on a phone: the logos no longer sit on the score, and the Watch buttons are a row under it (step 152; CU). A monthly odds plan: 100k credits across every league in season, the NFL funded first, then college, then the rest at one fill (step 153; CV). Fantasy reads the NFL board: every league desk scores your lineup and head-to-head on this week's projections (the matchup, the game script, the weather, who is out around him, the touchdown model, the chance he plays; a bye or an Out at zero), a "This week" room on the Fantasy page, the best pickups from your league's free agents, the player panel and Ask (step 154; CW). Every game report's short version reads in sentences now, the teams by name and what each number means, for every league (step 155; CX). The live scoreboard you circled again is step 152's fix, already in; an old stamp now reads in hours and days (step 156; CY). Your four Patriots–Bears research docs, checked against the 2026 data and our model: a player the books took down no longer reads as "back up" while he is out, every soft corner is named with a questionable one flagged, a starter the depth chart already replaced is still named out, and two starting linemen out are said against the pass rush (step 157; CZ). Your new data in Most Likely and Edge: the 11 inventions now measure themselves every Thursday and join both boards the moment one holds (step 158; DA). Why Luther Burden III isn't on our boards: our fitted curve rates him under the books, receiving yards is shut on Edge, and his likeliest lines sit just past the −250 cap; a check, a re-test and your call (step 159; DB, corrected in DC). Your call on the cap: Most Likely now lists the bets we rate 70% or better priced −251 to −350, labelled and never staked or journaled; and the Burden numbers I gave you were the plain curve, not the box's (step 160; DC). Is our receiving curve too cautious on receivers like Burden? No: on six held-out seasons it is within four points at his kind of bet, the plain curve behind my 72% was ten points high, and nothing changes (step 161; DD). Why Most Likely shows the low line, and the bigger lines now under every pick: each with its price, our chance and what it's worth, marked when the price beats our chance, never staked (step 162; DE). The iPhone Duo: the phone layout on the front screen, the desktop view open either way you hold it, your place kept through every fold, and the half-open cases covered (step 163; DF). Our carry projections: no bias, they beat a plain three-game average, and the misses are game flow (step 164; DG). Tonight, home: confirm every change is on the box, then one command for every check from CT on (step 165; DH). Your box run read: the yards re-test, a −9900 bigger line, the inventions' status and the update check fixed; Most Likely's past-cap list on every sport; and D: the referee before kickoff, our own grades (PFF's can't be shown on a paid site), and the public betting percentages, built and waiting on a key (step 166; DI). Your DI paste: a posted pick's stale bigger lines cleared, over-only rungs held to their own book's price, a `--why` for the referees, and SharpAPI's refusal said in its own words (step 167; DJ). Your DJ paste: splits need SharpAPI's Pro plan (your call), Football Zebras' prose post read sentence by sentence, the board's build stamp beside the marks, and the NBA and NHL boards waiting on the odds plan (step 168; DK). Every fold and flip built for, the way each phone's own apps lay out (the open Fold's desktop view, list beside detail, the hinge-split panes, Flex Mode, the cover glance); the bug scan, mailing you only when something breaks; and the app stores (no portrait lock, deletion page, screenshot sizes, two decisions for you) (step 169; DL). Both your store calls, built: the store app (no sportsbook links, no league logos or photos, no meme or prediction pages, Play sells nothing yet), push alerts when picks post and nights settle, the first screen that no longer jumps on a phone, Liquid Glass on the Duo, the app opening in season, a slip shared from Photos to the grader, and the store checklist (step 170; DM). Everything on the ideas list: the installed app opening from its own copy with no signal, the Fantasy room loaded when it opens, the iPhone's floating glass tab bar, the riding pill and your team's colours, your own watches and parlays by push, your games in your calendar, the record offline, the iPhone widget and lock-screen feeds with their Swift, and Lighthouse every night (step 171; DN). Finishing it: every page loads when it first opens, with its own styles (a first visit 570 → 383 KB); glass on what floats over the page and nothing else; and Lighthouse's audit fixed: accessibility 100, nothing moving as a page loads, a link to a page opening at its top (step 172; DO). The look, audited screen by screen and fixed: Settings rebuilt the way a phone draws its own (groups of rows, switches, a screen per row with a way back), Membership and Friends as rows, a labelled sign-in with a gold Log in, Alerts as switches, sentence-case buttons and one field style everywhere, and signed-out Fantasy leagues no longer opening empty (step 173; DP). The live score on the ballpark photograph's scoreboard, drawn in the board's own perspective: teams, runs, the inning and the count, a blink when a run scores (step 174; DQ). The runners on that scoreboard too: three bags beside the inning, lit where a runner stands (step 175; DR). The stadiums come alive: the football field's big board lit with both scores and the game, big moments on both boards (TOUCHDOWN, HOME RUN, fireworks over the stands), the wind over the ballpark's outfield, and a game's last hour counted down (step 176; DS). The arenas come alive and every sport has it all: the basketball and hockey arenas' own screens lit with the game (the shot clocks with the real clock), their big moments, the final horn with fireworks in every sport, a banner for a phone, college's team colours (step 177; DT). The boards blended into the photographs on every sport: drawn on the photos' own screens in their own colours and lettering, and kept on them on any phone (step 178; DU). Every page read like an app: the live football plays in plain words with each drive's ending, the field section and a game before kickoff saying each thing once, the Record's repeated totals folded, the league row off the account screens, the plans button pinned on a phone, the NBA's false "could not be placed" warning, and hockey's big screen cleared (step 179; DV). The live pages caught up with the game: every pass reads ESPN fresh, the loop sleeps 5 seconds instead of 12, a game's plays fetched four at a time, the live game page and the Live tab asking every 5 seconds and redrawing only on news, and the Record's last two repeats folded (step 180; DW). A chat in every game with a thread on every play, reactions and a who-wins vote, a play feed across every game, and the site free to look around: the live games, their chat and stats, a game's facts, the Record, Fantasy and My Bets, with every pick still for members, and Real's first screen (step 181; DX). Real's first screens before the sign-up, with our real Record on the last, and every big play's card like Real's: a 0–10 rating from the win chance it moved, a go-ahead, tie or walk-off tag, the players' lines so far, the season and night counts, the win chance before and after, and a share (step 182; DY). Referral codes: every member's code gives a friend $6.25 off their first payment and the member $6.25 off their next bill when the friend pays (a quarter of a month, as an amount on every plan), with a link, a share, and how it's gone (step 183; DZ). Right after sign-up, Real's next screen: follow your teams and players, each one a watch, so members hear when a pick on them posts and free accounts hear only how many; a new account lands on Live, not the plans (step 184; EA). Live injuries and birthdays on the game: a status that came onto ESPN's injury list during the game, under the score with the time, and a player's birthday from every league's roster feed (step 185; EB). Sign up or in with a phone number and a texted code, no password, through Twilio Verify; off until you set its three values, US and Canadian numbers only, with caps per number and address (step 186; EC). Each live game's win chance drawn play by play, the big swings dotted, from the feed's own number (step 187; ED). Your players, live: each player you follow, his line right now from whichever game he is in, on one strip at the top of Live (step 188; EE). Big moments by push: a walk-off, a late go-ahead or any play rated 8.5+ in a game of a team or player you follow, the score and who did it, a tap into the game (step 189; EF). Call it: on every live game, call how the next at-bat, drive, basket or shot ends, graded off the game's own file, with your streak and the room's best (step 190; EG). Your ticket in the game's chat: your saved parlay's legs in that game with the box's number so far, and a Share (step 191; EH). Your players on the iPhone widget and lock screen, by a key the app hands the widget; and the calendar link named in the privacy policy and deleted with the account (step 192; EI). The game chat out of the corner and rebuilt: a card under every game's scoreboard, a bar on a phone, docked under the header on a computer, messages grouped like a chat app with the tools on hover or a tap (step 193; EJ). While you were away (what you missed when you come back to a live game) and the game in 30 seconds (a finished game's story on one card, with a Share) (step 194; EK).
 The whole picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -4831,11 +4831,14 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh EF 2>&1 | tee /tmp/ef.txt
 ```
 
-**EG. Call it** (step 190). A game inside the game, free: on a live MLB,
-NFL or college game page, under the field, a "Call it" card asks how the
-next one ends. Baseball: Hit, Out, Strikeout or Walk for the batter up (open
-until his second pitch). Football: Touchdown, Field goal, Punt or Turnover
-for the drive (open through its first two plays). The game's own file says
+**EG. Call it** (step 190). A game inside the game, free: on every live
+game page, under the field, a "Call it" card asks how the next one ends.
+Baseball: Hit, Out, Strikeout or Walk for the batter up (open until his
+second pitch). Football: Touchdown, Field goal, Punt or Turnover for the
+drive (open through its first two plays). Basketball (NBA, WNBA): Three,
+Two or Free throw for the next points. Hockey: Goal, Save, Blocked or
+Missed for the next shot. Those two open after each score or shot and lock
+two plays later; a call still open at the final is void. The game's own file says
 how it ended a few seconds later; the card shows if you were right, your
 count for the game, your streak and best, and the room's top five callers.
 A call changes while it's open and never after; an at-bat that ends on an
@@ -4848,12 +4851,12 @@ Nothing to install. Read-only, any time:
 
 ```
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpCallItHTML('
-curl -s https://qellysbook.com/api/callit/nba/1
+curl -s https://qellysbook.com/api/callit/soccer/1
 cd /srv/qellys && sudo -u qellys python3 -c "import sqlite3; from engine import accounts as A; c=sqlite3.connect(f'file:{A.DB_PATH}?mode=ro', uri=True); t=c.execute(\"SELECT 1 FROM sqlite_master WHERE name='callit_calls'\").fetchone(); print(c.execute('SELECT COUNT(*), COUNT(won), COALESCE(SUM(won), 0) FROM callit_calls').fetchone() if t else 'no calls yet')"
 ```
 
 The first prints `1` once this version is live; the second
-`{"error": "no such game"}` (basketball isn't a Call it league, so the new
+`{"error": "no such game"}` (soccer isn't a Call it league, so the new
 server refuses it by name); the third the calls made, graded and right so
 far, or `no calls yet`.
 
@@ -4861,6 +4864,134 @@ The check in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh EG 2>&1 | tee /tmp/eg.txt
+```
+
+**EH. Your ticket in the game's chat** (step 191). Open a game's chat with
+a parlay saved to My Bets that has legs in that game, and under the
+"Who wins?" vote it shows **Your ticket in this game**: each of your legs in
+this game with the box's number so far ("Ja'Marr Chase o71.5 receiving
+yards · 58, 14 to go"), green with a ✓ once it's won, red with a ✗ once
+it's lost, and "2 more legs in other games" for the rest. **Share** puts
+the ticket on your next message so the room sees what you're sweating. It
+reads the score's facts off the live loop's own files, so it's free and
+needs no account; the chance, the hedge and the cash-out stay on the Live
+tab for members.
+
+Nothing to install. Read-only, any time:
+
+```
+curl -s https://qellysbook.com/js/chat.js | grep -c 'async function chatDrawTix('
+curl -s -X POST -H 'Content-Type: application/json' -d '{"room": "soccer_1"}' https://qellysbook.com/api/chat/ticket
+```
+
+The first prints `1` once this version is live; the second
+`{"error": "no such game"}` (a room it doesn't know is refused by name).
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh EH 2>&1 | tee /tmp/eh.txt
+```
+
+**EI. Your players on the iPhone widget and lock screen** (step 192). A
+second widget, **Your players**: the players you follow with their lines in
+today's games, on the Home Screen (small, medium) and the lock screen (the
+rectangle under the clock, and the line above it), every fifteen minutes
+while one of them plays. A widget can't sign in, so inside the iPhone app,
+Settings → **iPhone widget** asks the box for a key and leaves it where the
+widget reads it; off deletes the key on the box, and signing out in the app
+removes it from the phone. Box scores and your own follows; never a pick.
+
+On the box, nothing to install. In Xcode on the Mac, add the App Group
+`group.com.qellysbook.app` to the App and widget targets and drag in the
+three new Swift files (deploy/ios/README.md, "Your players on the
+widget").
+
+Also fixed in passing: the calendar link's table (`calendar_links`) was
+missing from the Privacy Policy and from deleting an account; both name it
+now, and the policy test reads that module so the next one can't slip
+through.
+
+Read-only, any time:
+
+```
+curl -s 'https://qellysbook.com/api/widget/mine?k=1.notakey'
+cd /srv/qellys && sudo -u qellys python3 -c "import sqlite3; from engine import accounts as A; c=sqlite3.connect(f'file:{A.DB_PATH}?mode=ro', uri=True); t=c.execute(\"SELECT 1 FROM sqlite_master WHERE name='widget_links'\").fetchone(); print(c.execute('SELECT COUNT(*) FROM widget_links').fetchone()[0] if t else 0, 'widgets on')"
+```
+
+The first prints `{"error": "not a widget key (turning it on again makes a
+new one)"}` once this version is live (`404` page text would mean the old
+server); the second how many accounts have the widget on.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh EI 2>&1 | tee /tmp/ei.txt
+```
+
+**EJ. The game chat, out of the corner and rebuilt** (step 193). Your "it's
+hidden in the corner of the live page ... and the actual chat looks
+buggy". Built from how Twitch, YouTube Live, Discord and Real do it:
+
+- **A card on every game page**, right under the scoreboard (football,
+  baseball, basketball, hockey): Game chat, how many are watching, the last
+  three messages, the room's who-wins split, and a gold **Join**.
+- **On a phone, a bar across the bottom** above the tab bar with the newest
+  message in it, in place of the little pill in the corner; it steps aside
+  while the card is on screen.
+- **On a computer the chat docks on the right under the site's own bar**,
+  so the header and search stay in reach; on a wide screen (1440+) the page
+  moves over so nothing is covered.
+- **The messages read like a chat app**: one author's run grouped under one
+  name, names in their own colour, reactions shown only once somebody used
+  one, and the react / Reply / ⋯ tools on hover with a mouse and on a tap on
+  a phone instead of under every line. A reply shows what it answers in one
+  line; a shared bet is a ticket with a gold edge.
+- **The composer is one pill**: + for a bet, the message, a send arrow.
+
+Nothing to install. Read-only, any time:
+
+```
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatEntryPaint('
+```
+
+It prints `1` once this version is live. Then open any live game on your
+phone: the card is under the score, and the bar appears when you scroll
+past it.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh EJ 2>&1 | tee /tmp/ej.txt
+```
+
+**EK. While you were away, and the game in 30 seconds** (step 194). Two
+cards at the top of every game page, both worked out on the phone from the
+game's own file:
+
+- **While you were away.** Leave a live game for four minutes or more and
+  come back: "While you were away · 10 min · 5 plays", the score then and
+  now (PIT 14–10 CIN → 14–17), how far the win chance swung (PIT 56% → CIN
+  81%), and the three biggest plays since, in order. × dismisses it. What
+  you last saw is kept on your phone only.
+- **The game in 30 seconds.** On a finished game: the final, the play of
+  the game (the highest moment rating), "CIN won after falling to 18% to
+  win" when there was a comeback, the lead changes and the biggest lead,
+  and the night's best line from the box. **Share** opens the phone's share
+  sheet with that summary and the link.
+
+Nothing to install. Read-only, any time:
+
+```
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpRecapHTML('
+```
+
+It prints `1` once this version is live.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh EK 2>&1 | tee /tmp/ek.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

@@ -542,8 +542,22 @@ async function chatPost(path, body) {
 
 /* ---------------- the floating button ---------------- */
 
+/* THE WAY IN (2026-10-25, Ethan: "it's hidden in the corner of the live
+   page, so it's hard to see"). Two doors, both live:
+     - a card on the game page itself, under the scoreboard (chatEntryPaint):
+       how many are watching, the last few messages, the room's who-wins
+       split, and Join — Twitch's and YouTube's chat sits beside the
+       picture, not behind a button;
+     - on a phone, a bar across the bottom above the tab bar with the
+       newest message in it (YouTube's collapsed live chat), not a pill in
+       the corner. On a computer the same bar is a labelled button. */
+function chatLast() {
+  const m = CH.msgs.length ? CH.msgs[CH.msgs.length - 1] : null;
+  return m && m.body ? m : null;
+}
 function chatFab() {
   let f = document.getElementById("gch-fab");
+  chatEntryPaint();
   if (!chatOnGame() || !CH.room) { if (f) f.remove(); return; }
   if (!f) {
     f = document.createElement("button");
@@ -554,10 +568,50 @@ function chatFab() {
     document.body.appendChild(f);
   }
   f.hidden = CH.open;
-  const n = CH.unread;
-  f.setAttribute("aria-label", `Game chat${n ? `, ${n} new` : ""}${CH.here ? `, ${CH.here} here` : ""}`);
-  f.innerHTML = `${chatIcon()}<span>Chat</span>${CH.here > 1 ? `<span class="gch-fab-here">${CH.here}</span>` : ""}${
-    n ? `<span class="gch-fab-new">${n > 99 ? "99+" : n}</span>` : ""}`;
+  const n = CH.unread, last = chatLast();
+  f.setAttribute("aria-label", `Open the game chat${n ? `, ${n} new` : ""}${CH.here ? `, ${CH.here} watching` : ""}`);
+  f.innerHTML = `<span class="gch-fab-ico">${chatIcon()}</span><span class="gch-fab-main"><b>Game chat${
+    CH.here > 1 ? `<span class="gch-fab-here"><i></i>${CH.here}</span>` : ""}</b><span class="gch-fab-last">${last
+    ? `<b>@${chEsc((last.by || {}).handle || "")}</b> ${chEsc(String(last.body).slice(0, 80))}` : "Say something about the game"}</span></span>${
+    n ? `<span class="gch-fab-new">${n > 99 ? "99+" : n}</span>` : ""}<span class="gch-fab-go" aria-hidden="true">›</span>`;
+}
+
+/* The card on the game page (detail.js and hoopscast.js leave an empty
+   `.gch-entry-slot` under the scoreboard; this fills every one on each
+   draw and each poll). */
+function chatEntryPaint() {
+  const slots = document.querySelectorAll(".gch-entry-slot");
+  if (!slots.length) return;
+  const rows = CH.msgs.filter((m) => m.body).slice(-3);
+  const d = CH.d || {}, v = CH.votes;
+  const total = v ? (v.away || 0) + (v.home || 0) : 0;
+  const pct = (x) => (total ? Math.round((100 * x) / total) : 50);
+  const poll = v && total && d.home && d.away ? `<div class="gch-entry-poll"><span>${chEsc(d.away)} ${pct(v.away || 0)}%</span>
+      <span class="gch-entry-bar" style="--gch-away:${pct(v.away || 0)}%"></span><span>${pct(v.home || 0)}% ${chEsc(d.home)}</span></div>` : "";
+  const html = `<button type="button" class="gch-entry" data-gch-entry="1">
+      <span class="gch-entry-h"><span class="gch-entry-ico">${chatIcon()}</span><b>Game chat</b>${
+        CH.here > 1 ? `<span class="gch-entry-live"><i></i>${CH.here} watching</span>` : ""}<span class="gch-entry-go">${
+        CH.unread ? `${CH.unread} new · ` : ""}Join</span></span>
+      <span class="gch-entry-msgs">${rows.length ? rows.map((m) => {
+        const c = Math.abs(Number((m.by || {}).color || 0)) % 8;
+        return `<span class="gch-entry-m"><b class="gch-c${c}">@${chEsc((m.by || {}).handle || "")}</b> ${chEsc(String(m.body).slice(0, 90))}</span>`;
+      }).join("") : `<span class="gch-entry-m gch-entry-quiet">${CH.loaded ? "Nobody has said anything yet — start it off." : "Opening the room…"}</span>`}</span>
+      ${poll}</button>`;
+  slots.forEach((slot) => {
+    if (slot.dataset.html === html) return;
+    slot.dataset.html = html;
+    slot.innerHTML = html;
+    slot.firstElementChild.addEventListener("click", () => chatOpen({}));
+  });
+  // While the card is on screen the bar at the bottom would say the same
+  // thing twice; it comes back once the card scrolls away.
+  if (typeof IntersectionObserver === "function") {
+    CH.io = CH.io || new IntersectionObserver((seen) => {
+      document.body.classList.toggle("gch-card-in", seen.some((x) => x.isIntersecting));
+    });
+    CH.io.disconnect();
+    slots.forEach((slot) => CH.io.observe(slot));
+  }
 }
 
 const chatIcon = () => `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>`;
@@ -572,7 +626,7 @@ function chatSheet() {
     s.className = "gch-sheet";
     s.setAttribute("role", "dialog");
     s.setAttribute("aria-label", "Game chat");
-    s.innerHTML = `<header class="gch-head"></header><div class="gch-poll"></div>
+    s.innerHTML = `<header class="gch-head"></header><div class="gch-poll"></div><div class="gch-tix" hidden></div>
       <nav class="gch-tabs" role="tablist"></nav>
       <div class="gch-body" tabindex="-1"></div>
       <button type="button" class="gch-newpill" hidden></button>
@@ -614,14 +668,71 @@ function chatDrawHead() {
     typeof teamMarkIn === "function" && abbr ? teamMarkIn(lg, abbr, 26) : ""}<b>${chEsc(abbr || "")}</b><span class="gch-score">${
     score != null ? chEsc(score) : ""}</span></div>`;
   const mid = lv.state === "live"
-    ? `<span class="gch-live"><i></i>LIVE</span><span class="gch-clock">${chEsc([lv.period, lv.clock].filter(Boolean).join(" "))}</span>`
+    ? `<span class="gch-live"><i></i>LIVE</span><span class="gch-clock">${chEsc(lv.detail || [lv.period, lv.clock].filter(Boolean).join(" "))}</span>`
     : lv.state === "final" ? `<span class="gch-clock">FINAL</span>`
     : `<span class="gch-clock">${chEsc(lv.detail || "Pregame")}</span>`;
   s.querySelector(".gch-head").innerHTML = `
-    <div class="gch-board">${side(d.away, lv.away_score, false)}<div class="gch-mid">${mid}</div>${side(d.home, lv.home_score, true)}</div>
-    <div class="gch-headrow"><span class="gch-here">${CH.here ? `${CH.here} here now` : "Game chat"}</span>
-      <button type="button" class="gch-x" data-gch="close" aria-label="Close the chat">${typeof icon === "function" ? icon("cross", 16) : "×"}</button></div>`;
+    <div class="gch-headrow"><span class="gch-title">${chatIcon()}Game chat</span><span class="gch-here">${
+      CH.here ? `<i></i>${CH.here} watching` : ""}</span>
+      <button type="button" class="gch-x" data-gch="close" aria-label="Close the chat">${typeof icon === "function" ? icon("cross", 16) : "×"}</button></div>
+    <div class="gch-board">${side(d.away, lv.away_score, false)}<div class="gch-mid">${mid}</div>${side(d.home, lv.home_score, true)}</div>`;
   chatDrawPoll();
+  chatDrawTix();
+}
+
+/* YOUR TICKETS IN THIS GAME (2026-10-25). The reader's saved slips from My
+   Bets, each leg in this game with the box's number so far — "Chase o71.5
+   rec yds · 58, 14 to go" — off the live loop's own files
+   (engine/sliplive.room_tickets, POST /api/chat/ticket). The score's facts,
+   free; the chance and the hedge stay on the Live tab for members. One tap
+   puts the ticket on the reader's next message. Asked at most every thirty
+   seconds while the sheet is open. */
+function chatTixMine() {
+  if (typeof mbLoad !== "function") return [];
+  return mbLoad().filter((b) => b && b.result === "pending" && b.src === "slip" && Array.isArray(b.legs) && b.legs.length)
+    .slice(-10);
+}
+function chatTixLegHTML(l) {
+  const word = typeof marketWord === "function" ? marketWord(l.market) : l.market;
+  const side = l.side ? `${String(l.side)[0].toLowerCase()}` : "";
+  const cur = Number(l.current), line = Number(l.line);
+  let now = "";
+  if (Number.isFinite(cur)) {
+    const over = String(l.side).toUpperCase() === "OVER", under = String(l.side).toUpperCase() === "UNDER";
+    const go = over && Number.isFinite(line) && !l.result ? `, ${Math.max(0, Math.floor(line) + 1 - cur)} to go`
+      : under && Number.isFinite(line) && !l.result ? `, ${Math.max(0, Math.floor(line) - cur)} to spare` : "";
+    now = `<span class="gch-tik-now">${chEsc(cur)}${chEsc(go)}</span>`;
+  } else if (l.state === "scheduled" || !l.state) now = `<span class="gch-tik-now">not started</span>`;
+  const res = l.result === "won" ? " r-won" : l.result === "lost" ? " r-lost" : "";
+  return `<li class="gch-tik-leg${res}"><b>${chEsc(l.player)}</b> ${chEsc(side)}${Number.isFinite(line) ? chEsc(line) : ""} ${
+    chEsc(word || "")}${now}${l.result ? `<span class="gch-tik-res">${l.result === "won" ? "✓" : l.result === "lost" ? "✗" : "push"}</span>` : ""}</li>`;
+}
+async function chatDrawTix() {
+  const s = document.getElementById("gch-sheet");
+  const box = s && s.querySelector(".gch-tix");
+  if (!box) return;
+  const mine = chatTixMine();
+  if (!mine.length || CH.thread) { box.hidden = true; return; }
+  const paint = () => {
+    const t = (CH.tix && CH.tix.room === CH.room && CH.tix.list) || [];
+    box.hidden = !t.length;
+    box.innerHTML = !t.length ? "" : `<div class="gch-tix-h">Your ${t.length === 1 ? "ticket" : "tickets"} in this game</div>${
+      t.map((k) => `<div class="gch-tik"><div class="gch-tik-top"><span>${chEsc(String(k.desc || "").slice(0, 70))}</span>
+        ${(CH.me || {}).signed_in ? `<button type="button" class="gch-tik-share" data-gch="tikshare" data-tik="${chEsc(k.id)}">Share</button>` : ""}</div>
+        <ul>${k.legs.map(chatTixLegHTML).join("")}</ul>${k.of > k.legs.length
+          ? `<span class="gch-tik-more">${k.of - k.legs.length} more leg${k.of - k.legs.length === 1 ? "" : "s"} in other games</span>` : ""}</div>`).join("")}`;
+  };
+  paint();
+  if (CH.tixAt && Date.now() - CH.tixAt < 30000 && CH.tix && CH.tix.room === CH.room) return;
+  CH.tixAt = Date.now();
+  const room = CH.room;
+  try {
+    const r = await fetch("/api/chat/ticket", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room, tickets: mine.map((b) => ({ id: b.id, desc: b.desc, legs: b.legs })) }) });
+    const v = r.ok ? await r.json() : null;
+    if (v && room === CH.room) { CH.tix = { room, list: v.tickets || [] }; paint(); }
+  } catch (e) { /* the next draw asks again */ }
 }
 
 /* Who wins? (Sofascore, Real) — the split, and the reader's own pick. */
@@ -690,7 +801,8 @@ function chatAppend(fresh, v) {
   if (add.length) {
     const empty = body.querySelector(".gch-empty");
     if (empty) empty.remove();
-    body.insertAdjacentHTML("beforeend", add.map(chatMsgHTML).join(""));
+    const shown = CH.msgs.filter(want);
+    body.insertAdjacentHTML("beforeend", add.map((m) => chatMsgHTML(m, shown[shown.indexOf(m) - 1])).join(""));
   }
   for (const id of Object.keys(v.reacts || {})) {
     const m = CH.byId.get(Number(id));
@@ -730,7 +842,7 @@ function chatListHTML(want) {
       ? `<b>Nobody has said anything yet.</b><span>Call the next play, share the bet you’re on, or pick a side above.</span>`
       : "Loading the chat…"}</div>`;
   }
-  return more + rows.map(chatMsgHTML).join("");
+  return more + rows.map((m, i) => chatMsgHTML(m, rows[i - 1])).join("");
 }
 
 const chatAgo = (t) => {
@@ -759,16 +871,45 @@ function chatBetHTML(b) {
     b.book ? `<span class="gch-bet-book">${chEsc(b.book)}</span>` : ""}</div>`;
 }
 
+/* A message's faces, as the chat apps draw them (Discord, Slack, iMessage's
+   tapbacks): only the ones somebody used, each with its count. The four to
+   choose from live in the message's tools, shown on hover with a mouse and
+   on a tap on a phone (chatSel), so a quiet room is a list of words, not a
+   wall of emoji. */
 function chatFacesHTML(m) {
   const faces = m.reacts || {};
-  return `<span class="gch-faces">${CHAT_FACES.map(([k, e]) => {
-    const n = faces[k] || 0;
-    return `<button type="button" class="gch-face${m.mine === k ? " mine" : ""}${n ? "" : " none"}" data-gch="react" data-id="${m.id}" data-kind="${k}"
-      aria-label="${k}${n ? ` ${n}` : ""}">${e}${n ? `<span>${n}</span>` : ""}</button>`;
+  return `<span class="gch-faces">${CHAT_FACES.filter(([k]) => (faces[k] || 0) > 0).map(([k, e]) => {
+    const n = faces[k];
+    return `<button type="button" class="gch-face${m.mine === k ? " mine" : ""}" data-gch="react" data-id="${m.id}" data-kind="${k}"
+      aria-label="${k} ${n}">${e}<span>${n}</span></button>`;
   }).join("")}</span>`;
 }
+const chatPickHTML = (m) => `<span class="gch-pick" role="group" aria-label="React">${CHAT_FACES.map(([k, e]) =>
+  `<button type="button" class="gch-pk${m.mine === k ? " mine" : ""}" data-gch="react" data-id="${m.id}" data-kind="${k}" aria-label="${k}">${e}</button>`).join("")}</span>`;
+function chatSel(id) {
+  CH.sel = CH.sel === id ? 0 : id;
+  document.querySelectorAll("#gch-sheet .gch-msg.sel").forEach((el) => el.classList.remove("sel"));
+  if (CH.sel) {
+    const el = document.querySelector(`#gch-sheet .gch-msg[data-id="${CH.sel}"]`);
+    if (el) el.classList.add("sel");
+  }
+}
+/* The message before this one in what the list shows, for grouping. */
+function chatPrevOf(id) {
+  const el = document.querySelector(`#gch-sheet .gch-msg[data-id="${Number(id)}"]`);
+  const prev = el && el.previousElementSibling;
+  return prev && prev.dataset && prev.dataset.id ? CH.byId.get(Number(prev.dataset.id)) : null;
+}
+/* One author's run of messages inside three minutes reads as one block:
+   the name and the face on the first, the rest beneath it (Discord). */
+const chatJoins = (m, prev) => !!prev && (prev.by || {}).handle === (m.by || {}).handle && !m.reply_to
+  && !(m.play && !CH.thread) && Math.abs(Number(m.at) - Number(prev.at)) < 180;
+const chatClock = (t) => {
+  const d = new Date(Number(t || 0) * 1000);
+  return `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
-function chatMsgHTML(m) {
+function chatMsgHTML(m, prev) {
   const p = m.by || {};
   const c = Math.abs(Number(p.color || 0)) % 8;
   const reply = m.reply_to ? CH.byId.get(m.reply_to) : null;
@@ -776,15 +917,19 @@ function chatMsgHTML(m) {
   const badge = (p.verified ? `<span class="gch-tick" title="Verified">${typeof icon === "function" ? icon("check", 10) : "✓"}</span>` : "")
     + (p.founder ? `<span class="gch-founder">Founder</span>` : "");
   const menu = CH.menu === m.id ? chatMenuHTML(m) : "";
-  return `<article class="gch-msg${m.own ? " own" : ""}" data-id="${m.id}">
-    <span class="gch-av gch-c${c}${p.founder ? " gold" : ""}" aria-hidden="true">${chEsc(chatInitials(p))}</span>
+  const cont = chatJoins(m, prev && typeof prev === "object" ? prev : null);
+  return `<article class="gch-msg${m.own ? " own" : ""}${cont ? " cont" : ""}${CH.sel === m.id ? " sel" : ""}${p.founder ? " staff" : ""}" data-id="${m.id}">
+    ${cont ? `<time class="gch-gutter" aria-hidden="true">${chatClock(m.at)}</time>`
+      : `<span class="gch-av gch-c${c}${p.founder ? " gold" : ""}" aria-hidden="true">${chEsc(chatInitials(p))}</span>`}
     <div class="gch-bub">
-      <div class="gch-meta"><b>@${chEsc(p.handle || "")}</b>${badge}${p.team ? `<span class="gch-team">${chEsc(p.team)}</span>` : ""}<time>${chatAgo(m.at)}</time></div>
-      ${reply ? `<div class="gch-quote">@${chEsc((reply.by || {}).handle || "")}: ${chEsc(String(reply.body || "").slice(0, 90))}</div>` : ""}
+      ${cont ? "" : `<div class="gch-meta"><b class="gch-name gch-c${c}">@${chEsc(p.handle || "")}</b>${badge}${
+        p.team ? `<span class="gch-team">${chEsc(p.team)}</span>` : ""}<time>${chatAgo(m.at)}</time></div>`}
+      ${reply ? `<div class="gch-quote"><span>↪ @${chEsc((reply.by || {}).handle || "")}</span> ${chEsc(String(reply.body || "").slice(0, 90))}</div>` : ""}
       ${play ? `<button type="button" class="gch-on-play" data-gch="thread" data-play="${chEsc(m.play)}">on ${chEsc(chatPlayTitle(play))}</button>` : ""}
       ${m.body ? `<p class="gch-text">${chatText(m.body)}</p>` : ""}
       ${chatBetHTML(m.bet)}
-      <div class="gch-acts">${chatFacesHTML(m)}
+      <div class="gch-acts">${chatFacesHTML(m)}</div>
+      <div class="gch-tools">${chatPickHTML(m)}
         <button type="button" class="gch-act" data-gch="reply" data-id="${m.id}">Reply</button>
         <button type="button" class="gch-act" data-gch="menu" data-id="${m.id}" aria-label="More">⋯</button></div>
       ${menu}
@@ -868,7 +1013,7 @@ function chatThreadHTML() {
   const rows = CH.msgs.filter((m) => m.play === CH.thread);
   return `<div class="gch-thread-top"><button type="button" class="gch-back" data-gch="unthread">← All of the chat</button></div>
     ${p ? chatPlayCardHTML(p, true) : `<p class="gch-empty">This play’s thread.</p>`}
-    ${rows.length ? rows.map(chatMsgHTML).join("") : `<div class="gch-empty"><span>Be the first to say something about this play.</span></div>`}`;
+    ${rows.length ? rows.map((m, i) => chatMsgHTML(m, rows[i - 1])).join("") : `<div class="gch-empty"><span>Be the first to say something about this play.</span></div>`}`;
 }
 
 /* ---------------- the composer ---------------- */
@@ -901,10 +1046,10 @@ function chatDrawFoot() {
     ${CH.bet ? `<div class="gch-betdraft">${chatBetHTML(CH.bet)}<button type="button" data-gch="unbet" aria-label="Remove the bet">×</button></div>` : ""}
     ${CH.betOpen ? chatBetFormHTML() : ""}
     <form class="gch-compose" data-gch-form="send">
-      <button type="button" class="gch-addbet" data-gch="bet" aria-label="Add the bet you’re on" title="Add the bet you’re on">＋ Bet</button>
-      <textarea class="gch-input" name="body" rows="1" maxlength="280" placeholder="${thread ? "Say something about this play…" : "Say something about the game…"}"
+      <button type="button" class="gch-addbet" data-gch="bet" aria-label="Add the bet you’re on" title="Add the bet you’re on">+</button>
+      <textarea class="gch-input" name="body" rows="1" maxlength="280" placeholder="${thread ? "Reply about this play…" : "Send a message"}"
         aria-label="Message"></textarea>
-      <button type="submit" class="btn gch-send" aria-label="Send">Send</button>
+      <button type="submit" class="gch-send" aria-label="Send"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 8.6 14 2.5l-3.6 11.2-2.3-4.4z"/></svg></button>
     </form><p class="gch-err">${chEsc(CH.err)}</p>`;
 }
 
@@ -963,7 +1108,14 @@ async function chatClick(e) {
   const share = e.target.closest("[data-pc-share]");
   if (share) return pcShare(share);
   const t = e.target.closest("[data-gch]");
-  if (!t) return;
+  if (!t) {
+    // A tap on a message (not on one of its buttons) shows its tools on a
+    // phone, as a long-press does in a messaging app; a second tap, or a
+    // tap on another, moves them (chatSel).
+    const msg = e.target.closest(".gch-msg");
+    if (msg && !e.target.closest("a, button, input, textarea, select")) chatSel(Number(msg.dataset.id));
+    return;
+  }
   const act = t.dataset.gch;
   if (act === "close") return chatClose();
   if (act === "tab") { CH.tab = t.dataset.tab; CH.menu = 0; chatDrawTabs(); chatDrawBody(); return; }
@@ -980,6 +1132,15 @@ async function chatClick(e) {
   if (act === "unreply") { CH.replyTo = 0; chatDrawFoot(); return; }
   if (act === "bet") { CH.betOpen = !CH.betOpen; chatDrawFoot(); return; }
   if (act === "unbet") { CH.bet = null; chatDrawFoot(); return; }
+  if (act === "tikshare") {
+    const b = chatTixMine().find((x) => String(x.id) === t.dataset.tik);
+    if (b) { CH.bet = { player: String(b.desc || "").slice(0, 60), odds: Number(b.odds) || undefined, book: String(b.book || "").slice(0, 24) || undefined }; }
+    CH.betOpen = false;
+    chatDrawFoot();
+    const inp = document.querySelector("#gch-sheet .gch-input");
+    if (inp) inp.focus();
+    return;
+  }
   if (act === "usebet") {
     CH.bet = { player: t.dataset.desc, odds: Number(t.dataset.odds) || undefined, book: t.dataset.book || undefined };
     CH.betOpen = false;
@@ -991,7 +1152,7 @@ async function chatClick(e) {
     CH.menu = CH.menu === id ? 0 : id;
     const el = t.closest(".gch-msg");
     const m = CH.byId.get(id);
-    if (el && m) el.outerHTML = chatMsgHTML(m);
+    if (el && m) el.outerHTML = chatMsgHTML(m, chatPrevOf(id));
     return;
   }
   /* A face is drawn the moment the server takes it, from its own answer
@@ -1008,6 +1169,7 @@ async function chatClick(e) {
       if (out.mine) faces[out.mine] = (faces[out.mine] || 0) + 1;
       m.reacts = faces;
       m.mine = out.mine;
+      if (CH.sel === id) chatSel(id);
       const el = document.querySelector(`#gch-sheet .gch-msg[data-id="${id}"] .gch-faces`);
       if (el) el.outerHTML = chatFacesHTML(m);
     }

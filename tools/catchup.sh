@@ -44,6 +44,10 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EE 2>&1 | tee /tmp/ee.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EF 2>&1 | tee /tmp/ef.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EG 2>&1 | tee /tmp/eg.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EH 2>&1 | tee /tmp/eh.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EI 2>&1 | tee /tmp/ei.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EJ 2>&1 | tee /tmp/ej.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EK 2>&1 | tee /tmp/ek.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -509,8 +513,22 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
 SH
 run EG "Call it on live games" 60 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpCallItHTML('
-curl -s https://qellysbook.com/api/callit/nba/1
+curl -s https://qellysbook.com/api/callit/soccer/1
 cd /srv/qellys && sudo -u qellys python3 -c "import sqlite3; from engine import accounts as A; c=sqlite3.connect(f'file:{A.DB_PATH}?mode=ro', uri=True); t=c.execute(\"SELECT 1 FROM sqlite_master WHERE name='callit_calls'\").fetchone(); print(c.execute('SELECT COUNT(*), COUNT(won), COALESCE(SUM(won), 0) FROM callit_calls').fetchone() if t else 'no calls yet')"
+SH
+run EH "Your ticket in the game's chat" 60 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'async function chatDrawTix('
+curl -s -X POST -H 'Content-Type: application/json' -d '{"room": "soccer_1"}' https://qellysbook.com/api/chat/ticket
+SH
+run EI "Your players on the iPhone widget" 60 <<'SH'
+curl -s 'https://qellysbook.com/api/widget/mine?k=1.notakey'
+cd /srv/qellys && sudo -u qellys python3 -c "import sqlite3; from engine import accounts as A; c=sqlite3.connect(f'file:{A.DB_PATH}?mode=ro', uri=True); t=c.execute(\"SELECT 1 FROM sqlite_master WHERE name='widget_links'\").fetchone(); print(c.execute('SELECT COUNT(*) FROM widget_links').fetchone()[0] if t else 0, 'widgets on')"
+SH
+run EJ "The game chat, out of the corner and rebuilt" 30 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatEntryPaint('
+SH
+run EK "While you were away, and the game in 30 seconds" 30 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpRecapHTML('
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

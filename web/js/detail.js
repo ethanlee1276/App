@@ -2657,15 +2657,172 @@ function pbpTotalsHTML(d, league) {
       nothing fetched, nothing estimated.</p></div>`;
 }
 
+/* WHILE YOU WERE AWAY (2026-10-25). Come back to a live game after a few
+   minutes away and the page says what you missed before anything else:
+   the score then and now, how far the win chance swung, and the biggest
+   plays since you left, off the plays' own clock times (`at`, MLB's
+   `time`) and their moment ratings (engine/playmoments). What you last saw
+   is kept per game on this device only, for the forty newest games. */
+const AWAY_KEY = "qb_seen_v1";
+const AWAY_MIN_MS = 4 * 60 * 1000;
+let _away = { key: "", card: "", marked: 0 };
+function awaySeen() {
+  try { return JSON.parse(localStorage.getItem(AWAY_KEY) || "{}") || {}; } catch (e) { return {}; }
+}
+function awayRows(d, league) {
+  return (league === "mlb" ? (d.events || []).filter((e) => e && e.kind === "atbat") : (d.plays || []))
+    .filter((r) => r && typeof r === "object");
+}
+function awayWp(rows) {
+  for (let i = rows.length - 1; i >= 0; i--) if (typeof rows[i].wp === "number") return rows[i].wp;
+  return null;
+}
+function awayWords(r, league) {
+  const who = league === "mlb" ? r.batter : (Array.isArray(r.players) && r.players[0]) || r.player || "";
+  const tag = { walkoff: "Walk-off", go_ahead: "Go-ahead", tying: "Game-tying" }[r.swing] || "";
+  const yds = league !== "mlb" && Number(r.yards) ? ` ${r.yards > 0 ? "+" : ""}${r.yards} yds` : "";
+  return `${tag ? `${tag} · ` : ""}${who ? `${who} — ` : ""}${r.event || "Play"}${yds}`;
+}
+function awayCardHTML(d, league, was) {
+  const lv = d.live || {};
+  const rows = awayRows(d, league);
+  const since = rows.filter((r) => Date.parse(r.at || r.time || "") > was.t);
+  if (!since.length) return "";
+  const top = since.map((r, i) => [r, i]).sort((a, b) => (Number(b[0].rating) || 0) - (Number(a[0].rating) || 0))
+    .slice(0, 3).sort((a, b) => a[1] - b[1]).map(([r]) => r);
+  const mins = Math.round((Date.now() - was.t) / 60000);
+  const wpNow = awayWp(rows), side = (wp) => (wp >= 50 ? d.home : d.away), pct = (wp) => Math.round(wp >= 50 ? wp : 100 - wp);
+  const swing = typeof was.wp === "number" && typeof wpNow === "number" && Math.abs(wpNow - was.wp) >= 5
+    ? `<span>Win chance: ${escapeHtml(side(was.wp))} ${pct(was.wp)}% → ${escapeHtml(side(wpNow))} ${pct(wpNow)}%</span>` : "";
+  const score = was.a != null && was.h != null
+    ? `<span>${escapeHtml(d.away)} ${Number(was.a)}–${Number(was.h)} ${escapeHtml(d.home)} → <b>${Number(lv.away_score)}–${Number(lv.home_score)}</b></span>` : "";
+  return `<div class="card pbp-away" role="status">
+    <div class="pbp-rail-head">While you were away <span class="mini">${mins < 90 ? `${mins} min` : `${Math.round(mins / 60)} hr`} · ${since.length} play${since.length === 1 ? "" : "s"}</span>
+      <button type="button" class="pbp-away-x" data-away-x="1" aria-label="Dismiss">×</button></div>
+    <div class="pbp-away-sum">${score}${swing}</div>
+    <ol class="pbp-away-list">${top.map((r) => `<li${r.scoring ? ' class="is-score"' : ""}>${escapeHtml(awayWords(r, league))}</li>`).join("")}</ol>
+  </div>`;
+}
+function pbpAwayHTML(d, league) {
+  if (!d || !d.event_id) return "";
+  const key = `${league}_${d.event_id}`;
+  if (_away.key !== key) {
+    const was = awaySeen()[key];
+    _away = { key, card: "", marked: 0 };
+    if (was && (d.live || {}).state === "live" && Date.now() - was.t > AWAY_MIN_MS) _away.card = awayCardHTML(d, league, was);
+  }
+  // What was seen, every twenty seconds while the page is open.
+  if (Date.now() - _away.marked > 20000) {
+    _away.marked = Date.now();
+    const lv = d.live || {}, all = awaySeen();
+    all[key] = { t: Date.now(), a: lv.away_score, h: lv.home_score, wp: awayWp(awayRows(d, league)) };
+    Object.keys(all).sort((x, y) => all[y].t - all[x].t).slice(40).forEach((k) => delete all[k]);
+    try { localStorage.setItem(AWAY_KEY, JSON.stringify(all)); } catch (e) {}
+  }
+  return _away.card;
+}
+if (typeof window !== "undefined" && !window._awayBound) {
+  window._awayBound = true;
+  document.addEventListener("click", (e) => {
+    const x = e.target.closest && e.target.closest("[data-away-x]");
+    if (!x) return;
+    _away.card = "";
+    const card = x.closest(".pbp-away");
+    if (card) card.remove();
+  });
+}
+
+/* THE GAME IN 30 SECONDS (2026-10-25). On a finished game, before the
+   rooms: the final, the play of the game (the highest moment rating), a
+   comeback when the winner's win chance sank below thirty, how often the
+   lead changed and the biggest lead, and the night's best line from the
+   box. All off the game's own file; Share hands the text to the phone's
+   share sheet, or copies it. */
+function recapTop(d, league) {
+  const rows = d.players || [];
+  const n = (r, k) => Number(((r || {}).stats || {})[k]) || 0;
+  const L = (r) => (r && r.line) || {};
+  const score = league === "mlb"
+    ? (r) => (L(r).pitching ? 1.5 * (Number(L(r).pitching.k) || 0) : 3 * (Number((L(r).batting || {}).hr) || 0) + (Number((L(r).batting || {}).h) || 0) + (Number((L(r).batting || {}).rbi) || 0))
+    : league === "nhl" ? (r) => 3 * n(r, "goals") + 2 * n(r, "assists") + n(r, "saves") / 10
+    : league === "nfl" || league === "cfb" ? (r) => n(r, "pass_yds") / 2.5 + n(r, "rush_yds") + n(r, "rec_yds") + 20 * (n(r, "pass_td") + n(r, "rush_td") + n(r, "rec_td"))
+    : (r) => n(r, "pts") + n(r, "reb") + n(r, "ast");
+  const best = rows.slice().sort((a, b) => score(b) - score(a))[0];
+  if (!best || score(best) <= 0) return "";
+  const s = best.stats || {}, line = L(best);
+  const words = line.batting ? `${line.batting.h || 0}-for-${line.batting.ab || 0}${line.batting.hr ? `, ${line.batting.hr} HR` : ""}${line.batting.rbi ? `, ${line.batting.rbi} RBI` : ""}`
+    : line.pitching ? `${line.pitching.ip || 0} IP, ${line.pitching.k || 0} K`
+    : league === "nhl" ? (s.saves ? `${s.saves} saves` : `${s.goals || 0} G, ${s.assists || 0} A`)
+    : league === "nfl" || league === "cfb" ? [s.pass_yds && `${s.pass_yds} pass yds`, s.rush_yds && `${s.rush_yds} rush yds`, s.rec_yds && `${s.rec_yds} rec yds`,
+      (s.pass_td || 0) + (s.rush_td || 0) + (s.rec_td || 0) ? `${(s.pass_td || 0) + (s.rush_td || 0) + (s.rec_td || 0)} TD` : ""].filter(Boolean).slice(0, 3).join(", ")
+    : `${s.pts || 0} pts, ${s.reb || 0} reb, ${s.ast || 0} ast`;
+  return `${best.player} (${best.team}): ${words}`;
+}
+function recapFacts(d, league) {
+  const lv = d.live || {};
+  const rows = awayRows(d, league);
+  const a = Number(lv.away_score), h = Number(lv.home_score);
+  if (!Number.isFinite(a) || !Number.isFinite(h)) return null;
+  const won = h > a ? d.home : a > h ? d.away : "";
+  const pog = rows.reduce((b, r) => ((Number(r.rating) || 0) > (Number((b || {}).rating) || 0) ? r : b), null);
+  let changes = 0, lead = 0, big = { n: 0, side: "" }, low = 101;
+  rows.forEach((r) => {
+    const x = Number(r.away_score), y = Number(r.home_score);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      const now = Math.sign(y - x);
+      if (now && lead && now !== lead) changes++;
+      if (now) lead = now;
+      if (Math.abs(y - x) > big.n) big = { n: Math.abs(y - x), side: y > x ? d.home : d.away };
+    }
+    if (typeof r.wp === "number" && won) low = Math.min(low, won === d.home ? r.wp : 100 - r.wp);
+  });
+  return { a, h, won, pog: pog && Number(pog.rating) > 0 ? pog : null, changes, big,
+           comeback: won && low < 30 ? Math.max(1, Math.round(low)) : 0, top: recapTop(d, league) };
+}
+function pbpRecapHTML(d, league) {
+  if (!d || (d.live || {}).state !== "final") return "";
+  const f = recapFacts(d, league);
+  if (!f) return "";
+  const lines = [
+    f.pog ? `<li><span>Play of the game</span>${escapeHtml(awayWords(f.pog, league))}<em>${Number(f.pog.rating).toFixed(1)}</em></li>` : "",
+    f.comeback ? `<li><span>Comeback</span>${escapeHtml(f.won)} won after falling to ${f.comeback}% to win</li>` : "",
+    f.changes ? `<li><span>Lead changes</span>${f.changes}${f.big.n ? ` · biggest lead ${escapeHtml(f.big.side)} by ${f.big.n}` : ""}</li>`
+      : f.big.n ? `<li><span>Biggest lead</span>${escapeHtml(f.big.side)} by ${f.big.n}</li>` : "",
+    f.top ? `<li><span>Best line</span>${escapeHtml(f.top)}</li>` : "",
+  ].filter(Boolean);
+  if (!lines.length) return "";
+  const text = `${d.away} ${f.a}–${f.h} ${d.home}, final. ${f.pog ? `Play of the game: ${awayWords(f.pog, league)}. ` : ""}${
+    f.comeback ? `${f.won} won after falling to ${f.comeback}% to win. ` : ""}${f.top ? `Best line: ${f.top}.` : ""}`;
+  return `<div class="card pbp-recap">
+    <div class="pbp-rail-head">The game in 30 seconds <button type="button" class="pbp-recap-share" data-recap-share="${escapeAttr(text)}">Share</button></div>
+    <div class="pbp-recap-final">${escapeHtml(d.away)} <b>${f.a}</b> – <b>${f.h}</b> ${escapeHtml(d.home)}<span>Final</span></div>
+    <ul class="pbp-recap-list">${lines.join("")}</ul></div>`;
+}
+if (typeof window !== "undefined" && !window._recapBound) {
+  window._recapBound = true;
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("[data-recap-share]");
+    if (!b) return;
+    const text = `${b.dataset.recapShare} ${location.href}`;
+    try {
+      if (navigator.share) { await navigator.share({ title: "Qellys Book", text }); return; }
+      await navigator.clipboard.writeText(text);
+      b.textContent = "Copied";
+    } catch (err) { /* the reader closed the sheet */ }
+  });
+}
+
 /* CALL IT (2026-10-25, engine/callit). Before each at-bat or drive the
    reader calls how it ends; the box grades it off this game's own file a
    few seconds later, and the room keeps score. Free — no money, no prices,
    nothing the model thinks. The card is drawn from the last answer on every
    redraw, so it never blinks, and asks again at most every five seconds. */
 const _ci = { key: "", at: 0, v: null, note: "" };
-const CI_LEAGUES = new Set(["mlb", "nfl", "cfb"]);
+const CI_LEAGUES = new Set(["mlb", "nfl", "cfb", "nba", "wnba", "nhl"]);
 const CI_WORD = { hit: "Hit", out: "Out", k: "Strikeout", walk: "Walk",
-                  td: "Touchdown", fg: "Field goal", punt: "Punt", turnover: "Turnover" };
+                  td: "Touchdown", fg: "Field goal", punt: "Punt", turnover: "Turnover",
+                  three: "Three", two: "Two", ft: "Free throw",
+                  goal: "Goal", save: "Save", block: "Blocked", miss: "Missed" };
 function pbpCallItHTML(d, league) {
   if (!CI_LEAGUES.has(league) || (d.live || {}).state !== "live") return "";
   const key = `${league}/${d.event_id}`;
@@ -3702,6 +3859,9 @@ async function renderPbpPage(tick) {
   const way = pbpBack();
   const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">${way.label}</button>`;
   const wire = () => {
+    // The game chat's card under the scoreboard (js/chat.js chatEntryPaint),
+    // filled the moment the page is drawn, whichever layout drew it.
+    if (typeof chatEntryPaint === "function") chatEntryPaint();
     const b = document.getElementById("pbp-back");
     if (b) b.addEventListener("click", () => { markBackNav(); switchView(way.view); });
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>
@@ -3889,7 +4049,8 @@ async function renderPbpPage(tick) {
     loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });
   }
   // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
-  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire })) { if (lv.state === "live") again(); return; }
+  // Call it rides in on the basketball and hockey pages too, under the arena (pbpCallItHTML).
+  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) { if (lv.state === "live") again(); return; }
   const panel = tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
@@ -3922,6 +4083,8 @@ async function renderPbpPage(tick) {
           ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
           ${pbpNewInjuriesHTML(d)}${pbpBirthdaysHTML(d)}
         </div>
+        ${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
+        <div class="gch-entry-slot"></div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
           ${pbpParkHTML(d, league, boardGame, lastPlay)}

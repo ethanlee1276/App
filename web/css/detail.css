@@ -703,3 +703,27 @@
 .ci-meta, .ci-note { margin: 0; }
 .ci-board { margin: 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--text-mute); }
 .ci-board b { color: var(--text); }
+
+/* While you were away (pbpAwayHTML): the score then and now, the swing, the biggest plays since. */
+.pbp-away { display: grid; gap: 6px; border-color: color-mix(in oklab, var(--brand) 40%, var(--border)); }
+.pbp-away .pbp-rail-head { display: flex; align-items: center; gap: 8px; }
+.pbp-away-x { margin-left: auto; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--fill-hover);
+  color: var(--text-mute); font: inherit; font-size: var(--fs-md); cursor: pointer; }
+.pbp-away-sum { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-sm); color: var(--text-dim); }
+.pbp-away-sum b { color: var(--text); font-family: var(--font-mono); }
+.pbp-away-list { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: var(--fs-sm); color: var(--text-body); }
+.pbp-away-list li.is-score { color: var(--good); font-weight: 700; }
+
+/* The game in 30 seconds (pbpRecapHTML): a finished game's story on one card. */
+.pbp-recap { display: grid; gap: 8px; }
+.pbp-recap .pbp-rail-head { display: flex; align-items: center; gap: 8px; }
+.pbp-recap-share { margin-left: auto; padding: 4px 12px; border-radius: 999px; border: var(--hairline) solid var(--border);
+  background: transparent; color: var(--brand-2); font: inherit; font-size: var(--fs-xs); font-weight: 800; cursor: pointer; }
+.pbp-recap-final { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-lg); font-weight: 700; }
+.pbp-recap-final b { font-family: var(--font-mono); font-size: var(--fs-xl); }
+.pbp-recap-final span { margin-left: auto; font-size: var(--fs-2xs); font-weight: 900; color: var(--text-mute); text-transform: uppercase; letter-spacing: .08em; }
+.pbp-recap-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.pbp-recap-list li { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr) auto; gap: 8px; align-items: baseline;
+  font-size: var(--fs-sm); color: var(--text-body); }
+.pbp-recap-list li span { font-size: var(--fs-2xs); font-weight: 800; color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
+.pbp-recap-list li em { font-style: normal; font-family: var(--font-mono); font-weight: 800; color: var(--brand-2); }

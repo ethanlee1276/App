@@ -464,6 +464,39 @@ def live_state(leg: dict, fast_dir=None, now: float | None = None) -> dict | Non
     return out
 
 
+def room_tickets(tickets, league: str, home: str, away: str, fast_dir=None,
+                 now: float | None = None) -> list:
+    """Each saved ticket's legs in ONE game, with where each stands off the
+    box (``live_state``): the score's state, his number so far, won or
+    lost. The free half of following a slip, for the game chat's "Your
+    tickets" (js/chat.js chatDrawTix) — none of the chance, the hedge or
+    the cash-out, which are the membership's (server ``_ask_track``)."""
+    out = []
+    for t in (tickets or [])[:10]:
+        if not isinstance(t, dict):
+            continue
+        legs = []
+        all_legs = [x for x in (t.get("legs") or [])[:12] if isinstance(x, dict)]
+        for leg in all_legs:
+            if str(leg.get("league") or leg.get("sport") or "").lower() != league:
+                continue
+            if not (_teams(leg) & {home, away}):
+                continue
+            # A slip read writes OVER as often as over; the result reads lower.
+            side = str(leg.get("side") or "").lower()
+            st = live_state(dict(leg, league=league, side=side), fast_dir, now) or {}
+            if st.get("home") and {st.get("home"), st.get("away")} != {home, away}:
+                continue
+            legs.append({"player": str(leg.get("player") or leg.get("team") or "")[:60],
+                         "market": str(leg.get("market") or "")[:24], "side": str(leg.get("side") or "")[:8],
+                         "line": _num(leg.get("line")), "current": st.get("current"),
+                         "result": st.get("result"), "state": st.get("state") or ""})
+        if legs:
+            out.append({"id": str(t.get("id") or "")[:40], "desc": str(t.get("desc") or "")[:160],
+                        "legs": legs, "of": len(all_legs)})
+    return out
+
+
 def _nhl_box(base: Path, game: dict, now: float | None = None) -> dict | None:
     """The hockey game's skater rows from the loop's own box file, in the
     shape `_player_stats` reads (a `players` list). A file the loop has

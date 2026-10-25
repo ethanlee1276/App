@@ -49,7 +49,47 @@ def test_one_unit_open_locked_once_under_way():
     assert nfl["unit"] == "dr2" and nfl["prompt"] == "KC's drive"
     assert CI.open_unit(_nfl(plays=3)) is None
     assert CI.open_unit(dict(_mlb(), live={"state": "final"})) is None
-    assert CI.open_unit({"league": "nba", "event_id": "1", "live": LIVE}) is None
+    assert CI.open_unit({"league": "nfl2", "event_id": "1", "live": LIVE}) is None
+
+
+def _hoops(plays, state="live"):
+    return {"league": "nba", "event_id": "8", "live": {"state": state}, "plays": plays}
+
+
+def _p(pid, event="Jump Shot", points=0, scoring=False, shot=False):
+    return {"id": pid, "event": event, "points": points, "scoring": scoring, "shot": shot}
+
+
+def test_basketball_calls_the_next_points_and_hockey_the_next_shot():
+    assert CI.open_unit(_hoops([]))["unit"] == "sc0", "before any score, the first one"
+    plays = [_p("1", points=2, scoring=True), _p("2", "Defensive Rebound")]
+    op = CI.open_unit(_hoops(plays))
+    assert op["unit"] == "sc1" and [k for k, _ in op["choices"]] == ["three", "two", "ft"]
+    assert CI.open_unit(_hoops(plays + [_p("3", "Turnover"), _p("4", "Steal")])) is None, "locked two plays in"
+    later = plays + [_p("3", "Turnover"), _p("4", "Free Throw", points=1, scoring=True)]
+    assert CI.result_of(_hoops(later), "sc1") == "ft" and CI.result_of(_hoops(plays), "sc1") == ""
+    assert CI.result_of(_hoops(later), "sc0") == "two" and CI.result_of(_hoops(later), "sc99") == "void"
+    three = plays + [_p("5", "Three Point Jumper", points=3, scoring=True)]
+    assert CI.result_of(_hoops(three), "sc1") == "three"
+    nhl = lambda rows: {"league": "nhl", "event_id": "4", "live": {"state": "live"}, "plays": rows}  # noqa: E731
+    rows = [_p("10", "Faceoff"), _p("11", "Shot", shot=True), _p("12", "Hit")]
+    assert CI.open_unit(nhl(rows))["unit"] == "sh11"
+    for ev, want in (("Blocked Shot", "block"), ("Missed Shot", "miss"), ("Shot", "save"), ("Goal", "goal")):
+        r = _p("13", ev, shot=True, scoring=(ev == "Goal"))
+        assert CI.result_of(nhl(rows + [r]), "sh11") == want, ev
+
+
+def test_a_call_open_when_the_game_ends_is_void():
+    conn, (a,) = _users(1)
+    try:
+        doc = _hoops([_p("1", points=2, scoring=True)])
+        assert CI.call(conn, a, doc, "sc1", "three", now=1.0)[0] == 200
+        CI.grade(conn, doc)
+        assert CI.state(conn, a, doc).get("last") is None, "still open"
+        CI.grade(conn, dict(doc, live={"state": "final"}))
+        assert CI.state(conn, a, dict(doc, live={"state": "final"}))["last"]["result"] == "void"
+    finally:
+        conn.close()
 
 
 def test_how_a_unit_ended():
@@ -138,7 +178,7 @@ def test_the_server_reads_only_a_league_it_plays_and_an_id_of_digits():
         h._send = lambda code, body, kind=".json", headers=None: out.update(code=code, body=json.loads(body))
         h._account = lambda conn: None
         try:
-            for bad in ("nba/9", "mlb/../x", "mlb/9a", "mlb/", "mlb/12345678901234567"):
+            for bad in ("nfl2/9", "mlb/../x", "mlb/9a", "mlb/", "mlb/12345678901234567", "soccer/1"):
                 h._callit(bad)
                 assert out["code"] == 404, bad
             h._callit("mlb/9")
@@ -152,6 +192,9 @@ def test_the_server_reads_only_a_league_it_plays_and_an_id_of_digits():
 def test_the_page_the_privacy_page_and_deletion():
     det = (ROOT / "web" / "js" / "detail.js").read_text()
     assert "${pbpCallItHTML(d, league)}" in det
+    assert "pbpCallItHTML(d, league) })) {" in det, "the basketball page draws its own layout"
+    for page in ("hoopscast.js", "rinkcast.js"):
+        assert '${(ctx && ctx.callit) || ""}' in (ROOT / "web" / "js" / page).read_text(), page
     fn = det[det.index("function ciBodyHTML("):det.index("function ciPaint(")]
     assert "escapeHtml(v.open.prompt)" in fn and "escapeHtml(r.handle)" in fn and "escapeHtml(label)" in fn
     assert 'if (typeof window !== "undefined" && !window._ciBound)' in det
@@ -160,7 +203,7 @@ def test_the_page_the_privacy_page_and_deletion():
     priv = (ROOT / "web" / "privacy.html").read_text()
     assert "<code>callit_calls</code>" in priv
     acc = (ROOT / "engine" / "accounts.py").read_text()
-    assert '"callit_calls"):' in acc[acc.index("def delete_user("):acc.index("def export_user(")]
+    assert '"callit_calls",' in acc[acc.index("def delete_user("):acc.index("def export_user(")]
     assert 'out["call_it_calls"] = calls' in acc
 
 

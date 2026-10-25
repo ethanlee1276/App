@@ -956,7 +956,7 @@
   function pageHTML(d, ctx) {
     const k = facts(d, ctx);
     return `<div class="rc" data-league="nhl">
-      <div class="rc-top">${scoreboardHTML(d, k)}${stageHTML(d, k)}</div>
+      <div class="rc-top">${scoreboardHTML(d, k)}<div class="gch-entry-slot"></div>${stageHTML(d, k)}${(ctx && ctx.callit) || ""}</div>
       ${rightHTML(d, k)}
       <div class="rc-low">${statsCardHTML(d, k)}${lineupHTML(d, k)}</div>
       ${oddsCardHTML(d, k)}</div>`;

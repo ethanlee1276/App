@@ -66,6 +66,28 @@ or two the first time. After the steps above:
    pick). The lock screen: open the Live tab with a saved parlay and tap
    **On my lock screen**.
 
+## Your players on the widget (2026-10-25)
+
+A second widget, **Your players**, shows the players the account follows
+with their lines in today's games, on the Home Screen (small, medium) and
+the lock screen (the rectangle and the line above the clock). A widget
+cannot sign in, so the app hands it a key through an App Group:
+
+1. In Xcode, select the **App** target → Signing & Capabilities → **+
+   Capability** → **App Groups**, and add `group.com.qellysbook.app`. Do the
+   same on the **QellysWidgets** target, with the same group ticked.
+2. Drag `native/Shared/WidgetKey.swift` into the project with **both**
+   targets ticked, `native/App/WidgetKeyPlugin.swift` into the App target,
+   and `native/Widget/YourPlayersWidget.swift` into the widget target.
+   (`MainViewController.swift` and `QellysWidgets.swift` already list them.)
+3. Build to a phone, sign in, follow a player or two, then Settings →
+   **iPhone widget** → on. Long-press the Home Screen → **+** → Qellys →
+   **Your players**; for the lock screen, long-press it → Customize → the
+   widget row under the clock.
+
+Turning it off in Settings deletes the key on the box (the widget then says
+how to turn it on); signing out in the app clears it from the phone.
+
 The lock screen is updated by the box with the same Apple key as the alerts
 (`QB_APNS_*` above): push type `liveactivity`, topic
 `com.qellysbook.app.push-type.liveactivity` (engine/webpush.apns_live). No

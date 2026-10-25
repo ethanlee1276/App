@@ -1246,6 +1246,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._callit(parsed.path[len("/api/callit/"):].strip("/"))
         if parsed.path.startswith("/api/calendar/"):
             return self._calendar_get(parsed.path[len("/api/calendar/"):].strip("/"))
+        if parsed.path in ("/api/widget/mine", "/api/widget/mine/"):
+            return self._widget_mine((parse_qs(parsed.query).get("k") or [""])[0])
         if parsed.path in ("/api/widget", "/api/widget/"):
             # The iPhone widget's few numbers (engine/widgetfeed): the free
             # record, last night, and today's pick counts — never a pick.
@@ -1397,6 +1399,7 @@ class Handler(BaseHTTPRequestHandler):
                 or parsed.path.startswith("/api/chat/")
                 or parsed.path.startswith("/api/alerts/")
                 or parsed.path.startswith("/api/callit/")
+                or parsed.path in ("/api/widget/key", "/api/widget/key/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
                 or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
                 or parsed.path in ("/api/mybets/closes", "/api/mybets/closes/")
@@ -1420,6 +1423,8 @@ class Handler(BaseHTTPRequestHandler):
                     parsed.path[len("/api/alerts/"):].strip("/"), body)
             if parsed.path.startswith("/api/callit/"):
                 return self._callit(parsed.path[len("/api/callit/"):].strip("/"), body)
+            if parsed.path.startswith("/api/widget/key"):
+                return self._widget_key(body)
             if parsed.path.startswith("/api/parlay/check"):
                 return self._parlay_check(body)
             if parsed.path.startswith("/api/parlay/build"):
@@ -3044,6 +3049,44 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def _widget_mine(self, key: str):
+        """The account's own iPhone widget (engine/widgetfeed.mine): the key
+        is the address, as the calendar's is, so a wrong or replaced one is
+        a plain 404."""
+        from engine import widgetfeed as WF
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "widget"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            out = WF.mine(conn, key)
+            if out is None:
+                return self._send(404, b'{"error":"not a widget key (turning it on again makes a new one)"}', ".json")
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _widget_key(self, body: dict):
+        """POST /api/widget/key: the signed-in account's widget key (the app
+        puts it where the widget reads it); ``{"new": true}`` replaces it,
+        ``{"off": true}`` deletes it and the widget stops answering."""
+        from engine import widgetfeed as WF
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "widget"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if body.get("off"):
+                WF.key_off(conn, who["id"])
+                return self._send(200, b'{"ok": true, "off": true}', ".json")
+            key = WF.key_for(conn, who["id"], new=bool(body.get("new")))
+            return self._send(200, json.dumps({"key": key}).encode(), ".json")
+        finally:
+            conn.close()
+
     def _callit(self, path: str, body: dict | None = None):
         """CALL IT (engine/callit): GET the game's open call, its grades and
         the room's best; POST a call. ``path`` is ``{league}/{event id}``,
@@ -3051,7 +3094,7 @@ class Handler(BaseHTTPRequestHandler):
         and an id of digits, nothing else reaches the disk."""
         from engine import callit as CI
         league, _, event = path.partition("/")
-        if (league not in ("mlb",) + CI.FOOTBALL) or not event.isdigit() or len(event) > 14:
+        if league not in CI.LEAGUES or not event.isdigit() or len(event) > 14:
             return self._send(404, b'{"error":"no such game"}', ".json")
         try:
             doc = json.loads((WEB / "data" / "pbp" / f"{league}_{event}.json").read_text())
@@ -3067,7 +3110,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(out).encode(), ".json")
             if not who:
                 return self._send(401, b'{"error":"Make a free account to play Call it."}', ".json")
-            code, out = CI.call(conn, who["id"], doc, str(body.get("unit") or "")[:12],
+            code, out = CI.call(conn, who["id"], doc, str(body.get("unit") or "")[:40],
                                 str(body.get("call") or "")[:12])
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
@@ -3297,6 +3340,27 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def _chat_ticket(self, body: dict):
+        """YOUR TICKETS IN THIS GAME (engine/sliplive.room_tickets): the
+        reader's own saved slips from My Bets, each leg in this room's game
+        with the box's number — the score's facts, free, no account needed
+        (the tickets live on the reader's device). Never the chance."""
+        from engine import sliplive as SL
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "ticket"):
+            return
+        room = str(body.get("room") or "")
+        m = re.fullmatch(r"(nfl|cfb|nba|wnba|nhl|mlb)_(\d{1,14})", room)
+        if not m:
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        try:
+            doc = json.loads((WEB / "data" / "pbp" / f"{room}.json").read_text())
+            home, away = str(doc.get("home") or ""), str(doc.get("away") or "")
+        except Exception:                                    # noqa: BLE001
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        tickets = body.get("tickets") if isinstance(body.get("tickets"), list) else []
+        out = SL.room_tickets(tickets, m.group(1), home, away)
+        return self._send(200, json.dumps({"tickets": out}).encode(), ".json")
+
     def _chat_get(self, path: str, q: dict):
         """The game chat (engine/gamechat). Open to read; the founder's
         queue of reported messages behind the feed's moderation door."""
@@ -3339,8 +3403,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _chat_post(self, path: str, body: dict):
         from engine import gamechat as GC
-        if path not in ("send", "react", "play", "vote", "report", "delete", "hide"):
+        if path not in ("send", "react", "play", "vote", "report", "delete", "hide", "ticket"):
             return self._send(404, b'{"error":"unknown chat endpoint"}', ".json")
+        if path == "ticket":
+            return self._chat_ticket(body)
         A = _acct()
         conn = A.connect()
         try:

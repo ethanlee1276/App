@@ -904,7 +904,12 @@ def delete_user(conn, user_id: int) -> None:
                   # (engine/redeem), likewise cascade-only until now.
                   "code_redemptions", "code_attempts",
                   # Call it's calls on live games (engine/callit).
-                  "callit_calls"):
+                  "callit_calls",
+                  # The calendar link's salt (engine/calfeed), which had
+                  # been left behind, and the iPhone widget's
+                  # (engine/widgetfeed): with the row gone, neither address
+                  # answers again.
+                  "calendar_links", "widget_links"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     if "chat_msgs" in have:
@@ -1057,6 +1062,13 @@ def export_user(conn, user_id: int) -> dict:
                                                "WHERE user_id=? ORDER BY at", (int(user_id),))]
         if calls:
             out["call_it_calls"] = calls
+    # The two links exist or not; their values are keys, not data, and are
+    # never exported (a copy of the file would open the calendar).
+    for table, label in (("calendar_links", "calendar_link_made"), ("widget_links", "iphone_widget_on_since")):
+        if table in have:
+            row = conn.execute(f"SELECT made FROM {table} WHERE user_id=?", (int(user_id),)).fetchone()
+            if row:
+                out[label] = row[0]
     return out
 
 

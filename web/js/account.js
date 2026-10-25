@@ -2770,6 +2770,7 @@ function setListHTML() {
               attrs: 'data-set-open="fantasy"' }),
     setItem({ ico: "calendar", tone: "amber", title: "Calendar",
               val: !inn ? "Sign in" : _calLink ? "On" : "Off", chev: true, attrs: 'data-set-open="calendar"' }),
+    ...widgetRows(inn),
   ], "Read-only, and none of them asks for a platform password."));
   out.push(setGroup("Help", [
     setItem({ ico: "compass", title: "Show me around", attrs: 'data-set-tour="1"' }),
@@ -2964,6 +2965,56 @@ function notifGroupHTML() {
     foot = "Could not read your email settings.";
   }
   return setGroup("Notifications", rows, foot);
+}
+
+/* YOUR PLAYERS ON THE IPHONE WIDGET (engine/widgetfeed, deploy/ios/native):
+   only inside the iPhone app, where its WidgetKey plugin is. On asks the box
+   for the account's widget key and hands it to the app, which leaves it
+   where the widget reads it; off deletes the key on the box and clears the
+   phone. Signing out clears the phone too (app.js acctSignOut). */
+const widgetPlugin = () => {
+  const C = typeof window !== "undefined" && window.Capacitor;
+  return C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.WidgetKey;
+};
+let _widgetOn = null;
+function widgetRows(inn) {
+  const P = widgetPlugin();
+  if (!P || !inn) return [];
+  if (_widgetOn === null) {
+    _widgetOn = false;
+    Promise.resolve(P.status()).then((r) => {
+      _widgetOn = !!(r && r.on);
+      const sw = document.querySelector("[data-widget-switch]");
+      if (sw) sw.setAttribute("aria-checked", String(_widgetOn));
+    }).catch(() => {});
+  }
+  return [setItem({ tag: "label", ico: "bell", tone: "amber", title: "iPhone widget",
+                    sub: "Your players on the Home Screen and lock screen",
+                    end: setSwitch(_widgetOn, 'data-widget-switch="1"') })];
+}
+async function widgetFlip(sw) {
+  const P = widgetPlugin();
+  if (!P) return;
+  const on = !_widgetOn;
+  sw.setAttribute("aria-checked", String(on));
+  try {
+    const r = await fetch("/api/widget/key", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(on ? {} : { off: true }) });
+    const got = r.ok ? await r.json() : null;
+    if (!got) throw new Error("refused");
+    if (on) await P.set({ key: got.key });
+    else await P.clear();
+    _widgetOn = on;
+  } catch (e) {
+    sw.setAttribute("aria-checked", String(!!_widgetOn));
+  }
+}
+if (typeof window !== "undefined" && !window._widgetBound) {
+  window._widgetBound = true;
+  document.addEventListener("click", (e) => {
+    const sw = e.target.closest && e.target.closest("[data-widget-switch]");
+    if (sw) { e.preventDefault(); widgetFlip(sw); }
+  });
 }
 
 /* YOUR GAMES IN YOUR CALENDAR (engine/calfeed, docs/IDEAS.md 12): your
