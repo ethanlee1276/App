@@ -102,6 +102,75 @@ def test_in_a_browser_every_page_opens_clean_on_every_screen():
     assert not failures, failures
 
 
+def test_a_second_switch_before_the_first_finishes_raises_nothing():
+    """The check above found this one, but only by luck: the Account page
+    happened to render slowly enough that its view transition was still
+    running when the walk moved on, and the skipped transition's rejected
+    `ready` promise came out as an unhandled rejection. Had Account been a
+    little faster the walk would have passed and the bug would have stayed.
+
+    A mouse reaches it on purpose — two nav clicks in quick succession —
+    so pin the cause directly instead of the page that exposed it.
+
+    The first version of this test set `location.hash` twice 30ms apart,
+    and it PASSED against the unfixed code on an idle machine: whether the
+    second switch lands while the first transition is still running
+    depends on how fast the box is, so the test proved nothing it claimed
+    to. Drive the two switches in one task instead. The spec is explicit
+    that a `startViewTransition` with one already pending skips the
+    pending one, so the overlap is guaranteed rather than raced for, and
+    the test reads the same on a loaded CI box and on his laptop."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("      (skipped: no Playwright)")
+        return
+    import rendercheck
+    body = json.dumps(_board())
+    srv, port = rendercheck._serve()
+    errors = []
+    try:
+        with sync_playwright() as pw:
+            kw = {"args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]}
+            if os.path.exists("/opt/pw-browsers/chromium"):
+                kw["executable_path"] = "/opt/pw-browsers/chromium"
+            browser = pw.chromium.launch(**kw)
+            try:
+                # Desktop: is_mobile/has_touch off, so neither of the two
+                # opt-outs in switchView applies and the transition runs.
+                ctx = browser.new_context(viewport={"width": 1280, "height": 800},
+                                          is_mobile=False, has_touch=False,
+                                          service_workers="block")
+                page = ctx.new_page()
+                page.on("pageerror", lambda e: errors.append(str(e)[:200]))
+                page.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
+                for pat in ("**/api/recommendations*", "**/data/recommendations*.json*"):
+                    page.route(pat, lambda r: r.fulfill(status=200, content_type="application/json", body=body))
+                page.goto(f"http://127.0.0.1:{port}/index.html", wait_until="load")
+                page.wait_for_timeout(1000)
+                # Both of these are the reason the check works at all: no
+                # View Transitions, or a switchView that is not reachable,
+                # and the two calls below would raise nothing no matter
+                # how the transition is handled.
+                assert page.evaluate("typeof document.startViewTransition === 'function'"), \
+                    "this browser has no View Transitions, so the check below proves nothing"
+                assert page.evaluate("typeof switchView === 'function'"), \
+                    "switchView is no longer reachable; this check is now vacuous"
+                errors.clear()
+                for a, b in (("standings", "account"), ("account", "recommended")):
+                    page.evaluate(f"switchView('{a}'); switchView('{b}');")
+                    page.wait_for_timeout(1200)
+                ctx.close()
+            finally:
+                browser.close()
+    finally:
+        srv.shutdown()
+    assert not errors, errors
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

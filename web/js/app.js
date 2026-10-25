@@ -24017,7 +24017,17 @@ function switchView(name, push = false) {
       && !(window.matchMedia
            && (matchMedia("(prefers-reduced-motion: reduce)").matches
                || matchMedia("(pointer: coarse)").matches))) {
-    document.startViewTransition(go);
+    // Switch again before this one has finished — two nav clicks in quick
+    // succession, which a mouse makes easy — and the browser skips the
+    // transition in flight. A skipped transition REJECTS its `ready`
+    // promise (AbortError), and nothing was holding that promise, so it
+    // surfaced as an unhandled rejection: the page was fine, but the store
+    // app's crash check counts one, and a console full of them hides the
+    // next real error. Being overtaken is the normal outcome here, not a
+    // fault, so swallow that one promise and leave `updateCallbackDone`
+    // uncaught — if `go` itself throws, we still want to hear about it.
+    const vt = document.startViewTransition(go);
+    if (vt && vt.ready && typeof vt.ready.catch === "function") vt.ready.catch(() => {});
     return;
   }
   go();
