@@ -10186,6 +10186,11 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   animation: boot-hide 0s linear 4s forwards, shimmer 1.3s ease-in-out infinite; }
 @keyframes boot-hide { to { display: none; height: 0; margin: 0; } }
 @media (prefers-reduced-motion: reduce) { html.booting main::before { animation: boot-hide 0s linear 4s forwards; } }
+/* A page's own code on its way, the first time it opens (app.js roomWait). */
+.room-wait { height: min(60vh, 520px); margin: 14px 0; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border-soft); background: var(--skeleton); background-size: 220% 100%;
+  animation: shimmer 1.3s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .room-wait { animation: none; } }
 /* The Live page's scoreboard waits on the live feeds; until they answer it
    holds the place its quiet state takes, so the bets under it stay put. */
 .lv-hold { height: 172px; margin-bottom: 14px; }

@@ -20,6 +20,8 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DM 2>&1 | tee /tmp/dm.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DN 2>&1 | tee /tmp/dn.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN 2>&1 | tee /tmp/dn.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DO 2>&1 | tee /tmp/do.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO 2>&1 | tee /tmp/do.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -51,8 +53,8 @@
 # reset-day setting, CW's fantasy fit (--save), DA's inventions run (it saves
 # their verdicts, and runs itself every Thursday), CZ's linemen study (it
 # fetches any old season's files it lacks; already run, nothing applied),
-# DM's pushalerts --send (it records and sends what is owed), DN's Caddyfile
-# install (it reloads the web server).
+# DM's pushalerts --send (it records and sends what is owed), DN's and DO's
+# Caddyfile install (it reloads the web server).
 set -u
 
 ONLY=""
@@ -407,6 +409,11 @@ curl -s https://qellysbook.com/api/widget | python3 -m json.tool | head -30
 curl -s -o /dev/null -D - -H 'Accept-Encoding: zstd, gzip' https://qellysbook.com/js/app.js | grep -i '^content-encoding'
 curl -s https://qellysbook.com/sw.js | grep -c 'const LAZY'
 curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/js/fantasy.js
+SH
+run DO "The pages' own files, the trimmed copy, this version live" 120 <<'SH'
+for f in js/record.js js/detail.js js/account.js js/more.js css/record.css css/detail.css css/account.css css/more.css; do printf '%s ' $f; curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/$f; done
+curl -s https://qellysbook.com/css/more.css | wc -c; wc -c < /srv/qellys/web/css/more.css
+curl -s https://qellysbook.com/ | grep -c 'id="likely-board"'
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

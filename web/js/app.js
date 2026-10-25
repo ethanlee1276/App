@@ -2858,10 +2858,14 @@ const _paidInflight = new Map();
 async function paidFetch(name) {
   let ask = _paidInflight.get(name);
   if (!ask) {
+    // The light copy boot.js asked for with the page, taken once.
+    const early = typeof QB_EARLY_BOARD !== "undefined" && QB_EARLY_BOARD && QB_EARLY_BOARD.name === name
+      ? QB_EARLY_BOARD.ask : null;
+    if (early) QB_EARLY_BOARD = null;
     ask = (async () => {
       if (_paidDenied !== boardMemWho()) {
         try {
-          const res = await boardFetch("/api/board/" + name);
+          const res = await (early || boardFetch("/api/board/" + name));
           if (res.ok) return res;
           if (res.status === 401 || res.status === 402) _paidDenied = boardMemWho();
         } catch (e) { /* no API here — the static copy is the honest fallback */ }
@@ -18127,12 +18131,29 @@ function loadRoom(js, css) {
   }
   return rooms.get(js);
 }
+/* A PAGE'S OWN CODE ON ITS WAY (2026-10-25). The first time a page opens in
+   a browser tab its file is fetched, and on a slow network that was a blank
+   page for a moment. A shimmer holds the page's place once the wait is long
+   enough to see (a quick load never flashes one), and goes the moment the
+   page draws or says it could not load. */
+const ROOM_WAIT_MS = 150;
 function roomCall(stub, name, js, css, args) {
+  const cold = !(window._qbRooms && window._qbRooms.has(js));
+  let wait = null;
+  const timer = cold ? setTimeout(() => { wait = roomWait(); }, ROOM_WAIT_MS) : 0;
   return loadRoom(js, css).then((ok) => {
+    clearTimeout(timer);
+    if (wait) wait.remove();
     if (ok && window[name] !== stub) return window[name](...args);
     if (!ok) roomFailed();
     return null;
   });
+}
+function roomWait() {
+  const v = document.querySelector(".view.active");
+  if (!v || v.querySelector(".room-wait")) return null;
+  v.insertAdjacentHTML("beforeend", `<div class="room-wait" role="status" aria-label="Loading this page"></div>`);
+  return v.querySelector(".room-wait");
 }
 /* A room that could not arrive (no signal, and not yet in the app's copy)
    says so on the page that asked for it, rather than leaving it blank;

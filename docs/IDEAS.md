@@ -45,6 +45,12 @@ holds still, Liquid Glass on the Duo. The rest, best value first:
    lines) and its styles moved to fantasy.js/fantasy.css, the meme pages'
    styles to memes.css: app.js 494 → 451 KB gz, a first visit 620 → 570.
    Under 400 still wants the account pages and team pages next.
+   **BUILT IN FULL the same night**: the Record page, the game, pick and
+   play-by-play pages, the account pages and the More menu's rarer pages
+   each load the first time they open (record.js, detail.js, account.js,
+   more.js; app.js loadRoom, with a reload rather than a mix of versions
+   when a new one is out): app.js 451 → 284 KB gz, a first visit 570 → 399.
+   tests/test_a_room_loads_when_its_page_opens.py.
 3. **The first game's stadium photo** is the largest thing on the first
    screen and lands last (3.3 s on a slow phone). Preload it as soon as the
    board says which it is, or paint a 1 KB blurred copy first. *An hour.*
@@ -56,6 +62,12 @@ holds still, Liquid Glass on the Duo. The rest, best value first:
    nothing (Chromium's coverage tool lists them). *A day.*
    **PART BUILT 2026-10-24**: 336 rules moved out with the Fantasy and meme
    pages. Dropping unmatched selectors is still open.
+   **BUILT 2026-10-25**: each room's styles moved out with its code
+   (css/record.css, detail, account, more): styles.css 73 → 57 KB gz, a
+   first visit 399 → 383 KB gz. Unmatched selectors: none to drop. The only
+   ones that matched nothing were the chart library's own classes and
+   colour classes built at run time. tests/test_a_rooms_styles_are_its_own.py
+   keeps each room's sheet to classes only that room draws.
 5. **Brotli** instead of gzip for the trimmed files: ~15% fewer bytes. Caddy
    needs a plugin for it, or the files pre-compressed at build. *An hour on
    the box.*
@@ -129,6 +141,12 @@ holds still, Liquid Glass on the Duo. The rest, best value first:
     slower night shows up as a number rather than a feeling. *An hour.*
     **BUILT 2026-10-24** (tools/lighthouse_check.py, the nightly run):
     baseline 67 on Lighthouse's phone setting.
+    **2026-10-25**: accessibility, best practices and SEO are scored in the
+    same runs, and the audit that night fixed what they found (the closed
+    drawer reachable by keyboard, a skipped heading level, five pages whose
+    name an element also had, so a link scrolled past the page's top; a
+    page that shifted as it loaded). The new baseline: performance 81,
+    largest paint 4.9 s, blocked 97 ms, shift 0, accessibility 100, SEO 100.
 
 
 ## The rule this list is filtered through

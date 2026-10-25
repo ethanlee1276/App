@@ -87,3 +87,31 @@ if (QB_STORE_APP && window.MutationObserver) {
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
   })();
 }
+
+/* THE PICKS ASKED FOR WITH THE PAGE (2026-10-25, Lighthouse on a slow phone
+   network). The board's light copy (engine/lightboard) was asked for only
+   once app.js had arrived and run, so the picks landed a download after the
+   page. The league this visit opens is known now (app.js startSport's
+   rules: ?sport=, the kept league, the season), so its light copy is asked
+   for here and app.js's paidFetch takes this answer instead of asking
+   again. Only at the site's root: a clean path names its own league and
+   page, and a wrong guess would cost a download nothing uses. */
+var QB_EARLY_BOARD = null;
+try {
+  (function () {
+    if (!window.fetch || !/^\/(index\.html)?$/.test(location.pathname) || /[?&]static\b/.test(location.search)) return;
+    var light = { nfl: "recommendations_picks.json", mlb: "mlb_recommendations_picks.json", nba: "nba_picks.json",
+                  wnba: "wnba_picks.json", cfb: "cfb_picks.json", nhl: "nhl_picks.json" };
+    var sport = (location.search.match(/[?&]sport=([a-z]+)/) || [])[1];
+    if (!light[sport]) {
+      var kept = null;
+      try { kept = localStorage.getItem("qb.sport"); } catch (e) {}
+      var d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate();
+      sport = light[kept] ? kept : md >= 901 || md < 215 ? "nfl" : md < 326 ? "nba" : "mlb";
+    }
+    var name = light[sport];
+    var ask = fetch("/api/board/" + name);
+    ask.catch(function () {});
+    QB_EARLY_BOARD = { name: name, ask: ask };
+  })();
+} catch (e) {}
