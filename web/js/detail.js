@@ -1162,7 +1162,7 @@ function tapeTier(r, n = 32) {
     : q <= 0.75 ? ["", "Below avg"] : ["bad", "Weak"];
 }
 
-function tapeCell(r, n, now) {
+function tapeCell(r, n, now, raw) {
   const t = tapeTier(r, n);
   if (!t) return `<span class="tp-cell">—</span>`;
   /* THIS SEASON ALONE, under the blended rank (engine/gamescan
@@ -1175,8 +1175,20 @@ function tapeCell(r, n, now) {
      wrapped to two left-aligned lines in a 92px cell). */
   const nowLine = now != null
     ? `<small class="tp-now">This season <span class="tp-now-n">${ordinal(now)}</span></small>` : "";
-  return `<span class="tp-cell ${t[0]}"><b>${ordinal(r)}</b><em>${t[1]}</em>${nowLine}</span>`;
+  // The season's own rate, where the raw table used to print it again
+  // (seasonNumbersHTML, TAPE_RAW): the number, and its unadjusted rank when
+  // that is not the rank above it.
+  const rawLine = raw && raw.value != null
+    ? `<small class="tp-now tp-raw">${Math.round(raw.value * 100)}%${raw.rank && raw.rank !== now ? ` · ${ordinal(raw.rank)} raw` : ""}</small>` : "";
+  return `<span class="tp-cell ${t[0]}"><b>${ordinal(r)}</b><em>${t[1]}</em>${nowLine}${rawLine}</span>`;
 }
+
+/* THE RATES BOTH TABLES PRINTED (2026-10-25, the real CIN @ BAL page): the
+   ranks table carried third downs and the red zone, and the raw table
+   under it printed the same four rates again with their own ranks. Each
+   now sits once, in its ranks row: {side: {unit: raw key}}. */
+const TAPE_RAW = { off: { third_down: "third_off", redzone: "rz_off" },
+                   def: { third_down: "third_def", redzone: "rz_def" } };
 
 function tapeVerdict(scan, a, b, side) {
   const ra = ((((scan.units || {})[a] || {})[side] || {}).overall || {}).rank;
@@ -1248,14 +1260,14 @@ const SEASON_NUMBER_ROWS = [["pts_for", "Points scored a game", "n"], ["pts_agai
   ["third_off", "Third-down conversions", "p"], ["third_def", "Third downs allowed", "p"],
   ["rz_off", "Red-zone TD rate", "p"], ["rz_def", "Red-zone TD rate allowed", "p"],
   ["run_rate", "Run rate", "p"], ["sacks", "Sacks a game", "d"]];
-function seasonNumbersHTML(scan, away, home) {
+function seasonNumbersHTML(scan, away, home, drawn = new Set()) {
   const nums = (scan && scan.numbers) || {};
   if (!nums[away] && !nums[home]) return "";
   const fmt = (c, kind) => !c || c.value == null ? "—"
     : kind === "p" ? `${Math.round(c.value * 100)}%` : kind === "d" ? Number(c.value).toFixed(1) : Number(c.value).toFixed(1);
   const cellOf = (t, k, kind) => { const c = (nums[t] || {})[k];
     return `<span class="tp-num">${fmt(c, kind)}${c && c.rank ? ` <em>${ordinal(c.rank)}</em>` : ""}</span>`; };
-  const rows = SEASON_NUMBER_ROWS.filter(([k]) => (nums[away] || {})[k] || (nums[home] || {})[k])
+  const rows = SEASON_NUMBER_ROWS.filter(([k]) => !drawn.has(k) && ((nums[away] || {})[k] || (nums[home] || {})[k]))
     .map(([k, label, kind]) => `<div class="tp-row"><span class="tp-k">${escapeHtml(label)}</span>${cellOf(away, k, kind)}${cellOf(home, k, kind)}</div>`).join("");
   if (!rows) return "";
   const g = Math.max((nums[away] || {}).games || 0, (nums[home] || {}).games || 0);
@@ -1266,25 +1278,31 @@ function scanTapeHTML(scan, away, home) {
   const n = scanTeams(scan);
   const u = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).rank;
   const un = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).now_rank;
+  const nums = scan.numbers || {};
+  const drawn = new Set();
+  const rawOf = (t, side, k) => { const key = (TAPE_RAW[side] || {})[k]; return key ? (nums[t] || {})[key] : null; };
   const group = (side, title) => {
     const rows = SCAN_UNITS.map(([k]) => {
       const ra = u(away, side, k), rh = u(home, side, k);
       if (ra == null && rh == null) return "";
       const label = (TAPE_LABELS[k] || [k, k])[side === "off" ? 0 : 1];
+      const key = (TAPE_RAW[side] || {})[k];
+      if (key && (rawOf(away, side, k) || rawOf(home, side, k))) drawn.add(key);
       return `<div class="tp-row"><span class="tp-k">${escapeHtml(label)}</span>
-        ${tapeCell(ra, n, un(away, side, k))}${tapeCell(rh, n, un(home, side, k))}</div>`;
+        ${tapeCell(ra, n, un(away, side, k), rawOf(away, side, k))}${tapeCell(rh, n, un(home, side, k), rawOf(home, side, k))}</div>`;
     }).join("");
     return rows ? `<div class="tp-group">${title}</div>${rows}` : "";
   };
+  const offense = group("off", "Offense"), defense = group("def", "Defense");
   return `<div class="card ms-tape">
       <div class="tp-verdicts">${tapeVerdict(scan, away, home, "off")}${tapeVerdict(scan, away, home, "def")}</div>
       <p class="tp-basis">${escapeHtml(tapeBasis(scan, away, home))}</p>${tapeChanges(scan, away, home)}
       <div class="tp-row tp-head"><span class="tp-k">Rank of ${n}, 1 = best</span>
         <span class="tp-team">${teamMark(away, 22)}<b>${escapeHtml(teamName(away))}</b></span>
         <span class="tp-team">${teamMark(home, 22)}<b>${escapeHtml(teamName(home))}</b></span></div>
-      ${group("off", "Offense")}
-      ${group("def", "Defense")}
-      ${seasonNumbersHTML(scan, away, home)}
+      ${offense}
+      ${defense}
+      ${seasonNumbersHTML(scan, away, home, drawn)}
     </div>`;
 }
 
@@ -3396,6 +3414,19 @@ async function renderPbpPage() {
     wire();
     again();                                       // it may appear on the next pass
     return;
+  }
+  /* A FINISHED GAME SAYS FINAL (2026-10-25, PIT @ NO in London: the deep
+     file's last write held the scoreboard at "Q4 0:34, live" under a play
+     list that ended "End of Game", and the page read LIVE all afternoon).
+     The league's fast scoreboard, already fetched for the strip, has the
+     final; so does a play list whose last entry is the end of the game. */
+  const fast = (strip || []).find((g) => String(g.event_id) === String(event));
+  const ended = ((d.plays || []).slice(-1)[0] || {}).event === "End of Game";
+  if ((d.live || {}).state === "live" && ((fast && (fast.live || {}).state === "final") || ended)) {
+    // The in-game win chance goes with the clock it was read at: a final
+    // has no "99.9% with 0:34 left".
+    d.live = { ...d.live, ...((fast || {}).live || {}), state: "final", period: "Final", clock: "", detail: "",
+               win_prob: undefined };
   }
   const lv = d.live || {};
   const mark = (abbr) => teamMarkIn(league, abbr, 44);

@@ -77,12 +77,18 @@ CASES = [
     ({"event": "Kickoff", "yards": 25}, "Kickoff, returned 25 yds", True),
     ({"event": "Kickoff", "yards": 0}, "Kickoff", True),
     ({"event": "Kickoff Return Touchdown", "yards": 98}, "Kickoff returned for a touchdown", True),
-    ({"event": "Punt", "yards": 45}, "Punt, 45 yds", True),
-    ({"event": "Punt", "yards": 9}, "Punt", True),
+    # A punt's yards are its RETURN (the real PIT @ NO feed: -3, 0, 20, 13).
+    ({"event": "Punt", "yards": 20}, "Punt, returned 20 yds", True),
+    ({"event": "Punt", "yards": -3}, "Punt", True),
+    # A field goal's yards are the kick's own distance; the spot only fills in.
+    ({"event": "Field Goal Good", "yards": 28, "team": "TB", "spot": 10}, "Field goal good, 28 yds", True),
     ({"event": "Field Goal Good", "yards": 0, "team": "DAL", "spot": 70}, "Field goal good, 47 yds", True),
     ({"event": "Field Goal Missed", "yards": 0, "team": "TB", "spot": 35}, "Field goal missed, 52 yds", True),
     ({"event": "Blocked Field Goal", "yards": 0}, "Field goal blocked", True),
-    ({"event": "Penalty", "yards": 5}, "Penalty, 5 yds", True),
+    ({"event": "Penalty", "yards": -10}, "Penalty on the offense, 10 yds", True),
+    ({"event": "Penalty", "yards": 5}, "Penalty on the defense, 5 yds", True),
+    # A flag on a field-goal try carries the try's distance (4th & 3 at the 19: 37).
+    ({"event": "Penalty", "yards": 37, "down": 4, "team": "TB", "spot": 19}, "Penalty on the field-goal try", True),
     ({"event": "Safety", "yards": 0}, "Safety", True),
     ({"event": "Timeout", "yards": 0}, "Timeout", False),
     ({"event": "End Period", "yards": 0, "period": 1}, "End of the 1st quarter", False),
@@ -105,6 +111,18 @@ def test_every_play_type_reads_as_a_sentence_a_person_would_say():
         # A moment in the game carries no team: nobody "did" a quarter's end,
         # and the feed does not say which side called a timeout.
         assert w["team"] is snap, (play, w)
+
+
+def test_a_tv_timeout_is_not_a_row_at_all():
+    got = _node("""
+      console.log(JSON.stringify([footballWords({event: "Official Timeout"}, {}),
+        playsHTML({home: "DAL", away: "TB", plays: [{kind: "football", event: "Official Timeout", team: "DAL", period: 1, clock: "5:21"}]})]));""")
+    if got is None:
+        print("  SKIP node not installed")
+        return
+    assert got[0]["quiet"] is True and got[0]["snap"] is False
+    assert '<div class="lb-play' not in got[1].replace('<div class="lb-plays">', ""), \
+        "twelve of them in one game, and none says anything"
 
 
 def test_a_timeout_row_names_nobody_and_carries_no_yards_or_down():
@@ -149,6 +167,22 @@ def test_the_photograph_and_the_last_play_card_keep_the_last_real_snap():
     assert "find((p) => isSnap(p, d))" in GC, "the card titles the last snap"
     assert "sinceSnap(d, p)" in GC and "gc-last-since" in GC, "and names the moments after it under it"
     assert '" · penalty"' not in GC
+
+
+def test_a_finished_game_says_final_whatever_the_file_froze_at():
+    """PIT @ NO in London, 2026-10-25: the deep file's last write held the
+    scoreboard at "Q4 0:34, live" under a play list ending "End of Game"."""
+    assert 'const fast = (strip || []).find((g) => String(g.event_id) === String(event));' in DETAIL
+    assert '((d.plays || []).slice(-1)[0] || {}).event === "End of Game"' in DETAIL
+    assert 'state: "final", period: "Final", clock: "", detail: "",' in DETAIL
+    assert "win_prob: undefined" in DETAIL, "no 99.9% with 0:34 left on a final"
+    # …and before `lv` is read, so the header, the board and the gamecast all see it.
+    assert DETAIL.index("const ended = ") < DETAIL.index("const lv = d.live || {};\n  const mark = ")
+
+
+def test_a_punt_is_not_drawn_flying_its_return():
+    assert 'const fly = kind === "fg" || word === "NO GOOD" ? (dir > 0 ? 110 : -10) : null;' in GC
+    assert 'word === "PUNT" && gain >= 15' not in GC
 
 
 def test_the_repeated_pieces_are_gone_on_a_phone():

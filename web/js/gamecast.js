@@ -249,8 +249,10 @@
       const n = Math.round((to - from) * dir);
       const label = td ? (n > 0 ? `+${n} TD` : "TD") : stays ? word : `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)} ${word}`;
       // A punt flies its own yards when they read as a punt's; a kick at the posts flies to them.
-      const fly = kind === "fg" || word === "NO GOOD" ? (dir > 0 ? 110 : -10)
-        : word === "PUNT" && gain >= 15 && gain <= 85 ? Math.max(-10, Math.min(110, from + gain * dir)) : null;
+      // A punt's `yards` is its RETURN (a real game read 2026-10-25: −3, 0,
+      // 20), so it is not drawn as a flight of that length; it sits at its
+      // spot like any kick whose distance the file does not hold.
+      const fly = kind === "fg" || word === "NO GOOD" ? (dir > 0 ? 110 : -10) : null;
       // The down and the distance it was snapped on: the photograph draws
       // each snap's own line to gain.
       const at = (v) => (v != null && isFinite(Number(v)) ? Number(v) : null);
@@ -1151,7 +1153,7 @@
         <b class="gc-last-title">${foot ? playTitle(p, d) : esc(p.event || "Play")}</b>${tag}</div>
         ${winPct(d, league)}</div>
       ${foot && p.team && (!words || words.snap) ? `<div class="gc-last-team">${teamMarkIn(league, p.team, 18)} ${esc(teamNameIn(league, p.team))}${
-        ` <span class="mini">${esc((words && ROLE_WORD[words.role]) || "on offence")}</span>`}</div>` : ""}
+        ` <span class="mini">${esc((words && ROLE_WORD[words.role]) || "on offense")}</span>`}</div>` : ""}
       ${chips ? `<div class="gc-chips">${chips}</div>` : ""}
       <div class="gc-last-foot">${snap ? `<span>${snap}</span>` : ""}${score}</div>${
         since.length ? `<div class="gc-last-since">${since.map((w) => `<span>${esc(w)}</span>`).join("")}</div>` : ""}</div>`;

@@ -568,6 +568,9 @@
   white-space: nowrap; border-top: var(--hairline) solid var(--border-soft); font-family: var(--font-sans);
   font-size: var(--fs-2xs); letter-spacing: .02em; color: var(--text-mute); }
 .tp-cell .tp-now-n { font-weight: 700; color: var(--text-dim); }
+/* The season's own rate under its rank (tapeCell, TAPE_RAW): the same small
+   line, no second rule. */
+.tp-cell .tp-now.tp-raw { margin-top: 0; padding-top: 1px; border-top: 0; }
 .tp-cell.good { border-color: color-mix(in oklab, var(--good) 55%, transparent); }
 .tp-cell.good b, .tp-cell.good em { color: var(--good); }
 .tp-cell.bad { border-color: color-mix(in oklab, var(--bad) 55%, transparent); }

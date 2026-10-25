@@ -213,7 +213,9 @@ def test_a_drive_is_its_snaps_where_they_started_and_where_they_ended():
     # A kickoff's spot is the kicking side's, and a try is no snap: neither is drawn.
     assert [r[1] for r in punt] == ["+6 RUN", "−8 SACK", "PUNT"], punt
     assert punt[0][2:4] == [75, 69] and punt[1][2:4] == [69, 77], "the away side drives toward 0; a sack takes it back"
-    assert punt[2][0] == "kick" and punt[2][5] == 33, "a punt flies its own yards from the snap"
+    # A punt's yards are its return (the real PIT @ NO feed, 2026-10-25:
+    # -3, 0, 20), so it is not flown that far: it sits at its snap.
+    assert punt[2][0] == "kick" and punt[2][5] is None, "a punt is not flown its return's length"
     assert [r[1] for r in td] == ["+4 RUN", "+18 PASS", "+53 TD"] and td[2][3] == 100, "a touchdown runs to the goal line"
     assert pick == [["to", "INT", 60, 60, None, None]], "a turnover stays where the ball was snapped"
     assert [r[0] for r in now] == ["run", "inc", "flag", "loss"]

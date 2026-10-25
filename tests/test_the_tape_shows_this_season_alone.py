@@ -51,7 +51,8 @@ def test_the_card_draws_it_and_says_what_it_is():
     rule = css[css.index(".tp-cell .tp-now {"):].split("}")[0]
     assert "white-space: nowrap" in rule and "text-align: center" in rule and "font-mono" not in rule, \
         "one centred line, never wrapped in mono (Ethan: 'it looks buggy')"
-    assert "${tapeCell(ra, n, un(away, side, k))}${tapeCell(rh, n, un(home, side, k))}" in APP
+    # Since 2026-10-25 a rate both tables printed rides in its cell too (TAPE_RAW).
+    assert "${tapeCell(ra, n, un(away, side, k), rawOf(away, side, k))}${tapeCell(rh, n, un(home, side, k), rawOf(home, side, k))}" in APP
     assert "“This season” under it is this season on its own." in APP
 
 

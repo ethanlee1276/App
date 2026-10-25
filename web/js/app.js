@@ -30416,10 +30416,19 @@ function footballWords(p, g) {
   const spot = Number((p || {}).spot), home = (g || {}).home, away = (g || {}).away;
   const toGoal = (p || {}).spot == null || !isFinite(spot) ? null
     : p.team && p.team === home ? 100 - spot : p.team && p.team === away ? spot : null;
-  const kick = toGoal != null && toGoal >= 0 && toGoal <= 60 ? `, ${Math.round(toGoal + 17)} yds` : "";
+  /* THE NUMBERS AS ESPN MEANS THEM, read off a real game (PIT @ NO,
+     2026-10-25, the London game): a field goal's `yards` is the kick's
+     own distance (28, 38, 47 — the snap's spot plus seventeen came out a
+     yard short), a punt's and a kickoff's are the RETURN (a punt "−3", a
+     punt "0" on a fair catch), and a penalty's are signed for the
+     offence (−5 a false start, −10 a hold). A flag on a field-goal try
+     carries the try's distance instead (a "37" on 4th & 3 at the 19). */
+  const kickDist = y >= 18 && y <= 70 ? y : toGoal != null && toGoal >= 0 && toGoal <= 60 ? Math.round(toGoal + 17) : null;
+  const kick = kickDist != null ? `, ${kickDist} yds` : "";
   const td = { tag: "TD" };
   if (/^timeout$/i.test(e)) return moment("Timeout");
-  if (/official timeout/i.test(e)) return moment("Officials' timeout");
+  // A TV timeout says nothing a reader can use: twelve of them in one game.
+  if (/official timeout/i.test(e)) return { ...moment("TV timeout"), quiet: true };
   if (/^end (period|of quarter)$/i.test(e)) {
     const n = Number(p.period) || 0;
     return moment(n >= 1 && n <= 4 ? `End of the ${FB_PERIOD[n]}` : "End of overtime");
@@ -30433,7 +30442,7 @@ function footballWords(p, g) {
   if (/kickoff/i.test(e)) return at(y > 0 ? `Kickoff, returned ${yds(y)}` : "Kickoff", { role: "receiving" });
   if (/punt.*touchdown/i.test(e)) return at("Punt returned for a touchdown", td);
   if (/blocked punt/i.test(e)) return at("Punt blocked", { role: "punting" });
-  if (/punt/i.test(e)) return at(y >= 15 && y <= 85 ? `Punt, ${yds(y)}` : "Punt", { role: "punting" });
+  if (/punt/i.test(e)) return at(y > 0 ? `Punt, returned ${yds(y)}` : "Punt", { role: "punting" });
   if (/field goal/i.test(e)) {
     const how = /block/i.test(e) ? "blocked" : /good/i.test(e) && !/no good/i.test(e) ? "good" : "missed";
     return at(`Field goal ${how}${kick}`, { role: "kicking", tag: how === "good" ? "FG" : "" });
@@ -30455,7 +30464,11 @@ function footballWords(p, g) {
   if (/incomplet/i.test(e)) return at("Pass incomplete");
   if (/pass|reception/i.test(e)) return at(gain("Pass complete"));
   if (/^rush|run|kneel|scramble/i.test(e)) return at(/kneel/i.test(e) ? "Kneel-down" : gain("Run"));
-  if (/penalty/i.test(e)) return at(y ? `Penalty, ${yds(y)}` : "Penalty", { tag: "Flag" });
+  if (/penalty/i.test(e)) {
+    const onTry = Number(p.down) === 4 && toGoal != null && y >= 18 && Math.abs(y - (toGoal + 17)) <= 2;
+    return at(onTry ? "Penalty on the field-goal try" : y < 0 ? `Penalty on the offense, ${yds(y)}`
+      : y > 0 ? `Penalty on the defense, ${yds(y)}` : "Penalty", { tag: "Flag" });
+  }
   return at(e ? (y ? `${e}, ${yds(y)}` : e) : "Play");
 }
 //: The clock as a scoreboard writes it: "Q2 1:50", not "Q2 01:50".
@@ -30501,6 +30514,7 @@ function playsHTML(g) {
     const when = `${q}${p.clock ? ` ${fbClock(p.clock)}` : ""}`;
     // A moment in the game (a timeout, a quarter's end) is a quiet line of
     // its own: no team, no down, no score beside it.
+    if (w.quiet) return "";
     if (!w.snap) {
       return `<div class="lb-play lb-moment"><span class="lb-inn">${escapeHtml(when)}</span>
         <span class="lb-what">${escapeHtml(w.title)}</span></div>`;

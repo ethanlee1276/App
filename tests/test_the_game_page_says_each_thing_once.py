@@ -75,6 +75,23 @@ def test_one_empty_state_for_the_props():
     assert "props.length > shown.length && shown.length ?" in body, "the held note only beside picks it is not repeating"
 
 
+def test_the_scan_prints_each_rate_once():
+    """The real CIN @ BAL page, 2026-10-25: the ranks table carried third
+    downs and the red zone, and the raw table under it printed the same four
+    rates again. Each rate now sits in its ranks row, with its unadjusted
+    rank beside it when that differs."""
+    assert 'const TAPE_RAW = { off: { third_down: "third_off", redzone: "rz_off" },' in DETAIL
+    assert 'def: { third_down: "third_def", redzone: "rz_def" } };' in DETAIL
+    cell = _fn(DETAIL, "tapeCell")
+    assert "raw.rank && raw.rank !== now ? ` · ${ordinal(raw.rank)} raw` : \"\"" in cell
+    nums = _fn(DETAIL, "seasonNumbersHTML")
+    assert "!drawn.has(k)" in nums, "the raw table keeps what only it has"
+    tape = _fn(DETAIL, "scanTapeHTML")
+    assert "seasonNumbersHTML(scan, away, home, drawn)" in tape
+    assert "if (key && (rawOf(away, side, k) || rawOf(home, side, k))) drawn.add(key);" in tape, \
+        "a rate leaves the raw table only where the ranks table drew it"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in list(globals().items()):

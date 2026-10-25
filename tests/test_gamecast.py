@@ -344,7 +344,7 @@ def test_the_rooms_draw_the_drive_the_last_play_the_leaders_the_box_and_the_tota
     for want in ("Current drive", "7 plays, 66 yards, 3:23", "TB 4",
                  "Last play · Q1 10:51", "Touchdown run, 1 yd", "Win % (our model)", "<b>92.0</b>",
                  "Game leaders", ">Passing<", ">Rushing<", ">Receiving<", ">Tackles<", "Dak Prescott",
-                 "George Pickens", "Jalen Trotter", "2 TOT, 1 SOLO", "img/jw.png", ">Touchdown<", "on offence"):
+                 "George Pickens", "Jalen Trotter", "2 TOT, 1 SOLO", "img/jw.png", ">Touchdown<", "on offense"):
         assert want in g, want
     # The next snap's down and spot are the header's (and the strip's):
     # the gamecast no longer repeats them in tiles (2026-10-25).
