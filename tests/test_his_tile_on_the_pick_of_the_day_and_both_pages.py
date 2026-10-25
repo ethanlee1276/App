@@ -187,6 +187,9 @@ def test_in_a_browser_the_three_tiles_draw_his_photo_or_his_initials():
                         page = ctx.new_page()
                         errors = []
                         page.on("pageerror", lambda e: errors.append(str(e)))
+                        # A returning visitor: the first-visit tour, removed by hand below,
+                        # came back on the pick page and took the click (2026-10-25).
+                        page.add_init_script("try { localStorage.setItem('qb-seen-intro', '1'); localStorage.setItem('qb.tour', 'done'); } catch (e) {}")
                         # Nothing leaves the machine: the page's fonts and logos are refused.
                         page.route(lambda url: not url.startswith(f"http://127.0.0.1:{port}/")
                                    and "faces.test" not in url, lambda r: r.abort())
