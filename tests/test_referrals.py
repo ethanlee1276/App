@@ -186,7 +186,7 @@ def test_the_server_attaches_at_sign_up_and_discounts_at_checkout():
     buy = buy[:buy.index("else:")]
     assert "RF.discount_for(conn, who[\"id\"], not fresh)" in buy and "BI.ensure_referral_coupon()" in buy
     assert "allow_promo=fresh and not coupon, coupon=coupon" in buy
-    assert '"lastleg", "referral"):' in srv
+    assert '"lastleg", "referral", ' in srv
     get = srv[srv.index('            if path == "referral":'):]
     assert "member=self._entitled(conn, who)" in get[:600] and '/?ref={out[' in get[:600]
 

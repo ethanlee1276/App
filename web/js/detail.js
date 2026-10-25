@@ -2454,6 +2454,34 @@ const PBP_SURFACE_WORD = { fieldturf: "FieldTurf", grass: "Grass", turf: "Turf",
 const pbpTitleCase = (v) => String(v || "").replace(/[_-]+/g, " ")
   .replace(/\b\w/g, (c) => c.toUpperCase());
 
+/* THE GAME'S WIN CHANCE, PLAY BY PLAY — the line Real does not draw. The
+   feed's own number after every play (ESPN's for football and basketball,
+   MLB's per at-bat; engine/playmoments), the home side's chance across the
+   middle, the swings of fifteen points or more dotted. Nothing here is our
+   model's: it is the game's own win chance, free like the score. Absent
+   until the feed has given a handful of plays a number. */
+function pbpWinChartHTML(d, league) {
+  const rows = (league === "mlb" ? (d.events || []).filter((e) => e && e.kind === "atbat") : (d.plays || []))
+    .filter((r) => r && typeof r.wp === "number");
+  if (rows.length < 4) return "";
+  const W = 320, H = 110, n = rows.length;
+  const x = (i) => ((i / (n - 1)) * W).toFixed(1);
+  const y = (wp) => (H - (Math.max(0, Math.min(100, wp)) / 100) * H).toFixed(1);
+  const last = rows[n - 1].wp;
+  const lead = last >= 50 ? d.home : d.away;
+  const swings = rows.map((r, i) => [r, i]).filter(([r]) => Math.abs(Number(r.wpa) || 0) >= 15).slice(-8);
+  return `<div class="card pbp-wpcard">
+    <div class="pbp-rail-head">Win chance <span class="mini">${escapeHtml(lead || "")} ${Math.round(last >= 50 ? last : 100 - last)}% now</span></div>
+    <svg class="pbp-wp" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+      aria-label="${escapeAttr(`${d.home || "Home"} win chance across the game, ${Math.round(last)}% now`)}">
+      <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" class="pbp-wp-mid"/>
+      <polyline class="pbp-wp-line" fill="none" points="${rows.map((r, i) => `${x(i)},${y(r.wp)}`).join(" ")}"/>
+      ${swings.map(([r, i]) => `<circle class="pbp-wp-dot" cx="${x(i)}" cy="${y(r.wp)}" r="3"/>`).join("")}
+    </svg>
+    <div class="pbp-wp-key"><span>Above the line: ${escapeHtml(d.home || "home")}</span><span>Below: ${escapeHtml(d.away || "away")}</span></div>
+  </div>`;
+}
+
 /* A PLAYER'S BIRTHDAY ON HIS GAME (Ethan, 2026-10-25, on Real: "It shows
    players' birthdays and stuff like that"). Off the published rosters by
    the box (engine/rosters.attach_birthdays), never guessed; absent when
@@ -3637,6 +3665,7 @@ async function renderPbpPage(tick) {
           <div class="pbp-rail-head">Play by play <span class="mini">${(events.length || (d.plays || []).length)} on file</span></div>
           ${pbpRailHTML(d, league)}
         </div>
+        ${pbpWinChartHTML(d, league)}
         ${winProb}
         ${pbpModelWinProbHTML(d)}
         ${pbpPressureHTML(d, league, boardGame)}

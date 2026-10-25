@@ -2333,9 +2333,15 @@ class Handler(BaseHTTPRequestHandler):
                        # Whether "Forgot password?" can email a link, so
                        # the page can say how to get back in BEFORE anybody
                        # types an address into a form that cannot send.
-                       "reset_by_email": _mail_on()}
+                       "reset_by_email": _mail_on(),
+                       # Whether the phone option is on (engine/smsverify).
+                       "phone_signup": __import__("engine.smsverify", fromlist=["x"]).configured()}
                 if who:
                     out["email"] = who["email"]
+                    from engine import smsverify as SV
+                    if SV.is_placeholder(who["email"]):
+                        row = conn.execute("SELECT phone FROM users WHERE id=?", (who["id"],)).fetchone()
+                        out["phone"] = SV.say(row[0]) if row and row[0] else ""
                     # ONE PROFILE FOR THE WHOLE SITE (Ethan, 2026-10-07):
                     # the Account page, the top bar's avatar and the feed
                     # all read this one row.
@@ -2477,11 +2483,73 @@ class Handler(BaseHTTPRequestHandler):
         import os as _os
         return _os.environ.get("QB_ALLOW_INSECURE_LOGIN", "") == "1"
 
+    def _phone_auth(self, A, conn, path: str, body: dict):
+        """Sign up or in with a phone number (engine/smsverify; Ethan,
+        2026-10-25: "you can either make an account with an email or a phone
+        number"). `phone-start` texts a code; `phone-verify` checks it and
+        signs in the account with that number — or, from the sign-up screen
+        (the age-and-terms box ticked), makes it, with the same username
+        check and referral code as an email sign-up. 503 until Twilio's
+        three values are set."""
+        from engine import smsverify as SV
+        if not SV.configured():
+            return self._send(503, json.dumps({"error": "Signing in by phone isn’t switched on yet — "
+                                                        "use your email for now."}).encode(), ".json")
+        phone = SV.normalize(body.get("phone"))
+        if not phone:
+            return self._send(400, json.dumps({"error": "Enter a US or Canadian mobile number.",
+                                               "field": "phone"}).encode(), ".json")
+        if path == "phone-start":
+            if not SV.allow(phone, self._client_ip()):
+                return self._send(429, json.dumps({"error": "That’s a lot of codes — try again in an hour."}).encode(),
+                                  ".json")
+            try:
+                SV.start(phone)
+            except SV.SmsUnavailable:
+                return self._send(502, json.dumps({"error": "We couldn’t send the code. Try again in a moment."}).encode(),
+                                  ".json")
+            _seclog("phone_start", "ok", self._client_ip(), status=200)
+            return self._send(200, json.dumps({"sent": True, "to": SV.say(phone)}).encode(), ".json")
+        if not SV.check(phone, body.get("code")):
+            _seclog("phone_verify", "fail", self._client_ip(), status=400)
+            return self._send(400, json.dumps({"error": "That code isn’t right, or it has expired.",
+                                               "field": "code"}).encode(), ".json")
+        who = A.user_by_phone(conn, phone)
+        made = ""
+        if who is None:
+            if not body.get("confirmed"):
+                return self._send(404, json.dumps({"error": "There’s no account with that number yet — "
+                                                            "create one on the sign-up screen."}).encode(), ".json")
+            from engine import socialfeed as SF
+            handle = str(body.get("handle") or "").strip().lstrip("@")[:20]
+            if handle:
+                hc, why = SF.handle_problem(conn, handle)
+                if hc:
+                    return self._send(hc, json.dumps({"error": why, "field": "handle"}).encode(), ".json")
+            code, out = A.create_phone_user(conn, phone, confirmed=True)
+            if code != 200:
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if handle:
+                SF.profile_set(conn, out["id"], handle, "")
+            if body.get("ref"):
+                try:
+                    from engine import referrals as RF
+                    _ok, made = RF.attach(conn, out["id"], body.get("ref"))
+                except Exception:                            # noqa: BLE001
+                    made = ""
+            who = {"id": out["id"], "email": out["email"]}
+        _seclog("phone_verify", "ok", self._client_ip(), status=200)
+        token = A.start_session(conn, who["id"])
+        return self._send(200, json.dumps(
+            {"signed_in": True, "email": who["email"], "phone": SV.say(phone),
+             **({"ref_note": made} if made and made != "no code" else {})}).encode(),
+            ".json", headers=self._session_cookie(token))
+
     def _account_post(self, path: str, body: dict):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
                         "delete", "signout-all", "digest", "forgot", "reset",
-                        "lastleg", "referral"):
+                        "lastleg", "referral", "phone-start", "phone-verify"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         if path in self.PASSWORD_PATHS and not self._password_transport_ok():
@@ -2508,6 +2576,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(
                     {"signed_in": True, "email": out["email"]}).encode(),
                     ".json", headers=self._session_cookie(token))
+            if path in ("phone-start", "phone-verify"):
+                return self._phone_auth(A, conn, path, body)
             if path in ("signup", "login"):
                 handle = ""
                 ref_note = ""

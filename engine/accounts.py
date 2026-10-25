@@ -392,9 +392,12 @@ def _migrate(conn) -> None:
     """
     have = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
     for col, decl in (("age_confirmed", "INTEGER NOT NULL DEFAULT 0"),
-                      ("terms_accepted_at", "REAL")):
+                      ("terms_accepted_at", "REAL"),
+                      # A phone account's number, E.164 (engine/smsverify).
+                      ("phone", "TEXT")):
         if col not in have:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users(phone) WHERE phone IS NOT NULL")
 
 
 # --- accounts ----------------------------------------------------------------
@@ -428,6 +431,34 @@ def create_user(conn, email, password, confirmed=False) -> tuple[int, dict]:
         # coyness here is a person who cannot tell why they cannot sign up.
         return 409, {"error": "There is already an account with that email."}
     return 200, {"id": int(cur.lastrowid), "email": e}
+
+
+def create_phone_user(conn, phone: str, confirmed=False) -> tuple[int, dict]:
+    """``(status, body)`` for an account made with a verified phone number
+    (engine/smsverify — the caller has already checked the code). No
+    password: it signs in by a code, so the verifier is a random one nobody
+    holds. The email column carries the non-deliverable placeholder."""
+    from . import smsverify as SV
+    if not SV.normalize(phone) or SV.normalize(phone) != phone:
+        return 400, {"error": "That doesn’t look like a US or Canadian number."}
+    if not confirmed:
+        return 400, {"error": "Please confirm you are 21 or older and accept "
+                              "the Terms and Privacy Policy."}
+    import secrets as _s
+    try:
+        cur = conn.execute(
+            "INSERT INTO users (email, verifier, created_at, age_confirmed, terms_accepted_at, phone) "
+            "VALUES (?,?,?,1,?,?)",
+            (SV.placeholder_email(phone), hash_password(_s.token_urlsafe(32)), time.time(), time.time(), phone))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        return 409, {"error": "There is already an account with that number."}
+    return 200, {"id": int(cur.lastrowid), "email": SV.placeholder_email(phone), "phone": phone}
+
+
+def user_by_phone(conn, phone: str):
+    row = conn.execute("SELECT id, email FROM users WHERE phone=?", (str(phone or ""),)).fetchone()
+    return {"id": int(row[0]), "email": row[1]} if row else None
 
 
 def _throttled(key: str) -> int:

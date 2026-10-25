@@ -680,3 +680,10 @@
 .pbp-moment-banner.pbp-mb-left { left: 8px; translate: none; }
 @media (max-width: 720px) { .pbp-moment-banner { display: flex; } }
 @media (prefers-reduced-motion: reduce) { .pbp-moment-banner { animation: none; } }
+
+/* The game's win chance (pbpWinChartHTML). */
+.pbp-wp { display: block; width: 100%; height: 110px; margin-top: 6px; }
+.pbp-wp-mid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.pbp-wp-line { stroke: var(--brand-2); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.pbp-wp-dot { fill: var(--brand-2); stroke: var(--panel); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.pbp-wp-key { display: flex; justify-content: space-between; margin-top: 4px; font-size: var(--fs-2xs); color: var(--text-mute); }

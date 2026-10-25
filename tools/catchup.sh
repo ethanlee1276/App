@@ -39,6 +39,8 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DZ 2>&1 | tee /tmp/dz.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EA 2>&1 | tee /tmp/ea.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EB 2>&1 | tee /tmp/eb.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EC 2>&1 | tee /tmp/ec.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh ED 2>&1 | tee /tmp/ed.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -486,6 +488,12 @@ run EB "Live injuries and birthdays on the game" 60 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpNewInjuriesHTML('
 python3 -c "import json,glob;print(' '.join(f.split('rosters_')[1][:-5]+'='+str(sum(1 for t in json.load(open(f)).get('teams',{}).values() for q in t.get('players',[]) if q.get('born'))) for f in sorted(glob.glob('/srv/qellys/web/data/rosters_*.json'))))"
 python3 -c "import json,glob;fs=glob.glob('/srv/qellys/web/data/pbp/*.json');print(len(fs),sum(1 for f in fs if json.load(open(f)).get('injuries_live')))"
+SH
+run EC "Sign up with a phone number (on once Twilio's three values are set)" 30 <<'SH'
+curl -s https://qellysbook.com/api/account/me | grep -o '"phone_signup": [a-z]*'
+SH
+run ED "The game's win chance, drawn play by play" 30 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpWinChartHTML('
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

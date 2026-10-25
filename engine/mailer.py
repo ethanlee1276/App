@@ -177,6 +177,10 @@ def send(to: str, subject: str, text: str, html: str = "") -> None:
     flattening them into one message is how an evening gets spent on the
     wrong one.
     """
+    # A phone account's placeholder address (engine/smsverify) is reserved
+    # as undeliverable; nothing is ever sent to one.
+    if str(to or "").lower().endswith(".invalid"):
+        raise RuntimeError("that account signs in by phone and has no email address — nothing was sent.")
     gaps = missing()
     if gaps:
         raise RuntimeError(

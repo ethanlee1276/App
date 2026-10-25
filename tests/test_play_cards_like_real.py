@@ -274,6 +274,21 @@ def test_both_cards_carry_it_and_a_share():
         assert cls in CSS, cls
 
 
+def test_the_game_page_draws_the_win_chance_across_the_game():
+    """What Real does not draw: the feed's own win chance after every play,
+    one line, the swings of fifteen points or more dotted. Absent until a
+    handful of plays carry a number."""
+    detail = (ROOT / "web" / "js" / "detail.js").read_text()
+    assert "${pbpWinChartHTML(d, league)}" in detail
+    fn = detail[detail.index("function pbpWinChartHTML("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert 'typeof r.wp === "number"' in fn and "if (rows.length < 4) return \"\";" in fn
+    assert 'e.kind === "atbat"' in fn, "baseball reads its at-bats"
+    assert "Math.abs(Number(r.wpa) || 0) >= 15" in fn
+    css = (ROOT / "web" / "css" / "detail.css").read_text()
+    assert ".pbp-wp-line" in css and "gradient" not in css[css.index(".pbp-wp {"):]
+
+
 def test_a_groundout_is_not_a_big_play():
     """The rail's at-bats carry batted-ball data on every ball in play."""
     node = shutil.which("node")

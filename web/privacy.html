@@ -51,6 +51,12 @@
     <ul>
       <li><b>Email address</b> — your login, and how we reach you about
         your subscription. (<code>users.email</code>)</li>
+      <li><b>Or your mobile number</b>, if you made the account with your
+        phone instead — then it is your login, a code we text you is how
+        you sign in, and the account has no email address and no password
+        (its email column holds a placeholder nothing can be sent to). We
+        use the number to sign you in and for nothing else.
+        (<code>users.phone</code>)</li>
       <li><b>A password verifier</b> — a scrypt hash. <b>We do not store
         your password</b> and cannot recover it; we can only reset it.
         (<code>users.verifier</code>)</li>
@@ -296,6 +302,10 @@
         username and profile, your Feed posts and comments, and your
         messages in a game’s chat. A direct message is seen by the friend
         you send it to.</li>
+      <li><b>Twilio Inc.</b> — only if you sign up or sign in with your
+        phone number. They receive the number so they can text you the code
+        and check it; the code itself never reaches us. Twilio’s privacy
+        policy governs what they do with it.</li>
       <li><b>Stripe, Inc.</b> — if you subscribe. They receive your email
         address and payment details (entered on their page) so they can
         take the payment and send you a receipt. They hold the card

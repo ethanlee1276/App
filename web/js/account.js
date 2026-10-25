@@ -911,6 +911,7 @@ function acctSignInHTML() {
         : `Open the site at its <b>https</b> address and sign in there.`}</div>` : ""}
     ${acctFieldsHTML("login")}
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
+    ${phoneDoorHTML("login")}
     <div class="acct-alt">
       <span>Don’t have an account?</span>
       <button class="btn ghost" data-act="acctGoSignup">Create one</button>
@@ -2226,6 +2227,7 @@ function signupHTML() {
     </label>`)}
 
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
+    ${phoneDoorHTML("signup")}
 
     <div class="acct-alt">
       <span>Already have an account?</span>
@@ -2249,6 +2251,110 @@ function signupHTML() {
   </div>
   ${/* The wall's own screens hide the site footer, so they print its line. */""}
   <p class="pw-legal">21+ · Not betting advice · Gambling problem? Call <b>1-800-GAMBLER</b></p>`;
+}
+
+/* AN ACCOUNT BY PHONE (Ethan, 2026-10-25: "you can either make an account
+   with an email or a phone number"). A code by text through Twilio Verify
+   (engine/smsverify), no password; offered only when the server says it is
+   switched on (`phone_signup` on /api/account/me). Signing up asks for the
+   username, the referral code and the 21+ box like the email form does;
+   signing in asks for the number and the code. */
+let _ph = { mode: "", sent: false, to: "" };
+const phoneDoorHTML = (mode) => ((_acctUser || {}).phone_signup
+  ? `<button type="button" class="acct-forgot ph-door" data-ph="open" data-mode="${mode}">${
+    mode === "signup" ? "Use your phone number instead" : "Sign in with your phone number"}</button>` : "");
+
+function phoneCardHTML(mode) {
+  const up = mode === "signup";
+  return `<h2 class="acct-card-h">${up ? "Create your free account" : "Welcome back"}</h2>
+    <p class="rank-help">${up ? "With your phone: we text you a code, and there’s no password to remember."
+      : "We’ll text a code to the number on your account."}</p>
+    ${up ? `<label class="acct-field"><span class="acct-field-k">Username</span>
+      <span class="acct-handle-row"><b>@</b><input class="ph-handle" maxlength="20" autocomplete="username"
+        autocapitalize="none" spellcheck="false" placeholder="yourname"></span></label>` : ""}
+    <label class="acct-field"><span class="acct-field-k">Mobile number</span>
+      <input class="ph-phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(555) 201-4567"
+        ${_ph.sent ? "readonly" : ""} value="${escapeAttr(_ph.to)}"></label>
+    ${_ph.sent ? `<label class="acct-field"><span class="acct-field-k">The code we texted</span>
+      <input class="ph-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="6 digits"></label>` : ""}
+    ${up ? `<label class="acct-field"><span class="acct-field-k">Friend’s referral code <i>optional</i></span>
+      <input class="ph-ref" maxlength="16" autocomplete="off" autocapitalize="characters" value="${escapeAttr(referralTyped())}"></label>
+      <label class="acct-confirm"><input type="checkbox" class="ph-age"><span>I am 21 or older, and I accept the
+        <a href="terms.html" target="_blank" rel="noopener">Terms</a> and
+        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>` : ""}
+    <button type="button" class="btn primary" data-ph="go" data-mode="${mode}">${_ph.sent ? (up ? "Create account" : "Sign in") : "Text me a code"}</button>
+    <p class="acct-note ph-note" role="status"></p>
+    ${_ph.sent ? `<button type="button" class="acct-forgot" data-ph="again" data-mode="${mode}">Send a new code</button>` : ""}
+    <button type="button" class="acct-forgot" data-ph="email" data-mode="${mode}">Use ${up ? "email" : "email and password"} instead</button>
+    <p class="rank-help acct-fine">Standard text rates may apply. Your number is used to sign you in and nothing else.</p>`;
+}
+
+async function phoneGo(card, mode) {
+  const note = (t) => { const n = card.querySelector(".ph-note"); if (n) n.textContent = t; };
+  const val = (c) => ((card.querySelector(c) || {}).value || "").trim();
+  if (!_ph.sent) {
+    _ph.to = val(".ph-phone");
+    note("Sending…");
+    const r = await fetch("/api/account/phone-start", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: _ph.to }) }).catch(() => null);
+    const out = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) return note(out.error || "Couldn’t reach the server — try again.");
+    _ph.sent = true;
+    const keep = mode === "signup" ? { h: val(".ph-handle"), age: !!(card.querySelector(".ph-age") || {}).checked } : null;
+    card.innerHTML = phoneCardHTML(mode);
+    if (keep) {
+      const h = card.querySelector(".ph-handle"); if (h) h.value = keep.h;
+      const a = card.querySelector(".ph-age"); if (a) a.checked = keep.age;
+    }
+    const c = card.querySelector(".ph-code"); if (c) c.focus();
+    const n2 = card.querySelector(".ph-note"); if (n2) n2.textContent = `Code sent to ${out.to || _ph.to}.`;
+    return;
+  }
+  const body = { phone: _ph.to, code: val(".ph-code") };
+  if (mode === "signup") {
+    const age = card.querySelector(".ph-age");
+    if (!age || !age.checked) return note("Please confirm you are 21 or older and accept the Terms.");
+    Object.assign(body, { confirmed: true, handle: val(".ph-handle").replace(/^@/, ""), ref: val(".ph-ref") });
+    if (body.handle && !/^[A-Za-z0-9_]{3,20}$/.test(body.handle)) return note("Pick a username: 3–20 letters, numbers or underscores.");
+  }
+  note("Checking…");
+  const r = await fetch("/api/account/phone-verify", { method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+  const out = r ? await r.json().catch(() => ({})) : {};
+  if (!r || !r.ok) return note(out.error || "Couldn’t reach the server — try again.");
+  // Signed in: the same steps an email sign-in takes (app.js acctAuth).
+  _ph = { mode: "", sent: false, to: "" };
+  _acctUser = { signed_in: true, email: out.email, phone: out.phone };
+  if (typeof pushRelink === "function") pushRelink();
+  welcomeDone();
+  if (mode === "signup" && typeof dcMarkWelcome === "function") dcMarkWelcome();
+  if (typeof acceptPendingInvite === "function") acceptPendingInvite();
+  try { await acctSync(); } catch (e) {}
+  if (mode === "signup") return followStep(() => acctLandAfterAuth());
+  return acctLandAfterAuth();
+}
+
+if (typeof window !== "undefined" && !window._phBound) {
+  window._phBound = true;
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-ph]");
+    if (!b) return;
+    const card = b.closest(".acct-card, .acct-signin");
+    if (!card) return;
+    const mode = b.dataset.mode || "signup";
+    const act = b.dataset.ph;
+    if (act === "open" || act === "again") {
+      _ph = { mode, sent: false, to: act === "again" ? _ph.to : "" };
+      card.innerHTML = phoneCardHTML(mode);
+      return;
+    }
+    if (act === "email") {
+      _ph = { mode: "", sent: false, to: "" };
+      if (mode === "signup") renderSignup(); else renderAccount();
+      return;
+    }
+    if (act === "go") { b.disabled = true; phoneGo(card, mode).finally(() => { b.disabled = false; }); }
+  });
 }
 
 /* REAL'S FIRST SCREENS, OURS (Ethan's screenshot, 2026-10-25: "Welcome to
@@ -2623,10 +2729,13 @@ function setListHTML() {
   const u = _acctUser, inn = !!(u && u.signed_in);
   const out = [];
   if (inn) {
+    // A phone account (engine/smsverify) has a number, not an address, and
+    // no password to change: it signs in by a texted code.
     out.push(setGroup("Account", [
-      setItem({ ico: "mail", tone: "gold", title: "Email", val: escapeHtml(u.email) }),
-      setItem({ ico: "lock", tone: "gold", title: "Password", val: "Change", chev: true,
-                attrs: 'data-set-open="password"' }),
+      ...(u.phone ? [setItem({ ico: "lock", tone: "gold", title: "Phone", val: escapeHtml(u.phone), sub: "Signs in with a texted code" })]
+        : [setItem({ ico: "mail", tone: "gold", title: "Email", val: escapeHtml(u.email) }),
+           setItem({ ico: "lock", tone: "gold", title: "Password", val: "Change", chev: true,
+                     attrs: 'data-set-open="password"' })]),
       setItem({ ico: "sync", tone: "gold", title: "Sync now", sub: escapeHtml(_acctNote || ""), subCls: "acct-note",
                 attrs: 'data-act="acctSyncNow"' }),
     ], "Your bets, fantasy leagues, settings and searches follow this account to every device you sign in on."));

@@ -62,6 +62,9 @@ def test_a_hanging_chore_runs_on_its_own_thread_and_says_where_it_is_stuck():
         assert _wait_for(lambda: launch._LANES["daily"]["step"] == "maintenance")
         # The settle is NOT held behind the stuck daily pass.
         assert _wait_for(lambda: "settle force=False" in ran and launch._LANES["settle"]["step"] is None)
+        # The step clears a moment before the thread returns; on a loaded
+        # machine the next kick could land in between and call it running.
+        launch._LANES["settle"]["thread"].join(5)
         assert launch._kick_chores() == {"daily": "still running", "settle": "started"}, \
             "a lane still running is left to finish; the free one runs again"
         st = launch._chores_status()
