@@ -2453,8 +2453,13 @@ function pbpStripHTML(league, games, current) {
        was disabled; it now opens the board's game when the board has it. */
     const bg = !door && state.sport === league && state.data
       ? ((state.data.games || []).find((x) => x.home === g.home && x.away === g.away) || null) : null;
+    // A game starting inside the hour counts down to it ("in 12:34"), ticked
+    // by the page's one timer (pbpCountStart); later ones say the time.
+    const start = Date.parse(lv.start_time || ""), left = start - Date.now();
     const head = lv.state === "live" ? `<span class="lb-live">${icon("dot", 8)} LIVE</span>`
       : lv.state === "final" ? `<span class="pbp-chip-final">FINAL</span>`
+      : left > 0 && left <= PBP_COUNT_MS ? `<span class="pbp-chip-time" data-pbp-count="${start}" data-pbp-pre="in "
+          data-pbp-done="Starting">in ${pbpCountdown(left)}</span>`
       : `<span class="pbp-chip-time">${escapeHtml(pbpTime(lv.start_time) || "TBD")}</span>`;
     const row = (abbr, score) => `<span class="pbp-chip-row">${teamMarkIn(league, abbr, 16)}<em>${
       escapeHtml(abbr || "")}</em><b>${score != null ? score : ""}</b></span>`;
@@ -2629,7 +2634,8 @@ function pbpRailHTML(d, league) {
    all of this in words. */
 const PBP_BOARD = [[20.3, 24.1], [52.9, 24.7], [52.9, 39.8], [21.0, 40.7]];   // TL TR BR BL
 const PBP_BOARD_LED = { amber: "#FFC94A", white: "#F4F6FA", dim: "#8C95A8", off: "#262B36",
-                        ball: "#3DDC84", strike: "#FF5A4E", panel: "#05070C", rule: "#FFFFFF" };
+                        ball: "#3DDC84", strike: "#FF5A4E", panel: "#05070C", rule: "#FFFFFF",
+                        face: "#07080C" };
 // The three bags on the board's face (base, x, y): second at the top.
 const PBP_BOARD_BASES = [[1, 96.2, 15], [2, 91.2, 10], [3, 86.2, 15]];
 let _pbpBoardLast = null;
@@ -2652,19 +2658,170 @@ function pbpBoardMap() {
 
 /* A team's colour that shows on a black board: its primary, or its
    secondary when the primary is a navy or a black that would vanish. */
-function pbpBoardColor(abbr) {
-  const t = (typeof MLB_TEAMS !== "undefined" && MLB_TEAMS[abbr]) || {};
+function pbpBoardColor(abbr, league = "mlb") {
+  const table = (typeof teamsForSport === "function" && teamsForSport(league))
+    || (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {});
+  const t = (table && table[abbr]) || {};
+  // A colour shows on the board's black when it stands 3:1 off it, the
+  // contrast a mark needs to be seen (WCAG's for a graphic): the Bucs' and
+  // the Reds' red do, the Brewers' and the Cowboys' navy do not. A team with
+  // none that bright keeps its brightest past 2:1 (the Jets' green, the
+  // Texans' red) before it falls to the board's grey.
   const lum = (hex) => {
     const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
     if (!m) return 0;
     const n = parseInt(m[1], 16);
-    return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+    const ch = (c) => (c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    return 0.2126 * ch(n >> 16) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
   };
-  const pick = [t.primary, t.secondary, t.tertiary].find((c) => lum(c) > 0.28);
+  const off = (c) => (lum(c) + 0.05) / (lum(PBP_BOARD_LED.panel) + 0.05);
+  const all = [t.primary, t.secondary, t.tertiary].filter(Boolean);
+  const pick = all.find((c) => off(c) >= 3) || all.filter((c) => off(c) >= 2).sort((a, b) => off(b) - off(a))[0];
   return pick || PBP_BOARD_LED.dim;
 }
 
-function pbpBoardSVG(d) {
+/* BIG MOMENTS (Ethan, 2026-10-25: "keep adding life to the app"). A home
+   run, a touchdown, a field goal, a takeaway: the play that just happened
+   goes up on the board the way a stadium's board shouts it, and a home run
+   or a touchdown sets off fireworks over the stands.
+
+   Only a play that lands while the page is open counts. The board keeps
+   the newest play it drew and when it drew it; the page asks again every
+   twelve seconds, so a newer play drawn under forty seconds later is news.
+   A page left and come back to does not celebrate what it missed, and a
+   first drawing celebrates nothing. Every play since the last drawing is
+   read, not only the newest, so a touchdown and its extra point landing
+   in one pass still read TOUCHDOWN.
+
+   ONCE UP, IT STAYS UP until the next pass (eleven seconds): the page is
+   redrawn for other reasons too (the slate finishing loading, a tab
+   picked), and a redraw keeps the word and runs the fireworks on from
+   where they had got to (--t, the time since the play, in css/detail.css)
+   rather than wiping them or starting them over. */
+const PBP_MOMENT_MS = 40000, PBP_MOMENT_UP_MS = 11000;
+const PBP_MOMENTS = [                    // football, the biggest first: word, the play, fireworks
+  ["TOUCHDOWN", (p) => p.scoring && /touchdown/i.test(p.event || ""), true],
+  ["FIELD GOAL", (p) => p.scoring && /field goal/i.test(p.event || ""), false],
+  ["SAFETY", (p) => p.scoring && /safety/i.test(p.event || ""), false],
+  ["INTERCEPTION", (p) => p.turnover && /interception/i.test(p.event || ""), false],
+  ["FUMBLE", (p) => p.turnover && /fumble/i.test(p.event || ""), false],
+];
+function pbpMoment(d, league, prev) {
+  const football = league === "nfl" || league === "cfb";
+  const plays = football ? (d.plays || []).filter((r) => r && r.kind === "football")
+    : (d.events || []).filter((r) => r && r.kind === "atbat");
+  const keyOf = (r) => String((football ? r.id : r.at_bat) ?? "");
+  const key = plays.length ? keyOf(plays[plays.length - 1]) : "";
+  const was = prev && prev.moment;
+  if (was && prev.play === key && Date.now() - was.at < PBP_MOMENT_UP_MS) return was;
+  const out = { key, word: "", big: false, side: "", at: Date.now() };
+  if (!key || !prev || prev.play == null || prev.play === key || !(Date.now() - prev.at < PBP_MOMENT_MS)) return out;
+  // Where the last drawing's newest play is (none yet: every play is new).
+  const seen = plays.findIndex((r) => keyOf(r) === prev.play);
+  const fresh = seen >= 0 ? plays.slice(seen + 1) : prev.play === "" ? plays : plays.slice(-1);
+  if (football) {
+    const hit = PBP_MOMENTS.find(([, is]) => fresh.some(is));
+    if (hit) Object.assign(out, { word: hit[0], big: hit[2] });
+  } else {
+    const hr = fresh.filter((r) => r.event_type === "home_run").pop();
+    if (hr) Object.assign(out, { word: hr.rbi >= 4 ? "GRAND SLAM" : "HOME RUN", big: true,
+      side: hr.half === "T" ? "away" : "home" });
+  }
+  return out;
+}
+
+/* The fireworks: bursts over the stands, rings of sparks in the board's
+   gold, white and the scoring side's colour, opening one after another
+   (css/detail.css runs them; reduced motion never shows them). The spots
+   are each photograph's sky and upper deck, clear of its boards. */
+const PBP_BOOM_MS = 5200;                // the last burst's second fade ends by then
+const PBP_BOOM_SPOTS = {
+  mlb: [[150, 10, 13], [100, 15, 11], [198, 17, 12], [126, 27, 9], [176, 8, 10]],
+  football: [[62, 30, 12], [178, 30, 12], [120, 42, 10], [40, 12, 9], [200, 12, 9]],
+};
+function pbpBoomSVG(spots, color, since = 0) {
+  const L = PBP_BOARD_LED, f = (n) => n.toFixed(2);
+  const inks = [L.amber, color || L.white, L.white];
+  const bursts = spots.map(([x, y, r], i) => {
+    const sparks = Array.from({ length: 16 }, (_, k) => {
+      const a = (k / 16) * Math.PI * 2 + i * 0.4, c = Math.cos(a), s = Math.sin(a);
+      return `<line x1="${f(c * r * .3)}" y1="${f(s * r * .3)}" x2="${f(c * r)}" y2="${f(s * r)}"/>`
+        + `<circle cx="${f(c * r * 1.1)}" cy="${f(s * r * 1.1)}" r=".55" stroke="none"/>`;
+    }).join("");
+    return `<g transform="translate(${x} ${y})"><g class="pbp-boom-b" stroke="${inks[i % 3]}" fill="${inks[i % 3]}"
+      stroke-width=".45" stroke-linecap="round">${sparks}</g></g>`;
+  }).join("");
+  return `<svg class="pbp-boom" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+    style="--t:${Math.round(since)}ms">${bursts}</svg>`;
+}
+
+/* THE LAST HOUR, COUNTED DOWN. Inside an hour of the start a game counts
+   to it a second at a time: its chip in the strip along the top of every
+   live page ("in 12:34"), and both boards when the page is the game's own
+   ("FIRST PITCH IN 12:34", "KICKOFF IN 4:05"; a game's file is written
+   once it is live, so that is the rarer of the two). The number is drawn
+   with the moment it counts to, and one timer for the page (pbpCountStart,
+   started by renderPbpPage when there is one to run) ticks every number on
+   it. At zero the page asks for the games again; from ten minutes out a
+   game's own page asks every twelve seconds (pbpStartsSoon), so its board
+   goes live without a refresh. */
+const PBP_COUNT_MS = 60 * 60000;
+let _pbpCountTimer = null;
+function pbpCountdown(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  const two = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
+}
+function pbpCountStart() {
+  if (_pbpCountTimer) return;
+  _pbpCountTimer = setInterval(() => {
+    const els = document.querySelectorAll("[data-pbp-count]");
+    if (!els.length || state.view !== "pbp") { clearInterval(_pbpCountTimer); _pbpCountTimer = null; return; }
+    let rang = false;
+    els.forEach((el) => {
+      const left = Number(el.dataset.pbpCount) - Date.now();
+      if (left > 0) { el.textContent = (el.dataset.pbpPre || "") + pbpCountdown(left); return; }
+      el.removeAttribute("data-pbp-count");
+      el.textContent = el.dataset.pbpDone || "";
+      rang = true;
+    });
+    if (rang) renderPbpPage();
+  }, 1000);
+}
+// From ten minutes before the start to an hour after it (a game that never
+// starts stops being asked about).
+function pbpStartsSoon(lv) {
+  if (!lv || lv.state === "live" || lv.state === "final" || !lv.start_time) return false;
+  const left = Date.parse(lv.start_time) - Date.now();
+  return left < 10 * 60000 && left > -60 * 60000;
+}
+
+/* THE WIND OVER THE PARK (Ethan, 2026-10-25). The header says "12 mph
+   blowing out"; here it is seen: streaks running over the outfield the way
+   the wind runs, out toward the wall or in toward the plate, more of them
+   and faster the harder it blows. Only what the feed holds is drawn:
+   baseball's wind is its relation to the park, so "out" and "in" are
+   drawn; a crosswind's side is not held, so it is not (the header still
+   says it), nor a wind under 5 mph, nor one under a closed roof. Each
+   streak runs over the outfield grass, from the back of the infield's
+   dirt (y 79-95 on the photograph) over the wall (app.js PBP_PHOTO: centre
+   field's at 120,58, the poles at 26,72 and 216,73), centre field first. */
+const PBP_GUSTS = [
+  [119, 94, 119.5, 74, 120, 52], [104, 95, 94, 76, 82, 58], [134, 95, 145, 76, 157, 58],
+  [90, 100, 72, 86, 52, 74], [148, 100, 166, 86, 186, 74],
+];
+function pbpWindSVG(w) {
+  const mph = Number((w || {}).wind_mph) || 0, dir = String((w || {}).wind_dir || "").trim().toLowerCase();
+  if (!w || w.dome || mph < 5 || (dir !== "out" && dir !== "in")) return "";
+  const band = mph < 10 ? "pbp-wind-light" : mph < 15 ? "pbp-wind-brisk" : "pbp-wind-strong";
+  const gusts = PBP_GUSTS.slice(0, band === "pbp-wind-light" ? 3 : 5).map(([x0, y0, cx, cy, x1, y1]) => dir === "out"
+    ? `<path d="M${x0} ${y0}Q${cx} ${cy} ${x1} ${y1}"/>` : `<path d="M${x1} ${y1}Q${cx} ${cy} ${x0} ${y0}"/>`).join("");
+  return `<svg class="pbp-wind ${band}" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+    fill="none" stroke="${PBP_BOARD_LED.white}" stroke-linecap="round">${gusts}</svg>`;
+}
+
+function pbpBoardSVG(d, league = "mlb", boardGame = null) {
+  if (league === "nfl" || league === "cfb") return pbpFieldBoardSVG(d, league);
   const lv = (d && d.live) || {};
   const away = String(d.away || ""), home = String(d.home || "");
   if (!away || !home) return "";
@@ -2688,7 +2845,9 @@ function pbpBoardSVG(d) {
   // A run that scored since the last time this board was drawn flashes.
   const id = `${away}@${home}`;
   const prev = _pbpBoardLast && _pbpBoardLast.id === id ? _pbpBoardLast : null;
-  _pbpBoardLast = { id, away: lv.away_score, home: lv.home_score };
+  const moment = pbpMoment(d, league, prev);
+  _pbpBoardLast = { id, away: lv.away_score, home: lv.home_score, play: moment.key, at: Date.now(),
+    moment: moment.word ? moment : null };
   const row = (side, abbr, runs, cy) => {
     const fresh = prev && runs != null && prev[side] != null && runs !== prev[side];
     // Two digits step down a size, so a twelve keeps clear of "ARI".
@@ -2703,13 +2862,18 @@ function pbpBoardSVG(d) {
   // A word is sized to its room (the column's 30 of 36 units unless told
   // otherwise), never past it.
   let side = "";
-  const word = (txt, y, max, fill, mono, cx = 82, room = 30) => {
+  const word = (txt, y, max, fill, mono, cx = 82, room = 30, attrs = "") => {
     const size = Math.min(max, room / (Math.max(1, txt.length) * 0.62));
     return at(cx, y, `<text${mono ? ' class="pbp-sb-num"' : ""} font-size="${f(size)}" text-anchor="middle"
-      fill="${fill}"${mono ? ' filter="url(#pbp-sb-glow)"' : ""}>${escapeHtml(txt)}</text>`);
+      fill="${fill}"${mono ? ' filter="url(#pbp-sb-glow)"' : ""}${attrs}>${escapeHtml(txt)}</text>`);
   };
   const hold = typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
-  if (live && hold) {
+  if (moment.word) {
+    // HOME RUN across the column, blinking, until the next pass redraws it.
+    const [a, b] = moment.word.split(" ");
+    side = `<g class="pbp-sb-moment" style="--t:${Date.now() - moment.at}ms">${word(a, 19.5, 14, L.amber, true, 82, 34)}${
+      word(b, 37, 14, L.amber, true, 82, 34)}</g>`;
+  } else if (live && hold) {
     // "Delayed — Rain": the state, and under it why.
     const [what, why] = hold.split(/\s[\u2014-]\s/);
     side = word(what.toUpperCase(), why ? 24 : 28, 8, L.amber) + (why ? word(why.toUpperCase(), 33.5, 6.4, L.dim) : "");
@@ -2741,10 +2905,16 @@ function pbpBoardSVG(d) {
   } else if (final) {
     side = word("FINAL", 28.5, 11, L.white);
   } else if (!live && lv.start_time && typeof tzTime === "function") {
-    // "7:10 PM": the time lit, its half of the day small under it.
-    const [clock, ampm] = String(tzTime(lv.start_time)).split(/\s+/);
-    side = word("FIRST", 12.5, 6, L.dim) + word("PITCH", 19, 6, L.dim) + word(clock || "", 31.5, 11, L.amber, true)
-      + (ampm ? word(ampm.toUpperCase(), 40.5, 6, L.dim) : "");
+    const start = Date.parse(lv.start_time), left = start - Date.now();
+    if (left > 0 && left <= PBP_COUNT_MS) {
+      side = word("FIRST", 12.5, 6, L.dim) + word("PITCH IN", 19, 6, L.dim) + word(pbpCountdown(left), 32, 11,
+        L.amber, true, 82, 30, ` data-pbp-count="${start}" data-pbp-done="NOW"`);
+    } else {
+      // "7:10 PM": the time lit, its half of the day small under it.
+      const [clock, ampm] = String(tzTime(lv.start_time)).split(/\s+/);
+      side = word("FIRST", 12.5, 6, L.dim) + word("PITCH", 19, 6, L.dim) + word(clock || "", 31.5, 11, L.amber, true)
+        + (ampm ? word(ampm.toUpperCase(), 40.5, 6, L.dim) : "");
+    }
   }
   return `<svg class="pbp-board" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
     <defs><filter id="pbp-sb-glow" x="-30%" y="-30%" width="160%" height="160%">
@@ -2757,7 +2927,107 @@ function pbpBoardSVG(d) {
     ${line(3, 25, 61, 25)}${line(64, 4, 64, 46)}
     ${row("away", away, lv.away_score, 13.5)}${row("home", home, lv.home_score, 36.5)}
     ${side}
-  </svg>`;
+  </svg>${pbpWindSVG((boardGame || {}).weather)}${moment.big && Date.now() - moment.at < PBP_BOOM_MS
+    ? pbpBoomSVG(PBP_BOOM_SPOTS.mlb, pbpBoardColor(moment.side === "away" ? away : home), Date.now() - moment.at) : ""}`;
+}
+
+/* THE FOOTBALL FIELD'S BOARD, LIT (Ethan, 2026-10-25: "keep going with any
+   more ideas like that" — after the ballpark's scoreboard).
+
+   THE CENTRE-HUNG BOARD over the field photographs (all four: the pro and
+   college fields, either side on offence) has a main screen carrying our
+   crown and wordmark, and a framed screen on each side. A real stadium's
+   centre-hung board puts the teams on its side screens, so ours does: the
+   away team on the left, the home team on the right, each with a stripe
+   of its colour, its score, and a football under the side that has the
+   ball. The crown stays; the wordmark under it becomes the game: the
+   quarter and the clock and the down ("Q3 4:12 · 3RD & 8"), HALFTIME,
+   FINAL, or the kickoff before it.
+
+   MEASURED ON ALL FOUR FRAMES, which are four renders and not one picture
+   copied: the side screens' frame lines sit within half a unit of each
+   other across them (left 85.5-99.0 x 13.0-26.7, right 140.3-153.8 x
+   13.0-26.7), so each screen here is drawn a touch larger than any of
+   them, with a bezel of its own, and no frame's edge shows past it. The
+   board faces the camera, so these are rectangles. The wordmark lies in
+   106.5-132.5 x 21-25.4 on every frame; its cover is the board's own
+   black, sampled off the four (#07080C).
+
+   What it shows is what the live state holds, and a score that has just
+   changed flashes, as on the ballpark's board. */
+const PBP_FIELD_BOARD = {
+  away: [85.1, 12.6, 99.1, 27],          // x0 y0 x1 y1
+  home: [140.2, 12.6, 154, 27],
+  line: [105.5, 20.9, 134.5, 25.9],      // where the wordmark was
+};
+
+function pbpFieldBoardSVG(d, league) {
+  const lv = (d && d.live) || {};
+  const away = String(d.away || ""), home = String(d.home || "");
+  if (!away || !home) return "";
+  const L = PBP_BOARD_LED, f = (n) => n.toFixed(2);
+  const live = lv.state === "live", final = lv.state === "final";
+  const id = `${league}:${away}@${home}`;
+  const prev = _pbpBoardLast && _pbpBoardLast.id === id ? _pbpBoardLast : null;
+  const moment = pbpMoment(d, league, prev);
+  // Who scored, for the fireworks' colour: the side whose score went up.
+  if (moment.big && !moment.side && prev) {
+    moment.side = lv.home_score > prev.home ? "home" : lv.away_score > prev.away ? "away" : "";
+  }
+  _pbpBoardLast = { id, away: lv.away_score, home: lv.home_score, play: moment.key, at: Date.now(),
+    moment: moment.word ? moment : null };
+  const hold = live && typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
+  const screen = (side, abbr, pts) => {
+    const [x0, y0, x1, y1] = PBP_FIELD_BOARD[side], cx = f((x0 + x1) / 2);
+    const fresh = prev && pts != null && prev[side] != null && pts !== prev[side];
+    const ball = live && !hold && lv.possession && lv.possession === abbr;     // no one has it at the half
+    const s = pts != null ? String(pts) : "";
+    return `<rect x="${x0}" y="${y0}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" rx=".5" fill="${L.panel}"
+        stroke="${L.rule}" stroke-opacity=".22" stroke-width=".25"/>
+      <rect x="${f(x0 + .9)}" y="${f(y0 + .9)}" width="${f(x1 - x0 - 1.8)}" height=".8" rx=".3"
+        fill="${pbpBoardColor(abbr, league)}"/>
+      <text x="${cx}" y="${f(y0 + 5)}" font-size="3.4" text-anchor="middle" fill="${L.white}"
+        letter-spacing=".2">${escapeHtml(abbr)}</text>${s ? `
+      <text class="pbp-sb-num${fresh ? " pbp-sb-new" : ""}" x="${cx}" y="${f(y0 + 10.8)}"
+        font-size="${s.length > 2 ? 4.6 : 6.2}" text-anchor="middle" fill="${L.amber}"
+        filter="url(#pbp-sb-glow)">${escapeHtml(s)}</text>` : ""}${ball ? `
+      <g class="pbp-sb-ball" transform="translate(${cx} ${f(y1 - 1.4)})"><ellipse rx="1.6" ry=".85" fill="${L.amber}"/>
+        <path d="M-.75 0H.75M-.4 -.32V.32M0 -.32V.32M.4 -.32V.32" stroke="${L.panel}" stroke-width=".2"/></g>` : ""}`;
+  };
+  // The main screen's line: what the game is doing now.
+  const per = String(lv.period || "");
+  let msg = "", count = "";
+  if (moment.word) {
+    msg = moment.word;
+  } else if (hold) {
+    // "Halftime", "Delayed", "End of 3rd" (ESPN's "End of 3rd Quarter", shortened).
+    msg = hold.split(/\s[\u2014-]\s/)[0].replace(/\s+quarter$/i, "").toUpperCase();
+  } else if (live) {
+    const q = /^Q(\d+)$/.exec(per), n = q ? +q[1] : 0;
+    const quarter = n > 4 ? (n === 5 ? "OT" : `${n - 4}OT`) : per;
+    const down = String(lv.detail || "").split(/\s+at\s+/i)[0].toUpperCase();
+    msg = [quarter + (lv.clock ? ` ${lv.clock}` : ""), down].filter((x) => x.trim()).join(" · ");
+  } else if (final) {
+    msg = (per || "Final").toUpperCase();
+  } else if (lv.start_time && typeof tzTime === "function") {
+    const start = Date.parse(lv.start_time), left = start - Date.now();
+    msg = left > 0 && left <= PBP_COUNT_MS ? `KICKOFF IN ${pbpCountdown(left)}` : `KICKOFF ${tzTime(lv.start_time)}`;
+    if (left > 0 && left <= PBP_COUNT_MS) count = ` data-pbp-count="${start}" data-pbp-pre="KICKOFF IN " data-pbp-done="KICKOFF"`;
+  }
+  const [lx0, ly0, lx1, ly1] = PBP_FIELD_BOARD.line;
+  const size = Math.min(3.6, (lx1 - lx0 - 2) / (Math.max(1, msg.length) * 0.6));
+  const line = msg ? `<rect x="${lx0}" y="${ly0}" width="${f(lx1 - lx0)}" height="${f(ly1 - ly0)}" fill="${L.face}"/>
+    <text class="pbp-sb-num${moment.word ? ` pbp-sb-moment" style="--t:${Date.now() - moment.at}ms` : ""}" x="${f((lx0 + lx1) / 2)}" y="${f(ly1 - 1.25)}"
+      font-size="${f(size)}" text-anchor="middle" fill="${L.amber}" filter="url(#pbp-sb-glow)"${count}>${escapeHtml(msg)}</text>` : "";
+  return `<svg class="pbp-board" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <defs><filter id="pbp-sb-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation=".35" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter></defs>
+    ${screen("away", away, lv.away_score)}${screen("home", home, lv.home_score)}
+    ${line}
+  </svg>${moment.big && Date.now() - moment.at < PBP_BOOM_MS
+    ? pbpBoomSVG(PBP_BOOM_SPOTS.football, moment.side ? pbpBoardColor(moment.side === "away" ? away : home, league) : "",
+      Date.now() - moment.at) : ""}`;
 }
 
 async function renderPbpPage() {
@@ -2817,6 +3087,9 @@ async function renderPbpPage() {
     }, 12000);
   };
   const stripHTML = pbpStripHTML(league, strip, event);
+  // A chip counting down its last hour: the page's timer ticks it, whichever
+  // way the page goes on to draw itself (each draws it synchronously).
+  if (stripHTML.includes("data-pbp-count")) pbpCountStart();
   if (!d) {
     host.innerHTML = `${stripHTML}${emptySlate("stadium", "No play-by-play on file for this game",
       "The file is written while a game is in progress — up to eight games at a "
@@ -2953,5 +3226,6 @@ async function renderPbpPage() {
       </aside>
     </div>`;
   wire();
-  if (lv.state === "live") again();
+  if (host.querySelector("[data-pbp-count]")) pbpCountStart();
+  if (lv.state === "live" || pbpStartsSoon(lv)) again();
 }

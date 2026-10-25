@@ -86,10 +86,13 @@ def test_the_screen_is_the_one_measured_off_the_photograph():
     assert MEASURED[3][1] - MEASURED[0][1] > MEASURED[2][1] - MEASURED[1][1]
 
 
-def test_only_baseball_gets_it_and_it_rides_the_park():
+def test_the_ballpark_and_the_football_fields_get_it_and_it_rides_the_park():
+    # Football joined the same day (test_the_boards_come_alive.py): its own
+    # board, on the centre-hung screens over the field photographs.
     park = APP[APP.index("function pbpParkHTML("):]
     park = park[:park.index("\n}\n")]
-    assert 'const board = league === "mlb" && typeof pbpBoardSVG === "function" ? pbpBoardSVG(d) : "";' in park
+    assert ('const board = (league === "mlb" || isFootball) && typeof pbpBoardSVG === "function" '
+            '? pbpBoardSVG(d, league, boardGame) : "";') in park
     assert '<div class="pbp-park">${art}${board}${runners}${arc}${chip}</div>' in park
     assert "function pbpBoardSVG(" not in APP, "the board is the live page's own (detail.js), not the boot file's"
 
@@ -127,7 +130,7 @@ def test_the_bottom_half_bats_the_home_team():
 def test_final_pregame_middle_and_a_delay_each_say_so():
     got = _node("return [" + ", ".join([
         _svg({"state": "final", "away_score": 4, "home_score": 11, "period": "Final"}, "NYY", "BOS"),
-        _svg({"state": "scheduled", "start_time": "2026-10-25T23:10:00Z"}),
+        _svg({"state": "scheduled", "start_time": "2099-10-25T23:10:00Z"}),   # past the hour that counts down
         _svg({"state": "live", "away_score": 3, "home_score": 2, "period": "Middle 3rd", "outs": 3}),
         _svg({"state": "live", "away_score": 1, "home_score": 7, "period": "Top 4th", "hold": "Delayed — Rain"}, "CWS", "DET"),
     ]) + "];")
@@ -169,7 +172,7 @@ def test_nothing_spills_off_the_board():
     assert re.search(r'font-size="10" text-anchor="middle"[^>]*>11<', extra), "so does the 11th"
     word = _board_src()
     assert "const size = Math.min(max, room / (Math.max(1, txt.length) * 0.62));" in word, "a word fits its room"
-    assert "const word = (txt, y, max, fill, mono, cx = 82, room = 30) => {" in word
+    assert 'const word = (txt, y, max, fill, mono, cx = 82, room = 30, attrs = "") => {' in word
     sizes = [float(s) for s in re.findall(r'font-size="([0-9.]+)" text-anchor="middle"\s*fill="#FFC94A">SUSPENDED', suspended)]
     assert sizes and sizes[0] * 0.62 * len("SUSPENDED") <= 30.1, sizes   # printed to two places
 

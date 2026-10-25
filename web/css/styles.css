@@ -8532,6 +8532,14 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    ballpark's board does. Steps here because a room's sheet holds only
    rules its own classes can match. */
 @keyframes pbp-sb-flash { 0%, 40%, 80% { opacity: .25; } 20%, 60%, 100% { opacity: 1; } }
+/* A home run's or a touchdown's fireworks (detail.js pbpBoomSVG; the
+   page's own sheet runs them). */
+@keyframes pbp-boom {
+  0%   { transform: scale(.12); opacity: 0; }
+  10%  { opacity: 1; }
+  65%  { opacity: .95; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
 .pbp-parkchip { position: absolute; top: 10px; right: 10px; background: rgba(12,16,32,.82);
   border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 6px 9px;
   font-size: var(--fs-xs); color: var(--night-text); display: flex; flex-direction: column; gap: 2px; }

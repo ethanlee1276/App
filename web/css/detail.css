@@ -620,3 +620,28 @@
 .pbp-board text { font-family: var(--font-display); font-weight: 800; }
 .pbp-board .pbp-sb-num { font-family: var(--font-mono); font-weight: 700; }
 .pbp-sb-new { animation: pbp-sb-flash 1.4s linear 1; }
+/* The big moment (detail.js pbpMoment): HOME RUN or TOUCHDOWN on the board
+   blinks three times, then holds until the next pass redraws the board. */
+.pbp-sb-moment { animation: pbp-sb-flash 1.4s linear 3; animation-delay: calc(0s - var(--t, 0s)); }
+/* The fireworks: each burst opens from its centre and fades, one after
+   another, twice over. Reduced motion never shows them. */
+.pbp-boom, .pbp-wind { pointer-events: none; }
+.pbp-boom-b { transform-box: fill-box; transform-origin: center; opacity: 0;
+  animation: pbp-boom 1.7s cubic-bezier(.15, .75, .3, 1) 2 both;
+  animation-delay: calc(var(--d, 0s) - var(--t, 0s)); }
+.pbp-boom > g:nth-child(2) .pbp-boom-b { --d: .4s; }
+.pbp-boom > g:nth-child(3) .pbp-boom-b { --d: .8s; }
+.pbp-boom > g:nth-child(4) .pbp-boom-b { --d: 1.15s; }
+.pbp-boom > g:nth-child(5) .pbp-boom-b { --d: 1.5s; }
+@media (prefers-reduced-motion: reduce) { .pbp-boom { display: none; } }
+/* The wind over the outfield: a dash running each streak, out or in, its
+   speed the wind's band (light under 10 mph, brisk under 15, strong past). Reduced
+   motion leaves the streaks standing still. */
+.pbp-wind path { stroke-opacity: .42; stroke-width: .4; stroke-dasharray: 12 36;
+  animation: windflow 2.6s linear infinite; }
+.pbp-wind path:nth-child(2) { animation-delay: -.9s; }
+.pbp-wind path:nth-child(3) { animation-delay: -1.7s; }
+.pbp-wind path:nth-child(4) { animation-delay: -.4s; }
+.pbp-wind path:nth-child(5) { animation-delay: -1.3s; }
+.pbp-wind-brisk path { animation-duration: 1.8s; stroke-opacity: .5; }
+.pbp-wind-strong path { animation-duration: 1.2s; stroke-opacity: .58; stroke-width: .5; }

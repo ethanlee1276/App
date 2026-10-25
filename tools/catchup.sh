@@ -28,6 +28,8 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP DQ 2>&1 | tee /tmp/dq.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DR 2>&1 | tee /tmp/dr.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP DQ DR 2>&1 | tee /tmp/dr.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DS 2>&1 | tee /tmp/ds.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP DQ DR DS 2>&1 | tee /tmp/ds.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -430,6 +432,10 @@ curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpBoardSVG('
 SH
 run DR "The runners on the park's scoreboard are live" 120 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'PBP_BOARD_BASES = '
+SH
+run DS "The stadiums come alive (the football board, big moments, the wind, the countdown)" 120 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpFieldBoardSVG('
+curl -s https://qellysbook.com/css/styles.css | grep -c '@keyframes pbp-boom'
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py
