@@ -60,7 +60,6 @@
 .gp-sub { color: var(--text-dim); font-size: var(--fs-md); margin-top: 6px; }
 .gp-inactives { color: var(--text-mute); font-size: var(--fs-sm); }
 .gp-chips { margin-top: 12px; }
-.gp-stats { margin-bottom: 22px; }
 /* Venue panel — fills the column beside the stadium art with the reason
    the park carries the factors it does. */
 .pk-panel { margin-top: 14px; border-top: var(--hairline) solid var(--border-soft); padding-top: 12px; }
@@ -267,6 +266,16 @@
 .pbp-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
 .pbp-main, .pbp-rail { min-width: 0; }
 @media (max-width: 980px) { .pbp-layout { grid-template-columns: minmax(0, 1fr); } }
+/* ONE PLAY LIST ON A PHONE (2026-10-25). Where the page has the gamecast's
+   tabs, its Play-by-play tab is the whole game drive by drive; the rail's
+   copy, folded under the page on a narrow screen, printed the same plays a
+   second time below the leaders. Its other cards (the win chance, the
+   pressure) stay. Baseball has no such tab, so its rail is its list. */
+@media (max-width: 980px) { .pbp-has-tabs .pbp-railcard { display: none; } }
+/* The club's short name on a phone, the full one where there is room. */
+.pbp-hero .pbp-nm-nick { display: none; }
+@media (max-width: 720px) { .pbp-hero .pbp-nm-full { display: none; }
+  .pbp-hero .pbp-nm-nick { display: inline; } }
 .pbp-hero { display: grid; grid-template-columns: 1fr auto auto auto 1fr; align-items: center; gap: 12px; }
 .pbp-hero-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .pbp-hero-side b { font-size: var(--fs-lg); }
@@ -408,7 +417,9 @@
   text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
 .pbp-group-head b { color: var(--text); }
 .pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
-.pbp-tag { color: var(--good); }
+.pbp-tag { color: var(--text-dim); }
+.pbp-tag.score { color: var(--good); }
+.pbp-tag.live { color: var(--brand); }
 .pbp-tag.turnover { color: var(--warn); }
 .pbp-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start;
   padding: 6px 0; border-top: var(--hairline) solid var(--border); font-size: var(--fs-sm); }
@@ -444,16 +455,6 @@
 .pbp-wp-blind { color: var(--warn); opacity: 1; }
 /* The pick page's shopped-number line (shoppedLineNote). */
 .pp-shopped { color: var(--text-mute); font-size: var(--fs-sm); margin: 6px 0 10px; line-height: var(--lh-snug); }
-@media (max-width: 720px) {
-  /* The game page's five counts (the 2026-09-27 sweep): a column of five
-     big tiles ran ~330px for five small numbers. Three across, the
-     numbers a size down, the sub-lines left to the desktop. */
-  .stats.gp-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .stats.gp-stats .tile { padding: 10px 10px 9px; }
-  .stats.gp-stats .tile .k { font-size: var(--fs-2xs); }
-  .stats.gp-stats .tile .v { font-size: var(--fs-xl); margin-top: 3px; }
-  .stats.gp-stats .tile-sub { display: none; }
-}
 /* The prediction markets on the board's own spread and total (crowdLinesHTML). */
 .gp-crowd-lines { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px;
   font-size: var(--fs-sm); color: var(--text-dim); }

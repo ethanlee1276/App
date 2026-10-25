@@ -178,21 +178,6 @@
     return [`${n} play${n === 1 ? "" : "s"}`, `${Number(dr.yards || 0)} yard${Number(dr.yards) === 1 ? "" : "s"}`,
             dr.elapsed || ""].filter(Boolean).join(", ");
   }
-  function situationTiles(d, lastPlay) {
-    const lv = d.live || {};
-    // The scoreboard's own words for the NEXT snap ("2nd & 6 at BUF 38"),
-    // split on " at "; the strip's spot when the words are missing.
-    const detail = String(lv.detail || "");
-    let down = "", on = "";
-    const m = /^(.*?)\s+at\s+(.+)$/.exec(detail);
-    if (m) { down = m[1]; on = m[2]; } else if (detail) { down = detail; }
-    if (!on) on = spotWord(d, lv.yard_line);
-    if (!down && lastPlay) down = "";          // the last play's down is the LAST snap's, not the next
-    if (!down && !on) return "";
-    return `<div class="gc-tiles">
-      <div class="gc-tile"><span class="gc-k">Down</span><b>${esc(down || "—")}</b></div>
-      <div class="gc-tile"><span class="gc-k">Ball on</span><b>${esc(on || "—")}</b></div></div>`;
-  }
   function currentDriveHTML(d, league, lastPlay) {
     const lv = d.live || {};
     const dr = currentDrive(d);
@@ -203,8 +188,7 @@
       <div class="gc-drive-head">${teamMarkIn(league, dr.team, 28)}
         <div><div class="gc-k">Current drive</div><b>${esc(driveWords(dr))}</b></div>
         <span class="gc-drive-end">${fd.rz ? `<span class="gc-rz">Red zone</span>` : ""}${dr.period ? `<span class="gc-q">Q${esc(dr.period)}</span>` : ""}${fd.html ? fd.replay : ""}</span></div>
-      ${fd.html}
-      ${situationTiles(d, lastPlay)}</div>`;
+      ${fd.html}</div>`;
   }
 
   /* ---------------- the drive on the field ----------------
@@ -1107,18 +1091,30 @@
      model writes `live.win_prob` for every game in progress
      (livescore_build._win_prob), and that is the number drawn, with the
      mark of the side it favours. No reading is no badge. */
+  /* Football's newest SNAP: a timeout or a quarter's end is a moment in
+     the game, not a play (app.js footballWords), and the card names it
+     under the play rather than in its place — "Last play: Timeout, 0 yds"
+     was the card the live page used to draw. */
+  const isSnap = (p, d) => typeof footballWords !== "function" || footballWords(p, d).snap;
   function newestPlay(d, league) {
     const plays = d.plays || [];
-    if (FOOTBALL.has(league)) return plays.slice().reverse().find((p) => p && p.kind === "football") || null;
+    if (FOOTBALL.has(league)) {
+      const foot = plays.filter((p) => p && p.kind === "football");
+      return foot.slice().reverse().find((p) => isSnap(p, d)) || foot[foot.length - 1] || null;
+    }
     return plays.slice().reverse().find((p) => p && p.event) || null;
+  }
+  //: The moments since the newest snap ("Timeout", "End of the 1st quarter").
+  function sinceSnap(d, p) {
+    const foot = (d.plays || []).filter((r) => r && r.kind === "football");
+    const i = foot.indexOf(p);
+    return i < 0 ? [] : foot.slice(i + 1).filter((r) => !isSnap(r, d)).map((r) => footballWords(r, d).title);
   }
   /* "1-yd Touchdown Run" is ESPN's title; ours is the type and the yards
      ("Rushing Touchdown · 1 yd"), composed from the two fields and
      nothing else. */
-  function playTitle(p) {
-    const y = Number(p.yards || 0);
-    const yds = y ? `${y > 0 ? "" : trueMinus("-")}${Math.abs(y)} yd${Math.abs(y) === 1 ? "" : "s"}` : "";
-    return [esc(p.event || "Play"), yds ? esc(yds) : ""].filter(Boolean).join(" · ");
+  function playTitle(p, d) {
+    return esc(typeof footballWords === "function" ? footballWords(p, d).title : (p.event || "Play"));
   }
   function winPct(d, league) {
     const wp = (d.live || {}).win_prob;
@@ -1131,10 +1127,11 @@
     const p = newestPlay(d, league);
     if (!p) return "";
     const foot = p.kind === "football";
-    const when = foot ? `${p.period ? `Q${p.period}` : ""}${p.clock ? ` ${p.clock}` : ""}`.trim()
+    const when = foot ? `${p.period ? `Q${p.period}` : ""}${p.clock ? ` ${typeof fbClock === "function" ? fbClock(p.clock) : p.clock}` : ""}`.trim()
       : `${p.period ? (league === "nhl" ? hockeyPeriod(p.period) : (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`)) : ""}${p.clock ? ` ${p.clock}` : ""}`.trim();
+    const words = foot && typeof footballWords === "function" ? footballWords(p, d) : null;
     const tag = p.turnover ? `<span class="gc-tag turnover">Turnover</span>`
-      : p.scoring ? `<span class="gc-tag">${foot ? "Score" : (league === "nhl" ? "Goal" : `+${p.points || ""}`)}</span>` : p.penalty ? `<span class="gc-tag">Penalty</span>` : "";
+      : p.scoring ? `<span class="gc-tag">${foot ? ({ TD: "Touchdown", FG: "Field goal" }[words && words.tag] || "Score") : (league === "nhl" ? "Goal" : `+${p.points || ""}`)}</span>` : p.penalty ? `<span class="gc-tag">Flag</span>` : "";
     const names = foot ? (p.players || []).filter(Boolean) : [p.player].filter(Boolean);
     const pass = foot && /pass|reception/i.test(String(p.event || ""));
     const chips = names.map((name, i) => {
@@ -1146,17 +1143,21 @@
           ${got.line ? `<span class="gc-chip-line">${got.line}</span>` : ""}</div></div>`;
     }).join("");
     const snap = foot && p.down ? `${esc(downWord(p))}${p.spot != null ? ` at ${esc(spotWord(d, p.spot))}` : ""}` : "";
+    const since = foot ? sinceSnap(d, p) : [];
     const score = (p.away_score != null && p.home_score != null)
       ? `<span class="gc-score">${esc(d.away)} ${esc(p.away_score)} – ${esc(p.home_score)} ${esc(d.home)}</span>` : "";
     return `<div class="card gc-last">
       <div class="gc-last-head"><div><div class="gc-k">Last play${when ? ` · ${esc(when)}` : ""}</div>
-        <b class="gc-last-title">${foot ? playTitle(p) : esc(p.event || "Play")}</b>${tag}</div>
+        <b class="gc-last-title">${foot ? playTitle(p, d) : esc(p.event || "Play")}</b>${tag}</div>
         ${winPct(d, league)}</div>
-      ${foot && p.team ? `<div class="gc-last-team">${teamMarkIn(league, p.team, 18)} ${esc(teamNameIn(league, p.team))}${
-        p.penalty ? " · penalty" : ""}</div>` : ""}
+      ${foot && p.team && (!words || words.snap) ? `<div class="gc-last-team">${teamMarkIn(league, p.team, 18)} ${esc(teamNameIn(league, p.team))}${
+        ` <span class="mini">${esc((words && ROLE_WORD[words.role]) || "on offence")}</span>`}</div>` : ""}
       ${chips ? `<div class="gc-chips">${chips}</div>` : ""}
-      <div class="gc-last-foot">${snap ? `<span>${snap}</span>` : ""}${score}</div></div>`;
+      <div class="gc-last-foot">${snap ? `<span>${snap}</span>` : ""}${score}</div>${
+        since.length ? `<div class="gc-last-since">${since.map((w) => `<span>${esc(w)}</span>`).join("")}</div>` : ""}</div>`;
   }
+  //: Which side the team on the card was, for the play it is named on.
+  const ROLE_WORD = { receiving: "receiving", punting: "punting", kicking: "kicking" };
 
   /* ---------------- the game leaders ----------------
      ESPN's GAME LEADERS: five rows for football (passing, rushing,
@@ -1294,17 +1295,17 @@
     return gameChartHTML(d, league) + drives.map((dr, i) => {
       const rows = dr.plays || [];
       const n = dr.offensive_plays || rows.length;
-      const result = dr.result || (dr.scoring ? "Score" : rows.some((p) => p.turnover) ? "Turnover"
+      const result = (typeof driveResultWord === "function" ? driveResultWord(dr) : dr.result) || (dr.scoring ? "Score" : rows.some((p) => p.turnover) ? "Turnover"
         : (i === 0 && lv.state === "live") ? "In progress" : "");
       const last = rows[rows.length - 1] || {};
       const score = (last.away_score != null && last.home_score != null) ? `${last.away_score}–${last.home_score}` : "";
       return `<div class="card gc-dr${dr.scoring ? " scoring" : ""}">
         <div class="gc-dr-head">${teamMarkIn(league, dr.team, 22)}
-          <div><b>${esc(dr.team || "—")}</b><span class="mini"> · ${n} play${n === 1 ? "" : "s"} · ${dr.yards || 0} yd${
-            dr.elapsed ? ` · ${esc(dr.elapsed)}` : ""}${dr.period ? ` · Q${esc(dr.period)}` : ""}</span></div>
-          ${result ? `<span class="gc-tag${/turnover/i.test(result) ? " turnover" : ""}">${esc(result)}</span>` : ""}
+          <div><b>${esc(dr.team || "—")}</b><span class="mini"> · ${n} play${n === 1 ? "" : "s"}, ${dr.yards || 0} yd${dr.yards === 1 ? "" : "s"}${
+            dr.elapsed ? `, ${esc(dr.elapsed)}` : ""}${dr.period ? ` · Q${esc(dr.period)}` : ""}</span></div>
+          ${result ? `<span class="gc-tag${/turnover|interception|fumble|safety/i.test(result) ? " turnover" : /touchdown|field goal|score/i.test(result) ? "" : " quiet"}">${esc(result)}</span>` : ""}
           ${score ? `<span class="gc-dr-score">${esc(score)}</span>` : ""}</div>
-        ${playsHTML({ plays: rows }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`;
+        ${playsHTML({ plays: rows, home: d.home, away: d.away }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`;
     }).join("");
   }
   function playsTabHTML(d, league) {

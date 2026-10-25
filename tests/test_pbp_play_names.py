@@ -195,8 +195,10 @@ def test_the_old_line_survives_when_nobody_resolved():
     """Most of what this touches is a feed that resolved fine yesterday;
     a play with no names must not lose its category and its yards."""
     fn = _row_fn()
-    assert 'who ? `<b>${who}</b> · ` : ""' in fn
-    assert "escapeHtml(p.event)" in fn and "escapeHtml(yds)" in fn
+    # Since 2026-10-25 the play's words come from footballWords (its verb
+    # and its yards); the names follow them only when some resolved.
+    assert 'who ? ` · <b>${who}</b>` : ""' in fn
+    assert "escapeHtml(w.title)" in fn and "footballWords(p, g)" in fn
 
 
 def test_the_situation_and_the_flags_still_ride_the_row():

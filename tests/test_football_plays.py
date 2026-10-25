@@ -324,9 +324,14 @@ def _fn(name):
 def test_the_card_draws_football_rows_from_the_numbers():
     body = _fn("playsHTML")
     assert 'p.kind === "football"' in body
-    for field in ("p.period", "p.clock", "p.down", "p.distance", "p.yards",
+    for field in ("p.period", "p.clock", "p.down", "p.distance",
                   "p.team", "p.turnover", "p.scoring"):
         assert field in body, field
+    # The play's verb and its yards come from the one composer every
+    # place that names a play reads (2026-10-25).
+    assert "footballWords(p, g)" in body
+    words = _fn("footballWords")
+    assert "(p || {}).yards" in words and "(p || {}).event" in words and ".text" not in words
     assert "p.text" not in body and "p.description" not in body
     assert "g.drive" in body, "the current drive line is never drawn"
     assert "${driveLine}" in body, "the drive line is built and never placed"

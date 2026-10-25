@@ -6925,6 +6925,13 @@ body.has-deck #rail-live { display: none; }
 }
 /* A football clock ("Q4 4:26") fits its column on one line. */
 .lb-play { grid-template-columns: minmax(2.4em, max-content) 1fr auto; }
+/* The football row's parts (2026-10-25): the team in its own weight, the
+   down after the play in the muted tone, and a moment in the game (a
+   timeout, a quarter's end) as a quiet line with nothing beside it. */
+.lb-play .lb-side { font-weight: 700; color: var(--text); }
+.lb-play .lb-dd { color: var(--text-mute); }
+.lb-play.lb-moment .lb-what { color: var(--text-mute); font-style: italic; }
+.lb-play .lb-rbi.lb-to { color: var(--warn); }
 /* Tonight across every sport (2026-09-05): the Live tab's chip row, the
    league blocks under it. */
 .tn-chips { margin-bottom: 10px; }
@@ -10534,3 +10541,11 @@ button.set-item:active, a.set-item:active, label.set-item:active { background: v
   .graph-tip { background-image: none; }
   html.store-ios .topbar, html.ios-home .topbar { background: var(--topbar-bg); }
 }
+
+/* The sign-up screen's two promises (signupHTML): a mark and a sentence a
+   row, set like a settings list's footnotes. */
+.acct-promises { list-style: none; margin: 16px 0 0; padding: 12px 0 0; display: grid; gap: 10px;
+  border-top: var(--hairline) solid var(--border); }
+.acct-promises li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
+  font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); }
+.acct-promises li > :first-child { color: var(--brand); margin-top: 2px; }

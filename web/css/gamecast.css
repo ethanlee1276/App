@@ -22,10 +22,6 @@
 .gc-drive-head { display: flex; align-items: center; gap: 12px; }
 .gc-drive-head b { font-size: var(--fs-md); }
 .gc-q { margin-left: auto; font-family: var(--font-mono); color: var(--text-mute); }
-.gc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.gc-tile { padding: 8px 10px; border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
-  background: rgba(255,255,255,.03); text-align: center; }
-.gc-tile b { display: block; font-size: var(--fs-lg); margin-top: 2px; }
 
 /* the last play */
 .gc-last-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
@@ -43,6 +39,11 @@
 .gc-last-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px;
   margin-top: 10px; font-size: var(--fs-sm); color: var(--text-mute); }
 .gc-score { font-family: var(--font-mono); }
+/* What has happened since the play (a timeout, a quarter's end): a quiet
+   line under the card, never in the play's place. */
+.gc-last-since { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.gc-last-since span { font-size: var(--fs-xs); color: var(--text-dim); padding: 2px 8px;
+  border: var(--hairline) solid var(--border); border-radius: 999px; }
 
 /* the leaders and the team stats: the card's head sits tight over its rows */
 .gc-leaders, .gc-tstats { padding-bottom: 6px; }
@@ -88,8 +89,14 @@
 /* play by play, drive by drive */
 .gc-dr { margin-bottom: 10px; }
 .gc-dr.scoring { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); }
-.gc-dr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.gc-dr-score { margin-left: auto; font-family: var(--font-mono); color: var(--text-mute); font-size: var(--fs-sm); }
+/* The head is three columns — the mark, who and how long, then how it
+   ended over the score it left — so on a phone the score sits under its
+   tag instead of wrapping to a line of its own at the far edge. */
+.gc-dr-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+  column-gap: 10px; row-gap: 2px; margin-bottom: 8px; }
+.gc-dr-head > :first-child, .gc-dr-head > div { grid-row: span 2; min-width: 0; }
+.gc-dr-head > .gc-tag { grid-column: 3; justify-self: end; margin-left: 0; }
+.gc-dr-score { grid-column: 3; justify-self: end; font-family: var(--font-mono); color: var(--text-mute); font-size: var(--fs-sm); }
 
 @media (max-width: 700px) {
   .gc-lead-row { grid-template-columns: 1fr auto 1fr; gap: 6px; }

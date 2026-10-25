@@ -588,3 +588,20 @@
 .dc-live .dc-hash { color: var(--brand-2); font-weight: 800; }
 .pw-store .pw-hero { text-align: center; padding: 32px 16px 8px; }
 .pw-store .pw-store-go { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+
+/* The plans screen's pinned button on a phone (pwDock): above the tab bar,
+   gone once the plans themselves are on screen. Opacity and transform
+   only, inside the motion budget. */
+.pw-dock { display: none; }
+@media (max-width: 720px) {
+  .pw-dock { position: fixed; left: 12px; right: 12px; z-index: 55;
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+    padding: 10px 12px; border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
+    background: var(--panel); box-shadow: var(--glow-soft);
+    transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+  .pw-dock .pw-dock-go { width: 100%; }
+  .pw-dock .pw-dock-fine { text-align: center; font-size: var(--fs-xs); color: var(--text-mute); }
+  .pw-dock.away { opacity: 0; transform: translateY(10px); pointer-events: none; }
+  body.walled .pw-dock { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}

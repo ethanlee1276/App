@@ -60,6 +60,7 @@ def _node(js):
       {_const("PROOF_RATE_FLOOR")}
       {_fn("zenoMoney")}
       {_fn("recFloor")}
+      {_fn("sameTally")}
       {_fn("recordRibbonsHTML")}
       {_fn("zenoWhoHTML")}
       {_fn("adoptPooledRecord")}

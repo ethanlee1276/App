@@ -2249,6 +2249,52 @@ def other_day(ev, slate_days: set[str]) -> bool:
     return bool(slate_days) and len(c) == 10 and c not in slate_days
 
 
+def _eastern_day(stamp: str) -> str:
+    """An ISO instant's calendar day in US Eastern, or "" when unreadable."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    s = str(stamp or "").strip()
+    if len(s) < 16:
+        return ""
+    try:
+        t = _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=_dt.timezone.utc)
+    return t.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+
+
+def off_slate_day(ev, games) -> bool:
+    """Is this event on a day none of the slate's games is on, in Eastern?
+
+    THE WINDOW ABOVE IS A DAY WIDE ON PURPOSE AND THAT IS WHY THIS EXISTS
+    (2026-10-25, the NBA bug scan: "8 priced event(s) could not be placed
+    on the slate", night after night). `slate_days` pads a day either side
+    because a 10:30pm Eastern tip is already tomorrow in UTC — so on a
+    Saturday slate every one of SUNDAY's games falls inside the window, is
+    not one of our pairs, and was reported as a wiring drop. It is
+    tomorrow's game, which is not a fault.
+
+    Asked only of an event that is NOT one of the slate's pairs, so it can
+    never turn a real game away: it decides whether a missing pair is
+    another day's fixture (counted with the other days) or a genuine
+    mismatch between our abbreviations and the table's (still a drop). The
+    slate's day is each game's own `date` — the league's local day, the
+    NBA CDN's gameDateEst — and the kickoff read in Eastern where a game
+    carries no date.
+    """
+    days: set[str] = set()
+    for g in games or []:
+        d = _field(g, "date")[:10]
+        if len(d) != 10:
+            d = _eastern_day(_field(g, "kickoff"))
+        if len(d) == 10:
+            days.add(d)
+    c = _eastern_day(str((ev or {}).get("commence_time") or ""))
+    return bool(days) and bool(c) and c not in days
+
+
 def same_meeting(ev_home: str, ev_away: str, game) -> bool:
     """Is this event the same MEETING of these two teams as `game`?
 
@@ -2466,6 +2512,9 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
             continue
         pair = frozenset((home, away))
         legs = pair_games.get(pair) or []
+        if not legs and off_slate_day(ev, slate.games):
+            result.other_day_events += 1            # tomorrow's game, inside the padded window
+            continue
         if not legs:
             # Reaching here means the pair is not on the slate AND the
             # kickoff is on a day the slate covers, which is a wiring bug
@@ -2794,6 +2843,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # board-lines path and `slate_days` for why it was inert.
         if other_day(ev, days):
             result.other_day_events += 1
+            continue
+        if frozenset((home, away)) not in slate_pairs and off_slate_day(ev, slate.games):
+            result.other_day_events += 1            # tomorrow's game, inside the padded window
             continue
         if frozenset((home, away)) not in slate_pairs:
             # A later date's game is not a fault and never reaches here —

@@ -258,12 +258,19 @@ def test_the_module_draws_numbers_and_never_a_sentence():
     assert "https://a.espncdn.com/i/headshots/${dir}/players/full/" in GC
     assert 'const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl" };' in GC
     assert "onerror" not in GC and "onclick" not in GC, "no inline handlers under the page's CSP"
-    for cls in (".gc-drive", ".gc-tiles", ".gc-last", ".gc-chip", ".gc-win", ".gc-leaders", ".gc-lead-row",
+    for cls in (".gc-drive", ".gc-last", ".gc-chip", ".gc-win", ".gc-leaders", ".gc-lead-row",
                 ".gc-toggle", ".gc-tog.active", ".gc-ts-row", ".gc-bar", ".gc-dr", ".gc-tag.turnover", ".gc-face"):
         assert cls in GC_CSS, cls
     assert "js/gamecast.js" in shrink.FILES and "css/gamecast.css" in shrink.FILES
     caddy = (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
     assert "/js/gamecast.js /css/gamecast.css" in caddy
+
+
+def _app_piece(head):
+    """One top-level declaration of app.js, from its head to the next."""
+    i = APP.index(head)
+    ends = [APP.find(m, i + 10) for m in ("\nfunction ", "\nasync function ", "\nconst ", "\nlet ", "\n/* ", "\n//")]
+    return APP[i:min(e for e in ends if e != -1)]
 
 
 def _node(js):
@@ -290,6 +297,10 @@ def _node(js):
       const pbpTotalsHTML = () => "<div>old totals</div>";
       const window = {};
     """
+    # The site's own words for a play and a drive's ending (app.js), the
+    # real ones: the Last play card and the drive heads read them.
+    stubs += "\n".join(_app_piece(n) for n in ("const FB_PERIOD", "function footballWords(",
+                                               "const DRIVE_RESULT", "function driveResultWord("))
     prog = f"{stubs}\n{GC}\nconsole.log(JSON.stringify((() => {{ const QBGamecast = window.QBGamecast; {js} }})()));"
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog); path = fh.name
@@ -330,11 +341,14 @@ def test_the_rooms_draw_the_drive_the_last_play_the_leaders_the_box_and_the_tota
     assert got["face"] == "https://a.espncdn.com/i/headshots/nfl/players/full/3042.png"
     assert got["own"] == "img/jw.png", "the board's own face first"
     g = got["gamecast"]
-    for want in ("Current drive", "7 plays, 66 yards, 3:23", ">Down<", "2nd &amp; Goal", ">Ball on<", "TB 4",
-                 "Last play · Q1 10:51", "Rushing Touchdown · 1 yd", "Win % (our model)", "<b>92.0</b>",
+    for want in ("Current drive", "7 plays, 66 yards, 3:23", "TB 4",
+                 "Last play · Q1 10:51", "Touchdown run, 1 yd", "Win % (our model)", "<b>92.0</b>",
                  "Game leaders", ">Passing<", ">Rushing<", ">Receiving<", ">Tackles<", "Dak Prescott",
-                 "George Pickens", "Jalen Trotter", "2 TOT, 1 SOLO", "img/jw.png", ">Score<"):
+                 "George Pickens", "Jalen Trotter", "2 TOT, 1 SOLO", "img/jw.png", ">Touchdown<", "on offence"):
         assert want in g, want
+    # The next snap's down and spot are the header's (and the strip's):
+    # the gamecast no longer repeats them in tiles (2026-10-25).
+    assert ">Down<" not in g and ">Ball on<" not in g
     assert ">Sacks<" not in g, "nobody has a sack: the row is not drawn"
     # The last play's chips: the man named on it, his face, his line so
     # far, and the snap it came from — no sentence anywhere on the page.
@@ -351,7 +365,7 @@ def test_the_rooms_draw_the_drive_the_last_play_the_leaders_the_box_and_the_tota
     assert "5-12" in t and t.count("gc-bar") == 2, "bars for the two plain numbers, none for 5-12 or 31:12"
     p = got["plays"]
     assert p.index("Touchdown") < p.index("Punt"), "newest drive first"
-    assert "7 plays · 66 yd · 3:23 · Q1" in p and "0–7" in p
+    assert "7 plays, 66 yds, 3:23 · Q1" in p and "0–7" in p
     assert "picks" in got["odds"] and "track" in got["odds"] and "Full game page" in got["odds"]
 
 

@@ -209,12 +209,14 @@ def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     assert "const edge = pooled ? (src.edge_board || src.edge.overall) : o;" in v, \
         "the edge card is the edge board alone, so the two cards add up to the number above them"
     assert "the model’s edge board, " in v, "the sub-line says whose number it is"
-    assert "combinedLineHTML(src.pooled_overall, need)" in v, "the pooled total, named, beneath it"
-    assert ": pooled ? verdictBooksHTML(edge, lk, chart, lines)" in v
+    # The pooled total, named, beneath it — when it is not the tiles again
+    # (sameTally, 2026-10-25).
+    assert "combinedLineHTML(src.pooled_overall, need, o)" in v, "the pooled total, named, beneath it"
+    assert ": pooled ? verdictBooksHTML(edge, lk, chart, lines, o)" in v
     assert '<div class="rv-read">${chart}' in v, "an unpooled file still gets the old reading"
     b = _fn("verdictBooksHTML")
     assert '<span class="hd-eyebrow">Edge bets</span>' in b and '<span class="hd-eyebrow">Most likely</span>' in b
-    assert "${line(edge)}" in b and '${lk ? line(lk) : "no rows yet"}' in b
+    assert "${line(edge)}" in b and "${lk ? line(lk) : \"nothing staked yet" in b
     assert "reliabilityDiagram(likelyBuckets)" in b and "predicted: b.claimed, actual: b.actual, n: b.n, ci," in b, \
         "the Most Likely diagram is drawn from its bands, in the edge diagram's shape"
     assert "2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n)" in b, "the same two-standard-error band"

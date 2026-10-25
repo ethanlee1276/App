@@ -1945,6 +1945,32 @@ async function renderPaywall() {
      paying, which is where the two get confused. */
   host.innerHTML = paywallHTML(rec, _pwStatus);
   sweepRings(host);                 // the ribbon's ring sweeps in and its numbers count
+  pwDock(host);
+}
+
+/* THE BUTTON STAYS IN REACH (2026-10-25; Ethan: "the paywall page and all
+   that stuff ... needs to be curated to work for an app"). A store app's
+   plans screen keeps its one button pinned above the tab bar while the
+   reader scrolls the proof; this page put it in the hero and then ran
+   two screens of receipts before the plans. On a phone the hero's own
+   button rides along at the bottom — the same words, the same action —
+   and steps aside once the plans are on screen, where their own buttons
+   take over. Nothing is drawn when the hero has no plan to offer. */
+function pwDock(host) {
+  const go = host.querySelector(".pw-cta-go");
+  const plans = host.querySelector(".pw-plans");
+  if (!go || !plans) return;
+  const monthly = PLANS.find((p) => p.id === "monthly");
+  const trial = /days free/.test(go.textContent);
+  const fine = trial && monthly ? `then $${monthly.price} a month · cancel anytime` : "Cancel anytime";
+  host.insertAdjacentHTML("beforeend", `<div class="pw-dock" role="region" aria-label="Start">
+      <button class="btn primary pw-dock-go" type="button" data-act="pwToPlans">${escapeHtml(go.textContent.trim())}</button>
+      <span class="pw-dock-fine">${escapeHtml(fine)}</span></div>`);
+  const dock = host.querySelector(".pw-dock");
+  if (typeof IntersectionObserver !== "function") return;
+  new IntersectionObserver((seen) => {
+    dock.classList.toggle("away", seen.some((e) => e.isIntersecting));
+  }, { threshold: 0.15 }).observe(plans);
 }
 
 /* WHICH PLAN, IN WORDS, ON THE ACCOUNT PAGE.

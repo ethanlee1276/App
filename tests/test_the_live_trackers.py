@@ -255,9 +255,13 @@ def test_the_drive_card_draws_the_field_the_lines_and_the_ball_running_the_drive
         assert 'style="--tm:#002244"' in svg, "the field wears the offence's colour"
     assert ">DAL<" in g and ">TB<" in g, "the end zones are named"
     assert "Line of scrimmage" in g and "Line to gain" in g and "Red zone" not in g
-    assert "<animate" not in got["later"].split("gc-fd")[1].split("gc-tiles")[0], "a redraw after the run draws it at rest"
+    assert "<animate" not in got["later"].split("gc-fd")[1], "a redraw after the run draws it at rest"
     assert got["later"].count('class="gc-fd-lbl') == 8
-    assert ">Down<" in g and ">Ball on<" in g, "the tiles stay"
+    # The Down and Ball on tiles went (2026-10-25): the header says the
+    # next snap's down and spot, and the strip under the photograph says
+    # where the ball is — three places was the repetition Ethan asked
+    # to lose.
+    assert ">Down<" not in g and ">Ball on<" not in g and "gc-tiles" not in g
 
 
 def test_a_new_play_runs_from_the_last_one_seen_and_the_red_zone_lights():

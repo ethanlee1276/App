@@ -103,9 +103,14 @@
 .rc-ppbadge { --pc: var(--brand); position: absolute; top: calc(var(--sp-3) + 52px); right: var(--sp-3); padding: 4px 10px; border-radius: 999px;
   font: 700 var(--fs-xs) / 1.3 var(--font-sans); color: var(--text);
   background: color-mix(in oklab, var(--pc) 55%, var(--bg)); border: var(--hairline) solid color-mix(in oklab, var(--pc) 70%, var(--text)); }
-.rc-caption { position: absolute; top: var(--sp-3); left: var(--sp-3); max-width: min(460px, 48%); display: flex; align-items: center; gap: var(--sp-2);
+/* THE LAST PLAY SITS UNDER THE PICTURE, ON EVERY SCREEN (2026-10-25). On a
+   computer it floated over the arena's top-left corner, up to half the
+   picture wide — straight across the left half of the big screen, where the
+   score, the strength and GOAL are lit. A phone already set it under the
+   art; a computer now does the same, so nothing covers the board. */
+.rc-caption { position: static; margin: var(--sp-2) var(--sp-3) 0; display: flex; align-items: center; gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: color-mix(in oklab, var(--bg) 76%, transparent);
-  border: var(--hairline) solid var(--border); box-shadow: var(--glow-soft); }
+  border: var(--hairline) solid var(--border); }
 .rc-cap-t { display: flex; flex-direction: column; min-width: 0; line-height: var(--lh-tight); }
 .rc-cap-t b { display: flex; align-items: center; gap: 6px; font: 700 var(--fs-md) / 1.25 var(--font-sans); color: var(--text); }
 .rc-cap-t span { font: 500 var(--fs-xs) / 1.35 var(--font-sans); color: var(--text-dim); }

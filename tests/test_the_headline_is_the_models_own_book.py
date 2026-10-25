@@ -59,7 +59,7 @@ def _node(body: str, call: str, arg):
 
 
 def _ribbons(rec, ov):
-    body = _fn("recFloor") + _fn("recordRibbonsHTML")
+    body = _fn("recFloor") + _fn("sameTally") + _fn("recordRibbonsHTML")
     got = _node(body, "recordRibbonsHTML(a.rec, a.ov, [])", {"rec": rec, "ov": ov})
     return None if got is None else re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", got))
 

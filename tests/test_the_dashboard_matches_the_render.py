@@ -142,7 +142,9 @@ def test_the_game_and_pick_pages_do_not_say_things_twice_on_a_phone():
     assert "const linesCard = !gpLines && (g.spread != null" in APP
     i = APP.index("const notes = [];")
     assert "mph wind" not in APP[i:APP.index("const notesCard", i)]
-    assert ".stats.gp-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }" in CSS
+    # The five counts went altogether (2026-10-25): the jump chips carry
+    # each section's count on its own button.
+    assert "gp-stats" not in APP and "gp-stats" not in CSS
     assert ".metrics:has(> .metric:nth-child(2):last-child) .metric.primary { grid-column: auto; }" in CSS
 
 

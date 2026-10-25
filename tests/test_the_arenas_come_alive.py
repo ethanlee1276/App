@@ -343,6 +343,17 @@ def test_a_room_replaces_only_its_own_entry_points():
         assert not shared, (room, shared)
 
 
+def test_the_last_play_card_sits_under_the_arena_and_off_its_big_screen():
+    """Ethan's desktop hockey page, 2026-10-25: the page's last-play card
+    ("PUCK: NYR") floated over the top-left of the arena, across the left
+    half of the jumbotron the score is lit on. It sits under the picture
+    now on every screen, as it already did on a phone."""
+    css = open(os.path.join(ROOT, "web", "css", "rinkcast.css"), encoding="utf-8").read()
+    rule = re.search(r"(?m)^\.rc-caption \{(.*?)\}", css, re.S).group(1)
+    assert "position: static" in rule and "position: absolute" not in rule
+    assert "max-width: min(460px, 48%)" not in rule
+
+
 # --- in a browser -----------------------------------------------------------------------
 def test_in_a_browser_the_arenas_light_and_a_moment_reaches_a_phone():
     if os.environ.get("QB_BROWSER_TESTS") != "1":

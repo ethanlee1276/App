@@ -1716,6 +1716,10 @@ function renderGamePage() {
     if (b) b.addEventListener("click", detailBack);
     return;
   }
+  // The cards drawn below know they are on their own game's page
+  // (app.js cardInGame): the matchup, the kickoff and the weather lines
+  // the header carries are not printed again on every one of them.
+  CARD_GAME = g;
   const mlb = state.sport === "mlb";
   const nba = state.sport === "nba" || state.sport === "wnba";
   const w = g.weather || {};
@@ -1838,7 +1842,11 @@ function renderGamePage() {
         <b>${gpMl(g.home_ml)}</b>
       </div></div>` : "";
   const notes = [];
-  (g.injuries || []).slice(0, 4).forEach((i) => notes.push(
+  // WHO IS OUT HAS ONE HOME. The game report's injuries section and the
+  // game plan's "who is out" step both list them with what each absence
+  // opens; this card listing the first four again under them was the
+  // third copy (2026-10-25). It keeps them when neither is on the page.
+  if (!gameReportFor(g) && !gamePlanFor(g)) (g.injuries || []).slice(0, 4).forEach((i) => notes.push(
     `${i.player} (${i.team} ${i.position || ""}) — ${i.status}`));
   if (g.lineups_confirmed === false) notes.push(lineupPendingWords(g));
   if (mlb && f.hr >= 1.05) notes.push(`Park boosts home runs +${Math.round((f.hr - 1) * 100)}%`);
@@ -2055,23 +2063,11 @@ function renderGamePage() {
     <div id="gp-lab"></div>
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}
 
-    <div class="stats gp-stats">
-      <div class="tile"><div class="k">Props analyzed</div><div class="v">${props.length}</div>
-        <div class="tile-sub">in this game</div></div>
-      <div class="tile"><div class="k">Edge picks</div><div class="v">${props.filter((r) => r._ok).length + bets.filter((b) => b._ok).length}</div>
-        <div class="tile-sub">props &amp; game bets that clear the edge bar</div></div>
-      <div class="tile"><div class="k">Edge game bets</div><div class="v">${bets.filter((b) => b._ok).length}</div>
-        <div class="tile-sub">moneyline, spread, totals</div></div>
-      <div class="tile"><div class="k">Most likely</div><div class="v">${
-        /* The one board's picks in this game when it is on — the section
-           below draws them; `likelies` is the old shelf and is empty then
-           (Ethan, 2026-09-27: the tile read 0 above Top picks 2, Strong 12). */
-        oneBoardOn() ? matchupPickCount(g) : likelies.length}</div>
-        <div class="tile-sub">on the Most Likely board · own book</div></div>
-      <div class="tile"><div class="k">Long shots</div><div class="v">${shots.length}</div>
-        <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : state.sport === "nhl" ? "none for NHL" : "anytime TDs"} · tracked separately</div></div>
-    </div>
-
+    ${/* NO COUNT TILES (2026-10-25): Props analyzed, Edge picks, Edge game
+          bets, Most likely and Long shots were five boxes of numbers the jump
+          chips above already carry on each section's own button, mostly
+          zeros. The one number no chip has — how many props were analyzed —
+          is said where the props are. */""}
     ${gpMatchupHTML(g)}
 
     ${likelies.length || offHere ? `<div id="gp-sec-likely">${
@@ -2126,8 +2122,10 @@ function renderGamePage() {
         <div class="card" style="padding:0">${shown.map(edgePropRow).sort((a, b) => b.ev - a.ev).map(edgeRowHTML).join("")}</div>`
       : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
           <div class="es-title">No player props clear the filters in this game</div>
-          <div class="es-sub">Either the model passes on everything here, or books haven’t
-          posted prices for it yet.</div>
+          <div class="es-sub">${props.length
+            ? `${plural(props.length, "prop was", "props were")} analyzed here and held — the edge under
+               the bar, no real price, or the lineup not confirmed yet.`
+            : "Books haven’t posted prop prices for this game yet."}</div>
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
             Show all ${props.length} analyzed ${pluralWord(props.length, "prop")} anyway</button>` : ""}</div>`}</div>
 
@@ -2135,7 +2133,7 @@ function renderGamePage() {
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
       <div class="cards gp-cards">${shots.map(longShotCard).join("")}</div></div>` : ""}
 
-    ${props.length > shown.length ? `<p class="list-note" style="margin-top:14px">
+    ${props.length > shown.length && shown.length ? `<p class="list-note" style="margin-top:14px">
       ${plural(props.length - shown.length, "more analyzed prop", "more analyzed props")}
       in this game ${props.length - shown.length === 1 ? "is" : "are"} held
       (edge below the bar, no real price, or lineup unconfirmed).</p>` : ""}
@@ -2595,9 +2593,9 @@ function pbpRailHTML(d, league) {
     <div class="pbp-group">
       <div class="pbp-group-head"><span><b>${escapeHtml(g.head)}</b>${
         g.sub ? ` — ${escapeHtml(g.sub)}` : ""}</span>${
-        g.tag ? `<span class="pbp-tag${g.tag === "TURNOVER" ? " turnover" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
+        g.tag ? `<span class="pbp-tag${/TURNOVER|INTERCEPTION|FUMBLE|SAFETY/.test(g.tag) ? " turnover" : /TOUCHDOWN|FIELD GOAL|SCORE/.test(g.tag) ? " score" : g.tag === "IN PROGRESS" ? " live" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
       ${mlb ? g.rows.map((r) => pbpRowHTML(r, league, g.batting)).join("")
-            : (playsHTML({ plays: g.rows }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
+            : (playsHTML({ plays: g.rows, home: d.home, away: d.away }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
     </div>`;
   const more = total - shown.reduce((a, g) => a + g.rows.length, 0);
   return `${shown.length ? shown.map(group).join("") : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
@@ -3401,7 +3399,17 @@ async function renderPbpPage() {
   }
   const lv = d.live || {};
   const mark = (abbr) => teamMarkIn(league, abbr, 44);
-  const name = (abbr, full) => escapeHtml(full || teamNameIn(league, abbr) || abbr || "");
+  // The full name, and the club's own short name beside it for a phone,
+  // where "Indianapolis Colts" ran into its own score (2026-10-25).
+  const name = (abbr, full) => {
+    const long = full || teamNameIn(league, abbr) || abbr || "";
+    // A college's short name is its school ("Ole Miss"), a pro club's its nickname.
+    const t = teamsIn(league)[abbr] || {};
+    const nick = (league === "cfb" && t.loc) || t.nick || abbr || long;
+    return nick && nick !== long
+      ? `<span class="pbp-nm-full">${escapeHtml(long)}</span><span class="pbp-nm-nick">${escapeHtml(nick)}</span>`
+      : escapeHtml(long);
+  };
   let situation = escapeHtml(lv.period || "");
   if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
   if (league === "mlb" && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
@@ -3423,8 +3431,11 @@ async function renderPbpPage() {
   // — livescore_build writes `drives` and a flattened `plays`, and the
   // MLB builder is the only one that writes `events`. Renamed from
   // `lastHit` when football joined: it is not a hit any more.
+  // A timeout or a quarter's end is not a play (footballWords): the
+  // photograph keeps drawing the last real snap through it.
   const lastPlay = PBP_FOOTBALL.has(league)
-    ? ((d.plays || []).slice().reverse().find((r) => r && r.kind === "football") || null)
+    ? ((d.plays || []).slice().reverse().find((r) => r && r.kind === "football" && footballWords(r, d).snap)
+       || (d.plays || []).slice().reverse().find((r) => r && r.kind === "football") || null)
     : (events.slice().reverse().find((r) => r.kind === "atbat" && r.hit) || null);
   const park = (boardGame || {}).park || {};
   const wx = (boardGame || {}).weather || {};
@@ -3493,7 +3504,7 @@ async function renderPbpPage() {
     ? `<span class="pbp-hero-tv">${escapeHtml((d.tv || [])[0])}</span>` : "";
   host.innerHTML = `
     ${stripHTML}
-    <div class="pbp-layout">
+    <div class="pbp-layout${league === "mlb" ? "" : " pbp-has-tabs"}">
       <div class="pbp-main">
         <div class="card pbp-hero">
           <div class="pbp-hero-side">${mark(d.away)}<div><div class="mini">${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())}</div>

@@ -2773,7 +2773,14 @@ const REFERENCE_VIEWS = ["why", "about", "methodology", "features"];
    row above them read as a filter the feed was not under. The Account
    page joined the same day: it is the one profile now, and the profile
    on Social carries no league row either. */
-const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed", "account"];
+/* Pages about no league, where the league row has nothing to switch. The
+   account's own screens joined on 2026-10-25 (Ethan: "even like the sign-in
+   page and the paywall page ... it needs to be curated to work for an
+   app"): signing up, the plans, checkout, resetting a password, your own
+   bets and your messages are the same page whichever league is lit, and a
+   store app shows no sport tabs above its account screens. */
+const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed", "account", "signup", "paywall", "checkout", "reset",
+  "mybets", "messages"];
 
 /* THE LOUD ONE. The chip is for "how fresh is this"; this is for "the
    pipeline is dead and every number below is a fossil". It exists
@@ -5278,6 +5285,7 @@ async function renderBestBets() {
     ${marketBlock}
     ${earlyBlock}
     ${signalsBlock}`;
+  quietBoardEcho();
 }
 
 /* ============================================================
@@ -8322,6 +8330,19 @@ async function renderDayCard() {
   </div>`;
 }
 
+/* The picks card and the grid under it are drawn by two functions, one of
+   them async, so whichever lands second makes the check: when the card
+   says "No qualifying plays at current numbers", the grid's own "Nothing
+   cleared the model’s bars tonight" is the same sentence again and goes,
+   leaving the breakdown under it. */
+function quietBoardEcho() {
+  const cards = document.getElementById("cards");
+  const bb = document.getElementById("best-bets");
+  if (!cards || !bb || !/no qualifying plays/i.test(bb.textContent || "")) return;
+  const echo = [...cards.querySelectorAll(".empty-slate")]
+    .find((el) => /Nothing cleared the model’s bars tonight/.test(el.textContent || ""));
+  if (echo) echo.remove();
+}
 function renderRecommended() {
   renderDayCard();
   renderHomeDeck();
@@ -8441,11 +8462,19 @@ function renderRecommended() {
        Built inline rather than through `emptySlate` because these
        sentences carry markup (the census branch bolds its reason), and
        the helper escapes what it is given, correctly. */
+    /* SAID ONCE ON THE PAGE (2026-10-25; Ethan: "a lot of data lined up
+       that says the same thing"). On the Edge page this grid sits under
+       the picks card, which has already said "No qualifying plays at
+       current numbers" in the same words' meaning — so the plain no-pick
+       branch keeps only the breakdown here, under its own heading, and
+       the specific branches above (a stale pull, schedule only, the
+       darts) still say their own sentence. */
     host.innerHTML = `<div class="empty-slate">
         <div class="es-icon">${icon("inbox", 22)}</div>
         <div class="es-title">${escapeHtml(msgTitle)}</div>
         <div class="es-sub">${msg}</div>
       </div>${censusFunnelHTML()}`;
+    quietBoardEcho();
     return;
   }
   // Group by market so all Total Bases props sit together, all Hits
@@ -9537,6 +9566,26 @@ function likelyTier(r) {
   return (r || {}).bettable ? "lk-top" : "lk-mid";
 }
 
+/* A CARD ON ITS OWN GAME'S PAGE (Ethan, 2026-10-25, on opening a game
+   before it starts: "a lot of repeated information that doesn't need to
+   be there"). Every card on the page repeated the matchup and the
+   kickoff the page's header is about, the game's script sentence the
+   Game scripts section explains, and the wind and cold lines the header's
+   weather panel already gives. The game page sets this while it draws;
+   a card that belongs to that game drops the copies and keeps what is its
+   own — its verdict on the weather, the script's word and what it did to
+   this pick. Anywhere else (a board mixing games) the card is unchanged. */
+let CARD_GAME = null;
+function cardInGame(r) {
+  const g = CARD_GAME;
+  if (!g || !r || state.view !== "game") return null;
+  const same = (r.home && r.away) ? (r.home === g.home && r.away === g.away)
+    : typeof propInGame === "function" && propInGame(r, g);
+  return same ? g : null;
+}
+//: The weather lines a game page's header panel already says.
+const WEATHER_DETAIL = /^(wind \d|\d+\s*°f|rain\b|snow\b|precipitation)/i;
+
 function likelyCard(r) {
   const pct = (x) => `${(Number(x || 0) * 100).toFixed(0)}%`;
   const spark = likelySpark(r);
@@ -9545,15 +9594,21 @@ function likelyCard(r) {
   // ("a read on who hits rather than a card"); repeating the engine's
   // version as a bullet said the same fact twice and pushed a real
   // reason off the five-bullet list.
+  const home = cardInGame(r);
   const why = likelyNotes(r)
     .filter((x) => r.bettable || !/nothing here is bettable/i.test(x))
+    .filter((x) => !(home && home.weather && WEATHER_DETAIL.test(String(x).trim())))
     .slice(0, 5).map((x) => reasonLI(x)).join("");
   // The same game-script sentence the prop card and the Fantasy page
-  // carry for this game — one read per number (Ethan, 2026-09-02).
-  const scriptLine = r.game_script && r.game_script.archetype
-    ? `<div class="mini" style="margin-top:4px"><b>${escapeHtml(r.game_script.archetype)}</b>
-         · ${escapeHtml(r.game_script.line || "")} — ${escapeHtml(r.game_script.lean || "")}${
-         r.game_script.applied ? `; ${escapeHtml(r.game_script.applied)}` : ""}.</div>`
+  // carry for this game — one read per number (Ethan, 2026-09-02). On the
+  // game's own page the line and the lean are the Game scripts section's;
+  // the card keeps the script's name and what it did to this pick.
+  const gs = r.game_script || {};
+  const scriptLine = gs.archetype
+    ? `<div class="mini" style="margin-top:4px"><b>${escapeHtml(gs.archetype)}</b>${home
+         ? (gs.applied ? ` · ${escapeHtml(gs.applied)}.` : "")
+         : ` · ${escapeHtml(gs.line || "")} — ${escapeHtml(gs.lean || "")}${
+         gs.applied ? `; ${escapeHtml(gs.applied)}` : ""}.`}</div>`
     : "";
   const ev = Number(r.ev_per_unit || 0);
   // THE PRICE IS SHOWN AND NEVER RANKED ON. Sorting or grading by it here
@@ -9627,7 +9682,7 @@ function likelyCard(r) {
         <div>
           <div class="player">${escapeHtml(who)}
             <span class="ml-odds">${american(r.odds)}</span></div>
-          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}${startedChip(r) ? ` ${startedChip(r)}` : ""}${reserveChip(r) ? ` ${reserveChip(r)}` : ""}</div>
+          <div class="subtitle">${home ? "" : `${sub}${when ? ` · ${escapeHtml(when)}` : ""}`}${startedChip(r) ? ` ${startedChip(r)}` : ""}${reserveChip(r) ? ` ${reserveChip(r)}` : ""}</div>
           ${r.locked && r.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} ${escapeHtml(r.lock_note)}</div>` : ""}
           <div class="pick">${label}
             <span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}</div>
@@ -11750,8 +11805,8 @@ function longShotCard(r) {
         <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
           <div>
             <div class="player">${escapeHtml(r.player)} <span class="ml-odds">${american(r.odds)}</span></div>
-            <div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.game_date, r.game_kickoff)
-              ? ` · ${escapeHtml(whenLabel(r.game_date, r.game_kickoff))}` : ""}</div>
+            ${cardInGame(r) ? "" : `<div class="subtitle">${escapeHtml(r.matchup)}${whenLabel(r.game_date, r.game_kickoff)
+              ? ` · ${escapeHtml(whenLabel(r.game_date, r.game_kickoff))}` : ""}</div>`}
             <div class="pick">${escapeHtml(r.market_label)}
               <span class="book">· ${escapeHtml(r.book)}</span></div>
           </div>
@@ -15481,13 +15536,13 @@ function recordVerdictHTML(src, scopeLabel, lk) {
              claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
     </div>
     ${moneySplitHTML(o)}
-    ${combinedLineHTML(src.pooled_overall, need)}
+    ${combinedLineHTML(src.pooled_overall, need, o)}
     ${thin ? `<p class="rv-early">${icon("warn", 14)}
         <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
         against the ${need} this page needs before a rate means anything.
         The numbers above are real and they are not yet a verdict — judge the
         process by CLV until the count catches up.</p>`
-      : pooled ? verdictBooksHTML(edge, lk, chart, lines)
+      : pooled ? verdictBooksHTML(edge, lk, chart, lines, o)
       : `<div class="rv-read">${chart}
           <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div>
         </div>`}
@@ -15497,8 +15552,8 @@ function recordVerdictHTML(src, scopeLabel, lk) {
 /* THE POOLED TOTAL, NAMED AND SECOND (audit P1-1). The edge board is
    the verdict; this is the line that adds the Most Likely board to it,
    with the same floor on its ROI. Absent pool → nothing. */
-function combinedLineHTML(po, need) {
-  if (!po || !po.settled) return "";
+function combinedLineHTML(po, need, o) {
+  if (!po || !po.settled || sameTally(po, o)) return "";
   const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
   const wl = `${po.wins || 0}\u2011${po.losses || 0}${po.pushes ? `\u2011${po.pushes}` : ""}`;
   const tail = po.settled < (need || 30)
@@ -15518,7 +15573,7 @@ function combinedLineHTML(po, need) {
    report's claimed-probability bands, with the same two-standard-error
    band the edge diagram carries, so the two pictures are read the same
    way. Nothing here is a number the page did not already hold. */
-function verdictBooksHTML(edge, lk, chart, lines) {
+function verdictBooksHTML(edge, lk, chart, lines, o) {
   const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
   const line = (b) => {
     const n = ((b || {}).wins || 0) + ((b || {}).losses || 0);
@@ -15534,10 +15589,10 @@ function verdictBooksHTML(edge, lk, chart, lines) {
   const likelyChart = likelyBuckets.length >= 2 ? reliabilityDiagram(likelyBuckets) : "";
   return `<div class="rv-books">
     <div class="rv-book"><span class="hd-eyebrow">Edge bets</span>
-      <div class="rv-book-line">${line(edge)}</div>${chart}
+      ${sameTally(edge, o) ? "" : `<div class="rv-book-line">${line(edge)}</div>`}${chart}
       <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div></div>
     <div class="rv-book"><span class="hd-eyebrow">Most likely</span>
-      <div class="rv-book-line">${lk ? line(lk) : "no rows yet"}</div>${likelyChart}
+      <div class="rv-book-line">${lk ? line(lk) : "nothing staked yet — its paper picks are under Records by book"}</div>${likelyChart}
       <div class="rv-says">${lk && lk.verdict ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""}</div></div>
   </div>`;
 }
@@ -18807,13 +18862,16 @@ function signupHTML() {
       <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
     </div>
 
-    <p class="rank-help">Length is what makes a password hard to guess. We
-      keep a one-way scramble of it, never the password itself, so a lost one
-      gets replaced from “Forgot password?”, not recovered. We never ask for
-      your sportsbook or ESPN password.</p>
-    <p class="rank-help">Creating an account does not subscribe you to
-      anything and takes no card. ${PLANS[0] ? `The plans are
-      <a href="#paywall">over here</a> when you want them.` : ""}</p>
+    ${/* TWO PROMISES, AS AN APP SAYS THEM (2026-10-25): two rows under the
+          form, each a mark and one sentence, where two paragraphs of grey
+          prose used to sit. Nothing said is lost. */""}
+    <ul class="acct-promises">
+      <li>${iconMark("lock", 15)}<span>Length is what makes a password hard to guess. We keep a one-way
+        scramble of it, never the password — a lost one is replaced from “Forgot password?”, not recovered —
+        and we never ask for your sportsbook or ESPN password.</span></li>
+      <li>${iconMark("check", 15)}<span>An account is free — it takes no card and subscribes you to nothing.${PLANS[0] ? ` The plans are
+        <a href="#paywall">over here</a> when you want them.` : ""}</span></li>
+    </ul>
   </div>`;
 }
 
@@ -29656,7 +29714,7 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   const fx = window.QBGamecast && QBGamecast.art && QBGamecast.art(d, league, hitRow, boardGame);
   const arc = fx || (league === "mlb" && hitRow && hitRow.hit
     ? pbpArcSVG(hitRow.hit, (boardGame || {}).park, { photo })
-    : isFootball && hitRow ? pbpPlaySVG(hitRow) : "");
+    : isFootball && hitRow ? pbpPlaySVG(hitRow, d) : "");
   const park = (boardGame || {}).park || {};
   const w = (boardGame || {}).weather || {};
   const wx = w.temp_f != null ? `${Math.round(w.temp_f)}°F${w.wind_mph != null
@@ -29672,54 +29730,17 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   // are the boards (detail.js pbpBoardSVG, the page's own file): the
   // ballpark's scoreboard and the field's centre-hung one, lit with the
   // live score, with the wind and the big moments' fireworks over them.
+  // FOOTBALL HAS NO TILES UNDER THE FIELD ANY MORE (Ethan, 2026-10-25:
+  // "a lot of repeated information that doesn't need to be there"). They
+  // were the play's yards, its type, its down and the side with the ball —
+  // the call-out on the photograph, the Last play card and the header
+  // already say every one of them. The strip stays: where the ball is.
   const runners = league === "mlb" ? pbpBasesSVG(d.live) : "";
   const board = (league === "mlb" || isFootball) && typeof pbpBoardSVG === "function" ? pbpBoardSVG(d, league, boardGame) : "";
   return `<div class="pbp-park">${art}${board}${runners}${arc}${chip}</div>
     ${isFootball ? pbpFieldPosHTML(d, hitRow) : ""}
-    ${isFootball ? pbpPlayTilesHTML(hitRow) : pbpBattedHTML(hitRow)}
+    ${isFootball ? "" : pbpBattedHTML(hitRow)}
     ${pbpParkFactsHTML(park, boardGame)}`;
-}
-
-/* The four tiles under a football field.
- *
- * Ethan's render shows EXIT VELOCITY and LAUNCH ANGLE beside the yards
- * and the play type. Those are Statcast numbers: baseball has them
- * because a camera array measures every batted ball, and football does
- * not have them at all. ESPN's play carries `event`, `yards`, `down`,
- * `distance` and `yard_line` — so the shape of his four-up is kept and
- * filled with the four numbers we hold, rather than two real ones beside
- * two invented ones.
- *
- * Down and field position earn their place on their own merit anyway: on
- * a betting page they are what moves a live total.
- *
- * NOT the play's own `yard_line`, which the first version of this showed
- * as "YARD LINE 34". That field is ESPN's raw `start.yardLine`, and
- * engine/sources/livescores.py says of it: "its zero point is not
- * documented and differs between the endpoints — read wrong it puts the
- * ball on the opposite forty, which on a drawing is not a rounding
- * error, it is the other team driving." A bare 34 on a card is the same
- * ambiguity handed to the reader instead. The team with the ball is
- * unambiguous, and `team` is the drive's side resolved through
- * `_side_key`, so it is the same string the card's home/away carry.
- *
- * Where the ball IS gets answered properly by the field strip below,
- * which reads `live.yard_line` — the parsed, side-resolved number whose
- * convention is stated once in engine/models.py. */
-function pbpPlayTilesHTML(play) {
-  const p = play || {};
-  if (!p.kind) return "";
-  const tile = (ic, k, v, u) => v === "" ? "" : `<div class="pbp-bb-tile">
-      <div class="k">${icon(ic, 12)}${escapeHtml(k)}</div>
-      <b>${escapeHtml(String(v))}${u ? `<span>${escapeHtml(u)}</span>` : ""}</b></div>`;
-  const yards = Number(p.yards);
-  return `<div class="pbp-bb">
-    ${tile("rising", "GAINED", isFinite(yards) ? yards : "", " YDS")}
-    ${tile("football", "PLAY TYPE", p.event || "")}
-    ${tile("target", "DOWN", p.down
-        ? `${pbpOrd(p.down)} & ${p.distance != null ? p.distance : "?"}` : "")}
-    ${tile("people", "POSSESSION", p.team || "")}
-  </div>`;
 }
 
 /* The park photograph, with this park's distances marked on its wall.
@@ -29860,7 +29881,7 @@ function pbpFieldHTML(d, league, play) {
  * caption says "-3 YDS", which is the honest version of that play. */
 const PBP_PLAY_HUE = { score: "#ffd24a", turnover: "#ff8a5c", normal: "#ffd24a" };
 
-function pbpPlaySVG(play) {
+function pbpPlaySVG(play, g) {
   const p = play || {};
   const yards = Number(p.yards);
   if (!isFinite(yards)) return "";
@@ -29872,11 +29893,11 @@ function pbpPlaySVG(play) {
   const [x0, y0] = PBP_FIELD.qb;
   const y1 = yards > 0 ? pbpFieldY(yards) : PBP_FIELD.los;
   const len = Math.abs(y0 - y1);
-  const title = String(p.event || "Play");
-  const detail = [`${yards > 0 ? "" : yards < 0 ? "−" : ""}${Math.abs(Math.round(yards))} YDS`,
-    p.down ? `${pbpOrd(p.down)} & ${p.distance != null ? p.distance : "?"}` : ""]
-    .filter(Boolean).join(" • ");
-  const cw = Math.max(40, Math.min(104, 11 + Math.max(title.length, detail.length) * 3.5));
+  // The play in the site's words (footballWords): the verb and the yards
+  // in the title, the down it was snapped on under it.
+  const title = footballWords(p, g).title;
+  const detail = p.down ? `${pbpOrd(p.down)} & ${p.distance != null ? (Number(p.distance) === 0 ? "Goal" : p.distance) : "?"}` : "";
+  const cw = Math.max(40, Math.min(118, 11 + Math.max(title.length, detail.length) * 3.3));
   const ch = title && detail ? 19 : 12;
   const [bx, by] = pbpCalloutBox([x0, y1], cw, ch);
   return `
@@ -30243,21 +30264,33 @@ function pbpParkFactsHTML(park, boardGame) {
 /* The groups a sport is read in, newest first. Rows inside a football
    drive stay in order — a drive is read forwards; rows inside a period or
    a half-inning are newest first, like a feed. */
+/* A drive's ending as a reader says it: the summary's own short label,
+   with its two abbreviations spelled out and "Downs" given its verb. */
+const DRIVE_RESULT = { "fg": "Field goal", "field goal": "Field goal", "missed fg": "Missed field goal",
+  "downs": "Turnover on downs", "int": "Interception", "fumble": "Fumble lost", "end of half": "End of half",
+  "end of game": "End of game", "td": "Touchdown" };
+function driveResultWord(dr) {
+  const r = String((dr || {}).result || "").trim();
+  return r ? (DRIVE_RESULT[r.toLowerCase()] || r) : "";
+}
 function pbpGroups(d) {
   const plays = d.plays || [];
   const live = d.live || {};
   if (d.league === "nfl" || d.league === "cfb") {
+    // How the drive ended, in the summary's own word when it has one
+    // ("Touchdown", "Punt" — espnplays._drive_result) and derived
+    // otherwise: a drive head that said SCORE could not tell a touchdown
+    // from a field goal.
     return (d.drives || []).slice().reverse().map((dr, i) => {
       const rows = dr.plays || [];
       const n = dr.offensive_plays || rows.length;
-      const tag = dr.scoring ? "SCORE"
-        : rows.some((p) => p.turnover) ? "TURNOVER"
-        : (i === 0 && live.state === "live") ? "IN PROGRESS" : "";
+      const tag = (i === 0 && live.state === "live" && !dr.result) ? "IN PROGRESS"
+        : driveResultWord(dr) || (dr.scoring ? "SCORE" : rows.some((p) => p.turnover) ? "TURNOVER" : "");
       return {
         head: `${dr.team || "—"} drive`,
-        sub: `${n} play${n === 1 ? "" : "s"} · ${dr.yards || 0} yd${
-          dr.elapsed ? ` · ${dr.elapsed}` : ""}${dr.period ? ` · Q${dr.period}` : ""}`,
-        tag, rows,
+        sub: `${n} play${n === 1 ? "" : "s"}, ${dr.yards || 0} yd${dr.yards === 1 ? "" : "s"}${
+          dr.elapsed && dr.elapsed !== "0:00" ? `, ${dr.elapsed}` : ""}`,
+        tag: tag.toUpperCase(), rows,
       };
     });
   }
@@ -30347,6 +30380,87 @@ function hockeyPeriod(n) {
   return !n ? "" : n <= 3 ? `P${n}` : n === 4 ? "OT" : n === 5 ? "SO" : `${n - 3}OT`;
 }
 
+/* A FOOTBALL PLAY IN PLAIN WORDS (Ethan, 2026-10-25, on a live NFL game:
+   "look at the field section … it's kind of buggy and there's some of the
+   wording that doesn't make sense").
+
+   The rows used to print ESPN's type label with the play's yards glued on,
+   and the label is a category written for a database, not for a person:
+   "TEN · Pass Interception Return" reads as the Titans returning one when
+   they threw it; "TEN · Kickoff +25" as the Titans kicking off when they
+   received it; "IND · Timeout · GAINED 0 YDS" credits a timeout to the
+   offence whichever side called it and gives it a yardage; "Punt +9" is a
+   return written as a gain. ONE composer now turns the same fields into
+   words, and every place a play is named reads it — the rows, the call-out
+   on the photograph, the Last play card — so the three cannot disagree.
+
+   Still the site's own wording from the numbers (the row rule above
+   `playsHTML`): the type label decides the verb, `yards` the number, and
+   nothing reads ESPN's sentence.
+
+   `snap` is whether the entry is a down played at a line: a timeout, the
+   end of a quarter or the two-minute warning is a moment in the game, not
+   a play, so it carries no team, no down and no yards, and the
+   photograph keeps drawing the last real snap through it. A field goal's
+   distance is its snap's distance to the goal line plus seventeen (the
+   end zone and the hold), from `spot`, when the row resolved one. */
+const FB_PERIOD = ["", "1st quarter", "2nd quarter", "3rd quarter", "4th quarter"];
+function footballWords(p, g) {
+  const e = String((p || {}).event || "").trim();
+  const y = Math.round(Number((p || {}).yards) || 0);
+  const yds = (n) => `${Math.abs(n)} yd${Math.abs(n) === 1 ? "" : "s"}`;
+  const gain = (verb) => y > 0 ? `${verb} for ${yds(y)}` : y < 0 ? `${verb} for a loss of ${yds(y)}` : `${verb}, no gain`;
+  const at = (title, more = {}) => ({ title, snap: true, team: true, tag: "", ...more });
+  const moment = (title) => ({ title, snap: false, team: false, tag: "" });
+  // The kick's distance: to the goal line from the snap, plus the end zone and the hold.
+  const spot = Number((p || {}).spot), home = (g || {}).home, away = (g || {}).away;
+  const toGoal = (p || {}).spot == null || !isFinite(spot) ? null
+    : p.team && p.team === home ? 100 - spot : p.team && p.team === away ? spot : null;
+  const kick = toGoal != null && toGoal >= 0 && toGoal <= 60 ? `, ${Math.round(toGoal + 17)} yds` : "";
+  const td = { tag: "TD" };
+  if (/^timeout$/i.test(e)) return moment("Timeout");
+  if (/official timeout/i.test(e)) return moment("Officials' timeout");
+  if (/^end (period|of quarter)$/i.test(e)) {
+    const n = Number(p.period) || 0;
+    return moment(n >= 1 && n <= 4 ? `End of the ${FB_PERIOD[n]}` : "End of overtime");
+  }
+  if (/end of half|halftime/i.test(e)) return moment("Halftime");
+  if (/end of regulation/i.test(e)) return moment("End of regulation");
+  if (/end of game/i.test(e)) return moment("Final");
+  if (/two[- ]minute/i.test(e)) return moment("Two-minute warning");
+  if (/coin toss/i.test(e)) return moment("Coin toss");
+  if (/kickoff.*touchdown/i.test(e)) return at("Kickoff returned for a touchdown", td);
+  if (/kickoff/i.test(e)) return at(y > 0 ? `Kickoff, returned ${yds(y)}` : "Kickoff", { role: "receiving" });
+  if (/punt.*touchdown/i.test(e)) return at("Punt returned for a touchdown", td);
+  if (/blocked punt/i.test(e)) return at("Punt blocked", { role: "punting" });
+  if (/punt/i.test(e)) return at(y >= 15 && y <= 85 ? `Punt, ${yds(y)}` : "Punt", { role: "punting" });
+  if (/field goal/i.test(e)) {
+    const how = /block/i.test(e) ? "blocked" : /good/i.test(e) && !/no good/i.test(e) ? "good" : "missed";
+    return at(`Field goal ${how}${kick}`, { role: "kicking", tag: how === "good" ? "FG" : "" });
+  }
+  if (/extra point|^pat\b/i.test(e)) {
+    const ok = /good|made/i.test(e) && !/no good/i.test(e);
+    return at(ok ? "Extra point good" : /block/i.test(e) ? "Extra point blocked" : "Extra point missed", { role: "kicking" });
+  }
+  if (/two[- ]?point|2pt|conversion/i.test(e)) return at(p.scoring ? "Two-point try good" : "Two-point try failed");
+  if (/interception.*touchdown|pick[- ]six/i.test(e)) return at("Intercepted and returned for a touchdown", { tag: "Turnover" });
+  if (/interception/i.test(e)) return at("Pass intercepted", { tag: "Turnover" });
+  if (/fumble.*touchdown/i.test(e)) return at("Fumble returned for a touchdown", { tag: "Turnover" });
+  if (/fumble/i.test(e)) return p.turnover || /opponent/i.test(e) ? at("Fumble lost", { tag: "Turnover" })
+    : at(gain("Fumble recovered"));
+  if (/safety/i.test(e)) return at("Safety", { tag: "Safety" });
+  if (/sack/i.test(e)) return at(y ? `Sacked for a loss of ${yds(y)}` : "Sacked, no loss");
+  if (/passing touchdown|pass.*touchdown/i.test(e)) return at(y > 0 ? `Touchdown pass, ${yds(y)}` : "Touchdown pass", td);
+  if (/rushing touchdown|rush.*touchdown|touchdown/i.test(e)) return at(y > 0 ? `Touchdown run, ${yds(y)}` : "Touchdown run", td);
+  if (/incomplet/i.test(e)) return at("Pass incomplete");
+  if (/pass|reception/i.test(e)) return at(gain("Pass complete"));
+  if (/^rush|run|kneel|scramble/i.test(e)) return at(/kneel/i.test(e) ? "Kneel-down" : gain("Run"));
+  if (/penalty/i.test(e)) return at(y ? `Penalty, ${yds(y)}` : "Penalty", { tag: "Flag" });
+  return at(e ? (y ? `${e}, ${yds(y)}` : e) : "Play");
+}
+//: The clock as a scoreboard writes it: "Q2 1:50", not "Q2 01:50".
+const fbClock = (c) => String(c || "").replace(/^0(\d:)/, "$1");
+
 function playsHTML(g) {
   const plays = (g.plays || []).filter((p) => p && p.event);
   if (!plays.length) {
@@ -30382,22 +30496,26 @@ function playsHTML(g) {
      already uses. The arrow is never drawn over a relationship the row
      cannot vouch for. */
   const footballRow = (p) => {
-    const q = p.period ? `Q${p.period}` : "";
-    const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
-    const yds = p.yards ? ` ${p.yards > 0 ? "+" : trueMinus("-")}${Math.abs(p.yards)}` : "";
-    const dd = p.down ? ` · ${ord(p.down)} & ${p.distance == null ? "?" : p.distance}` : "";
-    const flag = p.turnover ? ` <span class="lb-rbi">TO</span>`
-      : p.scoring ? ` <span class="lb-rbi">SCORE</span>` : "";
-    const at = (p.away_score != null && p.home_score != null)
+    const w = footballWords(p, g);
+    const q = p.period ? (p.period <= 4 ? `Q${p.period}` : "OT") : "";
+    const when = `${q}${p.clock ? ` ${fbClock(p.clock)}` : ""}`;
+    // A moment in the game (a timeout, a quarter's end) is a quiet line of
+    // its own: no team, no down, no score beside it.
+    if (!w.snap) {
+      return `<div class="lb-play lb-moment"><span class="lb-inn">${escapeHtml(when)}</span>
+        <span class="lb-what">${escapeHtml(w.title)}</span></div>`;
+    }
+    const dd = p.down ? ` · ${ord(p.down)} & ${p.distance == null ? "?" : (Number(p.distance) === 0 ? "Goal" : p.distance)}` : "";
+    const flag = w.tag ? ` <span class="lb-rbi${w.tag === "Turnover" ? " lb-to" : ""}">${escapeHtml(w.tag)}</span>` : "";
+    const at = (p.away_score != null && p.home_score != null) && p.scoring
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
     const names = (p.players || []).filter(Boolean).map(escapeHtml);
     const pass = /pass|reception/i.test(String(p.event || ""));
     const who = names.length === 2 && pass ? names.join(" → ") : names.join(" · ");
     return `<div class="lb-play${p.scoring ? " scoring" : ""}${p.turnover ? " turnover" : ""}">
       <span class="lb-inn">${escapeHtml(when)}</span>
-      <span class="lb-what">${escapeHtml(p.team || "")}${p.team ? " · " : ""}${
-        who ? `<b>${who}</b> · ` : ""}${
-        escapeHtml(p.event)}${escapeHtml(yds)}${escapeHtml(dd)}${flag}</span>
+      <span class="lb-what">${p.team ? `<span class="lb-side">${escapeHtml(p.team)}</span> ` : ""}${
+        escapeHtml(w.title)}${who ? ` · <b>${who}</b>` : ""}<span class="lb-dd">${escapeHtml(dd)}</span>${flag}</span>
       ${at}</div>`;
   };
   /* BASKETBALL ROWS, from the `plays` list the probe read off a finished
@@ -31523,6 +31641,18 @@ function potdHeroHTML(d) {
    record page"). `ov` and `recent` are the scope in view (the page hands
    a league's own overall and rows); Zeno's book is pooled, because it is
    his and not the model's. Returns the tiles' HTML, or "" over nothing. */
+/* TWO TALLIES THAT ARE THE SAME TALLY (2026-10-25, Ethan: "we have a
+   lot of data lined up that says the same thing"). On a board where the
+   Most Likely half has nothing settled, "Combined · edge + Most Likely"
+   is the edge book's own W-L, units and ROI under a second name — the
+   page printed one record six times. A second line is drawn only when
+   it adds something. */
+function sameTally(a, b) {
+  if (!a || !b) return false;
+  const k = (t) => [t.wins || 0, t.losses || 0, t.pushes || 0, Number(t.net_units || 0).toFixed(2)].join("|");
+  return k(a) === k(b);
+}
+
 function recordRibbonsHTML(rec, ov, recent, opts) {
   ov = ov || {};
   const parts = !!(opts || {}).parts;
@@ -31591,7 +31721,7 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
   /* The edge board and the Most Likely board as one — the pooled journal,
      named, with the two halves it adds on the tile. */
   const po = (rec || {}).pooled_overall;
-  if (po && po.settled) {
+  if (po && po.settled && !sameTally(po, ov)) {
     const f = recFloor(rec, po);
     const roi = po.roi == null ? null : Number(po.roi), u = Number(po.net_units || 0);
     const k = "Combined · edge + Most Likely boards";

@@ -74,6 +74,8 @@ def _node(js):
         _const("pbpOrd"), _const("PBP_FIELD"), _const("PBP_PLAY_HUE"),
         _fn("pbpFieldY"), _fn("pbpFieldHTML"), _fn("pbpFieldPosHTML"),
         _fn("pbpCalloutBox"), _fn("pbpPlaySVG"),
+        # The call-out names the play in the site's words (footballWords).
+        _const("FB_PERIOD"), _fn("footballWords"),
     ])
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(src + "\n" + js); path = fh.name
@@ -224,7 +226,7 @@ def test_a_play_that_lost_yards_draws_no_flight():
       const markY = (s) => +(s.match(/<circle cx="[\d.]+" cy="([\d.]+)"/) || [])[1];
       console.log(JSON.stringify({
         sackPath: /<path /.test(sack), gainPath: /<path /.test(gain),
-        sackSaysLoss: sack.includes("7 YDS"), sackHasMark: /<circle /.test(sack),
+        sackSaysLoss: sack.includes("loss of 7 yds"), sackHasMark: /<circle /.test(sack),
         sackMarkY: markY(sack), gainMarkY: markY(gain), los: PBP_FIELD.los}));""")
     if got is None:
         print("  SKIP node not installed"); return
@@ -437,27 +439,20 @@ def test_no_spot_means_no_strip():
 
 
 # ------------------------------------------------------------- the tiles ---
-def test_the_tiles_carry_only_numbers_football_actually_has():
-    body = _fn("pbpPlayTilesHTML")
-    for real in ("p.yards", "p.event", "p.down", "p.distance", "p.team"):
-        assert real in body, real
-    # NOT the play's own yard_line. It is ESPN's raw start.yardLine, whose
-    # zero point livescore's parser calls undocumented and endpoint-
-    # dependent; a bare "34" on a card hands that ambiguity to the reader.
-    # Where the ball is has its own strip, on the parsed number.
-    assert "p.yard_line" not in body
-    code = "\n".join(ln for ln in body.splitlines() if not ln.strip().startswith("//"))
-    for invented in ("launch_speed", "launch_angle", "EXIT VELOCITY", "LAUNCH ANGLE"):
-        assert invented not in code, invented
-
-
-def test_every_football_tile_wears_a_mark_the_site_draws_itself():
-    body = _fn("pbpPlayTilesHTML")
-    names = re.findall(r'tile\("([a-z]+)"', body)
-    assert len(names) == 4, names
-    assert "glove" not in names, "a baseball glove is not a football mark"
-    for n in names:
-        assert f"\n  {n}:" in APP, f"{n} is not in ICON_PATHS"
+def test_the_tiles_under_the_field_are_gone_and_what_they_said_is_still_said():
+    """Ethan, 2026-10-25: "a lot of repeated information that doesn't need
+    to be there". The four tiles were the play's yards, its type, its down
+    and the side with the ball; the call-out on the photograph, the Last
+    play card and the header say each of them, so the tiles went and the
+    facts stayed."""
+    assert "function pbpPlayTilesHTML(" not in APP
+    park = _fn("pbpParkHTML")
+    assert 'isFootball ? "" : pbpBattedHTML(hitRow)' in park, "baseball keeps its batted-ball tiles"
+    assert "pbpFieldPosHTML(d, hitRow)" in park, "the strip (where the ball is) stays"
+    svg = _fn("pbpPlaySVG")
+    assert "footballWords(p, g).title" in svg and "p.down" in svg, "the call-out: the play and its down"
+    gc = (ROOT / "web" / "js" / "gamecast.js").read_text()
+    assert "downWord(p)" in gc and "spotWord(d, p.spot)" in gc, "the Last play card: the down and the spot"
 
 
 def test_the_wind_word_tells_the_two_leagues_fields_apart():

@@ -82,29 +82,25 @@ def test_the_headline_recommended_count_is_the_edge_book_only():
     # Renamed "Edge picks" (Ethan, 2026-09-27: "wondering if these numbers
     # are correct" — "Recommended 2" beside "Most likely 0" said nothing
     # about which book either counted).
-    m = re.search(r'<div class="k">Edge picks</div><div class="v">\$\{([^}]*)\}',
-                  page)
-    assert m, "the Edge picks tile moved; re-anchor this test"
-    expr = m.group(1)
-    assert "props.filter" in expr and "bets.filter" in expr, \
-        f"the edge book left the Recommended tile: {expr}"
-    assert "likel" not in expr.lower(), \
-        f"likelihood rows are being counted as Recommended: {expr}"
+    # The count tiles went on 2026-10-25 (the jump chips already carried
+    # each section's count); the edge book's own chips are what count now,
+    # and neither may add the likelihood board in.
+    for chip in ('["gp-sec-props", shown.length ? `Edge picks · ${shown.length}` : "Edge picks"]',
+                 '["gp-sec-bets", `Game bets · ${betsShown.length}`]'):
+        assert chip in page, f"the edge book's chip moved: {chip}"
+    assert '<div class="k">Edge picks</div>' not in page
 
 
-def test_the_likelihood_rows_get_their_own_labelled_tile():
+def test_the_likelihood_rows_get_their_own_labelled_chip():
+    """Its own count, on its own button, never inside the edge count. The
+    tile that said so went with the other four on 2026-10-25; the jump
+    chip carries the same count and the section under it says which book
+    it is."""
     page = _nocomments(_fn(_js(), "renderGamePage"))
-    m = re.search(r'<div class="k">Most likely</div><div class="v">\$\{([^}]*)\}',
-                  page)
-    assert m, "no Most likely tile on the game page"
-    assert "likelies.length" in m.group(1)
-    assert "oneBoardOn() ? matchupPickCount(g)" in m.group(1), \
-        "with the one board on, the tile counts the board's picks in this game, not the empty old shelf"
-    # The label has to say it is a separate book, the way Long shots does
-    # — a bare count beside "Recommended" reads as more of the same thing.
-    i = page.index('<div class="k">Most likely</div>')
-    assert "own book" in page[i:i + 260], \
-        "the tile does not say these are tracked separately"
+    assert '`${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`' in page
+    assert '["gp-sec-likely", `Most likely · ${likelies.length}`]' in page
+    assert "kept in its own book, never in the headline record" in page, \
+        "the section does not say these are tracked separately"
 
 
 def test_the_likelihood_section_leads():

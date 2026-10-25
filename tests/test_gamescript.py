@@ -143,7 +143,7 @@ def test_the_page_renders_it_in_three_places():
     assert "function scriptChip(r)" in js and "function scriptCardHTML(r)" in js
     assert "${scriptChip(r)}" in js                 # the board card
     assert "${scriptCardHTML(r)}" in js             # the prop page
-    assert "r.game_script.lean" in js               # the Most Likely card
+    assert "const gs = r.game_script || {};" in js and "gs.lean" in js   # the Most Likely card
 
 
 def test_a_low_total_is_never_called_a_shootout():

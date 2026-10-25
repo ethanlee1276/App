@@ -91,7 +91,7 @@ def test_the_prediction_page_shows_no_league_chrome():
     # Social (#feed) joined 2026-10-07: it has its own sport chips. The
     # Account page the same day: it is the one profile, and the profile on
     # Social shows no league row.
-    assert 'const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed", "account"];' in APP
+    assert 'const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed", "account", "signup", "paywall", "checkout", "reset",' in APP
     assert 'document.body.classList.toggle("off-league", OFF_LEAGUE_VIEWS.includes(name));' in APP
     assert "body.off-league .sportbar { display: none; }" in CSS
     i = APP.index("function renderStaleBar(")

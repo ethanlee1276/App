@@ -719,7 +719,12 @@ async function recBetsFetch(host, offset) {
   try {
     const r = await fetch(recBetsURL(recBetsQuery(ctx.scope, ctx.from), offset));
     const page = r.ok ? await r.json() : null;
-    if (_recBets.key === key && page && Array.isArray(page.rows)) {
+    // An answer of nothing at all while this page holds settled rows is a
+    // journal the server cannot see (a host with no ledger), not "Nothing
+    // settled yet" under a verdict of 38 settled: the shipped rows stand.
+    const q = recBetsQuery(ctx.scope, ctx.from);
+    const blank = page && !Number(page.total) && (ctx.settled || 0) > 0 && !(q.kind || q.result || q.since);
+    if (_recBets.key === key && page && Array.isArray(page.rows) && !blank) {
       _recBets.rows = offset ? _recBets.rows.concat(page.rows) : page.rows;
       _recBets.total = Number(page.total) || 0;
       _recBets.remote = true;
