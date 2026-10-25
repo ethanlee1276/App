@@ -13,8 +13,10 @@ What holds it (detail.js pbpBoardSVG):
     map, so the lettering leans with the board instead of sitting flat on
     it.
   - IT SHOWS WHAT THE LIVE FEED HOLDS: both teams and their runs, the
-    inning and its half, balls, strikes and outs, a lamp at the team
-    batting; FINAL at the end, the first pitch before it, the delay in one.
+    inning and its half, the runners on base (Ethan, the same day: "next to
+    the score we added on the board, should also show the batters on
+    base"), balls, strikes and outs, a lamp at the team batting; FINAL at
+    the end, the first pitch before it, the delay in one.
     Hits and errors are not in the live state, so they are not drawn.
   - A RUN THAT HAS JUST SCORED FLASHES ONCE, and only that team's number.
   - NOTHING SPILLS: a two-digit score steps down a size so it keeps clear of
@@ -164,11 +166,34 @@ def test_nothing_spills_off_the_board():
         return
     extra, suspended = got
     assert len(re.findall(r'font-size="15"\s+text-anchor="end"', extra)) == 2, "two-digit scores step down a size"
-    assert re.search(r'font-size="13"\s+text-anchor="middle"[^>]*>11<', extra), "so does the 11th"
+    assert re.search(r'font-size="10" text-anchor="middle"[^>]*>11<', extra), "so does the 11th"
     word = _board_src()
-    assert "const size = Math.min(max, 30 / (Math.max(1, txt.length) * 0.62));" in word, "a word fits its column"
+    assert "const size = Math.min(max, room / (Math.max(1, txt.length) * 0.62));" in word, "a word fits its room"
+    assert "const word = (txt, y, max, fill, mono, cx = 82, room = 30) => {" in word
     sizes = [float(s) for s in re.findall(r'font-size="([0-9.]+)" text-anchor="middle"\s*fill="#FFC94A">SUSPENDED', suspended)]
     assert sizes and sizes[0] * 0.62 * len("SUSPENDED") <= 30.1, sizes   # printed to two places
+
+
+def test_the_runners_light_their_bags_second_at_the_top():
+    lit_rect = lambda svg: len(re.findall(r'<rect x="-2.2" y="-2.2" width="4.4" height="4.4"\s+transform="rotate\(45\)" fill="#FFC94A"', svg))
+    dark_rect = lambda svg: len(re.findall(r'<rect x="-2.2" y="-2.2" width="4.4" height="4.4"\s+transform="rotate\(45\)" fill="#262B36"', svg))
+    cases = [[], [1], [2], [1, 3], [1, 2, 3]]
+    got = _node("return [" + ", ".join(_svg({"state": "live", "away_score": 0, "home_score": 0, "period": "Top 3rd",
+                                              "bases": b}) for b in cases)
+                + ", " + _svg({"state": "final", "away_score": 1, "home_score": 0})
+                + ", " + _svg({"state": "live", "period": "Top 3rd", "bases": [1], "hold": "Delayed — Rain"}) + "];")
+    if got is None:
+        return
+    for bases, svg in zip(cases, got):
+        assert (lit_rect(svg), dark_rect(svg)) == (len(bases), 3 - len(bases)), (bases, lit_rect(svg), dark_rect(svg))
+    final, delay = got[-2:]
+    assert lit_rect(final) + dark_rect(final) == 0, "no bags on a finished game"
+    assert lit_rect(delay) + dark_rect(delay) == 0, "a delay says so instead"
+    bags = {b: (x, y) for b, x, y in json.loads(re.search(r"const PBP_BOARD_BASES = (\[\[.*?\]\]);", DETAIL).group(1))}
+    assert bags[2][1] < bags[1][1] == bags[3][1], "second at the top, first and third level"
+    assert bags[3][0] < bags[2][0] < bags[1][0], "third on the left, first on the right"
+    assert 82 < bags[3][0] - 3.12 and bags[1][0] + 3.12 < 100, "inside the column, clear of the inning"
+    assert "const on = new Set(lv.bases || []);" in _board_src(), "the photograph's own base numbers (pbpBasesSVG)"
 
 
 def test_a_teams_colour_shows_on_a_black_board():
@@ -231,8 +256,9 @@ def test_in_a_browser_the_board_sits_on_the_photographs_screen():
                       const poly = document.querySelector('.pbp-board polygon').getBoundingClientRect();
                       const words = [...document.querySelectorAll('.pbp-board text')].map((t) => t.textContent.trim());
                       const font = getComputedStyle(document.querySelector('.pbp-board text')).fontFamily;
+                      const bags = [...document.querySelectorAll('.pbp-board rect[transform="rotate(45)"]')].map((r) => r.getAttribute('fill'));
                       return { photo: [photo.x, photo.y, photo.width, photo.height], park: [park.x, park.y, park.width, park.height],
-                               poly: [poly.x, poly.y, poly.width, poly.height], words, font,
+                               poly: [poly.x, poly.y, poly.width, poly.height], words, font, bags,
                                wide: document.scrollingElement.scrollWidth - innerWidth };
                     }""")
                     got[width]["errors"] = errors
@@ -251,6 +277,7 @@ def test_in_a_browser_the_board_sits_on_the_photographs_screen():
         for w in ("NYY", "DET", "3", "2", "6"):
             assert w in g["words"], (width, w, g["words"])
         assert "Archivo Narrow" in g["font"], g["font"]
+        assert sorted(g["bags"]) == ["#262B36", "#262B36", "#FFC94A"], ("a runner on first, the other bags dark", g["bags"])
         assert g["wide"] <= 0 and not g["errors"], (width, g)
 
 

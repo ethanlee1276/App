@@ -26,6 +26,8 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP 2>&1 | tee /tmp/dp.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DQ 2>&1 | tee /tmp/dq.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP DQ 2>&1 | tee /tmp/dq.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DR 2>&1 | tee /tmp/dr.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP DQ DR 2>&1 | tee /tmp/dr.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -425,6 +427,9 @@ curl -s https://qellysbook.com/css/styles.css | grep -c 'color-scheme: dark'
 SH
 run DQ "The live score on the park's scoreboard is live" 120 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpBoardSVG('
+SH
+run DR "The runners on the park's scoreboard are live" 120 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'PBP_BOARD_BASES = '
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

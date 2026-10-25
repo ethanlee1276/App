@@ -2620,8 +2620,8 @@ function pbpRailHTML(d, league) {
    projective map keeps straight lines straight).
 
    WHAT IT SHOWS IS WHAT THE LIVE FEED HOLDS: both teams and their runs,
-   the inning and its half, balls, strikes and outs, and a lamp beside
-   the team at bat. A real board's hits and errors are not in our live
+   the inning and its half, the runners on base, balls, strikes and outs,
+   and a lamp beside the team at bat. A real board's hits and errors are not in our live
    state, so they are not drawn rather than drawn as zeros. Before the
    first pitch it shows the first pitch; at the end, FINAL; in a delay,
    the delay. A run that has just scored flashes once, as boards do.
@@ -2630,6 +2630,8 @@ function pbpRailHTML(d, league) {
 const PBP_BOARD = [[20.3, 24.1], [52.9, 24.7], [52.9, 39.8], [21.0, 40.7]];   // TL TR BR BL
 const PBP_BOARD_LED = { amber: "#FFC94A", white: "#F4F6FA", dim: "#8C95A8", off: "#262B36",
                         ball: "#3DDC84", strike: "#FF5A4E", panel: "#05070C", rule: "#FFFFFF" };
+// The three bags on the board's face (base, x, y): second at the top.
+const PBP_BOARD_BASES = [[1, 96.2, 15], [2, 91.2, 10], [3, 86.2, 15]];
 let _pbpBoardLast = null;
 
 /* The projective map from the board's flat face (0..1 by 0..1) onto the
@@ -2698,25 +2700,39 @@ function pbpBoardSVG(d) {
           text-anchor="end" fill="${L.amber}" filter="url(#pbp-sb-glow)">${escapeHtml(r)}</text>`) : "");
   };
   // The right side: the inning and the count, or what stands in for them.
-  // A word is sized to the column (30 of its 36 units), never past it.
+  // A word is sized to its room (the column's 30 of 36 units unless told
+  // otherwise), never past it.
   let side = "";
-  const word = (txt, y, max, fill, mono) => {
-    const size = Math.min(max, 30 / (Math.max(1, txt.length) * 0.62));
-    return at(82, y, `<text${mono ? ' class="pbp-sb-num"' : ""} font-size="${f(size)}" text-anchor="middle"
+  const word = (txt, y, max, fill, mono, cx = 82, room = 30) => {
+    const size = Math.min(max, room / (Math.max(1, txt.length) * 0.62));
+    return at(cx, y, `<text${mono ? ' class="pbp-sb-num"' : ""} font-size="${f(size)}" text-anchor="middle"
       fill="${fill}"${mono ? ' filter="url(#pbp-sb-glow)"' : ""}>${escapeHtml(txt)}</text>`);
   };
   const hold = typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
   if (live && hold) {
     // "Delayed — Rain": the state, and under it why.
-    const [what, why] = hold.split(/\s[—-]\s/);
+    const [what, why] = hold.split(/\s[\u2014-]\s/);
     side = word(what.toUpperCase(), why ? 24 : 28, 8, L.amber) + (why ? word(why.toUpperCase(), 33.5, 6.4, L.dim) : "");
   } else if (live && inn) {
+    // The inning on the left of the column (x 64-82), the runners on its
+    // right, the count under both.
     const n = inn[2], two = n.length > 1;
     side = half === "top" || half === "bot"
-      ? at(two ? 72.5 : 75.5, 13, `<path d="${half === "top" ? "M-3 2.2 L0 -2.6 L3 2.2 Z" : "M-3 -2.2 L0 2.6 L3 -2.2 Z"}"
-          fill="${L.amber}"/>`) + at(86, 13, `<text class="pbp-sb-num" y="${two ? 4.6 : 6.2}" font-size="${two ? 13 : 17}"
-            text-anchor="middle" fill="${L.amber}" filter="url(#pbp-sb-glow)">${escapeHtml(n)}</text>`)
-      : word(half === "mid" ? "MID" : "END", 9.6, 7, L.dim) + word(n, 22.4, 13, L.amber, true);
+      ? at(two ? 67.3 : 67.8, 13, `<path d="${half === "top" ? "M-3 2.2 L0 -2.6 L3 2.2 Z" : "M-3 -2.2 L0 2.6 L3 -2.2 Z"}"
+          fill="${L.amber}"${two ? ' transform="scale(.8)"' : ""}/>`) + at(two ? 76 : 75.6, 13, `<text class="pbp-sb-num"
+            y="${two ? 3.5 : 5.1}" font-size="${two ? 10 : 14.5}" text-anchor="middle" fill="${L.amber}"
+            filter="url(#pbp-sb-glow)">${escapeHtml(n)}</text>`)
+      : word(half === "mid" ? "MID" : "END", 9.6, 6.4, L.dim, false, 74.5, 15)
+        + word(n, 22.4, 12, L.amber, true, 74.5, 15);
+    // THE RUNNERS (Ethan, 2026-10-25: "next to the score we added on the
+    // board, should also show the batters on base"), the way a board and
+    // a broadcast draw them: three bags, second at the top, first on the
+    // right, lit where `live.bases` has a runner. The same base numbers
+    // the photograph's own bag markers read (app.js pbpBasesSVG).
+    const on = new Set(lv.bases || []);
+    side += PBP_BOARD_BASES.map(([bag, x, y]) => at(x, y, `<rect x="-2.2" y="-2.2" width="4.4" height="4.4"
+        transform="rotate(45)" fill="${on.has(bag) ? L.amber : L.off}"${
+        on.has(bag) ? ' filter="url(#pbp-sb-glow)"' : ""}/>`)).join("");
     const lamps = (label, cy, lit, of, color) => at(69, cy, `<text y="2.3" font-size="6.4" text-anchor="middle"
         fill="${L.dim}">${label}</text>`) + Array.from({ length: of }, (_, i) => at(75 + i * 6.5, cy,
         `<circle r="2.2" fill="${i < (lit || 0) ? color : L.off}"/>`)).join("");
