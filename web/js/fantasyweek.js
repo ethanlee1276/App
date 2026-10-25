@@ -152,7 +152,10 @@
         <div class="es-sub">They build with the NFL board — every player’s week from the same
           projections the picks use. Back once this week’s board is up.</div></div>`;
     }
-    if (w.locked_reason) {
+    // SEALED WHOLE: a public copy written while the week was paid whole
+    // (before 2026-10-25). Since then a reader without a plan gets every
+    // row with its workings cut (engine/gate.ROW_PAID_KEYS_BY_FILE).
+    if (w.locked_reason && !(w.players || []).length) {
       return `<div class="card ms-locked"><b>Every player’s week in fantasy points</b> — the prop
         board’s projections added up: the defence against his position, the game script, the
         weather, who is out around him, his touchdown chance and the chance he plays, with the
@@ -178,6 +181,9 @@
         touchdown model’s. A questionable player counts at the chance he plays; tap any name for
         his whole week. Your league desk (Around the league) scores your lineup on these numbers
         under your league’s own scoring.</p>
+      ${w.locked && w.locked["players[].fields"] ? `<p class="rank-help">${icon("lock", 12)} Members also see each
+        player’s stat line, touchdown chance and game script, and the reasons behind his number —
+        <a href="#paywall">the plans</a>.</p>` : ""}
       ${byes.length ? `<p class="rank-help"><b>On a bye:</b> ${byes.map(nflName).map(escapeHtml).join(", ")}</p>` : ""}
       <div class="rec-bf-group ffw-pos" role="group" aria-label="Position">${tabs.map((p) => `
         <button type="button" class="rec-bf${p === want ? " active" : ""}" data-ffwpos="${p}"
@@ -209,7 +215,7 @@
      or over. */
   function rowFor(name, team) {
     const w = _ffWeek;
-    if (!w || w.locked_reason || !current(w)) return null;
+    if (!w || (w.locked_reason && !(w.players || []).length) || !current(w)) return null;
     const k = ffNorm(name);
     const row = (w.players || []).find((r) => ffNorm(r.player) === k);
     if (row) return row;

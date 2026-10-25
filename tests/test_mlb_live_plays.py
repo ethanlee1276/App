@@ -228,7 +228,9 @@ def test_the_card_draws_the_plays():
     for field in ("p.batter", "p.event", "p.rbi", "p.half", "p.inning"):
         assert field in body, field
     assert "p.description" not in body, "the card is reading MLB's prose"
-    assert "${playsHTML(g)}" in src, "it is defined and never called"
+    # Called with the game's chat room beside it since 2026-10-25 (each
+    # play's thread, js/chat.js).
+    assert "${playsHTML({ ...g, room:" in src, "it is defined and never called"
 
 
 def test_a_card_with_no_plays_never_draws_an_empty_strip():

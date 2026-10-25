@@ -764,7 +764,8 @@
           <span class="rc-pclock">${esc(divider ? "" : String(e.clock || "").replace(/^0(\d:)/, "$1"))}</span>
           <span class="rc-pkind">${svg(GLYPH[e.kind] || GLYPH.other, 15)}</span>
           <span class="rc-pwhat"><b>${esc(w.title)}</b>${w.sub ? `<span>${esc(w.sub)}</span>` : ""}</span>
-          ${e.team && !divider ? `<span class="rc-tb" style="--tc:${colOf(d, e, k)}">${esc(e.team)}</span>` : "<span></span>"}</div>`;
+          ${e.team && !divider ? `<span class="rc-tb" style="--tc:${colOf(d, e, k)}">${esc(e.team)}</span>` : "<span></span>"}${
+          !divider && typeof chatPlayBadge === "function" && d.event_id && e.id != null ? chatPlayBadge(`nhl_${d.event_id}`, e) : ""}</div>`;
     }).join("");
     return `<div class="rc-plays-head"><select class="rc-q" data-rc-q aria-label="Which period">${opts}</select></div>
       <div class="rc-play-list">${rows || `<p class="rail-quiet">No plays yet${cur ? " this period" : ""}.</p>`}</div>`;

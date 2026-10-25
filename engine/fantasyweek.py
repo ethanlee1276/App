@@ -780,6 +780,18 @@ def index(doc: dict) -> dict:
     return out
 
 
+def free_view(doc: dict) -> dict:
+    """This week for a reader without a plan (the free Fantasy room,
+    2026-10-25): every row without the fields engine/gate keeps paid
+    (ROW_PAID_KEYS_BY_FILE) — the same cut the public file gets."""
+    from .gate import ROW_PAID_KEYS_BY_FILE
+    key, drop = ROW_PAID_KEYS_BY_FILE["fantasy_week.json"]
+    out = dict(doc or {})
+    out[key] = [{k: v for k, v in r.items() if k not in drop} if isinstance(r, dict) else r
+                for r in (doc or {}).get(key) or []]
+    return out
+
+
 def week_entry(row: dict, base: dict | None = None) -> dict:
     """A desk `means` entry for this week, from his week row: PPR points
     (expected, so a doubtful man counts at his chance) and every component

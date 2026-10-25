@@ -86,10 +86,16 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     async function pressureWarm() {{}}
     function renderSweatZone() {{}}
     function liveSlips() {{}}
-    // The tab's own five-second clock (liveTickArm) is not under test here.
+    // The tab's own five-second clock (liveTickArm), the play feed and the
+    // threads' counts are not under test here.
     const liveSig = () => "";
     let _liveDrawnSig = "";
     function liveTickArm() {{}}
+    let _liveView = "games";
+    function liveChatCounts() {{}}
+    function loadRoom() {{ return Promise.resolve(false); }}
+    // A member's view: the free tier's lock is tests/test_the_free_tier.py's.
+    const isWalled = () => false;
     const betsDrawnFor = [];
     function renderLivePicks() {{ betsDrawnFor.push(state.sport); }}
 
@@ -228,6 +234,8 @@ def draw_bets(sport="nfl", rows=(), potd=(), elsewhere=0):
     const tonightSignals = () => ({{ props: [], sharpBets: [], modelBets: [] }});
     const _els = {{ "live-picks": {{ innerHTML: "" }} }};
     const document = {{ getElementById: (id) => _els[id] || null }};
+    const isWalled = () => false;
+    const memberLockHTML = () => "";
     {_fn("trackerBetText")}
     {_fn("isLikelyBook")}
     {_fn("renderLivePicks")}

@@ -170,6 +170,42 @@ def fetch_summary(league: str, event_id: str, ttl: int = LIVE_TTL) -> dict:
     return json.loads(text)
 
 
+#: ESPN's own stamp of when a play happened (`wallclock`, both shapes the
+#: docstring above lists), as UTC. The Live tab's feed of every game's big
+#: plays (Real's main screen, 2026-10-25) orders plays from different games
+#: by it; a clock and a quarter cannot be compared across two games.
+_WALL = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d)?(\.\d+)?Z$")
+
+
+def _wallclock(p: dict) -> str:
+    v = str((p or {}).get("wallclock") or "").strip()
+    return v[:20] if _WALL.match(v) else ""
+
+
+_BIG_RUNPASS = re.compile(r"rush|run|pass|reception|scramble", re.I)
+_BIG_RETURN = re.compile(r"return|punt|kickoff", re.I)
+_BIG_FOOTBALL = re.compile(r"sack|interception|fumble|blocked|safety", re.I)
+_BIG_HOOPS = re.compile(r"dunk|block|steal|alley|technical|flagrant", re.I)
+
+
+def big_play(row: dict) -> bool:
+    """A play a room talks about — the twin of app.js `playIsBig`, which
+    reads the same rows: a score, a turnover, a run or pass of twenty
+    yards (a flag on a kick carries the try's distance, so a gain counts
+    only on a run or a pass), a return of forty, a sack; a three, a dunk,
+    a block or a steal; a goal or a penalty."""
+    e = str((row or {}).get("event") or "")
+    kind = (row or {}).get("kind")
+    if kind == "football":
+        gain = abs(_int(row.get("yards")) or 0) if _BIG_RUNPASS.search(e) and not row.get("penalty") else 0
+        ret = (_int(row.get("yards")) or 0) if _BIG_RETURN.search(e) else 0
+        return bool(row.get("scoring") or row.get("turnover") or gain >= 20 or ret >= 40
+                    or _BIG_FOOTBALL.search(e))
+    if kind == "hoops":
+        return bool((row.get("scoring") and _int(row.get("points")) == 3) or _BIG_HOOPS.search(e))
+    return bool(row.get("scoring") or re.search(r"goal|penalty|fight", e, re.I))
+
+
 def _int(v):
     try:
         return int(v)
@@ -288,6 +324,9 @@ def _football_row(p: dict, team: str, home: str = "",
         "away_score": _int(p.get("awayScore")),
         "home_score": _int(p.get("homeScore")),
     }
+    at = _wallclock(p)
+    if at:
+        row["at"] = at
     who = _football_players(p.get("text"), roster)
     if who:
         row["players"] = who
@@ -708,6 +747,7 @@ def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,
             "points_attempted": _int(p.get("pointsAttempted")) or 0,
             "away_score": _int(p.get("awayScore")),
             "home_score": _int(p.get("homeScore")),
+            "at": _wallclock(p),
         }
         # EVERY NAME ON THE PLAY (2026-10-15), in ESPN's order: the shooter
         # then the assist on a make or the block on a miss

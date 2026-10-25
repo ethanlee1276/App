@@ -148,8 +148,12 @@ def test_the_slip_and_the_tracker_buzz_where_they_should():
     # 2026-09-16 added the Pick of the Day's own list to it, and a test
     # pinned to the old literal failed a change that did exactly what
     # this test wants — buzz on more settles, not fewer.
-    i = APP.index("function renderLivePicks() {")
-    head = APP[i:i + 260]
+    # Read up to the host check rather than a fixed 260 characters: the
+    # free tier's member lock (2026-10-25) went first, so a walled reader
+    # — who has no bets of ours to settle — is never buzzed.
+    body = _fn("renderLivePicks")
+    head = body[:body.index("if (!host) return;")]
+    assert head.index("if (host && isWalled())") < head.index("buzzOnSettle(")
     assert head.count("buzzOnSettle(") == 1
     assert "live_picks" in head and "live_potd" in head, \
         "a settled bet on one of the two lists buzzes and the other does not"

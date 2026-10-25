@@ -328,6 +328,22 @@ def profile_set(conn, user_id: int, handle, bio, name=None, color=None,
     return 200, {"ok": True, "profile": profile_of(conn, user_id)}
 
 
+def handle_problem(conn, handle) -> tuple[int, str]:
+    """(0, '') when a NEW account may take this handle, else (status, why) —
+    the same rules profile_set applies, asked before the account exists so
+    a sign-up that names a taken or refused handle makes no account at all
+    (Real's first screen: a username, then the rest, 2026-10-25)."""
+    ensure_tables(conn)
+    handle = str(handle or "").strip().lstrip("@")
+    if not HANDLE_RE.match(handle):
+        return 400, "A username is 3–20 letters, numbers or underscores."
+    if not profanity.clean_name(handle) or _reserved(handle):
+        return 400, "That username is not available."
+    if _uid_of(conn, handle) is not None:
+        return 409, "Somebody already has that username."
+    return 0, ""
+
+
 def claim(conn, email: str, handle: str, name: str = "", verified: bool = True) -> tuple[int, dict]:
     """The owner's door (a box command, never an endpoint a browser can
     reach): give the account with this email a reserved handle — the

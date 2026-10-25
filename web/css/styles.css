@@ -234,6 +234,7 @@
      background-color is what shows. Kept on :root so the light theme
      inherits them rather than redeclaring the geometry. */
   --ic-check: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.4L13 4.6"/></svg>');
+  --ic-lock: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 7V5a4 4 0 0 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 0 0-4 0z"/></svg>');
   --ic-cross: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>');
   /* The UFC method bar needs six distinguishable segments and the palette
      above offers five. It used to reach for var(--violet, #a78bfa) — a
@@ -6925,6 +6926,37 @@ body.has-deck #rail-live { display: none; }
 }
 /* A football clock ("Q4 4:26") fits its column on one line. */
 .lb-play { grid-template-columns: minmax(2.4em, max-content) 1fr auto; }
+/* A PLAY'S THREAD (js/chat.js, 2026-10-25 — Real's counter and comments on
+   every play). The bubble sits last on the row, quiet until somebody has
+   reacted or replied, then lit with the count. */
+.lb-play:has(.pr-chat) { grid-template-columns: minmax(2.4em, max-content) 1fr auto auto; }
+.pbp-row:has(.pr-chat) { grid-template-columns: 22px 1fr auto auto; }
+.pr-chat { align-self: center; display: inline-flex; align-items: center; gap: 3px; min-width: 30px; min-height: 26px;
+  padding: 2px 7px; border-radius: 999px; border: var(--hairline) solid transparent; background: transparent;
+  color: var(--text-mute); font: inherit; font-size: var(--fs-2xs); font-weight: 800; cursor: pointer; opacity: .7; }
+.pr-chat:hover { color: var(--text-mute); border-color: var(--border-soft); }
+.pr-chat.has { opacity: 1; color: var(--brand-2); border-color: color-mix(in oklab, var(--brand) 35%, transparent);
+  background: color-mix(in oklab, var(--brand) 8%, transparent); }
+.pr-chat-n:empty { display: none; }
+/* THE FREE TIER (2026-10-25): what a locked section says in place of what
+   it holds (app.js memberLockHTML), and a lock on each menu entry a plan
+   opens (markLockedNav). */
+.member-lock { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 12px; align-items: center; }
+.member-lock-ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+  background: color-mix(in oklab, var(--brand) 14%, var(--panel)); color: var(--brand-2); }
+.member-lock-copy p { margin: 2px 0 0; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.member-lock-go { grid-column: 1 / -1; justify-self: start; }
+.nav-locked { position: relative; }
+.nav-locked::after { content: ""; position: absolute; top: 5px; right: 6px; width: 9px; height: 9px; opacity: .7;
+  background: currentColor; -webkit-mask: var(--ic-lock) center / contain no-repeat; mask: var(--ic-lock) center / contain no-repeat; }
+/* The tab bar's items draw their active dot on the same ::after, scaled to
+   nothing until active — so the lock undoes the dot's placement and scale,
+   and sits at the icon's shoulder. */
+.tb-item.nav-locked::after, .tb-item.nav-locked.active::after { top: 4px; right: auto; bottom: auto; left: calc(50% + 8px);
+  margin: 0; border-radius: 0; transform: none; }
+.acct-handle-row { display: flex; align-items: center; gap: 6px; }
+.acct-handle-row input { flex: 1; min-width: 0; }
+
 /* The football row's parts (2026-10-25): the team in its own weight, the
    down after the play in the muted tone, and a moment in the game (a
    timeout, a quarter's end) as a quiet line with nothing beside it. */
@@ -8086,14 +8118,17 @@ body.picks-withheld :is(#potd-zone, #best-bets, #top-picks, #cards, #likely-top,
    invented star rating, and a "consistent profits" headline — is argued
    in app.js beside the code, because that is where somebody would put
    them back. The layout, the rhythm and the three-tier shape are his. */
-body.walled .sidebar, body.walled .tabbar,
-body.walled .nav-btn { display: none !important; }
+/* THE FREE TIER (2026-10-25): only the wall's own screens (app.js
+   WALL_SCREENS — the plans, checkout, sign-up, a reset) are standalone;
+   everywhere else a reader without a plan keeps the app around them. */
+body.walled.on-wall .sidebar, body.walled.on-wall .tabbar,
+body.walled.on-wall .nav-btn { display: none !important; }
 /* AND THE LEAGUE STRIP, which used to be covered by the line above: the
    chips lived inside `.sidebar` until 2026-09-10 and moved into `<main>`,
    which the wall does not hide. The paragraph below already says why —
    "a person who has never signed in has no use for … a sport switcher" —
    it just named the topbar's copy of it. */
-body.walled .sportbar { display: none !important; }
+body.walled.on-wall .sportbar { display: none !important; }
 /* The league row leaves the pages that are not about a league (OFF_LEAGUE_VIEWS). */
 body.off-league .sportbar { display: none; }
 /* ONE LEAGUE PICKER (audit V-16, roadmap #46). Live, Tonight and the
@@ -8112,13 +8147,13 @@ body.off-league .sportbar { display: none; }
    who has never signed in has no use for a search box, a notification
    bell or a sport switcher, and every one of those was still sitting
    above the headline. */
-body.walled .topbar, body.walled .footer { display: none !important; }
+body.walled.on-wall .topbar, body.walled.on-wall .footer { display: none !important; }
 /* THE GRID COLUMN OUTLIVES THE ELEMENT. `.shell` is
    `var(--sidebar-w) minmax(0,1fr)`;
    display:none takes the sidebar out of the flow but leaves the track, so
    main landed in the sidebar's column and the whole shop rendered as a
    narrow strip down the left. Measured at 1400px before the fix. */
-body.walled .shell { grid-template-columns: minmax(0, 1fr); }
+body.walled.on-wall .shell { grid-template-columns: minmax(0, 1fr); }
 /* THE SAFE AREA CAME OFF WITH THE TOPBAR. `.topbar` carries
    `padding: env(safe-area-inset-top) …`, and hiding it on the wall took
    that padding out of the document — so on a phone the page began at
@@ -8132,14 +8167,14 @@ body.walled .shell { grid-template-columns: minmax(0, 1fr); }
    on one, the Record page's title on the other. Record is reachable
    while walled — it is free by design — so it inherited the same
    missing padding. */
-body.walled main {
+body.walled.on-wall main {
   padding-left: 16px; padding-right: 16px;
   padding-top: calc(10px + env(safe-area-inset-top, 0px));
 }
 /* …and the sides too, for a landscape notch. `main` already has 16px of
    its own; the inset is whatever the hardware adds on top. */
 @supports (padding: env(safe-area-inset-left)) {
-  body.walled main {
+  body.walled.on-wall main {
     padding-left: calc(16px + env(safe-area-inset-left, 0px));
     padding-right: calc(16px + env(safe-area-inset-right, 0px));
   }
@@ -8310,7 +8345,7 @@ input:-webkit-autofill:focus {
 }
 /* No tab bar on a walled page — it is hidden with the rest of the
    chrome, so the sheet would float above nothing. */
-body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 
 .a2hs-card { position: relative; max-width: 30rem; margin: 0 auto;
   padding: 15px 16px; border-radius: var(--radius-lg);

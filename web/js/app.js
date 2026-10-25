@@ -5665,9 +5665,14 @@ function isLikelyBook(c) {
 }
 
 function renderLivePicks() {
+  const host = document.getElementById("live-picks");
+  if (host && isWalled()) {
+    host.innerHTML = memberLockHTML("Our picks on these games, live",
+      "Members see every Edge pick, Most Likely pick and the Pick of the Day on the games above, tracked play by play to the final, with the live chance each one cashes.");
+    return;
+  }
   buzzOnSettle([...(((state.data || {}).live_picks) || []),
                 ...(((state.data || {}).live_potd) || [])]);
-  const host = document.getElementById("live-picks");
   if (!host) return;
   /* THE PHASE COMES FROM THE FAST FEED, NOT THE BUILD. `live_picks` is
      assembled when the BOARD is built — every 45 minutes or so for the
@@ -18805,6 +18810,10 @@ function acctFieldsHTML(mode, beforeButton = "") {
   const isNew = mode === "signup";
   return `
     <div class="acct-row">
+      ${isNew ? `<label class="acct-field"><span class="acct-field-k">Username</span>
+        <span class="acct-handle-row"><span aria-hidden="true">@</span><input type="text" class="acct-handle" placeholder="yourname"
+        autocomplete="username" maxlength="20" spellcheck="false" autocapitalize="off"
+        pattern="[A-Za-z0-9_]{3,20}" aria-label="Username"></span></label>` : ""}
       ${acctEmailHTML()}
       ${isNew
         ? acctPwHTML("acct-pw", "10 characters or more", "Password", "new-password", true)
@@ -18843,65 +18852,30 @@ window.acctGoLogin = function () {
   window.scrollTo({ top: 0, behavior: "auto" });
 };
 
-function signupHTML() {
-  const insecure = _acctUser && _acctUser.insecure;
-  return `
-  <div class="card acct-card">
-    <div class="card-head">
-      <div><div class="player">Create your account</div>
-        <div class="subtitle">One account, every device. Your bets, fantasy
-          leagues and settings follow it.</div></div>
-    </div>
-    ${insecure ? `<div class="warning">${icon("warn")} <b>${
-      _acctUser.allowed ? "This connection is not private."
-                        : "Not over this connection."}</b>
-      This page came over plain HTTP, so a password typed here crosses the
-      network readable by anyone on it.</div>` : ""}
-
-    ${acctFieldsHTML("signup", `
-    <label class="acct-confirm">
-      <input type="checkbox" class="acct-age">
-      <span>I am 21 or older, and I accept the
-        <a href="terms.html" target="_blank" rel="noopener">Terms</a> and
-        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
-        This site publishes model estimates and takes no bets.</span>
-    </label>`)}
-
-    <div class="acct-note">${escapeHtml(_acctNote)}</div>
-
-    <div class="acct-alt">
-      <span>Already have an account?</span>
-      <button class="btn ghost" data-act="acctGoLogin">Log in</button>
-    </div>
-    <div class="acct-alt-more">
-      <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
-    </div>
-
-    ${/* TWO PROMISES, AS AN APP SAYS THEM (2026-10-25): two rows under the
-          form, each a mark and one sentence, where two paragraphs of grey
-          prose used to sit. Nothing said is lost. */""}
-    <ul class="acct-promises">
-      <li>${iconMark("lock", 15)}<span>Length is what makes a password hard to guess. We keep a one-way
-        scramble of it, never the password — a lost one is replaced from “Forgot password?”, not recovered —
-        and we never ask for your sportsbook or ESPN password.</span></li>
-      <li>${iconMark("check", 15)}<span>An account is free — it takes no card and subscribes you to nothing.${PLANS[0] ? ` The plans are
-        <a href="#paywall">over here</a> when you want them.` : ""}</span></li>
-    </ul>
-  </div>`;
+/* THE FIRST SCREEN A NEW VISITOR SEES (Ethan, 2026-10-25: "when you first
+   click on the [Real] app ... it immediately gives you an option to create
+   a username or log in ... that's how our app should work, since it's
+   initially going to be free"). Sign-up leads with what the free account
+   is for — every game live, its chat, the public record — and asks for
+   the username first. "Look around first" is the one way past it without
+   an account, to the free Live tab; once taken it is not asked again. */
+const WELCOME_KEY = "qb_welcome_v1";
+const acctSignedIn = () => !!((_pwStatus && _pwStatus.email) || (_acctUser && _acctUser.signed_in));
+function welcomeSeen() {
+  try { return localStorage.getItem(WELCOME_KEY) === "1" || !!localStorage.getItem("qb_acct_v1"); }
+  catch (e) { return true; }
 }
-
-async function renderSignup() {
-  const host = document.getElementById("view-signup");
-  if (!host) return;
-  // Somebody already signed in has no business on this page — send them
-  // to their account rather than offering a second one.
-  await acctWho();
-  if (_acctUser && _acctUser.signed_in) {
-    switchView("account", false);
-    return;
-  }
-  host.innerHTML = signupHTML();
+function welcomeDone() { try { localStorage.setItem(WELCOME_KEY, "1"); } catch (e) {} }
+function _pendingPlanPeek() {
+  try { return !!localStorage.getItem(PENDING_PLAN_KEY); } catch (e) { return false; }
 }
+window.welcomeBrowse = function () {
+  welcomeDone();
+  location.hash = "#live";
+};
+
+// The sign-up screen is the account room's (js/account.js): only the page itself needs it.
+function renderSignup(...a) { return roomCall(renderSignup, "renderSignup", "js/account.js", "css/account.css", a); }
 
 /* ===================== FORGOT PASSWORD =====================
    Ethan, 2026-10-11: "add an option for forget a password. Like, after
@@ -19021,7 +18995,8 @@ function resetHTML() {
     </div>
     <div class="acct-note-reset" role="status">${escapeHtml(_resetNote)}</div>
     ${back}
-  </div>`;
+  </div>
+  <p class="pw-legal">21+ · Not betting advice · Gambling problem? Call <b>1-800-GAMBLER</b></p>`;
 }
 
 async function renderReset() {
@@ -19140,17 +19115,22 @@ window.acctAuth = async function (btn, mode) {
   }
   if (mode === "signup" && !confirmed)
     return say("Please confirm you are 21 or older and accept the Terms.");
+  const handleBox = card.querySelector(".acct-handle");
+  const handle = handleBox ? (handleBox.value || "").trim().replace(/^@/, "") : "";
+  if (mode === "signup" && handleBox && !/^[A-Za-z0-9_]{3,20}$/.test(handle))
+    return say("Pick a username: 3–20 letters, numbers or underscores.");
   say(mode === "signup" ? "Creating your account…" : "Signing in…");
   try {
     const r = await fetch(`/api/account/${mode}`, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, confirmed }),
+      body: JSON.stringify({ email, password, confirmed, ...(mode === "signup" ? { handle, ref: referralTyped() } : {}) }),
     });
     const body = await r.json().catch(() => null);
     if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
     _acctUser = { signed_in: true, email: body.email };
     pushRelink();
+    welcomeDone();
     // The typed password is not kept anywhere. What we hold now is a
     // session cookie this script cannot even read.
     card.querySelectorAll(".acct-pw, .acct-pw2").forEach((i) => { i.value = ""; });
@@ -19235,7 +19215,10 @@ async function acctLandAfterAuth(say = () => {}) {
   if (walled !== was) {
     say(walled ? "Signed in — this account does not have a plan yet."
                : "Signed in — taking you in…");
-    location.hash = walled ? "#paywall" : dcFirstStop();
+    // An account without a plan lands in the free tier (Live), not on the
+    // plans it did not ask for; one that chose a plan first is carried on
+    // to checkout below, on the reload.
+    location.hash = walled ? (_pendingPlanPeek() ? "#paywall" : "#live") : dcFirstStop();
     return location.reload();
   }
 
@@ -23960,6 +23943,18 @@ const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "pr
 // exists to pull people in.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    "signup", "reset", "streak", "messages", "tools",
+                   // THE FREE TIER (Ethan, 2026-10-25: "make the website
+                   // free, but the only free things you get access to is
+                   // the record, the live page ... users can at least use
+                   // the live feature and the chat and look at live stats
+                   // ... for free", and his four answers that day): every
+                   // game in progress and its play-by-play, chat and stats;
+                   // a game's own page (its facts — the analysis and every
+                   // pick are locked on it); Fantasy; the reader's own My
+                   // Bets. The picks were never in what these pages fetch
+                   // for a reader without a plan (engine/gate redacts them
+                   // on disk); what is opened here is the page around them.
+                   "live", "pbp", "game", "fantasy", "mybets",
                    // The feed is open: a paid leg is locked by the server
                    // for a reader who has not paid (engine/socialfeed).
                    "feed",
@@ -23967,6 +23962,40 @@ const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    // proof, like the Record's. His BETS inside it are for
                    // members (engine/zeno.PAID_BOARD, zenoTickets).
                    "zeno"];
+
+/* The screens that ARE the wall — the plans, checkout, sign-up, a reset —
+   are standalone pages with their own masthead, so the app's own chrome
+   steps aside on them (styles.css `body.walled.on-wall`). Everywhere else a
+   reader without a plan keeps the tab bar and the menu, and a paid page
+   they tap opens the plans. */
+const WALL_SCREENS = ["paywall", "checkout", "signup", "reset"];
+/* A REFERRAL CODE rides in on a link (`?ref=CODE`, 2026-10-25) and waits on
+   this device until the sign-up sends it (engine/referrals). */
+const REF_KEY = "qb_ref";
+try {
+  const ref = new URLSearchParams(location.search).get("ref");
+  if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) localStorage.setItem(REF_KEY, ref.toUpperCase());
+} catch (e) {}
+const referralTyped = () => { try { return localStorage.getItem(REF_KEY) || ""; } catch (e) { return ""; } };
+const isWalled = () => document.body.classList.contains("walled");
+
+/* What a locked section says in place of what it holds: what is behind it,
+   in a sentence, and the way to it. Never a number from behind it. */
+function memberLockHTML(title, body) {
+  return `<div class="card member-lock">
+    <div class="member-lock-ic" aria-hidden="true">${icon("lock", 18)}</div>
+    <div class="member-lock-copy"><b>${escapeHtml(title)}</b><p>${escapeHtml(body)}</p></div>
+    <a class="btn primary member-lock-go" href="#paywall" data-view="paywall">See the plans</a></div>`;
+}
+
+/* The menu and the tab bar mark what a plan opens: a lock on every entry
+   the free tier does not (WALL_OPEN). */
+function markLockedNav() {
+  const walled = isWalled();
+  document.querySelectorAll(".nav-btn[data-view]").forEach((b) => {
+    b.classList.toggle("nav-locked", walled && !WALL_OPEN.includes(b.dataset.view));
+  });
+}
 
 function wallBlocked(name) {
   return document.body.classList.contains("walled")
@@ -24129,6 +24158,8 @@ function _switchViewNow(name, push, dir) {
     name = name === "checkout" ? "paywall" : "recommended";
     dir = 0;
   }
+  // The wall's own screens draw their own masthead (WALL_SCREENS).
+  document.body.classList.toggle("on-wall", WALL_SCREENS.includes(name));
   // Late, because a deferred view transition queued before the wall went
   // up arrives here after it did — see WALL_OPEN above.
   if (wallBlocked(name)) { name = "paywall"; dir = 0; }
@@ -24291,10 +24322,13 @@ function _switchViewNow(name, push, dir) {
   // Driven from here rather than from each page's own render, because
   // this is the one place that knows which view is showing — and a
   // future exempt page would otherwise have to remember to draw its own.
+  // The free tier (2026-10-25): the app's own chrome is there everywhere
+  // but on the wall's standalone screens, so the way back to the free pages
+  // is needed only on those — the plans, checkout, a reset.
   const back = document.getElementById("wall-back");
   if (back) {
     back.hidden = !(document.body.classList.contains("walled")
-                    && name !== "paywall" && name !== "checkout");
+                    && (name === "paywall" || name === "checkout" || name === "reset"));
   }
   updateAgo();          // reference pages hide the freshness chip
   /* THE PROP PAGE'S OWN ADDRESS SURVIVES THIS LINE, and until
@@ -28978,7 +29012,7 @@ function liveCardHTML({ sport, g, bets }) {
     </div>
     ${linesGrid}
     ${pressureLiveHTML(sport, g)}
-    ${playsHTML(g)}
+    ${playsHTML({ ...g, room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : "" })}
     ${lineTrackHTML(g)}
   </div>`;
 }
@@ -29379,6 +29413,10 @@ function pbpPickRowHTML({ r, placed }, book) {
     </div>`;
 }
 function pbpPropsHTML(d, league) {
+  if (isWalled()) {
+    return memberLockHTML("Our picks on this game",
+      "Members see the Edge picks, the Most Likely picks and the Pick of the Day on this game, each tracked live with its chance to cash.");
+  }
   if (state.sport !== league) {
     return `<p class="rail-quiet">Our picks are kept on each league’s own board — open the ${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab to see them on this game.</p>`;
   }
@@ -30513,8 +30551,37 @@ function footballWords(p, g) {
 //: The clock as a scoreboard writes it: "Q2 1:50", not "Q2 01:50".
 const fbClock = (c) => String(c || "").replace(/^0(\d:)/, "$1");
 
+/* THE GAME CHAT'S DOORS (js/chat.js, 2026-10-25 — Ethan: "a live chat
+   for each game"; Real files a thread under every play). The room loads
+   with its page the first time a game mounts it; a play's bubble, drawn
+   on every play-by-play row here, opens that play's thread and counts its
+   faces and replies, which the chat's own poll writes back into
+   `_chatPlayCounts`. A play's key is the same everywhere it is read: the
+   feed's own id, or the at-bat's index for baseball. */
+function chatMount(...a) { return roomCall(chatMount, "chatMount", "js/chat.js", "css/chat.css", a); }
+function chatOpen(...a) { return roomCall(chatOpen, "chatOpen", "js/chat.js", "css/chat.css", a); }
+const chatPlayKey = (p) => String((p && (p.kind === "atbat" ? (p.at_bat != null ? `ab${p.at_bat}` : "") : p.id)) || "");
+const CHAT_BUBBLE = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>`;
+function chatPlayBadge(room, p) {
+  const key = chatPlayKey(p);
+  if (!room || !key) return "";
+  const n = ((window._chatPlayCounts || {})[room] || {})[key] || 0;
+  return `<button type="button" class="pr-chat${n ? " has" : ""}" data-chat-room="${escapeAttr(room)}" data-chat-play="${escapeAttr(key)}"
+    aria-label="This play’s thread${n ? `, ${n}` : ""}">${CHAT_BUBBLE}<span class="pr-chat-n">${n || ""}</span></button>`;
+}
+// Captured, so the bubble opens its thread rather than the card under it.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".pr-chat");
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  chatOpen({ room: b.dataset.chatRoom, play: b.dataset.chatPlay });
+}, true);
+
 function playsHTML(g) {
   const plays = (g.plays || []).filter((p) => p && p.event);
+  // The play's thread, when the caller names the game's room.
+  const bubble = (p) => (g.room ? chatPlayBadge(g.room, p) : "");
   if (!plays.length) {
     const why = PLAYS_EMPTY[(g || {}).plays_state];
     return why ? `<p class="rail-quiet lb-why">${escapeHtml(why)}</p>` : "";
@@ -30569,7 +30636,7 @@ function playsHTML(g) {
       <span class="lb-inn">${escapeHtml(when)}</span>
       <span class="lb-what">${p.team ? `<span class="lb-side">${escapeHtml(p.team)}</span> ` : ""}${
         escapeHtml(w.title)}${who ? ` · <b>${who}</b>` : ""}<span class="lb-dd">${escapeHtml(dd)}</span>${flag}</span>
-      ${at}</div>`;
+      ${at}${bubble(p)}</div>`;
   };
   /* BASKETBALL ROWS, from the `plays` list the probe read off a finished
      WNBA game (event 401857186, 2026-09-05). A play names its team and
@@ -30595,7 +30662,7 @@ function playsHTML(g) {
     return `<div class="lb-play${p.scoring ? " scoring" : ""}">
       <span class="lb-inn">${escapeHtml(when)}</span>
       <span class="lb-what">${who}${who ? " — " : ""}${escapeHtml(p.event)}${tag}</span>
-      ${at}</div>`;
+      ${at}${bubble(p)}</div>`;
   };
   const d = g.drive;
   const driveLine = d && d.team ? `<div class="lb-drive">${escapeHtml(d.team)} drive
@@ -30612,7 +30679,7 @@ function playsHTML(g) {
       <span class="lb-inn">${escapeHtml(half)}</span>
       <span class="lb-what">${escapeHtml(p.batter || "")}${
         p.batter && p.event ? " — " : ""}${escapeHtml(p.event)}${rbi}</span>
-      ${at}</div>`;
+      ${at}${bubble(p)}</div>`;
   };
   /* A STRIP THAT IS A MOMENT BEHIND SAYS SO. A college Saturday has
      more live games than the play budget fetches in one pass, so a game
@@ -30693,6 +30760,7 @@ let _sweatCache = null, _sweatAt = 0;
 async function renderSweatZone() {
   const host = document.getElementById("sweat-zone");
   if (!host) return;
+  if (isWalled()) { host.innerHTML = ""; return; }      // members' (renderLivePicks says so once)
   if (!_sweatCache || Date.now() - _sweatAt > 10000) {
     try {
       const res = await paidFetch("sweat.json");
@@ -30835,7 +30903,7 @@ const LIVE_TICK_MS = 5000;
 let _liveTick = null;
 let _liveDrawnSig = "";
 const liveSig = (games) => JSON.stringify((games || []).map(({ sport, g }) =>
-  [sport, g.away, g.home, g.live, g.plays, g.drive, g.players]).concat([(_liveAll.finals || []).length]));
+  [sport, g.away, g.home, g.live, g.plays, g.big, g.drive, g.players]).concat([(_liveAll.finals || []).length]));
 function liveTickArm(games) {
   clearTimeout(_liveTick);
   _liveTick = null;
@@ -30850,6 +30918,13 @@ function liveTickArm(games) {
     else liveTickArm(now);
   }, LIVE_TICK_MS);
 }
+
+/* THE PLAY FEED (Real's main screen, 2026-10-25): Games or Feed on the
+   Live tab, remembered per reader. The feed itself is drawn by js/chat.js
+   (playFeedMount), loaded the first time it is chosen. */
+const LIVE_VIEW_KEY = "qb_live_view";
+let _liveView = (() => { try { return localStorage.getItem(LIVE_VIEW_KEY) === "feed" ? "feed" : "games"; } catch (e) { return "games"; } })();
+const pfRoom = (sport, g) => ((g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : "");
 
 async function renderLiveBoard() {
   const host = document.getElementById("live-board");
@@ -30920,7 +30995,8 @@ async function renderLiveBoard() {
         right now — ${games.length} live across the other leagues (choose All).</p>
        ${darkWhy}`
     : "";
-  const shelved = _liveChip === "all"
+  const shelved = _liveView === "feed" ? (shown.length ? `<div class="pf-host"></div>` : "")
+    : _liveChip === "all"
     ? Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
         <div class="lb-shelf">
           <span class="lb-shelf-logo">${(SPORT_META[s] || {}).logo || ""}</span>
@@ -30932,10 +31008,25 @@ async function renderLiveBoard() {
   host.innerHTML = `
     <div class="section-title">Live now
       <span class="sub">— every game in progress across the sports we model</span></div>
+    ${leagueChipsHTML([{ key: "games", label: "Games" }, { key: "feed", label: "Play feed" }],
+                      { group: "pf-view", attr: "data-live-view", active: _liveView, label: "How the live games are shown" })}
     ${leagueChipsHTML(chips.map((s) => ({ key: s, label: s === "all" ? "All" : s.toUpperCase(),
                                           n: s === "all" ? games.length : (bySport[s] || 0) })),
                       { group: "lb-chips", attr: "data-chip", active: _liveChip })}
     ${nothingHere}${shelved}`;
+  host.querySelectorAll("[data-live-view]").forEach((b) =>
+    b.addEventListener("click", () => {
+      _liveView = b.dataset.liveView === "feed" ? "feed" : "games";
+      try { localStorage.setItem(LIVE_VIEW_KEY, _liveView); } catch (e) {}
+      renderLiveBoard();
+    }));
+  // The feed and the threads' counts are the chat room's (js/chat.js).
+  const pfHost = host.querySelectorAll(".pf-host")[0];
+  if (games.length) loadRoom("js/chat.js", "css/chat.css").then((ok) => {
+    if (!ok) return;
+    if (pfHost && pfHost.isConnected) playFeedMount(pfHost, shown);
+    liveChatCounts(games);
+  });
   /* A LEAGUE CHIP MOVES THE WHOLE TAB, NOT THE TOP HALF OF IT.
 
      Ethan, 2026-09-18, during Lions-Bills: "we have a live nfl game
@@ -32494,6 +32585,7 @@ function buzzOnSettle(rows) {
     a2hsTick();
     if (!walled) return;
     document.body.classList.add("walled");
+    markLockedNav();
     renderPaywall();
     // A LINK TO AN OPEN PAGE LANDS ON THAT PAGE. The forced switch here
     // used to be unconditional, which shoved every cold load onto the
@@ -32505,8 +32597,19 @@ function buzzOnSettle(rows) {
     // line put the pricing table over it. A plain visit still opens on
     // the plans; a load that ASKED for an open page keeps it.
     const bootTarget = (location.hash || "").replace(/^#/, "").split("/")[0];
-    if (!(WALL_OPEN.includes(bootTarget) || bootTarget === "friend"))
-      _switchViewNow("paywall", false, 0);
+    // THE FREE TIER OPENS ON LIVE (2026-10-25): a visit that asked for no
+    // page, or for a paid one, lands on the games in progress — and a
+    // stranger who has never signed in, on the sign-up first (Real's first
+    // screen: make a username or log in). A link to a paid page still
+    // shows the plans, because that is what its sender meant to share.
+    if (!(WALL_OPEN.includes(bootTarget) || bootTarget === "friend")) {
+      const fresh = !acctSignedIn() && !welcomeSeen();
+      if (bootTarget && bootTarget !== "recommended" && !fresh) _switchViewNow("paywall", false, 0);
+      else {
+        location.hash = fresh ? "#signup" : "#live";
+        _switchViewNow(fresh ? "signup" : "live", false, 0);
+      }
+    }
     // A hash that names a real page must not punch through the wall.
     // `_switchViewNow` is what refuses it — see WALL_OPEN — and this
     // listener only has to make sure the plans are DRAWN when it does.
@@ -32598,6 +32701,7 @@ const ACTS = {
   acctGoForgot: (el) => acctGoForgot(el),
   acctForgotSend: (el) => acctForgotSend(el),
   acctForgotAgain: () => acctForgotAgain(),
+  welcomeBrowse: () => welcomeBrowse(),
   acctResetSave: (el) => acctResetSave(el),
   acctGo: (el, a) => acctGo(el, a === "create"),
   // With an argument, one of the settings screens ("Link a league":

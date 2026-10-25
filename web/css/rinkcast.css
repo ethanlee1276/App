@@ -196,6 +196,8 @@
   text-transform: uppercase; color: var(--text); background: var(--panel-2); border: var(--hairline) solid var(--border); }
 .rc-play-list { flex: 1; min-height: 0; overflow-y: auto; }
 .rc-play-list > .rail-quiet { margin: 0; padding: var(--sp-3) var(--sp-4); }
+/* A play's thread (js/chat.js): its bubble last on the row. */
+.rc-play:has(.pr-chat) { grid-template-columns: 40px 26px minmax(0, 1fr) auto auto; }
 .rc-play { display: grid; grid-template-columns: 40px 26px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2);
   padding: 8px var(--sp-3); border-bottom: var(--hairline) solid var(--border-soft); }
 .rc-play.divider { background: color-mix(in oklab, var(--panel-2) 60%, transparent); }

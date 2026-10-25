@@ -651,7 +651,8 @@
           <span class="hc-pmark">${side ? teamMarkIn(league, p.team, 22) : ""}</span>
           <span class="hc-pkind">${esc(KIND[kind])}</span>
           <span class="hc-pwhat">${who ? `<b>${esc(who)}</b>` : ""}<span>${playWords(p, d, k)}</span></span>
-          <span class="hc-psc${p.scoring && side ? ` ${side}` : ""}">${p.away_score != null ? `${esc(p.away_score)}–${esc(p.home_score)}` : ""}</span></div>`;
+          <span class="hc-psc${p.scoring && side ? ` ${side}` : ""}">${p.away_score != null ? `${esc(p.away_score)}–${esc(p.home_score)}` : ""}</span>${
+          typeof chatPlayBadge === "function" && d.event_id ? chatPlayBadge(`${league}_${d.event_id}`, p) : ""}</div>`;
     }).join("");
     return `<div class="card hc-card hc-plays">
       <div class="hc-card-head"><b>${live ? "Live Play by Play" : "Play by Play"}</b>${live ? `<span class="hc-pill">${icon("dot", 8)} Live</span>` : ""}

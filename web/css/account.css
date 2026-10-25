@@ -603,5 +603,14 @@
   .pw-dock .pw-dock-go { width: 100%; }
   .pw-dock .pw-dock-fine { text-align: center; font-size: var(--fs-xs); color: var(--text-mute); }
   .pw-dock.away { opacity: 0; transform: translateY(10px); pointer-events: none; }
-  body.walled .pw-dock { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  body.walled.on-wall .pw-dock { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* THE FIRST SCREEN (2026-10-25, Real's: a username or a log-in before
+   anything else): what the free account is for, over the form. */
+.welcome-hero { display: grid; justify-items: center; gap: 12px; text-align: center; margin: 6px auto 16px; max-width: 520px; }
+.welcome-mark { width: 64px; height: 64px; }
+.welcome-h { margin: 0; font-family: var(--font-headline); font-size: var(--fs-3xl); line-height: var(--lh-tight); color: var(--text); }
+.welcome-free { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; text-align: left; }
+.welcome-free li { display: flex; align-items: flex-start; gap: 10px; color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-snug); }
+.welcome-skip { margin-left: auto; color: var(--brand-2); }

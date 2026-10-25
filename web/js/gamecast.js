@@ -1307,7 +1307,7 @@
             dr.elapsed ? `, ${esc(dr.elapsed)}` : ""}${dr.period ? ` · Q${esc(dr.period)}` : ""}</span></div>
           ${result ? `<span class="gc-tag${/turnover|interception|fumble|safety/i.test(result) ? " turnover" : /touchdown|field goal|score/i.test(result) ? "" : " quiet"}">${esc(result)}</span>` : ""}
           ${score ? `<span class="gc-dr-score">${esc(score)}</span>` : ""}</div>
-        ${playsHTML({ plays: rows, home: d.home, away: d.away }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`;
+        ${playsHTML({ plays: rows, home: d.home, away: d.away, room: d.event_id ? `${league}_${d.event_id}` : "" }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`;
     }).join("");
   }
   function playsTabHTML(d, league) {
@@ -1316,7 +1316,7 @@
     if (!groups.length) return `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`;
     return groups.map((g) => `<div class="card gc-dr"><div class="gc-dr-head"><div><b>${esc(g.head)}</b>${
       g.sub ? `<span class="mini"> — ${esc(g.sub)}</span>` : ""}</div>${g.tag ? `<span class="gc-tag">${esc(g.tag)}</span>` : ""}</div>
-      ${playsHTML({ plays: g.rows }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`).join("");
+      ${playsHTML({ plays: g.rows, room: d.event_id ? `${league}_${d.event_id}` : "" }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`).join("");
   }
 
   /* ---------------- odds & picks ----------------

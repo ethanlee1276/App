@@ -46,8 +46,10 @@ def test_the_pages_that_hide_the_footer_print_their_own_line():
         assert re.search(r'class="pw-legal[^"]*">21\+ · Not betting advice · Gambling problem\? '
                          r"Call <b>1-800-GAMBLER</b>", body), fn
     assert '<span class="ask-help">21+ · 1-800-GAMBLER</span>' in _fn("renderAsk")
-    # Those are the pages whose footer is hidden (walled, Ask).
-    assert "body.walled .topbar, body.walled .footer { display: none !important; }" in CSS
+    # Those are the pages whose footer is hidden (the wall's own screens,
+    # Ask). A free reader elsewhere keeps the footer and its line, since
+    # the free tier (2026-10-25).
+    assert "body.walled.on-wall .topbar, body.walled.on-wall .footer { display: none !important; }" in CSS
     assert "body.ask-open .footer { display: none; }" in CSS
 
 

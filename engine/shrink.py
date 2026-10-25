@@ -53,7 +53,9 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          # The pages split out of app.js (2026-10-24), trimmed the same way.
          "js/fantasy.js", "js/memes.js",
          "js/record.js", "js/detail.js", "js/account.js", "js/more.js",
-         "css/record.css", "css/detail.css", "css/account.css", "css/more.css")
+         "css/record.css", "css/detail.css", "css/account.css", "css/more.css",
+         # The game chat (2026-10-25), a room like the others.
+         "js/chat.js", "css/chat.css")
 
 #: HTML comments that are not commentary: `engine/routes.document` splices
 #: an entity's preview tags between these two markers, so they stay.

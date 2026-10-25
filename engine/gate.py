@@ -260,8 +260,13 @@ PAID_KEYS = (
 #:                  paid: `coins` (every coin with our momentum score,
 #:                  risk score and exit signals) and the `rocket`/`exits`
 #:                  lists, which are the scan's two answers.
+#: FANTASY IS FREE (Ethan, 2026-10-25, choosing among the free tier's
+#: options: "Free — they see lineup scores and start/sit help, never a line,
+#: an edge or a pick"). The draft kit, our ranks and buy/sell are fantasy
+#: opinions, not bets, and open with the room; the game scripts stay paid —
+#: they are sold by name on the plans page and read straight into bets.
 PAID_KEYS_BY_FILE = {
-    "fantasy.json": ("draft_kit", "ranks", "buy_sell", "scripts"),
+    "fantasy.json": ("scripts",),
     "memecoins.json": ("coins", "rocket", "exits"),
 }
 
@@ -308,11 +313,23 @@ PAID_FILES = (
     # His TOTALS stay free in record.json: they are the proof, these are
     # the product.
     "zeno.json",
-    # THIS WEEK IN FANTASY POINTS (engine/fantasyweek, 2026-10-22): every
-    # row is the prop board's projections added up, its touchdown chances
-    # and its reads — the model's output, all of it.
-    "fantasy_week.json",
 )
+
+#: PAID FIELDS ON THE ROWS OF A FREE LIST, by file: {file: (list key, fields)}.
+#: `_strip` deliberately does not descend into lists (its docstring says why),
+#: so a board whose rows are half free and half paid names them here.
+#:
+#: THIS WEEK IN FANTASY POINTS (engine/fantasyweek), free since 2026-10-25
+#: with the Fantasy room: a player's points, his chance to play, the
+#: matchup, his role change and his injury line are a fantasy answer. His
+#: stat line (`proj`, `volume`) is the prop board's own median on every
+#: market and his touchdown chance is the anytime-TD price's number — read
+#: beside a book's line, either is a pick — and the script and the model's
+#: reads are the paid analysis. Those stay behind the plan.
+ROW_PAID_KEYS_BY_FILE = {
+    "fantasy_week.json": ("players", ("proj", "volume", "td_prob", "td_quoted", "td_reasons",
+                                      "read", "script", "reasons")),
+}
 
 #: …and the ones that must NEVER be touched, named rather than inferred.
 #:
@@ -430,7 +447,8 @@ KNOWN_BOARDS = (
     # every owner post (engine/zeno.publish_tickets). Paid whole.
     "zeno.json",
     # The week's fantasy projections, written beside the NFL board by
-    # nfl_build (engine/fantasyweek). Paid whole.
+    # nfl_build (engine/fantasyweek). Free points, paid workings
+    # (ROW_PAID_KEYS_BY_FILE) since the Fantasy room went free, 2026-10-25.
     "fantasy_week.json",
     # memes_build.py has written this since the meme ledger shipped and
     # nothing here had ever heard of it — the third time a pipeline grew
@@ -463,6 +481,9 @@ MIXED_FILES = (
     # `ranks` are ordinary words and a global entry would strip them off
     # any future board that happened to use the name.
     "fantasy.json", "memecoins.json",
+    # Each row's points are free and its workings paid, per row rather than
+    # per key: ROW_PAID_KEYS_BY_FILE.
+    "fantasy_week.json",
 )
 
 #: The switch. OFF by default, and that default is the whole reason this
@@ -563,6 +584,14 @@ def redact(payload: dict, name: str = "") -> dict:
 
     locked: dict = {}
     out = _strip(payload, paid_keys_for(name), locked)
+    rows = ROW_PAID_KEYS_BY_FILE.get(Path(str(name or "")).name)
+    if rows and isinstance(out.get(rows[0]), list):
+        cut = [{k: v for k, v in r.items() if k not in rows[1]} if isinstance(r, dict) else r
+               for r in out[rows[0]]]
+        n = sum(1 for a, b in zip(out[rows[0]], cut) if isinstance(a, dict) and len(a) != len(b))
+        out[rows[0]] = cut
+        if n:
+            locked[f"{rows[0]}[].fields"] = n
     if locked:
         out["locked"] = locked
         out["locked_reason"] = "subscription"

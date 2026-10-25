@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import re
 import os
 from pathlib import Path
 
@@ -189,7 +190,15 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
     for g in live[:PLAYS_MAX_GAMES]:
         try:
             payload = fetch_live_playbyplay(g["game_pk"])
-            g["plays"] = recent_plays(payload, PLAYS_PER_GAME)
+            every = recent_plays(payload, 0)
+            g["plays"] = every[-PLAYS_PER_GAME:]
+            # The game's recent big at-bats too, for the Live tab's play
+            # feed (livescore_build.BIG_PER_GAME says why): a hit that
+            # drove a run in, a home run, a strikeout, a double play.
+            big = [r for r in every if r.get("hit") or (r.get("rbi") or 0) > 0
+                   or re.search(r"home run|strikeout|double play", str(r.get("event") or ""), re.I)][-8:]
+            if big:
+                g["big"] = big
             g["plays_state"] = "ok"
             got += 1
         except Exception:                                    # noqa: BLE001

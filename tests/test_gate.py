@@ -716,12 +716,15 @@ def test_the_facts_inside_a_gated_board_stay_free():
              "draft_kit": [{"player": "y"}], "ranks": {"rows": [1, 2]},
              "buy_sell": {"buy": [1]}, "scripts": [{"game": "z"}]}
     red = gate.redact(board, "fantasy.json")
-    for keep in ("season", "usage", "schedule", "rates", "trending", "camp"):
+    # The draft kit, ranks and buy/sell opened with the Fantasy room on
+    # 2026-10-25 (fantasy opinions, not bets); the game scripts did not.
+    for keep in ("season", "usage", "schedule", "rates", "trending", "camp",
+                 "draft_kit", "ranks", "buy_sell"):
         assert red.get(keep) == board[keep], f"redaction ate {keep}"
-    for gone in ("draft_kit", "ranks", "buy_sell", "scripts"):
+    for gone in ("scripts",):
         assert not red.get(gone), f"{gone} survived on the public path"
     assert red["locked_reason"] == "subscription"
-    assert set(red["locked"]) == {"draft_kit", "ranks", "buy_sell", "scripts"}
+    assert set(red["locked"]) == {"scripts"}
 
 
 def test_the_meme_scan_is_gated_and_its_counts_are_not():

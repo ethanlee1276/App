@@ -137,7 +137,14 @@ def test_the_pages_that_stay_open_are_named_once():
                           # the reader types, and sport tools that read only
                           # the board the reader already has. #wall-back
                           # verified visible on it with body.walled set.
-                          "tools"}, open_
+                          "tools",
+                          # THE FREE TIER (2026-10-25): every live game,
+                          # its play-by-play and chat, the game page's
+                          # facts, the Fantasy room and My Bets. Each keeps
+                          # the app's chrome behind the wall and draws a
+                          # member lock where the paid sections were
+                          # (tests/test_the_free_tier.py).
+                          "live", "pbp", "game", "fantasy", "mybets"}, open_
 
 
 def test_every_open_page_is_a_real_view():

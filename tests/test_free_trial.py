@@ -81,8 +81,10 @@ def test_nothing_advertises_the_walled_pages_as_free():
     m = re.search(r"const WALL_OPEN = \[([^\]]*)\]", app)
     openable = set(re.findall(r'"([a-z]+)"', m.group(1)))
     assert "record" in openable
-    for shut in ("standings", "rosters", "injuries", "fantasy", "mybets",
-                 "bankroll"):
+    # The Fantasy room and My Bets opened on 2026-10-25 (Ethan: "the fantasy
+    # room could probably be free"; My Bets free with an account), so
+    # they are no longer on this list — tests/test_the_free_tier.py.
+    for shut in ("standings", "rosters", "injuries", "bankroll"):
         assert shut not in openable, (
             "%s is reachable unpaid; if that is deliberate this test needs "
             "updating, and so does whatever page says it is not" % shut)

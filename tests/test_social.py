@@ -764,7 +764,7 @@ def test_a_signed_out_open_stashes_and_sign_in_accepts():
     assert 'PENDING_INVITE_KEY = "qb_pending_invite"' in APPJS
     assert "acceptPendingInvite" in APPJS
     i = APPJS.index("window.acctAuth")
-    assert "acceptPendingInvite()" in APPJS[i:i + 3000], \
+    assert "acceptPendingInvite()" in APPJS[i:i + 4000], \
         "sign-in no longer fires the stashed invite"
 
 

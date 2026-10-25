@@ -197,7 +197,9 @@ def test_it_does_not_cover_the_navigation():
 
 def test_it_clears_the_bottom_edge_on_a_walled_page_too():
     css = open(CSS, encoding="utf-8").read()
-    assert "body.walled .a2hs" in css, (
+    # On the wall's own screens since the free tier (2026-10-25): a free
+    # reader on Live keeps the tab bar, so the sheet keeps clearing it.
+    assert "body.walled.on-wall .a2hs" in css, (
         "the tab bar is hidden behind the wall, so the sheet floats above "
         "nothing")
 

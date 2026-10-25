@@ -427,7 +427,7 @@ class _Conn:
         pass
 
 
-def test_the_desk_reads_the_week_for_members_and_says_why_otherwise():
+def test_the_desk_reads_the_week_for_everyone_and_the_workings_for_members():
     import server
     soon = (dt.date.today() + dt.timedelta(days=3)).isoformat()
     gone = (dt.date.today() - dt.timedelta(days=9)).isoformat()
@@ -443,8 +443,9 @@ def test_the_desk_reads_the_week_for_members_and_says_why_otherwise():
         assert meta["measured"] is None or "score" in meta["measured"]
         h._entitled = lambda conn, who: False
         doc, meta = h._fantasy_week()
-        assert doc == {} and meta["locked"] and meta["state"] == "locked"
-        assert "membership" in meta["note"]
+        assert doc["players"] and meta["state"] == "free" and not meta["locked"]
+        assert not any("proj" in r or "td_prob" in r for r in doc["players"])
+        assert "Members also get" in meta["note"]
         FW.load = lambda path=None: _doc(teams={"CIN": {"date": gone}})
         h._entitled = lambda conn, who: True
         doc, meta = h._fantasy_week()
@@ -503,11 +504,25 @@ def test_the_file_is_built_from_the_board():
     assert "Fantasy week: 1 players projected (1 WR)" in FW.summary_line(doc)
 
 
-def test_the_file_is_paid_whole():
-    assert "fantasy_week.json" in gate.PAID_FILES and "fantasy_week.json" in gate.KNOWN_BOARDS
+def test_the_points_are_free_and_the_workings_are_paid():
+    """Paid whole until 2026-10-25, when the Fantasy room went free (Ethan:
+    "the fantasy room could probably be free"). The cut is per row: his
+    points, chance to play and matchup are public; his stat line, his
+    touchdown chance and the script — each a prop line in another form —
+    stay behind the plan."""
+    assert "fantasy_week.json" in gate.MIXED_FILES and "fantasy_week.json" in gate.KNOWN_BOARDS
+    assert "fantasy_week.json" not in gate.PAID_FILES
     assert not gate.is_free("fantasy_week.json")
-    public = gate.redact(_doc(built_at="2026-10-22T10:00:00"), "fantasy_week.json")
-    assert "players" not in public and public["locked_reason"] == "subscription"
+    doc = _doc(built_at="2026-10-22T10:00:00")
+    public = gate.redact(doc, "fantasy_week.json")
+    assert len(public["players"]) == len(doc["players"])
+    drop = gate.ROW_PAID_KEYS_BY_FILE["fantasy_week.json"][1]
+    for row in public["players"]:
+        assert row.get("player") and "ppr" in row and "play" in row, row
+        assert not set(row) & set(drop), sorted(set(row) & set(drop))
+    assert public["locked_reason"] == "subscription" and public["locked"]["players[].fields"]
+    assert FW.free_view(doc)["players"] == public["players"], "the desk and the file cut differently"
+    assert all("proj" in r for r in doc["players"]), "the cut changed the member's copy"
 
 
 def test_publish_keeps_the_full_copy_private_and_load_reads_it():
@@ -520,7 +535,9 @@ def test_publish_keeps_the_full_copy_private_and_load_reads_it():
         finally:
             gate.enabled = keep
         assert Path(pub) == board.parent / "fantasy_week.json"
-        assert "players" not in json.loads(Path(pub).read_text()), "the public copy leaked the week"
+        public = json.loads(Path(pub).read_text())
+        assert public["players"] and not any("proj" in r for r in public["players"]), \
+            "the public copy leaked the workings"
         assert Path(full).parent != board.parent
         assert FW.load(full)["players"], "the private copy is the whole week"
     assert FW.publish({}, "") is None

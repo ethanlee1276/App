@@ -23,6 +23,11 @@ APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 LAZY = (ROOT / "web" / "js" / "memes.js").read_text(encoding="utf-8")
 VIS = (ROOT / "web" / "js" / "visuals.js").read_text(encoding="utf-8")
 PAGES = APP + VIS + (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+#: Every page module too (2026-10-25): the sign-up screen moved to
+#: js/account.js with a "Look around first" button whose action was never
+#: registered, and the scan above read app.js alone, so nothing said so.
+ROOMS = "".join(f.read_text(encoding="utf-8") for f in sorted((ROOT / "web" / "js").glob("*.js"))
+                if f.name not in ("app.js", "visuals.js"))
 
 
 def _table(src, name):
@@ -35,7 +40,7 @@ def test_every_named_action_is_registered():
     for attr, (src, table) in {"data-act": (APP, "ACTS"), "data-change": (APP, "CHANGES"),
                                "data-key": (APP, "KEYS"), "data-onerr": (VIS, "IMG_ERR")}.items():
         _, names = _table(src, table)
-        used = set(re.findall(rf'{attr}="(\w+)"', PAGES))
+        used = set(re.findall(rf'{attr}="(\w+)"', PAGES + (ROOMS if attr == "data-act" else "")))
         assert used, attr
         missing = used - names
         assert not missing, f"{attr} names nothing: {sorted(missing)}"

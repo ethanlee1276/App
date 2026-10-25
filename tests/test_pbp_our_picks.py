@@ -40,6 +40,7 @@ def _node(js):
         "const LEAGUE_LABEL = { cfb: 'College football', nfl: 'NFL' };",
         "const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');",
         "const escapeAttr = escapeHtml;",
+        "const isWalled = () => false; const memberLockHTML = () => '';",
         "const american = (o) => (o > 0 ? `+${o}` : `−${Math.abs(o)}`);",
         "const teamName = (t) => ({ HAW: \"Hawai'i\", WYO: 'Wyoming' })[t] || t;",
         "const betMark = () => '<i></i>';",

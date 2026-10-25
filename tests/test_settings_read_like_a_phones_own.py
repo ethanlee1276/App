@@ -152,7 +152,8 @@ def test_sign_in_fields_are_labelled_and_the_action_is_gold():
     fields = _fn(APP, "acctFieldsHTML")
     assert '<button class="btn primary"\n        data-act="acctAuth"' in fields, "Log in is the gold button too"
     assert fields.index("${beforeButton}") < fields.index('data-act="acctAuth"')
-    assert '${acctFieldsHTML("signup", `' in _fn(APP, "signupHTML"), "the age box comes before Create account"
+    # The sign-up screen is the account room's since 2026-10-25 (js/account.js).
+    assert '${acctFieldsHTML("signup", `' in _fn(ACCT, "signupHTML"), "the age box comes before Create account"
     card = _fn(ACCT, "acctSignInHTML")
     assert "acct-brand" not in card and "<svg" not in card, "the decorative eye is gone"
     assert ".acct-field { display: grid; gap: 6px; min-width: 0; }" in CSS, \

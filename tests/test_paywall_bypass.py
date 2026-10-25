@@ -726,7 +726,9 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     html = _read("web", "index.html")
 
     assert 'id="wall-back"' in html, "the escape hatch is gone from the page"
-    assert 'href="#paywall"' in html, "it no longer points at the plans"
+    # Back to the live games since 2026-10-25: the free tier's home, and a
+    # way out of the plans page has to lead somewhere other than the plans.
+    assert 'href="#live"' in html, "it no longer leads back to the free pages"
 
     # Shown by the ROUTER, which is the one place that knows the current
     # view — a page drawing its own would have to remember to.
@@ -784,9 +786,17 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     # already has, so a walled reader's sealed board shows the college meter
     # as a membership line, never a number. Back link confirmed by rendering
     # #tools with body.walled set: #wall-back visible, five calculators drawn.
+    # "live", "game", "pbp", "fantasy", "mybets" added 2026-10-25: THE FREE
+    # TIER (Ethan: "users can at least use the live feature and the chat and
+    # look at live stats ... for free"). Each carries the app's own chrome
+    # behind the wall now — tab bar, sidebar, locked tabs marked — so the way
+    # around is the chrome itself; #wall-back is kept for the wall's own
+    # standalone screens and leads to #live. Every one was rendered with
+    # body.walled set (tests/test_the_free_tier.py): the game page drops its
+    # paid sections for a member lock, the Live tab's picks rail likewise.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
                       "signup", "streak", "messages", "zeno", "feed", "reset",
-                      "tools"}, (
+                      "tools", "live", "game", "pbp", "fantasy", "mybets"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

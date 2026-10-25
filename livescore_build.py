@@ -68,6 +68,12 @@ SUMMARY_WORKERS = 4
 #: Plays on a card: about one drive's worth.
 PLAYS_PER_GAME = 6
 
+#: The game's recent BIG plays on its card too (espnplays.big_play): the
+#: Live tab's play feed reads every game's (Real's main screen,
+#: 2026-10-25), and six plays is a drive — a touchdown twenty minutes ago
+#: has long left them. From the summary already in hand; no extra fetch.
+BIG_PER_GAME = 8
+
 #: The most football games one pass will fetch a summary for. A college
 #: Saturday can have thirty in progress at once, a summary is a few
 #: hundred kilobytes, and this box OOM-killed seven test children on
@@ -327,6 +333,8 @@ def _carry_forward(waiting: list[dict], league: str,
         if not plays:
             continue
         g["plays"] = plays
+        if old.get("big"):
+            g["big"] = old["big"]
         if old.get("drive"):
             g["drive"] = old["drive"]
         if old.get("players"):
@@ -436,9 +444,11 @@ def attach_plays(games: list[dict], league: str,
                      str(g.get("away_id") or ""): g["away"]}
             sides.pop("", None)
             if noun == "drives":
-                g["plays"] = espnplays.football_plays(
-                    payload, league, PLAYS_PER_GAME,
-                    home=g["home"], away=g["away"])
+                every = espnplays.football_plays(payload, league, 0, home=g["home"], away=g["away"])
+                g["plays"] = every[-PLAYS_PER_GAME:]
+                big = [r for r in every if espnplays.big_play(r)][-BIG_PER_GAME:]
+                if big:
+                    g["big"] = big
                 drive = espnplays.current_drive(payload, league)
                 if drive:
                     g["drive"] = drive
@@ -450,8 +460,11 @@ def attach_plays(games: list[dict], league: str,
                 nofeed += 1
                 continue
             else:
-                g["plays"] = espnplays.hoops_plays(payload, league,
-                                                   PLAYS_PER_GAME, sides=sides)
+                every = espnplays.hoops_plays(payload, league, 0, sides=sides)
+                g["plays"] = every[-PLAYS_PER_GAME:]
+                big = [r for r in every if espnplays.big_play(r)][-BIG_PER_GAME:]
+                if big:
+                    g["big"] = big
             g["plays_state"] = "ok"
             got += 1
         except Exception:                                    # noqa: BLE001

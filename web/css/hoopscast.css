@@ -170,6 +170,8 @@
   color: var(--text); background: var(--panel-2); border: var(--hairline) solid var(--border); }
 .hc-play-list { max-height: 520px; overflow-y: auto; }
 .hc-play-list > .rail-quiet { margin: 0; padding: var(--sp-3) var(--sp-4); }
+/* A play's thread (js/chat.js): its bubble last on the row. */
+.hc-play:has(.pr-chat) { grid-template-columns: 44px 24px 28px minmax(0, 1fr) auto auto; }
 .hc-play { display: grid; grid-template-columns: 44px 24px 28px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2);
   padding: 8px var(--sp-4); border-bottom: var(--hairline) solid var(--border-soft); }
 .hc-pclock { font: 600 var(--fs-xs) / 1.2 var(--font-mono); color: var(--text-mute); font-variant-numeric: tabular-nums; }

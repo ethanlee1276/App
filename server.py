@@ -318,6 +318,11 @@ def rate_ok(key: str, limit: int, now: float | None = None) -> bool:
         return not over
 
 
+#: The game chat's "here now" count keys an anonymous reader by a hash of
+#: their address, salted per process so the hash means nothing outside it
+#: and nothing survives a restart (engine/gamechat.touch keeps it 45s).
+_HERE_SALT = __import__("secrets").token_hex(16)
+
 _RATE_LIMITED = ('{"error":"Too many requests — slow down and try again '
                  'in a minute."}')
 
@@ -1231,6 +1236,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/feed/"):
             return self._feed_get(parsed.path[len("/api/feed/"):].strip("/"),
                                   parse_qs(parsed.query))
+        if parsed.path.startswith("/api/chat/"):
+            return self._chat_get(parsed.path[len("/api/chat/"):].strip("/"),
+                                  parse_qs(parsed.query))
         if parsed.path.startswith("/api/alerts/"):
             return self._alerts_get(
                 parsed.path[len("/api/alerts/"):].strip("/"))
@@ -1384,6 +1392,7 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/tailfade/"):].strip("/"), body)
         if (parsed.path.startswith("/api/social/")
                 or parsed.path.startswith("/api/feed/")
+                or parsed.path.startswith("/api/chat/")
                 or parsed.path.startswith("/api/alerts/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
                 or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
@@ -1419,6 +1428,9 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path.startswith("/api/feed/"):
                 return self._feed_post(
                     parsed.path[len("/api/feed/"):].strip("/"), body)
+            if parsed.path.startswith("/api/chat/"):
+                return self._chat_post(
+                    parsed.path[len("/api/chat/"):].strip("/"), body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
         if parsed.path in ("/api/ask/slip", "/api/ask/slip/"):
@@ -1738,11 +1750,16 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             aconn.close()
         if not ok:
-            return {}, {"week": doc.get("week"), "season": doc.get("season"),
-                        "state": "locked", "locked": True,
-                        "note": ("This week's projections — the matchup, the game script, "
-                                 "the weather, injuries and who is out around him — come with "
-                                 "a membership. Shown here: season averages.")}
+            # THE FREE FANTASY ROOM (2026-10-25): this week's points, his
+            # chance to play, the matchup and his role — not his stat line,
+            # his touchdown chance or the script (fantasyweek.free_view), so
+            # a league's own scoring reads PPR points for a free reader.
+            return fantasyweek.free_view(doc), {
+                "week": doc.get("week"), "season": doc.get("season"),
+                "built_at": doc.get("built_at"), "byes": doc.get("byes") or [],
+                "state": "free", "locked": False, "measured": doc.get("measured"),
+                "note": ("This week in PPR points. Members also get each player's stat line, "
+                         "touchdown chance and game script, and their league's own scoring.")}
         return doc, {"week": doc.get("week"), "season": doc.get("season"),
                      "built_at": doc.get("built_at"), "byes": doc.get("byes") or [],
                      "state": "ok", "locked": False, "measured": doc.get("measured")}
@@ -2484,10 +2501,23 @@ class Handler(BaseHTTPRequestHandler):
                     {"signed_in": True, "email": out["email"]}).encode(),
                     ".json", headers=self._session_cookie(token))
             if path in ("signup", "login"):
+                handle = ""
                 if path == "signup":
+                    # THE USERNAME COMES WITH THE ACCOUNT (2026-10-25, Real's
+                    # first screen): checked BEFORE the account exists, so a
+                    # taken or refused one makes nothing, and set the moment
+                    # it does — the chat and the feed then know them by it.
+                    from engine import socialfeed as SF
+                    handle = str(body.get("handle") or "").strip().lstrip("@")[:20]
+                    if handle:
+                        hc, why = SF.handle_problem(conn, handle)
+                        if hc:
+                            return self._send(hc, json.dumps({"error": why, "field": "handle"}).encode(), ".json")
                     code, out = A.create_user(
                         conn, body.get("email"), body.get("password"),
                         confirmed=bool(body.get("confirmed")))
+                    if code == 200 and handle:
+                        SF.profile_set(conn, out["id"], handle, "")
                 else:
                     code, out = A.authenticate(
                         conn, body.get("email"), body.get("password"),
@@ -3126,6 +3156,87 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 code, out = SF.profile_set(conn, uid, txt("handle"), txt("bio"), name=txt("name"),
                                            color=body.get("color"), team=txt("team"))
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _chat_get(self, path: str, q: dict):
+        """The game chat (engine/gamechat). Open to read; the founder's
+        queue of reported messages behind the feed's moderation door."""
+        from engine import gamechat as GC
+        one = lambda k, d="": (q.get(k) or [d])[0]                # noqa: E731
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            uid = who["id"] if who else None
+            if path == "room":
+                # "Here now" counts pages, not people: a signed-in reader by
+                # account, anyone else by a salted hash of the address that
+                # lives in memory only and is gone in under a minute.
+                key = f"u{uid}" if uid else "a" + hashlib.sha256(
+                    (_HERE_SALT + self._client_ip()).encode()).hexdigest()[:16]
+                try:
+                    since = float(one("since") or 0)
+                except ValueError:
+                    since = 0.0
+                code, out = GC.room_view(conn, one("room")[:24], uid, after=_int(one("after")),
+                                         before=_int(one("before")), since=since,
+                                         strong=one("strong") == "1", here_key=key)
+                if code == 200:
+                    from engine import socialfeed as SF
+                    out["me"] = {"signed_in": bool(who),
+                                 "handle": ((SF.profile_of(conn, uid) or {}).get("handle") if uid else None),
+                                 "founder": bool(uid and SF.is_founder(conn, uid))}
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "counts":
+                rooms = [r for r in one("rooms").split(",") if r][:GC.MAX_ROOMS]
+                return self._send(200, json.dumps({"rooms": GC.counts(conn, rooms)}).encode(), ".json")
+            if path == "reported":
+                if not self._founder_or_owner(conn):
+                    return
+                return self._send(200, json.dumps({"items": GC.reported(conn)}).encode(), ".json")
+            return self._send(404, b'{"error":"unknown chat endpoint"}', ".json")
+        finally:
+            conn.close()
+
+    def _chat_post(self, path: str, body: dict):
+        from engine import gamechat as GC
+        if path not in ("send", "react", "play", "vote", "report", "delete", "hide"):
+            return self._send(404, b'{"error":"unknown chat endpoint"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            if path == "hide":
+                if not self._founder_or_owner(conn):
+                    return
+                code, out = GC.set_hidden(conn, _int(body.get("id")), bool(body.get("hidden", True)))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to join the chat."}', ".json")
+            uid = who["id"]
+            room = str(body.get("room") or "")[:24]
+            if path == "react":
+                code, out = GC.react(conn, uid, _int(body.get("id")), str(body.get("kind") or ""))
+            elif path == "play":
+                code, out = GC.react_play(conn, uid, room, str(body.get("play") or "")[:40],
+                                          str(body.get("kind") or ""))
+            elif path == "vote":
+                code, out = GC.vote(conn, uid, room, str(body.get("side") or ""))
+            elif path == "report":
+                code, out = GC.report(conn, uid, _int(body.get("id")), str(body.get("reason") or "other")[:12])
+            elif path == "delete":
+                code, out = GC.delete(conn, uid, _int(body.get("id")))
+            else:
+                # A message: what the writer typed, the play it answers, the
+                # message it replies to, and the bet THEY say they are on —
+                # rebuilt field by field by gamechat.clean_bet; nothing else
+                # in a crafted body lands anywhere.
+                code, out = GC.send(conn, uid, room, body.get("body") if isinstance(body.get("body"), str) else "",
+                                    play=str(body.get("play") or "")[:40],
+                                    bet=body.get("bet") if isinstance(body.get("bet"), dict) else None,
+                                    reply_to=_int(body.get("reply_to")) or None)
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()

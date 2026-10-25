@@ -34,6 +34,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DU 2>&1 | tee /tmp/du.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DV 2>&1 | tee /tmp/dv.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DW 2>&1 | tee /tmp/dw.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX 2>&1 | tee /tmp/dx.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -458,6 +459,11 @@ run DW "The live pages, caught up with the game (fresh every pass, a 5-second lo
 curl -s https://qellysbook.com/js/app.js | grep -c 'const PBP_POLL_MS = 5000;'
 grep -c '^SCORES_FAST_S = 5' /srv/qellys/launch.py
 python3 -c "import json,time,glob;fs=[f for f in sorted(glob.glob('/srv/qellys/web/data/live_*.json')) if '_box' not in f];g=lambda f:json.load(open(f)).get('generated_at');s={f:{g(f)} for f in fs};[time.sleep(2) or [s[f].add(g(f)) for f in fs] for _ in range(15)];print(' '.join(f.split('live_')[1][:-5]+'='+str(len(v)-1) for f,v in s.items()))"
+SH
+run DX "A chat on every game, plays like Real, and the site free to look around" 60 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatMount('
+curl -s https://qellysbook.com/js/app.js | grep -c '"live", "pbp", "game", "fantasy", "mybets",'
+curl -s -o /dev/null -w '%{http_code}\n' 'https://qellysbook.com/api/chat/room?room=nfl_1'
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

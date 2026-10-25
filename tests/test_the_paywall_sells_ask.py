@@ -98,7 +98,10 @@ def test_the_paywall_shows_ask_and_opens_no_door_to_it():
     blocked = _fn("wallBlocked")
     assert 'document.body.classList.contains("walled")' in blocked and "!WALL_OPEN.includes(name)" in blocked
     assert "if (wallBlocked(name)) name = \"paywall\";" in _fn("switchView"), "a walled route to Ask lands on the paywall"
-    assert "body.walled .sidebar, body.walled .tabbar," in CSS, "and the tab bar with its Ask button is gone"
+    # On the wall's own screens only since the free tier (2026-10-25): a
+    # free reader browsing the live games keeps the tab bar, with the paid
+    # tabs marked locked and the router still sending them here.
+    assert "body.walled.on-wall .sidebar, body.walled.on-wall .tabbar," in CSS, "and the tab bar with its Ask button is gone"
 
 
 def test_what_the_shop_sells_is_behind_the_subscription():

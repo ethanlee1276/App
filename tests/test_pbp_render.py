@@ -207,7 +207,7 @@ def test_the_rail_shows_the_newest_forty_and_offers_the_rest():
     assert "const PEEK = 40;" in body
     assert "_pbpShowAll ? Infinity : PEEK" in body
     assert 'id="pbp-more"' in body and "View full play by play" in body
-    assert "playsHTML({ plays: g.rows, home: d.home, away: d.away })" in body, "football and hoops keep the card's rows"
+    assert "playsHTML({ plays: g.rows, home: d.home, away: d.away, room: pbpRoom(d, league) })" in body, "football and hoops keep the card's rows"
     page = _fn("renderPbpPage")
     assert "_pbpShowAll = true; renderPbpPage();" in page
 

@@ -1983,10 +1983,15 @@ function renderGamePage() {
   /* WATCH, ONLY WHILE THE GAME IS ON (Ethan, 2026-10-07: "We should not
      show the 'watch' button until the game is live"). The fast file can
      know a game is live before the board does, so its row decides. */
-  if (!isFinal && typeof fetchAllLive === "function") {
+  if (typeof fetchAllLive === "function") {
     fetchAllLive().then(() => {
       const slot = document.getElementById("gp-watch-slot");
       const row = liveRowFor(state.sport, g);
+      // THE GAME'S CHAT BEFORE KICKOFF TOO (Real's pregame room and its
+      // "who wins" poll): the same room the play-by-play page opens, keyed
+      // by the fast scoreboard's own id for this game.
+      if (row && (row.event_id || row.game_pk) && state.view === "game") chatMount(state.sport, row.event_id || row.game_pk, row);
+      if (isFinal) return;
       if (slot && row && state.view === "game") {
         slot.innerHTML = (row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : "";
       }
@@ -2164,6 +2169,21 @@ function renderGamePage() {
       Showing every prop analyzed for this game, including the ones the model
       passed on. <button class="btn ghost" id="gp-hideall" type="button"
         >Show only the picks</button></p>` : ""}`;
+
+  /* THE FREE TIER ON A GAME'S PAGE (2026-10-25, Ethan's call: "facts free,
+     analysis paid"). A reader without a plan keeps the matchup, the time,
+     the lines, the weather, the stadium, the injuries and the team shapes;
+     the report, the plan, the scan, the replay, the scripts and every pick
+     — whose data never reached this page for them (engine/gate) — give way
+     to one card that says what is behind it. */
+  if (isWalled()) {
+    host.querySelectorAll(".gp-jump, #gp-sec-report, #gp-sec-plan, #gp-sec-scan, #gp-sec-replay, #gp-sec-matchup, "
+      + "#gp-sec-likely, #gp-sec-scripts, #gp-sec-bets, #gp-sec-props, #gp-sec-shots, #gp-lab").forEach((el) => el.remove());
+    host.querySelectorAll(".list-note").forEach((el) => el.remove());
+    const hero = host.querySelector(".gp-hero");
+    if (hero) hero.insertAdjacentHTML("afterend", memberLockHTML("The analysis and every pick on this game",
+      "Members read the written game report, the matchup scan and the game scripts, and see the Edge picks, the Most Likely picks and the long shots on this game — every one graded on the public Record."));
+  }
 
   const back = document.getElementById("gp-back");
   if (back) back.addEventListener("click", detailBack);
@@ -2571,7 +2591,13 @@ function pbpBaseballGroups(d) {
   groups.forEach((g) => g.rows.reverse());
   return groups.reverse();
 }
-function pbpRowHTML(r, league, batting) {
+/* The game's chat room: the deep file's own key (js/chat.js). */
+const pbpRoom = (d, league) => {
+  const id = (d && (d.event_id || d.game_pk)) || (state.pbp || {}).event;
+  return id ? `${league}_${id}` : "";
+};
+
+function pbpRowHTML(r, league, batting, room) {
   const when = pbpTime(r.time);
   if (r.kind === "pitch") {
     const kind = PBP_CALL_KIND(r.code);
@@ -2591,7 +2617,7 @@ function pbpRowHTML(r, league, batting) {
     <span class="pbp-mark">${teamMarkIn(league, batting, 18)}</span>
     <span class="pbp-what"><b>${escapeHtml(r.event || "")}</b>${rbi}
       <span class="pbp-who">${escapeHtml(r.batter || "")}${hitTxt ? ` · ${escapeHtml(hitTxt)}` : ""}</span></span>
-    <span class="pbp-time">${escapeHtml(when)}</span></div>`;
+    <span class="pbp-time">${escapeHtml(when)}</span>${room ? chatPlayBadge(room, r) : ""}</div>`;
 }
 
 function pbpRailHTML(d, league) {
@@ -2612,8 +2638,8 @@ function pbpRailHTML(d, league) {
       <div class="pbp-group-head"><span><b>${escapeHtml(g.head)}</b>${
         g.sub ? ` — ${escapeHtml(g.sub)}` : ""}</span>${
         g.tag ? `<span class="pbp-tag${/TURNOVER|INTERCEPTION|FUMBLE|SAFETY/.test(g.tag) ? " turnover" : /TOUCHDOWN|FIELD GOAL|SCORE/.test(g.tag) ? " score" : g.tag === "IN PROGRESS" ? " live" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
-      ${mlb ? g.rows.map((r) => pbpRowHTML(r, league, g.batting)).join("")
-            : (playsHTML({ plays: g.rows, home: d.home, away: d.away }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
+      ${mlb ? g.rows.map((r) => pbpRowHTML(r, league, g.batting, pbpRoom(d, league))).join("")
+            : (playsHTML({ plays: g.rows, home: d.home, away: d.away, room: pbpRoom(d, league) }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
     </div>`;
   const more = total - shown.reduce((a, g) => a + g.rows.length, 0);
   return `${shown.length ? shown.map(group).join("") : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
@@ -3399,6 +3425,9 @@ async function renderPbpPage(tick) {
     if (res.ok) { raw = await res.text(); d = JSON.parse(raw); }
   } catch (e) { d = null; }
   if (state.view !== "pbp") return;                // moved on while fetching
+  // The game's chat: its button on every game page, whichever layout draws
+  // below (js/chat.js keeps the conversation across redraws).
+  chatMount(league, event, d);
   // ONE CLOCK. Two draws in flight at once (the slate's own reload lands
   // while a poll is fetching) each armed a timer of their own, and from
   // then on the page polled twice as often as it said; the newest arming

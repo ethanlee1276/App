@@ -276,7 +276,10 @@ def test_the_wall_hides_the_strip_too():
     argument for hiding the topbar says why: "a person who has never
     signed in has no use for … a sport switcher"."""
     css = re.sub(r"/\*.*?\*/", " ", CSS, flags=re.S)
-    assert "body.walled .sportbar { display: none !important; }" in css, \
+    # The pricing wall is one of the wall's own screens since the free tier
+    # (2026-10-25); a free reader on Live keeps the switcher, because the
+    # live games are sorted by it.
+    assert "body.walled.on-wall .sportbar { display: none !important; }" in css, \
         "the sport switcher renders on the pricing wall"
 
 

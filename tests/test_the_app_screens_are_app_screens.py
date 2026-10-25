@@ -55,8 +55,12 @@ def test_the_plans_screen_keeps_its_button_in_reach_on_a_phone():
 
 
 def test_the_sign_up_screen_says_its_promises_as_rows():
-    body = _fn(APP, "signupHTML")
-    assert '<ul class="acct-promises">' in body and body.count("<li>") == 2
+    # The account room's since 2026-10-25, when sign-up became the first
+    # screen a stranger sees (js/account.js).
+    body = _fn(ACCOUNT, "signupHTML")
+    promises = body[body.index('<ul class="acct-promises">'):]
+    promises = promises[:promises.index("</ul>")]
+    assert promises.count("<li>") == 2, "the welcome's three free things are their own list"
     assert "one-way" in body and "scramble" in body and "sportsbook or ESPN password" in body
     assert "it takes no card and subscribes you to nothing" in body
     assert ".acct-promises li { display: grid;" in STYLES

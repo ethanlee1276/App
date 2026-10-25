@@ -2171,6 +2171,79 @@ function acctScreenHTML() {
 /* Re-rendered whenever the server's answer changes — a screen still
    showing the sign-in form after a successful sign-in is the commonest
    way a page like this feels broken. */
+/* THE SIGN-UP SCREEN — the first one a new visitor sees (app.js welcomeSeen). */
+function signupHTML() {
+  const insecure = _acctUser && _acctUser.insecure;
+  return `
+  <div class="welcome-hero">
+    <img class="welcome-mark" src="logo-qb.png" alt="" width="64" height="64" decoding="async">
+    <h1 class="welcome-h">Every game, live. Talk it out with the room.</h1>
+    <ul class="welcome-free">
+      <li>${iconMark("signal", 15)}<span>Live scores, play-by-play and stats for every game — free.</span></li>
+      <li>${iconMark("people", 15)}<span>A chat for every game, a thread on every play.</span></li>
+      <li>${iconMark("trophy", 15)}<span>Every pick we make, graded in public on the Record.</span></li>
+    </ul>
+  </div>
+  <div class="card acct-card">
+    <div class="card-head">
+      <div><div class="player">Create your free account</div>
+        <div class="subtitle">Pick a username — it is how the chat knows you. No card,
+          nothing to cancel.</div></div>
+    </div>
+    ${insecure ? `<div class="warning">${icon("warn")} <b>${
+      _acctUser.allowed ? "This connection is not private."
+                        : "Not over this connection."}</b>
+      This page came over plain HTTP, so a password typed here crosses the
+      network readable by anyone on it.</div>` : ""}
+
+    ${acctFieldsHTML("signup", `
+    <label class="acct-confirm">
+      <input type="checkbox" class="acct-age">
+      <span>I am 21 or older, and I accept the
+        <a href="terms.html" target="_blank" rel="noopener">Terms</a> and
+        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
+        This site publishes model estimates and takes no bets.</span>
+    </label>`)}
+
+    <div class="acct-note">${escapeHtml(_acctNote)}</div>
+
+    <div class="acct-alt">
+      <span>Already have an account?</span>
+      <button class="btn ghost" data-act="acctGoLogin">Log in</button>
+    </div>
+    <div class="acct-alt-more">
+      <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
+      <button type="button" class="acct-forgot welcome-skip" data-act="welcomeBrowse">Look around first →</button>
+    </div>
+
+    ${/* TWO PROMISES, AS AN APP SAYS THEM (2026-10-25): two rows under the
+          form, each a mark and one sentence, where two paragraphs of grey
+          prose used to sit. Nothing said is lost. */""}
+    <ul class="acct-promises">
+      <li>${iconMark("lock", 15)}<span>Length is what makes a password hard to guess. We keep a one-way
+        scramble of it, never the password — a lost one is replaced from “Forgot password?”, not recovered —
+        and we never ask for your sportsbook or ESPN password.</span></li>
+      <li>${iconMark("check", 15)}<span>An account is free — it takes no card and subscribes you to nothing.${PLANS[0] ? ` The plans are
+        <a href="#paywall">over here</a> when you want them.` : ""}</span></li>
+    </ul>
+  </div>
+  ${/* The wall's own screens hide the site footer, so they print its line. */""}
+  <p class="pw-legal">21+ · Not betting advice · Gambling problem? Call <b>1-800-GAMBLER</b></p>`;
+}
+
+async function renderSignup() {
+  const host = document.getElementById("view-signup");
+  if (!host) return;
+  // Somebody already signed in has no business on this page — send them
+  // to their account rather than offering a second one.
+  await acctWho();
+  if (_acctUser && _acctUser.signed_in) {
+    switchView("account", false);
+    return;
+  }
+  host.innerHTML = signupHTML();
+}
+
 function renderAccount() {
   const body = document.getElementById("account-body");
   if (!body) return;

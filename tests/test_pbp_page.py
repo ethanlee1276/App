@@ -95,7 +95,7 @@ def test_rows_are_drawn_by_the_cards_own_renderer():
     (2026-09-05), and baseball's pitch rows have their own row function
     there (tests/test_pbp_render.py)."""
     body = _fn("pbpRailHTML")
-    assert "playsHTML({ plays: g.rows, home: d.home, away: d.away })" in body
+    assert "playsHTML({ plays: g.rows, home: d.home, away: d.away, room: pbpRoom(d, league) })" in body
 
 
 def test_groups_are_the_way_each_sport_is_read_newest_first():
