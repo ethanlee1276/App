@@ -71,8 +71,8 @@ def test_a_late_board_says_so_and_a_badly_late_one_withholds_its_picks():
     assert 'document.body.classList.toggle("picks-withheld", picksWithheld());' in _fn("updateAgo")
     rule = CSS[CSS.index("body.picks-withheld"):]
     rule = rule[:rule.index("}")]
-    for host in ("#potd-zone", "#best-bets", "#likely-top", "#likely", "#edge-board",
-                 "#props-body", "#longshots", "#cards", "#gp-sec-likely"):
+    for host in ("#potd-zone", "#best-bets", "#likely-top", "#likely-board", "#edge-board",
+                 "#props-body", "#longshots-board", "#cards", "#gp-sec-likely"):
         assert host in rule, host
     assert "display: none" in rule
 

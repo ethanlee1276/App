@@ -170,8 +170,8 @@ def test_the_host_is_not_a_card_grid_any_more():
     """It holds sections now, each with its own grid. Leaving `.cards` on
     the host made every shelf a single grid cell."""
     src = _src("web", "index.html")
-    assert '<div class="cards" id="likely">' not in src
-    assert '<div id="likely"></div>' in src
+    assert '<div class="cards" id="likely-board">' not in src
+    assert '<div id="likely-board"></div>' in src
 
 
 

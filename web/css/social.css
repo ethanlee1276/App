@@ -312,10 +312,16 @@ a.fd-slip:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--borde
 .fd-editbox { margin: 12px 0 4px; display: grid; gap: 4px; }
 .fd-editbox .fd-row-end { margin-top: 6px; }
 
-/* ⋯ menus */
+/* ⋯ menus. A menu floats over the feed, so it wears the glass the app's
+   other floating layers do (styles.css "GLASS FOR WHAT FLOATS"): the sheen
+   and the lit rim, no blur; solid for less transparency or more contrast. */
 .fd-popover { position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; min-width: 210px; padding: 6px;
-  border-radius: var(--radius); border: var(--hairline) solid var(--border); background: var(--panel-2); box-shadow: var(--glow-soft);
+  border-radius: var(--radius); border: var(--hairline) solid var(--border); background: var(--panel-2);
+  background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth);
   animation: fd-in var(--dur-base) var(--ease-out); }
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .fd-popover { background-image: none; box-shadow: var(--glow-soft); }
+}
 @keyframes fd-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .fd-menu { display: grid; gap: 2px; }
 .fd-menu-h { padding: 8px 12px 4px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }

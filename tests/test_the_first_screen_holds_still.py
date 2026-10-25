@@ -46,7 +46,10 @@ READ = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()  # noqa:
 APP, CSS, BOOT, EXTRAS, HTML = (READ("web", "js", "app.js"), READ("web", "css", "styles.css"), READ("web", "js", "boot.js"),
                                 READ("web", "js", "extras.js"), READ("web", "index.html"))
 #: Bars for the browser half, at 4x CPU on a slow mobile network.
-MAX_SHIFT = 0.1
+#: The shift bar came down from 0.1 on 2026-10-25, when the launch shimmer's
+#: margin stopped holding the page 14px low (0.016 -> 0.000 on all four):
+#: a shift does not wander the way time does, so the bar can sit close.
+MAX_SHIFT = 0.02
 MAX_FREEZE_MS = 500
 MAX_BLOCKED_MS = 900
 VIEWS = ("recommended", "likely", "live", "record")

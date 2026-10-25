@@ -26,6 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 CC = open(os.path.join(ROOT, "web", "css", "carrychart.css"), encoding="utf-8").read()
+SOCIAL = open(os.path.join(ROOT, "web", "css", "social.css"), encoding="utf-8").read()
 SECTION = CSS[CSS.index("GLASS FOR WHAT FLOATS"):]
 CODE = re.sub(r"/\*.*?\*/", "", SECTION.split("*/", 1)[1], flags=re.S)
 FLOATS = (".tf-toast", ".crash-note", ".slip-bar", '[id="ptr"]', ".slip-panel", ".pk-card", ".ffd-card",
@@ -44,6 +45,9 @@ def test_every_floating_layer_takes_the_glass_and_nothing_blurs():
     assert ".tf-toast { bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }" in CODE
     assert "html.store-ios .tf-toast, html.ios-home .tf-toast" in CODE
     assert ".cc { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }" in CC
+    # The feed's ⋯ menu floats over the posts (2026-10-25).
+    pop = re.search(r"\.fd-popover \{([^{}]*)\}", SOCIAL).group(1)
+    assert "var(--glass-sheen-soft)" in pop and "var(--glass-rim)" in pop and "blur(" not in pop
 
 
 def test_the_page_itself_stays_solid():
@@ -58,6 +62,7 @@ def test_less_transparency_or_more_contrast_gets_solid_panes():
         assert sel in solid, sel
     assert "background-image: none" in solid and "background: var(--topbar-bg)" in solid
     assert "prefers-reduced-transparency: reduce" in CC
+    assert re.search(r"prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{\s*\.fd-popover \{ background-image: none;", SOCIAL)
 
 
 def test_in_a_browser_the_layers_are_lit_panes_and_a_tabs_bar_is_not_glass():

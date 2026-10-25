@@ -5686,11 +5686,17 @@ body.has-rail .shell {
      now promoted too: two composited layers ARE ordered by z-index, and
      the drawer wins that on every engine. Source order (scrim first,
      drawer second, both direct children of body) is the third guard. */
+  /* CLOSED IS HIDDEN, not only slid away (2026-10-25, Lighthouse): a
+     keyboard's Tab and a screen reader's swipe walked into the drawer
+     while it sat off screen. Hidden once the slide out ends, shown before
+     the slide in starts. */
   .sidebar { position: fixed; top: var(--topbar-h); left: 0; bottom: 0; z-index: 50;
     width: min(84vw, 330px); height: auto; will-change: transform;
-    transform: translateX(-102%); transition: transform var(--dur-base) var(--ease-spring);
+    transform: translateX(-102%); visibility: hidden;
+    transition: transform var(--dur-base) var(--ease-spring), visibility 0s linear var(--dur-base);
     border-right: var(--hairline) solid var(--border); box-shadow: none; }
-  body.menu-open .sidebar { transform: translateX(0); box-shadow: var(--glow-soft); }
+  body.menu-open .sidebar { transform: translateX(0); visibility: visible; transition-delay: 0s;
+    box-shadow: var(--glow-soft); }
 
   /* THUMB TARGETS IN THE DRAWER. Measured 2026-08-20 across six widths:
      the group folds were 279x13 and the two switches 271x22 — wide, and
@@ -6588,7 +6594,7 @@ body.has-deck #rail-live { display: none; }
   .menu-toggle { display: none; }
   .sidebar { position: sticky; top: var(--topbar-h); left: auto; bottom: auto; z-index: auto;
     width: auto; height: calc(100vh - var(--topbar-h)); height: calc(100dvh - var(--topbar-h));
-    will-change: auto; transform: none; transition: none;
+    will-change: auto; transform: none; transition: none; visibility: visible;
     border-right: var(--hairline) solid var(--border-soft); }
   body.menu-open .sidebar { transform: none; box-shadow: none; }
   body.menu-open #scrim { display: none; }
@@ -8032,7 +8038,7 @@ button.rc-day b { font-size: var(--fs-sm); }
 /* A board past app.js withholdAfterMs(): every pick host comes off the
    page until the next build lands; the stale bar says why. */
 body.picks-withheld :is(#potd-zone, #best-bets, #top-picks, #cards, #likely-top,
-  #tonight-body, #edge-board, #props-body, #longshots, #likely, #scanner-body,
+  #tonight-body, #edge-board, #props-body, #longshots-board, #likely-board, #scanner-body,
   #gamebets, #parlays-body, #likely-parlays-body, #gp-sec-likely) { display: none; }
 
 /* ── Links the design system never claimed ─────────────────────────────
@@ -10169,6 +10175,11 @@ body.two-pane .pane-list .ob-ring small { display: none; }
 html.booting main > *, html.booting .footer, html.booting .rail {
   visibility: hidden; animation: boot-reveal 0s linear 4s forwards; }
 @keyframes boot-reveal { to { visibility: visible; } }
+/* The shimmer's margin stays inside <main> (flow-root): collapsed through it
+   and the phone's block .shell, it held the whole page 14px low until the
+   lift, then let it rise — the 0.016 shift every first load measured
+   (Lighthouse, 2026-10-25). */
+html.booting main { display: flow-root; }
 html.booting main::before { content: ""; display: block; height: min(70vh, 640px); margin: 14px;
   border-radius: var(--radius); border: var(--hairline) solid var(--border-soft);
   background: var(--skeleton); background-size: 220% 100%;
@@ -10330,8 +10341,8 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    ever, so nothing anybody reads changes. What floats, and now wears it: the
    toasts and the crash note, the slip's pill and its sheet, the
    pull-to-refresh pill, a chart's tooltip, the dialogs (a player, a fantasy
-   dossier, the tour, the install prompt; the chart card in css/carrychart.css), and the iPhone
-   app's top bar, the capsule tab bar's twin. The Duo's tokens, both themes,
+   dossier, the tour, the install prompt; the chart card in css/carrychart.css), the
+   feed's ⋯ menus (css/social.css), and the iPhone app's top bar, the capsule tab bar's twin. The Duo's tokens, both themes,
    no blur; solid for anyone asking for less transparency or more contrast.
    ========================================================================== */
 .tf-toast, .crash-note, .slip-bar, [id="ptr"] {

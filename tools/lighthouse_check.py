@@ -18,6 +18,13 @@ layout shifting past 0.1 (Google's "good" line). A single bad night is run
 again before it is called a regression (the nightly prompt says so); the
 baseline moves only with --write-baseline, after a change meant to move it.
 
+ACCESSIBILITY, BEST PRACTICES AND SEO are scored in the same runs (2026-10-25,
+Ethan: "continue on making the app better"; the audit that night took
+accessibility from 96-98 to 100). They do not wander the way timings do, so
+any point below the baseline fails the night, and the audits that failed are
+named. Best practices sits at 96 here: the sandbox cannot reach ESPN's logo
+server, and a refused image is a console error.
+
 Lighthouse is fetched by npx at a pinned version (or LIGHTHOUSE names a
 binary); Chromium is the preinstalled one (or CHROME_PATH). Neither present:
 it says so and exits 0 — that is the environment, not the page.
@@ -43,6 +50,9 @@ VERSION = "13.5.0"
 RUNS = 3
 #: What each number may drift before the night is called slower.
 SLACK = {"score": -10, "lcp_ms": 1.30, "tti_ms": 1.30, "tbt_ms": (1.5, 150), "cls": 0.1}
+#: The categories beside performance: (key, Lighthouse's id, the words). No slack.
+CATEGORIES = (("a11y", "accessibility", "accessibility"), ("bp", "best-practices", "best practices"),
+              ("seo", "seo", "SEO"))
 
 
 def _chrome() -> str:
@@ -119,19 +129,38 @@ def _board() -> bytes:
 
 
 def numbers(report: dict) -> dict:
-    """The five numbers out of one Lighthouse report."""
+    """The five numbers out of one Lighthouse report, and the other
+    categories' scores where the run scored them."""
     a = report.get("audits") or {}
     val = lambda k: (a.get(k) or {}).get("numericValue")          # noqa: E731
-    score = ((report.get("categories") or {}).get("performance") or {}).get("score")
-    return {"score": round(score * 100) if score is not None else None,
-            "lcp_ms": round(val("largest-contentful-paint") or 0), "tbt_ms": round(val("total-blocking-time") or 0),
-            "cls": round(val("cumulative-layout-shift") or 0, 3), "tti_ms": round(val("interactive") or 0),
-            "fcp_ms": round(val("first-contentful-paint") or 0), "si_ms": round(val("speed-index") or 0)}
+    cats = report.get("categories") or {}
+    score = (cats.get("performance") or {}).get("score")
+    out = {"score": round(score * 100) if score is not None else None,
+           "lcp_ms": round(val("largest-contentful-paint") or 0), "tbt_ms": round(val("total-blocking-time") or 0),
+           "cls": round(val("cumulative-layout-shift") or 0, 3), "tti_ms": round(val("interactive") or 0),
+           "fcp_ms": round(val("first-contentful-paint") or 0), "si_ms": round(val("speed-index") or 0)}
+    for key, cid, _ in CATEGORIES:
+        s = (cats.get(cid) or {}).get("score")
+        if s is not None:
+            out[key] = round(s * 100)
+    return out
+
+
+def failing(report: dict, cid: str) -> list:
+    """The titles of a category's audits that failed and count toward it."""
+    a = report.get("audits") or {}
+    out = []
+    for ref in ((report.get("categories") or {}).get(cid) or {}).get("auditRefs") or []:
+        au = a.get(ref.get("id")) or {}
+        if ref.get("weight") and au.get("score") is not None and au["score"] < 1:
+            out.append(au.get("title") or ref.get("id"))
+    return out
 
 
 def median(runs: list) -> dict:
+    keys = list(dict.fromkeys(k for r in runs for k in r))
     return {k: (statistics.median([r[k] for r in runs if r.get(k) is not None]) if any(r.get(k) is not None for r in runs)
-                else None) for k in runs[0]}
+                else None) for k in keys}
 
 
 def verdict(now: dict, base: dict) -> list:
@@ -150,9 +179,16 @@ def verdict(now: dict, base: dict) -> list:
     return out
 
 
+def worse(now: dict, base: dict) -> list:
+    """The categories scored below the baseline, in words; [] when none is."""
+    return [f"{name} {now[key]:.0f} (baseline {base[key]:.0f})" for key, _, name in CATEGORIES
+            if base.get(key) is not None and now.get(key) is not None and now[key] < base[key]]
+
+
 def line(m: dict) -> str:
     return (f"performance {m['score']:.0f} · largest paint {m['lcp_ms'] / 1000:.1f} s · blocked {m['tbt_ms']:.0f} ms · "
-            f"shift {m['cls']:.3f} · interactive {m['tti_ms'] / 1000:.1f} s")
+            f"shift {m['cls']:.3f} · interactive {m['tti_ms'] / 1000:.1f} s"
+            + "".join(f" · {name} {m[key]:.0f}" for key, _, name in CATEGORIES if m.get(key) is not None))
 
 
 def main(argv=None) -> int:
@@ -163,19 +199,20 @@ def main(argv=None) -> int:
         return 0
     srv, port = _serve(_board())
     out_dir = Path(tempfile.mkdtemp())
-    runs = []
+    runs, last = [], {}
     try:
         for i in range(RUNS):
             path = out_dir / f"run{i}.json"
             cmd = lh + [f"http://127.0.0.1:{port}/index.html?sport=nfl#recommended", "--quiet", "--output=json",
-                        f"--output-path={path}", "--only-categories=performance",
+                        f"--output-path={path}", "--only-categories=performance,accessibility,best-practices,seo",
                         "--chrome-flags=--headless=new --no-sandbox --disable-dev-shm-usage"]
             got = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
                                  env=dict(os.environ, CHROME_PATH=chrome))
             if got.returncode != 0 or not path.exists():
                 print(f"Lighthouse run {i + 1} failed: {(got.stderr or got.stdout).strip()[-400:]}")
                 continue
-            runs.append(numbers(json.loads(path.read_text(encoding="utf-8"))))
+            last = json.loads(path.read_text(encoding="utf-8"))
+            runs.append(numbers(last))
     finally:
         srv.shutdown()
         srv.server_close()
@@ -193,9 +230,15 @@ def main(argv=None) -> int:
     except (OSError, ValueError):
         print("No baseline yet: run with --write-baseline.")
         return 0
-    worse = verdict(m, base)
-    if worse:
-        print("SLOWER than the baseline (" + base.get("measured", "?") + "): " + "; ".join(worse))
+    slower, below = verdict(m, base), worse(m, base)
+    if slower:
+        print("SLOWER than the baseline (" + base.get("measured", "?") + "): " + "; ".join(slower))
+    if below:
+        print("WORSE than the baseline (" + base.get("measured", "?") + "): " + "; ".join(below))
+        for key, cid, name in CATEGORIES:
+            if base.get(key) is not None and m.get(key) is not None and m[key] < base[key]:
+                print(f"  {name}, failing: " + ("; ".join(failing(last, cid)) or "(none named)"))
+    if slower or below:
         return 1
     print(f"Within the baseline of {base.get('measured', '?')}.")
     return 0

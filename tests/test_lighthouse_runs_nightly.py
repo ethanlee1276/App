@@ -13,7 +13,10 @@ these hold is the arithmetic that decides "slower":
   - the baseline is committed and dated, and the code it measures is served
     as the box serves it (trimmed, compressed), not as 2.4 MB of raw script;
   - with no Chromium or no npx it says so and passes: the environment, not
-    the page.
+    the page;
+  - accessibility, best practices and SEO are scored in the same runs
+    (2026-10-25): any point below the baseline fails the night, with the
+    failing audits named (they do not wander the way timings do).
 
     python3 tests/test_lighthouse_runs_nightly.py
 """
@@ -60,8 +63,29 @@ def test_the_baseline_is_committed_and_the_code_is_served_as_the_box_serves_it()
     assert set(BASE) <= set(base) and base["measured"] and base["lighthouse"] == LC.VERSION
     src = (ROOT / "tools" / "lighthouse_check.py").read_text()
     assert "shrink.trimmed(rel, src) if rel in shrink.FILES" in src and '("Content-Encoding", "gzip")' in src
-    assert f'"lighthouse@{{VERSION}}"' in src and "--only-categories=performance" in src
+    assert f'"lighthouse@{{VERSION}}"' in src and "--only-categories=performance,accessibility,best-practices,seo" in src
     assert "from test_the_first_screen_holds_still import _board" in src, "the same board the first-screen test loads"
+
+
+def test_the_other_categories_fail_on_any_point_down_and_name_the_audits():
+    rep = _report(.70, 6000, 300, .016, 6400)
+    rep["categories"].update({
+        "accessibility": {"score": .96, "auditRefs": [{"id": "heading-order", "weight": 3}, {"id": "skip-link", "weight": 3},
+                                                       {"id": "label-content-name-mismatch", "weight": 0}]},
+        "best-practices": {"score": .96, "auditRefs": []}, "seo": {"score": 1, "auditRefs": []}})
+    rep["audits"].update({"heading-order": {"score": 0, "title": "Heading elements are not in order"},
+                          "skip-link": {"score": 1, "title": "Skip links are focusable"},
+                          "label-content-name-mismatch": {"score": 0, "title": "Weightless"}})
+    n = LC.numbers(rep)
+    assert (n["a11y"], n["bp"], n["seo"]) == (96, 96, 100)
+    assert "accessibility 96 · best practices 96 · SEO 100" in LC.line(n)
+    base = dict(BASE, a11y=100, bp=96, seo=100)
+    assert LC.worse(dict(n), base) == ["accessibility 96 (baseline 100)"], "one point down is reported"
+    assert LC.worse(dict(n, a11y=100), base) == [] and LC.worse(dict(n, a11y=100, bp=100), base) == []
+    assert LC.worse(n, BASE) == [], "an old baseline without the categories judges only the timings"
+    assert LC.failing(rep, "accessibility") == ["Heading elements are not in order"], "only audits that count, and failed"
+    assert "a11y" not in LC.numbers(_report(.7, 1, 1, 0, 1)), "a performance-only run carries no category"
+    assert LC.median([LC.numbers(_report(.7, 1, 1, 0, 1)), n])["a11y"] == 96
 
 
 def test_no_browser_or_no_npx_is_the_environment_not_the_page():

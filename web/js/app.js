@@ -7506,10 +7506,15 @@ function gameCard(g, i) {
   const picksChip = n
     ? `<span class="gc-picks" title="${escapeAttr(`${counts.edge} Edge · ${counts.likely} Most Likely`)}">${
         n} pick${n === 1 ? "" : "s"}</span>` : "";
+  // The card's name stands in for everything on it, so a screen reader
+  // hears what a glance gets: when it starts and how many picks it holds.
+  const when = !isLive && !isFinal ? whenLabel(g.date, g.kickoff) : "";
+  const doorFacts = escapeHtml((when ? `, ${when.replace(/\s*·\s*/g, ", ")}` : "")
+    + (n ? `, ${n} pick${n === 1 ? "" : "s"}` : ""));
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
              role="button" tabindex="0"
-             aria-label="${isLive ? "Open the live play-by-play for" : "Open picks for"} ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
+             aria-label="${isLive ? "Open the live play-by-play for" : "Open picks for"} ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}${doorFacts}">
       <div class="stadium-wrap">${art}${
         // The photo slot (Ethan, 2026-08-11: wants the cards to look
         // exactly like his generated renders). A team-specific
@@ -10069,9 +10074,17 @@ function renderLikelyTop() {
 }
 
 function renderLikely() {
-  const host = document.getElementById("likely");
+  const host = document.getElementById("likely-board");
   const note = document.getElementById("likely-note");
   if (!host || !note) return;
+  // THE LAYOUT IS CHOSEN BEFORE THE BOARD LANDS (2026-10-25). The one
+  // board swaps the page's plain title for its own hero, and choosing that
+  // only once the board arrived drew the title and then took it away under
+  // the reader: Lighthouse measured the jump at 0.12, past Google's 0.1.
+  // Only the NFL build carries the one board (nfl_build.py); the board
+  // settles it when it lands.
+  const lv = document.getElementById("view-likely");
+  if (lv) lv.classList.toggle("ob-on", state.data ? oneBoardOn() : state.sport === "nfl");
   // A COLD LANDING ON THIS TAB. `#likely` in the address bar makes the
   // boot block's router switch here before any board has loaded, and
   // the switch renders the view it lands on — with no board that was a
@@ -10134,8 +10147,6 @@ function renderLikely() {
   if (likelySub) likelySub.textContent = oneBoardOn()
     ? "— every pick in one place, tiered by how many checks agree"
     : "— grouped by the kind of bet, ranked by how likely it is";
-  const lv = document.getElementById("view-likely");
-  if (lv) lv.classList.toggle("ob-on", oneBoardOn());
   if (oneBoardOn()) {
     note.innerHTML = obHeroHTML();
     host.innerHTML = oneBoardHTML() + likelyScriptsHTML(rows)
@@ -10931,7 +10942,7 @@ function obTierSections(rows, opts = {}) {
     const rs = obSorted(rows.filter((r) => r.tier === t));
     if (!rs.length) return "";
     const body = `<div class="ob-cards">${rs.map((r, i) => obCardHTML(r, i + 1)).join("")}</div>`;
-    const head = `<div class="ob-sec-head"><h3 class="ob-sec-title">${title} <span class="ob-count">${rs.length}</span></h3>
+    const head = `<div class="ob-sec-head"><h2 class="ob-sec-title">${title} <span class="ob-count">${rs.length}</span></h2>
       <p class="ob-sec-sub">${sub}</p>${first && first[0] === t ? obSortHTML() : ""}</div>`;
     return `<section class="likely-shelf ob-tier" id="ob-${t}">${head}${body}</section>`;
   }).join("");
@@ -11155,7 +11166,7 @@ function matchupPicksHTML() {
 function renderLongShots() {
   const mlb = state.sport === "mlb";
   const picks = (state.data.long_shots || []).filter((r) => !rowStarted(r));
-  const host = document.getElementById("longshots");
+  const host = document.getElementById("longshots-board");
   const note = document.getElementById("longshots-note");
   document.getElementById("longshots-sub").textContent = mlb
     ? "— home runs, priced on contact quality, park & weather"
@@ -13170,7 +13181,7 @@ function renderTrending() {
         ? `<span style="color:var(--good)">${icon('check')} recommended</span>`
         : `<span style="opacity:.55">pass — didn’t clear the gates</span>` },
   ];
-  const host = document.getElementById("trending");
+  const host = document.getElementById("trending-board");
   // v5: a quiet board is one slate, not three boxes each saying "No
   // movers." around 24px of nothing. The slate takes the same doors
   // as every other empty board (enhanceEmpties). With rows, a column
@@ -13298,7 +13309,7 @@ async function renderPlayers() {
     _profRows.get(r.player).push(r);
   });
   const players = [..._profRows.keys()];
-  const host = document.getElementById("players");
+  const host = document.getElementById("players-board");
   if (!players.length) {
     /* THE LEAGUE, NOT THE BOARD. Ethan, 2026-08-18: "The search page for
        players isn't working still. You should be able too look up any
@@ -13505,12 +13516,13 @@ document.addEventListener("click", (e) => {
 /* Market chips: swap ONE card in place and keep everything around it
    still.
 
-   ON THE DOCUMENT, NOT ON #players. It was bound to that host, which was
-   right while the Players page was the only place a profile card
-   existed. The peek overlay draws the same card outside that element, so
-   the listener never fired and the tabs did nothing at all — Ethan,
-   2026-08-22: "you can't click anything on the menu". One handler that
-   works wherever the card is drawn cannot develop that gap again. */
+   ON THE DOCUMENT, NOT ON THE PLAYER GRID (#players-board). It was bound
+   to that host, which was right while the Players page was the only place
+   a profile card existed. The peek overlay draws the same card outside
+   that element, so the listener never fired and the tabs did nothing at
+   all — Ethan, 2026-08-22: "you can't click anything on the menu". One
+   handler that works wherever the card is drawn cannot develop that gap
+   again. */
 document.addEventListener("click", (e) => {
   const chip = e.target.closest && e.target.closest(".prof-tab");
   if (!chip) return;
@@ -18345,7 +18357,7 @@ function acctApplySection(name, sec) {
     } else if (name === "bankroll") {
       localStorage.setItem("ge-bankroll", d.bankroll || "");
       if (d.unitPct) localStorage.setItem("ge-unit-pct", d.unitPct);
-      const el = document.getElementById("bankroll");
+      const el = document.getElementById("bankroll-amount");
       const unit = document.getElementById("unit-pct");
       if (el) {
         el.value = d.bankroll || "";
@@ -27576,7 +27588,7 @@ function bind() {
     renderRosters();
   });
 
-  const bankrollEl = document.getElementById("bankroll");
+  const bankrollEl = document.getElementById("bankroll-amount");
   const unitEl = document.getElementById("unit-pct");
   if (state.bankroll) bankrollEl.value = state.bankroll;
   unitEl.value = state.unitPct;
