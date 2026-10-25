@@ -13,6 +13,7 @@ Hampton 2+ catches). Those rows are named, never staked, and journaled
 on paper so the record says who was right.
 """
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +24,7 @@ from engine import gate                                             # noqa: E402
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 APP = app_js()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 
 GAME = {
     "home": "BUF", "away": "LAC", "date": "2026-09-27", "kickoff": "13:00", "spread": -7.0, "total": 50.0,

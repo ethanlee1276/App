@@ -9,6 +9,7 @@ in words, the counts under it, the figure a reader looks for on the
 right. The calibration table fits a phone and stays a table.
 """
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import re
 import shutil
@@ -20,7 +21,7 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 
 
 def _fn(name):

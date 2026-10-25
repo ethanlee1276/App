@@ -227,7 +227,10 @@ APP_JS_BUDGET_KB = 290
 #: 620 -> 570 KB gz.
 #: 580 -> 405 the same evening, for the rooms split above: the first visit
 #: is 570 -> 398.9 KB gz.
-BOOT_BUDGET_KB = 405
+#: 405 -> 390 the same night, when each room's styles moved out of
+#: styles.css with its code (css/record.css, detail, account, more):
+#: styles.css 73.1 -> 56.6 KB gz, the first visit 398.9 -> 382.6.
+BOOT_BUDGET_KB = 390
 
 
 def _gz_trimmed(rel: str) -> int:

@@ -19,6 +19,7 @@ all-time figures sit one click inside that same note.
 """
 
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import sys
 import tempfile
@@ -337,8 +338,7 @@ def test_the_note_is_not_hidden_behind_the_why_collapse():
     body = _fn(_js(), "function recEpochHTML(")
     assert 'class="section-title"' not in body
     assert 'class="rec-epoch"' in body
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     assert ".rec-epoch" in css, "the note has no styling at all"
 
 
@@ -474,8 +474,7 @@ def test_a_full_season_record_does_not_fill_its_own_tile():
     non-breaking hyphens that stop the score wrapping, is what guarantees
     the overrun once the tile is narrow enough.
     """
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     i = css.index(".rec-kpis {")
     block = css[i:css.index("}", i)]
     assert "minmax(min(196px" in block, "the track floor is back at 168px"

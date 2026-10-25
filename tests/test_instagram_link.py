@@ -23,7 +23,7 @@ find. Showing it to somebody who has not subscribed is the point.
 """
 
 import os
-from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+from _app import app_js, styles_css  # noqa: E402  (app.js, its rooms, and every sheet)
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -151,7 +151,7 @@ def test_the_address_is_escaped_where_it_is_interpolated():
 
 # --- both places it appears -------------------------------------------------
 def test_the_wall_carries_its_own_because_it_hides_the_top_bar():
-    css = _read(CSS)
+    css = styles_css()
     assert re.search(r"body\.walled[^{]*\.topbar[^{]*\{[^}]*display:\s*none",
                      css, re.S) or "body.walled .topbar" in css, (
         "this test assumes the wall hides the top bar; if that changed, "
@@ -202,7 +202,7 @@ def test_the_shell_rules_live_with_the_other_top_bar_icon():
 def test_hiding_it_actually_hides_it():
     """`[hidden]` loses to any `display` rule with equal specificity, and
     .meta-ico sets `display: grid`."""
-    css = _read(CSS)
+    css = styles_css()
     assert ".nav-ig[hidden] { display: none; }" in css, (
         "the icon is display:grid from .meta-ico, so the hidden attribute "
         "alone leaves it on screen")

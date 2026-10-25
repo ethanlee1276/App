@@ -18,6 +18,7 @@ Run directly: `python3 tests/test_showpiece_charts.py`
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
@@ -89,7 +90,7 @@ def test_the_replay_panel_upgrades_and_keeps_its_bars():
     hist = seg[seg.index("data-echart-hist"):]
     assert "gp-sim-bar" in hist[:900]
     assert "mountEChartsPanels(host)" in app
-    css = _read("web", "css", "styles.css")
+    css = styles_css()
     assert ".gp-sim-gauge:not([data-echarted]) { display: none; }" in css, \
         "an unmounted gauge must take no space — the fallback panel owns it"
 

@@ -15,6 +15,7 @@ games table holds the fixtures as well as the finals) and the published
 NFL depth chart, written by the NFL build where it already loads it.
 """
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import re
 import shutil
@@ -33,7 +34,7 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 
 APP = app_js()
 VIS = (ROOT / "web" / "js" / "visuals.js").read_text(encoding="utf-8")
-CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
+CSS = styles_css()
 
 
 def _fn(name, src=APP):

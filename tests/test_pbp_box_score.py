@@ -27,6 +27,7 @@ the new tables live under, because both are the kind of thing that gets
 """
 
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import re
 import shutil
@@ -40,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 
 
 def _fn(name):

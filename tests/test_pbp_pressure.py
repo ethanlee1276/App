@@ -29,6 +29,7 @@ Run directly: `python3 tests/test_pbp_pressure.py`
 """
 
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import shutil
 import subprocess
@@ -39,7 +40,7 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = app_js()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 
 
 def _fn(name):

@@ -17,6 +17,7 @@ Run directly: `python3 tests/test_stub_pages.py`
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -32,7 +33,7 @@ def _read(*parts):
 
 NOT_FOUND = _read("web", "404.html")
 MAINT = _read("web", "maintenance.html")
-CSS = _read("web", "css", "styles.css")
+CSS = styles_css()
 APP = app_js()
 SERVER = _read("server.py")
 
@@ -207,7 +208,10 @@ def test_the_record_scopes_wear_the_same_purple_as_every_other_filter():
     They were underlined tabs while every other filter row on the site
     is a pill that fills with brand violet when active."""
     i = CSS.index(".rec-scope {")
-    seg = CSS[i:i + 900]
+    # The base pill stays in the sheet and the active fill moved with the
+    # Record page's code (css/record.css, 2026-10-24): read the active rule.
+    j = CSS.index(".rec-scope.active")
+    seg = CSS[i:i + 900] + CSS[j:CSS.index("}", j)]
     assert "var(--grad-brand)" in seg, "the active scope is not brand-filled"
     assert "border-bottom-color" not in seg, "the underline treatment survived"
     # And it is the SAME fill every other PAGE-LEVEL filter row uses,

@@ -29,13 +29,14 @@ next reader does not have to take the rule on faith.
 """
 
 import re
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 
 
 def _track(selector, inside_media=False):

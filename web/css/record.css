@@ -1,0 +1,469 @@
+/* THE RECORD PAGE'S STYLES — loaded with its pages' code the first time the Record page opens
+   (app.js loadRoom, 2026-10-24). Every rule here was moved whole out of
+   styles.css, in its order there, because only these pages draw the classes
+   it names; the few that a later rule of styles.css might have outranked
+   stayed behind. Same tokens as the sheet. */
+/* The record's start date, under the numbers it qualifies.
+
+   NOT styled to disappear. It is quiet — this is not a warning — but it
+   is a full-width row in body colour rather than agate in the mute grey
+   the footnotes use, because a reader who never notices it has been told
+   nothing. The summary carries the whole claim on its own, so it works
+   for someone who never opens it. */
+.rec-epoch {
+  margin: 2px 0 10px; border-left: 2px solid var(--border);
+  padding: 2px 0 2px 12px;
+}
+.rec-epoch > summary {
+  cursor: pointer; color: var(--text-dim); font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.rec-epoch > summary:hover { color: var(--text-body); }
+.rec-epoch > div {
+  color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); max-width: var(--measure-wide);
+  margin-top: 7px;
+}
+.rec-epoch strong { color: var(--text); }
+/* A folded duplicate (the calibration room's current-model table): the
+   card inside gets the room's normal margin once it is open. */
+.rec-fold > .card { margin-top: 10px; }
+/* THE PROCESS ROW — Ethan's Results Tracker render, 2026-08-24.
+
+   Process was the sixth tile in the KPI strip and it is not the same
+   KIND of number as the other five: those are the record, this grades
+   the DECISIONS behind it, and it needs three lines to say so where they
+   need one. On its own row it carries the count and both causes as
+   bullets, and the two things a reader reaches for next — what the
+   record leaves out, and what counts as a tracked bet — sit beside it
+   instead of below the fold. */
+.rec-process-row {
+  display: grid; gap: 12px; margin-bottom: 20px; align-items: start;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+}
+.rec-process .v i {
+  font-style: normal; font-size: var(--fs-sm); font-weight: 700;
+  color: var(--text-mute); margin: 0 6px 0 1px; vertical-align: 3px;
+}
+.rp-bullets { list-style: none; margin: 9px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 4px; }
+.rp-bullets li { position: relative; padding-left: 14px;
+  color: var(--text-dim); font-size: var(--fs-sm); }
+.rp-bullets li::before {
+  content: ""; position: absolute; left: 0; top: .5em;
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+.rp-bullets li.good { color: var(--good); }
+.rp-bullets li.bad { color: var(--bad); }
+.rec-process-side { min-width: 0; display: flex; flex-direction: column;
+  gap: 4px; justify-content: center; }
+.rec-process-side .rec-epoch { margin-top: 0; }
+.rec-process-side .rec-disclose { margin: 4px 0 0; }
+/* Under this the two stack: a 260px card beside a paragraph is a card
+   beside a column of single words. */
+@media (max-width: 760px) {
+  .rec-process-row { grid-template-columns: 1fr; }
+}
+/* P&L chart */
+.rec-chart { padding: 14px 10px 8px; gap: 0; }
+.rec-chart .rc-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 0 8px 8px;
+}
+.rec-chart .rc-net { font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -.5px; }
+.rec-chart .rc-net.pos { color: var(--good); }
+.rec-chart .rc-net.neg { color: var(--bad); }
+.rec-chart .rc-span { color: var(--text-mute); font-size: var(--fs-sm); }
+.rec-chart .rc-foot { color: var(--text-mute); font-size: var(--fs-xs); padding: 4px 8px 4px; }
+.rb-rows.has-clv .rb-row {
+  grid-template-columns: minmax(0, 260px) minmax(60px, 1fr) 58px 50px 70px; }
+.rb-labels {
+  border-top: none; color: var(--text-mute); font-size: var(--fs-2xs);
+  text-transform: uppercase; letter-spacing: .5px; padding-bottom: 4px;
+}
+/* The bar column's heading. It used to be an empty `.rb-bar`, which
+   still painted its own grey track — a blank slot in a header row that
+   read as a rendering fault rather than a column. */
+/* Left, not centred: the bar column is now the widest in the table, and
+   a centred heading floated in the middle of it with nothing under it. */
+.rb-barh { text-align: left; font-size: var(--fs-2xs); letter-spacing: .5px; }
+/* A ceiling for very wide screens. The single full-width splits table is
+   comfortably under this at 1536px; without it the win-rate bar keeps
+   growing with the monitor and a 2560px display turns a supporting chart
+   into the loudest thing on the page — and the section's own subtitle
+   says the number that matters is net. */
+.rec-buckets-one .rec-bucket { max-width: 1120px; }
+.rb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); }
+.rb-wl { text-align: right; font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rb-clv { text-align: right; font-size: var(--fs-sm); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.rb-net { text-align: right; font-weight: 700; font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.rb-net.pos { color: var(--good); }
+ .rb-net.neg { color: var(--bad); }
+.rl-row {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 20px 86px minmax(0, 1fr) 90px 56px 72px;
+  padding: 9px 16px 9px 14px;
+  border-bottom: var(--hairline) solid var(--border-soft);
+  border-left: 3px solid transparent;
+}
+.rl-row:last-child { border-bottom: none; }
+/* FOUR CELLS, FOUR COLUMNS. The calibration rows (a probability band or
+   a market, said · hit, the sample, the ROI) have no icon and no book
+   cell, so on the six-column grid above their first cell landed in the
+   20px icon track and "45–60%" printed over "said 54.1%" (Ethan's
+   desktop, 2026-09-22). The phone's area layout below already seats
+   them by name and is restated there so this rule does not outrank it. */
+.rl-row.rl-cal { grid-template-columns: 112px minmax(0, 1fr) 90px 72px; }
+.rl-row.won { border-left-color: color-mix(in srgb, var(--good) 65%, transparent); }
+.rl-row.lost { border-left-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.rl-row.push { border-left-color: var(--border); }
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .rl-row.won { border-left-color: rgba(47, 213, 140, .65); }
+  .rl-row.lost { border-left-color: rgba(251, 90, 106, .45); }
+}
+.rl-icon { font-weight: 800; font-size: var(--fs-md); text-align: center; }
+.rl-row.won .rl-icon { color: var(--good); }
+.rl-row.lost .rl-icon { color: var(--bad); }
+.rl-date { color: var(--text-mute); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.rl-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); }
+.rl-bet { color: var(--text-mute); }
+/* min-width:0 + clip, for the same reason .rl-main has them. This column
+   holds free text — a Polymarket trader handle, which can be a 42-character
+   wallet address — inside a fixed 90px track. Without them the grid item
+   refuses to shrink below its content and the name renders straight across
+   the price and the P&L beside it. Measured at up to 225px of overhang. */
+.rl-proc {
+  text-align: right; font-size: var(--fs-xs); white-space: nowrap;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+/* The Polymarket table puts a NAME in this column, where every other table
+   puts a two-word verdict ("beat the close"). Clipping alone turned
+   "0x3DFb…eea1" into "0x3…", which identifies nobody — the last four
+   characters are how a wallet is recognised and they are exactly what the
+   ellipsis eats. So this one table gets a wider track, taken from the
+   1fr column, which has slack the fixed ones do not. */
+.pm-rows .rl-row { grid-template-columns: 20px 86px minmax(0, 1fr) 168px 56px 72px; }
+/* Both chips (the verdict against the close, the measured cause of a
+   loss) in the one 90px cell, so a row with two never breaks the grid. */
+.rl-chips { display: flex; justify-content: flex-end; gap: 6px; min-width: 0; overflow: hidden; }
+.rl-proc.good { color: var(--good); }
+ .rl-proc.bad { color: var(--bad); }
+.rl-proc.warn { color: var(--warn); }
+ .rl-proc.none { color: var(--text-mute); opacity: .55; }
+.rl-odds { text-align: right; font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rl-pnl { text-align: right; font-weight: 700; font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.rl-pnl.pos { color: var(--good); }
+ .rl-pnl.neg { color: var(--bad); }
+/* Parlay tickets reuse .rl-row, but a ticket has something a single bet
+   does not: legs. .rl-row is a six-column GRID, so a legs element added as
+   a sixth child lands in the 72px P&L column and renders each leg as a
+   vertical stack of one-word lines. It spans the full row instead, set
+   under the ticket line at the same indent as .rl-main. */
+.rl-row.has-legs { row-gap: 4px; }
+.pl-legs {
+  grid-column: 1 / -1; padding-left: 32px;
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  font-size: var(--fs-xs); color: var(--text-mute);
+}
+.pl-leg { white-space: nowrap; }
+.pl-leg.lost { opacity: .6; }
+.pl-mark { font-weight: 800; margin-right: 3px; }
+.pl-leg.won .pl-mark { color: var(--good); }
+.pl-leg.lost .pl-mark { color: var(--bad); }
+.pl-verdict { padding: 10px 16px 10px 14px; font-size: var(--fs-sm);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pl-codes { padding: 9px 16px 9px 14px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.pl-conds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pl-cond { font-size: var(--fs-xs); color: var(--text-mute);
+  border: var(--hairline) solid var(--border); padding: 3px 8px; }
+.pl-cond.met { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+/* WHAT THE PARLAY HEADLINE IS NOT COUNTING.
+   Three rows, set as a table rather than as cards: they are the same
+   measurement asked of three different populations, and the whole point
+   is that a reader can put them side by side. The label column gives, the
+   numbers do not — a fixed-width numeric column that clips is the bug
+   .rec-bucket already paid for.
+   `.dim` is the blended row: present so nothing is hidden, quieter
+   because it is the sum of two questions and the least useful of the
+   three. */
+.pl-split { margin-top: 14px; border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  background: var(--fill-subtle); }
+.pl-split-head { padding: 10px 14px 8px; font-size: var(--fs-sm);
+  font-weight: 700; color: var(--text-dim);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pl-split-head .sub { display: block; margin-top: 3px; font-weight: 400;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+.pl-split-row { display: grid; gap: 2px 12px; padding: 9px 14px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  border-top: var(--hairline) solid var(--border-soft); }
+.pl-split-row:first-of-type { border-top: 0; }
+.pl-split-label { font-size: var(--fs-sm); color: var(--text); min-width: 0; }
+.pl-split-n { font-size: var(--fs-xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
+.pl-split-u { font-size: var(--fs-sm); font-weight: 700;
+  font-variant-numeric: tabular-nums; text-align: right; }
+.pl-split-roi { display: block; font-weight: 400; font-size: var(--fs-xs);
+  color: var(--text-mute); }
+.pl-split-note { grid-column: 1 / -1; font-size: var(--fs-xs);
+  color: var(--text-mute); }
+@media (max-width: 560px) {
+  /* The three columns become two: the count moves under the label rather
+     than squeezing the units column into an ellipsis. */
+  .pl-split-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .pl-split-n { grid-column: 1; grid-row: 2; }
+  .pl-split-u { grid-row: 1 / 3; }
+}
+@media (max-width: 760px) {
+  /* Record page. The settled-pick row needs 414px of fixed columns before
+     the label gets a pixel, so on a phone it clips its own P&L figure
+     inside the card's overflow:hidden. Split into two lines: what the bet
+     was, then how it did. The splits drop their CLV column for the same
+     reason — the market name is what the table is for. */
+  /* Each meta span gets its OWN area — several grid items assigned to a
+     shared area don't flow side by side, they stack on top of each other
+     (the overlapping-text bug). */
+  /* `.pm-rows .rl-row` is listed explicitly because it is a two-class
+     selector and this one is a single class — a media query adds no
+     specificity, so the desktop six-column template won here and fought a
+     five-area layout: the 1fr column computed to 0px and the trader name
+     landed on top of the price. Matching its specificity is the fix. The
+     alternative — wrapping the desktop rule in a min-width block of its
+     own — opens the duplicate-breakpoint trap that test_header_density
+     slices on. */
+  /* The FLEXIBLE track is proc, not odds. With `auto auto minmax(0,1fr)`
+     across date/proc/odds, a long trader handle took everything an `auto`
+     track would give it and squeezed odds to a measured 0px — so the price
+     rendered underneath the name. The price is three characters and never
+     needs to flex; the name is the only thing here whose length is
+     unbounded, so it gets the track that can shrink. */
+  .rl-row, .pm-rows .rl-row {
+    grid-template-columns: 20px auto minmax(0, 1fr) auto 72px;
+    grid-template-areas: "icon main main main pnl"
+                         ".    date proc odds .";
+    row-gap: 3px; padding: 10px 12px 10px 11px;
+  }
+  .rl-row.rl-cal { grid-template-columns: 20px auto minmax(0, 1fr) auto 72px; }
+  .rl-icon { grid-area: icon; }
+  .rl-main { grid-area: main; white-space: normal; }
+  .rl-pnl { grid-area: pnl; }
+  .rl-date { grid-area: date; }
+  /* Wrapping, not clipping — a phone row has vertical room and no hover to
+     reveal a title. `overflow-wrap: anywhere` because a wallet address or a
+     handle like "monkeymashingkeyboard" is a single unbreakable token, and
+     `white-space: normal` alone will not break one: it overflowed the track
+     intact and ran across the price. */
+  .rl-proc {
+    grid-area: proc; white-space: normal;
+    overflow: visible; overflow-wrap: anywhere;
+  }
+  .rl-chips { grid-area: proc; justify-content: flex-start; flex-wrap: wrap;
+    gap: 4px 10px; overflow: visible; }
+  .rl-odds { grid-area: odds; }
+  .rl-date, .rl-proc, .rl-odds { text-align: left; justify-self: start; }
+  .rl-date::after { content: " ·"; opacity: .4; }
+  .rl-odds::before { content: "· "; opacity: .4; }
+  .rb-rows.has-clv .rb-row { grid-template-columns: minmax(0, 1fr) 46px 54px 66px; }
+  .rb-clv { display: none; }
+  .rec-chart .rc-net { font-size: var(--fs-2xl); }
+}
+/* ============================================================
+   Record scope — which model you are judging
+   ============================================================
+   The combined page answers "is the system making money". A per-sport
+   page answers "is THIS model any good", which is what the next change to
+   it depends on. Scrolls on one row rather than wrapping, because seven
+   scopes above a table should not cost two lines of header. */
+.rec-scopes {
+  display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 2px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.rec-scopes::-webkit-scrollbar { display: none; }
+/* ON A PHONE IT WRAPS INSTEAD OF SCROLLING. It is a FILTER row, not a
+   chart: eight short chips that all matter equally, and the reader is
+   choosing between them rather than reading along them.
+
+   Scrolling with the scrollbar hidden — which is right for the bracket
+   and the card strip, where the content genuinely runs off — meant the
+   last chip was sliced by the screen edge with nothing to say it moved.
+   Ethan's screenshot shows "CFB" cut in half, and the reasonable reading
+   of that is that the page is broken, not that it swipes.
+
+   Two rows of chips costs 40px and hides nothing. */
+@media (max-width: 640px) {
+  .rec-scopes { flex-wrap: wrap; overflow-x: visible; }
+}
+.rec-scope.active {
+  background: var(--grad-brand); border-color: transparent;
+  color: var(--brand-ink); box-shadow: var(--glow);
+}
+/* The count is the honest part: a scope with nothing in it still appears,
+   because hiding it would make "no bets yet" and "no such board" look
+   identical. */
+.rec-scope-n {
+  font-size: var(--fs-2xs); font-weight: 600; opacity: .75;
+  font-variant-numeric: tabular-nums;
+}
+.rec-scope.active .rec-scope-n { opacity: .9; }
+/* The headline's windows (audit item 5): a quieter row than the
+   scopes above it — it changes the headline and the chart, not the
+   page. */
+.rec-windows { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.rec-win { padding: 5px 12px; min-height: 30px; border-radius: 999px; cursor: pointer;
+  background: transparent; border: var(--hairline) solid var(--border); color: var(--text-mute);
+  font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700; }
+.rec-win.active { color: var(--text); border-color: var(--brand-2);
+  background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.rec-win-note { margin: -4px 0 14px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* A window the record cannot fill yet: there, greyed, with the reason
+   beside the row (audit V-22) — never silently missing. */
+.rec-win.off { opacity: .45; cursor: not-allowed; }
+.rec-win.off:hover { color: var(--text-mute); border-color: var(--border); }
+.rec-win-why { align-self: center; color: var(--text-mute); font-size: var(--fs-xs); }
+/* This month, in one card; and the fold below the sample floor. */
+.rec-month-card { padding: 14px 16px; margin: 12px 0; }
+.rec-mc-head { font-weight: 700; margin-bottom: 10px; }
+.rec-mc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 14px; }
+.rec-mc-cell .k { color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+.rec-mc-cell .v { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.05em; }
+.rec-mc-cell .s { color: var(--text-mute); font-size: var(--fs-xs); }
+.rec-fold { margin: 18px 0; border-top: var(--hairline) solid var(--border); padding-top: 12px; }
+.rec-fold > summary { cursor: pointer; color: var(--text-mute); font-weight: 700; min-height: 44px;
+  display: flex; align-items: center; }
+/* The settled list's filters (audit item 17): the window row's chip,
+   in two groups — the market, then the result. */
+.rec-bets-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 10px; }
+@media (pointer: coarse) { .rec-scope { min-height: 42px; } }
+/* --- Is there an edge at all? -------------------------------------------
+   The Record page's frame, above the ROI rather than beside it. A -28% ROI
+   next to "the edge signal carries no information" is one story with a
+   cause; the same ROI alone invites a hunt for the bad week that explains
+   it, and there is no bad week.
+
+   Deliberately quiet. The verdict is doing the work, and a panel that
+   shouts undermines a number whose whole authority is that it was measured
+   carefully. One hairline accent on the left edge carries the tone. */
+.rec-edge {
+  margin: 0 0 18px; padding: 14px 16px 12px;
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--border-soft);
+  border-left: 3px solid var(--text-faint);
+}
+.rec-edge.tone-neg { border-left-color: var(--bad); }
+.rec-edge.tone-pos { border-left-color: var(--good); }
+.rec-edge .section-title { margin-top: 0; }
+.rec-edge-verdict {
+  font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text);
+  margin: 6px 0 12px; max-width: var(--measure-tight);
+}
+.rec-edge-tbl td, .rec-edge-tbl th { padding: 4px 14px 4px 0; }
+/* The claimed edge is the row that decides things; the other three are
+   context for it. */
+/* IN THE ACCENT, per Ethan's render. Bold-and-white was the same weight
+   the other three rows already carry in a table of tabular figures, so
+   the row that decides things did not read as the row that decides
+   things. The arrow follows it into the accent for the same reason. */
+.rec-edge-tbl tr.lead-row td { font-weight: 700; color: var(--brand); }
+.rec-edge-tbl tr.lead-row td:first-child::after {
+  content: " \2190"; color: var(--brand); font-weight: 400;
+}
+.rec-edge .mini { max-width: var(--measure); }
+/* ---- Ethan's edge-panel render, 2026-08-23 ----------------------------
+   "this section here still looks like the old site, make it look like the
+   new site."
+
+   It did: three paragraphs of grey prose under a bare table, in a panel
+   that is really THREE separate instruments stacked — the AUC table, the
+   closing-line check, and the run history. Unbroken prose made them read
+   as one long caveat, so each gets the mark of what it is about. */
+/* The render's corner mark. A scale, because that is what the panel does
+   — it weighs our ranking against the market's — and it is the one the
+   icon set already has. Set faint and behind everything: decoration that
+   competes with a confidence interval is decoration that has to go. */
+.rec-edge { position: relative; overflow: hidden; }
+.ev-mark {
+  position: absolute; top: 10px; right: 14px; z-index: 0;
+  color: var(--brand); opacity: .13; pointer-events: none;
+}
+.rec-edge > *:not(.ev-mark) { position: relative; z-index: 1; }
+@media (max-width: 760px) { .ev-mark { display: none; } }
+.ev-notes { display: grid; gap: 12px; margin: 14px 0 4px; }
+.ev-note { display: flex; gap: 11px; align-items: flex-start; }
+.ev-note p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); max-width: var(--measure); }
+.ev-note strong { color: var(--text); }
+/* The disc, sized off the type it sits beside rather than a round number
+   — it is a label for a paragraph, so it lines up with the first line. */
+.ev-ico {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--brand); background: var(--panel-2);
+  border: var(--hairline) solid var(--border);
+}
+/* The run list, coloured by the side of the coin flip each run landed on.
+   0.500 is the line this whole panel is about, and a wall of identical
+   grey numbers was hiding the one thing the list has to say. */
+.ev-run { font-variant-numeric: tabular-nums; font-weight: 700; }
+.ev-run.pos { color: var(--good); }
+.ev-run.neg { color: var(--bad); }
+/* A four-column table of statistics has a width below which it stops
+   being readable and starts being wrapped. It scrolls in its own box
+   rather than pushing the page sideways. */
+.ev-scroll { overflow-x: auto; }
+@media (max-width: 640px) {
+  .rec-edge { padding: 12px 12px 10px; }
+  .rec-edge-tbl td, .rec-edge-tbl th { padding: 4px 8px 4px 0; }
+}
+.rec-riding a { color: var(--brand-2); }
+.rec-block { padding: 12px 14px; border-top: var(--hairline) solid var(--border-soft); }
+.rec-block.chart { padding: 14px 14px 4px; }
+.rec-cards { display: flex; gap: 18px; flex-wrap: wrap; }
+.rec-entry { padding: 12px 14px; border-bottom: var(--hairline) solid var(--border-soft); }
+/* Analytics on desktop — chart left, the three stats as a right rail. */
+.ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+.ra-main .rec-chart { margin-bottom: 0; }
+/* The 2026-08-17 declutter: the tile stacks that repeated the scoreboard
+   became two ledger lines — every number once, in a sentence. */
+.ra-line { margin: 2px 0 0; color: var(--text-dim); font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums; }
+.ra-line b { color: var(--text); font-weight: 700; }
+.ra-line b.pos { color: var(--good); }
+.ra-line b.neg { color: var(--bad); }
+.ra-line.ra-dim { color: var(--text-mute); margin-bottom: 14px; }
+.rec-buckets-one { grid-template-columns: 1fr; }
+.rec-more { display: block; width: 100%; padding: 11px 16px; border: 0;
+  background: transparent; color: var(--brand-2); font: inherit;
+  font-size: var(--fs-sm); font-weight: 700; cursor: pointer; text-align: center; }
+.rec-more:hover { background: var(--panel-2); }
+@media (min-width: 1000px) {
+  .ra-main { grid-template-columns: 1fr 235px; align-items: stretch; }
+}
+/* --- Preregistered tests (Ethan, 2026-08-13) ---------------------------
+   Deliberately not styled like a result. A test still collecting gets a
+   progress bar and a count and NO percentage, because a running total
+   that reads like a finding is the thing preregistration exists to
+   prevent. */
+.pr-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center; gap: 12px; padding: 10px 14px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pr-row:last-child { border-bottom: none; }
+.pr-claim { min-width: 0; font-size: var(--fs-sm); font-weight: 700; }
+.pr-claim .sub { display: block; font-weight: 400; color: var(--text-mute);
+  font-size: var(--fs-2xs); margin-top: 2px; }
+.pr-prog { display: block; width: 120px; height: 6px; border-radius: 3px;
+  background: var(--panel-3); overflow: hidden; }
+.pr-prog i { display: block; height: 100%; background: var(--brand); }
+/* The week in one card (Record page). */
+.wk-recap .wk-book { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-top:var(--hairline) solid var(--border); }
+.wk-recap .wk-book:first-of-type { border-top:0; }
+.wk-recap .wk-line { font-variant-numeric: tabular-nums; }
+.wk-recap .wk-line .pos { color: var(--good); }
+ .wk-recap .wk-line .neg { color: var(--bad); }
+.wk-recap .wk-pick { color: var(--text-dim); font-size: .9em; overflow-wrap:anywhere; }
+/* The record read offline (app.js renderRecord, sw.js THE RECORD, OFFLINE). */
+.rec-offline { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px;
+  border-radius: var(--radius-sm); border: var(--hairline) solid color-mix(in oklab, var(--warn) 50%, var(--border));
+  background: color-mix(in oklab, var(--warn) 10%, var(--panel)); font-size: var(--fs-sm); }
+.rec-offline .ic { color: var(--warn); flex: none; margin-top: 2px; }

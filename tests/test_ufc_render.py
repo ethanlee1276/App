@@ -24,6 +24,7 @@ by someone doing the obvious thing:
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -39,7 +40,7 @@ def _read(*parts):
 
 APP = app_js()
 VIS = _read("web", "js", "visuals.js")
-CSS = _read("web", "css", "styles.css")
+CSS = styles_css()
 
 
 def _fn(src, decl):
@@ -266,7 +267,9 @@ def test_the_phone_gets_two_cards_a_row_rather_than_five_screens():
     hit = [b for b in blocks if ".stat-cards" in b]
     assert len(hit) == 1, f"{len(hit)} phone blocks style the cards"
     assert "repeat(2, minmax(0, 1fr))" in hit[0]
-    assert ".ufc-hero-cta" in hit[0], "the hero button still floats on art"
+    # The card's own phone rules moved with the More menu's pages
+    # (css/more.css, 2026-10-24), each under the same 520px query.
+    assert any(".ufc-hero-cta" in b for b in blocks), "the hero button still floats on art"
 
 
 def test_the_record_panel_stacks_before_it_squeezes():

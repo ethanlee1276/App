@@ -26,13 +26,13 @@ both rows.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = app_js()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"),
-           encoding="utf-8").read()
+CSS = styles_css()
 
 EMOJI = re.compile(r"[\U0001F300-\U0001FAFF⚠-➿☀-⛿]")
 
@@ -179,7 +179,7 @@ def test_the_glyph_is_hidden_from_a_screen_reader():
 def test_the_emoji_has_a_font_stack_of_its_own():
     """`--font-sans` is self-hosted and has no emoji glyphs, so without
     this the browser falls back per-codepoint to whatever it likes."""
-    i = CSS.index(".pw-emoji")
+    i = re.search(r"(?m)^\.pw-emoji \{", CSS).start()
     rule = CSS[i:CSS.index("}", i)]
     assert "font-family" in rule
     assert "Emoji" in rule, "no emoji family is named"
@@ -187,7 +187,7 @@ def test_the_emoji_has_a_font_stack_of_its_own():
 
 def test_the_emoji_size_is_on_the_ramp():
     """It is a text glyph, so it is subject to the same rule as text."""
-    i = CSS.index(".pw-emoji")
+    i = re.search(r"(?m)^\.pw-emoji \{", CSS).start()
     rule = CSS[i:CSS.index("}", i)]
     m = re.search(r"font-size:\s*([^;]+)", rule)
     assert m, "no size at all"
@@ -197,7 +197,7 @@ def test_the_emoji_size_is_on_the_ramp():
 
 
 def test_it_does_not_drift_with_the_line_height():
-    i = CSS.index(".pw-emoji")
+    i = re.search(r"(?m)^\.pw-emoji \{", CSS).start()
     rule = CSS[i:CSS.index("}", i)]
     assert "line-height: 1" in rule, (
         "an emoji at the inherited line-height moves every time the type "

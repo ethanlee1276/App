@@ -18,6 +18,7 @@ screen is still reachable after the next refactor.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -34,7 +35,7 @@ def _read(*parts):
 
 APP = app_js()
 HTML = _read("web", "index.html")
-CSS = _read("web", "css", "styles.css")
+CSS = styles_css()
 
 
 def test_the_account_screen_is_a_view_with_its_own_url():

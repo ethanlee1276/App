@@ -12,6 +12,7 @@ specific regressions found, so they cannot come back quietly.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -19,7 +20,7 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 APP = app_js()
 
 
@@ -610,8 +611,7 @@ def test_every_control_has_a_visible_keyboard_focus():
     the modern selector answers it without taking the affordance from
     anyone on a keyboard.
     """
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     assert ":where(a, button, summary, input, select, textarea, " \
            "[tabindex]):focus-visible" in css, "no global focus ring"
     # Square and offset: no rounded containers anywhere, and an inset
@@ -745,8 +745,7 @@ def test_the_light_ramp_is_warm_too():
     choice. If this ever fails, the two themes have diverged and the fix
     belongs wherever they disagree."""
     import re as _re
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     # the light block is the LAST :root-scoped override in the sheet
     tail = css[css.rindex("--bg:"):]
     m = _re.search(r"--bg:\s*(#[0-9A-Fa-f]{6})", tail)
@@ -827,8 +826,7 @@ def test_no_transition_animates_a_layout_property():
     width — one of them on every card of a twenty-pick board, which is
     twenty simultaneous layout animations. transform runs on the
     compositor and touches neither layout nor paint."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     layout = re.compile(r"\b(width|height|left|right|top|bottom|margin|padding"
                         r"|inset|flex-basis)\b")
     bad = [t for t in _transitions(css) if layout.search(t)]
@@ -840,8 +838,7 @@ def test_no_ui_transition_outlasts_the_reading_of_it():
     manual puts on UI motion, and long enough that the number beside the
     bar had settled while the bar was still travelling. That reads as lag,
     not as polish."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     slow = []
     for t in _transitions(css):
         for d in re.findall(r"([\d.]+)s\b", t):
@@ -854,8 +851,7 @@ def test_the_indicator_scales_from_a_one_pixel_base():
     """scaleX(96) on a 1px bar is a 96px bar, which is what lets
     moveIndicator keep passing the measured offsetWidth straight through
     instead of computing a ratio against something that can change."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     # NEW LOOK (2026-08-11): the sliding underline retired — the bar
     # marks the active page with a filled pill instead, and the indicator
     # element stays in the DOM (display:none) so moveIndicator has a
@@ -886,8 +882,7 @@ def test_a_transition_that_cannot_fire_is_not_left_in_place():
     .4s ease on it never once ran. Same reasoning that kept the
     slashed-zero rule out: a declaration that cannot do anything is
     decoration wearing the costume of craft."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     rule = css[css.index(".lf-bar > span {"):]
     rule = rule[:rule.index("}")]
     assert "transition" not in rule
@@ -904,8 +899,7 @@ def test_nothing_transitions_a_shadow_that_never_exists():
     them defend against a UA default — .search-wrap input:focus is a real
     browser focus glow — and the rest document that this design has no
     shadows, which is worth saying once per surface."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     # NEW LOOK (2026-08-11, Ethan's render): light exists now — but only
     # through the tokens, so every glow on the site is the SAME glow.
     # A raw box-shadow value is still the tell it always was; it just
@@ -940,8 +934,7 @@ def test_the_tilt_stop_rule_says_none_rather_than_implying_a_shadow():
     drives the tilt — without it every mouse move queues a 300ms animation
     and the card lags the cursor. Saying that with `transition: box-shadow`
     reads as "animate the shadow" and animates nothing."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     rule = css[css.index(".tilt.tilting {"):]
     rule = rule[:rule.index("}")]
     assert "transition: none" in rule

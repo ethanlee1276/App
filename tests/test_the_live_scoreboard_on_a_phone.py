@@ -25,6 +25,7 @@ request that leaves the page's own server.
 Run directly: `python3 tests/test_the_live_scoreboard_on_a_phone.py`
 """
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import re
 import sys
@@ -39,7 +40,7 @@ from tests import test_the_nhl_live_page as NHL             # noqa: E402
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 APP = app_js()
-STYLES = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
+STYLES = styles_css()
 SHEETS = {"hc": (ROOT / "web" / "css" / "hoopscast.css").read_text(encoding="utf-8"),
           "rc": (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8")}
 

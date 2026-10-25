@@ -12,6 +12,7 @@ about the code that produces it:
 """
 
 import datetime
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import json
 import os
 import sys
@@ -589,8 +590,7 @@ def test_the_legs_line_spans_the_whole_row():
     """.rl-row is a six-column GRID. A legs element added as a sixth child
     lands in the 72px P&L column and renders each leg as a vertical stack of
     one-word lines — which is exactly what it did before this rule."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     i = css.index(".pl-legs")
     assert "grid-column: 1 / -1" in css[i:i + 200]
 
@@ -600,8 +600,7 @@ def test_every_class_the_parlay_section_uses_is_styled():
     text, which on this page reads as a layout bug rather than a missing
     rule."""
     src = _app_js()
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     i = src.index("function recParlaySection")
     block = src[i:src.index("function recLongshotSection")]
     import re

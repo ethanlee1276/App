@@ -30,12 +30,12 @@ sys.path.insert(0, str(ROOT))
 import livescore_build as B                                  # noqa: E402
 from engine import shrink                                    # noqa: E402
 from engine.sources import espnplays as E                    # noqa: E402
-from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+from _app import app_js, styles_css  # noqa: E402  (app.js and the rooms it loads on first use; their sheets)
 
 APP = app_js()
 GC = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
 GC_CSS = (ROOT / "web" / "css" / "gamecast.css").read_text(encoding="utf-8")
-CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
+CSS = styles_css()
 
 TEXT = "ESPN's own sentence describing the play"
 DESC = "ESPN's drive summary sentence"

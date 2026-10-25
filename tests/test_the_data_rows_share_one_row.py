@@ -10,13 +10,14 @@ list, the prose entries, the learning coverage. They share the row
 now, each variant a word; the UFC rows wrap instead of scrolling.
 """
 import re
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 from pathlib import Path
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 # watchlistHTML left this list 2026-09-22: it draws the book's row (hd-row),
 # the other shared row — tests/test_the_long_shots_watch_is_the_books_row.py.
 ROWS = ("predBoardHTML", "renderInjuryWatch", "renderUFC", "renderBestBets", "renderLivePicks", "marketBestHTML",

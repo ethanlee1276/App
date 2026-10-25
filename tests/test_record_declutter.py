@@ -16,6 +16,7 @@ Run directly: `python3 tests/test_record_declutter.py`
 """
 
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import shutil
 import subprocess
@@ -28,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 
 
 def _fn(name):

@@ -24,6 +24,7 @@ against, so a name on this page is a name the rest of the site can price.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,7 +34,7 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = app_js()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 SRV = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
 
 

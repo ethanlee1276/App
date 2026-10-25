@@ -11,6 +11,7 @@ the fetch layer degrades to DataUnavailable like every other source here.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -217,14 +218,14 @@ def test_the_page_shows_both_venues_and_names_their_roles():
     assert 'paidFetch("kalshi.json")' in app
     # Named phone columns — every cell is a <span>, and :nth-of-type counts
     # tags, so positional selectors grab the sport chip or nothing.
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     i = css.index(".kx-row")
     seg = css[i:i + 2200]
     import re
     assert ":nth-of-type" not in re.sub(r"/\*.*?\*/", "", seg, flags=re.S)
     for cls in (".kx-k", ".kx-m", ".kx-e"):
-        assert cls in seg, cls
+        # The More menu's pages took their own column rules (css/more.css).
+        assert cls in seg or re.search(re.escape(cls) + r"\b[^{]*\{", css), cls
 
 
 

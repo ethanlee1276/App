@@ -19,6 +19,7 @@ What this file holds:
     host with no API — the shipped recent rows, called that.
 """
 import datetime as dt
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import json
 import os
 import re
@@ -36,7 +37,7 @@ from engine import ledger                                      # noqa: E402
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 SERVER = (ROOT / "server.py").read_text()
 TODAY = dt.date.today()
 EPOCH = dt.date.fromisoformat(ledger.RECORD_EPOCH)

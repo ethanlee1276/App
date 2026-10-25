@@ -1,0 +1,615 @@
+/* THE DETAIL PAGES' STYLES — loaded with its pages' code the first time a game, a pick or a play-by-play page opens
+   (app.js loadRoom, 2026-10-24). Every rule here was moved whole out of
+   styles.css, in its order there, because only these pages draw the classes
+   it names; the few that a later rule of styles.css might have outranked
+   stayed behind. Same tokens as the sheet. */
+.gp-back { margin-bottom: 14px; }
+/* Back on the left, Copy link beside it. The row exists so the share
+   control has somewhere to sit that is not an inline margin bolted to a
+   button — the detail pages are the two surfaces people actually send to
+   somebody, so the control belongs where the eye already is. */
+/* The entity-page furniture, rebuilt 2026-08-25 (Ethan, circling six
+   wrapped pills: "It feels cheap just having all these buttons here").
+   Navigation is quiet text links in the nav row; actions on the pick
+   live in a hairline-divided strip INSIDE the card (.pp-actions). */
+.pp-nav { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; }
+.pp-nav .gp-back { margin-bottom: 0; }
+.pp-nav + .card, .pp-nav + .gp-hero { margin-top: 10px; }
+.pp-nav-right { display: inline-flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; }
+.pp-actions { display: flex; margin-top: 12px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.pp-actions .btn { flex: 1 1 0; margin: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; color: var(--text-dim);
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .02em;
+  padding: 12px 4px 4px; min-height: 44px; white-space: nowrap; }
+.pp-actions .btn + .btn { border-left: var(--hairline) solid var(--border-soft); }
+.pp-actions .btn:hover { color: var(--brand); background: none; }
+.gp-hero {
+  display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
+  gap: 22px; align-items: center; margin-bottom: 20px;
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius);
+  padding: 18px; overflow: hidden;
+}
+/* The stadium art is drawn for a card slot; given a half-page column it
+   grows to ~370px and pushes the hero taller than the content beside it.
+   Capped, so the header stays a header. */
+.gp-art {
+  position: relative; min-width: 0; border-radius: var(--radius); overflow: hidden;
+  max-height: 260px; display: flex; align-items: center; justify-content: center;
+}
+.gp-art svg { width: 100%; height: auto; max-height: 260px; display: block; }
+.gp-teams {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-size: var(--fs-2xl); font-weight: 800; letter-spacing: -.3px;
+}
+.gp-teams > span { display: inline-flex; align-items: center; gap: 8px; }
+/* A team's name opens its team page: a button that keeps the heading's type. */
+.gp-team {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 24px;
+  background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  font: inherit; color: inherit; letter-spacing: inherit; text-align: left;
+}
+.gp-team-name {
+  text-decoration: underline; text-decoration-thickness: 2px;
+  text-underline-offset: 6px; text-decoration-color: var(--text-mute);
+}
+.gp-team:hover .gp-team-name, .gp-team:focus-visible .gp-team-name { text-decoration-color: var(--brand); }
+.gp-sub { color: var(--text-dim); font-size: var(--fs-md); margin-top: 6px; }
+.gp-inactives { color: var(--text-mute); font-size: var(--fs-sm); }
+.gp-chips { margin-top: 12px; }
+.gp-stats { margin-bottom: 22px; }
+/* Venue panel — fills the column beside the stadium art with the reason
+   the park carries the factors it does. */
+.pk-panel { margin-top: 14px; border-top: var(--hairline) solid var(--border-soft); padding-top: 12px; }
+.pk-head { font-size: var(--fs-md); font-weight: 700; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.pk-facts { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 500; }
+/* Capped, not 1fr: three numbers stretched across a half-page column read
+   as three empty boxes with a digit lost in each. */
+.pk-dims { display: grid; grid-template-columns: repeat(3, minmax(0, 108px));
+  gap: 8px; margin-top: 10px; }
+.pk-dim {
+  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft);
+  border-radius: 0; padding: 7px 10px; min-width: 0;
+}
+.pk-dim .k { display: block; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-mute); font-weight: 600; }
+.pk-dim .v { display: block; font-size: var(--fs-xl); font-weight: 800; letter-spacing: -.3px; margin-top: 2px;
+  font-variant-numeric: tabular-nums; }
+.pk-dim .s { display: block; font-size: var(--fs-2xs); color: var(--text-mute); min-height: 13px; }
+.pk-factors { margin-top: 10px; display: grid; gap: 6px; }
+.pk-factor { display: grid; grid-template-columns: 74px minmax(60px, 240px) 44px;
+  gap: 10px; align-items: center; }
+.pk-fk { font-size: var(--fs-xs); color: var(--text-dim); }
+/* Bar is centred on league average, so the eye reads direction before it
+   reads the number: right of the tick is above average, left is below. */
+.pk-fbar { position: relative; display: block; height: 7px; border-radius: 0;
+  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); }
+.pk-fbar > i { position: absolute; top: 0; bottom: 0; background: var(--brand); opacity: .85; }
+.pk-fbar > b { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px;
+  background: var(--text); opacity: .35; }
+.pk-fv { font-size: var(--fs-xs); text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.pk-fv.up { color: var(--good); }
+ .pk-fv.down { color: var(--bad); }
+.pk-plays { color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-body); margin: 10px 0 0; }
+@media (max-width: 860px) {
+  .gp-hero { grid-template-columns: 1fr; }
+}
+.gp-watch { margin-top: 8px; }
+.gp-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 14px 0; }
+/* The game page's section chips (2026-09-22): a row under the hero that
+   scrolls to a section — the books' segmented-markets idea without hiding
+   anything behind a tab.
+
+   IT STAYS WHERE IT IS. It was sticky, pinned under the top bar, and on a
+   phone that is a band of five chips riding down over every card — Ethan,
+   2026-09-23, circling it over a pick: "fix how this bar follows the page
+   when you scroll down." A jump row is for the top of the page; a reader
+   further down scrolls, and the tab bar is the navigation that follows. */
+.gp-jump { margin: 12px 0 14px; padding: 8px 0; }
+.gp-jump .chip { cursor: pointer; font: inherit; }
+@media (min-width: 900px) { .gp-row { grid-template-columns: 1fr 1fr; } }
+.gp-lines .lb-table { border-top: none; padding-top: 0; }
+.pr-table { display: grid; grid-template-columns: 1fr repeat(4, auto); gap: 6px 12px;
+  align-items: center; }
+.pr-table .lb-th { color: var(--text-mute); font-size: var(--fs-xs); text-align: right; }
+.pr-table .lb-th:first-child { text-align: left; }
+.pr-table .lb-tm { color: var(--text-mute); font-size: var(--fs-sm); display: flex;
+  align-items: center; gap: 6px; min-width: 0; }
+.pr-table b { text-align: right; font-family: var(--font-mono); font-weight: 600; }
+.pr-defs { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
+  color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); }
+.pr-defs b { color: var(--text-dim); font-weight: 600; }
+/* The play-by-play page's under-pressure card (2026-09-08): the moment's
+   chips, the one-line reading, the live market's number, and the two-team
+   table with the two cells the scoreboard is asking lit. */
+.pbp-pressure .pbp-rail-head .lb-live { margin-left: 6px; }
+.pbp-pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.pbp-pr-line { margin: 0 0 8px; color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); }
+.pbp-pr-market { margin: 0 0 10px; color: var(--text-body); font-size: var(--fs-sm);
+  line-height: var(--lh-body); }
+.pbp-pr-asked { color: var(--gold); }
+.gp-note-list { margin: 0; padding-left: 18px; color: var(--text-body);
+  font-size: var(--fs-sm); }
+.gp-note-list li { margin: 4px 0; }
+/* The hero art holds the photo the same way a strip card does. */
+.gp-art { position: relative; overflow: hidden; }
+.gp-art .venue-photo { border-radius: var(--radius); }
+.pp-card { padding: 14px; }
+.pp-log, .pp-form {
+  display: grid; align-items: center; gap: 10px;
+  padding: 9px 12px; border-bottom: var(--hairline) solid var(--border-soft);
+}
+.pp-log { grid-template-columns: 62px 96px minmax(0, 1fr) 62px 84px; }
+.pp-form { grid-template-columns: minmax(0, 1fr) 70px 120px; }
+.pp-log:last-child, .pp-form:last-child { border-bottom: none; }
+.pp-when, .pp-fk { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
+.pp-opp { font-size: var(--fs-sm); font-weight: 700; }
+/* --text-mute, not --text-faint: the faint token is on an 8-use budget
+   precisely so every new column cannot argue itself into being the
+   exception. Size carries this column's rank instead of colour. */
+.pp-extra { color: var(--text-mute); font-size: var(--fs-2xs); min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-val, .pp-fv { text-align: right; font-weight: 800; font-size: var(--fs-md);
+                  font-variant-numeric: tabular-nums; }
+.pp-hit, .pp-fd { text-align: right; font-size: var(--fs-2xs); font-weight: 800;
+                  letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.pp-val.pos, .pp-hit.pos, .pp-fd.pos { color: var(--good); }
+.pp-val.neg, .pp-hit.neg, .pp-fd.neg { color: var(--bad); }
+.pp-fv { color: var(--text); }
+/* On a phone the context column is the one that gives: who and how much
+   are the two facts that must survive. */
+@media (max-width: 720px) {
+  .pp-log { grid-template-columns: 54px minmax(0, 1fr) 54px 72px; }
+  .pp-extra { display: none; }
+}
+/* ---- The replay panel: the drive sim's per-game diagnostics -------- */
+.gp-sim { display: block; margin-bottom: 18px; }
+.gp-sim-tiles { display: flex; gap: 18px; flex-wrap: wrap;
+  margin: 10px 0 14px; color: var(--text-mute); font-size: var(--fs-sm); }
+.gp-sim-tiles b { color: var(--text); font-size: var(--fs-lg);
+  margin-right: 4px; font-variant-numeric: tabular-nums; }
+/* The viz row: the ECharts gauge beside the histogram on a desk, stacked
+   on a phone. The gauge div is EMPTY until the lazy engine mounts it —
+   height 0 in the fallback state, so a machine without the vendor file
+   sees exactly the panel it always saw. */
+.gp-sim-viz { display: grid; grid-template-columns: 200px minmax(0, 1fr);
+  gap: 14px; align-items: end; }
+.gp-sim-gauge:not([data-echarted]) { display: none; }
+.gp-sim-gauge { height: 150px; min-width: 0; }
+.gp-sim-hist[data-echarted] { display: block; height: 170px; padding: 0; }
+@media (max-width: 700px) {
+  .gp-sim-viz { grid-template-columns: 1fr; }
+  .gp-sim-gauge { height: 130px; }
+}
+.gp-sim-hist { display: flex; align-items: flex-end; gap: 8px;
+  padding: 4px 0 0; }
+.gp-sim-col { flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 4px; min-width: 0; }
+.gp-sim-bar { width: 70%; max-width: 44px; border-radius: 3px 3px 0 0;
+  background: var(--brand); opacity: .8; }
+.gp-sim-lbl { font-size: var(--fs-xs); color: var(--text-mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; }
+.gp-sim-joint { margin: 12px 0 0; font-size: var(--fs-sm);
+  color: var(--text-dim); }
+.gp-sim-note { margin: 8px 0 0; font-size: var(--fs-xs);
+  color: var(--text-mute); }
+/* Team shapes — the game page's two-team radar. The wrapper holds the
+   percentile table as the engine-less fallback; the mount clears it and
+   draws the polygons in the same box. */
+.gp-shape { margin-bottom: 18px; }
+.gp-shape-radar { min-height: 250px; }
+.gp-shape-radar[data-echarted] { height: 280px; }
+.gp-shape-tbl { max-width: 360px; }
+/* The play-by-play page (2026-09-05): the card's row language, a game at
+   a time. The groups reuse .lb-plays without its top rule, since each
+   group carries its own head.
+
+   The header this block opened with (.pbp-head, .pbp-score and its four
+   descendants) was retired the same day by the hero below — renderPbpPage
+   stopped emitting those classes and nothing else ever wore them, so the
+   rules were styling nothing. Removed rather than left as a fallback: a
+   selector no markup can match cannot be a fallback, only a decoy for the
+   next person reading this file for the header's styling. */
+.pbp-group { margin: 12px 0 16px; }
+.pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+.pbp-group-head b { color: var(--text); }
+.pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
+.pbp-tag { color: var(--good); }
+.pbp-tag.turnover { color: var(--warn); }
+/* The play-by-play page to the render (2026-09-05): a strip of the
+   league's games, the hero, the park with the ball in flight, the
+   situation strip, and the rail. */
+.pbp-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px;
+  scrollbar-width: thin; }
+.pbp-chip { flex: 0 0 auto; min-width: 128px; text-align: left; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 8px 10px;
+  color: var(--text); font: inherit; cursor: default; }
+.pbp-chip.door { cursor: pointer; }
+.pbp-chip.door:hover { border-color: var(--text-mute); }
+.pbp-chip.active { border-color: var(--gold); border-width: 2px; padding: 7px 9px; }
+.pbp-chip-head { font-size: var(--fs-xs); color: var(--text-mute); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 4px; }
+.pbp-chip-final, .pbp-chip-time { font-family: var(--font-mono); letter-spacing: .04em; }
+.pbp-chip-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: center;
+  font-size: var(--fs-sm); }
+.pbp-chip-row em { font-style: normal; font-weight: 700; }
+.pbp-chip-row b { font-family: var(--font-mono); }
+.pbp-chip-foot { font-size: var(--fs-xs); color: var(--text-mute); margin-top: 3px; min-height: 1em; }
+/* THE COLUMN CANNOT BE WIDENED BY WHAT IS IN IT.
+   ---------------------------------------------------------------------
+   Ethan, 2026-09-06, from a phone: "it's all like pushed too the right of
+   the screen and not centered." Every card on the page was being drawn
+   wider than the screen — left edges where they belonged, right edges off
+   the side.
+
+   `1fr` is `minmax(auto, 1fr)`, and `auto` as a MINIMUM means the track
+   grows to its widest child's min-content width. One child that cannot
+   shrink — a table of nowrap cells, a long unbroken string — and the
+   whole track is wider than the viewport, taking every card in it along.
+   Measured at 428px with a nowrap table in the column: the sibling card
+   was laid out at 507px and the page scrolled to 526.
+
+   The desktop rule above already clamped it with `minmax(0, 1fr)`. Only
+   the phone — the one width where it matters — was left on bare `1fr`.
+   `min-width: 0` on the children for the same reason: a grid item's own
+   default minimum is `auto` too.
+
+   This is a floor, not a fix for any one child. A wide table still needs
+   its own `overflow-x: auto` to be READABLE; this only stops it dragging
+   the rest of the page sideways with it. */
+.pbp-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+.pbp-main, .pbp-rail { min-width: 0; }
+@media (max-width: 980px) { .pbp-layout { grid-template-columns: minmax(0, 1fr); } }
+.pbp-hero { display: grid; grid-template-columns: 1fr auto auto auto 1fr; align-items: center; gap: 12px; }
+.pbp-hero-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pbp-hero-side b { font-size: var(--fs-lg); }
+.pbp-hero-home { justify-content: flex-end; text-align: right; }
+.pbp-hero-score { font-size: 2.1rem; font-weight: 800; font-family: var(--font-mono); }
+.pbp-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; }
+/* ESPN's header has the record under each side and the carrier under the
+   clock (2026-10-08); both come off the deep file, both absent when unknown. */
+.pbp-hero-rec { color: var(--text-mute); }
+/* The watch buttons are the header's last row, under the scores, as on the
+   basketball and hockey pages (2026-10-20): in the middle column they set
+   its width, and on a phone they stacked beside the live state. */
+.pbp-hero > .pbp-watch { grid-column: 1 / -1; margin-top: 0; }
+.pbp-hero-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid var(--border);
+  border-radius: 999px; color: var(--text-dim); }
+/* FOUR ITEMS NEED FOUR COLUMNS (Ethan, 2026-09-06: "this area on the
+   play by play screen is bugged out").
+   ---------------------------------------------------------------------
+   The hero is five children — away block, away score, the state in the
+   middle, home score, home block — and the desktop rule gives them five
+   columns. This override moved the middle one out to its own full-width
+   row across the top, which leaves FOUR children still to place, and it
+   was handing them THREE columns.
+
+   So the grid did what grids do: away block, away score and home score
+   filled row two, and the home block wrapped onto a row of its own,
+   left-aligned in column one under the away team. `justify-content:
+   flex-end` then right-aligned it inside that first column, which is
+   why it read as floating in the middle of nowhere rather than as an
+   obvious wrap. Measured at 390px: the home block's left edge was 31px,
+   identical to the away block's, when at 900px it sits at 542.
+
+   Four columns, and it is the scoreboard it was always meant to be:
+   away | score | score | home, with the state above it. */
+@media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto auto 1fr; }
+  .pbp-hero-mid { grid-column: 1 / -1; order: -1; flex-direction: row; justify-content: center; gap: 8px; }
+  /* THE TWO SCORES SAT A GRID GAP APART (Ethan, 2026-09-07, "2 3" ringed
+     on a phone: "fix how bunched up these number are"). On the desktop the
+     state block sits BETWEEN the scores; lifting it to its own row here
+     left the two numbers as neighbouring auto columns with only the 12px
+     gap between them, reading as one number "23". Each score now has
+     room of its own and the home score carries a hairline on its left,
+     so the pair reads as a scoreboard: 2 | 3. Phone only — on the desktop
+     the state block is the divider. */
+  .pbp-hero-score { font-size: 1.6rem; min-width: 2ch; text-align: center; padding: 0 16px; }
+  .pbp-hero-mid + .pbp-hero-score { border-left: var(--hairline) solid var(--border); } }
+/* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): his card is
+   ringed in the gold the rest of the site already uses, which is what
+   makes the photograph read as OURS rather than as a stock picture
+   someone dropped in. `--brand` is that gold, so this follows the theme
+   rather than inventing a second one — it re-tints itself in light mode
+   with everything else. A hairline, not a frame: the picture is the
+   subject and a thick border would compete with it. */
+.pbp-parkcard { padding: 0; overflow: hidden;
+  border-color: color-mix(in srgb, var(--brand) 38%, var(--border)); }
+.pbp-parkcard .pbp-parkhead { border-bottom-color:
+  color-mix(in srgb, var(--brand) 22%, var(--border)); }
+.pbp-sit { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
+  padding: 12px 14px; border-top: var(--hairline) solid var(--border); }
+.pbp-sit-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* The club badge beside the batter and the pitcher (Ethan's render). */
+.pbp-sit-badge { display: inline-flex; flex: 0 0 auto; align-items: center; }
+.pbp-sit-badge img, .pbp-sit-badge svg { display: block; }
+.pbp-sit-right { justify-content: flex-end; text-align: right; }
+.pbp-sit .k { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em; }
+.pbp-sit-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pbp-count { font-family: var(--font-mono); font-size: var(--fs-lg); }
+.pbp-face { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--bg-2);
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.pbp-face-blank { color: var(--text-mute); }
+/* ESPN's tab row scrolls sideways on a phone with every label on one line
+   (2026-10-08: six tabs, "Play-by-play" was wrapping to three). */
+.pbp-tabs { display: flex; gap: 14px; align-items: center; margin: 12px 0 8px; border-bottom: var(--hairline) solid var(--border);
+  overflow-x: auto; scrollbar-width: none; }
+.pbp-tabs::-webkit-scrollbar { display: none; }
+.pbp-tabs .pbp-tab { white-space: nowrap; flex: 0 0 auto; }
+.pbp-tabs .active { padding: 6px 0; border-bottom: 2px solid var(--gold); font-weight: 700; }
+.pbp-tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-mute); font: inherit;
+  font-weight: 600; padding: 6px 2px; margin-right: 12px; cursor: pointer; min-height: 44px; }
+.pbp-tab.active { color: var(--text); border-bottom-color: var(--brand); }
+.pbp-panel { margin-top: 8px; }
+.pbp-tab-door { margin-left: auto; background: none; border: 0; color: var(--text-mute); font: inherit; cursor: pointer; }
+.pbp-tab-door:hover { color: var(--text); }
+/* The doors between the game page and the play-by-play, and the card's
+   own hint that a live game opens it. */
+.gp-pbp-door { display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-weight: 600; }
+.gp-pbp-door:hover { color: var(--text); }
+.pbp-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; }
+.pbp-info-ico { color: var(--gold); display: inline-flex; }
+/* The label above the value, small and quiet, so the tile reads as a
+   question and an answer rather than two facts of equal weight. */
+.pbp-info-k { font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-mute); font-weight: 700; }
+/* THE PLAY FEED IS CUT OFF AND SCROLLS ITSELF.
+   ---------------------------------------------------------------------
+   Ethan, 2026-09-06, circling the rail: "we should just make this menu
+   cut off and let people scroll it so you dont have to scroll all the
+   way down the page bc its ugly."
+
+   It was `sticky` with no ceiling, which is sticky in name only — an
+   element taller than the viewport has nowhere to stick to, so the rail
+   simply ran the full length of the feed and the page grew to match it.
+   Every pitch of a nine-inning game, in one column, under a park card
+   that ends after four hundred pixels.
+
+   This is not a new pattern: `.rail` above has done exactly this since
+   it was written — sticky under the topbar, capped at the viewport,
+   scrolling its own overflow, and released back to normal flow when the
+   layout folds to one column. The play feed was the one rail that never
+   picked it up. Same idiom, same breakpoint as .pbp-layout's own fold,
+   so the two cannot disagree about when the page is narrow.
+
+   `overscroll-behavior: contain` so reaching the end of the feed does
+   not then start scrolling the page underneath it. */
+.pbp-rail { position: sticky; top: var(--topbar-h);
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+  overscroll-behavior: contain; scrollbar-width: thin; }
+/* THE CARDS MUST NOT SHRINK TO FIT.
+   `.card` carries `overflow: hidden`, which makes it a legal flex item to
+   compress — so the first version of this rule capped the rail and the
+   CARD swallowed the feed instead, clipping two hundred pitches to
+   nothing with no scrollbar anywhere. Cut off, but not scrollable, which
+   is the half of the request that would have been useless. Measured in
+   Chromium: rail 820px, content 820px, scrolls false. Pinned at their
+   natural height, the content overflows the rail and the rail scrolls,
+   which is the point. */
+.pbp-rail > * { flex: 0 0 auto; }
+@media (max-width: 980px) {
+  .pbp-rail { position: static; max-height: none; overflow: visible; }
+}
+.pbp-rail-head { display: flex; justify-content: space-between; align-items: baseline;
+  font-weight: 800; margin-bottom: 6px; }
+.pbp-group { margin: 8px 0 14px; }
+.pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+.pbp-group-head b { color: var(--text); }
+.pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
+.pbp-tag { color: var(--good); }
+.pbp-tag.turnover { color: var(--warn); }
+.pbp-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start;
+  padding: 6px 0; border-top: var(--hairline) solid var(--border); font-size: var(--fs-sm); }
+.pbp-row.atbat { background: var(--bg-2); border-radius: var(--radius); padding: 8px; border-top: 0; margin: 4px 0; }
+.pbp-row.atbat.scoring b { color: var(--good); }
+.pbp-what { min-width: 0; }
+.pbp-who { display: block; color: var(--text-mute); font-size: var(--fs-xs); }
+.pbp-time { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); white-space: nowrap; }
+.pbp-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 3px; display: inline-block; }
+.pbp-dot.ball { background: var(--good); }
+.pbp-dot.strike { background: var(--bad); }
+.pbp-dot.foul { background: var(--warn); }
+.pbp-dot.inplay { background: var(--brand); }
+.pbp-mark { display: inline-flex; margin-top: 1px; }
+/* Live win probability, in the play-by-play rail. Ours, beside the
+   market's line track above it — two numbers about the same game from
+   two sources, which is the comparison this product is for. */
+.pbp-wp-row { display: grid; grid-template-columns: 3.5rem 1fr 2.6rem;
+  align-items: center; gap: 8px; margin: 6px 0; }
+.pbp-wp-tm { font-weight: 600; letter-spacing: .01em; color: var(--text); }
+.pbp-wp-bar { height: 8px; border-radius: 999px; overflow: hidden;
+  background: var(--panel-3); }
+/* SCALED, NOT WIDENED. Animating `width` reflows the row every frame
+   and the design guard refuses it; a transform is composited. The bar is
+   full width and squeezed from the left, so `scaleX(0.81)` reads as 81%. */
+.pbp-wp-bar i { display: block; height: 100%; width: 100%; border-radius: 999px;
+  background: var(--brand); transform-origin: left center;
+  transition: transform var(--dur-slow) var(--ease-out); }
+.pbp-wp-row b { text-align: right; font-variant-numeric: tabular-nums; }
+/* The caveat is not fine print: inside a one-score endgame it is the
+   most important line on the card, because that is where a margin model
+   without possession is most confidently wrong. */
+.pbp-wp-blind { color: var(--warn); opacity: 1; }
+/* The pick page's shopped-number line (shoppedLineNote). */
+.pp-shopped { color: var(--text-mute); font-size: var(--fs-sm); margin: 6px 0 10px; line-height: var(--lh-snug); }
+@media (max-width: 720px) {
+  /* The game page's five counts (the 2026-09-27 sweep): a column of five
+     big tiles ran ~330px for five small numbers. Three across, the
+     numbers a size down, the sub-lines left to the desktop. */
+  .stats.gp-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .stats.gp-stats .tile { padding: 10px 10px 9px; }
+  .stats.gp-stats .tile .k { font-size: var(--fs-2xs); }
+  .stats.gp-stats .tile .v { font-size: var(--fs-xl); margin-top: 3px; }
+  .stats.gp-stats .tile-sub { display: none; }
+}
+/* The prediction markets on the board's own spread and total (crowdLinesHTML). */
+.gp-crowd-lines { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px;
+  font-size: var(--fs-sm); color: var(--text-dim); }
+.gp-crowd-lines b { color: var(--text); font-variant-numeric: tabular-nums; }
+/* A Most Likely pick, explained (whyLikelyHTML, 2026-09-23) — the card
+   that leads the pick page when the reader came from that board. */
+.pp-book { color: var(--text-mute); font-weight: 400; }
+.pp-board { margin-top: 3px; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--good); }
+.wl-moves { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+.wl-moves b.pos { color: var(--good); }
+.wl-moves b.neg { color: var(--bad); }
+.tp-num { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); color: var(--text); }
+.tp-num em { font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
+/* THE CASE FOR THIS BET (pickCaseHTML, 2026-10-04): the verdict, then what
+   backs the side and what works against it, each marked in-our-number or
+   shown; then the corners he will see. */
+.pick-case { margin: 12px 0 4px; padding: 12px 14px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border-soft); background: var(--panel-2); }
+.pc-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text); margin-bottom: 6px; }
+.pc-verdict { margin: 0 0 10px; font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text); }
+.pc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pc-col { padding: 10px 12px; border-radius: var(--radius); }
+.pc-for { border: var(--hairline) solid color-mix(in srgb, var(--good) 40%, transparent);
+  background: color-mix(in srgb, var(--good) 6%, transparent); }
+.pc-against { border: var(--hairline) solid color-mix(in srgb, var(--bad) 40%, transparent);
+  background: color-mix(in srgb, var(--bad) 6%, transparent); }
+.pc-col-k { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-mute); margin-bottom: 6px; }
+.pc-for .pc-col-k { color: var(--good); }
+.pc-against .pc-col-k { color: var(--bad); }
+.pick-case ul { margin: 0; padding-left: 16px; display: grid; gap: 6px; }
+.pc-fact span { font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text); }
+.pc-fact em { display: block; font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
+.pc-shown span { color: var(--text-dim); }
+.pc-more { margin-top: 8px; font-size: var(--fs-sm); }
+.pc-more > summary { cursor: pointer; color: var(--text-mute); }
+.pc-cover { margin-top: 12px; }
+.pc-cover-note { margin: 4px 0 6px; font-size: var(--fs-xs); color: var(--text-mute); line-height: var(--lh-snug); }
+.pc-table { display: grid; gap: 2px; font-size: var(--fs-xs); overflow-x: auto; }
+.pc-tr { display: grid; grid-template-columns: minmax(9em, 2fr) repeat(6, minmax(3.2em, 1fr)); gap: 6px;
+  padding: 4px 0; border-bottom: var(--hairline) solid var(--border-soft); align-items: baseline; }
+.pc-th { color: var(--text-mute); font-weight: 700; }
+.pc-tr span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .pc-cols { grid-template-columns: 1fr; }
+  .pc-tr { grid-template-columns: minmax(8em, 2fr) repeat(6, minmax(2.6em, 1fr)); gap: 4px; }
+}
+/* L-7: the sharp-book mark under a pick's line. */
+.pp-sharp { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-dim);
+  letter-spacing: .02em; }
+/* The game page's "tonight" weather read, under the venue note. */
+.pk-tonight { margin-top: 12px; padding-top: 12px; border-top: var(--hairline) solid var(--border-soft); }
+.pk-tonight-k { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); margin-bottom: 6px; }
+.pk-tonight ul { margin: 0; padding-left: 18px; }
+.pk-tonight li { font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); margin: 4px 0; }
+/* The card's lines grid in the game page's header, a size up. */
+.gp-meta .gc-mkts { max-width: 480px; margin-top: 12px; }
+.gp-meta .gc-mk { padding: 8px; }
+.gp-meta .gc-mk i { font-size: var(--fs-xs); }
+.gp-meta .gc-mk b { font-size: var(--fs-md); }
+.gp-meta .gc-mk-teams b { font-size: var(--fs-md); }
+/* ---- The game page's hero, dressed as the Pick of the Day (2026-09-24) ----
+   The venue art fills the top band of the card and fades into its panel;
+   the matchup sits over the fade in the headline serif, a gold eyebrow
+   above it and the kickoff in mono under it. */
+.gp-hero.is-hero { display: block; position: relative; padding: 0; }
+.gp-hero.is-hero .gp-art {
+  position: absolute; left: 0; right: 0; top: 0; height: 320px; max-height: none;
+  border-radius: 0; display: block;
+}
+.gp-hero.is-hero .gp-art svg { width: 100%; height: 100%; max-height: none; }
+.gp-hero.is-hero .gp-art .venue-photo { border-radius: 0; object-fit: cover; }
+.gp-hero.is-hero .gp-art::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; background: var(--grad-gp-fade); pointer-events: none;
+}
+.gp-hero.is-hero .gp-art .status-badge, .gp-hero.is-hero .gp-art .venue-runners { z-index: 3; }
+.gp-hero.is-hero .gp-meta { position: relative; z-index: 1; padding: 150px 20px 20px; }
+.gp-hero.is-hero .gp-teams { margin-top: 8px; gap: 10px; font-family: var(--font-headline); font-size: var(--fs-2xl);
+  font-weight: 700; letter-spacing: 0; }
+.gp-hero.is-hero .gp-team-name { text-underline-offset: 5px; text-decoration-thickness: 1px; }
+.gp-hero.is-hero .gp-at { font-family: var(--font-sans); }
+.gp-hero.is-hero .gp-sub { font-family: var(--font-mono); color: var(--text-dim); }
+@media (min-width: 861px) {
+  .gp-hero.is-hero .gp-teams { font-size: var(--fs-3xl); }
+  .gp-hero.is-hero .gp-art { height: 380px; }
+  .gp-hero.is-hero .gp-meta { padding: 200px 28px 24px; }
+}
+.tp-verdicts { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+.tp-verdict { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--bg); border: var(--hairline) solid var(--border-soft); }
+.tp-verdict span { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-dim); }
+.tp-verdict b { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-md); }
+.tp-verdict em { font-style: normal; font-size: var(--fs-xs); color: var(--text-dim); }
+.tp-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px 92px; align-items: center; gap: 8px;
+  padding: 6px 0; border-top: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm); }
+.tp-head { border-top: 0; padding-top: 0; }
+.tp-head .tp-k { font-size: var(--fs-2xs); color: var(--text-dim); }
+.tp-team { display: grid; justify-items: center; gap: 4px; text-align: center; font-size: var(--fs-xs); }
+.tp-group { margin-top: 10px; padding: 6px 0 2px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text); border-top: var(--hairline) solid var(--border); }
+.tp-k { color: var(--text-dim); }
+.tp-cell { display: grid; justify-items: center; align-content: center; align-self: stretch; padding: 5px 4px;
+  border-radius: var(--radius-sm); background: var(--bg); border: var(--hairline) solid var(--border-soft);
+  line-height: var(--lh-tight); }
+.tp-cell b { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
+.tp-cell em { font-style: normal; font-size: var(--fs-2xs); color: var(--text-dim); }
+.tp-cell .tp-now { display: block; width: 100%; margin-top: 4px; padding-top: 4px; text-align: center;
+  white-space: nowrap; border-top: var(--hairline) solid var(--border-soft); font-family: var(--font-sans);
+  font-size: var(--fs-2xs); letter-spacing: .02em; color: var(--text-mute); }
+.tp-cell .tp-now-n { font-weight: 700; color: var(--text-dim); }
+.tp-cell.good { border-color: color-mix(in oklab, var(--good) 55%, transparent); }
+.tp-cell.good b, .tp-cell.good em { color: var(--good); }
+.tp-cell.bad { border-color: color-mix(in oklab, var(--bad) 55%, transparent); }
+.tp-cell.bad b, .tp-cell.bad em { color: var(--bad); }
+/* Which season the tape's ranks are (tapeBasis). */
+.tp-basis { margin: 4px 0 10px; font-size: var(--fs-xs); color: var(--text-dim); }
+/* The sides that lean harder on this season, and why (tapeChanges). */
+.tp-basis.tp-changed { margin-top: -6px; color: var(--text-mute); }
+/* THE GAME PLAN (gamePlanHTML): seven steps in a bettor's order, each a
+   card; the play rows are the board's own rows with the reason under. */
+.gplan-step { padding: 12px 14px; }
+.gplan-lines { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--fs-sm); }
+.gplan-lines li::marker { color: var(--brand); }
+.gplan .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none; display: grid; gap: 3px;
+  color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
+.gplan .sc-lines li::before { content: "· "; color: var(--brand); }
+.gplan .sc-lines li.gplan-tag::before { content: ""; }
+.gplan-row.avoid .ml-pct { background: color-mix(in oklab, var(--bad) 18%, transparent); color: var(--bad); }
+.gplan-row.gap .ml-pct { background: var(--bg); color: var(--text-dim); }
+.gplan-wx { width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-dim); }
+/* Where the money is going (moneySplitHTML) — the sportsbooks' split bars. */
+.gp-money { margin: 12px 0 4px; padding: 10px 12px; background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); }
+.gp-money-row + .gp-money-row { margin-top: 12px; }
+.gp-money-top { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: baseline;
+  font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.gp-money-top span:last-child { text-align: right; }
+.gp-money-top b { color: var(--text); font-weight: 800; }
+.gp-money-kind { color: var(--text-mute); font-size: var(--fs-xs); }
+.gp-money-bar { display: flex; gap: 3px; height: 6px; margin-top: 6px; }
+.gp-money-bar i { display: block; height: 100%; border-radius: 3px; min-width: 2px; }
+.gp-money-bar i.l { background: var(--brand); }
+.gp-money-bar i.r { background: var(--plum); }
+.gp-money-sub { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;
+  font-size: var(--fs-2xs); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gp-money-note { margin: 10px 0 0; color: var(--text-mute); }
+@media (max-width: 420px) { .gp-money-sub span:nth-child(2) { display: none; } }
+/* Every market's price on a game (crowdStripHTML). */
+.gp-crowd { margin: 10px 0 4px; }
+.gp-crowd-head { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 4px; }
+.gp-crowd-t { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.gp-crowd-t th, .gp-crowd-t td { padding: 4px 6px; text-align: right; border-bottom: var(--hairline) solid var(--border-soft); }
+.gp-crowd-t th[scope="row"], .gp-crowd-t thead th:first-child { text-align: left; }
+.gp-crowd-t thead th { color: var(--text-mute); font-weight: 600; }
+.gp-crowd-gap { margin: 6px 0 0; color: var(--text-mute); }
+.pp-actions .betit-box { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }

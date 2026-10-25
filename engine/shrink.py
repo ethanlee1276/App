@@ -52,7 +52,8 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/boot.js", "js/register-sw.js",
          # The pages split out of app.js (2026-10-24), trimmed the same way.
          "js/fantasy.js", "js/memes.js",
-         "js/record.js", "js/detail.js", "js/account.js", "js/more.js")
+         "js/record.js", "js/detail.js", "js/account.js", "js/more.js",
+         "css/record.css", "css/detail.css", "css/account.css", "css/more.css")
 
 #: HTML comments that are not commentary: `engine/routes.document` splices
 #: an entity's preview tags between these two markers, so they stay.

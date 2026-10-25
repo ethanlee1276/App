@@ -35,6 +35,7 @@ audit; these pin the four gaps it closed:
 Run directly: `python3 tests/test_research_parity.py`
 """
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -501,7 +502,7 @@ def test_the_game_page_says_when_inactives_post():
     assert 'state.sport !== "nfl"' in fn and "- 90" in fn and "inactives " in fn
     assert '["scheduled", "pre", "upcoming"].includes(st)' in fn, "while the game is still ahead"
     assert "${inactivesNote(g)}" in APP[APP.index('<div class="gp-sub">'):APP.index('<div class="gp-sub">') + 200]
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    css = styles_css()
     assert ".gp-inactives {" in css
     assert os.path.exists(os.path.join(ROOT, "docs", "RESEARCH_PARITY_2026-10-08.md"))
 

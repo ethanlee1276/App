@@ -148,3 +148,20 @@ def decl(name: str) -> str:
         if m:
             return src[m.start():_statement_end(src, m.start())]
     raise ValueError(f"no top-level declaration of {name!r} in app.js or any room")
+
+
+CSS = Path(__file__).resolve().parents[1] / "web" / "css"
+
+
+def room_sheets() -> list:
+    """The room stylesheets, in the order app.js names them (each loads with
+    its room, after styles.css)."""
+    app = (JS / "app.js").read_text(encoding="utf-8")
+    return list(dict.fromkeys(re.findall(r'roomCall\(\w+, "\w+", "js/[a-z0-9_-]+\.js", "css/([a-z0-9_-]+\.css)"', app)))
+
+
+def styles_css() -> str:
+    """styles.css, then every room's own sheet: the rules a page that only
+    some visits open moved out with its code (2026-10-24), in the cascade
+    order a browser applies them."""
+    return "\n".join((CSS / f).read_text(encoding="utf-8") for f in ["styles.css"] + room_sheets())

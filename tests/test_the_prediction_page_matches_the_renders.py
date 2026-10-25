@@ -9,6 +9,7 @@ width. Flow gets the render's league chips and sort; the proof room its
 callout, badge tiles and banded table.
 """
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import shutil
 import subprocess
@@ -17,7 +18,7 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
+CSS = styles_css()
 
 
 def _fn(name):
@@ -113,7 +114,7 @@ def test_the_board_stacks_on_a_phone_instead_of_squeezing():
     tail = CSS[i:]
     assert "@media (max-width: 1100px) {\n  .pmx .pm-layout { grid-template-columns: minmax(0, 1fr); }" in tail
     assert ".pmx .pm-detail:has(.pm-d-empty) { display: none; }" in tail
-    areas = re.search(r'\.pmx \.pm-table \.kx-row \{[^}]*grid-template-areas: ([^;]*);', tail).group(1)
+    areas = re.search(r'\.pmx \.pm-table \.kx-row \{[^}]*grid-template-areas: ([^;]*);', CSS).group(1)
     for area in ("sport", "title", "view", "k", "n", "m", "e", "meter"):
         assert re.search(rf'(?<![\w-]){area}(?![\w-])', areas), f"{area} has a place in the phone row"
     for k, word in (("k", "YES"), ("n", "NO"), ("m", "OURS"), ("e", "GAP")):

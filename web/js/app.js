@@ -2704,7 +2704,7 @@ document.addEventListener("click", (e) => {
 });
 
 // renderFeatures is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderFeatures(...a) { return roomCall(renderFeatures, "renderFeatures", "js/more.js", null, a); }
+function renderFeatures(...a) { return roomCall(renderFeatures, "renderFeatures", "js/more.js", "css/more.css", a); }
 
 const REFERENCE_VIEWS = ["why", "about", "methodology", "features"];
 /* PAGES THAT ARE NOT ABOUT A LEAGUE. Ethan, 2026-09-27, circling the
@@ -12523,7 +12523,7 @@ function likelyNotes(r) {
 }
 
 // renderPropPage is in js/detail.js, loaded the first time its page opens (loadRoom).
-function renderPropPage(...a) { return roomCall(renderPropPage, "renderPropPage", "js/detail.js", null, a); }
+function renderPropPage(...a) { return roomCall(renderPropPage, "renderPropPage", "js/detail.js", "css/detail.css", a); }
 
 /* ============================================================
    The sim as a toy (roadmap #7) — watch the distribution draw itself
@@ -13149,7 +13149,7 @@ function loadReport() {
 }
 
 // renderGamePage is in js/detail.js, loaded the first time its page opens (loadRoom).
-function renderGamePage(...a) { return roomCall(renderGamePage, "renderGamePage", "js/detail.js", null, a); }
+function renderGamePage(...a) { return roomCall(renderGamePage, "renderGamePage", "js/detail.js", "css/detail.css", a); }
 
 /* ============================================================
    Trending view — momentum & value from the model
@@ -15185,7 +15185,7 @@ function initMasthead() {
 }
 
 // renderLab is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderLab(...a) { return roomCall(renderLab, "renderLab", "js/more.js", null, a); }
+function renderLab(...a) { return roomCall(renderLab, "renderLab", "js/more.js", "css/more.css", a); }
 
 
 /* ============================================================
@@ -15573,10 +15573,10 @@ let _zenoCalMonth = null;    // "YYYY-MM" in view on his calendar; null = the la
 window._zenoCalSetMonth = (ym) => { _zenoCalMonth = ym; renderZeno(); };
 
 // renderZeno is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderZeno(...a) { return roomCall(renderZeno, "renderZeno", "js/more.js", null, a); }
+function renderZeno(...a) { return roomCall(renderZeno, "renderZeno", "js/more.js", "css/more.css", a); }
 
 // renderRecord is in js/record.js, loaded the first time its page opens (loadRoom).
-function renderRecord(...a) { return roomCall(renderRecord, "renderRecord", "js/record.js", null, a); }
+function renderRecord(...a) { return roomCall(renderRecord, "renderRecord", "js/record.js", "css/record.css", a); }
 
 /* Long explanatory prose is the right thing to have and the wrong thing to
    lead with — same progressive-disclosure pattern the section subtitles use.
@@ -16864,7 +16864,7 @@ function pmxRoom(id) {
 }
 
 // renderIntel is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderIntel(...a) { return roomCall(renderIntel, "renderIntel", "js/more.js", null, a); }
+function renderIntel(...a) { return roomCall(renderIntel, "renderIntel", "js/more.js", "css/more.css", a); }
 
 /* ============================================================
    MY BETS — the user's OWN sportsbook bets, tracked locally
@@ -17392,7 +17392,7 @@ function mbBulkShow(text) {
 }
 
 // renderMyBets is in js/account.js, loaded the first time its page opens (loadRoom).
-function renderMyBets(...a) { return roomCall(renderMyBets, "renderMyBets", "js/account.js", null, a); }
+function renderMyBets(...a) { return roomCall(renderMyBets, "renderMyBets", "js/account.js", "css/account.css", a); }
 
 /* Weather — the Zeno sidebar's page (Ethan, 2026-08-12), built from
    numbers we already price with: each game's slate weather, plus the
@@ -18070,7 +18070,7 @@ function renderBankrollExtras() {
 }
 
 // renderStreak is in js/account.js, loaded the first time its page opens (loadRoom).
-function renderStreak(...a) { return roomCall(renderStreak, "renderStreak", "js/account.js", null, a); }
+function renderStreak(...a) { return roomCall(renderStreak, "renderStreak", "js/account.js", "css/account.css", a); }
 
 /* ROOMS LOADED ON FIRST USE (2026-10-24, docs/IDEAS.md "split app.js
    further"). Rocket Radar (js/memes.js), the Fantasy room (js/fantasy.js),
@@ -19516,7 +19516,7 @@ function dcMarkWelcome() {
 }
 
 // renderDiscord is in js/account.js, loaded the first time its page opens (loadRoom).
-function renderDiscord(...a) { return roomCall(renderDiscord, "renderDiscord", "js/account.js", null, a); }
+function renderDiscord(...a) { return roomCall(renderDiscord, "renderDiscord", "js/account.js", "css/account.css", a); }
 
 window.pwToPlans = function () {
   const el = document.querySelector(".pw-plans");
@@ -19529,7 +19529,7 @@ window.pwSignIn = function () {
 };
 
 // renderPaywall is in js/account.js, loaded the first time its page opens (loadRoom).
-function renderPaywall(...a) { return roomCall(renderPaywall, "renderPaywall", "js/account.js", null, a); }
+function renderPaywall(...a) { return roomCall(renderPaywall, "renderPaywall", "js/account.js", "css/account.css", a); }
 
 let _pwStatus = null;
 
@@ -19752,7 +19752,7 @@ window.coBack = function () {
 };
 
 // renderBilling is in js/account.js, loaded the first time its page opens (loadRoom).
-function renderBilling(...a) { return roomCall(renderBilling, "renderBilling", "js/account.js", null, a); }
+function renderBilling(...a) { return roomCall(renderBilling, "renderBilling", "js/account.js", "css/account.css", a); }
 
 window.redeemCode = async function (btn) {
   const input = document.getElementById("code-in");
@@ -19950,7 +19950,7 @@ window.acctDelete = async function (btn) {
 };
 
 // renderAccount is in js/account.js, loaded the first time its page opens (loadRoom).
-function renderAccount(...a) { return roomCall(renderAccount, "renderAccount", "js/account.js", null, a); }
+function renderAccount(...a) { return roomCall(renderAccount, "renderAccount", "js/account.js", "css/account.css", a); }
 
 /* A linked platform, drawn the same for both: what it is, what it is
    linked to, and the one button that undoes it. A connect with no
@@ -20349,7 +20349,7 @@ function injRow(r, withTeam) {
 }
 
 // renderInjuries is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderInjuries(...a) { return roomCall(renderInjuries, "renderInjuries", "js/more.js", null, a); }
+function renderInjuries(...a) { return roomCall(renderInjuries, "renderInjuries", "js/more.js", "css/more.css", a); }
 
 /* Team unit rankings — Ethan, 2026-09-02: "For nfl and cfb on the
    rankings page, we should have a section ranking the current ranking
@@ -20467,10 +20467,10 @@ async function pressureWarm(sports) {
 }
 
 // renderStandings is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderStandings(...a) { return roomCall(renderStandings, "renderStandings", "js/more.js", null, a); }
+function renderStandings(...a) { return roomCall(renderStandings, "renderStandings", "js/more.js", "css/more.css", a); }
 
 // renderRosters is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderRosters(...a) { return roomCall(renderRosters, "renderRosters", "js/more.js", null, a); }
+function renderRosters(...a) { return roomCall(renderRosters, "renderRosters", "js/more.js", "css/more.css", a); }
 
 /* ---------------- League desk: lineup + trades --------------------------
 
@@ -21853,7 +21853,7 @@ function teamStatsHTML(st, sport) {
 let _teamOppAll = false;
 
 // renderTeamPage is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderTeamPage(...a) { return roomCall(renderTeamPage, "renderTeamPage", "js/more.js", null, a); }
+function renderTeamPage(...a) { return roomCall(renderTeamPage, "renderTeamPage", "js/more.js", "css/more.css", a); }
 
 async function teamLoadSeason(season) {
   const st = _teamState;
@@ -22784,7 +22784,7 @@ function fighterColHTML(f) {
 }
 
 // renderUFC is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderUFC(...a) { return roomCall(renderUFC, "renderUFC", "js/more.js", null, a); }
+function renderUFC(...a) { return roomCall(renderUFC, "renderUFC", "js/more.js", "css/more.css", a); }
 
 /* ============================================================
    Why Us — positioning with receipts, plus the open math layer.
@@ -23202,10 +23202,10 @@ async function renderVerify() {
 }
 
 // renderStatus is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderStatus(...a) { return roomCall(renderStatus, "renderStatus", "js/more.js", null, a); }
+function renderStatus(...a) { return roomCall(renderStatus, "renderStatus", "js/more.js", "css/more.css", a); }
 
 // renderAbout is in js/more.js, loaded the first time its page opens (loadRoom).
-function renderAbout(...a) { return roomCall(renderAbout, "renderAbout", "js/more.js", null, a); }
+function renderAbout(...a) { return roomCall(renderAbout, "renderAbout", "js/more.js", "css/more.css", a); }
 
 async function renderWhy() {
   const host = document.getElementById("why-body");
@@ -26646,7 +26646,7 @@ function msgShareRow(sh, sentSide) {
 }
 
 // renderMessages is in js/account.js, loaded the first time its page opens (loadRoom).
-function renderMessages(...a) { return roomCall(renderMessages, "renderMessages", "js/account.js", null, a); }
+function renderMessages(...a) { return roomCall(renderMessages, "renderMessages", "js/account.js", "css/account.css", a); }
 
 /* The thread column's height, MEASURED: from wherever the column
    actually starts down to the tab bar (or the viewport edge where there
@@ -30153,7 +30153,7 @@ function pbpGroups(d) {
 }
 
 // renderPbpPage is in js/detail.js, loaded the first time its page opens (loadRoom).
-function renderPbpPage(...a) { return roomCall(renderPbpPage, "renderPbpPage", "js/detail.js", null, a); }
+function renderPbpPage(...a) { return roomCall(renderPbpPage, "renderPbpPage", "js/detail.js", "css/detail.css", a); }
 
 /* The last few at-bats, on the card, from the same fast file as the score.
 

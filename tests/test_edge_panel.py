@@ -18,6 +18,7 @@ none can say something kinder than the numbers.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
@@ -25,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = app_js()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 
 
 def _fn(name):

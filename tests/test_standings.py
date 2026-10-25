@@ -15,6 +15,7 @@ nothing on it may be predicted.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -218,7 +219,7 @@ def test_the_bracket_round_names_share_one_line():
     """Letting the round name ride the space-around distribution walked
     the headings diagonally down the page — the later the round, the lower
     its label. Only the matchups spread out to meet the next round."""
-    css = _read("web", "css", "styles.css")
+    css = styles_css()
     js = app_js()
     assert ".brk-matches" in css and "brk-matches" in js, \
         "the matchups have no wrapper, so the heading still spreads"
@@ -423,7 +424,7 @@ def test_the_weather_rows_read_as_columns():
     body = js[i:i + 3000]
     assert '<span class="wx-temp">' in body and '<span class="wx-wind' in body
     assert "Dome" in body
-    css = _read("web", "css", "styles.css")
+    css = styles_css()
     assert ".wx-wind.windy { color: var(--warn); }" in css
 
 

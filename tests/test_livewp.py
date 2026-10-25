@@ -13,6 +13,7 @@ with constants of its own to drift.
 """
 
 import math
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import sys
 
@@ -360,7 +361,7 @@ def test_the_reading_is_nested_so_absent_is_not_zero():
 # ------------------------------------------------ and onto the page itself
 
 APP = app_js()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 
 
 def _card_fn():

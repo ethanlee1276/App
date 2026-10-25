@@ -33,6 +33,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from _app import styles_css  # noqa: E402
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -42,7 +43,7 @@ def _read(*parts):
 
 
 HTML = _read("web", "index.html")
-CSS = _read("web", "css", "styles.css")
+CSS = styles_css()   # styles.css and the rooms' sheets (the Record page's chips are in css/record.css)
 APP = _read("web", "js", "app.js")
 
 

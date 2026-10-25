@@ -15,6 +15,7 @@ Run directly: `python3 tests/test_pressure.py`
 """
 
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import shutil
 import sqlite3
@@ -32,7 +33,7 @@ from engine import db, pressure
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 
 
 def _conn(path=":memory:"):

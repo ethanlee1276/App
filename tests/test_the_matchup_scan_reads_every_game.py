@@ -9,6 +9,7 @@ a prop. The reads and their props are paid (`scan_reads`); the rest of
 the scan rides free on the game.
 """
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 import types
 
@@ -20,7 +21,7 @@ from engine.sources import nflscheme as N                        # noqa: E402
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 APP = app_js()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 BUILD = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
 
 

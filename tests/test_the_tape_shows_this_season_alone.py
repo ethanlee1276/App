@@ -5,6 +5,7 @@ two games the blend is 25% this season (the measured forecast), so a
 defence 10th this year and 30th last read "28th · Weak" and nothing said
 what this season alone says."""
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -46,7 +47,7 @@ def test_the_nfl_ratings_stamp_it_too():
 
 def test_the_card_draws_it_and_says_what_it_is():
     assert 'This season <span class="tp-now-n">${ordinal(now)}</span></small>' in APP
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    css = styles_css()
     rule = css[css.index(".tp-cell .tp-now {"):].split("}")[0]
     assert "white-space: nowrap" in rule and "text-align: center" in rule and "font-mono" not in rule, \
         "one centred line, never wrapped in mono (Ethan: 'it looks buggy')"

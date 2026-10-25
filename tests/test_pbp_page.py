@@ -14,6 +14,7 @@ cover this page too.
 """
 
 import re
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 from pathlib import Path
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -23,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 APP = app_js()
 HTML = (ROOT / "web" / "index.html").read_text()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 
 
 def _fn(name):

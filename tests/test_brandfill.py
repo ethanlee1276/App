@@ -40,6 +40,7 @@ Run directly: `python3 tests/test_brandfill.py`
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 
@@ -48,7 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import contrast as ct                                           # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 WHITE = (255, 255, 255)
 
 #: The tier `contrast.py` calls "body text, minimum". Small UI labels are

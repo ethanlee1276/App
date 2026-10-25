@@ -22,6 +22,7 @@ Run directly: `python3 tests/test_drivesim.py`
 """
 
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import sys
 import tempfile
@@ -132,8 +133,7 @@ def test_the_replay_panel_is_shares_not_picks():
     assert "not a pick" in block, "the panel must disclaim itself"
     assert "prices nothing until the public" in block
     assert "gp-sim-bar" in block, "the histogram draws bars, not a line"
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     assert ".gp-sim {" in css and ".gp-sim-hist {" in css
 
 

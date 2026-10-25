@@ -20,14 +20,14 @@ Run directly: `python3 tests/test_measure.py`
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"),
-           encoding="utf-8").read()
+CSS = styles_css()
 
 #: The comment block explains the old numbers, so a raw search finds the
 #: reasoning instead of the code.

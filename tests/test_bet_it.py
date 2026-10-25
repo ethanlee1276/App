@@ -7,6 +7,7 @@ Fixtures only; no network, nothing written outside a temp directory.
 Run directly: `python3 tests/test_bet_it.py`
 """
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import sys
 import tempfile
@@ -289,7 +290,7 @@ def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
     assert 'fetch("img/books/manifest.json"' in fn and 'data-onerr="remove"' in fn
     # The best price is tagged, and the book you took last time goes first.
     assert "Best price" in fn and "Your book" in fn and 'localStorage.setItem(BET_BOOK_KEY' in fn
-    css = (ROOT / "web" / "css" / "styles.css").read_text()
+    css = styles_css()
     sheet = css[css.index(".betit-sheet {"):css.index("body.betit-open")]
     assert "#betit-sheet" not in css, "a class, not an id: the Most Likely block forbids a #"
     assert "color: var(--text)" in sheet[:sheet.index(".betit-x {")], "the panel sets its own text colour"
@@ -336,7 +337,7 @@ def test_the_whole_bar_opens_the_sheet_not_just_the_word():
     round the bar, and the Home bar centres its word. The small chips
     (.mini) are outlined pills that are their whole button, so the card
     around a chip still opens the card: no stretched area there."""
-    css = (ROOT / "web" / "css" / "styles.css").read_text()
+    css = styles_css()
     assert ".betit-box.btn { position: relative; }" in css
     assert '.betit-box.btn .betit::after { content: ""; position: absolute; inset: 0; }' in css
     assert ".betit-box.btn:has(.betit:focus-visible) { outline: var(--focus-w) solid var(--brand);" in css

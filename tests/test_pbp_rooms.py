@@ -11,7 +11,9 @@ built, on purpose: the summary's team block has not been probed.
 """
 
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -27,7 +29,7 @@ from engine.sources import nflpreseason, cfbdata                    # noqa: E402
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 LIVE_BUILD = (ROOT / "live_build.py").read_text()
 
 
@@ -184,7 +186,8 @@ def test_the_page_has_four_real_tabs_and_says_what_is_not_built():
     assert "pbpBoxGroupHTML(mine, g)" in players and "pbpBoxGenericHTML(" in players, players
     for sel in (".pbp-tab.active", ".pbp-prop-row", ".pbp-bx-who"):
         assert sel in CSS, sel
-    assert "min-height: 44px" in CSS[CSS.index(".pbp-tab {"):CSS.index(".pbp-tab.active")], "a thumb-sized tab"
+    tab = re.search(r"(?m)^\.pbp-tab \{[^}]*\}", CSS).group(0)
+    assert "min-height: 44px" in tab, "a thumb-sized tab"
 
 
 if __name__ == "__main__":

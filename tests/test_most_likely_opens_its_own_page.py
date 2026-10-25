@@ -15,6 +15,7 @@ refusals and gates stay on the edge board. The address says so
 (#pick/<slug>/likely), so a refresh or a shared link keeps it.
 """
 import json
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import os
 import shutil
 import subprocess
@@ -27,7 +28,7 @@ sys.path.insert(0, ROOT)
 
 APP = app_js()
 VIS = open(os.path.join(ROOT, "web", "js", "visuals.js"), encoding="utf-8").read()
-CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 
 
 def _fn(src, name):
@@ -171,9 +172,13 @@ def test_the_chart_shows_the_chance_not_the_edge_boards_ev():
 
 
 def test_its_styles_use_the_tokens():
-    block = CSS[CSS.index("A Most Likely pick, explained"):]
+    # The section's own rules moved with the pick page's code (css/detail.css,
+    # 2026-10-24) or stayed in the sheet; the tokens-only rule is the sheet's
+    # own tail, and the room's copy of those rules is word for word.
+    sheet = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    block = sheet[sheet.index("A Most Likely pick, explained"):]
     for cls in (".why-likely", ".wl-head", ".wl-item", ".wl-moves", ".wl-foot", ".pp-board", ".pp-book"):
-        assert cls in block, cls
+        assert cls in CSS, cls
     assert "px solid" not in block and "#" not in block.split("*/", 1)[1], "tokens only"
 
 

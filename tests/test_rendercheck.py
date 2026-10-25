@@ -57,6 +57,10 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 SOURCES = " ".join(
     open(os.path.join(ROOT, p), encoding="utf-8").read()
     for p in ("web/js/app.js", "web/css/styles.css", "web/index.html"))
+# The rooms app.js loads on first use, and their sheets (2026-10-24).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _app import app_js as _app_js, styles_css as _styles_css  # noqa: E402
+SOURCES += " " + _app_js() + " " + _styles_css()
 
 
 def _selectors():

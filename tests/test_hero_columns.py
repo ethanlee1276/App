@@ -29,6 +29,7 @@ to the hero fails here instead of silently wrapping on someone's phone.
 """
 
 import re
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 from pathlib import Path
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -37,7 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 APP = app_js()
-CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+CSS = styles_css()
 
 HERO = APP[APP.index('<div class="card pbp-hero">'):APP.index('<div class="card pbp-parkcard">')]
 

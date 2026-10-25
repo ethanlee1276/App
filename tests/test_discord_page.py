@@ -28,7 +28,7 @@ one place nobody would think to look for the leak.
 """
 
 import os
-from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+from _app import app_js, styles_css  # noqa: E402  (app.js, its rooms, and every sheet)
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -231,7 +231,7 @@ def test_nothing_in_the_room_panel_is_an_invented_message():
 
 # --- the shell --------------------------------------------------------------
 def test_the_page_has_styles():
-    css = _read(CSS)
+    css = styles_css()
     for cls in ("dc-hero", "dc-main", "dc-mock", "dc-cta", "dc-grid",
                 # `sb-disc` retired 2026-08-22 with the sidebar row it
                 # styled — "we can remove the discord button in the 'my
@@ -242,7 +242,7 @@ def test_the_page_has_styles():
 
 def test_the_room_panel_cannot_push_the_page_sideways():
     """A channel name is arbitrary text in a fixed column."""
-    css = _read(CSS)
+    css = styles_css()
     rule = css[css.index(".dc-mock {"):]
     rule = rule[:rule.index("}")]
     assert "min-width: 0" in rule and "overflow: hidden" in rule

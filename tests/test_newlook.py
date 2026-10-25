@@ -27,6 +27,7 @@ Run directly: `python3 tests/test_newlook.py`
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -34,7 +35,7 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CSS = open(os.path.join(ROOT, "web/css/styles.css"), encoding="utf-8").read()
+CSS = styles_css()
 APP = app_js()  # + the meme-coin page app.js loads on first use (js/memes.js, 2026-10-24)
 HTML = open(os.path.join(ROOT, "web/index.html"), encoding="utf-8").read()
 
@@ -752,8 +753,7 @@ def test_the_drawer_outranks_its_scrim_by_source_order_too():
     assert i_scrim < i_draw, \
         "the scrim must precede the drawer, or a promoted blur layer hides it"
 
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
+    css = styles_css()
     j = css.index("body.menu-open #scrim")
     rule = css[j:css.index("}", j)]
     assert "backdrop-filter" not in rule, \
@@ -807,7 +807,7 @@ def test_a_dead_pipeline_cannot_hide_behind_a_small_number():
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     assert 'id="stalebar"' in html and "hidden" in html[html.index('id="stalebar"'):
                                                         html.index('id="stalebar"') + 60]
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    css = styles_css()
     assert "#stalebar {" in css and "#stalebar[hidden]" in css
 
 

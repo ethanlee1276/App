@@ -13,6 +13,7 @@ undercut them is absent.
 """
 
 import os
+from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import re
 import sys
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
@@ -149,7 +150,7 @@ def test_the_help_links_are_real_tap_targets_on_a_phone():
     """They were 15px tall — the most important links on the page and the
     hardest to hit. Somebody reaching for a helpline should not have to
     aim."""
-    css = _read("web", "css", "styles.css")
+    css = styles_css()
     assert ".about-list a" in css
     # Search EVERY coarse-pointer block, not just the last one in the
     # file. Pinning it to the last was never the requirement — it only
