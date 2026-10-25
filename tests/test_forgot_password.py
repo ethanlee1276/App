@@ -223,7 +223,7 @@ def test_a_reset_carries_a_password_so_it_is_refused_over_cleartext():
 
 
 def test_sign_up_asks_for_the_password_twice():
-    i = APP.index("function acctFieldsHTML(mode)")
+    i = APP.index("function acctFieldsHTML(mode")
     fields = APP[i:APP.index("\n}\n", i)]
     assert 'acctPwHTML("acct-pw2"' in fields and fields.count('"new-password"') == 2
     j = APP.index("window.acctAuth = async function")
@@ -233,7 +233,7 @@ def test_sign_up_asks_for_the_password_twice():
 
 
 def test_forgot_password_is_offered_wherever_someone_gets_stuck():
-    i = APP.index("function acctFieldsHTML(mode)")
+    i = APP.index("function acctFieldsHTML(mode")
     assert 'data-act="acctGoForgot"' in APP[i:APP.index("\n}\n", i)], "the sign-in form"
     k = APP.index("function signupHTML()")
     assert 'data-act="acctGoForgot"' in APP[k:APP.index("\n}\n", k)], "the sign-up page"

@@ -1078,6 +1078,21 @@ const ICON_PATHS = {
   shield: '<path d="M8 1.6l5.4 2.1v4.1c0 3-2.2 5.4-5.4 6.6'
         + '-3.2-1.2-5.4-3.6-5.4-6.6V3.7z"/><path d="M5.6 8.1l1.7 1.8 3.2-3.5"/>',
   bolt: '<path d="M9.2 1.4L3.4 9h3.6l-.6 5.6L12.6 7H9z"/>',
+  // THE SETTINGS SCREEN'S ROWS (2026-10-25, account.js settingsHTML): the
+  // marks a phone's own settings use for the same rows.
+  mail: '<rect x="1.8" y="3.4" width="12.4" height="9.2" rx="1.6"/><path d="M2.4 4.4L8 8.8l5.6-4.4"/>',
+  sync: '<path d="M13.2 6.4A5.4 5.4 0 003.4 4.6L2.2 6"/><path d="M2.2 2.6V6h3.4"/>'
+      + '<path d="M2.8 9.6a5.4 5.4 0 009.8 1.8l1.2-1.4"/><path d="M13.8 13.4V10h-3.4"/>',
+  card: '<rect x="1.6" y="3.4" width="12.8" height="9.2" rx="1.6"/><path d="M1.6 6.6h12.8M4 10.2h2.6"/>',
+  logout: '<path d="M6.4 2.4H3.6a1.2 1.2 0 00-1.2 1.2v8.8a1.2 1.2 0 001.2 1.2h2.8"/><path d="M10.4 11l3-3-3-3M13.4 8H6.2"/>',
+  trash: '<path d="M2.6 4.2h10.8M6.2 4.2V2.6h3.6v1.6"/><path d="M3.8 4.2l.7 9.2h7l.7-9.2"/><path d="M6.6 6.8v4.4M9.4 6.8v4.4"/>',
+  download: '<path d="M8 2v8.2M4.8 7.2L8 10.4l3.2-3.2"/><path d="M2.6 12.2v1.4h10.8v-1.4"/>',
+  palette: '<path d="M8 1.8a6.2 6.2 0 100 12.4c.9 0 1.3-.6 1.3-1.2 0-.4-.2-.7-.4-1-.3-.3-.4-.6-.4-1 0-.7.6-1.3 1.3-1.3'
+         + 'h1.5A2.9 2.9 0 0014.2 7 6 6 0 008 1.8z"/><path d="M4.9 7.4v.01M7.2 4.8v.01M10.4 5.2v.01"/>',
+  compass: '<circle cx="8" cy="8" r="6.2"/><path d="M10.6 5.4L9.2 9.2 5.4 10.6l1.4-3.8z"/>',
+  link: '<path d="M6.8 9.2a2.6 2.6 0 003.7 0l2.2-2.2a2.6 2.6 0 00-3.7-3.7l-.9.9"/>'
+      + '<path d="M9.2 6.8a2.6 2.6 0 00-3.7 0L3.3 9a2.6 2.6 0 003.7 3.7l.9-.9"/>',
+  user: '<circle cx="8" cy="5.4" r="2.8"/><path d="M2.8 14a5.2 5.2 0 0110.4 0"/>',
   // Two more for Ethan's UFC render (2026-08-25): the graded count wears
   // a star and the venue notice wears an information mark. Same 16-unit
   // stroke grid as every other one here — an icon library would be the
@@ -1200,6 +1215,45 @@ function icon(name, size = 13) {
   return `<svg class="ic" viewBox="0 0 16 16" width="${size}" height="${size}"
     fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
     stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
+}
+
+/* SETTINGS ROWS (2026-10-25, docs/VISUAL_AUDIT.md): the account page's
+   settings (account.js settingsHTML) and the Alerts page's switches draw
+   the same groups and rows; the look is "SETTINGS LISTS" in styles.css. */
+function setIco(name, tone = "") {
+  return `<span class="set-ico${tone ? " " + tone : ""}" aria-hidden="true">${icon(name, 16)}</span>`;
+}
+
+/* One row. With `attrs` (what it does, as data-* attributes) it is a
+   button; `href` makes it a link; `tag: "label"` wraps a switch so the
+   whole row flips it; otherwise it only shows a value. Titles and values
+   arrive escaped. */
+function setItem({ tag, href, ico, tone, lead, title, sub, subCls, val, end, chev, attrs, danger, gold }) {
+  const t = tag || (href ? "a" : attrs ? "button" : "div");
+  const open = t === "a" ? `a href="${setHref(href)}"` : t === "button" ? 'button type="button"' : t;
+  // `lead`: something of the row's own in the tile's place (a friend's initials).
+  const cls = `set-item${ico || lead ? "" : " bare"}${danger ? " danger" : ""}${gold ? " gold" : ""}`;
+  return `<${open} class="${cls}"${attrs ? " " + attrs : ""}>${lead || (ico ? setIco(ico, tone) : "")}
+    <span class="set-main"><span class="set-title">${title}</span>${sub || subCls
+      ? `<span class="set-sub${subCls ? " " + subCls : ""}">${sub || ""}</span>` : ""}</span>
+    <span class="set-end">${val ? `<span class="set-val">${val}</span>` : ""}${end || ""}${
+      chev ? `<span class="set-chev">${icon("chev", 14)}</span>` : ""}</span></${t}>`;
+}
+
+/* A row links inside the site only — a page's #route or one of its own
+   .html pages — so no address from outside can become a row's link. */
+function setHref(h) {
+  const s = String(h == null ? "" : h);
+  return /^(#[a-z0-9/-]*|[a-z0-9-]+\.html)$/i.test(s) ? s : "#";
+}
+
+function setGroup(head, rows, foot = "") {
+  return `<section class="set-group">${head ? `<h2 class="set-group-h">${head}</h2>` : ""}
+    <div class="set-list">${rows.join("")}</div>${foot ? `<p class="set-foot">${foot}</p>` : ""}</section>`;
+}
+
+function setSwitch(on, attrs) {
+  return `<button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" ${attrs}></button>`;
 }
 
 /* A drawn mark sized to sit inside a line of text. `icon()` defaults to
@@ -6881,10 +6935,9 @@ function renderSlateHorizon() {
   // played now →") retired with the preseason block, 2026-08-25. The
   // strip's own sentence is complete without something else to point at.
   host.innerHTML = `
-    <p class="slate-horizon">${icon("clock", 14)}
-      This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${
+    <p class="slate-horizon">${icon("clock", 14)}<span>This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${
         cd ? `first one starts in <b>${escapeHtml(cd)}</b>`
-           : `${days} days out`}. Nothing on it is tonight.</p>`;
+           : `${days} days out`}. Nothing on it is tonight.</span></p>`;
   clearTimeout(_horizonTimer);
   if (cd) _horizonTimer = setTimeout(renderSlateHorizon, 60000);
 }
@@ -17861,28 +17914,38 @@ function renderPushZone(note) {
   const on = !!(saved && saved.endpoint);
   const signedIn = !!(_acctUser && _acctUser.signed_in);
   const topics = ((saved && saved.topics) || ["posted", "settled"]).concat((saved && saved.mine) || []);
-  const box = (t, label, off) => `<label class="push-t"><input type="checkbox" data-push-topic="${t}"${
-    topics.includes(t) ? " checked" : ""}${kind === "home-screen" || off ? " disabled" : ""}> ${label}</label>`;
-  host.innerHTML = `<div class="card push-card">
-      <div class="push-h">${icon("bell", 18)}<b>Alerts on this phone</b>
-        <span class="push-state${on ? " on" : ""}">${on ? "On" : "Off"}</span></div>
-      ${kind === "home-screen"
-        ? `<p class="push-sub">On iPhone, Apple sends a site’s alerts only once it is on your Home Screen:
-            tap Share, then <b>Add to Home Screen</b>, open Qellys from there and turn them on here.</p>`
-        : `<p class="push-sub">A tap on your lock screen when tonight’s picks go up and when last night is graded.
-            Counts and the record only — never a pick on a lock screen.</p>
-          <div class="push-ts">${box("posted", "Tonight’s picks are up")}${box("settled", "Last night is graded")}</div>
-          <p class="push-sub push-mine-h"><b>Yours</b> — ${signedIn
-            ? "your own watches and saved parlays. Only your words and your ticket, only on phones you are signed in on."
-            : "sign in for alerts on your own watches and saved parlays."}</p>
-          <div class="push-ts">${box("watches", "A watch of mine catches something (members)", !signedIn)}${
-            box("bets", "My parlay: on, last leg, settled", !signedIn)}</div>
-          <button type="button" class="btn ${on ? "ghost" : "primary"}" data-push-go="${on ? "off" : "on"}">${
-            on ? "Turn alerts off" : "Turn alerts on"}</button>`}
-      ${note ? `<p class="push-note" role="status">${escapeHtml(note)}</p>` : ""}</div>`;
+  // A SETTINGS SCREEN, NOT A FORM (2026-10-25, docs/VISUAL_AUDIT.md S9): one
+  // switch for the phone, a switch a row for each kind of alert, the way a
+  // phone's own notification settings read. Until alerts are on, a kind's
+  // switch is only a choice.
+  const box = (t, label, off) => setItem({ title: label, end: setSwitch(topics.includes(t),
+    `data-push-topic="${t}" aria-label="${label}"${off ? " disabled" : ""}`) });
+  host.innerHTML = (kind === "home-screen"
+    ? setGroup("Alerts on this phone", [setItem({ ico: "bell", tone: "red", title: "Add Qellys to your Home Screen",
+        sub: "Then open it from there and turn alerts on here" })],
+      "On iPhone, Apple sends a site’s alerts only once it is on your Home Screen: tap Share, then <b>Add to Home Screen</b>.")
+    : setGroup("Alerts on this phone", [
+        setItem({ ico: "bell", tone: "red", title: "Alerts", sub: on ? "On for this phone" : "Off",
+                  end: setSwitch(on, `data-push-go="${on ? "off" : "on"}" aria-label="Alerts on this phone"`) }),
+        box("posted", "Tonight’s picks are up"),
+        box("settled", "Last night is graded"),
+      ], "A tap on your lock screen when tonight’s picks go up and when last night is graded. "
+        + "Counts and the record only — never a pick on a lock screen.")
+      + setGroup("Yours", [
+        box("watches", "A watch of mine catches something (members)", !signedIn),
+        box("bets", "My parlay: on, last leg, settled", !signedIn),
+      ], signedIn ? "Your own watches and saved parlays. Only your words and your ticket, only on phones you are signed in on."
+        : "Sign in for alerts on your own watches and saved parlays."))
+    + (note ? `<p class="set-foot push-note" role="status">${escapeHtml(note)}</p>` : "");
+  // Off, each kind is a choice for later, drawn dimmer than a live one.
+  host.classList.toggle("push-off", !on);
   host.querySelectorAll("[data-push-go], [data-push-topic]").forEach((el) => el.addEventListener(
-    el.matches("[data-push-go]") ? "click" : "change", async () => {
-      const picked = [...host.querySelectorAll("[data-push-topic]:checked")].map((c) => c.dataset.pushTopic);
+    "click", async () => {
+      if (el.disabled) return;
+      if (el.matches("[data-push-topic]")) {
+        el.setAttribute("aria-checked", el.getAttribute("aria-checked") === "true" ? "false" : "true");
+      }
+      const picked = [...host.querySelectorAll('[data-push-topic][aria-checked="true"]')].map((c) => c.dataset.pushTopic);
       const turnOff = el.dataset.pushGo === "off" || (el.matches("[data-push-topic]") && !picked.length);
       if (el.matches("[data-push-topic]") && !on) return;           // just a choice until it is on
       try {
@@ -18633,7 +18696,10 @@ window.acctTogglePw = function (btn) {
    typo is caught at the box rather than after the button. Enter in any
    box presses the card's button, the way every sign-in form behaves. */
 function acctPwHTML(cls, placeholder, label, autocomplete, pair = false) {
-  return `<div class="acct-pw-wrap">
+  // The label is shown over the box (2026-10-25, docs/VISUAL_AUDIT.md S7);
+  // the input keeps its aria-label so the eye inside the label is not
+  // read as part of the field's name.
+  return `<label class="acct-field"><span class="acct-field-k">${label}</span><span class="acct-pw-wrap">
         <input type="password" class="${cls}" placeholder="${placeholder}"
           autocomplete="${autocomplete}" maxlength="200"
           aria-label="${label}" data-key="acctEnter"${
@@ -18645,7 +18711,7 @@ function acctPwHTML(cls, placeholder, label, autocomplete, pair = false) {
             10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/>
           </svg>
         </button>
-      </div>`;
+      </span></label>`;
 }
 
 /* THE PASSWORD TWICE, on sign-up (Ethan, 2026-10-11: "you should have to
@@ -18656,27 +18722,30 @@ function acctPwHTML(cls, placeholder, label, autocomplete, pair = false) {
 /* The one email box — sign-in, sign-up and the Forgot page all draw it
    from here, so its hints cannot drift between them. */
 function acctEmailHTML(value = "") {
-  return `<input type="email" class="acct-email" placeholder="you@example.com"
+  return `<label class="acct-field"><span class="acct-field-k">Email</span>
+        <input type="email" class="acct-email" placeholder="you@example.com"
         autocomplete="email" maxlength="254" spellcheck="false"
         aria-label="Email address" data-key="acctEnter"${
-        value ? ` value="${escapeHtml(value)}"` : ""}>`;
+        value ? ` value="${escapeHtml(value)}"` : ""}></label>`;
 }
 
-function acctFieldsHTML(mode) {
+/* `beforeButton`: what has to be agreed before the button (sign-up's age
+   and terms box), so the button is the last thing in the form. */
+function acctFieldsHTML(mode, beforeButton = "") {
   const isNew = mode === "signup";
   return `
     <div class="acct-row">
       ${acctEmailHTML()}
       ${isNew
-        ? acctPwHTML("acct-pw", "choose a password", "Choose a password", "new-password", true)
-          + acctPwHTML("acct-pw2", "type it again", "Type the password again", "new-password", true)
-        : acctPwHTML("acct-pw", "password", "Password", "current-password")
+        ? acctPwHTML("acct-pw", "10 characters or more", "Password", "new-password", true)
+          + acctPwHTML("acct-pw2", "", "Confirm password", "new-password", true)
+        : acctPwHTML("acct-pw", "", "Password", "current-password")
           // Under the password box, above the button: where every sign-in
           // form puts it, so it is where a stuck person looks.
           + `<div class="acct-forgot-row">
         <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
-      </div>`}
-      <button class="btn${isNew ? " primary" : ""}"
+      </div>`}${beforeButton}
+      <button class="btn primary"
         data-act="acctAuth" data-arg="${isNew ? "signup" : "login"}">${
         isNew ? "Create account" : "Log in"}</button>
     </div>`;
@@ -18719,32 +18788,29 @@ function signupHTML() {
       This page came over plain HTTP, so a password typed here crosses the
       network readable by anyone on it.</div>` : ""}
 
-    ${acctFieldsHTML("signup")}
-
+    ${acctFieldsHTML("signup", `
     <label class="acct-confirm">
       <input type="checkbox" class="acct-age">
       <span>I am 21 or older, and I accept the
         <a href="terms.html" target="_blank" rel="noopener">Terms</a> and
         <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
         This site publishes model estimates and takes no bets.</span>
-    </label>
+    </label>`)}
 
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
 
     <div class="acct-alt">
       <span>Already have an account?</span>
       <button class="btn ghost" data-act="acctGoLogin">Log in</button>
+    </div>
+    <div class="acct-alt-more">
       <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
     </div>
 
-    <p class="rank-help">Ten characters or more — length is what makes a
-      password hard to guess. Type it twice so a slip of the thumb is caught
-      here. We store a one-way scramble of it, never the password itself,
-      which is why nobody here can ever tell you what yours is; a lost one
-      gets replaced from “Forgot password?”, not recovered.</p>
-    <p class="rank-help">We never ask for your sportsbook or ESPN password.
-      Those belong to someone else’s service and could not be revoked by
-      us. This one is ours, and you can delete it whenever you like.</p>
+    <p class="rank-help">Length is what makes a password hard to guess. We
+      keep a one-way scramble of it, never the password itself, so a lost one
+      gets replaced from “Forgot password?”, not recovered. We never ask for
+      your sportsbook or ESPN password.</p>
     <p class="rank-help">Creating an account does not subscribe you to
       anything and takes no card. ${PLANS[0] ? `The plans are
       <a href="#paywall">over here</a> when you want them.` : ""}</p>
@@ -18835,8 +18901,8 @@ function resetHTML() {
           signs you in here and signs every other device out.</div></div></div>
       ${warn}
       <div class="acct-row">
-        ${acctPwHTML("acct-pw", "new password", "New password", "new-password", true)}
-        ${acctPwHTML("acct-pw2", "type it again", "Type the new password again", "new-password", true)}
+        ${acctPwHTML("acct-pw", "10 characters or more", "New password", "new-password", true)}
+        ${acctPwHTML("acct-pw2", "", "Confirm new password", "new-password", true)}
         <button class="btn primary" data-act="acctResetSave">Save new password</button>
       </div>
       <div class="acct-note-reset" role="status">${escapeHtml(_resetNote)}</div>
@@ -19819,8 +19885,11 @@ window.redeemCode = async function (btn) {
 };
 
 async function _billGo(btn, path, payload) {
-  const was = btn.textContent;
-  btn.textContent = "Opening secure checkout…";
+  // A settings row (account.js setItem) keeps its tile and chevron; only
+  // its name says where it is going.
+  const label = (btn.classList.contains("set-item") && btn.querySelector(".set-title")) || btn;
+  const was = label.textContent;
+  label.textContent = path === "portal" ? "Opening billing…" : "Opening secure checkout…";
   btn.disabled = true;
   try {
     const r = await fetch(`/api/billing/${path}`, {
@@ -19835,10 +19904,12 @@ async function _billGo(btn, path, payload) {
     location.href = d.url;
   } catch (e) {
     btn.disabled = false;
-    btn.textContent = was;
-    // The paywall's lapse banner has its own line: every .acct-note
-    // carries the account's "synced" status (acctSync).
-    const note = btn.closest(".card").querySelector(".acct-note, .pw-lapse-note");
+    label.textContent = was;
+    // The paywall's lapse banner and a settings screen have their own
+    // line: every .acct-note carries the account's "synced" status
+    // (acctSync).
+    const box = acctBox(btn);
+    const note = box.querySelector(".bill-note, .pw-lapse-note") || box.querySelector(".acct-note");
     if (note) note.textContent = String((e && e.message) || e);
   }
 }
@@ -19850,8 +19921,6 @@ window.coStart = function (btn) {
   window.scrollTo({ top: 0, behavior: "auto" });
 };
 
-window.billSubscribe = (btn) => _billGo(btn, "checkout",
-                                       { plan: (_coPlan || PLANS[0]).id });
 window.billPortal = (btn) => _billGo(btn, "portal");
 
 /* The account card does not price anything — one pricing surface, and it
@@ -19914,8 +19983,14 @@ window.coPay = async function (btn) {
   }
 };
 
+/* The box an account action's note and fields live in: a card on the
+   sign-in screen, a settings screen (account.js settingsHTML) elsewhere. */
+function acctBox(btn) {
+  return (btn && btn.closest && btn.closest(".card, .set-page, .qb-settings")) || document;
+}
+
 window.acctChangePassword = async function (btn) {
-  const card = btn.closest(".card");
+  const card = acctBox(btn);
   const note = card.querySelector(".acct-note");
   const say = (t) => { if (note) note.textContent = t; };
   const old = card.querySelector(".acct-old").value || "";
@@ -19934,6 +20009,7 @@ window.acctChangePassword = async function (btn) {
               + "this one — sign in with the new one.";
     if (state.view === "mybets") renderMyBets();
     else if (state.view === "fantasy") renderFantasy();
+    else if (state.view === "account") renderAccount();
   } catch (e) { say("Server not reachable."); }
 };
 
@@ -19952,7 +20028,7 @@ window.acctExport = async function () {
 };
 
 window.acctDelete = async function (btn) {
-  const card = btn.closest(".card");
+  const card = acctBox(btn);
   const note = card.querySelector(".acct-note");
   const pw = prompt("Deleting removes your account and everything in it, and "
                     + "cannot be undone.\n\nType your password to confirm:");
@@ -19979,6 +20055,7 @@ window.acctDelete = async function (btn) {
     _acctNote = "Account deleted. Anything on this device is still here.";
     if (state.view === "mybets") renderMyBets();
     else if (state.view === "fantasy") renderFantasy();
+    else if (state.view === "account") renderAccount();
   } catch (e) {}
 };
 
@@ -22446,7 +22523,7 @@ function ffCalMinePromptHTML() {
         same calendar scoped to YOUR players — which of them has the best
         day, every day.</div></div>
       <button class="btn" type="button"
-              data-act="toAccount">Link a league</button>
+              data-act="toAccount" data-arg="fantasy">Link a league</button>
     </div>
     <p class="rank-help" style="margin-bottom:0">Sleeper takes a username.
       ESPN takes a league id. Neither asks for a password.</p></div>`;
@@ -24295,9 +24372,11 @@ function copyPlainText(text, btn) {
 function copyRawURL(url, btn) {
   const said = (msg) => {
     if (!btn) return tfToast(msg);
-    const was = btn.textContent;
-    btn.textContent = msg;
-    setTimeout(() => { btn.textContent = was; }, 1600);
+    // A settings row (setItem) keeps its tile; only its name says so.
+    const label = (btn.classList.contains("set-item") && btn.querySelector(".set-title")) || btn;
+    const was = label.textContent;
+    label.textContent = msg;
+    setTimeout(() => { label.textContent = was; }, 1600);
   };
   const coarse = window.matchMedia
     && window.matchMedia("(pointer: coarse)").matches;
@@ -32294,10 +32373,14 @@ const ACTS = {
   acctForgotAgain: () => acctForgotAgain(),
   acctResetSave: (el) => acctResetSave(el),
   acctGo: (el, a) => acctGo(el, a === "create"),
-  toAccount: () => switchView("account", true),
+  // With an argument, one of the settings screens ("Link a league":
+  // fantasy): account.js settingsHTML opens it and the page lands on it.
+  toAccount: (el, a) => {
+    if (a) { window._acctTab = "settings"; window._setOpen = a; }
+    switchView("account", true);
+  },
   billSeePlans: () => billSeePlans(),
   billPortal: (el) => billPortal(el),
-  billSubscribe: (el) => billSubscribe(el),
   redeemCode: (el) => redeemCode(el),
   pwSignIn: () => pwSignIn(),
   pwToPlans: () => pwToPlans(),

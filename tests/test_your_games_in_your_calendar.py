@@ -162,7 +162,8 @@ def test_the_server_answers_by_address_and_settings_carries_the_row():
     finally:
         srv.shutdown()
     app = app_js()
-    assert '<div class="set-row" id="set-cal">' in app and "${calRowHTML()}" in app
+    # Settings › Calendar, its own screen since 2026-10-25 (account.js setPageHTML).
+    assert 'head("Calendar") + `<div id="set-cal">${calRowHTML()}</div>`' in app
     at = app.index("function bindSettings() {")
     assert "bindCalRow();" in app[at:at + 300]
     assert '"/api/calendar/new"' in app and '"/api/calendar/link"' in app and '"webcal://" + web.replace(' in app

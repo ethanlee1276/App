@@ -51,7 +51,8 @@ def test_the_pill_breathes_only_for_readers_who_allow_motion():
 
 def test_team_colours_are_a_setting_off_by_default_and_tokens_until_set():
     assert 'teamColors: "off",' in APP
-    assert 'pick("teamColors", "Team colours", s.teamColors' in APP
+    # A switch in the settings list since 2026-10-25 (account.js setListHTML).
+    assert 'end: setSwitch(s.teamColors === "on", `data-set-switch="teamColors"' in APP
     at = APP.index("function applySport() {")
     assert "applyTeamColors();" in APP[at:at + 400]
     root = CSS[CSS.index(":root {"):CSS.index("}", CSS.index(":root {"))]

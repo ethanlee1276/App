@@ -114,12 +114,26 @@ def test_they_render_signed_out_as_well_as_in():
     """The links live in this browser and do not need an account. A
     person following "Link a league" from Fantasy while signed out must
     not land on a sign-in wall — that is a dead end, and worse than the
-    duplicate forms this replaced."""
-    screen = _fn(_app(), "acctScreenHTML")
-    assert screen.count("${ffLinksHTML()}") == 2, (
-        "the links are missing from one of the two account screens")
-    signed_out = screen[screen.index("acct-hero"):]
-    assert "${ffLinksHTML()}" in signed_out, "signed out has no way to link"
+    duplicate forms this replaced.
+
+    Since 2026-10-25 they are Settings › Fantasy leagues, a screen of the
+    settings list, which is drawn signed out as well as in (renderAccount
+    draws settingsHTML on both branches). The sign-in screen stopped
+    drawing a second copy: two `#ffl-sleeper` hosts on one page and the
+    one on the screen the reader opened stayed empty. "Link a league"
+    opens that screen and lands on it."""
+    app = _app()
+    rows = _fn(app, "setListHTML")
+    i = rows.index('title: "Fantasy leagues"')
+    assert "data-set-open=\"fantasy\"" in rows[i:i + 400]
+    connected = rows[rows.rindex("out.push(", 0, i):i]
+    assert "if (inn)" not in connected and "signed_in" not in connected, "the row is behind sign-in"
+    assert 'if (page === "fantasy") return head("Fantasy leagues") + ffLinksHTML();' in _fn(app, "setPageHTML")
+    render = _fn(app, "renderAccount")
+    assert render.count("settingsHTML()") == 2, "one of the two account branches lost the settings"
+    assert "ffLinksHTML()" not in _fn(app, "acctScreenHTML"), "two hosts with one id again"
+    assert app.count('data-act="toAccount" data-arg="fantasy"') == 2
+    assert 'if (a) { window._acctTab = "settings"; window._setOpen = a; }' in app
 
 
 # --- and one way back out -----------------------------------------------------

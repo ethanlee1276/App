@@ -494,7 +494,7 @@ function ffLinkStripHTML() {
       : "No fantasy league linked yet — Sleeper takes a username, ESPN a "
         + "league id off your own URL. Neither asks for a password."}</span>
     <button class="btn${bits.length ? " ghost" : ""}"
-      data-act="toAccount">${
+      data-act="toAccount" data-arg="fantasy">${
       bits.length ? "Manage leagues" : "Link a league"}</button>
   </div>`;
 }

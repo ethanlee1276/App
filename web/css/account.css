@@ -4,24 +4,12 @@
    it names; the few that a later rule of styles.css might have outranked
    stayed behind. Same tokens as the sheet. */
 /* ======================================================================
-   Settings — the preferences panel on the Account page, and the two
-   marks that follow from it (a starred game, a Follow button).
-   ====================================================================== */
-.qb-settings { padding: 18px; }
-/* ======================================================================
    Friends — the invite card, the send picker, the inbox rows.
    ====================================================================== */
-.qb-friends { padding: 18px; }
-.fr-invite { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding-bottom: 12px; border-bottom: var(--hairline) solid var(--border-soft); }
-.fr-list { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; }
-.fr-chip { display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 8px 6px 12px; border-radius: 999px;
-  background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
-  font-size: var(--fs-sm); }
-.fr-x { display: inline-flex; padding: 2px; border: 0; background: none;
-  color: var(--text-mute); cursor: pointer; }
-.fr-x:hover { color: var(--bad); }
+/* Friends: settings rows (account.js friendsCardHTML), a friend's initials
+   in the tile's place. */
+.qb-friends .msg-ava { width: 30px; height: 30px; font-size: var(--fs-2xs); }
+.qb-friends .fr-x { padding: 5px 12px; font-size: var(--fs-sm); }
 .pw-verify .pk-go { margin-left: 14px; }
 /* A second line under a name — "1 open" beside a book whose bets have
    not settled. Its own line rather than a sixth column: it applies to
@@ -33,21 +21,11 @@
    Wraps rather than scrolls: on a phone the email, the password and the
    two buttons stack, which is the only arrangement where all four stay
    tappable at 390px. */
-/* The code box. Set apart from the subscribe control by a rule rather
-   than a card, because it is an ALTERNATIVE route to the same thing and
-   a second card would read as a second product. */
-.code-box { margin-top: 14px; padding-top: 14px;
-  border-top: var(--hairline) solid var(--border-soft); }
-.code-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--text-mute); margin-bottom: 8px; }
-.code-held { margin-top: 10px; }
-.acct-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.acct-more { margin-top: 12px; padding-top: 10px;
-  border-top: var(--hairline) solid var(--border); }
-.acct-more summary { cursor: pointer; font-size: var(--fs-sm);
-  color: var(--text-dim); }
-.bill-state { font-size: var(--fs-sm); color: var(--text-dim); }
-.bill-state.on { color: var(--good); font-weight: 600; }
+/* The code box: a settings group (account.js codeBoxHTML), the field and
+   its button one row. On the code's own screen the screen's title says
+   what the group header would. */
+.code-row input { flex: 1 1 auto; min-width: 0; }
+.set-code .code-head { display: none; }
 /* Plan cards (render 21). Two, not three — there is one real plan, and
    inventing tiers to fill a layout is the same sin as inventing a
    number. The raised card is the paid one, as in the render. */
@@ -90,22 +68,6 @@
   line-height: var(--lh-snug); }
 .plan-trial .ic { color: var(--good); flex: none; }
 .plan-trial b { color: var(--text); }
-/* WHICH PLAN, on the account page. A panel rather than a sentence,
-   because the four facts people actually want — name, price, what
-   happens next, when — are four facts and a sentence buries three of
-   them. */
-.acct-plan { margin: 0 0 14px; padding: 14px 16px; border-radius: var(--radius);
-  background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft); }
-.acct-plan-head { display: flex; align-items: center; gap: 10px;
-  flex-wrap: wrap; margin-bottom: 10px; }
-.acct-plan-name { font-size: var(--fs-lg); font-weight: 800; }
-.plan-kvs { display: grid; gap: 6px; }
-.plan-kv { display: flex; align-items: baseline; justify-content: space-between;
-  gap: 12px; font-size: var(--fs-sm); }
-.plan-kv span { color: var(--text-mute); }
-.plan-kv b { color: var(--text); text-align: right; }
-.acct-plan .rank-help { margin: 10px 0 0; }
 .plan-list { list-style: none; margin: 0; padding: 0; }
 .plan-list li { display: flex; gap: 8px; align-items: baseline;
   font-size: var(--fs-sm); color: var(--text-dim); padding: 3px 0; }
@@ -138,7 +100,10 @@
    which is precisely what "not professional" looked like. `--measure-tight`
    is the token already used for reading columns, so this borrows the
    site's own answer rather than inventing a number. */
-.acct-screen { max-width: var(--measure-tight); margin: 0 auto; }
+.acct-screen { max-width: var(--measure-tight); margin: 0 auto 28px; }
+/* Signed out, the settings list sits under the sign-in column, centred
+   with it rather than pinned to the page's left edge. */
+.acct-screen ~ .qb-settings { margin-inline: auto; }
 /* Render 1/2's sign-in screen: the wordmark and a tagline over the card,
    centred, on the same violet wash every card carries. Their tagline
    promised profit; ours says what the page does. */
@@ -153,30 +118,16 @@
 .acct-hero-tag { color: var(--text-mute); font-size: var(--fs-2xs);
   font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .acct-hero-sub { margin-top: 6px; }
-.acct-screen-head { display: flex; align-items: center; gap: 14px;
-  margin: 4px 0 18px; }
-.acct-screen-head h2 { margin: 0; font-family: var(--font-display);
-  font-size: var(--fs-xl); line-height: var(--lh-tight); letter-spacing: -.01em; }
 .acct-screen-sub { margin: 4px 0 0; color: var(--text-mute);
   font-size: var(--fs-sm); line-height: var(--lh-body); }
-/* The three promises under the form. Not decoration: the objection a
+/* The promises under the form. Not decoration: the objection a
    signed-out visitor actually has is "what are you going to do with my
    details", and answering it beside the button is worth more than
-   answering it in a policy page nobody opens. */
-.acct-assure { list-style: none; margin: 18px 0 0; padding: 0;
-  border-top: var(--hairline); padding-top: 14px; }
-.acct-assure li { position: relative; padding-left: 22px; margin: 7px 0;
-  color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-body); }
-/* MASKED SVG, NOT A TYPED CHARACTER. This repo draws its status marks —
-   a literal ✓ inherits whatever glyph the reader's font happens to have,
-   which is a different weight and baseline on every platform, and on some
-   is an emoji. `--ic-check` is the same mark the reasons list uses, so
-   these read as one vocabulary. Caught by tests/test_icons.py, which is
-   the rule written down. */
-.acct-assure li::before { content: ""; position: absolute; left: 0; top: .35em;
-  width: 13px; height: 13px; background-color: var(--good);
-  -webkit-mask: var(--ic-check) no-repeat center / contain;
-  mask: var(--ic-check) no-repeat center / contain; }
+   answering it in a policy page nobody opens. One quiet line since
+   2026-10-25 (docs/VISUAL_AUDIT.md S7): a list of ticks under a sign-in
+   form reads as an advert. */
+.acct-assure { margin: 16px 8px 0; color: var(--text-mute); font-size: var(--fs-xs);
+  line-height: var(--lh-snug); text-align: center; }
 /* The form, at a sign-in measure. `.acct-row` is a wrapping flex row built
    for a card the width of the board; at 30rem it wrapped into a ragged
    three-row arrangement — email full width, then password sharing a line
@@ -191,18 +142,19 @@
    they are support, not the point, and at full body size they outweighed
    the form they sit under. */
 .acct-screen .rank-help { font-size: var(--fs-xs); }
-/* The login panel, following the render's layout: a mark, a welcome, the
-   two fields, one primary action, and the sign-up route underneath rather
-   than beside. Two equally weighted buttons make a returning customer
-   read both before pressing either. */
-.acct-brand { display: grid; place-items: center; margin: 4px 0 2px; }
-.acct-brand svg { width: 42px; height: 42px; color: var(--gold); }
-.acct-welcome { justify-content: center; text-align: center; }
-.acct-welcome .player { font-family: var(--font-display);
-  font-size: var(--fs-lg); letter-spacing: .01em; }
-.acct-welcome .subtitle { max-width: var(--measure-tight);
-  margin-inline: auto; }
+/* The login panel: a welcome, the two labelled fields, one gold action,
+   and the sign-up route underneath rather than beside. Two equally
+   weighted buttons make a returning customer read both before pressing
+   either. The eye that sat over the welcome went (2026-10-25): the
+   wordmark above already says whose door this is. */
+.acct-card-h { margin: 0 0 14px; font-family: var(--font-display); font-size: var(--fs-xl);
+  font-weight: 700; line-height: var(--lh-tight); text-align: center; }
 .acct-screen .acct-alt .btn { width: auto; }
+.acct-signin .acct-fine { margin: 0; text-align: center; }
+.acct-signin::before { content: none; }
+.acct-signin:hover { transform: none; }
+.acct-signin > .acct-note:empty { display: none; }
+.acct-screen .acct-row .btn.primary { min-height: 46px; }
 .pw-hero { text-align: center; padding: 26px 16px 30px; }
 /* Why the wall is up, when it is a lapse (pwLapseHTML). A row, not the
    card's column, and the card's own accent bar in the warning colour. */

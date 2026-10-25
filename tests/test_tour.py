@@ -105,8 +105,9 @@ def test_it_boots_after_the_slip_and_settings_can_show_it_again():
     i = APP.index("(function initNewLook() {")
     boot = APP[i:APP.index("\n})();", i)]
     assert "slipRender();\n  tourMaybe();" in boot
-    sh = _fn("settingsHTML")
-    assert 'data-set-tour="1">Show me around</button>' in sh
+    # A row of the settings list since 2026-10-25 (account.js setListHTML).
+    sh = _fn("setListHTML")
+    assert 'title: "Show me around"' in sh and "attrs: 'data-set-tour=\"1\"'" in sh
     assert 'host.querySelectorAll("[data-set-tour]").forEach((b) =>\n    b.addEventListener("click", () => tourOpen(0)));' in APP
     for sel in ("#tour-overlay", ".tour-card", ".tour-dots i.on", ".tour-nav"):
         assert sel in CSS, sel

@@ -148,13 +148,16 @@ def test_the_cookie_is_cleared_by_the_server_too():
 
 
 def test_the_button_is_on_the_page():
-    card = _fn(_code(), "acctSignedInHTML")
+    # A row of the settings list since 2026-10-25 (account.js setListHTML).
+    card = _fn(_code(), "setListHTML")
     assert "acctSignOutAll" in card
 
 
 # --- the settings that were already right -----------------------------------
 def test_the_four_that_matter_are_still_there():
-    card = _fn(_code(), "acctSignedInHTML")
+    # Rows of the settings list; the password has a screen of its own.
+    card = _fn(_code(), "setListHTML") + _fn(_code(), "setPageHTML")
+    assert 'data-set-open="password"' in card
     for fn, what in (("acctChangePassword", "change a password"),
                      ("acctExport", "download what is held about you"),
                      ("acctSearchClear", "clear the search history"),

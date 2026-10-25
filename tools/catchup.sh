@@ -22,6 +22,8 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN 2>&1 | tee /tmp/dn.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DO 2>&1 | tee /tmp/do.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO 2>&1 | tee /tmp/do.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DP 2>&1 | tee /tmp/dp.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP 2>&1 | tee /tmp/dp.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -414,6 +416,10 @@ run DO "The pages' own files, the trimmed copy, this version live" 120 <<'SH'
 for f in js/record.js js/detail.js js/account.js js/more.js css/record.css css/detail.css css/account.css css/more.css; do printf '%s ' $f; curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/$f; done
 curl -s https://qellysbook.com/css/more.css | wc -c; wc -c < /srv/qellys/web/css/more.css
 curl -s https://qellysbook.com/ | grep -c 'id="likely-board"'
+SH
+run DP "The new look is live (the settings rows, the dark theme told to the browser)" 120 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function setItem('
+curl -s https://qellysbook.com/css/styles.css | grep -c 'color-scheme: dark'
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

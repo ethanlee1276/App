@@ -380,7 +380,7 @@ function renderMyBets() {
           inputmode="decimal" placeholder="25"></label>
         <label>Odds<input id="mb-odds" type="number" step="1"
           inputmode="numeric" placeholder="-110"></label>
-        <button class="btn mb-add" type="button" data-act="mbAdd">Log bet</button>
+        <button class="btn primary mb-add" type="button" data-act="mbAdd">Log bet</button>
       </div>
       <div id="mb-form-warn" class="mb-warn"></div>
     </div>`;
@@ -890,54 +890,6 @@ async function renderStreak() {
   if (save) save.addEventListener("click", stkSaveName);
 }
 
-function acctSignedInHTML(u) {
-  return `<div class="card" style="margin-bottom:16px">
-    <div class="card-head">
-      <div><div class="player">Signed in — ${escapeHtml(u.email)}</div>
-        <div class="subtitle">Your bets, fantasy leagues and search history
-          follow this account to every device you sign in on.</div></div>
-      <div class="acct-btns">
-        <button class="btn" data-act="acctSyncNow">Sync now</button>
-        <button class="btn ghost" data-act="acctSignOut">Sign out</button>
-      </div>
-    </div>
-    <div class="acct-note">${escapeHtml(_acctNote)}</div>
-    <div id="billing-slot"></div>
-    <details class="acct-more">
-      <summary>Account settings</summary>
-      <div class="acct-row">
-        <input type="password" class="acct-old" placeholder="current password"
-          autocomplete="current-password">
-        <input type="password" class="acct-new" placeholder="new password"
-          autocomplete="new-password">
-        <button class="btn ghost" data-act="acctChangePassword">Change password</button>
-      </div>
-      <p class="rank-help">Forgot your current one?
-        <button type="button" class="acct-forgot" data-act="acctGoForgot">Email me a reset link</button></p>
-      <p class="rank-help">Changing it signs out every other device — a
-        password change is usually an answer to “somebody else may have
-        this”, and leaving those sessions alive would answer it with
-        nothing.</p>
-      <div class="acct-row">
-        <button class="btn ghost" data-act="acctSignOutAll">Sign out
-          everywhere</button>
-      </div>
-      <p class="rank-help">Ends every session on every device, including
-        this one. For a laptop you left signed in somewhere you cannot get
-        back to — without it, the only way to revoke a session you cannot
-        reach is to change a password you had no other reason to
-        change.</p>
-      <div class="acct-row">
-        <button class="btn ghost" data-act="acctExport">Download my data</button>
-        <button class="btn ghost" data-act="acctSearchClear">Clear search history</button>
-        <button class="btn ghost" data-act="acctDelete">Delete my account</button>
-      </div>
-      <p class="rank-help">Delete removes the account, every bet, league and
-        search we hold for it, and cannot be undone.</p>
-    </details>
-  </div>`;
-}
-
 function acctSignInHTML() {
   const legacy = acctState();
   // THE WARNING COMES BEFORE THE FORM, not after the password is typed.
@@ -945,18 +897,8 @@ function acctSignInHTML() {
   // late to be useful: by then the password is already in the box, and on
   // a phone it is already in the keyboard's suggestion history.
   const insecure = _acctUser && _acctUser.insecure;
-  return `<div class="card" style="margin-bottom:16px">
-    <div class="acct-brand" aria-hidden="true">
-      <svg viewBox="0 0 40 40" fill="none" stroke="currentColor"
-        stroke-width="2.5"><ellipse cx="20" cy="20" rx="17" ry="12"/>
-        <circle cx="20" cy="20" r="3.5" fill="currentColor" stroke="none"/>
-      </svg>
-    </div>
-    <div class="card-head acct-welcome"><div>
-      <div class="player">Welcome back</div>
-      <div class="subtitle">Your bets, fantasy leagues and search history
-        are stored with your account, so they are there on every device you
-        sign in on.</div></div></div>
+  return `<div class="card acct-signin">
+    <h2 class="acct-card-h">Welcome back</h2>
     ${insecure ? `<div class="warning">${icon("warn")} <b>${
       _acctUser.allowed ? "This connection is not private."
                         : "Not over this connection."}</b>
@@ -973,7 +915,7 @@ function acctSignInHTML() {
       <span>Don’t have an account?</span>
       <button class="btn ghost" data-act="acctGoSignup">Create one</button>
     </div>
-    <p class="rank-help">We never ask for your sportsbook or ESPN
+    <p class="rank-help acct-fine">We never ask for your sportsbook or ESPN
       password. Those belong to someone else’s service and could not be
       revoked by us. This one is ours, and you can delete it whenever you
       like.</p>
@@ -1034,9 +976,8 @@ function billPlansHTML(s) {
   // after cancelling would be a promise the checkout then refuses.
   const trial = days > 0 && s && s.trial_eligible && !entitled;
   return `
-    <div class="section-title">What an account costs
-      <span class="sub">— one subscription, three lengths, and you see the
-      exact total before you enter a card.</span></div>
+    <section class="set-group">
+    <h2 class="set-group-h">What a membership includes</h2>
     <div class="plan-grid">
       <div class="card plan raised${entitled ? " current" : ""}">
         <div class="plan-band">The whole board</div>
@@ -1059,12 +1000,14 @@ function billPlansHTML(s) {
           before then.</span></p>` : ""}
         ${entitled
           ? `<div class="plan-cta plan-cur">Your plan now</div>`
-          : `<button class="btn plan-btn" data-act="billSeePlans">See the plans</button>`}
+          : `<button class="btn primary plan-btn" data-act="billSeePlans">See the plans</button>`}
       </div>
     </div>
-    <p class="rank-help">No card number ever reaches this server — checkout
-      and cancellation both happen on Stripe’s own pages. The site still
-      takes no bets and holds no money.</p>`;
+    <p class="set-foot">One subscription, three lengths, and you see the exact
+      total before you enter a card. No card number ever reaches this server —
+      checkout and cancellation both happen on Stripe’s own pages. The site
+      still takes no bets and holds no money.</p>
+    </section>`;
 }
 
 /* ONE PLAN, THEN THE LONGER ONES AS SAVINGS (Ethan's product audit,
@@ -2030,42 +1973,47 @@ function planPanelHTML(s) {
   // Cancelled to run out at the period's end (billing.read_event).
   const ending = s.cancel_at_end || String(s.status || "") === "canceled";
 
+  // A settings row (setItem) per fact.
   const row = (k, v) => v
-    ? `<div class="plan-kv"><span>${k}</span><b>${v}</b></div>` : "";
+    ? setItem({ title: k, val: v }) : "";
 
-  return `
-    <div class="acct-plan">
-      <div class="acct-plan-head">
-        <span class="acct-plan-name">${
-          plan ? escapeHtml(plan.name) + " plan"
-               : (s.comped ? "Complimentary access" : "Your subscription")}</span>
-        <span class="chip ${trial ? "warn" : "good"}">${
-          trial ? "Free trial" : ending ? "Ends " + when : "Active"}</span>
-      </div>
-      <div class="plan-kvs">
-        ${row("Price", plan ? `$${plan.price} per ${escapeHtml(plan.per)}` : "")}
-        ${row(trial ? "Trial ends" : ending ? "Access until" : "Renews", when)}
-        ${row(trial && plan ? "Then" : "",
-              trial && plan ? `$${plan.price} per ${escapeHtml(plan.per)}` : "")}
-        ${row("Started with a code", s.codes && s.codes.active ? "Yes" : "")}
-      </div>
-      ${ending ? `<p class="rank-help">Cancelled. Nothing further will be
-        charged and your access runs to the date above.</p>` : ""}
-      ${trial ? `<p class="rank-help">Cancel before the trial ends and you
-        are not charged at all. One button, below.</p>` : ""}
-      ${s.comped ? `<p class="rank-help">This account was given access
-        directly — there is no card on file and nothing to cancel.</p>` : ""}
-    </div>`;
+  return setGroup("Your plan", [
+    setItem({ ico: "gem", tone: "gold",
+              title: plan ? escapeHtml(plan.name) + " plan"
+                          : (s.comped ? "Complimentary access" : "Your subscription"),
+              end: `<span class="chip ${trial || ending ? "warn" : "good"}">${
+                trial ? "Free trial" : ending ? "Cancelled" : "Active"}</span>` }),
+    row("Price", plan ? `$${plan.price} per ${escapeHtml(plan.per)}` : ""),
+    row(trial ? "Trial ends" : ending ? "Access until" : "Renews", when),
+    row(trial && plan ? "Then" : "",
+        trial && plan ? `$${plan.price} per ${escapeHtml(plan.per)}` : ""),
+    row("Started with a code", s.codes && s.codes.active ? "Yes" : ""),
+  ], ending ? "Cancelled. Nothing further will be charged and your access runs to the date above."
+    : trial ? "Cancel before the trial ends and you are not charged at all — Manage billing, below."
+    : s.comped ? "This account was given access directly — there is no card on file and nothing to cancel."
+    : "");
 }
 
 async function renderBilling() {
-  const slot = document.getElementById("billing-slot");
-  if (!slot) return;
+  if (!document.getElementById("billing-slot") && !document.getElementById("set-plan")
+      && !document.querySelector(".set-code")) return;
   let s;
   try {
     const r = await fetch("/api/billing/status", { credentials: "same-origin" });
     s = await r.json();
-  } catch (e) { slot.innerHTML = ""; return; }
+  } catch (e) {
+    const failed = document.getElementById("billing-slot");
+    if (failed) failed.innerHTML = "";
+    return;
+  }
+  // The Membership group on the settings list (settingsHTML) …
+  _billStatus = s || false;
+  const rows = document.getElementById("set-plan");
+  if (rows) rows.innerHTML = planRowsHTML(_billStatus);
+  codeScreenRedraw(s);
+  // … and the plan's own screen, when it is the one open.
+  const slot = document.getElementById("billing-slot");
+  if (!slot) return;
   if (!s || !s.signed_in) { slot.innerHTML = ""; return; }
   /* THE CODE BOX DOES NOT DEPEND ON THE PROCESSOR, and the old shape did:
      an unconfigured processor returned early and took the whole panel
@@ -2073,29 +2021,27 @@ async function renderBilling() {
      has to survive that — it is the only way in before the Stripe keys
      are on the box, and it stays the way Ethan comps somebody after. */
   const codes = s.codes || {};
+  // NO "FREE" PLAN: there is none (tests/test_free_trial.py). Somebody
+  // without one is told so, with the server's own sentence for why when
+  // there is more to say than that (payment failed, cancelled, paused).
+  const none = setGroup("Your plan", [setItem({ ico: "gem", tone: "gold", title: "No membership",
+    sub: s.note && s.note !== "No subscription." ? escapeHtml(s.note) : "" })], s.configured ? "" : s.paywall
+    ? "Card payment is not switched on on this server yet. Access is by code for now — if you have one, enter it below."
+    : "Everything is free right now, so there is nothing to pay for. A code still works and starts its clock from the day you enter it.");
   slot.innerHTML = (s.configured ? `
-    ${planPanelHTML(s)}
-    <div class="acct-row">
-      <span class="bill-state${s.entitled ? " on" : ""}">${
-        escapeHtml(s.note || "")}</span>
-      ${s.customer_id
-        ? `<button class="btn ghost" data-act="billPortal">Manage billing</button>`
-        : (s.entitled
-            // Entitled with nobody to bill: a comped address or a
-            // redeemed code. "Manage billing" opened Stripe's portal for
-            // a customer that does not exist and came back an error, and
-            // "Subscribe" would sell them what they already have.
-            ? ""
-            : `<button class="btn" data-act="billSubscribe">Subscribe</button>`)}
-      ${s.live === false ? `<span class="chip warn">Stripe test mode —
-        no real money moves</span>` : ""}
-    </div>
-    ${billPlansHTML(s)}`
-  : `<p class="rank-help">${s.paywall
-      ? `Card payment is not switched on on this server yet. Access is by
-         code for now — if you have one, enter it below.`
-      : `Everything is free right now, so there is nothing to pay for. A code
-         still works and starts its clock from the day you enter it.`}</p>`)
+    ${s.entitled ? planPanelHTML(s) : none}
+    ${s.customer_id
+      // Only with somebody to bill. Entitled with nobody — a comped
+      // address or a redeemed code — "Manage billing" opened Stripe's
+      // portal for a customer that does not exist and came back an error.
+      ? setGroup("", [setItem({ ico: "card", tone: "gold", title: "Manage billing",
+                                sub: "Your card, receipts, or cancelling — on Stripe’s own page",
+                                chev: true, attrs: 'data-act="billPortal"' })],
+                 s.live === false ? "Stripe test mode — no real money moves." : "")
+        + `<p class="set-foot bill-note" role="status"></p>`
+      : ""}
+    ${s.entitled ? "" : billPlansHTML(s)}`
+  : s.entitled ? planPanelHTML(s) : none)
     // NO DISCORD BOX HERE ANY MORE. Ethan, 2026-08-22: "we can remove
     // the discord button in the account tab." There are now two better
     // places for it — the icon in the top bar, which is on every page,
@@ -2105,30 +2051,38 @@ async function renderBilling() {
     + codeBoxHTML(codes);
 }
 
+/* The code's own screen (Settings › Redeem a code), redrawn from a fresh
+   status: a code just applied shows what it covers. */
+function codeScreenRedraw(s) {
+  const own = document.querySelector(".set-code");
+  if (own && s) own.innerHTML = codeBoxHTML(s.codes || {});
+}
+
 /* "Have a code?" — Ethan, 2026-08-20. Kept beside the subscribe control
    rather than on a page of its own, because somebody holding a code and
    somebody about to pay are at the same moment in the same decision, and
    a code box nobody finds is a support email. */
 function codeBoxHTML(codes) {
-  const held = (codes.codes || []).map((c) => `
-    <div class="mk-kv"><span>${escapeHtml(c.code)}</span>
-      <b>${c.months} month${c.months === 1 ? "" : "s"} · through ${
-        new Date((c.granted_to || 0) * 1000).toLocaleDateString()}</b></div>`).join("");
+  const held = (codes.codes || []).map((c) => setItem({ ico: "ticket", tone: "gold", title: escapeHtml(c.code),
+    val: `${c.months} month${c.months === 1 ? "" : "s"} · through ${
+      new Date((c.granted_to || 0) * 1000).toLocaleDateString()}` })).join("");
+  // Not an .acct-note: those all carry the account's sync line (acctPaintNote).
   return `
-    <div class="code-box">
-      <div class="code-head">Have a code?</div>
-      <div class="acct-row">
-        <input class="acct-in code-in" id="code-in" type="text"
-               autocomplete="off" spellcheck="false"
-               placeholder="Enter your code" aria-label="Discount code">
-        <button class="btn" data-act="redeemCode">Apply</button>
+    <section class="set-group code-box">
+      <h2 class="set-group-h code-head">Have a code?</h2>
+      <div class="set-list">
+        <div class="set-item code-row">
+          <input class="code-in" id="code-in" type="text"
+                 autocomplete="off" spellcheck="false"
+                 placeholder="Enter your code" aria-label="Discount code">
+          <button class="btn primary" data-act="redeemCode">Apply</button>
+        </div>${held}
       </div>
-      <p class="acct-note code-note" id="code-note"></p>
-      ${held ? `<div class="code-held">${held}</div>` : ""}
-      ${codes.active ? `<p class="rank-help">Your code covers you through
+      <p class="set-foot code-note" id="code-note" role="status"></p>
+      ${codes.active ? `<p class="set-foot">Your code covers you through
         <b>${new Date((codes.granted_to || 0) * 1000).toLocaleDateString()}</b>.
         No card is involved and there is nothing to cancel.</p>` : ""}
-    </div>`;
+    </section>`;
 }
 
 /* One card, mounted on both My Bets and Fantasy. Handlers find their
@@ -2157,23 +2111,10 @@ function codeBoxHTML(codes) {
    nothing. */
 function acctScreenHTML() {
   const u = _acctUser;
-  if (u && u.signed_in) {
-    setTimeout(renderBilling, 0);
-    // The profile header above this panel is who you are on the site; this
-    // is the account behind it — sign-in, plan, devices, data. It carried
-    // its own initials disc until 2026-10-07, which made two identities on
-    // one page (Ethan: "it should all be one main profile").
-    return `<div class="acct-screen acct-screen-in">
-      <div class="acct-screen-head">
-        <div>
-          <h2>Sign-in &amp; plan</h2>
-          <p class="acct-screen-sub">${escapeHtml(u.email)} — only you see this.</p>
-        </div>
-      </div>
-      ${acctSignedInHTML(u)}
-      ${ffLinksHTML()}
-    </div>`;
-  }
+  // Signed in, the account behind the profile — sign-in, plan, devices,
+  // data — is the settings screen's own groups (settingsHTML, 2026-10-25):
+  // there is no second card above them saying the email twice.
+  if (u && u.signed_in) return "";
   // Signed out. A legacy PIN profile, if this device still has one, goes
   // BELOW the sign-in rather than above it: it is the old thing being
   // replaced, and putting it first would make the upgrade look optional.
@@ -2195,12 +2136,8 @@ function acctScreenHTML() {
         subscription to every device you use.</p>
     </div>
     ${acctSignInHTML()}
-    <ul class="acct-assure">
-      <li>The site takes no bets and never holds your money.</li>
-      <li>Card details go to Stripe, never to this server.</li>
-      <li>Delete the account whenever you like, from this page.</li>
-    </ul>
-    ${ffLinksHTML()}
+    <p class="acct-assure">The site takes no bets and never holds your money.
+      Card details go to Stripe, never to this server.</p>
     ${legacy}
   </div>`;
 }
@@ -2223,15 +2160,16 @@ function renderAccount() {
        shows, so the account is never out of reach. */
     body.innerHTML = `<div id="acct-prof" class="acct-prof"></div>
       <div data-acct-tab="friends" hidden>${friendsCardHTML()}</div>
-      <div data-acct-tab="settings" hidden>${acctScreenHTML()}${settingsHTML()}${menuDiagHTML()}</div>`;
+      <div data-acct-tab="settings" hidden>${settingsHTML()}${menuDiagHTML()}</div>`;
     loadSocial().then((S) => {
       const el = document.getElementById("acct-prof");
-      if (S && S.mountAccount && el) S.mountAccount(el, u);
-      else body.querySelectorAll("[data-acct-tab]").forEach((x) => { x.hidden = false; });
-    });
+      if (S && S.mountAccount && el) return S.mountAccount(el, u);
+      body.querySelectorAll("[data-acct-tab]").forEach((x) => { x.hidden = false; });
+    }).then(setLandOn);
   } else {
     body.innerHTML = acctScreenHTML() + friendsCardHTML() + settingsHTML()
       + menuDiagHTML();
+    setTimeout(setLandOn, 0);
   }
   renderFantasyLinks();
   bindSettings();
@@ -2244,11 +2182,23 @@ function renderAccount() {
 }
 
 /* ============================================================
-   The settings panel
+   The settings screen
    ============================================================
    Ethan, 2026-08-25: "Settings that stick: odds format (−110 vs 1.91),
    units vs dollars, timezone, favorite teams first, which sports show in
    nav."
+
+   BUILT LIKE A PHONE'S OWN SETTINGS since 2026-10-25 (Ethan: "The settings
+   and account area ... is ugly and doesn't look like real settings";
+   docs/VISUAL_AUDIT.md S1-S6). It was a stack of cards: a billing card
+   carrying the whole plans advert, two fantasy cards of paragraphs, then a
+   card of pill rows with a paragraph under each. Now it is groups under
+   small headers, each a rounded list of rows: an icon tile, the name, the
+   value, then a chevron where the row opens a screen of its own, a switch
+   where it is on or off, or a segmented control where there are two or
+   three choices. A footnote under a group only where one is needed;
+   destructive rows last, in red. The look lives in styles.css ("SETTINGS
+   LISTS"), because the Alerts page draws the same rows.
 
    RENDERED SIGNED OUT AS WELL AS IN, and deliberately — the same rule
    ffLinksHTML already follows. These live in this browser and work with
@@ -2259,7 +2209,8 @@ function renderAccount() {
 
    Every control writes through `setSetting`, which stamps the section
    and schedules the same debounced push every other synced section
-   uses. Nothing here needs its own endpoint. */
+   uses, or through the account's own endpoints, exactly as before. Only
+   the drawing changed. */
 const TZ_CHOICES = [
   ["", "This device"],
   ["America/New_York", "Eastern"],
@@ -2270,74 +2221,230 @@ const TZ_CHOICES = [
   ["UTC", "UTC"],
 ];
 
+/* The screen open inside Settings: "" is the list, otherwise the screen a
+   row opened (the time zone, the leagues, your teams, the password, the
+   plan, a code, the fantasy links, the calendar). Kept across redraws, so
+   a change made on one of those screens does not throw the reader back. */
+let _setPage = "";
+/* The last answers the plan and the email rows were drawn from (null:
+   not read yet; false: the read failed). */
+let _billStatus = null;
+let _mailState = null;
+
+/* setIco, setItem, setGroup and setSwitch live in app.js: the Alerts page
+   draws the same rows. */
+/* The KEY is passed, never derived from the label: a settings panel that
+   decides which preference it is writing by matching the words on screen
+   is one rename away from writing the wrong one. */
+function setSeg(key, value, opts) {
+  return `<span class="set-seg">${opts.map(([v, label]) => `<button type="button"
+    class="${v === value ? "on" : ""}" aria-pressed="${v === value ? "true" : "false"}"
+    data-set-key="${escapeAttr(key)}" data-set-val="${escapeAttr(v)}">${escapeHtml(label)}</button>`).join("")}</span>`;
+}
+
+const setCheck = () => `<span class="set-check">${icon("check", 16)}</span>`;
+
+function setTeamName(t) {
+  const [sport, abbr] = String(t).split(":");
+  return teamNameIn(sport, abbr) || abbr;
+}
+
+/* A link that asked for one of the screens ("Link a league" on the
+   fantasy pages: app.js toAccount) opens it, and the page lands on it
+   once it is drawn (renderAccount). */
+let _setLand = false;
+function setLandOn() {
+  if (!_setLand) return;
+  _setLand = false;
+  setScrollTop();
+}
+
+/* The settings screen at the top of the window, under the bar. */
+function setScrollTop() {
+  const now = document.querySelector(".qb-settings");
+  const bar = document.querySelector(".topbar");
+  if (now) window.scrollTo({ top: Math.max(0, now.getBoundingClientRect().top + window.scrollY
+    - (bar ? bar.offsetHeight : 0) - 12), behavior: "auto" });
+}
+
 function settingsHTML() {
+  if (window._setOpen) { _setPage = window._setOpen; window._setOpen = ""; _setLand = true; }
+  // Drawn first: an unknown screen falls back to the list and clears _setPage.
+  const inner = _setPage ? setPageHTML(_setPage) : setListHTML();
+  return `<section class="qb-settings set-screen${_setPage ? " set-page" : ""}">${inner}</section>`;
+}
+
+/* The list itself. */
+function setListHTML() {
   const s = settings();
-  // The KEY is passed, never derived from the label: a settings panel
-  // that decides which preference it is writing by matching the words on
-  // screen is one rename away from writing the wrong one.
-  const pick = (key, name, value, opts) => `<div class="set-row">
-      <div class="set-k">${escapeHtml(name)}</div>
-      <div class="set-v">${opts.map(([v, label, note]) => `
-        <button type="button" class="set-opt${v === value ? " on" : ""}"
-          data-set-key="${escapeAttr(key)}"
-          data-set-val="${escapeAttr(v)}">${escapeHtml(label)}${
-          note ? `<span class="set-note">${escapeHtml(note)}</span>` : ""}</button>`)
-        .join("")}</div>
-    </div>`;
-  const leagues = SPORT_CODES.map((c) => `
-    <button type="button" class="set-opt${
-      !s.leagues.length || s.leagues.includes(c) ? " on" : ""}"
-      data-set-league="${escapeAttr(c)}">${escapeHtml(
-        (LEAGUE_LABEL && LEAGUE_LABEL[c]) || c.toUpperCase())}</button>`).join("");
-  const favs = s.teams.length
-    ? s.teams.map((t) => {
-        const [sport, abbr] = t.split(":");
-        return `<button type="button" class="set-opt on" data-set-unfav="${escapeAttr(t)}"
-          title="Remove">★ ${escapeHtml(teamNameIn(sport, abbr) || abbr)}
-          <span class="set-note">${escapeHtml((sport || "").toUpperCase())}</span></button>`;
-      }).join("")
-    : `<span class="set-empty">None yet — open a game and tap the ☆ beside a team.</span>`;
-  return `<section class="card qb-settings">
-    <div class="section-title minor">Settings
-      <span class="sub">— they follow your account to every device you
-      sign in on. Signed out they still stick, on this one.</span></div>
-    ${pick("odds", "Prices", s.odds, [["american", "American", "−110"],
-                                     ["decimal", "Decimal", "1.91"]])}
-    ${pick("stake", "Stakes", s.stake, [["both", "Both", "$28 · 1.4u"],
-                                       ["units", "Units", "1.4u"],
-                                       ["dollars", "Dollars", "$28"]])}
-    ${pick("tz", "Times", s.tz, TZ_CHOICES.map(([v, l]) => [v, l]))}
-    ${pick("teamColors", "Team colours", s.teamColors, [["off", "Off"],
-      ["on", "Your team", s.teams.length ? teamNameIn(...s.teams[0].split(":")) : "follow one below"]])}
-    <div class="set-row">
-      <div class="set-k">Leagues in the nav</div>
-      <div class="set-v">${leagues}
-        <span class="set-note wide">All of them, unless you narrow it. The
-        league you are looking at always shows.</span></div>
-    </div>
-    <div class="set-row" id="set-mail">
-      <div class="set-k">Email</div>
-      <div class="set-v"><span class="set-empty">Checking…</span></div>
-    </div>
-    <div class="set-row">
-      <div class="set-k">Your teams</div>
-      <div class="set-v">${favs}
-        <span class="set-note wide">Their games ride at the front of the
-        strip and wear a star. Follow one from any game page. Picks stay ordered by edge — floating your
-        teams up a ranked board would say the model likes them more than
-        it does.</span></div>
-    </div>
-    <div class="set-row" id="set-cal">
-      <div class="set-k">Calendar</div>
-      <div class="set-v">${calRowHTML()}</div>
-    </div>
-    <div class="set-row">
-      <div class="set-k">Walkthrough</div>
-      <div class="set-v"><button type="button" class="set-opt" data-set-tour="1">Show me around</button>
-        <span class="set-note wide">The three cards a first visit sees: what a
-        pick card is, what RIDING means, why the Record keeps two books.</span></div>
-    </div>
-  </section>`;
+  const u = _acctUser, inn = !!(u && u.signed_in);
+  const out = [];
+  if (inn) {
+    out.push(setGroup("Account", [
+      setItem({ ico: "mail", tone: "gold", title: "Email", val: escapeHtml(u.email) }),
+      setItem({ ico: "lock", tone: "gold", title: "Password", val: "Change", chev: true,
+                attrs: 'data-set-open="password"' }),
+      setItem({ ico: "sync", tone: "gold", title: "Sync now", sub: escapeHtml(_acctNote || ""), subCls: "acct-note",
+                attrs: 'data-act="acctSyncNow"' }),
+    ], "Your bets, fantasy leagues, settings and searches follow this account to every device you sign in on."));
+    out.push(`<div id="set-plan">${planRowsHTML(_billStatus)}</div>`);
+  }
+  const team1 = s.teams.length ? setTeamName(s.teams[0]) : "";
+  out.push(setGroup("Preferences", [
+    setItem({ tag: "div", ico: "tag", tone: "green", title: "Prices",
+              sub: s.odds === "decimal" ? "Shown as 1.91" : "Shown as −110",
+              end: setSeg("odds", s.odds, [["american", "American"], ["decimal", "Decimal"]]) }),
+    setItem({ tag: "div", ico: "scale", tone: "green", title: "Stakes",
+              sub: s.stake === "units" ? "1.4u" : s.stake === "dollars" ? "$28" : "$28 · 1.4u",
+              end: setSeg("stake", s.stake, [["both", "Both"], ["units", "Units"], ["dollars", "Dollars"]]) }),
+    setItem({ ico: "clock", tone: "green", title: "Time zone",
+              val: escapeHtml((TZ_CHOICES.find(([v]) => v === s.tz) || TZ_CHOICES[0])[1]), chev: true,
+              attrs: 'data-set-open="tz"' }),
+    setItem({ ico: "list", tone: "green", title: "Leagues in the nav",
+              val: !s.leagues.length || s.leagues.length >= SPORT_CODES.length ? "All"
+                : `${s.leagues.length} of ${SPORT_CODES.length}`, chev: true, attrs: 'data-set-open="leagues"' }),
+    setItem({ ico: "star", tone: "green", title: "Your teams",
+              val: !s.teams.length ? "None" : s.teams.length > 2 ? `${s.teams.length} teams`
+                : escapeHtml(s.teams.map(setTeamName).join(", ")), chev: true, attrs: 'data-set-open="teams"' }),
+    setItem({ tag: "label", ico: "palette", tone: "green", title: "Team colours",
+              sub: team1 ? escapeHtml(`${team1} on the bar, the Live disc and the lit tab`) : "Follow a team first",
+              end: setSwitch(s.teamColors === "on", `data-set-switch="teamColors"${s.teams.length ? "" : " disabled"}`) }),
+  ]));
+  out.push(`<div id="set-notif">${notifGroupHTML()}</div>`);
+  const sl = localStorage.getItem("ff_user"), es = localStorage.getItem("ff_espn_league");
+  out.push(setGroup("Connected", [
+    setItem({ ico: "football", tone: "amber", title: "Fantasy leagues",
+              val: sl && es ? "Sleeper · ESPN" : sl ? "Sleeper" : es ? "ESPN" : "Not linked", chev: true,
+              attrs: 'data-set-open="fantasy"' }),
+    setItem({ ico: "calendar", tone: "amber", title: "Calendar",
+              val: !inn ? "Sign in" : _calLink ? "On" : "Off", chev: true, attrs: 'data-set-open="calendar"' }),
+  ], "Read-only, and none of them asks for a platform password."));
+  out.push(setGroup("Help", [
+    setItem({ ico: "compass", title: "Show me around", attrs: 'data-set-tour="1"' }),
+    setItem({ ico: "book", title: "How the model works", href: "#methodology", chev: true }),
+    setItem({ ico: "shield", title: "Privacy Policy", href: "privacy.html", chev: true }),
+    setItem({ ico: "info", title: "Terms of Service", href: "terms.html", chev: true }),
+  ]));
+  if (inn) {
+    out.push(setGroup("Your data", [
+      setItem({ ico: "download", title: "Download my data", attrs: 'data-act="acctExport"' }),
+      setItem({ ico: "search", title: "Clear search history", attrs: 'data-act="acctSearchClear"' }),
+      setItem({ ico: "logout", title: "Sign out everywhere", sub: "Every device, this one too",
+                attrs: 'data-act="acctSignOutAll"' }),
+    ]));
+    out.push(setGroup("", [
+      setItem({ ico: "logout", tone: "red", title: "Sign out", danger: true, attrs: 'data-act="acctSignOut"' }),
+      setItem({ ico: "trash", tone: "red", title: "Delete account", danger: true, attrs: 'data-act="acctDelete"' }),
+    ], "Delete removes the account and every bet, league and search we hold for it. It can’t be undone."));
+  }
+  return out.join("");
+}
+
+/* The screen a row opens: Back, its title, its own list or form. */
+function setPageHTML(page) {
+  const s = settings();
+  const head = (title) => `<button type="button" class="set-back" data-set-open="">${icon("chev", 16)}Settings</button>
+    <h2 class="set-page-h">${title}</h2>`;
+  if (page === "tz") {
+    return head("Time zone") + setGroup("", TZ_CHOICES.map(([v, label]) => setItem({
+      title: escapeHtml(label), end: v === s.tz ? setCheck() : "",
+      attrs: `data-set-key="tz" data-set-val="${escapeAttr(v)}" aria-pressed="${v === s.tz ? "true" : "false"}"` })),
+    "Every time on the site reads in this zone. This device follows the phone’s own.");
+  }
+  if (page === "leagues") {
+    return head("Leagues in the nav") + setGroup("", SPORT_CODES.map((c) => {
+      const on = !s.leagues.length || s.leagues.includes(c);
+      return setItem({ title: escapeHtml((LEAGUE_LABEL && LEAGUE_LABEL[c]) || c.toUpperCase()),
+                       end: on ? setCheck() : "", attrs: `data-set-league="${escapeAttr(c)}" aria-pressed="${on}"` });
+    }), "All of them, unless you narrow it. The league you are looking at always shows.");
+  }
+  if (page === "teams") {
+    return head("Your teams") + (s.teams.length ? setGroup("", s.teams.map((t) => setItem({
+      ico: "star", tone: "gold", title: escapeHtml(setTeamName(t)),
+      sub: escapeHtml((t.split(":")[0] || "").toUpperCase()), end: '<span class="set-val">Remove</span>',
+      attrs: `data-set-unfav="${escapeAttr(t)}" aria-label="${escapeAttr(`Stop following ${setTeamName(t)}`)}"` })),
+    "Their games ride at the front of the strip and wear a star. Picks stay ordered by edge — floating your teams up a ranked board would say the model likes them more than it does.")
+      : `<p class="set-foot set-empty">None yet. Open a game and tap the ☆ beside a team.</p>`);
+  }
+  if (page === "password") {
+    return head("Password") + `<div class="set-list">
+        <label class="set-field"><span>Current password</span>
+          <input type="password" class="acct-old" autocomplete="current-password" maxlength="200"></label>
+        <label class="set-field"><span>New password</span>
+          <input type="password" class="acct-new" autocomplete="new-password" maxlength="200"></label>
+      </div>
+      <div class="set-actions">
+        <button class="btn primary" data-act="acctChangePassword">Change password</button>
+        <button type="button" class="btn ghost acct-forgot" data-act="acctGoForgot">Email me a reset link</button>
+        <p class="acct-note"></p>
+      </div>
+      <p class="set-foot">Changing it signs out every other device — a new password is usually the answer to
+        “somebody else may have this”.</p>`;
+  }
+  if (page === "plan") return head("Membership") + `<div id="billing-slot"></div>`;
+  if (page === "code") {
+    return head("Redeem a code") + `<div class="set-code">${codeBoxHTML((_billStatus && _billStatus.codes) || {})}</div>`;
+  }
+  if (page === "fantasy") return head("Fantasy leagues") + ffLinksHTML();
+  if (page === "calendar") return head("Calendar") + `<div id="set-cal">${calRowHTML()}</div>`;
+  _setPage = "";
+  return setListHTML();
+}
+
+/* The Membership group, from the billing status (renderBilling). */
+function planRowsHTML(s) {
+  if (s === null) {
+    return setGroup("Membership", [setItem({ ico: "gem", tone: "gold", title: "Plan", val: "…" })]);
+  }
+  if (!s || !s.signed_in) return "";
+  const plan = PLANS.find((p) => p.id === s.plan);
+  const trial = String(s.status || "") === "trialing";
+  const ending = s.cancel_at_end || String(s.status || "") === "canceled";
+  const when = s.period_end ? new Date(s.period_end * 1000).toLocaleDateString([],
+    { year: "numeric", month: "short", day: "numeric" }) : "";
+  const rows = [];
+  if (s.entitled) {
+    const name = plan ? plan.name : s.comped ? "Complimentary" : "Member";
+    rows.push(setItem({ ico: "gem", tone: "gold", title: "Plan",
+                        val: `${escapeHtml(name)} · ${trial ? "Free trial" : ending ? "Ending" : "Active"}`,
+                        chev: true, attrs: 'data-set-open="plan"' }));
+    if (when) {
+      rows.push(setItem({ ico: "calendar", tone: "gold", title: trial ? "Trial ends" : ending ? "Access until" : "Renews",
+                          val: escapeHtml(when) }));
+    }
+    if (s.customer_id) rows.push(setItem({ ico: "card", tone: "gold", title: "Manage billing", chev: true,
+                                           attrs: 'data-act="billPortal"' }));
+  } else {
+    rows.push(setItem({ ico: "gem", tone: "gold", title: "Plan", val: "None", chev: true, attrs: 'data-set-open="plan"' }));
+    if (s.configured) rows.push(setItem({ ico: "card", tone: "gold", title: "See the plans", gold: true, chev: true,
+                                          attrs: 'data-act="billSeePlans"' }));
+  }
+  rows.push(setItem({ ico: "ticket", tone: "gold", title: "Redeem a code", chev: true, attrs: 'data-set-open="code"' }));
+  return setGroup("Membership", rows, s.live === false ? "Stripe test mode — no real money moves."
+    : "Card details go to Stripe, never to this server.") + `<p class="set-foot bill-note" role="status"></p>`;
+}
+
+/* The Notifications group: this phone's alerts, and the two emails. */
+function notifGroupHTML() {
+  const inn = !!(_acctUser && _acctUser.signed_in);
+  const st = _mailState;
+  const rows = [setItem({ ico: "bell", tone: "red", title: "Alerts on this phone", href: "#alerts", chev: true })];
+  let foot = "";
+  if (!inn) {
+    foot = "Sign in to get the morning card or the nightly recap by email.";
+  } else if (st && st.available) {
+    rows.push(setItem({ tag: "label", ico: "sun", tone: "red", title: "Morning card", sub: "The day’s picks, by email",
+                        end: setSwitch(!!st.morning, 'data-mail="morning"') }));
+    rows.push(setItem({ tag: "label", ico: "moon", tone: "red", title: "Nightly recap", sub: "How last night graded",
+                        end: setSwitch(!!st.nightly, 'data-mail="nightly"') }));
+    foot = "Every email carries a one-click unsubscribe.";
+  } else if (st && st.available === false) {
+    foot = "Email is not switched on yet — the digests are built and nothing can send them until a delivery "
+      + "provider is configured. Nothing here is subscribed to in the meantime.";
+  } else if (st === false) {
+    foot = "Could not read your email settings.";
+  }
+  return setGroup("Notifications", rows, foot);
 }
 
 /* YOUR GAMES IN YOUR CALENDAR (engine/calfeed, docs/IDEAS.md 12): your
@@ -2347,20 +2454,21 @@ function settingsHTML() {
 let _calLink = null;
 function calRowHTML() {
   if (!(_acctUser && _acctUser.signed_in)) {
-    return `<span class="set-empty">Sign in to put your teams’ games and your saved parlays in your calendar.</span>`;
+    return `<p class="set-foot set-empty">Sign in to put your teams’ games and your saved parlays in your calendar.</p>`;
   }
   if (!_calLink) {
-    return `<button type="button" class="set-opt" data-cal="get">Add my games to my calendar</button>
-      <span class="set-note wide">Your teams’ games this week and every game in a parlay you saved — never a pick.</span>`;
+    return setGroup("", [setItem({ ico: "calendar", tone: "amber", title: "Add my games to my calendar", gold: true,
+                                   attrs: 'data-cal="get"' })],
+      "Your teams’ games this week and every game in a parlay you saved — never a pick.");
   }
   // webcal:// is the same address, which a phone hands to its calendar;
   // built from the https one through safeHref, never taken on trust.
   const web = safeHref(_calLink.url), cal = web === "#" ? "#" : "webcal://" + web.replace(/^https?:\/\//i, "");
-  return `<a class="set-opt on" href="${cal}">Open in Calendar</a>
-    <button type="button" class="set-opt" data-cal="copy">Copy link</button>
-    <button type="button" class="set-opt" data-cal="new">New link</button>
-    <span class="set-note wide">Google Calendar: Other calendars → From URL, and paste the link.
-      Anyone with the link sees your games; New link stops the old one.</span>`;
+  return setGroup("", [
+    setItem({ ico: "calendar", tone: "amber", title: "Open in Calendar", href: cal, chev: true }),
+    setItem({ ico: "link", tone: "amber", title: "Copy link", attrs: 'data-cal="copy"' }),
+    setItem({ ico: "sync", tone: "amber", title: "New link", sub: "The old one stops working", attrs: 'data-cal="new"' }),
+  ], "Google Calendar: Other calendars → From URL, and paste the link. Anyone with the link sees your games; New link stops the old one.");
 }
 function bindCalRow() {
   const row = document.getElementById("set-cal");
@@ -2368,7 +2476,8 @@ function bindCalRow() {
   row.querySelectorAll("[data-cal]").forEach((b) => b.addEventListener("click", async () => {
     const what = b.dataset.cal;
     if (what === "copy") {
-      try { await navigator.clipboard.writeText(_calLink.url); b.textContent = "Copied"; } catch (e) { b.textContent = _calLink.url; }
+      const t = b.querySelector(".set-title") || b;
+      try { await navigator.clipboard.writeText(_calLink.url); t.textContent = "Copied"; } catch (e) { t.textContent = _calLink.url; }
       return;
     }
     try {
@@ -2376,56 +2485,42 @@ function bindCalRow() {
         what === "new" ? { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" }
           : { credentials: "same-origin" });
       if (r.ok) _calLink = await r.json();
-    } catch (e) { /* the button stays; a tap tries again */ }
-    row.querySelector(".set-v").innerHTML = calRowHTML();
+    } catch (e) { /* the row stays; a tap tries again */ }
+    row.innerHTML = calRowHTML();
     bindCalRow();
   }));
 }
 
-/* THE EMAIL ROW IS THE ONE SETTING THAT IS NOT LOCAL.
+/* THE EMAIL ROWS ARE THE ONE SETTING THAT IS NOT LOCAL.
    Everything else here lives in this browser and syncs as a preferences
    blob; a mailing list has to live on the server, because the thing
    that reads it is a cron job at 9am and not a page. So it is fetched
-   and written on its own endpoint, and it says which of three states it
-   is in rather than pretending: signed out (there is nobody to mail),
-   not configured (the site cannot send mail at all yet — see
+   and written on its own endpoint, and the group says which of three
+   states it is in rather than pretending: signed out (there is nobody to
+   mail), not configured (the site cannot send mail at all yet — see
    docs/EMAIL.md), or a pair of switches. */
 async function renderMailRow() {
-  const row = document.querySelector("#set-mail .set-v");
-  if (!row) return;
+  const host = document.getElementById("set-notif");
+  if (!host) return;
   if (!(_acctUser && _acctUser.signed_in)) {
-    row.innerHTML = `<span class="set-empty">Sign in to get the morning
-      card or the nightly recap by email.</span>`;
+    _mailState = null;
+    host.innerHTML = notifGroupHTML();
     return;
   }
   let st = null;
   try {
     const res = await fetch("/api/account/digest", { cache: "no-store" });
-    st = res.ok ? await res.json() : null;
-  } catch (e) { st = null; }
-  if (!st) {
-    row.innerHTML = `<span class="set-empty">Could not read your email
-      settings.</span>`;
-    return;
-  }
-  if (!st.available) {
-    row.innerHTML = `<span class="set-empty">Email is not switched on yet —
-      the digests are built and nothing can send them until a delivery
-      provider is configured. Nothing here is subscribed to in the
-      meantime.</span>`;
-    return;
-  }
-  const opt = (key, label, note) => `<button type="button"
-    class="set-opt${st[key] ? " on" : ""}" data-mail="${escapeAttr(key)}"
-    >${escapeHtml(label)}<span class="set-note">${escapeHtml(note)}</span></button>`;
-  row.innerHTML = opt("morning", "Morning card", "the day’s picks")
-    + opt("nightly", "Nightly recap", "how last night graded")
-    + `<span class="set-note wide">Every message carries a one-click
-       unsubscribe, and turning both off here does the same thing.</span>`;
-  row.querySelectorAll("[data-mail]").forEach((b) =>
+    st = res.ok ? await res.json() : false;
+  } catch (e) { st = false; }
+  _mailState = st || false;
+  const now = document.getElementById("set-notif");
+  if (!now) return;
+  now.innerHTML = notifGroupHTML();
+  now.querySelectorAll("[data-mail]").forEach((b) =>
     b.addEventListener("click", async () => {
       const next = { morning: !!st.morning, nightly: !!st.nightly };
       next[b.dataset.mail] = !next[b.dataset.mail];
+      b.setAttribute("aria-checked", String(next[b.dataset.mail]));
       try {
         await fetch("/api/account/digest", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -2436,27 +2531,58 @@ async function renderMailRow() {
     }));
 }
 
+/* Redraw the settings screen alone: the profile above it stays put. */
+function setRepaint() {
+  const host = document.querySelector(".qb-settings");
+  if (!host) { renderAccount(); return; }
+  host.outerHTML = settingsHTML();
+  bindSettings();
+  renderFantasyLinks();
+}
+
 function bindSettings() {
   const host = document.querySelector(".qb-settings");
   if (!host) return;
   renderMailRow();
   bindCalRow();
+  if (_acctUser && _acctUser.signed_in) renderBilling();
   const redraw = () => {
     // Prices, stakes and times are read by every renderer on the site,
     // so the whole board redraws rather than the panel patching the two
     // places somebody remembered.
     if (state.data) renderAll();
     applySport();
-    renderAccount();
+    setRepaint();
   };
-  host.querySelectorAll("[data-set-key]").forEach((b) =>
-    b.addEventListener("click", () => {
-      setSetting(b.dataset.setKey, b.dataset.setVal);
+  // ONE LISTENER ON THE SCREEN, not one per row: the Membership rows land
+  // after the billing check, and a row drawn later is a row nobody bound.
+  host.addEventListener("click", (e) => {
+    const hit = (sel) => { const el = e.target.closest(sel); return el && host.contains(el) ? el : null; };
+    const open = hit("[data-set-open]");
+    if (open) {
+      _setPage = open.dataset.setOpen || "";
+      setRepaint();
+      // The screen opens at its top, under the bar, wherever the list was.
+      setScrollTop();
+      return;
+    }
+    const key = hit("[data-set-key]");
+    if (key) {
+      setSetting(key.dataset.setKey, key.dataset.setVal);
       redraw();
-    }));
-  host.querySelectorAll("[data-set-league]").forEach((b) =>
-    b.addEventListener("click", () => {
-      const code = b.dataset.setLeague;
+      return;
+    }
+    const flip = hit("[data-set-switch]");
+    if (flip) {
+      if (flip.disabled) return;
+      const k = flip.dataset.setSwitch;
+      setSetting(k, settings()[k] === "on" ? "off" : "on");
+      redraw();
+      return;
+    }
+    const league = hit("[data-set-league]");
+    if (league) {
+      const code = league.dataset.setLeague;
       // An empty list means EVERY league, so the first tap has to
       // materialise the full list before removing one — otherwise
       // un-ticking a league would read as ticking only that one.
@@ -2468,13 +2594,15 @@ function bindSettings() {
       // state that cannot leave somebody with no leagues at all.
       setSetting("leagues", cur.length ? cur : []);
       redraw();
-    }));
-  host.querySelectorAll("[data-set-unfav]").forEach((b) =>
-    b.addEventListener("click", () => {
-      const [sport, abbr] = String(b.dataset.setUnfav).split(":");
+      return;
+    }
+    const unfav = hit("[data-set-unfav]");
+    if (unfav) {
+      const [sport, abbr] = String(unfav.dataset.setUnfav).split(":");
       favToggle(abbr, sport);
       redraw();
-    }));
+    }
+  });
   host.querySelectorAll("[data-set-tour]").forEach((b) =>
     b.addEventListener("click", () => tourOpen(0)));
 }
@@ -2797,26 +2925,21 @@ function friendsCardHTML() {
   const friends = (soc && soc.friends) || [];
   const inv = (soc && soc.invite) || null;
   const days = inv ? Math.max(1, Math.round(inv.expires_in_s / 86400)) : 0;
-  return `<section class="card qb-friends">
-    <div class="section-title minor">Friends
-      <span class="sub">— send picks back and forth. Friends are made with
-      your invite link, or by name from the
-      <a href="#messages">Messages page</a> — requests wait for a yes, and
-      nobody you didn’t say yes to can message you.</span></div>
-    ${inv ? `<div class="fr-invite">
-      <button class="btn" data-copy-invite="${escapeAttr(inv.token)}">Copy my
-        invite link</button>
-      <span class="set-note">good for ${days} day${days === 1 ? "" : "s"} —
-        anyone who opens it signed in becomes your friend</span>
-      <button class="btn ghost" data-revoke-invite>New link</button>
-    </div>` : ""}
-    ${friends.length ? `<div class="fr-list">${friends.map((f) => `
-      <span class="fr-chip">${escapeHtml(f.name)}
-        <button class="fr-x" data-unfriend="${escapeAttr(String(f.id))}"
-          title="Remove — closes the channel both ways"
-          aria-label="Remove ${escapeAttr(f.name)}">${icon("cross", 11)}</button>
-      </span>`).join("")}</div>`
-    : `<p class="set-empty">No friends yet. Text somebody the link.</p>`}
+  // Settings rows since 2026-10-25 (docs/VISUAL_AUDIT.md): a friend a row,
+  // the invite link a group of its own.
+  return `<section class="qb-friends set-screen">
+    ${setGroup("Friends", friends.length ? friends.map((f) => setItem({ lead: msgAvatar(f.name), title: escapeHtml(f.name),
+        end: `<button type="button" class="btn ghost fr-x" data-unfriend="${escapeAttr(String(f.id))}"
+          title="Remove — closes the channel both ways" aria-label="Remove ${escapeAttr(f.name)}">Remove</button>` }))
+      : [setItem({ ico: "user", title: "No friends yet", sub: "Text somebody your invite link" })],
+      `Send picks back and forth. Friends are made with your invite link, or by name from the
+      <a href="#messages">Messages page</a> — requests wait for a yes, and nobody you didn’t say yes to
+      can message you.`)}
+    ${inv ? setGroup("Your invite link", [
+      setItem({ ico: "link", tone: "gold", title: "Copy my invite link",
+                sub: `Good for ${days} day${days === 1 ? "" : "s"}`, attrs: `data-copy-invite="${escapeAttr(inv.token)}"` }),
+      setItem({ ico: "sync", title: "Make a new link", sub: "The old one stops working", attrs: "data-revoke-invite" }),
+    ], "Anyone who opens it signed in becomes your friend.") : ""}
   </section>`;
 }
 
