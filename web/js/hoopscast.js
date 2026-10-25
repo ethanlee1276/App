@@ -577,11 +577,15 @@
     // The picture box holds the picture and what is pinned to it (the
     // building, the run); the caption, the legend, a pane and the views sit
     // over it on a wide screen and under it on a phone (css/hoopscast.css).
+    // The arena's own screens lit with the game, and a big moment's banner
+    // for a phone (detail.js pbpArenaSVG, the live page's file).
+    const lit = typeof pbpArenaSVG === "function" ? pbpArenaSVG(d, league) : "";
+    const shout = typeof pbpMomentBannerHTML === "function" ? pbpMomentBannerHTML(d, league) : "";
     return `<div class="card hc-stage v-${view}" style="--ca:${k.colors.away};--ch:${k.colors.home}">
       <div class="hc-art" data-side="${side}">
         <div class="hc-frame">${PICTURE}
-          <svg class="hc-svg" viewBox="0 0 ${ART.w} ${ART.h}" preserveAspectRatio="none" aria-hidden="true">${svg}</svg></div>
-        ${where}${view === "live" ? run : ""}</div>
+          <svg class="hc-svg" viewBox="0 0 ${ART.w} ${ART.h}" preserveAspectRatio="none" aria-hidden="true">${lit}${svg}</svg></div>
+        ${shout}${where}${view === "live" ? run : ""}</div>
       ${legend}${view === "live" ? captionHTML(d, league, k) : ""}
       ${pane ? `<div class="hc-pane">${pane}</div>` : ""}
       <div class="hc-views" role="toolbar" aria-label="What the arena shows">${tabs}

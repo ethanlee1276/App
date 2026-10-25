@@ -730,11 +730,17 @@
     // Replay plays the newest events again (the puck's run, liveMarks).
     const replay = view === "live" && lastSpot
       ? `<button type="button" class="rc-replay" data-rc-replay aria-label="Replay the last plays">${svg(GLYPH.replay, 13)}<span>Replay</span></button>` : "";
+    // The arena's own screens lit with the game (its power play the one this
+    // page shows), and a big moment's banner for a phone (detail.js
+    // pbpArenaSVG, the live page's file).
+    const lit = typeof pbpArenaSVG === "function"
+      ? pbpArenaSVG(d, "nhl", { pp: k.pp ? k.pp.side : "", ppLeft: k.pp && k.pp.left > 0 ? k.pp.left : null }) : "";
+    const shout = typeof pbpMomentBannerHTML === "function" ? pbpMomentBannerHTML(d, "nhl") : "";
     return `<div class="card rc-stage v-${view}" style="--ca:${k.colors.away};--ch:${k.colors.home}">
       <div class="rc-scene"><div class="rc-art" data-half="${half}">
         <div class="rc-frame">${PICTURE}
-          <svg class="rc-svg" viewBox="0 0 ${ART.w} ${ART.h}" preserveAspectRatio="none" aria-hidden="true">${marks}</svg></div>
-        ${where}${pp}</div>
+          <svg class="rc-svg" viewBox="0 0 ${ART.w} ${ART.h}" preserveAspectRatio="none" aria-hidden="true">${lit}${marks}</svg></div>
+        ${shout}${where}${pp}</div>
       ${chipsHTML(d, k)}${view === "live" ? captionHTML(d, k) : ""}
       ${pane ? `<div class="rc-pane">${pane}</div>` : ""}</div>
       <div class="rc-views" role="toolbar" aria-label="What the arena shows">${tabs}

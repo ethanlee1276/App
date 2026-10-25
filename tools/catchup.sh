@@ -30,6 +30,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP DQ DR 2>&1 | tee /tmp/dr.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DS 2>&1 | tee /tmp/ds.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DK DL DM DN DO DP DQ DR DS 2>&1 | tee /tmp/ds.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DT 2>&1 | tee /tmp/dt.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -436,6 +437,10 @@ SH
 run DS "The stadiums come alive (the football board, big moments, the wind, the countdown)" 120 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpFieldBoardSVG('
 curl -s https://qellysbook.com/css/styles.css | grep -c '@keyframes pbp-boom'
+SH
+run DT "The arenas come alive (their boards, every sport's moments; zstd on a file with no copy made ahead)" 120 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpArenaSVG('
+curl -s -o /dev/null -D - -H 'Accept-Encoding: zstd, gzip' https://qellysbook.com/js/hoopscast.js | grep -i '^content-encoding'
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

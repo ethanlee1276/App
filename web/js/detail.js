@@ -2635,7 +2635,7 @@ function pbpRailHTML(d, league) {
 const PBP_BOARD = [[20.3, 24.1], [52.9, 24.7], [52.9, 39.8], [21.0, 40.7]];   // TL TR BR BL
 const PBP_BOARD_LED = { amber: "#FFC94A", white: "#F4F6FA", dim: "#8C95A8", off: "#262B36",
                         ball: "#3DDC84", strike: "#FF5A4E", panel: "#05070C", rule: "#FFFFFF",
-                        face: "#07080C" };
+                        face: "#07080C", clock: "#FFD34A", lamp: "#FF3B30", shot: "#120707" };
 // The three bags on the board's face (base, x, y): second at the top.
 const PBP_BOARD_BASES = [[1, 96.2, 15], [2, 91.2, 10], [3, 86.2, 15]];
 let _pbpBoardLast = null;
@@ -2643,8 +2643,8 @@ let _pbpBoardLast = null;
 /* The projective map from the board's flat face (0..1 by 0..1) onto the
    screen's four corners, with its slope at the point (Heckbert's square
    to quad). */
-function pbpBoardMap() {
-  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = PBP_BOARD;
+function pbpBoardMap(quad = PBP_BOARD) {
+  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = quad;
   const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3;
   const dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
   const den = dx1 * dy2 - dx2 * dy1;
@@ -2675,7 +2675,8 @@ function pbpBoardColor(abbr, league = "mlb") {
     return 0.2126 * ch(n >> 16) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
   };
   const off = (c) => (lum(c) + 0.05) / (lum(PBP_BOARD_LED.panel) + 0.05);
-  const all = [t.primary, t.secondary, t.tertiary].filter(Boolean);
+  // College's table names its second colour `alt` (cfbdata.parse_teams).
+  const all = [t.primary, t.secondary, t.tertiary, t.alt].filter(Boolean);
   const pick = all.find((c) => off(c) >= 3) || all.filter((c) => off(c) >= 2).sort((a, b) => off(b) - off(a))[0];
   return pick || PBP_BOARD_LED.dim;
 }
@@ -2706,28 +2707,97 @@ const PBP_MOMENTS = [                    // football, the biggest first: word, t
   ["INTERCEPTION", (p) => p.turnover && /interception/i.test(p.event || ""), false],
   ["FUMBLE", (p) => p.turnover && /fumble/i.test(p.event || ""), false],
 ];
-function pbpMoment(d, league, prev) {
-  const football = league === "nfl" || league === "cfb";
-  const plays = football ? (d.plays || []).filter((r) => r && r.kind === "football")
-    : (d.events || []).filter((r) => r && r.kind === "atbat");
-  const keyOf = (r) => String((football ? r.id : r.at_bat) ?? "");
-  const key = plays.length ? keyOf(plays[plays.length - 1]) : "";
-  const was = prev && prev.moment;
-  if (was && prev.play === key && Date.now() - was.at < PBP_MOMENT_UP_MS) return was;
-  const out = { key, word: "", big: false, side: "", at: Date.now() };
-  if (!key || !prev || prev.play == null || prev.play === key || !(Date.now() - prev.at < PBP_MOMENT_MS)) return out;
-  // Where the last drawing's newest play is (none yet: every play is new).
-  const seen = plays.findIndex((r) => keyOf(r) === prev.play);
-  const fresh = seen >= 0 ? plays.slice(seen + 1) : prev.play === "" ? plays : plays.slice(-1);
-  if (football) {
-    const hit = PBP_MOMENTS.find(([, is]) => fresh.some(is));
-    if (hit) Object.assign(out, { word: hit[0], big: hit[2] });
-  } else {
-    const hr = fresh.filter((r) => r.event_type === "home_run").pop();
-    if (hr) Object.assign(out, { word: hr.rbi >= 4 ? "GRAND SLAM" : "HOME RUN", big: true,
-      side: hr.half === "T" ? "away" : "home" });
+// The sport a league plays, for the plays it reads and the moments it has.
+const pbpSportOf = (league) => league === "nfl" || league === "cfb" ? "football"
+  : league === "nba" || league === "wnba" ? "hoops" : league === "nhl" ? "hockey" : "baseball";
+// A game clock in seconds: "5:10", "0.4", "45.2" (app.js pbpClockSecs is
+// a drive's length, and reads only a plain m:ss).
+function pbpGameClockSecs(c) {
+  const s = String(c == null ? "" : c).trim();
+  const m = /^(\d+):(\d{1,2}(?:\.\d+)?)$/.exec(s);
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  return /^\d+(?:\.\d+)?$/.test(s) ? Number(s) : null;
+}
+/* Hockey's strength on the ice: the side on the power play and the side
+   whose net is empty. The power play is the page's own when it hands one
+   over (rinkcast works it out from the penalties when the feed is silent),
+   else the feed's block, else the newest event's situation code (away
+   goalie, away skaters, home skaters, home goalie: nhlrink.situation, a
+   pulled goalie's extra man not counted as a power play). */
+function pbpRinkSit(d, opt = {}) {
+  const rk = (d && d.rink) || {}, s = rk.situation || {};
+  const side = (abbr) => (abbr && abbr === d.home ? "home" : abbr && abbr === d.away ? "away" : "");
+  const code = String(((rk.events || []).filter((r) => r && r.sc).pop() || {}).sc || "");
+  let pp = opt.pp !== undefined ? opt.pp || "" : side(s.pp), en = "";
+  if (/^[01][3-6][3-6][01]$/.test(code)) {
+    const [ag, ask, hsk, hg] = code.split("").map(Number);
+    const a = ask - (ag === 0 ? 1 : 0), h = hsk - (hg === 0 ? 1 : 0);
+    if (opt.pp === undefined && s.pp === undefined) pp = h > a ? "home" : a > h ? "away" : "";
+    en = ag === 0 ? "away" : hg === 0 ? "home" : "";
   }
+  return { pp, en, left: opt.ppLeft != null ? pbpCountdown(opt.ppLeft * 1000) : s.left || "" };
+}
+function pbpMoment(d, league, prev, opt = {}) {
+  const lv = (d && d.live) || {}, sport = pbpSportOf(league);
+  const plays = sport === "football" ? (d.plays || []).filter((r) => r && r.kind === "football")
+    : sport === "hoops" ? (d.plays || []).filter((r) => r && r.kind === "hoops")
+    : sport === "hockey" ? (((d.rink || {}).events) || []).filter((r) => r && r.id != null)
+    : (d.events || []).filter((r) => r && r.kind === "atbat");
+  const keyOf = (r) => String((sport === "baseball" ? r.at_bat : r.id) ?? "");
+  const key = plays.length ? keyOf(plays[plays.length - 1]) : "";
+  const sit = sport === "hockey" ? pbpRinkSit(d, opt) : null;
+  const was = prev && prev.moment;
+  if (was && prev.play === key && prev.state === lv.state && Date.now() - was.at < PBP_MOMENT_UP_MS) return { ...was, sit };
+  const out = { key, word: "", big: false, side: "", at: Date.now(), sit };
+  if (!prev || !(Date.now() - prev.at < PBP_MOMENT_MS)) return out;
+  // Every play since the last drawing (none drawn yet: every play is new).
+  let fresh = [];
+  if (key && prev.play != null && prev.play !== key) {
+    const seen = plays.findIndex((r) => keyOf(r) === prev.play);
+    fresh = seen >= 0 ? plays.slice(seen + 1) : prev.play === "" ? plays : plays.slice(-1);
+  }
+  const sideOf = (team) => (team && team === d.home ? "home" : team && team === d.away ? "away" : "");
+  const lead = (a, h) => (a > h ? "away" : h > a ? "home" : "");
+  const set = (word, big, side) => Object.assign(out, { word, big, side: side || "" });
+  if (sport === "football") {
+    const hit = PBP_MOMENTS.find(([, is]) => fresh.some(is));
+    if (hit) set(hit[0], hit[2]);
+  } else if (sport === "baseball") {
+    const hr = fresh.filter((r) => r.event_type === "home_run").pop();
+    if (hr) set(hr.rbi >= 4 ? "GRAND SLAM" : "HOME RUN", true, hr.half === "T" ? "away" : "home");
+  } else if (sport === "hoops") {
+    // A make at the horn (a field goal with a second or less left) beats a
+    // three, a three a dunk, a dunk the lead changing hands, that a timeout.
+    const made = fresh.filter((r) => r.shot && r.scoring && Number(r.points) >= 2);
+    const horn = made.filter((r) => { const s = pbpGameClockSecs(r.clock); return s != null && s <= 1; }).pop();
+    const three = made.filter((r) => Number(r.points) === 3).pop();
+    const dunk = made.filter((r) => /dunk/i.test(r.event || "")).pop();
+    const timeout = fresh.filter((r) => /timeout/i.test(r.event || "")).pop();
+    const before = lead(prev.away, prev.home), now = lead(lv.away_score, lv.home_score);
+    if (horn) set("BUZZER BEATER", true, sideOf(horn.team));
+    else if (three) set("3-POINTER", false, sideOf(three.team));
+    else if (dunk) set("DUNK", false, sideOf(dunk.team));
+    else if (before && now && before !== now) set("LEAD CHANGE", false, now);
+    else if (timeout) set("TIMEOUT", false, sideOf(timeout.team));
+  } else {
+    const goal = fresh.filter((r) => r.kind === "goal").pop();
+    const had = prev.sit || {};
+    if (goal) set("GOAL", true, sideOf(goal.team));
+    else if (sit.pp && sit.pp !== had.pp) set("POWER PLAY", false, sit.pp);
+    else if (sit.en && sit.en !== had.en) set("EMPTY NET", false, sit.en);
+  }
+  // THE FINAL HORN, seen live: every game's last moment, whatever led to it
+  // (a walk-off or a buzzer-beater says so instead).
+  if (!out.word && prev.state === "live" && lv.state === "final") set("FINAL", true, lead(lv.away_score, lv.home_score));
+  // Fireworks burn in the colours of the side whose score went up.
+  if (out.big && !out.side) out.side = lv.home_score > prev.home ? "home" : lv.away_score > prev.away ? "away" : "";
   return out;
+}
+// What a board remembers between drawings: the score, the state, the
+// strength on the ice, the newest play and when, and a moment that is up.
+function pbpBoardKeep(id, lv, moment) {
+  return { id, away: lv.away_score, home: lv.home_score, state: lv.state, sit: moment.sit || null,
+           play: moment.key, at: Date.now(), moment: moment.word ? moment : null };
 }
 
 /* The fireworks: bursts over the stands, rings of sparks in the board's
@@ -2739,19 +2809,20 @@ const PBP_BOOM_SPOTS = {
   mlb: [[150, 10, 13], [100, 15, 11], [198, 17, 12], [126, 27, 9], [176, 8, 10]],
   football: [[62, 30, 12], [178, 30, 12], [120, 42, 10], [40, 12, 9], [200, 12, 9]],
 };
-function pbpBoomSVG(spots, color, since = 0) {
+function pbpBoomSVG(spots, color, since = 0, unit = 1, inline = false) {
   const L = PBP_BOARD_LED, f = (n) => n.toFixed(2);
   const inks = [L.amber, color || L.white, L.white];
   const bursts = spots.map(([x, y, r], i) => {
     const sparks = Array.from({ length: 16 }, (_, k) => {
       const a = (k / 16) * Math.PI * 2 + i * 0.4, c = Math.cos(a), s = Math.sin(a);
       return `<line x1="${f(c * r * .3)}" y1="${f(s * r * .3)}" x2="${f(c * r)}" y2="${f(s * r)}"/>`
-        + `<circle cx="${f(c * r * 1.1)}" cy="${f(s * r * 1.1)}" r=".55" stroke="none"/>`;
+        + `<circle cx="${f(c * r * 1.1)}" cy="${f(s * r * 1.1)}" r="${f(.55 * unit)}" stroke="none"/>`;
     }).join("");
     return `<g transform="translate(${x} ${y})"><g class="pbp-boom-b" stroke="${inks[i % 3]}" fill="${inks[i % 3]}"
-      stroke-width=".45" stroke-linecap="round">${sparks}</g></g>`;
+      stroke-width="${f(.45 * unit)}" stroke-linecap="round">${sparks}</g></g>`;
   }).join("");
-  return `<svg class="pbp-boom" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+  return inline ? `<g class="pbp-boom" style="--t:${Math.round(since)}ms">${bursts}</g>`
+    : `<svg class="pbp-boom" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
     style="--t:${Math.round(since)}ms">${bursts}</svg>`;
 }
 
@@ -2843,11 +2914,10 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
   const half = inn ? inn[1].toLowerCase().slice(0, 3) : "";
   const batting = live && half === "top" ? "away" : live && half === "bot" ? "home" : "";
   // A run that scored since the last time this board was drawn flashes.
-  const id = `${away}@${home}`;
+  const id = `mlb:${away}@${home}`;
   const prev = _pbpBoardLast && _pbpBoardLast.id === id ? _pbpBoardLast : null;
-  const moment = pbpMoment(d, league, prev);
-  _pbpBoardLast = { id, away: lv.away_score, home: lv.home_score, play: moment.key, at: Date.now(),
-    moment: moment.word ? moment : null };
+  const moment = pbpMoment(d, "mlb", prev);
+  _pbpBoardLast = pbpBoardKeep(id, lv, moment);
   const row = (side, abbr, runs, cy) => {
     const fresh = prev && runs != null && prev[side] != null && runs !== prev[side];
     // Two digits step down a size, so a twelve keeps clear of "ARI".
@@ -2871,8 +2941,9 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
   if (moment.word) {
     // HOME RUN across the column, blinking, until the next pass redraws it.
     const [a, b] = moment.word.split(" ");
-    side = `<g class="pbp-sb-moment" style="--t:${Date.now() - moment.at}ms">${word(a, 19.5, 14, L.amber, true, 82, 34)}${
-      word(b, 37, 14, L.amber, true, 82, 34)}</g>`;
+    side = `<g class="pbp-sb-moment" style="--t:${Date.now() - moment.at}ms">${b
+      ? word(a, 19.5, 14, L.amber, true, 82, 34) + word(b, 37, 14, L.amber, true, 82, 34)
+      : word(a, 28.5, 14, L.amber, true, 82, 34)}</g>`;
   } else if (live && hold) {
     // "Delayed — Rain": the state, and under it why.
     const [what, why] = hold.split(/\s[\u2014-]\s/);
@@ -2928,7 +2999,8 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
     ${row("away", away, lv.away_score, 13.5)}${row("home", home, lv.home_score, 36.5)}
     ${side}
   </svg>${pbpWindSVG((boardGame || {}).weather)}${moment.big && Date.now() - moment.at < PBP_BOOM_MS
-    ? pbpBoomSVG(PBP_BOOM_SPOTS.mlb, pbpBoardColor(moment.side === "away" ? away : home), Date.now() - moment.at) : ""}`;
+    ? pbpBoomSVG(PBP_BOOM_SPOTS.mlb, pbpBoardColor(moment.side === "away" ? away : home), Date.now() - moment.at) : ""}${
+    pbpMomentBannerHTML(d, "mlb")}`;
 }
 
 /* THE FOOTBALL FIELD'S BOARD, LIT (Ethan, 2026-10-25: "keep going with any
@@ -2970,12 +3042,7 @@ function pbpFieldBoardSVG(d, league) {
   const id = `${league}:${away}@${home}`;
   const prev = _pbpBoardLast && _pbpBoardLast.id === id ? _pbpBoardLast : null;
   const moment = pbpMoment(d, league, prev);
-  // Who scored, for the fireworks' colour: the side whose score went up.
-  if (moment.big && !moment.side && prev) {
-    moment.side = lv.home_score > prev.home ? "home" : lv.away_score > prev.away ? "away" : "";
-  }
-  _pbpBoardLast = { id, away: lv.away_score, home: lv.home_score, play: moment.key, at: Date.now(),
-    moment: moment.word ? moment : null };
+  _pbpBoardLast = pbpBoardKeep(id, lv, moment);
   const hold = live && typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
   const screen = (side, abbr, pts) => {
     const [x0, y0, x1, y1] = PBP_FIELD_BOARD[side], cx = f((x0 + x1) / 2);
@@ -3027,7 +3094,187 @@ function pbpFieldBoardSVG(d, league) {
     ${line}
   </svg>${moment.big && Date.now() - moment.at < PBP_BOOM_MS
     ? pbpBoomSVG(PBP_BOOM_SPOTS.football, moment.side ? pbpBoardColor(moment.side === "away" ? away : home, league) : "",
-      Date.now() - moment.at) : ""}`;
+      Date.now() - moment.at) : ""}${pbpMomentBannerHTML(d, league)}`;
+}
+
+/* THE ARENAS, LIT (Ethan, 2026-10-25: "do the nba and nhl next ... make
+   sure all additions and features and changes we have added and done has
+   been done to all sports"). js/hoopscast.js and js/rinkcast.js draw over
+   their arena photographs in the renders' 1672 x 941 (the files are the
+   same picture at 1280 x 720), and each page shows a window of it: a wide
+   screen the floor and the stands under the centre-hung board (basketball
+   from y 230 down, so only the board's ring band shows; hockey nearly all
+   of it), a phone the floor alone. So each arena is lit where its page
+   shows it, measured off the picture:
+
+   BASKETBALL (both leagues play in the one arena). The board's ring band
+   (693-981 x 277-309) and the scorer's table along the far sideline
+   (660-1018 x 556-584) carry the game: "LAL 10 · Q2 5:10 · BOS 8". The
+   shot clocks over both baskets were painted 5:24 and 18 and never moved;
+   they carry the game clock now, and the quarter in the red beneath it.
+   The shot clock itself is in no feed we read, so it is not drawn.
+
+   HOCKEY. The last-play card covers the main screen's left half on a wide
+   screen, down to y 256, so the score rides the board's ring band under
+   its screens (708-961 x 289-323) and the period and clock its lit halo
+   beneath (centre 836,366), with the power play or an empty net under
+   them. The centre panel of the far boards (755-922 x 576-595) is the one
+   piece of them every phone window holds, and carries the score there. A
+   goal says GOAL on the main screen and lights the red lamp behind the net
+   it went in: rinkcast's own goal lines at (294, 682) and (1391, 682), the
+   away side shooting at the left, the home side at the right.
+
+   A big moment goes up on all of them (pbpMoment), with fireworks for a
+   buzzer-beater, a goal and the final horn; on a phone, where all of this
+   is a few pixels high, the moment also gets its banner. What a board
+   shows is what the feed holds: timeouts, fouls and the bonus stay on the
+   page's own scoreboard. */
+const PBP_ARENA = {
+  hoops: {
+    ring: [693, 277, 981, 309],
+    table: [660, 556, 1018, 584],
+    // The shot clocks' faces inside their frames (TL TR BR BL): the left
+    // basket's leans in from the left, the right one's from the right.
+    clocks: [[[314.8, 460], [347.5, 454.2], [347.5, 499.9], [316.1, 511]],
+             [[1328.5, 454.2], [1359.9, 460], [1358.5, 510.4], [1327.2, 499.9]]],
+    boom: [[260, 430, 70], [1410, 430, 70], [520, 470, 56], [1150, 470, 56], [836, 480, 60]],
+  },
+  hockey: {
+    ring: [708, 289, 961, 323],
+    halo: [836, 366, 96, 23],                                 // cx cy rx ry
+    boards: [755, 576, 922, 595],
+    screen: [[663.6, 115], [1009.7, 115], [994.1, 283.6], [679.3, 283.6]],
+    nets: { away: [294, 682, 252], home: [1391, 682, 1433] },  // the goal line, and the lamp's x behind it
+    boom: [[260, 340, 70], [1410, 340, 70], [500, 420, 56], [1170, 420, 56], [836, 505, 50]],
+  },
+};
+// The period as an arena's boards say it: Q2, OT, 2OT; 1ST, 3RD, OT, SO.
+function pbpArenaPeriod(lv, league, d) {
+  const per = String((lv || {}).period || "");
+  if (league === "nhl") {
+    const m = /^P(\d+)$/.exec(per), n = m ? +m[1] : 0;
+    if (!n) return per.toUpperCase();
+    if (n <= 3) return ["1ST", "2ND", "3RD"][n - 1];
+    return n === 4 ? "OT" : (((d || {}).rink || {}).game_type === 3 ? `${n - 3}OT` : "SO");
+  }
+  const m = /^Q(\d+)$/.exec(per), n = m ? +m[1] : 0;
+  return !n ? per.toUpperCase() : n <= 4 ? `Q${n}` : n === 5 ? "OT" : `${n - 4}OT`;
+}
+// What the game is doing, in a board's words; inside the last hour, counted.
+function pbpArenaStatus(d, league) {
+  const lv = (d && d.live) || {};
+  const hold = lv.state === "live" && typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
+  if (hold) return { text: hold.split(/\s[\u2014-]\s/)[0].replace(/\s+(quarter|period)$/i, "").toUpperCase() };
+  if (lv.state === "live") return { text: [pbpArenaPeriod(lv, league, d), lv.clock || ""].filter(Boolean).join(" ") };
+  if (lv.state === "final") return { text: String(lv.period || "Final").toUpperCase() };
+  if (lv.start_time) {
+    const start = Date.parse(lv.start_time), left = start - Date.now(), word = league === "nhl" ? "PUCK DROP" : "TIP-OFF";
+    if (left > 0 && left <= PBP_COUNT_MS) return { text: `${word} IN ${pbpCountdown(left)}`, start, pre: `${word} IN `, done: word };
+    if (typeof tzTime === "function") return { text: `${word} ${tzTime(lv.start_time)}` };
+  }
+  return { text: "" };
+}
+// One lit line across a rectangle of the picture: the board's own black
+// over what was painted there, the words centred and sized to fit (the
+// face is mono, so a character is 0.6 of its size). `parts` colour it.
+function pbpLedLine([x0, y0, x1, y1], parts, max, blink = null) {
+  const L = PBP_BOARD_LED, f = (n) => n.toFixed(1);
+  const n = parts.map((p) => p.t).join("").length;
+  const size = Math.min(max, (x1 - x0) * 0.92 / (Math.max(1, n) * 0.6));
+  return `<rect x="${x0}" y="${y0}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" rx="3" fill="${L.face}" fill-opacity=".97"/>
+    <text class="pbp-sb-num${blink != null ? ` pbp-sb-moment" style="--t:${blink}ms` : ""}" x="${f((x0 + x1) / 2)}"
+      y="${f((y0 + y1) / 2 + size * 0.36)}" font-size="${f(size)}" text-anchor="middle" filter="url(#pbp-ar-glow)">${
+      parts.map((p) => `<tspan fill="${p.c || L.white}"${p.a || ""}>${escapeHtml(p.t)}</tspan>`).join("")}</text>`;
+}
+// Words on a screen the picture sees at an angle, drawn on its own face
+// (W 100 by H across) and carried onto the picture by its four corners.
+function pbpOnQuad(quad, H, inner) {
+  const map = pbpBoardMap(quad), W = 100, f = (n) => n.toFixed(3);
+  return inner.map(([x, y, svg]) => {
+    const m = map(x / W, y / H);
+    return `<g transform="matrix(${f(m.xu / W)} ${f(m.yu / W)} ${f(m.xv / H)} ${f(m.yv / H)} ${f(m.X)} ${f(m.Y)})">${svg}</g>`;
+  }).join("");
+}
+// A shot clock: the game clock in yellow over the period in red.
+function pbpShotClockSVG(quad, top, bottom) {
+  const L = PBP_BOARD_LED, fit = (s, max) => Math.min(max, 92 / (Math.max(1, s.length) * 0.6)).toFixed(1);
+  const glyph = (s, max, fill) => `<text class="pbp-sb-num" font-size="${fit(s, max)}" text-anchor="middle" fill="${fill}"
+    filter="url(#pbp-ar-glow)">${escapeHtml(s)}</text>`;
+  return `<polygon points="${quad.map(([x, y]) => `${x},${y}`).join(" ")}" fill="${L.shot}"/>` + pbpOnQuad(quad, 150, [
+    ...(top ? [[50, 52, glyph(top, 40, L.clock)]] : []), ...(bottom ? [[50, 124, glyph(bottom, 56, L.strike)]] : [])]);
+}
+function pbpArenaSVG(d, league, opt = {}) {
+  const lv = (d && d.live) || {};
+  const away = String((d && d.away) || ""), home = String((d && d.home) || "");
+  if (!away || !home) return "";
+  const hockey = league === "nhl", A = hockey ? PBP_ARENA.hockey : PBP_ARENA.hoops, L = PBP_BOARD_LED;
+  const id = `${league}:${away}@${home}`;
+  const prev = _pbpBoardLast && _pbpBoardLast.id === id ? _pbpBoardLast : null;
+  const moment = pbpMoment(d, league, prev, opt);
+  _pbpBoardLast = pbpBoardKeep(id, lv, moment);
+  const since = Date.now() - moment.at, blink = moment.word ? since : null;
+  const st = pbpArenaStatus(d, league);
+  // A count drawn here ticks on the page's one timer (renderPbpPage hands
+  // these pages over before it would start it).
+  if (st.start && typeof document !== "undefined") pbpCountStart();
+  const T = (t) => ({ t, c: L.white }), N = (n) => ({ t: String(n), c: L.amber }), S = (t) => ({ t, c: L.dim });
+  const now = st.text ? { t: st.text, c: L.amber,
+    a: st.start ? ` data-pbp-count="${st.start}" data-pbp-pre="${st.pre}" data-pbp-done="${st.done}"` : "" } : null;
+  const scored = lv.away_score != null && lv.home_score != null;
+  const shout = moment.word ? [{ t: moment.word, c: L.amber }, ...(moment.side ? [S(" · "), T(d[moment.side])] : [])] : null;
+  let out = "";
+  if (!hockey) {
+    const game = shout || [T(scored ? `${away} ` : away), ...(scored ? [N(lv.away_score)] : []),
+      ...(now ? [S(" · "), now] : []), S(" · "), T(scored ? `${home} ` : home), ...(scored ? [N(lv.home_score)] : [])];
+    const top = lv.state === "live" ? String(lv.clock || "") : lv.state === "final" ? "0.0" : "";
+    const bottom = lv.state === "live" ? pbpArenaPeriod(lv, league, d) : lv.state === "final" ? "FINAL" : "";
+    out = pbpLedLine(A.ring, game, 22, blink) + pbpLedLine(A.table, game, 19, blink)
+      + A.clocks.map((q) => pbpShotClockSVG(q, top, bottom)).join("");
+  } else {
+    const score = shout || (scored ? [T(`${away} `), N(lv.away_score), S(" – "), N(lv.home_score), T(` ${home}`)]
+      : [T(away), S(" · "), T(home)]);
+    const [cx, cy, rx, ry] = A.halo, sit = moment.sit || {};
+    const strength = lv.state !== "live" ? "" : sit.en ? `${d[sit.en]} EMPTY NET`
+      : sit.pp ? `${d[sit.pp]} POWER PLAY${sit.left ? ` ${sit.left}` : ""}` : "";
+    const fit = (s, room, max) => Math.min(max, room / (Math.max(1, s.length) * 0.6)).toFixed(1);
+    const halo = `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${L.face}" fill-opacity=".97"/>${now
+      ? `<text class="pbp-sb-num" x="${cx}" y="${(strength ? cy - 2 : cy + 8).toFixed(1)}" font-size="${fit(now.t, 168, 24)}"
+        text-anchor="middle" fill="${L.amber}" filter="url(#pbp-ar-glow)"${now.a}>${escapeHtml(now.t)}</text>` : ""}${strength
+      ? `<text class="pbp-sb-num" x="${cx}" y="${cy + 16}" font-size="${fit(strength, 156, 15)}" text-anchor="middle"
+        fill="${L.white}">${escapeHtml(strength)}</text>` : ""}`;
+    out = pbpLedLine(A.ring, score, 24, blink) + halo + pbpLedLine(A.boards, score, 15, blink);
+    if (moment.word === "GOAL" && moment.side) {
+      // The main screen says it, and the lamp behind the net it went in burns.
+      const [x, y, lx] = A.nets[moment.side];
+      out += `<polygon points="${A.screen.map(([px, py]) => `${px},${py}`).join(" ")}" fill="${L.face}"/>
+        <g class="pbp-sb-moment" style="--t:${since}ms">${pbpOnQuad(A.screen, 50, [
+          [50, 31, `<text class="pbp-sb-num" font-size="27" text-anchor="middle" fill="${L.amber}">GOAL</text>`],
+          [50, 44, `<text font-size="9" text-anchor="middle" fill="${pbpBoardColor(d[moment.side], league)}" letter-spacing=".8">${
+            escapeHtml(d[moment.side])}</text>`]])}</g>
+        <g class="pbp-lamp" style="--t:${since}ms"><ellipse cx="${x}" cy="${y - 18}" rx="110" ry="70" fill="url(#pbp-ar-lamp)"/>
+          <rect x="${lx - 10}" y="${y - 84}" width="20" height="14" rx="5" fill="${L.lamp}" filter="url(#pbp-ar-glow)"/></g>`;
+    }
+  }
+  return `<defs><filter id="pbp-ar-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter><radialGradient id="pbp-ar-lamp"><stop offset="0" stop-color="${L.lamp}" stop-opacity=".6"/>
+      <stop offset="1" stop-color="${L.lamp}" stop-opacity="0"/></radialGradient></defs>
+    <g class="pbp-board pbp-arena">${out}</g>${moment.big && since < PBP_BOOM_MS
+      ? pbpBoomSVG(A.boom, moment.side ? pbpBoardColor(d[moment.side], league) : "", since, 6.5, true) : ""}`;
+}
+/* THE BIG MOMENT ON A PHONE. A phone shows every picture whole or cropped
+   to its play, and a board's words there are a few pixels high: the moment
+   gets a lit banner over the picture in the boards' own face, in, three
+   blinks and out (css/detail.css; a wide screen reads the boards). It sits
+   where its picture has room: the ballpark's sky, under the field's board,
+   an arena's corner. */
+function pbpMomentBannerHTML(d, league) {
+  const m = _pbpBoardLast && _pbpBoardLast.id === `${league}:${d.away}@${d.home}` ? _pbpBoardLast.moment : null;
+  if (!m || !m.word || !(Date.now() - m.at < PBP_MOMENT_UP_MS)) return "";
+  const where = league === "nfl" || league === "cfb" ? " pbp-mb-below" : league === "mlb" ? "" : " pbp-mb-left";
+  const team = m.side ? String(d[m.side] || "") : "";
+  return `<div class="pbp-moment-banner${where}" style="--t:${Date.now() - m.at}ms" aria-hidden="true"><b>${
+    escapeHtml(m.word)}</b>${team ? `<span>${escapeHtml(team)}</span>` : ""}</div>`;
 }
 
 async function renderPbpPage() {

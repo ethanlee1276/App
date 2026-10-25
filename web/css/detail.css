@@ -645,3 +645,22 @@
 .pbp-wind path:nth-child(5) { animation-delay: -1.3s; }
 .pbp-wind-brisk path { animation-duration: 1.8s; stroke-opacity: .5; }
 .pbp-wind-strong path { animation-duration: 1.2s; stroke-opacity: .58; stroke-width: .5; }
+/* An arena's goal (detail.js pbpArenaSVG): the lamp behind the net it went
+   in burns on and off. Reduced motion leaves it lit. */
+.pbp-lamp { animation: pbp-lamp .6s ease-in-out 12 alternate both; animation-delay: calc(0s - var(--t, 0s)); }
+/* The big moment on a phone (detail.js pbpMomentBannerHTML): the boards'
+   lit face over the picture, in, three blinks, out. A wide screen reads
+   the boards themselves; reduced motion holds it still until the page's
+   next pass. Night tokens: it sits on a photograph in either theme. */
+.pbp-moment-banner { position: absolute; z-index: 3; top: 8px; left: 50%; translate: -50% 0; display: none;
+  align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: var(--radius-sm); pointer-events: none;
+  white-space: nowrap; background: color-mix(in srgb, var(--night-3) 88%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--night-gold) 55%, transparent); box-shadow: var(--glow);
+  animation: pbp-banner 5s linear both; animation-delay: calc(0s - var(--t, 0s)); }
+.pbp-moment-banner b { font: 700 var(--fs-xl) / 1.05 var(--font-mono); letter-spacing: .06em; color: var(--night-gold);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--night-gold) 65%, transparent); }
+.pbp-moment-banner span { font: 800 var(--fs-sm) / 1 var(--font-display); letter-spacing: .1em; color: var(--night-text); }
+.pbp-moment-banner.pbp-mb-below { top: 22%; }
+.pbp-moment-banner.pbp-mb-left { left: 8px; translate: none; }
+@media (max-width: 720px) { .pbp-moment-banner { display: flex; } }
+@media (prefers-reduced-motion: reduce) { .pbp-moment-banner { animation: none; } }

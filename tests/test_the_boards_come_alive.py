@@ -133,7 +133,9 @@ def test_overtime_the_half_a_quarters_end_the_final_and_the_kickoff_each_say_so(
         _fb(dict(LIVE, period="Q2", clock="0:00", hold="Halftime")),
         _fb(dict(LIVE, hold="End of 3rd Quarter")),
         _fb(dict(LIVE, hold="Delayed — Weather")),
-        _fb({"state": "final", "away_score": 30, "home_score": 27, "period": "Final/OT"}),
+        # Another game: this one's live drawings just above would make its
+        # final the horn seen live (test_the_arenas_come_alive.py), a moment.
+        _fb({"state": "final", "away_score": 30, "home_score": 27, "period": "Final/OT"}, away="BUF", home="MIA"),
         _fb({"state": "scheduled", "start_time": "2099-10-25T20:25:00Z"}),
     ]) + "];")
     if got is None:
