@@ -33,6 +33,7 @@ Policy and deleted with the account. Standard library only.
 """
 from __future__ import annotations
 
+import sqlite3
 import time
 
 FOOTBALL = ("nfl", "cfb")
@@ -261,6 +262,79 @@ def streaks(conn, user_id) -> tuple:
     return cur, best
 
 
+# --- across every game: the ladders and the flame ------------------------------
+# The ideas list (2026-10-25, item 3): a week's and a season's leaderboard
+# across every game, and a streak flame beside a handle in the chat. Both
+# are asked on every poll, so each is kept a minute in memory.
+LADDER_N = 5
+#: Graded calls a caller needs this week to stand on the ladder: three
+#: calls right of three is luck, not a ladder.
+LADDER_MIN = 10
+#: A flame from this many in a row.
+FLAME_MIN = 3
+CACHE_S = 60
+#: The season ladder's start: 1 Aug 2026, Eastern (the 2026-27 season; Call
+#: it itself began 25 Oct). Move it when a new season starts.
+SEASON_START = 1785556800
+_cache: dict = {}
+
+
+def _profiles(conn) -> tuple:
+    named = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'feed_profiles'").fetchone()
+    return ("p.handle", "LEFT JOIN feed_profiles p ON p.user_id = c.user_id ") if named else ("NULL", "")
+
+
+def ladder(conn, since: float, n: int = LADDER_N, now: float | None = None) -> list:
+    """The best callers across every game since ``since``: most right, then
+    the fewer calls it took. A caller needs LADDER_MIN graded calls."""
+    t = time.time() if now is None else now
+    hit = _cache.get(("ladder", since, n))
+    if hit and t - hit[0] < CACHE_S:
+        return hit[1]
+    handle, join = _profiles(conn)
+    rows = conn.execute(
+        f"SELECT c.user_id, SUM(c.won) AS r, COUNT(*) AS k, {handle} FROM callit_calls c {join}"
+        "WHERE c.at >= ? AND c.won IS NOT NULL GROUP BY c.user_id HAVING k >= ? AND r > 0 "
+        "ORDER BY r DESC, k ASC LIMIT ?", (float(since), LADDER_MIN, int(n))).fetchall()
+    out = [{"handle": r[3] or "a fan", "right": int(r[1] or 0), "total": int(r[2] or 0)} for r in rows]
+    _cache[("ladder", since, n)] = (t, out)
+    return out
+
+
+def week_start(now: float | None = None) -> float:
+    """The ladder's week: the last seven days, to the hour (so the cache key
+    holds still for an hour rather than moving every second)."""
+    t = time.time() if now is None else now
+    return float(int(t - 7 * 86400) // 3600 * 3600)
+
+
+def current_streaks(conn, user_ids, now: float | None = None) -> dict:
+    """``{user_id: calls right in a row now}`` for each id with a run of
+    FLAME_MIN or more (voids skipped), each read at most once a minute."""
+    t = time.time() if now is None else now
+    out = {}
+    try:
+        for uid in {int(u) for u in user_ids or []}:
+            hit = _cache.get(("streak", uid))
+            if hit and t - hit[0] < CACHE_S:
+                run = hit[1]
+            else:
+                run = 0
+                for (right,) in conn.execute("SELECT won FROM callit_calls WHERE user_id = ? AND won IS NOT NULL "
+                                             "ORDER BY at DESC LIMIT 100", (uid,)):
+                    if not right:
+                        break
+                    run += 1
+                _cache[("streak", uid)] = (t, run)
+            if run >= FLAME_MIN:
+                out[uid] = run
+    except sqlite3.Error:            # no calls table yet: nobody has a flame
+        return {}
+    if len(_cache) > 5000:
+        _cache.clear()
+    return out
+
+
 def board(conn, game: str) -> list:
     """The room's best callers in this game, by calls right. A username
     comes from the feed's profiles when that table exists (a fresh
@@ -282,7 +356,8 @@ def state(conn, user_id, doc: dict) -> dict:
     grade(conn, doc)
     game = game_key(doc)
     out = {"open": open_unit(doc), "kind": _kind(str(doc.get("league") or "")),
-           "board": board(conn, game), "signed_in": bool(user_id)}
+           "board": board(conn, game), "signed_in": bool(user_id),
+           "week": ladder(conn, week_start()), "season": ladder(conn, SEASON_START)}
     if not user_id:
         return out
     uid = int(user_id)

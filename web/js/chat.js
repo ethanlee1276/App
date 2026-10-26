@@ -999,7 +999,9 @@ function chatMsgHTML(m, prev) {
   const reply = m.reply_to ? CH.byId.get(m.reply_to) : null;
   const play = m.play && !CH.thread ? chatPlayOf(m.play) : null;
   const badge = (p.verified ? `<span class="gch-tick" title="Verified">${typeof icon === "function" ? icon("check", 10) : "✓"}</span>` : "")
-    + (p.founder ? `<span class="gch-founder">Founder</span>` : "");
+    + (p.founder ? `<span class="gch-founder">Founder</span>` : "")
+    // Call it's flame: this many calls right in a row now (engine/callit).
+    + (Number(p.streak) >= 3 ? `<span class="gch-flame" title="${Number(p.streak)} Call it calls right in a row">🔥${Number(p.streak)}</span>` : "");
   const menu = CH.menu === m.id ? chatMenuHTML(m) : "";
   const cont = chatJoins(m, prev && typeof prev === "object" ? prev : null);
   // The site's own account (engine/housepost posts each big play as it) wears the site's mark.

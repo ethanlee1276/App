@@ -145,6 +145,8 @@ body.gch-on { overflow: hidden; }
   background: color-mix(in oklab, var(--gch-tint, var(--brand)) 24%, var(--panel-2));
   color: var(--gch-tint, var(--brand)); font-size: var(--fs-xs); font-weight: 900; }
 .gch-av.gold { outline: 2px solid var(--brand); }
+/* Call it's flame beside a handle (engine/callit current_streaks). */
+.gch-flame { font-size: var(--fs-2xs); font-weight: 800; color: var(--warn); font-variant-numeric: tabular-nums; }
 .gch-c0 { --gch-tint: var(--brand); }
 .gch-c1 { --gch-tint: var(--good); }
 .gch-c2 { --gch-tint: var(--bad); }

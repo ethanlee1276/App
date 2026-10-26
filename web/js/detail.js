@@ -2867,7 +2867,7 @@ if (typeof window !== "undefined" && !window._recapBound) {
    few seconds later, and the room keeps score. Free — no money, no prices,
    nothing the model thinks. The card is drawn from the last answer on every
    redraw, so it never blinks, and asks again at most every five seconds. */
-const _ci = { key: "", at: 0, v: null, note: "" };
+const _ci = { key: "", at: 0, v: null, note: "", span: "week" };
 const CI_LEAGUES = new Set(["mlb", "nfl", "cfb", "nba", "wnba", "nhl"]);
 const CI_WORD = { hit: "Hit", out: "Out", k: "Strikeout", walk: "Walk",
                   td: "Touchdown", fg: "Field goal", punt: "Punt", turnover: "Turnover",
@@ -2901,10 +2901,26 @@ function ciBodyHTML(v) {
   const g = v.game || {};
   const meta = [g.total ? `${g.right} of ${g.total} right this game` : "", v.streak ? `${v.streak} in a row` : "",
     v.best > 1 ? `best ${v.best}` : ""].filter(Boolean);
-  const board = (v.board || []).length ? `<ol class="ci-board">${v.board.map((r) =>
+  const board = (v.board || []).length ? `<p class="mini ci-sub">Best in this game</p><ol class="ci-board">${v.board.map((r) =>
     `<li><b>${escapeHtml(r.handle)}</b> ${r.right} of ${r.total}</li>`).join("")}</ol>` : "";
+  // FIVE IN A ROW, AND EVERY FIVE AFTER: a card to share (the ideas list's "Called it").
+  const share = v.streak >= 5 && v.streak % 5 === 0 ? `<button type="button" class="ci-share"
+    data-ci-share="${escapeAttr(`I called ${v.streak} in a row on Qellys Book’s Call it.`)}">${escapeHtml(`${v.streak} in a row — share it`)}</button>` : "";
   return `${head}${last}${body}${_ci.note ? `<p class="mini ci-note" role="status">${escapeHtml(_ci.note)}</p>` : ""}${
-    meta.length ? `<p class="mini ci-meta">${escapeHtml(meta.join(" · "))}</p>` : ""}${board}`;
+    meta.length ? `<p class="mini ci-meta">${escapeHtml(meta.join(" · "))}</p>` : ""}${share}${board}${ciLadderHTML(v)}`;
+}
+/* THE LADDERS (engine/callit ladder): the best callers across every game,
+   this week (the last seven days) and this season, ten graded calls to stand
+   on one. The tab is remembered for the visit. */
+function ciLadderHTML(v) {
+  const span = _ci.span === "season" ? "season" : "week";
+  const rows = (v && v[span]) || [];
+  if (!((v && v.week) || []).length && !((v && v.season) || []).length) return "";
+  return `<div class="ci-ladder"><div class="ci-ladder-tabs" role="tablist">${["week", "season"].map((s) =>
+    `<button type="button" role="tab" class="ci-ladder-tab${s === span ? " on" : ""}" aria-selected="${s === span}"
+      data-ci-span="${s}">${s === "week" ? "This week" : "Season"}</button>`).join("")}</div>${rows.length
+    ? `<ol class="ci-board">${rows.map((r) => `<li><b>${escapeHtml(r.handle)}</b> ${r.right} of ${r.total}</li>`).join("")}</ol>`
+    : `<p class="mini rail-quiet">Nobody has ten graded calls ${span === "week" ? "this week" : "this season"} yet.</p>`}</div>`;
 }
 function ciPaint(key) {
   document.querySelectorAll(".ci-card").forEach((el) => {
@@ -2920,10 +2936,19 @@ function ciFetch(key) {
 if (typeof window !== "undefined" && !window._ciBound) {
   window._ciBound = true;
   document.addEventListener("click", async (e) => {
-    const b = e.target.closest && e.target.closest("[data-ci-call], [data-ci-join]");
+    const b = e.target.closest && e.target.closest("[data-ci-call], [data-ci-join], [data-ci-span], [data-ci-share]");
     const card = b && b.closest(".ci-card");
     if (!card) return;
     if (b.dataset.ciJoin) { switchView("signup"); return; }
+    if (b.dataset.ciSpan) { _ci.span = b.dataset.ciSpan; ciPaint(card.dataset.ciKey); return; }
+    if (b.dataset.ciShare) {
+      const text = `${b.dataset.ciShare} ${location.origin}/#live`;
+      try {
+        if (navigator.share) await navigator.share({ title: "Qellys Book", text });
+        else { await navigator.clipboard.writeText(text); b.textContent = "Copied"; }
+      } catch (err) { /* the reader closed the sheet */ }
+      return;
+    }
     const key = card.dataset.ciKey;
     if (_ci.v && _ci.key === key) { _ci.v.mine = b.dataset.ciCall; _ci.note = ""; ciPaint(key); }
     try {

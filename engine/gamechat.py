@@ -472,6 +472,12 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
             mine = {int(x[0]): x[1] for x in conn.execute(
                 f"SELECT msg_id, kind FROM chat_reacts WHERE user_id=? AND msg_id IN ({q})", [int(viewer), *want])}
     msgs = [_msg_view(r, strong, viewer, reacts, mine) for r in rows]
+    # The Call it flame beside a handle: its author's calls right in a row now.
+    from . import callit as CI
+    flames = CI.current_streaks(conn, {int(r["user_id"]) for r in rows}, now)
+    for m, r in zip(msgs, rows):
+        if int(r["user_id"]) in flames:
+            m["by"]["streak"] = flames[int(r["user_id"])]
     # Plays: the faces and the thread sizes, for every play that moved.
     cut = since - 1 if since else 0
     plays = _counts(conn, "SELECT play, kind, COUNT(*) FROM chat_play_reacts WHERE room=? AND kind<>'' "

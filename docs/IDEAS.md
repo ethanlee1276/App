@@ -72,10 +72,10 @@ of work first, each with what it is built from:
 2. **The house posts the moment.** BUILT 2026-10-26 (step 202,
    engine/housepost): a play rated 8+ goes into its game's chat from the
    site's own account, on the play's thread, six a game at most.
-3. **Call it ladders and badges.** A week's and a season's leaderboard
-   across every game, a streak flame beside a handle in the chat, a
-   "Called it" card to share at five in a row. Built from: callit_calls.
-   Small.
+3. **Call it ladders and badges.** BUILT 2026-10-26 (step 203): This week
+   and Season ladders on the Call it card (ten graded calls to stand on
+   one), a flame from three in a row beside a handle in the chats, and a
+   share at every five in a row.
 4. **The room against the math.** The who-wins vote charted through the
    game against the live win chance: "the room had CIN at 30% when the
    math had them at 70%". Built from: chat_votes snapshotted every few
