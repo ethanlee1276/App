@@ -216,7 +216,6 @@ body.gch-on { overflow: hidden; }
 .gch-playcard.gch-turned { border-color: color-mix(in oklab, var(--bad) 55%, var(--border)); }
 .gch-play-when { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-2xs); font-weight: 800;
   color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
-.gch-play-title { margin: 4px 0 0; font-size: var(--fs-md); font-weight: 700; line-height: var(--lh-snug); }
 .gch-thread-btn { margin-left: auto; color: var(--brand-2); }
 .gch-thread-top { position: sticky; top: -10px; z-index: 1; margin: -10px -12px 0; padding: 8px 12px; background: var(--bg); }
 .gch-back { padding: 4px 0; border: 0; background: transparent; color: var(--brand-2); font: inherit; font-size: var(--fs-sm);
@@ -278,8 +277,6 @@ body.gch-on { overflow: hidden; }
 .pf-lg svg, .pf-lg img { width: 18px; height: 18px; }
 .pf-when { font-weight: 700; }
 .pf-ago { margin-left: auto; color: var(--text-mute); }
-.pf-title { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); font-weight: 700;
-  line-height: var(--lh-snug); color: var(--text); }
 .pf-acts { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .pf-open { border: 0; background: transparent; color: var(--brand-2); font: inherit; font-size: var(--fs-xs);
   font-weight: 800; cursor: pointer; padding: 4px 0; }
