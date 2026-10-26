@@ -4746,6 +4746,25 @@ site restarted, and `"phone_signup": true` after. Then on your phone, in a
 private tab: sign up with "Use your phone number instead" and your own
 number.
 
+**Which value is which** (2026-10-26: the Account SID went into the Verify
+slot too). The Account SID starts with `AC` and sits on the console's home
+page with the Auth Token beside it. The Verify SID starts with `VA`: in
+the console, Verify → Services → the service you made → **Service SID**.
+A value of the wrong shape now keeps the phone option off rather than
+showing a button that fails, and this names any value that is missing or
+the wrong shape (it never prints a value):
+
+```
+cd /srv/qellys && sudo python3 -m engine.smsverify --check
+```
+
+To put the right one in (it replaces the old value), then restart:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_VERIFY_SID
+sudo systemctl restart qellys
+```
+
 The check in one go:
 
 ```

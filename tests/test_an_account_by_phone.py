@@ -30,6 +30,20 @@ def test_off_until_all_three_values_are_set():
     assert SV.configured(ENV)
 
 
+def test_a_swapped_sid_keeps_it_off_and_says_which():
+    """2026-10-26: the Account SID went into the Verify slot too. Twilio's
+    prefixes tell them apart (AC…, VA…), so the page offers no phone option
+    that would fail on every tap, and the check names the one to fix
+    without printing any value."""
+    swapped = dict(ENV, **{SV.ENV_SERVICE: "AC_test"})
+    assert not SV.configured(swapped)
+    said = SV.problems(swapped)
+    assert len(said) == 1 and said[0].startswith("TWILIO_VERIFY_SID should start with VA")
+    assert "Account SID" in said[0] and "AC_test" not in said[0], "a value is never printed"
+    assert SV.problems(ENV) == []
+    assert "TWILIO_AUTH_TOKEN is not set" in " ".join(SV.problems({SV.ENV_SID: "AC_x", SV.ENV_SERVICE: "VA_x"}))
+
+
 def test_only_a_north_american_mobile_shaped_number():
     assert SV.normalize("(415) 555-2671") == "+14155552671"
     assert SV.normalize("+1 415 555 2671") == "+14155552671"

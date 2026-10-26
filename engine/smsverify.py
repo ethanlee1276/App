@@ -58,9 +58,33 @@ class SmsUnavailable(RuntimeError):
     """Twilio is not configured, or would not answer."""
 
 
-def configured(env=None) -> bool:
+#: Twilio's own prefixes: an account is AC…, a Verify service VA…. The two
+#: sit a click apart in Twilio's console and are easy to swap (2026-10-26:
+#: the account's went into both), and a swapped pair would put a button on
+#: the page that fails on every tap — so a value of the wrong shape counts
+#: as not set, and `python3 -m engine.smsverify --check` says which.
+PREFIX = {ENV_SID: "AC", ENV_SERVICE: "VA"}
+WHERE = {ENV_SID: "the Account SID, on the console's home page",
+         ENV_TOKEN: "the Auth Token, beside the Account SID",
+         ENV_SERVICE: "Verify → Services → your service → Service SID"}
+
+
+def problems(env=None) -> list:
+    """What is missing or the wrong shape, in words; never a value."""
     e = os.environ if env is None else env
-    return all(str(e.get(k) or "").strip() for k in (ENV_SID, ENV_TOKEN, ENV_SERVICE))
+    out = []
+    for k in (ENV_SID, ENV_TOKEN, ENV_SERVICE):
+        v = str(e.get(k) or "").strip()
+        if not v:
+            out.append(f"{k} is not set — it is {WHERE[k]}.")
+        elif k in PREFIX and not v.startswith(PREFIX[k]):
+            also = " This one starts with AC, which is the Account SID." if k == ENV_SERVICE and v.startswith("AC") else ""
+            out.append(f"{k} should start with {PREFIX[k]} — it is {WHERE[k]}.{also}")
+    return out
+
+
+def configured(env=None) -> bool:
+    return not problems(env)
 
 
 def normalize(phone) -> str:
@@ -139,3 +163,14 @@ def check(phone: str, code, env=None, opener=None) -> bool:
     except SmsUnavailable:
         return False
     return str(out.get("status") or "") == "approved"
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.argv[1:] != ["--check"]:
+        sys.exit("usage: python3 -m engine.smsverify --check")
+    from engine import secrets as _s
+    _s.load_local_secrets()
+    found = problems()
+    print("\n".join(found) if found else "All three Twilio values are set and the right shape.")
+    sys.exit(1 if found else 0)
