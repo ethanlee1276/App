@@ -69,7 +69,9 @@ def test_the_plan_is_remembered_when_the_wall_interrupts_the_purchase():
     assert "rememberPendingPlan(plan)" in body, \
         "the plan is dropped on the floor at the one moment it is needed"
     i = body.index("rememberPendingPlan(plan)")
-    j = body.index('_switchViewNow("account"')
+    # To the sign-up since 2026-10-26: a reader with no account needs to make
+    # one, and the log-in page offered nothing to someone who had none.
+    j = body.index('_switchViewNow("signup"')
     assert i < j, "the bounce happens before the plan is kept"
 
 

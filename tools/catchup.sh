@@ -50,6 +50,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EK 2>&1 | tee /tmp/ek.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EL 2>&1 | tee /tmp/el.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EM 2>&1 | tee /tmp/em.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EN 2>&1 | tee /tmp/en.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -538,6 +539,11 @@ SH
 run EM "An account to use the site, and the paid side on its first screen" 30 <<'SH'
 curl -s https://qellysbook.com/api/billing/status | grep -o '"account_wall": [a-z]*'
 curl -s https://qellysbook.com/api/firstlook | head -c 400; echo
+SH
+run EN "The game chat's buttons, and a plans page that shows the free side" 120 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'async function lvmLoad('
+curl -s https://qellysbook.com/js/account.js | grep -c 'function pwDoorsHTML('
+cd /srv/qellys && sudo -u qellys python3 -m engine.bugscan --hours 48 | head -40
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

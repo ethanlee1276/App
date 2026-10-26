@@ -278,7 +278,8 @@ def test_reals_first_screens_come_before_the_form_once():
     assert '${i < 3 ? "Example" : ""}' in html, "the example cards say they are examples"
     render = ACCOUNT[ACCOUNT.index("async function renderSignup("):]
     render = render[:render.index("\n}\n")]
-    assert render.index("if (!introSeen())") < render.index("host.innerHTML = signupHTML();")
+    # …unless a plan is already chosen: a buyer goes straight to the form.
+    assert render.index("if (!introSeen() && !_pendingPlanPeek())") < render.index("host.innerHTML = signupHTML();")
     bind = _fn(ACCOUNT, "introBind")
     assert "introDone(); host.innerHTML = signupHTML();" in bind, "skip and the last step land on the form for good"
 

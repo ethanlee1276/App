@@ -863,3 +863,35 @@
 .pw-why p { margin: 3px 0 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .pw-fl:empty { display: none; }
 .pw-fl { max-width: 560px; margin: 16px auto 0; text-align: left; }
+
+/* Two ways in, at the top of the plans (pwDoorsHTML): the free account and
+   the membership side by side, each with its own button. */
+.pw-doors { max-width: 860px; margin: 6px auto 24px; text-align: center; }
+.pw-doors-h { margin: 0 0 14px; font-family: var(--font-headline); font-size: var(--fs-3xl); line-height: var(--lh-tight);
+  color: var(--text); }
+.pw-doors-h em { font-style: normal; color: var(--brand); }
+.pw-doors-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
+@media (max-width: 640px) { .pw-doors-row { grid-template-columns: 1fr; } }
+.pw-door { display: grid; gap: 10px; align-content: start; padding: 16px; border-radius: var(--radius-lg);
+  border: var(--hairline) solid var(--border); background: var(--panel); }
+.pw-door.mem { border-color: var(--brand); background: var(--grad-card), var(--panel); box-shadow: var(--glow); }
+.pw-door-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pw-door-top b { font-size: var(--fs-lg); color: var(--text); }
+.pw-door-you, .pw-door-tag { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 900;
+  letter-spacing: .04em; text-transform: uppercase; }
+.pw-door-you { background: color-mix(in oklab, var(--good) 18%, transparent); color: var(--good); }
+.pw-door-tag { background: var(--grad-brand); color: var(--brand-ink); }
+.pw-door-price { margin: -4px 0 0; color: var(--text-dim); font-size: var(--fs-sm); }
+.pw-door-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.pw-door-list li { display: grid; grid-template-columns: 16px 1fr; gap: 8px; font-size: var(--fs-sm); color: var(--text);
+  line-height: var(--lh-snug); }
+.pw-door-list li > :first-child { margin-top: 2px; color: var(--good); }
+.pw-door.mem .pw-door-list li > :first-child { color: var(--brand); }
+.pw-door-list .pw-door-plus { display: block; color: var(--text-dim); font-weight: 700; }
+.pw-door-go { width: 100%; min-height: 46px; margin-top: 4px; justify-content: center; }
+.pw-join { margin-left: 6px; }
+a.pw-door-go { text-decoration: none; }
+.pw-join, .pw-login { white-space: nowrap; }
+@media (max-width: 420px) {
+  .pw-top:has(.pw-join) .pw-brand-words { display: none; }
+}

@@ -264,7 +264,7 @@ def test_a_new_account_meets_the_offer_once_after_its_teams():
 
 def test_with_the_wall_up_the_sign_up_has_no_way_past():
     js = f"""
-    let _acctUser = null, _pwStatus = {{ account_wall: true }}, _acctNote = "", _fl = null;
+    let _acctUser = null, _pwStatus = {{ account_wall: true }}, _acctNote = "", _fl = null, _suNote = "";
     const escapeHtml = (s) => String(s), escapeAttr = escapeHtml, icon = () => "", iconMark = () => "";
     const brandMarkHTML = () => "", phoneDoorHTML = () => "", referralTyped = () => "", storeSells = () => true;
     const acctFieldsHTML = (m, extra) => extra, flTonightHTML = () => "", flMembersHTML = () => "";

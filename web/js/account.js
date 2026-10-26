@@ -1308,8 +1308,12 @@ function storePaywallHTML(rec, status) {
       <h1 class="pw-h1">Members <em>sign in</em> here.</h1>
       <p class="pw-sub">Tonight’s picks, the props and the game reports open
         with a Qellys Book membership. Sign in with the account you already have.</p>
+      <p class="pw-sub">${signed ? "Your free account keeps every game live, the game chat and Call it."
+        : "Every game live, the game chat and Call it are free with an account."}</p>
       <div class="pw-store-go">
         <button class="btn primary" data-act="pwSignIn">${signed ? "Your account" : "Log in"}</button>
+        ${signed ? `<a class="btn ghost" href="#live">Go to the live games</a>`
+          : `<button class="btn ghost" data-act="acctGoSignup">Create a free account</button>`}
         <a class="btn ghost" href="#record">See the record — free</a>
       </div>
     </section>
@@ -1340,6 +1344,9 @@ function paywallHTML(rec, status) {
   const readiness = {};
   ((status && status.plans) || []).forEach((p) => { readiness[p.id] = !!p.ready; });
   const sellable = (id) => (id in readiness ? readiness[id] : true);
+  // Signed in, a plan's button opens checkout; signed out, the free sign-up
+  // first, with the plan kept for checkout straight after (pwJoin).
+  const join = (id) => (status && status.signed_in ? 'data-act="coStart"' : `data-pwjoin="${escapeAttr(id)}"`);
 
   /* THE TRIAL, ON ONE CARD. Ethan, 2026-08-22: "we can offer a 3 day free
      trial only for the $25 plan." Drawn from the server's answer rather
@@ -1376,7 +1383,7 @@ function paywallHTML(rec, status) {
         `<li>${iconMark("check", 13)}<span>${escapeHtml(f)}</span></li>`).join("")}</ul>
       ${ok
         ? `<button class="btn primary pw-buy" data-plan="${escapeAttr(pl.id)}"
-             data-act="coStart">${
+             ${join(pl.id)}>${
              trial ? `Start ${trialDays} days free` : "Get started"}</button>`
         : `<button class="btn pw-buy" disabled
              title="This plan is not switched on yet">Not available yet</button>`}
@@ -1405,7 +1412,7 @@ function paywallHTML(rec, status) {
       ${pl.save ? `<span class="pw-save">Save $${pl.save}</span>` : ""}
       ${ok
         ? `<button class="btn pw-buy pw-buy-sm" data-plan="${escapeAttr(pl.id)}"
-             data-act="coStart">Choose</button>`
+             ${join(pl.id)}>Choose</button>`
         : `<button class="btn pw-buy pw-buy-sm" disabled
              title="This plan is not switched on yet">Not yet</button>`}
     </article>`;
@@ -1427,13 +1434,15 @@ function paywallHTML(rec, status) {
              <b>Signed in</b>${status.email
                ? `<span>${escapeHtml(status.email)}</span>` : ""}</span>
            <button class="btn ghost pw-login" data-act="pwSignIn">Account</button>`
-        : `<button class="btn ghost pw-login" data-act="pwSignIn">Log in</button>`}
+        : `<button class="btn ghost pw-login" data-act="pwSignIn">Log in</button>
+           <button class="btn primary pw-join" data-act="acctGoSignup">Sign up free</button>`}
     </header>
     ${pwLapseHTML(status)}
     ${pwWhyHTML()}
+    ${pwDoorsHTML(status, trialOK && sellable(trialPlan) ? trialDays : 0)}
 
     <section class="pw-hero">
-      <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
+      <h2 class="pw-h1">Data. <em>Edge.</em> Receipts.</h2>
       <p class="pw-sub">Professional sports intelligence. Real-time edges.
         Every call graded in public.</p>
       ${/* FROM sellable(), LIKE THE CARD (audit V-20): the hero promised
@@ -1525,7 +1534,7 @@ function paywallHTML(rec, status) {
           <a href="#record">Record</a> page before you pay — it is free, it
           stays free, and it is the only claim we make that you can check.</p>
         ${sellable("sixmonth") ? `<button class="btn primary pw-unlock-go" data-plan="sixmonth"
-          data-act="coStart">Get started</button>` : `<a class="btn pw-unlock-go" href="#record">See the record</a>`}
+          ${join("sixmonth")}>Get started</button>` : `<a class="btn pw-unlock-go" href="#record">See the record</a>`}
       </aside>
       <div class="card pw-faq">${faqFor(status).map(([q, a], i) => `
         <details class="pw-q"${i === 0 ? " open" : ""}>
@@ -1978,6 +1987,54 @@ const PW_WHY = {
   alerts: ["Alerts are for members", "Line moves, injuries and your players on tonight’s board, on your phone."],
 };
 
+/* TWO WAYS IN, BEFORE ANYTHING ELSE (Ethan, 2026-10-26: "the paywall page
+   also makes it seem like everything is still locked on a paid service. It
+   doesn't give u an option to create an account or anything ... People need
+   to know that there is free features available"). Spotify's and Duolingo's
+   plans page: the free way and the paid way side by side, each with its own
+   button, ahead of the pitch. The free lines are pages WALL_OPEN opens and
+   the member lines are PLAN_FEATURES' own (FL_ROWS, beside the sign-up's
+   table), so neither side promises what the other holds. */
+function pwDoorsHTML(status, trialDays) {
+  const signed = !!(status && status.signed_in);
+  const mo = PLANS.find((p) => p.id === "monthly") || PLANS[0];
+  const best = PLANS.find((p) => p.id === bestValuePlanId(PLANS));
+  const li = (t) => `<li>${iconMark("check", 13)}<span>${escapeHtml(t)}</span></li>`;
+  return `<div class="pw-doors" role="region" aria-labelledby="pw-doors-h">
+    <h1 class="pw-doors-h" id="pw-doors-h">Free to watch. <em>Members get the picks.</em></h1>
+    <div class="pw-doors-row">
+      <article class="pw-door free">
+        <div class="pw-door-top"><b>Free account</b>${signed ? `<span class="pw-door-you">You have this</span>` : ""}</div>
+        <p class="pw-door-price">No card, nothing to cancel</p>
+        <ul class="pw-door-list">${FL_ROWS.filter(([, f]) => f).map(([t]) => li(t)).join("")}</ul>
+        ${signed ? `<a class="btn ghost pw-door-go" href="#live">Go to the live games</a>`
+          : `<button type="button" class="btn ghost pw-door-go" data-act="acctGoSignup">Create a free account</button>`}
+      </article>
+      <article class="pw-door mem">
+        <div class="pw-door-top"><b>Member</b><span class="pw-door-tag">The picks</span></div>
+        <p class="pw-door-price">$${mo.price} a month${trialDays > 0 ? ` · ${trialDays} days free` : ""}${
+          best && best.id !== mo.id ? ` · or $${planPerMonth(best).toFixed(2)} a month ${escapeHtml(best.name.toLowerCase())}` : ""}</p>
+        <ul class="pw-door-list"><li class="pw-door-plus">Everything in the free account, plus:</li>${
+          FL_ROWS.filter(([, f]) => !f).map(([t]) => li(t)).join("")}</ul>
+        <button type="button" class="btn primary pw-door-go" data-act="pwToPlans">${
+          trialDays > 0 ? `Start ${trialDays} days free` : "See the plans"}</button>
+      </article>
+    </div>
+  </div>`;
+}
+
+/* A plan tapped before the account exists: the sign-up first, the plan kept
+   (rememberPendingPlan), checkout straight after (acctLandAfterAuth). */
+let _suNote = "";
+function pwJoin(id) {
+  const pl = PLANS.find((p) => p.id === id);
+  if (!pl) return;
+  rememberPendingPlan(pl.id);
+  _suNote = `Make your free account first — checkout opens on the ${pl.name.toLowerCase()} plan right after.`;
+  switchView("signup", true);
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
 function pwWhyHTML() {
   const v = typeof _wallFrom === "string" ? _wallFrom : "";
   if (!v) return "";
@@ -2422,7 +2479,7 @@ function signupHTML() {
         <div class="subtitle">Pick a username — it is how the chat knows you. No card,
           nothing to cancel.</div></div>
     </div>
-    <p class="fsu-plan-note" role="status"></p>
+    <p class="fsu-plan-note" role="status">${escapeHtml(_suNote)}</p>
     ${insecure ? `<div class="warning">${icon("warn")} <b>${
       _acctUser.allowed ? "This connection is not private."
                         : "Not over this connection."}</b>
@@ -2504,8 +2561,9 @@ function flToForm(note) {
 if (typeof window !== "undefined" && !window._flBound) {
   window._flBound = true;
   document.addEventListener("click", (e) => {
-    const t = e.target.closest && e.target.closest("[data-flplan], [data-flgo], [data-ps]");
+    const t = e.target.closest && e.target.closest("[data-flplan], [data-flgo], [data-ps], [data-pwjoin]");
     if (!t) return;
+    if (t.dataset.pwjoin) return pwJoin(t.dataset.pwjoin);
     if (t.dataset.flgo) return flToForm("");
     if (t.dataset.ps) return planPick(t.dataset.ps);
     const pl = PLANS.find((p) => p.id === t.dataset.flplan);
@@ -2909,7 +2967,9 @@ async function renderSignup() {
     switchView("account", false);
     return;
   }
-  if (!introSeen()) {
+  // Somebody who already chose a plan on the plans page goes straight to the
+  // form: the tour is for strangers, not for a buyer.
+  if (!introSeen() && !_pendingPlanPeek()) {
     introBind(host);
     host.innerHTML = introHTML();
     if (!_introRecord) {

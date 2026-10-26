@@ -460,9 +460,14 @@ function chatTeardown() {
   const f = document.getElementById("gch-fab");
   if (f) f.remove();
 }
+// Read off the address, not state.view: on a computer the page switch runs
+// through a view transition and state.view is still the game for a moment,
+// which left the chat bar sitting on the Live tab.
 window.addEventListener("hashchange", () => setTimeout(() => {
-  if (chatGone()) chatTeardown();
-  else if (!chatOnGame()) { const f = document.getElementById("gch-fab"); if (f) f.remove(); }
+  const v = (location.hash || "").replace(/^#/, "").split("/")[0];
+  const game = v === "pbp" || v === "game";
+  if (!game && v !== "live") chatTeardown();
+  else if (!game) { const f = document.getElementById("gch-fab"); if (f) f.remove(); }
 }, 0));
 
 /* ---------------- the poll ---------------- */
@@ -603,48 +608,57 @@ function chatFab() {
   f.hidden = CH.open;
   const n = CH.unread, last = chatLast();
   f.setAttribute("aria-label", `Open the game chat${n ? `, ${n} new` : ""}${CH.here ? `, ${CH.here} watching` : ""}`);
-  f.innerHTML = `<span class="gch-fab-ico">${chatIcon()}</span><span class="gch-fab-main"><b>Game chat${
+  const html = `<span class="gch-fab-ico">${chatIcon()}</span><span class="gch-fab-main"><b>Game chat${
     CH.here > 1 ? `<span class="gch-fab-here"><i></i>${CH.here}</span>` : ""}</b><span class="gch-fab-last">${last
     ? `<b>@${chEsc((last.by || {}).handle || "")}</b> ${chEsc(String(last.body).slice(0, 80))}` : "Say something about the game"}</span></span>${
     n ? `<span class="gch-fab-new">${n > 99 ? "99+" : n}</span>` : ""}<span class="gch-fab-go" aria-hidden="true">›</span>`;
+  // Rewritten only when it says something new: a tap that lands while the
+  // bar is being rewritten hits a node that is gone, and does nothing.
+  if (f._html !== html) { f._html = html; f.innerHTML = html; }
 }
 
-/* The card on the game page (detail.js and hoopscast.js leave an empty
-   `.gch-entry-slot` under the scoreboard; this fills every one on each
-   draw and each poll). */
+/* The card on the game page (detail.js, hoopscast.js and rinkcast.js leave
+   an empty `.gch-entry-slot` under the scoreboard).
+
+   ONE CARD, KEPT (2026-10-26, Ethan: the buttons to the game chat "glitch
+   out"). The game page redraws on every play and the room polls every few
+   seconds, and the card used to be rebuilt on each — about every two
+   seconds — so a tap that landed mid-rebuild hit a button that no longer
+   existed. Now one button lives for the whole visit: a redraw moves it into
+   the new slot, and only what it says changes, only when it changes. */
 function chatEntryPaint() {
-  const slots = document.querySelectorAll(".gch-entry-slot");
-  if (!slots.length) return;
+  const slot = document.querySelector(".gch-entry-slot");
+  if (!slot) return;
   const rows = CH.msgs.filter((m) => m.body && chatReady(m)).slice(-3);
   const d = CH.d || {}, v = CH.votes;
   const total = v ? (v.away || 0) + (v.home || 0) : 0;
   const pct = (x) => (total ? Math.round((100 * x) / total) : 50);
   const poll = v && total && d.home && d.away ? `<div class="gch-entry-poll"><span>${chEsc(d.away)} ${pct(v.away || 0)}%</span>
       <span class="gch-entry-bar" style="--gch-away:${pct(v.away || 0)}%"></span><span>${pct(v.home || 0)}% ${chEsc(d.home)}</span></div>` : "";
-  const html = `<button type="button" class="gch-entry" data-gch-entry="1">
-      <span class="gch-entry-h"><span class="gch-entry-ico">${chatIcon()}</span><b>Game chat</b>${
+  const html = `<span class="gch-entry-h"><span class="gch-entry-ico">${chatIcon()}</span><b>Game chat</b>${
         CH.here > 1 ? `<span class="gch-entry-live"><i></i>${CH.here} watching</span>` : ""}<span class="gch-entry-go">${
         CH.unread ? `${CH.unread} new · ` : ""}Join</span></span>
       <span class="gch-entry-msgs">${rows.length ? rows.map((m) => {
         const c = Math.abs(Number((m.by || {}).color || 0)) % 8;
         return `<span class="gch-entry-m"><b class="gch-c${c}">@${chEsc((m.by || {}).handle || "")}</b> ${chEsc(String(m.body).slice(0, 90))}</span>`;
       }).join("") : `<span class="gch-entry-m gch-entry-quiet">${CH.loaded ? "Nobody has said anything yet — start it off." : "Opening the room…"}</span>`}</span>
-      ${poll}</button>`;
-  slots.forEach((slot) => {
-    if (slot.dataset.html === html) return;
-    slot.dataset.html = html;
-    slot.innerHTML = html;
-    slot.firstElementChild.addEventListener("click", () => chatOpen({}));
-  });
-  // While the card is on screen the bar at the bottom would say the same
-  // thing twice; it comes back once the card scrolls away.
-  if (typeof IntersectionObserver === "function") {
-    CH.io = CH.io || new IntersectionObserver((seen) => {
-      document.body.classList.toggle("gch-card-in", seen.some((x) => x.isIntersecting));
-    });
-    CH.io.disconnect();
-    slots.forEach((slot) => CH.io.observe(slot));
+      ${poll}`;
+  if (!CH.card) {
+    CH.card = document.createElement("button");
+    CH.card.type = "button";
+    CH.card.className = "gch-entry";
+    CH.card.dataset.gchEntry = "1";
+    CH.card.addEventListener("click", () => chatOpen({}));
+    // While the card is on screen the bar at the bottom would say the same
+    // thing twice; it comes back once the card scrolls away.
+    if (typeof IntersectionObserver === "function") {
+      new IntersectionObserver((seen) => {
+        document.body.classList.toggle("gch-card-in", seen.some((x) => x.isIntersecting));
+      }).observe(CH.card);
+    }
   }
+  if (CH.cardHTML !== html) { CH.cardHTML = html; CH.card.innerHTML = html; }
+  if (CH.card.parentNode !== slot) slot.replaceChildren(CH.card);
 }
 
 const chatIcon = () => `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>`;

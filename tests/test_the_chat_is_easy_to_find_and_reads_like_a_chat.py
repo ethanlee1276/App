@@ -53,6 +53,22 @@ def test_the_card_and_the_bar_say_who_is_here_and_what_was_said():
     assert "left: 10px; right: 10px; width: auto;" in phone[:200], "a bar across, not a pill in the corner"
 
 
+def test_the_card_is_one_button_kept_across_redraws():
+    """2026-10-26 (Ethan: the chat's buttons "glitch out"): the card was
+    rebuilt on every redraw and every poll, about every two seconds, so a
+    tap mid-rebuild hit a button that was gone. One button now lives for the
+    visit, moved into each new slot, its words rewritten only when they
+    change; the bar is rewritten only when it changes too."""
+    fn = CHAT[CHAT.index("function chatEntryPaint("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "if (!CH.card) {" in fn and 'CH.card.addEventListener("click", () => chatOpen({}));' in fn
+    assert "if (CH.cardHTML !== html) { CH.cardHTML = html; CH.card.innerHTML = html; }" in fn
+    assert "if (CH.card.parentNode !== slot) slot.replaceChildren(CH.card);" in fn
+    assert "slot.innerHTML" not in fn, "the card is never rebuilt from a string"
+    fab = CHAT[CHAT.index("function chatFab("):CHAT.index("function chatEntryPaint(")]
+    assert "if (f._html !== html) { f._html = html; f.innerHTML = html; }" in fab
+
+
 def test_on_a_computer_the_room_docks_under_the_header():
     assert ".gch-sheet { inset: var(--topbar-h) 0 0 auto;" in CSS
     assert "@media (min-width: 1440px) { body.gch-on { padding-right: 400px; } }" in CSS

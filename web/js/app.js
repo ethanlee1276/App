@@ -20029,7 +20029,7 @@ window.coPay = async function (btn) {
       rememberPendingPlan(plan);
       say("One step first: a subscription has to attach to an account, so "
         + "we will make you one now. You will come straight back here.");
-      setTimeout(() => { _switchViewNow("account", false, 0); }, 1200);
+      setTimeout(() => { _switchViewNow("signup", false, 0); }, 1200);
       btn.disabled = false; btn.textContent = was;
       return;
     }
