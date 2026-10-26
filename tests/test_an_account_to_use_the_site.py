@@ -297,13 +297,13 @@ def test_a_locked_tab_says_on_the_plans_what_it_holds():
 
 
 def test_live_carries_the_members_strip_with_a_count_and_never_a_pick():
-    load = CHAT[CHAT.index("async function mbLoad("):CHAT.index("function mbHTML(")]
-    assert "isWalled()" in load and "storeSells()" in load and "Date.now() - _mbAt < 300000" in load
+    load = CHAT[CHAT.index("async function lvmLoad("):CHAT.index("function lvmHTML(")]
+    assert "isWalled()" in load and "storeSells()" in load and "Date.now() - _lvmAt < 300000" in load
     assert 'fetch("/api/firstlook"' in load
-    html = _fn(CHAT, "mbHTML")
+    html = _fn(CHAT, "lvmHTML")
     assert 'href="#paywall"' in html and "x.picks" in html and "player" not in html
-    mount = CHAT[CHAT.index("async function yourPlayersMount("):CHAT.index("let _mbLast = ")]
-    assert "host.innerHTML = _mbLast + _ypLast;" in mount
+    mount = CHAT[CHAT.index("async function yourPlayersMount("):CHAT.index("let _lvmLast = ")]
+    assert "host.innerHTML = _lvmLast + _ypLast;" in mount
 
 
 # --- in a browser --------------------------------------------------------------------

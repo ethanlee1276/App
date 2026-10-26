@@ -346,15 +346,15 @@ function ypBind(host) {
 }
 async function yourPlayersMount(host) {
   if (!host || !(typeof _acctUser !== "undefined" && _acctUser && _acctUser.signed_in)) return;
-  if (_ypLast || _mbLast) { host.innerHTML = _mbLast + _ypLast; ypBind(host); }
+  if (_ypLast || _lvmLast) { host.innerHTML = _lvmLast + _ypLast; ypBind(host); }
   let v = null;
   try {
-    const [r] = await Promise.all([fetch("/api/alerts/live", { credentials: "same-origin", cache: "no-store" }), mbLoad()]);
+    const [r] = await Promise.all([fetch("/api/alerts/live", { credentials: "same-origin", cache: "no-store" }), lvmLoad()]);
     if (r.ok) v = await r.json();
   } catch (e) { v = null; }
   if (!host.isConnected) return;
   if (v) _ypLast = ypHTML(v.players || []);
-  host.innerHTML = _mbLast + _ypLast;
+  host.innerHTML = _lvmLast + _ypLast;
   ypBind(host);
 }
 
@@ -363,31 +363,32 @@ async function yourPlayersMount(host) {
    from this free version"). Over the strip, for a signed-in reader without
    a plan: how many picks are up today, by league, and the door to the
    plans. A count, never a pick (engine/firstlook); asked again at most
-   every five minutes however often Live redraws. */
-let _mbLast = "";
-let _mbAt = 0;
-async function mbLoad() {
+   every five minutes however often Live redraws. Named lvm*, never mb*:
+   mbLoad is My Bets' loader, and a second one here replaced it. */
+let _lvmLast = "";
+let _lvmAt = 0;
+async function lvmLoad() {
   const want = typeof isWalled === "function" && isWalled() && (typeof storeSells !== "function" || storeSells());
-  if (!want) { _mbLast = ""; return; }
-  if (_mbLast && Date.now() - _mbAt < 300000) return;
+  if (!want) { _lvmLast = ""; return; }
+  if (_lvmLast && Date.now() - _lvmAt < 300000) return;
   let fl = null;
   try {
     const r = await fetch("/api/firstlook", { credentials: "same-origin", cache: "no-store" });
     if (r.ok) fl = await r.json();
   } catch (e) { fl = null; }
-  _mbAt = Date.now();
-  _mbLast = mbHTML(fl);
+  _lvmAt = Date.now();
+  _lvmLast = lvmHTML(fl);
 }
 
-function mbHTML(fl) {
+function lvmHTML(fl) {
   const t = ((fl && fl.tonight) || []).filter((x) => Number(x.picks) > 0);
   const n = t.reduce((a, x) => a + Number(x.picks), 0);
-  return `<a class="mb-strip" href="#paywall">
-    <span class="mb-ic" aria-hidden="true">${icon("lock", 14)}</span>
-    <span class="mb-txt"><b>${n ? `${n} pick${n === 1 ? "" : "s"} up for members today` : "Members get every pick before the game"}</b>
+  return `<a class="lvm-strip" href="#paywall">
+    <span class="lvm-ic" aria-hidden="true">${icon("lock", 14)}</span>
+    <span class="lvm-txt"><b>${n ? `${n} pick${n === 1 ? "" : "s"} up for members today` : "Members get every pick before the game"}</b>
       <span>${n ? t.slice(0, 4).map((x) => `${chEsc(x.league)} ${Number(x.picks)}`).join(" · ")
         : "Most Likely, parlays, Ask Qellys and Zeno’s bets"}</span></span>
-    <span class="mb-go">Get picks</span></a>`;
+    <span class="lvm-go">Get picks</span></a>`;
 }
 
 /* The fast scoreboard's row for a room, so a thread opened from the Live
