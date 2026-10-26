@@ -18010,6 +18010,7 @@ function renderPushZone(note) {
         box("watches", "My teams and players make the board (members see which)", !signedIn),
         box("bets", "My parlay: on, last leg, settled", !signedIn),
         box("clutch", "Big moments in games I follow", !signedIn),
+        box("finals", "Final scores of games I follow", !signedIn),
       ], signedIn ? "Your own watches and saved parlays. Only your words and your ticket, only on phones you are signed in on."
         : "Sign in for alerts on your own watches and saved parlays."))
     + (note ? `<p class="set-foot push-note" role="status">${escapeHtml(note)}</p>` : "");
@@ -18031,7 +18032,7 @@ function renderPushZone(note) {
           renderPushZone("Alerts are off on this phone.");
         } else {
           const got = await pushOn(picked.length ? picked : ["posted", "settled"]);
-          const mineT = (t) => t === "watches" || t === "bets" || t === "clutch";
+          const mineT = (t) => t === "watches" || t === "bets" || t === "clutch" || t === "finals";
           try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
             topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
           buzz("tap");

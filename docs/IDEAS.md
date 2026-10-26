@@ -83,9 +83,9 @@ of work first, each with what it is built from:
 5. **What has to happen.** Under each live leg of a saved ticket, one
    sentence from the box: "Chase needs 14 more yards; he's at 9.7 a catch
    tonight." Free (box facts); the chance stays the membership's. Small.
-6. **Recap by push.** "The game in 30 seconds" sent when a followed team's
-   game ends, the play of the game and the best line. Built from: the
-   recap logic ported to the box + engine/pushmine's topics. Small.
+6. **Recap by push.** BUILT 2026-10-26 (step 204, engine/finals): the
+   final, the play of the game and the best line (the page's own words),
+   on a new "Final scores of games I follow" switch.
 7. **Your fantasy lineup, live.** Sleeper and ESPN leagues are linked
    already: the starters' lines on the Your players strip and the matchup's
    live score. Built from: the linked rosters + engine/yourplayers. Medium.

@@ -35,6 +35,11 @@ by a player it follows: the score and who did it, a tap into the game.
 Public facts, so anyone who follows gets it; quiet hours hold it and its
 twenty minutes run out, so a moment from the night is never sent at nine.
 
+FINAL SCORES (topic "finals", engine/finals). When a game of a team the
+account follows, or with a player it follows in the box, goes final: the
+score, the play of the game and the best line, once, and only while the
+final is fresh.
+
 WHAT TRAVELS AND WHERE IT WAITS. A message is queued here (`push_mine`,
 beside the accounts) and sent by `flush`; a phone's service worker then asks
 POST /api/push/latest what to say, and `pushalerts.latest_for` reads the
@@ -65,7 +70,8 @@ TOPICS = PA.PERSONAL
 WATCH_EVERY_S = 120
 #: How long each kind stays worth showing. A "your game is on" an hour late
 #: is noise; a settled ticket is still news the next morning.
-TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 3600, "clutch": 20 * 60}
+TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 3600, "clutch": 20 * 60,
+         "finals": 3 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0}
@@ -585,6 +591,8 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
             _looked["watches"] = t
             told = watch_pass(conn, _feed(web), entitled=entitled, now=t)
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
+        from engine import finals as _fin
+        moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)
         stats = flush(conn, now=t, **flush_kw)
         if stats["messages"]:
             log(f"  push (yours): {stats['messages']} alert(s), {told} from watches, {moments} big moment(s) · "
