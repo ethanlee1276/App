@@ -3037,6 +3037,9 @@ document.addEventListener("click", (e) => {
 let _crashSaid = false;
 
 function crashNote(what) {
+  // A NEWER VERSION IS ALREADY HERE (register-sw.js QB_STALE): the fault is
+  // almost surely this page being the old one, so become the new one, once.
+  if (window.QB_STALE && !window._qbSkewReload) { window._qbSkewReload = true; location.reload(); return; }
   if (_crashSaid || !document.body) return;
   _crashSaid = true;
   const el = document.createElement("div");
@@ -3046,13 +3049,15 @@ function crashNote(what) {
     <span><b>Sorry — part of this page failed to draw.</b>
     Anything that looks empty below may not be empty; it may be this.
     Reloading usually fixes it, and the fault is ours either way.
-    <span class="cn-what"></span></span>
+    <span class="cn-what"></span>
+    <button type="button" class="cn-reload">Reload</button></span>
     <button class="fb-x" aria-label="Dismiss">${icon("cross", 12)}</button>`;
   // textContent for the message: it is a string from an exception, and
   // an exception can carry anything, including markup from a payload.
   const slot = el.querySelector(".cn-what");
   if (slot && what) slot.textContent = `(${String(what).slice(0, 120)})`;
   el.querySelector(".fb-x").addEventListener("click", () => el.remove());
+  el.querySelector(".cn-reload").addEventListener("click", () => location.reload());
   document.body.appendChild(el);
 }
 

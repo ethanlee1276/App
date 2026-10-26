@@ -38,6 +38,17 @@
  * under a thumb mid-scroll is its own defect, so the refresh is deferred
  * until the app is hidden: the reader is handed a fresh shell the next
  * time they come back, and never watches one arrive.
+ *
+ * UNLESS NOTHING WOULD BE LOST, OR IT NEVER RUNS (2026-10-26). Ethan's
+ * phone kept a My Bets clash that had been fixed for hours: the installed
+ * app opens on the copy it kept, the new version arrives a moment later,
+ * and a phone FREEZES a page it puts away, so the reload "when hidden"
+ * often never ran — the old code lived on, session after session. Now:
+ *   - a new version that arrives before the reader has touched the page
+ *     (a launch, in practice) takes its place at once;
+ *   - one that arrives after says so — a pill to tap — and still reloads
+ *     when the app is put away;
+ *   - coming back to a page a new version replaced reloads it right there.
  */
 (function () {
   if (!("serviceWorker" in navigator)) return;
@@ -62,10 +73,34 @@
     try { reg.update(); } catch (e) {}
   }
 
-  function refreshWhenHidden() {
-    if (!stale || reloading || document.visibilityState !== "hidden") return;
+  // Has the reader done anything on this page yet? Until they have, a new
+  // version can take its place at once: nothing of theirs is lost.
+  var touched = false;
+  ["pointerdown", "keydown", "wheel"].forEach(function (t) {
+    window.addEventListener(t, function () { touched = true; }, { capture: true, passive: true });
+  });
+
+  function reloadNow() {
+    if (reloading) return;
     reloading = true;
     location.reload();
+  }
+
+  function refreshWhenHidden() {
+    if (!stale || document.visibilityState !== "hidden") return;
+    reloadNow();
+  }
+
+  // Touched already: say a new version is here and let them pick the moment.
+  function offer() {
+    if (!document.body || document.getElementById("qb-update")) return;
+    var b = document.createElement("button");
+    b.type = "button";
+    b.id = "qb-update";
+    b.className = "tf-toast upd-pill";
+    b.textContent = "A new version is ready \u2014 tap to refresh";
+    b.addEventListener("click", reloadNow);
+    document.body.appendChild(b);
   }
 
   window.addEventListener("load", function () {
@@ -95,8 +130,15 @@
   // Resuming a home-screen app is this platform's version of opening it,
   // and it is the only moment a phone reliably gives us.
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible") check();
-    else refreshWhenHidden();
+    if (document.visibilityState === "visible") {
+      // Back on a page a new version replaced while it was away (the reload
+      // "when hidden" does not run on a page the phone froze).
+      if (stale) { reloadNow(); return; }
+      // Coming back is a fresh start: a version that lands before the
+      // reader's first touch takes this page's place at once.
+      touched = false;
+      check();
+    } else refreshWhenHidden();
   });
 
   navigator.serviceWorker.addEventListener("controllerchange", function () {
@@ -104,7 +146,10 @@
     stale = true;
     // app.js's rooms read this: a room fetched now would be the new
     // version's, so a page asked for on this one reloads instead (loadRoom).
+    // Its crash note reads it too: a fault on a stale page reloads.
     window.QB_STALE = true;
+    if (!touched && document.visibilityState === "visible") { reloadNow(); return; }
+    offer();
     refreshWhenHidden();
   });
 })();

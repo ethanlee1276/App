@@ -2890,6 +2890,10 @@ select.calc-in { width: auto; font-weight: 600; }
   max-width: var(--measure-wide); margin-inline: auto;
 }
 .cn-what { opacity: .6; }
+.cn-reload { margin-left: 6px; padding: 2px 10px; border-radius: 999px; border: var(--hairline) solid var(--border);
+  background: none; color: var(--brand); font: inherit; font-weight: 800; cursor: pointer; }
+/* A new version is here (register-sw.js offer): the toast's capsule, tappable. */
+.upd-pill { color: var(--brand); font-weight: 800; cursor: pointer; }
 
 /* ======================================================================
    Methodology and Status — the two trust pages.

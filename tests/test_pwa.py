@@ -205,7 +205,12 @@ def test_an_installed_app_goes_looking_for_a_new_shell():
     body = reg[i:reg.index("\n  }", i)]
     assert 'visibilityState !== "hidden"' in body, \
         "the refresh no longer waits for the app to be backgrounded"
-    assert "reloading" in body, "nothing stops a reload loop"
+    # Every reload goes through one guarded door (2026-10-26: also before
+    # the reader's first touch, and on coming back — tests/
+    # test_a_new_version_takes_over.py).
+    assert "reloadNow()" in body
+    j = reg.index("function reloadNow(")
+    assert "if (reloading) return;" in reg[j:reg.index("\n  }", j)], "nothing stops a reload loop"
 
 
 def test_no_topbar_padding_shorthand_drops_the_notch_inset():

@@ -58,6 +58,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh ES 2>&1 | tee /tmp/es.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh ET 2>&1 | tee /tmp/et.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EU 2>&1 | tee /tmp/eu.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -572,6 +573,9 @@ curl -s https://qellysbook.com/js/detail.js | grep -c 'function ciLadderHTML('
 SH
 run EU "Final scores by push" 30 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'Final scores of games I follow'
+SH
+run EV "The app replaces its old copy on your phone" 30 <<'SH'
+curl -s https://qellysbook.com/js/register-sw.js | grep -c 'function reloadNow('
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py
