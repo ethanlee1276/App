@@ -5159,6 +5159,13 @@ def _slip_watcher() -> None:
             _pm.run_once(entitled=_srv.account_entitled)
         except Exception as exc:      # noqa: BLE001 — never let this stop the site
             print(f"  ⚠️  push (yours): {type(exc).__name__}: {exc}")
+        # Each game's big moments, posted in its chat by the site's own
+        # account (engine/housepost). Nothing without that account.
+        try:
+            from engine import housepost as _hp
+            _hp.run_once()
+        except Exception as exc:      # noqa: BLE001 — never let this stop the site
+            print(f"  ⚠️  house posts: {type(exc).__name__}: {exc}")
 
 
 def _live_ufc_refresher() -> None:

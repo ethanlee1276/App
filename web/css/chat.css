@@ -135,6 +135,9 @@ body.gch-on { overflow: hidden; }
   background: color-mix(in oklab, var(--brand) 70%, transparent); }
 .gch-msg.own.cont::before { top: 0; }
 .gch-msg.staff { background: color-mix(in oklab, var(--brand) 6%, transparent); }
+/* The site's own account posting a big play (engine/housepost): its mark, on the room's gold tint. */
+.gch-msg.house { background: color-mix(in oklab, var(--brand) 9%, transparent); }
+.gch-house { background: var(--panel-2); outline: var(--hairline) solid color-mix(in oklab, var(--brand) 60%, var(--border)); }
 .gch-gutter { visibility: hidden; padding-top: 3px; text-align: right; font-size: var(--fs-2xs); color: var(--text-mute);
   font-variant-numeric: tabular-nums; }
 .gch-msg.cont:hover .gch-gutter, .gch-msg.cont.sel .gch-gutter { visibility: visible; }

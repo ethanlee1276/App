@@ -69,10 +69,9 @@ of work first, each with what it is built from:
    on TV? Delay" holds the game page and its chat back 10, 30 or 60
    seconds. The push alerts are the box's and are not held; holding them
    would need the delay on the account, read by engine/pushmine.
-2. **The house posts the moment.** A play rated 8 or more drops its card
-   into the game's chat as a message from the house account, so the whole
-   room reacts to the same thing at the same time (Real's core loop).
-   Built from: engine/playmoments + engine/gamechat. Small.
+2. **The house posts the moment.** BUILT 2026-10-26 (step 202,
+   engine/housepost): a play rated 8+ goes into its game's chat from the
+   site's own account, on the play's thread, six a game at most.
 3. **Call it ladders and badges.** A week's and a season's leaderboard
    across every game, a streak flame beside a handle in the chat, a
    "Called it" card to share at five in a row. Built from: callit_calls.

@@ -1002,8 +1002,10 @@ function chatMsgHTML(m, prev) {
     + (p.founder ? `<span class="gch-founder">Founder</span>` : "");
   const menu = CH.menu === m.id ? chatMenuHTML(m) : "";
   const cont = chatJoins(m, prev && typeof prev === "object" ? prev : null);
-  return `<article class="gch-msg${m.own ? " own" : ""}${cont ? " cont" : ""}${CH.sel === m.id ? " sel" : ""}${p.founder ? " staff" : ""}" data-id="${m.id}">
+  // The site's own account (engine/housepost posts each big play as it) wears the site's mark.
+  return `<article class="gch-msg${m.own ? " own" : ""}${cont ? " cont" : ""}${CH.sel === m.id ? " sel" : ""}${p.founder ? " staff" : ""}${p.official ? " house" : ""}" data-id="${m.id}">
     ${cont ? `<time class="gch-gutter" aria-hidden="true">${chatClock(m.at)}</time>`
+      : p.official ? `<span class="gch-av gch-house" aria-hidden="true">${brandMarkHTML(24)}</span>`
       : `<span class="gch-av gch-c${c}${p.founder ? " gold" : ""}" aria-hidden="true">${chEsc(chatInitials(p))}</span>`}
     <div class="gch-bub">
       ${cont ? "" : `<div class="gch-meta"><b class="gch-name gch-c${c}">@${chEsc(p.handle || "")}</b>${badge}${
