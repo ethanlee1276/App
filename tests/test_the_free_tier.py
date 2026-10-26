@@ -103,8 +103,12 @@ def test_every_paid_tab_is_marked_locked_and_none_of_the_free_ones():
     assert "markLockedNav();" in APP[i:i + 80], "the wall goes up and the tabs are not marked"
 
 
-def test_a_paid_tab_still_lands_on_the_plans():
-    assert "if (wallBlocked(name)) name = \"paywall\";" in _fn(APP, "switchView")
+def test_a_paid_tab_still_lands_on_the_plans_and_says_which_it_was():
+    """Which tab sent a reader is kept (`_wallFrom`) so the plans can say
+    what it holds (js/account.js pwWhyHTML)."""
+    sv = _fn(APP, "switchView")
+    assert '_wallFrom = wallBlocked(name) ? name : "";' in sv and 'if (_wallFrom) name = "paywall";' in sv
+    assert 'if (wallBlocked(name)) { _wallFrom = name; name = "paywall"; dir = 0; }' in _fn(APP, "_switchViewNow")
 
 
 # --- the lock card -----------------------------------------------------------
@@ -189,24 +193,30 @@ def test_anyone_reads_a_chat_and_any_account_posts():
 
 
 # --- the first screen -------------------------------------------------------
-def _boot_target(hash_, signed_in=False, seen=False):
+def _boot_target(hash_, signed_in=False, seen=False, door=False):
     """The boot's landing rule for a walled reader, run in node against the
-    real source: (the hash it sets, the view it switches to)."""
+    real source: (the hash it sets, the view it switches to). `door` is the
+    account wall up for a signed-out reader (app.js acctWallUp)."""
     i = APP.index("const bootTarget = ")
     j = APP.index("// A hash that names a real page must not punch through the wall.", i)
     block = APP[i:j]
     m = re.search(r"const WALL_OPEN = \[(.*?)\];", APP, re.S)
+    a = re.search(r"const ACCOUNT_OPEN = \[(.*?)\];", APP, re.S)
     js = f"""
     const WALL_OPEN = [{m.group(1)}];
+    const ACCOUNT_OPEN = [{a.group(1)}];
     const location = {{ hash: {json.dumps(hash_)} }};
     const acctSignedIn = () => {json.dumps(signed_in)};
     const welcomeSeen = () => {json.dumps(seen)};
+    const door = {json.dumps(door)};
+    let kept = null;
+    const acctWallTurns = (v) => {{ kept = v; return true; }};
     let went = null;
     const _switchViewNow = (name) => {{ went = name; }};
     {block}
-    console.log(JSON.stringify([location.hash, went]));
+    console.log(JSON.stringify([location.hash, went, kept]));
     """
-    return tuple(_node(js))
+    return tuple(_node(js))[:2] if not door else tuple(_node(js))
 
 
 def test_a_stranger_lands_on_sign_up():
@@ -232,10 +242,23 @@ def test_a_link_to_a_paid_page_shows_the_plans():
     assert _boot_target("#edge")[1] == "signup"
 
 
-def test_the_sign_up_screen_leads_with_the_free_account_and_a_way_past():
+def test_with_the_account_wall_up_every_closed_link_opens_the_sign_up_and_is_kept():
+    """Ethan, 2026-10-25: "people need an account to use the site". Signed
+    out with the wall up, a bare visit, a free page and a paid page all open
+    the sign-up; the page asked for is kept for after (acctWallTurns). The
+    plans, the Record and a reset stay open; a friend's invite keeps its own
+    route."""
+    assert _boot_target("", door=True) == ("#signup", "signup", None), "a bare visit keeps nothing"
+    for h, v in (("#live", "live"), ("#pbp/nfl/401", "pbp"), ("#likely", "likely")):
+        assert _boot_target(h, door=True) == ("#signup", "signup", v), h
+    for h in ("#record", "#paywall", "#account", "#signup", "#friend/abc"):
+        assert _boot_target(h, door=True)[1] is None, h
+
+
+def test_the_sign_up_screen_leads_with_the_free_account_and_a_way_past_only_without_the_wall():
     body = _fn(ACCOUNT, "signupHTML")
     assert "Create your free account" in body
-    assert 'data-act="welcomeBrowse"' in body and "Look around first" in body
+    assert '${wall ? "" : `<button type="button" class="acct-forgot welcome-skip" data-act="welcomeBrowse">Look around first →</button>`}' in body
     browse = APP[APP.index("window.welcomeBrowse = function"):]
     browse = browse[:browse.index("};")]
     assert "welcomeDone();" in browse and 'location.hash = "#live";' in browse

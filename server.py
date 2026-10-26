@@ -1103,6 +1103,10 @@ _UNSUB_IN_LOG = re.compile(r"(/unsubscribe/|/unsubscribe/?\?t=)[^\s\"&]+")
 
 #: The strategy lab's answer, kept until the journal changes (Handler._record_lab).
 _LAB_CACHE: dict = {}
+#: The first screen's members' side (engine/firstlook), kept a minute: every
+#: stranger's first page asks for it, and it reads every league's board.
+_FIRSTLOOK: dict = {}
+FIRSTLOOK_TTL_S = 60
 
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
@@ -1253,6 +1257,8 @@ class Handler(BaseHTTPRequestHandler):
             # record, last night, and today's pick counts — never a pick.
             from engine import widgetfeed
             return self._send(200, json.dumps(widgetfeed.build()).encode(), ".json")
+        if parsed.path in ("/api/firstlook", "/api/firstlook/"):
+            return self._firstlook()
         if parsed.path in ("/api/push/key", "/api/push/key/"):
             # The server's public VAPID key: what a browser subscribes with.
             from engine import webpush
@@ -2345,7 +2351,9 @@ class Handler(BaseHTTPRequestHandler):
                        # types an address into a form that cannot send.
                        "reset_by_email": _mail_on(),
                        # Whether the phone option is on (engine/smsverify).
-                       "phone_signup": __import__("engine.smsverify", fromlist=["x"]).configured()}
+                       "phone_signup": __import__("engine.smsverify", fromlist=["x"]).configured(),
+                       # Whether the sign-up is the only way in (gate.account_wall).
+                       "account_wall": __import__("engine.gate", fromlist=["x"]).account_wall()}
                 if who:
                     out["email"] = who["email"]
                     from engine import smsverify as SV
@@ -4343,6 +4351,9 @@ class Handler(BaseHTTPRequestHandler):
             # "you need to subscribe" from "everything is free right now"
             # without it, and it has been guessing.
             out["paywall"] = GATE_.enabled()
+            # And whether a stranger needs an account to look around
+            # (gate.account_wall) — the page's first question on boot.
+            out["account_wall"] = GATE_.account_wall()
             return self._send(200, json.dumps(out).encode(), ".json")
         finally:
             conn.close()
@@ -5172,6 +5183,20 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         except Exception:                                    # noqa: BLE001
             return self._send(503, b'{"error":"record unavailable"}', ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _firstlook(self):
+        """What the sign-up screen and the plans show of the members' side
+        (engine/firstlook): tonight's counts, last night, the record and the
+        newest graded pick. Public — every part of it already is."""
+        now = time.time()
+        if _FIRSTLOOK.get("body") is None or now - _FIRSTLOOK.get("at", 0) > FIRSTLOOK_TTL_S:
+            from engine import firstlook
+            try:
+                _FIRSTLOOK.update(at=now, body=json.dumps(firstlook.build(WEB),
+                                                          separators=(",", ":")).encode())
+            except Exception:                                # noqa: BLE001
+                return self._send(503, b'{"error":"unavailable"}', ".json")
+        return self._send(200, _FIRSTLOOK["body"], ".json")
 
     def _record_lab(self):
         """Every settled pick of the headline record, compact — the strategy

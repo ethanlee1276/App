@@ -100,7 +100,7 @@ def test_the_wall_cancels_a_pending_tour_and_takes_an_open_one_down():
     assert "clearTimeout(_tourTimer);" in hd and "ov.remove();" in hd and "lockScroll(false);" in hd
     assert "localStorage" not in hd and "sessionStorage" not in hd, "taking it down decides nothing"
     sw = _fn("_switchViewNow")
-    assert 'if (wallBlocked(name)) { name = "paywall"; dir = 0; }\n  if (noTourViews().includes(name)) tourHide();' in sw
+    assert 'if (wallBlocked(name)) { _wallFrom = name; name = "paywall"; dir = 0; }\n  if (noTourViews().includes(name)) tourHide();' in sw
     assert ".tour-never {" in CSS and ".tour-never:hover, .tour-never:focus-visible" in CSS
 
 

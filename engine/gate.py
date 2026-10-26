@@ -512,6 +512,27 @@ def enabled() -> bool:
     return os.environ.get(ENV_ENABLED, "").strip().lower() in ("1", "true", "yes")
 
 
+#: THE ACCOUNT WALL (Ethan, 2026-10-25, with the Live tab open on his phone:
+#: "people need an account to use the site ... look at the Real app and how
+#: they make u create an account on the first screen"). Signed out, the page
+#: opens on the sign-up, as Real's does; the plans, the Record and the
+#: legal pages stay readable without one (app.js ACCOUNT_OPEN).
+#:
+#: A DOOR, NOT A LOCK, and nothing is redacted for it: the scores behind it
+#: are public facts and the picks are sealed by this module on disk either
+#: way. So the switch lives here only to be one line on the box —
+#: `QB_ACCOUNT_WALL=0` takes it down, `1` puts it up even with the paywall
+#: off; unset, it stands wherever the paywall does.
+ENV_ACCOUNT_WALL = "QB_ACCOUNT_WALL"
+
+
+def account_wall() -> bool:
+    v = os.environ.get(ENV_ACCOUNT_WALL, "").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    return v in ("1", "true", "yes", "on") or enabled()
+
+
 def comped(email: str) -> bool:
     """True for an address on the comp list. Case- and space-insensitive,
     because the list is typed by hand into a file and `Ethan@…` and

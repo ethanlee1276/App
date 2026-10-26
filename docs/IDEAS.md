@@ -11,6 +11,50 @@ Ordered by *value per unit of work*, not by size.
 
 ---
 
+## 2026-10-25 (later): the way in and the way up — next, ranked
+
+Ethan: *"go deeper on the free paid wall ... look at other apps ... we can
+show our paid features on the sign up site."* Built today (runbook EM): an
+account to use the site, the sign-up showing tonight's locked picks, Free
+beside Member, the last graded pick, the plans and the trial's days; the
+offer once after a new account's teams; Get picks in the top bar, a members
+strip on Live, locked tabs that say what they hold. Next, best value per
+unit of work first:
+
+1. **The trial reminder the timeline implies.** A push and an email on the
+   last free day: "Your free trial ends tomorrow — keep it, or cancel in
+   one tap." Duolingo and Blinkist promise it on the paywall; it is what
+   keeps a trial from feeling like a trap. Built from: the subscription's
+   `trial_end` (billing) + engine/digest's mailer + webpush. Small.
+2. **Win-back on a lapse.** When a plan lapses, the plans page leads with
+   what the member missed since: "Since you left: 23–14, +6.1u" — the
+   public ledger over their dates. Small.
+3. **"What brings you here?"** One tap before the form, Sleeper's first
+   question — Live games, our picks, fantasy, tracking my bets — and the
+   landing and the order of Free beside Member follow it. Small.
+4. **True social proof.** "… accounts made this week" and "… in game rooms
+   right now", counted from the accounts table and the chat's presence —
+   numbers that are real or not shown. Small.
+5. **Picks on your teams, as a count.** The offer and the Live strip say
+   "4 of tonight's picks are on teams you follow" — the private board
+   against the account's watches, a count and never a pick. Small; your
+   call, since a count by team says a little more than a count by league.
+6. **Yearly at month two.** A monthly member on their third bill sees
+   "switch to yearly, save $75" once, in Settings. Small.
+7. **Not today? Keep the door open.** On the plans, a second button that
+   turns on the free "picks are up" push (a count) for someone not ready
+   to pay. Small.
+8. **Passkeys.** Face ID / Touch ID sign-in (WebAuthn): no password to
+   forget and no text-message cost per sign-in. Medium.
+9. **Gift a month.** Buy a month for a friend, delivered as a code
+   (engine/redeem already grants one). Medium.
+10. **One free pick a day — your call.** A random one of tonight's (never
+    the best), opened for free accounts 15 minutes before its game, the
+    way most pick apps let a stranger taste the product. It makes a paid
+    pick visible without paying, which the site has never done.
+
+---
+
 ## 2026-10-25: the live game as a place to be — next, ranked
 
 Ethan: *"keep diving deeper into that ideas ... think of things that I

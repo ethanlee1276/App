@@ -97,7 +97,9 @@ def test_the_paywall_shows_ask_and_opens_no_door_to_it():
     assert '"ask"' not in wall, "Ask must stay behind the wall"
     blocked = _fn("wallBlocked")
     assert 'document.body.classList.contains("walled")' in blocked and "!WALL_OPEN.includes(name)" in blocked
-    assert "if (wallBlocked(name)) name = \"paywall\";" in _fn("switchView"), "a walled route to Ask lands on the paywall"
+    sv = _fn("switchView")
+    assert '_wallFrom = wallBlocked(name) ? name : "";' in sv and 'if (_wallFrom) name = "paywall";' in sv, \
+        "a walled route to Ask lands on the paywall"
     # On the wall's own screens only since the free tier (2026-10-25): a
     # free reader browsing the live games keeps the tab bar, with the paid
     # tabs marked locked and the router still sending them here.

@@ -300,6 +300,17 @@ body.gch-on { overflow: hidden; }
 
 /* ── your players, live (ypHTML): one line per followed player ─────────── */
 .yp { margin-bottom: 18px; }
+/* The members strip over it (mbHTML): today's count and the way to the plans. */
+.mb-strip { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin: 0 0 14px; padding: 11px 12px;
+  border-radius: var(--radius); border: var(--hairline) solid color-mix(in oklab, var(--brand) 50%, var(--border));
+  background: var(--grad-card), var(--panel); color: var(--text); text-decoration: none; }
+.mb-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--brand);
+  background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.mb-txt { display: grid; gap: 1px; min-width: 0; }
+.mb-txt b { font-size: var(--fs-sm); }
+.mb-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--text-mute); }
+.mb-go { padding: 6px 12px; border-radius: 999px; background: var(--grad-brand); color: var(--brand-ink); font-size: var(--fs-xs);
+  font-weight: 900; white-space: nowrap; }
 .yp-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px;
   -webkit-overflow-scrolling: touch; }
 .yp-item { flex: 0 0 auto; min-width: 168px; max-width: 240px; scroll-snap-align: start; display: grid; gap: 3px;

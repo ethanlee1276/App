@@ -34,6 +34,16 @@ referrer, or the iOS shell's user agent (`QellysApp/<v> (ios)`). Inside it:
 
 The website keeps all of it. `?app=web` on a phone forgets the app.
 
+**The account wall and Apple 5.1.1(v).** Since 2026-10-25 a signed-out
+visitor meets the sign-up before anything else (`QB_ACCOUNT_WALL`, on with
+the paywall). Apple lets an app ask for an account up front when its main
+features are account-based — ours are: the game chats, Call it streaks,
+follows and their alerts, the bet tracker — and Real ships the same first
+screen. If a reviewer still asks for a look-around mode, `sudo
+./deploy/setenv.sh QB_ACCOUNT_WALL 0` brings back "Look around first"
+everywhere with no new build. Sign in with Apple is not required (4.8): the
+app offers no third-party or social sign-in, only email and phone.
+
 **Call 2 — push alerts, the native feature for 4.2.** Built
 (`engine/webpush.py`, `engine/pushalerts.py`, `web/sw.js`, the Alerts page's
 "Alerts on this phone"): "This week's NFL picks are up — 6 picks on the

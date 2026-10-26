@@ -267,6 +267,19 @@ sudo -u qellys python3 -m engine.analytics report       # last 7 days
 sudo -u qellys python3 -m engine.analytics report 30
 ```
 
+## The account wall: on with the paywall
+
+Signed out, the site opens on the sign-up (Real's first screen); the plans,
+the Record, Log in, a reset and checkout stay open, and a shared link opens
+once the account exists (`engine/gate.account_wall`, app.js `ACCOUNT_OPEN`).
+It follows `QB_PAYWALL` unless told otherwise:
+
+```bash
+sudo ./deploy/setenv.sh QB_ACCOUNT_WALL 0     # strangers may look around first
+sudo ./deploy/setenv.sh --unset QB_ACCOUNT_WALL   # back to following the paywall
+sudo systemctl restart qellys
+```
+
 ## When you are home and want the chores list
 
 ```bash

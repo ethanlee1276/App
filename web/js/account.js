@@ -1430,6 +1430,7 @@ function paywallHTML(rec, status) {
         : `<button class="btn ghost pw-login" data-act="pwSignIn">Log in</button>`}
     </header>
     ${pwLapseHTML(status)}
+    ${pwWhyHTML()}
 
     <section class="pw-hero">
       <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
@@ -1441,6 +1442,10 @@ function paywallHTML(rec, status) {
             ended on a dead button. */""}
       ${pwHeroCtaHTML(trialOK && sellable(trialPlan) ? trialDays : 0,
                       PLANS.some((p) => sellable(p.id)))}
+      ${/* Tonight's picks, locked, with their counts (flTonightHTML) —
+            drawn by pwTonight once the numbers are in, and only on a day
+            with picks up. */""}
+      <div class="pw-fl"></div>
       ${/* SPORTS FIRST (audit item 6, 2026-09-23): the lede sold three
             audiences at once — "bettors, fantasy players and market
             traders" — and the audit's question was which one this is.
@@ -1948,6 +1953,38 @@ async function renderPaywall() {
   sweepRings(host);                 // the ribbon's ring sweeps in and its numbers count
   pwDock(host);
   pwReferral(host);
+  pwTonight(host);
+}
+
+/* Tonight's picks on the plans, the same locked cards as the sign-up's. */
+function pwTonight(host) {
+  flGet().then((fl) => {
+    const slot = host.querySelector(".pw-fl");
+    if (slot && fl && (fl.tonight || []).some((x) => Number(x.picks) > 0)) slot.innerHTML = flTonightHTML(fl);
+  });
+}
+
+/* WHY THE PLANS OPENED (2026-10-25: a locked tab explains itself). A paid
+   page tapped without a plan lands here (app.js _wallFrom), and the top of
+   the plans says what that page holds before anything asks for money. */
+const PW_WHY = {
+  recommended: ["Home is tonight’s picks", "The best bets on every board, posted before the game with the price we took."],
+  likely: ["Picks is Most Likely", "Every pick tiered by its chance of hitting — the board members open first."],
+  ask: ["Ask Qellys is for members", "The AI on any team, player or game, answered from our own numbers."],
+  edge: ["Edge is for members", "Where our number and the market’s disagree most, ranked."],
+  props: ["The props board is for members", "Every player prop we price, with our chance beside the book’s."],
+  longshots: ["Long shots are for members", "The big prices our model still likes, every night."],
+  futures: ["Futures are for members", "Season-long prices, with our number against the book’s."],
+  alerts: ["Alerts are for members", "Line moves, injuries and your players on tonight’s board, on your phone."],
+};
+
+function pwWhyHTML() {
+  const v = typeof _wallFrom === "string" ? _wallFrom : "";
+  if (!v) return "";
+  const [h, p] = PW_WHY[v] || ["That page is for members",
+    "Members get the picks, every board and the tools. Your free account keeps every game live."];
+  return `<div class="pw-why" role="status">${iconMark("lock", 16)}<div><b>${escapeHtml(h)}</b>
+    <p>${escapeHtml(p)}</p></div></div>`;
 }
 
 /* A FRIEND'S CODE ON THE ACCOUNT (engine/referrals): said at the top of the
@@ -2189,25 +2226,203 @@ function acctScreenHTML() {
 /* Re-rendered whenever the server's answer changes — a screen still
    showing the sign-in form after a successful sign-in is the commonest
    way a page like this feels broken. */
-/* THE SIGN-UP SCREEN — the first one a new visitor sees (app.js welcomeSeen). */
+/* WHAT MEMBERS GET, SHOWN BEFORE THE ACCOUNT EXISTS (Ethan, 2026-10-25: "go
+   deeper on the free paid wall for when u sign into the site or first get
+   onto the site. look at other apps ... we can show our paid features on
+   the sign up site"). The store apps' paywall, built from what each does
+   best and kept honest:
+     - the picks waiting tonight, as locked cards that carry only their
+       count (the widget's and the "picks are up" alert's own number) —
+       OddsJam's and Action's locked boards;
+     - last night and the record, the only proof this site sells on;
+     - the newest graded pick in full, win or lose — the FT's "view a
+       sample" before you register;
+     - Free beside Member, Duolingo's table, and the three plans with the
+       trial's days laid out, Blinkist's timeline.
+   Every number comes off /api/firstlook (engine/firstlook); none is
+   written here. */
+let _fl = null;
+let _flAsk = null;
+function flGet() {
+  if (!_flAsk) {
+    _flAsk = fetch("/api/firstlook", { credentials: "same-origin", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((d) => { _fl = d; if (!d) _flAsk = null; return d; });
+  }
+  return _flAsk;
+}
+
+function flTonightHTML(fl) {
+  const t = ((fl && fl.tonight) || []).filter((x) => Number(x.picks) > 0);
+  const n = t.reduce((a, x) => a + Number(x.picks), 0);
+  const night = fl && fl.last_night;
+  // A league a card, as many as have picks up; three blank ones before the
+  // counts arrive or on a night with none, so the shape never jumps.
+  const cards = (t.length ? t.slice(0, 6) : [null, null, null]).map((x) => `
+    <div class="fl-lock">
+      <div class="fl-lock-top">${x ? `<span>${escapeHtml(((SPORT_META[x.sport] || {}).logo || "") + " " + x.league)}</span>
+        <b>${plural(Number(x.picks), "pick")}</b>` : "<span>Tonight</span>"}</div>
+      <i aria-hidden="true"></i><i aria-hidden="true"></i><i class="s" aria-hidden="true"></i>
+      <span class="fl-lock-ic">${icon("lock", 13)}<span>Members</span></span>
+    </div>`).join("");
+  return `<section class="fl-tonight" aria-label="Tonight for members">
+    <div class="fl-tonight-h"><span class="fl-tag">${iconMark("gem", 12)}Members</span>
+      <b>${n ? `${plural(n, "pick")} posted today` : "Tonight’s picks post before every game"}</b></div>
+    <div class="fl-locks">${cards}</div>
+    ${night ? `<p class="fl-night">Last night <b>${night.w}–${night.l}${night.p ? `–${night.p}` : ""}</b>
+      <span class="${night.units >= 0 ? "pos" : "neg"}">${night.units >= 0 ? "+" : "−"}${Math.abs(Number(night.units)).toFixed(1)}u</span>
+      · graded on the <a href="#record">Record</a></p>` : ""}
+  </section>`;
+}
+
+/* Free beside Member. Each free line is a page WALL_OPEN opens and each
+   member line is one PLAN_FEATURES sells; nothing here is new. */
+const FL_ROWS = [
+  ["Every game live — scores, play-by-play and stats", 1],
+  ["A chat for every game, a thread on every play", 1],
+  ["Call it, and your players’ lines live", 1],
+  ["Fantasy lineups and start/sit help, your bet tracker", 1],
+  ["The Record — every pick we post, graded", 1],
+  ["Tonight’s picks, props and parlays, before the game", 0],
+  ["Most Likely — every pick, tiered by its chance", 0],
+  ["Ask Qellys, the AI, on any team or player", 0],
+  ["Zeno’s bets as he places them, verified on Pikkit", 0],
+  ["Game reports, matchups, line moves and alerts", 0],
+  ["The members’ Discord", 0],
+];
+
+function flTableHTML() {
+  const mark = (on) => (on ? `<span class="fl-yes">${iconMark("check", 13)}<span class="sr-only">Included</span></span>`
+    : `<span class="fl-no" aria-hidden="true">—</span><span class="sr-only">Not included</span>`);
+  // Its own wrapper, so the page's table wrapper (app.js wrapTables) and its
+  // reserved scrollbar gutter leave a three-column table alone.
+  return `<div class="rank-scroll fl-twrap"><table class="fl-table">
+    <thead><tr><th scope="col"><span class="sr-only">What you get</span></th><th scope="col">Free account</th>
+      <th scope="col" class="fl-mem">Member</th></tr></thead>
+    <tbody>${FL_ROWS.map(([what, free]) => `<tr${free ? "" : ' class="paid"'}><th scope="row">${escapeHtml(what)}</th>
+      <td>${mark(free)}</td><td class="fl-mem">${mark(1)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function flLastHTML(fl) {
+  const b = fl && fl.last;
+  if (!b || !b.player) return "";
+  const won = b.status === "won", push = b.status === "push";
+  const pnl = Number(b.pnl_units) || 0;
+  const line = (b.market === "moneyline" || b.line == null) ? "" : `${b.line} `;
+  return `<section class="fl-last" aria-labelledby="fl-last-h">
+    <h3 class="fl-h3" id="fl-last-h">The last pick we graded</h3>
+    <div class="fl-pick ${push ? "push" : won ? "won" : "lost"}">
+      <div class="fl-pick-top"><span>${escapeHtml(String(b.sport || "").toUpperCase())}${b.date ? ` · ${escapeHtml(b.date)}` : ""}</span>
+        <b class="fl-res">${push ? "Push" : won ? "Won" : "Lost"} ${pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(2)}u</b></div>
+      <b class="fl-pick-who">${escapeHtml(b.player)}</b>
+      <span class="fl-pick-bet">${escapeHtml(b.side || "")} ${escapeHtml(line)}${escapeHtml(marketWord(b.market))} · ${escapeHtml(american(b.odds))}</span>
+      ${b.hit_prob != null ? `<span class="fl-pick-p">Our chance ${(Number(b.hit_prob) * 100).toFixed(0)}%</span>` : ""}
+    </div>
+    <p class="fl-note">Members had it before the game. Won or lost, the newest graded pick is the one shown — it is the Record’s own row.</p>
+  </section>`;
+}
+
+function flRecordHTML(fl) {
+  const r = fl && fl.record;
+  if (!r || !(r.w + r.l)) return "";
+  return `<a class="fl-rec" href="#record"><span>The Record</span>
+    <b>${r.w}–${r.l}${r.p ? `–${r.p}` : ""}</b>
+    <span class="${r.units >= 0 ? "pos" : "neg"}">${r.units >= 0 ? "+" : "−"}${Math.abs(r.units).toFixed(1)}u</span>
+    <i>Every pick, free to read ${icon("chev", 12)}</i></a>`;
+}
+
+/* The three plans as one row of choices. Before an account exists a tap
+   keeps the plan (rememberPendingPlan) and brings the form up — once the
+   account is made, checkout opens on it (acctLandAfterAuth). A build that
+   sells nothing (storeSells) names no price. */
+function flPlansHTML(status) {
+  if (!storeSells()) return `<p class="fl-fine">Members sign in with their account to open the picks.</p>`;
+  const ready = {};
+  ((status && status.plans) || []).forEach((p) => { ready[p.id] = !!p.ready; });
+  const days = (status && status.trial_days) || 0;
+  const tplan = (status && status.trial_plan) || "";
+  const best = bestValuePlanId(PLANS);
+  return `<div class="fl-plans">${PLANS.map((pl) => {
+    const trial = days > 0 && pl.id === tplan;
+    const ok = !(pl.id in ready) || ready[pl.id];
+    return `<button type="button" class="fl-plan${pl.id === best ? " best" : ""}" data-flplan="${escapeAttr(pl.id)}"${ok ? "" : " disabled"}>
+      ${pl.id === best ? `<span class="fl-plan-tag">Best value</span>` : trial ? `<span class="fl-plan-tag trial">${days} days free</span>` : ""}
+      <b>${escapeHtml(pl.name)}</b>
+      <span class="fl-plan-price">$${pl.price}<i>/${escapeHtml(pl.per)}</i></span>
+      <span class="fl-plan-per">${!ok ? "Not available yet" : pl.months > 1 ? `$${planPerMonth(pl).toFixed(2)} a month · save $${pl.save}`
+        : trial ? `then $${pl.price} a month` : "Cancel anytime"}</span>
+    </button>`;
+  }).join("")}</div>`;
+}
+
+/* The trial's days, said before the card is asked for (faqFor says the
+   same in full; Terms §5.3 is the binding version). */
+function flTrialHTML(status) {
+  const days = (status && status.trial_days) || 0;
+  const pl = PLANS.find((p) => p.id === ((status && status.trial_plan) || ""));
+  if (!days || !pl || !storeSells() || (status && status.trial_eligible === false)) return "";
+  return `<ol class="fl-trial" aria-label="How the free trial works">
+    <li><b>Today</b><span>Every pick and every board opens. A card is taken; nothing is charged.</span></li>
+    <li><b>Day ${days}</b><span>The last free day — cancelling is one button on your account page.</span></li>
+    <li><b>Day ${days + 1}</b><span>$${pl.price} a month begins, unless you cancelled.</span></li>
+  </ol>`;
+}
+
+function flMembersHTML(fl, status) {
+  return `<section class="fl-members" aria-labelledby="fl-h">
+    <h2 class="fl-h2" id="fl-h">Free, or the picks too</h2>
+    ${flTableHTML()}
+    ${flLastHTML(fl)}
+    ${flRecordHTML(fl)}
+    <h3 class="fl-h3">Choose a plan whenever you’re ready</h3>
+    ${flPlansHTML(status)}
+    ${flTrialHTML(status)}
+    <p class="fl-fine">The free account needs none of this — start free, and the plans are here when you want them.</p>
+  </section>`;
+}
+
+/* The page the account wall held back (app.js acctWallTurns), said over
+   the form: "the link you were sent opens once you're in". */
+function wallWhyLine() {
+  let h = "";
+  try { h = sessionStorage.getItem("qb_wall_back") || ""; } catch (e) {}
+  const v = h.replace(/^#/, "").split("/")[0];
+  if (!v) return "";
+  if (v === "pbp" || v === "game") return "Make a free account and the game you were sent opens.";
+  if (v === "live") return "Make a free account to watch every game live, with the room.";
+  if (v === "feed" || v === "messages") return "Make a free account to see what was shared with you.";
+  if (v === "fantasy") return "Make a free account to open the fantasy tools.";
+  if (v === "mybets") return "Make a free account to track your bets.";
+  if (v === "streak") return "Make a free account to play the streak.";
+  return WALL_OPEN.includes(v) ? "Make a free account and that page opens."
+    : "Make a free account first — then the plans open the picks.";
+}
+
+/* THE SIGN-UP SCREEN — the first one a new visitor sees (app.js welcomeSeen;
+   with the account wall up, the only one: acctWallTurns). Real's order —
+   who we are, then the form — with the members' side right under it. */
 function signupHTML() {
   const insecure = _acctUser && _acctUser.insecure;
-  return `
+  const wall = !!((_pwStatus && _pwStatus.account_wall) || (_acctUser && _acctUser.account_wall));
+  const why = wallWhyLine();
+  return `<div class="fsu">
+  <header class="fsu-top">
+    <span class="fsu-brand">${brandMarkHTML(30)}<span class="fsu-words">Qellys <b>Book</b></span></span>
+    <button type="button" class="btn ghost fsu-login" data-act="acctGoLogin">Log in</button>
+  </header>
+  ${why ? `<p class="fsu-why" role="status">${iconMark("lock", 14)}<span>${escapeHtml(why)}</span></p>` : ""}
   <div class="welcome-hero">
-    <img class="welcome-mark" src="logo-qb.png" alt="" width="64" height="64" decoding="async">
-    <h1 class="welcome-h">Every game, live. Talk it out with the room.</h1>
-    <ul class="welcome-free">
-      <li>${iconMark("signal", 15)}<span>Live scores, play-by-play and stats for every game — free.</span></li>
-      <li>${iconMark("people", 15)}<span>A chat for every game, a thread on every play.</span></li>
-      <li>${iconMark("trophy", 15)}<span>Every pick we make, graded in public on the Record.</span></li>
-    </ul>
+    <h1 class="welcome-h">Every game, live. Every pick, graded.</h1>
+    <p class="fsu-sub">Your free account opens every game, its chat and Call it. Members get the picks.</p>
   </div>
-  <div class="card acct-card">
+  <div class="fl-host">${flTonightHTML(_fl)}</div>
+  <div class="card acct-card" id="su-form">
     <div class="card-head">
       <div><div class="player">Create your free account</div>
         <div class="subtitle">Pick a username — it is how the chat knows you. No card,
           nothing to cancel.</div></div>
     </div>
+    <p class="fsu-plan-note" role="status"></p>
     ${insecure ? `<div class="warning">${icon("warn")} <b>${
       _acctUser.allowed ? "This connection is not private."
                         : "Not over this connection."}</b>
@@ -2235,22 +2450,136 @@ function signupHTML() {
     </div>
     <div class="acct-alt-more">
       <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
-      <button type="button" class="acct-forgot welcome-skip" data-act="welcomeBrowse">Look around first →</button>
+      ${wall ? "" : `<button type="button" class="acct-forgot welcome-skip" data-act="welcomeBrowse">Look around first →</button>`}
     </div>
-
-    ${/* TWO PROMISES, AS AN APP SAYS THEM (2026-10-25): two rows under the
-          form, each a mark and one sentence, where two paragraphs of grey
-          prose used to sit. Nothing said is lost. */""}
-    <ul class="acct-promises">
-      <li>${iconMark("lock", 15)}<span>Length is what makes a password hard to guess. We keep a one-way
-        scramble of it, never the password — a lost one is replaced from “Forgot password?”, not recovered —
-        and we never ask for your sportsbook or ESPN password.</span></li>
-      <li>${iconMark("check", 15)}<span>An account is free — it takes no card and subscribes you to nothing.${PLANS[0] ? ` The plans are
-        <a href="#paywall">over here</a> when you want them.` : ""}</span></li>
-    </ul>
   </div>
+
+  <div class="fl-more">${flMembersHTML(_fl, _pwStatus)}</div>
+
+  ${/* TWO PROMISES, AS AN APP SAYS THEM (2026-10-25): two rows under the
+        form, each a mark and one sentence, where two paragraphs of grey
+        prose used to sit. Nothing said is lost. */""}
+  <ul class="acct-promises">
+    <li>${iconMark("lock", 15)}<span>Length is what makes a password hard to guess. We keep a one-way
+      scramble of it, never the password — a lost one is replaced from “Forgot password?”, not recovered —
+      and we never ask for your sportsbook or ESPN password.</span></li>
+    <li>${iconMark("check", 15)}<span>An account is free — it takes no card and subscribes you to nothing.${PLANS[0] ? ` The plans are
+      <a href="#paywall">over here</a> when you want them.` : ""}</span></li>
+  </ul>
   ${/* The wall's own screens hide the site footer, so they print its line. */""}
-  <p class="pw-legal">21+ · Not betting advice · Gambling problem? Call <b>1-800-GAMBLER</b></p>`;
+  <p class="pw-legal">21+ · Not betting advice · Gambling problem? Call <b>1-800-GAMBLER</b></p></div>`;
+}
+
+/* The members' side drawn, then redrawn once its numbers arrive — only its
+   own boxes, so a half-typed form is never wiped. On a phone the form's
+   button rides along once the form scrolls away (the plans screen's pwDock,
+   the same shape). */
+function flPaint(host) {
+  const need = _pwStatus ? null : paywallCheck().catch(() => null);
+  Promise.all([flGet(), need]).then(([fl]) => {
+    const a = host.querySelector(".fl-host");
+    const b = host.querySelector(".fl-more");
+    if (a && fl) a.innerHTML = flTonightHTML(fl);
+    if (b) b.innerHTML = flMembersHTML(fl, _pwStatus);
+  });
+  const form = host.querySelector("#su-form");
+  if (!form || host.querySelector(".fsu-dock") || typeof IntersectionObserver !== "function") return;
+  host.insertAdjacentHTML("beforeend", `<div class="fsu-dock away" role="region" aria-label="Create your free account">
+    <button type="button" class="btn primary" data-flgo="1">Create your free account</button></div>`);
+  const dock = host.querySelector(".fsu-dock");
+  new IntersectionObserver((seen) => dock.classList.toggle("away", seen.some((e) => e.isIntersecting)),
+    { threshold: 0.05 }).observe(form);
+}
+
+function flToForm(note) {
+  const f = document.getElementById("su-form");
+  if (!f) return;
+  const n = f.querySelector(".fsu-plan-note");
+  if (n && note) n.textContent = note;
+  f.scrollIntoView({ behavior: "smooth", block: "start" });
+  const first = f.querySelector(".acct-handle, input");
+  if (first) setTimeout(() => first.focus({ preventScroll: true }), 350);
+}
+
+if (typeof window !== "undefined" && !window._flBound) {
+  window._flBound = true;
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest && e.target.closest("[data-flplan], [data-flgo], [data-ps]");
+    if (!t) return;
+    if (t.dataset.flgo) return flToForm("");
+    if (t.dataset.ps) return planPick(t.dataset.ps);
+    const pl = PLANS.find((p) => p.id === t.dataset.flplan);
+    if (!pl) return;
+    // Signed in already (the plans page's own row), straight to checkout.
+    if (acctSignedIn()) return window.coStart({ dataset: { plan: pl.id } });
+    rememberPendingPlan(pl.id);
+    flToForm(`Make your account and checkout opens on the ${pl.name.toLowerCase()} plan.`);
+  });
+}
+
+/* THE OFFER, ONCE, RIGHT AFTER THE ACCOUNT — Duolingo's and Spotify's
+   order: the account, your teams, then the plan, with "continue free" a
+   full-size button and not a grey link. Only for a new account with no
+   plan that chose none on the way in, on a build that sells. */
+let _planDone = null;
+async function planStep(done) {
+  const host = document.getElementById("view-signup");
+  if (!host || state.view !== "signup" || !storeSells() || _pendingPlanPeek()) return done();
+  let walled = false;
+  try { walled = await paywallCheck(1); } catch (e) { walled = false; }
+  if (!walled) return done();
+  _planDone = done;
+  host.innerHTML = planStepHTML(_fl);
+  window.scrollTo({ top: 0, behavior: "auto" });
+  flGet().then((fl) => {
+    const t = host.querySelector(".ps-tonight");
+    if (t && fl && _planDone) t.innerHTML = psTonightHTML(fl);
+  });
+}
+
+function psTonightHTML(fl) {
+  const n = ((fl && fl.tonight) || []).reduce((a, x) => a + (Number(x.picks) || 0), 0);
+  return n ? `${iconMark("lock", 13)}<span><b>${plural(n, "pick")}</b> waiting for members today</span>` : "";
+}
+
+function planStepHTML(fl) {
+  const s = _pwStatus || {};
+  const days = s.trial_days || 0;
+  const tpl = PLANS.find((p) => p.id === s.trial_plan);
+  const trial = days > 0 && tpl && s.trial_eligible !== false && (s.plans || []).some((p) => p.id === tpl.id && p.ready);
+  const mo = PLANS.find((p) => p.id === "monthly") || PLANS[0];
+  const best = PLANS.find((p) => p.id === bestValuePlanId(PLANS));
+  const handle = (((_acctUser || {}).profile) || {}).handle || "";
+  return `<div class="ps-step">
+    <span class="ps-done" aria-hidden="true">${iconMark("check", 26)}</span>
+    <h1 class="ps-h">You’re in${handle ? `, @${escapeHtml(handle)}` : ""}.</h1>
+    <p class="ps-sub">Every game live, the chat and Call it are yours — free.</p>
+    <section class="ps-card" aria-labelledby="ps-h2">
+      <span class="fl-tag">${iconMark("gem", 12)}Members</span>
+      <h2 class="ps-h2" id="ps-h2">Want the picks too?</h2>
+      <p class="ps-tonight">${psTonightHTML(fl)}</p>
+      <ul class="ps-list">
+        <li>${iconMark("check", 13)}<span>Every pick before the game, with its price and our chance</span></li>
+        <li>${iconMark("check", 13)}<span>Most Likely, parlay tickets and every prop board</span></li>
+        <li>${iconMark("check", 13)}<span>Ask Qellys, the AI, on any team or player</span></li>
+        <li>${iconMark("check", 13)}<span>Zeno’s bets as he places them, verified on Pikkit</span></li>
+      </ul>
+      <button type="button" class="btn primary ps-go" data-ps="${escapeAttr((trial ? tpl : mo).id)}">${
+        trial ? `Start ${days} days free` : `Become a member — $${mo.price} a month`}</button>
+      <p class="ps-fine">${trial ? `Then $${tpl.price} a month. Cancel in one tap before day ${days + 1} and nothing is charged.`
+        : "Cancel anytime in one tap."}${best && best.id !== mo.id
+        ? ` Or $${planPerMonth(best).toFixed(2)} a month on the ${escapeHtml(best.name.toLowerCase())} plan.` : ""}</p>
+    </section>
+    <button type="button" class="btn ghost ps-free" data-ps="free">Continue with the free account</button>
+  </div>`;
+}
+
+function planPick(choice) {
+  const done = _planDone;
+  if (!done) return;
+  _planDone = null;
+  if (choice !== "free") rememberPendingPlan(choice);
+  done();
 }
 
 /* AN ACCOUNT BY PHONE (Ethan, 2026-10-25: "you can either make an account
@@ -2431,7 +2760,7 @@ function introBind(host) {
     const act = b.dataset.intro;
     if (act === "next") _introStep += 1;
     else if (act === "go") _introStep = Number(b.dataset.step) || 0;
-    else { introDone(); host.innerHTML = signupHTML(); host.scrollTop = 0; return; }
+    else { introDone(); host.innerHTML = signupHTML(); host.scrollTop = 0; flPaint(host); return; }
     host.innerHTML = introHTML();
   });
   // A swipe moves a step either way, as Real's does.
@@ -2564,7 +2893,7 @@ function followStep(done) {
   if (!host || state.view !== "signup") return done();
   _fol = { lg: FOLLOW_LEAGUES.some(([k]) => k === state.sport) ? state.sport : "nfl",
            teams: settings().teams.filter((t) => FOLLOW_LEAGUES.some(([k]) => t.startsWith(`${k}:`))).slice(0, FOLLOW_MAX),
-           players: [], hits: [], q: "", done };
+           players: [], hits: [], q: "", done: () => planStep(done) };
   followBind(host);
   host.innerHTML = followHTML();
   window.scrollTo({ top: 0, behavior: "auto" });
@@ -2592,6 +2921,7 @@ async function renderSignup() {
     return;
   }
   host.innerHTML = signupHTML();
+  flPaint(host);
 }
 
 function renderAccount() {

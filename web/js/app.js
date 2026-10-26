@@ -19215,13 +19215,15 @@ async function acctLandAfterAuth(say = () => {}) {
                + "plan you are on. Reload the page in a moment.");
   }
 
+  // The page the account wall held back (acctWallTurns), if any.
+  const back = takeWallBack();
   if (walled !== was) {
     say(walled ? "Signed in — this account does not have a plan yet."
                : "Signed in — taking you in…");
     // An account without a plan lands in the free tier (Live), not on the
     // plans it did not ask for; one that chose a plan first is carried on
     // to checkout below, on the reload.
-    location.hash = walled ? (_pendingPlanPeek() ? "#paywall" : "#live") : dcFirstStop();
+    location.hash = walled ? (_pendingPlanPeek() ? "#paywall" : back || "#live") : back || dcFirstStop();
     return location.reload();
   }
 
@@ -19241,13 +19243,15 @@ async function acctLandAfterAuth(say = () => {}) {
     // THE FREE TIER (2026-10-25): an account without a plan lands on the
     // games, with the plans a locked tab away — not on a price list it
     // did not ask for.
-    switchView("live", true);
+    if (back) location.hash = back;
+    else switchView("live", true);
   } else {
     // Paid already, so a plan they were part-way through buying is moot.
     // Left behind it would ambush the next sign-in on this device.
     takePendingPlan();
     say("Signed in — taking you in…");
-    switchView(dcFirstStop().replace("#", ""), true);
+    if (back) location.hash = back;
+    else switchView(dcFirstStop().replace("#", ""), true);
   }
   window.scrollTo({ top: 0, behavior: "auto" });
   a2hsTick();
@@ -23997,6 +24001,8 @@ function memberLockHTML(title, body) {
    the free tier does not (WALL_OPEN). */
 function markLockedNav() {
   const walled = isWalled();
+  const up = document.getElementById("nav-up");
+  if (up) up.hidden = !walled || !storeSells();
   document.querySelectorAll(".nav-btn[data-view]").forEach((b) => {
     b.classList.toggle("nav-locked", walled && !WALL_OPEN.includes(b.dataset.view));
   });
@@ -24006,6 +24012,33 @@ function wallBlocked(name) {
   return document.body.classList.contains("walled")
     && !WALL_OPEN.includes(name);
 }
+
+/* THE ACCOUNT WALL (Ethan, 2026-10-25, the Live tab open on his phone:
+   "people need an account to use the site ... Look at the Real app and how
+   they make u create an account on the first screen"). Signed out, every
+   page but these opens the sign-up instead, and the one asked for waits in
+   this tab until the account exists (acctLandAfterAuth) — a shared game
+   opens once its reader has signed up. A door, not a lock: the scores
+   behind it are public facts and the picks are sealed on disk either way
+   (engine/gate.account_wall holds the switch). */
+const ACCOUNT_OPEN = ["signup", "account", "reset", "paywall", "checkout", "record"];
+const acctWallUp = () => !!(_pwStatus && _pwStatus.account_wall) && !acctSignedIn();
+function acctWallTurns(name) {
+  if (!acctWallUp() || ACCOUNT_OPEN.includes(name)) return false;
+  // The whole link when the address still holds it; a page switched to
+  // later (a room loading after the boot) keeps what was kept before it.
+  const h = location.hash || "", own = h.startsWith(`#${name}`);
+  try { if (own || !sessionStorage.getItem("qb_wall_back")) sessionStorage.setItem("qb_wall_back", own ? h : `#${name}`); } catch (e) {}
+  return true;
+}
+function takeWallBack() {
+  let h = "";
+  try { h = sessionStorage.getItem("qb_wall_back") || ""; sessionStorage.removeItem("qb_wall_back"); } catch (e) {}
+  return h;
+}
+/* Which paid page sent a reader to the plans, so the plans can say what it
+   holds (js/account.js pwWhyHTML) — a locked tab explains itself. */
+let _wallFrom = "";
 
 /* WHERE A VIEW LANDS YOU.
    -------------------------------------------------------------------
@@ -24110,7 +24143,8 @@ function _landScroll(name, leaving) {
 }
 
 function switchView(name, push = false) {
-  if (wallBlocked(name)) name = "paywall";
+  _wallFrom = wallBlocked(name) ? name : "";
+  if (_wallFrom) name = "paywall";
   if (storeApp() && STORE_APP_SKIPS.has(name)) name = "recommended";
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
   const go = () => _switchViewNow(name, push, dir);
@@ -24163,11 +24197,13 @@ function _switchViewNow(name, push, dir) {
     name = name === "checkout" ? "paywall" : "recommended";
     dir = 0;
   }
+  // No account, no page but the open ones (ACCOUNT_OPEN): the sign-up.
+  if (acctWallTurns(name)) { name = "signup"; dir = 0; }
   // The wall's own screens draw their own masthead (WALL_SCREENS).
   document.body.classList.toggle("on-wall", WALL_SCREENS.includes(name));
   // Late, because a deferred view transition queued before the wall went
   // up arrives here after it did — see WALL_OPEN above.
-  if (wallBlocked(name)) { name = "paywall"; dir = 0; }
+  if (wallBlocked(name)) { _wallFrom = name; name = "paywall"; dir = 0; }
   if (noTourViews().includes(name)) tourHide();
   if (document.body.classList.contains("more-open")) moreSheetOpen(false);
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
@@ -32402,10 +32438,13 @@ function buzzOnSettle(rows) {
     // Spent here too, because the entitled sign-in RELOADS: the sheet is
     // armed on one page load and shown on the next.
     a2hsTick();
-    if (!walled) return;
-    document.body.classList.add("walled");
-    markLockedNav();
-    renderPaywall();
+    const door = acctWallUp();
+    if (!walled && !door) return;
+    if (walled) {
+      document.body.classList.add("walled");
+      markLockedNav();
+      renderPaywall();
+    }
     // A LINK TO AN OPEN PAGE LANDS ON THAT PAGE. The forced switch here
     // used to be unconditional, which shoved every cold load onto the
     // plans — including loads whose hash named a page WALL_OPEN grants:
@@ -32416,6 +32455,15 @@ function buzzOnSettle(rows) {
     // line put the pricing table over it. A plain visit still opens on
     // the plans; a load that ASKED for an open page keeps it.
     const bootTarget = (location.hash || "").replace(/^#/, "").split("/")[0];
+    // NO ACCOUNT, THE SIGN-UP (ACCOUNT_OPEN), with the page asked for kept
+    // for after. A friend's invite keeps its own route (friendRoute).
+    if (door) {
+      if (!ACCOUNT_OPEN.includes(bootTarget) && bootTarget !== "friend") {
+        if (bootTarget) acctWallTurns(bootTarget);
+        location.hash = "#signup";
+        _switchViewNow("signup", false, 0);
+      }
+    } else
     // THE FREE TIER OPENS ON LIVE (2026-10-25): a visit that asked for no
     // page, or for a paid one, lands on the games in progress — and a
     // stranger who has never signed in, on the sign-up first (Real's first

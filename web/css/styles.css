@@ -8148,6 +8148,11 @@ body.off-league .sportbar { display: none; }
    bell or a sport switcher, and every one of those was still sitting
    above the headline. */
 body.walled.on-wall .topbar, body.walled.on-wall .footer { display: none !important; }
+/* "Get picks" in the top bar, for a reader without a plan (markLockedNav). */
+.nav-up { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+  background: var(--grad-brand); color: var(--brand-ink); font-size: var(--fs-xs); font-weight: 900; text-decoration: none; }
+.nav-up svg { width: 13px; height: 13px; }
+.nav-up[hidden] { display: none; }
 /* THE GRID COLUMN OUTLIVES THE ELEMENT. `.shell` is
    `var(--sidebar-w) minmax(0,1fr)`;
    display:none takes the sidebar out of the flow but leaves the track, so
