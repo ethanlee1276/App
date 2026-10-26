@@ -17,6 +17,13 @@ says it, never a pick), and the sample is the newest row of the Record's
 settled list (/api/record/bets serves the same row to anyone). Whatever
 that row did — won or lost — is what shows: a first screen that picked
 its own best result would be the one claim on the page nobody could check.
+
+AND HOW MANY ARE HERE (`proof`, 2026-10-26, the ideas list's "true social
+proof"): accounts made in the last seven days, from the accounts table,
+and pages in a game's chat room right now, from the room's own "here"
+count (engine/gamechat). Counts only, never a name. Real or not shown: a
+number under its floor is left out rather than dressed up, and nothing is
+ever rounded up, padded or invented.
 """
 from __future__ import annotations
 
@@ -24,6 +31,7 @@ import datetime as _dt
 import json
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +40,41 @@ WEB = ROOT / "web"
 #: What the screen keeps of the newest graded pick.
 LAST_FIELDS = ("date", "sport", "player", "market", "side", "line", "odds", "book",
                "status", "pnl_units", "hit_prob")
+
+
+#: The floors under which a count is not shown: "3 accounts made this
+#: week" tells a stranger nothing they should act on.
+WEEK_MIN = 25
+ROOMS_MIN = 10
+WEEK_S = 7 * 86400
+
+
+def proof(now: float | None = None, conn=None) -> dict | None:
+    """``{"week": accounts made in seven days, "rooms": pages in game rooms
+    now}``, each only when it clears its floor; None when neither does."""
+    now = time.time() if now is None else float(now)
+    out: dict = {}
+    own = conn is None
+    try:
+        if own:
+            # A read never makes the accounts file: no file, no count.
+            from engine import accounts as A
+            conn = A.connect() if Path(A.DB_PATH).exists() else None
+        if conn is not None:
+            week = int(conn.execute("SELECT COUNT(*) FROM users WHERE created_at > ?",
+                                    (now - WEEK_S,)).fetchone()[0])
+            if week >= WEEK_MIN:
+                out["week"] = week
+    except Exception:                    # noqa: BLE001 — the first screen draws without it
+        pass
+    finally:
+        if own and conn is not None:
+            conn.close()
+    from engine import gamechat as GC
+    rooms = GC.here_total(now)
+    if rooms >= ROOMS_MIN:
+        out["rooms"] = rooms
+    return out or None
 
 
 def last_graded(conn) -> dict | None:
@@ -60,6 +103,7 @@ def build(web: Path = WEB, today: _dt.date | None = None, conn=None) -> dict:
     finally:
         if own and conn is not None:
             conn.close()
+    out["proof"] = proof()
     return out
 
 

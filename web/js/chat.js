@@ -368,6 +368,8 @@ async function yourPlayersMount(host) {
 let _lvmLast = "";
 let _lvmAt = 0;
 async function lvmLoad() {
+  const trial = lvmTrialHTML(typeof _pwStatus !== "undefined" ? _pwStatus : null);
+  if (trial) { _lvmLast = trial; return; }
   const want = typeof isWalled === "function" && isWalled() && (typeof storeSells !== "function" || storeSells());
   if (!want) { _lvmLast = ""; return; }
   if (_lvmLast && Date.now() - _lvmAt < 300000) return;
@@ -389,6 +391,31 @@ function lvmHTML(fl) {
       <span>${n ? t.slice(0, 4).map((x) => `${chEsc(x.league)} ${Number(x.picks)}`).join(" · ")
         : "Most Likely, parlays, Ask Qellys and Zeno’s bets"}</span></span>
     <span class="lvm-go">Get picks</span></a>`;
+}
+
+/* A member on the free trial, in its place: when the trial turns into a
+   charge, what is charged, and the way to cancel. The Live tab's half of
+   engine/trialnote's day-before email, and the only half a phone account
+   (no address) gets. Gone once they cancel, and in a store build that sells
+   nothing. In the reader's own zone (tzTime), not Eastern: it is their card. */
+function lvmTrialHTML(s) {
+  if (!s || s.status !== "trialing" || !Number(s.period_end) || s.cancel_at_end) return "";
+  if (typeof storeSells === "function" && !storeSells()) return "";
+  const t = Number(s.period_end) * 1000;
+  if (t <= Date.now()) return "";
+  // Days counted in the zone every clock on the site reads in (tzOpts).
+  const ymd = (x) => Date.parse(new Intl.DateTimeFormat("en-CA", tzOpts({})).format(new Date(x)));
+  const days = Math.round((ymd(t) - ymd(Date.now())) / 864e5);
+  const day = days <= 0 ? "today" : days === 1 ? "tomorrow"
+    : `on ${new Date(t).toLocaleDateString(undefined, tzOpts({ weekday: "long", month: "short", day: "numeric" }))}`;
+  const clock = tzTime(t);
+  const pl = (typeof PLANS !== "undefined" ? PLANS : []).find((p) => p.id === (s.plan || "monthly"));
+  const then = pl ? `Then $${pl.price} ${pl.months === 1 ? "a month" : pl.months === 12 ? "a year" : `every ${pl.months} months`}. ` : "";
+  return `<a class="lvm-strip lvm-trial" href="#account">
+    <span class="lvm-ic" aria-hidden="true">${icon("clock", 14)}</span>
+    <span class="lvm-txt"><b>Your free trial ends ${chEsc(day)} at ${chEsc(clock)}</b>
+      <span>${chEsc(then)}Cancel before then and you pay nothing.</span></span>
+    <span class="lvm-go">Manage</span></a>`;
 }
 
 /* The fast scoreboard's row for a room, so a thread opened from the Live

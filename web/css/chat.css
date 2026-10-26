@@ -311,6 +311,10 @@ body.gch-on { overflow: hidden; }
 .lvm-txt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--text-mute); }
 .lvm-go { padding: 6px 12px; border-radius: 999px; background: var(--grad-brand); color: var(--brand-ink); font-size: var(--fs-xs);
   font-weight: 900; white-space: nowrap; }
+/* The trial's line in its place (lvmTrialHTML): a notice about a charge, not a sale — no gold button. */
+.lvm-trial { border-color: var(--border); }
+.lvm-trial .lvm-txt span { white-space: normal; }
+.lvm-trial .lvm-go { background: none; color: var(--text); border: var(--hairline) solid var(--border); }
 .yp-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px;
   -webkit-overflow-scrolling: touch; }
 .yp-item { flex: 0 0 auto; min-width: 168px; max-width: 240px; scroll-snap-align: start; display: grid; gap: 3px;

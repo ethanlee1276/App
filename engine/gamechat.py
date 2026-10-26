@@ -395,6 +395,14 @@ def here(room: str, now: float | None = None) -> int:
         return sum(1 for t in (_HERE.get(room) or {}).values() if now - t <= HERE_S)
 
 
+def here_total(now: float | None = None) -> int:
+    """Pages in any game's room right now, each counted once however many
+    rooms it has open (the first screen's "in game rooms right now")."""
+    now = time.time() if now is None else now
+    with _HERE_LOCK:
+        return len({k for seen in _HERE.values() for k, t in seen.items() if now - t <= HERE_S})
+
+
 def _counts(conn, sql: str, args) -> dict:
     out: dict = {}
     for r in conn.execute(sql, args):

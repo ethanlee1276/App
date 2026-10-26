@@ -161,6 +161,16 @@
 .pw-lapse { --grade-color: var(--warn); flex-direction: row; flex-wrap: wrap;
   align-items: center; gap: 10px 16px; margin: 14px 16px 0; padding: 14px 16px 14px 20px; }
 .pw-lapse p { margin: 0; flex: 1 1 260px; line-height: var(--lh-snug); }
+/* What they missed since (pwSinceHTML): the Record's numbers from the day the plan ended. */
+.pw-since { flex-basis: 100%; display: grid; grid-template-columns: auto auto auto 1fr; align-items: baseline; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border); background: var(--panel);
+  color: var(--text-dim); font-size: var(--fs-sm); text-decoration: none; }
+.pw-since b { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
+.pw-since .pos { color: var(--good); font-family: var(--font-mono); font-weight: 800; }
+.pw-since .neg { color: var(--bad); font-family: var(--font-mono); font-weight: 800; }
+.pw-since i { justify-self: end; display: inline-flex; align-items: center; gap: 4px; font-style: normal; color: var(--brand);
+  font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
+@media (max-width: 420px) { .pw-since { grid-template-columns: auto auto 1fr; } .pw-since > span:first-child { grid-column: 1 / -1; } }
 .pw-h1 { font-size: clamp(34px, 6vw, 62px); font-weight: 900;
   letter-spacing: -.01em; line-height: var(--lh-tight); margin: 0; }
 .pw-h1 em { font-style: normal; color: var(--brand-2); }
@@ -728,6 +738,13 @@
   color: var(--text); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .fsu-why > :first-child { flex: none; color: var(--brand); }
 .fsu-sub { margin: 0; max-width: var(--measure-tight); color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-snug); }
+/* How many are here (flProofHTML): two real counts under the promise. */
+.fl-proof { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin: 0; font-size: var(--fs-xs);
+  color: var(--text-mute); }
+.fl-proof b { color: var(--text); font-family: var(--font-mono); margin-right: 4px; }
+.fl-proof-live { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--good);
+  vertical-align: 1px; }
+.fl-proof-host:empty { display: none; }
 .fsu-plan-note { margin: 0 0 10px; color: var(--brand-2); font-size: var(--fs-sm); font-weight: 700; }
 .fsu-plan-note:empty { display: none; }
 
@@ -870,6 +887,12 @@
 .pw-doors-h { margin: 0 0 14px; font-family: var(--font-headline); font-size: var(--fs-3xl); line-height: var(--lh-tight);
   color: var(--text); }
 .pw-doors-h em { font-style: normal; color: var(--brand); }
+/* Not today (pwLaterHTML): the free picks-are-up alert under the two doors. */
+.pw-later { display: grid; justify-items: center; gap: 6px; margin: 16px auto 0; }
+.pw-later .btn { display: inline-flex; align-items: center; gap: 8px; }
+.pw-later-note { margin: 0; font-size: var(--fs-xs); color: var(--text-mute); }
+.pw-later.on { display: flex; justify-content: center; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-dim); }
+.pw-later-off { padding: 0; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 700; cursor: pointer; }
 .pw-doors-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
 @media (max-width: 640px) { .pw-doors-row { grid-template-columns: 1fr; } }
 .pw-door { display: grid; gap: 10px; align-content: start; padding: 16px; border-radius: var(--radius-lg);

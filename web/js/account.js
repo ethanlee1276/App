@@ -1280,13 +1280,36 @@ function pwAskHTML() {
    billing page, which changes the card and pays the open invoice. Not a
    second plan: that would bill them twice once Stripe's retry clears,
    and checkout refuses one. */
-function pwLapseHTML(s) {
+function pwLapseHTML(s, rec) {
   const st = s && s.signed_in && !s.entitled && s.note ? s.status : "";
   const fix = st === "past_due" || st === "unpaid";
   return fix || st === "canceled" || (st && s.cancel_at_end) ? `
-    <div class="card pw-lapse" role="status"><p>${escapeHtml(s.note)}</p>${fix
+    <div class="card pw-lapse" role="status"><p>${escapeHtml(s.note)}</p>${pwSinceHTML(rec, s)}${fix
       ? `<button class="btn primary" data-act="billPortal">Update card</button>
          <p class="pw-lapse-note"></p>` : ""}</div>` : "";
+}
+
+/* WHAT THEY MISSED (the ideas list's win-back, 2026-10-26): the public
+   record from the day the plan ended, off the curve the Record page draws
+   (adoptPooledRecord's edge curve), so the two always agree. Win or lose,
+   once five picks have graded — a record shown only when it flatters is
+   an advert, and the Record page is free to read anyway. */
+function pwSinceHTML(rec, s) {
+  const end = Number(s && s.period_end);
+  const curve = (rec && rec.curve) || [];
+  if (!end || end * 1000 > Date.now() || !curve.length) return "";
+  const from = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(end * 1000));
+  let w = 0, l = 0, n = 0, u = 0;
+  curve.forEach((pt) => {
+    if (String(pt.date || "").slice(0, 10) < from) return;
+    w += Number(pt.w) || 0; l += Number(pt.l) || 0; n += Number(pt.n) || 0; u += Number(pt.day_u) || 0;
+  });
+  if (w + l < 5) return "";
+  const p = Math.max(0, n - w - l);
+  const day = new Date(end * 1000).toLocaleDateString(undefined, tzOpts({ month: "short", day: "numeric" }));
+  return `<a class="pw-since" href="#record"><span>Since your plan ended ${escapeHtml(day)}</span>
+    <b>${w}–${l}${p ? `–${p}` : ""}</b><span class="${u >= 0 ? "pos" : "neg"}">${u >= 0 ? "+" : "−"}${Math.abs(u).toFixed(1)}u</span>
+    <i>See every pick ${icon("chev", 12)}</i></a>`;
 }
 
 /* The paywall in a store build that sells nothing (boot.js
@@ -1303,7 +1326,7 @@ function storePaywallHTML(rec, status) {
         <span class="pw-brand-words">QELLYS <b>BOOK</b></span></span>
       <button class="btn ghost pw-login" data-act="pwSignIn">${signed ? "Account" : "Log in"}</button>
     </header>
-    ${pwLapseHTML(status)}
+    ${pwLapseHTML(status, rec)}
     <section class="pw-hero">
       <h1 class="pw-h1">Members <em>sign in</em> here.</h1>
       <p class="pw-sub">Tonight’s picks, the props and the game reports open
@@ -1437,7 +1460,7 @@ function paywallHTML(rec, status) {
         : `<button class="btn ghost pw-login" data-act="pwSignIn">Log in</button>
            <button class="btn primary pw-join" data-act="acctGoSignup">Sign up free</button>`}
     </header>
-    ${pwLapseHTML(status)}
+    ${pwLapseHTML(status, rec)}
     ${pwWhyHTML()}
     ${pwDoorsHTML(status, trialOK && sellable(trialPlan) ? trialDays : 0)}
 
@@ -2020,7 +2043,66 @@ function pwDoorsHTML(status, trialDays) {
           trialDays > 0 ? `Start ${trialDays} days free` : "See the plans"}</button>
       </article>
     </div>
+    ${signed ? pwLaterHTML() : ""}
   </div>`;
+}
+
+/* NOT TODAY? (the ideas list, 2026-10-26): for a signed-in reader not ready
+   to pay, the free "tonight's picks are up" alert — how many, never which
+   (engine/pushalerts) — one tap from the plans, so the door stays open
+   without a sale. Only where alerts can work (app.js pushKind); once on,
+   it says so instead of asking again. */
+function pwLaterHTML() {
+  const kind = typeof pushKind === "function" ? pushKind() : "";
+  if (kind !== "web" && kind !== "native") return "";
+  const saved = pushSaved();
+  if (saved && saved.endpoint && (saved.topics || []).includes("posted")) return pwLaterOnHTML();
+  return `<div class="pw-later">
+    <button type="button" class="btn ghost" data-pwlater="1">${icon("bell", 14)}<span>Not today — tell me when picks are up</span></button>
+    <p class="pw-later-note" role="status">A tap on your lock screen when tonight’s picks post: how many, never which.</p></div>`;
+}
+// Its own off switch, here: the Alerts page's switches are a members' page.
+function pwLaterOnHTML() {
+  return `<p class="pw-later on" role="status">${iconMark("bell", 13)}<span>You’ll hear when tonight’s picks are up.</span>
+    <button type="button" class="pw-later-off" data-pwlater="off">Turn off</button></p>`;
+}
+async function pwLater(btn) {
+  const wrap = btn.closest(".pw-later");
+  const note = wrap && wrap.querySelector(".pw-later-note");
+  btn.disabled = true;
+  if (btn.dataset.pwlater === "off") {
+    // Off for this alert only: whatever else this phone was told stays.
+    const saved = pushSaved() || {};
+    const rest = (saved.topics || []).filter((t) => t !== "posted");
+    try {
+      if (rest.length || (saved.mine || []).length) {
+        await pushSend("subscribe", { endpoint: saved.endpoint, kind: pushKind() === "native" ? "apns" : "web",
+          topics: rest.concat(saved.mine || []) });
+        try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, saved, { topics: rest }))); } catch (e) {}
+      } else {
+        await pushOff(saved);
+        try { localStorage.removeItem(PUSH_KEY); } catch (e) {}
+      }
+      if (wrap) wrap.outerHTML = pwLaterHTML();
+    } catch (err) {
+      btn.disabled = false;
+    }
+    return;
+  }
+  try {
+    // The alerts already chosen on this phone stay chosen; "posted" joins them.
+    const saved = pushSaved() || {};
+    const topics = [...new Set((saved.topics || []).concat("posted"))];
+    const got = await pushOn(topics.concat(saved.mine || []));
+    const mine = (t) => t === "watches" || t === "bets" || t === "clutch";
+    try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
+      topics: got.topics.filter((t) => !mine(t)), mine: got.topics.filter(mine) }))); } catch (e) {}
+    buzz("tap");
+    if (wrap) wrap.outerHTML = pwLaterOnHTML();
+  } catch (err) {
+    btn.disabled = false;
+    if (note) note.textContent = (err && err.message) || "That did not work — try again.";
+  }
 }
 
 /* A plan tapped before the account exists: the sign-up first, the plan kept
@@ -2309,6 +2391,19 @@ function flGet() {
   return _flAsk;
 }
 
+/* HOW MANY ARE HERE (engine/firstlook proof, the ideas list's "true social
+   proof"): accounts made this week and pages in a game's room right now.
+   Real counts, each sent only once it clears its floor on the server, and
+   never rounded up or padded here — real or not shown. */
+function flProofHTML(fl) {
+  const p = (fl && fl.proof) || {};
+  const week = Math.floor(Number(p.week) || 0), rooms = Math.floor(Number(p.rooms) || 0);
+  const parts = [];
+  if (week > 0) parts.push(`<span><b>${week.toLocaleString()}</b> accounts made this week</span>`);
+  if (rooms > 0) parts.push(`<span><i class="fl-proof-live" aria-hidden="true"></i><b>${rooms.toLocaleString()}</b> in game rooms right now</span>`);
+  return parts.length ? `<p class="fl-proof">${parts.join("")}</p>` : "";
+}
+
 function flTonightHTML(fl) {
   const t = ((fl && fl.tonight) || []).filter((x) => Number(x.picks) > 0);
   const n = t.reduce((a, x) => a + Number(x.picks), 0);
@@ -2471,6 +2566,7 @@ function signupHTML() {
   <div class="welcome-hero">
     <h1 class="welcome-h">Every game, live. Every pick, graded.</h1>
     <p class="fsu-sub">Your free account opens every game, its chat and Call it. Members get the picks.</p>
+    <div class="fl-proof-host">${flProofHTML(_fl)}</div>
   </div>
   <div class="fl-host">${flTonightHTML(_fl)}</div>
   <div class="card acct-card" id="su-form">
@@ -2536,7 +2632,9 @@ function flPaint(host) {
   Promise.all([flGet(), need]).then(([fl]) => {
     const a = host.querySelector(".fl-host");
     const b = host.querySelector(".fl-more");
+    const c = host.querySelector(".fl-proof-host");
     if (a && fl) a.innerHTML = flTonightHTML(fl);
+    if (c && fl) c.innerHTML = flProofHTML(fl);
     if (b) b.innerHTML = flMembersHTML(fl, _pwStatus);
   });
   const form = host.querySelector("#su-form");
@@ -2561,9 +2659,10 @@ function flToForm(note) {
 if (typeof window !== "undefined" && !window._flBound) {
   window._flBound = true;
   document.addEventListener("click", (e) => {
-    const t = e.target.closest && e.target.closest("[data-flplan], [data-flgo], [data-ps], [data-pwjoin]");
+    const t = e.target.closest && e.target.closest("[data-flplan], [data-flgo], [data-ps], [data-pwjoin], [data-pwlater]");
     if (!t) return;
     if (t.dataset.pwjoin) return pwJoin(t.dataset.pwjoin);
+    if (t.dataset.pwlater) return pwLater(t);
     if (t.dataset.flgo) return flToForm("");
     if (t.dataset.ps) return planPick(t.dataset.ps);
     const pl = PLANS.find((p) => p.id === t.dataset.flplan);

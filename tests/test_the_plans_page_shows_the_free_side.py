@@ -36,7 +36,7 @@ def _fn(src, name):
 def _doors(status, trial):
     rows = ACCOUNT[ACCOUNT.index("const FL_ROWS = ["):ACCOUNT.index("];", ACCOUNT.index("const FL_ROWS = [")) + 2]
     js = f"""
-    const escapeHtml = (s) => String(s), iconMark = () => "";
+    const escapeHtml = (s) => String(s), iconMark = () => "", pwLaterHTML = () => "<later>";
     const PLANS = [{{ id: "monthly", name: "Monthly", price: 25, months: 1 }}, {{ id: "yearly", name: "Yearly", price: 225, months: 12 }}];
     const planPerMonth = (p) => p.price / p.months;
     const bestValuePlanId = () => "yearly";
@@ -65,6 +65,7 @@ def test_signed_in_without_a_plan_the_free_door_says_so():
     out = _doors({"signed_in": True}, 0)
     assert "You have this" in out and 'href="#live">Go to the live games</a>' in out
     assert "Create a free account" not in out and "See the plans</button>" in out, "no trial on offer, none promised"
+    assert "<later>" in out and "<later>" not in _doors({"signed_in": False}, 3), "not today, for a signed-in reader"
 
 
 def test_signed_out_every_buy_button_goes_through_the_free_sign_up():

@@ -452,7 +452,8 @@ def test_the_paywall_says_why_and_offers_the_fix():
     assert ".pw-lapse-note" in go, "a portal error would have nowhere to show"
     assert '"canceled"' in body and "cancel_at_end" in body
     pw = APP[APP.index("function paywallHTML("):]
-    assert "${pwLapseHTML(status)}" in pw[:pw.index("pw-hero")]
+    # With the record since: what the picks did after the plan ended (pwSinceHTML).
+    assert "${pwLapseHTML(status, rec)}" in pw[:pw.index("pw-hero")]
     assert "billPortal: (el) => billPortal(el)" in APP
 
 

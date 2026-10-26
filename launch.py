@@ -5120,6 +5120,9 @@ def _billing_sweeper() -> None:
                     _bi.sweep(conn)
                     # Referral credits the webhook could not pay (engine/referrals).
                     _bi.settle_referrals(conn)
+                    # The free trial's day-before email (engine/trialnote).
+                    from engine import trialnote as _tn
+                    _tn.run(conn)
                 finally:
                     conn.close()
         except Exception:      # noqa: BLE001 — never let this stop the site

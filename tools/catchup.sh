@@ -51,6 +51,10 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EL 2>&1 | tee /tmp/el.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EM 2>&1 | tee /tmp/em.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EN 2>&1 | tee /tmp/en.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EO 2>&1 | tee /tmp/eo.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EP 2>&1 | tee /tmp/ep.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EQ 2>&1 | tee /tmp/eq.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh ER 2>&1 | tee /tmp/er.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -544,6 +548,18 @@ run EN "The game chat's buttons, and a plans page that shows the free side" 120 
 curl -s https://qellysbook.com/js/chat.js | grep -c 'async function lvmLoad('
 curl -s https://qellysbook.com/js/account.js | grep -c 'function pwDoorsHTML('
 cd /srv/qellys && sudo -u qellys python3 -m engine.bugscan --hours 48 | head -40
+SH
+run EO "The free trial's reminder" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.trialnote
+SH
+run EP "What a lapsed member missed" 30 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'function pwSinceHTML('
+SH
+run EQ "How many are here, on the first screen" 30 <<'SH'
+curl -s https://qellysbook.com/api/firstlook | grep -oE '"proof":(null|\{[^}]*\})'
+SH
+run ER "Not today? The plans page keeps the door open" 30 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'function pwLaterHTML('
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

@@ -1064,8 +1064,10 @@ def init(conn) -> None:
     # cancel this at the period's end, when we last read the subscription
     # from Stripe ourselves (`refresh`), and the creation time of the
     # newest event the row reflects (`apply_event`'s ordering).
+    # And the trial reminder (engine/trialnote, 2026-10-26): the trial end
+    # this row was last reminded about, so the day-before email goes once.
     for col, kind in (("cancel_at_end", "INTEGER"), ("checked_at", "REAL"),
-                      ("event_at", "REAL")):
+                      ("event_at", "REAL"), ("trial_noted", "REAL")):
         if col not in have:
             conn.execute(f"ALTER TABLE subscriptions ADD COLUMN {col} {kind}")
     conn.commit()

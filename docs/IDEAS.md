@@ -21,29 +21,29 @@ offer once after a new account's teams; Get picks in the top bar, a members
 strip on Live, locked tabs that say what they hold. Next, best value per
 unit of work first:
 
-1. **The trial reminder the timeline implies.** A push and an email on the
-   last free day: "Your free trial ends tomorrow — keep it, or cancel in
-   one tap." Duolingo and Blinkist promise it on the paywall; it is what
-   keeps a trial from feeling like a trap. Built from: the subscription's
-   `trial_end` (billing) + engine/digest's mailer + webpush. Small.
-2. **Win-back on a lapse.** When a plan lapses, the plans page leads with
-   what the member missed since: "Since you left: 23–14, +6.1u" — the
-   public ledger over their dates. Small.
+1. **The trial reminder the timeline implies.** BUILT 2026-10-26 (step
+   198, engine/trialnote): one email about a day before the charge — when,
+   what, and Manage billing → Cancel — and the same line on Live while the
+   trial runs. No push: the phone's permission was given for games, not
+   for billing.
+2. **Win-back on a lapse.** BUILT 2026-10-26 (step 199, account.js
+   pwSinceHTML): the plans page's lapse notice carries the Record curve's
+   numbers since the plan ended, win or lose, once five have graded.
 3. **"What brings you here?"** One tap before the form, Sleeper's first
    question — Live games, our picks, fantasy, tracking my bets — and the
    landing and the order of Free beside Member follow it. Small.
-4. **True social proof.** "… accounts made this week" and "… in game rooms
-   right now", counted from the accounts table and the chat's presence —
-   numbers that are real or not shown. Small.
+4. **True social proof.** BUILT 2026-10-26 (step 200, engine/firstlook
+   proof): accounts made this week and pages in game rooms right now under
+   the first screen's promise, each left off under its floor (25 / 10).
 5. **Picks on your teams, as a count.** The offer and the Live strip say
    "4 of tonight's picks are on teams you follow" — the private board
    against the account's watches, a count and never a pick. Small; your
    call, since a count by team says a little more than a count by league.
 6. **Yearly at month two.** A monthly member on their third bill sees
    "switch to yearly, save $75" once, in Settings. Small.
-7. **Not today? Keep the door open.** On the plans, a second button that
-   turns on the free "picks are up" push (a count) for someone not ready
-   to pay. Small.
+7. **Not today? Keep the door open.** BUILT 2026-10-26 (step 201,
+   account.js pwLaterHTML): under the plans page's two cards, signed in,
+   where alerts work — with its own Turn off.
 8. **Passkeys.** Face ID / Touch ID sign-in (WebAuthn): no password to
    forget and no text-message cost per sign-in. Medium.
 9. **Gift a month.** Buy a month for a friend, delivered as a code
