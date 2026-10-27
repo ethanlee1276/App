@@ -64,9 +64,14 @@ class SmsUnavailable(RuntimeError):
 #: the page that fails on every tap — so a value of the wrong shape counts
 #: as not set, and `python3 -m engine.smsverify --check` says which.
 PREFIX = {ENV_SID: "AC", ENV_SERVICE: "VA"}
+#: A Verify service needs a paid account (2026-10-27, Ethan: "I don't have a
+#: paid twillo account so I don't get the VA key thing"): a free trial only
+#: texts numbers its owner verified, five at most, and offers no service to
+#: copy. The check says so rather than sending him looking for it.
 WHERE = {ENV_SID: "the Account SID, on the console's home page",
          ENV_TOKEN: "the Auth Token, beside the Account SID",
-         ENV_SERVICE: "Verify → Services → your service → Service SID"}
+         ENV_SERVICE: ("Verify → Services → Create new → Service SID, which Twilio offers once the "
+                       "account is upgraded from its free trial (the API key option is not needed)")}
 
 
 def problems(env=None) -> list:

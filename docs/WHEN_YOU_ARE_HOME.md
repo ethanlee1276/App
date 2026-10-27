@@ -4765,6 +4765,15 @@ cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_VERIFY_SID
 sudo systemctl restart qellys
 ```
 
+**It needs a paid Twilio account** (2026-10-27: a free trial shows only
+the Account SID, the Auth Token and an API key, no Verify service). A
+trial only texts codes to numbers its owner verified, five at most, and
+Twilio offers the Verify service once the account is upgraded (a card, a
+starting balance and a business profile Twilio approves). Until then the
+phone option stays hidden and email sign-up carries on; the check above
+says where the `VA…` value comes from. The API key is not needed: the
+site signs its requests with the Account SID and the Auth Token.
+
 The check in one go:
 
 ```
@@ -5348,39 +5357,42 @@ all the code to run"). Every command runs on the box (`ssh` in first).
    sudo systemctl start qellys-update
    ```
 
-2. Phone sign-up (EC) — the key that went in the wrong place. Each
-   command asks for one value: paste it and press Enter (nothing shows
-   while you paste; that is on purpose). Running one again replaces it.
-   - `TWILIO_ACCOUNT_SID` starts with `AC`: the Twilio console's home
-     page, "Account Info".
-   - `TWILIO_AUTH_TOKEN`: the same box, under the Account SID (click to
-     show it).
-   - `TWILIO_VERIFY_SID` starts with `VA` — the one that got the Account
-     SID by mistake: Verify → Services → your service → "Service SID"
-     (no service yet? Create new, any name, e.g. Qellys Book).
+2. Phone sign-up (EC): **skip it for now** (Ethan, 2026-10-27: "There is
+   no service sid, just a account sid and authentication token and an
+   option to create a api key … I don't have a paid twillo account so I
+   don't get the VA key thing"). Right: a free Twilio trial has no Verify
+   service to copy, and it only texts codes to numbers you have verified
+   yourself, five at most, so it could not sign anybody else up anyway.
+   The site keeps the phone option hidden until all three values are
+   right, and email sign-up works as it is: nothing is broken, and
+   nothing needs a restart. The API key is not needed at all.
+
+   Optional tidy-up: the Verify slot still holds the Account SID from
+   2026-10-26. It is harmless (the site treats it as not set); this clears
+   it:
 
    ```
-   cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_ACCOUNT_SID
-   cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_AUTH_TOKEN
+   cd /srv/qellys && sudo ./deploy/setenv.sh --unset TWILIO_VERIFY_SID
+   ```
+
+   If you ever want phone sign-up: upgrade the Twilio account (a card and
+   a starting balance; Twilio also asks for a business profile before it
+   texts any number), then Verify → Services → Create new (any name, e.g.
+   Qellys Book), copy its Service SID (it starts with `VA`), and:
+
+   ```
    cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_VERIFY_SID
-   ```
-
-   Then restart (this also starts everything from EO to EU at once), and
-   check the three values. The check names any that is missing or the
-   wrong kind, and never prints a value:
-
-   ```
    sudo systemctl restart qellys
    cd /srv/qellys && sudo python3 -m engine.smsverify --check
    ```
 
-3. Only if the site has no account of its own yet (ES, for the big plays
-   in the chats): sign up on the site with a second email, then run this
-   with that email in place of site@example.com:
+   Every code texted is billed by Twilio, a few cents each.
 
-   ```
-   cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.claim(A.connect(), 'site@example.com', 'Qellys_Book', name='Qellys Book'))"
-   ```
+3. The site's own account (ES): **already done** — the Founder crown and
+   `Qellys_Book` were set up on 2026-10-07, so skip the claim. The big
+   plays post as `Qellys_Book`; step 4's ES line confirms it, reading "The
+   site's own account: account … — big plays post as it." If it says NONE
+   instead, paste it back and I'll say which part to redo.
 
 4. Every read-only check since the chat shipped (DX to EX) in one go,
    a couple of minutes. Paste back what it prints:

@@ -42,6 +42,10 @@ def test_a_swapped_sid_keeps_it_off_and_says_which():
     assert "Account SID" in said[0] and "AC_test" not in said[0], "a value is never printed"
     assert SV.problems(ENV) == []
     assert "TWILIO_AUTH_TOKEN is not set" in " ".join(SV.problems({SV.ENV_SID: "AC_x", SV.ENV_SERVICE: "VA_x"}))
+    # 2026-10-27: a free trial has no Verify service to copy; the check says
+    # where one comes from instead of sending him looking for it.
+    unset = " ".join(SV.problems({SV.ENV_SID: "AC_x", SV.ENV_TOKEN: "t"}))
+    assert "TWILIO_VERIFY_SID is not set" in unset and "upgraded from its free trial" in unset
 
 
 def test_only_a_north_american_mobile_shaped_number():
