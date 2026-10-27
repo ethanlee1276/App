@@ -21,9 +21,11 @@ never from the model's words:
   NEXT    up to three questions a reader would ask next, from what this
           answer looked up and who it was about.
 
-Standard library only; pure functions.
+Standard library and engine/slipgrade's leg cleaner only; pure functions.
 """
 from __future__ import annotations
+
+from engine import slipgrade as _SG
 
 #: At most this many cards under one answer: two numbers-heavy panels is a
 #: lot on a phone.
@@ -109,6 +111,37 @@ def step_label(name: str, args) -> str:
     return "Looking it up"
 
 
+# ---- the bet a card is about ------------------------------------------------------------------
+#: What a card carries of tonight's bet so the page can act on it — add it to
+#: the slip, track it in My Bets, watch the player. The board row's own keys,
+#: so the slip's leg is the leg the board would have added.
+BET_KEYS = ("market", "market_label", "team", "opponent", "matchup", "game_date")
+
+
+def _bet(sport, player, row: dict, book=None, odds=None) -> dict | None:
+    """Tonight's priced player bet, from a board row: who, which market,
+    which side at which number, at which book and price. None unless all of
+    those are there: a button that adds half a bet is worse than none."""
+    if not isinstance(row, dict):
+        return None
+    side = str(row.get("side") or "").upper()
+    odds = row.get("odds") if odds is None else odds
+    book = row.get("book") if book is None else book
+    if not (sport and player and row.get("market") and side in ("OVER", "UNDER")
+            and row.get("line") is not None and isinstance(odds, (int, float)) and odds):
+        return None
+    bet = {"sport": str(sport).lower(), "player": player, "side": side, "line": row.get("line"),
+           "odds": int(odds), "book": book or ""}
+    bet.update({k: row[k] for k in BET_KEYS if row.get(k) not in (None, "")})
+    # Whether the box can follow it: a leg the screenshot checker's own
+    # cleaner keeps (engine/slipgrade.clean_slip), which is what the Live tab
+    # and the slip watch read it through.
+    bet["trackable"] = bool(_SG.clean_slip({"legs": [{"sport": bet["sport"], "player": player, "team": bet.get("team"),
+                                                      "market": bet["market"], "side": side.lower(),
+                                                      "line": bet["line"], "odds": bet["odds"]}]})["legs"])
+    return bet
+
+
 # ---- the cards ------------------------------------------------------------------------------
 def _rate(t: dict, side: str):
     if not isinstance(t, dict) or not t.get("games"):
@@ -150,7 +183,21 @@ def hits_card(out: dict) -> dict | None:
     if isinstance(t, dict):
         card["tonight"] = {k: t.get(k) for k in ("side", "line", "odds", "book", "model_prob", "tier")
                            if t.get(k) is not None}
+        # The buttons act on tonight's bet only when it is the one the card
+        # is about: the same side at the same number. Asked about the other
+        # side, or another line, there is no price on the board to act at.
+        same = str(t.get("side") or "").lower() == side and _same_line(t.get("line"), out.get("line"))
+        bet = _bet(out.get("sport"), out.get("player"), t) if same else None
+        if bet:
+            card["bet"] = bet
     return card
+
+
+def _same_line(a, b) -> bool:
+    try:
+        return abs(float(a) - float(b)) < 1e-9
+    except (TypeError, ValueError):
+        return False
 
 
 def prices_card(out: dict) -> dict | None:
@@ -168,6 +215,11 @@ def prices_card(out: dict) -> dict | None:
     mv = p.get("line_move") or {}
     if mv.get("open") is not None and mv.get("current") is not None:
         card["move"] = {"open": mv["open"], "current": mv["current"]}
+    # The bet at the best price on our side, where one was found; else ours.
+    bet = _bet(p.get("league"), p.get("player"), p, book=best.get("book") if best.get("odds") else p.get("our_book"),
+               odds=best.get("odds") or p.get("our_price"))
+    if bet:
+        card["bet"] = bet
     return card
 
 

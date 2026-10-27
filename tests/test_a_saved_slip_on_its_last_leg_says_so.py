@@ -193,9 +193,13 @@ def test_the_leg_is_described_from_the_scoreboard_and_a_push_is_not_a_leg_left()
     nolock = dict(card, hedge=dict(card["hedge"], lock={"hedge": 50.0, "either": -3.0}, back=None))
     assert "no hedge locks a profit" in SW.message(ONE_LEFT, nolock, link="x", site=SITE)[1]
     # One leg left means one leg to decide it — the standing's own count.
-    assert SW.last_leg({"now": {"status": "open", "left": 1}}) is True
-    assert SW.last_leg({"now": {"status": "open", "left": 2}}) is False
-    assert SW.last_leg({"now": {"status": "won", "left": 0}}) is False and SW.last_leg({"now": None}) is False
+    two = [{}, {}]
+    assert SW.last_leg({"legs": two, "now": {"status": "open", "left": 1}}) is True
+    assert SW.last_leg({"legs": two, "now": {"status": "open", "left": 2}}) is False
+    assert SW.last_leg({"legs": two, "now": {"status": "won", "left": 0}}) is False and SW.last_leg({"now": None}) is False
+    # A straight bet (one leg: tracked from Ask, a single on a screenshot)
+    # has one leg left from the start and is never "down to" it.
+    assert SW.last_leg({"legs": [{}], "now": {"status": "open", "left": 1}}) is False
     # A live last leg off the real reader, not the fixture: LA final, KC in play.
     fast = T._fast({"live_nfl.json": {"games": [
         {"event_id": "1", "home": "LA", "away": "BUF",

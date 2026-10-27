@@ -2170,6 +2170,10 @@ def line_shop(boards: dict, query: str, sport: str = "", prefer: str = "") -> di
                    "our_price": r.get("odds"), "our_book": r.get("book"),
                    "books": [{k: x[k] for k in ("book", "line", "over_odds", "under_odds") if x.get(k) is not None}
                              for x in books[:12]]}
+            # The bet itself, field by field (engine/askcards: the price
+            # card's Add to slip / Track it act on exactly this).
+            row.update({k: r[k] for k in ("player", "market", "market_label", "side", "line", "team",
+                                          "opponent", "matchup", "game_date") if r.get(k) not in (None, "")})
             same = [x for x in books if key and x.get(key) is not None and x.get("line") == r.get("line")]
             if same:
                 best = max(same, key=lambda x: x[key])

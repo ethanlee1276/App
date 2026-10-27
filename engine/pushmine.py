@@ -254,8 +254,15 @@ def _money(x) -> str:
         return "$0.00"
 
 
-def bet_on(conn, user_id, bet_id: str, where: str, now: float | None = None) -> bool:
-    return tell(conn, user_id, f"bets:on:{bet_id}", "bets", "Your parlay is on",
+def _noun(legs) -> str:
+    """A ticket of one leg is a bet, not a parlay: a straight bet tracked
+    from Ask (2026-10-27) or a single read off a screenshot. A count we were
+    not handed is a parlay, as every saved slip was before."""
+    return "bet" if legs == 1 else "parlay"
+
+
+def bet_on(conn, user_id, bet_id: str, where: str, now: float | None = None, legs: int = 0) -> bool:
+    return tell(conn, user_id, f"bets:on:{bet_id}", "bets", f"Your {_noun(legs)} is on",
                 (f"{where[:150]} — " if where else "") + "follow it on the Live tab.", "/#live", ttl="on", now=now)
 
 
@@ -270,6 +277,7 @@ def bet_settled(conn, user_id, bet: dict, done: dict, now: float | None = None) 
     just wrote to the member's My Bets."""
     res = done.get("result")
     stake = bet.get("stake")
+    noun = _noun(len(bet.get("legs") or []) if isinstance(bet.get("legs"), list) else 0)
     if res == "win":
         try:
             o = float(done.get("paid_odds") or bet.get("odds"))
@@ -277,11 +285,11 @@ def bet_settled(conn, user_id, bet: dict, done: dict, now: float | None = None) 
             body = f"{_money(float(stake) * dec)} back on {_money(stake)}. My Bets has it graded."
         except (TypeError, ValueError, ZeroDivisionError):
             body = "My Bets has it graded."
-        title = "Your parlay won"
+        title = f"Your {noun} won"
     elif res == "loss":
-        title, body = "Your parlay lost", "Graded off the box score. My Bets has it."
+        title, body = f"Your {noun} lost", "Graded off the box score. My Bets has it."
     elif res == "push":
-        title, body = "Your parlay pushed", f"Your {_money(stake)} comes back. My Bets has it."
+        title, body = f"Your {noun} pushed", f"Your {_money(stake)} comes back. My Bets has it."
     else:
         return False
     return tell(conn, user_id, f"bets:settled:{bet.get('id')}", "bets", title, body, "/#mybets",

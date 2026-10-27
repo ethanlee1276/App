@@ -211,9 +211,16 @@ def noted(conn, user_id: int, bet_id: str) -> bool:
 
 def last_leg(card: dict) -> bool:
     """One leg left to decide an open ticket — the standing the Live tab
-    draws (slipgrade.standing) says so. A pushed leg is not a leg left."""
+    draws (slipgrade.standing) says so. A pushed leg is not a leg left.
+
+    A TICKET OF ONE LEG IS NEVER "DOWN TO" IT (2026-10-27): a straight bet
+    tracked from Ask, or a single read off a screenshot, has one leg left
+    from the moment it is saved, and "down to the last leg — the hedge is
+    worth opening" said at once about a bet nobody has watched yet is the
+    alert crying wolf."""
     now = (card or {}).get("now") or {}
-    return now.get("status") == "open" and int(now.get("left") or 0) == 1
+    return (len((card or {}).get("legs") or []) > 1 and now.get("status") == "open"
+            and int(now.get("left") or 0) == 1)
 
 
 def _dec(o) -> float | None:
@@ -397,7 +404,7 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
         # member's phones that asked for their bets.
         on = next((l for l in card.get("legs") or [] if (l.get("live") or {}).get("state") == "live"), None)
         if on is not None:
-            _tell("bet_on", conn, r["user_id"], bid, where(on), now=t, log=log)
+            _tell("bet_on", conn, r["user_id"], bid, where(on), now=t, log=log, legs=len(card.get("legs") or []))
         # And the lock screen, where the member put this ticket there.
         _tell("activity_update", conn, r["user_id"], str(bet["id"]), card, now=t, log=log)
         if noted(conn, r["user_id"], bid) or not last_leg(card):

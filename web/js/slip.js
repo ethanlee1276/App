@@ -709,9 +709,13 @@
      the mark rides on the My Bets entry, so a reload or another device does
      not buzz again. The box notices the same moment on its own clock and
      emails a member who asked (engine/slipwatch). */
+  /* Down to the leg that decides it — a ticket of two or more. A straight
+     bet (one leg: tracked from Ask, or a single on a screenshot) has one
+     leg left from the start and is never "down to" it (engine/slipwatch
+     last_leg says the same). */
   function isLast(c) {
     const n = c && c.now;
-    return !!n && n.status === "open" && Number(n.left) === 1;
+    return !!n && (c.legs || []).length > 1 && n.status === "open" && Number(n.left) === 1;
   }
   function lastHTML(c) {
     if (!isLast(c)) return "";

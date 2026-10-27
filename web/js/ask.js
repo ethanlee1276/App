@@ -153,7 +153,7 @@ function askTurnHTML(t, live = false) {
    from what the tools returned, never from the model's words, so a card
    cannot say a number the data does not. */
 const ASK_CARD = {
-  hits(c) {
+  hits(c, tail = "") {
     const over = c.side !== "under";
     const line = Number(c.line);
     const pct = (r) => (r == null ? "–" : `${Math.round(r * 100)}%`);
@@ -174,9 +174,10 @@ const ASK_CARD = {
         }).join("")}<span class="ask-line" style="bottom:${
           Math.round((line / top) * 100)}%"></span></div>
         <div class="ask-bars-x">${games.map((g) => `<span>${escapeHtml(g.vs || "")}</span>`).join("")}</div>` : ""}
+      ${tail}
     </div>`;
   },
-  prices(c) {
+  prices(c, tail = "") {
     const pick = String(c.pick || "");
     const side = /\bunder\b/i.test(pick) ? "under_odds" : /\bover\b/i.test(pick) ? "over_odds" : "";
     const odds = (n) => (n == null ? "–" : n > 0 ? `+${n}` : String(n));
@@ -187,6 +188,7 @@ const ASK_CARD = {
           : `${odds(b.over_odds)} / ${odds(b.under_odds)}`}</em>${b.book === c.best ? `<small>best</small>` : ""}</div>`).join("")}
       ${c.move ? `<div class="ask-card-f">Line ${escapeHtml(String(c.move.open))} at open, ${
         escapeHtml(String(c.move.current))} now</div>` : ""}
+      ${tail}
     </div>`;
   },
   record(c) {
@@ -214,7 +216,11 @@ const ASK_CARD = {
   },
 };
 function askCardsHTML(t) {
-  return (t.cards || []).map((c) => (ASK_CARD[c && c.kind] ? ASK_CARD[c.kind](c) : "")).join("");
+  const cards = (t.cards || []).filter((c) => c && ASK_CARD[c.kind]);
+  // One card carries the buttons: the last one about a bet (the price card,
+  // when there is one, has the best price on it).
+  const acts = cards.map((c) => !!(c.bet && c.bet.player)).lastIndexOf(true);
+  return cards.map((c, i) => ASK_CARD[c.kind](c, i === acts ? askActsHTML(c.bet) : "")).join("");
 }
 
 /* WHAT TO ASK NEXT: up to three questions from what the answer looked up
@@ -224,6 +230,168 @@ function askNextHTML(t) {
   return qs.length ? `<div class="ask-next" aria-label="Ask next">${qs.map((q) =>
     `<button type="button" class="ask-next-q" data-ask-q="${escapeAttr(q)}">${escapeHtml(q)}</button>`).join("")}</div>` : "";
 }
+
+/* AN ANSWER YOU CAN ACT ON (2026-10-27; Ethan: "look at other apps that use
+   AI betting ... and do it better"). FanDuel's AceAI puts a bet on its slip
+   and Action Network's Playbook pre-fills one; neither follows it once it
+   is placed. Under a card about tonight's player line, three buttons:
+
+     Add to slip  the leg the board's own slip chip adds (slipToggle), on
+                  the board it is on: the slip holds one board at a time, so
+                  an answer about another league's player leaves it off.
+     Track it     a My Bets entry of one leg in the screenshot checker's shape
+                  (src "slip", the leg in engine/slipgrade's words), so the
+                  Live tab follows it, the box settles it off the box score
+                  and the member's phones hear "your bet is on" and how it
+                  ended (engine/slipwatch, engine/pushmine). The stake is
+                  typed; the price is the card's and can be changed to the
+                  one they got. A market the checker cannot follow is logged
+                  as a hand-entered bet instead, and says so.
+     Watch        the player as an Alerts watch: his line moving, a pick on
+                  him posting (engine/alerts; on the phone where asked).
+
+   Each button says what is already done when the answer is drawn again: in
+   the slip, tracked, watched. */
+function askBetRow(b) {
+  return { player: b.player, market: b.market, market_label: b.market_label || b.market, side: b.side,
+           line: b.line, odds: b.odds, team: b.team || "", book: b.book || "", opponent: b.opponent || "",
+           game_date: b.game_date || "" };
+}
+function askBetName(b) {
+  const side = String(b.side || "").toLowerCase();
+  return `${b.player} ${side.charAt(0).toUpperCase()}${side.slice(1)} ${b.line} ${b.market_label || b.market}`;
+}
+function askBetKey(b) {
+  return `ask-${slugify(b.player)}-${slugify(b.market)}-${String(b.side || "").toLowerCase()}-${b.line}-${
+    String(b.game_date || "").slice(0, 10)}`;
+}
+function askOdds(n) {
+  return n > 0 ? `+${n}` : `−${Math.abs(n)}`;
+}
+function askToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+/* The My Bets entry. A trackable bet is a ticket of one leg the box can
+   follow; any other is the hand-logged kind, graded by its owner. */
+function askBetEntry(b, stake, odds, book) {
+  const e = { id: Date.now() + "" + Math.floor(Math.random() * 1e4), book: book || "Other",
+              sport: String(b.sport || "").toUpperCase(), date: String(b.game_date || "").slice(0, 10) || askToday(),
+              desc: askBetName(b), stake, odds, result: "pending", slip_key: askBetKey(b) };
+  if (!b.trackable) return e;
+  return Object.assign(e, { src: "slip", legs: [{
+    sport: b.sport, player: b.player, team: b.team || "", game: / @ /.test(b.matchup || "") ? b.matchup : "",
+    market: b.market, side: String(b.side || "").toLowerCase(), line: b.line, odds, text: askBetName(b) }] });
+}
+function askWatching(player) {
+  const ws = ((typeof _alertsCache !== "undefined" && _alertsCache) || {}).watches || [];
+  const me = String(player || "").toLowerCase();
+  return ws.some((w) => w && w.kind === "player" && String(w.value || "").toLowerCase() === me);
+}
+let _askWatchesRead = false;
+function askActsHTML(b) {
+  if (!b || !b.player) return "";
+  // What the reader already watches, read once a visit; the buttons are
+  // drawn again when it lands.
+  if (!_askWatchesRead && typeof alertsFetch === "function") {
+    _askWatchesRead = true;
+    alertsFetch().then(() => askActsPaint());
+  }
+  const tracked = mbLoad().find((x) => x && x.slip_key === askBetKey(b));
+  const slipOk = b.sport === state.sport && typeof slipToggle === "function";
+  const inSlip = slipOk && slipHas(askBetRow(b));
+  const watching = askWatching(b.player);
+  const side = String(b.side || "").toLowerCase();
+  // An action bar: each button its icon over a word or two, three to a row
+  // on the narrowest phone; the words say what is already done.
+  const act = (name, on, ic, word, done, attrs) => `<button type="button" class="ask-act${on ? " on" : ""}" data-ask-act="${
+    name}"${attrs}>${icon(on ? "check" : ic, 16)}<span>${on ? done : word}</span></button>`;
+  return `<div class="ask-acts" data-ask-bet="${escapeAttr(JSON.stringify(b))}">
+      <div class="ask-acts-bet"><span><b>${escapeHtml(`${side.charAt(0).toUpperCase()}${side.slice(1)} ${b.line}`)}</b> ${
+        escapeHtml(b.market_label || b.market)}</span><span class="ask-acts-px"><b>${escapeHtml(askOdds(b.odds))}</b>${
+        b.book ? ` ${escapeHtml(b.book)}` : ""}</span></div>
+      <div class="ask-acts-row">
+        ${slipOk ? act("slip", inSlip, "ticket", "Add to slip", "In your slip", ` aria-pressed="${inSlip ? "true" : "false"}"`) : ""}
+        ${act("track", !!tracked, "chart", "Track it", "In My Bets", `${tracked ? " disabled" : ""} aria-expanded="false"`)}
+        ${act("watch", watching, "bell", "Watch", "Watching", `${watching ? " disabled" : ""} aria-label="${
+          escapeAttr(`${watching ? "Watching" : "Watch"} ${b.player}`)}"`)}
+      </div>
+      <form class="ask-track" hidden>
+        <label>Stake $<input inputmode="decimal" data-ask-stake placeholder="10" aria-label="Stake in dollars"></label>
+        <label>Price <input inputmode="text" data-ask-odds value="${escapeAttr(askOdds(b.odds))}" aria-label="American price"></label>
+        <button type="submit" class="ask-act primary">Save to My Bets</button>
+        <p class="ask-track-note">${b.trackable
+          ? "We follow it on the Live tab and settle it in My Bets off the box score."
+          : "Logged in My Bets for you to grade: we can’t follow this market live yet."}</p>
+      </form>
+    </div>`;
+}
+/* Every action row on the page, drawn again from the state it reads. */
+function askActsPaint() {
+  document.querySelectorAll(".ask-acts").forEach((box) => {
+    let b = null;
+    try { b = JSON.parse(box.dataset.askBet || "null"); } catch (e) { b = null; }
+    const form = box.querySelector(".ask-track");
+    if (b && !(form && !form.hidden)) box.outerHTML = askActsHTML(b);   // never under a stake being typed
+  });
+}
+function askActTrack(form, b) {
+  const note = form.querySelector(".ask-track-note");
+  const stake = Number(String((form.querySelector("[data-ask-stake]") || {}).value || "").replace(/[$,\s]/g, ""));
+  const typed = String((form.querySelector("[data-ask-odds]") || {}).value || "").replace(/[−–]/g, "-").replace(/[^\d+-]/g, "");
+  const odds = parseInt(typed, 10);
+  if (!(stake > 0)) { note.textContent = "Type the stake you placed it for."; return; }
+  if (!odds || Math.abs(odds) < 100) { note.textContent = "Type the American price you got, like −110 or +120."; return; }
+  const bets = mbLoad();
+  if (!bets.some((x) => x && x.slip_key === askBetKey(b))) {
+    // The card's book, unless the price typed is another one's.
+    bets.push(askBetEntry(b, stake, odds, odds === b.odds ? b.book : ""));
+    mbSave(bets);
+  }
+  form.hidden = true;
+  tfToast(b.trackable ? "In My Bets: we follow it on the Live tab." : "In My Bets.");
+  askActsPaint();
+}
+async function askActWatch(b) {
+  const out = await alertsPost("watch", { kind: "player", value: b.player });
+  if (out.error) { tfToast(out.error); return; }
+  if (typeof _alertsCache !== "undefined") _alertsCache = Object.assign(_alertsCache || {}, { watches: out.watches || [] });
+  tfToast(`Watching ${b.player}: Alerts has what moves.`);
+  askActsPaint();
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target && e.target.closest && e.target.closest("[data-ask-act]");
+  const box = btn && btn.closest(".ask-acts");
+  if (!box) return;
+  let b = null;
+  try { b = JSON.parse(box.dataset.askBet || "null"); } catch (x) { b = null; }
+  if (!b) return;
+  const act = btn.dataset.askAct;
+  if (act === "slip") {
+    if (b.sport === state.sport && slipToggle(askBetRow(b))) askActsPaint();
+  } else if (act === "track") {
+    const form = box.querySelector(".ask-track");
+    form.hidden = !form.hidden;
+    btn.setAttribute("aria-expanded", form.hidden ? "false" : "true");
+    if (!form.hidden) {
+      form.scrollIntoView({ block: "nearest" });
+      const stake = form.querySelector("[data-ask-stake]");
+      if (stake) stake.focus({ preventScroll: true });
+    }
+  } else if (act === "watch") {
+    btn.disabled = true;
+    askActWatch(b).finally(() => { btn.disabled = false; });
+  }
+});
+document.addEventListener("submit", (e) => {
+  const form = e.target && e.target.closest && e.target.closest(".ask-track");
+  const box = form && form.closest(".ask-acts");
+  if (!box) return;
+  e.preventDefault();
+  let b = null;
+  try { b = JSON.parse(box.dataset.askBet || "null"); } catch (x) { b = null; }
+  if (b) askActTrack(form, b);
+});
 
 function askSlipCard(t) {
   if (window.QBSlip) return window.QBSlip.card(t.slip);
@@ -335,6 +503,12 @@ function askRoomSize() {
   }
   const top = el.getBoundingClientRect().top + window.scrollY;
   el.style.height = `${Math.max(300, Math.floor(bottom - top - 8))}px`;
+  // Where the parlay slip's dock sits while the room is open: just above the composer.
+  const dock = el.querySelector(".ask-dock");
+  if (dock) {
+    document.documentElement.style.setProperty("--ask-foot",
+      `${Math.max(0, Math.round(window.innerHeight - dock.getBoundingClientRect().top))}px`);
+  }
   // A conversation opens on its newest message; the empty room on its title.
   const log = document.getElementById("ask-log");
   if (log) log.scrollTop = el.classList.contains("is-empty") ? 0 : log.scrollHeight;

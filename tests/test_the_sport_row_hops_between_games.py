@@ -207,6 +207,16 @@ def test_tapping_the_leagues_in_a_browser():
                 chip = page.evaluate("""(() => { const c = document.querySelector('[data-chip].active, [data-chip][aria-pressed="true"]');
                                                   return c ? c.dataset.chip : null; })()""")
                 assert chip == "nhl", f"the Live tab on hockey, not {chip}"
+                # Opened from the college board and left again: the game's own
+                # league while its page is open, the board never switched, and
+                # the college board's league lit again once the page is left.
+                page.goto(f"http://127.0.0.1:{port}/index.html?sport=cfb#pbp/nfl/{nfl['event_id']}", wait_until="load")
+                until(f"location.hash === '#pbp/nfl/{nfl['event_id']}' && !!document.querySelector('.pbp-hero')",
+                      "the NFL game page from the college board")
+                assert page.evaluate(LIT) == ["nfl"] and page.evaluate("state.sport") == "cfb"
+                page.evaluate("location.hash = '#live'")
+                until("document.getElementById('view-live').classList.contains('active')", "back to the Live tab")
+                assert page.evaluate(LIT) == ["cfb"], "leaving the game page lights the board's league again"
                 assert not errors, errors
                 ctx.close()
             finally:

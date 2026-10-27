@@ -167,6 +167,12 @@ def test_the_three_moments_of_a_ticket_once_each_and_only_if_asked():
         PM.bet_settled(conn, uid, {"id": "s3", "stake": 10, "odds": 300}, {"result": "push"}, now=NOW)
         titles = {m["id"]: m["title"] for m in PM.mine(conn, uid, now=NOW + 1)}
         assert titles["bets:settled:s2"] == "Your parlay lost" and titles["bets:settled:s3"] == "Your parlay pushed"
+        # A ticket of one leg is a bet (a straight bet tracked from Ask).
+        assert PM.bet_on(conn, uid, "s4", "BUF 0 – 0 LA, 1st 15:00", now=NOW, legs=1)
+        PM.bet_settled(conn, uid, {"id": "s4", "stake": 10, "odds": -110, "legs": [{"player": "Josh Allen"}]},
+                       {"result": "win"}, now=NOW)
+        titles = {m["id"]: m["title"] for m in PM.mine(conn, uid, now=NOW + 1)}
+        assert titles["bets:on:s4"] == "Your bet is on" and titles["bets:settled:s4"] == "Your bet won", titles
     finally:
         conn.close()
 
