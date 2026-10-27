@@ -2686,7 +2686,8 @@ function mountLiveTicks(root) {
     // row; without it the second change re-adds a class that is already
     // there and no animation replays.
     void el.offsetWidth;
-    el.classList.add(up ? "tick-up" : "tick-down");
+    // `invert`: a number that is good news falling (an under's yards).
+    el.classList.add((mode === "invert" ? !up : up) ? "tick-up" : "tick-down");
     clearTimeout(_tickTimers.get(key));
     _tickTimers.set(key, setTimeout(() => {
       el.classList.remove("tick-up", "tick-down");

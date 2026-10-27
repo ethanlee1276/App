@@ -150,7 +150,7 @@ def likely_diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
             continue
         worth = c["p"] is not None and ci <= c["p"] - LIKELY_CUSHION
         events.append({"id": _eid("likely_price", key, ts, str(c["odds"])), "ts": ts, "sport": sport,
-                       "kind": "likely_price", "player": c["player"], "label": c["label"],
+                       "kind": "likely_price", "player": c["player"], "label": c["label"], "market": c["market"],
                        "team": c["team"], "opponent": c["opponent"], "side": c["side"],
                        "line": c["line"], "book": c["book"], "odds": c["odds"],
                        "frm": pr["odds"], "to": c["odds"], "imp_delta": round(ci - pi, 3),
@@ -178,7 +178,7 @@ def diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
     def base(kind, c, key, **extra):
         e = {"id": _eid(kind, key, ts, str(extra.get("to", ""))),
              "ts": ts, "sport": sport, "kind": kind,
-             "player": c["player"], "label": c["label"],
+             "player": c["player"], "label": c["label"], "market": c.get("market", ""),
              "team": c.get("team", ""), "opponent": c.get("opponent", ""),
              "side": c["side"], "line": c["line"],
              "book": c["book"], "odds": c["odds"]}

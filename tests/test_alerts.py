@@ -65,10 +65,30 @@ def _w(kind, value):
 
 # --- the three shapes ------------------------------------------------------
 
-def test_there_are_exactly_three_shapes():
+def test_there_are_exactly_four_shapes():
     """The brief: "keep it to three shapes rather than building a query
-    builder nobody uses"."""
-    assert AL.KINDS == ("player", "team", "edge")
+    builder nobody uses". The fourth (2026-10-27, docs/IDEAS.md, Ethan: "do
+    all the idea and inventions") is still a shape, not a builder: one bet
+    at the price the reader wants, set from Ask's price card."""
+    assert AL.KINDS == ("player", "team", "edge", "price")
+
+
+def test_a_price_watch_is_one_bet_at_the_price_wanted():
+    assert AL.normalize("price", "Josh Allen|pass_yds|under|−105") == ("price", "Josh Allen|pass_yds|UNDER|-105")
+    for bad in ("Josh Allen|pass_yds|under", "Josh Allen|Pass Yds|under|-105", "Josh Allen|pass_yds|sideways|-105",
+                "Josh Allen|pass_yds|under|-50", "|pass_yds|under|-105", "x" * 70 + "|pass_yds|under|-105"):
+        assert AL.normalize("price", bad) is None, bad
+    assert AL.describe("price", "Josh Allen|pass_yds|UNDER|-105") == "Josh Allen under at -105 or better"
+    assert AL.describe("price", "Josh Allen|pass_yds|OVER|120") == "Josh Allen over at +120 or better"
+    w = "Josh Allen|pass_yds|UNDER|-105"
+    ev = {"kind": "price_move", "player": "Josh Allen", "market": "pass_yds", "side": "UNDER"}
+    assert AL.matches(dict(ev, odds=-104), "price", w), "a better price than asked"
+    assert AL.matches(dict(ev, odds=-105), "price", w), "the price asked"
+    assert not AL.matches(dict(ev, odds=-110), "price", w), "not there yet"
+    assert AL.matches(dict(ev, kind="line_move", odds=-120), "price", w), "the bet's own number moved"
+    assert not AL.matches(dict(ev, side="OVER", odds=100), "price", w), "the other side is another bet"
+    assert not AL.matches(dict(ev, market="rush_yds", odds=100), "price", w), "another market is another bet"
+    assert AL.matches(dict(ev, player="josh  allen", odds=-104), "price", w), "names fold as people type them"
 
 
 def test_a_player_watch_reads_a_name_the_way_people_type_it():

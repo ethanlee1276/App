@@ -927,6 +927,19 @@ function surname(n) {
 }
 const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || String(a ?? "").replace(/[<>"'`]/g, "");
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
+/* A TEAM'S COLOUR THAT SHOWS ON A DARK PAGE (2026-10-27): its primary,
+   unless that is a near-black, a navy or a grey, then its secondary — the
+   Bears' navy defers to their orange, the Patriots' to their red. */
+function teamVivid(a) {
+  const t = activeTeams()[a] || {};
+  for (const hex of [t.primary, t.secondary]) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) continue;
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+    if (mx >= .35 && d / mx >= .22) return hex;
+  }
+  return t.primary || "var(--brand)";
+}
 
 /* THE SAME ABBREVIATION IS FOUR DIFFERENT CLUBS. CIN, ATL, SF and TB all
    exist in more than one league, and `activeTeams()` is whichever tab the
@@ -7609,6 +7622,7 @@ function gameCard(g, i) {
     + (n ? `, ${n} pick${n === 1 ? "" : "s"}` : ""));
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
+             style="--ta:${escapeAttr(teamVivid(g.away))};--tb:${escapeAttr(teamVivid(g.home))}"
              role="button" tabindex="0"
              aria-label="${isLive ? "Open the live play-by-play for" : "Open picks for"} ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}${doorFacts}">
       <div class="stadium-wrap">${art}${
@@ -9131,6 +9145,30 @@ function pickInjuryNote(r) {
    is won by coming in below the line, so the bars are green on the games
    the bet would have cashed and the caption names the direction. See
    gamelogBars in visuals.js for the reading this replaced. */
+/* HOW OFTEN HE HAS CLEARED IT (2026-10-27, docs/IDEAS.md): the last five,
+   the last ten and every stored game against tonight's number, from the
+   side we hold — Outlier's and Linemate's first number, from the games every
+   row already carries (newest first). A push is not a hit. Five games is
+   the floor: under it a count is an anecdote. */
+function hitChipsHTML(r) {
+  const src = (r.recent_values || []).length ? r.recent_values : (r.logs || []).map((l) => l.value);
+  const vals = src.map(Number).filter(Number.isFinite);
+  const line = Number(r.line);
+  if (vals.length < 5 || !Number.isFinite(line)) return "";
+  const under = String(r.side || "OVER").toUpperCase() === "UNDER";
+  const side = under ? "Under" : "Over";
+  const chip = (label, xs) => {
+    const n = xs.filter((v) => (under ? v < line : v > line)).length;
+    const share = n / xs.length;
+    return `<span class="hit-chip${share >= .6 ? " up" : share <= .4 ? " down" : ""}" title="${
+      escapeAttr(`${side} ${line} in ${n} of ${label === "All" ? `all ${xs.length} stored games` : `his last ${xs.length}`}`)}"><b>${
+      n}/${xs.length}</b> ${label}</span>`;
+  };
+  return `<span class="hit-chips" aria-label="${escapeAttr(`How often he went ${side.toLowerCase()} ${line}`)}"><em>${side}</em>${
+    chip("L5", vals.slice(0, 5))}${vals.length >= 10 ? chip("L10", vals.slice(0, 10)) : ""}${
+    vals.length > 10 ? chip("All", vals) : ""}</span>`;
+}
+
 function propSpark(r, opts = {}) {
   const src = (r.recent_values || []).length
     ? r.recent_values : (r.logs || []).map((l) => l.value);
@@ -9236,7 +9274,7 @@ function cardHTML(r) {
             <div class="subtitle">${escapeHtml(r.team)} vs ${escapeHtml(r.opponent)}${r.position ? ` · ${escapeHtml(r.position)}` : ""}</div>
             <div class="pick">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
               <span class="book">· ${escapeHtml(r.book)} ${american(r.odds)}</span></div>
-            ${propSpark(r)}
+            ${propSpark(r)}${hitChipsHTML(r)}
           </div>
         </div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
@@ -10985,7 +11023,7 @@ function obCardHTML(r, rank, opts = {}) {
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${td}${band}${obWhyLine(r)}${pickWarnHTML(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
+        ${r.kind === "game" ? "" : hitChipsHTML(r)}${td}${band}${obWhyLine(r)}${pickWarnHTML(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}${betItHTML(r, "mini")}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
@@ -16025,7 +16063,7 @@ function edgeRowHTML(r, i) {
     <span class="hd-rank">${i + 1}</span>
     <span class="pick-id">${r.mark || ""}</span>
     <span class="hd-what"><b>${escapeHtml(r.label)}</b>
-      <span>${escapeHtml(r.sub)}</span></span>
+      <span>${escapeHtml(r.sub)}</span>${hitChipsHTML({ recent_values: r.vals, line: r.line, side: r.side })}</span>
     ${spark}
     <span class="hd-state"><span class="hd-num"><span class="hd-o">${oddsTxt(r.odds)}</span><span class="hd-p">+${evPct}% EV</span></span>
       <span class="hd-vs">${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%${r.rec ? ` · ${icon('check')}` : " ·"} ${escapeHtml(r.grade || "")}</span>${betItHTML(r, "mini")}</span>
@@ -16121,7 +16159,7 @@ function ouCardHTML(r) {
   return `<article class="card ou-card"${propAttrs(r)}>
     <div class="ou-head">${betMark(r, 36)}<div class="ou-who"><b>${escapeHtml(r.player)}</b>
       <span>${escapeHtml(teamName(r.team))}${r.opponent ? ` vs ${escapeHtml(teamName(r.opponent))}` : ""}</span></div></div>
-    <div class="ou-mk">${ouMarketLine(r)}</div>
+    <div class="ou-mk">${ouMarketLine(r)}</div>${hitChipsHTML(r)}
     <div class="ou-sides">${ouSideHTML("Over", s.over)}${ouSideHTML("Under", s.under)}</div>
     ${betItHTML(r, "mini")}
   </article>`;
@@ -17062,7 +17100,52 @@ function mbSave(bets) {
   // The tab badge counts what is still running, so it moves whenever the
   // book does — logging a bet, grading one, deleting one.
   faviconBadge();
+  winCheck();
 }
+
+/* A WIN, CELEBRATED (2026-10-27, docs/IDEAS.md; Underdog and Robinhood
+   throw confetti, and so do we). The first time this device sees a bet in
+   My Bets graded a win — settled off the box score by the Live tab or the
+   server, or marked by its owner — confetti and what it paid, once. Only a
+   bet on the last two days' games: a new phone adopting a season of old
+   wins from the account remembers them without a party. Read off the bet's
+   own date and the diff of what this device has seen, never a settled
+   stamp — several writers grade a bet, and not all of them stamp it
+   (tests/test_settings). Reduced motion gets the words without the
+   confetti. */
+const WON_SEEN_KEY = "qb_won_seen";
+const WIN_FRESH_MS = 2 * 86400000;
+function winCheck() {
+  const wins = mbLoad().filter((b) => b && b.result === "win" && b.id != null);
+  let seen = null;
+  try { seen = JSON.parse(localStorage.getItem(WON_SEEN_KEY) || "null"); } catch (e) { seen = null; }
+  const have = new Set((Array.isArray(seen) ? seen : []).map(String));
+  const fresh = wins.filter((b) => !have.has(String(b.id)));
+  if (Array.isArray(seen) && !fresh.length) return;
+  try {
+    localStorage.setItem(WON_SEEN_KEY, JSON.stringify([...have, ...fresh.map((b) => String(b.id))].slice(-400)));
+  } catch (e) {}
+  if (!Array.isArray(seen)) return;                       // the device's first look: remembered, not celebrated
+  const party = fresh.filter((b) => Math.abs(Date.now() - Date.parse(`${String(b.date || "").slice(0, 10)}T12:00:00`))
+    < WIN_FRESH_MS);
+  if (party.length) winParty(party.length, party.reduce((t, b) => t + mbProfit(b), 0));
+}
+function winParty(n, profit) {
+  if (typeof tfToast === "function") {
+    tfToast(`${n > 1 ? `${n} bets won` : "Your bet won"}${profit > 0 ? ` · +${mbMoney(profit)}` : ""}`);
+  }
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const hues = ["var(--brand)", "var(--good)", "var(--lg-nba)", "var(--sky)", "var(--lg-wnba)", "var(--lg-cfb)"];
+  const rnd = (a, b) => Math.round(a + Math.random() * (b - a));
+  const host = document.createElement("div");
+  host.className = "win-party";
+  host.setAttribute("aria-hidden", "true");
+  host.innerHTML = Array.from({ length: 42 }, (_, i) => `<i style="--x:${rnd(-170, 170)}px;--y:${rnd(-360, -140)}px;--r:${
+    rnd(-620, 620)}deg;--d:${rnd(0, 160)}ms;--c:${hues[i % hues.length]}"></i>`).join("");
+  document.body.appendChild(host);
+  setTimeout(() => host.remove(), 2400);
+}
+winCheck();            // the device's first look: every win already here, remembered
 
 /* American odds → decimal multiplier on the stake. +150 → 2.5, −120 →
    1.8333. The one piece of real math on the page, so it is its own pure
@@ -18508,8 +18591,9 @@ function acctApplySection(name, sec) {
       localStorage.setItem(MYBETS_KEY, JSON.stringify(d.rows || []));
       localStorage.setItem(ACCT_DEL_KEY, JSON.stringify(d.deleted || []));
       // Adopted, not saved — mbSave would re-stamp and push back — so the
-      // badge has to be told here too.
+      // badge has to be told here too, and a win the box settled is news.
       faviconBadge();
+      winCheck();
     } else if (name === "fantasy") {
       const put = (k, v) => v ? localStorage.setItem(k, v)
                               : localStorage.removeItem(k);
@@ -20755,7 +20839,7 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
   _ffDesk = d;
   const W = typeof QBWeek !== "undefined" ? QBWeek : null;
   host.innerHTML = (W ? W.live(d) + W.todo(d) : "") + ffH2HHTML(d) + ffLineupHTML(d)
-    + (W ? W.pickups(d) : "")
+    + ffStartersBoardHTML((d.lineup || {}).starters) + (W ? W.pickups(d) : "")
     + ffScoringGapsHTML(d) + ffTradesHTML(d) + ffStandingsHTML(d) + `<div id="ffs"></div>` + ffTeamsHTML(d);
   /* THE START CALENDAR GOES TO THE CALENDAR TAB, which is the only
      place a reader looking for a calendar will look. It shipped inside
@@ -20982,6 +21066,37 @@ function ldSwapsHTML(L) {
       which slot each one sits in. So that gain is a floor: if you have also
       mis-slotted somebody, you are losing more than this, never less.</p>
   </div>`;
+}
+
+/* YOUR STARTERS ON TONIGHT'S BOARD (2026-10-27, docs/IDEAS.md; RotoBot
+   puts fantasy and betting on one screen): each player in the lineup above
+   with a pick on tonight's NFL board — our side, our chance, which board,
+   a door to the pick. A free account is told what membership adds, never
+   which of its players have picks. */
+function ffStartersBoardHTML(starters) {
+  const names = new Set((starters || []).map((s) => s.player).filter(Boolean));
+  if (!names.size || state.sport !== "nfl" || !state.data) return "";
+  if (_pwStatus && _pwStatus.paywall && !_pwStatus.entitled) {
+    return `<p class="rank-help">${icon("lock")} Members see our pick on each of your starters tonight.
+      <a href="#paywall" data-view="paywall">See the plans</a></p>`;
+  }
+  const d = state.data, seen = new Set();
+  const rows = (d.most_likely || []).map((r) => [r, "Most Likely"])
+    .concat((d.recommendations || []).filter((r) => r.recommended).map((r) => [r, "Edge"]))
+    .filter(([r]) => r && names.has(r.player) && r.side && r.line != null
+      && !seen.has(`${r.player}|${r.market}|${r.side}`) && seen.add(`${r.player}|${r.market}|${r.side}`))
+    .slice(0, 8);
+  if (!rows.length) return "";
+  return `<div class="section-title">Your starters on tonight’s board
+      <span class="sub">— our pick on each player you start; tap one for the full read</span></div>
+    <div class="card"><div class="ff-rows">${rows.map(([r, board]) => {
+      const p = r.model_prob != null ? r.model_prob : r.hit_prob;
+      const side = String(r.side);
+      return `<div class="hd-row ff-row" data-prop="${escapeAttr(propId(r))}"${board === "Most Likely" ? ' data-likely="1"' : ""}
+        role="link" tabindex="0"><span class="hd-what"><b>${escapeHtml(r.player)}</b><span>${
+        escapeHtml(`${side.charAt(0)}${side.slice(1).toLowerCase()} ${r.line} ${r.market_label || r.market}`)}</span></span>
+        <span class="hd-state"><b>${p != null ? `${Math.round(p * 100)}%` : "—"}</b><span class="hd-vs">${board}</span></span></div>`;
+    }).join("")}</div></div>`;
 }
 
 function ffLineupHTML(d) {

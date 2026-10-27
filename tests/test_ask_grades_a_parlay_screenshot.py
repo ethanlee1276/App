@@ -40,6 +40,7 @@ by a fixture, and reloads to see the card come back.
 """
 import base64
 import json
+import re
 import math
 import os
 import shutil
@@ -1094,6 +1095,10 @@ def test_the_card_renders_and_escapes_what_the_picture_said():
     out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-800:]
     html, other, live, lost = out.stdout.split("\n=====\n")
+    # A leg's number ticks on the Live tab (2026-10-27): said here, then set
+    # aside so the words below are read as the reader reads them.
+    assert 'Has <b data-tick="sl:' in live and 'data-tick-v="24"' in live
+    live = re.sub(r' data-tick(?:-v|-mode)?="[^"]*"', "", live)
     assert "No number of ours" in other and "Our projection" not in other, \
         "a player we carry at a number we can't price is not 'not on our board'"
     assert 'class="pgr-grade g-a"' in html and ">A<sup>*</sup>" in html

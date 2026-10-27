@@ -10784,6 +10784,54 @@ body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
    basketball, ice on hockey — the page says which league it is about. */
 .section-title .st-ico { color: var(--league); }
 
+/* HOW OFTEN HE HAS CLEARED IT (app.js hitChipsHTML): the side, then the last
+   five, the last ten and every stored game, green when he clears it three
+   times in five, red when he does not twice in five. */
+.hit-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.hit-chips em { font-style: normal; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-mute); }
+.hit-chip { display: inline-flex; align-items: baseline; gap: 3px; padding: 1px 7px; border-radius: 999px;
+  border: var(--hairline) solid var(--border); background: var(--fill-hover); color: var(--text-dim);
+  font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; }
+.hit-chip b { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text); }
+.hit-chip.up { border-color: color-mix(in oklab, var(--good) 45%, transparent);
+  background: color-mix(in oklab, var(--good) 13%, transparent); }
+.hit-chip.up b { color: var(--good); }
+.hit-chip.down { border-color: color-mix(in oklab, var(--bad) 40%, transparent);
+  background: color-mix(in oklab, var(--bad) 11%, transparent); }
+.hit-chip.down b { color: var(--bad); }
+
+/* A WIN, CELEBRATED (app.js winParty): confetti in the palette, thrown up from
+   the lower middle of the screen and falling away, gone in two seconds. */
+.win-party { position: fixed; left: 50%; bottom: 28%; width: 0; height: 0; pointer-events: none; z-index: 95; }
+.win-party i {
+  --x: 0px;
+  --y: -240px;
+  --r: 0deg;
+  --d: 0ms;
+  --c: var(--brand);
+  position: absolute; left: 0; top: 0; width: 8px; height: 13px; border-radius: 2px; background: var(--c);
+  opacity: 0; animation: winBurst 1.9s var(--ease-out) var(--d) both; }
+.win-party i:nth-child(3n) { width: 10px; height: 10px; border-radius: 50%; }
+@keyframes winBurst {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0); }
+  45% { opacity: 1; transform: translate(var(--x), var(--y)) rotate(calc(var(--r) / 2)); }
+  100% { opacity: 0; transform: translate(calc(var(--x) * 1.25), calc(var(--y) + 260px)) rotate(var(--r)); }
+}
+
+/* EVERY GAME IN ITS TEAMS' COLOURS (app.js teamVivid; Apple Sports' tiles):
+   a stripe from the away side's colour to the home side's across the top of
+   the card's facts, and their light washed faintly under the names. */
+.game-card {
+  --ta: var(--brand);
+  --tb: var(--brand-2);
+  --grad-teams: linear-gradient(90deg, var(--ta), var(--tb));
+  --grad-teams-wash: linear-gradient(90deg, color-mix(in oklab, var(--ta) 16%, transparent), transparent 45%, transparent 55%, color-mix(in oklab, var(--tb) 16%, transparent));
+}
+.game-card .game-info { position: relative; background-image: var(--grad-teams-wash); }
+.game-card .game-info::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: var(--grad-teams); }
+
 /* ==========================================================================
    GLASS FOR WHAT FLOATS (2026-10-24, Ethan: "carry the Liquid Glass look onto
    more stuff without overdoing it"). The rule Apple's own apps follow: glass

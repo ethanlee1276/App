@@ -35,23 +35,28 @@ value per unit of work first:
    Over/Under, Most Likely) with the right question filled in ("Should I
    start Gibbs this week?"). Built from: the prop page's Ask attach, which
    already exists. Small.
-3. **A price watch.** "Tell me if this moves past −120" from Ask's price
+3. **A price watch.** BUILT 2026-10-27 (runbook FM), from Ask's price
+   card. "Tell me if this moves past −120" from Ask's price
    card or a prop page: Action's Line Watcher, Gambly's alert. Watches are
    player, team or edge today; a price is a fourth shape the feed's
    line_move events already answer. Medium.
-4. **A win celebration.** Confetti and the payout when a tracked bet
+4. **A win celebration.** BUILT 2026-10-27 (runbook FL). Confetti and the payout when a tracked bet
    settles a win on the Live tab or in My Bets (Underdog, Robinhood). Built
    from: slip.js settleOne and the stadiums' fireworks. Small.
-5. **Team colours on every game card.** The two teams' colours along a game
+5. **Team colours on every game card.** BUILT 2026-10-27 (FL), on the
+   board's game cards. The two teams' colours along a game
    card's top edge and its scoreboard (Apple Sports). Built from: the team
    colour table applyTeamColors reads. Small to medium.
-6. **Hit-rate chips on every prop row.** L5, L10 and the season against the
+6. **Hit-rate chips on every prop row.** BUILT 2026-10-27 (FL), on the Edge
+   rows, Most Likely and Over/Under. L5, L10 and the season against the
    line as three chips on the Over/Under list (Outlier, Linemate). Built
    from: the logs every prop row already carries. Small.
-7. **Numbers that tick.** Live scores, the record's units and a ticket's
+7. **Numbers that tick.** BUILT 2026-10-27 (FL) for a saved ticket on the
+   Live tab; the live scores already did. Live scores, the record's units and a ticket's
    standing roll to their new value rather than swapping (count-ups exist
    for the record's first draw). Small.
-8. **Your starters on tonight's board.** On the fantasy My team tab, the
+8. **Your starters on tonight's board.** BUILT 2026-10-27 (FM), on the
+   linked league's desk. On the fantasy My team tab, the
    starters with props tonight, our side and chance for members, a count
    for free accounts. Built from: the linked roster + the board. Medium.
 

@@ -37,6 +37,12 @@ in docs/IDEAS.md. What this gives you is the count on the bell and your
 own strip at the top of the page — which is the difference between
 reading two hundred rows and reading four.
 
+A FOURTH SHAPE, THE PRICE (2026-10-27, docs/IDEAS.md: Action Network's
+Line Watcher, Gambly's alert): one bet — a player, his market, the side —
+and the price the reader wants, "Josh Allen under at -105 or better". It
+fires on any feed event about that bet whose price has reached it, and on
+its line moving (the bet itself changed). Set from Ask's price card.
+
 Standard library, no I/O, no clock: the caller hands in the feed and the
 watches.
 """
@@ -45,9 +51,13 @@ from __future__ import annotations
 
 import re
 
-#: The three shapes. Anything else is refused at the door rather than
-#: stored and silently never matched.
-KINDS = ("player", "team", "edge")
+#: The shapes. Anything else is refused at the door rather than stored and
+#: silently never matched.
+KINDS = ("player", "team", "edge", "price")
+#: A price watch names its bet ("player|market|SIDE|odds"), so it may run
+#: longer than a name.
+MAX_PRICE_VALUE = 120
+PRICE_SIDES = ("OVER", "UNDER", "YES", "NO")
 
 #: Per account. A list longer than this stops being a filter.
 MAX_WATCHES = 20
@@ -83,6 +93,20 @@ def normalize(kind, value):
     if kind not in KINDS:
         return None
     raw = str(value or "").strip()
+    if kind == "price":
+        parts = [x.strip() for x in raw.split("|")]
+        if len(parts) != 4 or len(raw) > MAX_PRICE_VALUE:
+            return None
+        player, market, side, odds = parts
+        side = side.upper()
+        try:
+            odds = int(float(odds.replace("−", "-")))
+        except ValueError:
+            return None
+        if (not _fold(player) or len(player) > 60 or not re.fullmatch(r"[a-z0-9_]{1,24}", market)
+                or side not in PRICE_SIDES or abs(odds) < 100 or abs(odds) > 5000):
+            return None
+        return ("price", f"{player}|{market}|{side}|{odds}")
     if kind == "edge":
         try:
             pct = round(float(raw.rstrip("% ")), 2)
@@ -98,8 +122,27 @@ def normalize(kind, value):
     return ("player", raw)
 
 
+def _price(odds) -> str:
+    o = int(odds)
+    return f"+{o}" if o > 0 else str(o)
+
+
+def _implied(odds) -> float | None:
+    """American odds as the chance they imply: a better price is a lower one."""
+    try:
+        o = float(odds)
+    except (TypeError, ValueError):
+        return None
+    if abs(o) < 100:
+        return None
+    return 100.0 / (o + 100.0) if o > 0 else -o / (-o + 100.0)
+
+
 def describe(kind: str, value: str) -> str:
     """The watch as a sentence, for the chip and for an email subject."""
+    if kind == "price":
+        player, _market, side, odds = (value.split("|") + ["", "", "", "0"])[:4]
+        return f"{player} {side.lower()} at {_price(odds)} or better"
     if kind == "edge":
         return f"any edge at or above {value}%"
     if kind == "team":
@@ -135,6 +178,19 @@ def matches(event: dict, kind: str, value: str) -> bool:
             return False
         return want in {str(event.get("team") or "").upper(),
                         str(event.get("opponent") or "").upper()}
+    if kind == "price":
+        parts = str(value or "").split("|")
+        if len(parts) != 4:
+            return False
+        player, market, side, odds = parts
+        if (_fold(event.get("player")) != _fold(player)
+                or str(event.get("side") or "").upper() != side
+                or (event.get("market") and str(event.get("market")) != market)):
+            return False
+        if event.get("kind") == "line_move":
+            return True                            # the bet's own number moved
+        have, want = _implied(event.get("odds")), _implied(odds)
+        return have is not None and want is not None and have <= want + 1e-9
     field = _EDGE_FIELDS.get(str(event.get("kind") or ""))
     if not field:
         return False

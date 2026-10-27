@@ -239,7 +239,7 @@ function askCardsHTML(t) {
   // One card carries the buttons: the last one about a bet (the price card,
   // when there is one, has the best price on it).
   const acts = cards.map((c) => !!(c.bet && c.bet.player)).lastIndexOf(true);
-  return cards.map((c, i) => ASK_CARD[c.kind](c, i === acts ? askActsHTML(c.bet) : "")).join("");
+  return cards.map((c, i) => ASK_CARD[c.kind](c, i === acts ? askActsHTML(c.bet, c.kind) : "")).join("");
 }
 
 /* WHAT TO ASK NEXT: up to three questions from what the answer looked up
@@ -307,8 +307,28 @@ function askWatching(player) {
   const me = String(player || "").toLowerCase();
   return ws.some((w) => w && w.kind === "player" && String(w.value || "").toLowerCase() === me);
 }
+/* A PRICE ALERT ON THIS BET (engine/alerts, the "price" shape): its player,
+   market and side, at the price the reader wants. On the price card the
+   third button sets one instead of watching the player; it starts one notch
+   better than the best price there is. */
+function askPriceKey(b) {
+  return `${b.player}|${b.market}|${String(b.side || "").toUpperCase()}|`;
+}
+function askAlerted(b) {
+  const ws = ((typeof _alertsCache !== "undefined" && _alertsCache) || {}).watches || [];
+  return ws.some((w) => w && w.kind === "price" && String(w.value || "").startsWith(askPriceKey(b)));
+}
+function askNotchBetter(odds) {
+  const o = Number(odds);
+  let t = o + 5;
+  if (o < 0) {
+    t = Math.floor(t / 5) * 5;                    // to a round number: −108 asks for −105
+    if (t > -100) t = 200 + t;                    // past even money: −95 is +105
+  }
+  return t > 0 ? Math.ceil(t / 5) * 5 : t;
+}
 let _askWatchesRead = false;
-function askActsHTML(b) {
+function askActsHTML(b, kind = "") {
   if (!b || !b.player) return "";
   // What the reader already watches, read once a visit; the buttons are
   // drawn again when it lands.
@@ -320,22 +340,32 @@ function askActsHTML(b) {
   const slipOk = b.sport === state.sport && typeof slipToggle === "function";
   const inSlip = slipOk && slipHas(askBetRow(b));
   const watching = askWatching(b.player);
+  const priced = kind === "prices";
+  const alerted = priced && askAlerted(b);
   const side = String(b.side || "").toLowerCase();
   // An action bar: each button its icon over a word or two, three to a row
   // on the narrowest phone; the words say what is already done.
   const act = (name, on, ic, word, done, attrs) => `<button type="button" class="ask-act${on ? " on" : ""}" data-ask-act="${
     name}"${attrs}>${icon(on ? "check" : ic, 16)}<span>${on ? done : word}</span></button>`;
-  return `<div class="ask-acts" data-ask-bet="${escapeAttr(JSON.stringify(b))}">
+  return `<div class="ask-acts" data-ask-bet="${escapeAttr(JSON.stringify(b))}" data-ask-kind="${escapeAttr(kind)}">
       <div class="ask-acts-bet"><span><b>${escapeHtml(`${side.charAt(0).toUpperCase()}${side.slice(1)} ${b.line}`)}</b> ${
         escapeHtml(b.market_label || b.market)}</span><span class="ask-acts-px"><b>${escapeHtml(askOdds(b.odds))}</b>${
         b.book ? ` ${escapeHtml(b.book)}` : ""}</span></div>
       <div class="ask-acts-row">
         ${slipOk ? act("slip", inSlip, "ticket", "Add to slip", "In your slip", ` aria-pressed="${inSlip ? "true" : "false"}"`) : ""}
         ${act("track", !!tracked, "chart", "Track it", "In My Bets", `${tracked ? " disabled" : ""} aria-expanded="false"`)}
-        ${act("watch", watching, "bell", "Watch", "Watching", `${watching ? " disabled" : ""} aria-label="${
+        ${priced ? act("alert", alerted, "bell", "Price alert", "Alert set", `${alerted ? " disabled" : ""} aria-expanded="false"`)
+          : act("watch", watching, "bell", "Watch", "Watching", `${watching ? " disabled" : ""} aria-label="${
           escapeAttr(`${watching ? "Watching" : "Watch"} ${b.player}`)}"`)}
       </div>
-      <form class="ask-track" hidden>
+      ${priced ? `<form class="ask-track ask-alert" hidden>
+        <label>Tell me at <input inputmode="text" data-ask-target value="${escapeAttr(askOdds(askNotchBetter(b.odds)))}"
+          aria-label="The price you want"></label>
+        <button type="submit" class="ask-act primary">Set the alert</button>
+        <p class="ask-track-note">When any book has it at that price or better, or its line moves: on Alerts, and on your
+          phone if alerts are on.</p>
+      </form>` : ""}
+      <form class="ask-track ask-save" hidden>
         <label>Stake $<input inputmode="decimal" data-ask-stake placeholder="10" aria-label="Stake in dollars"></label>
         <label>Price <input inputmode="text" data-ask-odds value="${escapeAttr(askOdds(b.odds))}" aria-label="American price"></label>
         <button type="submit" class="ask-act primary">Save to My Bets</button>
@@ -350,9 +380,21 @@ function askActsPaint() {
   document.querySelectorAll(".ask-acts").forEach((box) => {
     let b = null;
     try { b = JSON.parse(box.dataset.askBet || "null"); } catch (e) { b = null; }
-    const form = box.querySelector(".ask-track");
-    if (b && !(form && !form.hidden)) box.outerHTML = askActsHTML(b);   // never under a stake being typed
+    const open = [...box.querySelectorAll(".ask-track")].some((f) => !f.hidden);
+    if (b && !open) box.outerHTML = askActsHTML(b, box.dataset.askKind || "");   // never under a number being typed
   });
+}
+async function askActAlert(form, b) {
+  const note = form.querySelector(".ask-track-note");
+  const typed = String((form.querySelector("[data-ask-target]") || {}).value || "").replace(/[−–]/g, "-").replace(/[^\d+-]/g, "");
+  const odds = parseInt(typed, 10);
+  if (!odds || Math.abs(odds) < 100) { note.textContent = "Type an American price, like −105 or +120."; return; }
+  const out = await alertsPost("watch", { kind: "price", value: `${askPriceKey(b)}${odds}` });
+  if (out.error) { note.textContent = out.error; return; }
+  if (typeof _alertsCache !== "undefined") _alertsCache = Object.assign(_alertsCache || {}, { watches: out.watches || [] });
+  form.hidden = true;
+  tfToast(`Alert set: ${b.player} ${String(b.side || "").toLowerCase()} at ${askOdds(odds)} or better.`);
+  askActsPaint();
 }
 function askActTrack(form, b) {
   const note = form.querySelector(".ask-track-note");
@@ -387,15 +429,16 @@ document.addEventListener("click", (e) => {
   if (!b) return;
   const act = btn.dataset.askAct;
   if (act === "slip") {
-    if (b.sport === state.sport && slipToggle(askBetRow(b))) askActsPaint();
-  } else if (act === "track") {
-    const form = box.querySelector(".ask-track");
+    // The slip's pill appears now: measured afresh, it sits above the box.
+    if (b.sport === state.sport && slipToggle(askBetRow(b))) { askActsPaint(); askRoomSize(); }
+  } else if (act === "track" || act === "alert") {
+    const form = box.querySelector(act === "track" ? ".ask-save" : ".ask-alert");
     form.hidden = !form.hidden;
     btn.setAttribute("aria-expanded", form.hidden ? "false" : "true");
     if (!form.hidden) {
       form.scrollIntoView({ block: "nearest" });
-      const stake = form.querySelector("[data-ask-stake]");
-      if (stake) stake.focus({ preventScroll: true });
+      const first = form.querySelector("[data-ask-stake], [data-ask-target]");
+      if (first) first.focus({ preventScroll: true });
     }
   } else if (act === "watch") {
     btn.disabled = true;
@@ -409,7 +452,7 @@ document.addEventListener("submit", (e) => {
   e.preventDefault();
   let b = null;
   try { b = JSON.parse(box.dataset.askBet || "null"); } catch (x) { b = null; }
-  if (b) askActTrack(form, b);
+  if (b) (form.classList.contains("ask-alert") ? askActAlert : askActTrack)(form, b);
 });
 
 function askSlipCard(t) {

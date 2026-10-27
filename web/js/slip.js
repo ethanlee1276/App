@@ -341,7 +341,12 @@
     if (g.current != null && l.market !== "moneyline" && l.market !== "spread") {
       const line = (l.market === "anytime_td" || l.market === "anytime_goal") ? 0.5 : Number(l.line);
       const what = l.market === "total" ? "Total" : "Has";
-      bits.push(`${what} <b>${esc(num(g.current))}</b>${Number.isFinite(line) && line !== 0.5 ? ` of ${esc(num(line))}` : ""}`);
+      // HIS NUMBER TICKS TO ITS NEW VALUE on the Live tab's minute (visuals.js
+      // mountLiveTicks): green when it moves the leg's way, red when an
+      // under's number climbs.
+      const tick = ` data-tick="sl:${esc([l.player || l.team || "", l.market, l.line, l.side].join("|"))}" data-tick-v="${
+        esc(g.current)}"${l.side === "under" ? ` data-tick-mode="invert"` : ""}`;
+      bits.push(`${what} <b${tick}>${esc(num(g.current))}</b>${Number.isFinite(line) && line !== 0.5 ? ` of ${esc(num(line))}` : ""}`);
       if (Number.isFinite(line) && line > 0.5) {
         prog = `<div class="pgr-prog" aria-hidden="true"><i style="width:${Math.min(100, Math.round(100 * g.current / line))}%"></i></div>`;
       }
@@ -492,14 +497,16 @@
   }
 
   /* Where the ticket stands once its games are on (slipgrade.standing). */
-  function nowHTML(n) {
+  function nowHTML(n, key = "") {
     if (!n) return "";
     if (n.status === "lost") return `<div class="pgr-now s-lost"><b>Lost</b> — ${esc(n.lost_leg)} missed.</div>`;
     if (n.status === "won") return `<div class="pgr-now s-won"><b>Every leg has won.</b></div>`;
     const bits = [["won", "won"], ["push", "pushed"], ["live", "in play"], ["start", "yet to start"]]
       .filter(([k]) => n[k]).map(([k, w]) => `${n[k]} ${w}`);
+    // The ticket's chance ticks too, on a saved slip the Live tab follows.
+    const tick = key && n.chance != null ? ` data-tick="sn:${esc(key)}" data-tick-v="${Math.round(n.chance * 100)}"` : "";
     return `<div class="pgr-now s-open"><b>Live</b> · ${bits.join(" · ")}${n.chance != null
-      ? ` · our chance for the rest <b>${pct(n.chance)}</b>` : n.live ? " · no number for the rest — a leg in play has no live chance yet" : ""}</div>`;
+      ? ` · our chance for the rest <b${tick}>${pct(n.chance)}</b>` : n.live ? " · no number for the rest — a leg in play has no live chance yet" : ""}</div>`;
   }
 
   function alertsHTML(a) {
@@ -809,7 +816,7 @@
     }
     const first = !c.now && c.first_kickoff && kick(c.first_kickoff)
       ? `<div class="pgr-now">Nothing has started · first game ${esc(kick(c.first_kickoff))}</div>` : "";
-    return `<div class="pgr-card pgr-track-card">${head}${done || lastHTML(c) + (nowHTML(c.now) || first)}${b.result === "pending" ? sweatHTML(b.id, c.now) + hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
+    return `<div class="pgr-card pgr-track-card">${head}${done || lastHTML(c) + (nowHTML(c.now, b.id) || first)}${b.result === "pending" ? sweatHTML(b.id, c.now) + hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
       <ol class="pgr-legs">${(c.legs || []).map(trackLegHTML).join("")}</ol>${b.result === "pending" ? lockHTML(b.id) : ""}</div>`;
   }
   /* ON MY LOCK SCREEN (engine/pushmine, deploy/ios/native): in the iOS app,
@@ -861,10 +868,11 @@
     const note = T.err === "locked" ? "Following saved slips is part of the membership."
       : T.err === "down" ? "Couldn’t reach the live line — trying again in a minute." : "";
     host.innerHTML = `<div class="section-title">Your saved slips
-        <span class="sub">— from the parlay checker in Ask, followed leg by leg while the games run</span></div>
+        <span class="sub">— from the parlay checker and Track it in Ask, followed leg by leg while the games run</span></div>
       ${note ? `<p class="pgr-foot">${esc(note)}</p>` : ""}
       ${mailHTML()}
       <div class="pgr-track">${show.map((b) => trackCardHTML(b, T.cards[b.id])).join("")}</div>`;
+    if (typeof mountLiveTicks === "function") mountLiveTicks(host);
   }
   /* THE EMAIL (engine/slipwatch): the box mails a member when a saved slip
      reaches its last leg, Live tab open or not. The switch is the account's

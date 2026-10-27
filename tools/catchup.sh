@@ -631,6 +631,12 @@ SH
 run FK "Ask reads your open bets; Ask from the player card" 30 <<'SH'
 curl -s https://qellysbook.com/js/ask.js | grep -c 'function askOpenBets('
 SH
+run FL "The board comes alive: hit rates, wins, team colours, ticks" 30 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function hitChipsHTML('
+SH
+run FM "Price alerts; your starters on tonight's board" 30 <<'SH'
+curl -s https://qellysbook.com/js/ask.js | grep -c 'function askActAlert('
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"
