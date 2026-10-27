@@ -36,12 +36,7 @@
     const days = Object.values((w || {}).teams || {})
       .map((t) => String((t || {}).date || "").slice(0, 10)).filter(Boolean).sort();
     if (!days.length) return true;
-    let today;
-    try {
-      today = new Date(new Date().getTime() - 6 * 3600e3)
-        .toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-    } catch (e) { today = new Date().toISOString().slice(0, 10); }
-    return days[days.length - 1] >= today;
+    return days[days.length - 1] >= slateDay();
   }
 
   /* "vs Steelers" / "at Steelers": from a board row's game, or a card's
@@ -776,6 +771,168 @@
     if (box.isConnected) box.innerHTML = seasonHTML(d);
   }
 
+  /* ---------------- Tonight: NBA, WNBA and NHL in fantasy points ---------
+     engine/fantasy_daily, beside each night's board: every priced player's
+     night added up in daily-fantasy points. The points are free; the stat
+     line under them (`proj`) is the members' (gate.ROW_PAID_KEYS_BY_FILE).
+     The scoring line is drawn from the file's own `scoring`, so the page
+     and the sum cannot disagree. */
+  const NIGHT = {
+    nba: { teams: () => (typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : null),
+           parts: [["pts", "PTS"], ["reb", "REB"], ["ast", "AST"], ["fg3m", "3PM"],
+                   ["stl", "STL"], ["blk", "BLK"], ["tov", "TO"]],
+           unscored: "Double-double and triple-double bonuses are not counted." },
+    nhl: { teams: () => (typeof NHL_TEAMS !== "undefined" ? NHL_TEAMS : null),
+           parts: [["goals", "G"], ["assists", "A"], ["sog", "SOG"], ["blocks", "BLK"]],
+           unscored: "Bonuses (a hat trick, five shots, three blocks or three points) are not "
+             + "counted, and goalies are left out: their wins and goals against are not projected." },
+  };
+  NIGHT.wnba = { ...NIGHT.nba, teams: () => (typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : null) };
+  const NIGHT_WORD = { pts: "point", fg3m: "three", reb: "rebound", ast: "assist", stl: "steal",
+                       blk: "block", tov: "turnover", goals: "goal", assists: "assist",
+                       sog: "shot on goal", blocks: "blocked shot" };
+  const NIGHT_POS = ["ALL", "C", "W", "D"];
+  let night = { sport: "", game: "", pos: "ALL", all: false };
+  let nightDocs = [];
+
+  /* The Eastern date, turned at 6am: the day a night's slate belongs to. */
+  function slateDay() {
+    try {
+      return new Date(new Date().getTime() - 6 * 3600e3)
+        .toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    } catch (e) { return new Date().toISOString().slice(0, 10); }
+  }
+
+  /* Tonight's files: built, holding players, and not a past night's. */
+  function nightCurrent(docs) {
+    const day = slateDay();
+    return (docs || []).filter((d) => d && NIGHT[d.sport] && (d.players || []).length
+      && String(d.date || "").slice(0, 10) >= day);
+  }
+
+  const listed = (xs) => (xs.length < 2 ? xs.join("")
+    : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+  function tipOff(g) {
+    const t = new Date((g || {}).kickoff || "");
+    if (isNaN(t.getTime())) return "";
+    if (t.getTime() <= new Date().getTime()) return "under way";
+    return t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  function gameKey(g) { return g && g.away && g.home ? `${g.away}@${g.home}` : ""; }
+
+  function nightRow(r, i, sport) {
+    const cfg = NIGHT[sport], map = cfg.teams();
+    const g = r.game || {};
+    const home = g.home ? g.home === r.team : null;
+    const where = [r.position, r.opponent ? `${home === false ? "at" : "vs"} ${r.opponent}` : "", tipOff(g)]
+      .filter(Boolean).join(" · ");
+    const face = r.headshot ? playerAvatar(r.player, r.team, { size: 40, map, headshot: r.headshot })
+      : teamMark(r.team, 40, map, sport);
+    const p = r.proj || null;
+    // A part the board has no line on is the season average: drawn dim,
+    // said once above the list (nightHTML) rather than on every row.
+    const avg = new Set(r.filled || []);
+    const line = p ? cfg.parts.filter(([k]) => p[k] != null)
+      .map(([k, short]) => `<span class="ffn-stat${avg.has(k) ? " avg" : ""}"${avg.has(k)
+        ? ` title="Season average: no line tonight"` : ""}><b>${Number(p[k]).toFixed(1)}</b>${short}</span>`).join("") : "";
+    return `<div class="ffn-row">
+      <span class="ffn-rank">${i + 1}</span>
+      <span class="ffn-face">${face}</span>
+      <span class="ffn-who"><b>${escapeHtml(r.player)}</b>
+        <span class="ffn-where">${teamMark(r.team, 14, map, sport)}${escapeHtml(r.team)}${
+          where ? ` · ${escapeHtml(where)}` : ""}${r.status ? ` <span class="hd-chip warn">${escapeHtml(r.status)}</span>` : ""}</span>
+        ${line ? `<span class="ffn-line">${line}</span>` : ""}</span>
+      <span class="ffn-pts"><b>${Number(r.points).toFixed(1)}</b><span>FPTS</span></span>
+    </div>`;
+  }
+
+  function nightScoring(doc) {
+    const sc = doc.scoring || {};
+    const a = (w) => (/^[aeiou]/.test(w) ? "an " : "a ") + w;
+    const parts = Object.keys(sc).map((k) => `${sc[k] < 0 ? "−" : ""}${Math.abs(sc[k])} ${a(NIGHT_WORD[k] || k)}`);
+    return `<p class="rank-help"><b>Scoring:</b> ${escapeHtml(listed(parts))}. ${escapeHtml(NIGHT[doc.sport].unscored)}</p>`;
+  }
+
+  /* The room: a switch per sport with a slate tonight, then the games, the
+     positions (hockey's), and every priced player best first. "" when no
+     slate is tonight's, which hides the tab. */
+  function daily(docs) {
+    nightDocs = nightCurrent(docs);
+    if (!nightDocs.length) return "";
+    return `<div id="ff-tonight">${nightHTML()}</div>`;
+  }
+
+  function nightHTML() {
+    const doc = nightDocs.find((d) => d.sport === night.sport) || nightDocs[0];
+    night.sport = doc.sport;
+    const all = doc.players || [];
+    const games = (doc.games || []).filter(gameKey);
+    const game = games.some((g) => gameKey(g) === night.game) ? night.game : "";
+    const posTabs = doc.sport === "nhl" ? NIGHT_POS.filter((p) => p === "ALL" || all.some((r) => r.position === p)) : [];
+    const pos = posTabs.includes(night.pos) ? night.pos : "ALL";
+    const rows = all.filter((r) => (!game || gameKey(r.game) === game) && (pos === "ALL" || r.position === pos));
+    const shown = night.all ? rows : rows.slice(0, SHOWN);
+    const word = { nba: "NBA", wnba: "WNBA", nhl: "NHL" };
+    const locked = doc.locked && doc.locked["players[].fields"];
+    return `
+      ${nightDocs.length > 1 ? `<div class="rec-bf-group ffn-sports" role="group" aria-label="Sport">${nightDocs.map((d) => `
+        <button type="button" class="rec-bf${d.sport === doc.sport ? " active" : ""}" data-ffnsport="${escapeAttr(d.sport)}"
+          aria-pressed="${d.sport === doc.sport}">${word[d.sport]}</button>`).join("")}</div>` : ""}
+      <div class="section-title">Tonight’s ${word[doc.sport]} in fantasy points
+        <span class="sub">— ${all.length} players across ${games.length} game${games.length === 1 ? "" : "s"},
+        from the same projections as tonight’s props</span></div>
+      ${nightScoring(doc)}
+      ${locked ? `<p class="rank-help">${icon("lock", 12)} Members also see each player’s stat line, the
+        projections the points are added up from — <a href="#paywall">the plans</a>.</p>` : ""}
+      <div class="ffn-filters">
+        ${games.length > 1 ? `<label class="ffn-game">
+          <select data-ffngame aria-label="Game">
+            <option value="">All ${games.length} games</option>${games.map((g) => `
+            <option value="${escapeAttr(gameKey(g))}"${gameKey(g) === game ? " selected" : ""}>${
+              escapeHtml(`${g.away} at ${g.home}${tipOff(g) ? ` · ${tipOff(g)}` : ""}`)}</option>`).join("")}
+          </select></label>` : ""}
+        ${posTabs.length > 2 ? `<div class="rec-bf-group" role="group" aria-label="Position">${posTabs.map((p) => `
+          <button type="button" class="rec-bf${p === pos ? " active" : ""}" data-ffnpos="${p}"
+            aria-pressed="${p === pos}">${p === "ALL" ? "All" : p}</button>`).join("")}</div>` : ""}
+      </div>
+      ${shown.some((r) => r.proj && (r.filled || []).length) ? `<p class="ffn-key">Dimmed numbers are season
+        averages: tonight’s board has no line on that stat.</p>` : ""}
+      <div class="card ffn-list">${shown.map((r, i) => nightRow(r, i, doc.sport)).join("")
+        || panelEmpty("No priced players in this game or position tonight.")}</div>
+      ${rows.length > shown.length ? `<button type="button" class="btn ghost" data-ffnmore>Show all ${
+        rows.length} players ▾</button>` : ""}`;
+  }
+
+  function dailyBind(root) {
+    const host = (root || document).querySelector("#ff-tonight");
+    if (!host || host.dataset.bound) return;
+    host.dataset.bound = "1";
+    const redraw = () => { host.innerHTML = nightHTML(); };
+    host.addEventListener("click", (e) => {
+      const at = (sel) => (e.target.closest ? e.target.closest(sel) : null);
+      const sport = at("[data-ffnsport]"), pos = at("[data-ffnpos]"), more = at("[data-ffnmore]");
+      if (sport) night = { sport: sport.dataset.ffnsport, game: "", pos: "ALL", all: false };
+      else if (pos) { night.pos = pos.dataset.ffnpos; night.all = false; }
+      else if (more) night.all = true;
+      else return;
+      redraw();
+    });
+    host.addEventListener("change", (e) => {
+      if (!e.target || !e.target.matches("[data-ffngame]")) return;
+      night.game = e.target.value;
+      night.all = false;
+      redraw();
+    });
+  }
+
+  /* The tab's name: the sports with a slate tonight. */
+  function dailyName(docs) {
+    const word = { nba: "NBA", wnba: "WNBA", nhl: "NHL" };
+    return listed(nightCurrent(docs).map((d) => word[d.sport])).replace(" and ", " & ") + " tonight";
+  }
+
   /* What the desk's lineup was scored on, said once under it. */
   function basis(d) {
     const pw = (d || {}).projection_week || {};
@@ -824,5 +981,5 @@
   }
 
   window.QBWeek = { room, bind, rowFor, dossier, pickups, basis, seat, current, h2hNote, callNote, todo, todoBind,
-                    season, live: liveHTML };
+                    season, live: liveHTML, daily, dailyBind, dailyName };
 })();

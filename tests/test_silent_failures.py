@@ -236,6 +236,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # game(s)". The three never read alike, and a feed must never cost
         # the build its board.
         "attach_to_board",
+        # TONIGHT IN FANTASY POINTS (engine/fantasy_daily.build, 2026-10-27),
+        # caught by this sweep the hour it was written. A failure returns
+        # "Fantasy tonight (NBA) skipped: <error>"; a quiet night says "no
+        # priced players" and a built one "N players, top …". The three
+        # never read alike, and a side file must never cost the build its
+        # board.
+        "build",
     }
 
     def broad(h):

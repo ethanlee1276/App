@@ -331,6 +331,11 @@ ROW_PAID_KEYS_BY_FILE = {
     # engine/dstproj) are its stat line: paid like a player's `proj`.
     "fantasy_week.json": ("players", ("proj", "volume", "td_prob", "td_quoted", "td_reasons",
                                       "read", "script", "reasons", "dst")),
+    # Tonight's NBA, WNBA and NHL fantasy points (engine/fantasy_daily): the
+    # points free, the stat line under them (the board's own medians) paid.
+    "fantasy_nba.json": ("players", ("proj",)),
+    "fantasy_wnba.json": ("players", ("proj",)),
+    "fantasy_nhl.json": ("players", ("proj",)),
 }
 
 #: …and the ones that must NEVER be touched, named rather than inferred.
@@ -452,6 +457,9 @@ KNOWN_BOARDS = (
     # nfl_build (engine/fantasyweek). Free points, paid workings
     # (ROW_PAID_KEYS_BY_FILE) since the Fantasy room went free, 2026-10-25.
     "fantasy_week.json",
+    # Tonight's basketball and hockey fantasy points, beside their boards
+    # (engine/fantasy_daily, 2026-10-27). Free points, paid stat lines.
+    "fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json",
     # memes_build.py has written this since the meme ledger shipped and
     # nothing here had ever heard of it — the third time a pipeline grew
     # a board without telling the gate. Unregistered meant `is_free` said
@@ -485,7 +493,7 @@ MIXED_FILES = (
     "fantasy.json", "memecoins.json",
     # Each row's points are free and its workings paid, per row rather than
     # per key: ROW_PAID_KEYS_BY_FILE.
-    "fantasy_week.json",
+    "fantasy_week.json", "fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json",
 )
 
 #: The switch. OFF by default, and that default is the whole reason this

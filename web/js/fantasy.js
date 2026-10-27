@@ -26,9 +26,12 @@ async function renderFantasy() {
     // shape of bug has been shipped, which is why paidFetch exists.
     // This week's file rides along too (engine/fantasyweek): the room
     // that draws it and the dossier that reads his line out of it.
-    const [res, , week] = await Promise.all([
-      paidFetch("fantasy.json"), loadInjuryBoard(), ffWeekLoad(), loadFantasyWeek()]);
+    // Tonight's basketball and hockey too (engine/fantasy_daily): the
+    // "NBA & NHL tonight" room, there only while a slate is tonight's.
+    const [res, , week, , nights] = await Promise.all([
+      paidFetch("fantasy.json"), loadInjuryBoard(), ffWeekLoad(), loadFantasyWeek(), ffNightLoad()]);
     _ffWeek = week;
+    _ffNight = nights;
     if (res.ok) { d = await res.json(); _lastGood.set("fantasy", Date.now()); }
     else fantasyFailed = res.status !== 404;
   } catch (e) { fantasyFailed = true; }
@@ -50,7 +53,8 @@ async function renderFantasy() {
     host.innerHTML = ff101HTML() + (fantasyFailed && !d ? outageHTML("the NFL usage board", "fantasy")
       : `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
       <div class="es-title">No NFL usage data yet</div>
-      <div class="es-sub">${escapeHtml((d && d.note) || "This fills once the season’s usage rows — targets, carries, air yards, PPR points — have been ingested. Your own league below does not wait on it.")}</div></div>`) + `
+      <div class="es-sub">${escapeHtml((d && d.note) || "This fills once the season’s usage rows — targets, carries, air yards, PPR points — have been ingested. Your own league below does not wait on it.")}</div></div>`)
+      + (typeof QBWeek !== "undefined" ? QBWeek.daily(_ffNight) : "") + `
       <div class="ff-sync-alone">
         <div class="section-title">Your leagues
           <span class="sub">— these read your own league and do not wait on the
@@ -61,6 +65,7 @@ async function renderFantasy() {
         <div id="espn-desk"></div>
       </div>`;
     ff101Bind(host);
+    if (typeof QBWeek !== "undefined") QBWeek.dailyBind(host);
     renderSleeperZone(d || {});
     renderEspnZone();
     return;
@@ -371,6 +376,12 @@ async function renderFantasy() {
     ["week", "This week",
      "every player’s week in fantasy points: the matchup, the script, injuries and why",
      typeof QBWeek !== "undefined" ? `<div id="ff-week">${QBWeek.room(_ffWeek)}</div>` : ""],
+    /* Tonight's basketball and hockey in fantasy points (engine/
+       fantasy_daily, 2026-10-27): drawn only while a slate is tonight's,
+       so the tab is not there on a night with none. */
+    ["tonight", typeof QBWeek !== "undefined" ? QBWeek.dailyName(_ffNight) : "Tonight",
+     "every player on tonight’s basketball and hockey boards, in daily-fantasy points",
+     typeof QBWeek !== "undefined" ? QBWeek.daily(_ffNight) : ""],
     ["usage", "Usage", "who is getting the ball, and whose share is moving",
      _ffUsage],
     ["waivers", "Waivers & starts",
@@ -420,7 +431,7 @@ async function renderFantasy() {
   ], { index: true }) + _ffFoot;
   bindSubtabs(host);
   ff101Bind(host);
-  if (typeof QBWeek !== "undefined") QBWeek.bind(host);
+  if (typeof QBWeek !== "undefined") { QBWeek.bind(host); QBWeek.dailyBind(host); }
   _mockBind(host);
   const more = document.getElementById("usage-more");
   if (more) more.addEventListener("click", () => {
@@ -1615,6 +1626,20 @@ async function ffWeekLoad() {
   } catch (e) { return null; }
 }
 
+/* Tonight's NBA, WNBA and NHL in fantasy points (engine/fantasy_daily):
+   the files that are built, each through paidFetch (its stat lines are the
+   members'). A missing one is a sport with no slate. */
+async function ffNightLoad() {
+  const one = async (name) => {
+    try {
+      const res = await paidFetch(name);
+      return res.ok ? await res.json() : null;
+    } catch (e) { return null; }
+  };
+  return (await Promise.all(["fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json"].map(one)))
+    .filter(Boolean);
+}
+
 function loadFantasyWeek() {
   if (window.QBWeek) return Promise.resolve(window.QBWeek);
   return _fwLoading || (_fwLoading = new Promise((resolve) => {
@@ -1630,6 +1655,7 @@ function loadFantasyWeek() {
    copy (gate.redact) keeps its `locked_reason` so each reader can say
    what it holds. */
 let _ffWeek = null;
+let _ffNight = [];                // tonight's basketball and hockey files
 let _fwLoading = null;            // js/fantasyweek.js, loading
 
 /* ---------------- Mock draft simulator ----------------

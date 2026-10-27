@@ -194,4 +194,11 @@ queue, in order.
    (engine/fantasy_live). **Fantasy points on the game pages** — SHIPPED
    2026-10-27: each football game page leads its Player stats with the
    game's top fantasy scorers, PPR and half-PPR.
-10. **Next:** NBA and NHL fantasy from the props we already project.
+10. **NBA and NHL tonight** — SHIPPED 2026-10-27: every player on each
+    night's basketball and hockey boards in daily-fantasy points (1 a point,
+    0.5 a three, 1.25 a rebound, 1.5 an assist, 2 a steal or block, −0.5 a
+    turnover; hockey 8.5 a goal, 5 an assist, 1.5 a shot, 1.3 a blocked
+    shot), from the same projections as the props, a stat the board does
+    not price filled from the season average and drawn dim
+    (engine/fantasy_daily). A tab of its own, "NBA & NHL tonight", while a
+    slate is tonight's; the points free, the stat line the members'.

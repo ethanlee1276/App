@@ -941,3 +941,34 @@
 .ffl-st { font-size: var(--fs-xs); color: var(--text-mute); }
 .ffl-st.on { color: var(--good); font-weight: 700; }
 .ffl-note { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
+
+/* Tonight's NBA, WNBA and NHL in fantasy points (js/fantasyweek.js
+   nightHTML, engine/fantasy_daily). One row a player: rank, face, who and
+   where, the stat line for a member, the points large on the right. */
+.ffn-sports { margin-bottom: var(--sp-3); }
+.ffn-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.ffn-filters .rec-bf-group { margin: 0; }
+.ffn-game select { min-height: 36px; max-width: 100%; padding: 6px 10px; border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.ffn-list { padding: 0; overflow: hidden; }
+.ffn-row { display: grid; grid-template-columns: 22px 40px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
+  padding: 10px var(--sp-4); border-bottom: var(--hairline) solid var(--border-soft); }
+.ffn-row:last-child { border-bottom: 0; }
+.ffn-rank { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); text-align: right; }
+.ffn-face { display: inline-flex; width: 40px; height: 40px; }
+.ffn-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ffn-who > b { font-size: var(--fs-md); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ffn-where { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--text-mute); }
+.ffn-where .hd-chip { padding: 1px 6px; }
+.ffn-line { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-xs); color: var(--text-mute); }
+.ffn-stat b { margin-right: 3px; font-family: var(--font-mono); font-weight: 600; color: var(--text-dim); }
+.ffn-stat.avg, .ffn-stat.avg b { color: var(--text-faint); }
+.ffn-key { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-mute); }
+.ffn-pts { display: flex; flex-direction: column; align-items: flex-end; }
+.ffn-pts b { font-family: var(--font-mono); font-size: var(--fs-xl); line-height: var(--lh-tight); font-weight: 600; color: var(--text); }
+.ffn-pts span { font-size: var(--fs-xs); letter-spacing: .06em; color: var(--text-mute); }
+.ffn-row:first-child .ffn-pts b { color: var(--brand); }
+@media (max-width: 520px) {
+  .ffn-row { grid-template-columns: 40px minmax(0, 1fr) auto; padding: 10px var(--sp-3); }
+  .ffn-rank { display: none; }
+}

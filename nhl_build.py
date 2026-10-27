@@ -1073,6 +1073,10 @@ def main() -> None:
         print(lightboard.report(gate.board_source(p), full))
     except Exception as exc:                                # noqa: BLE001
         print(f"⚠️  Light board skipped: {exc}")
+    # TONIGHT IN FANTASY POINTS (engine/fantasy_daily, 2026-10-27): the
+    # board's projections added up, beside it. Never fatal.
+    from engine import fantasy_daily as _fd
+    print("  " + _fd.build(SPORT, out, p))
     c = out["counts"]
     # THE ODDS LINE, ALWAYS. A board with no prices looks the same whether
     # no book had posted yet or the pull never happened (a hand run without

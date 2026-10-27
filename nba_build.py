@@ -1629,6 +1629,10 @@ def main() -> None:
         print(lightboard.report(gate.board_source(p), _lfull))
     except Exception as _lexc:                                # noqa: BLE001
         print(f"⚠️  Light board skipped: {_lexc}")
+    # TONIGHT IN FANTASY POINTS (engine/fantasy_daily, 2026-10-27): the
+    # board's projections added up, beside it. Never fatal.
+    from engine import fantasy_daily as _fd
+    print("  " + _fd.build(str(out.get("sport") or args.league), out, p))
     # AND THE PICK OF THE DAY, to its own book — HERE, once it exists and
     # the relock above has re-pointed it at today's lock. The journal
     # block runs before `potd.attach`, so journaling it there recorded
