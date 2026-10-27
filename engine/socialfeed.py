@@ -54,6 +54,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from . import profanity
+from .db import column_exists_or_raise
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "web" / "data"
@@ -119,8 +120,29 @@ def _cols(conn, table: str) -> set:
 
 
 def _add(conn, table: str, col: str, decl: str) -> None:
-    if col not in _cols(conn, table):
+    """Add the column if it is not there — and survive losing the race.
+
+    The read and the ALTER are two statements on a THREADED server
+    (ThreadingHTTPServer, one connection per request). Two requests that
+    arrive together on the first pass after a deploy both read the table
+    without the column and both ALTER it; the loser raised `duplicate
+    column name` out of `ensure_tables`, and the request it was serving
+    answered 500. Found by the nightly browser run (2026-10-27): opening
+    every page at once put six /api/feed calls in flight and one of them
+    threw `duplicate column name: last_try`.
+
+    So the read stays — it keeps the common case to one statement — and
+    the duplicate is swallowed, by the same rule the journal uses: only
+    "duplicate column" means someone else got there first. A lock or a
+    read-only database must still raise, or the column is missing for the
+    rest of the process and every insert naming it fails (audit
+    2026-09-30, F-10)."""
+    if col in _cols(conn, table):
+        return
+    try:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
 
 
 def ensure_tables(conn) -> None:

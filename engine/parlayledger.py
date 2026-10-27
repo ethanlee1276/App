@@ -50,6 +50,8 @@ import math
 import sqlite3
 from pathlib import Path
 
+from .db import column_exists_or_raise
+
 #: §13's promotion bar. A hundred graded tickets before anything is staked,
 #: and the singles board has to clear its own bar first.
 PROBATION_TICKETS = 100
@@ -124,10 +126,21 @@ def ensure_schema(conn) -> None:
     # DEFAULT 'edge' RATHER THAN NULL: every row written before today
     # came from the edge board, and calling that unknown would put the
     # whole existing record into a bucket labelled "we are not sure".
+    #
+    # The read is a fast path, not a lock: `ensure_schema` runs per
+    # request on a threaded server, so two requests on the first pass
+    # after a deploy can both read `parlays` without `source` and both
+    # ALTER it (the race that 500'd the feed and billing, nightly
+    # 2026-10-27). The loser swallows the duplicate — and still runs the
+    # backfill, because the winner's DEFAULT only covers rows written
+    # after it. A lock must still raise (audit 2026-09-30, F-10).
     cols = {r[1] for r in conn.execute("PRAGMA table_info(parlays)")}
     if "source" not in cols:
-        conn.execute("ALTER TABLE parlays ADD COLUMN source TEXT "
-                     "DEFAULT 'edge'")
+        try:
+            conn.execute("ALTER TABLE parlays ADD COLUMN source TEXT "
+                         "DEFAULT 'edge'")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
         conn.execute("UPDATE parlays SET source='edge' WHERE source IS NULL")
     conn.commit()
 

@@ -44,6 +44,7 @@ import secrets
 from pathlib import Path
 
 from engine import gate
+from engine.db import column_exists_or_raise
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
@@ -87,11 +88,22 @@ def ensure_tables(conn) -> None:
     # copy of the accounts DB unsubscribes nobody. `token` keeps the clear
     # tokens already sitting in inboxes, honoured until `legacy_until`
     # (set when a row first gets a salt) and then blanked.
+    #
+    # The read is a fast path, not a lock: `ensure_tables` runs on every
+    # opt-in read from a threaded server, so on the first pass after a
+    # deploy two requests both see the column missing and both ALTER it.
+    # Eight of sixteen threads raised `duplicate column name: salt` here
+    # (nightly run, 2026-10-27), and a raise out of ensure_tables is a 500
+    # on the request that was unlucky. Only the duplicate is swallowed —
+    # a lock must still raise (audit 2026-09-30, F-10).
     cols = {r[1] for r in conn.execute("PRAGMA table_info(digest_optin)")}
-    if "salt" not in cols:
-        conn.execute("ALTER TABLE digest_optin ADD COLUMN salt TEXT")
-    if "legacy_until" not in cols:
-        conn.execute("ALTER TABLE digest_optin ADD COLUMN legacy_until INTEGER")
+    for col, kind in (("salt", "TEXT"), ("legacy_until", "INTEGER")):
+        if col in cols:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE digest_optin ADD COLUMN {col} {kind}")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     conn.commit()
 
 

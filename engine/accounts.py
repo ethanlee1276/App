@@ -65,6 +65,8 @@ import threading
 import time
 from pathlib import Path
 
+from .db import column_exists_or_raise
+
 #: Owner-only, beside the other machine-local state. `*.db` is gitignored
 #: and this is pinned by name in tests/test_gitignore.py as well — it
 #: holds every user's email and verifier, which is the single worst file
@@ -396,7 +398,17 @@ def _migrate(conn) -> None:
                       # A phone account's number, E.164 (engine/smsverify).
                       ("phone", "TEXT")):
         if col not in have:
-            conn.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
+            # The read above is a fast path, not a lock. `once_per_db` is
+            # a memo too, so on a box whose users table predates one of
+            # these columns, concurrent first requests can both read it
+            # missing and both ALTER it; the loser raised out of connect()
+            # and answered 500 (the race the feed, billing and the digest
+            # hit — nightly 2026-10-27). Only the duplicate is swallowed;
+            # a lock must still raise (audit 2026-09-30, F-10).
+            try:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users(phone) WHERE phone IS NOT NULL")
 
 

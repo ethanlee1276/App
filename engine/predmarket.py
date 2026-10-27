@@ -40,8 +40,10 @@ Free public endpoints, stdlib only:
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 
+from .db import column_exists_or_raise
 from .sources.fetch import fetch_text, DataUnavailable
 
 GAMMA = "https://gamma-api.polymarket.com"
@@ -318,10 +320,19 @@ _PM_FLAG_MIGRATIONS = (("signals", "TEXT"), ("stack_mult", "REAL"))
 
 def ensure_tables(conn) -> None:
     conn.executescript(SCHEMA)
+    # The read is a fast path, not a lock — `ensure_tables` runs per
+    # request on a threaded server, so on the first pass after a deploy
+    # two requests can both read pm_flags without the column and both
+    # ALTER it. The loser swallows the duplicate rather than 500ing the
+    # page (the same race hit the feed and billing, nightly 2026-10-27);
+    # a lock still raises (audit 2026-09-30, F-10).
     have = {c[1] for c in conn.execute("PRAGMA table_info(pm_flags)")}
     for col, decl in _PM_FLAG_MIGRATIONS:
         if col not in have:
-            conn.execute(f"ALTER TABLE pm_flags ADD COLUMN {col} {decl}")
+            try:
+                conn.execute(f"ALTER TABLE pm_flags ADD COLUMN {col} {decl}")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
     conn.commit()
 
 

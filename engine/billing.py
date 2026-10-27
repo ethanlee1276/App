@@ -1028,7 +1028,10 @@ def _period_end(obj: dict) -> float | None:
 
 
 # --- storage ------------------------------------------------------------------
+import sqlite3                                      # noqa: E402
+
 from .accounts import once_per_db as _once_per_db   # noqa: E402  (audit F-9)
+from .db import column_exists_or_raise              # noqa: E402
 
 
 @_once_per_db
@@ -1055,11 +1058,24 @@ def init(conn) -> None:
     # `plan` arrived after the table did, so it is added rather than
     # declared. ALTER TABLE ADD COLUMN throws when the column is already
     # there and there is no IF NOT EXISTS for it in SQLite, so the
-    # existing columns are read first — cheaper and clearer than
-    # catching an exception whose message we would have to match on.
+    # existing columns are read first — cheaper than catching an
+    # exception on the common pass.
+    #
+    # BUT THE READ IS NOT THE GUARD IT LOOKS LIKE. `init` is called from
+    # six request handlers on a threaded server, and `once_per_db` is a
+    # memo, not a lock: on the first pass after a deploy, concurrent
+    # requests all read the table without the column and all ALTER it.
+    # Six of sixteen threads raised `duplicate column name: plan` out of
+    # here, and every one of those requests answered 500 — found by the
+    # nightly run, 2026-10-27, after the same race surfaced in the feed.
+    # So the loser swallows the duplicate, and only the duplicate: a lock
+    # must still raise (audit 2026-09-30, F-10).
     have = {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")}
     if "plan" not in have:
-        conn.execute("ALTER TABLE subscriptions ADD COLUMN plan TEXT")
+        try:
+            conn.execute("ALTER TABLE subscriptions ADD COLUMN plan TEXT")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     # The lapse lock (2026-10-12), added the same way: whether Stripe will
     # cancel this at the period's end, when we last read the subscription
     # from Stripe ourselves (`refresh`), and the creation time of the
@@ -1069,7 +1085,10 @@ def init(conn) -> None:
     for col, kind in (("cancel_at_end", "INTEGER"), ("checked_at", "REAL"),
                       ("event_at", "REAL"), ("trial_noted", "REAL")):
         if col not in have:
-            conn.execute(f"ALTER TABLE subscriptions ADD COLUMN {col} {kind}")
+            try:
+                conn.execute(f"ALTER TABLE subscriptions ADD COLUMN {col} {kind}")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
     conn.commit()
 
 
