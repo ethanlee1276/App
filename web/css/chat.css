@@ -259,7 +259,7 @@ body.gch-on { overflow: hidden; }
 .gch-betgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .gch-betgrid input[name="player"], .gch-betgrid input[name="market"] { grid-column: span 3; }
 .gch-mybets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-2xs); color: var(--text-mute); }
-.gch-mybets button { padding: 4px 9px; border-radius: 999px; border: var(--hairline) solid var(--border); background: var(--panel);
+.gch-mybets button { padding: 4px 9px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--panel);
   color: var(--text); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) { .gch-live i { animation: none; } }

@@ -4,16 +4,20 @@
    Self-hosted, because everything else on this site works with the
    network unplugged and the fonts should too — a board that renders in
    Times New Roman the one night your wifi drops is not a board you trust.
-   Seven files, 90KB total, and `font-display: swap` means text is
+   Three files, 78KB total, and `font-display: swap` means text is
    readable before they land rather than invisible.
 
-   Bodoni Moda for the masthead and entity names, Archivo Narrow for
-   headers, nav, labels and prose, IBM Plex Mono for every NUMBER — see the
-   note above its @font-face. The pairing is the point: a Didone masthead
-   over a condensed grotesque over a fixed-pitch data face is three
-   decisions somebody made, where a single neutral sans everywhere is what
-   you get when nobody did. It also does real work — it separates "this is
-   a section" from "this is a number" without a rule or a box.
+   Inter for everything a reader reads — headers, nav, labels, prose and
+   every NUMBER, in its tabular figures — and Bodoni Moda for the masthead
+   and the Pick of the Day's headline (2026-10-27, THE BLEND near the end of
+   this sheet). Until then it was three faces: Bodoni over a condensed
+   grotesque (Archivo Narrow) over a fixed-pitch data face (IBM Plex Mono).
+   Side by side with the apps people bet on, the three read as a terminal
+   in a newspaper; every one of those apps sets one clean sans, numbers
+   included, and Ethan asked for the site to look like them. What the mono
+   did for the numbers is kept: the figures are tabular (html, THE BLEND),
+   set at 500 with no tracking (the number rule below), so a column of odds
+   still lines up and nothing reads as a generated dashboard's 800-weight.
 
    THE NUMBERS ARE NOT THE DISPLAY FACE, and the reason is measured rather
    than felt. This was tried with Instrument Serif and is recorded here so
@@ -24,15 +28,20 @@
    harder — high-contrast hairlines vanish at 10px agate, and its figures
    are proportional. It sets names and the masthead. It never sets a price.
 */
+/* THE UI FACE IS INTER (2026-10-27, Ethan: "realize what apps actually look
+   like ... they don't look like what you made"). One variable file, every
+   weight from 100 to 900, 48 KB, the latin subset (SIL Open Font License
+   1.1, rsms/inter via Google Fonts). It replaced Archivo Narrow for words
+   and IBM Plex Mono for numbers: a condensed grotesque over a monospace
+   read as a terminal, and no app in the category sets either — DraftKings,
+   FanDuel, Underdog and Apple Sports all set one clean sans, numbers
+   included. Inter was drawn for screens at small sizes (a tall x-height,
+   open apertures), and its tabular figures line a column of odds up the
+   way the mono did: the page asks for them once, on the root. */
 @font-face {
-  font-family: "Archivo Narrow";
-  src: url("../fonts/archivo-narrow.woff2") format("woff2");
-  font-weight: 400; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: "Archivo Narrow";
-  src: url("../fonts/archivo-narrow-700.woff2") format("woff2");
-  font-weight: 700; font-style: normal; font-display: swap;
+  font-family: "Inter";
+  src: url("../fonts/inter.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap;
 }
 /* Bodoni ships 700 and 900 here: 900 for the masthead, 700 for entity
    names. Nothing asks it for a weight it does not have — a synthesised
@@ -47,23 +56,6 @@
   font-family: "Bodoni Moda";
   src: url("../fonts/bodoni-moda-900.woff2") format("woff2");
   font-weight: 900; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("../fonts/plex-mono.woff2") format("woff2");
-  font-weight: 400; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("../fonts/plex-mono-600.woff2") format("woff2");
-  font-weight: 600; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("../fonts/plex-mono-500.woff2") format("woff2");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
 }
 
 /* ============================================================
@@ -248,8 +240,8 @@
   --grad-hot: #E5484D;
   --grad-cold: #A8A090;
 
-  --fill-subtle: rgba(232,228,217,.022);
-  --fill-hover: rgba(232,228,217,.05);
+  --fill-subtle: rgba(255, 255, 255, .03);
+  --fill-hover: rgba(255, 255, 255, .06);
   --skeleton: linear-gradient(100deg, var(--panel-2) 30%, var(--panel-3) 50%, var(--panel-2) 70%);
   /* Worst-to-best track for range strips. Built from the semantic
      tones, which flip per theme on their own — one definition serves. */
@@ -263,7 +255,7 @@
   /* The Pick of the Day hero: its venue render fades into the panel
      under the headline. */
   /* The Most Likely page's cards (obCardHTML): a warm edge fading to the panel. */
-  --grad-ob-card: linear-gradient(90deg, color-mix(in srgb, var(--brand) 6%, var(--panel-2)), var(--panel));
+  --grad-ob-card: linear-gradient(180deg, var(--panel), var(--panel));
   /* The game page's hero: the same venue fade, onto the hero's own
      panel, over the art's band only. */
   /* A render dimmed for type on top, and the fade that dissolves it into
@@ -305,8 +297,7 @@
   --grad-field-quiet: linear-gradient(90deg, color-mix(in oklab, var(--panel) 82%, transparent) 0%, color-mix(in oklab, var(--panel) 30%, transparent) 50%, color-mix(in oklab, var(--panel) 8%, transparent) 100%);
   --grad-pmx-verdict: linear-gradient(90deg, color-mix(in srgb, var(--brand) 8%, var(--panel)), var(--panel));
 
-  --font-sans: "Archivo Narrow", "Arial Narrow", -apple-system,
-               BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   /* THE HERO'S HEADLINE. Ethan's August render set --font-display to
      Archivo Narrow (the NEW LOOK block below); the v3 prototype showed
      the Pick of the Day's bet in Bodoni and he chose it (2026-09-22:
@@ -315,7 +306,10 @@
      here, and the headline asks for 700. */
   --font-headline: "Bodoni Moda", "Iowan Old Style", "Palatino Linotype",
                    Palatino, Georgia, serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* THE NUMBER FACE is the UI face with tabular figures (html, below),
+     2026-10-27: the name is kept so the rules that ask for it still say
+     "this is a number". */
+  --font-mono: var(--font-sans);
 
   /* Tighter corners. A 10px radius on every panel is the house style of
      every component library shipped since 2022 — softening everything
@@ -387,24 +381,24 @@
      gold site). Formerly a second bare :root at that section; one :root
      now (audit #50). Where a token above lost its value to this layer,
      the dead value was dropped and its history comment kept. ---- */
-  --bg: #090705;
-  --bg-2: #0D0A07;
-  --panel: #14110C;
-  --panel-2: #1C1710;
-  --panel-3: #241D16;
-  --border: #31281D;
-  --border-soft: #241D15;
-  --text: #F7F1E9;
+  --bg: #0C0B0A;
+  --bg-2: #11100E;
+  --panel: #1A1816;
+  --panel-2: #22211F;
+  --panel-3: #2B2927;
+  --border: #2A2826;
+  --border-soft: #211F1D;
+  --text: #F6F4F1;
   /* THE SITE AUDIT, 2026-09-24 (M-5): the grey second line on every pick
      row (--text-mute) read Lc 47 against APCA's 60 for secondary text,
      and the loss red Lc 36 against 45 even for large bold text. Both
      re-solved by lightness alone (palettefit.solve: hue and chroma held),
      and --text-dim rose with them so the ladder keeps its steps:
      text 97 · dim 73 · mute 60 · faint 32 (tests/test_contrast.py). */
-  --text-dim: #D6C8B8;
-  --text-body: #E1D6C9;
-  --text-mute: #C1B3A1;
-  --text-faint: #857C6F;
+  --text-dim: #D2CEC8;
+  --text-body: #E2DFDB;
+  --text-mute: #BCB8B2;
+  --text-faint: #84817D;
   /* GOLD, WHOLE SITE. Ethan, 2026-08-23, with renders of every page:
      "i say we switch everything to the gold color like the renders but
      for the whole site. we should match everything."
@@ -420,8 +414,8 @@
   --brand-2: #FFC94D;
   --brand-ink: #0A0907;
   --gold: #F5B93B;
-  --good: #42C268;
-  --bad: #FF766E;
+  --good: #4EC577;
+  --bad: #FE7F7A;
   /* WARN STAYS AMBER, AND THAT IS A KNOWN COLLISION rather than an
      oversight. With the accent gold, --warn at #F79D00 sits ~6 degrees
      of hue from --brand and reads as the same paint, which is bad: a
@@ -439,13 +433,13 @@
      conditions row, the brand is a fill. Left as it was, and written
      down, so the next person meets the constraint rather than the
      symptom. */
-  --warn: #F79D00;
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 14px;
-  --topbar-bg: rgba(7, 7, 12, .96);
+  --warn: #FBA238;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 18px;
+  --topbar-bg: rgba(12, 11, 10, .94);
   /* Light lives in tokens so every glow on the site is the SAME glow. */
-  --glow: 0 0 0 1px rgba(255, 176, 0, .28), 0 6px 28px rgba(255, 176, 0, .16);
+  --glow: 0 8px 30px rgba(255, 176, 0, .18);
   --glow-soft: 0 10px 30px rgba(0, 0, 0, .45);
   /* --brand-solid EXISTED BECAUSE VIOLET COULD NOT CARRY WHITE, and the
      gold system does not have that problem — it has the opposite one.
@@ -473,9 +467,9 @@
      list wore it from top to bottom and read brown-olive, muddy. Its
      height is fixed now: every card keeps the warm top edge Ethan asked
      for on 2026-08-18 ("so flat"), and a long one is clean below it. */
-  --grad-card: radial-gradient(130% 160px at 50% 0%, rgba(255, 176, 0, .14), rgba(7, 7, 12, 0) 62%);
-  --grad-chip: linear-gradient(180deg, rgba(255, 176, 0, .20), rgba(255, 176, 0, .07));
-  --font-display: "Archivo Narrow", var(--font-sans);
+  --grad-card: radial-gradient(130% 150px at 50% 0%, rgba(255, 176, 0, .045), rgba(255, 176, 0, 0) 70%);
+  --grad-chip: linear-gradient(180deg, rgba(255, 176, 0, .16), rgba(255, 176, 0, .10));
+  --font-display: var(--font-sans);
 
   /* ---- LAYOUT (formerly a third :root beside the top bar's rules). ---- */
   --topbar-h: calc(64px + env(safe-area-inset-top));
@@ -525,23 +519,31 @@
   --glass-gold: linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, .06) 48%, rgba(255, 255, 255, 0) 52%);
   /* THE LIGHTS ON (2026-10-27): each league's colour, the glow family and
      the light's gradients; the section near the end of this sheet uses them. */
-  --lg-nfl: #FFB000;
-  --lg-cfb: #FF7A2F;
-  --lg-mlb: #4DA3FF;
-  --lg-nba: #9C7BFF;
-  --lg-wnba: #FF6FA1;
-  --lg-nhl: #45D4F5;
-  --lg-ufc: #FF4D4D;
+  --lg-nfl: #E8B04A;
+  --lg-cfb: #F89E6E;
+  --lg-mlb: #7ABCFF;
+  --lg-nba: #BEA6FE;
+  --lg-wnba: #F395C3;
+  --lg-nhl: #5FCBE3;
+  --lg-ufc: #FD9693;
   --league: var(--lg-nfl);
-  --sky: #5AAEFF;
-  --glow-gold: 0 0 0 1px rgba(255, 176, 0, .5), 0 0 24px rgba(255, 176, 0, .32);
-  --glow-good: 0 0 0 1px rgba(66, 194, 104, .45), 0 0 24px rgba(66, 194, 104, .22);
-  --glow-lift: 0 16px 36px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 176, 0, .2), 0 0 32px rgba(255, 176, 0, .1);
-  --glow-league: 0 0 0 1px color-mix(in oklab, var(--league) 60%, transparent), 0 0 26px color-mix(in oklab, var(--league) 40%, transparent);
-  --grad-aurora: radial-gradient(62% 560px at 30% 110px, color-mix(in oklab, var(--league) 27%, transparent), transparent 72%), radial-gradient(48% 440px at 94% 30px, color-mix(in oklab, var(--brand) 12%, transparent), transparent 70%);
+  --sky: #71C1F7;
+  --glow-gold: 0 6px 24px rgba(255, 176, 0, .24);
+  --glow-good: 0 6px 24px rgba(78, 197, 119, .16);
+  --glow-lift: 0 18px 40px rgba(0, 0, 0, .45), 0 0 32px rgba(255, 176, 0, .07);
+  --glow-league: 0 6px 26px color-mix(in oklab, var(--league) 30%, transparent);
+  --grad-aurora: radial-gradient(100% 440px at 50% -140px, color-mix(in oklab, var(--league) 14%, transparent), transparent 100%);
   --grad-shine: linear-gradient(105deg, var(--gold) 0%, var(--gold) 40%, #FFF6D8 50%, var(--gold) 60%, var(--gold) 100%);
-  --grad-gold-btn: linear-gradient(180deg, #FFD66B, #FFB000 55%, #F29A00);
-  --grad-sheen-white: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .38) 50%, transparent 70%);
+  --grad-gold-btn: linear-gradient(180deg, #FFCB52, #FFB000);
+  --grad-sheen-white: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .22) 50%, transparent 70%);
+  /* THE BLEND (2026-10-27): a surface is told from the page by its tone, not
+     an outline — a fill for every chip and button, a soft lift for a card. */
+  --fill-tone: rgba(255, 255, 255, .055);
+  --fill-tone-2: rgba(255, 255, 255, .085);
+  --glow-card: inset 0 1px 0 rgba(255, 255, 255, .035), 0 10px 30px rgba(0, 0, 0, .28);
+  --grad-rim-gold: linear-gradient(155deg, color-mix(in oklab, var(--brand) 85%, transparent), color-mix(in oklab, var(--brand) 18%, transparent) 30%, transparent 55%);
+  --venue-grade: saturate(.55) brightness(.72) contrast(1.05);
+  --grad-hero-veil: linear-gradient(90deg, var(--panel) 25%, color-mix(in oklab, var(--panel) 55%, transparent));
 }
 
 * { box-sizing: border-box; }
@@ -650,7 +652,7 @@ svg text.num { font-family: var(--font-mono);
 .btn {
   background: none; color: var(--text); border: var(--hairline) solid var(--text); cursor: pointer;
   padding: 7px 14px; font-weight: 700; font-size: var(--fs-xs);
-  font-family: var(--font-sans); letter-spacing: .13em; text-transform: uppercase;
+  font-family: var(--font-sans); letter-spacing: .07em; text-transform: uppercase;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   box-shadow: none;
 }
@@ -849,7 +851,7 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
    bottom of what stays legible (see the contrast ratchet).  */
 .section-title.lead { font-size: calc(var(--fs-lg) * 1.2); letter-spacing: -0.01em; }
 .section-title.minor {
-  font-size: var(--fs-sm); letter-spacing: .1em; text-transform: uppercase;
+  font-size: var(--fs-sm); letter-spacing: .06em; text-transform: uppercase;
   color: var(--text-dim); font-weight: 700; margin-bottom: 8px;
 }
 .section-title.minor .sub { text-transform: none; letter-spacing: 0; }
@@ -1222,7 +1224,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    else on the page: proceed with care. Outline rather than fill — nothing
    else in this design is a solid slab of colour. */
 .grade { font-family: var(--font-sans); font-size: var(--fs-2xs);
-  font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
   padding: 3px 9px; border-radius: var(--radius-sm); white-space: nowrap;
   background: none; border: var(--hairline) solid var(--text-mute); color: var(--text-dim); }
 .grade.strong { border-color: var(--good); color: var(--good); }
@@ -2066,7 +2068,7 @@ main { view-transition-name: page; }
   position: absolute; top: 9px; left: 9px; z-index: 2;
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--font-sans);
-  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .18em;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .1em;
   text-transform: uppercase;
   padding: 3px 8px; border-radius: var(--radius-sm); color: var(--text-dim);
   background: var(--bg); border: var(--hairline) solid var(--border);
@@ -2530,7 +2532,7 @@ select.calc-in { width: auto; font-weight: 600; }
    small lesson — measured 26px while the earlier rule said 34 and the JS
    said ten other things. */
 .section-title {
-  font-size: var(--fs-md); color: var(--text-dim); letter-spacing: .1em;
+  font-size: var(--fs-md); color: var(--text-dim); letter-spacing: .06em;
   margin-top: 34px; margin-bottom: 14px;
 }
 .section-title.tight, .section-title:first-child { margin-top: 0; }
@@ -2580,7 +2582,7 @@ select.calc-in { width: auto; font-weight: 600; }
   background: none; border: 0; padding: 0 0 0 2px;
   color: var(--brand-2); border-radius: var(--radius-sm);
   font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700;
-  letter-spacing: .1em; text-transform: lowercase; cursor: pointer;
+  letter-spacing: .06em; text-transform: lowercase; cursor: pointer;
   line-height: var(--lh-snug); opacity: 1;
 }
 .why-toggle::after { content: "\2020"; font-size: .85em; vertical-align: super;
@@ -2810,7 +2812,7 @@ select.calc-in { width: auto; font-weight: 600; }
   border: var(--hairline) solid var(--border); border-radius: var(--radius);
   background: var(--panel); padding: 10px 14px; margin-bottom: 14px; }
 .dc-half { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.dc-k { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
+.dc-k { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-mute); }
 .daycard b { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
 .daycard b.pos { color: var(--good); }
@@ -4399,10 +4401,10 @@ body.pk-open { overflow: hidden; }
 
 .rec-bf-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .rec-bf { padding: 5px 12px; min-height: 30px; border-radius: 999px; cursor: pointer;
-  background: transparent; border: var(--hairline) solid var(--border); color: var(--text-mute);
+  background: var(--fill-tone); border: var(--hairline) solid transparent; color: var(--text-mute);
   font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700; }
-.rec-bf:hover { color: var(--text); border-color: var(--brand-2); }
-.rec-bf.active { color: var(--text); border-color: var(--brand-2);
+.rec-bf:hover { color: var(--text); }
+.rec-bf.active { color: var(--text); border-color: transparent;
   background: color-mix(in oklab, var(--brand) 14%, transparent); }
 
 
@@ -4928,29 +4930,29 @@ body.pk-open { overflow: hidden; }
   --bad: #C8102E;
   --plum: #7A7263;                 /* darker: it sits on paper, not ink */
   --grad-violet: #E0C58A;
-  --fill-subtle: rgba(20,18,14,.035);
-  --fill-hover: rgba(20,18,14,.07);
+  --fill-subtle: rgba(23, 22, 19, .025);
+  --fill-hover: rgba(23, 22, 19, .05);
   --skeleton: linear-gradient(100deg, #f4f4f6 30%, #ebebee 50%, #f4f4f6 70%);
   --shadow: none;
   --shadow-lg: none;
   --ring: 0 0 0 2px rgba(58, 111, 216, 0.30);
 
   /* ---- the new look's light values (formerly a second light block) ---- */
-  --bg: #F8F4ED;
-  --bg-2: #F2ECE5;
+  --bg: #F6F4F1;
+  --bg-2: #EFEEEA;
   --panel: #FFFFFF;
-  --panel-2: #FCF5EE;
-  --panel-3: #F5ECE1;
-  --border: #E4D7C7;
-  --border-soft: #EFE4D7;
-  --text: #1E1811;
-  --text-dim: #524434;
-  --text-body: #362C20;
+  --panel-2: #FAF9F7;
+  --panel-3: #F1EFEB;
+  --border: #E3E1DD;
+  --border-soft: #ECEAE6;
+  --text: #171613;
+  --text-dim: #4B4742;
+  --text-body: #302D29;
   /* WCAG 4.5:1 on --panel-3, the darkest light ground (audit 2026-09-30,
      A-1): each of these three was 4.05-4.30 there. Solved by lightness
      only, hue and saturation held; contrast.py --light measures them. */
-  --text-mute: #756858;
-  --text-faint: #B9AA95;
+  --text-mute: #66635D;
+  --text-faint: #AEAAA4;
   /* LIGHT WANTS A DEEPER GOLD. #FFB000 on white is Lc 30 — an accent
      nobody can read. The light theme drops to a bronze that carries
      against paper, and its ink goes back to white because THAT colour
@@ -4968,11 +4970,11 @@ body.pk-open { overflow: hidden; }
      or TOP GAME and the active league chip go amber in light. */
   --grad-brand: linear-gradient(135deg, #9A6A00, #7A5300);
   --brand-solid: #7A5300;
-  --topbar-bg: rgba(244, 244, 251, .96);
-  --glow: 0 0 0 1px rgba(154, 106, 0, .22), 0 6px 24px rgba(154, 106, 0, .12);
+  --topbar-bg: rgba(246, 244, 241, .94);
+  --glow: 0 8px 26px rgba(154, 106, 0, .14);
   --glow-soft: 0 10px 26px rgba(23, 23, 42, .10);
-  --grad-card: radial-gradient(130% 160px at 50% 0%, rgba(154, 106, 0, .10), rgba(244, 244, 251, 0) 62%);
-  --grad-chip: linear-gradient(180deg, rgba(154, 106, 0, .16), rgba(154, 106, 0, .05));
+  --grad-card: none;
+  --grad-chip: linear-gradient(180deg, rgba(154, 106, 0, .12), rgba(154, 106, 0, .08));
   /* Liquid Glass on the Duo, in paper. */
 
   --glass-tint: color-mix(in oklab, var(--panel) 72%, transparent);
@@ -4985,20 +4987,26 @@ body.pk-open { overflow: hidden; }
   --glass-depth: 0 14px 30px rgba(23, 23, 42, .14);
   /* THE LIGHTS ON (2026-10-27), for a light page: darker league colours,
      softer glows. */
-  --lg-nfl: #C98200;
-  --lg-cfb: #E2611A;
-  --lg-mlb: #1F7AE0;
-  --lg-nba: #7A55F0;
-  --lg-wnba: #E0457E;
-  --lg-nhl: #0E9CC2;
-  --lg-ufc: #D93636;
-  --sky: #1F7AE0;
-  --glow-gold: 0 0 0 1px rgba(201, 130, 0, .45), 0 6px 18px rgba(201, 130, 0, .2);
-  --glow-good: 0 0 0 1px rgba(30, 140, 70, .35), 0 6px 18px rgba(30, 140, 70, .14);
-  --glow-lift: 0 14px 30px rgba(60, 40, 10, .16), 0 0 0 1px rgba(201, 130, 0, .22);
-  --glow-league: 0 0 0 1px color-mix(in oklab, var(--league) 55%, transparent), 0 6px 18px color-mix(in oklab, var(--league) 22%, transparent);
-  --grad-aurora: radial-gradient(62% 520px at 30% 110px, color-mix(in oklab, var(--league) 15%, transparent), transparent 72%), radial-gradient(48% 400px at 94% 30px, color-mix(in oklab, var(--brand) 8%, transparent), transparent 70%);
+  --lg-nfl: #A26C00;
+  --lg-cfb: #B4561A;
+  --lg-mlb: #2A76C3;
+  --lg-nba: #7D60BC;
+  --lg-wnba: #AF4D80;
+  --lg-nhl: #0088A4;
+  --lg-ufc: #B84D4E;
+  --sky: #0077BD;
+  --glow-gold: 0 6px 20px rgba(160, 110, 0, .20);
+  --glow-good: 0 6px 20px rgba(18, 115, 75, .10);
+  --glow-lift: 0 16px 36px rgba(40, 30, 10, .12);
+  --glow-league: 0 6px 20px color-mix(in oklab, var(--league) 22%, transparent);
+  --grad-aurora: radial-gradient(100% 440px at 50% -140px, color-mix(in oklab, var(--league) 10%, transparent), transparent 100%);
   --grad-shine: linear-gradient(105deg, var(--gold) 0%, var(--gold) 40%, #FFE9A8 50%, var(--gold) 60%, var(--gold) 100%);
+  /* THE BLEND, on paper: ink-tinted fills, and cards that sit on a soft
+     shadow rather than a rule. */
+  --fill-tone: rgba(23, 22, 19, .045);
+  --fill-tone-2: rgba(23, 22, 19, .07);
+  --glow-card: 0 1px 2px rgba(23, 22, 19, .05), 0 8px 24px rgba(23, 22, 19, .06);
+  --venue-grade: saturate(.7) brightness(.95);
 }
 
 /* The page never scrolls sideways — Ethan's screen recording
@@ -5081,7 +5089,7 @@ html, body { overflow-x: clip; }
 .nav-btn {
   border: 0; background: transparent; cursor: pointer; color: var(--text-mute);
   font: inherit; font-size: var(--fs-sm); font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase;
+  letter-spacing: .06em; text-transform: uppercase;
   padding: 9px 13px; border-radius: var(--radius-sm); white-space: nowrap;
   transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
@@ -5272,7 +5280,7 @@ body.has-rail .shell {
      wraps and never scrolls (test_league_strip). */
   .sportbar-in { padding: 6px 8px 2px; }
   .sportbar-in .sport-btn { display: flex; flex-direction: column; align-items: center; gap: 5px;
-    padding: 6px 2px 8px; border-bottom: 0; font-size: var(--fs-2xs); letter-spacing: .1em; }
+    padding: 6px 2px 8px; border-bottom: 0; font-size: var(--fs-2xs); letter-spacing: .06em; }
   /* The crest holds the sport's glyph (leagueCrests); the code is the
      label beneath it, once. */
   .sportbar-in .sport-btn .crest { width: 44px; height: 44px; border-radius: 50%;
@@ -5368,7 +5376,7 @@ body.has-rail .shell {
 
 .sb-sec { display: flex; flex-direction: column; gap: 4px; }
 .sb-label { margin: 12px 10px 4px; font-size: var(--fs-2xs); font-weight: 800;
-  letter-spacing: .16em; text-transform: uppercase; color: var(--text-mute); }
+  letter-spacing: .09em; text-transform: uppercase; color: var(--text-mute); }
 .sb-group { display: flex; flex-direction: column; gap: 2px; }
 /* Collapsible group heads. The chevron is the whole affordance, so it
    rotates rather than swaps. */
@@ -5437,7 +5445,7 @@ body.has-rail .shell {
   margin-top: 2px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; }
 .sb-hcm-switch { display: flex; align-items: center; gap: 9px; border: 0;
   background: transparent; cursor: pointer; color: var(--text-mute);
-  font: inherit; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+  font: inherit; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; padding: 0; }
 .sb-hcm-switch .knob { position: relative; width: 40px; height: 22px;
   border-radius: 999px; background: var(--panel-3); border: var(--hairline) solid var(--border);
@@ -5466,7 +5474,7 @@ body.has-rail .shell {
 .standing:hover { color: var(--text-dim); }
 .standing b { font-weight: 600; color: var(--good); }
 .standing b.neg { color: var(--bad); }
-.standing .lbl { text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
+.standing .lbl { text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
 .standing:empty { display: none; }
 
 /* ---------------- The rail ---------------- */
@@ -5476,7 +5484,7 @@ body.has-rail .shell {
 .rail-card { border: var(--hairline) solid var(--border); border-radius: var(--radius);
   background: var(--panel); background-image: var(--grad-card); padding: 15px 16px; }
 .rail-title { display: flex; align-items: center; gap: 8px;
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .14em;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-dim); }
 .rail-more { display: inline-block; margin-top: 12px; color: var(--brand-2);
   font-size: var(--fs-xs); font-weight: 700; text-decoration: none;
@@ -5494,12 +5502,12 @@ body.has-rail .shell {
 .stadium-wrap { position: relative; }
 .top-game-tag { position: absolute; top: 10px; right: 10px; z-index: 3;
   padding: 4px 9px; border-radius: var(--radius-sm); background: var(--grad-brand); color: var(--brand-ink);
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
   box-shadow: var(--glow); }
 .game-time-chip { position: absolute; top: 10px; left: 10px; z-index: 3;
   padding: 4px 9px; border-radius: var(--radius-sm); background: rgba(7, 7, 12, .72);
   border: var(--hairline) solid var(--border); color: var(--text-dim);
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; font-family: var(--font-mono); }
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em; font-family: var(--font-mono); }
 :root[data-theme="light"] .game-time-chip,
 :root[data-theme="light"] .game-wx-chip { background: rgba(255, 255, 255, .78);
   color: var(--text-dim); }
@@ -5521,7 +5529,7 @@ body.has-rail .shell {
 .perf-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px; margin-bottom: 8px; }
 .perf-tile .k { display: block; color: var(--text-mute); font-size: var(--fs-2xs);
-  font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .perf-tile b { display: block; margin-top: 4px; font-family: var(--font-mono);
   font-size: var(--fs-2xl); font-weight: 600; }
 .perf-tile .sub2 { display: block; color: var(--text-mute); font-size: var(--fs-2xs);
@@ -5533,7 +5541,7 @@ body.has-rail .shell {
 .perf-donut text { transform: rotate(90deg); transform-origin: 50px 50px;
   fill: var(--text); }
 .donut-n { font-size: var(--fs-2xl); font-weight: 700; font-family: var(--font-mono); }
-.donut-k { font-size: var(--fs-2xs); fill: var(--text-mute); letter-spacing: .14em;
+.donut-k { font-size: var(--fs-2xs); fill: var(--text-mute); letter-spacing: .08em;
   text-transform: uppercase; }
 .perf-legend { display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-sm);
   color: var(--text-dim); min-width: 0; }
@@ -5562,7 +5570,7 @@ body.has-rail .shell {
 .perf-recent { margin-top: 12px; padding-top: 10px;
   border-top: var(--hairline) solid var(--border-soft); }
 .perf-recent-h { color: var(--text-mute); font-size: var(--fs-2xs);
-  font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
   margin-bottom: 6px; }
 .perf-rrow { display: flex; align-items: baseline; gap: 10px;
   font-size: var(--fs-sm); padding: 2px 0; }
@@ -5600,7 +5608,7 @@ body.has-rail .shell {
 .rv-tile.good .rv-v { color: var(--good); }
 .rv-tile.warn .rv-v { color: var(--warn); }
 .rv-k { margin-top: 6px; font-size: var(--fs-2xs); font-weight: 800;
-  letter-spacing: .16em; text-transform: uppercase; color: var(--text-mute); }
+  letter-spacing: .09em; text-transform: uppercase; color: var(--text-mute); }
 .rv-s { margin-top: 3px; font-size: var(--fs-xs); color: var(--text-mute); }
 .rv-read { display: grid; grid-template-columns: 320px minmax(0, 1fr);
   gap: 22px; align-items: start; margin-top: 18px; }
@@ -5669,7 +5677,7 @@ body.has-rail .shell {
   border-top: var(--hairline) solid var(--border-soft); }
 .lt-head { display: flex; align-items: baseline; justify-content: space-between;
   gap: 10px; margin-bottom: 7px; }
-.lt-t { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .16em;
+.lt-t { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .09em;
   text-transform: uppercase; color: var(--text-mute); }
 .lt-win { font-size: var(--fs-xs); color: var(--text-mute);
   font-variant-numeric: tabular-nums; }
@@ -5954,7 +5962,7 @@ body.has-rail .shell {
 .gc-side { display: inline-flex; align-items: center; gap: 7px; }
 .gc-side .score { font-family: var(--font-mono); font-size: var(--fs-lg); }
 .gc-vs { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800;
-  letter-spacing: .12em; text-transform: uppercase; }
+  letter-spacing: .07em; text-transform: uppercase; }
 .gc-name { margin-top: 7px; font-size: var(--fs-md); font-weight: 700; }
 .gc-venue { margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
 /* The three markets in columns (2026-09-22): the team column, then
@@ -5966,7 +5974,7 @@ body.has-rail .shell {
 .gc-mk { display: grid; gap: 2px; min-width: 0; padding: 5px 6px;
   border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); background: var(--bg); }
 .gc-mk i { font-style: normal; color: var(--text-mute); font-size: var(--fs-2xs);
-  font-weight: 800; letter-spacing: .1em; text-transform: uppercase; min-height: 13px; }
+  font-weight: 800; letter-spacing: .06em; text-transform: uppercase; min-height: 13px; }
 .gc-mk b { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; color: var(--text);
   white-space: nowrap; }
 .gc-mk-teams { text-align: left; border: 0; background: transparent; padding-left: 0; }
@@ -6024,7 +6032,7 @@ body.has-rail .shell {
    looks like the same old website"). On the home they wear the deck's
    head; the sub-line keeps its words, one line down and quieter. */
 #home-deck .section-title { display: block; margin: 0 0 10px; color: var(--text-dim);
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 #home-deck .section-title .sub { display: block; margin-top: 2px; color: var(--text-mute);
   font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0; text-transform: none; }
 #home-deck .hd-sec[data-sec="hero"]:not(:has(#potd-zone > *)),
@@ -6043,7 +6051,7 @@ body.has-deck #rail-live { display: none; }
 .hd-sec { margin: 0 0 18px; }
 .hd-head { display: flex; justify-content: space-between; align-items: baseline;
   margin: 0 0 10px; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 800;
-  letter-spacing: .12em; text-transform: uppercase; }
+  letter-spacing: .07em; text-transform: uppercase; }
 .hd-head a { color: var(--brand-2); text-decoration: none; font-weight: 700;
   letter-spacing: .02em; text-transform: none; }
 .hd-strip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
@@ -6054,7 +6062,7 @@ body.has-deck #rail-live { display: none; }
   background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
 .hd-game-top, .hd-game-foot, .hd-team { display: flex; justify-content: space-between;
   align-items: center; gap: 8px; }
-.hd-lg { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; }
+.hd-lg { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em; }
 .hd-live { display: inline-flex; align-items: center; gap: 5px; color: var(--bad);
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; }
 .hd-live.hold { color: var(--brand-2); }
@@ -6082,7 +6090,7 @@ body.has-deck #rail-live { display: none; }
   border-radius: var(--radius-lg); background: var(--panel); }
 .hd-potd { padding: 12px 14px 4px; border-color: var(--brand); }
 .hd-eyebrow { display: block; color: var(--brand-2); font-size: var(--fs-2xs); font-weight: 800;
-  letter-spacing: .12em; text-transform: uppercase; }
+  letter-spacing: .07em; text-transform: uppercase; }
 .hd-row { display: flex; justify-content: space-between; align-items: center; gap: 12px;
   padding: 10px 0; border-top: var(--hairline) solid var(--border-soft); }
 .hd-row:first-child, .hd-potd .hd-row { border-top: 0; }
@@ -6133,9 +6141,10 @@ body.has-deck #rail-live { display: none; }
 .hd-rw > span:last-child { color: var(--text-dim); font-size: var(--fs-xs); }
 .hd-form { display: flex; gap: 4px; flex: 0 0 auto; }
 .hd-form i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
-  font-style: normal; font-size: var(--fs-2xs); font-weight: 800; color: var(--brand-ink); background: var(--good); }
-.hd-form i.l { background: var(--bad); }
-.hd-form i.p { background: var(--text-mute); }
+  font-style: normal; font-size: var(--fs-2xs); font-weight: 800; color: var(--good);
+  background: color-mix(in oklab, var(--good) 20%, transparent); }
+.hd-form i.l { color: var(--bad); background: color-mix(in oklab, var(--bad) 18%, transparent); }
+.hd-form i.p { color: var(--text-mute); background: var(--fill-tone-2); }
 /* v5 motion: the ribbon rises with the rows, the second a beat behind;
    its five form dots pop in one after another, newest first, inside
    --dur-base each — the whole ribbon has settled with the ring's sweep. */
@@ -6179,7 +6188,7 @@ body.has-deck #rail-live { display: none; }
 /* The prototype's hero: a gold eyebrow, the verdict as a pill, the bet
    in Bodoni, the price line in mono. The card's own pieces, dressed —
    the markup and every field are the ones test_potd_card pins. */
-.potd-hero .player { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
+.potd-hero .player { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--brand-2); }
 .potd-hero .potd-call.is-bet, .potd-hero .potd-call.is-pass { display: inline-flex; align-self: flex-start;
   margin-top: 6px; padding: 5px 11px; border-radius: 999px; }
@@ -6341,7 +6350,7 @@ body.has-deck #rail-live { display: none; }
   border: var(--hairline) solid var(--border); border-radius: 999px;
   background: var(--panel-2);
   font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .1em; color: var(--text-mute); vertical-align: middle; }
+  letter-spacing: .06em; color: var(--text-mute); vertical-align: middle; }
 .lb-card { border: var(--hairline) solid var(--border); border-radius: var(--radius);
   background-color: var(--panel); background-image: var(--grad-card);
   padding: 13px 15px; cursor: pointer;
@@ -6350,10 +6359,10 @@ body.has-deck #rail-live { display: none; }
 .lb-head { display: flex; align-items: center; gap: 10px; }
 .lb-live { display: inline-flex; align-items: center; gap: 6px;
   color: var(--good); font-size: var(--fs-2xs); font-weight: 800;
-  letter-spacing: .12em; text-transform: uppercase; }
+  letter-spacing: .07em; text-transform: uppercase; }
 .lb-sit { color: var(--text-mute); font-size: var(--fs-xs); }
 .lb-league { margin-left: auto; color: var(--text-faint); font-size: var(--fs-2xs);
-  font-weight: 800; letter-spacing: .1em; }
+  font-weight: 800; letter-spacing: .06em; }
 /* WATCH: where the game streams (Ethan, 2026-10-07). One door, the
    service's name on it; a second service as a quiet chip. */
 .watch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -6540,7 +6549,7 @@ body.has-deck #rail-live { display: none; }
      in a top bar that had five (2026-09-22). */
   #theme-toggle { display: none; }
   .more-group h3 { margin: 0 0 8px; color: var(--text-mute);
-    font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
+    font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .07em;
     text-transform: uppercase; }
   /* Rows in two columns, each with the sidebar's own mark — a map, not
      a wall of thirty identical pills (Ethan, 2026-09-22). */
@@ -7531,7 +7540,7 @@ button.rc-day b { font-size: var(--fs-sm); }
   transition: border-color var(--dur-fast) var(--ease-out);
 }
 .tld-card:hover { border-color: var(--brand); }
-.tld-k { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
+.tld-k { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .07em;
   text-transform: uppercase; color: var(--text-mute); }
 .tld-who { font-size: var(--fs-sm); font-weight: 700; color: var(--text); }
 .tld-pos { font-size: var(--fs-2xs); color: var(--text-mute);
@@ -7672,7 +7681,7 @@ button.rc-day b { font-size: var(--fs-sm); }
 .stub-brand { display: inline-flex; align-items: center; gap: 10px;
   text-decoration: none; margin-bottom: 34px; }
 .stub-words { font-family: var(--font-display); font-size: var(--fs-lg);
-  font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
   color: var(--text); }
 .stub-words span { color: var(--text-mute); font-weight: 600; }
 .stub-num { font-family: var(--font-display); font-size: var(--fs-stub);
@@ -8672,7 +8681,7 @@ body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)
   border-bottom: var(--hairline) solid var(--border); }
 /* The lockup: our mark, then the section name over its line. */
 .pbp-parkhead-t { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.pbp-parkhead-t b { letter-spacing: .1em; font-size: var(--fs-sm); }
+.pbp-parkhead-t b { letter-spacing: .06em; font-size: var(--fs-sm); }
 .pbp-parkhead-t span { display: block; font-size: var(--fs-xs); color: var(--text-mute);
   letter-spacing: .08em; text-transform: uppercase; }
 /* THE VENUE PILL (Ethan's render). The conditions belong to the venue,
@@ -8954,7 +8963,7 @@ body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)
    the book's price, our chance. Our side is outlined in the brand. */
 .ou-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 10px; margin: 0 0 10px; }
-.ou-views { display: inline-flex; border: var(--hairline) solid var(--border); border-radius: 999px;
+.ou-views { display: inline-flex; border: var(--hairline) solid transparent; background: var(--fill-tone); border-radius: 999px;
   padding: 2px; gap: 2px; }
 .ou-view { min-height: 30px; padding: 4px 14px; border: none; border-radius: 999px; cursor: pointer;
   background: transparent; color: var(--text-mute); font-family: var(--font-sans);
@@ -8973,7 +8982,7 @@ body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)
 .ou-proj { margin-left: 6px; color: var(--text-mute); font-size: var(--fs-xs); }
 .ou-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ou-side { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px;
-  border: var(--hairline) solid var(--border); border-radius: var(--radius); background: var(--bg); }
+  border: var(--hairline) solid transparent; border-radius: var(--radius); background: var(--fill-tone); }
 .ou-side.ours { border-color: var(--brand-2);
   background: color-mix(in oklab, var(--brand) 12%, transparent); }
 .ou-lab { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
@@ -9037,8 +9046,8 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
   border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text-dim);
   font: inherit; font-size: var(--fs-xs); font-weight: 700; }
 .ask-pill { display: inline-block; align-self: flex-start; padding: 4px 12px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--gold); color: var(--gold); font-size: var(--fs-sm); font-weight: 700;
-  letter-spacing: .04em; }
+  border: var(--hairline) solid transparent; background: color-mix(in oklab, var(--gold) 16%, transparent); color: var(--gold);
+  font-size: var(--fs-sm); font-weight: 700; letter-spacing: .04em; }
 /* The mascot (qbotHTML): the render, and its face drawn over it, one box. */
 .qbot { position: relative; display: inline-block; flex-shrink: 0; }
 .qbot picture, .qbot img, .qbot .qbot-face { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -9088,7 +9097,7 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
 .ask-sub { margin: -4px 0 4px; display: flex; flex-direction: column; gap: 2px;
   color: var(--text-dim); font-size: var(--fs-xl); }
 .ask-intro { display: flex; gap: 14px; align-items: flex-start; padding: 18px 16px;
-  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel); }
+  border: var(--hairline) solid transparent; border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--glow-card); }
 .ask-intro-ic { flex-shrink: 0; color: var(--gold); padding-top: 2px; }
 .ask-intro b { display: block; margin-bottom: 4px; color: var(--text); font-size: var(--fs-lg); }
 .ask-intro p { margin: 0; color: var(--text-dim); font-size: var(--fs-md); }
@@ -9096,9 +9105,9 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
 .ask-help { white-space: nowrap; }
 .ask-suggest { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .ask-sug { display: flex; align-items: center; gap: 10px; padding: 14px 12px; text-align: left; cursor: pointer;
-  border-radius: var(--radius-lg); border: var(--hairline) solid var(--border-soft); background: var(--panel);
-  color: var(--text); font: inherit; font-size: var(--fs-sm); }
-.ask-sug:hover { border-color: var(--brand-2); }
+  border-radius: var(--radius-lg); border: var(--hairline) solid transparent; background: var(--panel);
+  color: var(--text); font: inherit; font-size: var(--fs-sm); box-shadow: var(--glow-card); }
+.ask-sug:hover { background: var(--panel-2); }
 .ask-sug-ic { flex-shrink: 0; display: grid; color: var(--gold); }
 /* A phone's third of a row is too narrow for an icon beside the words:
    the icon goes on top, and the three still sit side by side. */
@@ -9169,7 +9178,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .ask-x { border: none; background: transparent; color: var(--text-mute); cursor: pointer;
   font-size: var(--fs-md); min-width: 28px; min-height: 28px; }
 .ask-form { display: flex; align-items: center; gap: 10px; padding: 7px 7px 7px 6px;
-  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--panel); }
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel-2); }
 .ask-form:focus-within { border-color: var(--gold); }
 .ask-clip { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; padding: 0 8px 0 4px;
   border: 0; border-right: var(--hairline) solid var(--border); background: none; color: var(--text-dim);
@@ -9263,7 +9272,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   min-height: clamp(150px, 14vw, 200px); align-items: center; }
 .pmx-hero-txt { position: relative; z-index: 2; pointer-events: none; }
 .pmx-hero-txt * { pointer-events: auto; }
-.pmx-eyebrow { font-size: var(--fs-xs); letter-spacing: .28em; text-transform: uppercase; color: var(--brand); opacity: .85; }
+.pmx-eyebrow { font-size: var(--fs-xs); letter-spacing: .15em; text-transform: uppercase; color: var(--brand); opacity: .85; }
 .pmx-title { font-family: var(--font-sans); font-weight: 800; font-size: clamp(28px, 2.6vw, 46px); line-height: 1;
   letter-spacing: -.01em; margin: 4px 0 8px; color: var(--text); display: flex; align-items: flex-end; gap: .22em; flex-wrap: wrap; }
 .pmx-title > span:first-of-type { color: var(--brand); }
@@ -9307,7 +9316,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .qt-brand-t b { font-family: var(--font-headline); font-size: clamp(var(--fs-3xl), 4.2vw, 58px);
   font-weight: 700; line-height: var(--lh-tight); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
 .qt-brand-t span { color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600;
-  letter-spacing: .3em; text-transform: uppercase; }
+  letter-spacing: .17em; text-transform: uppercase; }
 #quick-tools .qt-chip { gap: 14px; padding: 16px 16px 16px 18px;
   border-color: color-mix(in oklab, var(--brand) 38%, var(--border-soft)); }
 #quick-tools .qt-chip:hover { border-color: var(--brand); }
@@ -9382,7 +9391,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   .qt-brand { min-height: 0; padding: 8px 2px; background: none; border: 0; }
   .qt-brand-t b { font-size: var(--fs-lg); }
   .qt-brand-t { gap: 6px; }
-  .qt-brand-t span { font-size: var(--fs-2xs); letter-spacing: .2em; }
+  .qt-brand-t span { font-size: var(--fs-2xs); letter-spacing: .11em; }
   .potd-ball { width: 100%; opacity: .5; }
   /* SMALLER ON A PHONE (Ethan, 2026-09-27, circling the quick links and
      the Pick of the Day: "They both make up too much page space"). The
@@ -9543,7 +9552,7 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 
 .gp-eyebrow {
   display: flex; align-items: center; gap: 8px;
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
   color: var(--brand);
 }
 
@@ -9574,7 +9583,7 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .gs-scn { padding: 12px; border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); background: var(--bg); }
 .gs-scn.is-expected { border-color: var(--brand); }
 .gs-scn-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-weight: 700; }
-.gs-tag { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--brand); }
+.gs-tag { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
 .gs-n { margin-left: auto; font-size: var(--fs-xs); font-weight: 600; color: var(--text-mute); }
 .gs-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .gs-chip {
@@ -9637,7 +9646,7 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
    its word in each cell, green the top quarter and red the bottom. */
 .ms-tape { padding: 12px 14px; max-width: 680px; }
 .ms-note { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
-.ms-sub { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+.ms-sub { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
   color: var(--text-dim); margin-bottom: 8px; }
 .ms-sub-top { margin: 6px 0 0; }
 .ms-edges, .ms-inj, .ms-micros, .ms-locked { padding: 12px 14px; }
@@ -9693,7 +9702,7 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   .sct-grid { grid-template-columns: 1fr 1fr; }
 }
 .sct-list { display: grid; align-content: start; padding: 4px 14px 8px; }
-.sct-head { padding: 10px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em;
+.sct-head { padding: 10px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .07em;
   text-transform: uppercase; color: var(--text); }
 .sct-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
   width: 100%; padding: 10px 0; border: 0; border-top: var(--hairline) solid var(--border-soft);
@@ -10611,34 +10620,44 @@ button.set-item:active, a.set-item:active, label.set-item:active { background: v
 .code-in::placeholder { text-transform: none; letter-spacing: 0; font-weight: 400; }
 
 /* ==========================================================================
-   THE LIGHTS ON (2026-10-27). Ethan: "i feel like we can use more colors
-   and shit throughout the site too to be more exciting ... animations and
-   glowing shit." (He said it in August too: "the website feels so flat".)
-   Gold stays the brand and the interface's one accent (his call,
-   2026-08-23); what comes on around it:
+   THE BLEND (2026-10-27). Ethan, the night the lights went on: "We need the
+   whole site to feel more blended with the colors and everything you added.
+   Everything feels so sharp ... Look up research on like what people like to
+   see aesthetically and realize what apps actually look like ... The colors
+   look weird. The textures look weird ... The skins of everything look
+   weird." The research and the before-and-after are in docs/VISUAL_AUDIT.md
+   ("The blend"); what it changed, here and in the tokens:
 
-   - EVERY LEAGUE HAS ITS OWN LIGHT. Each sport button wears its league's
-     colour, the open one lit with it, and the top of every page glows in
-     the league in view (html[data-league], app.js markSportRow): football
-     gold, college blaze, baseball sky, basketball violet, the WNBA coral,
-     hockey ice, the UFC red.
-   - GLOW WHERE SOMETHING IS ON: the open league, a gold button under the
-     pointer, the top tiers' rings, a card lifted under the pointer, the
-     Live disc while games are on, the best pick's moving rim. Each through
-     a --glow-* token, so every glow on the site is still one system
-     (tests/test_design_tells).
-   - MOTION ON ARRIVAL. A page rises in, section by section, as it opens
-     (.view.enter, app.js _switchViewNow): once, never on a redraw, so a
-     live page redrawing every five seconds never flickers. The brand's
-     title catches the light; a button gives under a tap.
-   - COLOUR THAT MEANS SOMETHING. Most Likely's three tiers are three
-     colours (green, gold, sky); the home's four doors are four; a chip
-     that is up or down is tinted, not only outlined.
+   - ONE FACE. Inter for words and numbers (top of this sheet), the numbers
+     in its tabular figures, set once on the root.
+   - A NEUTRAL GROUND. Graphite, not brown: the ramp's chroma fell from
+     ~0.015 to ~0.004 in OKLCH, and a card sits a clear step above the page,
+     so a surface is told apart by its tone and needs no outline. A first
+     impression is formed in half a second, mostly from how busy and how
+     colourful a page is, and the moderate middle of both is liked best
+     (Reinecke et al., CHI 2013; Lindgaard et al., 2006).
+   - FILLED, NOT OUTLINED. Chips, pills, buttons, price boxes and the
+     league crests are tonal fills; the outlines and the accent stripes
+     went. People prefer curved contours to sharp ones (Bar & Neta, 2006),
+     and the radii grew a step: 10, 14, 18.
+   - LIGHT THAT BLENDS. The league in view is a wide, faint wash at the top
+     of the page, not a blob in a corner; a glow is blurred light with no
+     hard ring; the night's best pick wears a still gold edge rather than a
+     spinning rainbow; the home's four doors share the gold.
+   - PHOTOGRAPHS AS ATMOSPHERE. Every venue photo is graded the same
+     (--venue-grade): less colour, less light, so a stadium reads as mood
+     behind the numbers.
+   - COLOUR THAT MEANS SOMETHING, kept: each league its own hue (one family
+     now, equal lightness and chroma), green for a hit and red for a miss,
+     the three tiers. Gold is still the brand and the one accent.
 
-   A phone keeps its budget: nothing here blurs, no layer per card, and the
-   one endless animation that repaints is a single card's rim. Reduced
-   motion zeroes all of it (the universal block above).
+   A phone keeps its budget: nothing here blurs (the iOS crash note at
+   .topbar), no layer per card, and reduced motion zeroes every animation
+   (the universal block above).
    ========================================================================== */
+html { font-variant-numeric: tabular-nums; }
+body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  background-image: var(--grad-aurora); background-repeat: no-repeat; }
 :root[data-league="cfb"] { --league: var(--lg-cfb); }
 :root[data-league="mlb"] { --league: var(--lg-mlb); }
 :root[data-league="nba"] { --league: var(--lg-nba); }
@@ -10646,14 +10665,17 @@ button.set-item:active, a.set-item:active, label.set-item:active { background: v
 :root[data-league="nhl"] { --league: var(--lg-nhl); }
 :root[data-league="ufc"] { --league: var(--lg-ufc); }
 
-/* The league in view, as light at the top of the page. It scrolls away
-   with the page: a mood, not a fixture. */
-body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
+/* THE BARS: the page runs up under the top bar and the league row with no
+   rule between them; the menu and the freshness pill are fills. */
+.topbar, .sportbar { border-bottom-color: transparent; }
+.menu-toggle { border-color: transparent; background: var(--fill-tone); border-radius: var(--radius); }
+.live-refresh { border-color: transparent; background: var(--fill-tone); }
 
-/* EVERY LEAGUE'S BUTTON IN ITS OWN COLOUR. */
+/* EVERY LEAGUE'S BUTTON IN ITS OWN COLOUR, softly: the crest a fill tinted
+   with the league when it is open, a thin ring of it and its light. */
 .sportbar-in .sport-btn {
   --hue: var(--brand);
-  --glow-hue: 0 0 0 1px color-mix(in oklab, var(--hue) 65%, transparent), 0 0 22px color-mix(in oklab, var(--hue) 45%, transparent);
+  --glow-hue: 0 0 0 1.5px color-mix(in oklab, var(--hue) 70%, transparent), 0 6px 22px color-mix(in oklab, var(--hue) 28%, transparent);
 }
 .sportbar-in .sport-btn[data-sport="nfl"] { --hue: var(--lg-nfl); }
 .sportbar-in .sport-btn[data-sport="cfb"] { --hue: var(--lg-cfb); }
@@ -10665,87 +10687,127 @@ body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
 .sportbar-in .sport-btn:hover { color: var(--hue); }
 .sportbar-in .sport-btn.active { color: var(--hue); border-bottom-color: var(--hue); }
 @media (max-width: 760px) {
-  .sportbar-in .sport-btn .crest { color: color-mix(in oklab, var(--hue) 72%, var(--text-dim));
-    border-color: color-mix(in oklab, var(--hue) 22%, var(--border)); }
-  .sportbar-in .sport-btn.active .crest { outline-color: var(--hue); color: var(--hue); box-shadow: var(--glow-hue);
-    background: color-mix(in oklab, var(--hue) 16%, var(--panel)); }
+  .sportbar-in .sport-btn .crest { border-color: transparent; background: var(--fill-tone);
+    color: color-mix(in oklab, var(--hue) 80%, var(--text-dim)); }
+  .sportbar-in .sport-btn.active .crest { outline-color: transparent; color: var(--hue); box-shadow: var(--glow-hue);
+    background: color-mix(in oklab, var(--hue) 20%, var(--panel)); }
   body.ask-open .sportbar-in .sport-btn.active { color: var(--hue); border-bottom-color: var(--hue); }
 }
 @media (min-width: 1280px) {
-  .topbar .sportbar-in .sport-btn.active { border-color: var(--hue); color: var(--hue); box-shadow: var(--glow-hue);
+  .topbar .sportbar-in .sport-btn.active { border-color: transparent; color: var(--hue); box-shadow: var(--glow-hue);
     background: color-mix(in oklab, var(--hue) 15%, transparent); }
 }
 
-/* GOLD THAT GLOWS: the buttons. A primary button is a lit bar of gold; any
-   button under the pointer glows; every one gives a little under a tap. */
+/* SURFACES: a card is its own tone with a soft lift; a chip, a pill, a
+   button and a price box are fills. Meaning keeps its colour (up, down,
+   the tier that is on). */
+.card, .ob-card, .qt-chip, .hd-card { border-color: transparent; }
+.card, .ob-card, .hd-card { box-shadow: var(--glow-card); }
+.btn, .btn.ghost, .chip, .subnav-btn, .ob-pill, .ob-tier-chip, .ob-filter, .ob-view-btn, .mode-btn,
+.hd-o, .ob-odds, .gc-mk { border-color: transparent; background-color: var(--fill-tone); }
+.btn:hover, .btn.ghost:hover, .subnav-btn:hover, .mode-btn:hover { border-color: transparent; background-color: var(--fill-tone-2); }
+.prof-tab, .tf-btn, .stk-namebox button, .msg-tabs, .rec-scope, .hd-chip, .lb-chip, .more-pill, .mbc-chip, .al-cat,
+.pbp-parkchip, .ask-chip, .gs-chip, .theme-toggle { border-color: transparent; background-color: var(--fill-tone); }
+.lg-badge, .ml-tag, .ms-read-tag, .status-badge, .hd-ribbon { border-color: transparent; }
+.hd-ribbon { box-shadow: var(--glow-card); }
+.why-toggle, .ob-rank, .game-time-chip, .game-wx-chip, .strip-controls select, .ob-sort select { border-color: transparent; }
+.strip-controls select, .ob-sort select { background-color: var(--fill-tone); }
+.ob-pill.gold, .mode-btn[aria-pressed="true"], .ob-tier-chip.on, .ob-view-btn.on {
+  border-color: transparent; background-color: color-mix(in oklab, var(--brand) 16%, transparent); }
+.ob-tier-chip.tier-top.on { border-color: transparent; background-color: color-mix(in oklab, var(--good) 16%, transparent); }
+.ob-filter.on { background-color: var(--brand); }
+.hd-p { border-color: transparent; background-color: color-mix(in oklab, var(--good) 14%, transparent); }
+.chip.up { background-color: color-mix(in oklab, var(--good) 14%, transparent); }
+.chip.down { background-color: color-mix(in oklab, var(--bad) 13%, transparent); }
+.gc-mk-teams { background-color: transparent; }
+/* A notice is a tint, not a stripe down its side. The cards that carried a
+   coloured stripe in their own style (app.js, the rooms) name the colour
+   instead, as --tone, and wear it as light from the left edge: a stripe
+   curls into a crescent on a rounded card. */
+.slate-horizon, .ls-note { border-left-color: transparent; }
+[style*="--tone:"] {
+  --tone: var(--brand);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
+/* THE DESKTOP'S BAR AND COLUMN: the league group, the search, the theme
+   button and the column's three tiles are fills; the open page is a gold
+   tint, not a stripe. */
+.topbar .sportbar-in, .ns-field, .theme-toggle, .sb-app { border-color: transparent; background-color: var(--fill-tone); }
+.tb-ask { border-color: transparent; }
+.sb-item.active { box-shadow: none; background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.ob-view { border-color: transparent; background: color-mix(in oklab, var(--brand) 14%, transparent); letter-spacing: .04em; }
+/* A pick on a wide screen keeps its name on one line: the four checks run
+   under it, and the price, the chance and the doors stand at the right. */
+@media (min-width: 901px) {
+  .ob-card { grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas: "rank who odds ring door view" "rank checks odds ring door view"; }
+  .ob-checkcol { flex-direction: row; flex-wrap: wrap; gap: 2px 12px; }
+}
+
+/* GOLD THAT GLOWS: the primary button is a bar of gold, lit under the
+   pointer; Bet it is a gold-tinted pill on a card, solid on a pick's own
+   page; anything gives a little under a tap. */
 .btn.primary, .betit { background-image: var(--grad-gold-btn); }
 .btn.primary:hover, .betit:hover, .betit:focus-visible { background-image: var(--grad-gold-btn); box-shadow: var(--glow-gold); }
-.btn:hover { box-shadow: var(--glow-gold); }
-.btn.ghost:hover { box-shadow: none; }
+.betit { font-family: var(--font-sans); }
+.betit-box.mini .betit { border-color: transparent; background-image: none; background-color: color-mix(in oklab, var(--brand) 16%, transparent); }
+.betit-box.mini .betit:hover { background-color: color-mix(in oklab, var(--brand) 26%, transparent); box-shadow: var(--glow-gold); }
 .btn:active, .betit:active, .qt-chip:active, .ask-act:active { transform: scale(.97); }
 
-/* A CARD LIFTS TO THE POINTER, lit at the rim. Mouse and trackpad only: a
-   thumb scrolling a list would light everything it crosses. */
+/* A CARD LIFTS TO THE POINTER. Mouse and trackpad only: a thumb scrolling
+   a list would lift everything it crosses. */
 @media (hover: hover) and (pointer: fine) {
   .card, .ob-card {
     transition: border-color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out),
                 box-shadow var(--dur-base) var(--ease-out); }
-  .card:hover, .ob-card:hover { transform: translateY(-3px); box-shadow: var(--glow-lift); }
+  .card:hover, .ob-card:hover { transform: translateY(-2px); box-shadow: var(--glow-lift); }
 }
 
-/* THE HOME'S FOUR DOORS, FOUR COLOURS: Fantasy violet, Most Likely green,
-   Edge gold, Bankroll sky — each icon lit in its own, the tile washed with
-   it, glowing under the pointer. */
-.qt-row > .qt-chip {
-  --hue: var(--brand);
-  --glow-hue: 0 0 0 1px color-mix(in oklab, var(--hue) 60%, transparent), 0 0 24px color-mix(in oklab, var(--hue) 32%, transparent);
-  --grad-door: linear-gradient(135deg, color-mix(in oklab, var(--hue) 17%, var(--panel)), var(--panel) 72%);
-  background: var(--grad-door); border-color: color-mix(in oklab, var(--hue) 40%, var(--border-soft)); }
-.qt-row > .qt-chip:nth-child(1) { --hue: var(--lg-nba); }
-.qt-row > .qt-chip:nth-child(2) { --hue: var(--good); }
-.qt-row > .qt-chip:nth-child(4) { --hue: var(--sky); }
-.qt-row > .qt-chip .ic { color: var(--hue); filter: drop-shadow(0 0 8px color-mix(in oklab, var(--hue) 60%, transparent)); }
-.qt-row > .qt-chip:hover { border-color: var(--hue); box-shadow: var(--glow-hue); }
-.qt-row > .qt-chip:hover .qt-go { color: var(--hue); }
-
-/* THE BRAND CATCHES THE LIGHT: gold, with a sweep of light across it every
-   few seconds. */
+/* THE HOME: the four doors in one voice — the gold icon on the card's own
+   tone — and the line under the name said, not spelled out. */
+.qt-row > .qt-chip, [id="quick-tools"] .qt-chip { border-color: transparent; background-image: none; box-shadow: var(--glow-card); }
+.qt-row > .qt-chip:hover, [id="quick-tools"] .qt-chip:hover { border-color: transparent; box-shadow: var(--glow-card), var(--glow-gold); }
+.qt-row > .qt-chip:hover .qt-go { color: var(--brand); }
+.qt-brand-t span { color: var(--text-mute); letter-spacing: .08em; }
 .qt-brand-t b { background: var(--grad-shine) 0 0 / 250% 100%; -webkit-background-clip: text; background-clip: text;
   color: transparent; animation: lightShine 7s var(--ease-out) infinite; }
 @keyframes lightShine { 0%, 55% { background-position: 100% 0; } 100% { background-position: -150% 0; } }
 
+/* VENUES AS ATMOSPHERE: one grade for every photograph, and the chips on it
+   are dark glass rather than outlined boxes. */
+.venue-photo { filter: var(--venue-grade); }
+.game-time-chip, .game-wx-chip { font-family: var(--font-sans); letter-spacing: .02em; }
+.ob-hero { border-color: transparent; }
+.ob-hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: var(--grad-hero-veil); }
+.ob-hero > * { position: relative; }
+
 /* MOST LIKELY'S TIERS IN THREE COLOURS — Top green, Strong gold, Worth a
-   look sky — the top two rings lit, and the night's best pick (number one) in a
-   moving rim of the palette. */
+   look sky — and the night's best pick (number one) under a still gold
+   edge: a layer 1px proud of the card, the card's own ground over the
+   middle, so only the edge shows. */
 .ob-ring.tier-look .ob-ring-fg { stroke: var(--sky); }
 .ob-tierword.tier-look { color: var(--sky); }
-.ob-ring.tier-top svg { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--good) 65%, transparent)); }
-.ob-ring.tier-strong svg { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--brand) 60%, transparent)); }
-.ob-card.tier-top { box-shadow: var(--glow-good); border-color: color-mix(in oklab, var(--good) 40%, var(--border-soft)); }
-/* The rim is a layer behind the card, 2px proud of it: the card's own
-   ground covers the middle, so only the ring shows and the card keeps its
-   hairline (tests/test_hairlines). */
-@property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-.ob-card.is-first { position: relative; z-index: 0; border-color: transparent; box-shadow: var(--glow-gold); }
-.ob-card.is-first::before {
-  --spin: 0deg;
-  --rim: conic-gradient(from var(--spin), var(--brand), var(--lg-cfb), var(--lg-wnba), var(--lg-nba), var(--sky), var(--good), var(--brand));
-  content: ""; position: absolute; inset: -2px; z-index: -1; border-radius: var(--radius-lg);
-  background: var(--rim); animation: lightSpin 8s linear infinite; pointer-events: none; }
+.ob-card.tier-top { border-color: transparent; }
+.ob-rank { background: color-mix(in oklab, var(--brand) 16%, transparent); }
+.ob-card.is-first { position: relative; z-index: 0; border-color: transparent; box-shadow: var(--glow-card), var(--glow-gold); }
+.ob-card.is-first::before { content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: calc(var(--radius-lg) + 1px);
+  background: var(--grad-rim-gold); pointer-events: none; }
 .ob-card.is-first::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: var(--radius-lg);
   background: var(--grad-ob-card); pointer-events: none; }
-@keyframes lightSpin { to { --spin: 360deg; } }
-
-/* A CHIP THAT IS UP OR DOWN IS TINTED, not only outlined. */
-.chip.up { background: color-mix(in oklab, var(--good) 13%, transparent); border-color: color-mix(in oklab, var(--good) 45%, transparent); }
-.chip.down { background: color-mix(in oklab, var(--bad) 13%, transparent); border-color: color-mix(in oklab, var(--bad) 45%, transparent); }
-.grade.strong { box-shadow: var(--glow-good); }
-
-/* THE PHONE'S TAB BAR: the open tab's icon glows, and the Live disc
-   breathes a gold halo while games are on (its badge shows). Opacity and
-   scale only, so the halo never repaints the bar. */
+/* On a phone the price runs under the name, a pill of its own, so the
+   name and the bet keep the card's width. */
 @media (max-width: 760px) {
-  .tb-item.active svg { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--brand) 70%, transparent)); }
+  .ob-card { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who ring" "odds ring" "checks checks"; row-gap: 8px; }
+  .ob-odds { flex-direction: row; justify-self: start; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 999px; }
+}
+
+/* THE PHONE'S TAB BAR: the open tab's icon has a soft light under it, and
+   the Live disc breathes a gold halo while games are on (its badge shows).
+   Opacity and scale only, so the halo never repaints the bar. */
+@media (max-width: 760px) {
+  .tabbar { border-top-color: transparent; }
+  .tb-item.active svg { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--brand) 45%, transparent)); }
   .tb-center-disc:has(.tb-badge:not([hidden]))::after { content: ""; position: absolute; inset: -5px; border-radius: 50%;
     box-shadow: var(--glow-gold); pointer-events: none; animation: lightHalo 2.4s var(--ease-out) infinite; }
 }
@@ -10755,7 +10817,7 @@ body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
    to the view it switches to and takes it off 900ms later). Filled only
    BACKWARDS: once a section has landed it holds no transform, so nothing
    fixed inside it is ever placed against a moving box. */
-@keyframes lightRise { from { opacity: 0; transform: translateY(12px); } }
+@keyframes lightRise { from { opacity: 0; transform: translateY(10px); } }
 .view.enter > :nth-child(-n+8), .view.enter .ob-cards > .ob-card:nth-child(-n+6),
 .view.enter .cards > .card:nth-child(-n+6) { animation: lightRise var(--dur-slow) var(--ease-out) backwards; }
 .view.enter > :nth-child(2), .view.enter .ob-cards > .ob-card:nth-child(2), .view.enter .cards > .card:nth-child(2) {
@@ -10767,21 +10829,17 @@ body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
 .view.enter > :nth-child(n+5), .view.enter .ob-cards > .ob-card:nth-child(n+5), .view.enter .cards > .card:nth-child(n+5) {
   animation-delay: calc(var(--dur-fast) * 1.4); }
 
-/* ASK QELLYS, THE AI, LOOKS LIKE ONE: the pill glows, a sheen crosses it
-   every few seconds and its sparkle twinkles. A transform on a layer of
+/* ASK QELLYS, THE AI: the pill carries a soft gold light, a sheen crosses
+   it every few seconds and its sparkle twinkles. A transform on a layer of
    its own, so the bar never repaints for it. */
 .tb-ask { position: relative; overflow: hidden; box-shadow: var(--glow-gold); }
 .tb-ask::after { content: ""; position: absolute; inset: 0; background: var(--grad-sheen-white);
-  transform: translateX(-120%); animation: sheen 5s var(--ease-out) infinite; pointer-events: none; }
-.tb-ask svg { animation: lightTwinkle 5s var(--ease-out) infinite; }
-@keyframes lightTwinkle { 0%, 80%, 100% { transform: none; } 88% { transform: rotate(18deg) scale(1.25); } }
+  transform: translateX(-120%); animation: sheen 6s var(--ease-out) infinite; pointer-events: none; }
+.tb-ask svg { animation: lightTwinkle 6s var(--ease-out) infinite; }
+@keyframes lightTwinkle { 0%, 80%, 100% { transform: none; } 88% { transform: rotate(18deg) scale(1.2); } }
 
-/* THE RECORD'S RINGS GLOW in their own colour: green up, red down. */
-.hd-ring:not([data-pc="0"]) { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--good) 45%, transparent)); }
-.hd-ring.neg:not([data-pc="0"]) { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--bad) 45%, transparent)); }
-
-/* A SECTION'S ICON IS THE LEAGUE'S COLOUR: gold on football, violet on
-   basketball, ice on hockey — the page says which league it is about. */
+/* A SECTION'S ICON IS THE LEAGUE'S COLOUR: the page says which league it
+   is about. */
 .section-title .st-ico { color: var(--league); }
 
 /* HOW OFTEN HE HAS CLEARED IT (app.js hitChipsHTML): the side, then the last
@@ -10790,15 +10848,12 @@ body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
 .hit-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
 .hit-chips em { font-style: normal; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; color: var(--text-mute); }
-.hit-chip { display: inline-flex; align-items: baseline; gap: 3px; padding: 1px 7px; border-radius: 999px;
-  border: var(--hairline) solid var(--border); background: var(--fill-hover); color: var(--text-dim);
-  font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; }
+.hit-chip { display: inline-flex; align-items: baseline; gap: 3px; padding: 2px 8px; border-radius: 999px;
+  background: var(--fill-tone); color: var(--text-dim); font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; }
 .hit-chip b { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text); }
-.hit-chip.up { border-color: color-mix(in oklab, var(--good) 45%, transparent);
-  background: color-mix(in oklab, var(--good) 13%, transparent); }
+.hit-chip.up { background: color-mix(in oklab, var(--good) 15%, transparent); }
 .hit-chip.up b { color: var(--good); }
-.hit-chip.down { border-color: color-mix(in oklab, var(--bad) 40%, transparent);
-  background: color-mix(in oklab, var(--bad) 11%, transparent); }
+.hit-chip.down { background: color-mix(in oklab, var(--bad) 13%, transparent); }
 .hit-chip.down b { color: var(--bad); }
 
 /* A WIN, CELEBRATED (app.js winParty): confetti in the palette, thrown up from
@@ -10820,17 +10875,17 @@ body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
 }
 
 /* EVERY GAME IN ITS TEAMS' COLOURS (app.js teamVivid; Apple Sports' tiles):
-   a stripe from the away side's colour to the home side's across the top of
-   the card's facts, and their light washed faintly under the names. */
+   a fine line from the away side's colour to the home side's across the top
+   of the card's facts, and their light washed faintly under the names. */
 .game-card {
   --ta: var(--brand);
   --tb: var(--brand-2);
   --grad-teams: linear-gradient(90deg, var(--ta), var(--tb));
-  --grad-teams-wash: linear-gradient(90deg, color-mix(in oklab, var(--ta) 16%, transparent), transparent 45%, transparent 55%, color-mix(in oklab, var(--tb) 16%, transparent));
+  --grad-teams-wash: linear-gradient(90deg, color-mix(in oklab, var(--ta) 12%, transparent), transparent 45%, transparent 55%, color-mix(in oklab, var(--tb) 12%, transparent));
 }
 .game-card .game-info { position: relative; background-image: var(--grad-teams-wash); }
-.game-card .game-info::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
-  background: var(--grad-teams); }
+.game-card .game-info::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: var(--grad-teams); opacity: .6; }
 
 /* ==========================================================================
    GLASS FOR WHAT FLOATS (2026-10-24, Ethan: "carry the Liquid Glass look onto

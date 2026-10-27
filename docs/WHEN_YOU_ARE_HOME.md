@@ -5344,8 +5344,8 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 **EW. Tonight, 2026-10-26 — everything above, in order** (Ethan: "give me
 all the code to run"). Every command runs on the box (`ssh` in first).
 
-1. The box has the latest code. It should print `The board comes alive;
-   price alerts; your starters on tonight's board` or a newer line:
+1. The box has the latest code. It should print `The blend: one face, a
+   graphite ground, fills not outlines` or a newer line:
 
    ```
    git -C /srv/qellys log --oneline -1
@@ -5395,11 +5395,11 @@ all the code to run"). Every command runs on the box (`ssh` in first).
    site's own account: account … — big plays post as it." If it says NONE
    instead, paste it back and I'll say which part to redo.
 
-4. Every read-only check since the chat shipped (DX to FM) in one go,
+4. Every read-only check since the chat shipped (DX to FN) in one go,
    a couple of minutes. Paste back what it prints:
 
    ```
-   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM 2>&1 | tee /tmp/round.txt
+   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM FN 2>&1 | tee /tmp/round.txt
    ```
 
 5. On your phone: swipe Qellys up out of the app switcher, open it again,
@@ -6042,6 +6042,40 @@ The checks in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh FM 2>&1 | tee /tmp/fm.txt
+```
+
+**FN. The blend** (step 222). Ethan: "We need the whole site to feel more
+blended ... Everything feels so sharp ... realize what apps actually look
+like." The whole site, redone from the research up (docs/VISUAL_AUDIT.md, "The
+blend"):
+
+- **One clean face.** Inter for every word and number (numbers keep even
+  widths, so odds still line up); Bodoni stays on the brand and the Pick of
+  the Day headline.
+- **A graphite ground, not brown.** Cards sit a clear step above the page, so
+  nothing needs an outline; text greys are grey, not beige.
+- **Fills, not outlines.** Chips, pills, buttons, price boxes, the league
+  crests and filters are soft filled shapes; the open one is tinted. Corners
+  are rounder. Coloured stripes on cards became a soft wash of the colour.
+- **Light that blends.** A faint wash of the league's colour across the top
+  of the page; glows without hard rings; the best pick under a still gold
+  edge (the rainbow is gone); the home's four doors all gold; league colours
+  one matched family.
+- **Stadium photos as atmosphere**: the same muted grade on every one.
+- Desktop: the best pick's name is on one line again; the top bar, search
+  and sidebar are fills.
+
+Nothing to set. Read-only check, any time. It prints `1` once this version
+is live (the new face is served):
+
+```
+curl -s https://qellysbook.com/css/styles.css | grep -c 'fonts/inter.woff2'
+```
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh FN 2>&1 | tee /tmp/fn.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

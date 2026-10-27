@@ -3679,7 +3679,7 @@ async function renderPickOfTheDay() {
      explain a failure when the failure is well-behaved is not much of
      an explanation.) */
   if (d.pick_of_the_day_error) {
-    host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+    host.innerHTML = `<div class="card" style="--tone:var(--warn);margin-bottom:12px">
       <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} Pick of the Day hit an error this build:
       <code>${escapeHtml(String(d.pick_of_the_day_error))}</code></p></div>`;
     return;
@@ -3766,7 +3766,7 @@ async function renderPickOfTheDay() {
       ? `We do not put the day’s name on a bet we would not place. The board below is everything the ${escapeHtml(league)} slate priced today.`
       : (stripWhy && noteRaw.replace(/\.$/, "") === stripWhy.replace(/\.$/, "") ? "" : escapeHtml(noteRaw));
     const art = potdBallArt();
-    host.innerHTML = `<div class="card${art ? " potd-hero" : ""}"${art ? ' data-art="ball"' : ""} style="border-left:3px solid var(--brand);margin-bottom:12px">
+    host.innerHTML = `<div class="card${art ? " potd-hero" : ""}"${art ? ' data-art="ball"' : ""} style="--tone:var(--brand);margin-bottom:12px">
       ${art}<div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
       ${potdCallStrip(got)}
       ${why ? `<div class="potd-why" style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">${why}</div>` : ""}
@@ -3868,7 +3868,7 @@ async function renderPickOfTheDay() {
   const potdFam = VENUE_FAMILY[state.sport];
   const potdTeam = activeTeams()[pick.team] || activeTeams()[pick.player];
   const potdArt = potdFam ? absoluteSrc(venueSrc(`img/venues/variants/${potdFam}-${venueVariant(potdTeam)}.jpg`)) : "";
-  const potdStyle = `border-left:3px solid ${accent};margin-bottom:12px`;
+  const potdStyle = `--tone:${accent};margin-bottom:12px`;
   // The team's stadium when this league has them; the ball otherwise.
   const heroArt = potdVenueArt(potdArt) || potdBallArt();
   // HIS TILE over the stadium (Ethan, 2026-10-15): a player's pick with
@@ -4126,7 +4126,7 @@ function renderProbation() {
   const d = state.data || {};
   if (!d.probation) { host.innerHTML = ""; return; }
   const t = d.tuning || {};
-  host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+  host.innerHTML = `<div class="card" style="--tone:var(--warn);margin-bottom:12px">
     <div class="player">${iconMark("warn")}${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
     <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
       ${escapeHtml((d.probation_reasons || [])[0] || t.note
@@ -4159,7 +4159,7 @@ function renderAdvisories() {
   // false the moment nothing is staked, and would sit directly under a
   // banner saying so.
   if (!lines.length || d.probation) { host.innerHTML = ""; return; }
-  host.innerHTML = `<div class="card" style="border-left:3px solid var(--text-mute);margin-bottom:12px">
+  host.innerHTML = `<div class="card" style="--tone:var(--text-mute);margin-bottom:12px">
     <div class="player">${iconMark("info")}Sizes rest on an unmeasured haircut</div>
     <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
       ${lines.map((l) => escapeHtml(l)).join(" ")} These plays are staked; the
@@ -4216,7 +4216,7 @@ function talentWarnHTML(t) {
        rows: <b>${(t.empty_layers || []).map(escapeHtml).join(", ")}</b> —
        these fetched cleanly and had nothing in them, which is not the same
        as a feed that failed.</div>` : "";
-  return `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+  return `<div class="card" style="--tone:var(--warn);margin-bottom:12px">
     <div class="player">${iconMark("warn")}No preseason talent prior — running on results only</div>
     <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
       In September that means an unproven Alabama and an unproven Kent State
@@ -4810,7 +4810,7 @@ function haircutLine(sh) {
     (s) => escapeHtml(s.toUpperCase())).join(", ")} ${off.length > 1
     ? "are exceptions: their" : "is the exception: its"} own record refused
     this correction, so those picks carry the model’s own numbers.`;
-  return `<p style="margin:0;padding:8px 14px;border-left:3px solid var(--brand);
+  return `<p style="margin:0;padding:8px 14px;--tone:var(--brand);
              background:var(--panel-3);font-size:var(--fs-sm);color:var(--text-body)">
     <b style="color:var(--brand)">These probabilities are already cut.</b>
     Over ${lead.n} settled bets we claimed ${(lead.claimed * 100).toFixed(1)}% and
@@ -4978,7 +4978,7 @@ function marketBestHTML(sig) {
     <div class="section-title minor">Every market, the best we have
       <span class="sub">— the top row in each market by EV, the Edge Board’s own order, that did NOT clear the bar.
       Shown so the board is readable, not because we would bet them. No stake, no journal.</span></div>
-    <div class="card" style="padding:0;border-left:3px solid var(--text-mute)">
+    <div class="card" style="padding:0;--tone:var(--text-mute)">
       ${rows.map(row).join("")}
     </div>`;
 }
@@ -5167,7 +5167,7 @@ async function renderBestBets() {
     </div>`;
   const earlyBlock = earlyRows.length ? `
     <div class="section-title minor">On deck — waiting on lineups</div>
-    <div class="card" style="padding:0;border-left:3px solid var(--warn)">
+    <div class="card" style="padding:0;--tone:var(--warn)">
       <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
         <b style="color:var(--text)">${earlyRows.length} hitter lean${
           earlyRows.length === 1 ? "" : "s"} at real book prices, waiting only
@@ -5185,7 +5185,7 @@ async function renderBestBets() {
   const asOf = ((state.data || {}).odds_status || {}).at;
   const prePrice = prePriceHeadline();
   const picksBlock = picks.length ? `
-    <div class="card" style="padding:0;border-left:3px solid var(--good)">
+    <div class="card" style="padding:0;--tone:var(--good)">
       <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
         <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>${
         ridden.length ? ` <b style="color:var(--warn)">${ridden.length} more
@@ -5207,7 +5207,7 @@ async function renderBestBets() {
         ${censusFunnelHTML()}
       </details>
     </div>` : `
-    <div class="card" style="border-left:3px solid var(--warn)">
+    <div class="card" style="--tone:var(--warn)">
       <p style="margin:0;font-weight:800;font-size:var(--fs-lg)">${prePrice
         || "No qualifying plays at current numbers."}</p>
       <p style="margin:6px 0 0;color:var(--text-mute);font-size:var(--fs-md)">${prePrice
@@ -5759,7 +5759,7 @@ function renderLivePicks() {
   const leagueTag = `<span class="lb-of-league">${escapeHtml(leagueNow)}</span>`;
   if (trackerErr) {
     // A broken tracker must say so — an empty space reads as "no bets".
-    host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-top:8px">
+    host.innerHTML = `<div class="card" style="--tone:var(--warn);margin-top:8px">
       <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} Open-bet tracker hit an error this build:
       <code>${escapeHtml(trackerErr)}</code> — open bets still settle normally; see the Record page.</p></div>`;
     return;
@@ -6095,7 +6095,7 @@ function renderLivePicks() {
         ? `<span style="color:var(--bad)">${icon('dot')}</span>`
         : `<span style="color:var(--brand)">${icon('dot')}</span>`} ${title} ${leagueTag}
       <span class="sub">— ${sub}</span></div>
-    <div class="card" style="padding:0;border-left:3px solid ${n ? "var(--bad)" : "var(--brand)"}">
+    <div class="card" style="padding:0;--tone:${n ? "var(--bad)" : "var(--brand)"}">
       ${active.length ? active.map(rowHTML).join("")
         : `<p style="padding:12px 14px;margin:0;color:var(--text-mute)">${done.length
             ? `Nothing still playing — every bet on this card has finished.` : empty}</p>`}
@@ -6129,7 +6129,7 @@ function renderLivePicks() {
         <span class="live-dot"></span>LIVE NOW</span>` : ""}
       <span class="sub">— the one pick today is named after, tracked from first pitch to final</span></div>
     <div class="card potd-live${potdLive ? " is-live" : ""}"
-         style="padding:0;border-left:3px solid ${potdEdge};margin-bottom:14px">
+         style="padding:0;--tone:${potdEdge};margin-bottom:14px">
       ${potdRows.map(rowHTML).join("")}
       <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
         One pick a day per league, journaled to its own book the moment it clears
@@ -23689,7 +23689,7 @@ async function renderWhy() {
       <div id="pl-out"></div>
     </div>
 
-    <div class="card" style="padding:14px 18px;margin-top:20px;border-left:3px solid var(--warn)">
+    <div class="card" style="padding:14px 18px;margin-top:20px;--tone:var(--warn)">
       <h3 style="margin:0 0 6px">Play the long game</h3>
       <p style="color:var(--text-body);font-size:.92em;margin:0">Even a real edge loses often — that’s variance, not failure,
         and it’s why stakes here are fractions of bankroll, never "bet big to catch up." 21+ only. Never bet money you
@@ -24761,8 +24761,7 @@ function cardFont(px, weight) {
   // The site's own faces, with a real fallback: canvas silently
   // substitutes when a family is missing, so the card would come out in
   // Times without anybody being told.
-  return `${weight || 400} ${px}px "Archivo Narrow", "IBM Plex Mono", `
-       + `system-ui, -apple-system, sans-serif`;
+  return `${weight || 400} ${px}px "Inter", system-ui, -apple-system, sans-serif`;
 }
 
 function cardSerif(px, weight) {

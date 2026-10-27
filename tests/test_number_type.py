@@ -5,9 +5,10 @@ AI slop and I need it to look and feel human made."
 
 The numbers were set in the same grotesque as the labels, at weight 800 with
 -0.5px tracking — the house style of every generated dashboard, and the part
-that read as machine-made whatever else changed around it. They are now IBM
-Plex Mono (SIL OFL, latin subset, 20KB for two weights): slotted zero,
-flagged one, a column you can scan down.
+that read as machine-made whatever else changed around it. They were IBM
+Plex Mono (SIL OFL, latin subset, 20KB for two weights) until 2026-10-27, and
+are Inter's tabular figures at 500 with no tracking since (the blend): a
+column you can scan down, in the face every app in the category uses.
 
 The serif was tried first and MEASURED out, which is why it is worth writing
 down rather than re-litigating later:
@@ -52,21 +53,25 @@ MONO_RULE = ".tile .v, .metric .v, .ml-odds, .conf-num"
 
 
 # --- the face ---------------------------------------------------------------
-def test_the_mono_is_self_hosted_like_everything_else():
+# RE-DECIDED 2026-10-27 (THE BLEND, docs/VISUAL_AUDIT.md). Ethan: "realize
+# what apps actually look like". The numbers moved from IBM Plex Mono to the
+# UI face, Inter, in its TABULAR figures: what the mono gave a column of odds
+# (every digit one width) is kept, what it cost (a terminal's look beside
+# every app in the category) is gone. The tell this file was written against
+# — 800-weight figures with negative tracking — stays banned below.
+def test_the_number_face_is_self_hosted_like_everything_else():
     """A board that renders with the network unplugged does not get to make
     an exception for the typeface its numbers are in."""
-    for name in ("plex-mono.woff2", "plex-mono-500.woff2"):
-        path = os.path.join(ROOT, "web", "fonts", name)
-        assert os.path.exists(path), f"{name} is referenced but not shipped"
-        assert 4000 < os.path.getsize(path) < 60000, f"{name} looks wrong"
-    assert 'url("../fonts/plex-mono.woff2")' in CSS
+    path = os.path.join(ROOT, "web", "fonts", "inter.woff2")
+    assert os.path.exists(path) and 20000 < os.path.getsize(path) < 80000
+    assert 'url("../fonts/inter.woff2")' in CSS
 
 
-def test_the_mono_leads_the_stack():
+def test_the_number_face_is_the_ui_face_with_tabular_figures():
     m = re.search(r"--font-mono: ([^;]+);", CSS)
-    assert m and m.group(1).strip().startswith('"IBM Plex Mono"')
-    # …and still degrades to a real monospace if the file ever fails.
-    assert "monospace" in m.group(1)
+    assert m and m.group(1).strip() == "var(--font-sans)"
+    assert re.search(r'--font-sans: "Inter",[^;]*sans-serif;', CSS)
+    assert "html { font-variant-numeric: tabular-nums; }" in CSS
 
 
 def test_both_weights_have_a_job():
@@ -140,9 +145,9 @@ def test_the_value_can_still_break_between_number_and_unit():
 
 def test_the_header_note_counts_the_files_that_ship():
     n = len(set(re.findall(r'url\("\.\./fonts/([^"]+)"', CSS)))
-    assert n == 7
-    assert "Seven files" in CSS
-    assert "IBM Plex Mono for every NUMBER" in CSS
+    assert n == 3
+    assert "Three files" in CSS
+    assert "every NUMBER, in its tabular figures" in CSS
 
 
 def test_the_serif_rejection_is_recorded_with_its_measurement():

@@ -109,7 +109,7 @@ function talentCardHTML(t) {
   const chip = (name, n) => `<span class="chip ${n ? "good" : "down"}">${
     escapeHtml(name)} ${n ? n : "—"}</span>`;
   const fit = t.fit || {};
-  return `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
+  return `<div class="card" style="--tone:var(--good);margin-bottom:12px">
     <div class="player">${iconMark("check")}Preseason talent prior — ${plural(t.teams_with_prior, "team")}</div>
     <div class="lf-chips" style="margin:6px 0">
       ${chip("recruiting", L.talent)}${chip("blue-chip", L.blue_chip)}
@@ -1844,7 +1844,7 @@ async function renderInjuries() {
   const ageS = (((d || {}).ages_s) || {})[sport];
   const staleAfter = (d || {}).stale_after_s || 3600;
   const staleBanner = (ageS != null && ageS > staleAfter) ? `
-    <div class="card" style="border-left:3px solid var(--warn);margin-bottom:14px">
+    <div class="card" style="--tone:var(--warn);margin-bottom:14px">
       <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These designations are
         ${escapeHtml(ageText(ageS))} old.</b> ESPN’s feed has been declining, so the board is
         being served from the last successful pull — treat every status here as
@@ -2175,7 +2175,7 @@ async function renderStandings() {
      counted games, say so above the table — not only in a note the empty
      state would have shown. */
   const fallbackBanner = (d.source === "computed" && d.note) ? `
-    <div class="card" style="border-left:3px solid var(--warn);margin-bottom:14px">
+    <div class="card" style="--tone:var(--warn);margin-bottom:14px">
       <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These are our
         counted games, not the league’s table.</b> ${escapeHtml(d.note)}</p></div>` : "";
   host.innerHTML = `
@@ -3514,7 +3514,7 @@ async function renderUFC() {
                      `${((d.exposure || 0) * 100).toFixed(1)}%`,
                      `of bankroll · cap ${((d.card_cap || 0.08) * 100).toFixed(0)}%, the tightest in the system`)}
     </div>
-    ${(d.correlation_flags || []).length ? `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+    ${(d.correlation_flags || []).length ? `<div class="card" style="--tone:var(--warn);margin-bottom:12px">
         <div class="player">${icon('warn')} Correlation on this card</div>
         <ul class="reasons">${(d.correlation_flags || []).map((f) =>
           `<li class="neg">${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}
@@ -3613,14 +3613,14 @@ async function renderUFC() {
       const w = d.weigh_ins;
       if (!w) return "";
       if (w.missed) {
-        return `<div class="card" style="border-left:3px solid var(--bad);margin-bottom:12px">
+        return `<div class="card" style="--tone:var(--bad);margin-bottom:12px">
           <div class="player">${icon('cross')} ${plural(w.missed, "fighter")} missed weight</div>
           <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Their fights are
           gated off the pick list automatically — that is what KILL IF always said and now
           enforces. ${w.unrecorded} weigh-in(s) still unrecorded.</div></div>`;
       }
       if (w.unrecorded) {
-        return `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+        return `<div class="card" style="--tone:var(--warn);margin-bottom:12px">
           <div class="player">${icon('clock')} ${w.unrecorded} weigh-in(s) not recorded yet</div>
           <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Fighters weigh in the
           morning before the card, and the site pulls the results on its own once they publish —
@@ -3628,7 +3628,7 @@ async function renderUFC() {
           component rather than being marked down for it, so the picks below stand on their own.
           A miss, when one lands, gates that fight on the next build.</div></div>`;
       }
-      return `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
+      return `<div class="card" style="--tone:var(--good);margin-bottom:12px">
         <div class="player">${icon('check')} Weigh-ins complete — ${w.made} on weight, none missed</div></div>`;
     })()}
     ${d.no_qualifying ? `<div class="card"><div class="player">No qualifying plays on this card.</div>
@@ -4011,7 +4011,7 @@ function renderAbout() {
   if (dt) dt.textContent = "About · terms · responsible play";
 
   const card = (title, body, accent) => `
-    <article class="card about-card"${accent ? ` style="border-left:3px solid ${accent}"` : ""}>
+    <article class="card about-card"${accent ? ` style="--tone:${accent}"` : ""}>
       <div class="player">${title}</div>
       <div class="about-body">${body}</div>
     </article>`;

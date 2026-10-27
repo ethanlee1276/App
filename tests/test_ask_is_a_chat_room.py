@@ -159,7 +159,8 @@ def test_the_empty_room_is_ethans_render():
     assert re.search(r"\.ask-suggest \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)", CSS), \
         "side by side, a phone included"
     assert re.search(r"\.ask-title-sm em, \.ask-title em \{[^}]*color: var\(--gold\)", CSS), "Qellys in gold"
-    assert re.search(r"\.ask-pill \{[^}]*border: var\(--hairline\) solid var\(--gold\); color: var\(--gold\)", CSS)
+    # A gold tint, not a gold outline, since the blend (2026-10-27).
+    assert re.search(r"\.ask-pill \{[^}]*background: color-mix\(in oklab, var\(--gold\) 16%, transparent\); color: var\(--gold\)", CSS)
     assert re.search(r"\.ask-title \{[^}]*font-size: clamp\(var\(--fs-4xl\), 11\.5vw, 60px\)", CSS)
     form = r[r.index('<form class="ask-form" id="ask-form">'):r.index("</form>")]
     assert form.index("data-ask-clip") < form.index("<textarea") < form.index('class="ask-send"'), \

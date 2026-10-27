@@ -520,7 +520,9 @@ def test_no_rule_asks_the_display_face_for_a_weight_it_does_not_have():
     allowed set from the @font-face declarations instead: then adding a
     weight to the masthead without shipping the file fails, and swapping
     the family again does not need this test edited."""
-    fam = re.search(r'--font-display:\s*"([^"]+)"', CSS).group(1)
+    # The display face may be an alias of the UI face (the blend, 2026-10-27).
+    m = re.search(r'--font-display:\s*"([^"]+)"', CSS) or re.search(r'--font-sans:\s*"([^"]+)"', CSS)
+    fam = m.group(1)
     have = {int(w) for w in re.findall(
         rf'font-family:\s*"{re.escape(fam)}";[^}}]*?font-weight:\s*(\d+)', CSS, re.S)}
     assert have, f"{fam} is the display face but ships no @font-face"

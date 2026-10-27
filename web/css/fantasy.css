@@ -49,7 +49,7 @@
    gap between them IS the trend the delta chip states in words. */
 .ff-bar {
   position: relative; display: block; height: 7px; border-radius: 0;
-  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); overflow: hidden;
+  background: var(--fill-subtle); border: var(--hairline) solid transparent; overflow: hidden;
 }
 
 .ff-bar > i { display: block; height: 100%; border-radius: 0; opacity: .85; }
@@ -316,7 +316,7 @@
 
 .mk-tab { flex: 1; padding: 7px 10px; border-radius: var(--radius-sm);
   background: var(--panel-2); color: var(--text-mute);
-  border: var(--hairline) solid var(--border-soft);
+  border: var(--hairline) solid transparent;
   font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
 
 .mk-tab:hover { color: var(--text); }
@@ -460,7 +460,7 @@
 /* The survival odds, which are the point of the whole simulation. */
 .mk-wait { padding: 12px 14px; margin-bottom: 14px; }
 
-.mk-wait-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .1em;
+.mk-wait-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; }
 
 .mk-wait-body { margin-top: 8px; font-size: var(--fs-sm);
@@ -478,7 +478,7 @@
 
 .mk-setcard { padding: 6px 18px 12px; }
 
-.mk-setcard-head { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+.mk-setcard-head { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-mute); padding: 10px 0 4px; }
 
 .mk-row { display: flex; align-items: center; justify-content: space-between;
@@ -612,7 +612,7 @@
 
 .mk-plan, .mk-cliff { margin-top: 10px; display: grid; gap: 4px; }
 
-.mk-plan-head { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
+.mk-plan-head { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-mute); }
 
 .mk-plan-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 46px;
@@ -851,9 +851,9 @@
 .ffc-roster::-webkit-scrollbar { display: none; }
 .ffc-roster > * { flex: none; }
 .ffc-roster > span { margin-right: 2px; font-size: var(--fs-xs); color: var(--text-mute); }
-.ffc-chip { min-height: 28px; padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid var(--border-soft);
-  background: transparent; color: var(--text-dim); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
-.ffc-chip.on { border-color: var(--brand-2); background: var(--fill-subtle); color: var(--text); }
+.ffc-chip { min-height: 28px; padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid transparent;
+  background: var(--fill-tone); color: var(--text-dim); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
+.ffc-chip.on { border-color: transparent; background: var(--fill-subtle); color: var(--text); }
 .ffc-out { margin-top: var(--sp-3); }
 .ffc-hint { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-dim); }
 .ffc-call { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm);

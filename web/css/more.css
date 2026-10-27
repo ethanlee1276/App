@@ -297,7 +297,7 @@
   border-color: color-mix(in oklab, var(--warn) 35%, var(--border-soft));
   background: color-mix(in oklab, var(--warn) 8%, var(--panel-2)); }
 .pm-d-venue { display: inline-flex; align-items: center; gap: 7px;
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-mute); }
 /* The row's price drawn as a length ("the site feels and looks very
    flat", 2026-08-18). Track = 0..100¢; the fill is the venue's YES
@@ -406,7 +406,7 @@
    numbers below the fold. */
 .ufc-banner { display: block; width: 100%; aspect-ratio: 3 / 1;
   object-fit: cover; border-radius: var(--radius-lg);
-  border: var(--hairline) solid var(--border); margin-bottom: 14px; }
+  border: var(--hairline) solid transparent; margin-bottom: 14px; background: var(--fill-tone); }
 /* The venue notice. A bordered callout rather than the plain grey line it
    was: it changes how every price on the page should be read, which is
    not a footnote. */
@@ -499,7 +499,7 @@
 .tsq { display: flex; flex-direction: column; gap: 14px; }
 .tsq-pos-k {
   display: flex; align-items: baseline; gap: 8px;
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-mute);
   padding: 0 2px 6px; border-bottom: var(--hairline) solid var(--border-soft);
 }
@@ -598,7 +598,7 @@
 .pm-tape-head { display: flex; align-items: baseline;
   justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .pm-tape-t { font-size: var(--fs-xs); font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase; color: var(--text-mute); }
+  letter-spacing: .06em; text-transform: uppercase; color: var(--text-mute); }
 .pm-tape-win { font-size: var(--fs-2xs); color: var(--text-mute); }
 .pm-tape-plot { height: 132px; width: 100%; }
 .pm-tape-cap, .pm-tape-none { color: var(--text-mute);
@@ -628,7 +628,7 @@
    <button> and a button does neither by default — the two shapes have to
    sit in the same column without one of them centring itself. */
 .ft-row { display: flex; align-items: flex-start; gap: 14px; width: 100%; text-align: left;
-  font: inherit; background: var(--panel); border: var(--hairline) solid var(--border);
+  font: inherit; background: var(--panel); border: var(--hairline) solid transparent;
   border-radius: var(--radius-lg); padding: 13px 15px; color: var(--text); }
 .ft-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ft-row-main b { font-size: var(--fs-md); }
@@ -688,30 +688,30 @@
 /* the room pills */
 .pmx .subnav-wrap { margin: 4px 0 16px; }
 .pmx .subnav { display: flex; gap: 10px; flex-wrap: wrap; }
-.pmx .subnav-btn { padding: 11px 24px; border-radius: var(--radius); border: var(--hairline) solid var(--border); background: var(--panel);
+.pmx .subnav-btn { padding: 11px 24px; border-radius: var(--radius); border: var(--hairline) solid transparent; background: var(--panel);
   color: var(--text); font-weight: 600; font-size: var(--fs-md); }
-.pmx .subnav-btn.active { border-color: var(--brand); color: var(--brand);
+.pmx .subnav-btn.active { border-color: transparent; color: var(--brand);
   background: color-mix(in srgb, var(--brand) 10%, var(--panel)); box-shadow: var(--glow); }
 .pmx .subnav-hint { font-style: italic; color: var(--text-dim); margin: 10px 0 0; }
 .pmx-tile { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px; border-radius: var(--radius); }
-.pmx-tile .k, .pmx-btile .k { text-transform: uppercase; letter-spacing: .12em; font-size: var(--fs-xs); color: var(--text-dim); }
+.pmx-tile .k, .pmx-btile .k { text-transform: uppercase; letter-spacing: .07em; font-size: var(--fs-xs); color: var(--text-dim); }
 .pmx-tile .v { font-size: var(--fs-3xl); font-weight: 800; font-variant-numeric: tabular-nums; }
 .pmx-glyph svg { width: 56px; height: 34px; display: block; }
 /* informed flow */
 .pmx-sechead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 22px 0 12px; }
-.pmx-sechead h2 { font-size: var(--fs-lg); letter-spacing: .14em; text-transform: uppercase; margin: 0; display: flex;
+.pmx-sechead h2 { font-size: var(--fs-lg); letter-spacing: .08em; text-transform: uppercase; margin: 0; display: flex;
   align-items: baseline; gap: 12px; }
 .pmx-why { display: inline; font-size: var(--fs-sm); letter-spacing: 0; text-transform: none; }
 .pmx-why summary { color: var(--brand); cursor: pointer; list-style: none; font-weight: 600; }
 .pmx-why summary::-webkit-details-marker { display: none; }
 .pmx-why p { font-weight: 400; color: var(--text-dim); margin: 6px 0 0; max-width: var(--measure-tight); }
 .pmx-pills { display: flex; gap: 8px; flex-wrap: wrap; }
-.pmx-pill { padding: 7px 16px; border-radius: 999px; border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text);
+.pmx-pill { padding: 7px 16px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--panel); color: var(--text);
   font-weight: 600; font-size: var(--fs-sm); }
-.pmx-pill.active { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.pmx-pill.active { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
 .pmx-pill small { opacity: .7; margin-left: 2px; }
 .pmx-sort { margin-left: auto; color: var(--text-mute); font-size: var(--fs-sm); display: flex; align-items: center; gap: 8px; }
-.pmx-sort select { background: var(--panel); color: var(--text); border: var(--hairline) solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; }
+.pmx-sort select { background: var(--panel); color: var(--text); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); padding: 7px 10px; }
 .pmx-fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
 .pmx-fcard { position: relative; padding: 16px; border-radius: var(--radius-lg); background: var(--panel); border: var(--hairline) solid var(--border);
   border-left: 3px solid var(--border); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -737,7 +737,7 @@
 .pmx-metrics span { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--text-mute); }
 .pmx-metrics b { font-size: var(--fs-xl); font-variant-numeric: tabular-nums; }
 .pmx-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.pmx-chip { font-size: var(--fs-xs); padding: 4px 8px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border); color: var(--text-dim); }
+.pmx-chip { font-size: var(--fs-xs); padding: 4px 8px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent; color: var(--text-dim); background: var(--fill-tone); }
 .pmx-foot { font-size: var(--fs-sm); color: var(--text-mute); margin: 0; padding-top: 8px; border-top: var(--hairline) solid var(--border-soft); }
 .pmx-foot b { color: var(--text); }
 /* the rail */
@@ -752,7 +752,7 @@
 .pmx-rail.more-below { -webkit-mask-image: var(--grad-rail-fade); mask-image: var(--grad-rail-fade); }
 .pmx-card { background: var(--panel); border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
 .pmx-card-head { display: flex; justify-content: space-between; align-items: center; text-transform: uppercase;
-  letter-spacing: .14em; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 8px; }
+  letter-spacing: .08em; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 8px; }
 .pmx-livedot { color: var(--good); text-transform: none; letter-spacing: 0; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .pmx-livedot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good);
   animation: pmx-pulse 2s infinite; }
@@ -793,7 +793,7 @@
 .pmx-bands { margin-top: 14px; overflow: hidden; }
 .pmx-bands .pm-band { display: grid; grid-template-columns: 2fr 1fr 1.4fr 1fr; align-items: center; padding: 14px 20px;
   border-left: 3px solid color-mix(in srgb, var(--brand) 60%, transparent); }
-.pmx-bands .pm-band-head { border-left-color: transparent; text-transform: uppercase; letter-spacing: .12em; font-size: var(--fs-xs);
+.pmx-bands .pm-band-head { border-left-color: transparent; text-transform: uppercase; letter-spacing: .07em; font-size: var(--fs-xs);
   color: var(--text-dim); padding-top: 12px; padding-bottom: 10px; }
 .pmx-bands .dl-num small { display: block; color: var(--text-mute); font-size: var(--fs-xs); font-family: var(--font-sans); }
 .pmx-bands .pm-band > span { text-align: left; font-family: var(--font-sans); font-size: var(--fs-md); min-height: 0; }

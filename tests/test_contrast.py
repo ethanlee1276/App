@@ -228,7 +228,9 @@ def test_the_light_theme_was_not_given_the_dark_ladder():
     # block re-set it to #524434, which is what has painted since. The
     # merge (audit #50, 2026-10-02) dropped the dead copy, so the pin
     # reads the live value.
-    assert "--text-dim: #524434;" in light, "the light dim tier moved"
+    # THE BLEND (2026-10-27) re-set it once more, neutral where it was brown:
+    # WCAG 8.0-9.2:1 on every light ground (test_every_light_text_pair_clears_wcag_aa).
+    assert "--text-dim: #4B4742;" in light, "the light dim tier moved"
 
 
 def test_the_wcag_comparison_is_labelled_as_not_the_verdict():

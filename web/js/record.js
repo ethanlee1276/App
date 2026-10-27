@@ -1773,7 +1773,7 @@ function recRestatedSection(rs, sport) {
       <div class="section-title">At today’s model
         <span class="sub">— the same graded picks, re-priced and re-staked
         by the board as it now runs.</span></div>
-      <div class="card" style="border-left:3px solid var(--brand)">
+      <div class="card" style="--tone:var(--brand)">
         <p style="margin:0;font-size:var(--fs-md)">
           <b style="color:var(--brand)">It refuses all
           ${r.excluded.toLocaleString()} of them.</b> Corrected by the
@@ -3030,7 +3030,7 @@ function recZenoSection(z, scope, tix) {
       <span class="sub">— Zeno’s own tickets at FanDuel, DraftKings and theScore Bet, settled by
         the book, not by our model. ${scope ? escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports"}
         · <a href="#zeno" data-view="zeno">what’s riding now →</a></span></div>
-    <div class="card" style="border-left:3px solid var(--brand)">
+    <div class="card" style="--tone:var(--brand)">
       <div>${zenoTallyLine(t)}</div>
       <div class="pk-row">${pikkitBadgeHTML()}</div>
       ${!scope && books.length > 1 ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
@@ -3095,7 +3095,7 @@ function recPotdSection(rep, scope, recent) {
     <div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Pick of the Day
       <span class="sub">— one pick per sport per day, priced near even money, flat staked.
         ${escapeHtml(where)}</span></div>
-    <div class="card" style="border-left:3px solid var(--brand)">
+    <div class="card" style="--tone:var(--brand)">
       <div>${line}</div>
       ${n && n < POTD_MIN_N ? `<div style="margin-top:5px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${plural(n, "settled pick")} is too few to judge a hit rate on. This line is the

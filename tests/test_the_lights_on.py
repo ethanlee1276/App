@@ -15,7 +15,7 @@ family); a page rises in once, as it opens, never on a redraw, holds no
 transform once landed, and the screens of their own are left alone; the
 night's best pick wears a moving rim drawn behind it, not a heavier border;
 nothing blurs; and in a browser the basketball tab paints basketball's
-colour and the best pick spins.
+colour and the best pick wears its edge.
 
 Run directly: `python3 tests/test_the_lights_on.py`
 (the browser check with QB_BROWSER_TESTS=1 and /usr/bin/python3).
@@ -33,8 +33,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 #: The section's rules; its tokens live in the sheet's one :root and one
-#: light block (tests/test_one_root_and_shared_percents).
-LIGHTS = CSS[CSS.index("THE LIGHTS ON (2026-10-27). Ethan"):CSS.index("GLASS FOR WHAT FLOATS")]
+#: light block (tests/test_one_root_and_shared_percents). The same night
+#: Ethan asked for it all to blend ("Everything feels so sharp"), and the
+#: section became THE BLEND: the light stayed, softer (tests/test_the_site_blends).
+LIGHTS = CSS[CSS.index("THE BLEND (2026-10-27). Ethan"):CSS.index("GLASS FOR WHAT FLOATS")]
 LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
 
 
@@ -67,7 +69,7 @@ def test_the_page_names_the_league_in_view():
     mark = _fn("markSportRow")
     assert 'document.documentElement.dataset.league = lit || "";' in mark, \
         "the game page's own league too: markSportRow lights what sportRowLeague says"
-    assert "body { background-image: var(--grad-aurora); background-repeat: no-repeat; }" in LIGHTS
+    assert "background-image: var(--grad-aurora); background-repeat: no-repeat; }" in LIGHTS
     aurora = [l for l in (_root(":root") + _root(':root[data-theme="light"]')).splitlines()
               if l.strip().startswith("--grad-aurora:")]
     assert len(aurora) == 2 and all("var(--league)" in l for l in aurora), "the league's light, in both themes"
@@ -79,15 +81,16 @@ def test_every_league_button_wears_its_own_colour():
     btn = _block(".sportbar-in .sport-btn")
     assert "--glow-hue:" in btn and "var(--hue)" in btn
     phone = LIGHTS[LIGHTS.index("@media (max-width: 760px)"):]
-    assert ".sportbar-in .sport-btn.active .crest { outline-color: var(--hue); color: var(--hue); box-shadow: var(--glow-hue);" \
-        in phone
-    assert ".topbar .sportbar-in .sport-btn.active { border-color: var(--hue); color: var(--hue); box-shadow: var(--glow-hue);" \
+    assert ".sportbar-in .sport-btn.active .crest { outline-color: transparent; color: var(--hue); box-shadow: var(--glow-hue);" \
+        in phone, "a tinted crest with a thin ring of its light, not a hard outline"
+    assert ".topbar .sportbar-in .sport-btn.active { border-color: transparent; color: var(--hue); box-shadow: var(--glow-hue);" \
         in LIGHTS, "the desktop's pill too"
 
 
 def test_the_glows_are_tokens_and_nothing_blurs():
     shadows = re.findall(r"box-shadow:\s*([^;]+);", re.sub(r"/\*.*?\*/", "", LIGHTS, flags=re.S))
-    assert shadows and all(re.fullmatch(r"var\(--glow(?:-[a-z]+)*\)|none", v.strip()) for v in shadows), shadows
+    glow = r"var\(--glow(?:-[a-z]+)*\)"
+    assert shadows and all(re.fullmatch(rf"{glow}(?:, {glow})*|none", v.strip()) for v in shadows), shadows
     for name in ("--glow-gold", "--glow-good", "--glow-lift", "--glow-league"):
         assert f"{name}:" in _root(":root") and f"{name}:" in _root(':root[data-theme="light"]'), \
             f"{name} in both themes"
@@ -110,31 +113,27 @@ def test_a_page_rises_in_once_as_it_opens():
     assert ".view.enter > :nth-child(-n+8)" in rise
 
 
-def test_the_best_pick_wears_a_moving_rim_drawn_behind_it():
+def test_the_best_pick_wears_an_edge_drawn_behind_it():
+    """A moving rainbow until the blend (2026-10-27): a still gold edge now,
+    still a layer 1px proud of the card so the card keeps its hairline."""
     assert '${rank === 1 ? " is-first" : ""}' in _fn("obCardHTML")
     rim = LIGHTS[LIGHTS.index(".ob-card.is-first::before {"):]
     rim = rim[:rim.index("}") + 1]
-    assert "--rim: conic-gradient(from var(--spin)" in rim and "inset: -2px; z-index: -1;" in rim
-    assert "animation: lightSpin 8s linear infinite;" in rim
-    assert '@property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }' in LIGHTS
+    assert "inset: -1px; z-index: -1;" in rim and "background: var(--grad-rim-gold);" in rim
+    assert "animation" not in rim
     first = _block(".ob-card.is-first")
     assert "border:" not in first, "the card keeps its hairline (tests/test_hairlines)"
-
 
 def test_the_brand_and_the_ai_catch_the_light():
     assert ".qt-brand-t b { background: var(--grad-shine) 0 0 / 250% 100%;" in LIGHTS
     assert "animation: lightShine 7s var(--ease-out) infinite;" in LIGHTS
     assert ".tb-ask { position: relative; overflow: hidden; box-shadow: var(--glow-gold); }" in LIGHTS
-    assert "animation: sheen 5s var(--ease-out) infinite;" in LIGHTS, "the shared sheen, a transform only"
-
+    assert "animation: sheen 6s var(--ease-out) infinite;" in LIGHTS, "the shared sheen, a transform only"
 
 def test_colour_that_means_something():
-    for n, hue in ((1, "var(--lg-nba)"), (2, "var(--good)"), (4, "var(--sky)")):
-        assert f".qt-row > .qt-chip:nth-child({n}) {{ --hue: {hue}; }}" in LIGHTS
     assert ".ob-ring.tier-look .ob-ring-fg { stroke: var(--sky); }" in LIGHTS, "the third tier is a colour too"
-    assert ".chip.up { background: color-mix(in oklab, var(--good) 13%, transparent);" in LIGHTS
+    assert ".chip.up { background-color: color-mix(in oklab, var(--good) 14%, transparent); }" in LIGHTS
     assert ".section-title .st-ico { color: var(--league); }" in LIGHTS
-
 
 # --- in a browser (opt-in) -------------------------------------------------------------------
 def test_the_lights_in_a_browser():
@@ -186,9 +185,9 @@ def test_the_lights_in_a_browser():
                 page.wait_for_timeout(1100)
                 assert not page.evaluate("document.getElementById('view-likely').classList.contains('enter')"), \
                     "and is done before any redraw"
-                spin = page.evaluate("""(() => { const c = document.querySelector('.ob-card.is-first');
-                                                 return c ? getComputedStyle(c, '::before').animationName : null; })()""")
-                assert spin == "lightSpin", f"the best pick's rim: {spin}"
+                rim = page.evaluate("""(() => { const c = document.querySelector('.ob-card.is-first');
+                                                return c ? getComputedStyle(c, '::before').backgroundImage : null; })()""")
+                assert rim and "linear-gradient" in rim, f"the best pick's edge: {rim}"
                 assert not errors, errors
                 ctx.close()
             finally:

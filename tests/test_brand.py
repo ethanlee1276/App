@@ -458,9 +458,10 @@ def test_the_type_is_self_hosted():
     assert "fonts.googleapis.com" not in html
     # Named rather than counted, so dropping a family shows up here rather
     # than as a silent fallback to the platform's default serif.
-    for f in ("archivo-narrow.woff2", "archivo-narrow-700.woff2",
-              "bodoni-moda-700.woff2", "bodoni-moda-900.woff2",
-              "plex-mono.woff2", "plex-mono-500.woff2", "plex-mono-600.woff2"):
+    # Inter for the UI and Bodoni for the masthead since the blend
+    # (2026-10-27); Archivo Narrow and Plex Mono stay on disk for the night
+    # form's preview page (web/preview-nightform.html), which loads its own.
+    for f in ("inter.woff2", "bodoni-moda-700.woff2", "bodoni-moda-900.woff2"):
         assert os.path.isfile(os.path.join(root, "web", "fonts", f)), f
         assert f in css, f"{f} is on disk but nothing loads it"
     assert "font-display: swap" in css, "text would be invisible while loading"

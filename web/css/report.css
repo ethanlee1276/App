@@ -13,7 +13,7 @@
   scroll-margin-top: calc(var(--topbar-h) + 64px); }
 .gr-sec:first-child { border-top: 0; padding-top: 2px; }
 .gr-title { margin: 0 0 8px; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
-.gr-h { margin: 16px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+.gr-h { margin: 16px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-dim); }
 .gr-p { margin: 8px 0; font-size: var(--fs-lg); line-height: var(--lh-body); color: var(--text);
   max-width: var(--measure-wide); }

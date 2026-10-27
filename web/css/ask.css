@@ -20,7 +20,7 @@
 /* THE CARDS (js/ask.js ASK_CARD, engine/askcards): the lookups' own
    numbers under the answer. */
 .ask-card { margin: 12px 0 0; padding: 12px; border-radius: var(--radius); background: var(--panel);
-  border: var(--hairline) solid var(--border-soft); }
+  border: var(--hairline) solid transparent; box-shadow: var(--glow-card); }
 .ask-card-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 10px;
   margin-bottom: 10px; }
 .ask-card-h b { font-size: var(--fs-md); color: var(--text); }
@@ -74,9 +74,9 @@
    asks it. */
 .ask-next { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px 44px; }
 .ask-next-q { min-height: 34px; padding: 6px 12px; border-radius: 999px; cursor: pointer; text-align: left;
-  background: transparent; border: var(--hairline) solid var(--border); color: var(--text-dim);
+  background: var(--fill-tone); border: var(--hairline) solid transparent; color: var(--text-dim);
   font: inherit; font-size: var(--fs-sm); font-weight: 600; }
-@media (hover: hover) { .ask-next-q:hover { border-color: var(--brand-2); color: var(--text); } }
+@media (hover: hover) { .ask-next-q:hover { background: var(--fill-tone-2); color: var(--text); } }
 
 /* AN ANSWER YOU CAN ACT ON (js/ask.js askActsHTML): at the foot of the card
    about tonight's bet, the bet in one line and three buttons, with the
@@ -90,14 +90,14 @@
 .ask-acts-px b { font-family: var(--font-mono); font-size: var(--fs-sm); }
 .ask-acts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; }
 .ask-act { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  min-height: 56px; padding: 8px 4px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border);
-  background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--fs-xs); font-weight: 700;
+  min-height: 56px; padding: 8px 4px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
+  background: var(--fill-tone); color: var(--text); font: inherit; font-size: var(--fs-xs); font-weight: 700;
   line-height: var(--lh-tight); text-align: center; cursor: pointer; }
 .ask-act span { white-space: nowrap; }
 .ask-act .ic { color: var(--brand); }
-@media (hover: hover) { .ask-act:not([disabled]):hover { border-color: var(--brand); } }
+@media (hover: hover) { .ask-act:not([disabled]):hover { background: var(--fill-tone-2); } }
 .ask-act:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-.ask-act.on { border-color: color-mix(in oklab, var(--good) 60%, transparent); color: var(--good); }
+.ask-act.on { background: color-mix(in oklab, var(--good) 14%, transparent); color: var(--good); }
 .ask-act.on .ic { color: var(--good); }
 .ask-act[disabled] { cursor: default; }
 .ask-track .ask-act.primary { flex-direction: row; min-height: 36px; padding: 6px 14px; border-radius: 999px;

@@ -91,7 +91,7 @@ def test_the_record_is_a_ribbon_with_a_ring_and_form_dots_from_its_own_rows():
         "the ring is wins over decisions, pushes out"
     assert "if (ov.settled) {" in rec and "if (zo.settled) {" in rec, "no ribbon over nothing"
     assert '<i class="${w ? "w" : l ? "l" : "p"}">' in rec
-    assert ".hd-ribbon {" in CSS and ".hd-ring {" in CSS and ".hd-form i.l { background: var(--bad); }" in CSS
+    assert ".hd-ribbon {" in CSS and ".hd-ring {" in CSS and ".hd-form i.l { color: var(--bad); background: color-mix(in oklab, var(--bad) 18%, transparent); }" in CSS
     assert "  --grad-ring: conic-gradient(var(--good) 0 calc(var(--pc) * 1%), var(--border) calc(var(--pc) * 1%) 100%);" in CSS, \
         "the arc is a token declared on the ring, where --pc lives"
     assert "  --pc: 0;" in CSS and "  background: var(--grad-ring);" in CSS

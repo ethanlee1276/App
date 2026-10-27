@@ -339,7 +339,7 @@ async function renderFantasy() {
      trust a tier needs that fact above the tiers, not in a footer. */
   const staleU = d.usage_stale;
   const staleBanner = staleU ? `
-    <div class="card" style="border-left:3px solid var(--warn);margin-bottom:14px">
+    <div class="card" style="--tone:var(--warn);margin-bottom:14px">
       <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These numbers are
         built from the ${staleU.have} season</b> — the newest one ingested here.
         The ${staleU.expected} season’s usage has not been loaded yet, so

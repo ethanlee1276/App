@@ -139,3 +139,50 @@ Held by `test_the_lights_on` (and `test_design_tells`, whose shadow rule now
 allows the `--glow-*` family: still one system of tokens). Checked in both
 themes on a phone and a desktop. A phone keeps its budget: no blur, no layer
 per card, and reduced motion zeroes every animation.
+
+# The blend — 2026-10-27
+
+Ethan, the same night: "We need the whole site to feel more blended with the
+colors and everything you added. Everything feels so sharp ... Look up
+research on like what people like to see aesthetically and realize what apps
+actually look like ... The colors look weird. The textures look weird ... The
+skins of everything look weird." He was right. Side by side with the before
+shots, the site was a brown haze behind every page, a rainbow of league
+colours, an outline round nearly every box, numbers in a typewriter face,
+neon-cast stadium photographs behind the data, and a spinning rainbow round
+the best pick.
+
+**What the research says people like.**
+
+- A first impression forms in about half a second (Lindgaard et al., 2006),
+  and it is driven mostly by how busy and how colourful a page looks: the
+  moderate middle of both is rated most appealing (Reinecke et al., "Predicting
+  users' first impressions of website aesthetics", CHI 2013; Reinecke & Gajos,
+  CHI 2014, 2.4 million ratings). Every outline and every hue added complexity.
+- People prefer curved contours to sharp angles (Bar & Neta, "Humans prefer
+  curved visual objects", Psychological Science 2006; Silvia & Barona 2009).
+- On dark grounds, saturated colours vibrate, elevation reads by a lighter
+  surface rather than a line or a shadow, and accents should be desaturated
+  (Material's dark theme guidance and the dark-mode practice write-ups).
+- Typical beats novel: an app that looks like its category is liked more.
+  DraftKings, FanDuel, Underdog, PrizePicks and Apple Sports all set one clean
+  sans (numbers included), neutral surfaces with one accent, filled odds
+  buttons, and photos only as player or team imagery.
+
+| # | Was | Now |
+|---|---|---|
+| B1 | **Three faces**: a condensed grotesque, a monospace for numbers, a Didone for names | **Inter** for words and numbers (tabular figures, one 48 KB file, every weight); Bodoni kept only for the brand and the Pick of the Day headline Ethan chose |
+| B2 | **Brown neutrals** (chroma ~0.015) and cards barely a step off the page, so every box needed an outline | **graphite** (chroma ~0.004), cards a clear step above the page; text greys neutral instead of beige; the contrast ladder still holds (tests/test_contrast) |
+| B3 | **Outlines everywhere**: chips, pills, buttons, price boxes, crests, fields, notices with a stripe down the side | **fills**: tonal chips and buttons, the open one tinted; cards on a soft lift; a coloured stripe became light from the card's left edge |
+| B4 | Corners 8 / 12 / 14 | **10 / 14 / 18**, softer everywhere at once |
+| B5 | **A brown blob** of league light in the top-left of every page | a wide, faint wash of the league's colour across the top |
+| B6 | **League colours at full saturation**, each a different brightness | one family: equal lightness and chroma in OKLCH, a darker set for the light theme |
+| B7 | Glows with a hard 1px ring | blurred light only; the best pick wears a still gold edge, not a spinning rainbow; the home's four doors share the gold |
+| B8 | **Neon stadium photographs** behind the data | one grade for every venue photo (less colour, less light), chips on it as dark glass |
+| B9 | Tracked caps at up to .3em | about half that, everywhere (the wordmark keeps its spacing) |
+| B10 | The best pick's card crushed the name to two lines on a phone and a desktop | the price runs under the name on a phone, the four checks under it on a wide screen |
+
+Light theme: warm white page, white cards on a soft shadow, the same fills in
+ink. Held by tests/test_the_site_blends.py (and the contrast, chroma and
+design-tells tests, all re-measured). Before and after: every main page at a
+phone and a desktop width, both themes, and the iPhone app's capsule bar.

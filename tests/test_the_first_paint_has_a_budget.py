@@ -272,7 +272,8 @@ def test_the_hero_is_eager_and_the_body_font_is_preloaded():
         i = app.index(f"function {fn}(")
         body = app[i:app.index("\n}\n", i)]
         assert 'fetchpriority="high"' in body and 'loading="lazy"' not in body, fn
-    assert '<link rel="preload" href="fonts/archivo-narrow.woff2" as="font"' in HTML
+    # The UI face since the blend (2026-10-27): Inter, every weight in one file.
+    assert '<link rel="preload" href="fonts/inter.woff2" as="font"' in HTML
     assert HTML.index('rel="preload"') < HTML.index('rel="stylesheet"')
 
 

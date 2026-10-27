@@ -183,7 +183,9 @@ def test_the_chart_and_the_headline_share_one_window():
 def test_the_window_bar_is_quieter_than_the_scope_bar():
     assert ".rec-windows { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }" in CSS
     rule = CSS[CSS.index(".rec-win {"):CSS.index("}", CSS.index(".rec-win {"))]
-    assert "var(--hairline) solid var(--border)" in rule and "min-height: 30px" in rule
+    # A fill, not an outline, since the blend (2026-10-27).
+    assert "var(--hairline) solid transparent" in rule and "background: var(--fill-tone)" in rule \
+        and "min-height: 30px" in rule
     assert ".rec-win.active {" in CSS and ".rec-win-note {" in CSS
 
 

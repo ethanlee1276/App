@@ -25,7 +25,7 @@
 .pgr-leg-h b { flex: 1 1 14ch; min-width: 0; font-weight: 600; overflow-wrap: break-word; }
 .pgr-n { flex-shrink: 0; color: var(--text-mute); font-family: var(--font-mono); font-size: var(--fs-xs); }
 .pgr-pill { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .03em; text-transform: uppercase; color: var(--text-mute); border: var(--hairline) solid var(--border); }
+  letter-spacing: .03em; text-transform: uppercase; color: var(--text-mute); border: var(--hairline) solid transparent; background: var(--fill-tone); }
 .pgr-pill.v-strong { color: var(--good); border-color: currentColor; }
 .pgr-pill.v-fair { color: var(--gold); border-color: currentColor; }
 .pgr-pill.v-weak { color: var(--warn); border-color: currentColor; }
@@ -139,7 +139,7 @@
 /* Better legs for a weak spot (slipgrade.replacements): a short list under
    the leg, each with its own tag and what it does to the ticket. */
 .pgr-swaps { margin-top: 6px; padding: 7px 9px; border-radius: var(--radius-sm); font-size: var(--fs-xs);
-  color: var(--text-dim); background: var(--panel); border: var(--hairline) solid var(--border); overflow-wrap: break-word; }
+  color: var(--text-dim); background: var(--panel); border: var(--hairline) solid transparent; overflow-wrap: break-word; }
 .pgr-swaps > b { color: var(--text); }
 .pgr-swaps ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
 .pgr-swaps li b { color: var(--text); }
@@ -207,6 +207,6 @@
 .pgr-sw-t em.dn { color: var(--bad); }
 /* On my lock screen (the iOS app's Live Activity): one quiet button under the legs. */
 .pgr-lock { display: block; width: 100%; margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--border); background: var(--fill-subtle); color: var(--text);
+  border: var(--hairline) solid transparent; background: var(--fill-subtle); color: var(--text);
   font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
 .pgr-lock.on { color: var(--text-mute); cursor: default; }

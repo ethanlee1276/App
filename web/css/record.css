@@ -187,7 +187,7 @@
    `.dim` is the blended row: present so nothing is hidden, quieter
    because it is the sum of two questions and the least useful of the
    three. */
-.pl-split { margin-top: 14px; border: var(--hairline) solid var(--border);
+.pl-split { margin-top: 14px; border: var(--hairline) solid transparent;
   border-radius: var(--radius); overflow: hidden;
   background: var(--fill-subtle); }
 .pl-split-head { padding: 10px 14px 8px; font-size: var(--fs-sm);
@@ -312,15 +312,15 @@
    page. */
 .rec-windows { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
 .rec-win { padding: 5px 12px; min-height: 30px; border-radius: 999px; cursor: pointer;
-  background: transparent; border: var(--hairline) solid var(--border); color: var(--text-mute);
+  background: var(--fill-tone); border: var(--hairline) solid transparent; color: var(--text-mute);
   font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700; }
-.rec-win.active { color: var(--text); border-color: var(--brand-2);
+.rec-win.active { color: var(--text); border-color: transparent;
   background: color-mix(in oklab, var(--brand) 14%, transparent); }
 .rec-win-note { margin: -4px 0 14px; color: var(--text-mute); font-size: var(--fs-xs); }
 /* A window the record cannot fill yet: there, greyed, with the reason
    beside the row (audit V-22) — never silently missing. */
 .rec-win.off { opacity: .45; cursor: not-allowed; }
-.rec-win.off:hover { color: var(--text-mute); border-color: var(--border); }
+.rec-win.off:hover { color: var(--text-mute); border-color: transparent; }
 .rec-win-why { align-self: center; color: var(--text-mute); font-size: var(--fs-xs); }
 /* This month, in one card; and the fold below the sample floor. */
 .rec-month-card { padding: 14px 16px; margin: 12px 0; }

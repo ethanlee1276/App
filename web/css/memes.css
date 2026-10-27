@@ -199,7 +199,7 @@
   letter-spacing: .06em; text-transform: uppercase; }
 
 .mc-hero-live { color: var(--good); font-family: var(--font-sans);
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .07em;
   text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; }
 
 .mc-hero-words p { margin: 8px 0 0; color: var(--text-body); font-size: var(--fs-sm);
@@ -236,7 +236,7 @@
 
 .mc-watch-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
   padding: 11px 13px; border-bottom: var(--hairline) solid var(--border-soft);
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-dim); }
 
 .mc-watch-head span { color: var(--text-mute); font-weight: 600;

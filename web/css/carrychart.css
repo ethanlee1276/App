@@ -48,7 +48,7 @@
   font-size: 22px; font-weight: 700; letter-spacing: .02em; color: var(--text-dim); }
 .cc-face.on .cc-init { visibility: hidden; }
 .cc-who { display: flex; flex-direction: column; min-width: 0; flex: 1 1 200px; }
-.cc-eyebrow { font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--brand); }
+.cc-eyebrow { font-size: var(--fs-xs); letter-spacing: .07em; text-transform: uppercase; font-weight: 800; color: var(--brand); }
 .cc-name { margin: 2px 0; font-family: var(--font-headline); font-size: clamp(22px, 4.6vw, 30px); line-height: 1.1; }
 .cc-sub { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text-mute); font-size: var(--fs-sm); }
 .cc-seasons { display: flex; gap: 6px; }
@@ -73,7 +73,7 @@
 .cc-hero-logo { flex: 0 0 auto; display: grid; place-items: center;
   filter: drop-shadow(0 6px 16px color-mix(in oklab, var(--bg) 85%, transparent)); }
 .cc-hero-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.02; }
-.cc-hero-name small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--text-dim);
+.cc-hero-name small { font-size: var(--fs-xs); letter-spacing: .09em; text-transform: uppercase; font-weight: 700; color: var(--text-dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A NAME ON ITS OWN LINE (2026-10-14: "NUGGET / S", "TSARUK / YAN" on a
    phone): the display face runs about .73em a letter, so the size comes
@@ -84,8 +84,8 @@
   letter-spacing: .02em; text-transform: uppercase; color: var(--text); overflow-wrap: normal; }
 .cc-hero-name i { margin-top: 5px; font-style: normal; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-dim); }
 .cc-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 4px; text-align: center; }
-.cc-hero-mid small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 800; color: var(--brand); }
-.cc-hero-mid span { font-size: var(--fs-xs); letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--text-dim);
+.cc-hero-mid small { font-size: var(--fs-xs); letter-spacing: .09em; text-transform: uppercase; font-weight: 800; color: var(--brand); }
+.cc-hero-mid span { font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; color: var(--text-dim);
   white-space: nowrap; }
 .cc-hero-vs { margin-top: 4px; font-family: var(--font-display); font-size: clamp(22px, 4.4vw, 34px); font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
@@ -113,7 +113,7 @@
   .cc-hero-in { gap: 6px; min-height: 160px; padding: 16px 10px; }
   .cc-hero-team, .cc-hero-team.r { flex-direction: column; gap: 8px; text-align: center; }
   .cc-hero-team.r { flex-direction: column-reverse; justify-content: center; }
-  .cc-hero-name small { letter-spacing: .1em; font-size: var(--fs-2xs); }
+  .cc-hero-name small { letter-spacing: .06em; font-size: var(--fs-2xs); }
   .cc-hero-name b { font-size: clamp(13px, min(4.8vw, calc(34cqi / var(--nl, 6))), 22px); }
 }
 
@@ -128,12 +128,12 @@
 .cc-tab:hover { color: var(--text-dim); }
 .cc-tab.on { color: var(--text); border-bottom-color: var(--brand); }
 .cc-chip { display: inline-flex; align-items: baseline; gap: 7px; flex: 0 0 auto; padding: 7px 13px; border-radius: 999px;
-  border: var(--hairline) solid var(--border); background: var(--panel-2); color: var(--text-dim);
+  border: var(--hairline) solid transparent; background: var(--panel-2); color: var(--text-dim);
   font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; white-space: nowrap;
   transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out); }
 .cc-chip:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--border)); }
 .cc-chip small { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); }
-.cc-chip.on { border-color: var(--brand); color: var(--text); background: color-mix(in srgb, var(--brand) 16%, var(--panel-2)); }
+.cc-chip.on { border-color: transparent; color: var(--text); background: color-mix(in srgb, var(--brand) 16%, var(--panel-2)); }
 .cc-chip.on small { color: var(--brand); }
 .cc-car { display: flex; align-items: center; gap: 6px; margin: 2px 0 4px; }
 .cc-step { flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
@@ -153,7 +153,7 @@
 .cc-card { margin-top: 12px; padding: 14px; border-radius: var(--radius-lg); border: var(--hairline) solid var(--border);
   background: color-mix(in oklab, var(--panel-2) 72%, var(--panel)); min-width: 0; }
 .cc-card-h { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; }
-.cc-card-t { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-xs); letter-spacing: .14em;
+.cc-card-t { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-xs); letter-spacing: .08em;
   text-transform: uppercase; font-weight: 800; color: var(--text-dim); }
 .cc-stats > .cc-card-t { margin-bottom: 12px; }
 .cc-n { font-family: var(--font-mono); letter-spacing: 0; color: var(--text-mute); }
@@ -165,7 +165,7 @@
   background: var(--panel); }
 .cc-pop[hidden] { display: none; }
 .cc-pop .cc-note { margin: 0; }
-.cc-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; border: var(--hairline) solid var(--border);
+.cc-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; border: var(--hairline) solid transparent;
   background: var(--panel); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .cc-seg button { flex: 0 0 auto; padding: 6px 12px; border: 0; border-radius: 999px; background: none; color: var(--text-mute);
   font: inherit; font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; cursor: pointer; }
@@ -174,7 +174,7 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 60%, transparent); }
 .cc-splits > .cc-tbl-wrap:first-child { margin-top: 0; }
 .cc-card > .cc-more { margin-top: 0; border-top: 0; }
-.cc-card > .cc-more > summary { padding-top: 0; color: var(--text-dim); letter-spacing: .14em; font-weight: 800; }
+.cc-card > .cc-more > summary { padding-top: 0; color: var(--text-dim); letter-spacing: .08em; font-weight: 800; }
 
 /* THE FIELD, drawn the renders' way: dark turf with its mowing stripes,
    the sidelines and hash marks, the line of scrimmage in gold, and every
@@ -268,8 +268,8 @@
 .cc-sd { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 8px 4px; border-radius: var(--radius);
   border: var(--hairline) solid var(--border-soft); background: var(--panel); color: var(--text-dim); font: inherit; text-align: center; }
 button.cc-sd { cursor: pointer; }
-button.cc-sd:hover { border-color: var(--border); }
-.cc-sd span { font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
+button.cc-sd:hover { border-color: transparent; }
+.cc-sd span { font-size: var(--fs-2xs); letter-spacing: .07em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
 .cc-sd b { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
 .cc-sd b small { font-family: var(--font-sans); font-size: var(--fs-2xs); font-weight: 600; color: var(--text-mute); }
 .cc-sd i { font-style: normal; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--brand); }
@@ -307,7 +307,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-tiles-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .cc-tile { min-width: 0; padding: 10px 10px 9px; border-radius: var(--radius); border: var(--hairline) solid var(--border-soft);
   background: var(--panel); text-align: left; }
-.cc-k { display: flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
+.cc-k { display: flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); letter-spacing: .06em; text-transform: uppercase;
   font-weight: 800; color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cc-k .ic { flex: 0 0 auto; color: var(--brand); }
 /* a name the card would cut (carrychart.js measures it once drawn) */
@@ -368,7 +368,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-filt select:hover { border-color: var(--brand); }
 .cc-table { gap: 0; margin-top: 0; }
 .cc-lh, .cc-row.cc-tr { display: grid; align-items: center; gap: 6px; }
-.cc-lh { padding: 0 8px 8px; border-bottom: var(--hairline) solid var(--border); font-size: var(--fs-2xs); letter-spacing: .12em;
+.cc-lh { padding: 0 8px 8px; border-bottom: var(--hairline) solid var(--border); font-size: var(--fs-2xs); letter-spacing: .07em;
   text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
 .cc-row.cc-tr { padding: 10px 8px; border: 0; border-bottom: var(--hairline) solid var(--border-soft); border-radius: 0;
   background: none; color: var(--text-dim); }
@@ -459,7 +459,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-bv small { margin-left: 6px; font-size: var(--fs-xs); color: var(--text-mute); }
 .cc-bx { grid-area: x; font-size: var(--fs-xs); color: var(--text-mute); }
 .cc-bx .cc-pill { margin-left: 6px; padding: 1px 7px; }
-.cc-bh { margin: 14px 0 10px; font-size: var(--fs-2xs); letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
+.cc-bh { margin: 14px 0 10px; font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
 .cc-bh:first-child { margin-top: 0; }
 @media (max-width: 520px) {
   .cc-brow { grid-template-columns: minmax(70px, 96px) minmax(0, 1fr) 64px; grid-template-areas: "n t v" "x x x"; }
@@ -515,7 +515,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-sk-fig { height: 300px; }
 .cc-chip.cc-pend { color: var(--text-mute); border-style: dashed; cursor: default; background: var(--skeleton);
   background-size: 220% 100%; animation: shimmer 1.3s ease-in-out infinite; }
-.cc-chip.cc-pend:hover { border-color: var(--border); }
+.cc-chip.cc-pend:hover { border-color: transparent; }
 .cc-fail { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .cc-sk, .cc-chip.cc-pend { animation: none; }
@@ -629,7 +629,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-pick select, .mb-pick.one { appearance: none; -webkit-appearance: none; padding: 6px 28px 6px 12px; border-radius: 999px;
   border: var(--hairline) solid color-mix(in oklab, var(--text) 22%, transparent);
   background: color-mix(in oklab, var(--bg) 55%, transparent); color: var(--text);
-  font: inherit; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+  font: inherit; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
 .mb-pick.one { padding-right: 12px; cursor: default; }
 .mb-pick:not(.one)::after { content: "▾"; position: absolute; right: 11px; top: 50%; transform: translateY(-50%); pointer-events: none;
   font-size: 11px; color: var(--text-dim); }
@@ -666,21 +666,21 @@ button.cc-sd:hover { border-color: var(--border); }
   background: linear-gradient(to top, color-mix(in oklab, var(--ta, var(--brand)) 55%, var(--bg)), transparent); }
 .mb-hero-who { grid-area: who; display: flex; flex-direction: column; align-items: flex-end; min-width: 0; text-align: right;
   line-height: 1.02; }
-.mb-hero-who small { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--text-dim); }
+.mb-hero-who small { font-size: var(--fs-xs); letter-spacing: .09em; text-transform: uppercase; font-weight: 700; color: var(--text-dim); }
 /* HIS SURNAME ON ONE LINE (2026-10-14: the card read "HERNÁNDE / Z" and
    "WILLIA / MS" on a phone): the size comes down with the longest word's
    letters (`--nl`, set where it is drawn) so a name is never cut, and a
    two-word one ("St. Brown") still breaks only between its words. */
 .mb-hero-who b { font-family: var(--font-display); font-size: clamp(12px, min(6.6cqi, calc(34cqi / var(--nl, 6))), 40px);
   font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: var(--text); overflow-wrap: normal; }
-.mb-hero-who span { margin-top: 6px; font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: .1em; color: var(--text-dim);
+.mb-hero-who span { margin-top: 6px; font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: .06em; color: var(--text-dim);
   white-space: pre; }
 .mb-hero-tiles { grid-area: tiles; display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 6px; margin-top: 2px; }
 .mb-ht { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; padding: 9px 4px 8px;
   border-radius: var(--radius); border: var(--hairline) solid color-mix(in oklab, var(--text) 18%, transparent);
   background: color-mix(in oklab, var(--bg) 58%, transparent); }
 .mb-ht b { font-family: var(--font-mono); font-size: clamp(16px, 4.8cqi, 26px); line-height: 1; color: var(--text); }
-.mb-ht span { font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
+.mb-ht span { font-size: var(--fs-2xs); letter-spacing: .07em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
 .mb-cover { margin: 8px 2px 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
 @container (max-width: 420px) {
   .mb-hero-in { gap: 8px; padding: 10px 10px 12px; }
@@ -696,7 +696,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-recent { margin-top: 2px; }
 .mb-row-h { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin: 4px 0 8px; }
 .mb-last { margin: 0 2px 8px; font-size: var(--fs-sm); color: var(--text-dim); }
-.mb-last span { margin-right: 4px; font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
+.mb-last span { margin-right: 4px; font-size: var(--fs-2xs); letter-spacing: .07em; text-transform: uppercase; font-weight: 800; color: var(--text-mute); }
 .mb-last b { font-family: var(--font-mono); color: var(--text); }
 .mb-chips .cc-chip.mb-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 112px;
   padding: 8px 10px; text-align: left; }
@@ -725,11 +725,11 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-side { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .mb-side.r { justify-content: flex-end; text-align: right; }
 .mb-side span { display: flex; flex-direction: column; line-height: 1; }
-.mb-side b { font-size: var(--fs-sm); letter-spacing: .12em; font-weight: 800; color: var(--text-dim); }
+.mb-side b { font-size: var(--fs-sm); letter-spacing: .07em; font-weight: 800; color: var(--text-dim); }
 .mb-side em { margin-top: 4px; font-style: normal; font-family: var(--font-mono); font-size: clamp(26px, 8cqi, 40px); font-weight: 800; color: var(--text); }
 .mb-side .mb-rec { margin-top: 5px; font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; color: var(--text-mute); }
 .mb-fin { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.mb-fin small { font-size: var(--fs-2xs); letter-spacing: .16em; text-transform: uppercase; font-weight: 800; color: var(--text-dim); }
+.mb-fin small { font-size: var(--fs-2xs); letter-spacing: .09em; text-transform: uppercase; font-weight: 800; color: var(--text-dim); }
 .mb-fin b { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: var(--radius-sm);
   border: 1.5px solid currentColor; font-family: var(--font-mono); font-size: var(--fs-md); color: var(--text-dim); }
 .mb-fin b.w { color: var(--brand); }
@@ -737,7 +737,7 @@ button.cc-sd:hover { border-color: var(--border); }
 .cc-tile.hot { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, var(--panel)); }
 .cc-tile.hot b { color: var(--brand); }
 .mb-sub-h { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
-.mb-sub { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-xs); letter-spacing: .14em; text-transform: uppercase;
+.mb-sub { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase;
   font-weight: 800; color: var(--text-dim); }
 .mb-sub-h .cc-tools { margin-left: auto; }
 .mb-c-mph { font-family: var(--font-mono); color: var(--text-dim); }
@@ -761,15 +761,15 @@ button.cc-sd:hover { border-color: var(--border); }
 .mb-pc.b { border-style: dashed; color: var(--text-mute); }
 .mb-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
 .mb-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
-  border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text);
+  border: var(--hairline) solid transparent; background: var(--panel); color: var(--text);
   font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
-.mb-btn:hover, .mb-btn[aria-pressed="true"] { border-color: var(--brand); }
+.mb-btn:hover, .mb-btn[aria-pressed="true"] { border-color: transparent; }
 a.mb-btn { text-decoration: none; }
 .mb-btn.mb-ext span { color: var(--text-mute); }
 /* MLB's own expected stats and barrel rate, beside ours */
 .mb-own { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 10px 2px 0; font-size: var(--fs-sm);
   color: var(--text-dim); }
-.mb-own span { flex: 0 0 100%; font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; font-weight: 800;
+.mb-own span { flex: 0 0 100%; font-size: var(--fs-2xs); letter-spacing: .07em; text-transform: uppercase; font-weight: 800;
   color: var(--text-mute); }
 .mb-own b { font-family: var(--font-mono); color: var(--text); }
 .mb-cap { margin: 0 2px 10px; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }

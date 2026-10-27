@@ -11,7 +11,7 @@
   "appendUserAgent": "QellysApp/1.0 (ios)",
   "ios": {
     "contentInset": "never",
-    "backgroundColor": "#090705"
+    "backgroundColor": "#0C0B0A"
   },
   "plugins": {
     "PushNotifications": {
@@ -22,7 +22,7 @@
       ]
     },
     "SplashScreen": {
-      "backgroundColor": "#090705",
+      "backgroundColor": "#0C0B0A",
       "launchAutoHide": true
     }
   }

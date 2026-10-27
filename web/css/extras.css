@@ -79,9 +79,9 @@
 .xt-chip.t-bad { color: var(--bad); }
 .xt-chip.t-warn { color: var(--gold); }
 .xt-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.xt-tab { padding: 4px 12px; border-radius: 999px; border: var(--hairline) solid var(--border); background: var(--panel-2);
+.xt-tab { padding: 4px 12px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--panel-2);
   color: var(--text-dim); font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
-.xt-tab.on { color: var(--text); border-color: var(--brand); }
+.xt-tab.on { color: var(--text); border-color: transparent; }
 .xt-wi-out { min-height: 1.4em; }
 
 /* Hockey: the goalie board and the line matchups. */

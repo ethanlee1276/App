@@ -239,7 +239,8 @@ def test_every_home_section_wears_the_decks_head_and_the_league_select_yields():
     assert "#home-deck .section-title { display: block; margin: 0 0 10px; color: var(--text-dim);" in CSS
     i = CSS.index("#home-deck .section-title {")
     rule = CSS[i:CSS.index("}", i)]
-    assert "text-transform: uppercase" in rule and "letter-spacing: .12em" in rule
+    # Tracked caps at about half their old spacing since the blend (2026-10-27).
+    assert "text-transform: uppercase" in rule and "letter-spacing: .07em" in rule
     sub = CSS[CSS.index("#home-deck .section-title .sub {"):]
     sub = sub[:sub.index("}")]
     assert "display: block" in sub and "text-transform: none" in sub, "the sub-line is kept, one line down"
@@ -262,7 +263,7 @@ def test_the_pick_of_the_day_is_the_hero_in_the_prototypes_dress():
     potd = potd[:potd.index("\nfunction ", 10)]
     assert '<strong class="potd-bet">${text}</strong>' in potd
     assert 'style="font-size:var(--fs-lg)">${text}' not in potd
-    assert ".potd-hero .player { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;" in CSS
+    assert ".potd-hero .player { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;" in CSS
     # Named by the strip's two states, so test_potd_verdict's anchor on
     # the strip's own rule (`.potd-call {`) stays the first in the sheet.
     assert ".potd-hero .potd-call.is-bet, .potd-hero .potd-call.is-pass { display: inline-flex; align-self: flex-start;" in CSS, \
