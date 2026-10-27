@@ -2199,7 +2199,26 @@ class Handler(BaseHTTPRequestHandler):
                           statuses=status_of, team_of=team_of, budget_left=budget_left,
                           playoff_start=lset.get("playoff_week_start"),
                           dst_scoring=dstproj.scoring_from_sleeper(scoring), trades=trades)
+        if mine:
+            self._remember_lineup_league(league_id, user_id)
         self._send(200, json.dumps(out).encode(), ".json")
+
+    def _remember_lineup_league(self, league_id: str, sleeper_user: str) -> None:
+        """The league this desk just read, kept for the lineup alert
+        (engine/lineupalerts) when the signed-in account has "My fantasy
+        lineup" on, and only then (pushmine.lineup_remember). A desk never
+        fails for it."""
+        try:
+            from engine import pushmine
+            aconn = _acct().connect()
+            try:
+                who = self._account(aconn)
+                if who and who.get("id"):
+                    pushmine.lineup_remember(aconn, who["id"], league_id, sleeper_user)
+            finally:
+                aconn.close()
+        except Exception as exc:                                  # noqa: BLE001
+            sys.stderr.write(f"  lineup league: {type(exc).__name__}: {exc}\n")
 
     def _league_desk_espn(self, league_id: str, member_id: str, query: dict):
         """The same desk, reading an ESPN league instead of a Sleeper one.

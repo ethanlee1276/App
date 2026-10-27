@@ -68,13 +68,15 @@ WEB = ROOT / "web"
 TOPICS = PA.PERSONAL
 #: The watches look at most this often (the feed changes on a build, minutes apart).
 WATCH_EVERY_S = 120
+#: The lineup alert's pass (engine/lineupalerts) looks at most this often.
+LINEUP_EVERY_S = 15 * 60
 #: How long each kind stays worth showing. A "your game is on" an hour late
 #: is noise; a settled ticket is still news the next morning.
 TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 3600, "clutch": 20 * 60,
-         "finals": 3 * 3600}
+         "finals": 3 * 3600, "lineup": 18 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
-_looked = {"watches": 0.0}
+_looked = {"watches": 0.0, "lineup": 0.0}
 
 
 def ensure_tables(conn) -> None:
@@ -94,6 +96,9 @@ def ensure_tables(conn) -> None:
       CREATE TABLE IF NOT EXISTS push_clutch_seen (
         game TEXT NOT NULL, play TEXT NOT NULL, at REAL NOT NULL,
         PRIMARY KEY (game, play));
+      CREATE TABLE IF NOT EXISTS push_lineup_leagues (
+        user_id INTEGER PRIMARY KEY, league_id TEXT NOT NULL, sleeper_user TEXT NOT NULL,
+        at REAL NOT NULL);
     """)
     conn.commit()
 
@@ -123,6 +128,32 @@ def tell(conn, user_id, msg_id: str, topic: str, title: str, body: str, url: str
                      "WHERE user_id = ? ORDER BY at DESC LIMIT ?)", (int(user_id), int(user_id), KEEP_PER_USER))
     conn.commit()
     return bool(cur.rowcount)
+
+
+def lineup_remember(conn, user_id, league_id: str, sleeper_user: str, now: float | None = None) -> bool:
+    """Keep the Sleeper league a member's desk just opened, for the lineup
+    alert (engine/lineupalerts), only while a phone of theirs has "My
+    fantasy lineup" on. False (and nothing kept) otherwise."""
+    if not user_id or not str(league_id).isdigit() or not str(sleeper_user).isdigit():
+        return False
+    if not asked(conn, user_id, "lineup"):
+        return False
+    conn.execute("INSERT INTO push_lineup_leagues (user_id, league_id, sleeper_user, at) VALUES (?,?,?,?) "
+                 "ON CONFLICT(user_id) DO UPDATE SET league_id = excluded.league_id, "
+                 "sleeper_user = excluded.sleeper_user, at = excluded.at",
+                 (int(user_id), str(league_id)[:25], str(sleeper_user)[:25], time.time() if now is None else now))
+    conn.commit()
+    return True
+
+
+def lineup_forget(conn) -> int:
+    """Forget the league of every account no phone of which has "My fantasy
+    lineup" on any more (switched off, signed out, or the phone gone): the
+    privacy policy's "within fifteen minutes of your turning it off"."""
+    cur = conn.execute("DELETE FROM push_lineup_leagues WHERE user_id NOT IN (SELECT user_id FROM push_subs "
+                       "WHERE user_id IS NOT NULL AND (',' || topics || ',') LIKE '%,lineup,%')")
+    conn.commit()
+    return cur.rowcount
 
 
 def mine(conn, user_id, now: float | None = None) -> list[dict]:
@@ -526,7 +557,7 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     # Kept a day at most (the privacy policy, 2.7): long enough for a late
     # knock to read it, no longer.
     conn.execute("DELETE FROM push_mine WHERE at < ?", (t - KEEP_S,))
-    held = " AND kind NOT IN ('watches', 'clutch')" if quiet else ""
+    held = " AND kind NOT IN ('watches', 'clutch', 'lineup')" if quiet else ""
     rows = conn.execute("SELECT user_id, id, kind, title, body, url FROM push_mine WHERE sent = 0" + held +
                         " ORDER BY at").fetchall()
     stats = {"messages": len(rows), "sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
@@ -584,12 +615,20 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
     conn = connect()
     try:
         ensure_tables(conn)
+        lineup_forget(conn)
         if not conn.execute("SELECT 1 FROM push_subs WHERE user_id IS NOT NULL LIMIT 1").fetchone():
             return {"messages": 0}
         told = 0
         if t - _looked["watches"] >= WATCH_EVERY_S:
             _looked["watches"] = t
             told = watch_pass(conn, _feed(web), entitled=entitled, now=t)
+        if t - _looked["lineup"] >= LINEUP_EVERY_S:
+            _looked["lineup"] = t
+            from engine import lineupalerts as _la
+            try:
+                told += _la.lineup_pass(conn, now=t)
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  lineup alerts: {type(exc).__name__}: {exc}")
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         from engine import finals as _fin
         moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)
@@ -620,10 +659,15 @@ def main(argv=None) -> int:
             q = conn.execute("SELECT kind, SUM(sent = 0), COUNT(*) FROM push_mine GROUP BY kind").fetchall()
         except sqlite3.Error:
             q = []
+        try:
+            leagues = conn.execute("SELECT COUNT(*) FROM push_lineup_leagues").fetchone()[0]
+        except sqlite3.Error:
+            leagues = 0
     finally:
         conn.close()
     print(f"Signed-in phones asking: {n['watches']} for watches, {n['bets']} for their bets, "
-          f"{n['clutch']} for big moments.")
+          f"{n['clutch']} for big moments, {n['finals']} for final scores, {n['lineup']} for their "
+          f"fantasy lineup ({leagues} league{'s' if leagues != 1 else ''} kept for it).")
     print("Queued (unsent / kept): " + (", ".join(f"{k} {u}/{c}" for k, u, c in q) if q else "nothing yet."))
     return 0
 

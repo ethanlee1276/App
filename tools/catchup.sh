@@ -64,6 +64,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EZ 2>&1 | tee /tmp/ez.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh FA 2>&1 | tee /tmp/fa.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh FB 2>&1 | tee /tmp/fb.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh FC 2>&1 | tee /tmp/fc.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -595,6 +596,9 @@ SH
 run FB "Your season and last week in review on a Sleeper league's desk" 60 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function seasonHTML('
 curl -s "https://qellysbook.com/api/leagueseason?league=x"; echo
+SH
+run FC "Lineup alerts: phones asking and leagues kept" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
 SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('

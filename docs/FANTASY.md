@@ -176,9 +176,11 @@ queue, in order.
 6. **Waivers for your roster** — SHIPPED 2026-10-27. Free agents ranked by what they add to
    *your* starting lineup; a FAAB bid range where the league uses a budget;
    the bench player to drop.
-7. **Lineup alerts.** Opt in, and a push tells you when one of your
-   starters is ruled out, inactive or on a bye, with the bench player who
-   should replace him.
+7. **Lineup alerts** — SHIPPED 2026-10-27 (Sleeper leagues). Opt in, and a
+   push tells you when a starter you still have in is out, on IR,
+   suspended, on a bye or doubtful (engine/lineupalerts). The push names
+   the player and his designation, both public; the replacement is the
+   to-do list's, a tap away, because a push carries no projection.
 8. **The week in review** — SHIPPED 2026-10-27 (Sleeper leagues). Last
    week: your score against your best possible lineup (points left on the
    bench), your costliest and best calls (and whether the costly one cost

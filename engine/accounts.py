@@ -907,7 +907,7 @@ def delete_user(conn, user_id: int) -> None:
     # A phone's own subscription is the device's: it keeps the public
     # alerts it asked for, with this account unlinked from it.
     for table in ("chat_msgs", "chat_reacts", "chat_play_reacts", "chat_votes", "chat_reports",
-                  "push_mine", "push_watch_seen", "push_activities", "referral_codes",
+                  "push_mine", "push_watch_seen", "push_activities", "push_lineup_leagues", "referral_codes",
                   # The Alerts page's watches (engine/alerts), which had
                   # leaned on ON DELETE CASCADE alone — the very thing this
                   # function's docstring says not to trust.
