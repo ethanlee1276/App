@@ -259,6 +259,11 @@ def league_points(means: dict, scoring: dict) -> dict:
             # would have buried a real gap the day one appeared.
             if key in QB_ONLY_COMPONENTS and pos and pos != "QB":
                 continue
+            # A KICKER'S AND A TEAM DEFENSE'S CATCHES AND YARDS ARE ZERO, NOT
+            # UNKNOWN: their week is scored on its own parts (kicking points,
+            # engine/dstproj), never on these.
+            if pos in ("K", "DEF"):
+                continue
             missing.append(key)
             continue
         pts += (float(want) - ppr_rate) * float(have)

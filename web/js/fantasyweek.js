@@ -103,7 +103,28 @@
     return out.slice(0, n || 3);
   }
 
+  /* A TEAM DEFENSE (engine/dstproj): its club's mark, its opponent's
+     implied points, and its expected sacks and takeaways for a member. Not a
+     player, so not a door to a player's panel. */
+  function defRowHTML(r) {
+    const why = reasons(r, 2);
+    const d = r.dst || {};
+    const more = [
+      r.range ? `8 in 10 weeks ${r.range[0]}–${r.range[1]}` : "",
+      d.sack != null ? `${Number(d.sack).toFixed(1)} sacks, ${(Number(d.int || 0) + Number(d.fum_rec || 0)).toFixed(1)} takeaways expected` : "",
+    ].filter(Boolean).join(" · ");
+    return `<div class="hd-row ff-row ffw-row ffw-def">
+      <span class="hd-what"><b>${teamMark(r.team, 24, nflMap(), "nfl")}${escapeHtml(r.player)}${matchChip(r.matchup)}</b>
+        <span>${escapeHtml(["D/ST", vs(r), (r.matchup || {}).text || ""].filter(Boolean).join(" · "))}</span>
+        ${more ? `<span>${escapeHtml(more)}</span>` : ""}
+        ${why.length ? `<span class="ffw-why">${why.map(escapeHtml).join(" · ")}</span>` : ""}</span>
+      <span class="hd-state"><b>${Number(r.expected).toFixed(1)}</b>
+        <span class="hd-vs">points this week</span></span>
+    </div>`;
+  }
+
   function rowHTML(r) {
+    if (r.position === "DEF") return defRowHTML(r);
     const why = reasons(r, 2);
     const where = [r.position, vs(r),
       r.script && r.script.team_implied != null ? `team total ${r.script.team_implied}` : ""]
@@ -167,7 +188,7 @@
         <div class="es-sub">Next week’s projections build with the next NFL board.</div></div>`;
     }
     const all = w.players || [];
-    const tabs = ["ALL", "QB", "RB", "WR", "TE", "K"]
+    const tabs = ["ALL", "QB", "RB", "WR", "TE", "K", "DEF"]
       .filter((p) => p === "ALL" || all.some((r) => r.position === p));
     const want = tabs.includes(wantPos) ? wantPos : "ALL";
     const rows = all.filter((r) => want === "ALL" || r.position === want);
@@ -187,11 +208,11 @@
       ${byes.length ? `<p class="rank-help"><b>On a bye:</b> ${byes.map(nflName).map(escapeHtml).join(", ")}</p>` : ""}
       <div class="rec-bf-group ffw-pos" role="group" aria-label="Position">${tabs.map((p) => `
         <button type="button" class="rec-bf${p === want ? " active" : ""}" data-ffwpos="${p}"
-          aria-pressed="${p === want ? "true" : "false"}">${p === "ALL" ? "All" : p}</button>`).join("")}</div>
+          aria-pressed="${p === want ? "true" : "false"}">${p === "ALL" ? "All" : p === "DEF" ? "D/ST" : p}</button>`).join("")}</div>
       <div class="card ff-rows ffw-list">${shown.map(rowHTML).join("")
         || panelEmpty("No players at this position on this week’s board.")}</div>
       ${rows.length > shown.length ? `<button type="button" class="btn ghost" data-ffwmore>Show all ${
-        rows.length} ${want === "ALL" ? "players" : want}s ▾</button>` : ""}
+        rows.length} ${want === "ALL" ? "players" : want === "DEF" ? "defense" : want}s ▾</button>` : ""}
       ${measuredHTML(w.measured)}`;
   }
 
@@ -250,27 +271,100 @@
         ${r.filled.length === 1 ? "it" : "them"} this week.</p>` : ""}`;
   }
 
+  /* YOUR WEEK, AS A TO-DO LIST (engine/fantasy_todo, 2026-10-27; Ethan:
+     "I don't know how fantasy works"). The desk's answers in the order a
+     week is lost in, each with the points it is worth; a tap scrolls to the
+     section that says more. */
+  const TODO_SECTIONS = { lineup: "Your best lineup", h2h: "you vs", pickups: "Pickups for your roster",
+                          trades: "Trades worth proposing" };
+  function todo(d) {
+    const list = (d || {}).todo;
+    if (!Array.isArray(list)) return "";
+    const wk = (d || {}).week || ((d || {}).projection_week || {}).week;
+    const item = (t) => `<li class="fft-item ${escapeAttr(t.tone || "info")}"${t.section
+        ? ` data-fftsec="${escapeAttr(t.section)}" role="button" tabindex="0"` : ""}>
+        <span class="fft-dot" aria-hidden="true"></span>
+        <span class="fft-text"><b>${escapeHtml(t.title)}</b>${t.detail ? `<span>${escapeHtml(t.detail)}</span>` : ""}</span>
+        ${t.gain != null ? `<span class="fft-gain">+${Number(t.gain).toFixed(1)}</span>` : ""}
+      </li>`;
+    return `<div class="card fft">
+      <div class="fft-head"><b>Your week</b><span>${wk ? `Week ${escapeHtml(String(wk))} · ` : ""}what to do now</span></div>
+      ${list.length ? `<ol class="fft-list">${list.map(item).join("")}</ol>`
+        : `<p class="fft-none">Nothing to do: your lineup is set and nothing on the wire beats it.</p>`}
+    </div>`;
+  }
+  function todoBind(host) {
+    if (!host) return;
+    host.querySelectorAll("[data-fftsec]").forEach((el) => {
+      const go = () => {
+        const want = TODO_SECTIONS[el.dataset.fftsec] || "";
+        const t = [...host.querySelectorAll(".section-title")].find((s) => s.textContent.includes(want));
+        if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+      el.addEventListener("click", go);
+      el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+  }
+
+  /* PICKUPS FOR YOUR ROSTER (engine/fantasy_waivers): what each free agent
+     adds to YOUR best lineup this week, whom he pushes out, his season, a
+     FAAB bid where the league bids from a budget, and the bench player to
+     drop. */
+  function rosterPickups(d) {
+    const P = (d || {}).pickups;
+    if (!P || !(P.pickups || []).length) return "";
+    const row = (r) => {
+      const c = r.card || {};
+      const def = r.position === "DEF";
+      const b = r.bid || {};
+      const bid = b.rule === "stream" ? "Bid $0–1: a one-week stream"
+        : b.high ? `Bid $${b.low}–$${b.high} of your $${b.of}` : "";
+      return `<div class="hd-row ff-row${def ? "" : " ffrow-door"}"${def ? ""
+          : ` data-dossier="${escapeAttr(r.player)}" role="button" tabindex="0"`}>
+        <span class="ld-slot">${escapeHtml(def ? "D/ST" : r.position || "")}</span>
+        <span class="hd-what"><b>${escapeHtml(r.player)}${matchChip(c.matchup)}${playChip(c)}</b>
+          <span>${escapeHtml([r.replaces ? `in for ${r.replaces}` : "", vs(c),
+            r.season_ppg ? `${Number(r.season_ppg).toFixed(1)} a game this season` : ""].filter(Boolean).join(" · "))}</span>
+          ${bid ? `<span class="ffp-bid">${escapeHtml(bid)}</span>` : ""}</span>
+        <span class="hd-state"><b>+${Number(r.gain).toFixed(1)}</b>
+          <span class="hd-vs">to your lineup</span></span>
+      </div>`;
+    };
+    const drop = P.drop;
+    return `
+      <div class="section-title">Pickups for your roster
+        <span class="sub">— who adds the most to your best lineup this week</span></div>
+      <div class="card ff-rows">${P.pickups.map(row).join("")}</div>
+      ${drop ? `<p class="rank-help"><b>To make room:</b> drop ${escapeHtml(drop.player)} (${escapeHtml(drop.position || "")},
+        ${Number(drop.ppg || 0).toFixed(1)} a game), your bench player worth least over the season.</p>` : ""}
+      ${(P.pickups || []).some((r) => (r.bid || {}).rule === "thumb") ? `<p class="rank-help">The bid is a rule of thumb, not
+        a measurement: more for more points a week and more weeks before the playoffs, never more than a quarter of
+        what you have left.</p>` : ""}`;
+  }
+
   /* The best of this week nobody in the league rosters (the desk's
      `free_agents`, engine/fantasyweek.free_agents): a pickup is this
      week's question too. */
   function pickups(d) {
     const fa = (d || {}).free_agents || {};
-    const order = ["QB", "RB", "WR", "TE", "K"].filter((p) => (fa[p] || []).length);
-    if (!order.length) return "";
+    const order = ["QB", "RB", "WR", "TE", "K", "DEF"].filter((p) => (fa[p] || []).length);
+    if (!order.length) return rosterPickups(d);
     const row = (r) => {
       const c = r.card || {};
       const why = reasons(c, 1);
-      return `<div class="hd-row ff-row ffrow-door" data-dossier="${escapeAttr(r.player)}"
-           role="button" tabindex="0">
-        <span class="ld-slot">${escapeHtml(r.position || "")}</span>
+      // A team defense to stream is no player's panel (engine/dstproj).
+      const def = r.position === "DEF";
+      return `<div class="hd-row ff-row${def ? "" : " ffrow-door"}"${def ? ""
+          : ` data-dossier="${escapeAttr(r.player)}" role="button" tabindex="0"`}>
+        <span class="ld-slot">${escapeHtml(def ? "D/ST" : r.position || "")}</span>
         <span class="hd-what"><b>${escapeHtml(r.player)}${matchChip(c.matchup)}${playChip(r)}</b>
-          <span>${escapeHtml([nflName(r.team), vs(c)].filter(Boolean).join(" · "))}</span>
+          <span>${escapeHtml([def ? (c.matchup || {}).text : nflName(r.team), vs(c)].filter(Boolean).join(" · "))}</span>
           ${why.length ? `<span class="ffw-why">${escapeHtml(why[0])}</span>` : ""}</span>
         <span class="hd-state"><b>${Number(r.expected).toFixed(1)}</b>
-          <span class="hd-vs">PPR this week</span></span>
+          <span class="hd-vs">${def ? "points" : "PPR"} this week</span></span>
       </div>`;
     };
-    return `
+    return rosterPickups(d) + `
       <div class="section-title">Best pickups this week
         <span class="sub">— the best of this week’s projections that nobody in your league
         rosters, by position</span></div>
@@ -324,5 +418,5 @@
       average.</p>`;
   }
 
-  window.QBWeek = { room, bind, rowFor, dossier, pickups, basis, seat, current, h2hNote, callNote };
+  window.QBWeek = { room, bind, rowFor, dossier, pickups, basis, seat, current, h2hNote, callNote, todo, todoBind };
 })();

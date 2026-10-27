@@ -47,7 +47,7 @@ async function renderFantasy() {
        league directly, and last season's target shares have nothing to
        do with it. The empty state stays too: it is true, and it says
        what to run. */
-    host.innerHTML = (fantasyFailed && !d ? outageHTML("the NFL usage board", "fantasy")
+    host.innerHTML = ff101HTML() + (fantasyFailed && !d ? outageHTML("the NFL usage board", "fantasy")
       : `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
       <div class="es-title">No NFL usage data yet</div>
       <div class="es-sub">${escapeHtml((d && d.note) || "This fills once the season’s usage rows — targets, carries, air yards, PPR points — have been ingested. Your own league below does not wait on it.")}</div></div>`) + `
@@ -60,6 +60,7 @@ async function renderFantasy() {
         <div id="sleeper-zone"></div><div id="league-desk"></div>
         <div id="espn-desk"></div>
       </div>`;
+    ff101Bind(host);
     renderSleeperZone(d || {});
     renderEspnZone();
     return;
@@ -298,7 +299,7 @@ async function renderFantasy() {
   // was 9,906px with ten section titles stacked in a single column, and
   // the usage table — the thing the page is FOR — sat below camp reports,
   // the waiver pulse, the offseason tracker and the draft kit.
-  const _ffLead = `
+  const _ffLead = `${ff101HTML()}
     <div class="stats">
       <div class="tile"><div class="k">Season</div><div class="v">${d.season}</div>
         <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${d.season < new Date().getFullYear()
@@ -418,6 +419,7 @@ async function renderFantasy() {
      + offseasonHTML(off) + draftKit],
   ], { index: true }) + _ffFoot;
   bindSubtabs(host);
+  ff101Bind(host);
   if (typeof QBWeek !== "undefined") QBWeek.bind(host);
   _mockBind(host);
   const more = document.getElementById("usage-more");
@@ -482,6 +484,56 @@ function campHTML(camp) {
 
 /* What the Fantasy page wears instead of the forms: what is linked, and
    the way to the page that changes it. */
+/* FANTASY 101 (Ethan, 2026-10-27: "I don't know how fantasy works. I don't
+   know how that shit works"). The game, the points, the week's rhythm and
+   the words every tab uses, in a minute, at the top of the room. Open until
+   the reader closes it; the one-line summary stays to open it again. */
+const FF101_KEY = "qb_ff101";
+const FF101_TERMS = [
+  ["PPR", "a point per catch; half-PPR is half a point"],
+  ["Flex", "a lineup spot any running back, receiver or tight end can fill; a superflex takes a quarterback too"],
+  ["Bye", "the one week each NFL team has off: its players score zero"],
+  ["Waivers", "claiming a player nobody owns, usually Tuesday or Wednesday night"],
+  ["FAAB", "a season budget (often $100) you bid from, blind, for waiver claims"],
+  ["Stream", "picking up a defense, kicker or quarterback for one good matchup, then dropping him"],
+  ["Handcuff", "the backup to your starting running back, who takes the job if he is hurt"],
+  ["Floor / ceiling", "a bad week and a big week for him: eight weeks in ten land between them"],
+  ["Q / D / Out / IR", "questionable (usually plays), doubtful (usually doesn’t), out, injured reserve (out for weeks)"],
+];
+function ff101Open() {
+  try { return localStorage.getItem(FF101_KEY) !== "closed"; } catch (e) { return true; }
+}
+function ff101HTML() {
+  return `<details class="card ff101"${ff101Open() ? " open" : ""}>
+    <summary><span class="ff101-k">New to fantasy?</span> How it works, in a minute</summary>
+    <ol class="ff101-steps">
+      <li><b>Draft a team.</b> You and about ten friends take turns picking real NFL players before the season.</li>
+      <li><b>Start a lineup every week.</b> Usually a quarterback, two running backs, two receivers, a tight end, a
+        flex, a kicker and a team defense (D/ST). Everyone else sits on your bench and scores nothing that week.</li>
+      <li><b>Their real games are your points.</b> A point per 10 rushing or receiving yards and per 25 passing
+        yards; 6 per touchdown (4 for a passing one); −2 per interception or lost fumble; in PPR leagues a point per
+        catch. A defense scores for sacks, takeaways and touchdowns, and more the fewer points it allows.</li>
+      <li><b>Beat one team a week.</b> The best records make the playoffs, usually weeks 15 to 17.</li>
+    </ol>
+    <div class="ff101-week">
+      <div><b>Tue–Wed</b><span>Waivers: claim the players nobody owns</span></div>
+      <div><b>Thu</b><span>The first game: its players lock at kickoff</span></div>
+      <div><b>Sun</b><span>Inactives come out 90 minutes before kickoff: never start a man who sits</span></div>
+      <div><b>Any day</b><span>Trades with the other managers</span></div>
+    </div>
+    <p class="ff101-start"><b>Start here:</b> link your league (Sleeper, ESPN or Yahoo). Then <b>This week</b> says who to
+      start and why, your league desk sets your best lineup and your odds against this week’s opponent, and
+      <b>Waivers &amp; starts</b> says who to pick up.</p>
+    <dl class="ff101-terms">${FF101_TERMS.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl>
+  </details>`;
+}
+function ff101Bind(host) {
+  const d = host.querySelector(".ff101");
+  if (d) d.addEventListener("toggle", () => {
+    try { localStorage.setItem(FF101_KEY, d.open ? "open" : "closed"); } catch (e) { /* the card still works */ }
+  });
+}
+
 function ffLinkStripHTML() {
   const bits = [];
   const sl = localStorage.getItem("ff_user");

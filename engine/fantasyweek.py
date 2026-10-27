@@ -562,7 +562,8 @@ def _teams(games: list) -> dict:
 
 def from_board(result: dict, tds: dict | None = None, *, ideas: dict | None = None,
                season: int | None = None, week: int | None = None, slate=None,
-               built_at: str | None = None, season_means: dict | None = None) -> dict:
+               built_at: str | None = None, season_means: dict | None = None,
+               defenses: list | None = None) -> dict:
     """The week's fantasy file, off a priced NFL board.
 
     ``result`` is the board `pipeline.run_slate` returned (its prop rows,
@@ -571,7 +572,8 @@ def from_board(result: dict, tds: dict | None = None, *, ideas: dict | None = No
     the practice reports and the role-change watch. ``slate`` gives the
     week's full injury report, every listed player, board or no board.
     ``season_means`` are the desks' per-game means (fantasy_lineup
-    .per_game), for the parts the board does not project."""
+    .per_game), for the parts the board does not project. ``defenses`` are
+    the week's team defenses (engine/dstproj.week_rows), position DEF."""
     from .divisions import NFL as _NFL, canonical
     secs = (ideas or {}).get("sections") or {}
     practice = ((secs.get("practice") or {}).get("listed") or {})
@@ -590,6 +592,10 @@ def from_board(result: dict, tds: dict | None = None, *, ideas: dict | None = No
     # The parts the board is silent on, from his season average
     # (`season_means`: the desks' fantasy_lineup.per_game).
     players = fill_missing(players, season_means)
+    # THE TEAM DEFENSES (engine/dstproj, 2026-10-27): every league starts
+    # one, and every desk valued one at zero. In the same list, by worth.
+    if defenses:
+        players = sorted(players + [dict(r) for r in defenses], key=lambda r: -float(r.get("expected") or 0))
     teams = _teams(games)
     for r in players:
         t = teams.get(r["team"])
@@ -871,8 +877,14 @@ def _zeroed(base: dict, week: dict) -> dict:
     return out
 
 
+def _defenses(doc: dict) -> dict:
+    """{club code: the week's defense row}."""
+    return {r.get("team"): r for r in (doc or {}).get("players") or []
+            if r.get("position") == "DEF" and r.get("team")}
+
+
 def with_week(means: dict, doc: dict, roster_names=None, teams: dict | None = None,
-              statuses: dict | None = None) -> dict:
+              statuses: dict | None = None, dst_scoring: dict | None = None) -> dict:
     """`means` with THIS WEEK in place of the season average, for every
     player the week knows something about. Returns a NEW dict.
 
@@ -892,13 +904,20 @@ def with_week(means: dict, doc: dict, roster_names=None, teams: dict | None = No
     "DJ Moore" finds "D.J. Moore". ``teams`` maps a name to his NFL team
     where the desk knows it (Sleeper does); otherwise the season rows'
     team is used for the bye. ``statuses`` maps a name to his injury
-    status on the league's platform, where it has one."""
+    status on the league's platform, where it has one.
+
+    A TEAM DEFENSE is joined by its club, whatever the platform calls it
+    (Sleeper's "Philadelphia Eagles", ESPN's "Eagles D/ST", Yahoo's
+    "Philadelphia": engine/dstproj.team_of), and scored on the league's own
+    defense scoring where the desk hands it (``dst_scoring``)."""
     from .backtest import _norm
     from .divisions import canonical
+    from . import dstproj
     if not doc or not doc.get("players"):
         return dict(means or {})
     out = dict(means or {})
     idx = index(doc)
+    defs = _defenses(doc)
     byes = {canonical("nfl", t) for t in doc.get("byes") or []}
     listed = {_norm(k): v for k, v in (doc.get("listed") or {}).items()}
     names = list(roster_names) if roster_names is not None else list(out)
@@ -911,8 +930,12 @@ def with_week(means: dict, doc: dict, roster_names=None, teams: dict | None = No
                                        "source": "league"})
             continue
         row = idx.get(k)
+        if row is None or row.get("position") == "DEF":
+            club = dstproj.team_of(name, (teams or {}).get(name))
+            if club in defs:
+                row = dstproj.with_scoring(defs[club], dst_scoring)
         if row is not None:
-            out[name] = week_entry(row, base)
+            out[name] = week_entry(row, {**base, "position": "DEF"} if row.get("position") == "DEF" else base)
             continue
         team = canonical("nfl", (teams or {}).get(name) or base.get("team") or "")
         status = (listed.get(k) or {}).get("status", "")
@@ -930,12 +953,17 @@ def free_agents(doc: dict, rostered, limit_per_pos: int = 5) -> dict:
     {position: [rows]}, by expected points. ``rostered`` is every name on
     every roster in the league, in the league's spellings."""
     from .backtest import _norm
+    from . import dstproj
     taken = {_norm(n) for n in rostered or [] if n}
+    # A rostered defense under any platform's name for it.
+    taken_clubs = {dstproj.team_of(n) for n in rostered or [] if n} - {None}
     out: dict = {}
     for r in (doc or {}).get("players") or []:
-        if r.get("position") not in ("QB", "RB", "WR", "TE", "K"):
+        if r.get("position") not in ("QB", "RB", "WR", "TE", "K", "DEF"):
             continue
         if _norm(r.get("player") or "") in taken or r.get("play", 1.0) <= 0:
+            continue
+        if r.get("position") == "DEF" and r.get("team") in taken_clubs:
             continue
         lst = out.setdefault(r["position"], [])
         if len(lst) < limit_per_pos:

@@ -104,6 +104,9 @@ FITS = (
     ("fantasyweekfit", "board", ("engine.fantasyweek",),
      "this week's fantasy file: the range, the head-to-head's spread, the play chances, and a touchdown "
      "scale only where it held (2026-10-22)"),
+    ("dstfit", "board", ("engine.dstproj",),
+     "the team defenses in this week's fantasy file: the league's sack, dropback and takeaway rates "
+     "and the spread of points allowed, walked forward against each defense's season average (2026-10-27)"),
     # ---- the inventions (engine/ideagate) ---------------------------------------------------
     ("engine.rookies", "gated", ("engine.ideagate",), "a thin rookie sample's prior"),
     ("engine.rolechange", "gated", ("engine.ideagate",), "the usage bridge's volume follows the detected role"),

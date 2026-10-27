@@ -777,3 +777,49 @@
      in 150px, which is where this stops being readable. */
   .gs-sides { grid-template-columns: 1fr; }
 }
+
+/* FANTASY 101 (2026-10-27): the game in a minute, at the top of the room. */
+.ff101 { padding: 0; margin-bottom: var(--sp-3); }
+.ff101 > summary { cursor: pointer; list-style: none; padding: var(--sp-3) var(--sp-4); font-weight: 700; color: var(--text); }
+.ff101 > summary::-webkit-details-marker { display: none; }
+.ff101 > summary::after { content: "▾"; float: right; color: var(--text-mute); }
+.ff101[open] > summary::after { content: "▴"; }
+.ff101-k { color: var(--brand); margin-right: 6px; }
+.ff101-steps { margin: 0; padding: 0 var(--sp-4) 0 calc(var(--sp-4) + 18px); display: grid; gap: 8px;
+  font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
+.ff101-steps b { color: var(--text); }
+.ff101-week { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;
+  margin: var(--sp-3) var(--sp-4) 0; }
+.ff101-week > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--fill-subtle); font-size: var(--fs-sm); }
+.ff101-week b { color: var(--brand); font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; }
+.ff101-week span { color: var(--text-body); line-height: var(--lh-tight); }
+.ff101-start { margin: var(--sp-3) var(--sp-4) 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
+.ff101-terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px var(--sp-4);
+  margin: var(--sp-3) 0 0; padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: var(--hairline) solid var(--border-soft); }
+.ff101-terms > div { display: flex; gap: 6px; font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.ff101-terms dt { flex: none; font-weight: 700; color: var(--text); }
+.ff101-terms dd { margin: 0; color: var(--text-dim); }
+
+/* YOUR WEEK (2026-10-27): the desk's to-do list, at its top. */
+.fft { padding: 0; margin-bottom: var(--sp-3); }
+.fft-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4) var(--sp-2); }
+.fft-head b { font-size: var(--fs-lg); color: var(--text); }
+.fft-head span { font-size: var(--fs-xs); color: var(--text-mute); }
+.fft-list { list-style: none; margin: 0; padding: 0 0 var(--sp-2); }
+.fft-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: start; gap: var(--sp-3);
+  padding: 10px var(--sp-4); border-top: var(--hairline) solid var(--border-soft); }
+.fft-item[data-fftsec] { cursor: pointer; }
+.fft-item[data-fftsec]:hover { background: var(--fill-subtle); }
+.fft-dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--text-mute); }
+.fft-item.act .fft-dot { background: var(--bad); }
+.fft-item.do .fft-dot { background: var(--brand); }
+.fft-item.warn .fft-dot { background: var(--warn); }
+.fft-item.good .fft-dot { background: var(--good); }
+.fft-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.fft-text b { color: var(--text); }
+.fft-text span { color: var(--text-dim); }
+.fft-gain { font: 800 var(--fs-md) / 1.2 var(--font-mono); color: var(--good); }
+.fft-none { margin: 0; padding: 0 var(--sp-4) var(--sp-3); color: var(--text-dim); font-size: var(--fs-sm); }
+.hd-what .ffp-bid { color: var(--brand); font-weight: 600; }

@@ -61,6 +61,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EX 2>&1 | tee /tmp/ex.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EY 2>&1 | tee /tmp/ey.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EZ 2>&1 | tee /tmp/ez.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -584,6 +585,11 @@ curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpBoardHTML('
 SH
 run EY "On a live game page the sport buttons hop between games" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'async function pbpHop('
+SH
+run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
+curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
+curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"
+cd /srv/qellys && sudo -u qellys python3 dstfit.py
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

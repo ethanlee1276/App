@@ -89,8 +89,10 @@ def test_the_desk_paints_it_there_and_not_inline():
     desk = APP[APP.index("async function renderLeagueDesk("):]
     desk = desk[:desk.index("\n/* ----")]
     assert "paintMyCalendar(ffRosterCalendarHTML(" in desk
-    assert "host.innerHTML = ffH2HHTML(d)" in desk
-    inner = desk[desk.index("host.innerHTML = ffH2HHTML(d)"):]
+    # Your week's to-do list leads the desk since 2026-10-27 (engine/fantasy_todo).
+    paint = 'host.innerHTML = (W ? W.todo(d) : "") + ffH2HHTML(d)'
+    assert paint in desk
+    inner = desk[desk.index(paint):]
     assert "ffRosterCalendarHTML" not in inner.split(";")[0], \
         "the calendar is still being drawn into the desk as well"
 

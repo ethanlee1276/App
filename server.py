@@ -1780,6 +1780,53 @@ class Handler(BaseHTTPRequestHandler):
                      "built_at": doc.get("built_at"), "byes": doc.get("byes") or [],
                      "state": "ok", "locked": False, "measured": doc.get("measured")}
 
+    def _desk_extras(self, out: dict, *, mine: list, slots: list, scoring: dict, means: dict,
+                     season_means: dict, week_doc: dict, league_names: list, statuses=None,
+                     team_of=None, budget_left=None, playoff_start=None, dst_scoring=None,
+                     trades=None) -> None:
+        """The pickups for this roster and the week's to-do list, the same on
+        every platform (engine/fantasy_waivers, engine/fantasy_todo; Ethan,
+        2026-10-27: "make sure … the fantasy room is actually a useful
+        tool"). Written onto ``out``; nothing when he has no roster here."""
+        from engine import fantasy_todo, fantasy_waivers, fantasyweek
+        if not mine:
+            return
+        week = (week_doc or {}).get("week") or out.get("week")
+        try:
+            out["pickups"] = fantasy_waivers.for_roster(
+                mine, slots, scoring, means, week_doc, league_names, season_means=season_means,
+                statuses=statuses, budget_left=budget_left, week=week, playoff_start=playoff_start,
+                dst_scoring=dst_scoring)
+        except Exception as exc:                              # noqa: BLE001 — a desk never dies on an extra
+            sys.stderr.write(f"  desk pickups: {type(exc).__name__}: {exc}\n")
+            out["pickups"] = None
+        # Next week's byes among the starters of the best lineup.
+        next_byes = []
+        try:
+            from engine import byes as _byes
+            from engine.db import connect
+            season = int((week_doc or {}).get("season") or out.get("season") or 0)
+            if season and week:
+                conn = connect()
+                try:
+                    off = {t for t, w in _byes.bye_weeks(conn, season).items() if int(w) == int(week) + 1}
+                finally:
+                    conn.close()
+                idx = fantasyweek.index(week_doc or {})
+                from engine.backtest import _norm
+                for s in ((out.get("lineup") or {}).get("starters") or []):
+                    name = s.get("player")
+                    team = ((team_of or {}).get(name) or (idx.get(_norm(name or "")) or {}).get("team")
+                            or ((season_means or {}).get(name) or {}).get("team"))
+                    if name and team and team in off:
+                        next_byes.append((name, team))
+        except Exception as exc:                              # noqa: BLE001
+            sys.stderr.write(f"  desk byes: {type(exc).__name__}: {exc}\n")
+        out["todo"] = fantasy_todo.build(
+            lineup=out.get("lineup"), h2h=out.get("h2h"), pickups=out.get("pickups"),
+            trades=trades if trades is not None else out.get("trades"), next_byes=next_byes,
+            kickoffs=fantasy_todo.kickoffs_from(week_doc), week=week)
+
     def _league_desk(self, query: dict):
         """Your optimal lineup and the trades worth proposing, in one read.
 
@@ -1890,11 +1937,13 @@ class Handler(BaseHTTPRequestHandler):
         # is out around him, a bye (engine/fantasyweek). A trade is the rest
         # of the season's, and a man on a bye this week is not worth zero
         # to it.
-        from engine import fantasyweek
+        from engine import dstproj, fantasyweek
         week_doc, week_meta = self._fantasy_week()
         league_names = [r["player"] for rows in by_roster.values() for r in rows]
         means = (fantasyweek.with_week(season_means, week_doc, league_names, teams=team_of,
-                                       statuses=status_of)
+                                       statuses=status_of,
+                                       dst_scoring=dstproj.scoring_from_sleeper(
+                                           league.get("scoring_settings")))
                  if week_doc else season_means)
 
         scoring = league.get("scoring_settings") or {}
@@ -1980,6 +2029,22 @@ class Handler(BaseHTTPRequestHandler):
             h2h["opponent"] = opp_name
             h2h["swings"] = fantasy_h2h.swings(h2h)
             out["h2h"] = h2h
+        # THE PICKUPS FOR THIS ROSTER AND THE WEEK'S TO-DO LIST. A FAAB
+        # league (Sleeper's waiver_type 2) gets a bid range from what is
+        # left of his budget.
+        lset = league.get("settings") or {}
+        budget_left = None
+        if int(lset.get("waiver_type") or 0) == 2 and lset.get("waiver_budget") is not None:
+            used = 0
+            for r in rosters or []:
+                if my_roster_id is not None and r.get("roster_id") == my_roster_id:
+                    used = (r.get("settings") or {}).get("waiver_budget_used") or 0
+            budget_left = float(lset.get("waiver_budget") or 0) - float(used or 0)
+        self._desk_extras(out, mine=mine, slots=slots, scoring=scoring, means=means,
+                          season_means=season_means, week_doc=week_doc, league_names=league_names,
+                          statuses=status_of, team_of=team_of, budget_left=budget_left,
+                          playoff_start=lset.get("playoff_week_start"),
+                          dst_scoring=dstproj.scoring_from_sleeper(scoring), trades=trades)
         self._send(200, json.dumps(out).encode(), ".json")
 
     def _league_desk_espn(self, league_id: str, member_id: str, query: dict):
@@ -2054,6 +2119,9 @@ class Handler(BaseHTTPRequestHandler):
         # here is every team but his — `mine` was popped out of it above
         # — which is exactly the shape Sleeper's `rivals` has.
         out["teams"] = _ff_team_rows(rosters, mine, mine_label)
+        self._desk_extras(out, mine=mine, slots=slots, scoring=scoring, means=means,
+                          season_means=season_means, week_doc=week_doc, league_names=league_names,
+                          trades=trades)
         self._send(200, json.dumps(out).encode(), ".json")
 
     # --- accounts: email and password, ours ---------------------------------
@@ -4708,6 +4776,9 @@ class Handler(BaseHTTPRequestHandler):
             "unmapped_scoring": lg.get("unmapped") or [],
             "not_modelled_scoring": lg.get("not_modelled") or [],
         }
+        self._desk_extras(out, mine=mine, slots=slots, scoring=scoring, means=means,
+                          season_means=season_means, week_doc=week_doc, league_names=league_names,
+                          trades=trades)
         self._send(200, json.dumps(out).encode(), ".json")
 
     # --- Yahoo's connection, which is the only credential this app holds ----

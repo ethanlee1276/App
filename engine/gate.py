@@ -327,8 +327,10 @@ PAID_FILES = (
 #: beside a book's line, either is a pick — and the script and the model's
 #: reads are the paid analysis. Those stay behind the plan.
 ROW_PAID_KEYS_BY_FILE = {
+    # A team defense's expected sacks, takeaways and touchdowns (`dst`,
+    # engine/dstproj) are its stat line: paid like a player's `proj`.
     "fantasy_week.json": ("players", ("proj", "volume", "td_prob", "td_quoted", "td_reasons",
-                                      "read", "script", "reasons")),
+                                      "read", "script", "reasons", "dst")),
 }
 
 #: …and the ones that must NEVER be touched, named rather than inferred.

@@ -1161,9 +1161,24 @@ def main() -> None:
                 _fw_conn.close()
         except Exception:                                     # noqa: BLE001
             _fw_means = {}
+        # THE TEAM DEFENSES (engine/dstproj, 2026-10-27): every league
+        # starts one, and the desks valued every one at zero.
+        _fw_defs: list = []
+        try:
+            from engine import dstproj as _dst
+            from engine.db import connect as _dst_connect
+            _dst_conn = _dst_connect()
+            try:
+                _fw_defs = _dst.week_rows(result.get("games") or [],
+                                          _dst.season_rates(_dst_conn, args.season, args.week))
+            finally:
+                _dst_conn.close()
+        except Exception as _dexc:                         # noqa: BLE001
+            print(f"  ⚠️  team defenses skipped: {_dexc}")
         _fw_doc = _fw.from_board(result, _td_chances(slate, nfl_usage),
                                  ideas=_ideas.LAST.get("nfl"), season=args.season,
-                                 week=args.week, slate=slate, season_means=_fw_means)
+                                 week=args.week, slate=slate, season_means=_fw_means,
+                                 defenses=_fw_defs)
         if args.out:
             _fw.publish(_fw_doc, args.out)
         print("  " + _fw.summary_line(_fw_doc))

@@ -20750,8 +20750,9 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
      describing somebody else's team can never become a verdict about
      his. */
   _ffDesk = d;
-  host.innerHTML = ffH2HHTML(d) + ffLineupHTML(d)
-    + (typeof QBWeek !== "undefined" ? QBWeek.pickups(d) : "")
+  const W = typeof QBWeek !== "undefined" ? QBWeek : null;
+  host.innerHTML = (W ? W.todo(d) : "") + ffH2HHTML(d) + ffLineupHTML(d)
+    + (W ? W.pickups(d) : "")
     + ffScoringGapsHTML(d) + ffTradesHTML(d) + ffStandingsHTML(d) + ffTeamsHTML(d);
   /* THE START CALENDAR GOES TO THE CALENDAR TAB, which is the only
      place a reader looking for a calendar will look. It shipped inside
@@ -20768,6 +20769,7 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
   paintMyCalendar(ffRosterCalendarHTML(_ffData || {}, ffDeskRoster(d)));
   host.querySelectorAll("[data-logtrade]").forEach((b) =>
     b.addEventListener("click", () => ffLogTrade(b)));
+  if (W) W.todoBind(host);
 }
 
 /* ---------------- The team you are actually playing (IDEAS #7) ----------
