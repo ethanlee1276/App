@@ -119,3 +119,7 @@ body.ask-open #qb-slip { bottom: var(--ask-foot); padding-bottom: 0; }
 body.ask-typing #qb-slip { display: none; }
 /* Room under the conversation's last line to scroll it clear of the dock. */
 body.ask-open:has(#qb-slip:not([hidden])) .ask-log { padding-bottom: 64px; }
+
+/* YOUR OPEN BETS in the paperclip's sheet (js/ask.js askAttachHTML). */
+.ask-attach-bets small { display: block; margin-top: 2px; font-size: var(--fs-xs); font-weight: 500;
+  color: var(--text-mute); }

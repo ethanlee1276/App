@@ -13,6 +13,25 @@ const ASK_SUGGEST = ["What’s the best bet on tonight’s board?",
 /* Asked from a prop page: the three questions a reader has about one bet.
    Fixed wording on purpose — the same words are the same cached answer. */
 const ASK_SUGGEST_PICK = ["Why this pick?", "How has this player done lately?", "What could go wrong?"];
+/* Asked about your own open bets (askOpenBets): the three questions a bettor
+   has about a ticket in play. */
+const ASK_SUGGEST_BETS = ["How are my bets doing?", "Which of my bets is in the most trouble?",
+                          "Should I hedge any of them?"];
+
+/* YOUR OPEN BETS, WHEN YOU ATTACH THEM (2026-10-27). FanDuel's AceAI knows
+   your bets because it is the book; this knows them across every book, and
+   only when you say so: the paperclip's "My open bets" attaches the pending
+   tickets in My Bets, newest first, and only they go with the question
+   (server.py _bets_standing grades each one the box can follow, live, the
+   way the Live tab does; engine/askbot never caches an answer about them). */
+function askOpenBets() {
+  return (typeof mbLoad === "function" ? mbLoad() : [])
+    .filter((b) => b && b.result === "pending" && b.desc)
+    .sort((x, y) => String(y.id).localeCompare(String(x.id)))
+    .slice(0, 8)
+    .map((b) => ({ desc: b.desc, odds: b.odds, stake: b.stake, book: b.book, sport: b.sport, date: b.date,
+                   legs: Array.isArray(b.legs) ? b.legs : undefined }));
+}
 
 /* THE CHAT ROOM. Ethan, 2026-09-23, the site footer circled on his phone:
    "Get rid of all this shit down here and make this look more like an
@@ -605,7 +624,10 @@ function askAttachable() {
    can be drawn before tonight's board has arrived. */
 function askAttachHTML() {
   const picks = askAttachable();
-  return `<label class="ask-attach-row"><span>Grade a parlay screenshot</span><b>Upload</b>
+  const bets = askOpenBets().length;
+  return `${bets ? `<button type="button" class="ask-attach-row ask-attach-bets" data-ask-bets><span>My open bets
+      <small>How they stand, from the box score</small></span><b>${bets}</b></button>` : ""}
+    <label class="ask-attach-row"><span>Grade a parlay screenshot</span><b>Upload</b>
     <input type="file" accept="image/*" class="ask-sr" data-ask-slip></label>
     <div class="ask-attach-h">Ask about one of tonight’s picks</div>${picks.length
     ? picks.map((p) => `<button type="button" class="ask-attach-row" data-ask-attach="${escapeAttr(p.id)}"
@@ -652,7 +674,7 @@ function renderAsk() {
   if (!host) return;
   const a = askState();
   const empty = !a.turns.length;
-  const sug = a.pick ? ASK_SUGGEST_PICK : askSuggest();
+  const sug = a.bets ? ASK_SUGGEST_BETS : a.pick ? ASK_SUGGEST_PICK : askSuggest();
   const title = `<span class="ask-pill">AI</span>`;
   const mood = a.busy ? "thinking" : _askTyping ? "talking" : "idle";
   // The newest answer's robot is the one that reacts; older ones hold still.
@@ -683,6 +705,9 @@ function renderAsk() {
     <div class="ask-dock">
       ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
         <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
+      ${a.bets ? `<div class="ask-focus"><span>About <b>your ${askOpenBets().length} open bet${
+        askOpenBets().length === 1 ? "" : "s"}</b></span>
+        <button type="button" class="ask-x" data-ask-clear-bets aria-label="Stop asking about your bets">&#215;</button></div>` : ""}
       <div class="ask-attach" id="ask-attach" role="dialog" aria-label="Attach a pick" hidden></div>
       ${askLocked() ? askLockedHTML() : `<form class="ask-form" id="ask-form">
         <button type="button" class="ask-clip" data-ask-clip aria-label="Attach a pick or a parlay screenshot"
@@ -730,6 +755,12 @@ function renderAsk() {
       sheet.querySelectorAll("[data-ask-attach]").forEach((b) => b.addEventListener("click", () => {
         a.pick = b.dataset.askAttach || "";
         a.pickLabel = b.dataset.askLabel || "";
+        a.bets = false;
+        askSave(); renderAsk();
+      }));
+      sheet.querySelectorAll("[data-ask-bets]").forEach((b) => b.addEventListener("click", () => {
+        a.bets = true;                 // this visit only: never written to storage
+        a.pick = ""; a.pickLabel = "";
         askSave(); renderAsk();
       }));
     }
@@ -748,6 +779,17 @@ function renderAsk() {
   host.querySelectorAll("[data-ask-clear-pick]").forEach((b) => b.addEventListener("click", () => {
     a.pick = ""; a.pickLabel = ""; askSave(); renderAsk();
   }));
+  host.querySelectorAll("[data-ask-clear-bets]").forEach((b) => b.addEventListener("click", () => {
+    a.bets = false; renderAsk();
+  }));
+  // A door elsewhere (a player's card) sent a question: it waits in the box,
+  // ready to send or to change.
+  if (input && typeof _askDraft !== "undefined" && _askDraft && !a.busy) {
+    input.value = _askDraft;
+    _askDraft = "";
+    input.dispatchEvent(new Event("input"));
+    if (window.matchMedia && matchMedia("(pointer: fine)").matches) input.focus();
+  }
 }
 
 /* The attach list closes on a tap anywhere else, or Escape. */
@@ -788,7 +830,8 @@ async function askSend(text) {
     const res = await fetch("/api/ask", {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ board: boardNameFor(meta), question, history, pick: a.pick, stream: ASK_STREAMS }),
+      body: JSON.stringify({ board: boardNameFor(meta), question, history, pick: a.pick, stream: ASK_STREAMS,
+                             bets: a.bets ? askOpenBets() : undefined }),
     });
     let body = {};
     if (res.ok && /event-stream/.test(res.headers.get("Content-Type") || "")) {

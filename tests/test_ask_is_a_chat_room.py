@@ -149,7 +149,7 @@ def test_the_empty_room_is_ethans_render():
     at = [empty.index(s) for s in order]
     assert at == sorted(at), order
     assert 'const title = `<span class="ask-pill">AI</span>`;' in r
-    assert "const sug = a.pick ? ASK_SUGGEST_PICK : askSuggest();" in r, "three cards, as drawn"
+    assert "const sug = a.bets ? ASK_SUGGEST_BETS : a.pick ? ASK_SUGGEST_PICK : askSuggest();" in r, "three cards, as drawn"
     # The first is tonight's next game when the board has one (2026-10-27).
     sug = _fn("askSuggest")
     assert "if (!g) return ASK_SUGGEST;" in sug and "ASK_SUGGEST[0], ASK_SUGGEST[2]]" in sug

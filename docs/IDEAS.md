@@ -24,12 +24,14 @@ its work (runbook FH); an Ask answer you can act on, add to slip, track it
 watch (FI); every league its own colour, glow and motion (FJ). Next, best
 value per unit of work first:
 
-1. **Ask reads your open bets, when you attach them.** "How's my parlay
+1. **Ask reads your open bets, when you attach them.** BUILT 2026-10-27
+   (runbook FK). "How's my parlay
    looking?" with the box's numbers: the paperclip offers My open bets, and
    only what is attached goes with the question. AceAI knows your bets
    because it is the book; this works for every book. Built from: My Bets
    (the page's own copy) + engine/sliplive. Small to medium.
-2. **Ask from anywhere.** An Ask door on every player row (fantasy rows,
+2. **Ask from anywhere.** BUILT 2026-10-27 (FK) on the fantasy player card,
+   the one door that had none (the prop page's Ask was already there). An Ask door on every player row (fantasy rows,
    Over/Under, Most Likely) with the right question filled in ("Should I
    start Gibbs this week?"). Built from: the prop page's Ask attach, which
    already exists. Small.

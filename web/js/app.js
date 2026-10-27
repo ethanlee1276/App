@@ -21444,7 +21444,7 @@ function ffDossierHTML(info) {
         <span class="ffd-sub">${info.team ? teamMark(info.team, 16, nflMap(), "nfl") : ""}
           ${escapeHtml([nflName(info.team) || info.team, info.position]
             .filter(Boolean).join(" · "))}</span>${injLineHTML(info.inj)}</div>
-      <button class="btn ghost ffd-close" aria-label="Close">${icon("cross", 14)}</button>
+      ${ffAskDoor(info.name)}<button class="btn ghost ffd-close" aria-label="Close">${icon("cross", 14)}</button>
     </div>
     ${parts.join("")}
     <div class="ffd-sect" id="ffd-charts"><div class="ffd-h">Weekly volume</div>
@@ -21696,7 +21696,7 @@ function ffProfileHTML(p, info, bio) {
           ${chip("Games", p.games)}${chip("Season", p.season)}
         </span>
       </div>
-      <button class="btn ghost ffd-close" aria-label="Close">${icon("cross", 14)}</button>
+      ${ffAskDoor(info.name)}<button class="btn ghost ffd-close" aria-label="Close">${icon("cross", 14)}</button>
     </div>
     ${/* THIS WEEK, FIRST, ON THE FULL PAGE TOO. The compact card opens
           on it ("do I start him on Sunday" is the decision), and this
@@ -21724,6 +21724,14 @@ const POSITION_STATS_LABELS = {
   WR: [["targets", "Tgt"], ["receptions", "Rec"], ["rec_yds", "Rec yds"]],
   TE: [["targets", "Tgt"], ["receptions", "Rec"], ["rec_yds", "Rec yds"]],
 };
+
+/* ASK FROM THE PLAYER CARD (2026-10-27): a door into Ask with the question
+   already in the box, ready to send or to change (the [data-ask-about]
+   handler below, js/ask.js renderAsk). */
+function ffAskDoor(name) {
+  return name ? `<button type="button" class="btn ghost ffd-ask" data-ask-about="${escapeAttr(`Should I start ${name} this week?`)}"
+    aria-label="${escapeAttr(`Ask Qellys about ${name}`)}">${icon("star", 14)}<span>Ask</span></button>` : "";
+}
 
 function openFfDossier(name) {
   let ov = document.getElementById("ffd-overlay");
@@ -21774,6 +21782,16 @@ function closeFfDossier() {
 document.addEventListener("click", (e) => {
   const t = e.target.closest && e.target.closest("[data-dossier]");
   if (t) openFfDossier(t.dataset.dossier);
+});
+/* ASK FROM ANYWHERE: a door with a question opens Ask with it in the box. */
+let _askDraft = "";
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-ask-about]");
+  if (!b) return;
+  e.preventDefault();
+  _askDraft = String(b.dataset.askAbout || "").slice(0, 400);
+  closeFfDossier();
+  switchView("ask", true);
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { closeFfDossier(); closePeek(); }

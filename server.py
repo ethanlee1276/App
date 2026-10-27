@@ -5573,6 +5573,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         question = str(body.get("question") or "").strip()
         pick = str(body.get("pick") or "")[:240]
         history = body.get("history") if isinstance(body.get("history"), list) else []
+        # The reader's own open bets, when they attached them (askbot.clean_bets).
+        mine = AB.clean_bets(body.get("bets")) if body.get("bets") else []
         if (not question or len(question) > AB.MAX_QUESTION
                 or GATE_.full_board_file(board) is None):
             return self._send(400, b'{"error":"a board and a question are required"}',
@@ -5610,14 +5612,16 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             got = payload if name == board else (AB.board_at(path) if path else None)
             if got:
                 boards[league] = got
+        if mine:
+            mine = self._bets_standing(AB, mine, boards)
         # STREAMED, WHEN THE PAGE ASKS (2026-10-27, engine/askcards): every
         # check above has already run, so a stream only ever opens on a
         # question that will be answered. Its steps go out as they happen.
         if body.get("stream") is True:
-            return self._ask_stream(AB, EX, payload, question, history, pick, board, boards, me)
+            return self._ask_stream(AB, EX, payload, question, history, pick, board, boards, me, mine)
         try:
             out = AB.ask(payload, question, history, pick, board_name=board,
-                         data_dir=WEB / "data", boards=boards)
+                         data_dir=WEB / "data", boards=boards, mine=mine)
         except EX.NotConfigured:
             return self._send(503, b'{"error":"ask not configured","configured":false}',
                               ".json")
@@ -5642,7 +5646,36 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                 pass                     # a counting failure never costs the answer
         return keep
 
-    def _ask_stream(self, AB, EX, payload, question, history, pick, board, boards, me):
+    def _bets_standing(self, AB, mine: list, boards: dict) -> list:
+        """Where each attached ticket the box can follow stands now, for Ask:
+        graded `brief` the way the Live tab's tracker grades a saved slip
+        (`_ask_track`: no picture, no model call), off the boards and the
+        live loop's files. A ticket that cannot be read goes as its words."""
+        if not any(b.get("legs") for b in mine):
+            return mine
+        from engine import gate as GATE_
+        from engine import slipgrade as SG
+        from engine import sliplive as SL
+        prices = {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            if path and league in boards:
+                prices[league] = AB.prices_at(path)
+        live = SL.Live(prices)
+        graded = SG.with_fights(dict(boards))
+        out = []
+        for b in mine:
+            if b.get("legs"):
+                try:
+                    slip = SG.clean_slip({"legs": b["legs"], "total_odds": b.get("odds"),
+                                          "stake": b.get("stake"), "is_bet_slip": True})
+                    b = dict(b, card=SG.grade(slip, graded, live=live, brief=True))
+                except Exception as exc:                        # noqa: BLE001
+                    sys.stderr.write(f"  ask bets: {type(exc).__name__}: {exc}\n")
+            out.append(b)
+        return out
+
+    def _ask_stream(self, AB, EX, payload, question, history, pick, board, boards, me, mine=None):
         """The same answer as a text/event-stream: a `step` event as each
         lookup starts, then `answer` (what `_ask` would have sent) or `fail`
         (the status `_ask` would have sent). A reader who leaves mid-answer
@@ -5666,7 +5699,7 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
 
         try:
             out = AB.ask(payload, question, history, pick, board_name=board, data_dir=WEB / "data",
-                         boards=boards, on_step=lambda label: event("step", {"label": label}))
+                         boards=boards, on_step=lambda label: event("step", {"label": label}), mine=mine)
             done = ("answer", self._ask_kept(AB, out, me))
         except EX.NotConfigured:
             done = ("fail", {"status": 503, "configured": False})

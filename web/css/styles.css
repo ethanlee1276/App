@@ -3842,6 +3842,8 @@ body.pk-open { overflow: hidden; }
 .ffd-sub { color: var(--text-mute); font-size: var(--fs-sm);
   display: inline-flex; align-items: center; gap: 5px; }
 .ffd-close { flex: none; padding: 4px 10px; }
+/* Ask from the player card (app.js ffAskDoor): the question goes in the box. */
+.ffd-ask { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; color: var(--brand); }
 .ffd-sect { padding: 12px 0; }
 .ffd-sect + .ffd-sect { border-top: var(--hairline) solid var(--border); }
 .ffd-h { font-size: var(--fs-xs); font-weight: 700;
