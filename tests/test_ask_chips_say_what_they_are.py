@@ -29,13 +29,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import askbot as AB                                # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _app import app_js  # noqa: E402
 
 _TMP = Path(tempfile.mkdtemp())
 AB.CACHE_PATH = _TMP / "ask_cache.json"
 AB.USAGE_PATH = _TMP / "ask_usage.json"
 AB.HISTORY_DB = str(_TMP / "no_history.db")
 os.environ["QB_ASK_WEB_DAILY"] = "0"
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()  # app.js and the rooms it loads on first use (Ask: js/ask.js)
 
 
 def _prop(player, team, market, label, side, line, **kw):

@@ -2247,6 +2247,9 @@ def prop_hit_rate(boards: dict, player: str, stat: str, line=None, side: str = "
     vals = [float(r["value"]) for r in rows]
     season = rows[0]["season"]
     out = {"player": name, "sport": s, "stat": label, "line": _n(ln), "side": side,
+           # The games themselves, newest first: the card under the answer
+           # draws them as bars against the line (engine/askcards).
+           "last_10_games": [{"vs": r["opponent"], "value": _n(float(r["value"]))} for r in rows[:10]],
            "last_5": _tally(vals[:5], ln, side), "last_10": _tally(vals[:10], ln, side),
            f"season_{season}": _tally([float(r["value"]) for r in rows if r["season"] == season], ln, side),
            "every_stored_game": _tally(vals, ln, side)}
@@ -3975,11 +3978,14 @@ def converse(client, model: str, req: dict, rounds: list) -> tuple:
             if made > MAX_TOOL_CALLS:
                 out = {"error": "that is all the lookups one question gets; answer with what you have"}
             else:
-                out = run_tool(getattr(b, "name", ""), getattr(b, "input", None), req["boards"], req["league"],
-                               req.get("data_dir"))
-                req["used"].add(getattr(b, "name", ""))
+                name, args = getattr(b, "name", ""), getattr(b, "input", None)
+                _step(req, name, args)
+                out = run_tool(name, args, req["boards"], req["league"], req.get("data_dir"))
+                req["used"].add(name)
                 # Kept for the answer's number check (engine.numcheck).
                 req.setdefault("tool_outputs", []).append(out)
+                # And for the cards under the answer (engine/askcards).
+                req.setdefault("calls", []).append((name, args, out))
                 src = tool_source(getattr(b, "name", ""), getattr(b, "input", None), out)
                 if src and src not in sources:
                     sources.append(src)
@@ -3990,12 +3996,31 @@ def converse(client, model: str, req: dict, rounds: list) -> tuple:
     return response, sources, made
 
 
+def _step(req: dict, name: str, args) -> None:
+    """A lookup starting: kept in words for the answer, and told to the page
+    as it happens when the question was asked to stream (``req["on_step"]``).
+    A page that has gone away never stops the answer."""
+    from . import askcards
+    label = askcards.step_label(name, args)
+    steps = req.setdefault("steps", [])
+    if label in steps:
+        return
+    steps.append(label)
+    tell = req.get("on_step")
+    if tell:
+        try:
+            tell(label)
+        except Exception:                                   # noqa: BLE001 — the reader left; the answer goes on
+            req["on_step"] = None
+
+
 def _web_seen(response, req: dict, sources: list) -> None:
     """Note a round that searched the web, and keep the pages its answer cites."""
     for b in getattr(response, "content", None) or []:
         kind = getattr(b, "type", "")
         if kind == "server_tool_use" and getattr(b, "name", "") == "web_search":
             req["used"].add("web_search")
+            _step(req, "web_search", None)
         for c in (getattr(b, "citations", None) or []) if kind == "text" else []:
             url = str(getattr(c, "url", "") or "")
             if getattr(c, "type", "") != "web_search_result_location" or not re.match(r"https?://", url):
@@ -4018,18 +4043,23 @@ def answer_text(response) -> str:
 
 
 def ask(board: dict, question: str, history=None, pick: str = "", client=None,
-        board_name: str = "", data_dir: Path | None = None, boards: dict | None = None) -> dict:
+        board_name: str = "", data_dir: Path | None = None, boards: dict | None = None,
+        on_step=None) -> dict:
     """One answer: ``{"text", "model", "refused", "matched", "focused",
-    "sources", "cached", "lookups"}``. ``board`` is the league the reader has
-    open, ``boards`` every league's. Raises ValueError for an empty question,
+    "sources", "cached", "lookups", "steps", "cards", "follow"}``. ``board`` is
+    the league the reader has open, ``boards`` every league's. ``on_step`` is
+    told each lookup as it starts, in words (engine/askcards.step_label), for
+    a page that streams. Raises ValueError for an empty question,
     NotConfigured, Unavailable.
     """
     if not str(question or "").strip():
         raise ValueError("empty question")
+    from . import askcards
     model = model_name()
     req = build_request(board, question, history, pick, data_dir, boards)
+    req["on_step"] = on_step
     base = {"model": model, "matched": req["matched"], "focused": req["focused"],
-            "sources": req["sources"], "lookups": 0}
+            "sources": req["sources"], "lookups": 0, "steps": [], "cards": [], "follow": []}
     fresh = not clean_history(history)
     # The record file is in the key too: a record question asked again after
     # the night's grading is a new question.
@@ -4044,7 +4074,9 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
         if hit:
             log_usage(model, cached=True)
             return {**base, "text": hit["text"], "refused": bool(hit.get("refused")), "cached": True,
-                    "sources": hit.get("sources") or shown_sources(base["sources"], hit["text"], req["about"])}
+                    "sources": hit.get("sources") or shown_sources(base["sources"], hit["text"], req["about"]),
+                    "steps": hit.get("steps") or [], "cards": hit.get("cards") or [],
+                    "follow": hit.get("follow") or []}
     if client is None:
         if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
             raise _ex.NotConfigured("ANTHROPIC_API_KEY is not set")
@@ -4088,8 +4120,14 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
     base["sources"] = shown_sources(merged, text, req["about"])
     if not text:
         raise _ex.Unavailable("the answer had no text")
+    # Shown as well as said (engine/askcards): what it looked up, those
+    # lookups' own numbers drawn, and what a reader would ask next.
+    base["steps"] = list(req.get("steps") or [])
+    base["cards"] = askcards.cards(req.get("calls"))
+    base["follow"] = askcards.follow_ups(question, req.get("calls"), req.get("league") or "")
     if key and not (req.get("used", set()) & NO_CACHE_TOOLS):     # a live score is stale in minutes
-        remember_answer(key, {"text": text, "refused": False, "sources": base["sources"]})
+        remember_answer(key, {"text": text, "refused": False, "sources": base["sources"],
+                              "steps": base["steps"], "cards": base["cards"], "follow": base["follow"]})
     return {**base, "text": text, "refused": False, "cached": False}
 
 

@@ -43,10 +43,12 @@ os.environ["QB_ANALYTICS_DB"] = str(_TMP / "analytics.db")
 from engine import accounts as A                               # noqa: E402
 from engine import analytics as AN                             # noqa: E402
 from engine import billing as BI                               # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _app import app_js  # noqa: E402
 
 A.DB_PATH = _TMP / "accounts.db"
 AN.DB_PATH = _TMP / "analytics.db"
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()  # app.js and the rooms it loads on first use (Ask: js/ask.js)
 
 
 def _on(flag: bool) -> None:

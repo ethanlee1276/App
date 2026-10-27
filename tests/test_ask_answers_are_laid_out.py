@@ -29,8 +29,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import askbot as AB                                # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _app import app_js  # noqa: E402
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+APP = app_js()  # app.js and the rooms it loads on first use (Ask: js/ask.js)
 CSS = (ROOT / "web" / "css" / "styles.css").read_text()
 CRAMMED = ("Top NFL offenses by points per game (early, only 2 games each so far):\n\n"
            "1. Bills — 38.5 ppg 2. Panthers — 35.5 ppg 3. Chiefs — 32.0 ppg 4. Bears, Lions, 49ers — 31.0 ppg "
@@ -108,7 +110,10 @@ def test_the_typed_answer_ends_in_the_same_shape():
     assert "askBodyHTML(t.text)" in turn, "a saved or re-rendered answer is laid out"
     typed = APP[APP.index("function askTypeOut("):]
     typed = typed[:typed.index("\n}\n")]
-    assert "bub.innerHTML = askBodyHTML(t.text) + askSourcesHTML(t);" in typed, "and it finishes identical"
+    # Its cards between the words and the sources (2026-10-27, askCardsHTML),
+    # as the answer draws once it is whole.
+    assert "bub.innerHTML = askBodyHTML(t.text) + askCardsHTML(t) + askSourcesHTML(t);" in typed, \
+        "and it finishes identical"
     assert "askBlocks(t.text)" in typed and 'document.createElement("li")' in typed
     assert "if (row.n) host.value = row.n;" in typed, "a typed ranking keeps its numbers"
     assert 'run.b ? document.createElement("strong")' in typed, "bold is bold as it is typed"

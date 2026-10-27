@@ -115,7 +115,8 @@ def test_the_key_is_kept_private_and_reused():
 def test_the_server_signs_and_the_page_sends_the_tag_back():
     srv = (ROOT / "server.py").read_text()
     assert 'keep["sig"] = AB.sign_turn(out.get("text") or "")' in srv
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    from _app import app_js
+    app = app_js()                       # app.js and the rooms it loads (Ask: js/ask.js)
     assert 'sig: body.sig || ""' in app
     assert "t.sig ? { role: t.role, text: t.text, sig: t.sig }" in app
 
@@ -128,7 +129,8 @@ def test_tool_text_is_data_never_instructions():
 def test_a_web_chip_is_a_hostname_and_says_it_is_from_the_web():
     src = (ROOT / "engine" / "askbot.py").read_text()
     assert 'chip = {"label": host, "url": url, "title": "", "web": True, "prop": ""}' in src
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    from _app import app_js
+    app = app_js()                       # app.js and the rooms it loads (Ask: js/ask.js)
     assert 'title="A web page, not our data">web · ${escapeHtml(s.label)} ↗</a>' in app
 
 

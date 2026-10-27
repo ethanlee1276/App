@@ -205,7 +205,9 @@ def test_search_switched_off_in_the_console_still_gets_an_answer():
 
 
 def test_the_page_turns_only_a_real_address_into_a_link():
-    js = (ROOT / "web" / "js" / "app.js").read_text()
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from _app import app_js
+    js = app_js()                    # app.js and the rooms it loads (Ask: js/ask.js)
     fn = js[js.index("function askSourcesHTML"):js.index("function askTurnHTML")]
     assert "/^https?:\\/\\//i.test(String(s.url" in fn, "javascript: and data: stay text"
     assert 'target="_blank" rel="noopener noreferrer"' in fn

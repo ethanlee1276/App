@@ -65,7 +65,9 @@ from engine import likelycal as LC                               # noqa: E402
 from engine import parlays as P                                  # noqa: E402
 from engine import slipgrade as SG                               # noqa: E402
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _app import app_js  # noqa: E402
+APP = app_js()  # app.js and the rooms it loads on first use (Ask: js/ask.js)
 SLIP_JS = ROOT / "web" / "js" / "slip.js"
 SLIP_CSS = ROOT / "web" / "css" / "slip.css"
 SRV = (ROOT / "server.py").read_text(encoding="utf-8")

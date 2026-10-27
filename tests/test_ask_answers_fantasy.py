@@ -205,7 +205,9 @@ def test_the_prompt_welcomes_fantasy_and_the_chips_name_the_lookup():
 
 
 def test_the_room_says_it_does_fantasy():
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from _app import app_js
+    app = app_js()                       # app.js and the rooms it loads (Ask: js/ask.js)
     assert "<p>Fantasy too: who to start, projected points, waiver pickups and the matchups to target.</p>" in app
 
 

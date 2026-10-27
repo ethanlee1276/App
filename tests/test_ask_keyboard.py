@@ -36,7 +36,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _app import app_js  # noqa: E402
+APP = app_js()  # app.js and the rooms it loads on first use (Ask: js/ask.js)
 CSS = (ROOT / "web" / "css" / "styles.css").read_text()
 
 

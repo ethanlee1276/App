@@ -619,6 +619,9 @@ SH
 run FG "The whole app, pass one" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'data-sub-enhanced'
 SH
+run FH "Ask Qellys shows its work" 30 <<'SH'
+curl -s https://qellysbook.com/js/ask.js | grep -c 'function askReadStream('
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"

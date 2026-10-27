@@ -71,7 +71,13 @@ def test_the_server_checks_before_it_reads_and_counts_only_what_it_paid_for():
     body = src.split("    def _ask(self, body):")[1].split("\n    def ")[0]
     assert body.index("AB.over_limit(me)") < body.index("AB.board_at(")
     assert '"ask daily limit"' in body and "self._send(429," in body
-    assert 'if not out.get("cached"):' in body and "AB.count_question(me)" in body
+    # Counted where an answer is kept, for the plain answer and the streamed
+    # one alike (2026-10-27): only a fresh answer was paid for.
+    kept = src.split("    def _ask_kept(self, AB, out: dict, me) -> dict:")[1].split("\n    def ")[0]
+    assert 'if not out.get("cached"):' in kept and "AB.count_question(me)" in kept
+    assert body.count("self._ask_kept(AB, out, me)") == 1
+    stream = src.split("    def _ask_stream(self,")[1].split("\n    def ")[0]
+    assert "self._ask_kept(AB, out, me)" in stream
     assert 'f"ip:{self._client_ip()}"' in body, "a reader with the paywall off is counted by address"
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     fn = app[app.index("function askErrorText("):]

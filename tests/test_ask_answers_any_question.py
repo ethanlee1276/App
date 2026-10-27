@@ -46,7 +46,9 @@ AB.UFC_PATH = str(_TMP / "no_fighters.json")
 AB.ROSTER_DIR = str(_TMP / "rosters")
 os.makedirs(AB.ROSTER_DIR, exist_ok=True)
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _app import app_js                                          # noqa: E402
+APP = app_js()          # app.js and the rooms it loads on first use (Ask: js/ask.js)
 HTML = (ROOT / "web" / "index.html").read_text()
 SERVER = (ROOT / "server.py").read_text()
 

@@ -5610,6 +5610,11 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             got = payload if name == board else (AB.board_at(path) if path else None)
             if got:
                 boards[league] = got
+        # STREAMED, WHEN THE PAGE ASKS (2026-10-27, engine/askcards): every
+        # check above has already run, so a stream only ever opens on a
+        # question that will be answered. Its steps go out as they happen.
+        if body.get("stream") is True:
+            return self._ask_stream(AB, EX, payload, question, history, pick, board, boards, me)
         try:
             out = AB.ask(payload, question, history, pick, board_name=board,
                          data_dir=WEB / "data", boards=boards)
@@ -5620,7 +5625,14 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             sys.stderr.write(f"  ask: {type(exc).__name__}: {exc}\n")
             err = {"error": "ask unavailable"}              # detail to the log only (E-14)
             return self._send(503, json.dumps(err).encode(), ".json")
-        keep = {k: out[k] for k in ("text", "refused", "matched", "focused", "sources", "cached")}
+        return self._send(200, json.dumps(self._ask_kept(AB, out, me)).encode(), ".json")
+
+    def _ask_kept(self, AB, out: dict, me) -> dict:
+        """What of an answer goes to the page, signed, and the question counted."""
+        keep = {k: out.get(k) for k in ("text", "refused", "matched", "focused", "sources", "cached")}
+        # Shown as well as said (engine/askcards): its steps, its cards, what next.
+        for k in ("steps", "cards", "follow"):
+            keep[k] = out.get(k) or []
         # Signed, so the page can carry it back as context (audit C-3).
         keep["sig"] = AB.sign_turn(out.get("text") or "")
         if not out.get("cached"):
@@ -5628,7 +5640,43 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                 AB.count_question(me)
             except Exception:                                # noqa: BLE001
                 pass                     # a counting failure never costs the answer
-        return self._send(200, json.dumps(keep).encode(), ".json")
+        return keep
+
+    def _ask_stream(self, AB, EX, payload, question, history, pick, board, boards, me):
+        """The same answer as a text/event-stream: a `step` event as each
+        lookup starts, then `answer` (what `_ask` would have sent) or `fail`
+        (the status `_ask` would have sent). A reader who leaves mid-answer
+        stops the steps, never the answer: it is still counted and cached."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        # no-transform: Caddy's `encode` (and any proxy) leaves it whole and
+        # unbuffered, so each step reaches the page when it is written.
+        self.send_header("Cache-Control", "no-store, no-transform")
+        self.send_header("X-Accel-Buffering", "no")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        if self._is_https():
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        self.end_headers()
+        self.close_connection = True
+
+        def event(kind: str, data: dict) -> None:
+            self.wfile.write(f"event: {kind}\ndata: {json.dumps(data)}\n\n".encode())
+            self.wfile.flush()
+
+        try:
+            out = AB.ask(payload, question, history, pick, board_name=board, data_dir=WEB / "data",
+                         boards=boards, on_step=lambda label: event("step", {"label": label}))
+            done = ("answer", self._ask_kept(AB, out, me))
+        except EX.NotConfigured:
+            done = ("fail", {"status": 503, "configured": False})
+        except EX.Unavailable as exc:
+            sys.stderr.write(f"  ask: {type(exc).__name__}: {exc}\n")
+            done = ("fail", {"status": 503})                # detail to the log only (E-14)
+        try:
+            event(*done)
+        except OSError:
+            pass                                             # the page left; the answer was kept
 
     def _ask_slip(self, body):
         """Ask Qellys grades a parlay from its screenshot (engine/slipgrade).

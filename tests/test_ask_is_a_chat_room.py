@@ -20,10 +20,13 @@ an actual ai chat room."
     betting advice, 21+, the helpline.
 """
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _app import app_js  # noqa: E402
+APP = app_js()  # app.js and the rooms it loads on first use (Ask: js/ask.js)
 CSS = (ROOT / "web" / "css" / "styles.css").read_text()
 HTML = (ROOT / "web" / "index.html").read_text()
 
@@ -146,7 +149,10 @@ def test_the_empty_room_is_ethans_render():
     at = [empty.index(s) for s in order]
     assert at == sorted(at), order
     assert 'const title = `<span class="ask-pill">AI</span>`;' in r
-    assert "const sug = a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST;" in r, "three cards, as drawn"
+    assert "const sug = a.pick ? ASK_SUGGEST_PICK : askSuggest();" in r, "three cards, as drawn"
+    # The first is tonight's next game when the board has one (2026-10-27).
+    sug = _fn("askSuggest")
+    assert "if (!g) return ASK_SUGGEST;" in sug and "ASK_SUGGEST[0], ASK_SUGGEST[2]]" in sug
     assert "ASK_SUGGEST_PAST" not in APP
     assert 'const ASK_SUGGEST_ICONS = ["bars", "doc", "trend"];' in APP
     assert "askIcon(ASK_SUGGEST_ICONS[n % ASK_SUGGEST_ICONS.length], 26)" in empty
@@ -159,7 +165,9 @@ def test_the_empty_room_is_ethans_render():
     assert form.index("data-ask-clip") < form.index("<textarea") < form.index('class="ask-send"'), \
         "paperclip, the box, the send button"
     assert 'askIcon("clip", 22)' in form and 'askIcon("plane", 22)' in form
-    assert 'placeholder="Ask about a player, a game or a bet…"' in form
+    # Shorter since 2026-10-27, so it sits on one line of a phone's box
+    # instead of running to a clipped second.
+    assert 'placeholder="Ask about a player, game or bet"' in form
     assert re.search(r"\.ask-clip \{[^}]*border-right: var\(--hairline\) solid var\(--border\)", CSS), "the divider"
     assert re.search(r"\.ask-send \{[^}]*background: var\(--gold\); color: var\(--brand-ink\)", CSS)
     assert ".ask-send:disabled { cursor: default; }" in CSS, "gold even before anything is typed, as drawn"
