@@ -1220,6 +1220,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_chart(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
+        if parsed.path in ("/api/fantasy/compare", "/api/fantasy/compare/"):
+            return self._fantasy_compare(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
             return self._yahoo(parsed.path[len("/api/yahoo/"):].strip("/"),
                                parse_qs(parsed.query))
@@ -1779,6 +1781,27 @@ class Handler(BaseHTTPRequestHandler):
         return doc, {"week": doc.get("week"), "season": doc.get("season"),
                      "built_at": doc.get("built_at"), "byes": doc.get("byes") or [],
                      "state": "ok", "locked": False, "measured": doc.get("measured")}
+
+    def _fantasy_compare(self, q: dict):
+        """Start A or B? Two to four of this week's players side by side, and
+        the call (engine/fantasy_compare; Ethan, 2026-10-27: "I don't know how
+        fantasy works … create more features"). Read off this week's file as
+        `_fantasy_week` serves it: a member's whole, a free reader's without
+        the stat line, the touchdown chance and the reasons, so the answer
+        carries only what the reader may see. ``p`` is a player (two to four
+        of them), ``scoring`` ppr, half or standard."""
+        from engine import fantasy_compare
+        names = [n.strip()[:80] for n in (q.get("p") or []) if n.strip()][:fantasy_compare.MAX_PLAYERS]
+        scoring = fantasy_compare.scoring_key((q.get("scoring") or ["ppr"])[0][:16])
+        doc, meta = self._fantasy_week()
+        if not doc:
+            return self._send(200, json.dumps({"state": meta.get("state"), "note": meta.get("note")}).encode(),
+                              ".json")
+        rows, unknown = fantasy_compare.pick(doc, names)
+        out = (fantasy_compare.compare(rows, scoring) if len(rows) >= 2
+               else {"error": "Pick two to four of this week's players."})
+        out.update({"state": meta.get("state"), "week": doc.get("week"), "unknown": unknown})
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _desk_extras(self, out: dict, *, mine: list, slots: list, scoring: dict, means: dict,
                      season_means: dict, week_doc: dict, league_names: list, statuses=None,

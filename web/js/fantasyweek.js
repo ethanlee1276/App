@@ -206,6 +206,7 @@
         player’s stat line, touchdown chance and game script, and the reasons behind his number —
         <a href="#paywall">the plans</a>.</p>` : ""}
       ${byes.length ? `<p class="rank-help"><b>On a bye:</b> ${byes.map(nflName).map(escapeHtml).join(", ")}</p>` : ""}
+      ${compareHTML(w)}
       <div class="rec-bf-group ffw-pos" role="group" aria-label="Position">${tabs.map((p) => `
         <button type="button" class="rec-bf${p === want ? " active" : ""}" data-ffwpos="${p}"
           aria-pressed="${p === want ? "true" : "false"}">${p === "ALL" ? "All" : p === "DEF" ? "D/ST" : p}</button>`).join("")}</div>
@@ -222,12 +223,41 @@
     if (!host || host.dataset.bound) return;
     host.dataset.bound = "1";
     host.addEventListener("click", (e) => {
-      const pos = e.target.closest && e.target.closest("[data-ffwpos]");
-      const more = e.target.closest && e.target.closest("[data-ffwmore]");
+      const at = (sel) => (e.target.closest ? e.target.closest(sel) : null);
+      const add = at("[data-ffcadd]"), del = at("[data-ffcdel]"), sc = at("[data-ffcsc]");
+      if (add || del || sc) {
+        if (add) {
+          const n = add.dataset.ffcadd;
+          cmp = cmp.includes(n) ? cmp.filter((x) => x !== n) : cmp.concat(n).slice(-CMP_MAX);
+        }
+        if (del) cmp = cmp.filter((x) => x !== del.dataset.ffcdel);
+        if (sc) { try { localStorage.setItem(CMP_SC_KEY, sc.dataset.ffcsc); } catch (e2) { /* the default stays */ } }
+        cmpRun(host);
+        return;
+      }
+      const pos = at("[data-ffwpos]");
+      const more = at("[data-ffwmore]");
       if (!pos && !more) return;
       if (pos) { wantPos = pos.dataset.ffwpos; showAll = false; }
       if (more) showAll = true;
       host.innerHTML = room(_ffWeek);
+    });
+    // A name picked from the list adds at once; Enter takes the one name
+    // that holds what was typed.
+    host.addEventListener("input", (e) => {
+      const el = e.target;
+      if (!el || el.id !== "ffc-in") return;
+      const exact = ((_ffWeek || {}).players || []).find((r) => r.player === el.value);
+      if (exact) cmpPick(host, exact.player);
+    });
+    host.addEventListener("keydown", (e) => {
+      const el = e.target;
+      if (!el || el.id !== "ffc-in" || e.key !== "Enter") return;
+      e.preventDefault();
+      const name = cmpFind(_ffWeek, el.value);
+      const miss = host.querySelector(".ffc-miss");
+      if (name) cmpPick(host, name);
+      else if (miss) miss.textContent = el.value.trim() ? "No one on this week’s board by that name, or more than one: keep typing." : "";
     });
   }
 
@@ -269,6 +299,186 @@
       ${(r.filled || []).length ? `<p class="ffd-note">His ${escapeHtml(r.filled.map((k) =>
         PART[k] || k).join(", "))} from his season average: the board has no line on
         ${r.filled.length === 1 ? "it" : "them"} this week.</p>` : ""}`;
+  }
+
+  /* START A OR B? (engine/fantasy_compare, 2026-10-27; Ethan: "I don't
+     know how fantasy works … invent more things"). Two to four of the
+     week's players side by side and the call: how often the call outscores
+     each of the others, the floor and the ceiling when the points are
+     close, and the clock on a questionable one (his inactives against the
+     other's kickoff). The server answers (/api/fantasy/compare), so this
+     page and Ask say the same thing; this picks the players and draws the
+     answer. Your own roster is a tap away once your league desk loads. */
+  const CMP_MAX = 4;
+  const CMP_SC_KEY = "qb_ffscoring";
+  const CMP_SCORING = [["ppr", "PPR"], ["half", "Half"], ["standard", "Std"]];
+  const CMP_GRADE = { soft: "soft", tough: "tough", neutral: "average" };
+  let cmp = [];                     // the players picked, in order
+  let cmpOut = null;                // the server's answer for them
+  let cmpAsk = 0;                   // the latest request: an older answer is dropped
+
+  function cmpScoring() {
+    try {
+      const v = localStorage.getItem(CMP_SC_KEY);
+      return CMP_SCORING.some(([k]) => k === v) ? v : "ppr";
+    } catch (e) { return "ppr"; }
+  }
+
+  /* Your roster, starters first, from the league desk (`_ffDesk`, app.js)
+     once it has loaded: the players on this week's file, and your defense
+     (the server finds a defense by any of its names). */
+  function cmpRoster(w) {
+    const L = (typeof _ffDesk !== "undefined" && _ffDesk && _ffDesk.lineup) || null;
+    if (!L) return [];
+    const have = new Set(((w || {}).players || []).map((r) => ffNorm(r.player)));
+    const seats = [...(L.starters || []), ...(L.bench || [])].filter((x) => x && x.player);
+    const names = seats.filter((x) => x.position === "DEF" || have.has(ffNorm(x.player))).map((x) => x.player);
+    return [...new Set(names)].slice(0, 18);
+  }
+
+  /* A typed name: the week's own spelling, exactly, or the one player whose
+     name holds it. */
+  function cmpFind(w, typed) {
+    const k = ffNorm(typed || "");
+    if (!k) return null;
+    const all = (w || {}).players || [];
+    const exact = all.find((r) => ffNorm(r.player) === k);
+    if (exact) return exact.player;
+    const hits = all.filter((r) => ffNorm(r.player).includes(k));
+    return hits.length === 1 ? hits[0].player : null;
+  }
+
+  /* A member's stat line, in words. */
+  function cmpLine(c) {
+    const l = (c || {}).line || {};
+    const n = (k, d) => Number(l[k]).toFixed(d || 0);
+    const bits = [];
+    if (c.position === "QB") {
+      if (l.pass_yds != null) bits.push(`${n("pass_yds")} pass yds`);
+      if (l.pass_td != null) bits.push(`${n("pass_td", 1)} pass TD`);
+      if (l.rush_yds != null) bits.push(`${n("rush_yds")} rush yds`);
+    } else {
+      if (l.rush_yds != null && (c.position === "RB" || l.rush_yds >= 5)) bits.push(`${n("rush_yds")} rush yds`);
+      if (l.receptions != null) bits.push(`${n("receptions", 1)} catches`);
+      if (l.rec_yds != null) bits.push(`${n("rec_yds")} rec yds`);
+    }
+    return bits.join(", ");
+  }
+
+  function cmpCardHTML(c, i, sc) {
+    const def = c.position === "DEF";
+    const who = def ? teamMark(c.team, 28, nflMap(), "nfl")
+      : playerAvatar(c.player, c.team, { size: 28, map: nflMap(), headshot: c.headshot });
+    const stat = (k, v) => (v == null || v === "" ? ""
+      : `<div><dt>${k}</dt><dd>${escapeHtml(String(v))}</dd></div>`);
+    const line = cmpLine(c);
+    return `<div class="ffc-card${i === 0 ? " lead" : ""}">
+      <div class="ffc-who">${who}<span><b>${escapeHtml(c.player)}</b>
+        <span>${escapeHtml([def ? "D/ST" : c.position, vs(c)].filter(Boolean).join(" · "))}</span></span></div>
+      <div class="ffc-n"><b>${Number(c.points).toFixed(1)}</b><span>${def ? "points" : escapeHtml(sc)}</span></div>
+      <dl class="ffc-stats">
+        ${c.play < 1 ? stat("To play", `${Math.round(c.play * 100)}%${c.status ? ` (${c.status})` : ""}`) : ""}
+        ${c.if_plays != null ? stat("If he plays", Number(c.if_plays).toFixed(1)) : ""}
+        ${c.floor != null ? stat("8 in 10 weeks", `${Number(c.floor).toFixed(1)}${c.floor < 0 ? " to " : "–"}${
+          Number(c.ceiling).toFixed(1)}`) : ""}
+        ${stat("Matchup", CMP_GRADE[(c.matchup || {}).grade] || "")}
+        ${stat("Kickoff", c.kickoff || "")}
+        ${stat("His line", line)}
+        ${c.td_prob != null ? stat(c.position === "QB" ? "Rush TD" : "TD chance", `${Math.round(c.td_prob * 100)}%`) : ""}
+        ${c.dst ? stat("Sacks · takeaways", `${c.dst.sacks} · ${c.dst.takeaways}`) : ""}
+      </dl>
+      ${(c.why || []).length ? `<p class="ffc-why">${escapeHtml(c.why[0])}</p>` : ""}
+    </div>`;
+  }
+
+  /* With a league linked, your matchup decides a close one: ahead, the
+     floor; behind, the ceiling (fantasy_h2h's swings say it from the real
+     margin). Only when the two at the top are both yours. */
+  function cmpDeskNote(o) {
+    const D = typeof _ffDesk !== "undefined" ? _ffDesk : null;
+    const h = (D && D.h2h) || {};
+    if (h.win_prob == null || !(o.notes || []).some((n) => /safer start|bigger week/.test(n))) return "";
+    const mine = new Set(cmpRoster(_ffWeek).map(ffNorm));
+    if (!(o.call.order || []).slice(0, 2).every((n) => mine.has(ffNorm(n)))) return "";
+    const lean = h.win_prob >= 0.55 ? "lean on the safer start"
+      : h.win_prob <= 0.45 ? "the bigger week is the one you need" : "";
+    return lean ? `<p class="ffc-desk">Your league desk has you ${Math.round(h.win_prob * 100)}% to win
+      this week: ${lean}.</p>` : "";
+  }
+
+  function cmpResultHTML(w) {
+    if (cmp.length < 2) {
+      return `<p class="ffc-hint">${cmp.length ? "Add one more to compare."
+        : "Your two running backs, your flex options, two defenses to stream: type a name, or tap one from your roster."}</p>`;
+    }
+    const o = cmpOut;
+    if (!o) return `<p class="loading">Comparing…</p>`;
+    const unknown = (o.unknown || []).length ? `<p class="ffc-hint">Not on this week’s board (a bye, or no
+      projection): ${escapeHtml(o.unknown.join(", "))}.</p>` : "";
+    if (o.error || !o.call) return unknown + `<p class="ffc-hint">${escapeHtml(o.error || o.note || "No comparison this week.")}</p>`;
+    const free = w && w.locked && w.locked["players[].fields"];
+    return `${unknown}
+      <div class="ffc-call${o.call.coin ? " coin" : ""}"><span class="ffc-k">The call</span>
+        <b>${escapeHtml(o.call.text)}</b></div>
+      ${cmpDeskNote(o)}
+      <div class="ffc-grid">${(o.players || []).map((c, i) => cmpCardHTML(c, i, o.scoring || "PPR")).join("")}</div>
+      ${(o.notes || []).length ? `<ul class="ffc-notes">${o.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>` : ""}
+      ${free ? `<p class="ffc-lock">${icon("lock", 12)} Members also see each player’s stat line, touchdown chance
+        and the reason behind his number — <a href="#paywall">the plans</a>.</p>` : ""}`;
+  }
+
+  function compareHTML(w) {
+    const sc = cmpScoring();
+    const roster = cmpRoster(w);
+    const full = cmp.length >= CMP_MAX;
+    return `<div class="card ffc" id="ffc">
+      <div class="ffc-head"><b>Start A or B?</b><span>Pick two to four players: who scores more this week,
+        how often, and the clock on a questionable one.</span></div>
+      <div class="ffc-pick">
+        <input id="ffc-in" class="ffc-in" type="search" list="ffc-names" autocomplete="off" enterkeyhint="done"
+          aria-label="Add a player or a defense to compare" placeholder="${full ? "Four at most" : "Add a player or a defense"}"${full ? " disabled" : ""}>
+        <datalist id="ffc-names">${((w || {}).players || []).map((r) => `<option value="${escapeAttr(r.player)}">${
+          escapeHtml([r.position === "DEF" ? "D/ST" : r.position, r.team].filter(Boolean).join(" · "))}</option>`).join("")}</datalist>
+        <div class="rec-bf-group" role="group" aria-label="Scoring">${CMP_SCORING.map(([k, l]) => `
+          <button type="button" class="rec-bf${k === sc ? " active" : ""}" data-ffcsc="${k}"
+            aria-pressed="${k === sc ? "true" : "false"}">${l}</button>`).join("")}</div>
+        <p class="ffc-miss" aria-live="polite"></p>
+      </div>
+      ${roster.length ? `<div class="ffc-roster"><span>Your roster</span>${roster.map((n) => `
+        <button type="button" class="ffc-chip${cmp.includes(n) ? " on" : ""}" data-ffcadd="${escapeAttr(n)}"
+          aria-pressed="${cmp.includes(n) ? "true" : "false"}">${escapeHtml(n)}</button>`).join("")}</div>` : ""}
+      ${cmp.some((n) => !roster.includes(n)) ? `<div class="ffc-picked">${cmp.filter((n) => !roster.includes(n)).map((n) => `
+        <button type="button" class="ffc-chip on" data-ffcdel="${escapeAttr(n)}" aria-label="Remove ${escapeAttr(n)}">${
+          escapeHtml(n)} <span aria-hidden="true">×</span></button>`).join("")}</div>` : ""}
+      <div class="ffc-out" aria-live="polite">${cmpResultHTML(w)}</div>
+    </div>`;
+  }
+
+  function cmpPaint(host) {
+    const box = host && host.querySelector("#ffc");
+    if (box) box.outerHTML = compareHTML(_ffWeek);
+  }
+
+  async function cmpRun(host) {
+    const ask = ++cmpAsk;
+    cmpOut = null;
+    cmpPaint(host);
+    if (cmp.length < 2) return;
+    const qs = cmp.map((n) => `p=${encodeURIComponent(n)}`).join("&") + `&scoring=${cmpScoring()}`;
+    let out;
+    try {
+      const r = await fetch(`/api/fantasy/compare?${qs}`);
+      out = await r.json();
+    } catch (e) { out = { error: "The comparison did not load. Try again in a moment." }; }
+    if (ask !== cmpAsk) return;
+    cmpOut = out || { error: "No answer." };
+    cmpPaint(host);
+  }
+
+  function cmpPick(host, name) {
+    if (!name) return;
+    cmp = cmp.includes(name) ? cmp : cmp.concat(name).slice(-CMP_MAX);
+    cmpRun(host);
   }
 
   /* YOUR WEEK, AS A TO-DO LIST (engine/fantasy_todo, 2026-10-27; Ethan:

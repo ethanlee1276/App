@@ -823,3 +823,51 @@
 .fft-gain { font: 800 var(--fs-md) / 1.2 var(--font-mono); color: var(--good); }
 .fft-none { margin: 0; padding: 0 var(--sp-4) var(--sp-3); color: var(--text-dim); font-size: var(--fs-sm); }
 .hd-what .ffp-bid { color: var(--brand); font-weight: 600; }
+
+/* START A OR B? (2026-10-27): two to four players side by side, and the call. */
+.ffc { padding: var(--sp-3) var(--sp-4) var(--sp-4); margin: var(--sp-3) 0; }
+.ffc-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--sp-2); }
+.ffc-head b { font-size: var(--fs-lg); color: var(--text); }
+.ffc-head span { font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
+.ffc-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.ffc-in { flex: 1 1 200px; min-width: 0; min-height: 36px; padding: 6px 14px; border-radius: 999px;
+  border: var(--hairline) solid var(--border); background: var(--fill-subtle); color: var(--text);
+  font: inherit; font-size: var(--fs-sm); }
+.ffc-miss { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); color: var(--warn); }
+.ffc-miss:empty { display: none; }
+.ffc-roster, .ffc-picked { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: var(--sp-2); }
+/* One line that scrolls sideways: a whole roster of chips was five rows on a phone. */
+.ffc-roster { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.ffc-roster::-webkit-scrollbar { display: none; }
+.ffc-roster > * { flex: none; }
+.ffc-roster > span { margin-right: 2px; font-size: var(--fs-xs); color: var(--text-mute); }
+.ffc-chip { min-height: 28px; padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid var(--border-soft);
+  background: transparent; color: var(--text-dim); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
+.ffc-chip.on { border-color: var(--brand-2); background: var(--fill-subtle); color: var(--text); }
+.ffc-out { margin-top: var(--sp-3); }
+.ffc-hint { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-dim); }
+.ffc-call { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm);
+  border-left: 3px solid var(--good); background: var(--fill-subtle); }
+.ffc-call.coin { border-left-color: var(--warn); }
+.ffc-k { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-mute); }
+.ffc-call b { font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text); }
+.ffc-desk { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--brand); }
+.ffc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-2); margin-top: var(--sp-3); }
+.ffc-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border-soft); }
+.ffc-card.lead { border-color: var(--good); }
+.ffc-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ffc-who > span { display: flex; flex-direction: column; min-width: 0; }
+.ffc-who b { font-size: var(--fs-sm); color: var(--text); overflow-wrap: anywhere; }
+.ffc-who > span > span { font-size: var(--fs-xs); color: var(--text-mute); }
+.ffc-n { display: flex; align-items: baseline; gap: 6px; }
+.ffc-n b { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 800; color: var(--text); }
+.ffc-n span { font-size: var(--fs-xs); color: var(--text-mute); }
+.ffc-stats { display: grid; gap: 3px; margin: 0; }
+.ffc-stats > div { display: flex; justify-content: space-between; gap: 6px; font-size: var(--fs-xs); }
+.ffc-stats dt { color: var(--text-mute); }
+.ffc-stats dd { margin: 0; text-align: right; color: var(--text); }
+.ffc-why { margin: 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-dim); }
+.ffc-notes { display: grid; gap: 6px; margin: var(--sp-3) 0 0; padding-left: 18px;
+  font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
+.ffc-lock { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-mute); }

@@ -193,6 +193,16 @@ def test_the_desk_draws_the_list_first_and_the_pickups_with_their_bids():
     assert _render({})[0] == "", "an older desk with no list draws nothing"
 
 
+
+def test_a_kickoff_written_in_utc_reads_on_the_eastern_clock():
+    """The board writes a kickoff as nflverse's Eastern "13:00" or as an ISO
+    time in UTC; the to-do list's "kicks off" reads both the same."""
+    k = TD.kickoffs_from({"teams": {"MIA": {"date": "2026-11-01", "kickoff": "13:00"},
+                                    "CIN": {"date": "2026-10-25", "kickoff": "2026-10-25T17:00:00Z"},
+                                    "NYJ": {}}})
+    assert TD._when(k, "MIA") == TD._when(k, "CIN") == "Sun 1:00 PM ET"
+    assert TD._when(k, "NYJ") == "" and TD._when(k, "LV") == ""
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

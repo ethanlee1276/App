@@ -163,8 +163,10 @@ queue, in order.
    starters who are out or on a bye, questionable starters and when their
    game kicks off, your win chance, the best pickup for your roster, next
    week's byes, the best trade.
-4. **Start A or B?** Pick two to four players; side by side: points this
-   week, range, matchup, chance to play, and the call.
+4. **Start A or B?** — SHIPPED 2026-10-27. Pick two to four players; side
+   by side: points this week, range, matchup, chance to play, and the call,
+   with how often each outscores the other and the clock on a questionable
+   one (engine/fantasy_compare). Ask gives the same call.
 5. **Playoff odds and power rankings** for your league: the rest of the
    regular season simulated with each roster's projected strength and the
    league's own schedule; each team's playoff chance and projected record.

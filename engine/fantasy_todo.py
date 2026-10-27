@@ -66,6 +66,8 @@ def _clock(hhmm: str) -> str:
 
 def _when(kickoffs: dict | None, team: str | None) -> str:
     k = (kickoffs or {}).get(team or "") or {}
+    if k.get("when"):
+        return k["when"]
     return " ".join(x for x in (k.get("day"), _clock(k.get("time") or "") if k.get("time") else "") if x)
 
 
@@ -164,9 +166,12 @@ def build(*, lineup: dict | None = None, h2h: dict | None = None, pickups: dict 
 
 
 def kickoffs_from(week_doc: dict | None) -> dict:
-    """{team: {day, time}} off the week file's `teams` (date, kickoff), in
-    the words the list uses: "Sun 1:00 PM"."""
+    """{team: {day, time, when}} off the week file's `teams` (date, kickoff),
+    in the words the list uses: "Sun 1:00 PM ET". The board writes a kickoff
+    as nflverse's Eastern "13:00" or as an ISO time in UTC; `when` reads
+    both (fantasy_compare.kickoff)."""
     import datetime as _dt
+    from .fantasy_compare import clock, kickoff
     out = {}
     for team, t in ((week_doc or {}).get("teams") or {}).items():
         day = ""
@@ -174,5 +179,6 @@ def kickoffs_from(week_doc: dict | None) -> dict:
             day = _dt.date.fromisoformat(str(t.get("date") or "")[:10]).strftime("%a")
         except ValueError:
             day = ""
-        out[team] = {"day": day, "time": str(t.get("kickoff") or "")}
+        out[team] = {"day": day, "time": str(t.get("kickoff") or ""),
+                     "when": clock(kickoff({"date": t.get("date"), "kickoff": t.get("kickoff")}))}
     return out
