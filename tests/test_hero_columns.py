@@ -1,46 +1,45 @@
-"""The scoreboard hero has a column for every block in it.
+"""The football and baseball scoreboard has a column for every block in it.
 
 Ethan, 2026-09-06, circling the top card on his phone: "this area on the
-play by play screen is bugged out."
+play by play screen is bugged out." The header then was five children (away
+block, away score, the state, home score, home block) and the phone rule
+lifted the state onto a row of its own while handing the other four THREE
+columns, so the home block wrapped under the away team. The day after, with
+the state lifted, the two scores sat one grid gap apart and read as one
+number ("2 3", ringed: "fix how bunched up these number are").
 
-The hero is five children — away block, away score, the state in the
-middle, home score, home block. The desktop rule gives them five
-columns. The phone override moves the middle one out to its own
-full-width row across the top, which leaves FOUR children still to
-place — and it was handing them THREE columns.
+Since 2026-10-27 the header is the basketball page's scoreboard (Ethan,
+circling the NBA's: "We want all of these too look like nba for all
+sports"): three blocks, the away side, the clock, the home side, on every
+width. Each side carries its own score, so the clock always stands between
+the two numbers, on a phone as on a desk, and nothing is lifted out of the
+row. These hold that shape:
 
-So the grid did exactly what a grid does. Away block, away score and
-home score filled row two, and the home block wrapped onto a row of its
-own, left-aligned in column one, directly under the away team.
-`justify-content: flex-end` then right-aligned it INSIDE that first
-column, which is why it read as floating in the middle of nowhere rather
-than as an obvious wrap.
+  - the board is three blocks and every layout gives it three columns;
+  - the home side mirrors the away side (its crest on the outside, its
+    score toward the clock), on a desk and on a phone;
+  - the watch buttons are a row of their own under the board, not a block
+    in it (tests/test_the_live_scoreboard_on_a_phone.py measures it).
 
-Measured in Chromium at 390px, before and after:
-
-    before   away block left 31px, home block left  31px   (stacked)
-    after    away block left 31px, home block left 228px   (beside it)
-
-at 900px the home block sits at 542 either way, which is why this was
-only ever visible on a phone.
-
-The test counts rather than matching a literal, so adding a sixth block
-to the hero fails here instead of silently wrapping on someone's phone.
+The test counts rather than matching a literal, so a fourth block added to
+the board fails here instead of silently wrapping on someone's phone.
 """
 
 import re
-from _app import styles_css  # noqa: E402  (styles.css and every room's own sheet)
 import sys
 from pathlib import Path
-from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+
+from _app import app_js, styles_css  # noqa: E402  (app.js and its rooms; every sheet)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 APP = app_js()
 CSS = styles_css()
+SHEET = (ROOT / "web" / "css" / "detail.css").read_text(encoding="utf-8")
 
-HERO = APP[APP.index('<div class="card pbp-hero">'):APP.index('<div class="card pbp-parkcard">')]
+BOARD = APP[APP.index("function pbpBoardHTML("):APP.index("async function renderPbpPage(")]
+CARD = BOARD[BOARD.index('<div class="card pbp-hero"'):]
 
 
 def _tracks(decl):
@@ -48,69 +47,46 @@ def _tracks(decl):
     return len(re.findall(r"(?:minmax\([^)]*\)|[\d.]+fr|auto|[\d.]+px)", decl))
 
 
-def _hero_rule(media=None):
-    hay = CSS
+def _board_rule(media=None):
+    hay = SHEET
     if media:
-        i = CSS.index(f"@media (max-width: {media}px) {{ .pbp-hero {{")
-        hay = CSS[i:CSS.index("} }", i)]
+        i = SHEET.index(f"@media (max-width: {media}px) {{\n  .pbp-hero {{")
+        hay = SHEET[i:SHEET.index("\n}\n", i)]
     m = re.search(r"\.pbp-hero \{[^}]*grid-template-columns:\s*([^;}]+)", hay)
-    assert m, f"no hero grid rule (media={media})"
+    assert m, f"no board grid rule (media={media})"
     return m.group(1).strip()
 
 
 def _blocks():
-    """The hero's own children, by the classes the page gives them."""
-    return (len(re.findall(r'class="pbp-hero-side"', HERO))
-            + len(re.findall(r'class="pbp-hero-score"', HERO))
-            + len(re.findall(r'class="pbp-hero-mid"', HERO))
-            + len(re.findall(r'class="pbp-hero-side pbp-hero-home"', HERO)))
+    """The board's own children: the two sides and the clock between them."""
+    return (len(re.findall(r'\$\{side\("(?:away|home)"\)\}', CARD))
+            + len(re.findall(r'<div class="pbp-sb-mid">', CARD)))
 
 
-def test_the_hero_is_still_five_blocks():
-    assert _blocks() == 5, HERO[:400]
+def test_the_board_is_three_blocks_the_clock_between_the_sides():
+    assert _blocks() == 3, CARD[:400]
+    assert CARD.index('${side("away")}') < CARD.index('<div class="pbp-sb-mid">') < CARD.index('${side("home")}')
 
 
-def test_the_wide_layout_has_a_column_per_block():
-    assert _tracks(_hero_rule()) == _blocks()
+def test_every_layout_has_a_column_per_block():
+    assert _tracks(_board_rule()) == _blocks()
+    assert _tracks(_board_rule(media=720)) == _blocks(), "the phone keeps the clock between the sides"
+    # Nothing is lifted out of the row any more: the clock is the divider.
+    assert not re.search(r"\.pbp-sb-mid \{[^}]*grid-column:\s*1 / -1", SHEET)
 
 
-def test_the_phone_layout_has_a_column_per_block_that_is_left_in_the_row():
-    """The middle block is lifted out to its own full-width row, so the
-    row below it needs one column fewer — not two."""
-    lifted = re.search(r"\.pbp-hero-mid \{[^}]*grid-column:\s*1 / -1", CSS)
-    assert lifted, "the state block no longer spans its own row"
-    assert _tracks(_hero_rule(media=700)) == _blocks() - 1
+def test_the_home_side_mirrors_the_away_side():
+    desk = re.search(r"(?m)^\.pbp-sb-side\.home \{([^}]*)\}", SHEET)
+    assert desk and "row-reverse" in desk.group(1) and "text-align: right" in desk.group(1), desk
+    phone = SHEET[SHEET.index("@media (max-width: 720px) {\n  .pbp-hero {"):]
+    phone = phone[:phone.index("\n}\n")]
+    assert 'grid-template-areas: "crest pts" "team team"' in phone
+    assert 'grid-template-areas: "pts crest" "team team"' in phone
 
 
-def test_the_home_block_still_hugs_its_own_side():
-    """It is the right-alignment that turned the wrap into something
-    that looked deliberate, so it has to stay honest about which column
-    it is aligning inside of."""
-    m = re.search(r"(?m)^\.pbp-hero-home \{([^}]*)\}", CSS)
-    assert m and "flex-end" in m.group(1), m
-
-
-def _phone_block():
-    i = CSS.index("@media (max-width: 700px) { .pbp-hero {")
-    return CSS[i:CSS.index("} }", i) + 3]
-
-
-def test_the_two_scores_do_not_touch_on_a_phone():
-    """Ethan, 2026-09-07, "2 3" ringed on a phone: "fix how bunched up
-    these number are." With the state block lifted to its own row the
-    two scores are neighbouring auto columns, one grid gap apart — so
-    each gets its own room and the home score a hairline on its left."""
-    block = _phone_block()
-    m = re.search(r"\.pbp-hero-score \{([^}]*)\}", block)
-    assert m, "no phone score rule"
-    pad = re.search(r"padding:\s*0 (\d+)px", m.group(1))
-    assert pad and int(pad.group(1)) >= 12, m.group(1)
-    assert "text-align: center" in m.group(1)
-    div = re.search(r"\.pbp-hero-mid \+ \.pbp-hero-score \{([^}]*)\}", block)
-    assert div and "border-left" in div.group(1), "the home score lost its divider"
-    # Phone only: the desktop hero keeps the state block as the divider.
-    desk = CSS[:CSS.index("@media (max-width: 700px) { .pbp-hero {")]
-    assert ".pbp-hero-mid + .pbp-hero-score" not in desk
+def test_the_watch_row_is_not_a_block():
+    assert CARD.index('${side("home")}') < CARD.index('watchHTML(d, league, "pbp-watch")')
+    assert ".pbp-hero > .pbp-watch { grid-column: 1 / -1; margin-top: 0; }" in CSS
 
 
 if __name__ == "__main__":

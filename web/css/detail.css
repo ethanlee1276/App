@@ -272,19 +272,43 @@
    second time below the leaders. Its other cards (the win chance, the
    pressure) stay. Baseball has no such tab, so its rail is its list. */
 @media (max-width: 980px) { .pbp-has-tabs .pbp-railcard { display: none; } }
-/* The club's short name on a phone, the full one where there is room. */
-.pbp-hero .pbp-nm-nick { display: none; }
-@media (max-width: 720px) { .pbp-hero .pbp-nm-full { display: none; }
-  .pbp-hero .pbp-nm-nick { display: inline; } }
-.pbp-hero { display: grid; grid-template-columns: 1fr auto auto auto 1fr; align-items: center; gap: 12px; }
-.pbp-hero-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.pbp-hero-side b { font-size: var(--fs-lg); }
-.pbp-hero-home { justify-content: flex-end; text-align: right; }
-.pbp-hero-score { font-size: 2.1rem; font-weight: 800; font-family: var(--font-mono); }
-.pbp-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; }
-/* ESPN's header has the record under each side and the carrier under the
-   clock (2026-10-08); both come off the deep file, both absent when unknown. */
-.pbp-hero-rec { color: var(--text-mute); }
+/* THE SCOREBOARD, THE BASKETBALL PAGE'S (Ethan, 2026-10-27: "We want all of
+   these too look like nba for all sports"). css/hoopscast.css .hc-score, for
+   football and baseball (pbpBoardHTML): each club's colour washed in from its
+   own edge, the crest, the city over the name in capitals and the record, the
+   score in the display face, and the clock in the middle. */
+.pbp-hero {
+  --ca: var(--brand);
+  --ch: var(--text-mute);
+  --grad-pbp-sb: linear-gradient(90deg, color-mix(in oklab, var(--ca) 24%, var(--panel)) 0%, var(--panel) 34%,
+    var(--panel) 66%, color-mix(in oklab, var(--ch) 24%, var(--panel)) 100%);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); background: var(--grad-pbp-sb); }
+.pbp-sb-side { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.pbp-sb-side.home { flex-direction: row-reverse; text-align: right; }
+.pbp-sb-crest { flex: none; display: grid; place-items: center; }
+.pbp-sb-team { display: flex; flex-direction: column; min-width: 0; line-height: var(--lh-tight); }
+.pbp-sb-loc { font: 600 var(--fs-xs) / 1.2 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+.pbp-sb-nick { font: 800 var(--fs-2xl) / 1.05 var(--font-display); text-transform: uppercase; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pbp-sb-rec { font: 500 var(--fs-sm) / 1.3 var(--font-mono); color: var(--text-dim); }
+.pbp-sb-pts { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2);
+  font: 800 var(--fs-4xl) / 1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
+.pbp-sb-side.home .pbp-sb-pts { margin-left: 0; margin-right: auto; flex-direction: row-reverse; }
+.pbp-sb-ball { display: inline-grid; place-items: center; color: var(--brand); }
+.pbp-sb-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 104px; text-align: center; }
+.pbp-sb-per { font: 700 var(--fs-sm) / 1.2 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim);
+  text-wrap: balance; }
+.pbp-sb-clock { font: 800 var(--fs-3xl) / 1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
+.pbp-sb-clock:empty { display: none; }
+.pbp-sb-sit { font: 600 var(--fs-xs) / 1.3 var(--font-sans); color: var(--text); text-wrap: balance; }
+.pbp-sb-bases { display: inline-grid; place-items: center; }
+.pbp-sb-bases .lb-diamond { width: 40px; height: auto; }
+.pbp-sb-live { display: inline-flex; align-items: center; gap: 4px; font: 800 var(--fs-2xs) / 1.4 var(--font-sans);
+  letter-spacing: .1em; text-transform: uppercase; color: var(--bad); }
+.pbp-sb-ago { font: 500 var(--fs-2xs) / 1.3 var(--font-mono); color: var(--text-faint); text-wrap: balance; }
+.pbp-sb-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid var(--border);
+  border-radius: 999px; color: var(--text-dim); }
 /* The watch buttons are the header's last row, under the scores, as on the
    basketball and hockey pages (2026-10-20): in the middle column they set
    its width, and on a phone they stacked beside the live state. */
@@ -295,39 +319,40 @@
   text-transform: uppercase; color: var(--text); background: color-mix(in oklab, var(--bad) 30%, var(--panel)); }
 .pbp-bday { grid-column: 1 / -1; margin: 0; text-align: center; font-size: var(--fs-sm); color: var(--text-dim); }
 .pbp-bday b { color: var(--text); }
-.pbp-hero-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid var(--border);
-  border-radius: 999px; color: var(--text-dim); }
-/* FOUR ITEMS NEED FOUR COLUMNS (Ethan, 2026-09-06: "this area on the
-   play by play screen is bugged out").
-   ---------------------------------------------------------------------
-   The hero is five children — away block, away score, the state in the
-   middle, home score, home block — and the desktop rule gives them five
-   columns. This override moved the middle one out to its own full-width
-   row across the top, which leaves FOUR children still to place, and it
-   was handing them THREE columns.
-
-   So the grid did what grids do: away block, away score and home score
-   filled row two, and the home block wrapped onto a row of its own,
-   left-aligned in column one under the away team. `justify-content:
-   flex-end` then right-aligned it inside that first column, which is
-   why it read as floating in the middle of nowhere rather than as an
-   obvious wrap. Measured at 390px: the home block's left edge was 31px,
-   identical to the away block's, when at 900px it sits at 542.
-
-   Four columns, and it is the scoreboard it was always meant to be:
-   away | score | score | home, with the state above it. */
-@media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto auto 1fr; }
-  .pbp-hero-mid { grid-column: 1 / -1; order: -1; flex-direction: row; justify-content: center; gap: 8px; }
-  /* THE TWO SCORES SAT A GRID GAP APART (Ethan, 2026-09-07, "2 3" ringed
-     on a phone: "fix how bunched up these number are"). On the desktop the
-     state block sits BETWEEN the scores; lifting it to its own row here
-     left the two numbers as neighbouring auto columns with only the 12px
-     gap between them, reading as one number "23". Each score now has
-     room of its own and the home score carries a hairline on its left,
-     so the pair reads as a scoreboard: 2 | 3. Phone only — on the desktop
-     the state block is the divider. */
-  .pbp-hero-score { font-size: 1.6rem; min-width: 2ch; text-align: center; padding: 0 16px; }
-  .pbp-hero-mid + .pbp-hero-score { border-left: var(--hairline) solid var(--border); } }
+/* NARROWER, AS THE BASKETBALL BOARD DOES (css/hoopscast.css). A tablet's side
+   holds "Commanders" beside a two-figure score. */
+@media (max-width: 1100px) {
+  .pbp-sb-side { gap: var(--sp-2); }
+  .pbp-sb-nick { font-size: var(--fs-xl); }
+}
+/* A phone's board is ESPN's: the crest and the score in one line a side
+   either side of the clock, the club and its record under them. The score
+   keeps its whole width and the crest takes what is left, up to 36px, so the
+   digits never sit on the crest. */
+@media (max-width: 720px) {
+  .pbp-hero { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; padding: var(--sp-3); gap: var(--sp-2); }
+  .pbp-sb-side, .pbp-sb-side.home { display: grid; grid-template-columns: minmax(0, 36px) 1fr;
+    grid-template-areas: "crest pts" "team team"; align-items: center; gap: 6px var(--sp-2); }
+  .pbp-sb-side.home { grid-template-columns: 1fr minmax(0, 36px); grid-template-areas: "pts crest" "team team"; }
+  .pbp-sb-crest { grid-area: crest; display: block; width: 100%; }
+  /* teamMark writes its desktop size on the wrapper itself (width:56px),
+     which only an important rule outranks. */
+  .pbp-sb-crest > .team-mark-wrap { display: block; width: 100% !important; height: auto !important; aspect-ratio: 1 / 1; }
+  .pbp-sb-team { grid-area: team; }
+  .pbp-sb-pts, .pbp-sb-side.home .pbp-sb-pts { grid-area: pts; margin: 0; justify-content: flex-end; gap: var(--sp-1);
+    font-size: var(--fs-3xl); }
+  .pbp-sb-loc { display: none; }
+  .pbp-sb-nick { font-size: var(--fs-md); }
+  .pbp-sb-rec { font-size: var(--fs-xs); }
+  .pbp-sb-mid { min-width: 72px; max-width: 120px; padding-top: 2px; }
+  .pbp-sb-clock { font-size: var(--fs-2xl); }
+}
+/* The smallest phones: a smaller score and middle, so a two-figure score and
+   the ball leave the crest its room. */
+@media (max-width: 359px) {
+  .pbp-sb-pts, .pbp-sb-side.home .pbp-sb-pts { font-size: var(--fs-2xl); }
+  .pbp-sb-mid { min-width: 64px; max-width: 92px; }
+}
 /* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): his card is
    ringed in the gold the rest of the site already uses, which is what
    makes the photograph read as OURS rather than as a stock picture

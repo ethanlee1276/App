@@ -19,6 +19,11 @@ Two causes, on the NBA and NHL pages alike:
   which only an important rule outranks. On a phone the crest now takes
   what the score leaves, up to 36px, so the digits never sit on it.
 
+Football's and baseball's header became the same board on 2026-10-27
+(Ethan, circling the NBA's: "We want all of these too look like nba for all
+sports"), so the browser half measures the football, college and baseball
+boards with the same geometry as the basketball and hockey ones.
+
 Offline; the browser half is opt-in (QB_BROWSER_TESTS=1) and aborts every
 request that leaves the page's own server.
 
@@ -42,7 +47,9 @@ from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first u
 APP = app_js()
 STYLES = styles_css()
 SHEETS = {"hc": (ROOT / "web" / "css" / "hoopscast.css").read_text(encoding="utf-8"),
-          "rc": (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8")}
+          "rc": (ROOT / "web" / "css" / "rinkcast.css").read_text(encoding="utf-8"),
+          # Football's and baseball's, the same board since 2026-10-27 (pbpBoardHTML).
+          "pbp-sb": (ROOT / "web" / "css" / "detail.css").read_text(encoding="utf-8")}
 
 # A stand-in for app.js's watchHTML: the page draws whatever it returns.
 WATCH = 'globalThis.watchHTML = (d, lg, cls) => `<div class="watch ${cls}"><a class="watch-main">Watch</a></div>`;'
@@ -57,7 +64,9 @@ def _render(mod, league, doc):
 
 
 def _phone_block(css: str) -> str:
-    i = css.index("@media (max-width: 720px) {")
+    # detail.css has phone rules of its own before the board's.
+    at = "@media (max-width: 720px) {\n  .pbp-hero {"
+    i = css.index(at) if at in css else css.index("@media (max-width: 720px) {")
     return css[i:css.index("\n}\n", i)]
 
 
@@ -76,11 +85,12 @@ def test_the_watch_row_is_the_scoreboards_last_row_not_the_clocks():
 
 
 def test_the_football_and_baseball_header_puts_it_last_too():
-    i = APP.index('<div class="card pbp-hero">')
-    hero = APP[i:APP.index('<div class="card pbp-parkcard">', i)]
-    m = hero.index('class="pbp-hero-mid"')
-    assert "watchHTML" not in hero[m:hero.index('class="pbp-hero-score"', m)]
-    assert hero.index("pbp-hero-home") < hero.index('lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""')
+    board = APP[APP.index("function pbpBoardHTML("):APP.index("async function renderPbpPage(")]
+    mid = board[board.index('<div class="pbp-sb-mid">'):board.index('${side("home")}')]
+    assert "watchHTML" not in mid
+    clock = APP[APP.index("function pbpBoardMidHTML("):APP.index("function pbpBoardHTML(")]
+    assert "watchHTML" not in clock
+    assert board.index('${side("home")}') < board.index('lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""')
 
 
 # --- the stylesheets -------------------------------------------------------------------
@@ -129,6 +139,33 @@ def _meet(a, b):
     return a["l"] < b["r"] - 0.5 and b["l"] < a["r"] - 0.5 and a["t"] < b["b"] - 0.5 and b["t"] < a["b"] - 0.5
 
 
+def _college(fb):
+    """The football doc as a college game: Mississippi State at Alabama, the
+    longest school on the board beside a short one."""
+    raw = json.dumps(fb).replace('"DAL"', '"ALA"').replace('"TB"', '"MSST"')
+    d = json.loads(raw)
+    d.update({"league": "cfb", "event_id": "e10", "home_name": "Alabama Crimson Tide",
+              "away_name": "Mississippi State Bulldogs", "records": {"ALA": "6-1", "MSST": "3-4"}})
+    return d
+
+
+#: The college board's identities ride in its board file (pbpCfbTeamsWarm).
+CFB_TEAMS = {"ALA": {"id": "333", "name": "Alabama Crimson Tide", "nick": "Alabama", "primary": "#9e1b32", "alt": "#ffffff"},
+             "MSST": {"id": "344", "name": "Mississippi State Bulldogs", "nick": "Mississippi St",
+                      "primary": "#5d1725", "alt": "#c1c6c8"}}
+
+
+def _mlb():
+    return {"league": "mlb", "event_id": "e11", "home": "NYY", "away": "BOS", "home_name": "New York Yankees",
+            "away_name": "Boston Red Sox", "tv": ["FOX"], "records": {"BOS": "88-74", "NYY": "94-68"},
+            "live": {"state": "live", "home_score": 4, "away_score": 13, "period": "Top 7", "outs": 2,
+                     "balls": 1, "strikes": 2, "bases": [1, 3]},
+            "current": {"half": "T", "inning": 7, "batter": "Rafael Devers", "pitcher": "Gerrit Cole", "pitches": 4},
+            "events": [{"kind": "atbat", "at_bat": i, "inning": 7, "half": "T", "batter": "Rafael Devers",
+                        "pitcher": "Gerrit Cole", "event": "single", "away_score": 13, "home_score": 4}
+                       for i in range(40, 46)]}
+
+
 def _nba(variant):
     d = NBA._deep()
     d["tv"] = ["Peacock"]
@@ -164,9 +201,18 @@ def test_the_scoreboards_in_a_browser_from_320_to_1280():
     nhl["tv"] = ["ESPN"]
     fb = FB._fb_doc()
     fb["event_id"], fb["tv"] = "e9", ["NBC"]
-    cases = [("nba", "opening", _nba("opening")), ("nba", "late", _nba("late")), ("nhl", "nhl", nhl)]
+    # Football's longest nickname, two figures, the ball (TB's drive).
+    fb["live"].update({"away_score": 24, "home_score": 17})
+    cases = [("nba", "opening", _nba("opening")), ("nba", "late", _nba("late")), ("nhl", "nhl", nhl),
+             ("nfl", "football", fb), ("cfb", "college", _college(fb)), ("mlb", "baseball", _mlb())]
+    board = {"score": ".pbp-hero", "mid": ".pbp-sb-mid", "side": ".pbp-sb-side", "pts": ".pbp-sb-pts",
+             "crest": ".pbp-sb-crest", "nick": ".pbp-sb-nick"}
     sels = {"nba": {"score": ".hc-score", "mid": ".hc-mid", "side": ".hc-side", "pts": ".hc-pts", "crest": ".hc-crest", "nick": ".hc-nick"},
-            "nhl": {"score": ".rc-score", "mid": ".rc-mid", "side": ".rc-side", "pts": ".rc-pts", "crest": ".rc-crest", "nick": ".rc-nick"}}
+            "nhl": {"score": ".rc-score", "mid": ".rc-mid", "side": ".rc-side", "pts": ".rc-pts", "crest": ".rc-crest", "nick": ".rc-nick"},
+            "nfl": board, "cfb": board, "mlb": board}
+    # The names each board must show whole, from 360px up: the opening's
+    # 76ers and Knicks, and football's longest nickname beside a short one.
+    whole = {"opening", "football"}
     serve = lambda body: (lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(body)))
     srv, port = rendercheck._serve()
     try:
@@ -188,6 +234,7 @@ def test_the_scoreboards_in_a_browser_from_320_to_1280():
                     page.route(f"**/data/pbp/{league}_{ev}.json*", serve(doc))
                     page.route(f"**/data/live_{league}.json*", serve({"games": [
                         {"event_id": ev, "home": doc["home"], "away": doc["away"], "live": doc["live"]}]}))
+                    page.route("**/data/cfb.json*", serve({"games": [], "teams": CFB_TEAMS}))
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/{league}/{ev}", wait_until="load")
                     return ctx, page, errors
 
@@ -196,6 +243,15 @@ def test_the_scoreboards_in_a_browser_from_320_to_1280():
                         ctx, page, errors = open_page(width, league, doc)
                         sel = sels[league]
                         page.wait_for_selector(sel["score"], timeout=15000)
+                        if league == "cfb":
+                            # Drawn again once the board file's identities land.
+                            for _ in range(100):
+                                if page.evaluate("(() => [...document.querySelectorAll('.pbp-sb-nick')]"
+                                                 ".map((e) => e.textContent).join('|'))()") == "Mississippi St|Alabama":
+                                    break
+                                page.wait_for_timeout(100)
+                            else:
+                                raise AssertionError(f"college at {width}px: the schools never replaced the full names")
                         g = page.evaluate(GEOM, sel)
                         at = f"{name} at {width}px"
                         for ha, s in g["sides"].items():
@@ -206,24 +262,17 @@ def test_the_scoreboards_in_a_browser_from_320_to_1280():
                             for part in ("crest", "ink", "nick"):
                                 assert not _meet(s[part], g["mid"]), f"{at}: the {ha} {part} runs into the clock"
                                 assert s[part]["b"] <= g["watch"]["t"] + 0.5, f"{at}: the watch row is not under the {ha} {part}"
-                            if name == "opening" and width >= 360:
+                            if name in whole and width >= 360:
                                 assert s["whole"], f"{at}: the {ha} name is cut"
                         if width == 390:
                             assert all(round(s["crest"]["r"] - s["crest"]["l"]) == 36 for s in g["sides"].values()), at
                         assert g["page"] <= width, f"{at}: the page scrolls sideways"
+                        if league in ("nfl", "cfb", "mlb"):
+                            w = page.evaluate("(() => { const h = document.querySelector('.pbp-hero');"
+                                              " return [h.scrollWidth, h.clientWidth]; })()")
+                            assert w[0] <= w[1] + 1, f"{at}: the board is wider than its card"
                         assert not errors, errors
                         ctx.close()
-                    # Football's header: nothing wider than the card, the buttons under the scores.
-                    ctx, page, errors = open_page(width, "nfl", fb)
-                    page.wait_for_selector(".pbp-hero", timeout=15000)
-                    h = page.evaluate("""(() => { const h = document.querySelector('.pbp-hero');
-                        const b = (s) => h.querySelector(s).getBoundingClientRect();
-                        return [h.scrollWidth, h.clientWidth, b('.pbp-watch').top,
-                                Math.max(...[...h.querySelectorAll('.pbp-hero-score')].map((e) => e.getBoundingClientRect().bottom))]; })()""")
-                    assert h[0] <= h[1] + 1, f"football at {width}px: the header is wider than its card"
-                    assert h[2] >= h[3] - 0.5, f"football at {width}px: the watch row is not under the scores"
-                    assert not errors, errors
-                    ctx.close()
             finally:
                 browser.close()
     finally:

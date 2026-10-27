@@ -117,8 +117,11 @@ def test_the_button_shows_only_while_the_game_is_live():
     the play-by-play page check the state themselves."""
     card = APP[APP.index("function liveCardHTML("):APP.index("function liveCardHTML(") + 4000]
     assert 'watchHTML(g, sport, "lb-watch")' in card
+    # The play-by-play page's header is its scoreboard (pbpBoardHTML).
     pbp = APP[APP.index("async function renderPbpPage("):]
-    assert 'lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""' in pbp
+    assert "${pbpBoardHTML(d, league, lv)}" in pbp
+    board = APP[APP.index("function pbpBoardHTML("):APP.index("async function renderPbpPage(")]
+    assert 'lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""' in board
     game = APP[APP.index("function renderGamePage()"):APP.index("function renderGamePage()") + 40000]
     assert 'isLive ? watchHTML(liveRowFor(state.sport, g) || g, state.sport, "gp-watch") : ""' in game
     assert '(row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : ""' in game

@@ -30,7 +30,7 @@ CHAT, CSS = JS("chat.js"), (ROOT / "web" / "css" / "chat.css").read_text()
 
 def test_every_game_page_leaves_the_card_a_slot_under_the_scoreboard():
     det = JS("detail.js")
-    hero = det[det.index('<div class="card pbp-hero">'):]
+    hero = det[det.index("${pbpBoardHTML(d, league, lv)}"):]
     assert '<div class="gch-entry-slot"></div>' in hero[:hero.index('<div class="card pbp-parkcard">')]
     assert '${scoreboardHTML(d, league, k)}<div class="gch-entry-slot"></div>' in JS("hoopscast.js")
     assert '${scoreboardHTML(d, k)}<div class="gch-entry-slot"></div>' in JS("rinkcast.js")

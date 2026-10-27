@@ -239,10 +239,11 @@ def test_the_page_loads_the_gamecast_on_first_use_and_draws_its_tabs():
     assert "GC ? GC.panel(tab, { d, league, faces, boardGame })" in page
     assert "Loading the gamecast…" in page
     assert "pbpTabsHTML(tab, boardGame, tabs)" in page
-    # The hero: the records and the carrier, absent when unknown.
-    assert '`<div class="mini pbp-hero-rec">${escapeHtml((d.records || {})[abbr])}</div>` : ""' in page
-    assert '`<span class="pbp-hero-tv">${escapeHtml((d.tv || [])[0])}</span>` : ""' in page
-    assert ".pbp-hero-rec {" in CSS and ".pbp-hero-tv {" in CSS
+    # The scoreboard: the records and the carrier, absent when unknown.
+    board = _fn("pbpBoardHTML")
+    assert '${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}' in board
+    assert '`<span class="pbp-sb-tv">${escapeHtml((d.tv || [])[0])}</span>` : ""' in board
+    assert ".pbp-sb-rec {" in CSS and ".pbp-sb-tv {" in CSS
     # The box score's team toggle, wired like every other button on the page.
     assert 'host.querySelectorAll("[data-gc-team]")' in page and "window.QBGamecast.setTeam(b.dataset.gcTeam)" in page
     # Baseball keeps its four rooms.

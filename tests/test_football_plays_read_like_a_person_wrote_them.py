@@ -177,7 +177,8 @@ def test_a_finished_game_says_final_whatever_the_file_froze_at():
     assert 'state: "final", period: "Final", clock: "", detail: "",' in DETAIL
     assert "win_prob: undefined" in DETAIL, "no 99.9% with 0:34 left on a final"
     # …and before `lv` is read, so the header, the board and the gamecast all see it.
-    assert DETAIL.index("const ended = ") < DETAIL.index("const lv = d.live || {};\n  const mark = ")
+    page = DETAIL[DETAIL.index("async function renderPbpPage("):]
+    assert page.index("const ended = ") < page.index("const lv = d.live || {};") < page.index("pbpBoardHTML(d, league, lv)")
 
 
 def test_a_punt_is_not_drawn_flying_its_return():
@@ -189,9 +190,13 @@ def test_the_repeated_pieces_are_gone_on_a_phone():
     # One play list: the gamecast's tab, not the rail's copy under it.
     assert '"" : " pbp-has-tabs"' in DETAIL
     assert "@media (max-width: 980px) { .pbp-has-tabs .pbp-railcard { display: none; } }" in DETAIL_CSS
-    # The club's short name where "Indianapolis Colts" ran into its score.
-    assert 'class="pbp-nm-nick"' in DETAIL and ".pbp-hero .pbp-nm-full { display: none; }" in DETAIL_CSS
-    assert '(league === "cfb" && t.loc) || t.nick' in DETAIL, "a college by its school"
+    # The club's short name where "Indianapolis Colts" ran into its score:
+    # the scoreboard's big name is the nickname (a college's, its school),
+    # and one too long for its side is cut, never run into the score.
+    assert "return { big: t.nick || full," in DETAIL
+    assert "big: school || full" in DETAIL, "a college by its school"
+    nick = DETAIL_CSS[DETAIL_CSS.index(".pbp-sb-nick {"):]
+    assert "text-overflow: ellipsis; white-space: nowrap;" in nick[:nick.index("}")]
     # The row's team class is its own: .lb-team is the Live card's column.
     assert ".lb-play .lb-side" in STYLES and 'class="lb-side"' in APP
 

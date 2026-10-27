@@ -129,10 +129,16 @@ def test_a_missing_file_says_why_and_offers_the_way_back():
 
 
 def test_the_header_names_the_teams_in_the_leagues_own_vocabulary():
-    body = _fn("renderPbpPage")
-    assert "teamMarkIn(league, abbr, 44)" in body, "the render's hero wears a bigger mark"
+    page = _fn("renderPbpPage")
+    assert "${pbpBoardHTML(d, league, lv)}" in page, "the page's header is the scoreboard"
+    body = _fn("pbpBoardHTML")
+    assert "teamMarkIn(league, abbr, 56)" in body, "the basketball board's crest size"
     assert "teamNameIn(league, abbr)" in body
-    assert "LEAGUE_LABEL[league]" in body
+    names = _fn("pbpSideNames")
+    assert "return { big: t.nick || full," in names, "a pro club by its nickname"
+    assert 'name.endsWith(` ${t.nick}`) ? name.slice(0, -t.nick.length - 1) : (t.loc || "")' in names, \
+        "under its city: the full name before the nickname"
+    assert "big: school || full" in names, "a college by its school"
 
 
 def test_the_styles_exist():
@@ -142,9 +148,8 @@ def test_the_styles_exist():
     the rules were still in the stylesheet, so the test stayed green while
     guarding markup that no longer existed — a test can only pin what it is
     told to look for, so tell it the header the renderer actually writes."""
-    for cls in (".pbp-hero", ".pbp-hero-side", ".pbp-hero-score",
-                ".pbp-hero-mid", ".pbp-hero-home",
-                ".pbp-group-head", ".pbp-tag.turnover"):
+    for cls in (".pbp-hero", ".pbp-sb-side", ".pbp-sb-pts", ".pbp-sb-mid", ".pbp-sb-side.home",
+                ".pbp-sb-nick", ".pbp-sb-rec", ".pbp-group-head", ".pbp-tag.turnover"):
         assert cls in CSS, cls
 
 
@@ -154,12 +159,15 @@ def test_the_retired_header_left_no_rules_behind():
     it that afternoon and the rules stayed. Dead CSS is not inert — it is
     the first thing somebody edits when the header looks wrong, and it will
     never change anything on the screen."""
-    body = _fn("renderPbpPage")
+    body = _fn("renderPbpPage") + _fn("pbpBoardHTML")
     # Comments stripped first: the note recording the removal names the
     # classes, and a note is not a rule. Matched as whole class tokens so
     # a future .pbp-headline is not read as .pbp-head coming back.
+    # The second row is the hero the scoreboard replaced on 2026-10-27.
     rules = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
-    for cls in ("pbp-head", "pbp-score", "pbp-home", "pbp-at"):
+    for cls in ("pbp-head", "pbp-score", "pbp-home", "pbp-at",
+                "pbp-hero-side", "pbp-hero-score", "pbp-hero-mid", "pbp-hero-home", "pbp-hero-rec",
+                "pbp-hero-tv", "pbp-nm-full", "pbp-nm-nick"):
         edge = re.compile(re.escape(cls) + r"(?![\w-])")
         assert not edge.search(body), f"{cls} is back in the markup; restore its CSS"
         assert not edge.search(rules), f".{cls} styles nothing"

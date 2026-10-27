@@ -3926,6 +3926,201 @@ function pbpMomentBannerHTML(d, league) {
     escapeHtml(m.word)}</b>${team ? `<span>${escapeHtml(team)}</span>` : ""}</div>`;
 }
 
+/* THE SCOREBOARD, THE BASKETBALL PAGE'S FOR EVERY SPORT (Ethan, 2026-10-27,
+   circling the NBA's: "The background and shit looks so good compared too the
+   nfl one. We want all of these too look like nba for all sports").
+   js/hoopscast.js draws it for basketball and js/rinkcast.js for hockey; this
+   is the same board for football and baseball: each club's colour washed in
+   from its own edge, its crest, its city over its name in capitals with its
+   record, the score in the display face with the ball beside the side that
+   has it, and the clock in the middle. */
+/* Each side's colour, as the hockey page picks it (js/rinkcast.js
+   clubColours): a club's first colour when it reads on the dark card; a first
+   colour a little too dark (the Eagles' midnight green, the Bills', the Cubs'
+   and the Royals' blue) lifted until it does, same hue; one far too dark (a
+   navy) or black gives way to the club's next colour that reads, and a club
+   with only silver behind its navy (the Cowboys, the Colts, the Yankees) lifts
+   its navy. The away side takes another of its colours when the two would
+   look alike. The basketball page keeps its simpler rule: its clubs' colours
+   read as they are, and football's and baseball's navies, by that rule, all
+   went grey. */
+const PBP_READS = 0.065, PBP_LIFT_FROM = 0.03, PBP_LIFT_TO = 0.1, PBP_HUED = 0.04;
+function pbpHexRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function pbpLuma(c) {
+  const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+}
+const pbpLin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const pbpByte = (v) => Math.round(Math.max(0, Math.min(1, v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)) * 255);
+function pbpOklab(c) {
+  const [r, g, b] = c.map(pbpLin);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+          0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+}
+function pbpFromOklab([L, a, b]) {
+  const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+  const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+  const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
+  return [pbpByte(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s), pbpByte(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+          pbpByte(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+}
+const pbpHex = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+const pbpHued = (c) => { const [, a, b] = pbpOklab(c); return Math.hypot(a, b) >= PBP_HUED; };
+/* The same hue, lighter, until it reads. */
+function pbpLift(c) {
+  const [L, a, b] = pbpOklab(c);
+  for (let l = L; l <= 0.96; l += 0.02) { const out = pbpFromOklab([l, a, b]); if (pbpLuma(out) >= PBP_LIFT_TO) return pbpHex(out); }
+  return pbpHex(c);
+}
+/* A club's colours in the order the board would use them. A college's
+   second colour is its "alt" (cfbdata.parse_teams). */
+function pbpClubColours(t) {
+  const cs = [t.primary, t.secondary, t.tertiary, t.alt].map(pbpHexRgb).filter(Boolean);
+  if (!cs.length) return [];
+  const [first, ...rest] = cs;
+  const reads = (c) => pbpLuma(c) >= PBP_READS;
+  const out = [];
+  if (reads(first)) out.push(pbpHex(first));
+  else if (pbpHued(first) && pbpLuma(first) >= PBP_LIFT_FROM) out.push(pbpLift(first));
+  rest.filter((c) => pbpHued(c) && reads(c)).forEach((c) => out.push(pbpHex(c)));
+  if (!reads(first) && pbpHued(first) && pbpLuma(first) < PBP_LIFT_FROM) out.push(pbpLift(first));
+  rest.filter((c) => !pbpHued(c) && reads(c)).forEach((c) => out.push(pbpHex(c)));
+  // Nothing reads at all (the table's two Jets greens): the first, lifted.
+  if (!out.length) out.push(pbpLift(first));
+  return out.filter((c, i) => out.indexOf(c) === i);
+}
+function pbpSideColours(league, d) {
+  const table = teamsIn(league) || {};
+  const apart = (a, b) => { const x = pbpHexRgb(a), y = pbpHexRgb(b);
+    return !x || !y || Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) >= 90; };
+  const homes = pbpClubColours(table[d.home] || {}), aways = pbpClubColours(table[d.away] || {});
+  // A club the page has no colours for is grey, never the site's own gold.
+  const home = homes[0] || "var(--text-mute)";
+  const away = aways.find((c) => apart(c, home)) || aways[0] || "var(--text-mute)";
+  return { home, away };
+}
+/* Whose ball it is: football's drive in progress, baseball's half at bat. */
+function pbpBallSide(d, league, lv) {
+  if (lv.state !== "live") return "";
+  if (league === "mlb") {
+    const h = (d.current || {}).half;
+    return h === "T" ? "away" : h === "B" ? "home" : "";
+  }
+  const t = (d.drive || {}).team;
+  return t && t === d.home ? "home" : t && t === d.away ? "away" : "";
+}
+/* The middle: the quarter and the clock with the down and distance under
+   them, or the inning with its runners, outs and count. */
+function pbpBoardMidHTML(d, league, lv) {
+  if (lv.state === "final") {
+    const extra = league === "mlb" ? ((d.current || {}).inning > 9 ? `F/${(d.current || {}).inning}` : "")
+      : /OT/i.test(String(lv.period || "")) ? "OT" : "";
+    return `<span class="pbp-sb-per">Final</span><b class="pbp-sb-clock">${escapeHtml(extra)}</b>`;
+  }
+  if (lv.state !== "live") {
+    return `<span class="pbp-sb-per">${league === "mlb" ? "First pitch" : "Kickoff"}</span>
+      <b class="pbp-sb-clock">${escapeHtml(pbpTime(lv.start_time) || "—")}</b>`;
+  }
+  /* A HOLD READS AS ONE, NEVER AS LIVE (tests/test_a_delayed_game_says_so):
+     its word stands where the quarter or the inning was ("Delayed",
+     "Halftime"), the feed's reason follows with where play stopped
+     ("2nd quarter · Lightning"), and nothing pulses. The box blanks the
+     frozen clock and down with it. */
+  const hold = lv.state === "live" && liveHoldWord(lv) ? liveHoldWord(lv) : "";
+  const [word, ...why] = hold ? hold.split(/\s[\u2014-]\s/) : [""];
+  // "Halftime" and "End of 3rd" already say where play stopped.
+  const stopped = (where) => (hold && !/half|end/i.test(word) ? where : "");
+  const live = hold ? "" : `<span class="pbp-sb-live">${icon("dot", 8)} Live</span>`;
+  const sit = (bits) => (bits.filter(Boolean).length
+    ? `<span class="pbp-sb-sit">${escapeHtml(bits.filter(Boolean).join(" · "))}</span>` : "");
+  if (league === "mlb") {
+    const cur = d.current || {};
+    const half = cur.half === "T" ? "Top" : cur.half === "B" ? "Bottom" : "";
+    const inning = half && cur.inning ? `${half} ${pbpOrd(cur.inning)}` : (lv.period || "");
+    const outs = lv.outs != null ? `${lv.outs} out${lv.outs === 1 ? "" : "s"}` : "";
+    const count = lv.balls != null && lv.strikes != null ? `${lv.balls}-${lv.strikes}` : "";
+    return `<span class="pbp-sb-per">${escapeHtml(word || inning)}</span>
+      <span class="pbp-sb-bases">${miniDiamond(lv.bases)}</span>
+      ${sit([stopped(inning), outs, hold ? "" : count])}${sit(why)}${live}`;
+  }
+  const q = /^Q(\d)$/.exec(String(lv.period || ""));
+  const quarter = q ? `${pbpOrd(Number(q[1]))} quarter` : (lv.period || "");
+  return `<span class="pbp-sb-per">${escapeHtml(word || quarter)}</span>
+    <b class="pbp-sb-clock">${escapeHtml(hold ? "" : (lv.clock || ""))}</b>
+    ${hold ? sit([stopped(quarter), ...why]) : sit([lv.detail])}${live}`;
+}
+/* The two names a side, the big one and the line over it: a pro club's city
+   over its nickname ("Cincinnati" / "Bengals"); a college goes by its school
+   ("Ole Miss"), so the school is the big one and the mascot goes over it
+   ("Rebels", what the full name has after the school). A college the page has
+   no table for yet (pbpCfbTeamsWarm) shows its full name until it lands. */
+function pbpSideNames(league, t, full) {
+  // The city is the full name before the nickname: the table's "NY Jets"
+  // and "LA Rams" would say the nickname twice.
+  const name = String(t.name || "");
+  if (league !== "cfb") {
+    return { big: t.nick || full,
+             small: t.nick && name.endsWith(` ${t.nick}`) ? name.slice(0, -t.nick.length - 1) : (t.loc || "") };
+  }
+  const school = t.nick || "";
+  return { big: school || full,
+           small: school && name.startsWith(`${school} `) ? name.slice(school.length + 1) : "" };
+}
+/* College's 134 identities ride in its board file, not a checked-in table
+   (app.js _cfbTeams). A game page opened straight from a link or an alert,
+   with no college board read yet, has no crests, colours or school names
+   for its scoreboard, so the board is read once and the page drawn again. */
+let _pbpCfbWarm = null;
+function pbpCfbTeamsWarm() {
+  if (_cfbTeams || _pbpCfbWarm || typeof LIVE_FEEDS === "undefined") return;
+  _pbpCfbWarm = boardFetch(LIVE_FEEDS.cfb, { cache: "no-cache" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((b) => {
+      if (!b || !b.teams || _cfbTeams) return;
+      _cfbTeams = b.teams;
+      if (state.view === "pbp" && (state.pbp || {}).league === "cfb") renderPbpPage();
+    })
+    .catch(() => {});
+}
+function pbpBoardHTML(d, league, lv) {
+  const table = teamsIn(league) || {};
+  const col = pbpSideColours(league, d);
+  const ball = pbpBallSide(d, league, lv);
+  if (league === "cfb") pbpCfbTeamsWarm();
+  const side = (ha) => {
+    const abbr = d[ha], t = table[abbr] || {};
+    const full = (ha === "home" ? d.home_name : d.away_name) || teamNameIn(league, abbr) || abbr || "";
+    const { big, small } = pbpSideNames(league, t, full);
+    const score = ha === "home" ? lv.home_score : lv.away_score;
+    const rec = (d.records || {})[abbr];
+    const has = ball === ha ? `<span class="pbp-sb-ball" title="${league === "mlb" ? "At bat" : "Ball"}">${
+      icon(league === "mlb" ? "baseball" : "football", 14)}</span>` : "";
+    return `<div class="pbp-sb-side ${ha}">
+        <span class="pbp-sb-crest">${teamMarkIn(league, abbr, 56)}</span>
+        <div class="pbp-sb-team">${small ? `<span class="pbp-sb-loc">${escapeHtml(small)}</span>` : ""}
+          <b class="pbp-sb-nick">${escapeHtml(big)}</b>${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}</div>
+        <b class="pbp-sb-pts">${has}${score != null ? escapeHtml(String(score)) : "–"}</b></div>`;
+  };
+  // Live, the Watch button names the carrier; the pill is for before and after.
+  const carrier = (d.tv || [])[0] && lv.state !== "live" ? `<span class="pbp-sb-tv">${escapeHtml((d.tv || [])[0])}</span>` : "";
+  const ago = pbpAgo(d.generated_at);
+  return `<div class="card pbp-hero" style="--ca:${col.away};--ch:${col.home}">
+      ${side("away")}
+      <div class="pbp-sb-mid">${pbpBoardMidHTML(d, league, lv)}${carrier}${ago ? `<span class="pbp-sb-ago">${escapeHtml(ago)}</span>` : ""}</div>
+      ${side("home")}
+      ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
+      ${pbpNewInjuriesHTML(d)}${pbpBirthdaysHTML(d)}
+    </div>`;
+}
+
 async function renderPbpPage(tick) {
   const host = document.getElementById("pbp-body");
   if (!host) return;
@@ -4046,27 +4241,6 @@ async function renderPbpPage(tick) {
                win_prob: undefined };
   }
   const lv = d.live || {};
-  const mark = (abbr) => teamMarkIn(league, abbr, 44);
-  // The full name, and the club's own short name beside it for a phone,
-  // where "Indianapolis Colts" ran into its own score (2026-10-25).
-  const name = (abbr, full) => {
-    const long = full || teamNameIn(league, abbr) || abbr || "";
-    // A college's short name is its school ("Ole Miss"), a pro club's its nickname.
-    const t = teamsIn(league)[abbr] || {};
-    const nick = (league === "cfb" && t.loc) || t.nick || abbr || long;
-    return nick && nick !== long
-      ? `<span class="pbp-nm-full">${escapeHtml(long)}</span><span class="pbp-nm-nick">${escapeHtml(nick)}</span>`
-      : escapeHtml(long);
-  };
-  let situation = escapeHtml(lv.period || "");
-  if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
-  if (league === "mlb" && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
-  if (lv.detail && league !== "mlb") situation += ` · ${escapeHtml(lv.detail)}`;
-  if (liveHoldWord(lv)) situation += ` · ${escapeHtml(liveHoldWord(lv))}`;
-  const stateWord = lv.state === "live" && liveHoldWord(lv)
-      ? liveHoldWord(lv).split(/\s[\u2014-]\s/)[0].toUpperCase()
-    : lv.state === "live" ? `${icon("dot", 10)} LIVE`
-    : lv.state === "final" ? "FINAL" : "SCHEDULED";
   // The league's board, when the visitor is standing on it: faces, the
   // park's facts, the weather, the live win-probability track.
   const boardGame = (state.sport === league && state.data)
@@ -4143,30 +4317,11 @@ async function renderPbpPage(tick) {
     : `<p class="rail-quiet">Loading the gamecast…</p>`;
   const infoHTML = `${pbpTabsHTML(tab, boardGame, tabs)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
   const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
-  // The two records and the carrier (ESPN's header: "TB 0-4", "Prime
-  // Video"), from the summary's header and the scoreboard — absent, nothing.
-  const rec = (abbr) => (d.records || {})[abbr]
-    ? `<div class="mini pbp-hero-rec">${escapeHtml((d.records || {})[abbr])}</div>` : "";
-  // Live, the Watch button already names the carrier; the pill is for
-  // before and after, when there is no button.
-  const carrier = (d.tv || [])[0] && lv.state !== "live"
-    ? `<span class="pbp-hero-tv">${escapeHtml((d.tv || [])[0])}</span>` : "";
   host.innerHTML = `
     ${stripHTML}
     <div class="pbp-layout${league === "mlb" ? "" : " pbp-has-tabs"}">
       <div class="pbp-main">
-        <div class="card pbp-hero">
-          <div class="pbp-hero-side">${mark(d.away)}<div><div class="mini">${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())}</div>
-            <b>${name(d.away, d.away_name)}</b>${rec(d.away)}</div></div>
-          <b class="pbp-hero-score">${lv.away_score != null ? lv.away_score : "–"}</b>
-          <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>${carrier}
-            <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span></div>
-          <b class="pbp-hero-score">${lv.home_score != null ? lv.home_score : "–"}</b>
-          <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
-            <b>${name(d.home, d.home_name)}</b>${rec(d.home)}</div>${mark(d.home)}</div>
-          ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
-          ${pbpNewInjuriesHTML(d)}${pbpBirthdaysHTML(d)}
-        </div>
+        ${pbpBoardHTML(d, league, lv)}
         ${pbpTvHTML(d)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
         <div class="gch-entry-slot"></div>
         <div class="card pbp-parkcard">

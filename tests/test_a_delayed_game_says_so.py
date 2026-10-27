@@ -142,9 +142,12 @@ def test_every_place_that_draws_a_live_game_asks_about_the_hold():
     assert "liveDetail = liveHoldDetailHTML(live)" in card
     assert "if (liveHoldWord(lv)) situation +=" in body("liveCardHTML"), \
         "the live tab does not draw a held game"
-    assert 'lv.state === "live" && liveHoldWord(lv)' in body("renderPbpPage"), \
-        "the game page still says LIVE through a hold"
-    assert "if (liveHoldWord(lv)) situation +=" in body("renderPbpPage")
+    # The game page's scoreboard (pbpBoardHTML since 2026-10-27): the hold's
+    # word where the quarter or inning was, its reason after, no Live chip.
+    assert "${pbpBoardHTML(d, league, lv)}" in body("renderPbpPage")
+    mid = body("pbpBoardMidHTML")
+    assert 'lv.state === "live" && liveHoldWord(lv)' in mid, "the game page still says LIVE through a hold"
+    assert 'const live = hold ? "" :' in mid and "sit([stopped(quarter), ...why])" in mid
     assert ".live-dot.paused { animation: none" in \
         (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8"), \
         "the dot keeps pulsing on a game that has stopped"
