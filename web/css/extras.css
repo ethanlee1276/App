@@ -3,7 +3,7 @@
 .xt-sec:first-child { margin-top: 4px; }
 .xt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; align-items: start; }
 .xt-card, .xt-rc { display: grid; gap: 10px; align-content: start; padding: 14px; border-radius: var(--radius);
-  background: var(--panel); border: var(--hairline) solid var(--border-soft); min-width: 0; }
+  background: var(--panel); border: var(--hairline) solid transparent; min-width: 0; }
 .xt-wide { grid-column: 1 / -1; }
 .xt-card-h h3 { margin: 0; font-size: var(--fs-md); color: var(--text); }
 .xt-card-h p { margin: 3px 0 0; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
@@ -12,7 +12,7 @@
 .xt-leg .xt-f { flex: 1 1 0; }
 .xt-f { display: grid; gap: 3px; flex: 1 1 120px; min-width: 0; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 600; }
 .xt-f input, .xt-f select { width: 100%; min-width: 0; padding: 8px 10px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--border); background: var(--panel-2); color: var(--text);
+  border: var(--hairline) solid transparent; background: var(--panel-2); color: var(--text);
   font: inherit; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .xt-f input:focus, .xt-f select:focus { outline: none; border-color: var(--brand); }
 .xt-out { min-height: 1.4em; }
@@ -36,8 +36,8 @@
 .xt-tbl th:first-child, .xt-tbl td:first-child { text-align: left; font-family: var(--font-sans); color: var(--text); }
 .xt-tbl td b { color: var(--text); }
 .xt-tbl small { display: block; color: var(--text-mute); font-size: var(--fs-2xs); font-family: var(--font-sans); }
-.xt-btn { justify-self: start; padding: 8px 14px; border-radius: 999px; border: var(--hairline) solid var(--brand);
-  background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
+.xt-btn { justify-self: start; padding: 8px 14px; border-radius: 999px; border: var(--hairline) solid transparent;
+  background: color-mix(in oklab, var(--brand) 12%, var(--panel-2)); color: var(--text); font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
   transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .xt-btn:hover { color: var(--brand); }
 .xt-btn[disabled] { opacity: .55; cursor: default; }
@@ -124,7 +124,7 @@
 /* UFC: each fight's path (extras.js pathsHTML). Corner a in the brand's
    colour, corner b in plum; knockout darkest, decision lightest. */
 .xt-fps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.xt-fp { display: grid; gap: 8px; padding: 12px; border-radius: var(--radius-sm); background: var(--panel-2); border: var(--hairline) solid var(--border); }
+.xt-fp { display: grid; gap: 8px; padding: 12px; border-radius: var(--radius-sm); background: var(--panel-2); border: var(--hairline) solid transparent; }
 .xt-fp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .xt-fp-h b { color: var(--text); font-size: var(--fs-md); overflow-wrap: anywhere; }
 .xt-fp-h span { color: var(--text-mute); font-size: var(--fs-xs); text-transform: capitalize; }
@@ -213,8 +213,8 @@
 .xt-pb-list li span, .xt-pb-legs li span { min-width: 0; color: var(--text); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .xt-pb-list small, .xt-pb-legs small { display: block; color: var(--text-mute); font-size: var(--fs-2xs); font-family: var(--font-mono); }
 .xt-pb-list .xt-btn { flex: none; padding: 5px 12px; font-size: var(--fs-xs); }
-.xt-pb-legs li { border: var(--hairline) solid var(--brand); }
-.xt-x { flex: none; width: 28px; height: 28px; border-radius: 999px; border: var(--hairline) solid var(--border);
+.xt-pb-legs li { border: var(--hairline) solid transparent; background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.xt-x { flex: none; width: 28px; height: 28px; border-radius: 999px; border: var(--hairline) solid transparent;
   background: var(--panel); color: var(--text-mute); font: inherit; font-size: var(--fs-md); line-height: 1; cursor: pointer;
   transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
 .xt-x:hover { color: var(--bad); border-color: var(--bad); }

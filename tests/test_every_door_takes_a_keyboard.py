@@ -85,7 +85,8 @@ def test_chips_type_and_the_composer_ring():
     m = re.search(r"@media \(max-width: 760px\) \{\s*:root \{ --fs-2xs: ([0-9.]+)px; --fs-xs: ([0-9.]+)px; \}", CSS)
     assert m and float(m.group(1)) >= 11 and float(m.group(2)) >= 12
     assert ".ask-form:focus-within { box-shadow: var(--glow); }" in CSS
-    assert ".ask-form:focus-within { border-color: var(--gold); }" in CSS
+    # The composer's focus is its glow, not a gold line (tests/test_no_hard_lines).
+    assert ".ask-form:focus-within { border-color: transparent; }" in CSS
 
 
 def _lum(h):

@@ -141,7 +141,7 @@
 
 .dk-aucrow input {
   width: 110px; background: var(--panel-2); color: inherit;
-  border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  border: var(--hairline) solid transparent; border-radius: var(--radius);
   padding: 8px 10px; font-family: inherit; font-variant-numeric: tabular-nums;
 }
 
@@ -178,7 +178,7 @@
    on both. */
 .mk-sel { font: inherit; font-size: var(--fs-md); padding: 6px 8px;
   background: var(--bg-2); color: var(--text);
-  border: var(--hairline) solid var(--border); display: block;
+  border: var(--hairline) solid transparent; display: block;
   margin-top: 4px; }
 
 .mk-panel { display: block; padding: 2px 0; }
@@ -282,7 +282,7 @@
    phone on cellular, and without a licence question. */
 .mk-hero { position: relative; overflow: hidden; margin: 4px 0 16px;
   padding: 16px 18px 14px; border-radius: var(--radius);
-  border: var(--hairline) solid var(--border-soft);
+  border: var(--hairline) solid transparent;
   background: var(--grad-mkhero-wash), var(--grad-mkhero-bed);
   display: flex; flex-wrap: wrap; align-items: center; gap: 16px 22px; }
 
@@ -298,7 +298,7 @@
 
 .mk-hs { min-width: 92px; padding: 7px 12px; border-radius: var(--radius-sm);
   background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft); }
+  border: var(--hairline) solid transparent; }
 
 .mk-hero .mk-prog { flex: 1 0 100%; margin-top: 2px; }
 
@@ -373,7 +373,7 @@
 
 .mk-edge { flex: none; text-align: center; padding: 12px 16px;
   border-radius: var(--radius); min-width: 132px;
-  border: var(--hairline) solid color-mix(in oklab, var(--good) 34%, var(--border-soft));
+  border: var(--hairline) solid transparent;
   background: color-mix(in oklab, var(--good) 8%, var(--panel-2)); }
 
 /* The three detail panels under the card. */
@@ -673,7 +673,7 @@
 
 .rank-import textarea { width: 100%; margin-top: 8px; padding: 9px 12px;
   background: var(--panel-2); color: inherit; font-family: inherit;
-  font-size: var(--fs-sm); border: var(--hairline) solid var(--border);
+  font-size: var(--fs-sm); border: var(--hairline) solid transparent;
   border-radius: var(--radius); }
 
 .rank-btns { display: flex; align-items: center; gap: 10px; margin-top: 8px;
@@ -710,7 +710,7 @@
 
 .dk-plan-controls label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 700; }
 
-.dk-plan-controls select { background: var(--panel-2); color: inherit; border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 7px 10px; font-family: inherit; }
+.dk-plan-controls select { background: var(--panel-2); color: inherit; border: var(--hairline) solid transparent; border-radius: var(--radius); padding: 7px 10px; font-family: inherit; }
 
 .dk-plan-sum { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
 
@@ -790,7 +790,7 @@
 .ff101-steps { list-style: none; margin: 0; padding: 0 var(--sp-4); display: grid; gap: var(--sp-2);
   grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
 .ff101-steps li { position: relative; padding: var(--sp-3) var(--sp-3) var(--sp-3) 44px; border-radius: var(--radius-sm);
-  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm);
+  background: var(--fill-subtle); border: var(--hairline) solid transparent; font-size: var(--fs-sm);
   line-height: var(--lh-snug); color: var(--text-dim); }
 .ff101-steps b { display: block; margin-bottom: 2px; color: var(--text); }
 .ff101-n { position: absolute; left: var(--sp-3); top: var(--sp-3); display: inline-grid; place-items: center;
@@ -799,7 +799,7 @@
 .ff101-week { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-2);
   margin: var(--sp-3) var(--sp-4) 0; }
 .ff101-week > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm);
-  border-left: 2px solid var(--brand); background: var(--fill-subtle); font-size: var(--fs-xs); }
+  border-left: 0; background: color-mix(in oklab, var(--brand) 9%, transparent); font-size: var(--fs-xs); }
 .ff101-week b { color: var(--brand); font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; }
 .ff101-week span { color: var(--text-body); line-height: var(--lh-tight); }
 .ff101-start { margin: var(--sp-3) var(--sp-4) 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
@@ -841,7 +841,7 @@
 .ffc-head span { font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
 .ffc-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .ffc-in { flex: 1 1 200px; min-width: 0; min-height: 36px; padding: 6px 14px; border-radius: 999px;
-  border: var(--hairline) solid var(--border); background: var(--fill-subtle); color: var(--text);
+  border: var(--hairline) solid transparent; background: var(--fill-subtle); color: var(--text);
   font: inherit; font-size: var(--fs-sm); }
 .ffc-miss { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); color: var(--warn); }
 .ffc-miss:empty { display: none; }
@@ -864,7 +864,9 @@
 .ffc-desk { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--brand); }
 .ffc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-2); margin-top: var(--sp-3); }
 .ffc-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--border-soft); }
+  border: var(--hairline) solid transparent;
+  background: var(--fill-subtle);
+}
 .ffc-card.lead { border-color: var(--good); }
 .ffc-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ffc-who > span { display: flex; flex-direction: column; min-width: 0; }
@@ -958,7 +960,7 @@
 .ffn-sports { margin-bottom: var(--sp-3); }
 .ffn-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-3) 0; }
 .ffn-filters .rec-bf-group { margin: 0; }
-.ffn-game select { min-height: 36px; max-width: 100%; padding: 6px 10px; border: var(--hairline) solid var(--border);
+.ffn-game select { min-height: 36px; max-width: 100%; padding: 6px 10px; border: var(--hairline) solid transparent;
   border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--fs-sm); }
 .ffn-line { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-xs); color: var(--text-mute); }
 .ffn-stat b { margin-right: 3px; font-family: var(--font-mono); font-weight: 600; color: var(--text-dim); }
@@ -978,7 +980,7 @@
 .ff-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 var(--sp-3);
   font-size: var(--fs-sm); color: var(--text-mute); }
 .ff-strip-wk { padding: 3px 10px; border-radius: 999px; background: var(--grad-chip);
-  border: var(--hairline) solid var(--border); font-weight: 800; color: var(--text); }
+  border: var(--hairline) solid transparent; font-weight: 800; color: var(--text); }
 
 /* THE ROOMS AS AN APP'S TOOL TILES (2026-10-27, the visual pass): a mark,
    the name and what is in it, every room on screen at once. Six abreast

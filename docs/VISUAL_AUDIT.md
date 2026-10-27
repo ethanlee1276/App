@@ -186,3 +186,30 @@ Light theme: warm white page, white cards on a soft shadow, the same fills in
 ink. Held by tests/test_the_site_blends.py (and the contrast, chroma and
 design-tells tests, all re-measured). Before and after: every main page at a
 phone and a desktop width, both themes, and the iPhone app's capsule bar.
+
+# No hard lines — 2026-10-27
+
+Ethan, a screenshot of his phone with the top bar and the league row circled:
+"notice how sharp all the lines are on the whole site for everything ... Make
+everything smoother and more blended and just like feel more professional."
+His shot was the old build, but he was right about the lines: a probe of every
+page (each element's borders, inset rings and thin bars, on the phone, the
+iPhone app with team colours on, and the desktop) found them everywhere —
+under the top bar, round every chip and field, a gold ring round whatever was
+selected, a 2px team stripe on the bar and on every game card, page dividers,
+column rules, stripes down notices.
+
+| # | Was | Now |
+|---|---|---|
+| N1 | **A line under the top bar** (the app's glass rim, and a 2px stripe in your team's colours) | the bar casts a 12px soft fade over what scrolls under it; your team's colour spills from it as light |
+| N2 | **The league row a band** with its own background and an edge | the row is see-through, so the page's light runs up behind it |
+| N3 | **Every outline in every sheet** (298 of them, plus 34 in mixed colours) | a fill where the thing needs a shape, nothing where tone and space already do it |
+| N4 | **Selected = a gold ring** (filters, tabs, ranges, the open league) | selected = a tint and, for the league, its light |
+| N5 | **Fields drawn as boxes** | filled wells, the iOS way; focus is a soft gold edge |
+| N6 | Dividers in the border colours | a whisper: within a few points of lightness of the surfaces they cross |
+| N7 | A 2px team line across every game card | the teams' colours as light from the photo, fading down |
+| N8 | Gold stripes down notices and the opened "why?" | a gold tint and a rounded callout |
+| N9 | Footer, empty states, the venue band, the desktop's column rules | gone: space and tone separate them |
+
+Held by tests/test_no_hard_lines.py, including a browser pass over the home's
+first three screens that fails on any full outline or thin bar.

@@ -9,7 +9,7 @@
 /* ── the way in: a bar on a phone, a labelled button on a computer ─────── */
 .gch-fab { position: fixed; right: 18px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); z-index: 57;
   display: flex; align-items: center; gap: 10px; width: min(360px, calc(100vw - 36px)); padding: 9px 12px 9px 9px;
-  border: var(--hairline) solid color-mix(in oklab, var(--brand) 45%, var(--border)); border-radius: var(--radius-lg);
+  border: var(--hairline) solid transparent; border-radius: var(--radius-lg);
   background: var(--glass-sheen), var(--glass-tint-strong); box-shadow: var(--glass-rim), var(--glass-depth);
   -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
   color: var(--text); font: inherit; text-align: left; cursor: pointer; }
@@ -36,9 +36,9 @@
 
 /* ── the card on the game page (chatEntryPaint) ─────────────────────────── */
 .gch-entry { display: grid; gap: 8px; width: 100%; margin: 0; padding: 12px 14px; text-align: left; cursor: pointer;
-  border-radius: var(--radius); border: var(--hairline) solid color-mix(in oklab, var(--brand) 35%, var(--border));
+  border-radius: var(--radius); border: var(--hairline) solid transparent;
   background: var(--panel); color: var(--text); font: inherit; }
-.gch-entry:hover { border-color: var(--brand); }
+.gch-entry:hover { border-color: transparent; }
 .gch-entry-h { display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); }
 .gch-entry-ico { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
   background: var(--grad-brand); color: var(--brand-ink); }
@@ -97,7 +97,7 @@ body.gch-on { overflow: hidden; }
 .gch-poll[hidden] { display: none; }
 .gch-poll-q { font-size: var(--fs-2xs); font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }
 .gch-vote { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 11px; border-radius: 999px;
-  border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text); font: inherit;
+  border: var(--hairline) solid transparent; background: var(--panel); color: var(--text); font: inherit;
   font-size: var(--fs-xs); font-weight: 800; cursor: pointer; }
 .gch-vote span { color: var(--text-mute); font-family: var(--font-mono); font-size: var(--fs-2xs); }
 .gch-vote.mine { border-color: var(--brand); color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, var(--panel)); }
@@ -120,7 +120,7 @@ body.gch-on { overflow: hidden; }
 .gch-empty { display: grid; gap: 4px; padding: 26px 16px; text-align: center; color: var(--text-mute);
   font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .gch-empty b { color: var(--text); }
-.gch-older { align-self: center; margin: 4px 0 8px; padding: 6px 12px; border-radius: 999px; border: var(--hairline) solid var(--border);
+.gch-older { align-self: center; margin: 4px 0 8px; padding: 6px 12px; border-radius: 999px; border: var(--hairline) solid transparent;
   background: var(--panel); color: var(--text-mute); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
 
 /* A message: the face and the name on an author's first, the words under
@@ -186,14 +186,14 @@ body.gch-on { overflow: hidden; }
 .gch-faces { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .gch-faces:empty { display: none; }
 .gch-face { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px;
-  border: var(--hairline) solid var(--border-soft); background: var(--panel); font: inherit; font-size: var(--fs-sm);
+  border: var(--hairline) solid transparent; background: var(--panel); font: inherit; font-size: var(--fs-sm);
   color: var(--text); cursor: pointer; line-height: var(--lh-tight); }
 .gch-face span { font-size: var(--fs-2xs); font-weight: 800; color: var(--text-dim); }
 .gch-face.mine { border-color: var(--brand); background: color-mix(in oklab, var(--brand) 14%, var(--panel)); }
 /* The tools: a small floating bar at the message's top right (Discord),
    on hover with a mouse and on a tap on a phone. */
 .gch-tools { display: none; position: absolute; top: -12px; right: 12px; z-index: 2; align-items: center; gap: 2px; padding: 2px;
-  border-radius: var(--radius-sm); border: var(--hairline) solid var(--border); background: var(--panel-2); box-shadow: var(--glass-depth); }
+  border-radius: var(--radius-sm); border: var(--hairline) solid transparent; background: var(--panel-2); box-shadow: var(--glass-depth); }
 .gch-msg.sel .gch-tools { display: flex; }
 @media (hover: hover) and (pointer: fine) { .gch-msg:hover .gch-tools { display: flex; } }
 .gch-msg:first-child .gch-tools, .gch-older + .gch-msg .gch-tools { top: 2px; }
@@ -203,17 +203,17 @@ body.gch-on { overflow: hidden; }
 .gch-act { height: 28px; padding: 0 9px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-dim); font: inherit;
   font-size: var(--fs-xs); font-weight: 800; cursor: pointer; }
 .gch-act:hover { background: var(--fill-hover); color: var(--text); }
-.gch-menu { display: grid; margin-top: 6px; border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
+.gch-menu { display: grid; margin-top: 6px; border: var(--hairline) solid transparent; border-radius: var(--radius-sm);
   background: var(--panel); overflow: hidden; }
 .gch-menu button { padding: 9px 12px; border: 0; border-top: var(--hairline) solid var(--border-soft); background: transparent;
   color: var(--text); font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
 .gch-menu button:first-child { border-top: 0; }
 
 /* ── the plays ──────────────────────────────────────────────────────────── */
-.gch-playcard { padding: 10px 12px; border-radius: var(--radius); border: var(--hairline) solid var(--border);
+.gch-playcard { padding: 10px 12px; border-radius: var(--radius); border: var(--hairline) solid transparent;
   background: var(--panel); }
-.gch-playcard.gch-scored { border-color: color-mix(in oklab, var(--good) 55%, var(--border)); }
-.gch-playcard.gch-turned { border-color: color-mix(in oklab, var(--bad) 55%, var(--border)); }
+.gch-playcard.gch-scored { border-color: transparent; }
+.gch-playcard.gch-turned { border-color: transparent; }
 .gch-play-when { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-2xs); font-weight: 800;
   color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
 .gch-thread-btn { margin-left: auto; color: var(--brand-2); }
@@ -232,8 +232,8 @@ body.gch-on { overflow: hidden; }
   -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
   display: grid; gap: 6px; }
 .gch-compose { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; gap: 4px; padding: 4px;
-  border-radius: var(--radius-lg); border: var(--hairline) solid var(--border); background: var(--panel); }
-.gch-compose:focus-within { border-color: color-mix(in oklab, var(--brand) 60%, var(--border)); }
+  border-radius: var(--radius-lg); border: var(--hairline) solid transparent; background: var(--panel); }
+.gch-compose:focus-within { border-color: transparent; }
 .gch-input { width: 100%; min-height: 36px; max-height: 120px; resize: none; padding: 8px 6px; border: 0; outline: 0;
   background: transparent; color: var(--text); font: inherit; font-size: var(--fs-md); line-height: var(--lh-tight); field-sizing: content; }
 .gch-addbet { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--fill-hover);
@@ -247,15 +247,15 @@ body.gch-on { overflow: hidden; }
 .gch-replying button, .gch-betdraft button { margin-left: auto; border: 0; background: transparent; color: var(--text-mute);
   font-size: var(--fs-lg); cursor: pointer; }
 .gch-rules, .gch-join { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px;
-  border-radius: var(--radius-sm); background: var(--panel); border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-sm); background: var(--panel); border: var(--hairline) solid transparent;
   font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-dim); }
 .gch-rules span, .gch-join span { flex: 1 1 220px; }
 .gch-handle { display: grid; gap: 6px; font-size: var(--fs-sm); }
 .gch-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; }
 .gch-atsign { color: var(--text-mute); font-weight: 800; }
 .gch-handle input, .gch-betgrid input, .gch-betgrid select { min-height: 38px; padding: 7px 10px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text); font: inherit; font-size: var(--fs-sm); }
-.gch-betform { display: grid; gap: 8px; padding: 8px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border-soft); }
+  border: var(--hairline) solid transparent; background: var(--panel); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.gch-betform { display: grid; gap: 8px; padding: 8px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent; background: var(--fill-subtle); }
 .gch-betgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .gch-betgrid input[name="player"], .gch-betgrid input[name="market"] { grid-column: span 3; }
 .gch-mybets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-2xs); color: var(--text-mute); }
@@ -267,10 +267,10 @@ body.gch-on { overflow: hidden; }
 /* ── the Live tab's play feed (playFeedMount) ───────────────────────────── */
 .pf-list { display: grid; gap: 10px; margin-top: 10px; }
 @media (min-width: 900px) { .pf-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.pf-item { padding: 11px 13px; border-radius: var(--radius); border: var(--hairline) solid var(--border);
+.pf-item { padding: 11px 13px; border-radius: var(--radius); border: var(--hairline) solid transparent;
   background: var(--panel); cursor: pointer; display: grid; gap: 6px; }
-.pf-item.pf-scored { border-color: color-mix(in oklab, var(--good) 50%, var(--border)); }
-.pf-item.pf-turned { border-color: color-mix(in oklab, var(--bad) 50%, var(--border)); }
+.pf-item.pf-scored { border-color: transparent; }
+.pf-item.pf-turned { border-color: transparent; }
 .pf-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-mute); }
 .pf-top b { color: var(--text); font-family: var(--font-mono); font-size: var(--fs-sm); }
 .pf-lg { display: inline-flex; width: 18px; height: 18px; }
@@ -290,7 +290,7 @@ body.gch-on { overflow: hidden; }
 .gch-tik { display: grid; gap: 4px; }
 .gch-tik-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-mute); }
 .gch-tik-top span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gch-tik-share { border: var(--hairline) solid var(--border); background: transparent; color: var(--brand-2);
+.gch-tik-share { border: var(--hairline) solid transparent; background: var(--fill-tone); color: var(--brand-2);
   font: inherit; font-size: var(--fs-2xs); font-weight: 800; border-radius: var(--radius-sm); padding: 2px 8px; cursor: pointer; }
 .gch-tik ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .gch-tik-leg { font-size: var(--fs-sm); color: var(--text); display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
@@ -304,7 +304,7 @@ body.gch-on { overflow: hidden; }
 .yp { margin-bottom: 18px; }
 /* The members strip over it (lvmHTML): today's count and the way to the plans. */
 .lvm-strip { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin: 0 0 14px; padding: 11px 12px;
-  border-radius: var(--radius); border: var(--hairline) solid color-mix(in oklab, var(--brand) 50%, var(--border));
+  border-radius: var(--radius); border: var(--hairline) solid transparent;
   background: var(--grad-card), var(--panel); color: var(--text); text-decoration: none; }
 .lvm-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--brand);
   background: color-mix(in oklab, var(--brand) 14%, transparent); }
@@ -316,11 +316,11 @@ body.gch-on { overflow: hidden; }
 /* The trial's line in its place (lvmTrialHTML): a notice about a charge, not a sale — no gold button. */
 .lvm-trial { border-color: var(--border); }
 .lvm-trial .lvm-txt span { white-space: normal; }
-.lvm-trial .lvm-go { background: none; color: var(--text); border: var(--hairline) solid var(--border); }
+.lvm-trial .lvm-go { background: var(--fill-tone); color: var(--text); border: var(--hairline) solid transparent; }
 .yp-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px;
   -webkit-overflow-scrolling: touch; }
 .yp-item { flex: 0 0 auto; min-width: 168px; max-width: 240px; scroll-snap-align: start; display: grid; gap: 3px;
-  text-align: left; padding: 10px 12px; border-radius: var(--radius); border: var(--hairline) solid var(--border);
+  text-align: left; padding: 10px 12px; border-radius: var(--radius); border: var(--hairline) solid transparent;
   background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
 .yp-item.is-final { opacity: .72; }
 .yp-who { font-weight: 800; font-size: var(--fs-sm); line-height: var(--lh-snug); }

@@ -81,7 +81,8 @@ def test_every_scanner_row_is_the_books_row():
     sec = _fn("scanSection")
     assert '<div class="hd-card">' in sec
     assert ".hd-scan .hd-state span { color: var(--text-mute); font-size: var(--fs-xs); text-align: right; }" in CSS
-    assert ".scan-stake { width: 90px; background: transparent; color: inherit; font: inherit;" in CSS
+    # A filled well, not an outlined box, since "No hard lines" (2026-10-27).
+    assert ".scan-stake { width: 90px; background: var(--fill-tone); color: inherit; font: inherit;" in CSS
     assert ".hd-scan .hd-state { flex: 0 1 auto; min-width: 0; max-width: 52%; }" in CSS, "the right column yields on a phone"
     assert ".hd-scan .hd-what { flex: 1 1 120px; min-width: 120px; }" in CSS
 

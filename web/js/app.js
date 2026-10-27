@@ -16203,7 +16203,7 @@ function renderProps() {
         markets.length > 1 ? markets.map((m) => chip(m, `${m} ${count[m]}`)).join("") : ""}</div>
       <div class="ou-views" role="group" aria-label="View">${vbtn("cards", "Cards")}${vbtn("list", "List")}</div>
     </div>
-    <p class="ou-note">The book’s price and our chance on both sides. Our side is outlined;
+    <p class="ou-note">The book’s price and our chance on both sides. Our side is lit in gold;
       the other side’s chance is the rest of ours, drawn only on half-point lines, where a
       push can’t happen. Tap any prop for the charts and the reasons.</p>
     ${mode === "list"

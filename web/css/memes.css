@@ -73,8 +73,8 @@
 .mc-picker .mc-pick { flex: none; white-space: nowrap; }
 
 .mc-pick { display: inline-flex; align-items: baseline; gap: 7px;
-  padding: 6px 10px; background: none; cursor: pointer;
-  border: var(--hairline) solid var(--border); color: var(--text-dim);
+  padding: 6px 10px; background: var(--fill-tone); cursor: pointer;
+  border: var(--hairline) solid transparent; color: var(--text-dim);
   font: inherit; font-size: var(--fs-sm); }
 
 .mc-pick b { color: var(--text); font-weight: 700; }
@@ -127,7 +127,7 @@
 .mc-chart-off { display: flex; align-items: center; justify-content: center;
   text-align: center; min-height: clamp(220px, 30vh, 340px);
   margin-top: 8px; padding: 24px 20px; background: var(--bg-2);
-  border: var(--hairline) solid var(--border-soft);
+  border: var(--hairline) solid transparent;
   border-radius: var(--radius-sm); color: var(--text-mute);
   font-size: var(--fs-sm); line-height: var(--lh-snug);
   max-width: var(--measure); margin-left: auto; margin-right: auto; }
@@ -231,7 +231,7 @@
 .mc-term { display: grid; grid-template-columns: 348px minmax(0, 1fr);
   gap: 14px; align-items: start; }
 
-.mc-watch { border: var(--hairline) solid var(--border); border-radius: var(--radius);
+.mc-watch { border: var(--hairline) solid transparent; border-radius: var(--radius);
   background: var(--panel); overflow: hidden; }
 
 .mc-watch-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;

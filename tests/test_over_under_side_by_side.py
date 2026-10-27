@@ -148,7 +148,8 @@ def test_cards_or_a_list_remembered_and_the_page_is_a_real_destination():
     assert '"Over / Under", "Every prop we price tonight' in APP, "on the features page"
     for card in (_fn("ouCardHTML"), _fn("ouRowHTML")):
         assert "${propAttrs(r)}" in card, "every prop is a door to its page"
-    assert ".ou-side.ours { border-color: var(--brand-2);" in CSS
+    # Our side is lit in gold (a tint), not ringed, since 2026-10-27 (tests/test_no_hard_lines).
+    assert ".ou-side.ours { border-color: transparent;\n  background: color-mix(in oklab, var(--brand) 12%, transparent); }" in CSS
     assert ".ou-grid { display: grid;" in CSS
 
 

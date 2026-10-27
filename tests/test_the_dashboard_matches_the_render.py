@@ -130,7 +130,8 @@ def test_the_top_bar_carries_the_name_line_the_leagues_and_a_search_box():
     place = _fn("placeLeagues")
     assert "brand.after(bar)" in place and "_leaguesHome.parent.insertBefore(bar" in place
     assert "placeLeagues();" in APP and 'window.matchMedia(LEAGUES_MQ).addEventListener("change", placeLeagues);' in APP
-    assert ".topbar .sportbar-in .sport-btn.active { border-color: var(--brand); color: var(--brand);" in CSS
+    # The chosen league is a tint and a colour, not a ring, since "No hard lines" (2026-10-27).
+    assert ".topbar .sportbar-in .sport-btn.active { border-color: transparent; color: var(--brand);" in CSS
     assert ".brand-tag { display: none; }" in CSS and ".ns-input { display: none; }" in CSS
 
 

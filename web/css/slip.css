@@ -35,9 +35,9 @@
 .pgr-leg-w { margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
 /* His chart doors under a football leg (js/carrychart.js opens them). */
 .pgr-charts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.pgr-chart { padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid var(--border); background: var(--panel-2);
+.pgr-chart { padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--panel-2);
   color: var(--text-dim); font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
-.pgr-chart:hover { color: var(--text); border-color: var(--brand); }
+.pgr-chart:hover { color: var(--text); border-color: transparent; }
 /* Our chance as the fill, what the price needs as the tick: a fill past
    the tick is a leg that clears its price. */
 .pgr-bar { position: relative; height: 4px; margin-top: 6px; border-radius: 2px; background: var(--panel-3); }
@@ -112,10 +112,10 @@
 .pgr-now, .pgr-alerts, .pgr-shop, .pgr-better, .pgr-pairs { padding: 8px 10px; border-radius: var(--radius-sm);
   font-size: var(--fs-sm); color: var(--text-dim); background: var(--panel); overflow-wrap: break-word; }
 .pgr-now b, .pgr-shop b, .pgr-better b, .pgr-pairs > b, .pgr-alerts > b { color: var(--text); }
-.pgr-now.s-open { border: var(--hairline) solid var(--gold); }
+.pgr-now.s-open { border: var(--hairline) solid transparent; background: color-mix(in oklab, var(--brand) 14%, transparent); }
 .pgr-now.s-lost { border: var(--hairline) solid var(--bad); }
 .pgr-now.s-won { border: var(--hairline) solid var(--good); }
-.pgr-now.s-last { border: 2px solid var(--gold); color: var(--text); }
+.pgr-now.s-last { border: 2px solid transparent; color: var(--text); background: color-mix(in oklab, var(--brand) 14%, transparent); }
 .pgr-alerts { border: var(--hairline) solid var(--warn); }
 .pgr-fresh { margin: 0; font-size: var(--fs-xs); color: var(--text-mute); }
 .pgr-alerts ul, .pgr-pairs ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
@@ -146,16 +146,16 @@
 .pgr-swaps li b.pos { color: var(--good); font-family: var(--font-mono); }
 .pgr-swaps li b.neg { color: var(--bad); font-family: var(--font-mono); }
 .pgr-swap-k { display: inline-block; margin-right: 4px; padding: 0 6px; border-radius: 999px; font-size: 10px;
-  font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--gold); border: var(--hairline) solid var(--gold); }
+  font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--gold); border: var(--hairline) solid transparent; background: color-mix(in oklab, var(--brand) 14%, transparent); }
 .pgr-hedge { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
-  color: var(--text-dim); background: var(--panel); border: var(--hairline) solid var(--gold); overflow-wrap: break-word; }
+  color: var(--text-dim); background: color-mix(in oklab, var(--brand) 12%, var(--panel)); border: var(--hairline) solid transparent; overflow-wrap: break-word; }
 .pgr-hedge b { color: var(--text); }
 .pgr-hedge.pgr-cash { border-color: var(--border); }
 .pgr-hedge-in { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .pgr-hedge-in label, .pgr-save label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs);
   color: var(--text-mute); font-weight: 600; }
 .pgr-hedge-in input, .pgr-save input { width: 7.5ch; min-height: 32px; padding: 4px 8px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--border); background: var(--panel-2); color: var(--text);
+  border: var(--hairline) solid transparent; background: var(--panel-2); color: var(--text);
   font-family: var(--font-mono); font-size: var(--fs-sm); }
 .pgr-hedge-out { display: grid; gap: 3px; }
 .pgr-hedge-out p { margin: 0; }
@@ -188,7 +188,7 @@
 /* The sweat meter (slip.js sweatHTML): the ticket's live chance for the
    rest as a half-dial, its word and how far it moved since the last read. */
 .pgr-sweat { display: flex; align-items: center; gap: 12px; margin: 8px 0; padding: 8px 10px; border-radius: var(--radius-sm);
-  background: var(--panel-2); border: var(--hairline) solid var(--border); }
+  background: var(--panel-2); border: var(--hairline) solid transparent; }
 .pgr-sweat svg { width: 96px; height: auto; flex-shrink: 0; }
 .pgr-sw-track { fill: none; stroke: var(--panel-3); stroke-width: 9; stroke-linecap: round; }
 .pgr-sw-fill { fill: none; stroke: var(--text-dim); stroke-width: 9; stroke-linecap: round; }

@@ -62,8 +62,9 @@ def test_the_park_panel_is_inset_by_the_cards_own_gutter():
 
 def test_the_panel_carries_a_frame_and_clips_what_it_frames():
     park = _rule(".pbp-park")
-    assert "border:" in park and "var(--hairline)" in park, park
-    assert "var(--brand)" in park, "the frame follows the card's gold, not a second colour"
+    # Framed by its own ground and its corners since 2026-10-27, no gold line
+    # round it (tests/test_no_hard_lines).
+    assert "border: var(--hairline) solid transparent" in park, park
     assert "overflow: hidden" in park, "the photo, the wall marks and the arc stay inside"
     assert "border-radius: var(--radius)" in park, "corner shape comes from the theme token"
 

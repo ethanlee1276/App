@@ -176,7 +176,9 @@
   border-top: var(--hairline) solid var(--border-soft); }
 .pl-conds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .pl-cond { font-size: var(--fs-xs); color: var(--text-mute);
-  border: var(--hairline) solid var(--border); padding: 3px 8px; }
+  border: var(--hairline) solid transparent; padding: 3px 8px;
+  background: var(--fill-subtle);
+}
 .pl-cond.met { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 /* WHAT THE PARLAY HEADLINE IS NOT COUNTING.
    Three rows, set as a table rather than as cards: they are the same
@@ -348,7 +350,7 @@
 .rec-edge {
   margin: 0 0 18px; padding: 14px 16px 12px;
   background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft);
+  border: var(--hairline) solid transparent;
   border-left: 3px solid var(--text-faint);
 }
 .rec-edge.tone-neg { border-left-color: var(--bad); }
@@ -400,7 +402,7 @@
   flex: none; width: 30px; height: 30px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--brand); background: var(--panel-2);
-  border: var(--hairline) solid var(--border);
+  border: var(--hairline) solid transparent;
 }
 /* The run list, coloured by the side of the coin flip each run landed on.
    0.500 is the line this whole panel is about, and a wall of identical
@@ -464,6 +466,6 @@
 .wk-recap .wk-pick { color: var(--text-dim); font-size: .9em; overflow-wrap:anywhere; }
 /* The record read offline (app.js renderRecord, sw.js THE RECORD, OFFLINE). */
 .rec-offline { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px;
-  border-radius: var(--radius-sm); border: var(--hairline) solid color-mix(in oklab, var(--warn) 50%, var(--border));
+  border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
   background: color-mix(in oklab, var(--warn) 10%, var(--panel)); font-size: var(--fs-sm); }
 .rec-offline .ic { color: var(--warn); flex: none; margin-top: 2px; }

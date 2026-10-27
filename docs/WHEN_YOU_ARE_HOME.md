@@ -5344,8 +5344,8 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 **EW. Tonight, 2026-10-26 — everything above, in order** (Ethan: "give me
 all the code to run"). Every command runs on the box (`ssh` in first).
 
-1. The box has the latest code. It should print `Sweat it, find it, keep
-   coming back: nine more ideas` or a newer line:
+1. The box has the latest code. It should print `No hard lines: every outline
+   a fill, every edge a fade` or a newer line:
 
    ```
    git -C /srv/qellys log --oneline -1
@@ -5395,11 +5395,11 @@ all the code to run"). Every command runs on the box (`ssh` in first).
    site's own account: account … — big plays post as it." If it says NONE
    instead, paste it back and I'll say which part to redo.
 
-4. Every read-only check since the chat shipped (DX to FO) in one go,
+4. Every read-only check since the chat shipped (DX to FP) in one go,
    a couple of minutes. Paste back what it prints:
 
    ```
-   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM FN FO 2>&1 | tee /tmp/round.txt
+   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM FN FO FP 2>&1 | tee /tmp/round.txt
    ```
 
 5. On your phone: swipe Qellys up out of the app switcher, open it again,
@@ -6112,6 +6112,34 @@ The checks in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh FO 2>&1 | tee /tmp/fo.txt
+```
+
+**FP. No hard lines** (step 224). Ethan, with his phone's top bar and league
+row circled: "notice how sharp all the lines are on the whole site for
+everything ... Make everything smoother and more blended." Every outline on
+the site is gone (docs/VISUAL_AUDIT.md, "No hard lines"):
+
+- **The top of the page is one surface.** No line under the top bar (in the
+  iPhone app too); it fades softly into what scrolls under it, and your
+  team's colour glows from it instead of drawing a stripe. The league row no
+  longer sits on its own band.
+- **No outlines.** Chips, buttons, tiles, notices and fields are soft filled
+  shapes; whatever you picked is tinted, not ringed in gold.
+- **Dividers are a whisper**, and the footer, empty states and the desktop's
+  columns are separated by space, not rules.
+- **Game cards**: the teams' colours are light from the photo, not a line.
+
+Nothing to set. Read-only check, any time. It prints `1` once this version
+is live:
+
+```
+curl -s https://qellysbook.com/css/styles.css | grep -c 'grad-team-spill:'
+```
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh FP 2>&1 | tee /tmp/fp.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

@@ -78,7 +78,8 @@ def test_buttons_speak_in_sentence_case():
 def test_one_field_style_and_gold_checkboxes():
     i = CSS.index(":where(input:not([type])")
     field = CSS[i:CSS.index("}", i)]
-    for want in ("background-color: var(--panel-2)", "border-radius: var(--radius-sm)", "min-height: 44px"):
+    # A filled well, no outline, since 2026-10-27 (tests/test_no_hard_lines).
+    for want in ("background-color: var(--fill-tone)", "solid transparent", "border-radius: var(--radius-sm)", "min-height: 44px"):
         assert want in field, want
     assert re.search(r':where\(input\[type="checkbox"\], input\[type="radio"\]\) \{[^}]*accent-color: var\(--brand-solid\)', CSS)
     # The pages that drew their own boxes defer to it.

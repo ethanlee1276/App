@@ -30,7 +30,7 @@
   display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
   gap: 22px; align-items: center; margin-bottom: 20px;
   background: var(--panel-2);
-  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius);
+  border: var(--hairline) solid transparent; border-radius: var(--radius);
   padding: 18px; overflow: hidden;
 }
 /* The stadium art is drawn for a card slot; given a half-page column it
@@ -70,7 +70,7 @@
 .pk-dims { display: grid; grid-template-columns: repeat(3, minmax(0, 108px));
   gap: 8px; margin-top: 10px; }
 .pk-dim {
-  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft);
+  background: var(--fill-subtle); border: var(--hairline) solid transparent;
   border-radius: 0; padding: 7px 10px; min-width: 0;
 }
 .pk-dim .k { display: block; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .5px;
@@ -85,7 +85,7 @@
 /* Bar is centred on league average, so the eye reads direction before it
    reads the number: right of the tick is above average, left is below. */
 .pk-fbar { position: relative; display: block; height: 7px; border-radius: 0;
-  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); }
+  background: var(--fill-subtle); border: var(--hairline) solid transparent; }
 .pk-fbar > i { position: absolute; top: 0; bottom: 0; background: var(--brand); opacity: .85; }
 .pk-fbar > b { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px;
   background: var(--text); opacity: .35; }
@@ -307,8 +307,10 @@
 .pbp-sb-live { display: inline-flex; align-items: center; gap: 4px; font: 800 var(--fs-2xs) / 1.4 var(--font-sans);
   letter-spacing: .06em; text-transform: uppercase; color: var(--bad); }
 .pbp-sb-ago { font: 500 var(--fs-2xs) / 1.3 var(--font-mono); color: var(--text-faint); text-wrap: balance; }
-.pbp-sb-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid var(--border);
-  border-radius: 999px; color: var(--text-dim); }
+.pbp-sb-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid transparent;
+  border-radius: 999px; color: var(--text-dim);
+  background: var(--fill-subtle);
+}
 /* The watch buttons are the header's last row, under the scores, as on the
    basketball and hockey pages (2026-10-20): in the middle column they set
    its width, and on a phone they stacked beside the live state. */
@@ -361,7 +363,7 @@
    with everything else. A hairline, not a frame: the picture is the
    subject and a thick border would compete with it. */
 .pbp-parkcard { padding: 0; overflow: hidden;
-  border-color: color-mix(in srgb, var(--brand) 38%, var(--border)); }
+  border-color: transparent; }
 .pbp-parkcard .pbp-parkhead { border-bottom-color:
   color-mix(in srgb, var(--brand) 22%, var(--border)); }
 .pbp-sit { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
@@ -396,7 +398,7 @@
 .gp-pbp-door:hover { color: var(--text); }
 .pbp-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
-  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; }
+  border: var(--hairline) solid transparent; border-radius: var(--radius-lg); padding: 10px 12px; }
 .pbp-info-ico { color: var(--gold); display: inline-flex; }
 /* The label above the value, small and quiet, so the tile reads as a
    question and an answer rather than two facts of equal weight. */
@@ -504,15 +506,15 @@
    backs the side and what works against it, each marked in-our-number or
    shown; then the corners he will see. */
 .pick-case { margin: 12px 0 4px; padding: 12px 14px; border-radius: var(--radius);
-  border: var(--hairline) solid var(--border-soft); background: var(--panel-2); }
+  border: var(--hairline) solid transparent; background: var(--panel-2); }
 .pc-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
   color: var(--text); margin-bottom: 6px; }
 .pc-verdict { margin: 0 0 10px; font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text); }
 .pc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pc-col { padding: 10px 12px; border-radius: var(--radius); }
-.pc-for { border: var(--hairline) solid color-mix(in srgb, var(--good) 40%, transparent);
+.pc-for { border: var(--hairline) solid transparent;
   background: color-mix(in srgb, var(--good) 6%, transparent); }
-.pc-against { border: var(--hairline) solid color-mix(in srgb, var(--bad) 40%, transparent);
+.pc-against { border: var(--hairline) solid transparent;
   background: color-mix(in srgb, var(--bad) 6%, transparent); }
 .pc-col-k { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
   color: var(--text-mute); margin-bottom: 6px; }
@@ -577,7 +579,7 @@
 }
 .tp-verdicts { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
 .tp-verdict { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm);
-  background: var(--bg); border: var(--hairline) solid var(--border-soft); }
+  background: var(--bg); border: var(--hairline) solid transparent; }
 .tp-verdict span { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text-dim); }
 .tp-verdict b { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-md); }
@@ -591,7 +593,7 @@
   text-transform: uppercase; color: var(--text); border-top: var(--hairline) solid var(--border); }
 .tp-k { color: var(--text-dim); }
 .tp-cell { display: grid; justify-items: center; align-content: center; align-self: stretch; padding: 5px 4px;
-  border-radius: var(--radius-sm); background: var(--bg); border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-sm); background: var(--bg); border: var(--hairline) solid transparent;
   line-height: var(--lh-tight); }
 .tp-cell b { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
 .tp-cell em { font-style: normal; font-size: var(--fs-2xs); color: var(--text-dim); }
@@ -623,7 +625,7 @@
 .gplan-row.gap .ml-pct { background: var(--bg); color: var(--text-dim); }
 .gplan-wx { width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-dim); }
 /* Where the money is going (moneySplitHTML) — the sportsbooks' split bars. */
-.gp-money { margin: 12px 0 4px; padding: 10px 12px; background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
+.gp-money { margin: 12px 0 4px; padding: 10px 12px; background: var(--panel-2); border: var(--hairline) solid transparent;
   border-radius: var(--radius); }
 .gp-money-row + .gp-money-row { margin-top: 12px; }
 .gp-money-top { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: baseline;
@@ -696,7 +698,7 @@
 .pbp-moment-banner { position: absolute; z-index: 3; top: 8px; left: 50%; translate: -50% 0; display: none;
   align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: var(--radius-sm); pointer-events: none;
   white-space: nowrap; background: color-mix(in srgb, var(--night-3) 88%, transparent);
-  border: var(--hairline) solid color-mix(in srgb, var(--night-gold) 55%, transparent); box-shadow: var(--glow);
+  border: var(--hairline) solid transparent; box-shadow: var(--glow);
   animation: pbp-banner 5s linear both; animation-delay: calc(0s - var(--t, 0s)); }
 .pbp-moment-banner b { font: 700 var(--fs-xl) / 1.05 var(--font-mono); letter-spacing: .06em; color: var(--night-gold);
   text-shadow: 0 0 10px color-mix(in srgb, var(--night-gold) 65%, transparent); }
@@ -717,7 +719,7 @@
 .ci-card { display: grid; gap: 8px; }
 .ci-q { margin: 0; font-weight: 700; font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text); }
 .ci-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.ci-pick { min-height: 44px; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--border);
+.ci-pick { min-height: 44px; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
   background: var(--panel-2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
 .ci-pick.is-mine { border-color: var(--brand-2); color: var(--brand-2);
   background: color-mix(in oklab, var(--brand-2) 12%, var(--panel-2)); }
@@ -739,7 +741,7 @@
   color: var(--brand-ink); font: inherit; font-size: var(--fs-xs); font-weight: 900; cursor: pointer; }
 
 /* While you were away (pbpAwayHTML): the score then and now, the swing, the biggest plays since. */
-.pbp-away { display: grid; gap: 6px; border-color: color-mix(in oklab, var(--brand) 40%, var(--border)); }
+.pbp-away { display: grid; gap: 6px; border-color: transparent; }
 .pbp-away .pbp-rail-head { display: flex; align-items: center; gap: 8px; }
 .pbp-away-x { margin-left: auto; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--fill-hover);
   color: var(--text-mute); font: inherit; font-size: var(--fs-md); cursor: pointer; }
@@ -751,8 +753,8 @@
 /* The game in 30 seconds (pbpRecapHTML): a finished game's story on one card. */
 .pbp-recap { display: grid; gap: 8px; }
 .pbp-recap .pbp-rail-head { display: flex; align-items: center; gap: 8px; }
-.pbp-recap-share { margin-left: auto; padding: 4px 12px; border-radius: 999px; border: var(--hairline) solid var(--border);
-  background: transparent; color: var(--brand-2); font: inherit; font-size: var(--fs-xs); font-weight: 800; cursor: pointer; }
+.pbp-recap-share { margin-left: auto; padding: 4px 12px; border-radius: 999px; border: var(--hairline) solid transparent;
+  background: var(--fill-tone); color: var(--brand-2); font: inherit; font-size: var(--fs-xs); font-weight: 800; cursor: pointer; }
 .pbp-recap-final { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-lg); font-weight: 700; }
 .pbp-recap-final b { font-family: var(--font-mono); font-size: var(--fs-xl); }
 .pbp-recap-final span { margin-left: auto; font-size: var(--fs-2xs); font-weight: 900; color: var(--text-mute); text-transform: uppercase; letter-spacing: .08em; }
@@ -765,9 +767,9 @@
 /* Watching on TV (pbpTvHTML): the delay the page and its chat are held by. */
 .pbp-tv { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 2px 2px 0; }
 .pbp-tv-q { font-size: var(--fs-xs); font-weight: 800; color: var(--text-dim); margin-right: 2px; }
-.pbp-tv-b { padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid var(--border); background: transparent;
+.pbp-tv-b { padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--fill-tone);
   color: var(--text-mute); font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
-.pbp-tv-b.on { border-color: var(--brand); color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, transparent); }
+.pbp-tv-b.on { border-color: transparent; color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, transparent); }
 .pbp-tv-note { flex-basis: 100%; font-size: var(--fs-2xs); color: var(--text-mute); }
 
 /* FANTASY POINTS ON THE GAME PAGE (2026-10-27): the game's top fantasy scorers, off its box. */

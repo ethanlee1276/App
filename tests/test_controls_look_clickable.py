@@ -57,8 +57,11 @@ def test_an_idle_tab_has_a_surface_and_an_edge():
     r = _rule(_css(), ".subnav-btn")
     assert "background: var(--fill-subtle)" in r, \
         "an idle tab has no fill — it is text again"
-    assert "border: var(--hairline) solid var(--border)" in r, \
-        "an idle tab has no edge — it is text again"
+    # No outline since 2026-10-27 (tests/test_no_hard_lines): the fill is the
+    # surface, and the border stays only as a transparent hairline so a tab
+    # keeps its size when it is chosen.
+    assert "border: var(--hairline) solid transparent" in r, \
+        "an idle tab keeps its hairline's room"
     # `border: 0` was the whole bug. It must not come back by any route.
     assert not re.search(r"border:\s*0", r), "the tab dropped its border"
     assert "background: transparent" not in r
@@ -291,14 +294,14 @@ def test_the_pressed_card_keeps_its_fill_under_a_sticky_hover():
     assert "@media (hover: hover)" in css[max(0, i - 120):i], \
         "room-card hover is not gated on a hover-capable pointer"
     keep = _rule(css, ".room-card.active:hover")
-    assert "background: var(--brand)" in keep and "border-color: var(--brand)" in keep
+    assert "background: var(--brand)" in keep and "border-color: transparent" in keep
 
 
 def test_an_index_card_is_shaped_like_a_control():
     css = _css()
     r = _rule(css, ".room-card")
     assert "background: var(--fill-subtle)" in r
-    assert "border: var(--hairline) solid var(--border)" in r
+    assert "border: var(--hairline) solid transparent" in r, "a fill, not an outline (tests/test_no_hard_lines)"
     assert "cursor: pointer" in r
     hover = _rule(css, ".room-card:hover")
     assert "background: var(--fill-hover)" in hover
