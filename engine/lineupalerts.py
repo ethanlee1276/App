@@ -75,7 +75,8 @@ def message(league: str, outs: list) -> tuple[str, str]:
     where = f"your {league} lineup" if league else "your lineup"
     if len(outs) == 1:
         name, why = outs[0]
-        return f"{name} is {why}", f"He is in {where}. Tap to see who to start instead."[:240]
+        # "Still in", not "He is in": a team defense gets this too.
+        return f"{name} is {why}", f"Still in {where}. Tap to see who to start instead."[:240]
     listed = ", ".join(f"{n} ({w})" for n, w in outs[:-1]) + f" and {outs[-1][0]} ({outs[-1][1]})"
     return (f"{len(outs)} of your starters won’t play",
             f"{listed} are in {where}. Tap to see who to start instead."[:240])
@@ -110,7 +111,14 @@ def lineup_pass(conn, now: float | None = None, grab=None, week_doc: dict | None
     rows = conn.execute("SELECT user_id, league_id, sleeper_user FROM push_lineup_leagues").fetchall()
     if not rows:
         return 0
-    grab = grab or _grab
+    # One read of each path a pass: the players file is five megabytes, and
+    # every account in the pass shares it.
+    read, memo = grab or _grab, {}
+
+    def grab(path, ttl):
+        if path not in memo:
+            memo[path] = read(path, ttl)
+        return memo[path]
     if week_doc is None:
         from engine import fantasyweek
         week_doc = fantasyweek.load()

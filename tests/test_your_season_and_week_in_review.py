@@ -227,6 +227,7 @@ def test_the_season_endpoint_answers_from_the_league():
         h._fail = lambda code, msg, exc, where: sent.append((code, {"error": msg}))
         h._kit_board = lambda: {}
         h._fantasy_week = lambda: ({}, {"state": "none"})
+        h._rate_limited = lambda limit, bucket="read": False
         h._league_season({"league": ["77"], "user": ["u1"]})
         h._league_season({"league": ["not-a-league"]})
     finally:
@@ -247,6 +248,9 @@ def test_the_season_endpoint_answers_from_the_league():
     assert sent[1][0] == 400
     src = (ROOT / "server.py").read_text(encoding="utf-8")
     assert '"/api/leagueseason"' in src
+    body = src[src.index("    def _league_season("):src.index("    def _desk_extras(")]
+    assert 'self._rate_limited(RATE_SEASON_PER_MIN, "leagueseason")' in body, \
+        "fourteen Sleeper reads a call get their own, tighter bucket"
 
 
 # --- the page ------------------------------------------------------------------------------

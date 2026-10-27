@@ -94,7 +94,9 @@ def test_the_week_s_designation_wins_over_sleeper_s():
 def test_the_words_are_names_and_designations_never_a_number():
     title, body = LA.message("Sunday Funday", [("Ja'Marr Chase", "out")])
     assert title == "Ja'Marr Chase is out"
-    assert body == "He is in your Sunday Funday lineup. Tap to see who to start instead."
+    assert body == "Still in your Sunday Funday lineup. Tap to see who to start instead."
+    title, body = LA.message("", [("Philadelphia Eagles", "on a bye")])
+    assert (title, body) == ("Philadelphia Eagles is on a bye", "Still in your lineup. Tap to see who to start instead.")
     title, body = LA.message("", [("Ja'Marr Chase", "out"), ("Mark Andrews", "on a bye"), ("Breece Hall", "doubtful")])
     assert title == "3 of your starters won’t play"
     assert body.startswith("Ja'Marr Chase (out), Mark Andrews (on a bye) and Breece Hall (doubtful) are in your lineup.")
@@ -167,6 +169,23 @@ def test_the_minute_forgets_even_when_no_phone_is_left():
         conn.commit()
         PM.run_once(connect=lambda: A.connect(Path(d) / "a.db"), log=lambda *a: None)
         assert conn.execute("SELECT COUNT(*) FROM push_lineup_leagues").fetchone()[0] == 0
+        conn.close()
+
+
+def test_one_read_of_the_players_file_a_pass():
+    with tempfile.TemporaryDirectory() as d:
+        conn = _db(d)
+        for i in range(3):
+            uid = _member(conn, f"on{i}@example.com", "lineup")
+            PM.lineup_remember(conn, uid, "321", "555")
+        seen = []
+        inner = _sleeper()
+
+        def counting(path, ttl):
+            seen.append(path)
+            return inner(path, ttl)
+        assert LA.lineup_pass(conn, now=1000.0, grab=counting, week_doc=WEEK) == 3
+        assert seen.count("players/nfl") == 1 and seen.count("league/321/rosters") == 1, seen
         conn.close()
 
 

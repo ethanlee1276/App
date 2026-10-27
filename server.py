@@ -237,6 +237,11 @@ MAX_TRACK_SLIPS = 10
 #: The Live tab asks once a minute while it is open; a reload or a second
 #: tab is a few more. Its own bucket, so it never spends a question's.
 RATE_TRACK_PER_MIN = 6
+#: A league's season (/api/leagueseason) reads every week of its Sleeper
+#: matchups, fourteen reads on a cold cache: a desk opens it once, a
+#: reload or a league switch a few more. Its own bucket, so a stranger
+#: walking league ids cannot turn the read limit into Sleeper's problem.
+RATE_SEASON_PER_MIN = 6
 #: Auth is different: nobody legitimately signs in twenty times a minute.
 #: This sits ON TOP of the per-email throttle in `engine.accounts` — that
 #: one stops guessing at one account, this one stops spraying across many.
@@ -1817,6 +1822,8 @@ class Handler(BaseHTTPRequestHandler):
         user_id = (query.get("user") or [""])[0].strip()
         if not re.fullmatch(r"\d{1,25}", league_id):
             return self._send(400, b'{"error":"bad league id"}', ".json")
+        if self._rate_limited(RATE_SEASON_PER_MIN, "leagueseason"):
+            return
         from concurrent.futures import ThreadPoolExecutor
         from engine import byes as _byes, fantasy_lineup, fantasy_season, fantasyweek
         from engine.db import connect

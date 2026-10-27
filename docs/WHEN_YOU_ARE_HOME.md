@@ -5628,7 +5628,7 @@ Sleeper league is yours. Every fifteen minutes the box reads the lineup you
 actually have set there and checks each starter against this week's byes
 and injury report (and Sleeper's own status). A starter who is out, on IR,
 suspended, on a bye, or doubtful (usually sits) gets you one alert, once a
-week per news: "Ja'Marr Chase is out. He is in your Sunday Funday lineup.
+week per news: "Ja'Marr Chase is out. Still in your Sunday Funday lineup.
 Tap to see who to start instead." The tap opens Fantasy, where the to-do
 list names the replacement. Quiet hours (11pm to 9am Eastern) hold it to
 the morning. The alert names the player and his designation (both public)
