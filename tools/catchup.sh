@@ -519,7 +519,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/api/alerts/live
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import yourplayers as YP; print(len(YP.index()), 'players with a line right now')"
 SH
 run EF "Big moments by push (the clutch switch in Alerts)" 60 <<'SH'
-curl -s https://qellysbook.com/js/app.js | grep -c 'Big moments in my teams'
+curl -s https://qellysbook.com/js/app.js | grep -c 'Big moments in games I follow'
 cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
 SH
 run EG "Call it on live games" 60 <<'SH'

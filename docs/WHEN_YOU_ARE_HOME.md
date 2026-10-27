@@ -4824,7 +4824,7 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh EE 2>&1 | tee /tmp/ee.txt
 ```
 
 **EF. Big moments by push** (step 189). A new switch in Alerts → Yours:
-"Big moments in my teams' and players' games". With it on, a walk-off, a
+"Big moments in games I follow". With it on, a walk-off, a
 late go-ahead score or any play our moment rating puts at 8.5 or more
 (about a 35-point swing in the win chance) in a game of a team you follow,
 or by a player you follow, taps your phone: "Walk-off: ATL 4–5 NYM ·
@@ -4837,11 +4837,13 @@ after twenty minutes, so the night's moments are dropped, not sent at nine.
 Nothing to install. Read-only, any time:
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'Big moments in my teams'
+curl -s https://qellysbook.com/js/app.js | grep -c 'Big moments in games I follow'
 cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
 ```
 
-The first prints `1` once this version is live; the second ends with how
+The first prints `1` once this version is live (corrected 2026-10-27: it
+looked for words the switch never used, so it printed 0 even when live);
+the second ends with how
 many signed-in phones asked for big moments and what's queued.
 
 The check in one go:
@@ -5333,7 +5335,7 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 **EW. Tonight, 2026-10-26 — everything above, in order** (Ethan: "give me
 all the code to run"). Every command runs on the box (`ssh` in first).
 
-1. The box has today's code. It should print `9c27e979` or newer:
+1. The box has the latest code. It should print `c656fc43` or newer:
 
    ```
    git -C /srv/qellys log --oneline -1
@@ -5346,13 +5348,28 @@ all the code to run"). Every command runs on the box (`ssh` in first).
    sudo systemctl start qellys-update
    ```
 
-2. Phone sign-up (EC): put in the Verify **Service** SID, the one that
-   starts with `VA` (Twilio console → Verify → Services → your service).
-   Then restart, which also starts everything from EO to EU at once, and
-   check the three Twilio values:
+2. Phone sign-up (EC) — the key that went in the wrong place. Each
+   command asks for one value: paste it and press Enter (nothing shows
+   while you paste; that is on purpose). Running one again replaces it.
+   - `TWILIO_ACCOUNT_SID` starts with `AC`: the Twilio console's home
+     page, "Account Info".
+   - `TWILIO_AUTH_TOKEN`: the same box, under the Account SID (click to
+     show it).
+   - `TWILIO_VERIFY_SID` starts with `VA` — the one that got the Account
+     SID by mistake: Verify → Services → your service → "Service SID"
+     (no service yet? Create new, any name, e.g. Qellys Book).
 
    ```
+   cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_ACCOUNT_SID
+   cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_AUTH_TOKEN
    cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_VERIFY_SID
+   ```
+
+   Then restart (this also starts everything from EO to EU at once), and
+   check the three values. The check names any that is missing or the
+   wrong kind, and never prints a value:
+
+   ```
    sudo systemctl restart qellys
    cd /srv/qellys && sudo python3 -m engine.smsverify --check
    ```
@@ -5365,10 +5382,11 @@ all the code to run"). Every command runs on the box (`ssh` in first).
    cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.claim(A.connect(), 'site@example.com', 'Qellys_Book', name='Qellys Book'))"
    ```
 
-4. Every read-only check from today in one go. Paste back what it prints:
+4. Every read-only check since the chat shipped (DX to EV) in one go,
+   a couple of minutes. Paste back what it prints:
 
    ```
-   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EC EM EN EO EP EQ ER ES ET EU EV 2>&1 | tee /tmp/round.txt
+   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV 2>&1 | tee /tmp/round.txt
    ```
 
 5. On your phone: swipe Qellys up out of the app switcher, open it again,
