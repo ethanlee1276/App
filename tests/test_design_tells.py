@@ -913,7 +913,10 @@ def test_nothing_transitions_a_shadow_that_never_exists():
     # The Liquid Glass panes (2026-10-24) are the same discipline: their lit
     # rim and their depth are tokens, defined once per theme, and a pane may
     # stack them with the glow — never a hand-mixed shadow.
-    token = r"var\(--(?:glow|glow-soft|glass-rim|glass-rim-soft|glass-depth)\)"
+    # THE LIGHTS ON (2026-10-27, Ethan: "more colors ... animations and
+    # glowing shit"): the glow is a family now (--glow-gold, -good, -lift,
+    # -league, and --glow-hue, a control's own colour), every one a token.
+    token = r"var\(--(?:glow(?:-[a-z]+)*|glass-rim|glass-rim-soft|glass-depth)\)"
     allowed = re.compile(
         r"^(none|var\(--autofill-cover\)|inset [0-9. px-]+ var\(--brand\)"
         rf"|{token}(?:, {token})*)$")

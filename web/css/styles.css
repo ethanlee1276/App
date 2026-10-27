@@ -523,6 +523,25 @@
   --glass-sheen-soft: linear-gradient(170deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0) 42%);
   --glass-depth: 0 14px 34px rgba(0, 0, 0, .46);
   --glass-gold: linear-gradient(180deg, rgba(255, 255, 255, .38), rgba(255, 255, 255, .06) 48%, rgba(255, 255, 255, 0) 52%);
+  /* THE LIGHTS ON (2026-10-27): each league's colour, the glow family and
+     the light's gradients; the section near the end of this sheet uses them. */
+  --lg-nfl: #FFB000;
+  --lg-cfb: #FF7A2F;
+  --lg-mlb: #4DA3FF;
+  --lg-nba: #9C7BFF;
+  --lg-wnba: #FF6FA1;
+  --lg-nhl: #45D4F5;
+  --lg-ufc: #FF4D4D;
+  --league: var(--lg-nfl);
+  --sky: #5AAEFF;
+  --glow-gold: 0 0 0 1px rgba(255, 176, 0, .5), 0 0 24px rgba(255, 176, 0, .32);
+  --glow-good: 0 0 0 1px rgba(66, 194, 104, .45), 0 0 24px rgba(66, 194, 104, .22);
+  --glow-lift: 0 16px 36px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 176, 0, .2), 0 0 32px rgba(255, 176, 0, .1);
+  --glow-league: 0 0 0 1px color-mix(in oklab, var(--league) 60%, transparent), 0 0 26px color-mix(in oklab, var(--league) 40%, transparent);
+  --grad-aurora: radial-gradient(62% 560px at 30% 110px, color-mix(in oklab, var(--league) 27%, transparent), transparent 72%), radial-gradient(48% 440px at 94% 30px, color-mix(in oklab, var(--brand) 12%, transparent), transparent 70%);
+  --grad-shine: linear-gradient(105deg, var(--gold) 0%, var(--gold) 40%, #FFF6D8 50%, var(--gold) 60%, var(--gold) 100%);
+  --grad-gold-btn: linear-gradient(180deg, #FFD66B, #FFB000 55%, #F29A00);
+  --grad-sheen-white: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .38) 50%, transparent 70%);
 }
 
 * { box-sizing: border-box; }
@@ -4962,6 +4981,22 @@ body.pk-open { overflow: hidden; }
   --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .85), rgba(255, 255, 255, .35) 34%, rgba(255, 255, 255, 0) 60%);
   --glass-sheen-soft: linear-gradient(170deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, 0) 45%);
   --glass-depth: 0 14px 30px rgba(23, 23, 42, .14);
+  /* THE LIGHTS ON (2026-10-27), for a light page: darker league colours,
+     softer glows. */
+  --lg-nfl: #C98200;
+  --lg-cfb: #E2611A;
+  --lg-mlb: #1F7AE0;
+  --lg-nba: #7A55F0;
+  --lg-wnba: #E0457E;
+  --lg-nhl: #0E9CC2;
+  --lg-ufc: #D93636;
+  --sky: #1F7AE0;
+  --glow-gold: 0 0 0 1px rgba(201, 130, 0, .45), 0 6px 18px rgba(201, 130, 0, .2);
+  --glow-good: 0 0 0 1px rgba(30, 140, 70, .35), 0 6px 18px rgba(30, 140, 70, .14);
+  --glow-lift: 0 14px 30px rgba(60, 40, 10, .16), 0 0 0 1px rgba(201, 130, 0, .22);
+  --glow-league: 0 0 0 1px color-mix(in oklab, var(--league) 55%, transparent), 0 6px 18px color-mix(in oklab, var(--league) 22%, transparent);
+  --grad-aurora: radial-gradient(62% 520px at 30% 110px, color-mix(in oklab, var(--league) 15%, transparent), transparent 72%), radial-gradient(48% 400px at 94% 30px, color-mix(in oklab, var(--brand) 8%, transparent), transparent 70%);
+  --grad-shine: linear-gradient(105deg, var(--gold) 0%, var(--gold) 40%, #FFE9A8 50%, var(--gold) 60%, var(--gold) 100%);
 }
 
 /* The page never scrolls sideways — Ethan's screen recording
@@ -10574,6 +10609,180 @@ button.set-item:active, a.set-item:active, label.set-item:active { background: v
 .code-in::placeholder { text-transform: none; letter-spacing: 0; font-weight: 400; }
 
 /* ==========================================================================
+   THE LIGHTS ON (2026-10-27). Ethan: "i feel like we can use more colors
+   and shit throughout the site too to be more exciting ... animations and
+   glowing shit." (He said it in August too: "the website feels so flat".)
+   Gold stays the brand and the interface's one accent (his call,
+   2026-08-23); what comes on around it:
+
+   - EVERY LEAGUE HAS ITS OWN LIGHT. Each sport button wears its league's
+     colour, the open one lit with it, and the top of every page glows in
+     the league in view (html[data-league], app.js markSportRow): football
+     gold, college blaze, baseball sky, basketball violet, the WNBA coral,
+     hockey ice, the UFC red.
+   - GLOW WHERE SOMETHING IS ON: the open league, a gold button under the
+     pointer, the top tiers' rings, a card lifted under the pointer, the
+     Live disc while games are on, the best pick's moving rim. Each through
+     a --glow-* token, so every glow on the site is still one system
+     (tests/test_design_tells).
+   - MOTION ON ARRIVAL. A page rises in, section by section, as it opens
+     (.view.enter, app.js _switchViewNow): once, never on a redraw, so a
+     live page redrawing every five seconds never flickers. The brand's
+     title catches the light; a button gives under a tap.
+   - COLOUR THAT MEANS SOMETHING. Most Likely's three tiers are three
+     colours (green, gold, sky); the home's four doors are four; a chip
+     that is up or down is tinted, not only outlined.
+
+   A phone keeps its budget: nothing here blurs, no layer per card, and the
+   one endless animation that repaints is a single card's rim. Reduced
+   motion zeroes all of it (the universal block above).
+   ========================================================================== */
+:root[data-league="cfb"] { --league: var(--lg-cfb); }
+:root[data-league="mlb"] { --league: var(--lg-mlb); }
+:root[data-league="nba"] { --league: var(--lg-nba); }
+:root[data-league="wnba"] { --league: var(--lg-wnba); }
+:root[data-league="nhl"] { --league: var(--lg-nhl); }
+:root[data-league="ufc"] { --league: var(--lg-ufc); }
+
+/* The league in view, as light at the top of the page. It scrolls away
+   with the page: a mood, not a fixture. */
+body { background-image: var(--grad-aurora); background-repeat: no-repeat; }
+
+/* EVERY LEAGUE'S BUTTON IN ITS OWN COLOUR. */
+.sportbar-in .sport-btn {
+  --hue: var(--brand);
+  --glow-hue: 0 0 0 1px color-mix(in oklab, var(--hue) 65%, transparent), 0 0 22px color-mix(in oklab, var(--hue) 45%, transparent);
+}
+.sportbar-in .sport-btn[data-sport="nfl"] { --hue: var(--lg-nfl); }
+.sportbar-in .sport-btn[data-sport="cfb"] { --hue: var(--lg-cfb); }
+.sportbar-in .sport-btn[data-sport="mlb"] { --hue: var(--lg-mlb); }
+.sportbar-in .sport-btn[data-sport="nba"] { --hue: var(--lg-nba); }
+.sportbar-in .sport-btn[data-sport="wnba"] { --hue: var(--lg-wnba); }
+.sportbar-in .sport-btn[data-sport="nhl"] { --hue: var(--lg-nhl); }
+.sportbar-in .sport-btn[data-sport="ufc"] { --hue: var(--lg-ufc); }
+.sportbar-in .sport-btn:hover { color: var(--hue); }
+.sportbar-in .sport-btn.active { color: var(--hue); border-bottom-color: var(--hue); }
+@media (max-width: 760px) {
+  .sportbar-in .sport-btn .crest { color: color-mix(in oklab, var(--hue) 72%, var(--text-dim));
+    border-color: color-mix(in oklab, var(--hue) 22%, var(--border)); }
+  .sportbar-in .sport-btn.active .crest { outline-color: var(--hue); color: var(--hue); box-shadow: var(--glow-hue);
+    background: color-mix(in oklab, var(--hue) 16%, var(--panel)); }
+  body.ask-open .sportbar-in .sport-btn.active { color: var(--hue); border-bottom-color: var(--hue); }
+}
+@media (min-width: 1280px) {
+  .topbar .sportbar-in .sport-btn.active { border-color: var(--hue); color: var(--hue); box-shadow: var(--glow-hue);
+    background: color-mix(in oklab, var(--hue) 15%, transparent); }
+}
+
+/* GOLD THAT GLOWS: the buttons. A primary button is a lit bar of gold; any
+   button under the pointer glows; every one gives a little under a tap. */
+.btn.primary, .betit { background-image: var(--grad-gold-btn); }
+.btn.primary:hover, .betit:hover, .betit:focus-visible { background-image: var(--grad-gold-btn); box-shadow: var(--glow-gold); }
+.btn:hover { box-shadow: var(--glow-gold); }
+.btn.ghost:hover { box-shadow: none; }
+.btn:active, .betit:active, .qt-chip:active, .ask-act:active { transform: scale(.97); }
+
+/* A CARD LIFTS TO THE POINTER, lit at the rim. Mouse and trackpad only: a
+   thumb scrolling a list would light everything it crosses. */
+@media (hover: hover) and (pointer: fine) {
+  .card, .ob-card {
+    transition: border-color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out); }
+  .card:hover, .ob-card:hover { transform: translateY(-3px); box-shadow: var(--glow-lift); }
+}
+
+/* THE HOME'S FOUR DOORS, FOUR COLOURS: Fantasy violet, Most Likely green,
+   Edge gold, Bankroll sky — each icon lit in its own, the tile washed with
+   it, glowing under the pointer. */
+.qt-row > .qt-chip {
+  --hue: var(--brand);
+  --glow-hue: 0 0 0 1px color-mix(in oklab, var(--hue) 60%, transparent), 0 0 24px color-mix(in oklab, var(--hue) 32%, transparent);
+  --grad-door: linear-gradient(135deg, color-mix(in oklab, var(--hue) 17%, var(--panel)), var(--panel) 72%);
+  background: var(--grad-door); border-color: color-mix(in oklab, var(--hue) 40%, var(--border-soft)); }
+.qt-row > .qt-chip:nth-child(1) { --hue: var(--lg-nba); }
+.qt-row > .qt-chip:nth-child(2) { --hue: var(--good); }
+.qt-row > .qt-chip:nth-child(4) { --hue: var(--sky); }
+.qt-row > .qt-chip .ic { color: var(--hue); filter: drop-shadow(0 0 8px color-mix(in oklab, var(--hue) 60%, transparent)); }
+.qt-row > .qt-chip:hover { border-color: var(--hue); box-shadow: var(--glow-hue); }
+.qt-row > .qt-chip:hover .qt-go { color: var(--hue); }
+
+/* THE BRAND CATCHES THE LIGHT: gold, with a sweep of light across it every
+   few seconds. */
+.qt-brand-t b { background: var(--grad-shine) 0 0 / 250% 100%; -webkit-background-clip: text; background-clip: text;
+  color: transparent; animation: lightShine 7s var(--ease-out) infinite; }
+@keyframes lightShine { 0%, 55% { background-position: 100% 0; } 100% { background-position: -150% 0; } }
+
+/* MOST LIKELY'S TIERS IN THREE COLOURS — Top green, Strong gold, Worth a
+   look sky — the top two rings lit, and the night's best pick (number one) in a
+   moving rim of the palette. */
+.ob-ring.tier-look .ob-ring-fg { stroke: var(--sky); }
+.ob-tierword.tier-look { color: var(--sky); }
+.ob-ring.tier-top svg { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--good) 65%, transparent)); }
+.ob-ring.tier-strong svg { filter: drop-shadow(0 0 6px color-mix(in oklab, var(--brand) 60%, transparent)); }
+.ob-card.tier-top { box-shadow: var(--glow-good); border-color: color-mix(in oklab, var(--good) 40%, var(--border-soft)); }
+/* The rim is a layer behind the card, 2px proud of it: the card's own
+   ground covers the middle, so only the ring shows and the card keeps its
+   hairline (tests/test_hairlines). */
+@property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.ob-card.is-first { position: relative; z-index: 0; border-color: transparent; box-shadow: var(--glow-gold); }
+.ob-card.is-first::before {
+  --spin: 0deg;
+  --rim: conic-gradient(from var(--spin), var(--brand), var(--lg-cfb), var(--lg-wnba), var(--lg-nba), var(--sky), var(--good), var(--brand));
+  content: ""; position: absolute; inset: -2px; z-index: -1; border-radius: var(--radius-lg);
+  background: var(--rim); animation: lightSpin 8s linear infinite; pointer-events: none; }
+.ob-card.is-first::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: var(--radius-lg);
+  background: var(--grad-ob-card); pointer-events: none; }
+@keyframes lightSpin { to { --spin: 360deg; } }
+
+/* A CHIP THAT IS UP OR DOWN IS TINTED, not only outlined. */
+.chip.up { background: color-mix(in oklab, var(--good) 13%, transparent); border-color: color-mix(in oklab, var(--good) 45%, transparent); }
+.chip.down { background: color-mix(in oklab, var(--bad) 13%, transparent); border-color: color-mix(in oklab, var(--bad) 45%, transparent); }
+.grade.strong { box-shadow: var(--glow-good); }
+
+/* THE PHONE'S TAB BAR: the open tab's icon glows, and the Live disc
+   breathes a gold halo while games are on (its badge shows). Opacity and
+   scale only, so the halo never repaints the bar. */
+@media (max-width: 760px) {
+  .tb-item.active svg { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--brand) 70%, transparent)); }
+  .tb-center-disc:has(.tb-badge:not([hidden]))::after { content: ""; position: absolute; inset: -5px; border-radius: 50%;
+    box-shadow: var(--glow-gold); pointer-events: none; animation: lightHalo 2.4s var(--ease-out) infinite; }
+}
+@keyframes lightHalo { 0% { opacity: .9; transform: scale(.92); } 100% { opacity: 0; transform: scale(1.25); } }
+
+/* THE PAGE RISES IN as it opens, a section at a time (app.js adds .enter
+   to the view it switches to and takes it off 900ms later). Filled only
+   BACKWARDS: once a section has landed it holds no transform, so nothing
+   fixed inside it is ever placed against a moving box. */
+@keyframes lightRise { from { opacity: 0; transform: translateY(12px); } }
+.view.enter > :nth-child(-n+8), .view.enter .ob-cards > .ob-card:nth-child(-n+6),
+.view.enter .cards > .card:nth-child(-n+6) { animation: lightRise var(--dur-slow) var(--ease-out) backwards; }
+.view.enter > :nth-child(2), .view.enter .ob-cards > .ob-card:nth-child(2), .view.enter .cards > .card:nth-child(2) {
+  animation-delay: calc(var(--dur-fast) * .35); }
+.view.enter > :nth-child(3), .view.enter .ob-cards > .ob-card:nth-child(3), .view.enter .cards > .card:nth-child(3) {
+  animation-delay: calc(var(--dur-fast) * .7); }
+.view.enter > :nth-child(4), .view.enter .ob-cards > .ob-card:nth-child(4), .view.enter .cards > .card:nth-child(4) {
+  animation-delay: calc(var(--dur-fast) * 1.05); }
+.view.enter > :nth-child(n+5), .view.enter .ob-cards > .ob-card:nth-child(n+5), .view.enter .cards > .card:nth-child(n+5) {
+  animation-delay: calc(var(--dur-fast) * 1.4); }
+
+/* ASK QELLYS, THE AI, LOOKS LIKE ONE: the pill glows, a sheen crosses it
+   every few seconds and its sparkle twinkles. A transform on a layer of
+   its own, so the bar never repaints for it. */
+.tb-ask { position: relative; overflow: hidden; box-shadow: var(--glow-gold); }
+.tb-ask::after { content: ""; position: absolute; inset: 0; background: var(--grad-sheen-white);
+  transform: translateX(-120%); animation: sheen 5s var(--ease-out) infinite; pointer-events: none; }
+.tb-ask svg { animation: lightTwinkle 5s var(--ease-out) infinite; }
+@keyframes lightTwinkle { 0%, 80%, 100% { transform: none; } 88% { transform: rotate(18deg) scale(1.25); } }
+
+/* THE RECORD'S RINGS GLOW in their own colour: green up, red down. */
+.hd-ring:not([data-pc="0"]) { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--good) 45%, transparent)); }
+.hd-ring.neg:not([data-pc="0"]) { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--bad) 45%, transparent)); }
+
+/* A SECTION'S ICON IS THE LEAGUE'S COLOUR: gold on football, violet on
+   basketball, ice on hockey — the page says which league it is about. */
+.section-title .st-ico { color: var(--league); }
+
+/* ==========================================================================
    GLASS FOR WHAT FLOATS (2026-10-24, Ethan: "carry the Liquid Glass look onto
    more stuff without overdoing it"). The rule Apple's own apps follow: glass
    is the layer that floats over the page — bars, sheets, dialogs, toasts —
@@ -10606,4 +10815,3 @@ button.set-item:active, a.set-item:active, label.set-item:active { background: v
   .graph-tip { background-image: none; }
   html.store-ios .topbar, html.ios-home .topbar { background: var(--topbar-bg); }
 }
-

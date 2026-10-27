@@ -11,6 +11,50 @@ Ordered by *value per unit of work*, not by size.
 
 ---
 
+## 2026-10-27: act on what you read, and the lights on — next, ranked
+
+Ethan: *"think of any other ideas where we should be looking at and do it as
+well"*, then *"we can use more colors ... animations and glowing shit."*
+Looked at for it: FanDuel's AceAI (adds to the slip, keeps context), Action
+Network's Playbook (pre-filled slip, line compare), Rithmm, Gambly (line-move
+alerts), RotoBot (fantasy and betting), Outlier and Linemate (L5/L10 hit
+rates), PrizePicks, Underdog, Sleeper, Apple Sports. Built today: Ask shows
+its work (runbook FH); an Ask answer you can act on, add to slip, track it
+(followed live, settled off the box score, "your bet is on" by push) and
+watch (FI); every league its own colour, glow and motion (FJ). Next, best
+value per unit of work first:
+
+1. **Ask reads your open bets, when you attach them.** "How's my parlay
+   looking?" with the box's numbers: the paperclip offers My open bets, and
+   only what is attached goes with the question. AceAI knows your bets
+   because it is the book; this works for every book. Built from: My Bets
+   (the page's own copy) + engine/sliplive. Small to medium.
+2. **Ask from anywhere.** An Ask door on every player row (fantasy rows,
+   Over/Under, Most Likely) with the right question filled in ("Should I
+   start Gibbs this week?"). Built from: the prop page's Ask attach, which
+   already exists. Small.
+3. **A price watch.** "Tell me if this moves past −120" from Ask's price
+   card or a prop page: Action's Line Watcher, Gambly's alert. Watches are
+   player, team or edge today; a price is a fourth shape the feed's
+   line_move events already answer. Medium.
+4. **A win celebration.** Confetti and the payout when a tracked bet
+   settles a win on the Live tab or in My Bets (Underdog, Robinhood). Built
+   from: slip.js settleOne and the stadiums' fireworks. Small.
+5. **Team colours on every game card.** The two teams' colours along a game
+   card's top edge and its scoreboard (Apple Sports). Built from: the team
+   colour table applyTeamColors reads. Small to medium.
+6. **Hit-rate chips on every prop row.** L5, L10 and the season against the
+   line as three chips on the Over/Under list (Outlier, Linemate). Built
+   from: the logs every prop row already carries. Small.
+7. **Numbers that tick.** Live scores, the record's units and a ticket's
+   standing roll to their new value rather than swapping (count-ups exist
+   for the record's first draw). Small.
+8. **Your starters on tonight's board.** On the fantasy My team tab, the
+   starters with props tonight, our side and chance for members, a count
+   for free accounts. Built from: the linked roster + the board. Medium.
+
+---
+
 ## 2026-10-25 (later): the way in and the way up — next, ranked
 
 Ethan: *"go deeper on the free paid wall ... look at other apps ... we can

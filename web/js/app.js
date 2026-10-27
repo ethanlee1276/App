@@ -626,6 +626,8 @@ function sportRowLeague() {
 }
 function markSportRow(lit = sportRowLeague()) {
   document.querySelectorAll(".sport-btn").forEach((b) => setSelected(b, !!b.dataset.sport && b.dataset.sport === lit));
+  // The page's light is the league in view (styles.css THE LIGHTS ON).
+  document.documentElement.dataset.league = lit || "";
   applyNavLeagues();
 }
 
@@ -10977,7 +10979,7 @@ function obCardHTML(r, rank, opts = {}) {
     : `hits about ${Math.max(1, Math.round(Number(r.model_prob) * 10))} in 10`}${
     r.backed_note ? ` · ${escapeHtml(r.backed_note)}` : ""}</span>` : "";
   const band = r.band_note ? `<span class="ob-plain">${escapeHtml(r.band_note)}</span>` : "";
-  return `<div class="ob-card tier-${escapeAttr(r.tier || "look")}">
+  return `<div class="ob-card tier-${escapeAttr(r.tier || "look")}${rank === 1 ? " is-first" : ""}">
     ${rank ? `<span class="ob-rank">#${rank}</span>` : ""}
     <button class="ob-who" type="button"${door}>${obFaceHTML(r)}
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
@@ -24218,6 +24220,7 @@ function storeSells() {
   return !a || !(typeof QB_STORE_CHECKOUT !== "undefined" && !QB_STORE_CHECKOUT[a]);
 }
 
+const RISE_SKIPS = new Set(["ask", "pbp", "messages"]);
 function _switchViewNow(name, push, dir) {
   if (storeApp() && (STORE_APP_SKIPS.has(name) || (name === "checkout" && !storeSells()))) {
     name = name === "checkout" ? "paywall" : "recommended";
@@ -24271,6 +24274,14 @@ function _switchViewNow(name, push, dir) {
   if (dir > 0) target.classList.add("from-right");
   else if (dir < 0) target.classList.add("from-left");
   target.classList.add("active");
+  // THE PAGE RISES IN as it opens, once: off again before any redraw. Not
+  // the rooms that are screens of their own (the chat room, a game's page,
+  // a message thread), whose bars are fixed to the screen.
+  if (name !== leaving && !RISE_SKIPS.has(name)) {
+    target.classList.add("enter");
+    clearTimeout(target._enterT);
+    target._enterT = setTimeout(() => target.classList.remove("enter"), 900);
+  }
   // A board page renderAll skipped while it was off screen draws now,
   // before anything below reads it (OFFSCREEN_PAGES).
   drawStale(name);

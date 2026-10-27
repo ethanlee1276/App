@@ -112,3 +112,30 @@ things every page repeats show up as repeats.
 Checked after in both themes. Held by the tests that pinned each rule
 (moved to the new values): `test_the_venue_heads_the_proof_pages`,
 `test_an_empty_board_carries_the_card`, `test_controls_look_clickable`.
+
+# The lights on — 2026-10-27
+
+Ethan: "i feel like we can use more colors and shit throughout the site too
+to be more exciting and shit like that. animations and glowing shit." The
+apps people call exciting (PrizePicks' neon More/Less, Underdog's yellow on
+black, Sleeper's multi-hue accents and glowing live dots, DraftKings' and
+Robinhood's green/red glows, Apple Sports' team colours) all do the same
+three things: a colour per thing you can tell apart, light on what is live or
+chosen, and motion when something arrives. Gold stays the brand (his call,
+2026-08-23); around it:
+
+| # | What was flat | Now |
+|---|---|---|
+| L1 | **Every league was gold**: seven identical crests | each league its own colour (football gold, college blaze, baseball sky, basketball violet, the WNBA coral, hockey ice, the UFC red); the open one ringed and glowing in it, on a phone and on the desktop's pills |
+| L2 | **Every page the same black** whatever league was open | the top of every page glows in the league in view, and a section's icon wears it |
+| L3 | **The home's four doors were four gold tiles** | Fantasy violet, Most Likely green, Edge gold, Bankroll sky, each tile washed and its icon lit in its own, glowing under the pointer |
+| L4 | **Most Likely's third tier was grey** | Top green, Strong gold, Worth a look sky; the top two rings glow; the top tier's cards glow green; the night's best pick (#1) wears a moving holographic rim |
+| L5 | **Nothing moved when a page opened** | the page rises in, section by section and card by card, once (never on a redraw, so a live page never flickers) |
+| L6 | Buttons and cards **sat still under the pointer** | gold buttons are a lit gradient that glows; cards lift with a lit rim (mouse only); everything gives a little under a tap |
+| L7 | **The brand and the AI were plain text** | the title is gold with a sweep of light across it; Ask Qellys glows, a sheen crosses it and its sparkle twinkles |
+| L8 | Up and down chips were outlines; the record's rings were flat | tinted chips; rings that glow green up, red down |
+
+Held by `test_the_lights_on` (and `test_design_tells`, whose shadow rule now
+allows the `--glow-*` family: still one system of tokens). Checked in both
+themes on a phone and a desktop. A phone keeps its budget: no blur, no layer
+per card, and reduced motion zeroes every animation.

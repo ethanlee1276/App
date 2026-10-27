@@ -625,6 +625,9 @@ SH
 run FI "Act on an Ask answer: add to slip, track it, watch" 30 <<'SH'
 curl -s https://qellysbook.com/js/ask.js | grep -c 'function askActsHTML('
 SH
+run FJ "The lights on: every league its colour, glow and motion" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c '@keyframes lightSpin'
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"
