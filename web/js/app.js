@@ -613,10 +613,20 @@ function applySport() {
   // subtitle. Assigning textContent silently deleted the .sub span.
   if (gt) gt.innerHTML = `${escapeHtml(meta.gamesTitle)}`
     + (meta.gamesSub ? ` <span class="sub">— ${escapeHtml(meta.gamesSub)}</span>` : "");
-  document.querySelectorAll(".sport-btn").forEach((b) =>
-    setSelected(b, !!b.dataset.sport && b.dataset.sport === state.sport));
-  applyNavLeagues();
+  markSportRow();
   markMoreMenu();
+}
+
+/* THE LEAGUE ROW SAYS WHERE YOU ARE: on a game page its own league (one
+   opened from Live can be any league's, 2026-10-27: an NFL game under a lit
+   CFB), everywhere else the sport in force. */
+function sportRowLeague() {
+  const g = state.view === "pbp" && state.pbp;
+  return g && SPORT_META[g.league] ? g.league : state.sport;
+}
+function markSportRow(lit = sportRowLeague()) {
+  document.querySelectorAll(".sport-btn").forEach((b) => setSelected(b, !!b.dataset.sport && b.dataset.sport === lit));
+  applyNavLeagues();
 }
 
 /* WHICH LEAGUES SHOW IN THE NAV. Ethan asked for it as a setting, and an
@@ -633,7 +643,7 @@ function applyNavLeagues() {
   document.querySelectorAll(".sport-btn").forEach((b) => {
     const code = b.dataset.sport;
     if (!code || !SPORT_CODES.includes(code)) return;   // tools, not leagues
-    const show = !want.length || want.includes(code) || code === state.sport;
+    const show = !want.length || want.includes(code) || code === state.sport || code === sportRowLeague();
     b.hidden = !show;
   });
 }
@@ -24262,6 +24272,7 @@ function _switchViewNow(name, push, dir) {
     : name === "pbp" ? "live" : name;
   document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
   syncNavHint(lit);
+  markSportRow();
   if (name === "prop") {
     renderPropPage();
     /* `#pick/…` when the row has a shareable slug, `#prop/…` when it
@@ -27803,7 +27814,10 @@ function bind() {
       if (!b.dataset.sport) return;
       if (STANDALONE_MODES.includes(b.dataset.sport)) { enterStandaloneMode(b.dataset.sport); return; }
       exitStandaloneMode();
-      if (state.sport === b.dataset.sport) return;
+      // On a game page, another league's button opens that league's game (pbpHop).
+      const hop = state.view === "pbp" && state.pbp && state.pbp.league !== b.dataset.sport
+        && typeof pbpHop === "function";
+      if (state.sport === b.dataset.sport) { if (hop) pbpHop(b.dataset.sport); return; }
       state.sport = b.dataset.sport;
       state.search = "";
       state.playerSlug = "";
@@ -27827,6 +27841,9 @@ function bind() {
       // menu and shows the finished board.
       applySport();
       load(document.body.classList.contains("menu-open"));
+      if (hop) pbpHop(b.dataset.sport);
+      // A board game's or a pick's page is the sport just left's: back to where it was opened.
+      else if (state.view === "game" || state.view === "prop") detailBack();
     }));
 
   let _searchT;

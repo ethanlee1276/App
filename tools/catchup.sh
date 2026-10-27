@@ -60,6 +60,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EU 2>&1 | tee /tmp/eu.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EX 2>&1 | tee /tmp/ex.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EY 2>&1 | tee /tmp/ey.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -580,6 +581,9 @@ curl -s https://qellysbook.com/js/register-sw.js | grep -c 'function reloadNow('
 SH
 run EX "Every sport's scoreboard is the basketball page's" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpBoardHTML('
+SH
+run EY "On a live game page the sport buttons hop between games" 30 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'async function pbpHop('
 SH
 run AT "Past UFC voids that look like the midnight bug (asks ESPN)" 600 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 ufcvoids.py

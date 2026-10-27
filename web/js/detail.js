@@ -3064,6 +3064,29 @@ function pbpStripHTML(league, games, current) {
   return `<div class="pbp-strip" role="list">${games.map(chip).join("")}</div>`;
 }
 
+/* ON A GAME PAGE THE LEAGUE ROW HOPS GAMES (Ethan, 2026-10-27, on the
+   Cavaliers' page: "you should be able to click on the sport up top and
+   bounce between like pages"). Another league's button opens that league's
+   game in progress, the first on its strip; with none on, its latest final
+   (the game in 30 seconds, and the strip's next starts); with neither, the
+   Live tab on that league, which says so. Back still goes where the first
+   game page was opened from, and the newest tap wins. */
+let _pbpHopSeq = 0;
+async function pbpHop(league) {
+  const ticket = ++_pbpHopSeq;
+  markSportRow(league);
+  let games = [];
+  try { games = await pbpStripGames(league); } catch (e) { games = []; }
+  if (ticket !== _pbpHopSeq || state.view !== "pbp") return;
+  const id = (g) => String(g.event_id || g.game_pk || "");
+  const at = (s) => games.filter((g) => (g.live || {}).state === s && id(g));
+  const pick = at("live")[0] || at("final").slice(-1)[0];
+  if (pick) { openPbp(league, id(pick), state.pbpFrom); return; }
+  _liveChip = league;
+  _liveChipSport = state.sport;
+  switchView("live");
+}
+
 /* --- the situation strip: who is up, the count, the bases, who is throwing --- */
 function pbpFaces(league) {
   if (state.sport !== league || !state.data) return {};
