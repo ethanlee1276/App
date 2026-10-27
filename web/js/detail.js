@@ -2564,6 +2564,43 @@ function pbpBoxGenericHTML(rows, league) {
       }).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
+/* FANTASY POINTS, OFF THE SAME BOX (2026-10-27; the Fantasy room's "next":
+   fantasy points on the live game pages). Each player's points from the
+   passing, rushing and receiving lines below: a point per 10 rushing or
+   receiving yards and per 25 passing, 6 a rushing or receiving touchdown,
+   4 a passing one, −2 an interception, and a catch a point in PPR, half in
+   half-PPR. Fumbles, two-point tries and returns are not in this box score
+   and are not counted; the note says so. */
+function pbpFantasyPts(r, perCatch = 1) {
+  const n = (k) => pbpStat(r, k) || 0;
+  return n("pass_yds") * 0.04 + n("pass_td") * 4 - n("pass_int") * 2 + n("rush_yds") * 0.1 + n("rush_td") * 6
+    + n("rec_yds") * 0.1 + n("rec_td") * 6 + n("receptions") * perCatch;
+}
+
+function pbpFantasyHTML(d, league) {
+  if (!PBP_FOOTBALL.has(league)) return "";
+  const top = (d.players || []).map((r) => ({ r, pts: pbpFantasyPts(r) })).filter((x) => x.pts >= 0.05)
+    .sort((a, b) => b.pts - a.pts).slice(0, 8);
+  if (!top.length) return "";
+  const n = (r, k) => pbpStat(r, k) || 0;
+  const words = (r) => [
+    n(r, "pass_yds") ? `${n(r, "pass_yds")} pass yds${n(r, "pass_td") ? `, ${n(r, "pass_td")} TD` : ""}` : "",
+    n(r, "rush_yds") || n(r, "rush_td") ? `${n(r, "rush_yds")} rush yds${n(r, "rush_td") ? `, ${n(r, "rush_td")} TD` : ""}` : "",
+    n(r, "receptions") ? `${n(r, "receptions")}-${n(r, "rec_yds")}${n(r, "rec_td") ? `, ${n(r, "rec_td")} TD` : ""}` : "",
+  ].filter(Boolean).join(" · ");
+  const live = String(((d || {}).live || {}).state || "").toLowerCase();
+  return `<div class="pbp-box pbp-ff"><div class="pbp-box-head">Fantasy points${
+    live === "final" || live === "post" ? "" : " so far"}<span class="pbp-ff-k">PPR · half</span></div>
+    <ol class="pbp-ff-list">${top.map(({ r, pts }, i) => `<li>
+      <span class="pbp-ff-rank">${i + 1}</span>${teamMarkIn(league, r.team, 18)}
+      <span class="pbp-ff-who"><b>${escapeHtml(r.player || "")}${r.position ? ` <span class="mini">${
+        escapeHtml(r.position)}</span>` : ""}</b><span>${escapeHtml(words(r))}</span></span>
+      <span class="pbp-ff-pts"><b>${pts.toFixed(1)}</b><span>${pbpFantasyPts(r, 0.5).toFixed(1)}</span></span>
+    </li>`).join("")}</ol>
+    <p class="pbp-ff-note">From the box score below. Fumbles, two-point tries and returns are not in it, so
+      they are not counted; your league’s own scoring may differ.</p></div>`;
+}
+
 function pbpPlayersHTML(d, league) {
   const rows = d.players || [];
   if (!rows.length) return `<p class="rail-quiet">No box score on file yet — the fast loop writes one each cycle for a game in progress.</p>`;
@@ -2576,7 +2613,7 @@ function pbpPlayersHTML(d, league) {
       escapeHtml(teamNameIn(league, abbr))}</div>${
       body || `<p class="rail-quiet">Nothing logged for this club yet.</p>`}</div>`;
   };
-  return `${block(d.away)}${block(d.home)}<p class="mini" style="opacity:.6">Box score ${
+  return `${pbpFantasyHTML(d, league)}${block(d.away)}${block(d.home)}<p class="mini" style="opacity:.6">Box score ${
     escapeHtml(pbpAgo(d.generated_at))} — the fields the open-bet tracker reads, nothing more.</p>`;
 }
 

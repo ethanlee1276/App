@@ -106,7 +106,8 @@ def _node(tail):
         _block("const PBP_BOX_FOOTBALL = [", "\n];"),
         _block("const PBP_BOX_HEAD = {", "\n};"),
         _line("const pbpStat = "),
-        _fn("pbpBoxGroupHTML"), _fn("pbpBoxGenericHTML"), _fn("pbpPlayersHTML"),
+        _fn("pbpBoxGroupHTML"), _fn("pbpBoxGenericHTML"), _fn("pbpFantasyPts"), _fn("pbpFantasyHTML"),
+        _fn("pbpPlayersHTML"),
         _fn("pbpClockSecs"), _line("const pbpSecsClock = "),
         _fn("pbpTeamTotals"), _fn("pbpTotalsHTML"),
         tail,
@@ -164,7 +165,8 @@ def test_football_splits_into_three_tables_and_nothing_else_does():
         assert f">{head}<" in got["nfl"], (head, got["nfl"][:600])
     # The QB appears in passing AND rushing — the same player, twice,
     # which is what a box score does.
-    assert got["nfl"].count(">QB") == 2, got["nfl"]
+    # (The fantasy leaders above the tables name him once more, 2026-10-27.)
+    assert got["nfl"].count('class="pbp-bx-who">QB') == 2, got["nfl"]
     # A league whose stat keys have not been read gets ONE table built
     # from its own keys, not football's headings over foreign numbers.
     assert "Passing" not in got["nba"], got["nba"]

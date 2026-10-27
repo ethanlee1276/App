@@ -2163,10 +2163,15 @@ class Handler(BaseHTTPRequestHandler):
                 week = 0
         out["week"] = week if 1 <= week <= 18 else None
         opp_rows, opp_name = None, None
+        board = []
+        from engine import fantasy_live
+        live_board = fantasy_live.scoreboard()
         if out["week"] and my_roster_id is not None:
             try:
+                # A minute old at most while a game is on: the live matchup
+                # reads Sleeper's points off this same board.
                 board = grab(f"league/{league_id}/matchups/{out['week']}",
-                             ttl=300)
+                             ttl=60 if any(g["state"] == "live" for g in live_board.values()) else 300)
             except (DataUnavailable, ValueError):
                 board = []
             opp_id = fantasy_h2h.opponent_roster_id(board, my_roster_id)
@@ -2190,6 +2195,19 @@ class Handler(BaseHTTPRequestHandler):
             h2h["opponent"] = opp_name
             h2h["swings"] = fantasy_h2h.swings(h2h)
             out["h2h"] = h2h
+            # YOUR MATCHUP, LIVE (engine/fantasy_live): once a starter on
+            # either side has kicked off, Sleeper's own points so far, the
+            # rest projected, and the win chance from there.
+            if board and same_week:
+                try:
+                    proj, sds = fantasy_live.projections(league_names, means, scoring)
+                    live = fantasy_live.matchup(board, my_roster_id, players, slots, proj, sds,
+                                                fantasy_live.states(week_doc, live_board))
+                    if live:
+                        live["opponent"] = opp_name
+                        out["live"] = live
+                except Exception as exc:                      # noqa: BLE001 — the desk never fails for it
+                    sys.stderr.write(f"  desk live: {type(exc).__name__}: {exc}\n")
         # THE PICKUPS FOR THIS ROSTER AND THE WEEK'S TO-DO LIST. A FAAB
         # league (Sleeper's waiver_type 2) gets a bid range from what is
         # left of his budget.

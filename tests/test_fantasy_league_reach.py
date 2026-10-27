@@ -90,7 +90,7 @@ def test_the_desk_paints_it_there_and_not_inline():
     desk = desk[:desk.index("\n/* ----")]
     assert "paintMyCalendar(ffRosterCalendarHTML(" in desk
     # Your week's to-do list leads the desk since 2026-10-27 (engine/fantasy_todo).
-    paint = 'host.innerHTML = (W ? W.todo(d) : "") + ffH2HHTML(d)'
+    paint = 'host.innerHTML = (W ? W.live(d) + W.todo(d) : "") + ffH2HHTML(d)'
     assert paint in desk
     inner = desk[desk.index(paint):]
     assert "ffRosterCalendarHTML" not in inner.split(";")[0], \

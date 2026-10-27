@@ -272,7 +272,7 @@ def test_the_desk_asks_the_league_which_week_it_is():
     own `leg`, then Sleeper's NFL state."""
     src = _read("server.py")
     i = src.index('out["standings"] = fantasy_h2h.standings')
-    block = src[i:i + 2200]
+    block = src[i:src.index("h2h = fantasy_h2h.head_to_head(", i) + 40]
     assert '"leg"' in block and "state/nfl" in block
     assert "opponent_roster_id" in block and "head_to_head" in block
 

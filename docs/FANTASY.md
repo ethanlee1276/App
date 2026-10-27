@@ -187,6 +187,11 @@ queue, in order.
    the game), and the league's awards (top and lowest score, blowout,
    closest game, unluckiest loss, luckiest win, sharpest lineup, most left
    on a bench, player of the week, best on a bench).
-9. **Next:** your matchup live (points so far from the live box scores,
-   the rest projected, the win chance moving); fantasy points on the live
-   game pages; NBA and NHL fantasy from the props we already project.
+9. **Your matchup live** — SHIPPED 2026-10-27 (Sleeper leagues): the score
+   as it stands from Sleeper's own points for the lineup set, each side's
+   projected final with what is left projected from each game's clock,
+   the win chance, slot by slot, refreshing every minute
+   (engine/fantasy_live). **Fantasy points on the game pages** — SHIPPED
+   2026-10-27: each football game page leads its Player stats with the
+   game's top fantasy scorers, PPR and half-PPR.
+10. **Next:** NBA and NHL fantasy from the props we already project.

@@ -20752,7 +20752,7 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
      his. */
   _ffDesk = d;
   const W = typeof QBWeek !== "undefined" ? QBWeek : null;
-  host.innerHTML = (W ? W.todo(d) : "") + ffH2HHTML(d) + ffLineupHTML(d)
+  host.innerHTML = (W ? W.live(d) + W.todo(d) : "") + ffH2HHTML(d) + ffLineupHTML(d)
     + (W ? W.pickups(d) : "")
     + ffScoringGapsHTML(d) + ffTradesHTML(d) + ffStandingsHTML(d) + `<div id="ffs"></div>` + ffTeamsHTML(d);
   /* THE START CALENDAR GOES TO THE CALENDAR TAB, which is the only

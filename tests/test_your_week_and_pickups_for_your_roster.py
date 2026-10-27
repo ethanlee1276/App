@@ -176,7 +176,7 @@ def _render(d):
 
 
 def test_the_desk_draws_the_list_first_and_the_pickups_with_their_bids():
-    assert "host.innerHTML = (W ? W.todo(d) : \"\") + ffH2HHTML(d)" in APP_JS and "W.todoBind(host);" in APP_JS
+    assert "host.innerHTML = (W ? W.live(d) + W.todo(d) : \"\") + ffH2HHTML(d)" in APP_JS and "W.todoBind(host);" in APP_JS
     d = {"week": 9, "todo": [{"kind": "lineup", "tone": "act", "title": "Puka is on a bye: start Waddle",
                               "detail": "+11.2 projected points this week", "gain": 11.2, "section": "lineup"}],
          "pickups": {"pickups": [{"player": "FA Back", "position": "RB", "gain": 6.0, "replaces": "RB Two",

@@ -581,6 +581,77 @@
       <div class="card ff-rows">${order.map((p) => fa[p].slice(0, 3).map(row).join("")).join("")}</div>`;
   }
 
+  /* YOUR MATCHUP, LIVE (engine/fantasy_live, 2026-10-27): once a starter on
+     either side has kicked off, the score as it stands (Sleeper's points,
+     your league's scoring), each side's projected final with what is left
+     projected, the win chance, and the lineups slot by slot, the way the
+     fantasy apps draw a matchup. While a game is on it asks again every
+     minute and redraws only itself. */
+  const LIVE_EVERY_MS = 60e3;
+  let liveTimer = null;
+
+  function liveHTML(d) {
+    const L = (d || {}).live;
+    if (!L || !L.me) return "";
+    const me = L.me, them = L.them || { players: [], points: 0, projected: 0 };
+    const wp = L.win_prob;
+    const word = L.done ? "Final" : L.in_progress ? "Live" : "Between games";
+    const chip = (p) => p.state === "live" ? `<span class="ffl-st on">${escapeHtml(p.clock || "Live")}</span>`
+      : p.state === "final" ? `<span class="ffl-st">Final</span>`
+      : p.state === "pre" ? `<span class="ffl-st">${escapeHtml(p.clock || "Not started")}</span>` : "";
+    const cell = (p, cls) => p && p.player ? `<span class="ffl-p ${cls}">
+        <b>${escapeHtml(p.player)}</b>
+        <span class="ffl-pp"><span class="ffl-n">${Number(p.points).toFixed(1)}</span>${chip(p)}</span>
+      </span>` : `<span class="ffl-p ${cls} empty">Empty</span>`;
+    const n = Math.max(me.players.length, (them.players || []).length);
+    const rows = Array.from({ length: n }, (_, i) => {
+      const a = me.players[i], b = (them.players || [])[i];
+      const slot = (a && a.slot) || (b && b.slot) || "";
+      return `<div class="ffl-row">${cell(a, "me")}<span class="ffl-slot">${escapeHtml(slot === "DEF" ? "D/ST"
+        : slot === "SUPER_FLEX" ? "SF" : slot === "REC_FLEX" || slot === "WRRB_FLEX" ? "FLEX" : slot)}</span>${cell(b, "them")}</div>`;
+    }).join("");
+    const lead = Number(me.points) - Number(them.points);
+    return `<div class="card ffl${L.in_progress ? " on" : ""}"${L.in_progress ? ` data-ffl-on="1"` : ""}>
+      <div class="ffl-head"><span class="ffl-badge${L.in_progress ? " on" : ""}">${word}</span>
+        <span>Week ${escapeHtml(String((d || {}).week || ""))}${L.opponent ? ` · vs ${escapeHtml(L.opponent)}` : ""}</span></div>
+      <div class="ffl-score">
+        <div class="ffl-side"><span class="ffl-who">You</span><b class="${lead >= 0 ? "up" : ""}">${Number(me.points).toFixed(1)}</b>
+          <span class="ffl-proj">projected ${Number(me.projected).toFixed(1)}</span></div>
+        <div class="ffl-side r"><span class="ffl-who">${escapeHtml(L.opponent || "Them")}</span><b class="${lead < 0 ? "up" : ""}">${
+          Number(them.points).toFixed(1)}</b><span class="ffl-proj">projected ${Number(them.projected).toFixed(1)}</span></div>
+      </div>
+      ${wp != null ? `<div class="ffl-wp" role="img" aria-label="${Math.round(wp * 100)}% to win">
+        <span class="ffl-wp-bar"><span style="width:${Math.max(2, Math.min(98, Math.round(wp * 100)))}%"></span></span>
+        <span class="ffl-wp-n"><b>${Math.round(wp * 100)}%</b> to win</span></div>` : ""}
+      <div class="ffl-rows">${rows}</div>
+      <p class="ffl-note">Points so far are Sleeper’s, under your league’s scoring, for the lineup you set. What is
+        left is projected: a player yet to play at this week’s projection, one in a game at his points plus his
+        projection for the time left.${L.in_progress ? " This card refreshes every minute." : ""}</p>
+    </div>`;
+  }
+
+  /* While a game is on, ask again every minute and redraw the card alone. */
+  function liveWatch(host, leagueId, userId, platform) {
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+    if (!host || !host.querySelector(".ffl[data-ffl-on]")) return;
+    liveTimer = setTimeout(async () => {
+      liveTimer = null;
+      const card = host.querySelector(".ffl");
+      if (!card || !card.isConnected || document.hidden) {
+        if (card && card.isConnected) liveWatch(host, leagueId, userId, platform);
+        return;
+      }
+      try {
+        const r = await fetch(`/api/leaguedesk?league=${encodeURIComponent(leagueId)}&user=${
+          encodeURIComponent(userId || "")}&platform=${encodeURIComponent(platform || "sleeper")}`);
+        const d = await r.json();
+        const now = host.querySelector(".ffl");
+        if (r.ok && now && now.isConnected) now.outerHTML = liveHTML(d) || now.outerHTML;
+      } catch (e) { /* the next minute tries again */ }
+      liveWatch(host, leagueId, userId, platform);
+    }, LIVE_EVERY_MS);
+  }
+
   /* YOUR SEASON (engine/fantasy_season, 2026-10-27; Ethan: "look at other
      apps … add more features"): playoff odds from the league's own
      schedule played out 2,000 times, power rankings with the all-play
@@ -691,6 +762,7 @@
   }
 
   async function season(host, leagueId, userId, platform) {
+    liveWatch(host, leagueId, userId, platform);
     const box = host && host.querySelector("#ffs");
     if (!box || !leagueId || (platform && platform !== "sleeper")) return;
     box.innerHTML = `<p class="loading">Playing out the rest of your season…</p>`;
@@ -752,5 +824,5 @@
   }
 
   window.QBWeek = { room, bind, rowFor, dossier, pickups, basis, seat, current, h2hNote, callNote, todo, todoBind,
-                    season };
+                    season, live: liveHTML };
 })();
