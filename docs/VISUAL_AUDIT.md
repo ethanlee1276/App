@@ -92,3 +92,23 @@ the matchup head-to-head), FantasyPros (ranges, tiers, start/sit).
 Held by the tests that already pinned these pieces (moved to the new
 markup), plus `test_fantasy_101` (first visit open, then as left) and
 `test_fantasy_tonight` (the night's rows wear the same row and badges).
+
+# The whole app, pass one — 2026-10-27
+
+The same request, then "look at all the other visuals for everything else".
+Every main page (21 of them) at a phone and a desktop width, signed out, on
+the live site's own public files, laid side by side on one sheet so the
+things every page repeats show up as repeats.
+
+| # | Finding | Fix |
+|---|---|---|
+| A1 | **Every subtitle wore the amber rule**: a 2px gold bar and a block of text under every section title on every page, so pages read as documents | a short subtitle is a muted line under its title; the rule stays for an explanation the reader opened behind "why?" |
+| A2 | **Every card wore a stripe** down its left in the faintest colour when it had no grade: lists, forms and notes opened on a quotation bar | only a card with a grade (a pick's tier, a game bet, a long shot) wears one |
+| A3 | **The stadium band was a 44px dark strip on a phone** over the Record, Live, Edge and Most Likely titles, reading as a glitch | gone on a phone; a computer keeps its 64px band |
+| A4 | Row descriptions and fact chips in **typewriter type** ("QB · vs Cowboys", "3 games on the card") | the page's own type; prices and figures keep the mono |
+| A5 | **The Edge page had no name at the top**: it opened on its legend, and the picks' own heading three blocks down took the page title's size | "Edge picks" first, with its line; the picks' heading is a section head again |
+| A6 | The Record's scope buttons **shouted in tracked capitals** across three rows | sentence case, the same weight as every other filter |
+
+Checked after in both themes. Held by the tests that pinned each rule
+(moved to the new values): `test_the_venue_heads_the_proof_pages`,
+`test_an_empty_board_carries_the_card`, `test_controls_look_clickable`.

@@ -1011,7 +1011,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .card:hover { border-color: var(--border); transform: translateY(-1px); }
 .card.faded { opacity: .6; }
-.card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grade-color, var(--text-faint)); }
+/* THE STRIPE IS A GRADE, SO ONLY A GRADED CARD WEARS ONE (2026-10-27, the
+   visual pass). Every card drew it, in the faintest token when it had no
+   grade, so a list, a form or a note opened on a pale bar down its left:
+   a quotation mark on things that quote nothing. A card that sets
+   `--grade-color` (a pick's tier, a game bet, a long shot) keeps it. */
+.card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grade-color, transparent); }
+.card.longshot { --grade-color: var(--text-faint); }
 
 /* space-between distributes LEFTOVER space; it does not make anything
    shrink. Flex items default to min-width:auto, so a long market question
@@ -1114,7 +1120,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 /* v5: the empty board's facts (mono chips — a count and a clock) and
    its two doors (boardEmptyFacts, boardEmptyDoors). */
 .empty-slate .es-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
-.empty-slate .es-fact { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-dim);
+.empty-slate .es-fact { font-family: var(--font-sans); font-size: var(--fs-xs); color: var(--text-dim);
   padding: 4px 9px; border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); }
 .empty-slate .es-doors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 /* NOTHING HERE YET, INSIDE A PANEL — the third size.
@@ -2574,10 +2580,18 @@ select.calc-in { width: auto; font-weight: 600; }
    is declared later in this sheet and would beat the clamp. */
 .note-folded, .mb-safety.note-folded { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .note-more { display: inline-block; margin: 2px 0 10px; }
+/* A SHORT SUBTITLE IS A LINE, NOT A QUOTATION (2026-10-27, the visual
+   pass; Ethan: "it doesn't feel like a professionally built app"). Every
+   subtitle wore the amber rule, so every section on every page opened on
+   a gold bar and a block of text, and the page read as a document. The
+   rule is for the explanation a reader opened (a long sub behind "why?",
+   `data-sub-enhanced`); a short one is a muted line under its title. */
 .section-title .sub:not(.sub-collapsed) {
-  border-left: 2px solid var(--brand); padding: 6px 0 6px 13px;
-  margin-top: 8px; text-transform: none; letter-spacing: 0;
-  font-weight: 400; color: var(--text-body); max-width: var(--measure-wide);
+  margin-top: 4px; text-transform: none; letter-spacing: 0;
+  font-weight: 400; color: var(--text-mute); max-width: var(--measure-wide);
+}
+.section-title[data-sub-enhanced] .sub:not(.sub-collapsed) {
+  border-left: 2px solid var(--brand); padding: 6px 0 6px 13px; margin-top: 8px; color: var(--text-body);
 }
 
 
@@ -4350,8 +4364,7 @@ body.pk-open { overflow: hidden; }
   padding: 7px 14px; border-radius: var(--radius-sm); cursor: pointer;
   background: var(--panel); border: var(--hairline) solid var(--border);
   color: var(--text-mute); font-family: var(--font-sans);
-  font-size: var(--fs-xs); font-weight: 800;
-  letter-spacing: .08em; text-transform: uppercase;
+  font-size: var(--fs-sm); font-weight: 700;
   min-height: 34px;
 }
 .rec-scope:hover { color: var(--text); border-color: var(--brand-2); }
@@ -6039,7 +6052,7 @@ body.has-deck #rail-live { display: none; }
 .hd-what { flex: 1; min-width: 0; }
 .hd-what b, .hd-what strong { display: block; font-size: var(--fs-sm); font-weight: 700; }
 .hd-what span { display: block; margin-top: 2px; color: var(--text-mute);
-  font-family: var(--font-mono); font-size: var(--fs-xs); }
+  font-family: var(--font-sans); font-size: var(--fs-xs); }
 .hd-state { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
 .hd-chip { padding: 3px 8px; border: var(--hairline) solid var(--border-soft); border-radius: 999px;
   color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
@@ -10009,7 +10022,10 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 .venue-band::after { content: ""; position: absolute; inset: 0;
   background: var(--venue-fade); }
 @media (max-width: 760px) {
-  .venue-band { height: 44px; }
+  /* GONE ON A PHONE (2026-10-27): at 44px the stadium read as a dark
+     strip, a glitch over the page title rather than a photograph, on the
+     four pages a phone opens most. A computer keeps its band. */
+  .venue-band { height: 44px; display: none; }
   /* ODDS FIRST ON A PHONE (roadmap item 51): the photo pushed the prices —
      the part a bettor came for — under the fold. The render stays; the
      lines lead the card's text. */

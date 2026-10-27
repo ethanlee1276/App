@@ -37,9 +37,12 @@ def test_a_band_heads_each_proof_and_pick_page_once():
         assert (ROOT / "web" / "img" / "venues" / "variants" / f"{fam}-gold.webp").exists(), fam
 
 
-def test_the_band_is_low_and_the_phone_card_leads_with_prices():
+def test_the_band_is_low_gone_on_a_phone_and_the_phone_card_leads_with_prices():
     assert ".venue-band { position: relative; height: 64px;" in CSS
-    m = re.search(r"@media \(max-width: 760px\) \{\s*\.venue-band \{ height: 44px; \}(.*?)\n\}", CSS, re.S)
+    # 2026-10-27, the visual pass: at a phone's 44px the stadium read as a
+    # dark strip over the title, a glitch rather than a photograph.
+    body = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    m = re.search(r"@media \(max-width: 760px\) \{\s*\.venue-band \{ height: 44px; display: none; \}(.*?)\n\}", body, re.S)
     assert m and ".game-card .game-info > .gc-mkts { order: -1;" in m.group(1)
 
 

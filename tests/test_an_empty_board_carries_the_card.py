@@ -123,7 +123,9 @@ def test_the_doors_open_the_pages_that_are_never_empty_minus_this_one():
         i = body.index('${boardEmptyFacts()}${boardEmptyDoors("%s")}</div>' % key)
         assert f"bindEmptyDoors({host});" in body[i:i + 200], f"{fn}: the doors are drawn but not wired"
     assert ".empty-slate .es-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }" in CSS
-    assert ".empty-slate .es-fact { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-dim);" in CSS
+    # A fact is a phrase, set in the page's own type (2026-10-27, the
+    # visual pass): the agate mono made "3 games on the card" a printout.
+    assert ".empty-slate .es-fact { font-family: var(--font-sans); font-size: var(--fs-xs); color: var(--text-dim);" in CSS
     assert ".empty-slate .es-doors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }" in CSS
 
 
