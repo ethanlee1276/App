@@ -581,6 +581,129 @@
       <div class="card ff-rows">${order.map((p) => fa[p].slice(0, 3).map(row).join("")).join("")}</div>`;
   }
 
+  /* YOUR SEASON (engine/fantasy_season, 2026-10-27; Ethan: "look at other
+     apps … add more features"): playoff odds from the league's own
+     schedule played out 2,000 times, power rankings with the all-play
+     record and luck, and last week in review. Its own request after the
+     desk paints (/api/leagueseason), so the desk is never slower for it.
+     Sleeper leagues: their schedule and their weekly box are public. */
+  // A simulation never proves a zero or a certainty: none of 2,000 is "<1%".
+  const pct = (x) => (x == null ? "–" : x >= 0.995 ? ">99%" : x < 0.005 ? "<1%" : `${Math.round(x * 100)}%`);
+  const rec = (w, l, t) => `${w}–${l}${t ? `–${t}` : ""}`;
+  const ord = (n) => `${n}${["th", "st", "nd", "rd"][((n % 100) - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"}`;
+
+  /* What it takes, best record first: the outcomes that land at the same
+     chance are one line ("2–4 or better: >99%"), so a team that is in
+     unless it collapses reads as one. */
+  function seasonPaths(d) {
+    const ps = (d.paths || []).filter((p) => p.share >= 0.01);
+    const groups = [];
+    ps.forEach((p) => {
+      const g = groups[groups.length - 1];
+      if (g && g.label === pct(p.playoff)) g.lo = p;
+      else groups.push({ hi: p, lo: p, label: pct(p.playoff) });
+    });
+    const r = (p) => rec(p.wins, p.of - p.wins);
+    return groups.slice(0, 4).map((g) => ({
+      text: g.hi === g.lo ? r(g.hi) : g.hi === ps[0] ? `${r(g.lo)} or better`
+        : g.lo === ps[ps.length - 1] ? `${r(g.hi)} or worse` : `${r(g.hi)} to ${r(g.lo)}`,
+      label: g.label,
+    }));
+  }
+
+  function seasonMeHTML(d) {
+    const me = (d.teams || []).find((t) => t.me);
+    const o = (me || {}).odds;
+    if (!me || !o) return "";
+    const paths = seasonPaths(d);
+    return `<div class="card ffs-me">
+      <div class="ffs-big"><b>${pct(o.playoff)}</b><span>to make the playoffs</span></div>
+      <p class="ffs-sub">Projected to finish ${rec(Math.round(o.wins), Math.round(o.losses))}, about the
+        ${ord(Math.max(1, Math.round(o.seed)))} seed. The top ${escapeHtml(String(d.playoff_teams))} of
+        ${(d.teams || []).length} make it; the regular season ends in Week ${escapeHtml(String(d.last_regular_week))}.
+        ${o.first >= 0.01 ? ` First place: ${pct(o.first)}.` : ""}</p>
+      ${paths.length && d.games_left ? `<ul class="ffs-paths">${paths.map((p) => `<li><b>${p.text}</b>
+        the rest of the way: ${p.label} to get in</li>`).join("")}</ul>` : ""}
+    </div>`;
+  }
+
+  function seasonTableHTML(d) {
+    const rows = d.teams || [];
+    if (!rows.length) return "";
+    const row = (t) => {
+      const ap = t.all_play ? `all-play ${rec(t.all_play.w, t.all_play.l, t.all_play.t)}` : "";
+      const luck = t.luck == null || Math.abs(t.luck) < 0.5 ? ""
+        : `<span class="hd-chip ${t.luck > 0 ? "good" : "bad"}" title="Wins above what the all-play record gives">${
+          t.luck > 0 ? "lucky" : "unlucky"} ${t.luck > 0 ? "+" : ""}${Number(t.luck).toFixed(1)}</span>`;
+      return `<div class="ffs-row${t.me ? " me" : ""}">
+        <span class="ffs-rank">${t.power}</span>
+        <span class="ffs-team"><b>${escapeHtml(t.team || "")}${luck}</b>
+          <span>${escapeHtml([rec(t.wins, t.losses, t.ties), `${Number(t.pf).toFixed(1)} pts`, ap,
+            `projects ${Number(t.strength).toFixed(1)} a week`].filter(Boolean).join(" · "))}</span></span>
+        <span class="ffs-pct">${t.odds ? pct(t.odds.playoff) : "–"}</span>
+        <span class="ffs-pct">${t.odds ? pct(t.odds.first) : "–"}</span>
+      </div>`;
+    };
+    return `<div class="card ffs-table">
+      <div class="ffs-row head"><span class="ffs-rank">#</span><span class="ffs-team">Power ranking</span>
+        <span class="ffs-pct">Playoffs</span><span class="ffs-pct">1st</span></div>
+      ${rows.map(row).join("")}
+    </div>
+    <p class="rank-help">Ranked by each roster’s best lineup a week on this season’s averages, under your league’s
+      scoring. The odds play the rest of the regular season ${Number(d.sims || 0).toLocaleString()} times on your
+      league’s own schedule: each team’s week drawn around that lineup with its starters’ own swings, a player on
+      a bye at zero${d.this_week_basis === "week" ? ", this week on this week’s projections" : ""}, ties on record
+      to points scored${d.median ? ", and a game against the league’s median every week" : ""}. Rosters as they
+      stand today: no trades or pickups. All-play is each week’s score against every team’s, the record without
+      the schedule’s luck.</p>`;
+  }
+
+  function reviewHTML(d) {
+    const R = d.review;
+    if (!R) return "";
+    const m = R.me;
+    const call = (c, word) => `${word} ${escapeHtml(c.started)} (${Number(c.started_pts).toFixed(1)}) over ${
+      escapeHtml(c.benched)} (${Number(c.benched_pts).toFixed(1)})`;
+    const mine = m ? `<div class="ffr-me">
+        <p>${m.result ? `You ${{ W: "won", L: "lost", T: "tied" }[m.result]} ${Number(m.points).toFixed(1)}–${
+          Number(m.opp_points).toFixed(1)} against ${escapeHtml(m.opponent || "")}.` : `You scored ${Number(m.points).toFixed(1)}.`}
+          ${m.best == null ? "" : `Your best possible lineup scored ${Number(m.best).toFixed(1)}${m.left > 0.05
+            ? `: you left ${Number(m.left).toFixed(1)} on your bench.` : ": you set it perfectly."}`}</p>
+        ${m.worst_call ? `<p class="ffr-call bad">Costliest call: ${call(m.worst_call, "starting")}, −${
+          Number(m.worst_call.diff).toFixed(1)}.${
+          m.worst_call.would_have_won ? " The other way, you win the game." : ""}</p>` : ""}
+        ${m.best_call ? `<p class="ffr-call good">Best call: ${call(m.best_call, "starting")}, +${
+          Number(m.best_call.diff).toFixed(1)}.</p>` : ""}
+      </div>` : "";
+    return `<div class="section-title">Week ${escapeHtml(String(d.review_week || ""))} in review
+        <span class="sub">— your week, and the league’s awards</span></div>
+      <div class="card ffr">${mine}
+        <ul class="ffr-awards">${(R.awards || []).map((a) => `<li><span>${escapeHtml(a.title)}</span>
+          <b>${escapeHtml(a.text)}</b></li>`).join("")}</ul>
+      </div>`;
+  }
+
+  function seasonHTML(d) {
+    if (!d || !(d.teams || []).length) return "";
+    return `<div class="section-title">Your season
+        <span class="sub">— playoff odds and power rankings</span></div>
+      ${seasonMeHTML(d)}${seasonTableHTML(d)}${reviewHTML(d)}`;
+  }
+
+  async function season(host, leagueId, userId, platform) {
+    const box = host && host.querySelector("#ffs");
+    if (!box || !leagueId || (platform && platform !== "sleeper")) return;
+    box.innerHTML = `<p class="loading">Playing out the rest of your season…</p>`;
+    let d = null;
+    try {
+      const r = await fetch(`/api/leagueseason?league=${encodeURIComponent(leagueId)}&user=${
+        encodeURIComponent(userId || "")}`);
+      d = await r.json();
+      if (!r.ok) d = null;
+    } catch (e) { d = null; }
+    if (box.isConnected) box.innerHTML = seasonHTML(d);
+  }
+
   /* What the desk's lineup was scored on, said once under it. */
   function basis(d) {
     const pw = (d || {}).projection_week || {};
@@ -628,5 +751,6 @@
       average.</p>`;
   }
 
-  window.QBWeek = { room, bind, rowFor, dossier, pickups, basis, seat, current, h2hNote, callNote, todo, todoBind };
+  window.QBWeek = { room, bind, rowFor, dossier, pickups, basis, seat, current, h2hNote, callNote, todo, todoBind,
+                    season };
 })();

@@ -63,6 +63,7 @@
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EY 2>&1 | tee /tmp/ey.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh EZ 2>&1 | tee /tmp/ez.txt
 #   cd /srv/qellys && nice -n 19 bash tools/catchup.sh FA 2>&1 | tee /tmp/fa.txt
+#   cd /srv/qellys && nice -n 19 bash tools/catchup.sh FB 2>&1 | tee /tmp/fb.txt
 #
 # Quick checks first and the slow measurements last (AT, BE, M2, P2, O, AD,
 # E: about half an hour together), so a stop part-way still has the quick
@@ -590,6 +591,10 @@ SH
 run FA "Start A or B? on the Fantasy page and in Ask" 60 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function compareHTML('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys,urllib.parse,urllib.request; d=json.load(sys.stdin); n=[r['player'] for r in d.get('players', []) if r.get('position') == 'RB'][:2]; a=json.load(urllib.request.urlopen('https://qellysbook.com/api/fantasy/compare?' + urllib.parse.urlencode([('p', x) for x in n]))); print(a.get('call', {}).get('text') or a.get('error') or a.get('note'))"
+SH
+run FB "Your season and last week in review on a Sleeper league's desk" 60 <<'SH'
+curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function seasonHTML('
+curl -s "https://qellysbook.com/api/leagueseason?league=x"; echo
 SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('

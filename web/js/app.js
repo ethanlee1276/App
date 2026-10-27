@@ -20753,7 +20753,7 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
   const W = typeof QBWeek !== "undefined" ? QBWeek : null;
   host.innerHTML = (W ? W.todo(d) : "") + ffH2HHTML(d) + ffLineupHTML(d)
     + (W ? W.pickups(d) : "")
-    + ffScoringGapsHTML(d) + ffTradesHTML(d) + ffStandingsHTML(d) + ffTeamsHTML(d);
+    + ffScoringGapsHTML(d) + ffTradesHTML(d) + ffStandingsHTML(d) + `<div id="ffs"></div>` + ffTeamsHTML(d);
   /* THE START CALENDAR GOES TO THE CALENDAR TAB, which is the only
      place a reader looking for a calendar will look. It shipped inside
      this desk on 2026-09-09 — under the camp report and the offseason
@@ -20769,7 +20769,7 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
   paintMyCalendar(ffRosterCalendarHTML(_ffData || {}, ffDeskRoster(d)));
   host.querySelectorAll("[data-logtrade]").forEach((b) =>
     b.addEventListener("click", () => ffLogTrade(b)));
-  if (W) W.todoBind(host);
+  if (W) { W.todoBind(host); W.season(host, leagueId, userId, platform); }
 }
 
 /* ---------------- The team you are actually playing (IDEAS #7) ----------

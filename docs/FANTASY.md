@@ -167,18 +167,24 @@ queue, in order.
    by side: points this week, range, matchup, chance to play, and the call,
    with how often each outscores the other and the clock on a questionable
    one (engine/fantasy_compare). Ask gives the same call.
-5. **Playoff odds and power rankings** for your league: the rest of the
-   regular season simulated with each roster's projected strength and the
-   league's own schedule; each team's playoff chance and projected record.
+5. **Playoff odds and power rankings** — SHIPPED 2026-10-27 (Sleeper
+   leagues). The rest of the regular season simulated with each roster's
+   projected strength and the league's own schedule; each team's playoff
+   and first-place chance, projected record and seed, what record gets you
+   in, and power rankings with the all-play record and luck
+   (engine/fantasy_season).
 6. **Waivers for your roster** — SHIPPED 2026-10-27. Free agents ranked by what they add to
    *your* starting lineup; a FAAB bid range where the league uses a budget;
    the bench player to drop.
 7. **Lineup alerts.** Opt in, and a push tells you when one of your
    starters is ruled out, inactive or on a bye, with the bench player who
    should replace him.
-8. **The week in review.** Last week: your score against your best
-   possible lineup (points left on the bench), your best and worst calls,
-   and the league's awards (top score, unluckiest loss, biggest blowout).
+8. **The week in review** — SHIPPED 2026-10-27 (Sleeper leagues). Last
+   week: your score against your best possible lineup (points left on the
+   bench), your costliest and best calls (and whether the costly one cost
+   the game), and the league's awards (top and lowest score, blowout,
+   closest game, unluckiest loss, luckiest win, sharpest lineup, most left
+   on a bench, player of the week, best on a bench).
 9. **Next:** your matchup live (points so far from the live box scores,
    the rest projected, the win chance moving); fantasy points on the live
    game pages; NBA and NHL fantasy from the props we already project.

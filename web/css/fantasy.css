@@ -871,3 +871,36 @@
 .ffc-notes { display: grid; gap: 6px; margin: var(--sp-3) 0 0; padding-left: 18px;
   font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
 .ffc-lock { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
+
+/* YOUR SEASON (2026-10-27): playoff odds, power rankings, last week in review. */
+.ffs-me { padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+.ffs-big { display: flex; align-items: baseline; gap: var(--sp-2); }
+.ffs-big b { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 800; color: var(--text); }
+.ffs-big span { font-size: var(--fs-sm); color: var(--text-dim); }
+.ffs-sub { margin: 4px 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
+.ffs-paths { display: grid; gap: 4px; margin: var(--sp-2) 0 0; padding-left: 18px;
+  font-size: var(--fs-sm); color: var(--text-body); }
+.ffs-paths b { color: var(--text); }
+.ffs-table { padding: 0; margin-bottom: var(--sp-2); }
+.ffs-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 62px 46px; align-items: center; gap: var(--sp-2);
+  padding: 9px var(--sp-3); border-top: var(--hairline) solid var(--border-soft); }
+.ffs-row.head { border-top: 0; font-size: var(--fs-xs); font-weight: 700; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .04em; }
+.ffs-row.me { background: var(--fill-subtle); }
+.ffs-rank { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-mute); text-align: right; }
+.ffs-team { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ffs-team b { font-size: var(--fs-sm); color: var(--text); overflow-wrap: anywhere; }
+.ffs-team > span { font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
+.ffs-row.me .ffs-team b { color: var(--brand); }
+.ffs-pct { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; text-align: right; color: var(--text); }
+.ffs-row.head .ffs-pct { font-family: inherit; font-size: var(--fs-xs); }
+.ffr { padding: var(--sp-3) var(--sp-4); }
+.ffr-me p { margin: 0 0 6px; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
+.ffr-call.bad { color: var(--bad); }
+.ffr-call.good { color: var(--good); }
+.ffr-awards { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;
+  margin: var(--sp-2) 0 0; padding: 0; }
+.ffr-awards li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--fill-subtle); }
+.ffr-awards span { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-mute); }
+.ffr-awards b { font-size: var(--fs-sm); color: var(--text); }

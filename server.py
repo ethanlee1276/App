@@ -1222,6 +1222,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._league_desk(parse_qs(parsed.query))
         if parsed.path in ("/api/fantasy/compare", "/api/fantasy/compare/"):
             return self._fantasy_compare(parse_qs(parsed.query))
+        if parsed.path in ("/api/leagueseason", "/api/leagueseason/"):
+            return self._league_season(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
             return self._yahoo(parsed.path[len("/api/yahoo/"):].strip("/"),
                                parse_qs(parsed.query))
@@ -1802,6 +1804,135 @@ class Handler(BaseHTTPRequestHandler):
                else {"error": "Pick two to four of this week's players."})
         out.update({"state": meta.get("state"), "week": doc.get("week"), "unknown": unknown})
         return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _league_season(self, query: dict):
+        """Your league's season: playoff odds, power rankings and last week
+        in review (engine/fantasy_season; Ethan, 2026-10-27: "look at other
+        apps … add more features"). Sleeper leagues: their schedule and
+        their weekly box are public. Its own request, after the desk, so the
+        desk is never slower for it: every week of the league's matchups is
+        read (in parallel; a week that is over is kept a day, the rest an
+        hour) and the season is played SIMS times."""
+        league_id = (query.get("league") or [""])[0].strip()
+        user_id = (query.get("user") or [""])[0].strip()
+        if not re.fullmatch(r"\d{1,25}", league_id):
+            return self._send(400, b'{"error":"bad league id"}', ".json")
+        from concurrent.futures import ThreadPoolExecutor
+        from engine import byes as _byes, fantasy_lineup, fantasy_season, fantasyweek
+        from engine.db import connect
+        from engine.sources.fetch import fetch_text, DataUnavailable
+
+        def grab(path, ttl):
+            if not sleeper_path_ok(path):
+                raise DataUnavailable(f"path not allowlisted: {path}")
+            return json.loads(fetch_text(SLEEPER_BASE + path, sleeper_cache_name(path), ttl=ttl))
+
+        try:
+            league = grab(f"league/{league_id}", ttl=600)
+            rosters = grab(f"league/{league_id}/rosters", ttl=300)
+            users = grab(f"league/{league_id}/users", ttl=600)
+            players = grab("players/nfl", ttl=86400)
+        except (DataUnavailable, ValueError) as exc:
+            return self._fail(502, "Sleeper did not answer for that league. Try again in a minute.",
+                              exc, "sleeper league season")
+        lset = league.get("settings") or {}
+        week = int(lset.get("leg") or 0)
+        if not 1 <= week <= 18:
+            try:
+                week = int((grab("state/nfl", ttl=1800) or {}).get("week") or 0)
+            except (DataUnavailable, ValueError):
+                week = 0
+        playoff_start = int(lset.get("playoff_week_start") or 15)
+        playoff_teams = int(lset.get("playoff_teams") or 6)
+        last = max(1, playoff_start - 1)
+        owner = {str(u.get("user_id")): (u.get("display_name") or u.get("username") or "?") for u in users or []}
+        names, by_roster, team_of, me = {}, {}, {}, None
+        for r in rosters or []:
+            rid = int(r.get("roster_id") or 0)
+            names[rid] = owner.get(str(r.get("owner_id") or ""), f"Team {rid}")
+            if str(r.get("owner_id") or "") == user_id or user_id in [str(x) for x in r.get("co_owners") or []]:
+                me = rid
+            rows = []
+            for pid in r.get("players") or []:
+                pl = (players or {}).get(str(pid)) or {}
+                name = " ".join(x for x in (pl.get("first_name"), pl.get("last_name")) if x)
+                pos = (pl.get("position") or "").upper()
+                if name and pos:
+                    rows.append({"player": name, "position": pos})
+                    if pl.get("team"):
+                        team_of[name] = str(pl["team"]).upper()
+            by_roster[rid] = rows
+
+        def box(w):
+            try:
+                return w, grab(f"league/{league_id}/matchups/{w}", ttl=86400 if w < week else 3600)
+            except (DataUnavailable, ValueError):
+                return w, []
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            boxes = dict(pool.map(box, range(1, last + 1)))
+
+        conn = connect()
+        try:
+            season = max((int(x[0]) for x in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'").fetchall()), default=0)
+            season_means = fantasy_lineup.per_game(conn, season) if season else {}
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
+            bye_of = _byes.bye_weeks(conn, season) if season else {}
+        finally:
+            conn.close()
+        scoring = league.get("scoring_settings") or {}
+        slots = fantasy_lineup.starting_slots(league.get("roster_positions"))
+        week_doc, _meta = self._fantasy_week()
+        this_week = (fantasyweek.with_week(season_means, week_doc,
+                                           [r["player"] for rows in by_roster.values() for r in rows],
+                                           teams=team_of)
+                     if week_doc and week_doc.get("week") == week else None)
+        left = [w for w in range(max(1, week), last + 1)]
+        strength = {w: fantasy_season.strengths(
+                        by_roster, slots, scoring, this_week if (w == week and this_week) else season_means,
+                        off=None if (w == week and this_week) else {t for t, b in bye_of.items() if int(b) == w},
+                        team_of=team_of)
+                    for w in left}
+        schedule = {w: fantasy_season.schedule_from(boxes.get(w)) for w in left}
+        teams = {}
+        for r in rosters or []:
+            st = r.get("settings") or {}
+            teams[int(r.get("roster_id") or 0)] = {
+                "wins": int(st.get("wins") or 0), "losses": int(st.get("losses") or 0),
+                "ties": int(st.get("ties") or 0),
+                "pf": float(st.get("fpts") or 0) + float(st.get("fpts_decimal") or 0) / 100.0,
+                "pa": float(st.get("fpts_against") or 0) + float(st.get("fpts_against_decimal") or 0) / 100.0}
+        sim = (fantasy_season.simulate(teams, schedule, strength, playoff_teams=playoff_teams,
+                                       median=bool(lset.get("league_average_match")), me=me,
+                                       seed=int(league_id[-9:] or 0) + week)
+               if any(schedule.values()) else None)
+        weekly = {w: {int(m["roster_id"]): float(m.get("points") or 0) for m in boxes.get(w) or []
+                      if m.get("roster_id") is not None}
+                  for w in range(1, min(week, last + 1))}
+        now = fantasy_season.strengths(by_roster, slots, scoring, season_means)
+        power = fantasy_season.power(teams, now, fantasy_season.all_play(weekly))
+        rows = []
+        for p in power:
+            rid = p["roster_id"]
+            t = teams[rid]
+            rows.append({**p, "team": names.get(rid), "me": rid == me, "wins": t["wins"], "losses": t["losses"],
+                         "ties": t["ties"], "pf": round(t["pf"], 1), "pa": round(t["pa"], 1),
+                         "odds": (sim or {}).get("teams", {}).get(rid)})
+
+        def who(pid):
+            # A team defense is in the players file too: id "PHI", first
+            # name Philadelphia, last name Eagles, position DEF.
+            pl = (players or {}).get(str(pid)) or {}
+            return (" ".join(x for x in (pl.get("first_name"), pl.get("last_name")) if x) or None,
+                    (pl.get("position") or "").upper())
+        review = fantasy_season.review(boxes.get(week - 1) or [], who, slots, names, me) if week > 1 else None
+        out = {"league": league.get("name"), "week": week or None, "playoff_start": playoff_start,
+               "playoff_teams": playoff_teams, "last_regular_week": last, "sims": fantasy_season.SIMS if sim else 0,
+               "median": bool(lset.get("league_average_match")), "teams": rows, "me": me,
+               "paths": (sim or {}).get("paths") or [], "games_left": (sim or {}).get("games_left") or 0,
+               "review": review, "review_week": week - 1 if review else None,
+               "this_week_basis": "week" if this_week else "season"}
+        self._send(200, json.dumps(out).encode(), ".json")
 
     def _desk_extras(self, out: dict, *, mine: list, slots: list, scoring: dict, means: dict,
                      season_means: dict, week_doc: dict, league_names: list, statuses=None,
