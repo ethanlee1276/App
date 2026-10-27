@@ -11,6 +11,45 @@ Ordered by *value per unit of work*, not by size.
 
 ---
 
+## 2026-10-27 (later): sweat it, find it, keep coming back — round three
+
+Ethan: *"think of more ideas and build them all too."* Every idea on the
+list before this one is built (runbook FI to FM). This round, chosen for what
+a bettor does next on this site and what would bring them back tomorrow, each
+built from data the site already holds:
+
+1. **What has to happen.** **BUILT** (runbook FO). Under each live leg of a saved ticket on the Live
+   tab: "Needs 79 more · on pace for 262" (an under: "Can give up 78 more"),
+   from his number so far and how much of the game is left; Ask reads the
+   same when you attach your bets. Built from: engine/sliplive's `current`
+   and `share_left`. Small.
+2. **Streaks.** **BUILT** (runbook FO). "🔥 5 straight" on a prop row when he has cleared tonight's
+   number in each of his last four or more games (Outlier's streaks). Built
+   from: the games the hit-rate chips count. Small.
+3. **Our parlay, in your slip.** **BUILT** (runbook FO). Each of the engine's parlay tickets gets
+   "Load into my slip": the legs land in the slip in one tap, priced and
+   ready to send or copy. Built from: the slip and the tickets on the board.
+   Small.
+4. **The line's path.** **BUILT** (runbook FO). Ask's price card draws the line since it opened as a
+   small chart, not only "262.5 at open, 259.5 now". Built from: line_shop's
+   `line_since_open`. Small.
+5. **Ask about your teams.** **BUILT** (runbook FO). The paperclip offers "My teams and players"
+   (the ones you follow): "What's on for my teams tonight?" is answered for
+   your teams. Built from: settings `teams` and your player watches. Small.
+6. **Your stake, filled in.** **BUILT** (runbook FO). Track it starts at your unit times our stake
+   for the pick when you have set a bankroll. Built from: the Bankroll page's
+   unit and the pick's `stake_units`. Small.
+7. **What brings you here?** **BUILT** (runbook FO). One tap on the sign-up page (Live games, our
+   picks, fantasy, tracking my bets) and a new account lands there. Small.
+8. **Keyboard shortcuts on a computer.** **BUILT** (runbook FO). `/` search, `a` Ask, `1`–`7` the
+   leagues, `?` the list. Small.
+9. **Your week, by push.** **BUILT** (runbook FO). Monday morning, for an account whose phone gets
+   its bets: last week's record, what it made or lost, and the best win, off
+   the My Bets the account already keeps. Built from: the account's My Bets
+   copy and engine/pushmine. Small to medium.
+
+---
+
 ## 2026-10-27: act on what you read, and the lights on — next, ranked
 
 Ethan: *"think of any other ideas where we should be looking at and do it as

@@ -2583,6 +2583,7 @@ function signupHTML() {
       network readable by anyone on it.</div>` : ""}
 
     ${acctFieldsHTML("signup", `
+    ${suWhyHTML()}
     <label class="acct-field"><span class="acct-field-k">Friend’s referral code <i>optional</i></span>
       <input class="acct-ref" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false"
         value="${escapeAttr(referralTyped())}" placeholder="$6.25 off your first payment"></label>
@@ -2646,6 +2647,26 @@ function flPaint(host) {
     { threshold: 0.05 }).observe(form);
 }
 
+/* WHAT BRINGS YOU HERE? (docs/IDEAS.md round three): one tap on the sign-up
+   form, kept on this device, and the new account lands there (app.js
+   whyLand) instead of on the first stop of the tour. Optional. */
+const SU_WHY = [["live", "Live games"], ["picks", "Our picks"], ["fantasy", "Fantasy"], ["bets", "Tracking my bets"]];
+function suWhyHTML() {
+  let on = "";
+  try { on = localStorage.getItem("qb_why") || ""; } catch (e) {}
+  return `<div class="acct-field acct-why" role="group" aria-label="What brings you here?">
+    <span class="acct-field-k">What brings you here? <i>optional</i></span>
+    <div class="acct-why-row">${SU_WHY.map(([k, label]) => `<button type="button" class="acct-why-b${k === on ? " on" : ""}"
+      data-su-why="${k}" aria-pressed="${k === on}">${label}</button>`).join("")}</div></div>`;
+}
+
+function suWhyTap(t) {
+  const on = !t.classList.contains("on");
+  try { if (on) localStorage.setItem("qb_why", t.dataset.suWhy); else localStorage.removeItem("qb_why"); } catch (err) {}
+  t.parentElement.querySelectorAll("[data-su-why]").forEach((b) => {
+    const me = b === t && on; b.classList.toggle("on", me); b.setAttribute("aria-pressed", String(me)); });
+}
+
 function flToForm(note) {
   const f = document.getElementById("su-form");
   if (!f) return;
@@ -2659,12 +2680,13 @@ function flToForm(note) {
 if (typeof window !== "undefined" && !window._flBound) {
   window._flBound = true;
   document.addEventListener("click", (e) => {
-    const t = e.target.closest && e.target.closest("[data-flplan], [data-flgo], [data-ps], [data-pwjoin], [data-pwlater]");
+    const t = e.target.closest && e.target.closest("[data-flplan], [data-flgo], [data-ps], [data-pwjoin], [data-pwlater], [data-su-why]");
     if (!t) return;
     if (t.dataset.pwjoin) return pwJoin(t.dataset.pwjoin);
     if (t.dataset.pwlater) return pwLater(t);
     if (t.dataset.flgo) return flToForm("");
     if (t.dataset.ps) return planPick(t.dataset.ps);
+    if (t.dataset.suWhy) return suWhyTap(t);
     const pl = PLANS.find((p) => p.id === t.dataset.flplan);
     if (!pl) return;
     // Signed in already (the plans page's own row), straight to checkout.

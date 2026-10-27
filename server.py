@@ -5575,6 +5575,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         history = body.get("history") if isinstance(body.get("history"), list) else []
         # The reader's own open bets, when they attached them (askbot.clean_bets).
         mine = AB.clean_bets(body.get("bets")) if body.get("bets") else []
+        # The teams and players they follow, when they attached them (askbot.clean_follows).
+        follows = AB.clean_follows(body.get("follows")) if body.get("follows") else None
         if (not question or len(question) > AB.MAX_QUESTION
                 or GATE_.full_board_file(board) is None):
             return self._send(400, b'{"error":"a board and a question are required"}',
@@ -5618,10 +5620,10 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         # check above has already run, so a stream only ever opens on a
         # question that will be answered. Its steps go out as they happen.
         if body.get("stream") is True:
-            return self._ask_stream(AB, EX, payload, question, history, pick, board, boards, me, mine)
+            return self._ask_stream(AB, EX, payload, question, history, pick, board, boards, me, mine, follows)
         try:
             out = AB.ask(payload, question, history, pick, board_name=board,
-                         data_dir=WEB / "data", boards=boards, mine=mine)
+                         data_dir=WEB / "data", boards=boards, mine=mine, follows=follows)
         except EX.NotConfigured:
             return self._send(503, b'{"error":"ask not configured","configured":false}',
                               ".json")
@@ -5675,7 +5677,7 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             out.append(b)
         return out
 
-    def _ask_stream(self, AB, EX, payload, question, history, pick, board, boards, me, mine=None):
+    def _ask_stream(self, AB, EX, payload, question, history, pick, board, boards, me, mine=None, follows=None):
         """The same answer as a text/event-stream: a `step` event as each
         lookup starts, then `answer` (what `_ask` would have sent) or `fail`
         (the status `_ask` would have sent). A reader who leaves mid-answer
@@ -5699,7 +5701,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
 
         try:
             out = AB.ask(payload, question, history, pick, board_name=board, data_dir=WEB / "data",
-                         boards=boards, on_step=lambda label: event("step", {"label": label}), mine=mine)
+                         boards=boards, on_step=lambda label: event("step", {"label": label}), mine=mine,
+                         follows=follows)
             done = ("answer", self._ask_kept(AB, out, me))
         except EX.NotConfigured:
             done = ("fail", {"status": 503, "configured": False})

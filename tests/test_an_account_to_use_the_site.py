@@ -183,7 +183,8 @@ def test_after_the_account_the_kept_page_opens():
     land = _fn(APP, "acctLandAfterAuth")
     i = land.index("const back = takeWallBack();")
     assert land.index("if (!_pwStatus) {") < i, "a status that failed to arrive keeps the page for the next try"
-    assert '(_pendingPlanPeek() ? "#paywall" : back || "#live") : back || dcFirstStop();' in land
+    # What brought them here (whyLand, docs/IDEAS.md round three) comes after the kept page.
+    assert '(_pendingPlanPeek() ? "#paywall" : back || whyLand(1) || "#live") : back || whyLand() || dcFirstStop();' in land
     assert land.count("if (back) location.hash = back;") == 2
 
 
@@ -269,6 +270,7 @@ def test_with_the_wall_up_the_sign_up_has_no_way_past():
     const escapeHtml = (s) => String(s), escapeAttr = escapeHtml, icon = () => "", iconMark = () => "";
     const brandMarkHTML = () => "", phoneDoorHTML = () => "", referralTyped = () => "", storeSells = () => true;
     const acctFieldsHTML = (m, extra) => extra, flTonightHTML = () => "", flMembersHTML = () => "", flProofHTML = () => "";
+    const suWhyHTML = () => "";
     const sessionStorage = {{ getItem: () => "#pbp/nfl/1" }}; const WALL_OPEN = ["pbp"]; const PLANS = [{{}}];
     {_fn(ACCOUNT, "wallWhyLine")}
     {_fn(ACCOUNT, "signupHTML")}

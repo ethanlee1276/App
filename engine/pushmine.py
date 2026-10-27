@@ -73,10 +73,12 @@ LINEUP_EVERY_S = 15 * 60
 #: How long each kind stays worth showing. A "your game is on" an hour late
 #: is noise; a settled ticket is still news the next morning.
 TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 3600, "clutch": 20 * 60,
-         "finals": 3 * 3600, "lineup": 18 * 3600}
+         "finals": 3 * 3600, "lineup": 18 * 3600, "week": 14 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
-_looked = {"watches": 0.0, "lineup": 0.0}
+_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0}
+#: Your week's pass looks at most this often, and only on a Monday morning.
+WEEK_EVERY_S = 30 * 60
 
 
 def ensure_tables(conn) -> None:
@@ -270,6 +272,75 @@ def bet_last(conn, user_id, bet_id: str, leg: str, now: float | None = None) -> 
     return tell(conn, user_id, f"bets:last:{bet_id}", "bets", "Down to the last leg",
                 f"{leg[:100] or 'One leg'} decides your parlay — the hedge and the cash-out check are on the Live tab.",
                 "/#live", ttl="last", now=now)
+
+
+# --- your week (topic "bets", docs/IDEAS.md round three) ----------------------
+def week_summary(bets, start: str, end: str) -> dict | None:
+    """Last week's settled bets in My Bets (dated start..end inclusive, ISO):
+    the record, what it made or lost, and the best win. None when nothing
+    settled that week."""
+    w = l = p = 0
+    net = 0.0
+    best = None
+    for b in bets if isinstance(bets, list) else []:
+        if not isinstance(b, dict) or not (start <= str(b.get("date") or "")[:10] <= end):
+            continue
+        res = str(b.get("result") or "")
+        try:
+            stake = float(b.get("stake") or 0)
+            o = float(b.get("odds"))
+            dec = 1 + o / 100 if o > 0 else 1 + 100 / abs(o)
+        except (TypeError, ValueError, ZeroDivisionError):
+            stake, dec = 0.0, 1.0
+        if res in ("win", "won"):
+            w += 1
+            gain = stake * (dec - 1)
+            net += gain
+            if best is None or gain > best[0]:
+                best = (gain, str(b.get("desc") or "")[:70])
+        elif res in ("loss", "lost"):
+            l += 1
+            net -= stake
+        elif res in ("push", "void"):
+            p += 1
+    if not (w or l or p):
+        return None
+    return {"w": w, "l": l, "p": p, "net": round(net, 2), "best": best[1] if best else ""}
+
+
+def week_pass(conn, now: float | None = None) -> int:
+    """Monday from nine in the morning, Eastern: each member whose phone gets
+    their bets hears last week's record, what it made or lost and the best
+    win, once a week (the message id is the week)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    t = time.time() if now is None else now
+    et = datetime.fromtimestamp(t, ZoneInfo("America/New_York"))
+    if et.weekday() != 0 or not 9 <= et.hour < 21:
+        return 0
+    start = (et - timedelta(days=7)).date().isoformat()
+    end = (et - timedelta(days=1)).date().isoformat()
+    year, week, _ = (et - timedelta(days=7)).isocalendar()
+    users = [r[0] for r in conn.execute(
+        "SELECT DISTINCT user_id FROM push_subs WHERE user_id IS NOT NULL "
+        "AND (',' || topics || ',') LIKE '%,bets,%'").fetchall()]
+    told = 0
+    for uid in users:
+        row = conn.execute("SELECT payload FROM user_data WHERE user_id=? AND section='mybets'", (int(uid),)).fetchone()
+        try:
+            data = json.loads(row[0]) if row is not None else None
+        except (ValueError, TypeError):
+            data = None
+        got = week_summary((data or {}).get("rows") if isinstance(data, dict) else None, start, end)
+        if not got:
+            continue
+        rec = f"{got['w']}–{got['l']}" + (f"–{got['p']}" if got["p"] else "")
+        sign = "+" if got["net"] >= 0 else "−"
+        title = f"Your week: {rec}, {sign}{_money(abs(got['net']))}"
+        body = (f"Best win: {got['best']}. " if got["best"] else "") + "My Bets has every one."
+        told += bool(tell(conn, uid, f"bets:week:{year}-W{week:02d}", "bets", title, body, "/#mybets",
+                          ttl="week", now=t))
+    return told
 
 
 def bet_settled(conn, user_id, bet: dict, done: dict, now: float | None = None) -> bool:
@@ -637,6 +708,12 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 told += _la.lineup_pass(conn, now=t)
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  lineup alerts: {type(exc).__name__}: {exc}")
+        if t - _looked["week"] >= WEEK_EVERY_S:
+            _looked["week"] = t
+            try:
+                told += week_pass(conn, now=t)
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  your week: {type(exc).__name__}: {exc}")
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         from engine import finals as _fin
         moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)

@@ -5344,8 +5344,8 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 **EW. Tonight, 2026-10-26 — everything above, in order** (Ethan: "give me
 all the code to run"). Every command runs on the box (`ssh` in first).
 
-1. The box has the latest code. It should print `The blend: one face, a
-   graphite ground, fills not outlines` or a newer line:
+1. The box has the latest code. It should print `Sweat it, find it, keep
+   coming back: nine more ideas` or a newer line:
 
    ```
    git -C /srv/qellys log --oneline -1
@@ -5395,11 +5395,11 @@ all the code to run"). Every command runs on the box (`ssh` in first).
    site's own account: account … — big plays post as it." If it says NONE
    instead, paste it back and I'll say which part to redo.
 
-4. Every read-only check since the chat shipped (DX to FN) in one go,
+4. Every read-only check since the chat shipped (DX to FO) in one go,
    a couple of minutes. Paste back what it prints:
 
    ```
-   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM FN 2>&1 | tee /tmp/round.txt
+   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM FN FO 2>&1 | tee /tmp/round.txt
    ```
 
 5. On your phone: swipe Qellys up out of the app switcher, open it again,
@@ -6076,6 +6076,42 @@ The checks in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh FN 2>&1 | tee /tmp/fn.txt
+```
+
+**FO. Sweat it, find it, keep coming back** (step 223). Ethan: "think of more
+ideas and build them all too." Nine, all built (docs/IDEAS.md, round three):
+
+- **What has to happen.** Under each live leg of a saved ticket on the Live
+  tab: "Needs 79 more" for an over, "Can give up 78 more" for an under, or
+  "Cleared"; Ask reads the same when you attach your bets.
+- **Streaks.** "5 straight" on a prop row when he has cleared tonight's
+  number in each of his last four or more games.
+- **Our parlay, in your slip.** "Load into my slip" on each of our parlay
+  tickets: the legs land in your slip, priced, ready to send or copy.
+- **The line's path.** Ask's price card draws the line since it opened.
+- **Ask about your teams.** The paperclip offers "My teams and players" (the
+  teams you follow, the players you watch): "What's on for my teams tonight?"
+- **Your stake, filled in.** Track it in Ask starts at your unit times our
+  stake when you have set a bankroll.
+- **What brings you here?** One tap on the sign-up page (Live games, our
+  picks, fantasy, tracking bets) and a new account lands there.
+- **Keys on a computer.** `/` search, `a` Ask, `1` to `7` the leagues, `?`
+  the list.
+- **Your week, by push.** Monday from nine in the morning (Eastern), a phone
+  that gets your bet alerts hears last week's record, what it made or lost and
+  the best win, once.
+
+Nothing to set: the weekly note rides the push loop the box already runs.
+Read-only check, any time. It prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/ask.js | grep -c 'function askFollows('
+```
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh FO 2>&1 | tee /tmp/fo.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

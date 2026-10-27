@@ -918,3 +918,9 @@ a.pw-door-go { text-decoration: none; }
 @media (max-width: 420px) {
   .pw-top:has(.pw-join) .pw-brand-words { display: none; }
 }
+
+/* What brings you here? on the sign-up form (account.js suWhyHTML). */
+.acct-why-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.acct-why-b { padding: 7px 14px; border-radius: 999px; border: 0; background: var(--fill-tone); color: var(--text-dim);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.acct-why-b.on { background: color-mix(in oklab, var(--brand) 18%, transparent); color: var(--text); }

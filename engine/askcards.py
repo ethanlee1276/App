@@ -115,7 +115,7 @@ def step_label(name: str, args) -> str:
 #: What a card carries of tonight's bet so the page can act on it — add it to
 #: the slip, track it in My Bets, watch the player. The board row's own keys,
 #: so the slip's leg is the leg the board would have added.
-BET_KEYS = ("market", "market_label", "team", "opponent", "matchup", "game_date")
+BET_KEYS = ("market", "market_label", "team", "opponent", "matchup", "game_date", "stake_units")
 
 
 def _bet(sport, player, row: dict, book=None, odds=None) -> dict | None:
@@ -215,6 +215,12 @@ def prices_card(out: dict) -> dict | None:
     mv = p.get("line_move") or {}
     if mv.get("open") is not None and mv.get("current") is not None:
         card["move"] = {"open": mv["open"], "current": mv["current"]}
+    # THE LINE'S PATH since it opened (docs/IDEAS.md round three), drawn as a
+    # small chart under the books: the points line_shop already returns.
+    tape = [{"line": t["line"], "minutes_ago": t.get("minutes_ago")} for t in p.get("line_since_open") or []
+            if isinstance(t, dict) and isinstance(t.get("line"), (int, float))]
+    if len(tape) > 1:
+        card["tape"] = tape
     # The bet at the best price on our side, where one was found; else ours.
     bet = _bet(p.get("league"), p.get("player"), p, book=best.get("book") if best.get("odds") else p.get("our_book"),
                odds=best.get("odds") or p.get("our_price"))

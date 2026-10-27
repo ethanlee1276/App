@@ -10855,6 +10855,9 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 .hit-chip.up b { color: var(--good); }
 .hit-chip.down { background: color-mix(in oklab, var(--bad) 13%, transparent); }
 .hit-chip.down b { color: var(--bad); }
+.hit-chip.hot { color: var(--warn); background: color-mix(in oklab, var(--warn) 15%, transparent); }
+.hit-chip.hot b { color: var(--warn); }
+.hit-chip .ic { align-self: center; }
 
 /* A WIN, CELEBRATED (app.js winParty): confetti in the palette, thrown up from
    the lower middle of the screen and falling away, gone in two seconds. */

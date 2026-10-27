@@ -134,7 +134,8 @@ def test_the_unpaid_landing_is_the_free_tier_unless_a_plan_was_chosen():
     body = _decomment(_body(_src(), "acctLandAfterAuth"))
     assert 'switchView("live", true)' in body, "an unpaid sign-in lands on the plans again"
     # …or on the page the account wall held back for it (app.js takeWallBack).
-    assert '_pendingPlanPeek() ? "#paywall" : back || "#live"' in body
+    # …and, after that, what the sign-up form said brought them (whyLand, docs/IDEAS.md round three).
+    assert '_pendingPlanPeek() ? "#paywall" : back || whyLand(1) || "#live"' in body
     assert '_switchViewNow("checkout"' in body, "a chosen plan is no longer carried on"
 
 

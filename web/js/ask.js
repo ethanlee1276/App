@@ -18,6 +18,20 @@ const ASK_SUGGEST_PICK = ["Why this pick?", "How has this player done lately?", 
 const ASK_SUGGEST_BETS = ["How are my bets doing?", "Which of my bets is in the most trouble?",
                           "Should I hedge any of them?"];
 
+/* YOUR TEAMS AND PLAYERS, WHEN YOU ATTACH THEM (docs/IDEAS.md round three):
+   the teams you follow (Settings) and the players you watch (Alerts) go with
+   the question, this visit only, and the answer is about them first
+   (engine/askbot follows_facts: their games tonight and our picks on them). */
+const ASK_SUGGEST_FOLLOWS = ["What’s on for my teams tonight?", "Any picks on my players tonight?",
+                             "Which of my teams has the best bet tonight?"];
+function askFollows() {
+  const teams = (typeof settings === "function" ? settings().teams : []) || [];
+  const watches = ((typeof _alertsCache !== "undefined" && _alertsCache) || {}).watches || [];
+  const players = watches.filter((w) => w && w.kind === "player" && w.value).map((w) => String(w.value));
+  return { teams: teams.slice(0, 24), players: players.slice(0, 24) };
+}
+const askFollowCount = () => { const f = askFollows(); return f.teams.length + f.players.length; };
+
 /* YOUR OPEN BETS, WHEN YOU ATTACH THEM (2026-10-27). FanDuel's AceAI knows
    your bets because it is the book; this knows them across every book, and
    only when you say so: the paperclip's "My open bets" attaches the pending
@@ -205,6 +219,7 @@ const ASK_CARD = {
       ${(c.books || []).map((b) => `<div class="ask-pr${b.book === c.best ? " best" : ""}"><b>${escapeHtml(b.book)}</b>
         <span>${b.line != null ? escapeHtml(String(b.line)) : ""}</span><em>${side ? odds(b[side])
           : `${odds(b.over_odds)} / ${odds(b.under_odds)}`}</em>${b.book === c.best ? `<small>best</small>` : ""}</div>`).join("")}
+      ${askTapeHTML(c.tape)}
       ${c.move ? `<div class="ask-card-f">Line ${escapeHtml(String(c.move.open))} at open, ${
         escapeHtml(String(c.move.current))} now</div>` : ""}
       ${tail}
@@ -234,6 +249,21 @@ const ASK_CARD = {
     </div>`;
   },
 };
+/* THE LINE'S PATH (docs/IDEAS.md round three): the line since it opened as
+   a step chart, the open on the left and now on the right, each change a
+   step, the latest number marked. */
+function askTapeHTML(tape) {
+  const pts = (tape || []).map((p) => Number(p.line)).filter(Number.isFinite);
+  if (pts.length < 2) return "";
+  const W = 260, H = 46, lo = Math.min(...pts), hi = Math.max(...pts), span = hi - lo || 1;
+  const x = (i) => Math.round((i / (pts.length - 1)) * (W - 8)) + 4;
+  const y = (v) => (hi === lo ? H / 2 : Math.round(H - 6 - ((v - lo) / span) * (H - 12)));
+  const d = pts.map((v, i) => (i ? `H${x(i)}V${y(v)}` : `M${x(0)} ${y(v)}`)).join("");
+  const last = pts[pts.length - 1];
+  return `<div class="ask-tape"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeAttr(
+    `The line since it opened: ${pts.join(", ")}`)}"><path d="${d}"/><circle cx="${x(pts.length - 1)}" cy="${y(last)}" r="3.5"/></svg>
+    <span><em>${escapeHtml(String(pts[0]))}</em><b>${escapeHtml(String(last))}</b></span></div>`;
+}
 function askCardsHTML(t) {
   const cards = (t.cards || []).filter((c) => c && ASK_CARD[c.kind]);
   // One card carries the buttons: the last one about a bet (the price card,
@@ -293,6 +323,12 @@ function askToday() {
 }
 /* The My Bets entry. A trackable bet is a ticket of one leg the box can
    follow; any other is the hand-logged kind, graded by its owner. */
+/* YOUR STAKE, FILLED IN (docs/IDEAS.md round three): your unit from the
+   Bankroll page times our stake for the pick, when a bankroll is set. */
+function askStakeGuess(b) {
+  const u = typeof unitDollars === "function" ? unitDollars() : 0;
+  return u > 0 ? String(Math.max(1, Math.round(u * (Number(b.stake_units) || 1)))) : "";
+}
 function askBetEntry(b, stake, odds, book) {
   const e = { id: Date.now() + "" + Math.floor(Math.random() * 1e4), book: book || "Other",
               sport: String(b.sport || "").toUpperCase(), date: String(b.game_date || "").slice(0, 10) || askToday(),
@@ -366,7 +402,7 @@ function askActsHTML(b, kind = "") {
           phone if alerts are on.</p>
       </form>` : ""}
       <form class="ask-track ask-save" hidden>
-        <label>Stake $<input inputmode="decimal" data-ask-stake placeholder="10" aria-label="Stake in dollars"></label>
+        <label>Stake $<input inputmode="decimal" data-ask-stake placeholder="10" value="${askStakeGuess(b)}" aria-label="Stake in dollars"></label>
         <label>Price <input inputmode="text" data-ask-odds value="${escapeAttr(askOdds(b.odds))}" aria-label="American price"></label>
         <button type="submit" class="ask-act primary">Save to My Bets</button>
         <p class="ask-track-note">${b.trackable
@@ -668,8 +704,11 @@ function askAttachable() {
 function askAttachHTML() {
   const picks = askAttachable();
   const bets = askOpenBets().length;
+  const follows = askFollowCount();
   return `${bets ? `<button type="button" class="ask-attach-row ask-attach-bets" data-ask-bets><span>My open bets
-      <small>How they stand, from the box score</small></span><b>${bets}</b></button>` : ""}
+      <small>How they stand, from the box score</small></span><b>${bets}</b></button>` : ""}${
+    follows ? `<button type="button" class="ask-attach-row ask-attach-bets" data-ask-follows><span>My teams and players
+      <small>The teams you follow and the players you watch</small></span><b>${follows}</b></button>` : ""}
     <label class="ask-attach-row"><span>Grade a parlay screenshot</span><b>Upload</b>
     <input type="file" accept="image/*" class="ask-sr" data-ask-slip></label>
     <div class="ask-attach-h">Ask about one of tonight’s picks</div>${picks.length
@@ -717,7 +756,7 @@ function renderAsk() {
   if (!host) return;
   const a = askState();
   const empty = !a.turns.length;
-  const sug = a.bets ? ASK_SUGGEST_BETS : a.pick ? ASK_SUGGEST_PICK : askSuggest();
+  const sug = a.bets ? ASK_SUGGEST_BETS : a.follows ? ASK_SUGGEST_FOLLOWS : a.pick ? ASK_SUGGEST_PICK : askSuggest();
   const title = `<span class="ask-pill">AI</span>`;
   const mood = a.busy ? "thinking" : _askTyping ? "talking" : "idle";
   // The newest answer's robot is the one that reacts; older ones hold still.
@@ -751,6 +790,8 @@ function renderAsk() {
       ${a.bets ? `<div class="ask-focus"><span>About <b>your ${askOpenBets().length} open bet${
         askOpenBets().length === 1 ? "" : "s"}</b></span>
         <button type="button" class="ask-x" data-ask-clear-bets aria-label="Stop asking about your bets">&#215;</button></div>` : ""}
+      ${a.follows ? `<div class="ask-focus"><span>About <b>your teams and players</b></span>
+        <button type="button" class="ask-x" data-ask-clear-follows aria-label="Stop asking about your teams">&#215;</button></div>` : ""}
       <div class="ask-attach" id="ask-attach" role="dialog" aria-label="Attach a pick" hidden></div>
       ${askLocked() ? askLockedHTML() : `<form class="ask-form" id="ask-form">
         <button type="button" class="ask-clip" data-ask-clip aria-label="Attach a pick or a parlay screenshot"
@@ -803,7 +844,12 @@ function renderAsk() {
       }));
       sheet.querySelectorAll("[data-ask-bets]").forEach((b) => b.addEventListener("click", () => {
         a.bets = true;                 // this visit only: never written to storage
-        a.pick = ""; a.pickLabel = "";
+        a.follows = false; a.pick = ""; a.pickLabel = "";
+        askSave(); renderAsk();
+      }));
+      sheet.querySelectorAll("[data-ask-follows]").forEach((b) => b.addEventListener("click", () => {
+        a.follows = true;              // this visit only, like the bets
+        a.bets = false; a.pick = ""; a.pickLabel = "";
         askSave(); renderAsk();
       }));
     }
@@ -824,6 +870,9 @@ function renderAsk() {
   }));
   host.querySelectorAll("[data-ask-clear-bets]").forEach((b) => b.addEventListener("click", () => {
     a.bets = false; renderAsk();
+  }));
+  host.querySelectorAll("[data-ask-clear-follows]").forEach((b) => b.addEventListener("click", () => {
+    a.follows = false; renderAsk();
   }));
   // A door elsewhere (a player's card) sent a question: it waits in the box,
   // ready to send or to change.
@@ -874,7 +923,7 @@ async function askSend(text) {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ board: boardNameFor(meta), question, history, pick: a.pick, stream: ASK_STREAMS,
-                             bets: a.bets ? askOpenBets() : undefined }),
+                             bets: a.bets ? askOpenBets() : undefined, follows: a.follows ? askFollows() : undefined }),
     });
     let body = {};
     if (res.ok && /event-stream/.test(res.headers.get("Content-Type") || "")) {

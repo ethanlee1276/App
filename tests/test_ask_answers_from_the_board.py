@@ -383,7 +383,7 @@ def test_the_endpoint_is_gated_checked_and_honest_about_being_off():
     body = SERVER[SERVER.index("    def _ask(self, body):"):SERVER.index("    def _receipts_csv(self):")]
     assert body.index('self._rate_limited(RATE_ASK_PER_MIN, "ask")') < body.index("self._entitled(conn, who)") \
         < body.index("AB.configured()") < body.index("AB.ask(payload, question, history, pick,")
-    assert 'board_name=board,' in body and 'data_dir=WEB / "data", boards=boards, mine=mine)' in body, \
+    assert 'board_name=board,' in body and 'data_dir=WEB / "data", boards=boards, mine=mine, follows=follows)' in body, \
         "the cache key, our data files, every league's board and the reader's attached bets"
     assert '"sources", "cached")}' in body
     assert "return self._send(401 if not who else 402," in body and '"configured":false' in body
@@ -412,7 +412,7 @@ def test_the_page_shows_where_each_answer_came_from():
     assert "sources: body.sources || []" in send
     assert ".filter((t) => !t.error).slice(-6)" in send
     assert 'const ASK_SUGGEST_PICK = ["Why this pick?", "How has this player done lately?",' in APP
-    assert "const sug = a.bets ? ASK_SUGGEST_BETS : a.pick ? ASK_SUGGEST_PICK : askSuggest();" in APP
+    assert "const sug = a.bets ? ASK_SUGGEST_BETS : a.follows ? ASK_SUGGEST_FOLLOWS : a.pick ? ASK_SUGGEST_PICK : askSuggest();" in APP
     gi = (ROOT / ".gitignore").read_text()
     for f in ("data/ask_cache.json", "data/ask_usage.json", "data/explain_cache.json"):
         assert f in gi, f

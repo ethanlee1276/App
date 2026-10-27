@@ -126,3 +126,12 @@ body.ask-open:has(#qb-slip:not([hidden])) .ask-log { padding-bottom: 64px; }
 /* YOUR OPEN BETS in the paperclip's sheet (js/ask.js askAttachHTML). */
 .ask-attach-bets small { display: block; margin-top: 2px; font-size: var(--fs-xs); font-weight: 500;
   color: var(--text-mute); }
+
+/* The line's path on the price card (ask.js askTapeHTML). */
+.ask-tape { display: grid; gap: 2px; margin-top: 10px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--fill-tone); }
+.ask-tape svg { width: 100%; height: 46px; display: block; overflow: visible; }
+.ask-tape path { fill: none; stroke: var(--brand); stroke-width: 2; stroke-linejoin: round; }
+.ask-tape circle { fill: var(--brand); }
+.ask-tape span { display: flex; justify-content: space-between; font-size: var(--fs-2xs); color: var(--text-mute); }
+.ask-tape b { color: var(--text); }
+.ask-tape em { font-style: normal; }

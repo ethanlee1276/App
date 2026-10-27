@@ -9164,7 +9164,13 @@ function hitChipsHTML(r) {
       escapeAttr(`${side} ${line} in ${n} of ${label === "All" ? `all ${xs.length} stored games` : `his last ${xs.length}`}`)}"><b>${
       n}/${xs.length}</b> ${label}</span>`;
   };
+  // A STREAK (docs/IDEAS.md round three): tonight's number cleared in each
+  // of his last four or more games, newest first, said as a run.
+  let run = 0;
+  while (run < vals.length && (under ? vals[run] < line : vals[run] > line)) run++;
   return `<span class="hit-chips" aria-label="${escapeAttr(`How often he went ${side.toLowerCase()} ${line}`)}"><em>${side}</em>${
+    run >= 4 ? `<span class="hit-chip hot" title="${escapeAttr(`${side} ${line} in each of his last ${run}`)}">${
+      icon("hot", 12)}<b>${run}</b> straight</span>` : ""}${
     chip("L5", vals.slice(0, 5))}${vals.length >= 10 ? chip("L10", vals.slice(0, 10)) : ""}${
     vals.length > 10 ? chip("All", vals) : ""}</span>`;
 }
@@ -11513,6 +11519,7 @@ function parlayTicket(t, live) {
           : t.grade === "marginal" ? "clears at a good price · check yours"
           : "does not clear"}</span>
         <span class="chip stake">graded · 0.00u</span>
+        <button class="btn primary" data-parlay-slip="${escapeAttr(String(t.rank))}">Load into my slip</button>
         <button class="btn ghost qb-share" data-parlay-card="${escapeAttr(String(t.rank))}"
           >Share card</button>
       </div>
@@ -19304,6 +19311,13 @@ window.acctAuth = async function (btn, mode) {
    that keeps the wall from being hash-hopped is installed at boot and
    only when the wall is up. Rendering the plans without it would leave a
    wall any typed URL could walk around. */
+/* WHAT BROUGHT THEM HERE (account.js suWhyHTML), read once: a free account
+   is never landed on the picks it cannot open. */
+function whyLand(free) {
+  let w = "";
+  try { w = localStorage.getItem("qb_why") || ""; localStorage.removeItem("qb_why"); } catch (e) {}
+  return { live: "#live", picks: free ? "" : "#likely", fantasy: "#fantasy", bets: "#mybets" }[w] || "";
+}
 async function acctLandAfterAuth(say = () => {}) {
   const was = document.body.classList.contains("walled");
   // Nulled so that a failed request is distinguishable from a cached
@@ -19326,7 +19340,7 @@ async function acctLandAfterAuth(say = () => {}) {
     // An account without a plan lands in the free tier (Live), not on the
     // plans it did not ask for; one that chose a plan first is carried on
     // to checkout below, on the reload.
-    location.hash = walled ? (_pendingPlanPeek() ? "#paywall" : back || "#live") : back || dcFirstStop();
+    location.hash = walled ? (_pendingPlanPeek() ? "#paywall" : back || whyLand(1) || "#live") : back || whyLand() || dcFirstStop();
     return location.reload();
   }
 
@@ -25194,6 +25208,20 @@ document.addEventListener("click", (e) => {
   const z = (state.data || {}).parlays || {};
   const t = (z.tickets || []).find((x) => String(x.rank) === b.dataset.parlayCard);
   if (t) shareParlay(t, b);
+});
+
+/* OUR PARLAY, IN YOUR SLIP (docs/IDEAS.md round three): the ticket's legs
+   replace what the slip held, each found on the board so it carries its
+   price and book, and the slip opens on them. */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-parlay-slip]");
+  const t = b && (((state.data || {}).parlays || {}).tickets || []).find((x) => String(x.rank) === b.dataset.parlaySlip);
+  if (!t) return;
+  _slip = { sport: "", date: "", legs: [] };
+  const n = t.legs.filter((l) => slipToggle(findSlipRow(l.player ? propId(l) : gameBetId(l)) || l)).length;
+  _slipOpen = n > 0;
+  slipRender();
+  tfToast(`${n} of ${t.legs.length} legs are in your slip.`);
 });
 
 /* The door from a pick to the man. Ethan's entity-pages list: "Every
@@ -31862,6 +31890,16 @@ function buzzOnSettle(rows) {
     if (barBox && barBox.offsetParent !== null) { barBox.focus(); return; }
     goSearch();
     setTimeout(() => { const box = document.getElementById("player-search"); if (box) box.focus(); }, 60);
+  });
+  // THE REST OF THE KEYS (docs/IDEAS.md round three), on a keyboard: a for
+  // Ask, 1 to 7 the leagues in the row, ? the list.
+  document.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (e.metaKey || e.ctrlKey || e.altKey || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
+    if (e.key === "a") return switchView("ask");
+    if (e.key === "?") return tfToast("Keys: / search · a Ask · 1 to 7 the leagues");
+    const b = /^[1-7]$/.test(e.key) && document.querySelectorAll(".sportbar-in .sport-btn")[e.key - 1];
+    if (b) b.click();
   });
   const tbSearch = document.getElementById("tb-search");
   if (tbSearch) tbSearch.addEventListener("click", () => { moreSheetOpen(false); goSearch(); });

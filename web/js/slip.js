@@ -350,6 +350,7 @@
       if (Number.isFinite(line) && line > 0.5) {
         prog = `<div class="pgr-prog" aria-hidden="true"><i style="width:${Math.min(100, Math.round(100 * g.current / line))}%"></i></div>`;
       }
+      if (g.state === "live") bits.push(esc(needWords(l, g.current, line)));
     } else if (l.market === "spread" && g.cover_by != null) {
       bits.push(g.cover_by > 0 ? `covering by ${esc(num(g.cover_by))}` : g.cover_by < 0 ? `short by ${esc(num(-g.cover_by))}` : "right on the number");
     } else if (l.market === "moneyline" && g.win_prob != null && g.state === "live") {
@@ -357,6 +358,22 @@
     }
     if (g.note) bits.push(esc(g.note));
     return `<div class="pgr-live">${tag} ${bits.join(" · ")}</div>${prog}${g.state === "live" ? chanceHTML(g.chance) : ""}`;
+  }
+
+  /* WHAT HAS TO HAPPEN (2026-10-27, docs/IDEAS.md round three): the leg in
+     one plain line while it is live — how many more an over needs, how many
+     an under can still give up, or that it is already decided. A whole-
+     number line pushes at the number, so an over needs one past it. */
+  function needWords(l, current, line) {
+    const now = Number(current);
+    if (!Number.isFinite(now) || !Number.isFinite(line)) return "";
+    const under = l.side === "under";
+    if (line === 0.5) return now >= 1 ? (under ? "Lost: he has one" : "Done: he has one") : (under ? "Holding: none yet" : "Needs one");
+    const over = Math.floor(line) + 1;               // the first number that wins an over
+    const top = Math.ceil(line) - 1;                 // the last number that wins an under
+    if (!under) return now >= over ? "Cleared" : `Needs ${num(over - now)} more`;
+    if (now === line) return "On the number: a push now, one more loses";
+    return now > top ? "Past the number" : `Can give up ${num(top - now)} more`;
   }
 
   /* A prop in play, as a race between what he has banked and the game

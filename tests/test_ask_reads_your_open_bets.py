@@ -145,8 +145,8 @@ def test_the_server_grades_each_ticket_before_the_model_is_called():
     body = SERVER.split("    def _ask(self, body):")[1].split("\n    def ")[0]
     assert 'mine = AB.clean_bets(body.get("bets")) if body.get("bets") else []' in body
     assert body.index("mine = self._bets_standing(AB, mine, boards)") < body.index('if body.get("stream") is True:')
-    assert "boards=boards, mine=mine)" in body
-    assert ("on_step=lambda label: event(\"step\", {\"label\": label}), mine=mine)"
+    assert "boards=boards, mine=mine, follows=follows)" in body
+    assert ("on_step=lambda label: event(\"step\", {\"label\": label}), mine=mine,"
             in SERVER.split("    def _ask_stream(")[1].split("\n    def ")[0])
     std = SERVER.split("    def _bets_standing(")[1].split("\n    def ")[0]
     assert "SG.grade(slip, graded, live=live, brief=True)" in std, "the Live tab's own brief grade"
@@ -177,7 +177,8 @@ def test_the_page_attaches_only_pending_bets_and_only_while_attached():
     got = json.loads(out.stdout)
     assert [b["desc"] for b in got] == ["new", "old"], "pending only, newest first"
     assert got[0]["legs"] == [LEG] and "legs" not in got[1] and "id" not in got[0], "what a bet says, no more"
-    assert 'bets: a.bets ? askOpenBets() : undefined }' in ASK_JS, "sent only while attached"
+    assert 'bets: a.bets ? askOpenBets() : undefined, follows: a.follows ? askFollows() : undefined }' in ASK_JS, \
+        "sent only while attached"
     assert "a.bets = true;                 // this visit only: never written to storage" in ASK_JS
     save = APP[APP.index("function askSave()"):]
     assert "bets" not in save[:save.index("\n}\n")], "never written to storage"
@@ -189,7 +190,7 @@ def test_the_sheet_offers_them_and_the_reader_can_take_them_off():
     assert 'data-ask-bets><span>My open bets' in sheet and "askOpenBets().length" in sheet
     assert 'data-ask-clear-bets aria-label="Stop asking about your bets"' in ASK_JS
     assert 'const ASK_SUGGEST_BETS = ["How are my bets doing?", "Which of my bets is in the most trouble?",' in ASK_JS
-    assert "const sug = a.bets ? ASK_SUGGEST_BETS : a.pick ? ASK_SUGGEST_PICK : askSuggest();" in ASK_JS
+    assert "const sug = a.bets ? ASK_SUGGEST_BETS : a.follows ? ASK_SUGGEST_FOLLOWS : a.pick ? ASK_SUGGEST_PICK : askSuggest();" in ASK_JS
 
 
 def test_the_privacy_page_names_who_answers_and_what_goes_with_it():
