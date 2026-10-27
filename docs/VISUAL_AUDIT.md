@@ -61,3 +61,34 @@ the settings list, a screen and back, Membership, the sign-in screen and
 the Alerts switches), with the tests that pinned the old markup moved to
 the new: `test_account_settings`, `test_fantasy_links`, `test_tour`,
 `test_your_games_in_your_calendar`, `test_forgot_password`.
+
+# The Fantasy room — 2026-10-27
+
+Ethan: *"go through the visuals of the fantasy room as well. Like, look at
+how other fantasy apps and fantasy rooms and shit like that looks visually
+... It doesn't feel like a professionally built app."*
+
+How it was checked: every Fantasy tab, top to bottom, at a phone width (390)
+and a desktop width (1280), on the live site's own public files, then again
+after each change. The apps it was held against: ESPN's 2025 rebuild (a
+personal home first, a matchup view with the score pinned, live projections,
+action items), Yahoo's (more on screen at once), Sleeper (position colours,
+the matchup head-to-head), FantasyPros (ranges, tiers, start/sit).
+
+| # | Finding | Fix |
+|---|---|---|
+| F1 | The room opened on **onboarding and navigation, no content**: the Fantasy 101 card open on every visit (the whole first screen on a phone), four tiles of numbers nobody acts on (the season's year, a count of usage rows, of trade flags, of game scripts), and ten described cards before the first player | 101 opens on the first visit only, then as the reader left it, its steps as numbered tiles and its glossary folded; the four tiles became one line: the week, its games, who is on a bye; the rooms became app-style tiles with an icon (all eleven on one phone screen) |
+| F2 | **Your own league was the last room**, under the camp report, the offseason and the draft kit | "My team" is a room of its own, first, and opens first when a league is linked |
+| F3 | **Every card wore a brown wash** top to bottom: the gold glow's height was the card's, so a 4,000px list read muddy | the glow is a fixed 160px at the top of every card, site-wide; long lists are clean below it |
+| F4 | **Player rows were text**: "8 in 10 weeks 8.3–38.2" and "PPR this week" in typewriter type on every row, no position colours | one player row for the room: face, name and chips, a colour badge for the position (QB red, RB green, WR blue, TE orange, K purple, D/ST grey), the team's mark and the kickoff in the reader's time zone, the floor-to-ceiling range as a bar on one scale with his number marked, the number large on the right; a wide screen gives the bar its own column |
+| F5 | **Buy low / Sell high was one huge card a player** (GAP, ACTUAL, xFP boxes and the same sentence on every card): five players a phone screen | a row a player with a bar (scored against expected), the gap on the right, the sentence said once above the list: twelve players a screen (8,033 → 2,724px) |
+| F6 | **Waivers rows broke on a desktop** (the number fell to a line of its own) and repeated their note on every row | the same row, with a share bar from where his share was to where it is |
+| F7 | **The usage table broke on a phone**: the fantasy sheet re-showed the bar the phone rule hid, so every trend chip fell to its own line, and names ran to an ellipsis | the bar hidden again after the rule it must beat; the name over a line with the position badge |
+| F8 | The head-to-head card was **five paragraphs** between the score and the lineup | the odds as a bar under the number; how they are figured under a fold (every word kept) |
+| F9 | The league desk sat **under two long lists** (the roster's usage, the waiver watch) | both folded under their counts, so the live score, the to-do list and the lineup are a screen from the top; the lineup's slots wear their player's position colour |
+| F10 | "How these numbers are built" stood **between the reader and the list** on This week, and the byes were said twice | folded under the list; the byes on the room's first line |
+| F11 | Around the league listed **every rookie, a hundred rows** | twelve, the rest under a fold |
+
+Held by the tests that already pinned these pieces (moved to the new
+markup), plus `test_fantasy_101` (first visit open, then as left) and
+`test_fantasy_tonight` (the night's rows wear the same row and badges).

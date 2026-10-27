@@ -97,9 +97,9 @@ async function renderFantasy() {
   };
   const usageRow = (u) => `
     <div class="ff-row">
-      <span class="ff-who" data-dossier="${escapeAttr(u.player)}">${playerAvatar(u.player, u.team, { map: nflMap(), headshot: u.headshot })}
+      <span class="ff-who" data-dossier="${escapeAttr(u.player)}">${playerAvatar(u.player, u.team, { size: 36, map: nflMap(), headshot: u.headshot })}
         <span class="ff-name"><strong>${escapeHtml(u.player)}</strong>
-          <span class="ff-pos">${escapeHtml(u.position)} · ${nflName(u.team)}${
+          <span class="ff-pos">${ffPos(u.position)} ${nflName(u.team)}${
             u.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(u.moved_from)}</b>` : ""}${
             u.roster_flag ? ` <b style="color:var(--warn)">(${escapeHtml(u.roster_flag)})</b>` : ""} · ${escapeHtml(u.metric)}</span></span></span>
       ${shareBar(u)}
@@ -127,32 +127,17 @@ async function renderFantasy() {
   (off.coach_changes || []).forEach((c) => { coachChanged[c.team] = c.now; });
 
   const bs = d.buy_sell || {};
-  const tradeCard = (r, kind) => {
-    const buy = kind === "buy";
-    return `<article class="card" style="--grade-color:${buy ? "var(--good)" : "var(--warn)"}">
-      <div class="card-head">
-        <div class="card-id" data-dossier="${escapeAttr(r.player)}">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
-          <div><div class="player">${escapeHtml(r.player)}</div>
-            <div class="subtitle">${escapeHtml(r.position)} · ${nflName(r.team)}${
-              r.moved_from ? ` <b style="color:var(--warn)">← traded from ${nflName(r.moved_from)}</b>` : ""}${
-              r.roster_flag ? ` <b style="color:var(--warn)">(${escapeHtml(r.roster_flag)})</b>` : ""} ·
-              ${r.targets_pg} tgt/g · ${r.carries_pg} car/g</div></div>
-        </div>
-        <span class="pm-status" style="color:${buy ? "var(--good)" : "var(--warn)"}">${buy ? "BUY LOW" : "SELL HIGH"}</span>
-      </div>
-      <div class="metrics">
-        <div class="metric"><div class="k">Actual</div><div class="v">${r.actual_ppg}</div></div>
-        <div class="metric"><div class="k">${r.basis === "xfp" ? "xFP says" : "Volume says"}</div><div class="v">${r.expected_ppg}</div></div>
-        <div class="metric primary"><div class="k">Gap</div><div class="v ${r.gap < 0 ? "pos" : "neg"}">${r.gap > 0 ? "+" : ""}${r.gap}</div></div>
-      </div>
-      <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
-        ${r.basis === "xfp"
-          ? (buy ? "Expected points say the production is coming — his chances are worth more than he has scored from them so far."
-                 : "Scoring above what his situations support — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains.")
-          : (buy ? "Usage says the production is coming — the volume is already there."
-                 : "Producing above what the opportunity supports — beyond the ~" + (bs.band || 1.5) + " PPG a good player sustains.")}</div>
-    </article>`;
-  };
+  const tradeTop = Math.max(10, ...[...(bs.buy_low || []), ...(bs.sell_high || [])]
+    .map((r) => Math.max(Number(r.actual_ppg) || 0, Number(r.expected_ppg) || 0))) * 1.08;
+  const tradeCard = (r, kind) => ffRow({
+    player: r.player, team: r.team, position: r.position, headshot: r.headshot,
+    chips: `${r.moved_from ? `<span class="hd-chip warn">traded from ${escapeHtml(nflName(r.moved_from))}</span>` : ""}${
+      r.roster_flag ? `<span class="hd-chip warn">${escapeHtml(r.roster_flag)}</span>` : ""}`,
+    meta: `${nflName(r.team)} · ${r.targets_pg} tgt/g · ${r.carries_pg} car/g`,
+    bar: ffGapBar(r, tradeTop),
+    num: `${r.gap > 0 ? "+" : ""}${r.gap}`, unit: kind === "buy" ? "pts/g owed" : "pts/g over",
+    tone: kind === "buy" ? "pos" : "neg" });
+
 
   /* Rebuilt 2026-08-18 — Ethan, screenshot in hand: "organize this game
      script page better and also include team logos next to the team
@@ -299,24 +284,11 @@ async function renderFantasy() {
       ${gsDetail(s)}
     </article>`).join("");
 
-  const bsCount = (bs.buy_low || []).length + (bs.sell_high || []).length;
   // Four rooms, not one 11-screen scroll. Measured in Chromium: this page
   // was 9,906px with ten section titles stacked in a single column, and
   // the usage table — the thing the page is FOR — sat below camp reports,
   // the waiver pulse, the offseason tracker and the draft kit.
-  const _ffLead = `${ff101HTML()}
-    <div class="stats">
-      <div class="tile"><div class="k">Season</div><div class="v">${d.season}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${d.season < new Date().getFullYear()
-          ? "last completed — live weekly in Sept" : "updating weekly"}</div></div>
-      <div class="tile"><div class="k">Usage movers</div><div class="v">${(d.usage || []).length}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">biggest role changes tracked</div></div>
-      <div class="tile"><div class="k">Trade flags</div><div class="v">${bsCount}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">outside the sustainable band</div></div>
-      <div class="tile"><div class="k">Game scripts</div><div class="v">${(d.scripts || []).length}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">games with posted lines</div></div>
-    </div>
-`;
+  const _ffLead = `${ff101HTML()}${ffStripHTML(d)}`;
   const _ffUsage = `    <div class="ls-note">Shares are of TEAM volume: targets for WR/TE/QB, carries for RB.
       The delta column is the money — a riser at 42% beats a flat 60%.</div>
     <div class="section-title">Usage movers
@@ -335,11 +307,15 @@ async function renderFantasy() {
 `;
   const _ffTrade = `    <div class="section-title">Buy low
       <span class="sub">— volume-expected points say the production is coming</span></div>
-    <div class="cards wide">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
+    <p class="ffr-note">Each bar: what he has scored a game (the fill) against what his chances are worth
+      (the mark): expected points (xFP) off every play where the play-by-play is in, his volume where it
+      is not. A gap beyond ~${bs.band || 1.5} points a game is flagged; inside that band a good player
+      sustains it.</p>
+    <div class="card ffr-list">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
       `${panelEmpty("Nobody outside the sustainable band right now.")}`}</div>
     <div class="section-title">Sell high
       <span class="sub">— outrunning their opportunity; regression risk</span></div>
-    <div class="cards wide">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
+    <div class="card ffr-list">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
       `${panelEmpty("Nobody outside the sustainable band right now.")}`}</div>
 `;
   const _ffScripts = `    <div class="section-title">Game scripts
@@ -368,36 +344,50 @@ async function renderFantasy() {
         built from the ${staleU.have} season</b> — the newest one ingested here.
         The ${staleU.expected} season’s usage has not been loaded yet, so
         treat every tier and projection as historical until it is.</p></div>` : "";
+  /* WHICH ROOM OPENS: your own league's when one is linked, as every
+     fantasy app opens on your team; this week's projections otherwise. A
+     room the reader picked this visit stays picked. */
+  if (!_subtab.fantasy) _subtab.fantasy = ffLinked() ? "mine" : "week";
   host.innerHTML = _ffLead + staleBanner + subtabbedHTML("fantasy", [
-    /* FIRST, because in season it is the question: who to start this
-       week, and why. Ethan, 2026-10-22, on the board's offence, defence
-       and game-script data: "make sure we wrap that into it how it
-       should be." */
+    /* MY TEAM (2026-10-27, the visual pass; Ethan: "it doesn't feel like a
+       professionally built app"). The reader's own league — the live
+       matchup, the to-do list, the lineup, the season — was the LAST room,
+       under the camp report, the offseason moves and the draft kit. No
+       fantasy app keeps your team there: ESPN, Yahoo and Sleeper all open
+       on it. It is a room of its own now, first in the row. */
+    ["mine", "My team", "your lineup, matchup and season",
+     acctStripHTML() + ffLinkStripHTML()
+     + `<div id="sleeper-zone"></div>`
+     + `<div id="league-desk"></div>`
+     + `<div id="espn-desk"></div>`],
+    /* In season it is the question: who to start this week, and why.
+       Ethan, 2026-10-22, on the board's offence, defence and game-script
+       data: "make sure we wrap that into it how it should be." */
     ["week", "This week",
-     "every player’s week in fantasy points: the matchup, the script, injuries and why",
+     "who to start, and why",
      typeof QBWeek !== "undefined" ? `<div id="ff-week">${QBWeek.room(_ffWeek)}</div>` : ""],
     /* Tonight's basketball and hockey in fantasy points (engine/
        fantasy_daily, 2026-10-27): drawn only while a slate is tonight's,
        so the tab is not there on a night with none. */
     ["tonight", typeof QBWeek !== "undefined" ? QBWeek.dailyName(_ffNight) : "Tonight",
-     "every player on tonight’s basketball and hockey boards, in daily-fantasy points",
+     "tonight’s slate in fantasy points",
      typeof QBWeek !== "undefined" ? QBWeek.daily(_ffNight) : ""],
-    ["usage", "Usage", "who is getting the ball, and whose share is moving",
+    ["usage", "Usage", "who is getting the ball",
      _ffUsage],
     ["waivers", "Waivers & starts",
-     "whose job just changed, and whose spot is best this week",
+     "who to pick up and stream",
      waiverBoardHTML(d.waivers) + streamerHTML(d.streamers)
      + waiverPulseHTML(d.trending)],
     ["trade", "Trade targets",
-     "buy low and sell high — where production and opportunity disagree",
+     "buy low, sell high",
      _ffTrade],
     ["scripts", "Game scripts",
-     "what the market expects each game to look like", _ffScripts],
+     "how each game should go", _ffScripts],
     ["ranks", "Rankings",
-     "every source we can read without a password, and where they argue",
+     "every source, side by side",
      rankBoardHTML(d.ranks)],
     ["days", "Calendar",
-     "your own roster day by day, then the best play in the league",
+     "your roster, day by day",
      /* YOUR ROSTER FIRST, and this is the whole of Ethan's report on
         2026-09-10: "I want to be able to sync my sleeper league, then
         the calendar will show which players from MY league I should
@@ -416,19 +406,16 @@ async function renderFantasy() {
         league linked must be told what to do rather than shown a gap. */
      `<div id="ffcal-mine">${ffCalMinePromptHTML()}</div>` + ffCalendarHTML(d)],
     ["mock", "Mock draft",
-     "a snake draft against the room — same board the kit publishes",
+     "practice a snake draft",
      `<div id="mock-room">${mockDraftHTML()}</div>`],
     ["league", "Around the league",
-     "camp, the waiver wire, the offseason and the draft kit",
-     acctStripHTML() + ffLinkStripHTML()
-     + `<div id="sleeper-zone"></div>`
-     + `<div id="league-desk"></div>`
-     + `<div id="espn-desk"></div>`
-     + campHTML(d.camp)
+     "camp, moves and the draft kit",
+     campHTML(d.camp)
      // The Sleeper pulse moved to the Waivers tab, beside our own signal
      // — the two are the same question asked of two different sources.
      + offseasonHTML(off) + draftKit],
   ], { index: true }) + _ffFoot;
+  ffRoomIcons(host);
   bindSubtabs(host);
   ff101Bind(host);
   if (typeof QBWeek !== "undefined") { QBWeek.bind(host); QBWeek.dailyBind(host); }
@@ -511,20 +498,69 @@ const FF101_TERMS = [
   ["Floor / ceiling", "a bad week and a big week for him: eight weeks in ten land between them"],
   ["Q / D / Out / IR", "questionable (usually plays), doubtful (usually doesn’t), out, injured reserve (out for weeks)"],
 ];
+/* Is a league linked in this browser? Sleeper by username, ESPN by league
+   id: the two the desk reads. */
+function ffLinked() {
+  try { return Boolean(localStorage.getItem("ff_user") || localStorage.getItem(ESPN_LEAGUE_KEY)); }
+  catch (e) { return false; }
+}
+
+/* THE ROOM'S FIRST LINE (2026-10-27, the visual pass). Four tiles opened
+   the room on the season's year and counts of usage rows, trade flags and
+   game scripts: numbers nobody acts on. The fantasy apps open on the week
+   (which one, how many games, who is off) and so does this. */
+function ffStripHTML(d) {
+  const w = _ffWeek && (_ffWeek.players || []).length
+    && (typeof QBWeek === "undefined" || QBWeek.current(_ffWeek)) ? _ffWeek : null;
+  const games = w ? Math.floor(Object.keys(w.teams || {}).length / 2) : 0;
+  const byes = (w && w.byes) || [];
+  return `<div class="ff-strip">
+    <span class="ff-strip-wk">${w ? `Week ${escapeHtml(String(w.week || ""))}` : `${escapeHtml(String(d.season || ""))} season`}</span>
+    ${games ? `<span class="ff-strip-k">${games} game${games === 1 ? "" : "s"}</span>` : ""}
+    ${byes.length ? `<span class="ff-strip-k">On a bye: ${byes.map(nflName).map(escapeHtml).join(", ")}</span>` : ""}
+  </div>`;
+}
+
+/* Each room tile's mark, from the site's own icon set (icon()). Drawn
+   here rather than in subtabbedHTML, which every roomed page shares. */
+const FF_ROOM_ICON = { mine: "user", week: "football", tonight: "basketball", usage: "chart", waivers: "rising",
+                       trade: "scale", scripts: "book", ranks: "list", days: "calendar", mock: "target",
+                       league: "people" };
+function ffRoomIcons(host) {
+  host.querySelectorAll(".room-card[data-subtab]").forEach((b) => {
+    const name = FF_ROOM_ICON[b.dataset.subtab];
+    if (name && !b.querySelector(".rc-ic")) b.insertAdjacentHTML("afterbegin", `<span class="rc-ic">${icon(name, 18)}</span>`);
+  });
+}
+
+/* OPEN ON THE FIRST VISIT, THEN AS THE READER LEFT IT (2026-10-27, the
+   visual pass). Open until closed put the whole card over the room on
+   every visit to anyone who never thought to close it, which on a phone
+   is the whole first screen. The first visit marks it seen; later visits
+   fold it to its one line unless the reader left it open. Decided once a
+   page load, so a data refresh redrawing the room never shuts it under
+   the reader's eyes. */
+let _ff101Now = null;
 function ff101Open() {
-  try { return localStorage.getItem(FF101_KEY) !== "closed"; } catch (e) { return true; }
+  if (_ff101Now !== null) return _ff101Now;
+  try {
+    const v = localStorage.getItem(FF101_KEY);
+    if (v === null) localStorage.setItem(FF101_KEY, "seen");
+    _ff101Now = v === null || v === "open";
+  } catch (e) { _ff101Now = true; }
+  return _ff101Now;
 }
 function ff101HTML() {
   return `<details class="card ff101"${ff101Open() ? " open" : ""}>
     <summary><span class="ff101-k">New to fantasy?</span> How it works, in a minute</summary>
     <ol class="ff101-steps">
-      <li><b>Draft a team.</b> You and about ten friends take turns picking real NFL players before the season.</li>
-      <li><b>Start a lineup every week.</b> Usually a quarterback, two running backs, two receivers, a tight end, a
+      <li><span class="ff101-n">1</span><b>Draft a team.</b> You and about ten friends take turns picking real NFL players before the season.</li>
+      <li><span class="ff101-n">2</span><b>Start a lineup every week.</b> Usually a quarterback, two running backs, two receivers, a tight end, a
         flex, a kicker and a team defense (D/ST). Everyone else sits on your bench and scores nothing that week.</li>
-      <li><b>Their real games are your points.</b> A point per 10 rushing or receiving yards and per 25 passing
+      <li><span class="ff101-n">3</span><b>Their real games are your points.</b> A point per 10 rushing or receiving yards and per 25 passing
         yards; 6 per touchdown (4 for a passing one); −2 per interception or lost fumble; in PPR leagues a point per
         catch. A defense scores for sacks, takeaways and touchdowns, and more the fewer points it allows.</li>
-      <li><b>Beat one team a week.</b> The best records make the playoffs, usually weeks 15 to 17.</li>
+      <li><span class="ff101-n">4</span><b>Beat one team a week.</b> The best records make the playoffs, usually weeks 15 to 17.</li>
     </ol>
     <div class="ff101-week">
       <div><b>Tue–Wed</b><span>Waivers: claim the players nobody owns</span></div>
@@ -535,12 +571,15 @@ function ff101HTML() {
     <p class="ff101-start"><b>Start here:</b> link your league (Sleeper, ESPN or Yahoo). Then <b>This week</b> says who to
       start and why, your league desk sets your best lineup and your odds against this week’s opponent, and
       <b>Waivers &amp; starts</b> says who to pick up.</p>
-    <dl class="ff101-terms">${FF101_TERMS.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl>
+    <details class="ff101-words"><summary>The words every tab uses</summary>
+      <dl class="ff101-terms">${FF101_TERMS.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl>
+    </details>
   </details>`;
 }
 function ff101Bind(host) {
   const d = host.querySelector(".ff101");
   if (d) d.addEventListener("toggle", () => {
+    _ff101Now = d.open;
     try { localStorage.setItem(FF101_KEY, d.open ? "open" : "closed"); } catch (e) { /* the card still works */ }
   });
 }
@@ -584,19 +623,66 @@ function ffLinkStripHTML() {
    It never says "free agent". The site cannot see your league, so a
    claim about availability would be a guess with a number next to it.
    Role change is what we can measure, and it is the half a claim buys. */
-function waiverRowHTML(r) {
-  const pct = pct0Or;
-  const up = (r.delta || 0) > 0;
-  return `<div class="dl-row">
-    <span class="dl-main" data-dossier="${escapeAttr(r.player || "")}">
-      ${playerAvatar(r.player, r.team, { size: 26, map: nflMap(),
-                                         headshot: r.headshot })}
-      <span><strong>${escapeHtml(r.player || "")}</strong>
-        <span class="dl-sub">${escapeHtml(r.position || "")} ·
-          ${escapeHtml(nflName(r.team))} — ${escapeHtml(r.why || "")}</span></span></span>
-    <span class="dl-num strong" style="color:${up ? "var(--good)" : "var(--text)"}"
-          title="share of his team\u2019s work at that position">${pct(r.share)}</span>
+/* THE ROOM'S PLAYER ROW (2026-10-27, the visual pass; Ethan: "it doesn't
+   feel like a professionally built app"). The lists this file draws take
+   the look This week's rows have (js/fantasyweek.js rowHTML, css/fantasy
+   .css "THE PLAYER ROW"): his face, his name with its chips, a colour
+   badge for his position beside his team, one line of why, a bar where a
+   bar says it better than a sentence, and his number large on the right.
+   Each list used to repeat its explanation on every card; it says it once
+   above the list now. */
+function ffPos(pos) {
+  return typeof QBWeek !== "undefined" && QBWeek.pos ? QBWeek.pos(pos)
+    : (pos ? `<span class="ffpos">${escapeHtml(pos)}</span>` : "");
+}
+function ffRow(o) {
+  const door = o.door !== false && o.player;
+  return `<div class="ffr${door ? " ffrow-door" : ""}"${door
+      ? ` data-dossier="${escapeAttr(o.player)}" role="button" tabindex="0"` : ""}>
+    <span class="ffr-face">${playerAvatar(o.player, o.team, { size: 40, map: nflMap(), headshot: o.headshot })}</span>
+    <span class="ffr-main">
+      <span class="ffr-name"><b>${escapeHtml(o.player || "")}</b>${o.chips || ""}</span>
+      <span class="ffr-meta">${ffPos(o.position)}${o.team ? teamMark(o.team, 14, nflMap(), "nfl") : ""}<span>${
+        escapeHtml(o.meta || "")}</span></span>
+      ${o.why ? `<span class="ffr-why">${escapeHtml(o.why)}</span>` : ""}
+    </span>
+    ${o.bar || ""}
+    <span class="ffr-pts"><b${o.tone ? ` class="${o.tone}"` : ""}>${o.num}</b>${o.unit
+      ? `<span>${escapeHtml(o.unit)}</span>` : ""}</span>
   </div>`;
+}
+/* A share of his team's work as a bar: where it was (the fill starts
+   there) and where it is now (the mark), the two numbers at its ends. */
+function ffShareBar(now, before) {
+  if (now == null) return "";
+  const at = (v) => `${Math.max(0, Math.min(100, Number(v) * 100)).toFixed(1)}%`;
+  const was = before == null ? 0 : Math.max(0, before);
+  const lo = Math.min(was, now), hi = Math.max(was, now);
+  const words = before == null ? `${pct0Or(now)} of his team’s work`
+    : `${pct0Or(was)} of his team’s work before, ${pct0Or(now)} now`;
+  return `<span class="ffr-range" title="${escapeAttr(words)}" aria-label="${escapeAttr(words)}">
+    <span class="ffr-end">${before == null ? "0%" : pct0Or(was)}</span>
+    <span class="ffr-track"><i class="${now >= was ? "up" : "down"}" style="left:${at(lo)};width:${at(hi - lo)}"></i><b
+      style="left:${at(now)}"></b></span>
+    <span class="ffr-end">${pct0Or(now)}</span></span>`;
+}
+/* Points a game, scored against what his chances were worth: the fill is
+   what he scored, the mark what the volume says, on one scale (`top`). */
+function ffGapBar(r, top) {
+  const at = (v) => `${Math.max(0, Math.min(100, (Number(v) / top) * 100)).toFixed(1)}%`;
+  const words = `${r.actual_ppg} a game scored, ${r.expected_ppg} expected`;
+  return `<span class="ffr-range" title="${escapeAttr(words)}" aria-label="${escapeAttr(words)}">
+    <span class="ffr-end">${escapeHtml(String(r.actual_ppg))}</span>
+    <span class="ffr-track"><i style="left:0;width:${at(r.actual_ppg)}"></i><b
+      style="left:${at(r.expected_ppg)}"></b></span>
+    <span class="ffr-end">${escapeHtml(String(r.expected_ppg))}</span></span>`;
+}
+
+function waiverRowHTML(r) {
+  const before = r.delta != null && r.share != null ? r.share - r.delta : null;
+  return ffRow({ player: r.player, team: r.team, position: r.position, headshot: r.headshot,
+                 meta: nflName(r.team), why: r.why, bar: ffShareBar(r.share, before),
+                 num: pct0Or(r.share), unit: "share", tone: (r.delta || 0) > 0 ? "pos" : "" });
 }
 
 function waiverBoardHTML(w) {
@@ -604,7 +690,7 @@ function waiverBoardHTML(w) {
   const sec = (title, sub, rows, empty) => `
     <div class="section-title minor">${title}
       <span class="sub">— ${sub}</span></div>
-    <div class="card" style="padding:14px 16px">${
+    <div class="card ffr-list">${
       (rows || []).length ? rows.map(waiverRowHTML).join("")
                           : panelEmpty(empty)}</div>`;
   return sec("Jobs just vacated",
@@ -637,33 +723,24 @@ function streamerHTML(st) {
   const POS = ["RB", "WR", "TE"];
   const have = POS.filter((p) => ((st || {})[p] || []).length);
   if (!have.length) return "";
-  const row = (r) => `<div class="dl-row">
-    <span class="dl-main" data-dossier="${escapeAttr(r.player || "")}">
-      ${playerAvatar(r.player, r.team, { size: 26, map: nflMap(),
-                                         headshot: r.headshot })}
-      <span><strong>${escapeHtml(r.player || "")}</strong>
-        <span class="dl-sub">vs ${escapeHtml(nflName(r.opponent))} —
-          ${escapeHtml(r.why || "")}</span></span></span>
-    <span class="dl-num strong"
-          title="share of his team\u2019s work times its implied total">${
-      (r.score == null ? "\u2014" : r.score.toFixed(1))}</span>
-  </div>`;
+  const row = (r, p) => ffRow({ player: r.player, team: r.team, position: p, headshot: r.headshot,
+                                meta: `vs ${nflName(r.opponent)}`, why: r.why,
+                                num: r.score == null ? "\u2014" : r.score.toFixed(1), unit: "spot" });
   return `<div class="section-title minor">Best spots this week
       <span class="sub">— opportunity times environment, by position</span></div>
-    <div class="cards wide">${have.map((p) => `
-      <div class="card" style="padding:14px 16px">
-        <div style="font-weight:800;margin-bottom:8px">${p}</div>
-        ${(st[p] || []).map(row).join("")}
+    <div class="ffr-cols">${have.map((p) => `
+      <div class="card ffr-list"><div class="ffr-group">${ffPos(p)} Best ${p} spots</div>
+        ${(st[p] || []).map((r) => row(r, p)).join("")}
       </div>`).join("")}</div>
-    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:8px">
-      The score is his share of the work multiplied by the points the
-      market has his offense scoring, tilted by pass rate over
-      expectation — a run-lean offense helps its back and costs its
-      receivers. It is a ranking of SPOTS, not a projection of points.
-      Quarterbacks are absent on purpose: every share here is targets or
-      carries, which a quarterback has neither of, and streaming one is
-      nearly pure team environment — a call that needs a depth chart we
-      would only be guessing at.</p>`;
+    <details class="ffr-how"><summary>What the spot score is</summary>
+      <p class="rank-help">The score is his share of the work multiplied by the points the
+        market has his offense scoring, tilted by pass rate over
+        expectation — a run-lean offense helps its back and costs its
+        receivers. It is a ranking of SPOTS, not a projection of points.
+        Quarterbacks are absent on purpose: every share here is targets or
+        carries, which a quarterback has neither of, and streaming one is
+        nearly pure team environment — a call that needs a depth chart we
+        would only be guessing at.</p></details>`;
 }
 
 function waiverPulseHTML(t) {
@@ -754,7 +831,9 @@ function offseasonHTML(off) {
         <span class="sub">— on rosters now, deliberately unranked: no NFL volume exists,
         and projecting them would be invention. Depth-chart slot is the honest signal.</span></div>
       <div class="card" style="padding:8px 16px">
-        <div class="os-rookies">${off.rookies.map(rookie).join("")}</div>
+        <div class="os-rookies">${off.rookies.slice(0, 12).map(rookie).join("")}</div>
+        ${off.rookies.length > 12 ? `<details class="ffz-fold"><summary>All ${off.rookies.length} rookies</summary>
+          <div class="os-rookies">${off.rookies.slice(12).map(rookie).join("")}</div></details>` : ""}
       </div>` : ""}`;
 }
 

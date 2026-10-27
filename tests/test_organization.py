@@ -600,7 +600,7 @@ def test_game_script_cards_wear_the_clubs_marks_and_one_grid():
     # The card template nests its own `.join("")` (the coach-change
     # warnings), so the block runs to the next statement, not to a join.
     i = js.index("const scriptCards =")
-    block = js[i:js.index("const bsCount", i)]
+    block = js[i:js.index("const _ffLead", i)]
     assert 'teamMark(s.away, 22, nflMap(), "nfl")' in block
     assert 'teamMark(s.home, 22, nflMap(), "nfl")' in block
     assert 'class="gs-grid"' in block

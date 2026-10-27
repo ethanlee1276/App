@@ -8,7 +8,8 @@ shit works." What these hold (js/fantasy.js ff101HTML):
   - it says the game (draft, a lineup a week, real stats are points, one
     opponent a week), the scoring, the week's rhythm and the words every
     tab uses, and where to start;
-  - it is open until the reader closes it, and remembers that, in a
+  - it is open on the first visit and then as the reader left it (seen
+    once, it folds to its one line), decided once a page load, in a
     storage that may be refused.
 
     python3 tests/test_fantasy_101.py
@@ -34,16 +35,20 @@ def _const(name):
     return FANTASY[i:FANTASY.index(";\n", i) + 2]
 
 
-def _card(stored):
+def _card(stored, again=False):
     js = f"""
     const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-    const store = {json.dumps(stored)};
-    const localStorage = {{ getItem: (k) => {{ if (store === "throws") throw new Error("denied"); return store; }} }};
+    let store = {json.dumps(stored)};
+    const localStorage = {{ getItem: (k) => {{ if (store === "throws") throw new Error("denied"); return store; }},
+                           setItem: (k, v) => {{ store = v; }} }};
     {_const("FF101_KEY")}
     {_const("FF101_TERMS")}
+    let _ff101Now = null;
     {_fn("ff101Open")}
     {_fn("ff101HTML")}
-    console.log(JSON.stringify(ff101HTML()));"""
+    const first = ff101HTML();
+    {"_ff101Now = null;" if again else ""}
+    console.log(JSON.stringify({"ff101HTML()" if again else "first"}));"""
     r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)
@@ -66,16 +71,22 @@ def test_it_says_the_game_the_points_the_week_and_the_words():
         assert said in text, said
 
 
-def test_open_until_closed_and_remembered():
+def test_open_on_the_first_visit_then_as_the_reader_left_it():
     assert "<details class=\"card ff101\" open>" in _card(None), "a first visit opens it"
+    assert "<details class=\"card ff101\">" in _card(None, again=True), "seen once, the next visit folds it"
     assert "<details class=\"card ff101\">" in _card("closed")
+    assert "<details class=\"card ff101\">" in _card("seen")
+    assert "<details class=\"card ff101\" open>" in _card("open"), "left open, it opens open"
     assert "<details class=\"card ff101\" open>" in _card("throws"), "a refused storage still shows it"
+    assert "let _ff101Now = null;" in FANTASY, "decided once a page load: a redraw never shuts it"
     bind = _fn("ff101Bind")
     assert 'localStorage.setItem(FF101_KEY, d.open ? "open" : "closed")' in bind and "catch (e)" in bind
+    assert "_ff101Now = d.open;" in bind
 
 
 def test_its_styles_are_the_rooms():
-    for cls in ("ff101", "ff101-k", "ff101-steps", "ff101-week", "ff101-start", "ff101-terms"):
+    for cls in ("ff101", "ff101-k", "ff101-steps", "ff101-n", "ff101-week", "ff101-start", "ff101-words",
+                "ff101-terms"):
         assert f".{cls}" in CSS, cls
 
 

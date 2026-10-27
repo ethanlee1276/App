@@ -98,53 +98,101 @@
     return out.slice(0, n || 3);
   }
 
+  /* A POSITION'S COLOUR (2026-10-27, the visual pass; Ethan: "look at how
+     other fantasy apps ... look visually"). Every fantasy app wears the
+     positions in colours, one badge a row, the same hue in every room. */
+  function posBadge(pos) {
+    const p = String(pos || "").toUpperCase();
+    if (!p) return "";
+    const dst = p === "DEF" || p === "DST" || p === "D/ST";
+    return `<span class="ffpos ffpos-${dst ? "dst" : escapeAttr(p.toLowerCase().replace(/[^a-z]/g, ""))}">${
+      escapeHtml(dst ? "D/ST" : p)}</span>`;
+  }
+
+  /* Kickoff: the week file's Eastern date and clock as an instant, drawn
+     in the reader's own zone (tzTime) with the weekday. */
+  function kickoff(g) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String((g || {}).date || ""));
+    const k = /^(\d{1,2}):(\d{2})/.exec(String((g || {}).kickoff || ""));
+    if (!m || !k) return "";
+    let t = Date.UTC(+m[1], +m[2] - 1, +m[3], +k[1] + 5, +k[2]);           // as if Eastern standard time
+    try {
+      const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric",
+                                                          hourCycle: "h23" }).format(new Date(t)));
+      if (h !== +k[1]) t -= 3600e3;                                       // daylight time: an hour earlier
+    } catch (e) { /* the standard-time guess stands */ }
+    return typeof tzTime === "function" ? tzTime(t, { weekday: "short", hour: "numeric", minute: "2-digit" }) : "";
+  }
+
+  /* EIGHT WEEKS IN TEN, DRAWN: the floor-to-ceiling span on one scale for
+     the whole list (`top`), his number a mark on it. The words stay the
+     bar's title and label. */
+  function rangeBar(r, top) {
+    const rg = r && r.range;
+    if (!rg || !(top > 0)) return "";
+    const at = (v) => `${Math.max(0, Math.min(100, (Number(v) / top) * 100)).toFixed(1)}%`;
+    const words = `8 in 10 weeks ${rg[0]}–${rg[1]}`;
+    return `<span class="ffr-range" title="${escapeAttr(words)}" aria-label="${escapeAttr(words)}">
+      <span class="ffr-end">${escapeHtml(String(rg[0]))}</span>
+      <span class="ffr-track"><i style="left:${at(rg[0])};width:${at(rg[1] - rg[0])}"></i><b style="left:${
+        at(r.expected)}"></b></span>
+      <span class="ffr-end">${escapeHtml(String(rg[1]))}</span></span>`;
+  }
+
+  /* The scale a list's bars share: its highest ceiling, to the next five. */
+  function rangeTop(rows) {
+    const hi = Math.max(20, ...(rows || []).map((r) => Number(((r || {}).range || [])[1]) || Number((r || {}).expected) || 0));
+    return Math.ceil(hi / 5) * 5;
+  }
+
+  /* A part of his number from his season average, or none at all: one
+     mark on the number, the words in its title and on his panel. */
+  function partMark(r) {
+    const said = [];
+    if ((r.filled || []).length) said.push(`His ${r.filled.map((k) => PART[k] || k).join(", ")} from his season average`);
+    if ((r.missing || []).length) said.push(`no line for his ${r.missing.map((k) => PART[k] || k).join(", ")}, left out`);
+    return said.length ? `<sup class="ffr-part" title="${escapeAttr(said.join("; "))}">•</sup>` : "";
+  }
+
   /* A TEAM DEFENSE (engine/dstproj): its club's mark, its opponent's
      implied points, and its expected sacks and takeaways for a member. Not a
      player, so not a door to a player's panel. */
-  function defRowHTML(r) {
-    const why = reasons(r, 2);
+  function defRowHTML(r, top) {
+    const why = reasons(r, 1);
     const d = r.dst || {};
-    const more = [
-      r.range ? `8 in 10 weeks ${r.range[0]}–${r.range[1]}` : "",
-      d.sack != null ? `${Number(d.sack).toFixed(1)} sacks, ${(Number(d.int || 0) + Number(d.fum_rec || 0)).toFixed(1)} takeaways expected` : "",
-    ].filter(Boolean).join(" · ");
-    return `<div class="hd-row ff-row ffw-row ffw-def">
-      <span class="hd-what"><b>${teamMark(r.team, 24, nflMap(), "nfl")}${escapeHtml(r.player)}${matchChip(r.matchup)}</b>
-        <span>${escapeHtml(["D/ST", vs(r), (r.matchup || {}).text || ""].filter(Boolean).join(" · "))}</span>
-        ${more ? `<span>${escapeHtml(more)}</span>` : ""}
-        ${why.length ? `<span class="ffw-why">${why.map(escapeHtml).join(" · ")}</span>` : ""}</span>
-      <span class="hd-state"><b>${Number(r.expected).toFixed(1)}</b>
-        <span class="hd-vs">points this week</span></span>
+    const meta = [vs(r), kickoff(r.game || {}), (r.matchup || {}).text || ""].filter(Boolean).join(" · ");
+    const more = d.sack != null ? `${Number(d.sack).toFixed(1)} sacks, ${
+      (Number(d.int || 0) + Number(d.fum_rec || 0)).toFixed(1)} takeaways expected` : "";
+    return `<div class="ffr ffw-def">
+      <span class="ffr-face">${teamMark(r.team, 40, nflMap(), "nfl")}</span>
+      <span class="ffr-main">
+        <span class="ffr-name"><b>${escapeHtml(r.player)}</b>${matchChip(r.matchup)}</span>
+        <span class="ffr-meta">${posBadge("DEF")}<span>${escapeHtml(meta)}</span></span>
+        ${more || why.length ? `<span class="ffr-why">${escapeHtml([more, why[0]].filter(Boolean).join(" · "))}</span>` : ""}
+      </span>
+      ${rangeBar(r, top)}
+      <span class="ffr-pts"><b>${Number(r.expected).toFixed(1)}</b><span>points</span></span>
     </div>`;
   }
 
-  function rowHTML(r) {
-    if (r.position === "DEF") return defRowHTML(r);
-    const why = reasons(r, 2);
-    const where = [r.position, vs(r),
+  function rowHTML(r, top) {
+    if (r.position === "DEF") return defRowHTML(r, top);
+    const why = reasons(r, 1);
+    const meta = [vs(r), kickoff(r.game || {}),
       r.script && r.script.team_implied != null ? `team total ${r.script.team_implied}` : ""]
       .filter(Boolean).join(" · ");
-    const more = [
-      r.play > 0 && r.play < 1 ? `${Number(r.ppr).toFixed(1)} if he plays` : "",
-      r.range ? `8 in 10 weeks ${r.range[0]}–${r.range[1]}` : "",
-      r.td_prob != null ? `${tdLabel(r.position)} ${Math.round(r.td_prob * 100)}%` : "",
-    ].filter(Boolean).join(" · ");
-    return `<div class="hd-row ff-row ffw-row ffrow-door" data-dossier="${escapeAttr(r.player)}"
-         role="button" tabindex="0">
-      <span class="hd-what"><b>${playerAvatar(r.player, r.team,
-        { size: 24, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}${
-        matchChip(r.matchup)}${playChip(r)}</b>
-        <span>${escapeHtml(where)}</span>
-        ${more ? `<span>${escapeHtml(more)}</span>` : ""}
-        ${why.length ? `<span class="ffw-why">${why.map(escapeHtml).join(" · ")}</span>` : ""}
-        ${(r.filled || []).length ? `<span class="ffw-miss">His ${
-          escapeHtml(r.filled.map((k) => PART[k] || k).join(", "))} from his season
-          average — the board has no line on ${r.filled.length === 1 ? "it" : "them"}</span>` : ""}
-        ${(r.missing || []).length ? `<span class="ffw-miss">No line for his ${
-          escapeHtml(r.missing.map((k) => PART[k] || k).join(", "))} — left out,
-          not guessed</span>` : ""}</span>
-      <span class="hd-state"><b>${Number(r.expected).toFixed(1)}</b>
-        <span class="hd-vs">PPR this week</span></span>
+    const td = r.td_prob != null ? `<span class="hd-chip">${tdLabel(r.position)} ${Math.round(r.td_prob * 100)}%</span>` : "";
+    const maybe = r.play > 0 && r.play < 1;
+    return `<div class="ffr ffw-row ffrow-door" data-dossier="${escapeAttr(r.player)}" role="button" tabindex="0">
+      <span class="ffr-face">${playerAvatar(r.player, r.team, { size: 40, map: nflMap(), headshot: r.headshot })}</span>
+      <span class="ffr-main">
+        <span class="ffr-name"><b>${escapeHtml(r.player)}</b>${matchChip(r.matchup)}${playChip(r)}${td}</span>
+        <span class="ffr-meta">${posBadge(r.position)}${teamMark(r.team, 14, nflMap(), "nfl")}<span>${escapeHtml(meta)}</span></span>
+        ${why.length ? `<span class="ffr-why">${escapeHtml(why[0])}</span>` : ""}
+      </span>
+      ${rangeBar(r, top)}
+      <span class="ffr-pts"><b>${Number(r.expected).toFixed(1)}${partMark(r)}</b><span>${
+        maybe ? `${Number(r.ppr).toFixed(1)} if he plays` : "PPR"}</span></span>
     </div>`;
   }
 
@@ -188,28 +236,45 @@
     const want = tabs.includes(wantPos) ? wantPos : "ALL";
     const rows = all.filter((r) => want === "ALL" || r.position === want);
     const shown = showAll ? rows : rows.slice(0, SHOWN);
-    const byes = w.byes || [];
+    const top = rangeTop(shown);
+    const parts = shown.some((r) => (r.filled || []).length || (r.missing || []).length);
+    // The byes are on the room's own first line (fantasy.js ffStripHTML);
+    // how the numbers are built folds under the list, where a reader who
+    // wants it looks, rather than standing between the reader and them.
     return `
       <div class="section-title">Week ${escapeHtml(String(w.week || ""))} in fantasy points
         <span class="sub">— every player on the NFL board, PPR, at the chance he plays</span></div>
-      <p class="rank-help">Each line is the prop board’s own projection — the defence against his
-        position, the game script, the weather, who is out around him — and his touchdowns are the
-        touchdown model’s. A questionable player counts at the chance he plays; tap any name for
-        his whole week. Your league desk (Around the league) scores your lineup on these numbers
-        under your league’s own scoring.</p>
       ${w.locked && w.locked["players[].fields"] ? `<p class="rank-help">${icon("lock", 12)} Members also see each
         player’s stat line, touchdown chance and game script, and the reasons behind his number —
         <a href="#paywall">the plans</a>.</p>` : ""}
-      ${byes.length ? `<p class="rank-help"><b>On a bye:</b> ${byes.map(nflName).map(escapeHtml).join(", ")}</p>` : ""}
       ${compareHTML(w)}
-      <div class="rec-bf-group ffw-pos" role="group" aria-label="Position">${tabs.map((p) => `
-        <button type="button" class="rec-bf${p === want ? " active" : ""}" data-ffwpos="${p}"
-          aria-pressed="${p === want ? "true" : "false"}">${p === "ALL" ? "All" : p === "DEF" ? "D/ST" : p}</button>`).join("")}</div>
-      <div class="card ff-rows ffw-list">${shown.map(rowHTML).join("")
+      <div class="ffr-bar">
+        <div class="rec-bf-group ffw-pos" role="group" aria-label="Position">${tabs.map((p) => `
+          <button type="button" class="rec-bf${p === want ? " active" : ""}" data-ffwpos="${p}"
+            aria-pressed="${p === want ? "true" : "false"}">${p === "ALL" ? "All" : p === "DEF" ? "D/ST" : p}</button>`).join("")}</div>
+        <span class="ffr-scale">Bars: 8 weeks in 10, on one 0–${top} scale</span>
+      </div>
+      <div class="card ffw-list ffr-list">${shown.map((r) => rowHTML(r, top)).join("")
         || panelEmpty("No players at this position on this week’s board.")}</div>
       ${rows.length > shown.length ? `<button type="button" class="btn ghost" data-ffwmore>Show all ${
         rows.length} ${want === "ALL" ? "players" : want === "DEF" ? "defense" : want}s ▾</button>` : ""}
-      ${measuredHTML(w.measured)}`;
+      ${parts ? `<p class="ffr-key"><sup class="ffr-part">•</sup> Part of the number is his season average: the
+        board has no line on it. Tap the name for which part.</p>` : ""}
+      <details class="ffr-how"><summary>How these numbers are built</summary>
+        <p class="rank-help">Each line is the prop board’s own projection — the defence against his
+          position, the game script, the weather, who is out around him — and his touchdowns are the
+          touchdown model’s. A questionable player counts at the chance he plays; tap any name for
+          his whole week. Your league desk (My team) scores your lineup on these numbers under your
+          league’s own scoring.</p>
+        ${byesNote(w)}${measuredHTML(w.measured)}
+      </details>`;
+  }
+
+  /* The byes, said once more inside the fold for a reader who opened the
+     room by itself (the strip above says them first). */
+  function byesNote(w) {
+    const byes = (w || {}).byes || [];
+    return byes.length ? `<p class="rank-help"><b>On a bye:</b> ${byes.map(nflName).map(escapeHtml).join(", ")}</p>` : "";
   }
 
   /* The room redraws itself in place: a filter is not a page load. */
@@ -822,11 +887,11 @@
 
   function gameKey(g) { return g && g.away && g.home ? `${g.away}@${g.home}` : ""; }
 
-  function nightRow(r, i, sport) {
+  function nightRow(r, sport) {
     const cfg = NIGHT[sport], map = cfg.teams();
     const g = r.game || {};
     const home = g.home ? g.home === r.team : null;
-    const where = [r.position, r.opponent ? `${home === false ? "at" : "vs"} ${r.opponent}` : "", tipOff(g)]
+    const where = [r.opponent ? `${home === false ? "at" : "vs"} ${r.opponent}` : "", tipOff(g)]
       .filter(Boolean).join(" · ");
     const face = r.headshot ? playerAvatar(r.player, r.team, { size: 40, map, headshot: r.headshot })
       : teamMark(r.team, 40, map, sport);
@@ -837,16 +902,19 @@
     const line = p ? cfg.parts.filter(([k]) => p[k] != null)
       .map(([k, short]) => `<span class="ffn-stat${avg.has(k) ? " avg" : ""}"${avg.has(k)
         ? ` title="Season average: no line tonight"` : ""}><b>${Number(p[k]).toFixed(1)}</b>${short}</span>`).join("") : "";
-    return `<div class="ffn-row">
-      <span class="ffn-rank">${i + 1}</span>
-      <span class="ffn-face">${face}</span>
-      <span class="ffn-who"><b>${escapeHtml(r.player)}</b>
-        <span class="ffn-where">${teamMark(r.team, 14, map, sport)}${escapeHtml(r.team)}${
-          where ? ` · ${escapeHtml(where)}` : ""}${r.status ? ` <span class="hd-chip warn">${escapeHtml(r.status)}</span>` : ""}</span>
-        ${line ? `<span class="ffn-line">${line}</span>` : ""}</span>
-      <span class="ffn-pts"><b>${Number(r.points).toFixed(1)}</b><span>FPTS</span></span>
+    return `<div class="ffr ffn-row">
+      <span class="ffr-face">${face}</span>
+      <span class="ffr-main">
+        <span class="ffr-name"><b>${escapeHtml(r.player)}</b>${r.status
+          ? `<span class="hd-chip warn">${escapeHtml(r.status)}</span>` : ""}</span>
+        <span class="ffr-meta">${posBadge(r.position)}${teamMark(r.team, 14, map, sport)}<span>${escapeHtml(r.team)}${
+          where ? ` · ${escapeHtml(where)}` : ""}</span></span>
+        ${line ? `<span class="ffn-line">${line}</span>` : ""}
+      </span>
+      <span class="ffr-pts"><b>${Number(r.points).toFixed(1)}</b><span>FPTS</span></span>
     </div>`;
   }
+
 
   function nightScoring(doc) {
     const sc = doc.scoring || {};
@@ -899,7 +967,7 @@
       </div>
       ${shown.some((r) => r.proj && (r.filled || []).length) ? `<p class="ffn-key">Dimmed numbers are season
         averages: tonight’s board has no line on that stat.</p>` : ""}
-      <div class="card ffn-list">${shown.map((r, i) => nightRow(r, i, doc.sport)).join("")
+      <div class="card ffr-list">${shown.map((r) => nightRow(r, doc.sport)).join("")
         || panelEmpty("No priced players in this game or position tonight.")}</div>
       ${rows.length > shown.length ? `<button type="button" class="btn ghost" data-ffnmore>Show all ${
         rows.length} players ▾</button>` : ""}`;
@@ -981,5 +1049,5 @@
   }
 
   window.QBWeek = { room, bind, rowFor, dossier, pickups, basis, seat, current, h2hNote, callNote, todo, todoBind,
-                    season, live: liveHTML, daily, dailyBind, dailyName };
+                    season, live: liveHTML, daily, dailyBind, dailyName, pos: posBadge };
 })();

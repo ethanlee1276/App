@@ -89,7 +89,10 @@ def test_the_lineup_is_rows_with_the_slot_in_words():
     h = " ".join(got["html"].split())
     assert "<table" not in h and "SUPER_FLEX" not in h, "the table, or Sleeper's key, is back"
     assert h.count('<div class="hd-row ff-row">') == 3
-    assert '<span class="ld-slot">SFLEX</span>' in h and '<span class="ld-slot">QB</span>' in h
+    # The slot wears its player's position colour (css/fantasy.css .ffpos,
+    # 2026-10-27): a quarterback in the superflex reads as one at a glance.
+    assert '<span class="ld-slot ffpos ffpos-qb">SFLEX</span>' in h and '<span class="ld-slot ffpos ffpos-qb">QB</span>' in h
+    assert '<span class="ld-slot">FLEX</span>' in h, "an empty slot has no position to wear"
     assert "<b>Josh Allen <span class=\"hd-chip warn\">thin sample</span></b>" in h
     assert '<span class="hd-state"><b>23.9</b> <span class="hd-vs">PPR base 23.1</span></span>' in h
     assert "— nobody eligible" in h and '<b>—</b> <span class="hd-vs">PPR base —</span>' in h

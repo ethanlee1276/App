@@ -613,6 +613,9 @@ except ValueError: print('not built yet'); raise SystemExit
 p=d.get('players') or []; print(d.get('sport'), d.get('date'), len(p), 'players', (p[0]['player'], p[0]['points']) if p else '')"; done
 sudo -u qellys grep -h "Fantasy tonight" /srv/qellys/data/logs/nba_build.log /srv/qellys/data/logs/nhl_build.log
 SH
+run FF "The Fantasy room, redesigned" 30 <<'SH'
+curl -s https://qellysbook.com/js/fantasy.js | grep -c 'function ffStripHTML('
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"

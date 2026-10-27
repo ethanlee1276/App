@@ -207,7 +207,9 @@ def test_the_builds_call_it_and_it_never_stops_one():
 
 def _night_js():
     i = WEEK_JS.index("  const NIGHT = {")
-    return WEEK_JS[i:WEEK_JS.index("  /* What the desk's lineup was scored on", i)]
+    b = WEEK_JS.index("  function posBadge(pos) {")
+    badge = WEEK_JS[b:WEEK_JS.index("\n  }\n", b) + 4]
+    return badge + WEEK_JS[i:WEEK_JS.index("  /* What the desk's lineup was scored on", i)]
 
 
 def _render(docs, then=""):
@@ -241,8 +243,9 @@ def test_the_room_in_node():
     assert html.startswith('<div id="ff-tonight">')
     assert "Tonight’s NBA in fantasy points" in text and "2 players across 1 game" in text
     assert "Scoring: 1 a point, 0.5 a three, 1.25 a rebound, 1.5 an assist, 2 a steal, 2 a block and −0.5 a turnover." in text
-    assert "1 Jay Star BOS · at NYK" in text and "34.5 FPTS" in text, "Boston is the away side"
-    assert "2 Bench Guy NYK · vs BOS" in text
+    assert "Jay Star BOS · at NYK" in text and "34.5 FPTS" in text, "Boston is the away side"
+    assert "Bench Guy NYK · vs BOS" in text
+    assert text.index("Jay Star") < text.index("Bench Guy"), "best first"
     assert "20.0 PTS 10.0 REB 1.0 STL" in text, "a member's stat line"
     assert "Old" not in text, "a past night's slate is not tonight's"
     assert 'data-ffnsport="nhl"' in html, "a switch for each sport with a slate"
@@ -267,7 +270,8 @@ def test_hockey_draws_its_positions_and_says_what_it_does_not_count():
     text = " ".join(re.sub(r"<[^>]+>", " ", html).split())
     assert 'data-ffnpos="C"' in html and 'data-ffnpos="D"' in html and 'data-ffnpos="W"' not in html
     assert "goalies are left out" in text and "8.5 a goal" in text
-    assert "1 Sniper TOR · C · vs MTL" in text
+    assert "Sniper C TOR · vs MTL" in text, "the position a badge before the team"
+    assert 'class="ffpos ffpos-c"' in html and 'class="ffpos ffpos-d"' in html
 
 
 def test_the_fantasy_page_draws_the_tab_and_styles_every_class():

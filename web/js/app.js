@@ -20804,8 +20804,7 @@ function ffH2HHTML(d) {
   return `
     <div class="section-title">${escapeHtml(wk)}: you vs ${
       escapeHtml(h.opponent || "your opponent")}
-      <span class="sub">— the start/sit answer against the team you are
-      actually playing, not against the field</span></div>
+      <span class="sub">— your lineup against theirs</span></div>
     <div class="card ld-h2h">
       <div class="ld-h2h-score">
         <span class="ld-h2h-side"><b>${h.me.points}</b><span>you</span></span>
@@ -20818,12 +20817,14 @@ function ffH2HHTML(d) {
         scoring on these rosters to put odds on it — the projected margin
         above stands on its own.</p>`
       : `<div class="ld-h2h-odds ${lead ? "pos" : "neg"}">${pct}% to win</div>
+         <div class="ld-wp ${lead ? "pos" : "neg"}"><i style="width:${pct}%"></i></div>
+         <details class="ld-how"><summary>How the odds are figured</summary>
          <p class="rank-help">A ${h.sd}-point swing sits around that margin,
          ${h.basis === "week" ? "measured on how far weeks land from projections like these"
            : "measured off both sides’ own week-to-week scoring"} rather than
          assumed. ${h.coinflip ? "Inside a point either way, which is a coin flip."
            : lead ? "You are favoured, so a safer lineup is worth more than a bigger one."
-           : "You are behind, so ceiling is worth more than floor."}</p>`}
+           : "You are behind, so ceiling is worth more than floor."}</p>${ffH2HHow(h)}</details>`}
       ${swings.length ? `<div class="ld-swaps">
         <div class="rank-fight-head">Start these instead</div>
         ${swings.map((w) => `<div class="rank-fight-row">
@@ -20836,7 +20837,14 @@ function ffH2HHTML(d) {
       </div>` : `<p class="rank-help">Nothing on your bench improves your
         odds this week — the highest-scoring lineup is also the likeliest
         to win this particular game.</p>`}
-      ${(h.unmeasured || []).length ? `<p class="rank-help">${icon("warn")}
+    </div>`;
+}
+
+/* What the odds assume, under their own fold (2026-10-27, the visual
+   pass): said, never hidden, and no longer five paragraphs between the
+   reader and his lineup. */
+function ffH2HHow(h) {
+  return `${(h.unmeasured || []).length ? `<p class="rank-help">${icon("warn")}
         No measured week-to-week swing for
         <b>${(h.unmeasured || []).map(escapeHtml).join(", ")}</b>, so each
         contributes points and no uncertainty. The spread above is
@@ -20847,8 +20855,7 @@ function ffH2HHTML(d) {
       And the two lineups are treated as independent — when your
       quarterback is throwing to their receiver they are not, and this app
       measures fantasy correlation nowhere, so it is flagged rather than
-      guessed at.</p>
-    </div>`;
+      guessed at.</p>`;
 }
 
 /* The table, straight off the league. No model in it at all — which is
@@ -20997,7 +21004,7 @@ function ffLineupHTML(d) {
              under it, and the biggest reason his number moved. */
           const wk = W ? W.seat(s.week) : { chips: "", vs: "", why: "" };
           return `<div class="hd-row ff-row">
-          <span class="ld-slot">${escapeHtml(MOCK_SLEEPER_SLOT[s.slot] || s.slot)}</span>
+          <span class="ld-slot${s.position ? ` ffpos ffpos-${escapeHtml(s.position.toLowerCase())}` : ""}">${escapeHtml(MOCK_SLEEPER_SLOT[s.slot] || s.slot)}</span>
           <span class="hd-what"><b>${s.player ? escapeHtml(s.player)
             : '<span class="rank-none">\u2014 nobody eligible</span>'}${
             s.thin && s.basis !== "week" ? ' <span class="hd-chip warn">thin sample</span>' : ""}${wk.chips}</b>
@@ -22872,8 +22879,8 @@ function renderSleeperPanel(d, ctx) {
       </div>
     </div>
     ${leagueChips}
-    <div class="section-title">My roster
-      <span class="sub">— usage trend (season → 4wk → last) and trade flags for YOUR players</span></div>
+    <details class="ffz-fold"><summary>Your roster’s usage <span class="ffz-n">${myRows.length}</span></summary>
+    <p class="rank-help">Usage trend (season → 4-week → last) and trade flags for your players.</p>
     ${(() => {
       // The one line a manager checks first. Names, not a count — a
       // count sends him hunting through his own list.
@@ -22886,12 +22893,12 @@ function renderSleeperPanel(d, ctx) {
         — details on the Injuries page.</p>` : "";
     })()}
     <div style="margin:0 -18px">${myRows.map(rowHTML).join("") ||
-      `${panelEmpty("Couldn’t match a roster you own in this league.")}`}</div>
-    <div class="section-title">Waiver watch
-      <span class="sub">— usage RISERS nobody in this league rosters</span></div>
+      `${panelEmpty("Couldn’t match a roster you own in this league.")}`}</div></details>
+    <details class="ffz-fold"><summary>Waiver watch <span class="ffz-n">${waivers.length}</span></summary>
+    <p class="rank-help">Usage risers nobody in this league rosters.</p>
     <div style="margin:0 -18px">${waivers.map((u) => rowHTML({
         name: u.player, pos: u.position, team: u.team, u, flag: flagByName[ffNorm(u.player)] })).join("") ||
-      `${panelEmpty("Every notable riser is already rostered here.")}`}</div>
+      `${panelEmpty("Every notable riser is already rostered here.")}`}</div></details>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:10px 2px 8px">Boards use PPR scoring;
       custom-scoring recompute lands with the in-season update.</p>
   </div>`;

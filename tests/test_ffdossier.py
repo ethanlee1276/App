@@ -38,8 +38,11 @@ def test_every_fantasy_surface_is_a_door():
     n = APP.count('data-dossier="${escapeAttr(')
     assert n >= 9, f"only {n} surfaces carry the hook"
     # The named ones, by their anchoring class.
+    # The trade targets, the waiver board and the best spots are the
+    # room's player row since 2026-10-27 (fantasy.js ffRow), a door on
+    # the row itself.
     for anchor in ('class="ff-who" data-dossier',
-                   'class="card-id" data-dossier',
+                   'ffrow-door" : ""}"${door\n      ? ` data-dossier="${escapeAttr(o.player)}"',
                    'class="os-team mk-idrow" data-dossier',
                    'class="dl-main" data-dossier',
                    'class="rank-name" data-dossier',

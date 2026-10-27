@@ -343,6 +343,7 @@ def test_the_room_draws_the_week_by_position():
     week = dict(_WEEK, measured=measured)
     out = _run("""
       globalThis.escapeAttr = (x) => String(x == null ? "" : x);
+      globalThis.teamMark = () => "";
       globalThis.playerAvatar = () => "";
       globalThis.nflMap = () => ({});
       globalThis.icon = (n) => "";

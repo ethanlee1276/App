@@ -160,7 +160,7 @@ def test_the_build_and_the_desk_read_them():
 
 def test_the_room_draws_them():
     assert '["ALL", "QB", "RB", "WR", "TE", "K", "DEF"]' in WEEK_JS
-    assert "if (r.position === \"DEF\") return defRowHTML(r);" in WEEK_JS
+    assert "if (r.position === \"DEF\") return defRowHTML(r, top);" in WEEK_JS
     assert '["QB", "RB", "WR", "TE", "K", "DEF"].filter((p) => (fa[p] || []).length)' in WEEK_JS
 
 

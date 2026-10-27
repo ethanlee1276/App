@@ -785,18 +785,28 @@
 .ff101 > summary::after { content: "▾"; float: right; color: var(--text-mute); }
 .ff101[open] > summary::after { content: "▴"; }
 .ff101-k { color: var(--brand); margin-right: 6px; }
-.ff101-steps { margin: 0; padding: 0 var(--sp-4) 0 calc(var(--sp-4) + 18px); display: grid; gap: 8px;
-  font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
-.ff101-steps b { color: var(--text); }
-.ff101-week { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;
+/* The four steps as numbered tiles: four abreast on a wide screen, a list
+   on a phone. */
+.ff101-steps { list-style: none; margin: 0; padding: 0 var(--sp-4); display: grid; gap: var(--sp-2);
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.ff101-steps li { position: relative; padding: var(--sp-3) var(--sp-3) var(--sp-3) 44px; border-radius: var(--radius-sm);
+  background: var(--fill-subtle); border: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); color: var(--text-dim); }
+.ff101-steps b { display: block; margin-bottom: 2px; color: var(--text); }
+.ff101-n { position: absolute; left: var(--sp-3); top: var(--sp-3); display: inline-grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 999px; background: var(--brand); color: var(--brand-ink);
+  font-size: var(--fs-xs); font-weight: 800; }
+.ff101-week { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-2);
   margin: var(--sp-3) var(--sp-4) 0; }
 .ff101-week > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm);
-  background: var(--fill-subtle); font-size: var(--fs-sm); }
+  border-left: 2px solid var(--brand); background: var(--fill-subtle); font-size: var(--fs-xs); }
 .ff101-week b { color: var(--brand); font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; }
 .ff101-week span { color: var(--text-body); line-height: var(--lh-tight); }
 .ff101-start { margin: var(--sp-3) var(--sp-4) 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-body); }
+.ff101-words { margin: var(--sp-3) var(--sp-4) var(--sp-4); }
+.ff101-words > summary { cursor: pointer; width: fit-content; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); }
 .ff101-terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px var(--sp-4);
-  margin: var(--sp-3) 0 0; padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: var(--hairline) solid var(--border-soft); }
+  margin: var(--sp-2) 0 0; padding: 0; }
 .ff101-terms > div { display: flex; gap: 6px; font-size: var(--fs-xs); line-height: var(--lh-snug); }
 .ff101-terms dt { flex: none; font-weight: 700; color: var(--text); }
 .ff101-terms dd { margin: 0; color: var(--text-dim); }
@@ -950,25 +960,146 @@
 .ffn-filters .rec-bf-group { margin: 0; }
 .ffn-game select { min-height: 36px; max-width: 100%; padding: 6px 10px; border: var(--hairline) solid var(--border);
   border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--fs-sm); }
-.ffn-list { padding: 0; overflow: hidden; }
-.ffn-row { display: grid; grid-template-columns: 22px 40px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
-  padding: 10px var(--sp-4); border-bottom: var(--hairline) solid var(--border-soft); }
-.ffn-row:last-child { border-bottom: 0; }
-.ffn-rank { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); text-align: right; }
-.ffn-face { display: inline-flex; width: 40px; height: 40px; }
-.ffn-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.ffn-who > b { font-size: var(--fs-md); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ffn-where { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--text-mute); }
-.ffn-where .hd-chip { padding: 1px 6px; }
 .ffn-line { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-xs); color: var(--text-mute); }
 .ffn-stat b { margin-right: 3px; font-family: var(--font-mono); font-weight: 600; color: var(--text-dim); }
 .ffn-stat.avg, .ffn-stat.avg b { color: var(--text-faint); }
 .ffn-key { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-mute); }
-.ffn-pts { display: flex; flex-direction: column; align-items: flex-end; }
-.ffn-pts b { font-family: var(--font-mono); font-size: var(--fs-xl); line-height: var(--lh-tight); font-weight: 600; color: var(--text); }
-.ffn-pts span { font-size: var(--fs-xs); letter-spacing: .06em; color: var(--text-mute); }
-.ffn-row:first-child .ffn-pts b { color: var(--brand); }
-@media (max-width: 520px) {
-  .ffn-row { grid-template-columns: 40px minmax(0, 1fr) auto; padding: 10px var(--sp-3); }
-  .ffn-rank { display: none; }
+.ffr.ffn-row:first-child .ffr-pts > b { color: var(--brand); }
+/* A night's row has no range bar: the name and the number, at every width. */
+.ffr.ffn-row { grid-template-areas: "face main pts"; }
+@media (min-width: 900px) { .ffr.ffn-row { grid-template-columns: 40px minmax(0, 1fr) 86px; grid-template-areas: "face main pts"; } }
+/* Hockey's positions, in the football badges' colours. */
+.ffpos-c { --pos: var(--pos-rb); }
+.ffpos-w { --pos: var(--pos-wr); }
+.ffpos-d { --pos: var(--pos-te); }
+
+/* THE WEEK, ONE LINE (fantasy.js ffStripHTML): which week, how many games,
+   who is off. */
+.ff-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 var(--sp-3);
+  font-size: var(--fs-sm); color: var(--text-mute); }
+.ff-strip-wk { padding: 3px 10px; border-radius: 999px; background: var(--grad-chip);
+  border: var(--hairline) solid var(--border); font-weight: 800; color: var(--text); }
+
+/* THE ROOMS AS AN APP'S TOOL TILES (2026-10-27, the visual pass): a mark,
+   the name and what is in it, every room on screen at once. Six abreast
+   on a wide screen, four on a phone with the name alone (the description
+   stays the tile's title). The tile is the tab: app.js subtabbedHTML
+   draws it, fantasy.js ffRoomIcons adds the mark. */
+.room-index { display: grid; gap: var(--sp-2); margin: 0 0 var(--sp-4);
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.room-card { position: relative; justify-content: center; gap: 1px; min-height: 58px; padding: 9px 12px 9px 56px;
+  border-radius: var(--radius); }
+.rc-ic { position: absolute; left: 12px; top: 50%; display: inline-grid; place-items: center; width: 34px; height: 34px;
+  margin-top: -17px; border-radius: var(--radius-sm); background: var(--fill-subtle); color: var(--brand); }
+.room-card .rc-what { max-width: none; }
+.room-card.active .rc-ic { background: color-mix(in oklab, var(--brand-ink) 14%, transparent); color: var(--brand-ink); }
+@media (max-width: 760px) {
+  .room-index { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .room-card { align-items: center; justify-content: flex-start; gap: 5px; min-height: 74px; padding: 9px 4px 8px;
+    text-align: center; white-space: normal; }
+  .rc-ic { position: static; width: 30px; height: 30px; margin: 0; }
+  .room-card .rc-name { font-size: var(--fs-xs); line-height: var(--lh-tight); }
+  .room-card .rc-what { display: none; }
 }
+
+/* ---- THE PLAYER ROW (2026-10-27, the visual pass) ----------------------
+   One look for a player wherever the room lists one: his face, his name
+   with its chips, a colour badge for his position beside his team and
+   game, the reason his number moved, eight weeks in ten as a bar on the
+   list's own scale, and his number large on the right. A wide screen
+   gives the bar a column of its own; a phone puts it under his name. */
+:root { --pos-qb: #F2616B; --pos-rb: #35C29A; --pos-wr: #5B9CF5; --pos-te: #F2A33A;
+  --pos-k: #B48CF0; --pos-dst: #A3A39A; }
+:root[data-theme="light"] { --pos-qb: #C42E3A; --pos-rb: #12805F; --pos-wr: #2160C4; --pos-te: #B5650C;
+  --pos-k: #7448C2; --pos-dst: #6E6E66; }
+.ffpos { --pos: var(--text-mute); display: inline-flex; align-items: center; flex: none; height: 18px; padding: 0 6px;
+  border-radius: 4px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .03em; line-height: var(--lh-tight);
+  color: var(--pos); background: color-mix(in oklab, var(--pos) 16%, transparent); }
+.ffpos-qb { --pos: var(--pos-qb); }
+.ffpos-rb { --pos: var(--pos-rb); }
+.ffpos-wr { --pos: var(--pos-wr); }
+.ffpos-te { --pos: var(--pos-te); }
+.ffpos-k { --pos: var(--pos-k); }
+.ffpos-dst { --pos: var(--pos-dst); }
+.ffr-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  margin: var(--sp-3) 0 var(--sp-2); }
+.ffr-bar .rec-bf-group { margin: 0; }
+.ffr-scale { font-size: var(--fs-xs); color: var(--text-mute); }
+.ffr-list { padding: 0; overflow: hidden; }
+.ffr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "face main pts" ". range range";
+  align-items: center; column-gap: var(--sp-3); row-gap: 6px; padding: 12px var(--sp-4);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.ffr:last-child { border-bottom: 0; }
+.ffr.ffrow-door { cursor: pointer; }
+@media (hover: hover) { .ffr.ffrow-door:hover { background: var(--fill-subtle); } }
+.ffr-face { grid-area: face; display: inline-flex; width: 40px; height: 40px; }
+.ffr-main { grid-area: main; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ffr-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.ffr-name > b { font-size: var(--fs-md); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%; }
+.ffr-name .hd-chip { padding: 1px 7px; font-size: var(--fs-xs); }
+.ffr-meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-xs); color: var(--text-mute); }
+.ffr-meta > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ffr-why { font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-dim); }
+.ffr-pts { grid-area: pts; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.ffr-pts > b { font-family: var(--font-mono); font-size: var(--fs-xl); line-height: var(--lh-tight); font-weight: 600;
+  color: var(--text); }
+.ffr-pts > span { font-size: var(--fs-xs); color: var(--text-mute); }
+.ffr-part { margin-left: 1px; color: var(--warn); font-size: var(--fs-xs); }
+.ffr-range { grid-area: range; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ffr-track { position: relative; flex: 1; height: 6px; border-radius: 999px; background: var(--fill-subtle); }
+.ffr-track > i { position: absolute; top: 0; bottom: 0; border-radius: 999px;
+  background: color-mix(in oklab, var(--brand) 38%, transparent); }
+.ffr-track > b { position: absolute; top: -3px; width: 4px; height: 12px; margin-left: -2px; border-radius: 2px;
+  background: var(--brand); }
+.ffr-end { flex: none; min-width: 26px; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); }
+.ffr-end:last-child { text-align: right; }
+.ffr-key { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
+.ffr-how { margin-top: var(--sp-3); }
+.ffr-how > summary { cursor: pointer; width: fit-content; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); }
+@media (min-width: 900px) {
+  .ffr { grid-template-columns: 40px minmax(0, 1fr) minmax(180px, 240px) 86px; grid-template-areas: "face main range pts";
+    column-gap: var(--sp-4); }
+}
+.ffr-track > i.up { background: color-mix(in oklab, var(--good) 45%, transparent); }
+.ffr-track > i.down { background: color-mix(in oklab, var(--bad) 45%, transparent); }
+.ffr-pts > b.pos { color: var(--good); }
+.ffr-pts > b.neg { color: var(--bad); }
+.ffr-note { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-mute); }
+.ffr-cols { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+.ffr-group { display: flex; align-items: center; gap: 8px; padding: 10px var(--sp-4);
+  border-bottom: var(--hairline) solid var(--border-soft); font-weight: 800; color: var(--text); }
+/* Inside a column, the bar takes the row under the name at every width. */
+.ffr-cols .ffr { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "face main pts" ". range range"; }
+
+/* THE USAGE TABLE ON A PHONE (2026-10-27): this sheet's own .ff-bar
+   (display: block) came after styles.css's phone rule that hides it, so a
+   phone drew the bar anyway and the trend chip fell to a line of its own
+   under every row. Hidden again here, after the rule it must beat; the
+   name keeps two lines instead of an ellipsis. */
+@media (max-width: 1100px) { .ff-row > .ff-bar, .ff-head > .ff-bar-h { display: none; } }
+.ff-name { display: flex; flex-direction: column; gap: 2px; }
+.ff-name > strong, .ff-name > .ff-pos { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-name > .ff-pos { display: flex; align-items: center; gap: 5px; font-size: var(--fs-xs); }
+
+/* ---- THE LEAGUE DESK, TIDIED (2026-10-27, the visual pass) ------------
+   The head-to-head's odds as a bar under the number, its workings under a
+   fold; the lineup's slot a badge in its player's position colour; the
+   Sleeper card's two long lists folded under their counts, so the desk
+   (the live score, the to-do list, the lineup) is a screen from the top. */
+.ld-wp { width: 100%; height: 8px; max-width: 360px; margin: 6px auto 0; border-radius: 999px; background: var(--fill-subtle);
+  overflow: hidden; }
+.ld-wp > i { display: block; height: 100%; border-radius: 999px; background: var(--good); }
+.ld-wp.neg > i { background: var(--bad); }
+.ld-how, .ffz-fold { margin-top: var(--sp-3); }
+.ld-how > summary, .ffz-fold > summary { cursor: pointer; width: fit-content; font-size: var(--fs-sm); font-weight: 700;
+  color: var(--brand); }
+.ffz-fold > summary { display: flex; align-items: center; gap: 8px; width: auto; padding: 10px 0;
+  border-top: var(--hairline) solid var(--border-soft); color: var(--text); }
+.ffz-n { padding: 1px 8px; border-radius: 999px; background: var(--fill-subtle); font-size: var(--fs-xs);
+  color: var(--text-mute); }
+.ld-slot.ffpos { justify-content: center; height: 22px; padding: 0 4px; font-family: var(--font-sans);
+  font-size: var(--fs-xs); }
+/* The lineup's game line in the room's own type, not the agate mono the
+   picks boards keep for prices. */
+.ld-slot ~ .hd-what > span { font-family: var(--font-sans); }
