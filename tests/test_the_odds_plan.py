@@ -131,6 +131,28 @@ def test_college_comes_second_and_the_rest_share_one_fill():
         f"the third tier is not at one fill: {fills} — someone was cut before the rest"
 
 
+def test_until_the_renewal_the_nba_is_funded_right_after_the_nfl():
+    """Ethan, 2026-10-28: "we still don't have edge bets or most likely bets
+    for nba. We need that now" — October's credits had run out after the
+    NFL and college, and he chose the NBA before college until Nov 1."""
+    oct28, end = dt.date(2026, 10, 28), dt.date(2026, 11, 1)
+    assert P.tiers(oct28)[:3] == (("nfl",), ("nba",), ("cfb",))
+    assert sorted(lg for t in P.tiers(oct28) for lg in t) == sorted(P.PRIORITY), "nobody dropped"
+    assert P.tiers(P.NBA_FIRST_UNTIL) == P.TIERS and P.tiers(NOV1) == P.TIERS, "from the renewal, as before"
+    seen = 0
+    for pool in range(2_000, 30_000, 250):
+        plan = P.build(oct28, pool, end=end, reset="measured", start=dt.date(2026, 10, 1))
+        nfl, nba, cfb = plan.get("nfl"), plan.get("nba"), plan.get("cfb")
+        assert nba.priority == 2 and cfb.priority == 3
+        # A share is cut to whole credits, so one can trickle past a tier.
+        if nba.target > 1:
+            assert nfl.need - nfl.target <= 1, "the NFL's target still comes first"
+        if cfb.target > 1:
+            assert nba.need - nba.target <= 1, f"college funded at {pool} before the NBA's target was met"
+            seen += 1
+    assert seen, "some pool funds both"
+
+
 def test_nobody_gets_headroom_while_a_target_is_cut():
     plan = _short_plan()
     assert all(lp.extra == 0 for lp in plan.leagues.values()), \

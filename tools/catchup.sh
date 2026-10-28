@@ -661,6 +661,14 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GU "NBA picks before college until Nov 1" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan | head -16
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/nba.json'))
+print('built', d.get('built_at') or d.get('generated_at'), '·', len(d.get('recommendations') or []), 'Edge ·', len(d.get('most_likely') or []), 'Most Likely ·', d.get('likely_census'))
+"
+SH
 run GT "A free account's menu wears its locks" 30 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'pill.classList.toggle("nav-locked", src.classList.contains("nav-locked"));'
 SH

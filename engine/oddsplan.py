@@ -84,6 +84,22 @@ TIERS = (("nfl",), ("cfb",), ("mlb", "nba", "nhl", "ufc", "wnba"))
 #: Every league, in the order the report lists them.
 PRIORITY = tuple(lg for tier in TIERS for lg in tier)
 
+#: ETHAN'S CALL, 2026-10-28: "we still don't have edge bets or most likely
+#: bets for nba. We need that now". October's credits had run out for every
+#: league after the NFL and college (DK: 0 NBA props priced), and of the
+#: ways to pay for the month's last days he chose the NBA before college
+#: until the plan renews. Before this day the NBA is funded right after the
+#: NFL; from it, TIERS stands again by itself.
+NBA_FIRST_UNTIL = _dt.date(2026, 11, 1)
+
+
+def tiers(day: _dt.date) -> tuple:
+    """The order the plan funds the leagues in on ``day`` (TIERS, but for
+    NBA_FIRST_UNTIL)."""
+    if day < NBA_FIRST_UNTIL:
+        return (("nfl",), ("nba",), ("cfb",), tuple(lg for lg in TIERS[2] if lg != "nba"))
+    return TIERS
+
 #: Headroom on top of the target, funded only after every tier's target:
 #: the NFL's first, up to half again; then each later tier's, a quarter.
 NFL_HEADROOM = 0.50
@@ -451,7 +467,8 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
     plan = Plan(day=day, days_left=len(days), pool=pool, reserve=RESERVE,
                 harvest=harvest, buffer=buffer, spendable=spendable, unplanned=0,
                 ends=end, reset=reset, starts=start, headroom=headroom)
-    for i, tier in enumerate(TIERS, 1):
+    order = tiers(day)
+    for i, tier in enumerate(order, 1):
         for lg in tier:
             today = day_need(lg, day, games_today.get(lg))
             rest = sum(day_need(lg, d) for d in days[1:])
@@ -466,14 +483,14 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
         return {lg: int(owed[lg] * frac) for lg in tier}
 
     left = spendable
-    for tier in TIERS:                                   # 2. targets, NFL first
+    for tier in order:                                   # 2. targets, NFL first
         got = share_out(tier, {lg: plan.leagues[lg].need for lg in tier}, left)
         for lg, n in got.items():
             plan.leagues[lg].target = n
             left -= n
     short = (not headroom
              or any(lp.target < lp.need for lp in plan.leagues.values()))
-    for i, tier in enumerate(TIERS):                     # 3. headroom, same order
+    for i, tier in enumerate(order):                     # 3. headroom, same order
         if short:
             break                    # nobody's extra before everybody's target
         rate = NFL_HEADROOM if i == 0 else HEADROOM
