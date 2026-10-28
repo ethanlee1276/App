@@ -567,6 +567,34 @@ def test_a_skipped_test_file_is_not_reported_as_a_pass():
     assert 'print("SKIP ' in vi
 
 
+def test_an_optional_crypto_library_that_is_installed_but_broken_is_skipped():
+    """The same bug as above, one door further out (nightly, 2026-10-28).
+
+    test_passkeys.py cross-checks our plain-Python ES256/RS256 against the
+    `cryptography` package when the box has one, and skipped on
+    `except ImportError`. But `cryptography` is a Rust extension: where
+    its bindings load and its own dependency does not, the import does not
+    fail — it panics, and pyo3 raises PanicException, which inherits from
+    BaseException and sails straight past `except ImportError`. A box with
+    a half-installed copy took the whole file red, 16k tests in, on a
+    cross-check that was never the point of the test.
+
+    engine/webpush.py already catches it broadly, with a comment saying
+    why. The test is pinned to the same door so the two cannot drift."""
+    src = open(os.path.join(ROOT, "tests", "test_passkeys.py"), encoding="utf-8").read()
+    guard = src[src.index("def test_the_plain_python_checks_agree_with_a_crypto_library"):]
+    guard = guard[:guard.index("\ndef ")]
+    assert "from cryptography" in guard, "the cross-check no longer imports the library"
+    assert "except BaseException" in guard, (
+        "too narrow — an installed-but-unusable cryptography panics past "
+        "ImportError and must skip the cross-check, not fail the file")
+    assert "KeyboardInterrupt" in guard, "a broad catch must still let Ctrl-C through"
+
+    # And the engine's copy, which is where the lesson was learned first.
+    wp = open(os.path.join(ROOT, "engine", "webpush.py"), encoding="utf-8").read()
+    assert "except BaseException" in wp, "engine/webpush.py lost its broad catch"
+
+
 # --- the tripwires for the August bugs ---------------------------------------
 def test_the_new_invariant_checks_are_registered_in_both_lists():
     """A check that exists but is not in CHECKS never runs; one missing

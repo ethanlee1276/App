@@ -325,8 +325,17 @@ def test_the_plain_python_checks_agree_with_a_crypto_library():
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import ec, padding
         from cryptography.hazmat.primitives.asymmetric import rsa as rsa_lib
-    except ImportError:
-        print("      (cross-check skipped: no cryptography package)")
+    except BaseException as exc:                              # noqa: BLE001
+        # A half-installed `cryptography` panics rather than failing to
+        # import (its Rust bindings raise pyo3's PanicException, which is
+        # a BaseException, when _cffi_backend is missing), so `except
+        # ImportError` lets the whole file go red on a box that simply
+        # does not have a working copy. engine/webpush.py already catches
+        # it broadly for the same reason. The library is only an oracle
+        # here; the plain-Python checks above are the test.
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        print(f"      (cross-check skipped: no working cryptography package — {type(exc).__name__})")
         return
     key = ec.generate_private_key(ec.SECP256R1())
     nums = key.public_key().public_numbers()
