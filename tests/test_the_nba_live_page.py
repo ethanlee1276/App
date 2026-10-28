@@ -616,7 +616,7 @@ def test_the_page_in_a_browser_at_390_and_1280():
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nba/401810010", wait_until="load")
                     page.wait_for_selector(".hc-stage .hc-photo", timeout=15000)
                     page.evaluate("document.querySelectorAll('#tour-overlay, .tour-pop').forEach((n) => n.remove())")
-                    page.wait_for_function("document.querySelector('.hc-photo').naturalWidth > 0", timeout=8000)
+                    page.wait_for_function("() => document.querySelector('.hc-photo').naturalWidth > 0", timeout=8000)
                     assert page.query_selector(".hc-svg .hc-flight"), "the last shot's flight"
                     assert len(page.query_selector_all(".hc-play")) == 8
                     # The four tabs fit across a phone; nothing scrolls sideways.

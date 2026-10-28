@@ -33,7 +33,7 @@ const CHAT_REASONS = [["spam", "Spam"], ["abuse", "Abuse"], ["hate", "Hate"], ["
 const CH = {
   room: "", league: "", event: "", d: null,
   msgs: [], byId: new Map(), lastId: 0, firstId: 0, older: false, since: 0,
-  plays: {}, threads: {}, minePlays: {}, votes: null, here: 0, me: null,
+  plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0, me: null,
   open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false,
   unread: 0, timer: 0, busy: false, loaded: false, err: "", menu: 0,
 };
@@ -465,10 +465,16 @@ function chatOpen(opts) {
   chatSchedule(0);
 }
 
+/* The who-wins vote through the game, [at, home, away] a mark (the server's
+   chat_vote_marks), for the game page's win-chance chart. */
+function chatVotePath() {
+  return CH.votePath || [];
+}
+
 function chatReset() {
   clearTimeout(CH.timer);
   Object.assign(CH, { room: "", league: "", event: "", d: null, msgs: [], byId: new Map(), lastId: 0,
-    firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, here: 0,
+    firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0,
     open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false, unread: 0, timer: 0,
     loaded: false, err: "", menu: 0 });
   const s = document.getElementById("gch-sheet");
@@ -554,6 +560,10 @@ async function chatPull(older) {
   Object.assign(CH.threads, v.threads || {});
   Object.assign(CH.minePlays, v.mine_plays || {});
   CH.votes = v.votes || CH.votes;
+  CH.votePath = v.vote_path || CH.votePath || [];
+  // The room against the math: the game page's chart draws the vote
+  // through the game (js/detail.js pbpRoomLine) whenever it moves.
+  if (typeof pbpRoomLine === "function") pbpRoomLine();
   CH.here = v.here || 0;
   CH.me = v.me || CH.me;
   if (!older) CH.since = v.t || CH.since;

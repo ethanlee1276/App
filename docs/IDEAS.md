@@ -166,10 +166,12 @@ of work first, each with what it is built from:
    and Season ladders on the Call it card (ten graded calls to stand on
    one), a flame from three in a row beside a handle in the chats, and a
    share at every five in a row.
-4. **The room against the math.** The who-wins vote charted through the
-   game against the live win chance: "the room had CIN at 30% when the
-   math had them at 70%". Built from: chat_votes snapshotted every few
-   minutes (one new table) + the deep file's `wp`. Small to medium.
+4. **The room against the math.** BUILT 2026-10-28 (runbook FS): the
+   who-wins vote charted through the game against the live win chance,
+   dashed in sky on the game page's win-chance chart, and "the room had
+   CIN at 30% when the math had them at 70%" where they were furthest
+   apart. engine/gamechat chat_vote_marks, a mark a minute at most;
+   js/detail.js pbpRoomLine.
 5. **What has to happen.** BUILT 2026-10-27 (round three, runbook FO):
    under each live leg of a saved ticket, one sentence from the box: "Chase
    needs 14 more yards; he's at 9.7 a catch tonight." Free (box facts); the

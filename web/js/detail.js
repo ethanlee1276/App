@@ -2999,11 +2999,16 @@ if (typeof window !== "undefined" && !window._ciBound) {
   });
 }
 
+const WP_W = 320, WP_H = 110;
 function pbpWinChartHTML(d, league) {
   const rows = (league === "mlb" ? (d.events || []).filter((e) => e && e.kind === "atbat") : (d.plays || []))
     .filter((r) => r && typeof r.wp === "number");
   if (rows.length < 4) return "";
-  const W = 320, H = 110, n = rows.length;
+  const W = WP_W, H = WP_H, n = rows.length;
+  // When each play happened (ESPN's own stamp), so the room's vote can be
+  // laid along the same plays (pbpRoomLine); left off if any play lacks it.
+  const ats = rows.map((r) => Math.round(Date.parse(r.at || "") / 1000));
+  const timed = ats.every((t) => t > 0);
   const x = (i) => ((i / (n - 1)) * W).toFixed(1);
   const y = (wp) => (H - (Math.max(0, Math.min(100, wp)) / 100) * H).toFixed(1);
   const last = rows[n - 1].wp;
@@ -3012,13 +3017,69 @@ function pbpWinChartHTML(d, league) {
   return `<div class="card pbp-wpcard">
     <div class="pbp-rail-head">Win chance <span class="mini">${escapeHtml(lead || "")} ${Math.round(last >= 50 ? last : 100 - last)}% now</span></div>
     <svg class="pbp-wp" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
-      aria-label="${escapeAttr(`${d.home || "Home"} win chance across the game, ${Math.round(last)}% now`)}">
+      aria-label="${escapeAttr(`${d.home || "Home"} win chance across the game, ${Math.round(last)}% now`)}"${timed
+        ? ` data-ats="${ats.join(",")}" data-wps="${rows.map((r) => Math.round(r.wp)).join(",")}"
+      data-home="${escapeAttr(d.home || "")}" data-away="${escapeAttr(d.away || "")}"` : ""}>
       <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" class="pbp-wp-mid"/>
       <polyline class="pbp-wp-line" fill="none" points="${rows.map((r, i) => `${x(i)},${y(r.wp)}`).join(" ")}"/>
       ${swings.map(([r, i]) => `<circle class="pbp-wp-dot" cx="${x(i)}" cy="${y(r.wp)}" r="3"/>`).join("")}
+      ${timed ? `<polyline class="pbp-wp-room" fill="none" points=""/>` : ""}
     </svg>
-    <div class="pbp-wp-key"><span>Above the line: ${escapeHtml(d.home || "home")}</span><span>Below: ${escapeHtml(d.away || "away")}</span></div>
+    <div class="pbp-wp-key"><span>Above the line: ${escapeHtml(d.home || "home")}</span>${timed
+      ? `<span class="pbp-wp-roomkey" hidden>Dashed: the room’s vote</span>` : ""}<span>Below: ${escapeHtml(d.away || "away")}</span></div>
+    ${timed ? `<p class="mini pbp-wp-says" hidden></p>` : ""}
   </div>`;
+}
+
+/* THE ROOM AGAINST THE MATH (the ideas list, 2026-10-28): the game chat's
+   who-wins vote through the game, dashed on the win-chance chart, and one
+   sentence where the two were furthest apart — "the room had CIN at 30%
+   when the math had them at 70%". Aggregates only, as the vote bar is;
+   only marks with ten votes behind them, and a gap of fifteen points.
+   The chat hands over its marks (js/chat.js chatVotePath, [at, home,
+   away]); a mark before the first play is the split at kickoff. */
+const ROOM_LINE_MIN_VOTES = 10, ROOM_LINE_GAP = 15;
+function pbpRoomLine() {
+  const svg = document.querySelector(".pbp-wpcard .pbp-wp[data-ats]");
+  if (!svg) return;
+  const card = svg.closest(".pbp-wpcard");
+  const line = svg.querySelector(".pbp-wp-room");
+  const key = card.querySelector(".pbp-wp-roomkey"), says = card.querySelector(".pbp-wp-says");
+  const ats = svg.dataset.ats.split(",").map(Number), wps = svg.dataset.wps.split(",").map(Number);
+  const n = ats.length;
+  const marks = (typeof chatVotePath === "function" ? chatVotePath() : [])
+    .filter((m) => m[1] + m[2] >= ROOM_LINE_MIN_VOTES);
+  const before = marks.filter((m) => m[0] < ats[0]).pop();
+  const path = (before ? [[ats[0], before[1], before[2]]] : []).concat(marks.filter((m) => m[0] >= ats[0]));
+  if (path.length < 2 || n < 4) {
+    line.setAttribute("points", "");
+    key.hidden = says.hidden = true;
+    return;
+  }
+  // The play a moment falls at, between the two plays either side of it.
+  const at = (t) => {
+    if (t >= ats[n - 1]) return n - 1;
+    let i = 1;
+    while (i < n - 1 && ats[i] < t) i++;
+    const a = ats[i - 1], b = ats[i];
+    return i - 1 + (b > a ? Math.min(1, Math.max(0, (t - a) / (b - a))) : 0);
+  };
+  const pts = path.map(([t, h, a]) => [at(t), (100 * h) / (h + a)]);
+  line.setAttribute("points", pts.map(([i, p]) =>
+    `${((i / (n - 1)) * WP_W).toFixed(1)},${(WP_H - (p / 100) * WP_H).toFixed(1)}`).join(" "));
+  key.hidden = false;
+  let best = null;
+  for (const [i, room] of pts) {
+    const math = wps[Math.max(0, Math.min(n - 1, Math.round(i)))];
+    if (!best || Math.abs(room - math) > best.gap) best = { gap: Math.abs(room - math), room, math };
+  }
+  if (best.gap < ROOM_LINE_GAP) { says.hidden = true; return; }
+  // Said of the side the math favoured at that moment.
+  const home = best.math >= 50;
+  const pct = (v) => Math.round(home ? v : 100 - v);
+  says.textContent = `The room had ${home ? svg.dataset.home : svg.dataset.away} at ${pct(best.room)}% `
+    + `when the math had them at ${pct(best.math)}%.`;
+  says.hidden = false;
 }
 
 /* A PLAYER'S BIRTHDAY ON HIS GAME (Ethan, 2026-10-25, on Real: "It shows
@@ -4192,6 +4253,7 @@ async function renderPbpPage(tick) {
     // The game chat's card under the scoreboard (js/chat.js chatEntryPaint),
     // filled the moment the page is drawn, whichever layout drew it.
     if (typeof chatEntryPaint === "function") chatEntryPaint();
+    pbpRoomLine();
     const b = document.getElementById("pbp-back");
     if (b) b.addEventListener("click", () => { markBackNav(); switchView(way.view); });
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>

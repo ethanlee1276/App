@@ -684,7 +684,7 @@ def test_in_a_browser_the_photo_the_links_and_the_tiles():
                     page.wait_for_selector(".mb-hero-face .cc-act.on", timeout=3000)
                     assert page.evaluate("getComputedStyle(document.querySelector('.mb-hero-face .cc-face')).display") == "none"
                 else:
-                    page.wait_for_function("!document.querySelector('.mb-hero-face .cc-act')", timeout=3000)
+                    page.wait_for_function("() => !document.querySelector('.mb-hero-face .cc-act')", timeout=3000)
                     assert page.evaluate("getComputedStyle(document.querySelector('.mb-hero-face .cc-face')).display") != "none"
                 # The game: the park, the series, MLB's page, the runs and steals; no video.
                 head = page.evaluate("document.querySelector('.mb-game-h').textContent.replace(/\\s+/g, ' ')")

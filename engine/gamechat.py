@@ -69,6 +69,11 @@ REPORT_REASONS = ("spam", "abuse", "hate", "scam", "other")
 REACTIONS = ("fire", "wow", "lol", "ugh")
 PAGE = 60
 KEEP_DAYS = 14
+#: The room against the math (2026-10-28): the who-wins vote's split is
+#: marked at most once a minute, and a room hands back its last
+#: VOTE_PATH_MAX marks — a game's worth at a busy minute.
+VOTE_MARK_EVERY_S = 60
+VOTE_PATH_MAX = 240
 #: How long a page counts as "here" after its last ask.
 HERE_S = 45
 #: The most rooms one counts call may ask about (the Live tab's games).
@@ -118,6 +123,16 @@ def ensure_tables(conn) -> None:
         changed_at REAL NOT NULL,
         PRIMARY KEY (room, user_id)
       );
+      -- THE ROOM'S LINE THROUGH THE GAME (the room against the math): the
+      -- vote's split as it stood, a mark a minute at most. Aggregates only,
+      -- as the vote bar is: no user ids.
+      CREATE TABLE IF NOT EXISTS chat_vote_marks (
+        room TEXT NOT NULL,
+        at   REAL NOT NULL,
+        home INTEGER NOT NULL,
+        away INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS chat_vote_marks_room ON chat_vote_marks (room, at);
       CREATE TABLE IF NOT EXISTS chat_reports (
         msg_id     INTEGER NOT NULL,
         user_id    INTEGER NOT NULL,
@@ -215,6 +230,7 @@ def _prune(conn, now: float) -> None:
     conn.execute("DELETE FROM chat_msgs WHERE created_at<?", (old,))
     conn.execute("DELETE FROM chat_play_reacts WHERE changed_at<?", (old,))
     conn.execute("DELETE FROM chat_votes WHERE changed_at<?", (old,))
+    conn.execute("DELETE FROM chat_vote_marks WHERE at<?", (old,))
 
 
 def send(conn, user_id: int, room, body, play="", bet=None, reply_to=None,
@@ -312,8 +328,33 @@ def vote(conn, user_id: int, room, side, now: float | None = None,
     conn.execute("INSERT INTO chat_votes (room, user_id, side, changed_at) VALUES (?,?,?,?) "
                  "ON CONFLICT(room, user_id) DO UPDATE SET side=excluded.side, changed_at=excluded.changed_at",
                  (room, int(user_id), side, now))
+    _mark_votes(conn, room, now)
     conn.commit()
     return 200, {"ok": True, "mine": side}
+
+
+def _mark_votes(conn, room: str, now: float) -> None:
+    """The split as it stands, on the room's line: a new mark once a
+    minute has passed since the last, otherwise the last mark takes the
+    new split — so a busy room is a line through the game, not a row for
+    every tap."""
+    n = {r[0]: int(r[1]) for r in conn.execute(
+        "SELECT side, COUNT(*) FROM chat_votes WHERE room=? GROUP BY side", (room,))}
+    home, away = n.get("home", 0), n.get("away", 0)
+    last = conn.execute("SELECT rowid, at FROM chat_vote_marks WHERE room=? ORDER BY at DESC LIMIT 1",
+                        (room,)).fetchone()
+    if last and now - float(last[1]) < VOTE_MARK_EVERY_S:
+        conn.execute("UPDATE chat_vote_marks SET home=?, away=? WHERE rowid=?", (home, away, last[0]))
+    else:
+        conn.execute("INSERT INTO chat_vote_marks (room, at, home, away) VALUES (?,?,?,?)",
+                     (room, now, home, away))
+
+
+def vote_path(conn, room: str) -> list:
+    """[[at, home, away], ...] oldest first, the last VOTE_PATH_MAX marks."""
+    rows = conn.execute("SELECT at, home, away FROM chat_vote_marks WHERE room=? ORDER BY at DESC LIMIT ?",
+                        (room, VOTE_PATH_MAX)).fetchall()
+    return [[round(float(r[0]), 1), int(r[1]), int(r[2])] for r in reversed(rows)]
 
 
 def report(conn, user_id: int, msg_id, reason="other", now: float | None = None) -> tuple[int, dict]:
@@ -511,6 +552,9 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
            "plays": plays, "threads": threads, "mine_plays": mine_plays,
            "votes": {"home": votes.get("home", 0), "away": votes.get("away", 0), "mine": my_vote,
                      "open": game.get("state") != "final"},
+           # The room against the math: the vote through the game, drawn on
+           # the game page's win-chance chart (detail.js pbpRoomLine).
+           "vote_path": vote_path(conn, room),
            "here": touch(room, here_key, now) if here_key else here(room, now)}
     return 200, out
 

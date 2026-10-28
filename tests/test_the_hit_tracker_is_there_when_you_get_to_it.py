@@ -578,7 +578,7 @@ def test_in_a_browser_the_hit_tracker_is_drawn_before_the_reader_gets_there():
             assert page.evaluate("document.querySelectorAll('.cc-slot .cc-pend').length") >= 1, \
                 "a place kept on the switch"
             page.evaluate("window.HERO = document.querySelector('.cc-slot .mb-hero')")
-            page.wait_for_function("document.querySelector(\"[data-ck='role']\") && "
+            page.wait_for_function("() => document.querySelector(\"[data-ck='role']\") && "
                                    "document.querySelector(\"[data-ck='matchup']\") && "
                                    "!document.querySelector('.cc-pend')", timeout=5000)
             assert page.evaluate("document.querySelector('.cc-slot .mb-hero') === window.HERO"), \
@@ -587,7 +587,7 @@ def test_in_a_browser_the_hit_tracker_is_drawn_before_the_reader_gets_there():
             assert asked.count("matchup:Aaron Judge") == 2, "the dropped matchup was asked again"
             assert not any("Juan Soto" in a for a in asked), "a slot further down waits until it nears the screen"
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            page.wait_for_function("window.ASKED.some((a) => a === 'spray:Juan Soto')", timeout=3000)
+            page.wait_for_function("() => window.ASKED.some((a) => a === 'spray:Juan Soto')", timeout=3000)
             # The switch works with what joined it.
             page.click(".cc-slot [data-ck='matchup']")
             assert not errors, errors

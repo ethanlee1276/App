@@ -419,7 +419,7 @@ def test_in_a_browser_the_slot_draws_switches_and_survives_a_redraw():
             assert page.eval_on_selector_all("#cc-overlay [data-ck]", "els => els.map((e) => e.dataset.ck)") == \
                 ["carries", "routes"]
             page.click("#cc-overlay [data-ck=routes]")
-            page.wait_for_function("document.querySelector('#cc-overlay .cc-eyebrow').textContent.includes('Route')",
+            page.wait_for_function("() => document.querySelector('#cc-overlay .cc-eyebrow').textContent.includes('Route')",
                                    timeout=5000)
             page.evaluate("window.QBCarry.close()")
             assert not errors, errors

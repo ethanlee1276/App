@@ -720,6 +720,11 @@
 .pbp-wp-line { stroke: var(--brand-2); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .pbp-wp-dot { fill: var(--brand-2); stroke: var(--panel); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .pbp-wp-key { display: flex; justify-content: space-between; margin-top: 4px; font-size: var(--fs-2xs); color: var(--text-mute); }
+/* The room against the math (pbpRoomLine): the chat's vote, dashed in sky so
+   it never reads as the math's gold line. */
+.pbp-wp-room { stroke: var(--sky); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.pbp-wp-roomkey { color: var(--sky); }
+.pbp-wp-says { margin: 6px 0 0; color: var(--text-dim); }
 
 /* Call it (pbpCallItHTML): the next at-bat or drive, four calls, the room's best. */
 .ci-card { display: grid; gap: 8px; }

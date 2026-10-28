@@ -394,7 +394,7 @@ def test_in_a_browser_every_control_of_the_hit_page_works():
             assert "Every pitch he saw, by kind" in page.evaluate("document.querySelector('.cc-dist').textContent")
             # The season picker asks for that season.
             page.select_option("[data-season-pick]", "2025")
-            page.wait_for_function("document.querySelector('.mb-hero').textContent.includes('2025 season')", timeout=3000)
+            page.wait_for_function("() => document.querySelector('.mb-hero').textContent.includes('2025 season')", timeout=3000)
             assert page.evaluate("document.scrollingElement.scrollWidth") <= 390
             assert page.evaluate("(() => { const c = document.querySelector('#cc-overlay .cc'); return c.scrollWidth - c.clientWidth; })()") == 0
             assert not errors, errors
