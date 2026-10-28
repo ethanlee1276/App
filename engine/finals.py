@@ -145,11 +145,11 @@ def message(doc: dict) -> tuple | None:
     return title, " ".join(parts) or "The game is over."
 
 
-def _follows(watches: list, doc: dict) -> bool:
+def _follows(watches: list, doc: dict, leagues: dict | None = None) -> bool:
     sides = {str(doc.get("home") or "").upper(), str(doc.get("away") or "").upper()} - {""}
     names = {AL._fold(r.get("player")) for r in doc.get("players") or [] if isinstance(r, dict) and r.get("player")}
     for w in watches:
-        if w.get("kind") == "team" and str(w.get("value") or "").upper() in sides:
+        if w.get("kind") == "team" and AL.team_hit(w.get("value"), doc.get("league"), sides, leagues):
             return True
         if w.get("kind") == "player" and AL._fold(w.get("value")) in names:
             return True
@@ -166,6 +166,7 @@ def finals_pass(conn, pbp_dir: Path | None = None, now: float | None = None) -> 
                          "AND (',' || topics || ',') LIKE ?", (f"%,{TOPIC},%",)).fetchall()
     watching = {uid: AL.list_watches(conn, uid) for (uid,) in users}
     watching = {u: w for u, w in watching.items() if w}
+    leagues = {u: AL.team_leagues(conn, u) for u in watching}
     told = 0
     base = Path(pbp_dir) if pbp_dir else PM.WEB / "data" / "pbp"
     for path in sorted(base.glob("*.json")) if base.is_dir() else []:
@@ -190,7 +191,7 @@ def finals_pass(conn, pbp_dir: Path | None = None, now: float | None = None) -> 
         if said and watching:
             url = f"/#pbp/{doc.get('league')}/{doc.get('event_id')}"
             for uid, watches in watching.items():
-                if _follows(watches, doc):
+                if _follows(watches, doc, leagues.get(uid)):
                     told += PM.tell(conn, uid, f"final:{game}", TOPIC, said[0], said[1], url, now=t)
         conn.commit()
     return told

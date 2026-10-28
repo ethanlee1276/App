@@ -2095,7 +2095,7 @@ async function pwLater(btn) {
     const saved = pushSaved() || {};
     const topics = [...new Set((saved.topics || []).concat("posted"))];
     const got = await pushOn(topics.concat(saved.mine || []));
-    const mine = (t) => t === "watches" || t === "bets" || t === "clutch" || t === "finals" || t === "lineup";
+    const mine = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup";
     try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
       topics: got.topics.filter((t) => !mine(t)), mine: got.topics.filter(mine) }))); } catch (e) {}
     buzz("tap");

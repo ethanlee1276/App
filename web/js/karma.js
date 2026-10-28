@@ -226,7 +226,8 @@ const KR_NEW = [
   ["👥", "Pick'em with friends", "Everyone | Friends over the Pick'em tables: your week against your friends'."],
   ["✨", "Pick'em karma", "+5 a winner, +25 a perfect week, and two new badges on the Karma tab."],
   ["🗓️", "Picks left", "While the NFL week has games to pick, the card above says how many and when they lock."],
-  ["👤", "Pick'em on profiles", "This season's pick'em record and place, on every player's profile."]];
+  ["👤", "Pick'em on profiles", "This season's pick'em record and place, on every player's profile."],
+  ["⏰", "Kickoff alerts", "Alerts → My teams' games: a push 10 minutes before your teams play."]];
 function krNewHTML(v) {
   if (!v || v.camp) return "";
   try { if (localStorage.getItem(KR_NEW_KEY)) return ""; } catch (e) { return ""; }

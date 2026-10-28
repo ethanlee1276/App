@@ -85,7 +85,9 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          # The pick'em's push before picks lock (engine/pickem): until they do.
          "pickem": 3 * 3600,
          # The pick'em's Tuesday line on the week just over: that day.
-         "pickem_recap": 12 * 3600}
+         "pickem_recap": 12 * 3600,
+         # A followed team's game about to start (engine/kickoffs): until it does.
+         "kickoff": 15 * 60}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0}
@@ -568,12 +570,12 @@ def clutch_line(doc: dict, play: dict) -> tuple:
     return title, body
 
 
-def _follows(watches: list, doc: dict, play: dict) -> bool:
+def _follows(watches: list, doc: dict, play: dict, leagues: dict | None = None) -> bool:
     sides = {str(doc.get("home") or "").upper(), str(doc.get("away") or "").upper()} - {""}
     names = [play.get("batter"), play.get("pitcher")] + list(play.get("players") or [])
     folded = {AL._fold(n) for n in names if n}
     for w in watches:
-        if w.get("kind") == "team" and str(w.get("value") or "").upper() in sides:
+        if w.get("kind") == "team" and AL.team_hit(w.get("value"), doc.get("league"), sides, leagues):
             return True
         if w.get("kind") == "player" and AL._fold(w.get("value")) in folded:
             return True
@@ -596,6 +598,7 @@ def clutch_pass(conn, pbp_dir: Path | None = None, now: float | None = None) -> 
         return 0
     watching = {uid: AL.list_watches(conn, uid) for (uid,) in users}
     watching = {u: w for u, w in watching.items() if w}
+    leagues = {u: AL.team_leagues(conn, u) for u in watching}
     told = 0
     base = Path(pbp_dir) if pbp_dir else WEB / "data" / "pbp"
     for path in sorted(base.glob("*.json")) if base.is_dir() else []:
@@ -625,7 +628,7 @@ def clutch_pass(conn, pbp_dir: Path | None = None, now: float | None = None) -> 
             title, body = clutch_line(doc, play)
             url = f"/#pbp/{doc.get('league')}/{doc.get('event_id')}"
             for uid, watches in watching.items():
-                if not _follows(watches, doc, play):
+                if not _follows(watches, doc, play, leagues.get(uid)):
                     continue
                 sent = conn.execute("SELECT COUNT(*) FROM push_mine WHERE user_id = ? AND id LIKE ?",
                                     (uid, f"clutch:{game}:%")).fetchone()[0]
@@ -749,6 +752,13 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
             told += _gc.reminders_pass(conn, now=t)
         except Exception as exc:                                  # noqa: BLE001 — the rest of the minute still runs
             log(f"  ⚠️  reminders: {type(exc).__name__}: {exc}")
+        # Kickoff (engine/kickoffs): a followed team's game starting in ten
+        # minutes, after the bells so a bell rung for it speaks instead.
+        from engine import kickoffs as _ko
+        try:
+            told += _ko.kickoff_pass(conn, Path(web) / "data", now=t)
+        except Exception as exc:                                  # noqa: BLE001 — the rest of the minute still runs
+            log(f"  ⚠️  kickoff: {type(exc).__name__}: {exc}")
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         from engine import finals as _fin
         moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)

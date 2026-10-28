@@ -18203,6 +18203,7 @@ function renderPushZone(note) {
       + setGroup("Yours", [
         box("watches", "My teams and players make the board (members see which)", !signedIn),
         box("bets", "My parlay: on, last leg, settled", !signedIn),
+        box("kickoff", "My teams’ games, 10 minutes before they start", !signedIn),
         box("clutch", "Big moments in games I follow", !signedIn),
         box("finals", "Final scores of games I follow", !signedIn),
         box("lineup", "My fantasy lineup: a starter out or on a bye", !signedIn),
@@ -18227,7 +18228,7 @@ function renderPushZone(note) {
           renderPushZone("Alerts are off on this phone.");
         } else {
           const got = await pushOn(picked.length ? picked : ["posted", "settled"]);
-          const mineT = (t) => t === "watches" || t === "bets" || t === "clutch" || t === "finals" || t === "lineup";
+          const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup";
           try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
             topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
           buzz("tap");

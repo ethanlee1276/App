@@ -49,7 +49,9 @@ watches.
 
 from __future__ import annotations
 
+import json
 import re
+import sqlite3
 
 #: The shapes. Anything else is refused at the door rather than stored and
 #: silently never matched.
@@ -276,6 +278,41 @@ def list_watches(conn, user_id) -> list[dict]:
             for r in conn.execute(
                 "SELECT id, kind, value FROM alert_watches WHERE user_id=? "
                 "ORDER BY created_at", (int(user_id),))]
+
+
+# ─── a followed team, in its own league ─────────────────────────────────────
+#: The leagues a followed team names (js/account.js followSave keeps
+#: "nfl:MIA" in the account's synced settings; the watch itself is "MIA").
+TEAM_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+
+
+def team_leagues(conn, user_id) -> dict:
+    """{"MIA": {"nfl"}}: the teams this account followed with their league,
+    from its synced settings. A team watch named here counts only in those
+    leagues: a Dolphins fan's "MIA" is not the Heat or the Marlins."""
+    try:
+        row = conn.execute("SELECT payload FROM user_data WHERE user_id=? AND section='settings'",
+                           (int(user_id),)).fetchone()
+        teams = (json.loads(row[0]) or {}).get("teams") if row else None
+    except (sqlite3.Error, ValueError, TypeError, AttributeError):
+        return {}
+    out: dict = {}
+    for t in teams if isinstance(teams, list) else []:
+        lg, _, abbr = str(t).partition(":")
+        if lg in TEAM_LEAGUES and abbr.strip():
+            out.setdefault(abbr.strip().upper(), set()).add(lg)
+    return out
+
+
+def team_hit(value, league, sides, leagues: dict | None = None) -> bool:
+    """Does a team watch catch a game of ``league`` between ``sides``? Only
+    in the leagues the account followed that team in, when it said (see
+    `team_leagues`); wherever the abbreviation plays when it did not."""
+    abbr = str(value or "").strip().upper()
+    if not abbr or abbr not in sides:
+        return False
+    only = (leagues or {}).get(abbr)
+    return not only or str(league or "").lower() in only
 
 
 def add_watch(conn, user_id, kind, value) -> tuple[int, dict]:
