@@ -9887,7 +9887,7 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   grid-template-areas: "rank who checks odds ring door view";
   --grad-tier-light: linear-gradient(90deg, color-mix(in oklab, var(--tier, transparent) 11%, transparent), transparent 46%);
   background: var(--grad-tier-light), var(--grad-ob-card);
-  border: var(--hairline) solid transparent; }
+  border: var(--hairline) solid transparent; cursor: pointer; }
 .ob-card.tier-top { border-color: transparent; }
 .ob-rank { grid-area: rank; align-self: start; justify-self: start; display: inline-flex; align-items: center;
   justify-content: center; min-width: 24px; font-weight: 800; font-size: var(--fs-sm); line-height: 1; color: var(--brand);

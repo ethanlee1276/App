@@ -9540,7 +9540,15 @@ function openFrom(spec) {
    which stops the event before it reaches this one. */
 document.addEventListener("click", (e) => {
   const row = e.target.closest && e.target.closest("[data-open]");
-  if (row) openFrom(row.dataset.open);
+  if (row) return openFrom(row.dataset.open);
+  /* THE WHOLE PICK CARD OPENS ITS PICK (Ethan, 2026-10-28: "you should be
+     able too click on the whole card not just the players name"), wherever
+     a card is drawn. A control on the card keeps its own click, and the
+     card stays out of the tab order: its name is the keyboard's door. */
+  const card = e.target.closest && e.target.closest(".ob-card");
+  const ctl = card && e.target.closest("a, button, summary, details, input, select, label");
+  const door = card && !(ctl && card.contains(ctl)) && card.querySelector("[data-open]");
+  if (door) openFrom(door.dataset.open);
 });
 
 /* THE MODEL'S OWN NUMBER ON A MARKET-RANKED ROW. A football moneyline

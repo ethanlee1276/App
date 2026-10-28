@@ -230,7 +230,12 @@ APP_JS_BUDGET_KB = 290
 #: 405 -> 390 the same night, when each room's styles moved out of
 #: styles.css with its code (css/record.css, detail, account, more):
 #: styles.css 73.1 -> 56.6 KB gz, the first visit 398.9 -> 382.6.
-BOOT_BUDGET_KB = 390
+#: 390 -> 391 on 2026-10-28, for two things Ethan asked for on the boards
+#: the first page draws: each Most Likely tier in its colour, and the whole
+#: pick card opening its pick. Twelve dead style rules came out to pay for
+#: the first (399,341 B with 19 to spare); the second's listener does not
+#: fit in what is left (399,421 B, 61 over). Told to Ethan.
+BOOT_BUDGET_KB = 391
 
 
 def _gz_trimmed(rel: str) -> int:

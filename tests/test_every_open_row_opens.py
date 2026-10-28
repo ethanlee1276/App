@@ -40,7 +40,11 @@ def test_the_listener_is_site_wide_and_opens_through_openfrom():
     body = _listener()
     assert body.startswith('document.addEventListener("click"'), "on the document, so no page can forget it"
     assert "openFrom(row.dataset.open)" in body
-    assert "a, button" not in body, "a row IS a button; skipping buttons was the bug"
+    # A row IS a button; skipping buttons was the bug. A tapped row opens
+    # before anything else is asked: the controls the whole-card door
+    # (2026-10-28) leaves alone are a card's own, never a row.
+    assert body.index("if (row) return openFrom(row.dataset.open);") < body.index('closest("a, button'), \
+        "a row opens first, whatever it is drawn as"
     for page in ("function renderLikely(", "function renderTonight(", "function renderTonightAll("):
         i = APP.index(page)
         j = APP.index("\nfunction ", i + 1)
@@ -63,6 +67,14 @@ const inside = { closest: (sel) => sel === "[data-open]" ? row : null };
 const outside = { closest: () => null };
 handlers.forEach((h) => h({ target: inside }));
 handlers.forEach((h) => h({ target: outside }));
+// A pick card: a tap on its ring opens its own door; a tap on its Bet it does not.
+const door = { dataset: { open: "likely:Chuba Hubbard|rec|over|1.5" } };
+const betit = {};
+const card = { contains: (x) => x === betit, querySelector: (q) => q === "[data-open]" ? door : null };
+const ring = { closest: (sel) => sel === ".ob-card" ? card : null };
+const onBet = { closest: (sel) => sel === ".ob-card" ? card : sel.startsWith("a, button") ? betit : null };
+handlers.forEach((h) => h({ target: ring }));
+handlers.forEach((h) => h({ target: onBet }));
 console.log(JSON.stringify(opened));
 """ % _listener()
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
@@ -73,7 +85,8 @@ console.log(JSON.stringify(opened));
     finally:
         os.unlink(path)
     assert out.returncode == 0, out.stderr
-    assert json.loads(out.stdout) == ["prop:Josh Jacobs|anytime_td|OVER|0.5"], "one tap, one open; a tap elsewhere, none"
+    assert json.loads(out.stdout) == ["prop:Josh Jacobs|anytime_td|OVER|0.5", "likely:Chuba Hubbard|rec|over|1.5"], \
+        "one tap, one open; a tap elsewhere, none; a card's ring opens its pick, its Bet it does not"
 
 
 def test_the_row_still_carries_where_it_goes():

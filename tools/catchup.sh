@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GD "The whole pick card opens its pick" 30 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'card.querySelector("\[data-open\]")'
+SH
 run GC "Each Most Likely tier in its colour" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -c -- '--tier: var(--brand); }'
 SH
