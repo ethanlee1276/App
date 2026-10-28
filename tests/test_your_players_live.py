@@ -87,9 +87,10 @@ def test_mine_is_the_members_player_watches_live_games_first():
 
 def test_the_server_and_the_live_tab():
     srv = (ROOT / "server.py").read_text()
-    get = srv[srv.index("    def _alerts_get(self, path: str):"):srv.index("    def _alerts_post(")]
+    get = srv[srv.index("    def _alerts_get(self, path: str, query: dict | None = None):"):srv.index("    def _alerts_post(")]
     assert get.index("sign in first") < get.index('if path == "live":'), "the member's own watches"
-    assert "YP.mine(AL.list_watches(conn, who[\"id\"]))" in get
+    # And a linked lineup's starters by name (tests/test_your_fantasy_lineup_live.py).
+    assert "YP.mine(AL.list_watches(conn, who[\"id\"])," in get
     app = (ROOT / "web" / "js" / "app.js").read_text()
     board = app[app.index("async function renderLiveBoard()"):]
     assert '— every game in progress across the sports we model</span></div><div class="yp-host"></div>' in board

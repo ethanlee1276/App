@@ -179,9 +179,13 @@ of work first, each with what it is built from:
 6. **Recap by push.** BUILT 2026-10-26 (step 204, engine/finals): the
    final, the play of the game and the best line (the page's own words),
    on a new "Final scores of games I follow" switch.
-7. **Your fantasy lineup, live.** Sleeper and ESPN leagues are linked
-   already: the starters' lines on the Your players strip and the matchup's
-   live score. Built from: the linked rosters + engine/yourplayers. Medium.
+7. **Your fantasy lineup, live.** BUILT 2026-10-28 (runbook FU): with a
+   Sleeper league linked on the device, the Live tab opens on the matchup
+   as it stands (points, projected finals, the win chance; the desk's
+   `live=1` answer, once a minute while a game is on), and the starters'
+   lines join the Your players strip with their fantasy points so far,
+   looked up by name and never kept (engine/yourplayers `lineup`, js/chat.js
+   ffLiveLoad). Sleeper only, as the desk's live matchup is (engine/fantasy_live).
 8. **Watch-party rooms.** A private thread inside a game's chat for a
    friend group, by invite link. Built from: engine/gamechat rooms + an
    invite token; the moderation is already there. Medium.

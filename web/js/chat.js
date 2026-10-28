@@ -340,7 +340,65 @@ function ypHTML(rows) {
       <span class="yp-who">${chEsc(r.player)}</span>
       <span class="yp-line">${chEsc(r.line)}</span>
       <span class="yp-when">${chEsc(r.team)}${r.opp ? ` vs ${chEsc(r.opp)}` : ""} · ${chEsc(r.status)}</span>
+      ${r.lineup ? `<span class="yp-ff">${ffPtsText(r.player)}</span>` : ""}
     </button>`).join("")}</div></div>`;
+}
+
+/* YOUR FANTASY LINEUP, LIVE (2026-10-28; docs/IDEAS.md). A Sleeper league
+   linked on this device (ff_user, ff_league): the matchup as it stands
+   over the strip (GET /api/leaguedesk?live=1, engine/fantasy_live:
+   Sleeper's own points so far, the rest projected, the win chance), and
+   the starters' box lines on the strip beside the players followed, each
+   with his fantasy points so far (`lineup`, engine/yourplayers). Asked
+   once a minute while a game is on and every five minutes otherwise,
+   however often Live redraws. A starter in a game saved for later (app.js
+   spoiledG) holds the matchup's score back. */
+let _ffLive = null, _ffAt = 0;
+async function ffLiveLoad() {
+  let user = "", league = "";
+  try { user = localStorage.getItem("ff_user") || ""; league = localStorage.getItem("ff_league") || ""; } catch (e) { /* storage off */ }
+  const key = `${league}|${user}`;
+  if (!user || !league) { _ffLive = null; return; }
+  const wait = _ffLive && _ffLive.live && _ffLive.live.in_progress ? 60000 : 300000;
+  if (_ffLive && _ffLive.key === key && Date.now() - _ffAt < wait) return;
+  _ffAt = Date.now();
+  try {
+    const r = await fetch(`/api/leaguedesk?live=1&platform=sleeper&league=${encodeURIComponent(league)}`
+      + `&user=${encodeURIComponent(user)}`, { credentials: "same-origin", cache: "no-store" });
+    if (r.ok) _ffLive = { ...(await r.json()), key };
+  } catch (e) { /* the last matchup stands until the next ask */ }
+}
+// The starters' names for the strip's own ask: only once a game is on.
+function ffLineupQuery() {
+  const me = _ffLive && _ffLive.live && _ffLive.live.me;
+  const names = ((me && me.players) || []).map((p) => p.player).filter(Boolean);
+  return names.length ? `?lineup=${encodeURIComponent(names.join("|"))}` : "";
+}
+const ffKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/(jr|sr|ii|iii|iv|v)$/, "");
+function ffPtsText(name) {
+  const me = (_ffLive && _ffLive.live && _ffLive.live.me) || {};
+  const p = (me.players || []).find((x) => x.player && ffKey(x.player) === ffKey(name));
+  return p && p.points != null ? `In your lineup · ${Number(p.points).toFixed(1)} pts` : "In your lineup";
+}
+function ffHeld(v) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(SPOIL_KEY) || "{}") || {}; } catch (e) { all = {}; }
+  const teams = new Set([...(v.me.players || []), ...((v.them || {}).players || [])].map((p) => p.team).filter(Boolean));
+  const now = Date.now();
+  return Object.values(all).some((x) => x && x.exp > now && x.l === "nfl" && (teams.has(x.a) || teams.has(x.h)));
+}
+function ffLiveHTML() {
+  const v = _ffLive && _ffLive.live;
+  if (!v || !v.me) return "";
+  const them = v.them || {}, held = ffHeld(v);
+  const pts = (n) => (held ? "–" : (Number(n) || 0).toFixed(1));
+  const wp = v.win_prob == null || held ? "" : ` · <b class="${v.win_prob >= 0.5 ? "ffl-up" : "ffl-down"}">${Math.round(v.win_prob * 100)}%</b> to win`;
+  const sub = held ? "Spoiler-free: a game in it is saved for later"
+    : v.done ? "Final" : `Projected ${pts(v.me.projected)}–${pts(them.projected)}`;
+  return `<a class="ffl" href="#fantasy">
+    <span class="ffl-k">Your matchup · ${chEsc(_ffLive.league || "your league")}${_ffLive.week ? ` · week ${chEsc(_ffLive.week)}` : ""}</span>
+    <span class="ffl-s"><span>You <b>${pts(v.me.points)}</b></span> <span>${chEsc(v.opponent || "Them")} <b>${pts(them.points)}</b></span></span>
+    <span class="ffl-sub">${sub}${wp}</span></a>`;
 }
 function ypBind(host) {
   host.querySelectorAll(".yp-item").forEach((b) =>
@@ -351,11 +409,12 @@ async function yourPlayersMount(host) {
   if (_ypLast || _lvmLast) { host.innerHTML = _lvmLast + _ypLast; ypBind(host); }
   let v = null;
   try {
-    const [r] = await Promise.all([fetch("/api/alerts/live", { credentials: "same-origin", cache: "no-store" }), lvmLoad()]);
+    const [r] = await Promise.all([ffLiveLoad().then(() => fetch("/api/alerts/live" + ffLineupQuery(),
+      { credentials: "same-origin", cache: "no-store" })), lvmLoad()]);
     if (r.ok) v = await r.json();
   } catch (e) { v = null; }
   if (!host.isConnected) return;
-  if (v) _ypLast = ypHTML(v.players || []);
+  if (v) _ypLast = ffLiveHTML() + ypHTML(v.players || []);
   host.innerHTML = _lvmLast + _ypLast;
   ypBind(host);
 }

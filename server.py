@@ -1254,7 +1254,7 @@ class Handler(BaseHTTPRequestHandler):
                                   parse_qs(parsed.query))
         if parsed.path.startswith("/api/alerts/"):
             return self._alerts_get(
-                parsed.path[len("/api/alerts/"):].strip("/"))
+                parsed.path[len("/api/alerts/"):].strip("/"), parse_qs(parsed.query))
         if parsed.path.startswith("/api/callit/"):
             return self._callit(parsed.path[len("/api/callit/"):].strip("/"))
         if parsed.path.startswith("/api/calendar/"):
@@ -2028,6 +2028,21 @@ class Handler(BaseHTTPRequestHandler):
             cache = sleeper_cache_name(path)
             return json.loads(fetch_text(SLEEPER_BASE + path, cache, ttl=ttl))
 
+        # THE LIVE TAB'S CALL (js/chat.js ffLiveLoad; docs/IDEAS.md "Your
+        # fantasy lineup, live"): the matchup as it stands and nothing else,
+        # asked once a minute at most while a game is on. No trades, no
+        # pickups, no to-do list, and the lineup alert's memory untouched.
+        # The device keeps the Sleeper USERNAME (ff_user), so a name is
+        # turned into its id here, off the same cached read the sync makes.
+        live_only = (query.get("live") or [""])[0] == "1"
+        if live_only and user_id and not re.fullmatch(r"\d{1,25}", user_id):
+            if not re.fullmatch(r"[A-Za-z0-9_]{1,40}", user_id):
+                return self._send(400, b'{"error":"bad sleeper user"}', ".json")
+            try:
+                user_id = str((grab(f"user/{user_id}", ttl=86400) or {}).get("user_id") or "")
+            except (DataUnavailable, ValueError) as exc:
+                return self._fail(502, "Sleeper did not answer. Try again in a minute.", exc, "sleeper live user")
+
         try:
             league = grab(f"league/{league_id}", ttl=600)
             rosters = grab(f"league/{league_id}/rosters", ttl=300)
@@ -2119,8 +2134,9 @@ class Handler(BaseHTTPRequestHandler):
             "free_agents": (fantasyweek.free_agents(week_doc, league_names)
                             if week_doc else {}),
         }
+        # The Live tab's ask (live_only) builds no trades.
         trades = (fantasy_trade.generate(mine, rivals, slots, scoring, season_means)
-                  if mine and rivals else [])
+                  if mine and rivals else []) if not live_only else []
         out["trades"] = trades[:12]
         out["trade_summary"] = fantasy_trade.summary(trades)
 
@@ -2208,6 +2224,9 @@ class Handler(BaseHTTPRequestHandler):
                         out["live"] = live
                 except Exception as exc:                      # noqa: BLE001 — the desk never fails for it
                     sys.stderr.write(f"  desk live: {type(exc).__name__}: {exc}\n")
+        if live_only:
+            return self._send(200, json.dumps({"league": out["league"], "week": out["week"],
+                                               "has_me": out["has_me"], "live": out.get("live")}).encode(), ".json")
         # THE PICKUPS FOR THIS ROSTER AND THE WEEK'S TO-DO LIST. A FAAB
         # league (Sleeper's waiver_type 2) gets a bid range from what is
         # left of his budget.
@@ -3276,7 +3295,7 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, ValueError):
             return []
 
-    def _alerts_get(self, path: str):
+    def _alerts_get(self, path: str, query: dict | None = None):
         from engine import alerts as AL
         A = _acct()
         conn = A.connect()
@@ -3287,9 +3306,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "live":
                 # YOUR PLAYERS, LIVE (engine/yourplayers): each followed
                 # player's box-score line in the game he is in now. Public
-                # box scores and the member's own watches — free.
+                # box scores and the member's own watches — free. And the
+                # starters of a fantasy lineup linked on the device, by name
+                # (`lineup`, js/chat.js ffLiveLoad): looked up, never kept.
                 from engine import yourplayers as YP
-                lines = YP.mine(AL.list_watches(conn, who["id"]))
+                lines = YP.mine(AL.list_watches(conn, who["id"]),
+                                lineup=YP.lineup_names(((query or {}).get("lineup") or [""])[0]))
                 return self._send(200, json.dumps({"players": lines}).encode(), ".json")
             if path != "me":
                 return self._send(404, b'{"error":"unknown alerts endpoint"}',

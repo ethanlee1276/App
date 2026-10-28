@@ -27,6 +27,7 @@ Standard library only.
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 
@@ -40,6 +41,9 @@ NHL_BOX = DATA / "live_nhl_box.json"
 FINAL_FOR_S = 6 * 3600
 #: The most lines one strip carries (a follow list caps at twenty).
 MAX_LINES = 20
+#: A linked fantasy lineup's starters ride on the strip too, by name: at
+#: most this many (a superflex or IDP lineup runs past a dozen).
+LINEUP_MAX = 20
 
 _cache: dict = {}
 
@@ -176,16 +180,48 @@ def index(pbp_dir: Path = PBP_DIR, nhl_box: Path = NHL_BOX, now: float | None = 
     return idx
 
 
-def mine(watches, idx: dict | None = None) -> list[dict]:
-    """The lines for a member's player watches: live games first, in the
-    order they were followed, one line per player per game."""
+def _bare(key: str) -> str:
+    """A folded name without its suffix ("kennethwalkeriii" → "kennethwalker")."""
+    return re.sub(r"(jr|sr|ii|iii|iv|v)$", "", key) or key
+
+
+def lineup_names(raw) -> list[str]:
+    """The starters' names a request carries ("A|B|C"), checked: a name is
+    letters, spaces and . ' - only, 48 characters at most, and the first
+    LINEUP_MAX are read. Nothing else is taken from them."""
+    out: list[str] = []
+    for n in str(raw or "").split("|"):
+        n = " ".join(n.split())
+        if n and len(n) <= 48 and re.fullmatch(r"[^\W\d_]+(?:[ .'\u2019-]+[^\W\d_]+)*\.?", n) and n not in out:
+            out.append(n)
+        if len(out) >= LINEUP_MAX:
+            break
+    return out
+
+
+def mine(watches, idx: dict | None = None, lineup=()) -> list[dict]:
+    """The lines for a member's player watches, then a linked lineup's
+    starters not already followed: live games first, in that order, one
+    line per player per game. A starter's line says so (``lineup``)."""
     idx = index() if idx is None else idx
-    out, seen = [], set()
+    order: list[str] = []
     for w in watches or []:
         key = _fold((w or {}).get("value"))
-        if (w or {}).get("kind") != "player" or key in seen:
-            continue
-        seen.add(key)
-        out.extend(idx.get(key, []))
+        if (w or {}).get("kind") == "player" and key and key not in order:
+            order.append(key)
+    # A starter is the fantasy app's spelling (Sleeper's "Kenneth Walker"),
+    # the index the box score's ("Kenneth Walker III"): a name the index
+    # does not hold is tried again with the suffixes off both sides.
+    bare = None
+    starters = []
+    for n in lineup or ():
+        k = _fold(n)
+        if k and k not in idx:
+            bare = {_bare(x): x for x in idx} if bare is None else bare
+            k = bare.get(_bare(k), k)
+        if k and k not in starters:
+            starters.append(k)
+    order += [k for k in starters if k not in order]
+    out = [dict(e, lineup=True) if k in starters else e for k in order for e in idx.get(k, [])]
     out.sort(key=lambda e: 0 if e["state"] == "live" else 1)
-    return out[:MAX_LINES]
+    return out[:MAX_LINES + (LINEUP_MAX if starters else 0)]

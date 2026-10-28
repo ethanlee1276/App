@@ -326,6 +326,16 @@ body.gch-on { overflow: hidden; }
 .yp-who { font-weight: 800; font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .yp-line { font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .yp-when { font-size: var(--fs-xs); color: var(--text-mute); }
+/* A linked lineup's starter on the strip (ffPtsText), and the matchup over it (ffLiveHTML). */
+.yp-ff { font-size: var(--fs-2xs); font-weight: 700; color: var(--brand-2); }
+.ffl { display: grid; gap: 4px; max-width: 520px; margin: 0 0 14px; padding: 12px 14px; border-radius: var(--radius);
+  background: var(--grad-card), var(--panel); color: var(--text); text-decoration: none; }
+.ffl-k { font-size: var(--fs-xs); font-weight: 700; color: var(--text-mute); }
+.ffl-s { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: var(--fs-sm); }
+.ffl-s b { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 800; }
+.ffl-sub { font-size: var(--fs-xs); color: var(--text-mute); }
+.ffl-up { color: var(--good); }
+.ffl-down { color: var(--bad); }
 
 /* ── the play card's body, Real's and then some (pcBodyHTML) ────────────── */
 .pcard-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 4px; }
