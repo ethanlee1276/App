@@ -103,9 +103,13 @@ body.gch-on { overflow: hidden; }
 .gch-vote.mine { border-color: transparent; color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, var(--panel)); }
 .gch-vote:disabled { cursor: default; opacity: .8; }
 .gch-poll-n { margin-left: auto; font-size: var(--fs-2xs); color: var(--text-mute); }
-/* The fans' player of the game: all four names in sight, two lines on a phone. */
-.gch-potg { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
-.gch-potg .gch-vote { flex: none; }
+/* The fans' player of the game: four cards, two by two, each with its line. */
+.gch-potg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-basis: 100%; }
+.gch-potg .gch-vote { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 6px;
+  padding: 6px 11px; border-radius: var(--radius-sm); text-align: left; }
+.gch-potg .gch-vote b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gch-potg .gch-vote i { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-style: normal; font-weight: 600; font-size: var(--fs-2xs); color: var(--text-mute); }
 .gch-vote.lead b { color: var(--brand-2); }
 .gch-poll-bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--border); }
 .gch-poll-bar::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--gch-away); background: var(--brand); }

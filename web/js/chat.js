@@ -1102,7 +1102,7 @@ function chatPotgHTML(p) {
   return `<span class="gch-poll-q">${p.open && p.mine == null ? "Player of the game?" : "Fans' player of the game"}</span>
     <span class="gch-potg">${p.options.map((o, i) => `<button type="button" class="gch-vote${p.mine === i ? " mine" : ""}${i === lead ? " lead" : ""}"
       data-gch="potg" data-i="${i}"${p.open && p.mine == null ? "" : " disabled"}><b>${chEsc(o.name)}</b>${
-      shown ? `<span>${pct(i)}%</span>` : o.team ? `<span>${chEsc(o.team)}</span>` : ""}</button>`).join("")}</span>
+      shown ? `<span>${pct(i)}%</span>` : ""}<i>${chEsc([o.team, o.line].filter(Boolean).join(" · "))}</i></button>`).join("")}</span>
     <span class="gch-poll-n">${shown ? `${total} vote${total === 1 ? "" : "s"}` : "+5 karma"}</span>`;
 }
 

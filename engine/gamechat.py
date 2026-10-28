@@ -521,24 +521,33 @@ def _mark_votes(conn, room: str, now: float) -> None:
 
 # ─── the fans' player of the game ───────────────────────────────────────────
 #: When a game goes final its room votes the player of the game (theScore's
-#: and ESPN's fan vote): the four players in the game's biggest plays, by
-#: the play cards' own 0-10 ratings, either team; open a day, one vote each.
+#: and ESPN's fan vote): the game's four best lines off the box, either
+#: team, each with its line; open a day, one vote each.
 POTG_OPTIONS = 4
 POTG_OPEN_S = 24 * 3600
 
 
 def potg_options(room: str, data_dir: Path | None = None) -> list:
-    """[{name, team}] best first: each player's share of the ratings of the
-    plays he is named in (the first named carries the play, the rest half
-    of it), off the game's deep file (web/data/pbp/{room}.json)."""
+    """[{name, team, line}] best first, off the game's deep file
+    (web/data/pbp/{room}.json): the box's best lines, scored per sport as
+    the final-score alert and the page's recap do (engine/finals); a file
+    with no box falls back to the plays' own 0-10 ratings (the first named
+    carries a play, the rest half of it)."""
+    from . import finals as FN
     if not ROOM_RE.match(str(room or "")):
         return []
     try:
         doc = json.loads(((data_dir or DATA) / "pbp" / f"{room}.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
+    if not isinstance(doc, dict):
+        return []
+    doc.setdefault("league", room.split("_")[0])
+    box = FN.top_lines(doc, POTG_OPTIONS)
+    if len(box) >= 2:
+        return [{"name": r["player"][:40], "team": r["team"][:6], "line": r["words"][:60]} for r in box]
     score: dict = {}
-    for p in (doc.get("plays") or []) if isinstance(doc, dict) else []:
+    for p in doc.get("plays") or []:
         if not isinstance(p, dict):
             continue
         try:

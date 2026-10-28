@@ -238,3 +238,14 @@ button.kr-prof:hover { background: var(--fill-hover); }
   padding: 10px 14px; border: 0; border-radius: var(--radius-sm); cursor: pointer; text-align: left;
   background: var(--panel); color: var(--text); font: inherit; font-size: var(--fs-xs); }
 .kr-daily-n { flex: none; color: var(--text-mute); }
+/* Wider than a phone: the four names in one row. */
+@media (min-width: 761px) { .kr-opts { grid-template-columns: repeat(4, 1fr); } }
+/* What's new: once, a line a feature, put away with "Got it". */
+.kr-strip-host .kr-new { margin-top: 8px; }
+.kr-new-ok { min-height: 32px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: color-mix(in oklab, var(--brand) 18%, transparent); color: var(--text); font: inherit;
+  font-size: var(--fs-xs); font-weight: 800; }
+.kr-new-l { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.kr-new-l li { display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; align-items: baseline; }
+.kr-new-l li b { font-size: var(--fs-xs); }
+.kr-new-l li span:last-child { grid-column: 2; font-size: var(--fs-2xs); color: var(--text-mute); }

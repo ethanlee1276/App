@@ -5,9 +5,10 @@ theScore and ESPN close a game with a fan vote; ours opens in the game's
 chat the moment the game is final, where the who-wins bar was. What this
 file pins:
 
-  * the four names are the players in the game's biggest plays, by the
-    play cards' own 0-10 ratings (the first named carries a play, the rest
-    half of it), either team, off the game's own deep file;
+  * the four names are the game's best lines off its box, scored per sport
+    as the final-score alert does, each with its line ("312 pass yds, 2
+    TD"); a file with no box falls back to the plays' own 0-10 ratings (the
+    first named carries a play, the rest half of it), either team;
   * the vote opens only once the scoreboard calls the game final, keeps
     the names it opened with whatever the file says after, takes one vote
     an account, shows how the room voted only to those who have, and
@@ -73,6 +74,33 @@ def test_the_four_names_come_from_the_games_biggest_plays():
     assert GC.potg_options(ROOM, _data(plays=[{"players": ["One Man"], "rating": 9}])) == [], "a vote needs two"
     assert GC.potg_options("nfl_1", _data()) == [], "no file, no vote"
     assert GC.potg_options("../etc", _data()) == []
+
+
+def test_with_a_box_the_names_are_its_best_lines_each_with_its_line():
+    d = _data()
+    doc = json.loads((d / "pbp" / f"{ROOM}.json").read_text())
+    doc["players"] = [
+        {"player": "Jordan Love", "team": "GB", "stats": {"pass_yds": 312, "pass_td": 2}},
+        {"player": "Josh Jacobs", "team": "GB", "stats": {"rush_yds": 96, "rush_td": 1}},
+        {"player": "DJ Moore", "team": "CHI", "stats": {"rec_yds": 121}},
+        {"player": "Caleb Williams", "team": "CHI", "stats": {"pass_yds": 240, "pass_td": 1}},
+        {"player": "Backup Guy", "team": "CHI", "stats": {}}, "not a row"]
+    (d / "pbp" / f"{ROOM}.json").write_text(json.dumps(doc))
+    got = GC.potg_options(ROOM, d)
+    assert got == [{"name": "Jordan Love", "team": "GB", "line": "312 pass yds, 2 TD"},
+                   {"name": "DJ Moore", "team": "CHI", "line": "121 rec yds"},
+                   {"name": "Josh Jacobs", "team": "GB", "line": "96 rush yds, 1 TD"},
+                   {"name": "Caleb Williams", "team": "CHI", "line": "240 pass yds, 1 TD"}], got
+    # Baseball keeps its plays elsewhere; the box is the same box.
+    m = Path(tempfile.mkdtemp()) / "pbp"
+    m.mkdir()
+    (m / "mlb_7.json").write_text(json.dumps({"league": "mlb", "events": [], "players": [
+        {"player": "Aaron Judge", "team": "NYY", "line": {"batting": {"h": 3, "ab": 4, "hr": 2, "rbi": 4}}},
+        {"player": "Gerrit Cole", "team": "NYY", "line": {"pitching": {"ip": "7.0", "k": 9}}}]}))
+    got = GC.potg_options("mlb_7", m.parent)
+    # Scored as the final-score alert does: nine strikeouts (13.5) over two homers (13).
+    assert [(o["name"], o["line"]) for o in got] == [("Gerrit Cole", "7.0 IP, 9 K"),
+                                                     ("Aaron Judge", "3-for-4, 2 HR, 4 RBI")], got
 
 
 def test_the_vote_opens_at_the_final_and_keeps_its_names():

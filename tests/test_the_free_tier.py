@@ -97,7 +97,7 @@ def test_the_apps_chrome_hides_only_on_the_walls_own_screens():
 
 def test_every_paid_tab_is_marked_locked_and_none_of_the_free_ones():
     body = _fn(APP, "markLockedNav")
-    assert '"nav-locked", walled && !WALL_OPEN.includes(b.dataset.view)' in body
+    assert '"nav-locked", walled && !WALL_OPEN.includes(b.dataset.view || b.dataset.sport || "recommended")' in body
     assert ".nav-locked::after" in CSS and "--ic-lock" in CSS
     i = APP.index('document.body.classList.add("walled");')
     assert "markLockedNav();" in APP[i:i + 80], "the wall goes up and the tabs are not marked"

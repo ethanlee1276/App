@@ -661,6 +661,12 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GT "A free account's menu wears its locks" 30 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'pill.classList.toggle("nav-locked", src.classList.contains("nav-locked"));'
+SH
+run GS "The player-of-the-game vote reads the box" 30 <<'SH'
+curl -s https://qellysbook.com/css/chat.css | grep -c '.gch-potg .gch-vote i {'
+SH
 run GR "Remind me" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatBellPaint('
 SH

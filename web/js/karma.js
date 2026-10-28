@@ -167,7 +167,7 @@ function krStripHTML(v) {
 
 async function karmaStripMount(host) {
   if (!host) return;
-  const draw = (v) => { host.innerHTML = krStripHTML(v) + krDailyHTML(KR.daily, true); };
+  const draw = (v) => { host.innerHTML = krStripHTML(v) + krNewHTML(v) + krDailyHTML(KR.daily, true); };
   if (KR.me) draw(KR.me);
   // The strip does not wait for the day's question: it joins when it lands.
   const daily = krDailyLoad();
@@ -176,6 +176,25 @@ async function karmaStripMount(host) {
   draw(v);
   await daily;
   if (host.isConnected && KR.me) draw(KR.me);
+}
+
+/* WHAT'S NEW (an app store's release notes, inside the app): once, to an
+   account past its getting-started list, what the last round added, a line
+   each; "Got it" puts it away on this device. */
+const KR_NEW_KEY = "qb_new_2026_10_28";
+const KR_NEW = [
+  ["🧠", "Today's question", "One trivia question a day for everybody, +10 karma right, here and on the Karma tab."],
+  ["🏅", "Player of the game", "When a game goes final, its chat votes the player of the game."],
+  ["🔔", "Remind me", "A bell under the chat of a game that has not started: a push 10 minutes before."],
+  ["👥", "Friends", "Who is watching what, here, and your friends' karma race on the Karma tab."],
+  ["📌", "Pin and share", "Pin three badges to your profile, and share a picture of your level."]];
+function krNewHTML(v) {
+  if (!v || v.camp) return "";
+  try { if (localStorage.getItem(KR_NEW_KEY)) return ""; } catch (e) { return ""; }
+  return `<section class="kr-card kr-new"><div class="kr-h"><b>What's new</b>
+      <button type="button" class="kr-new-ok" data-kr="new-ok">Got it</button></div>
+    <ul class="kr-new-l">${KR_NEW.map(([i, t, w]) => `<li><span aria-hidden="true">${i}</span><b>${krEsc(t)}</b>
+      <span>${krEsc(w)}</span></li>`).join("")}</ul></section>`;
 }
 
 /* TODAY'S QUESTION (engine/trivia daily; Wordle's one a day): one trivia
@@ -556,6 +575,12 @@ document.addEventListener("click", (e) => {
   if (act === "up-close") { const up = b.closest(".kr-up"); if (up) up.remove(); return; }
   if (act === "share") { krShare(b); return; }
   if (act === "daily") { krDailyAnswer(b); return; }
+  if (act === "new-ok") {
+    try { localStorage.setItem(KR_NEW_KEY, "1"); } catch (e) { /* gone for this view only */ }
+    const card = b.closest(".kr-new");
+    if (card) card.remove();
+    return;
+  }
   const root = b.closest(".kr-panel-host");
   if (act === "scope" && root) { krLadder(root, ["all", "friends"].includes(b.dataset.v) ? b.dataset.v : "week"); return; }
   if (act === "pin" && root && KR.me) {

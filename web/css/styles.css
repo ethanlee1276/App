@@ -7078,6 +7078,10 @@ body.has-deck #rail-live { display: none; }
    and sits at the icon's shoulder. */
 .tb-item.nav-locked::after, .tb-item.nav-locked.active::after { top: 4px; right: auto; bottom: auto; left: calc(50% + 8px);
   margin: 0; border-radius: 0; transform: none; }
+/* The phone's menu sheet: the lock at the icon's shoulder, as on the tab
+   bar, so no label gives up its room; the label a step back. */
+.more-pill.nav-locked { color: var(--text-mute); }
+.more-pill.nav-locked::after { top: calc(50% - 15px); right: auto; left: 26px; width: 11px; height: 11px; opacity: 1; }
 .acct-handle-row { display: flex; align-items: center; gap: 6px; }
 .acct-handle-row input { flex: 1; min-width: 0; }
 

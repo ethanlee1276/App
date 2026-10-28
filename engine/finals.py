@@ -56,12 +56,8 @@ def _fmt(v) -> str:
     return str(int(v)) if v == int(v) else f"{v:g}"
 
 
-def best_line(doc: dict) -> str:
-    """The night's best line off the box, scored per sport as the page does
-    (js/detail.js recapTop): ``"Joe Burrow (CIN): 312 pass yds, 2 TD"``."""
-    league = str(doc.get("league") or "")
-    rows = [r for r in doc.get("players") or [] if isinstance(r, dict)]
-
+def _score(league: str):
+    """How a box row ranks, per sport (js/detail.js recapTop)."""
     def st(r, k):
         return _n((r.get("stats") or {}).get(k))
 
@@ -82,29 +78,46 @@ def best_line(doc: dict) -> str:
     else:
         def score(r):
             return st(r, "pts") + st(r, "reb") + st(r, "ast")
-    if not rows:
-        return ""
-    best = max(rows, key=score)
-    if score(best) <= 0:
-        return ""
-    s, ln = best.get("stats") or {}, line(best)
+    return score
+
+
+def _words(league: str, r: dict) -> str:
+    """A box row's line in words: "312 pass yds, 2 TD", "3-for-4, 1 HR"."""
+    s, ln = r.get("stats") or {}, r.get("line") or {}
     if ln.get("batting"):
         b = ln["batting"]
-        words = f"{_fmt(b.get('h'))}-for-{_fmt(b.get('ab'))}" + (f", {_fmt(b['hr'])} HR" if _n(b.get("hr")) else "") \
+        return f"{_fmt(b.get('h'))}-for-{_fmt(b.get('ab'))}" + (f", {_fmt(b['hr'])} HR" if _n(b.get("hr")) else "") \
             + (f", {_fmt(b['rbi'])} RBI" if _n(b.get("rbi")) else "")
-    elif ln.get("pitching"):
+    if ln.get("pitching"):
         p = ln["pitching"]
-        words = f"{p.get('ip') or 0} IP, {_fmt(p.get('k'))} K"
-    elif league == "nhl":
-        words = f"{_fmt(s.get('saves'))} saves" if _n(s.get("saves")) else f"{_fmt(s.get('goals'))} G, {_fmt(s.get('assists'))} A"
-    elif league in ("nfl", "cfb"):
+        return f"{p.get('ip') or 0} IP, {_fmt(p.get('k'))} K"
+    if league == "nhl":
+        return f"{_fmt(s.get('saves'))} saves" if _n(s.get("saves")) else f"{_fmt(s.get('goals'))} G, {_fmt(s.get('assists'))} A"
+    if league in ("nfl", "cfb"):
         td = _n(s.get("pass_td")) + _n(s.get("rush_td")) + _n(s.get("rec_td"))
         parts = [f"{_fmt(s[k])} {w}" for k, w in (("pass_yds", "pass yds"), ("rush_yds", "rush yds"), ("rec_yds", "rec yds"))
                  if _n(s.get(k))] + ([f"{_fmt(td)} TD"] if td else [])
-        words = ", ".join(parts[:3])
-    else:
-        words = f"{_fmt(s.get('pts'))} pts, {_fmt(s.get('reb'))} reb, {_fmt(s.get('ast'))} ast"
-    return f"{best.get('player')} ({best.get('team')}): {words}"
+        return ", ".join(parts[:3])
+    return f"{_fmt(s.get('pts'))} pts, {_fmt(s.get('reb'))} reb, {_fmt(s.get('ast'))} ast"
+
+
+def top_lines(doc: dict, n: int = 1) -> list:
+    """The night's best lines off the box, best first, scored per sport as
+    the page does: [{"player", "team", "words"}] (the fans' player of the
+    game reads four, engine/gamechat)."""
+    league = str(doc.get("league") or "")
+    score = _score(league)
+    rows = [r for r in doc.get("players") or [] if isinstance(r, dict) and r.get("player")]
+    ranked = sorted(rows, key=lambda r: -score(r))     # stable: the first of equals first, as max() picks
+    return [{"player": str(r.get("player")), "team": str(r.get("team") or ""), "words": _words(league, r)}
+            for r in ranked[:max(0, int(n))] if score(r) > 0]
+
+
+def best_line(doc: dict) -> str:
+    """The night's best line off the box, scored per sport as the page does
+    (js/detail.js recapTop): ``"Joe Burrow (CIN): 312 pass yds, 2 TD"``."""
+    top = top_lines(doc, 1)
+    return f"{top[0]['player']} ({top[0]['team']}): {top[0]['words']}" if top else ""
 
 
 def _rows(doc: dict) -> list:

@@ -128,7 +128,7 @@ def test_the_route_the_card_and_the_policy():
     assert 'b\'{"error":"Make a free account to answer."}\'' in body
     kjs = Path(ROOT, "web", "js", "karma.js").read_text(encoding="utf-8")
     for want in ("function krDailyHTML(d, fold)", 'data-kr="daily"', 'fetch("/api/trivia/daily"',
-                 "krStripHTML(v) + krDailyHTML(KR.daily, true)", "${krDailyHTML(KR.daily, false)}",
+                 "krStripHTML(v) + krNewHTML(v) + krDailyHTML(KR.daily, true)", "${krDailyHTML(KR.daily, false)}",
                  '["day", "daily_q", "quest", "quests_all"]'):
         assert want in kjs, want
     policy = " ".join(Path(ROOT, "web", "privacy.html").read_text(encoding="utf-8").split())

@@ -24260,13 +24260,15 @@ function memberLockHTML(title, body) {
 }
 
 /* The menu and the tab bar mark what a plan opens: a lock on every entry
-   the free tier does not (WALL_OPEN). */
+   the free tier does not (WALL_OPEN) — its pages, its tools (a tool's page
+   is its name) and the board's own tabs (Game Lines opens the board).
+   The phone's menu sheet copies each lock (moreSheetBuild). */
 function markLockedNav() {
   const walled = isWalled();
   const up = document.getElementById("nav-up");
   if (up) up.hidden = !walled || !storeSells();
-  document.querySelectorAll(".nav-btn[data-view]").forEach((b) => {
-    b.classList.toggle("nav-locked", walled && !WALL_OPEN.includes(b.dataset.view));
+  document.querySelectorAll('.nav-btn[data-view],.sport-btn[data-kind="tool"],.sb-subtab').forEach((b) => {
+    b.classList.toggle("nav-locked", walled && !WALL_OPEN.includes(b.dataset.view || b.dataset.sport || "recommended"));
   });
 }
 
@@ -31106,6 +31108,7 @@ function moreSheetBuild() {
       }
       if (src.classList.contains("active") || src.getAttribute("aria-selected") === "true")
         pill.classList.add("active");
+      pill.classList.toggle("nav-locked", src.classList.contains("nav-locked"));
       pill.addEventListener("click", () => { moreSheetOpen(false); src.click(); });
       pills.push(pill);
     });
