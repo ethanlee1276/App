@@ -84,12 +84,20 @@ def test_the_toolbox_never_freezes_a_page_it_is_not_on():
 
 
 def _board():
+    """Today's board, its game still ahead at any hour. The base board's game
+    kicks off at 13:00, and the page reads a kickoff as Eastern time: dated
+    today, it had started from 1 p.m. to 8 p.m. ET on a UTC machine (after 8
+    the UTC date is tomorrow's), and every check that wants a pick still to
+    play (Most Likely's lead, tests/test_a_page_link_opens_at_the_top.py)
+    failed those seven hours a day. 23:59 ET on the machine's date is always
+    still ahead."""
     from test_every_page_opens_clean import _board as base
     b = base()
     today = time.strftime("%Y-%m-%d")
     b.update(generated_from="live", date=today)
     for g in b["games"]:
         g["date"] = today
+        g["kickoff"] = "23:59"
     return b
 
 
