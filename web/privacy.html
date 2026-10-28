@@ -189,7 +189,8 @@
       mentions and replies" on Activity, that someone named you with an @
       or answered your message in a game chat (their username, the game and
       their words; one a game every five minutes at most, and none while
-      you have that game open). For the lineup alert, while it is on, we
+      you have that game open); and, for a game you set "Remind me" on,
+      that it starts in ten minutes (the two teams). For the lineup alert, while it is on, we
       keep the ID of the Sleeper league your league desk last opened and
       your Sleeper user ID, to read the lineup you have set there, and we
       delete them within fifteen minutes of your turning it off. We keep
@@ -252,7 +253,10 @@
         <code>message_deletes</code>, <code>friend_nicknames</code>)</li>
       <li><b>A game’s chat</b> — messages you post in a game’s room, with the
         play or message they answer and any bet you chose to attach (your
-        words, typed by you); the reactions, the who-wins vote and any
+        words, typed by you); the reactions, the who-wins vote, your vote
+        for the player of the game once it is final (the room sees only how
+        many picked each name, never who), a game you asked to be reminded
+        of (the game and when it starts, until the reminder is sent) and any
         reports you make. Anyone viewing that game can read its room.
         Kept 14 days. The who-wins vote’s running totals are kept too, a
         count a minute at most, so a game’s page can chart the room through
@@ -266,7 +270,8 @@
         account, a party you started stays for its friends, with you taken
         off it. (<code>chat_msgs</code>, <code>chat_reacts</code>,
         <code>chat_play_reacts</code>, <code>chat_votes</code>,
-        <code>chat_vote_marks</code>, <code>chat_reports</code>,
+        <code>chat_vote_marks</code>, <code>chat_potg</code>, <code>chat_reminders</code>,
+        <code>chat_potg_opts</code>, which names no one, <code>chat_reports</code>,
         <code>chat_parties</code>, <code>chat_party_members</code>)</li>
       <li><b>Referrals</b> — a member’s referral code, and which account
         joined with whose code, whether its first payment went through and

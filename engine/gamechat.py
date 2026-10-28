@@ -40,6 +40,7 @@ two empty lists.
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import re
 import secrets
@@ -171,6 +172,29 @@ def ensure_tables(conn) -> None:
         PRIMARY KEY (party_id, user_id)
       );
       CREATE INDEX IF NOT EXISTS chat_party_members_user ON chat_party_members (user_id);
+      -- THE FANS' PLAYER OF THE GAME: the four names a final game's room
+      -- votes between (set once, naming no account), and each vote.
+      CREATE TABLE IF NOT EXISTS chat_potg_opts (
+        room TEXT PRIMARY KEY,
+        opts TEXT NOT NULL,
+        at   REAL NOT NULL
+      );
+      -- REMIND ME: a game an account asked to hear about before it starts,
+      -- until it is told (then the row goes).
+      CREATE TABLE IF NOT EXISTS chat_reminders (
+        user_id  INTEGER NOT NULL,
+        room     TEXT NOT NULL,
+        start_at REAL NOT NULL,
+        title    TEXT NOT NULL,
+        PRIMARY KEY (user_id, room)
+      );
+      CREATE TABLE IF NOT EXISTS chat_potg (
+        room    TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        pick    INTEGER NOT NULL,
+        at      REAL NOT NULL,
+        PRIMARY KEY (room, user_id)
+      );
     """)
     # A party's messages are the room's rows with its id; the room's own are
     # 0. Added rather than declared (the table shipped first), and raced:
@@ -205,9 +229,18 @@ def game_of(room: str, data_dir: Path | None = None) -> dict:
     blob = _read((data_dir or DATA) / f"live_{m.group(1)}.json") or {}
     for g in blob.get("games") or []:
         if str(g.get("event_id") or g.get("game_pk") or "") == m.group(2):
+            live = g.get("live") or {}
             return {"home": g.get("home") or "", "away": g.get("away") or "",
-                    "state": ((g.get("live") or {}).get("state") or "")}
+                    "state": (live.get("state") or ""), "start": _when(live.get("start_time"))}
     return {}
+
+
+def _when(v) -> float | None:
+    """A scoreboard's ISO start time as a timestamp (None if it is not one)."""
+    try:
+        return _dt.datetime.fromisoformat(str(v or "").strip().replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
 
 
 # ─── what a bet chip may say ────────────────────────────────────────────────
@@ -272,6 +305,8 @@ def _prune(conn, now: float) -> None:
     conn.execute("DELETE FROM chat_play_reacts WHERE changed_at<?", (old,))
     conn.execute("DELETE FROM chat_votes WHERE changed_at<?", (old,))
     conn.execute("DELETE FROM chat_vote_marks WHERE at<?", (old,))
+    conn.execute("DELETE FROM chat_potg WHERE at<?", (old,))
+    conn.execute("DELETE FROM chat_potg_opts WHERE at<?", (old,))
     conn.execute("DELETE FROM chat_party_members WHERE party_id IN (SELECT id FROM chat_parties WHERE created_at<?)",
                  (old,))
     conn.execute("DELETE FROM chat_parties WHERE created_at<?", (old,))
@@ -482,6 +517,185 @@ def _mark_votes(conn, room: str, now: float) -> None:
     else:
         conn.execute("INSERT INTO chat_vote_marks (room, at, home, away) VALUES (?,?,?,?)",
                      (room, now, home, away))
+
+
+# ─── the fans' player of the game ───────────────────────────────────────────
+#: When a game goes final its room votes the player of the game (theScore's
+#: and ESPN's fan vote): the four players in the game's biggest plays, by
+#: the play cards' own 0-10 ratings, either team; open a day, one vote each.
+POTG_OPTIONS = 4
+POTG_OPEN_S = 24 * 3600
+
+
+def potg_options(room: str, data_dir: Path | None = None) -> list:
+    """[{name, team}] best first: each player's share of the ratings of the
+    plays he is named in (the first named carries the play, the rest half
+    of it), off the game's deep file (web/data/pbp/{room}.json)."""
+    if not ROOM_RE.match(str(room or "")):
+        return []
+    try:
+        doc = json.loads(((data_dir or DATA) / "pbp" / f"{room}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    score: dict = {}
+    for p in (doc.get("plays") or []) if isinstance(doc, dict) else []:
+        if not isinstance(p, dict):
+            continue
+        try:
+            r = float(p.get("rating") or 0)
+        except (TypeError, ValueError):
+            continue
+        if r <= 0:
+            continue
+        for i, name in enumerate(p.get("players") or []):
+            if not isinstance(name, str) or not name.strip():
+                continue
+            row = score.setdefault(name.strip()[:40], [0.0, ""])
+            row[0] += r if i == 0 else r / 2
+            if i == 0 and not row[1]:
+                row[1] = str(p.get("team") or "")[:6]
+    best = sorted(score.items(), key=lambda kv: (-kv[1][0], kv[0]))[:POTG_OPTIONS]
+    return [{"name": n, "team": t} for n, (_v, t) in best] if len(best) >= 2 else []
+
+
+def potg_view(conn, room: str, viewer=None, data_dir: Path | None = None, now: float | None = None):
+    """The vote as the chat draws it, once the game is final (None before):
+    the names, and the counts once this reader has voted or it has closed."""
+    t = time.time() if now is None else float(now)
+    row = conn.execute("SELECT opts, at FROM chat_potg_opts WHERE room=?", (room,)).fetchone()
+    if not row:
+        if game_of(room, data_dir).get("state") != "final":
+            return None
+        opts = potg_options(room, data_dir)
+        if not opts:
+            return None
+        conn.execute("INSERT OR IGNORE INTO chat_potg_opts (room, opts, at) VALUES (?,?,?)",
+                     (room, json.dumps(opts), t))
+        conn.commit()
+        row = conn.execute("SELECT opts, at FROM chat_potg_opts WHERE room=?", (room,)).fetchone()
+    opts, at = json.loads(row[0]), float(row[1])
+    mine = None
+    if viewer:
+        m = conn.execute("SELECT pick FROM chat_potg WHERE room=? AND user_id=?", (room, int(viewer))).fetchone()
+        mine = int(m[0]) if m else None
+    out = {"options": opts, "mine": mine, "open": t - at < POTG_OPEN_S}
+    if mine is not None or not out["open"]:
+        counts = [0] * len(opts)
+        for pick, n in conn.execute("SELECT pick, COUNT(*) FROM chat_potg WHERE room=? GROUP BY pick", (room,)):
+            if 0 <= int(pick) < len(counts):
+                counts[int(pick)] = int(n)
+        out.update(counts=counts, n=sum(counts))
+    return out
+
+
+def potg_vote(conn, user_id: int, room, pick, data_dir: Path | None = None,
+              now: float | None = None) -> tuple[int, dict]:
+    """One vote an account, while the vote is open."""
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    room = str(room or "")
+    v = potg_view(conn, room, user_id, data_dir, t) if room_ok(room) else None
+    if not v:
+        return 409, {"error": "The vote opens when the game is final."}
+    if not v["open"]:
+        return 409, {"error": "The vote has closed."}
+    if v["mine"] is not None:
+        return 409, {"error": "You voted already."}
+    try:
+        pick = int(pick)
+    except (TypeError, ValueError):
+        return 400, {"error": "Pick one of the names."}
+    if not 0 <= pick < len(v["options"]):
+        return 400, {"error": "Pick one of the names."}
+    conn.execute("INSERT OR IGNORE INTO chat_potg (room, user_id, pick, at) VALUES (?,?,?,?)",
+                 (room, int(user_id), pick, t))
+    conn.commit()
+    return 200, potg_view(conn, room, user_id, data_dir, t)
+
+
+# ─── remind me ──────────────────────────────────────────────────────────────
+#: A bell on a game that has not started (theScore's "notify me"): a push
+#: this long before it starts, once, and then the reminder is spent.
+REMIND_BEFORE_S = 10 * 60
+#: A game already this far under way is not told about.
+REMIND_LATE_S = 15 * 60
+#: The push topic (engine/pushmine): an account's phones carry it while it
+#: has a reminder set (engine/pushalerts' account topics).
+REMIND_TOPIC = "reminders"
+#: An account's reminders set at once, at most.
+REMIND_MAX = 40
+
+
+def remind_view(conn, room: str, viewer=None, data_dir: Path | None = None, now: float | None = None):
+    """The bell for a game that has not started (None once it has, or when
+    the scoreboard gives no start): whether this reader set it."""
+    t = time.time() if now is None else float(now)
+    g = game_of(room, data_dir)
+    start = g.get("start")
+    if g.get("state") in ("live", "final") or not start or start <= t:
+        return None
+    on = bool(viewer) and conn.execute("SELECT 1 FROM chat_reminders WHERE user_id=? AND room=?",
+                                       (int(viewer), room)).fetchone() is not None
+    return {"on": on, "start": start}
+
+
+def reminds(conn, user_id) -> bool:
+    """Has this account a reminder set? (engine/pushalerts.subscribe asks.)"""
+    try:
+        return conn.execute("SELECT 1 FROM chat_reminders WHERE user_id=? LIMIT 1",
+                            (int(user_id),)).fetchone() is not None
+    except sqlite3.Error:
+        return False
+
+
+def remind(conn, user_id: int, room, on: bool, data_dir: Path | None = None,
+           now: float | None = None) -> tuple[int, dict]:
+    """Set or take back the bell on a game that has not started."""
+    from . import pushalerts as PA
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    room = str(room or "")
+    if not room_ok(room):
+        return 400, {"error": "That game has no room."}
+    if on:
+        v = remind_view(conn, room, user_id, data_dir, t)
+        if not v:
+            return 409, {"error": "That game has started."}
+        n = conn.execute("SELECT COUNT(*) FROM chat_reminders WHERE user_id=? AND room<>?",
+                         (int(user_id), room)).fetchone()[0]
+        if n >= REMIND_MAX:
+            return 429, {"error": f"You have {REMIND_MAX} reminders set already."}
+        g = game_of(room, data_dir)
+        title = f"{g['away']} @ {g['home']}" if g.get("away") and g.get("home") else "Your game"
+        conn.execute("INSERT OR REPLACE INTO chat_reminders (user_id, room, start_at, title) VALUES (?,?,?,?)",
+                     (int(user_id), room, float(v["start"]), title))
+    else:
+        conn.execute("DELETE FROM chat_reminders WHERE user_id=? AND room=?", (int(user_id), room))
+    PA.relink(conn, user_id, REMIND_TOPIC, reminds(conn, user_id))
+    conn.commit()
+    return 200, {"ok": True, "on": bool(on), "phones": PA.phones(conn, user_id)}
+
+
+def reminders_pass(conn, now: float | None = None) -> int:
+    """Tell each reminder whose game starts within REMIND_BEFORE_S, once
+    (engine/pushmine runs it every minute); a game well under way is let
+    go untold. Returns how many were queued."""
+    from . import pushmine as PM
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    told = 0
+    for uid, room, start, title in conn.execute(
+            "SELECT user_id, room, start_at, title FROM chat_reminders WHERE start_at<=?",
+            (t + REMIND_BEFORE_S,)).fetchall():
+        m = ROOM_RE.match(room)
+        if m and float(start) > t - REMIND_LATE_S:
+            mins = round((float(start) - t) / 60)
+            head = f"{title} starts in {mins} minute{'' if mins == 1 else 's'}" if mins >= 1 else f"{title} is starting"
+            told += PM.tell(conn, uid, f"remind:{room}", REMIND_TOPIC, head,
+                            "Tap for the game and its chat.", f"/#pbp/{m.group(1)}/{m.group(2)}", now=t)
+        conn.execute("DELETE FROM chat_reminders WHERE user_id=? AND room=?", (uid, room))
+    conn.commit()
+    return told
 
 
 def vote_path(conn, room: str) -> list:
@@ -712,6 +926,14 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
            # The room's heat (Twitch's Hype Train): the last five minutes as
            # a meter, paying a viewer who is part of it (engine/karma).
            "hype": K.hype(conn, room, viewer, now)}
+    # The game is final: its fans' player of the game.
+    potg = potg_view(conn, room, viewer, data_dir, now)
+    if potg:
+        out["potg"] = potg
+    # Not started yet: the bell (remind me).
+    bell = remind_view(conn, room, viewer, data_dir, now)
+    if bell:
+        out["remind"] = bell
     if viewer:
         # Friends in this game now (engine/karma), unless they hid it.
         out["friends"] = [f["handle"] for f in K.friends_watching(conn, viewer, now, room=room)]

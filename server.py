@@ -3958,7 +3958,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _chat_post(self, path: str, body: dict):
         from engine import gamechat as GC
-        if path not in ("send", "react", "play", "vote", "report", "delete", "hide", "ticket",
+        if path not in ("send", "react", "play", "vote", "potg", "remind", "report", "delete", "hide", "ticket",
                         "party", "join", "leave"):
             return self._send(404, b'{"error":"unknown chat endpoint"}', ".json")
         if path == "ticket":
@@ -3983,6 +3983,10 @@ class Handler(BaseHTTPRequestHandler):
                                           str(body.get("kind") or ""))
             elif path == "vote":
                 code, out = GC.vote(conn, uid, room, str(body.get("side") or ""))
+            elif path == "potg":
+                code, out = GC.potg_vote(conn, uid, room, body.get("pick"))
+            elif path == "remind":
+                code, out = GC.remind(conn, uid, room, body.get("on") is True)
             elif path == "report":
                 code, out = GC.report(conn, uid, _int(body.get("id")), str(body.get("reason") or "other")[:12])
             elif path == "delete":
@@ -4010,6 +4014,7 @@ class Handler(BaseHTTPRequestHandler):
                         "react": lambda K: K.on_react(conn, uid, _int(body.get("id")), out.get("mine") or ""),
                         "play": lambda K: K.on_play_react(conn, uid, out.get("mine") or ""),
                         "vote": lambda K: K.on_vote(conn, uid, room),
+                        "potg": lambda K: K.on_potg(conn, uid, room),
                         "join": lambda K: K.on_party_join(conn, uid, out.get("id"))}.get(path)
                 k = _karma_note(earn) if earn else None
                 if k:

@@ -79,7 +79,9 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          "karma": 3 * 3600, "karma_week": 12 * 3600,
          # A game chat's mention or reply (engine/gamechat): the game is
          # still on for a couple of hours at most.
-         "mentions": 2 * 3600}
+         "mentions": 2 * 3600,
+         # A game's reminder (engine/gamechat remind): worth it until the game is on.
+         "reminders": 20 * 60}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0}
@@ -729,6 +731,12 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 told += _karma.alerts_pass(conn, now=t)
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  karma alerts: {type(exc).__name__}: {exc}")
+        # Remind me (engine/gamechat): games starting in ten minutes.
+        from engine import gamechat as _gc
+        try:
+            told += _gc.reminders_pass(conn, now=t)
+        except Exception as exc:                                  # noqa: BLE001 — the rest of the minute still runs
+            log(f"  ⚠️  reminders: {type(exc).__name__}: {exc}")
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         from engine import finals as _fin
         moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)

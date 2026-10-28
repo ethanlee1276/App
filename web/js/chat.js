@@ -33,7 +33,7 @@ const CHAT_REASONS = [["spam", "Spam"], ["abuse", "Abuse"], ["hate", "Hate"], ["
 const CH = {
   room: "", league: "", event: "", d: null,
   msgs: [], byId: new Map(), lastId: 0, firstId: 0, older: false, since: 0,
-  plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0, me: null, friends: [],
+  plays: {}, threads: {}, minePlays: {}, votes: null, potg: null, remind: null, votePath: [], here: 0, me: null, friends: [],
   open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false,
   unread: 0, timer: 0, busy: false, loaded: false, err: "", menu: 0,
   // A watch party (engine/gamechat): the reader's parties in this game, the
@@ -600,7 +600,7 @@ function chatReset() {
   clearTimeout(CH.timer);
   clearTimeout(CH.wtimer);
   Object.assign(CH, { room: "", league: "", event: "", d: null, msgs: [], byId: new Map(), lastId: 0,
-    firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0, friends: [],
+    firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, potg: null, remind: null, votePath: [], here: 0, friends: [],
     open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false, unread: 0, timer: 0,
     loaded: false, err: "", menu: 0, parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
     hype: null, wtimer: 0, wfirst: false });
@@ -689,6 +689,10 @@ async function chatPull(older) {
   Object.assign(CH.threads, v.threads || {});
   Object.assign(CH.minePlays, v.mine_plays || {});
   CH.votes = v.votes || CH.votes;
+  // The game is final: the fans' player of the game (engine/gamechat potg).
+  CH.potg = v.potg || CH.potg || null;
+  // Not started yet: the bell (engine/gamechat remind); gone once it starts.
+  CH.remind = v.remind || null;
   CH.votePath = v.vote_path || CH.votePath || [];
   // The room against the math: the game page's chart draws the vote
   // through the game (js/detail.js pbpRoomLine) whenever it moves.
@@ -847,6 +851,42 @@ function chatEntryPaint() {
   }
   if (CH.cardHTML !== html) { CH.cardHTML = html; CH.card.innerHTML = html; }
   if (CH.card.parentNode !== slot) slot.replaceChildren(CH.card);
+  chatBellPaint(slot);
+}
+
+/* REMIND ME (theScore's "notify me"): on a game that has not started, a
+   bell under the chat card; set, the phones signed in to the account hear
+   ten minutes before it starts (engine/gamechat remind). */
+function chatBellPaint(slot) {
+  let el = slot.querySelector(".gch-bell");
+  const r = CH.remind;
+  if (!r) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("button");
+    el.type = "button";
+    el.className = "gch-bell";
+    el.addEventListener("click", chatBellToggle);
+    slot.appendChild(el);
+  }
+  const html = `<span aria-hidden="true">🔔</span><span>${r.on ? "Reminder set: a push 10 minutes before it starts"
+    : "Remind me 10 minutes before it starts"}</span>${r.on ? "<b>On</b>" : ""}`;
+  if (el._html !== html) { el._html = html; el.innerHTML = html; }
+  el.classList.toggle("on", !!r.on);
+  el.setAttribute("aria-pressed", String(!!r.on));
+}
+
+async function chatBellToggle() {
+  const r = CH.remind;
+  if (!r) return;
+  const out = await chatPost("remind", { on: !r.on });
+  if (out.status === 401) return chatNeedAccount();
+  if (out.status !== 200) { if (out.error && typeof tfToast === "function") tfToast(out.error); return; }
+  CH.remind = { ...r, on: !!out.on };
+  chatEntryPaint();
+  if (typeof tfToast === "function") {
+    tfToast(!out.on ? "Reminder off." : Number(out.phones) ? "Set: your phone hears 10 minutes before it starts."
+      : "Set. Turn on alerts for this phone in Settings, under Alerts, and the reminder comes with them.");
+  }
 }
 
 const chatIcon = () => `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>`;
@@ -1039,6 +1079,7 @@ function chatDrawPoll() {
   const box = s.querySelector(".gch-poll");
   if (!v || !d.home || !d.away || CH.thread) { box.innerHTML = ""; box.hidden = true; return; }
   box.hidden = false;
+  if (!v.open && CH.potg && (CH.potg.options || []).length) { box.innerHTML = chatPotgHTML(CH.potg); return; }
   const total = (v.away || 0) + (v.home || 0);
   const pct = (n) => (total ? Math.round((100 * n) / total) : 0);
   const btn = (key, abbr) => `<button type="button" class="gch-vote${v.mine === key ? " mine" : ""}" data-gch="vote" data-side="${key}"
@@ -1047,6 +1088,22 @@ function chatDrawPoll() {
     ${btn("away", d.away)}${btn("home", d.home)}
     <span class="gch-poll-n">${total ? `${total} vote${total === 1 ? "" : "s"}` : v.open ? "Be the first" : ""}</span>
     ${total ? `<span class="gch-poll-bar" style="--gch-away:${pct(v.away || 0)}%"></span>` : ""}`;
+}
+
+/* THE FANS' PLAYER OF THE GAME (theScore's and ESPN's fan vote): once the
+   game is final the who-wins bar becomes this, the four players in its
+   biggest plays; how the room voted shows once you have. */
+function chatPotgHTML(p) {
+  const counts = p.counts || [];
+  const total = counts.reduce((a, b) => a + b, 0);
+  const shown = p.mine != null || !p.open;
+  const pct = (i) => (total ? Math.round((100 * (counts[i] || 0)) / total) : 0);
+  const lead = shown && total ? counts.indexOf(Math.max(...counts)) : -1;
+  return `<span class="gch-poll-q">${p.open && p.mine == null ? "Player of the game?" : "Fans' player of the game"}</span>
+    <span class="gch-potg">${p.options.map((o, i) => `<button type="button" class="gch-vote${p.mine === i ? " mine" : ""}${i === lead ? " lead" : ""}"
+      data-gch="potg" data-i="${i}"${p.open && p.mine == null ? "" : " disabled"}><b>${chEsc(o.name)}</b>${
+      shown ? `<span>${pct(i)}%</span>` : o.team ? `<span>${chEsc(o.team)}</span>` : ""}</button>`).join("")}</span>
+    <span class="gch-poll-n">${shown ? `${total} vote${total === 1 ? "" : "s"}` : "+5 karma"}</span>`;
 }
 
 function chatDrawTabs() {
@@ -1552,6 +1609,13 @@ async function chatClick(e) {
       chatShareCounts();
       document.querySelectorAll(`#gch-sheet .gch-playcard[data-play="${CSS.escape(key)}"] .gch-faces`).forEach((el) => { el.outerHTML = chatPlayFacesHTML(key); });
     }
+    return;
+  }
+  if (act === "potg") {
+    const out = await chatPost("potg", { pick: Number(t.dataset.i) });
+    if (out.status === 401) return chatNeedAccount();
+    if (out.status === 200 && out.options) { CH.potg = out; chatDrawPoll(); }
+    else if (out.error && typeof tfToast === "function") tfToast(out.error);
     return;
   }
   if (act === "vote") {

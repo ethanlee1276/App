@@ -906,7 +906,9 @@ def delete_user(conn, user_id: int) -> None:
     # (engine/pushmine), and both sides of a referral (engine/referrals).
     # A phone's own subscription is the device's: it keeps the public
     # alerts it asked for, with this account unlinked from it.
-    for table in ("chat_msgs", "chat_reacts", "chat_play_reacts", "chat_votes", "chat_reports", "chat_party_members",
+    for table in ("chat_msgs", "chat_reacts", "chat_play_reacts", "chat_votes", "chat_potg", "chat_reminders",
+                  "chat_reports",
+                  "chat_party_members",
                   "push_mine", "push_watch_seen", "push_activities", "push_lineup_leagues", "referral_codes",
                   # The Alerts page's watches (engine/alerts), which had
                   # leaned on ON DELETE CASCADE alone — the very thing this

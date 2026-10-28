@@ -119,6 +119,7 @@ RULES = {
     "react_day": (5, None, "Reacted"),
     "vote": (5, None, "Voted who wins"),
     "vote_won": (10, None, "Picked the winner"),
+    "potg": (5, None, "Voted the player of the game"),
     "call_won": (5, 75, "Called it"),
     "call_streak": (25, None, "Five calls right in a row"),
     "trivia": (5, 30, "Trivia right"),
@@ -480,6 +481,12 @@ def on_play_react(conn, user_id, kind_now: str, now: float | None = None) -> dic
 def on_vote(conn, user_id, room: str, now: float | None = None) -> dict | None:
     ensure_tables(conn)
     return note(conn, user_id, award(conn, user_id, "vote", room, now=now), "vote")
+
+
+def on_potg(conn, user_id, room: str, now: float | None = None) -> dict | None:
+    """A vote for a final game's player of the game (engine/gamechat): +5."""
+    ensure_tables(conn)
+    return note(conn, user_id, award(conn, user_id, "potg", str(room)[:24], now=now), "potg")
 
 
 def on_daily(conn, user_id, day: str, right: bool, now: float | None = None) -> dict | None:

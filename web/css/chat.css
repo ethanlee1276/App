@@ -103,6 +103,10 @@ body.gch-on { overflow: hidden; }
 .gch-vote.mine { border-color: transparent; color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, var(--panel)); }
 .gch-vote:disabled { cursor: default; opacity: .8; }
 .gch-poll-n { margin-left: auto; font-size: var(--fs-2xs); color: var(--text-mute); }
+/* The fans' player of the game: all four names in sight, two lines on a phone. */
+.gch-potg { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
+.gch-potg .gch-vote { flex: none; }
+.gch-vote.lead b { color: var(--brand-2); }
 .gch-poll-bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--border); }
 .gch-poll-bar::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--gch-away); background: var(--brand); }
 
@@ -406,3 +410,10 @@ body.gch-on { overflow: hidden; }
 .pcard-share.done { color: var(--good); }
 .pf-acts .pcard-share { margin-left: auto; }
 .pf-acts .pcard-share + .pf-open { margin-left: 4px; }
+
+/* Remind me: a bell under the chat card on a game that has not started. */
+.gch-bell { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 8px; padding: 11px 14px; border: 0;
+  border-radius: var(--radius-sm); cursor: pointer; text-align: left; background: var(--panel); color: var(--text);
+  font: inherit; font-size: var(--fs-xs); font-weight: 700; }
+.gch-bell b { margin-left: auto; color: var(--brand); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .06em; }
+.gch-bell.on { background: color-mix(in oklab, var(--brand) 12%, var(--panel)); }

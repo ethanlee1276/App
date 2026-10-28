@@ -661,6 +661,12 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GR "Remind me" 30 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatBellPaint('
+SH
+run GQ "The fans' player of the game" 30 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatPotgHTML('
+SH
 run GP "Today's question" 30 <<'SH'
 curl -s https://qellysbook.com/js/karma.js | grep -c 'function krDailyHTML('
 SH

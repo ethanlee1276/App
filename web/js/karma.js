@@ -297,7 +297,7 @@ function krLadderRowsHTML(lad) {
 /* The ways to earn, grouped the way a reader looks for them. */
 const KR_RULE_GROUPS = [["Watching", ["watch_join", "watch", "witness"]],
   ["Talking", ["chat_day", "chat", "liked", "react_day", "hype"]],
-  ["Playing along", ["vote", "vote_won", "call_won", "call_streak", "trivia"]],
+  ["Playing along", ["vote", "vote_won", "potg", "call_won", "call_streak", "trivia"]],
   ["Every day", ["day", "daily_q", "quest", "quests_all"]],
   ["Friends", ["follow", "party_host", "party_join", "recruit"]],
   ["Your first two weeks", ["camp", "camp_done"]]];
