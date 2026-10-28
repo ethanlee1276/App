@@ -153,7 +153,8 @@ def test_the_live_clock_redraws_the_deck_in_place():
     i = deck.index('deckFill(host, "riding", deckRidingHTML(riding));')
     j = deck.index("if (still) {")
     assert i < j, "the riding rows refill either way — a bet's state moves with the score"
-    assert 'if (still) {\n    deckFill(host, "live", await deckLiveHTML(riding, rows));\n  } else {' in deck
+    # Since 2026-10-27 a redraw that comes back behind a newer render fills nothing (tests/test_the_newest_deck_wins.py).
+    assert 'if (still) {\n    const live = await deckLiveHTML(riding, rows);\n    if (gen !== _deckGen) return;\n    deckFill(host, "live", live);\n  } else {' in deck
     assert 'deckFill(host, "record", rest.record);' in deck[j:], "the record is rebuilt only on a full render"
     assert 'if (!still) host.querySelectorAll(".zeno-copy")' in deck, "no second listener on a button that stayed"
     assert "if (!still) {\n    sweepRings(host);" in deck, "a still redraw sweeps and counts nothing"

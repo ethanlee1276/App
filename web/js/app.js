@@ -31161,6 +31161,7 @@ const DECK_BOOK_LABEL = { main: "Edge", likely: "Most Likely", likely_live: "Mos
 let _deckFast = { at: 0, games: [] };
 let _deckTimer = null;
 let _deckStamp = "";
+let _deckGen = 0;
 
 /* Live games only, the ones with our bets on them first. `list` is
    [{sport, g}] from the fast scoreboards; `riding` the tracker's live
@@ -31670,6 +31671,15 @@ async function renderHomeDeck(opts) {
   const quiet = still || !!state.quiet;
   const host = document.getElementById("home-deck");
   if (!host) return;
+  /* THE NEWEST RENDER WINS. Two renders can be in flight at once (a
+     visit's board lands twice, a league is switched mid-fetch), and the
+     one whose awaits came back last used to fill the deck: an older
+     board's Live now over a newer one's, or the last league's. A full
+     render takes a new number; one that comes back to find a newer
+     number fills nothing and leaves the deck to it. A clock redraw keeps
+     the number it found: it refreshes the same board, and must not
+     cancel a full render that still has the record and Zeno to fill. */
+  const gen = still ? _deckGen : ++_deckGen;
   clearTimeout(_deckTimer);
   host.classList.toggle("hd-still", still);
   if (quiet) host.classList.add("hd-still");
@@ -31682,9 +31692,12 @@ async function renderHomeDeck(opts) {
   deckFill(host, "riding", deckRidingHTML(riding));
   renderRidingTray(riding);
   if (still) {
-    deckFill(host, "live", await deckLiveHTML(riding, rows));
+    const live = await deckLiveHTML(riding, rows);
+    if (gen !== _deckGen) return;
+    deckFill(host, "live", live);
   } else {
     const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
+    if (gen !== _deckGen) return;
     deckFill(host, "live", live);
     deckFill(host, "record", rest.record);
     deckFill(host, "zeno", rest.zeno);
