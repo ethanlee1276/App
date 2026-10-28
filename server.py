@@ -3558,7 +3558,9 @@ class Handler(BaseHTTPRequestHandler):
             K.ensure_tables(conn)
             who = self._account(conn)
             if path == "ladder" and body is None:
-                scope = "all" if one("scope") == "all" else "week"
+                scope = one("scope") if one("scope") in ("all", "friends") else "week"
+                if scope == "friends" and not who:
+                    return self._send(401, b'{"error":"Sign in to race your friends."}', ".json")
                 out = K.ladder(conn, scope, who["id"] if who else None)
                 return self._send(200, json.dumps(out).encode(), ".json")
             if not who:
@@ -3573,7 +3575,9 @@ class Handler(BaseHTTPRequestHandler):
                                         flair=body.get("flair") if isinstance(body.get("flair"), str) else None,
                                         ladder=body.get("ladder") if isinstance(body.get("ladder"), bool) else None,
                                         remind=body.get("remind") if isinstance(body.get("remind"), bool) else None,
-                                        share=body.get("share") if isinstance(body.get("share"), bool) else None)
+                                        share=body.get("share") if isinstance(body.get("share"), bool) else None,
+                                        pins=[str(x)[:20] for x in body.get("pins")][:10]
+                                        if isinstance(body.get("pins"), list) else None)
                 return self._send(code, json.dumps(out).encode(), ".json")
             return self._send(405, b'{"error":"wrong method"}', ".json")
         finally:

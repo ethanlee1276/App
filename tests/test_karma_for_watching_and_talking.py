@@ -433,7 +433,7 @@ def test_the_flair_opens_at_level_three_and_the_chat_wears_the_level():
     K.award(conn, me, "recruit", "x", pts=300, now=T0)
     assert K.set_prefs(conn, me, flair="💩")[0] == 400
     assert K.set_prefs(conn, me, flair="🔥") == (200, {"ok": True, "flair": "🔥", "ladder": True, "remind": False,
-                                                    "share": True, "phones": 0})
+                                                    "share": True, "pins": [], "phones": 0})
     GC.send(conn, me, ROOM, "hello", now=T0)
     _, v = GC.room_view(conn, ROOM, ids[1], now=T0 + 1)
     by = v["messages"][0]["by"]

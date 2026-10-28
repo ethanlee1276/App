@@ -197,15 +197,19 @@ function krBadgesHTML(v) {
   const rows = v.badges || [];
   const got = rows.filter((b) => b.tier).length;
   return `<section class="kr-card"><div class="kr-h"><b>Badges</b><span>${got} of ${rows.length} earned</span></div>
+    <p class="kr-fine kr-pinfine">Pin up to ${Number(v.pins_max || 3)} to lead your profile.</p>
     <div class="kr-badges">${rows.map((b) => {
       const tier = b.one ? (b.tier ? "kr-b6" : "") : b.tier ? `kr-b${Math.min(6, b.tier)}` : "";
       const next = b.next != null && !b.one ? `${krNum(b.n)} / ${krNum(b.next)}` : b.one ? (b.tier ? "Earned" : "Not yet") : `${krNum(b.n)} · every tier`;
       const pct = b.next ? Math.round(Math.min(1, b.n / b.next) * 100) : 100;
-      return `<div class="kr-badge${b.tier ? " on" : ""}" title="${krEsc(b.what)}">
+      const pinned = (v.pins || []).includes(b.key);
+      const pin = b.tier ? `<button type="button" class="kr-pin${pinned ? " on" : ""}" data-kr="pin" data-v="${krEsc(b.key)}"
+        aria-pressed="${pinned}" aria-label="${pinned ? "Unpin" : "Pin"} ${krEsc(b.name)} ${pinned ? "from" : "to"} your profile">${pinned ? "📌 Pinned" : "Pin"}</button>` : "";
+      return `<div class="kr-badge${b.tier ? " on" : ""}${pinned ? " pinned" : ""}" title="${krEsc(b.what)}">
         <span class="kr-medal ${tier}" aria-hidden="true">${KR_BADGE_ICON[b.key] || "★"}</span>
         <b>${krEsc(b.name)}</b><span class="kr-bt">${b.tier && !b.one ? krEsc(b.tier_name) : ""}</span>
         <span class="kr-bw">${krEsc(b.what)}</span>
-        <span class="kr-bar"><i style="--p:${pct}%"></i></span><span class="kr-bn">${next}</span></div>`;
+        <span class="kr-bar"><i style="--p:${pct}%"></i></span><span class="kr-bn"><span>${next}</span>${pin}</span></div>`;
     }).join("")}</div></section>`;
 }
 
@@ -216,6 +220,9 @@ function krLadderRowsHTML(lad) {
       <span class="kr-pts">${krNum(r.points)}</span></li>`).join("")
     : `<li class="kr-empty">Nobody yet — the first karma this week puts you at the top.</li>`;
   const m = lad.mine || {};
+  if (lad.scope === "friends" && !lad.friends) {
+    return `<p class="kr-fine">Add friends to race them here — Friends, on your profile, has your invite link.</p>`;
+  }
   const mine = m.hidden ? `You are off the karma ladders. Turn it back on below.`
     : m.rank ? `You: #${m.rank} · ${krNum(m.points)} karma` : m.points ? `${krNum(m.points)} karma — make a username to stand on the ladder.` : "";
   return `<ol class="kr-ladder">${rows}</ol>${mine ? `<p class="kr-fine kr-mine">${krEsc(mine)}</p>` : ""}`;
@@ -291,8 +298,9 @@ function krPanelHTML(v) {
     ${krQuestsHTML(v)}
     ${krBadgesHTML(v)}
     <section class="kr-card"><div class="kr-h"><b>Karma ladder</b>
-      <span class="kr-seg" role="group" aria-label="Which ladder"><button type="button" data-kr="scope" data-v="week" class="${KR.scope === "week" ? "on" : ""}">This week</button><button type="button" data-kr="scope" data-v="all" class="${KR.scope === "all" ? "on" : ""}">All time</button></span></div>
-      <div class="kr-lad-host">${krLadderRowsHTML(KR.scope === "week" ? v.week : KR.lad.all)}</div>
+      <span class="kr-seg" role="group" aria-label="Which ladder">${[["week", "This week"], ["friends", "Friends"], ["all", "All time"]].map(([k, t]) =>
+        `<button type="button" data-kr="scope" data-v="${k}" class="${KR.scope === k ? "on" : ""}">${t}</button>`).join("")}</span></div>
+      <div class="kr-lad-host">${krLadderRowsHTML(KR.scope === "week" ? v.week : KR.lad[KR.scope])}</div>
       <p class="kr-fine">The week runs Monday to Sunday, Eastern. The top ten take a trophy and its karma on Monday.</p></section>
     ${krPrefsHTML(v)}
     ${krRulesHTML(v)}
@@ -310,7 +318,7 @@ async function karmaPanelMount(el) {
     return;
   }
   el.innerHTML = krPanelHTML(v);
-  if (KR.scope === "all") krLadder(el, "all");
+  if (KR.scope !== "week") krLadder(el, KR.scope);
 }
 
 async function krLadder(root, scope) {
@@ -333,9 +341,11 @@ async function krPrefs(body, root) {
       headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const out = await r.json().catch(() => ({}));
     if (!r.ok) { if (typeof tfToast === "function") tfToast(out.error || "That did not save."); return; }
-    if (KR.me) Object.assign(KR.me, { flair: out.flair, ladder_on: out.ladder, remind: out.remind, phones: out.phones, share: out.share });
+    if (KR.me) Object.assign(KR.me, { flair: out.flair, ladder_on: out.ladder, remind: out.remind, phones: out.phones, share: out.share,
+      pins: out.pins || [] });
     if (root && KR.me) root.innerHTML = krPanelHTML(KR.me);
-    const said = body.share !== undefined ? (out.share ? "Friends see your game" : "Your game is hidden from friends")
+    const said = body.pins !== undefined ? (body.pins.length ? `Pinned to your profile (${body.pins.length} of ${KR.me ? KR.me.pins_max || 3 : 3})` : "Nothing pinned")
+      : body.share !== undefined ? (out.share ? "Friends see your game" : "Your game is hidden from friends")
       : body.remind !== undefined ? (out.remind ? (out.phones ? "Karma alerts on" : "Karma alerts on — turn on this phone's alerts too")
       : "Karma alerts off")
       : body.ladder !== undefined ? (out.ladder ? "You're on the ladders" : "You're off the ladders")
@@ -381,7 +391,16 @@ document.addEventListener("click", (e) => {
   if (act === "open") { e.preventDefault(); krOpenTab(); return; }
   if (act === "up-close") { const up = b.closest(".kr-up"); if (up) up.remove(); return; }
   const root = b.closest(".kr-panel-host");
-  if (act === "scope" && root) { krLadder(root, b.dataset.v === "all" ? "all" : "week"); return; }
+  if (act === "scope" && root) { krLadder(root, ["all", "friends"].includes(b.dataset.v) ? b.dataset.v : "week"); return; }
+  if (act === "pin" && root && KR.me) {
+    const pins = (KR.me.pins || []).slice();
+    const at = pins.indexOf(b.dataset.v);
+    if (at >= 0) pins.splice(at, 1);
+    else if (pins.length >= Number(KR.me.pins_max || 3)) { if (typeof tfToast === "function") tfToast(`Pin up to ${KR.me.pins_max || 3}: unpin one first`); return; }
+    else pins.push(b.dataset.v);
+    krPrefs({ pins }, root);
+    return;
+  }
   if (act === "flair" && root && !b.disabled) krPrefs({ flair: b.dataset.v || "" }, root);
   if (act === "game") { e.preventDefault(); if (typeof openPbp === "function") openPbp(b.dataset.lg, b.dataset.ev); return; }
   if ((act === "ladder" || act === "remind" || act === "share") && b.getAttribute("role") === "switch") {

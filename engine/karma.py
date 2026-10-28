@@ -293,11 +293,13 @@ def ensure_tables(conn) -> None:
     # (the table shipped first), and raced like gamechat's party column.
     have = {r[1] for r in conn.execute("PRAGMA table_info(karma_prefs)")}
     # And (the same day) whether friends may see the live game it is on.
-    for col, default in (("remind", 0), ("told_level", 0), ("share", 1)):
+    # And the badges pinned to show first on the profile (comma-separated).
+    for col, decl in (("remind", "INTEGER NOT NULL DEFAULT 0"), ("told_level", "INTEGER NOT NULL DEFAULT 0"),
+                      ("share", "INTEGER NOT NULL DEFAULT 1"), ("pins", "TEXT NOT NULL DEFAULT ''")):
         if col not in have:
             from .db import column_exists_or_raise
             try:
-                conn.execute(f"ALTER TABLE karma_prefs ADD COLUMN {col} INTEGER NOT NULL DEFAULT {default}")
+                conn.execute(f"ALTER TABLE karma_prefs ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError as exc:
                 column_exists_or_raise(exc)
 
@@ -881,10 +883,18 @@ def badges(conn, user_id, points: int | None = None, best_days: int | None = Non
     return out
 
 
-def top_badges(rows: list, n: int = 6) -> list:
-    """The ones to show on a profile: earned, highest tier first."""
+#: A profile shows its owner's pinned badges first (Steam's and Xbox's
+#: showcase): up to this many.
+PINS_MAX = 3
+
+
+def top_badges(rows: list, n: int = 6, pins=()) -> list:
+    """The ones to show on a profile: the pinned (earned) first, then
+    earned, highest tier first."""
     got = [b for b in rows if b["tier"]]
-    got.sort(key=lambda b: (-b["tier"] / max(1, b["of"]), -b["tier"], b["key"]))
+    pinned = [k for k in pins if k in {b["key"] for b in got}]
+    got.sort(key=lambda b: (b["key"] not in pinned, pinned.index(b["key"]) if b["key"] in pinned else 0,
+                            -b["tier"] / max(1, b["of"]), -b["tier"], b["key"]))
     return [{"key": b["key"], "name": b["name"], "tier": b["tier"], "tier_name": b["tier_name"],
              "one": bool(b.get("one"))} for b in got[:n]]
 
@@ -898,11 +908,45 @@ def _ladder_sql(conn) -> tuple:
     return handle, join
 
 
+def friend_ids(conn, user_id) -> set:
+    """The account's friends, both sides of the friendship (engine/social)."""
+    if not user_id or not _has(conn, "friendships"):
+        return set()
+    return {int(r[0]) for r in conn.execute(
+        "SELECT f.friend_id FROM friendships f JOIN friendships b ON b.user_id=f.friend_id AND b.friend_id=f.user_id "
+        "WHERE f.user_id=?", (int(user_id),))}
+
+
+def friends_ladder(conn, viewer, now: float | None = None) -> dict:
+    """This week's karma among the viewer and their friends (Duolingo's
+    friends league): the viewer always, a friend with a username unless
+    they took themselves off the ladders."""
+    _prepare(conn)
+    t = time.time() if now is None else float(now)
+    since = day_start(week_of(t))
+    pals = friend_ids(conn, viewer)
+    off = {int(r[0]) for r in conn.execute("SELECT user_id FROM karma_prefs WHERE ladder=0")}
+    ids = sorted((pals - off) | {int(viewer)})
+    q = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"SELECT p.user_id, p.handle, COALESCE((SELECT SUM(e.pts) FROM karma_events e WHERE e.user_id=p.user_id "
+        f"AND e.at>=? AND e.kind<>'trophy'), 0) AS s FROM feed_profiles p WHERE p.user_id IN ({q}) "
+        "ORDER BY s DESC, p.handle", (since, *ids)).fetchall() if _has(conn, "feed_profiles") else []
+    out = {"scope": "friends", "since": since, "friends": len(pals),
+           "rows": [{"rank": i + 1, "handle": h, "points": int(sm), "level": level_of(total(conn, u)),
+                     "me": int(u) == int(viewer)} for i, (u, h, sm) in enumerate(rows)]}
+    mine = next((r for r in out["rows"] if r["me"]), None)
+    out["mine"] = {"rank": mine["rank"], "points": mine["points"]} if mine else {"rank": None, "points": 0}
+    return out
+
+
 def ladder(conn, scope: str = "week", viewer=None, now: float | None = None, n: int = LADDER_N) -> dict:
     """The week's (from Monday, Eastern) or the all-time karma ladder: its
     top ``n`` by username, and the viewer's own place on it."""
     _prepare(conn)
     t = time.time() if now is None else float(now)
+    if scope == "friends":
+        return friends_ladder(conn, viewer, t) if viewer else {"scope": "friends", "rows": [], "mine": {}}
     since = day_start(week_of(t)) if scope == "week" else 0.0
     # A week's trophies pay on the Monday after: they count all time,
     # never towards the next week's ladder.
@@ -1139,12 +1183,25 @@ def alerts_pass(conn, now: float | None = None) -> int:
         if et.weekday() == 0 and 9 <= et.hour < 21:
             week = _shift(week_of(t), -7)
             trophies(conn, uid, t)
-            for who, rank in _week_results(conn, week):
-                if who == uid:
-                    told += PM.tell(conn, uid, f"karma:trophy:{week}", ALERT_TOPIC,
-                                    f"#{rank} on last week's karma ladder",
-                                    f"+{TROPHY.get(rank, 0)} karma and a trophy on your profile.", "/#account",
-                                    ttl="karma_week", now=t)
+            rank = next((r for who, r in _week_results(conn, week) if who == uid), None)
+            if rank:
+                told += PM.tell(conn, uid, f"karma:trophy:{week}", ALERT_TOPIC,
+                                f"#{rank} on last week's karma ladder",
+                                f"+{TROPHY.get(rank, 0)} karma and a trophy on your profile.", "/#account",
+                                ttl="karma_week", now=t)
+            else:
+                # Everyone else: their week in a line (Duolingo's and
+                # Strava's Monday recap), when there was one.
+                lo, hi = day_start(week), day_start(_shift(week, 7))
+                got = int(conn.execute("SELECT COALESCE(SUM(pts), 0) FROM karma_events WHERE user_id=? AND at>=? "
+                                       "AND at<? AND kind<>'trophy'", (uid, lo, hi)).fetchone()[0] or 0)
+                if got > 0:
+                    days = conn.execute("SELECT COUNT(DISTINCT day) FROM karma_events WHERE user_id=? AND at>=? "
+                                        "AND at<?", (uid, lo, hi)).fetchone()[0]
+                    told += PM.tell(conn, uid, f"karma:week:{week}", ALERT_TOPIC,
+                                    f"Your week: +{got:,} karma",
+                                    f"{days} day{'s' if days != 1 else ''} on Qellys, level {level_of(total(conn, uid))} "
+                                    "now. A new week's ladder starts today.", "/#account", ttl="karma_week", now=t)
         # A new tier since the last one told.
         lv = level_of(total(conn, uid))
         tier_at = max(at for at, _, _ in TIERS if at <= lv)
@@ -1160,11 +1217,12 @@ def alerts_pass(conn, now: float | None = None) -> int:
 # ─── what the pages read ────────────────────────────────────────────────────
 
 def _prefs(conn, user_id) -> dict:
-    row = conn.execute("SELECT flair, ladder, seen_level, remind, share FROM karma_prefs WHERE user_id=?",
+    row = conn.execute("SELECT flair, ladder, seen_level, remind, share, pins FROM karma_prefs WHERE user_id=?",
                        (int(user_id),)).fetchone()
     return {"flair": row[0] if row else "", "ladder": bool(row[1]) if row else True,
             "seen_level": int(row[2]) if row else 0, "remind": bool(row[3]) if row else False,
-            "share": bool(row[4]) if row else True}
+            "share": bool(row[4]) if row else True,
+            "pins": [x for x in str(row[5] or "").split(",") if x] if row else []}
 
 
 def reminds(conn, user_id) -> bool:
@@ -1196,9 +1254,18 @@ def _relink(conn, user_id, on: bool) -> None:
                      (",".join(have + ([ALERT_TOPIC] if on else [])), endpoint))
 
 
-def set_prefs(conn, user_id, flair=None, ladder=None, remind=None, share=None) -> tuple[int, dict]:
+def set_prefs(conn, user_id, flair=None, ladder=None, remind=None, share=None, pins=None) -> tuple[int, dict]:
     ensure_tables(conn)
     conn.execute("INSERT OR IGNORE INTO karma_prefs (user_id) VALUES (?)", (int(user_id),))
+    if pins is not None:
+        known = {f[0] for f in FAMILIES} | {o[0] for o in ONE_OFF}
+        keep = list(dict.fromkeys(str(k) for k in pins if str(k) in known))
+        if len(keep) > PINS_MAX:
+            return 400, {"error": f"Pin up to {PINS_MAX} badges."}
+        earned = {b["key"] for b in badges(conn, user_id) if b["tier"]}
+        if any(k not in earned for k in keep):
+            return 400, {"error": "Pin a badge you have earned."}
+        conn.execute("UPDATE karma_prefs SET pins=? WHERE user_id=?", (",".join(keep), int(user_id)))
     if share is not None:
         conn.execute("UPDATE karma_prefs SET share=? WHERE user_id=?", (1 if share else 0, int(user_id)))
     if remind is not None:
@@ -1255,8 +1322,10 @@ def public(conn, user_id) -> dict:
     pts = total(conn, user_id)
     st = streak(days_of(conn, user_id), day_of(time.time()))
     lv = level_view(pts)
-    flair = _prefs(conn, user_id)["flair"] if lv["level"] >= FLAIR_AT else ""
-    return {**lv, "flair": flair, "streak": st["now"], "badges": top_badges(badges(conn, user_id, pts, st["best"]))}
+    prefs = _prefs(conn, user_id)
+    flair = prefs["flair"] if lv["level"] >= FLAIR_AT else ""
+    return {**lv, "flair": flair, "streak": st["now"],
+            "badges": top_badges(badges(conn, user_id, pts, st["best"]), pins=prefs["pins"])}
 
 
 def me(conn, user_id, now: float | None = None, data_dir: Path | None = None, checkin: bool = True) -> dict:
@@ -1295,7 +1364,8 @@ def me(conn, user_id, now: float | None = None, data_dir: Path | None = None, ch
     out = {**lv, "streak": st, "quests": q, "badges": badges(conn, uid, pts, st["best"]),
            "flair": prefs["flair"] if lv["level"] >= FLAIR_AT else "", "flairs": list(FLAIRS),
            "ladder_on": prefs["ladder"], "remind": prefs["remind"], "phones": phones(conn, uid),
-           "share": prefs["share"], "camp": camp(conn, uid, t), "friends": friends_watching(conn, uid, t),
+           "share": prefs["share"], "pins": prefs["pins"], "pins_max": PINS_MAX,
+           "camp": camp(conn, uid, t), "friends": friends_watching(conn, uid, t),
            "season": dict(zip(("league", "games"), season_best(conn, uid))),
            "unlocks": {"flair": FLAIR_AT, "color": COLOR_AT, "ring": RING_AT},
            "week": ladder(conn, "week", uid, t, n=10),

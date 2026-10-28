@@ -842,18 +842,21 @@
     like: "liked your post", tail: "tailed your parlay", comment: "commented on your post",
     reply: "replied to your comment", mention: "mentioned you", follow: "started following you",
     comment_like: "liked your comment", won: "Your parlay won", lost: "Your parlay lost",
+    chat_mention: "mentioned you in a game chat",
   };
 
   function activityHTML(items) {
     const rows = (items || []).map((n) => {
       const actor = n.handle ? `<b>${escapeHtml(n.name || n.handle)}</b> ` : "";
-      const href = n.post_id ? `#feed/post/${n.post_id}` : n.handle ? profHref(n.handle) : "#feed";
+      // A game chat's @mention opens its game (engine/gamechat _mention).
+      const href = /^#pbp\/[a-z]+\/\d+(\/party\/[A-Za-z0-9_-]{8,40})?$/.test(n.link || "") ? n.link
+        : n.post_id ? `#feed/post/${n.post_id}` : n.handle ? profHref(n.handle) : "#feed";
       const mark = n.handle ? avatar(n, "sm") : `<span class="fd-av fd-av-sm fd-note-ic ${escapeAttr(n.kind)}">${icon(n.kind === "won" ? "check" : "cross", 13)}</span>`;
       return `<a class="fd-note${n.seen ? "" : " unseen"}" href="${href}">${mark}
         <span class="fd-note-t">${actor}${NOTE_WORDS[n.kind] || escapeHtml(n.kind)}${n.snippet ? `: <i>${escapeHtml(n.snippet)}</i>` : ""}
         <span class="fd-ago">${ago(n.at)}</span></span></a>`;
     }).join("");
-    return `${headHTML("Activity", "Likes, tails, comments, follows and your graded parlays.")}
+    return `${headHTML("Activity", "Likes, tails, comments, follows, mentions and your graded parlays.")}
       <section class="fd-card fd-notes">${rows || `<p class="fd-fine">Nothing yet. Likes, comments, tails, new followers and your graded parlays show up here.</p>`}</section>`;
   }
 

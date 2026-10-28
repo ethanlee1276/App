@@ -317,8 +317,51 @@ def send(conn, user_id: int, room, body, play="", bet=None, reply_to=None,
     mid = int(cur.lastrowid)
     if mid % 200 == 0:
         _prune(conn, now)
+    _mention(conn, user_id, room, mid, body, party)
     conn.commit()
     return 200, {"ok": True, "id": mid}
+
+
+MENTIONS_PER_MSG = 3
+
+
+def _mention(conn, user_id, room: str, mid: int, body: str, party: int = 0) -> None:
+    """@handle in a message (Social's own rule, socialfeed.MENTION_RE): each
+    reader named hears it in their Activity, with the game to open — in a
+    watch party, only its members; never the writer; a block stops it."""
+    from . import socialfeed as SF
+    if "@" not in (body or ""):
+        return
+    m = ROOM_RE.match(room)
+    link = f"#pbp/{m.group(1)}/{m.group(2)}" if m else ""
+    if party and link:
+        # A party's words open the party (its invite link: a member
+        # joining again is joining once).
+        row = conn.execute("SELECT token FROM chat_parties WHERE id=?", (int(party),)).fetchone()
+        link = f"{link}/party/{row['token']}" if row else link
+    seen: set = set()
+    try:
+        for h in SF.MENTION_RE.findall(body)[:MENTIONS_PER_MSG]:
+            uid = SF._uid_of(conn, h)
+            if not uid or uid == int(user_id) or uid in seen:
+                continue
+            if party and not _in_party(conn, uid, party):
+                continue
+            seen.add(uid)
+            # The message's id, negative, keeps each message's notice its
+            # own without pointing at a feed comment.
+            SF._notify(conn, uid, user_id, "chat_mention", comment_id=-int(mid), link=link, note=body)
+    except sqlite3.OperationalError:
+        return                                   # no Social tables here: nobody to name
+
+
+def _unmention(conn, msg_id) -> None:
+    """A message hidden or deleted takes its @mentions out of Activity."""
+    try:
+        conn.execute("DELETE FROM feed_notifs WHERE kind='chat_mention' AND comment_id=?", (-int(msg_id or 0),))
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
 
 def react(conn, user_id: int, msg_id, kind, now: float | None = None) -> tuple[int, dict]:
@@ -433,6 +476,7 @@ def delete(conn, user_id: int, msg_id) -> tuple[int, dict]:
     conn.execute("DELETE FROM chat_reports WHERE msg_id=?", (int(msg_id),))
     conn.execute("DELETE FROM chat_msgs WHERE id=?", (int(msg_id),))
     conn.commit()
+    _unmention(conn, msg_id)
     return 200, {"ok": True}
 
 
@@ -449,9 +493,11 @@ def set_hidden(conn, msg_id, hidden: bool) -> tuple[int, dict]:
 
 
 def _unpay(conn, msg_id) -> None:
-    """A hidden message keeps none of the karma it earned (engine/karma)."""
+    """A hidden message keeps none of the karma it earned (engine/karma),
+    and its @mentions leave Activity."""
     from . import karma as K
     K.revoke_message(conn, int(msg_id or 0))
+    _unmention(conn, msg_id)
 
 
 def reported(conn) -> list:

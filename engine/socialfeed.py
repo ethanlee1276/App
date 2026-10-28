@@ -272,6 +272,10 @@ def ensure_tables(conn) -> None:
                       ("link", "TEXT NOT NULL DEFAULT ''")):
         _add(conn, "feed_posts", col, decl)
     _add(conn, "feed_comments", "parent_id", "INTEGER")
+    # A notice that points somewhere other than a post (a game chat's
+    # @mention, 2026-10-28): where it opens, and the words it quotes.
+    _add(conn, "feed_notifs", "link", "TEXT NOT NULL DEFAULT ''")
+    _add(conn, "feed_notifs", "note", "TEXT NOT NULL DEFAULT ''")
     conn.commit()
 
 
@@ -574,15 +578,19 @@ def _person(r, following: set | None = None) -> dict:
 
 # ─── notifications ──────────────────────────────────────────────────────────
 
-def _notify(conn, user_id, actor_id, kind: str, post_id=None, comment_id=None) -> None:
-    """One row per (who, what, where): a like toggled ten times notifies once."""
+def _notify(conn, user_id, actor_id, kind: str, post_id=None, comment_id=None, link: str = "",
+            note: str = "") -> None:
+    """One row per (who, what, where): a like toggled ten times notifies once.
+    ``link`` and ``note``: where a notice that is not about a post opens,
+    and the words it quotes (a game chat's @mention)."""
     if user_id is None or (actor_id is not None and int(user_id) == int(actor_id)):
         return
     if actor_id is not None and int(actor_id) in blocked_ids(conn, user_id):
         return
-    conn.execute("INSERT OR IGNORE INTO feed_notifs (user_id, actor_id, kind, post_id, comment_id, created_at) "
-                 "VALUES (?,?,?,?,?,?)", (int(user_id), None if actor_id is None else int(actor_id), kind,
-                                          post_id, comment_id, time.time()))
+    conn.execute("INSERT OR IGNORE INTO feed_notifs (user_id, actor_id, kind, post_id, comment_id, created_at, "
+                 "link, note) VALUES (?,?,?,?,?,?,?,?)",
+                 (int(user_id), None if actor_id is None else int(actor_id), kind, post_id, comment_id, time.time(),
+                  str(link or "")[:80], str(note or "")[:120]))
     conn.execute("DELETE FROM feed_notifs WHERE user_id=? AND id NOT IN (SELECT id FROM feed_notifs "
                  "WHERE user_id=? ORDER BY created_at DESC LIMIT ?)", (int(user_id), int(user_id), NOTIF_KEEP))
 
@@ -614,11 +622,14 @@ def notifications(conn, user_id: int, strong: bool = False) -> dict:
             "LEFT JOIN feed_posts p ON p.id=n.post_id "
             "LEFT JOIN feed_comments c ON c.id=n.comment_id "
             "WHERE n.user_id=? ORDER BY n.created_at DESC LIMIT 60", (int(user_id),)):
-        what = r["cbody"] or r["title"] or r["caption"] or ""
+        keys = r.keys()
+        note = r["note"] if "note" in keys else ""
+        what = note or r["cbody"] or r["title"] or r["caption"] or ""
         out.append({"id": int(r["id"]), "kind": r["kind"], "at": r["created_at"], "seen": bool(r["seen"]),
                     "handle": r["handle"] or "", "name": r["display_name"] or "",
                     "color": int(r["color"] or 0), "post_id": r["post_id"], "comment_id": r["comment_id"],
-                    "result": r["result"] or "", "snippet": _text(what, strong)[:90]})
+                    "result": r["result"] or "", "snippet": _text(what, strong)[:90],
+                    "link": (r["link"] if "link" in keys else "") or ""})
     return {"items": out, "unseen": unseen(conn, user_id)}
 
 

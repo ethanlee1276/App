@@ -142,8 +142,16 @@
 .kr-bt { font-size: var(--fs-2xs); font-weight: 800; color: var(--brand); text-transform: uppercase; letter-spacing: .06em; }
 .kr-bw { grid-column: 1 / -1; font-size: var(--fs-2xs); color: var(--text-mute); }
 .kr-badge .kr-bar { grid-column: 1 / -1; height: 4px; }
-.kr-bn { grid-column: 1 / -1; font-size: var(--fs-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.kr-bn { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  font-size: var(--fs-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .kr-badge:not(.on) > b { color: var(--text-dim); }
+/* Pinned to the profile (Steam's showcase): the pin on the count's line,
+   clear of the name, and a soft light on what is pinned. */
+.kr-pin { flex: none; min-height: 28px; padding: 0 11px; border: 0; border-radius: 999px; cursor: pointer;
+  background: color-mix(in oklab, var(--text) 9%, transparent); color: var(--text); font: inherit; font-weight: 800; }
+.kr-pin.on { background: color-mix(in oklab, var(--brand) 24%, transparent); color: var(--brand); }
+.kr-badge.pinned { background: color-mix(in oklab, var(--brand) 10%, var(--panel-2)); }
+.kr-pinfine { margin: -4px 0 10px; }
 .kr-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--panel-2); }
 .kr-seg button { padding: 4px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--text-dim);
   font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
