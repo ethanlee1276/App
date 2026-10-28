@@ -269,6 +269,75 @@ def test_in_a_browser_a_saved_game_is_veiled_and_its_card_says_so():
         srv.shutdown()
 
 
+def test_in_a_browser_a_late_chat_never_lands_on_a_veiled_game():
+    """The race the gate found (2026-10-28, a full browser run): the game's
+    first draw asks for js/chat.js, the reader saves the game for later
+    before it arrives, and the chat mount that first draw queued then ran on
+    the veiled page and put up the chat bar, whose newest message can say
+    the score. Here chat.js is held in flight until the veil is up."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("      (skipped: no Playwright)")
+        return
+    import rendercheck
+    live = {"state": "live", "period": "Q2", "clock": "4:12", "away_score": 7, "home_score": 3}
+    pbp = {"league": "nfl", "event_id": "401", "home": "ATL", "away": "SF", "generated_at": "2026-10-25T17:00:00Z",
+           "live": live, "plays": [], "drives": []}
+    fast = {"games": [{"event_id": "401", "home": "ATL", "away": "SF", "live": live, "plays": []}]}
+    srv, port = rendercheck._serve()
+    try:
+        with sync_playwright() as pw:
+            chromium = os.environ.get("CHROMIUM_PATH", "/opt/pw-browsers/chromium")
+            kw = {"args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]}
+            if os.path.exists(chromium):
+                kw["executable_path"] = chromium
+            b = pw.chromium.launch(**kw)
+            try:
+                p = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True,
+                                  service_workers="block").new_page()
+                errs, held = [], []
+                p.on("pageerror", lambda e: errs.append(str(e)))
+                p.add_init_script("try { localStorage.setItem('qb-seen-intro', '1'); localStorage.setItem('qb.tour', 'done'); } catch (e) {}")
+                p.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
+                mk = lambda body: (lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(body)))  # noqa: E731
+                p.route("**/data/pbp/nfl_401.json*", mk(pbp))
+                p.route("**/data/live_nfl.json*", mk(fast))
+                p.route("**/api/chat/room*", mk({"room": "nfl_401", "messages": [], "votes": {"home": 0, "away": 0}}))
+                p.route("**/js/chat.js*", lambda r: held.append(r))
+                p.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#pbp/nfl/401", wait_until="load")
+                p.wait_for_selector("[data-spoil]", timeout=20000)
+                for _ in range(100):
+                    if held:
+                        break
+                    p.wait_for_timeout(100)
+                assert held, "the game's first draw asks for its chat"
+                p.click("[data-spoil]")
+                p.wait_for_selector(".pbp-spoil", timeout=10000)
+                # Any bar at all, however briefly: the page's next poll redraws
+                # the veil and takes a stray one down again, up to 5 s later.
+                p.evaluate("""() => { window.__fab = false; new MutationObserver(() => {
+                  if (document.getElementById('gch-fab')) window.__fab = true; }).observe(document.body,
+                  { childList: true, subtree: true }); }""")
+                held[0].continue_()
+                for _ in range(100):
+                    if p.evaluate("typeof chatFab === 'function'"):
+                        break
+                    p.wait_for_timeout(100)
+                p.wait_for_timeout(1500)
+                assert p.evaluate("typeof chatFab === 'function'"), "chat.js arrived"
+                assert not p.evaluate("window.__fab") and not p.query_selector("#gch-fab"), \
+                    "the late chat stays off the veiled game"
+                assert not errs, errs
+            finally:
+                b.close()
+    finally:
+        srv.shutdown()
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

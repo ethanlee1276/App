@@ -516,6 +516,14 @@ function chatRowFor(room) {
 function chatMount(league, event, d) {
   const room = league && event ? `${league}_${event}` : "";
   if (!/^(nfl|cfb|nba|wnba|nhl|mlb)_\d{1,14}$/.test(room)) return;
+  // A game saved for later (app.js spoiledG) has no room and no bar, even
+  // when this call was queued by the game's first draw and this file arrived
+  // after the reader had veiled it: the bar's newest message can say the score.
+  if (typeof spoiledG === "function" && spoiledG(league, { event_id: event, away: (d || {}).away, home: (d || {}).home })) {
+    if (CH.room) chatReset();
+    chatFab();
+    return;
+  }
   if (room !== CH.room) {
     chatReset();
     Object.assign(CH, { room, league, event });
