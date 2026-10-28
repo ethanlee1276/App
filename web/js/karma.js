@@ -207,14 +207,22 @@ function krRulesHTML(v) {
     <p class="kr-fine">Each thing pays once: the same message, game, call or day can't pay twice, and each kind has a daily limit. A message hidden for everyone gives back what it earned. Karma is never paid for a bet, a sportsbook, a parlay or a plan, and it buys nothing: it's your level, your badges and your flair.</p></section>`;
 }
 
+/* The site's own switch (Settings draws the same), or a checkbox. */
+const krSwitch = (on, key, label) => (typeof setSwitch === "function"
+  ? setSwitch(!!on, `data-kr="${key}" aria-label="${krEsc(label)}"`)
+  : `<input type="checkbox" data-kr="${key}" aria-label="${krEsc(label)}"${on ? " checked" : ""}>`);
+
 function krPrefsHTML(v) {
   const open = Number(v.level) >= Number((v.unlocks || {}).flair || 3);
   return `<section class="kr-card"><div class="kr-h"><b>Your flair</b><span>${open ? "Worn beside your name in every chat" : `Opens at level ${Number((v.unlocks || {}).flair || 3)}`}</span></div>
     <div class="kr-flairs${open ? "" : " locked"}">${(v.flairs || []).map((f) => `<button type="button" class="kr-flair${v.flair === f ? " on" : ""}"
       data-kr="flair" data-v="${krEsc(f)}"${open ? "" : " disabled"} aria-pressed="${v.flair === f}">${krEsc(f)}</button>`).join("")}${
       open && v.flair ? `<button type="button" class="kr-flair none" data-kr="flair" data-v="">None</button>` : ""}</div>
-    <label class="kr-switch"><span><b>Show me on the karma ladders</b><span>Your username and karma on the week's and the all-time ladders.</span></span>
-      <input type="checkbox" data-kr="ladder"${v.ladder_on ? " checked" : ""}></label></section>`;
+    <div class="kr-switch"><span><b>Show me on the karma ladders</b><span>Your username and karma on the week's and the all-time ladders.</span></span>
+      ${krSwitch(v.ladder_on, "ladder", "Show me on the karma ladders")}</div>
+    <div class="kr-switch"><span><b>Karma alerts</b><span>A nudge at 8 p.m. Eastern when your days in a row would end at midnight, your week's trophy and each new tier.</span>
+      ${v.remind && !Number(v.phones) ? `<span class="kr-warn">Turn on alerts for this phone in Settings, under Alerts, and these come with them.</span>` : ""}</span>
+      ${krSwitch(v.remind, "remind", "Karma alerts")}</div></section>`;
 }
 
 function krRecentHTML(v) {
@@ -286,9 +294,13 @@ async function krPrefs(body, root) {
       headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const out = await r.json().catch(() => ({}));
     if (!r.ok) { if (typeof tfToast === "function") tfToast(out.error || "That did not save."); return; }
-    if (KR.me) { KR.me.flair = out.flair; KR.me.ladder_on = out.ladder; }
+    if (KR.me) Object.assign(KR.me, { flair: out.flair, ladder_on: out.ladder, remind: out.remind, phones: out.phones });
     if (root && KR.me) root.innerHTML = krPanelHTML(KR.me);
-    if (typeof tfToast === "function") tfToast(body.ladder === undefined ? (out.flair ? `Wearing ${out.flair}` : "Flair off") : out.ladder ? "You're on the ladders" : "You're off the ladders");
+    const said = body.remind !== undefined ? (out.remind ? (out.phones ? "Karma alerts on" : "Karma alerts on — turn on this phone's alerts too")
+      : "Karma alerts off")
+      : body.ladder !== undefined ? (out.ladder ? "You're on the ladders" : "You're off the ladders")
+      : out.flair ? `Wearing ${out.flair}` : "Flair off";
+    if (typeof tfToast === "function") tfToast(said);
   } catch (e) {
     if (typeof tfToast === "function") tfToast("No connection — try again.");
   }
@@ -331,10 +343,15 @@ document.addEventListener("click", (e) => {
   const root = b.closest(".kr-panel-host");
   if (act === "scope" && root) { krLadder(root, b.dataset.v === "all" ? "all" : "week"); return; }
   if (act === "flair" && root && !b.disabled) krPrefs({ flair: b.dataset.v || "" }, root);
+  if ((act === "ladder" || act === "remind") && b.getAttribute("role") === "switch") {
+    const on = b.getAttribute("aria-checked") !== "true";
+    b.setAttribute("aria-checked", on ? "true" : "false");
+    krPrefs({ [act]: on }, root);
+  }
 });
 document.addEventListener("change", (e) => {
-  const b = e.target.closest && e.target.closest('[data-kr="ladder"]');
-  if (b) krPrefs({ ladder: !!b.checked }, b.closest(".kr-panel-host"));
+  const b = e.target.closest && e.target.closest('[data-kr="ladder"], [data-kr="remind"]');
+  if (b) krPrefs({ [b.dataset.kr]: !!b.checked }, b.closest(".kr-panel-host"));
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;

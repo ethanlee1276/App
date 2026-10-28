@@ -44,7 +44,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from engine import (accounts, billing, digest, gamechat, parlayledger,  # noqa: E402
+from engine import (accounts, billing, digest, gamechat, karma, parlayledger,  # noqa: E402
                     predmarket, slipwatch, socialfeed)
 
 #: (the file, a name for the failure, the migration to run on a connection).
@@ -60,6 +60,8 @@ MIGRATORS = (
     ("engine/socialfeed.py", "socialfeed.ensure_tables", socialfeed.ensure_tables),
     # The watch parties' column on the chat's messages (2026-10-28).
     ("engine/gamechat.py", "gamechat.ensure_tables", gamechat.ensure_tables),
+    # Karma alerts' two columns on the karma settings (2026-10-28).
+    ("engine/karma.py", "karma.ensure_tables", karma.ensure_tables),
 )
 
 #: Files that ALTER a table and are covered somewhere else, with the reason.

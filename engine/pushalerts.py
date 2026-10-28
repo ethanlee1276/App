@@ -46,7 +46,7 @@ LATEST = ROOT / "data" / "push" / "latest.json"
 KINDS = ("posted", "settled")
 #: A member's own alerts (engine/pushmine): a phone signed in when it
 #: subscribed may ask for these too.
-PERSONAL = ("watches", "bets", "clutch", "finals", "lineup")
+PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma")
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300
@@ -88,6 +88,14 @@ def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=KINDS
     # carries the shared two only, and its link to an account is whatever
     # its latest subscribe said (signing out re-subscribes, detaching it).
     t = _clean_list(topics, KINDS + (PERSONAL if user_id else ()))
+    # Karma alerts are switched on from the Karma tab, not this phone's
+    # list (engine/karma): a phone signed in to an account that wants them
+    # carries them, whatever the Alerts page sent.
+    if user_id:
+        from engine import karma as _karma
+        want = _karma.reminds(conn, user_id)
+        keep = [x for x in t.split(",") if x and x != _karma.ALERT_TOPIC]
+        t = ",".join(keep + ([_karma.ALERT_TOPIC] if want else []))
     if not t and not user_id and _clean_list(topics, PERSONAL):
         # Signed out with only their own alerts chosen: nothing left for
         # this phone, and it must not keep the last member's.

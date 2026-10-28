@@ -73,10 +73,15 @@ LINEUP_EVERY_S = 15 * 60
 #: How long each kind stays worth showing. A "your game is on" an hour late
 #: is noise; a settled ticket is still news the next morning.
 TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 3600, "clutch": 20 * 60,
-         "finals": 3 * 3600, "lineup": 18 * 3600, "week": 14 * 3600}
+         "finals": 3 * 3600, "lineup": 18 * 3600, "week": 14 * 3600,
+         # Karma (engine/karma.alerts_pass): the streak nudge is only worth
+         # sending before midnight; a week's trophy is still news that day.
+         "karma": 3 * 3600, "karma_week": 12 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
-_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0}
+_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0}
+#: Karma alerts' pass looks at most this often.
+KARMA_EVERY_S = 15 * 60
 #: Your week's pass looks at most this often, and only on a Monday morning.
 WEEK_EVERY_S = 30 * 60
 
@@ -636,7 +641,7 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     # Kept a day at most (the privacy policy, 2.7): long enough for a late
     # knock to read it, no longer.
     conn.execute("DELETE FROM push_mine WHERE at < ?", (t - KEEP_S,))
-    held = " AND kind NOT IN ('watches', 'clutch', 'lineup')" if quiet else ""
+    held = " AND kind NOT IN ('watches', 'clutch', 'lineup', 'karma')" if quiet else ""
     rows = conn.execute("SELECT user_id, id, kind, title, body, url FROM push_mine WHERE sent = 0" + held +
                         " ORDER BY at").fetchall()
     stats = {"messages": len(rows), "sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
@@ -714,6 +719,13 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 told += week_pass(conn, now=t)
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  your week: {type(exc).__name__}: {exc}")
+        if t - _looked["karma"] >= KARMA_EVERY_S:
+            _looked["karma"] = t
+            from engine import karma as _karma
+            try:
+                told += _karma.alerts_pass(conn, now=t)
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  karma alerts: {type(exc).__name__}: {exc}")
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         from engine import finals as _fin
         moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)
@@ -752,7 +764,8 @@ def main(argv=None) -> int:
         conn.close()
     print(f"Signed-in phones asking: {n['watches']} for watches, {n['bets']} for their bets, "
           f"{n['clutch']} for big moments, {n['finals']} for final scores, {n['lineup']} for their "
-          f"fantasy lineup ({leagues} league{'s' if leagues != 1 else ''} kept for it).")
+          f"fantasy lineup ({leagues} league{'s' if leagues != 1 else ''} kept for it), {n['karma']} for "
+          f"karma alerts.")
     print("Queued (unsent / kept): " + (", ".join(f"{k} {u}/{c}" for k, u, c in q) if q else "nothing yet."))
     return 0
 

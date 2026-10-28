@@ -1301,6 +1301,10 @@ def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
     if ids:
         for x in conn.execute(f"SELECT post_id, tag FROM feed_tags WHERE post_id IN ({q}) ORDER BY rowid", ids):
             tags.setdefault(int(x[0]), []).append(x[1])
+    # Each writer's karma level and the flair it opened (engine/karma), as
+    # the game chats show them.
+    from . import karma as K
+    levels = K.cards(conn, {int(r["user_id"]) for r in rows})
     out = []
     for r in rows:
         legs = json.loads(r["legs"] or "[]")
@@ -1334,6 +1338,7 @@ def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
             "mine": bool(viewer) and int(r["user_id"]) == int(viewer),
             "editable": bool(viewer) and int(r["user_id"]) == int(viewer)
                         and time.time() - float(r["created_at"]) <= EDIT_WINDOW_S,
+            **levels.get(int(r["user_id"]), {}),
         })
     return out
 
@@ -1463,6 +1468,8 @@ def _comment_views(conn, post_id: int, owner: int, viewer, strong: bool) -> list
     ids = [int(c["id"]) for c in rows]
     likes = _counts(conn, "feed_comment_likes", ids, "comment_id")
     liked = _mine(conn, "feed_comment_likes", ids, viewer, "comment_id")
+    from . import karma as K
+    levels = K.cards(conn, {int(c["user_id"]) for c in rows})
     by_id, top = {}, []
     for c in rows:
         cid = int(c["id"])
@@ -1473,7 +1480,7 @@ def _comment_views(conn, post_id: int, owner: int, viewer, strong: bool) -> list
              "likes": likes.get(cid, 0), "liked": cid in liked,
              "mine": bool(viewer) and int(c["user_id"]) == int(viewer),
              "can_delete": bool(viewer) and int(viewer) in (int(c["user_id"]), owner),
-             "parent_id": c["parent_id"], "replies": []}
+             "parent_id": c["parent_id"], "replies": [], **levels.get(int(c["user_id"]), {})}
         by_id[cid] = v
         if c["parent_id"] and int(c["parent_id"]) in by_id:
             by_id[int(c["parent_id"])]["replies"].append(v)

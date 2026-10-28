@@ -202,7 +202,11 @@
      comments, profiles, leaderboards, people lists. Only the box command
      engine/socialfeed.crown sets it; nobody can give it to themselves. */
   const badge = (p) => (p ? (p.verified ? VERIFIED : "") + (p.founder
-    ? `<span class="fd-founder" title="Founder of Qellys Book">${ico("crown", 11)}Founder</span>` : "") : "");
+    ? `<span class="fd-founder" title="Founder of Qellys Book">${ico("crown", 11)}Founder</span>` : "")
+    // Karma (engine/karma): the writer's level in its tier's colour and the
+    // flair level 3 opens, as the game chats show them (css/karma.css).
+    + (Number(p.lv) ? `<span class="fd-lv kr-lv kr-${escapeAttr(p.cls || "t1")}" title="Karma level ${Number(p.lv)}">${Number(p.lv)}</span>` : "")
+    + (p.flair ? `<span class="fd-flair" aria-hidden="true">${escapeHtml(p.flair)}</span>` : "") : "");
   const isBoss = () => !!(F.me && F.me.founder);
 
   function teamMap(sport) {
@@ -1007,6 +1011,8 @@
     const el = host();
     if (!el) return;
     const seq = ++_drawSeq;
+    // The tiers' colours for the levels beside names (js/karma.js's sheet).
+    if (typeof loadRoom === "function") loadRoom("js/karma.js", "css/karma.css");
     if (window._feedWant) {
       const want = window._feedWant;
       window._feedWant = null;

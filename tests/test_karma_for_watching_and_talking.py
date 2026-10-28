@@ -432,7 +432,8 @@ def test_the_flair_opens_at_level_three_and_the_chat_wears_the_level():
     assert K.set_prefs(conn, me, flair="🔥")[0] == 403
     K.award(conn, me, "recruit", "x", pts=300, now=T0)
     assert K.set_prefs(conn, me, flair="💩")[0] == 400
-    assert K.set_prefs(conn, me, flair="🔥") == (200, {"ok": True, "flair": "🔥", "ladder": True})
+    assert K.set_prefs(conn, me, flair="🔥") == (200, {"ok": True, "flair": "🔥", "ladder": True, "remind": False,
+                                                    "phones": 0})
     GC.send(conn, me, ROOM, "hello", now=T0)
     _, v = GC.room_view(conn, ROOM, ids[1], now=T0 + 1)
     by = v["messages"][0]["by"]
@@ -621,6 +622,7 @@ def test_in_a_browser_the_chat_the_strip_the_tab_and_a_level_crossed():
                 got["badges"] = page.evaluate("document.querySelectorAll('.kr-panel-host .kr-badge').length")
                 got["hero"] = page.evaluate("(document.querySelector('.kr-hero h2') || {}).textContent || ''")
                 got["row"] = page.evaluate("(document.querySelector('.kr-prof') || {}).textContent || ''")
+                got["switches"] = page.evaluate("document.querySelectorAll('.kr-panel-host .kr-switch [role=switch]').length")
                 page.evaluate("karmaNote({got: 40, why: 'All three quests', total: 99999, level: 60, up: true})")
                 page.wait_for_timeout(500)
                 got["up"] = page.evaluate("(document.querySelector('.kr-up h3') || {}).textContent || ''")
@@ -642,6 +644,7 @@ def test_in_a_browser_the_chat_the_strip_the_tab_and_a_level_crossed():
     assert f"Level {v['level']}" in got["strip"] and "karma" in got["strip"], got
     assert got["badges"] == len(K.FAMILIES) + len(K.ONE_OFF) and got["hero"].startswith(f"Level {v['level']}"), got
     assert f"Level {v['level']}" in got["row"], got
+    assert got["switches"] == 2, got
     assert got["up"] == "Level 60", got
     assert got["closed"], got
 

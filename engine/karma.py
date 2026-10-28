@@ -210,6 +210,16 @@ HYPE_S = 300
 HYPE_PEOPLE = 3
 HYPE_LEVELS = (10, 25, 50, 100, 200)
 
+#: KARMA ALERTS (2026-10-28, Ethan: "keep user retainment"), one switch on
+#: the Karma tab, sent as the account's own phone alerts (engine/pushmine,
+#: topic ALERT_TOPIC): at about eight in the evening, Eastern, when the days
+#: in a row would end at midnight (Duolingo's reminder); on a Monday, the
+#: week's trophy; and each new tier. Nothing at night (quiet hours hold it).
+ALERT_TOPIC = "karma"
+STREAK_NUDGE_HOURS = (19.5, 22.5)
+#: A run this long is worth a nudge.
+STREAK_NUDGE_MIN = 2
+
 LADDER_N = 25
 CACHE_S = 60
 _cache: dict = {}
@@ -257,6 +267,17 @@ def ensure_tables(conn) -> None:
         value TEXT NOT NULL
       );
     """)
+    # Karma alerts (2026-10-28): whether this account wants them, and the
+    # level its last "a new tier" alert was for. Added rather than declared
+    # (the table shipped first), and raced like gamechat's party column.
+    have = {r[1] for r in conn.execute("PRAGMA table_info(karma_prefs)")}
+    for col in ("remind", "told_level"):
+        if col not in have:
+            from .db import column_exists_or_raise
+            try:
+                conn.execute(f"ALTER TABLE karma_prefs ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
 
 
 _ready: set = set()
@@ -976,17 +997,110 @@ def hype(conn, room: str, viewer=None, now: float | None = None) -> dict:
     return out
 
 
+# ─── karma alerts ───────────────────────────────────────────────────────────
+
+def _next_mark(n: int):
+    return next((m for m in sorted(STREAK_BONUS) if m > n), None)
+
+
+def alerts_pass(conn, now: float | None = None) -> int:
+    """Queue each opted-in account's karma alerts (engine/pushmine sends
+    them): the evening nudge before the days in a row would end, the
+    Monday trophy, a new tier. Each once (its id), only to phones that
+    carry the topic. Returns how many were queued."""
+    from . import pushalerts as PA
+    from . import pushmine as PM
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    et = _dt.datetime.fromtimestamp(t, tz=_ET)
+    hour = et.hour + et.minute / 60
+    today = et.date().isoformat()
+    quiet = PA.quiet_now(et)
+    told = 0
+    for uid, told_level in conn.execute("SELECT user_id, told_level FROM karma_prefs WHERE remind=1").fetchall():
+        uid = int(uid)
+        if not PM.asked(conn, uid, ALERT_TOPIC):
+            continue
+        # The evening nudge: a run that would end at midnight, nothing yet today.
+        if STREAK_NUDGE_HOURS[0] <= hour < STREAK_NUDGE_HOURS[1]:
+            st = streak(days_of(conn, uid), today)
+            if st["now"] >= STREAK_NUDGE_MIN and not st["today"] and not st["rest"]:
+                mark = _next_mark(st["now"])
+                close = f" {mark - st['now']} more for the {mark}-day bonus." if mark and mark - st["now"] <= 2 else ""
+                told += PM.tell(conn, uid, f"karma:streak:{today}", ALERT_TOPIC,
+                                f"Your {st['now']}-day streak ends at midnight",
+                                "Open Live or a game for a minute to keep it going." + close, "/#live",
+                                ttl="karma", now=t)
+        if quiet:
+            continue
+        # Monday: last week's trophy (paid here if the Karma tab has not been opened).
+        if et.weekday() == 0 and 9 <= et.hour < 21:
+            week = _shift(week_of(t), -7)
+            trophies(conn, uid, t)
+            for who, rank in _week_results(conn, week):
+                if who == uid:
+                    told += PM.tell(conn, uid, f"karma:trophy:{week}", ALERT_TOPIC,
+                                    f"#{rank} on last week's karma ladder",
+                                    f"+{TROPHY.get(rank, 0)} karma and a trophy on your profile.", "/#account",
+                                    ttl="karma_week", now=t)
+        # A new tier since the last one told.
+        lv = level_of(total(conn, uid))
+        tier_at = max(at for at, _, _ in TIERS if at <= lv)
+        if tier_at > int(told_level or 0) and tier_at > 1:
+            name = tier_of(lv)[0]
+            told += PM.tell(conn, uid, f"karma:tier:{tier_at}", ALERT_TOPIC, f"Level {lv}: you're {name} now",
+                            f"Everyone in the chats sees {name} beside your name.", "/#account", ttl="karma", now=t)
+            conn.execute("UPDATE karma_prefs SET told_level=? WHERE user_id=?", (lv, uid))
+    conn.commit()
+    return told
+
+
 # ─── what the pages read ────────────────────────────────────────────────────
 
 def _prefs(conn, user_id) -> dict:
-    row = conn.execute("SELECT flair, ladder, seen_level FROM karma_prefs WHERE user_id=?", (int(user_id),)).fetchone()
+    row = conn.execute("SELECT flair, ladder, seen_level, remind FROM karma_prefs WHERE user_id=?",
+                       (int(user_id),)).fetchone()
     return {"flair": row[0] if row else "", "ladder": bool(row[1]) if row else True,
-            "seen_level": int(row[2]) if row else 0}
+            "seen_level": int(row[2]) if row else 0, "remind": bool(row[3]) if row else False}
 
 
-def set_prefs(conn, user_id, flair=None, ladder=None) -> tuple[int, dict]:
+def reminds(conn, user_id) -> bool:
+    """Does this account want karma alerts? (engine/pushalerts.subscribe
+    asks, so a phone signed in to it carries the topic.)"""
+    try:
+        row = conn.execute("SELECT remind FROM karma_prefs WHERE user_id=?", (int(user_id),)).fetchone()
+    except sqlite3.Error:
+        return False
+    return bool(row and row[0])
+
+
+def phones(conn, user_id) -> int:
+    """How many phones signed in to this account take alerts at all."""
+    if not _has(conn, "push_subs"):
+        return 0
+    return int(conn.execute("SELECT COUNT(*) FROM push_subs WHERE user_id=?", (int(user_id),)).fetchone()[0] or 0)
+
+
+def _relink(conn, user_id, on: bool) -> None:
+    """Put the karma topic on (or take it off) every phone signed in to the
+    account, the way a subscribe from the Alerts page would."""
+    if not _has(conn, "push_subs"):
+        return
+    for endpoint, topics in conn.execute("SELECT endpoint, topics FROM push_subs WHERE user_id=?",
+                                         (int(user_id),)).fetchall():
+        have = [t for t in str(topics or "").split(",") if t and t != ALERT_TOPIC]
+        conn.execute("UPDATE push_subs SET topics=? WHERE endpoint=?",
+                     (",".join(have + ([ALERT_TOPIC] if on else [])), endpoint))
+
+
+def set_prefs(conn, user_id, flair=None, ladder=None, remind=None) -> tuple[int, dict]:
     ensure_tables(conn)
     conn.execute("INSERT OR IGNORE INTO karma_prefs (user_id) VALUES (?)", (int(user_id),))
+    if remind is not None:
+        # From now on: the tiers already reached are not news.
+        conn.execute("UPDATE karma_prefs SET remind=?, told_level=? WHERE user_id=?",
+                     (1 if remind else 0, level_of(total(conn, user_id)), int(user_id)))
+        _relink(conn, user_id, bool(remind))
     if flair is not None:
         flair = str(flair)
         if flair and flair not in FLAIRS:
@@ -998,7 +1112,8 @@ def set_prefs(conn, user_id, flair=None, ladder=None) -> tuple[int, dict]:
         conn.execute("UPDATE karma_prefs SET ladder=? WHERE user_id=?", (1 if ladder else 0, int(user_id)))
     conn.commit()
     _cache.clear()
-    return 200, {"ok": True, **{k: v for k, v in _prefs(conn, user_id).items() if k != "seen_level"}}
+    return 200, {"ok": True, **{k: v for k, v in _prefs(conn, user_id).items() if k != "seen_level"},
+                 "phones": phones(conn, user_id)}
 
 
 def cards(conn, user_ids, now: float | None = None) -> dict:
@@ -1074,7 +1189,7 @@ def me(conn, user_id, now: float | None = None, data_dir: Path | None = None, ch
     lv = level_view(pts)
     out = {**lv, "streak": st, "quests": q, "badges": badges(conn, uid, pts, st["best"]),
            "flair": prefs["flair"] if lv["level"] >= FLAIR_AT else "", "flairs": list(FLAIRS),
-           "ladder_on": prefs["ladder"],
+           "ladder_on": prefs["ladder"], "remind": prefs["remind"], "phones": phones(conn, uid),
            "unlocks": {"flair": FLAIR_AT, "color": COLOR_AT, "ring": RING_AT},
            "week": ladder(conn, "week", uid, t, n=10),
            "today": int(conn.execute("SELECT COALESCE(SUM(pts), 0) FROM karma_events WHERE user_id=? AND day=?",

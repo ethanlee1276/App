@@ -3571,7 +3571,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "prefs" and body is not None:
                 code, out = K.set_prefs(conn, who["id"],
                                         flair=body.get("flair") if isinstance(body.get("flair"), str) else None,
-                                        ladder=body.get("ladder") if isinstance(body.get("ladder"), bool) else None)
+                                        ladder=body.get("ladder") if isinstance(body.get("ladder"), bool) else None,
+                                        remind=body.get("remind") if isinstance(body.get("remind"), bool) else None)
                 return self._send(code, json.dumps(out).encode(), ".json")
             return self._send(405, b'{"error":"wrong method"}', ".json")
         finally:

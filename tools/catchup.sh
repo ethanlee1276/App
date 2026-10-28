@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GK "Karma alerts, and levels on Social" 60 <<'SH'
+curl -s https://qellysbook.com/js/karma.js | grep -c 'const krSwitch = '
+cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
+SH
 run GJ "Karma: levels and badges for watching and talking" 60 <<'SH'
 curl -s https://qellysbook.com/js/karma.js | grep -c 'function karmaStripMount('
 cd /srv/qellys && sudo -u qellys python3 -m engine.karma
