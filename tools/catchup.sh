@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HC "A highlight fades out, not into a box" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'games-scroller { padding: 24px 2px 40px 26px;'
+SH
 run HB "The top of Live, uncluttered" 30 <<'SH'
 curl -s https://qellysbook.com/js/karma.js | grep -c 'function krAskHTML(d)'
 curl -s https://qellysbook.com/css/styles.css | grep -c '.hd-quiet.lv-rest { margin-bottom: 12px; }'

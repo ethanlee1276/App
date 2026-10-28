@@ -2548,6 +2548,26 @@ select.calc-in { width: auto; font-weight: 600; }
 @media (max-width: 900px) {
   .hero-games .game-card, .hero-games .skeleton-game { min-width: 300px; }
 }
+/* A HIGHLIGHT FADES OUT, NOT INTO A WALL (Ethan, 2026-10-28, a Home tile
+   held under his finger: "when something is highlighted make it look more
+   smooth, the highlight is cut off like it's in a box"). A sideways strip
+   clips whatever leaves its box, and a lifted tile's glow (--glow: 30px
+   soft, 8px low) left it on every side, so it stopped in straight lines.
+   The strip keeps room for it: 24px over the tiles, 40px under (a live
+   tile's resting shadow reaches as far), and the view's gutter beside it,
+   the margins giving all of it back, so the tiles sit where they did and
+   the glow fades out instead. On a phone the strip runs the screen's whole
+   width (12 or 10px each side); on a computer only its left reaches into
+   the gutter, so its right end still stops short of the rail. Over the
+   tiles it takes back only 4px: the sort row's buttons above keep their
+   whole tap, and the tiles get a little air under them. */
+.games-scroller { padding: 24px 2px 40px 26px; margin: -4px 0 -34px -26px; scroll-padding-inline: 26px 2px; }
+@media (max-width: 760px) {
+  .games-scroller { padding-inline: 12px; margin-inline: -12px; scroll-padding-inline: 12px; }
+}
+@media (max-width: 359px) {
+  .games-scroller { padding-inline: 10px; margin-inline: -10px; scroll-padding-inline: 10px; }
+}
 
 
 /* --- Typographic hierarchy -------------------------------------------
