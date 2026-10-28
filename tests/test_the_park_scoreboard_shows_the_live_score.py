@@ -280,7 +280,8 @@ def test_in_a_browser_the_board_sits_on_the_photographs_screen():
         assert all(abs(a - b) <= 1.5 for a, b in zip(g["poly"], want)), (width, g["poly"], want)
         for w in ("NYY", "DET", "3", "2", "6"):
             assert w in g["words"], (width, w, g["words"])
-        assert "Archivo Narrow" in g["font"], g["font"]
+        # The site's own display face: Archivo Narrow until "The blend" (2026-10-27), Inter since.
+        assert g["font"].startswith("Inter"), g["font"]
         assert sorted(g["bags"]) == ["#262B36", "#262B36", "#FFC94A"], ("a runner on first, the other bags dark", g["bags"])
         assert g["wide"] <= 0 and not g["errors"], (width, g)
 

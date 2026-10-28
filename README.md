@@ -698,6 +698,14 @@ Details: [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md),
 `.github/workflows/tests.yml` runs the full suite (`python3 run_tests.py`, stdlib
 only — no dependencies) on Python 3.9 / 3.11 / 3.12 for every push and PR.
 
+The checks that drive a real Chromium (layouts at every width, the glass, the
+scoreboards, the chat) are a second gate, kept out of the main run because a
+browser inside a busy suite is where flaky tests come from:
+`python3 run_tests.py --browser` runs only those files, three at a time, with
+Playwright's pre-installed Chromium. Setting `QB_BROWSER_TESTS=1` on the main
+run does nothing: the runner clears every `QB_*` name so the suite never reads
+the box's config.
+
 ## Testing the model quickly
 
 ```bash

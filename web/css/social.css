@@ -88,7 +88,7 @@
 
 /* ── the composer ───────────────────────────────────────────────────────── */
 .fd-comp { padding: 16px 18px 12px; border-color: transparent;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent), 0 10px 34px -16px color-mix(in srgb, var(--brand) 55%, transparent); }
+  box-shadow: 0 10px 34px -16px color-mix(in srgb, var(--brand) 55%, transparent); }
 .fd-comp-row { display: flex; align-items: flex-start; gap: 14px; }
 .fd-comp-row > a { flex: none; text-decoration: none; }
 .fd-comp-in, .fd-comp-fake { flex: 1; min-width: 0; min-height: 48px; padding: 13px 16px; border-radius: var(--radius);
@@ -140,7 +140,7 @@
 .fd-polled-row { display: flex; gap: 6px; align-items: center; }
 .fd-polled-row .fd-input { flex: 1; }
 .fd-addopt { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
-  border: var(--hairline) dashed var(--border); background: none; color: var(--text-dim); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+  border: var(--hairline) solid transparent; background: var(--fill-tone); color: var(--text-dim); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
 
 .fd-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--radius-sm); background: var(--bg);
   border: var(--hairline) solid var(--fd-line); }
@@ -157,7 +157,7 @@ textarea.fd-input { resize: vertical; line-height: var(--lh-snug); }
 .fd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border-radius: 999px;
   border: var(--hairline) solid transparent; background: var(--grad-brand); color: var(--ink-on-gold); font: inherit;
   font-size: var(--fs-md); font-weight: 800; cursor: pointer; text-decoration: none; white-space: nowrap; }
-.fd-btn.ghost { background: transparent; border-color: var(--border); color: var(--text); }
+.fd-btn.ghost { background: transparent; border-color: transparent; color: var(--text); background-color: var(--fill-tone); }
 .fd-btn.ghost:hover { border-color: transparent; color: var(--brand-2); }
 .fd-btn.sm { padding: 5px 12px; font-size: var(--fs-sm); }
 .fd-btn.icon { padding: 9px; }
@@ -205,8 +205,8 @@ textarea.fd-input { resize: vertical; line-height: var(--lh-snug); }
 .fd-ago { color: var(--text-mute); font-size: var(--fs-sm); white-space: nowrap; }
 .fd-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; border: var(--hairline) solid transparent;
   color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; vertical-align: 1px; background: var(--fill-tone); }
-.fd-tag.up { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
-.fd-tag.down { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.fd-tag.up { color: var(--good); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
+.fd-tag.down { color: var(--bad); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
 
 /* ── a post ─────────────────────────────────────────────────────────────── */
 .fd-list { display: flex; flex-direction: column; gap: 14px; }
@@ -233,8 +233,8 @@ textarea.fd-input { resize: vertical; line-height: var(--lh-snug); }
   border: var(--hairline) solid transparent; color: var(--text-mute);
   background: var(--fill-subtle);
 }
-.fd-res-won { color: var(--good); border-color: color-mix(in srgb, var(--good) 50%, transparent); background: color-mix(in srgb, var(--good) 10%, transparent); }
-.fd-res-lost { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, transparent); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.fd-res-won { color: var(--good); border-color: transparent; background: color-mix(in srgb, var(--good) 10%, transparent); }
+.fd-res-lost { color: var(--bad); border-color: transparent; background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .fd-text { margin: 12px 0 0; color: var(--text-body); font-size: var(--fs-lg); line-height: var(--lh-snug);
   white-space: pre-line; overflow-wrap: anywhere; }
 .fd-text.clamp { display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
@@ -270,7 +270,7 @@ a.fd-slip:hover { border-color: transparent; }
 .fd-lr.push { color: var(--text-mute); }
 
 .fd-poll { display: grid; gap: 8px; margin: 14px 0 0; }
-.fd-pollbtn { padding: 11px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: none;
+.fd-pollbtn { padding: 11px 14px; border-radius: var(--radius-sm); border: 1.5px solid transparent; background: var(--fill-tone);
   color: var(--text); font: inherit; font-size: var(--fs-md); font-weight: 700; text-align: left; cursor: pointer; }
 .fd-pollbtn:hover { border-color: transparent; color: var(--brand-2); }
 .fd-pollrow { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px;
@@ -472,7 +472,7 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-ptabs a, .fd-ptabs button { flex: none; padding: 12px 16px; border: 0; border-bottom: 2px solid transparent; background: none;
   color: var(--text-mute); font: inherit; font-size: var(--fs-lg); font-weight: 700; text-decoration: none; cursor: pointer; }
 .fd-ptabs a:hover, .fd-ptabs button:hover { color: var(--text); }
-.fd-ptabs .on { color: var(--text); border-bottom-color: var(--brand); }
+.fd-ptabs .on { color: var(--text); border-bottom-color: transparent; border-radius: 999px; background: color-mix(in oklab, var(--brand) 12%, transparent); }
 
 /* ── activity, leaders, tags ────────────────────────────────────────────── */
 .fd-notes { padding: 6px 12px; }
@@ -563,12 +563,12 @@ button.fd-pstat:hover b { color: var(--brand-2); }
   border-radius: 999px; background: var(--grad-brand); color: var(--ink-on-gold); vertical-align: middle;
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; line-height: var(--lh-snug); }
 .fd-av-founder { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--brand-2); }
-.fd-prof.founder { border-color: color-mix(in srgb, var(--brand) 55%, transparent); box-shadow: var(--glow-soft); }
+.fd-prof.founder { border-color: transparent; box-shadow: var(--glow-soft); }
 .fd-prof-crown { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0 0; padding: 6px 14px;
   border-radius: 999px; border: var(--hairline) solid transparent;
   background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand-2); font-size: var(--fs-sm); }
 .fd-prof-crown b { color: var(--brand-2); font-weight: 800; }
-.fd-post.pinned { border-color: color-mix(in srgb, var(--brand) 50%, transparent); }
+.fd-post.pinned { border-color: transparent; background-color: color-mix(in oklab, var(--brand) 6%, var(--panel)); }
 .fd-pinned { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--brand-2);
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .fd-mod-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; padding: 12px 0;
@@ -607,8 +607,8 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-pk-team[disabled] { cursor: default; }
 .fd-pk-game.locked .fd-pk-team:not(.on) { opacity: .6; }
 .fd-pk-team.on { border-color: transparent; background: color-mix(in srgb, var(--brand) 14%, var(--panel-2)); }
-.fd-pk-team.on.won { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--panel-2)); }
-.fd-pk-team.on.lost { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, var(--panel-2)); }
+.fd-pk-team.on.won { border-color: transparent; background: color-mix(in srgb, var(--good) 14%, var(--panel-2)); }
+.fd-pk-team.on.lost { border-color: transparent; background: color-mix(in srgb, var(--bad) 12%, var(--panel-2)); }
 .fd-pk-tag { margin-left: auto; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--brand-2);
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
 .fd-pk-team.won .fd-pk-tag { color: var(--good); }

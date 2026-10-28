@@ -176,7 +176,20 @@ def test_a_prop_opens_at_the_top_and_the_board_keeps_its_place():
             page = browser.new_page(viewport={"width": 390, "height": 844},
                                     is_mobile=True, has_touch=True)
             page.goto(f"http://127.0.0.1:{port}/index.html", wait_until="load")
+            # SETTLED FIRST (2026-10-28). The home deck fills its zones after
+            # their own fetches; under a busy machine (the browser gate runs
+            # three at a time) one landed during the prop visit, the content
+            # above the reader grew, scroll anchoring moved them ~400px, and
+            # this read it as the app losing their place. The app restores
+            # the offset it kept; the page has to be still before it is read:
+            # its height unchanged for a second (the page polls, so the
+            # network is never idle to wait for).
             page.wait_for_timeout(1500)
+            page.wait_for_function("""() => {
+              const h = document.scrollingElement.scrollHeight, w = window;
+              if (w._qbH !== h) { w._qbH = h; w._qbSince = performance.now(); }
+              return performance.now() - w._qbSince > 1000;
+            }""", polling=200, timeout=15000)
             got = page.evaluate("""async () => {
               // This container has no slate, so the board is short. Give it
               // the height a real one has — the offset is the whole point.

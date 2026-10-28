@@ -215,11 +215,14 @@ def test_in_a_browser_the_chat_opens_reacts_and_sends():
             for k in ("send", "play", "vote", "react"):
                 p.route(f"**/api/chat/{k}", post)
             p.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#pbp/nfl/401", wait_until="load")
-            p.wait_for_selector("#gch-fab", timeout=20000)
-            p.click("#gch-fab")
+            # The card under the scoreboard is the door in (EJ, step 193); the
+            # bar at the bottom says the same thing, so it waits until the
+            # card has scrolled away (chat.js: body.gch-card-in).
+            p.wait_for_selector(".gch-entry", timeout=20000)
+            p.click(".gch-entry")
             p.wait_for_selector("#gch-sheet .gch-msg", timeout=10000)
             assert "what a throw" in p.inner_text("#gch-sheet .gch-body")
-            assert "9 here now" in p.inner_text("#gch-sheet .gch-head")
+            assert "9 watching" in p.inner_text("#gch-sheet .gch-head")   # the rebuilt sheet's word (EJ)
             p.click("#gch-sheet [data-gch=tab][data-tab=plays]")
             p.wait_for_selector("#gch-sheet .gch-playcard", timeout=5000)
             p.click("#gch-sheet .gch-playcard [data-gch=playface][data-kind=fire]")
@@ -230,7 +233,13 @@ def test_in_a_browser_the_chat_opens_reacts_and_sends():
             p.wait_for_timeout(600)
             assert {"play", "vote", "send"} <= set(posted), posted
             p.click("#gch-sheet [data-gch=close]")
-            assert p.is_visible("#gch-fab")
+            assert p.is_visible(".gch-entry"), "the card is the way back in"
+            # Scrolled past the card, the bar at the bottom takes its place.
+            p.evaluate("window.scrollTo(0, document.scrollingElement.scrollHeight)")
+            p.wait_for_timeout(400)
+            assert p.evaluate("(() => { const r = document.querySelector('.gch-entry').getBoundingClientRect();"
+                              " return r.bottom < 0 || r.top > innerHeight; })()"), "the card scrolled away"
+            p.wait_for_selector("#gch-fab", timeout=5000)
             assert not errs, errs
             b.close()
     finally:

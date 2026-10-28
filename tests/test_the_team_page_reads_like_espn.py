@@ -142,7 +142,9 @@ def test_the_tab_strip_scrolls_away_with_the_page():
     tab = CSS[CSS.index(".tm-tab {"):]
     assert "min-height: 44px" in tab[:tab.index("}")]
     on = CSS[CSS.index(".tm-tab.on {"):]
-    assert "border-bottom-color: var(--brand)" in on[:on.index("}")]
+    # ESPN underlines the open tab; since "No hard lines" (2026-10-27) ours is a gold-tinted pill.
+    assert "border-bottom-color: transparent; border-radius: 999px;" in on[:on.index("}")]
+    assert "color-mix(in oklab, var(--brand) 12%, transparent)" in on[:on.index("}")]
 
 
 def test_the_depth_chart_says_which_it_is():

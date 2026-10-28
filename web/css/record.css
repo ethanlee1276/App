@@ -11,7 +11,7 @@
    nothing. The summary carries the whole claim on its own, so it works
    for someone who never opens it. */
 .rec-epoch {
-  margin: 2px 0 10px; border-left: 2px solid var(--border);
+  margin: 2px 0 10px; border-left: 2px solid transparent;
   padding: 2px 0 2px 12px;
 }
 .rec-epoch > summary {
@@ -114,9 +114,12 @@
    desktop, 2026-09-22). The phone's area layout below already seats
    them by name and is restated there so this rule does not outrank it. */
 .rl-row.rl-cal { grid-template-columns: 112px minmax(0, 1fr) 90px 72px; }
-.rl-row.won { border-left-color: color-mix(in srgb, var(--good) 65%, transparent); }
-.rl-row.lost { border-left-color: color-mix(in srgb, var(--bad) 45%, transparent); }
-.rl-row.push { border-left-color: var(--border); }
+.rl-row.won { --tone: color-mix(in srgb, var(--good) 65%, transparent); }
+.rl-row.lost { --tone: color-mix(in srgb, var(--bad) 45%, transparent); }
+.rl-row.push { --tone: var(--border); }
+.rl-row.won, .rl-row.lost, .rl-row.push {
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
 @supports not (background: color-mix(in srgb, red 10%, transparent)) {
   .rl-row.won { border-left-color: rgba(47, 213, 140, .65); }
   .rl-row.lost { border-left-color: rgba(251, 90, 106, .45); }
@@ -179,7 +182,7 @@
   border: var(--hairline) solid transparent; padding: 3px 8px;
   background: var(--fill-subtle);
 }
-.pl-cond.met { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.pl-cond.met { color: var(--good); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
 /* WHAT THE PARLAY HEADLINE IS NOT COUNTING.
    Three rows, set as a table rather than as cards: they are the same
    measurement asked of three different populations, and the whole point
@@ -351,10 +354,13 @@
   margin: 0 0 18px; padding: 14px 16px 12px;
   background: var(--panel-2);
   border: var(--hairline) solid transparent;
-  border-left: 3px solid var(--text-faint);
+  border-left: 3px solid transparent;
+  --tone: var(--text-faint);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone);
 }
-.rec-edge.tone-neg { border-left-color: var(--bad); }
-.rec-edge.tone-pos { border-left-color: var(--good); }
+.rec-edge.tone-neg { --tone: var(--bad); }
+.rec-edge.tone-pos { --tone: var(--good); }
 .rec-edge .section-title { margin-top: 0; }
 .rec-edge-verdict {
   font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text);

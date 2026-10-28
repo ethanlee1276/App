@@ -119,9 +119,9 @@ unit of work first:
 2. **Win-back on a lapse.** BUILT 2026-10-26 (step 199, account.js
    pwSinceHTML): the plans page's lapse notice carries the Record curve's
    numbers since the plan ended, win or lose, once five have graded.
-3. **"What brings you here?"** One tap before the form, Sleeper's first
-   question — Live games, our picks, fantasy, tracking my bets — and the
-   landing and the order of Free beside Member follow it. Small.
+3. **"What brings you here?"** BUILT 2026-10-27 (round three, runbook FO):
+   one tap before the form, Sleeper's first question — Live games, our
+   picks, fantasy, tracking my bets — and the landing follows it.
 4. **True social proof.** BUILT 2026-10-26 (step 200, engine/firstlook
    proof): accounts made this week and pages in game rooms right now under
    the first screen's promise, each left off under its floor (25 / 10).
@@ -170,9 +170,10 @@ of work first, each with what it is built from:
    game against the live win chance: "the room had CIN at 30% when the
    math had them at 70%". Built from: chat_votes snapshotted every few
    minutes (one new table) + the deep file's `wp`. Small to medium.
-5. **What has to happen.** Under each live leg of a saved ticket, one
-   sentence from the box: "Chase needs 14 more yards; he's at 9.7 a catch
-   tonight." Free (box facts); the chance stays the membership's. Small.
+5. **What has to happen.** BUILT 2026-10-27 (round three, runbook FO):
+   under each live leg of a saved ticket, one sentence from the box: "Chase
+   needs 14 more yards; he's at 9.7 a catch tonight." Free (box facts); the
+   chance stays the membership's.
 6. **Recap by push.** BUILT 2026-10-26 (step 204, engine/finals): the
    final, the play of the game and the best line (the page's own words),
    on a new "Final scores of games I follow" switch.

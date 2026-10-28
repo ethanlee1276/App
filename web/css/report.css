@@ -31,7 +31,7 @@
 @media (min-width: 861px) { .gr-people { grid-template-columns: 1fr 1fr; } }
 .gr-person { padding: 12px 14px; border: var(--hairline) solid transparent; border-radius: var(--radius);
   background: var(--panel); min-width: 0; }
-.gr-person.up { border-color: var(--good); }
+.gr-person.up { border-color: transparent; background-color: color-mix(in oklab, var(--good) 10%, var(--panel)); }
 .gr-person.down { border-color: transparent; }
 .gr-person[data-open] { cursor: pointer; }
 /* The verdict can run to four words ("Favorable — breakout candidate"), so

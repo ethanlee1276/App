@@ -16,6 +16,10 @@ blended and just like feel more professional." What these hold:
   * a league button is a tint and its light, never a ring;
   * a game card's team colours are light from the photo, not a 2px rule;
   * every field is a filled well;
+  * (the sweep after, 2026-10-28) a badge, a note or a frame is a tint; a
+    stripe is light from the left edge; an open tab is a tinted pill; what
+    still draws a line or a coloured border is named in GLYPHS, EDGES and
+    COLOURED, each a picture, a focus or a border that is its own fill;
   * and in a browser, the phone's home draws no line wider than a hairline
     in a border colour anywhere on its first three screens.
 
@@ -69,6 +73,116 @@ def test_no_outline_in_any_sheet():
     assert not left, left[:10]
 
 
+#: What may still draw a full border: pictures, not boxes. A chart's legend
+#: marks and miss dots, a pitch zone's ball, a puck, a ring chart, an avatar's
+#: ring (team-coloured on the hero card, the panel's own colour round a
+#: profile picture on its cover), a step's progress circle, and the social
+#: room's --fd-line, which is transparent wherever those rules apply.
+GLYPHS = {
+    ("ask.css", ".ask-steps li::before"),
+    ("carrychart.css", ".cc-legend .mk"), ("carrychart.css", ".cc-legend .dt.m"),
+    ("carrychart.css", ".cc-row .dot.miss"), ("carrychart.css", ".cc-legend .dt.mp-b"),
+    ("carrychart.css", ".mb-hero-face .cc-face"), ("carrychart.css", ".cc-legend .dt.kk-x"),
+    ("extras.css", ".xt-ring"),
+    ("gamecast.css", ".gc-pz-n.b"), ("gamecast.css", ".gc-pz-key .b::before"),
+    ("hoopscast.css", ".hc-key i.miss"),
+    ("rinkcast.css", ".rc-puckmark"), ("rinkcast.css", ".rc-key-note i.miss"), ("rinkcast.css", ".rc-key-note i.block"),
+    ("social.css", ".fd-card"), ("social.css", ".fd-tab"), ("social.css", ".fd-hero"),
+    ("social.css", ".fd-comp-in, .fd-comp-fake"), ("social.css", ".fd-seg"), ("social.css", ".fd-mtrend-c"),
+    ("social.css", ".fd-av-xl"), ("social.css", ".fd-av-xl.fd-av-site"), ("social.css", ".fd-search"),
+    ("social.css", ".fd-days"), ("social.css", ".fd-pstats"),
+}
+
+
+def test_badges_notes_and_frames_are_tints_not_outlines():
+    """2026-10-28, the sweep after: a grade, a status pill, a slip note, a
+    poll button, an invite code and a photo frame still drew their outline
+    in their own colour (currentColor, --good, --warn, --bad) or a dash,
+    which the outline checks above did not read. Each is a tint now; only
+    the pictures in GLYPHS still draw a full border."""
+    drawn = set()
+    for f, sel, body in _rules():
+        for d in re.finditer(r"(?<![-\w])border:\s*([^;]+);", body):
+            v = d.group(1)
+            if re.search(r"\b(solid|dashed|dotted|double)\b", v) and "transparent" not in v:
+                drawn.add((f, " ".join(sel.split())))
+    assert drawn <= GLYPHS, sorted(drawn - GLYPHS)
+    assert "var(--fd-line)" in (CSS_DIR / "social.css").read_text(encoding="utf-8")
+    for host in (".fd-wrap {", ".acct-prof {"):
+        rule = (CSS_DIR / "social.css").read_text(encoding="utf-8")
+        rule = rule[rule.index(host):]
+        assert "--fd-line: transparent;" in rule[:rule.index("}")], host
+
+
+#: One-sided lines that keep a colour: chart marks (Ask's line, a legend's
+#: dashed mark, the fantasy bars' threshold), two chevrons drawn with borders,
+#: and the Record ledger's stripe for a browser without color-mix (the wash
+#: that replaced it needs color-mix). Every other one-sided line is a divider
+#: in --border, --border-soft or --fd-line, or nothing.
+EDGES = {
+    ("ask.css", ".ask-line"), ("carrychart.css", ".cc-legend .dt.rl-m"), ("fantasy.css", ".mk-bars::after"),
+    ("record.css", ".rl-row.won"), ("record.css", ".rl-row.lost"),
+    ("styles.css", ".pz-runner > summary::after"), ("styles.css", ".row-fold-chev"),
+}
+
+#: A border colour that still shows: a field or a calculator in focus, a
+#: spinner, a ring chart, a legend mark, an avatar's ring or cut-out, and
+#: buttons and badges whose border is their own fill.
+COLOURED = {
+    ("ask.css", ".ask-steps li.now::before"), ("ask.css", ".ask-track .ask-act.primary"),
+    ("carrychart.css", ".uf-ring.me"), ("carrychart.css", ".cc-legend .mk.fum"),
+    ("extras.css", ".xt-f input:focus, .xt-f select:focus"), ("extras.css", ".xt-ring.good"), ("extras.css", ".xt-ring.bad"),
+    ("hoopscast.css", ".hc-play.k-made .hc-pkind, .hc-play.k-ft .hc-pkind"), ("rinkcast.css", ".rc-play.k-goal .rc-pkind"),
+    ("social.css", ".fd-comp-in:focus"), ("social.css", ".fd-input:focus"), ("social.css", ".fd-editp-prev .fd-av-xl"),
+    ("styles.css", ".search-wrap input:focus"), ("styles.css", ".calc-in:focus"), ("styles.css", "#ptr.ready, #ptr.busy"),
+    ("styles.css", ".card.longshot.lk-top .grade.lk-pct"), ("styles.css", ".card.longshot.lk-mid .grade.lk-pct"),
+    ("styles.css", ".stub-cta"), ("styles.css", ".pw-buy, .co-go"),
+    ("styles.css", ':where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus'),
+}
+
+
+def test_no_coloured_stripe_underline_or_ring_is_left():
+    """2026-10-28, the sweep after: a bet's stripe, a pick's, a verdict's and
+    a notice's became light from the left edge (the --tone wash); an open
+    tab's underline became a tinted pill like the league row's; a chip's,
+    a tag's or a card's coloured border, at rest, hovered or chosen, became
+    a tint. What is left is in EDGES and COLOURED, each a picture, a focus
+    or a border that is its own fill."""
+    edges, coloured = set(), set()
+    for f, sel, body in _rules():
+        key = (f, " ".join(sel.split()))
+        for d in re.finditer(r"(?<![-\w])border-(?:left|right|top|bottom)(-color)?:\s*([^;]+);", body):
+            v = d.group(2).strip()
+            if "transparent" in v or re.fullmatch(r"0|none", v):
+                continue
+            if d.group(1) is None and not re.search(r"\b(solid|dashed|dotted|double)\b", v):
+                continue
+            if not re.search(r"var\(--(border|border-soft|fd-line)\)$", v):
+                edges.add(key)
+        for d in re.finditer(r"(?<![-\w])border-color:\s*([^;]+);", body):
+            if d.group(1).strip() != "transparent":
+                coloured.add(key)
+    assert edges <= EDGES, sorted(edges - EDGES)
+    assert coloured <= COLOURED, sorted(coloured - COLOURED)
+    rec = (CSS_DIR / "record.css").read_text(encoding="utf-8")
+    fall = rec[rec.index("@supports not (background: color-mix(in srgb, red 10%, transparent)) {", rec.index(".rl-row.push")):]
+    assert ".rl-row.won { border-left-color" in fall[:fall.index("\n}")], "the stripe is only the old browsers' fallback"
+
+
+def test_a_state_is_a_wash_or_a_pill():
+    styles = CSS
+    assert ".mbc.open { --tone: var(--warn); }" in styles and ".mbc.win { --tone: var(--good); }" in styles
+    group = styles[styles.index(".mbc.open, .mbc.win, .mbc.loss, .mbc.push {"):]
+    group = group[:group.index("}")]
+    assert "--grad-tone:" in group and "background-image: var(--grad-tone);" in group
+    for f, sel in (("more.css", ".tm-tab.on {"), ("chat.css", ".gch-tab.on {"), ("detail.css", ".pbp-tab.active {"),
+                   ("carrychart.css", ".cc-tab.on {"), ("hoopscast.css", ".hc-tab.on {"), ("rinkcast.css", ".rc-tab.on {")):
+        s = (CSS_DIR / f).read_text(encoding="utf-8")
+        rule = s[s.index(sel):]
+        rule = rule[:rule.index("}")]
+        assert "border-bottom-color: transparent; border-radius: 999px;" in rule, (f, sel)
+
+
 def test_a_selected_thing_is_tinted_not_ringed():
     hot = re.compile(r"(?<![-\w])border-color:\s*var\(--(?:brand|brand-2|brand-solid|gold)\)")
     sel_re = re.compile(r"\.(active|on|sel|selected|ours|current)\b|\[aria-(pressed|selected|current)=")
@@ -94,7 +208,12 @@ def test_the_top_of_the_page_is_one_surface():
     team = team[:team.index("}") + 1]
     assert "top: 100%;" in team and "background: var(--grad-team-spill);" in team and "height: 2px" not in team
     glass = CSS[CSS.index("html.store-ios .topbar, html.ios-home .topbar {"):]
-    assert "box-shadow: none;" in glass[:200], "the iPhone app's bar has no rim"
+    # Lit glass along its top (under the status bar), and no ring: the full
+    # rim's 1px ring was the line along the bar's foot Ethan circled.
+    assert "box-shadow: var(--glass-rim-soft);" in glass[:200], "the iPhone app's bar has no ring"
+    for theme in (_root(":root"), _root(':root[data-theme="light"]')):
+        soft = re.search(r"--glass-rim-soft: ([^;]+);", theme).group(1)
+        assert soft.startswith("inset 0 1px 0 ") and soft.count("inset") == 1 and "0 0 0" not in soft, soft
     for theme in (_root(":root"), _root(':root[data-theme="light"]')):
         rim = re.search(r"--glass-rim: ([^;]+);", theme).group(1)
         assert "0 -1px" not in rim, "no dark line under glass"
@@ -178,6 +297,71 @@ def test_the_home_draws_no_hard_line_in_a_browser():
                 browser.close()
     finally:
         srv.shutdown()
+
+
+def test_the_pages_with_the_last_outlines_draw_none_in_a_browser():
+    """The sweep's pages, on a computer: the plans and sign-up pages' chosen
+    plan, Edge's chips, the method page's tags, My Bets and the memes page.
+    An element boxed on all four sides in a colour that shows is an outline,
+    whatever drew it; an avatar's ring is a picture."""
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("      (skipped: no Playwright)")
+        return
+    import rendercheck
+    from test_every_page_opens_clean import _board
+
+    body = json.dumps(_board())
+    chromium = os.environ.get("CHROMIUM_PATH", "/opt/pw-browsers/chromium")
+    srv, port = rendercheck._serve()
+    found = {}
+    try:
+        with sync_playwright() as pw:
+            kw = {"args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]}
+            if os.path.exists(chromium):
+                kw["executable_path"] = chromium
+            browser = pw.chromium.launch(**kw)
+            try:
+                for theme in ("dark", "light"):
+                    ctx = browser.new_context(viewport={"width": 1280, "height": 900}, service_workers="block")
+                    page = ctx.new_page()
+                    page.route(lambda url: not url.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
+                    page.route("**/api/**", lambda r: r.fulfill(status=200, content_type="application/json", body="{}"))
+                    for pat in ("**/api/recommendations*", "**/data/recommendations*.json*"):
+                        page.route(pat, lambda r: r.fulfill(status=200, content_type="application/json", body=body))
+                    page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');"
+                                         f"localStorage.setItem('ge-theme','{theme}');}}catch(e){{}}")
+                    for view in ("paywall", "signup", "edge", "methodology", "mybets", "memes", "recommended", "record"):
+                        page.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#{view}", wait_until="load")
+                        page.wait_for_timeout(1500)
+                        bad = page.evaluate("""() => {
+                          const out = [];
+                          const alpha = (c) => { if (!c || c === 'transparent') return 0; const m = c.match(/rgba?\\(([^)]+)\\)/);
+                            if (m) { const p = m[1].split(',').map(Number); return p.length > 3 ? p[3] : 1; }
+                            const s = c.match(/\\/\\s*([0-9.]+)\\s*\\)\\s*$/); return s ? +s[1] : 1; };
+                          for (const el of document.querySelectorAll('body *')) {
+                            const r = el.getBoundingClientRect();
+                            if (r.width < 6 || r.height < 6 || r.bottom < 0 || r.top > innerHeight * 3) continue;
+                            if (el === document.activeElement || /\\b(uf-ring|cc-face|fd-av-xl|crest)\\b/.test(String(el.className))) continue;
+                            const cs = getComputedStyle(el);
+                            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+                            const sides = ['Top', 'Right', 'Bottom', 'Left'].filter((s) => cs['border' + s + 'Style'] !== 'none'
+                              && parseFloat(cs['border' + s + 'Width']) > 0 && alpha(cs['border' + s + 'Color']) > .05);
+                            if (sides.length === 4) out.push(el.tagName + '.' + String(el.className).slice(0, 50) + ' ' + cs.borderTopColor);
+                          }
+                          return out; }""")
+                        if bad:
+                            found[f"{view}/{theme}"] = bad[:5]
+                    ctx.close()
+            finally:
+                browser.close()
+    finally:
+        srv.shutdown()
+    assert not found, found
 
 
 if __name__ == "__main__":

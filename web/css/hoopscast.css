@@ -189,10 +189,10 @@
 .hc-psc.home { color: color-mix(in oklab, var(--ch) 70%, var(--text)); }
 .hc-plays { --ca: var(--brand); --ch: var(--text-mute); }
 
-.hc-tabs { display: flex; gap: var(--sp-1); padding: 0 var(--sp-3); border-bottom: var(--hairline) solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.hc-tabs { display: flex; gap: var(--sp-1); padding: 0 var(--sp-3); border-bottom: var(--hairline) solid transparent; overflow-x: auto; scrollbar-width: none; }
 .hc-tab { flex: none; padding: 12px var(--sp-2); font: 700 var(--fs-sm) / 1.2 var(--font-sans); color: var(--text-mute); cursor: pointer;
   background: none; border: 0; border-bottom: 2px solid transparent; transition: color var(--dur-fast) var(--ease-out); }
-.hc-tab.on { color: var(--brand); border-bottom-color: var(--brand); }
+.hc-tab.on { color: var(--brand); border-bottom-color: transparent; border-radius: 999px; background: color-mix(in oklab, var(--brand) 12%, transparent); }
 .hc-card-body { padding: var(--sp-3) var(--sp-4); min-width: 0; }
 
 .hc-ts-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-2);
@@ -254,6 +254,12 @@
   .hc-side { gap: var(--sp-2); }
   .hc-nick { font-size: var(--fs-xl); }
 }
+/* The same desktop width as the football board's (css/detail.css): the
+   tablet's step for the names up to 1440px, so "Timberwolves" stays whole. */
+@media (min-width: 1101px) and (max-width: 1440px) {
+  .hc-side { gap: var(--sp-2); }
+  .hc-nick { font-size: var(--fs-xl); letter-spacing: -.01em; }
+}
 @media (max-width: 720px) {
   /* A phone's scoreboard is ESPN's: the crest and the score in one line a
      side either side of the clock, the club and its table under them. */
@@ -271,7 +277,11 @@
      which only an important rule outranks. */
   .hc-crest > .team-mark-wrap { display: block; width: 100% !important; height: auto !important; aspect-ratio: 1 / 1; }
   .hc-team { grid-area: team; }
-  .hc-pts, .hc-side.home .hc-pts { grid-area: pts; margin: 0; justify-content: flex-end; gap: var(--sp-1); font-size: var(--fs-3xl); }
+  /* In Inter's tabular figures (THE BLEND) a three-figure score and the
+     ball ran 10px past the old mono's at 390px and took it from the crest:
+     the score steps down with the screen, to its full size by 470px. */
+  .hc-pts, .hc-side.home .hc-pts { grid-area: pts; margin: 0; justify-content: flex-end; gap: var(--sp-1);
+    font-size: clamp(var(--fs-2xl), 6.4vw, var(--fs-3xl)); letter-spacing: -.02em; }
   .hc-loc { display: none; }
   .hc-nick { font-size: var(--fs-md); }
   .hc-rec { font-size: var(--fs-xs); }

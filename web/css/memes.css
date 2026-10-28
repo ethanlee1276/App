@@ -23,8 +23,11 @@
    unskippable without owning the fold ("you can barely see the charts").
    The summary line carries all five numbers itself. */
 .mc-honesty {
-  border-left: 3px solid var(--warn);
+  border-left: 3px solid transparent;
   margin-bottom: 12px; padding: 9px 14px;
+  --tone: var(--warn);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone);
 }
 
 .mc-honesty summary { cursor: pointer; display: flex; flex-wrap: wrap;
@@ -79,7 +82,7 @@
 
 .mc-pick b { color: var(--text); font-weight: 700; }
 
-.mc-pick:hover { border-color: var(--text-mute); }
+.mc-pick:hover { border-color: transparent; }
 
 .mc-pick-tag { font-size: var(--fs-xs); font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase; color: var(--good); }
@@ -284,7 +287,7 @@
 
 .mc-mom b { font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: 600; }
 
-.mc-riskb { display: inline-block; border: var(--hairline) solid; border-radius: 999px;
+.mc-riskb { display: inline-block; border: var(--hairline) solid transparent; background: color-mix(in oklab, currentColor 12%, transparent); border-radius: 999px;
   padding: 2px 8px; font-size: var(--fs-2xs); font-weight: 800;
   letter-spacing: .06em; white-space: nowrap; }
 

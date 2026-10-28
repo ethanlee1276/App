@@ -15,21 +15,24 @@
 .pgr-sum b.neg { color: var(--bad); }
 .pgr-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .pgr-leg { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel);
-  border-left: 3px solid var(--text-faint); }
-.pgr-leg.v-strong { border-left-color: var(--good); }
-.pgr-leg.v-fair { border-left-color: var(--gold); }
-.pgr-leg.v-weak { border-left-color: var(--warn); }
-.pgr-leg.v-against { border-left-color: var(--bad); }
+  border-left: 3px solid transparent;
+  --tone: var(--text-faint);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
+.pgr-leg.v-strong { --tone: var(--good); }
+.pgr-leg.v-fair { --tone: var(--gold); }
+.pgr-leg.v-weak { --tone: var(--warn); }
+.pgr-leg.v-against { --tone: var(--bad); }
 /* The name keeps a readable width; on a narrow screen the pill drops under it. */
 .pgr-leg-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .pgr-leg-h b { flex: 1 1 14ch; min-width: 0; font-weight: 600; overflow-wrap: break-word; }
 .pgr-n { flex-shrink: 0; color: var(--text-mute); font-family: var(--font-mono); font-size: var(--fs-xs); }
 .pgr-pill { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 700;
   letter-spacing: .03em; text-transform: uppercase; color: var(--text-mute); border: var(--hairline) solid transparent; background: var(--fill-tone); }
-.pgr-pill.v-strong { color: var(--good); border-color: currentColor; }
-.pgr-pill.v-fair { color: var(--gold); border-color: currentColor; }
-.pgr-pill.v-weak { color: var(--warn); border-color: currentColor; }
-.pgr-pill.v-against { color: var(--bad); border-color: currentColor; }
+.pgr-pill.v-strong { color: var(--good); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
+.pgr-pill.v-fair { color: var(--gold); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
+.pgr-pill.v-weak { color: var(--warn); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
+.pgr-pill.v-against { color: var(--bad); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
 .pgr-leg-m { margin-top: 3px; color: var(--text-dim); font-size: var(--fs-sm); }
 .pgr-leg-m b { color: var(--text); font-family: var(--font-mono); }
 .pgr-leg-w { margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
@@ -49,8 +52,8 @@
 .pgr-bar u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); }
 .pgr-note, .pgr-swap { padding: 8px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
   color: var(--text-dim); background: var(--panel); }
-.pgr-note { border: var(--hairline) solid var(--warn); }
-.pgr-note.kill { border-color: var(--bad); }
+.pgr-note { background: color-mix(in oklab, var(--warn) 12%, var(--panel)); }
+.pgr-note.kill { background: color-mix(in oklab, var(--bad) 12%, var(--panel)); }
 .pgr-note b, .pgr-swap b { color: var(--text); }
 .pgr-foot { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
 .pgr-fine { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
@@ -107,16 +110,16 @@
   letter-spacing: .03em; text-transform: uppercase; color: var(--brand-ink); background: var(--text-faint); }
 .pgr-res.r-won { background: var(--good); }
 .pgr-res.r-lost { background: var(--bad); }
-.pgr-leg.r-won { border-left-color: var(--good); }
-.pgr-leg.r-lost { border-left-color: var(--bad); opacity: .85; }
+.pgr-leg.r-won { --tone: var(--good); }
+.pgr-leg.r-lost { --tone: var(--bad); opacity: .85; }
 .pgr-now, .pgr-alerts, .pgr-shop, .pgr-better, .pgr-pairs { padding: 8px 10px; border-radius: var(--radius-sm);
   font-size: var(--fs-sm); color: var(--text-dim); background: var(--panel); overflow-wrap: break-word; }
 .pgr-now b, .pgr-shop b, .pgr-better b, .pgr-pairs > b, .pgr-alerts > b { color: var(--text); }
 .pgr-now.s-open { border: var(--hairline) solid transparent; background: color-mix(in oklab, var(--brand) 14%, transparent); }
-.pgr-now.s-lost { border: var(--hairline) solid var(--bad); }
-.pgr-now.s-won { border: var(--hairline) solid var(--good); }
+.pgr-now.s-lost { background: color-mix(in oklab, var(--bad) 12%, var(--panel)); }
+.pgr-now.s-won { background: color-mix(in oklab, var(--good) 12%, var(--panel)); }
 .pgr-now.s-last { border: 2px solid transparent; color: var(--text); background: color-mix(in oklab, var(--brand) 14%, transparent); }
-.pgr-alerts { border: var(--hairline) solid var(--warn); }
+.pgr-alerts { background: color-mix(in oklab, var(--warn) 12%, var(--panel)); }
 .pgr-fresh { margin: 0; font-size: var(--fs-xs); color: var(--text-mute); }
 .pgr-alerts ul, .pgr-pairs ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
 .pgr-shop small { display: block; margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
@@ -133,7 +136,7 @@
 .pgr-chance { margin-top: 4px; font-size: var(--fs-sm); color: var(--text-dim); overflow-wrap: break-word; }
 .pgr-chance b { color: var(--gold); font-family: var(--font-mono); }
 .pgr-bn { margin-top: 4px; padding: 6px 8px; border-radius: var(--radius-sm); font-size: var(--fs-xs); color: var(--text-dim);
-  border: var(--hairline) dashed var(--good); overflow-wrap: break-word; }
+  background: color-mix(in oklab, var(--good) 9%, transparent); overflow-wrap: break-word; }
 .pgr-bn > b:first-child { color: var(--text); }
 .pgr-bn b.pos { color: var(--good); font-family: var(--font-mono); }
 /* Better legs for a weak spot (slipgrade.replacements): a short list under
@@ -150,7 +153,7 @@
 .pgr-hedge { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
   color: var(--text-dim); background: color-mix(in oklab, var(--brand) 12%, var(--panel)); border: var(--hairline) solid transparent; overflow-wrap: break-word; }
 .pgr-hedge b { color: var(--text); }
-.pgr-hedge.pgr-cash { border-color: var(--border); }
+.pgr-hedge.pgr-cash { border-color: transparent; }
 .pgr-hedge-in { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .pgr-hedge-in label, .pgr-save label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs);
   color: var(--text-mute); font-weight: 600; }

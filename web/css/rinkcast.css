@@ -226,10 +226,10 @@
    so the stats beside it are not left over half a screen of nothing. */
 .rc-lineup .rc-card-body { max-height: 460px; overflow-y: auto; }
 .rc-odds { grid-area: odds; }
-.rc-tabs { display: flex; gap: var(--sp-1); padding: 0 var(--sp-3); border-bottom: var(--hairline) solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.rc-tabs { display: flex; gap: var(--sp-1); padding: 0 var(--sp-3); border-bottom: var(--hairline) solid transparent; overflow-x: auto; scrollbar-width: none; }
 .rc-tab { flex: none; padding: 12px var(--sp-2); font: 700 var(--fs-sm) / 1.2 var(--font-sans); color: var(--text-mute); cursor: pointer;
   background: none; border: 0; border-bottom: 2px solid transparent; transition: color var(--dur-fast) var(--ease-out); }
-.rc-tab.on { color: var(--brand); border-bottom-color: var(--brand); }
+.rc-tab.on { color: var(--brand); border-bottom-color: transparent; border-radius: 999px; background: color-mix(in oklab, var(--brand) 12%, transparent); }
 .rc-card-body { padding: var(--sp-3) var(--sp-4); min-width: 0; }
 .rc-toggle { display: flex; gap: 6px; margin-bottom: var(--sp-2); }
 .rc-ts-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-2);
@@ -290,6 +290,13 @@
   .rc-play-list { max-height: 460px; }
   .rc-right-body { max-height: 520px; }
   .rc-right-body.plays { max-height: none; }
+}
+/* The names' step the basketball and football boards take (a tablet, and a
+   desktop's middle column up to 1440px): in Inter (THE BLEND) "Blue Jackets"
+   beside its score needs it too. Phones have their own size below. */
+@media (min-width: 721px) and (max-width: 1440px) {
+  .rc-side { gap: var(--sp-2); }
+  .rc-nick { font-size: var(--fs-xl); letter-spacing: -.01em; }
 }
 @media (max-width: 720px) {
   /* A phone's scoreboard is ESPN's: the crest and the score in one line a

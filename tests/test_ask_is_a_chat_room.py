@@ -49,7 +49,8 @@ def test_the_footer_leaves_and_the_league_row_stays_as_text_tabs():
     phone = CSS[CSS.index("body.ask-open .footer { display: none; }"):]
     phone = phone[:phone.index("\n}\n")]
     assert "body.ask-open .sportbar-in .sport-btn .crest { display: none; }" in phone
-    assert "body.ask-open .sportbar-in .sport-btn.active { color: var(--gold); border-bottom-color: var(--gold); }" in phone
+    # Gold words, no underline, since "No hard lines" (2026-10-27).
+    assert "body.ask-open .sportbar-in .sport-btn.active { color: var(--gold); border-bottom-color: transparent; }" in phone
     sw = _fn("_switchViewNow")
     assert 'document.body.classList.toggle("ask-open", name === "ask");' in sw, \
         "toggled on EVERY switch, so the footer comes back on the next page"
@@ -160,7 +161,8 @@ def test_the_empty_room_is_ethans_render():
         "side by side, a phone included"
     assert re.search(r"\.ask-title-sm em, \.ask-title em \{[^}]*color: var\(--gold\)", CSS), "Qellys in gold"
     # A gold tint, not a gold outline, since the blend (2026-10-27).
-    assert re.search(r"\.ask-pill \{[^}]*background: color-mix\(in oklab, var\(--gold\) 16%, transparent\); color: var\(--gold\)", CSS)
+    # The words in --brand-2 since 2026-10-28: --gold on its own tint read 2.8:1 in the light theme.
+    assert re.search(r"\.ask-pill \{[^}]*background: color-mix\(in oklab, var\(--gold\) 16%, transparent\); color: var\(--brand-2\)", CSS)
     assert re.search(r"\.ask-title \{[^}]*font-size: clamp\(var\(--fs-4xl\), 11\.5vw, 60px\)", CSS)
     form = r[r.index('<form class="ask-form" id="ask-form">'):r.index("</form>")]
     assert form.index("data-ask-clip") < form.index("<textarea") < form.index('class="ask-send"'), \

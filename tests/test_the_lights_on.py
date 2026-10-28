@@ -135,6 +135,25 @@ def test_colour_that_means_something():
     assert ".chip.up { background-color: color-mix(in oklab, var(--good) 14%, transparent); }" in LIGHTS
     assert ".section-title .st-ico { color: var(--league); }" in LIGHTS
 
+def test_the_gold_buttons_ink_reads_on_their_sheen_in_both_themes():
+    """2026-10-28, the sweep after "No hard lines": the gold buttons' sheen
+    was the dark theme's bright gold in both themes, under the light theme's
+    white ink, so "See the plans" and "Log bet" read at 1.8:1 on paper. Each
+    theme names its own sheen, and both its stops hold its ink at 4.5:1."""
+    def lum(h):
+        def f(c):
+            return c / 12.92 if c <= .03928 else ((c + .055) / 1.055) ** 2.4
+        r, g, b = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        return .2126 * f(r) + .7152 * f(g) + .0722 * f(b)
+    for theme in (_root(":root"), _root(':root[data-theme="light"]')):
+        sheen = re.search(r"--grad-gold-btn: linear-gradient\(180deg, (#[0-9A-Fa-f]{6}), (#[0-9A-Fa-f]{6})\);", theme)
+        assert sheen, "each theme names its own sheen"
+        ink = re.search(r"--brand-ink: (#[0-9A-Fa-f]{6});", theme).group(1)
+        for stop in sheen.groups():
+            lo, hi = sorted((lum(stop), lum(ink)))
+            assert (hi + .05) / (lo + .05) >= 4.5, (stop, ink)
+
+
 # --- in a browser (opt-in) -------------------------------------------------------------------
 def test_the_lights_in_a_browser():
     if os.environ.get("QB_BROWSER_TESTS") != "1":

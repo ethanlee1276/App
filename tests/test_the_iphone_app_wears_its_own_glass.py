@@ -108,12 +108,16 @@ def test_in_a_browser_the_ios_app_floats_a_capsule_a_tab_does_not_and_the_team_t
     measure = """() => { const bar = document.querySelector('.tabbar'), r = bar.getBoundingClientRect(), s = getComputedStyle(bar);
         const disc = getComputedStyle(document.querySelector('.tb-center-disc'));
         const edge = getComputedStyle(document.querySelector('.topbar'), '::after');
+        const probe = document.createElement('i');
+        probe.style.color = 'color-mix(in oklab, var(--team-1) 22%, transparent)';
+        document.querySelector('.topbar').appendChild(probe);
+        const spill = getComputedStyle(probe).color; probe.remove();
         renderRidingTray([{ player: "Amon-Ra St. Brown", line: 5.5, current: 3, market: "receptions" }]);
         const tray = document.getElementById('riding-tray'), t = tray.getBoundingClientRect();
         return { radius: parseFloat(s.borderTopLeftRadius), left: r.left, right: innerWidth - r.right, gap: innerHeight - r.bottom,
                  tint: document.documentElement.classList.contains('team-tint'),
                  team: getComputedStyle(document.documentElement).getPropertyValue('--team-1').trim(),
-                 disc: disc.backgroundImage, edge: edge.backgroundImage,
+                 disc: disc.backgroundImage, edge: edge.backgroundImage, spill,
                  tray: { hidden: tray.hidden, mid: t.left + t.width / 2, width: t.width, above: r.top - t.bottom,
                          bg: getComputedStyle(tray).backgroundColor },
                  pad: parseFloat(getComputedStyle(document.body).paddingBottom), vw: innerWidth }; }"""
@@ -149,7 +153,10 @@ def test_in_a_browser_the_ios_app_floats_a_capsule_a_tab_does_not_and_the_team_t
     assert ios["radius"] > 30 and 8 <= ios["left"] <= 16 and 8 <= ios["right"] <= 16 and ios["gap"] >= 8, ios
     assert tab["radius"] == 0 and tab["left"] == 0 and tab["gap"] == 0, ("a browser tab keeps the full bar", tab)
     assert ios["tint"] and ios["team"] == "#005a8b", ios
-    assert "rgb(0, 90, 139)" in ios["disc"] and "rgb(0, 90, 139)" in ios["edge"], ios
+    assert "rgb(0, 90, 139)" in ios["disc"], ios
+    # The bar's edge wears the team's colour as light spilling down from it
+    # since "No hard lines" (2026-10-27), not a 2px stripe: 22% of it, fading.
+    assert ios["edge"].startswith("linear-gradient(") and ios["spill"] in ios["edge"], ios
     for g in (ios, light, tab):
         tr = g["tray"]
         assert not tr["hidden"] and abs(tr["mid"] - g["vw"] / 2) < 1.5 and tr["width"] <= g["vw"] - 32 + 0.5, tr

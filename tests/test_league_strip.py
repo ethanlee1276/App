@@ -319,11 +319,13 @@ def test_the_strip_is_chrome_and_the_page_keeps_the_pills():
     assert "border-radius: 0" in strip, strip
     assert "var(--panel)" not in strip, "the strip wears the pill's fill again"
 
-    # The selected league is a word with a rule under it.
+    # The selected league is a word in its colour. It had a rule under it
+    # until "No hard lines" (2026-10-27): now no rule, and THE BLEND lays
+    # the league's own tint and light behind it (tests/test_no_hard_lines).
     assert "var(--grad-brand)" not in active, \
         "the strip wears the page's selected-pill fill again"
     assert "color: var(--gold)" in active, active
-    assert "border-bottom-color: var(--gold)" in active, active
+    assert "border-bottom-color: transparent" in active, active
 
     # The band belongs to the header, not to the top of the page.
     bar = _rule(CSS, ".sportbar")

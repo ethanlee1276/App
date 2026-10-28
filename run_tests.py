@@ -5,6 +5,7 @@
     python3 run_tests.py -j 4       # four at a time
     python3 run_tests.py --serial   # one at a time, the old behaviour
     python3 run_tests.py --slowest  # …and list where the time went
+    python3 run_tests.py --browser  # only the files with a browser half, in Chromium
 
 Each test file runs itself as a script (exit non-zero on failure). Used by
 the deploy and handy locally.
@@ -283,6 +284,15 @@ def main() -> int:
     guard = os.path.join(ROOT, "tests", "netguard")
     env["PYTHONPATH"] = guard + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     env["QB_NETGUARD_LOG"] = os.path.join(sandbox, "netguard.log")
+    # THE BROWSER CHECKS (2026-10-28). The sweep above drops every QB_*
+    # name, and QB_BROWSER_TESTS is one of them: `QB_BROWSER_TESTS=1
+    # python3 run_tests.py` ran no browser check at all, and two passes of
+    # the look shipped six broken layouts behind a green gate. They stay
+    # out of the main run on purpose (Chromium inside a busy suite is
+    # where flaky tests come from); `--browser` runs them on their own:
+    # the switch set after the sweep, only the files with a browser half.
+    if "--browser" in sys.argv[1:]:
+        env["QB_BROWSER_TESTS"] = "1"
     try:
         return _run(env, sys.argv[1:])
     finally:
@@ -314,6 +324,11 @@ def netguard_tally(path: str, top: int = 8) -> str:
 def _run(env, argv) -> int:
     files = sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
     jobs = _workers(argv)
+    if "--browser" in argv:
+        files = [f for f in files if "QB_BROWSER_TESTS" in open(f, encoding="utf-8").read()]
+        # Each one drives Chromium: three at a time unless told otherwise.
+        if _pinned(argv) is None:
+            jobs = min(jobs, 3)
     started = time.monotonic()
     if jobs > 1:
         print(f"  {len(files)} files, {jobs} at a time\n")

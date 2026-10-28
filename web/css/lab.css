@@ -7,7 +7,8 @@
 .lb-card h3 { margin: 0; font-size: var(--fs-md); color: var(--text); }
 .lb-card header p { margin: 3px 0 0; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .lb-badge { flex-shrink: 0; padding: 2px 8px; border-radius: 999px; font-style: normal; font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .03em; text-transform: uppercase; border: var(--hairline) solid currentColor; color: var(--text-mute); }
+  letter-spacing: .03em; text-transform: uppercase; border: var(--hairline) solid transparent; background: color-mix(in oklab, currentColor 12%, transparent);
+  color: var(--text-mute); }
 .lb-badge.lb-ok { color: var(--good); }
 .lb-badge.lb-no { color: var(--bad); }
 .lb-badge.lb-wait { color: var(--gold); }
@@ -25,8 +26,11 @@
 /* 1. Do the books add up? */
 .lb-menu { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .lb-menu li { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2);
-  border-left: 3px solid var(--text-faint); min-width: 0; }
-.lb-menu li.flag { border-left-color: var(--gold); }
+  border-left: 3px solid transparent; min-width: 0;
+  --tone: var(--text-faint);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
+.lb-menu li.flag { --tone: var(--gold); }
 .lb-m-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; color: var(--text-mute); font-size: var(--fs-xs); }
 .lb-book { color: var(--text); font-weight: 700; text-transform: capitalize; }
 .lb-m-b { color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); overflow-wrap: anywhere; }

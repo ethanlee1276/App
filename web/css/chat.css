@@ -63,7 +63,7 @@ body.gch-on { overflow: hidden; }
    moves over to make room, and the header stays in reach. */
 @media (min-width: 900px) {
   .gch-sheet { inset: var(--topbar-h) 0 0 auto; width: min(400px, 40vw); padding-top: 0;
-    border-left: var(--hairline) solid var(--border); box-shadow: var(--glass-depth); }
+    border-left: var(--hairline) solid transparent; box-shadow: var(--glass-depth); }
   body.gch-on { overflow: auto; }
 }
 /* Only where the game's own layout still fits beside it: narrower, the room
@@ -100,18 +100,18 @@ body.gch-on { overflow: hidden; }
   border: var(--hairline) solid transparent; background: var(--panel); color: var(--text); font: inherit;
   font-size: var(--fs-xs); font-weight: 800; cursor: pointer; }
 .gch-vote span { color: var(--text-mute); font-family: var(--font-mono); font-size: var(--fs-2xs); }
-.gch-vote.mine { border-color: var(--brand); color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, var(--panel)); }
+.gch-vote.mine { border-color: transparent; color: var(--brand-2); background: color-mix(in oklab, var(--brand) 10%, var(--panel)); }
 .gch-vote:disabled { cursor: default; opacity: .8; }
 .gch-poll-n { margin-left: auto; font-size: var(--fs-2xs); color: var(--text-mute); }
 .gch-poll-bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--border); }
 .gch-poll-bar::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--gch-away); background: var(--brand); }
 
 /* ── tabs: one segmented control ────────────────────────────────────────── */
-.gch-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-bottom: var(--hairline) solid var(--border-soft); }
+.gch-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px 6px; border-bottom: var(--hairline) solid transparent; }
 .gch-tabs[hidden] { display: none; }
 .gch-tab { padding: 9px 6px; border: 0; border-bottom: 2px solid transparent; background: transparent;
   color: var(--text-mute); font: inherit; font-size: var(--fs-sm); font-weight: 800; cursor: pointer; }
-.gch-tab.on { color: var(--text); border-bottom-color: var(--brand); }
+.gch-tab.on { color: var(--text); border-bottom-color: transparent; border-radius: 999px; background: color-mix(in oklab, var(--brand) 12%, transparent); }
 
 /* ── the list ───────────────────────────────────────────────────────────── */
 .gch-sheet > .gch-body { flex: 1 1 auto; min-height: 0; }
@@ -176,7 +176,7 @@ body.gch-on { overflow: hidden; }
   background: color-mix(in oklab, var(--brand) 12%, var(--panel)); color: var(--brand-2); font: inherit; font-size: var(--fs-2xs);
   font-weight: 800; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .gch-bet { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 5px; padding: 7px 10px;
-  border-radius: var(--radius-sm); border-left: 3px solid var(--brand);
+  border-radius: var(--radius-sm); border-left: 3px solid transparent;
   background: color-mix(in oklab, var(--brand) 8%, var(--panel)); font-size: var(--fs-sm); }
 .gch-bet-k { font-size: var(--fs-2xs); font-weight: 900; color: var(--brand-2); text-transform: uppercase; letter-spacing: .06em; }
 .gch-bet-book { margin-left: auto; color: var(--text-mute); font-size: var(--fs-xs); }
@@ -189,7 +189,7 @@ body.gch-on { overflow: hidden; }
   border: var(--hairline) solid transparent; background: var(--panel); font: inherit; font-size: var(--fs-sm);
   color: var(--text); cursor: pointer; line-height: var(--lh-tight); }
 .gch-face span { font-size: var(--fs-2xs); font-weight: 800; color: var(--text-dim); }
-.gch-face.mine { border-color: var(--brand); background: color-mix(in oklab, var(--brand) 14%, var(--panel)); }
+.gch-face.mine { border-color: transparent; background: color-mix(in oklab, var(--brand) 14%, var(--panel)); }
 /* The tools: a small floating bar at the message's top right (Discord),
    on hover with a mouse and on a tap on a phone. */
 .gch-tools { display: none; position: absolute; top: -12px; right: 12px; z-index: 2; align-items: center; gap: 2px; padding: 2px;
@@ -314,7 +314,7 @@ body.gch-on { overflow: hidden; }
 .lvm-go { padding: 6px 12px; border-radius: 999px; background: var(--grad-brand); color: var(--brand-ink); font-size: var(--fs-xs);
   font-weight: 900; white-space: nowrap; }
 /* The trial's line in its place (lvmTrialHTML): a notice about a charge, not a sale — no gold button. */
-.lvm-trial { border-color: var(--border); }
+.lvm-trial { border-color: transparent; }
 .lvm-trial .lvm-txt span { white-space: normal; }
 .lvm-trial .lvm-go { background: var(--fill-tone); color: var(--text); border: var(--hairline) solid transparent; }
 .yp-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px;

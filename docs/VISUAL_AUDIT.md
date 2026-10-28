@@ -213,3 +213,50 @@ column rules, stripes down notices.
 
 Held by tests/test_no_hard_lines.py, including a browser pass over the home's
 first three screens that fails on any full outline or thin bar.
+
+## The sweep after — 2026-10-28
+
+Ethan: "make sure everything is complete". Every one of the 46 pages, on the
+phone and the desktop, dark and light, shot and probed again, and every
+sheet read for what the first pass's checks could not see: an outline drawn
+in its own colour (currentColor, the good, bad and warn colours), a dash, a
+variant chip whose two-class rule outranked the blend's one-class fix, a
+hover that brought the outline back, and the coloured stripes.
+
+| # | Was | Now |
+|---|---|---|
+| S1 | **Badges as outlined pills**: the grade (STRONG, PLAY, LEAN), statuses, risk, position (RB, WR, QB, TE), verdicts, a final score's W/L | a tint of their own colour |
+| S2 | **Chip variants ringed**: trend up/down, books, conditional, live, Ask's prop chips, line-move tags | a tint; the stake and time chips plain fills |
+| S3 | **The chosen plan ringed in gold** (plans page, sign-up), the method page's model tag, a pinned post, the deck's Pick of the Day | a tint, and the gold glow the best Most Likely pick wears |
+| S4 | **Stripes down cards**: My Bets (open, won, lost), the slip grader's legs, the Record's ledger and edge notes, warnings, verdicts, callouts, plan and pick cards | light from the left edge in the same colour (the --tone wash); the ledger keeps its stripe only where a browser cannot mix colours |
+| S5 | **An open tab underlined** (the team page, the game page's tabs, the chat sheet, the arenas, charts, profiles) | a tinted pill, like the league row's |
+| S6 | Outlines on hover (cards, chips, My Bets' actions, the method's sections) | the fill change alone |
+| S7 | Dashed boxes (an invite code, a checkout panel, "add option", Ask's error turn), a photo frame, a 3px rule under a verdict | fills, tints, or nothing |
+
+| S8 | **Light theme: the gold buttons' text** (See the plans, Log bet, Log in) was white on the dark theme's bright gold, 1.8:1 | the light theme's own bronze under its white ink, 4.7:1 |
+| S9 | Ask's "AI" label, gold on its own tint in the light theme (2.8:1) | the deeper gold, 5.6:1 |
+
+**And the checks the gate never ran.** `run_tests.py` clears every `QB_*`
+name before it starts a test, `QB_BROWSER_TESTS` among them, so the 65 files
+that drive a real Chromium had not run in any gate since the blend. Run on
+their own, six failed on the blend and the lines pass, every one a real fault
+on the site:
+
+| # | Was | Now |
+|---|---|---|
+| B1 | **The desktop's top bar ran off the screen at 1280px**: in Inter the league row, Ask and the freshness pill were 69px wider, and the theme button was clipped (laptops and an open fold too) | the league buttons 3px narrower a side and the search box 132px at 1280-1439: the button sits 20px in, as before |
+| B2 | **The logo squeezed to 10px** by the wider name beside it in its fixed column | the mark keeps its 44px; the name and its line track tighter |
+| B3 | A Most Likely card's name a sliver on a fold's 280px cover | the name takes the card's width there, the ring beside the price |
+| B4 | The basketball board's crest squeezed by a three-figure score and the ball at 390px | the score steps down with the screen, to full size by 470px |
+| B5 | Football and hockey names cut at 1280px ("Buccaneers", "Blue Jackets") | the tablet's size for the names up to 1440px |
+| B6 | The iPhone app's bar: no rim at all failed "what floats wears glass" | lit along its top only, under the status bar; still no line at its foot |
+
+`python3 run_tests.py --browser` now runs them as a second gate (README,
+"Continuous integration"); two more were stale tests, not faults (the chat
+opens from its card now, and says "watching").
+
+What still draws a line is named in tests/test_no_hard_lines.py (GLYPHS,
+EDGES, COLOURED), each a picture (a chart's marks, a ring chart, a puck, an
+avatar's ring, a chevron), a focus, or a border that is its own fill; and a
+second browser pass walks the plans, sign-up, Edge, method, My Bets, memes,
+home and Record pages in both themes and fails on any outline.

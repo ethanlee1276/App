@@ -201,7 +201,10 @@
 .mk-slotchip { min-width: 3.4em; text-align: center; flex: none; }
 
 .mk-advice { display: block; padding: 12px 16px; margin-bottom: 16px;
-  border-left: 3px solid var(--brand-2); font-size: var(--fs-sm); }
+  border-left: 3px solid transparent; font-size: var(--fs-sm);
+  --tone: var(--brand-2);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
 
 .mk-advice-head { font-size: var(--fs-xs); text-transform: uppercase;
   letter-spacing: .06em; color: var(--text-mute); margin-bottom: 6px; }
@@ -363,7 +366,7 @@
 
 .mk-badge { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs);
   font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
-  border: var(--hairline) solid currentColor; }
+  border: var(--hairline) solid transparent; background: color-mix(in oklab, currentColor 12%, transparent); }
 
 .mk-badge-mut { color: var(--text-mute); }
 
@@ -857,8 +860,11 @@
 .ffc-out { margin-top: var(--sp-3); }
 .ffc-hint { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-dim); }
 .ffc-call { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm);
-  border-left: 3px solid var(--good); background: var(--fill-subtle); }
-.ffc-call.coin { border-left-color: var(--warn); }
+  border-left: 3px solid transparent; background: var(--fill-subtle);
+  --tone: var(--good);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
+.ffc-call.coin { --tone: var(--warn); }
 .ffc-k { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-mute); }
 .ffc-call b { font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text); }
 .ffc-desk { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--brand); }
@@ -867,7 +873,7 @@
   border: var(--hairline) solid transparent;
   background: var(--fill-subtle);
 }
-.ffc-card.lead { border-color: var(--good); }
+.ffc-card.lead { border-color: transparent; background-color: color-mix(in oklab, var(--good) 8%, var(--panel)); }
 .ffc-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ffc-who > span { display: flex; flex-direction: column; min-width: 0; }
 .ffc-who b { font-size: var(--fs-sm); color: var(--text); overflow-wrap: anywhere; }
@@ -919,7 +925,7 @@
 
 /* YOUR MATCHUP, LIVE (2026-10-27): the score, the win chance, the lineups slot by slot. */
 .ffl { padding: var(--sp-3) var(--sp-4) var(--sp-4); margin-bottom: var(--sp-3); }
-.ffl.on { border-color: var(--good); }
+.ffl.on { border-color: transparent; background-color: color-mix(in oklab, var(--good) 12%, var(--panel)); }
 .ffl-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
   font-size: var(--fs-xs); color: var(--text-mute); }
 .ffl-badge { padding: 2px 8px; border-radius: 999px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;

@@ -292,6 +292,22 @@ def test_the_secrets_leak_the_clean_environment_closes():
             "into the run")
 
 
+def test_the_browser_checks_can_be_asked_for():
+    """2026-10-28: the clean environment above drops every QB_* name, so
+    `QB_BROWSER_TESTS=1 python3 run_tests.py` ran no browser check, and
+    six broken layouts went out behind a green gate. `--browser` sets the
+    switch AFTER the sweep (or the sweep eats it) and runs only the files
+    that have a browser half."""
+    src = open(os.path.join(ROOT, "run_tests.py"), encoding="utf-8").read()
+    body = src[src.index("def main("):]
+    body = body[:body.index("\ndef ")]
+    assert 'if "--browser" in sys.argv[1:]:\n        env["QB_BROWSER_TESTS"] = "1"' in body
+    assert body.index("env.pop(name)") < body.index('env["QB_BROWSER_TESTS"] = "1"'), "set before the sweep that removes it"
+    run = src[src.index("def _run("):]
+    assert 'files = [f for f in files if "QB_BROWSER_TESTS" in open(f, encoding="utf-8").read()]' in run
+    assert "jobs = min(jobs, 3)" in run
+
+
 def test_a_timeout_says_where_it_hung():
     """Three timeouts on the droplet reported nothing but the words
     TIMED OUT, and each one cost an afternoon of guessing which test was

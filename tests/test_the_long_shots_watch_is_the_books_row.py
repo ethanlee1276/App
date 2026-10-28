@@ -104,7 +104,8 @@ def test_the_rows_are_ruled_and_rise_through_their_items():
     assert ".watch-item + .watch-item > .hd-row { border-top: var(--hairline) solid var(--border-soft); }" in CSS
     assert ".watch-item > .hd-edge { animation: rise var(--dur-slow) var(--ease-out) both; }" in CSS
     assert ".watch-item:nth-child(2) > .hd-edge { animation-delay: calc(var(--dur-fast) * .3); }" in CSS
-    assert ".hd-p.flat { color: var(--text-mute); border-color: var(--border-soft); background: transparent; }" in CSS
+    # A plain fill, not an outline, since the sweep after "No hard lines" (2026-10-28).
+    assert '.hd-p.flat { color: var(--text-mute); border-color: transparent; background: transparent; background-color: var(--fill-tone); }' in CSS
     assert ".watch-why { padding: 2px 14px 12px 44px; }" in CSS
     # …and on a phone the row wraps, because it is the Edge Board's row.
     i = CSS.index("@media (max-width: 700px) {\n  .ls-row.drow { flex-wrap: wrap; }")

@@ -45,15 +45,18 @@
 /* The upset meter: ours as the fill, the market's as the tick. */
 .xt-ups { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 8px; }
 .xt-up { display: grid; gap: 6px; padding: 10px; border-radius: var(--radius-sm); background: var(--panel-2);
-  border-left: 3px solid var(--text-faint); }
-.xt-up.t-alert { border-left-color: var(--good); }
-.xt-up.t-live { border-left-color: var(--gold); }
+  border-left: 3px solid transparent;
+  --tone: var(--text-faint);
+  background-color: color-mix(in oklab, var(--tone) 10%, var(--panel-2)); }
+.xt-up.t-alert { --tone: var(--good); }
+.xt-up.t-live { --tone: var(--gold); }
 .xt-up-t { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .xt-up-t > div { display: grid; min-width: 0; flex: 1; }
 .xt-up-t b { color: var(--text); overflow-wrap: anywhere; }
 .xt-up-t span { color: var(--text-mute); font-size: var(--fs-xs); }
 .xt-pill { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-style: normal; font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .03em; text-transform: uppercase; color: var(--text-mute); border: var(--hairline) solid currentColor; }
+  letter-spacing: .03em; text-transform: uppercase; color: var(--text-mute); border: var(--hairline) solid transparent;
+  background: color-mix(in oklab, currentColor 12%, transparent); }
 .xt-pill.t-alert { color: var(--good); }
 .xt-pill.t-live { color: var(--gold); }
 .xt-meter { position: relative; height: 6px; border-radius: 3px; background: var(--panel-3); }
@@ -75,7 +78,8 @@
 .xt-sp-t b { color: var(--text); font-size: var(--fs-sm); }
 .xt-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .xt-chip { padding: 1px 8px; border-radius: 999px; font-style: normal; font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .02em; color: var(--text-mute); border: var(--hairline) solid currentColor; }
+  letter-spacing: .02em; color: var(--text-mute); border: var(--hairline) solid transparent;
+  background: color-mix(in oklab, currentColor 12%, transparent); }
 .xt-chip.t-bad { color: var(--bad); }
 .xt-chip.t-warn { color: var(--gold); }
 .xt-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -105,9 +109,11 @@
 .xt-ring b { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
 .xt-ring span { font-size: var(--fs-2xs); color: var(--text-mute); text-transform: uppercase; letter-spacing: .05em; }
 .xt-verdict { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text-dim);
-  font-size: var(--fs-sm); border-left: 3px solid var(--text-faint); }
-.xt-verdict.good { border-left-color: var(--good); }
-.xt-verdict.bad { border-left-color: var(--bad); }
+  font-size: var(--fs-sm); border-left: 3px solid transparent;
+  --tone: var(--text-faint);
+  background-color: color-mix(in oklab, var(--tone) 10%, var(--panel-2)); }
+.xt-verdict.good { --tone: var(--good); }
+.xt-verdict.bad { --tone: var(--bad); }
 .xt-splits { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .xt-split h4, .xt-sub { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 700; color: var(--gold);
   letter-spacing: .05em; text-transform: uppercase; }
@@ -140,8 +146,10 @@
 .xt-fp-key { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-2xs); color: var(--text-mute); }
 .xt-fp-key span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xt-fp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; }
-.xt-fp-s { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel); border-left: 3px solid var(--brand); }
-.xt-fp-s.xt-fp-b { border-left-color: var(--plum); }
+.xt-fp-s { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel); border-left: 3px solid transparent;
+  --tone: var(--brand);
+  background-color: color-mix(in oklab, var(--tone) 10%, var(--panel)); }
+.xt-fp-s.xt-fp-b { --tone: var(--plum); }
 .xt-fp-s h4 { margin: 0 0 4px; font-size: var(--fs-sm); color: var(--text); overflow-wrap: anywhere; }
 .xt-fp-s h4 small { color: var(--text-mute); font-weight: 600; }
 .xt-fp-s p { margin: 2px 0; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; font-size: var(--fs-xs); color: var(--text-dim); }
@@ -217,12 +225,13 @@
 .xt-x { flex: none; width: 28px; height: 28px; border-radius: 999px; border: var(--hairline) solid transparent;
   background: var(--panel); color: var(--text-mute); font: inherit; font-size: var(--fs-md); line-height: 1; cursor: pointer;
   transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
-.xt-x:hover { color: var(--bad); border-color: var(--bad); }
+.xt-x:hover { color: var(--bad); border-color: transparent; }
 .xt-pb-pairs { font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-snug); }
 .xt-pb-pairs b { display: inline-block; min-width: 3.4em; font-family: var(--font-mono); }
 .xt-pb-pairs .pos, .xt-pb .xt-fine .pos { color: var(--good); }
 .xt-pb-pairs .neg, .xt-pb .xt-fine .neg { color: var(--bad); }
-.xt-pb-no { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--bad);
+.xt-pb-no { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
+  background: color-mix(in oklab, var(--bad) 12%, transparent);
   color: var(--text); font-size: var(--fs-sm); }
 @media (prefers-reduced-motion: reduce) { .xt-x { transition: none; } }
 
