@@ -163,8 +163,13 @@ def _cli(argv=None) -> int:
               f"{REMIND_WITHIN_S // 3600} hours and are owed a reminder.")
         for r in rows:
             print(f"  account {r['user_id']}: ends {when(r['period_end'])[1]}")
-        print("Mail relay: " + ("configured." if mailer.configured() else
-                                "NOT configured — nothing will send (docs/EMAIL.md)."))
+        if mailer.configured():
+            print("Mail relay: configured.")
+        elif _local.system_env_hidden():
+            print("Mail relay: not visible to this user (the settings file is root's; the service has it). "
+                  "Names only: cd /srv/qellys && sudo ./deploy/setenv.sh --show")
+        else:
+            print("Mail relay: NOT configured — nothing will send (docs/EMAIL.md).")
         if a.send:
             print(f"Sent {run(conn)}.")
     finally:

@@ -157,7 +157,10 @@ queue, in order.
    and the defense's rates), fumble recoveries and touchdowns. Into "This
    week", the lineup, the head-to-head and the pickups; a streaming list.
    Measured on the box by `dstfit.py` against each defense's season
-   average.
+   average, once the past seasons' turnovers are filled in (2026-10-28:
+   `python3 -m engine.sources.nflpbp --team-weeks 2022-2025`; the first
+   measurement read 0.0 takeaways a game off seasons stored before they
+   were counted, and dstfit now refuses until they are).
 3. **Your week, as a to-do list** — SHIPPED 2026-10-27. For a linked league, the top of the
    desk says what to do now: lineup fixes (with the points each gains),
    starters who are out or on a bye, questionable starters and when their

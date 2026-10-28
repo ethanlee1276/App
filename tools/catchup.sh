@@ -626,7 +626,7 @@ run FI "Act on an Ask answer: add to slip, track it, watch" 30 <<'SH'
 curl -s https://qellysbook.com/js/ask.js | grep -c 'function askActsHTML('
 SH
 run FJ "The lights on: every league its colour, glow and motion" 30 <<'SH'
-curl -s https://qellysbook.com/css/styles.css | grep -c '@keyframes lightSpin'
+curl -s https://qellysbook.com/css/styles.css | grep -cF ':root[data-league="nba"] { --league: var(--lg-nba); }'
 SH
 run FK "Ask reads your open bets; Ask from the player card" 30 <<'SH'
 curl -s https://qellysbook.com/js/ask.js | grep -c 'function askOpenBets('
@@ -660,6 +660,10 @@ curl -s https://qellysbook.com/js/app.js | grep -c 'function spoiledG('
 SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
+SH
+run HK "The Discord link, the Instagram link, the defenses' turnovers" 30 <<'SH'
+curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('instagram'))"
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A; [print(r[0], r[1], 'accounts, the last on', r[2]) for r in A.connect().execute(\"SELECT code, COUNT(*), date(MAX(created_at), 'unixepoch') FROM code_redemptions GROUP BY code\")]"
 SH
 run HJ "The yearly offer and Gift a month, switched on" 30 <<'SH'
 curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('gifts'))"

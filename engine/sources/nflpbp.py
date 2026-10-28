@@ -392,3 +392,68 @@ def team_week_rows(agg: dict, season: int) -> list[dict]:
             **{k: int(t.get(k) or 0) for k in TENDENCY_KEYS},
         })
     return out
+
+
+# --- whole past seasons ----------------------------------------------------------
+def fill_team_weeks(conn, seasons, load=None) -> dict:
+    """team_weeks for whole seasons from their play-by-play, one season at a
+    time (a season's file is ~100 MB): {season: {"rows", "takeaways"}}, or
+    the reason a season was skipped.
+
+    THE BACKFILL (2026-10-28). The turnovers and the coaching tendencies
+    have been counted since 2026-10-20, but the nightly refresh reads only
+    the current season, so every season before it kept NULL in those
+    columns: the defense fit (dstfit.py) measured the league at zero
+    takeaways a game, and last season's weeks read as none in this
+    season's rates. Everything else in a row comes off the same read, so
+    rewriting it whole changes nothing that was already there."""
+    from .. import db
+    load = load or load_pbp_rows
+    out: dict = {}
+    for season in seasons:
+        try:
+            rows = team_week_rows(aggregate_pbp(load(season)), season)
+        except DataUnavailable as exc:
+            out[season] = str(exc)
+            continue
+        out[season] = {"rows": db.upsert_team_weeks(conn, rows),
+                       "takeaways": sum(int(r.get("takeaways") or 0) for r in rows)}
+    return out
+
+
+def _seasons(spec: str) -> list[int]:
+    """2023-2025, 2024 or 2023,2025 → the seasons."""
+    out: set = set()
+    for part in str(spec).split(","):
+        a, _, b = part.strip().partition("-")
+        if a:
+            out.update(range(int(a), int(b or a) + 1))
+    return sorted(out)
+
+
+def main(argv=None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description="Write team_weeks (turnovers, coaching tendencies, PROE, EPA, "
+                                             "pace) for whole NFL seasons from their play-by-play.")
+    ap.add_argument("--team-weeks", required=True, metavar="SEASONS", help="e.g. 2023-2025, 2024 or 2023,2025")
+    args = ap.parse_args(argv)
+    from .. import db
+    conn = db.connect()
+    try:
+        got = fill_team_weeks(conn, _seasons(args.team_weeks))
+    finally:
+        conn.close()
+    skipped = 0
+    for season, r in got.items():
+        if isinstance(r, str):
+            skipped += 1
+            print(f"  {season}: skipped, {r}")
+        else:
+            per = r["takeaways"] / r["rows"] if r["rows"] else 0.0
+            print(f"  {season}: {r['rows']:,} team weeks, {r['takeaways']:,} takeaways ({per:.2f} a team-game)")
+    return 1 if skipped or not got else 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

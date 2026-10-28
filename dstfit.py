@@ -4,6 +4,12 @@
     python3 dstfit.py --seasons 2024 --weeks 4-10
     python3 dstfit.py --save                 # keep the league rates and the score
 
+Each season replayed needs its turnover counts (team_weeks.takeaways,
+counted since 2026-10-20); a season stored before then is named, nothing is
+measured, and the one command that fills it is printed:
+
+    python3 -m engine.sources.nflpbp --team-weeks 2023-2025
+
 THE QUESTION (engine/dstproj, 2026-10-27). A team defense's fantasy week was
 never projected here: every league desk valued one at zero. The projection
 reads the opponent's implied points off the line, both sides' sack rates and
@@ -122,7 +128,7 @@ def run(conn, seasons: list[int], weeks: list[int]) -> dict:
     lg = dstproj.league_rates()
     out = {"weeks": 0, "n": 0, "pairs_proj": [0, 0], "pairs_base": [0, 0], "rank_proj": [], "rank_base": [],
            "abs_proj": 0.0, "abs_base": 0.0, "resid": [], "sacks": 0.0, "dropbacks": 0.0, "takeaways": 0.0,
-           "team_games": 0}
+           "ta_games": 0, "team_games": 0}
     for season in seasons:
         history: dict = {}                                   # team -> [non-TD points this season]
         for week in range(1, max(weeks) + 1):
@@ -162,11 +168,35 @@ def run(conn, seasons: list[int], weeks: list[int]) -> dict:
                               "AND season=? AND side='def'", (season,)):
             out["sacks"] += float(r[0] or 0)
             out["dropbacks"] += float(r[1] or 0)
-        for r in conn.execute("SELECT SUM(takeaways), COUNT(*) FROM team_weeks WHERE sport='nfl' AND season=?",
-                              (season,)):
+        for r in conn.execute("SELECT SUM(takeaways), COUNT(takeaways), COUNT(*) FROM team_weeks "
+                              "WHERE sport='nfl' AND season=?", (season,)):
             out["takeaways"] += float(r[0] or 0)
-            out["team_games"] += int(r[1] or 0)
+            out["ta_games"] += int(r[1] or 0)
+            out["team_games"] += int(r[2] or 0)
     return out
+
+
+def turnovers_missing(conn, seasons: list[int]) -> list[int]:
+    """The seasons whose team_weeks rows hold no turnover counts. Stored
+    before the columns were (2026-10-20), they read NULL; summed as none,
+    they measured the league at 0.0 takeaways a game and scored every
+    defense's week without its takeaways (the box, 2026-10-28)."""
+    out = []
+    for season in seasons:
+        n, counted, total = conn.execute(
+            "SELECT COUNT(*), COUNT(takeaways), COALESCE(SUM(takeaways), 0) FROM team_weeks "
+            "WHERE sport='nfl' AND season=?", (season,)).fetchone()
+        if n and (counted < n or not total):
+            out.append(season)
+    return out
+
+
+def _span(seasons: list[int]) -> str:
+    """2023-2025 for a run of seasons, else 2023,2025."""
+    s = sorted(seasons)
+    if len(s) > 1 and s == list(range(s[0], s[-1] + 1)):
+        return f"{s[0]}-{s[-1]}"
+    return ",".join(map(str, s))
 
 
 def summary(res: dict, seasons: list[int], weeks: list[int]) -> dict:
@@ -179,7 +209,8 @@ def summary(res: dict, seasons: list[int], weeks: list[int]) -> dict:
         league["sack_rate"] = round(res["sacks"] / res["dropbacks"], 4)
     if res["team_games"]:
         league["dropbacks"] = round(res["dropbacks"] / res["team_games"], 2)
-        league["takeaways"] = round(res["takeaways"] / res["team_games"], 3)
+    if res["ta_games"] and res["takeaways"] > 0:              # none counted is no measurement
+        league["takeaways"] = round(res["takeaways"] / res["ta_games"], 3)
     if sd:
         league["pa_sd"] = round(sd, 2)
     return {
@@ -205,9 +236,16 @@ def main(argv=None) -> int:
     seasons, weeks = _weeks(args.seasons), _weeks(args.weeks)
     conn = connect()
     try:
-        res = run(conn, seasons, weeks)
+        missing = turnovers_missing(conn, seasons)
+        res = None if missing else run(conn, seasons, weeks)
     finally:
         conn.close()
+    if missing:
+        print(f"The turnover counts are missing for {', '.join(map(str, missing))}: those weeks were stored "
+              "before takeaways were counted, so every defense would score without its takeaways and the "
+              "league would read zero a game. Nothing measured, nothing saved. Fill them first:")
+        print(f"    python3 -m engine.sources.nflpbp --team-weeks {_span(missing)}")
+        return 1
     doc = summary(res, seasons, weeks)
     s = doc["score"]
     if not s["n"]:

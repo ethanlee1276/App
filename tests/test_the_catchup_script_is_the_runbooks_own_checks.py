@@ -72,6 +72,27 @@ def test_every_command_is_the_runbooks_own_line():
     assert CHANGED <= used, CHANGED - used
 
 
+def test_every_check_of_a_served_file_finds_its_line_here():
+    """A check that greps a page or stylesheet the site serves must find its
+    line in this checkout. FJ's grepped the #1 pick's moving rim, which the
+    blend (FN) took out on purpose, so it printed 0 on the box, the answer it
+    gives before a version is live (Ethan's catch-up, 2026-10-28). Only a
+    check that is meant to print 0 may, and none is."""
+    zero, ran = [], 0
+    for line in RUNBOOK.read_text().split("\n"):
+        m = re.match(r"^curl -s https://qellysbook\.com/(\S+) \| (grep [^|]*)$", line)
+        local = ROOT / "web" / m.group(1).split("?")[0] if m else None
+        if not (local and local.is_file()):
+            continue
+        r = subprocess.run(["bash", "-c", m.group(2)], input=local.read_text(encoding="utf-8"),
+                           capture_output=True, text=True)
+        ran += 1
+        if r.stdout.strip() in ("", "0"):
+            zero.append(line)
+    assert ran > 100, ran
+    assert not zero, zero
+
+
 def test_nothing_in_it_writes():
     for label, _t, _s, lines in _sections():
         for ln in lines:

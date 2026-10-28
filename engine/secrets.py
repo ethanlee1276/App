@@ -68,6 +68,21 @@ def _read_into_environ(target: Path) -> None:
             os.environ[name] = value
 
 
+def system_env_hidden() -> bool:
+    """True when the box's settings file is there but this user cannot read
+    it. A tool run as the service's user (`sudo -u qellys`) then sees none
+    of the settings the service itself has from systemd, so "not set" is
+    something it cannot know, and must not say (the box, 2026-10-28:
+    `engine.trialnote` printed the mail relay NOT configured)."""
+    try:
+        _SYSTEM_ENV_FILE.stat()
+    except PermissionError:
+        return True                                        # a directory only root may enter
+    except OSError:
+        return False                                       # no file: nothing hidden
+    return not os.access(_SYSTEM_ENV_FILE, os.R_OK)
+
+
 def load_local_secrets(path: Path | None = None) -> None:
     """Read ``secrets.local`` into ``os.environ`` (once). Missing file = no-op.
 

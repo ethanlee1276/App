@@ -5376,6 +5376,10 @@ that"). Every command runs on the box (`ssh` in first).
 4. On your phone: swipe Qellys up out of the app switcher, open it again,
    and once more if it still looks old.
 
+5. After that run: step HK (the new Discord and Instagram links, the
+   defenses' turnovers filled in and measured again, the mail check, and
+   the free-year code).
+
 Skipped on purpose: phone sign-up (EC: it needs a paid Twilio account, and
 email sign-up works as it is) and the site's own account (ES: set up on
 2026-10-07; step 3's ES line confirms it). An optional tidy-up from EC,
@@ -5485,8 +5489,9 @@ prints:
 cd /srv/qellys && sudo -u qellys python3 dstfit.py
 ```
 
-If it says the projection is ahead, keep its league rates (this writes one
-file, `data/models/dst_fit.json`):
+If it says the turnover counts are missing, fill them first with step
+HK's command, then run it again. If it says the projection is ahead, keep
+its league rates (this writes one file, `data/models/dst_fit.json`):
 
 ```
 cd /srv/qellys && sudo -u qellys python3 dstfit.py --save
@@ -5909,11 +5914,14 @@ brand and the one interface colour; around it:
   it.
 
 Nothing to set. Phones keep their speed: nothing blurs, and "reduce motion"
-on your phone turns all of the movement off. Read-only check, any time. It
-prints `1` once this version is live:
+on your phone turns all of the movement off. (Since FN, the blend, the #1
+pick's rim is a still gold one and the four doors share the gold; the
+league colours stayed.) Read-only check, any time. It prints `1` once this
+version is live (it read the moving rim until 2026-10-28, and printed `0`
+after the blend took it out):
 
 ```
-curl -s https://qellysbook.com/css/styles.css | grep -c '@keyframes lightSpin'
+curl -s https://qellysbook.com/css/styles.css | grep -cF ':root[data-league="nba"] { --league: var(--lg-nba); }'
 ```
 
 On your phone: tap through the leagues on the top row and watch the colour
@@ -7553,6 +7561,128 @@ the setup script, which the catch-up never runs):
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HJ 2>&1 | tee /tmp/hj.txt
+```
+
+**HK. The Discord link, the Instagram link, the defenses' turnovers**
+(step 271; Ethan, 2026-10-28: "the discord server link on the site is
+expired and 2, my instagram name changes so the instagram button doesnt
+work either"). Neither link is in the code: each is one setting on the
+box, so each fix is a new link pasted at a prompt, and one restart for
+both. Neither goes in this repository, which is public on GitHub: the
+invite is for members only.
+
+The Discord invite. In Discord (easiest on a computer), signed in as
+the server's owner: the server's name → **Invite people** → **Edit invite
+link** → *Expire after*: **Never**, *Max number of uses*: **No limit** →
+**Generate a new link**, and copy it (it starts `https://discord.gg/`). An
+invite stops at its expiry (seven days unless it says Never) or at its
+most uses, or when somebody revokes it; Never and No limit keep this one
+open. On the box, paste it when it asks:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_DISCORD_INVITE
+```
+
+The Instagram button. In Instagram, your profile → **Share profile** →
+**Copy link**, and keep it only up to the new name (cut a `?` and all
+after it), so it reads `https://www.instagram.com/` and the name. Paste
+it when it asks:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_INSTAGRAM
+```
+
+One restart for both:
+
+```
+sudo systemctl restart qellys
+```
+
+The checks: both lines say `set`, and the last prints the new Instagram
+link:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh --show | grep -E '^  (QB_DISCORD_INVITE|QB_INSTAGRAM) '
+curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('instagram'))"
+```
+
+On the site, signed in as yourself: More → The Discord → **Join the
+Discord** opens the new invite, and the Instagram button opens the new
+profile. Only members are handed the invite; a free account sees the
+Instagram and never the invite.
+
+The defenses' turnovers, filled in once. EZ's measurement printed the
+league at `"takeaways": 0.0`. The turnovers have been counted since
+2026-10-20, but only for the season being played, so 2022–2025 hold none:
+the fit scored every defense without its takeaways, and this season's
+projections read last season's weeks as games without one (fixed in this
+push: a week never counted is left out). So no `dstfit.py --save` before
+this (it now refuses, and names this command). The fill reads each
+season's free nflverse play-by-play (about 100 MB a season: the first line
+shows the free disk, and it wants a gigabyte) and rewrites only those
+seasons' team-week rows, a season at a time, a minute or two each:
+
+```
+df -h /srv/qellys | tail -1
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.sources.nflpbp --team-weeks 2022-2025
+```
+
+Each season prints a line like `2024: 570 team weeks, 700 takeaways (1.23
+a team-game)`. If it stops with `Killed` (the box ran short of memory),
+give it one season at a time instead (`--team-weeks 2022`, then `2023`,
+and so on). Then the measurement again, read-only; paste what it prints,
+and I'll say whether to keep it (EZ's `--save`):
+
+```
+cd /srv/qellys && sudo -u qellys python3 dstfit.py
+```
+
+The mail line. EO's check printed `Mail relay: NOT configured`. That tool
+runs as the site's user, which cannot read the settings file (only root
+can), so it could not know; it now says that instead. Names only, never a
+value: QB_MAIL_FROM and either the three QB_SMTP_ lines (Gmail) or
+QB_RESEND_KEY should say `set`:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh --show | grep -E '^  (QB_SMTP_HOST|QB_SMTP_USER|QB_SMTP_PASS|QB_MAIL_FROM|QB_RESEND_KEY) '
+```
+
+And one real email, to yourself (your address in place of
+`you@example.com`):
+
+```
+cd /srv/qellys && sudo python3 -m engine.mailer test you@example.com
+```
+
+The free-year code is public. The redemption code you asked for on
+2026-08-20 (twelve months free, up to 100 accounts; the `QB_CODES`
+setting) sat in this repository's docs, deploy script and tests, and the
+repository is public, so anybody reading it could take a free year. This
+push takes it out of the files; it stays in the history, so only retiring
+it stops it. How many accounts used each code, and the last day one did
+(read-only):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A; [print(r[0], r[1], 'accounts, the last on', r[2]) for r in A.connect().execute(\"SELECT code, COUNT(*), date(MAX(created_at), 'unixepoch') FROM code_redemptions GROUP BY code\")]"
+```
+
+Your call. To retire it: whoever redeemed it keeps their months (each
+grant is a date in the database); only new redemptions stop. With no other
+code to keep, remove the setting, then restart. (To keep another code,
+set the list again without this one instead, `CODE:months:uses` with
+commas between, pasted at the prompt of `sudo ./deploy/setenv.sh
+QB_CODES`.)
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh --unset QB_CODES
+sudo systemctl restart qellys
+```
+
+The read-only checks in one go (the Instagram link and the codes; the
+settings lines need the setup script, which the catch-up never runs):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HK 2>&1 | tee /tmp/hk.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

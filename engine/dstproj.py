@@ -151,9 +151,13 @@ def saved_fit() -> dict:
 
 
 def league_rates() -> dict:
-    """LEAGUE, with the box's measured values where `dstfit.py --save` kept them."""
+    """LEAGUE, with the box's measured values where `dstfit.py --save` kept
+    them. Only a positive one: a league rate of zero is a measurement of
+    empty data (the past seasons' turnovers before they were counted,
+    2026-10-28), never a league, and the takeaways divide by it."""
     fit = (saved_fit().get("league") or {})
-    return {**LEAGUE, **{k: float(v) for k, v in fit.items() if k in LEAGUE and isinstance(v, (int, float))}}
+    return {**LEAGUE, **{k: float(v) for k, v in fit.items()
+                         if k in LEAGUE and isinstance(v, (int, float)) and v > 0}}
 
 
 def implied(game: dict, team: str, league: dict | None = None) -> float:
@@ -245,8 +249,13 @@ def team_rates(conn, season: int, before_week: int | None = None) -> dict:
     except Exception:                                      # noqa: BLE001 — a box without the table
         pass
     try:
+        # Only the weeks whose turnovers were counted (2026-10-28). The rows
+        # stored before the columns were (2026-10-20) hold NULL, and read as
+        # games without a takeaway they pulled every defense's rate down
+        # by last season's weight, until `python3 -m engine.sources.nflpbp
+        # --team-weeks` fills them.
         for r in conn.execute("SELECT team, takeaways, giveaways FROM team_weeks WHERE sport='nfl' "
-                              "AND season=? AND period < ?", (int(season), cut)):
+                              "AND season=? AND period < ? AND takeaways IS NOT NULL", (int(season), cut)):
             s = slot(r[0])
             s["takeaways"] += float(r[1] or 0)
             s["giveaways"] += float(r[2] or 0)
