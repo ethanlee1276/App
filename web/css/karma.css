@@ -64,7 +64,8 @@
 
 /* ── a level crossed ───────────────────────────────────────────────────── */
 .kr-up { position: fixed; inset: 0; z-index: 96; display: grid; place-items: center; padding: 16px;
-  background: color-mix(in oklab, var(--bg) 72%, transparent); animation: krIn .25s ease-out both; }
+  background: color-mix(in oklab, var(--bg) 72%, transparent); animation: krIn .25s ease-out both;
+  bottom: calc(-1 * var(--vgap)); }   /* to the screen's foot (styles.css, "the screen's last strip") */
 .kr-up-card { width: min(360px, 100%); display: grid; justify-items: center; gap: 6px; padding: 26px 22px 20px;
   border-radius: var(--radius-lg); background: var(--panel); text-align: center;
   box-shadow: var(--glow-lift), var(--glow-gold); }

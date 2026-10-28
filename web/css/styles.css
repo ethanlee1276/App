@@ -471,6 +471,9 @@
 
   /* ---- LAYOUT (formerly a third :root beside the top bar's rules). ---- */
   --topbar-h: calc(64px + env(safe-area-inset-top));
+  /* How far short of the screen iOS opened an iPhone app's page (boot.js
+     measures it; "the screen's last strip" below). 0 anywhere else. */
+  --vgap: 0px;
   /* The shell's two side columns. Both are written in three places —
      the two-column shell, the three-column shell, and the breakpoint
      where the rail drops below the content — and a shell whose columns
@@ -3820,6 +3823,13 @@ body.pk-open { overflow: hidden; }
    backdrop and card, three steps deep. */
 #tour-overlay { position: fixed; inset: 0; z-index: 80; display: flex;
   background: rgba(0, 0, 0, .55); align-items: center; justify-content: center; padding: 16px; }
+/* The screen's last strip (--vgap; the note after the iOS capsule tab bar):
+   these sheets reach the bottom of a screen iOS opened short, and the slip
+   is measured from the real edge. */
+#ffd-overlay, #pk-overlay, #tour-overlay { bottom: calc(-1 * var(--vgap)); }
+@media (max-width: 720px) {
+  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--vgap)); }
+}
 .tour-card { position: relative; width: 100%; max-width: 440px; background: var(--panel);
   border: var(--hairline) solid transparent; border-radius: var(--radius-lg); padding: 22px 20px 18px; }
 .tour-step { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .04em; text-transform: uppercase; }
@@ -10547,6 +10557,23 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   html.store-ios body.has-tray, html.ios-home body.has-tray { padding-bottom: calc(156px + env(safe-area-inset-bottom)); }
   html.store-ios .riding-tray, html.ios-home .riding-tray { bottom: calc(98px + env(safe-area-inset-bottom, 0px)); }
 }
+/* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from his iPhone: "Fix this
+   black bar"). iOS 26 can open a Home Screen app with its page a status
+   bar shorter than the screen until it settles (62pt on his phone), and
+   everything pinned to the bottom stopped that far up: the menu and its
+   shade ended over a bare strip, and the tab bar floated a status bar too
+   high. boot.js measures the shortfall as --vgap (0 anywhere else, so
+   nothing here moves), and the layers that reach the bottom edge reach
+   down by it; the ones that float above it are measured from the real
+   edge. A sheet keeps its own padding, so its last row lands where it
+   always did. */
+@media (max-width: 760px) {
+  .more-scrim, .more-sheet { bottom: calc(-1 * var(--vgap)); }
+  html.store-ios .tabbar, html.ios-home .tabbar { bottom: calc(8px + env(safe-area-inset-bottom) - var(--vgap)); }
+  html.store-ios .riding-tray, html.ios-home .riding-tray {
+    bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--vgap)); }
+}
+.betit-sheet { bottom: calc(-1 * var(--vgap)); }
 @media (pointer: coarse) {
   .more-sheet, .betit-panel { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
 }

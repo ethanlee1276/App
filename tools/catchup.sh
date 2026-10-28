@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HA "The black bar under the menu on the iPhone" 30 <<'SH'
+curl -s https://qellysbook.com/js/boot.js | grep -c 'setProperty("--vgap"'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'more-sheet { bottom: calc(-1'
+SH
 run GZ "Find people, round two: Recent and who you know that follows them" 30 <<'SH'
 curl -s https://qellysbook.com/js/social.js | grep -c 'function mutualHTML(m)'
 SH

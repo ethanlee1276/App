@@ -58,6 +58,47 @@ try {
   }
 } catch (e) {}
 
+/* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from his iPhone: "Fix this
+   black bar": the menu and its shade stopping 62pt above the bottom of the
+   screen over a bare strip). iOS 26 can open a Home Screen app with its
+   page a status bar shorter than the screen until it settles (innerHeight
+   = the screen less the status bar), and everything pinned to the bottom
+   stops that far up. On an iPhone, where the app always fills the screen,
+   the shortfall is measured and handed to styles.css as --vgap, which the
+   layers pinned to the bottom reach down by. It is measured again on every
+   resize, and once iOS catches up it is gone; while one stands it is also
+   checked every second, so a settle that fires no event still takes it
+   away. A shortfall over 100px is no status bar (the keyboard, a pinch
+   zoom) and is left alone. The iOS build
+   is known by its own user agent here, not the remembered QB_STORE_APP: a
+   Safari tab that once opened ?app=ios remembers that too, and a tab's own
+   bars are no shortfall. */
+try {
+  (function () {
+    var ua = navigator.userAgent || "";
+    if (!/iPhone/.test(ua) || !(navigator.standalone === true || /QellysApp\/[\d.]+ \(ios\)/.test(ua))) return;
+    var root = document.documentElement, last = -1, poll = 0;
+    function vgap() {
+      var s = window.screen;
+      var full = innerWidth < innerHeight ? Math.max(s.width, s.height) : Math.min(s.width, s.height);
+      var gap = Math.round(full - innerHeight);
+      if (!(gap > 0 && gap <= 100)) gap = 0;
+      if (gap === last) return;
+      last = gap;
+      if (gap) root.style.setProperty("--vgap", gap + "px");
+      else root.style.removeProperty("--vgap");
+      clearInterval(poll);
+      if (gap) poll = setInterval(vgap, 1000);
+    }
+    vgap();
+    addEventListener("resize", vgap);
+    addEventListener("orientationchange", vgap);
+    addEventListener("pageshow", vgap);
+    addEventListener("load", vgap);
+    if (window.visualViewport) visualViewport.addEventListener("resize", vgap);
+  })();
+} catch (e) {}
+
 /* The net under the art rule. visuals.js asks for no league logo or player
    photo in the app, but a picture can arrive by a road it does not cover
    (a board's own image field, a chart's photo). Any <img> from another

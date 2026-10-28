@@ -17,6 +17,12 @@
   overflow-y: auto; overscroll-behavior: contain;
   background: color-mix(in oklab, var(--bg) 78%, transparent); backdrop-filter: blur(6px); }
 #cc-overlay.open { display: flex; }
+/* To the screen's foot on an iPhone app iOS opened short (styles.css). The
+   one room sheet with a 0 of its own: the chart is also drawn without the
+   site's sheet (tests/test_every_sport_in_the_frame_of_the_renders.py),
+   where an unset token undid the inset and the overlay grew past the
+   screen. */
+#cc-overlay { bottom: calc(-1 * var(--vgap, 0px)); }
 .cc { position: relative; width: 100%; max-width: 880px; padding: 18px 18px 20px; border-radius: var(--radius-lg);
   border: var(--hairline) solid transparent; background: var(--panel); color: var(--text); }
 /* It floats, so it is glass (styles.css "GLASS FOR WHAT FLOATS"); solid when less transparency is asked for. */

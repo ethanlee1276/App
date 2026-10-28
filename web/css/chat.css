@@ -69,6 +69,9 @@ body.gch-on { overflow: hidden; }
 /* Only where the game's own layout still fits beside it: narrower, the room
    lies over the right column instead of squeezing the scoreboard. */
 @media (min-width: 1440px) { body.gch-on { padding-right: 400px; } }
+/* An iPhone app iOS opened short (styles.css, "the screen's last strip"):
+   the room still reaches the bottom of the screen and its box sits there. */
+.gch-sheet { bottom: calc(-1 * var(--vgap)); }
 
 .gch-head { padding: 8px 12px 10px; border-bottom: var(--hairline) solid var(--border-soft);
   background: var(--glass-sheen), var(--glass-tint-strong); box-shadow: var(--glass-rim-soft);
