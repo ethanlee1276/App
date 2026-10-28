@@ -11,6 +11,7 @@ Run directly: `python3 tests/test_by_game_ranks_highest_to_lowest.py`
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -51,8 +52,9 @@ def test_each_game_groups_by_tier_then_ranks_by_the_ring():
     order = [seg.split("]")[0] for seg in out.split("[")[1:]]
     assert order == ["Loveland rec", "Burden rec", "Burden yds", "Swift TD",
                      "Swift yds", "Raymond rec", "Loveland yds"], order
-    labels = [s.split("<")[0].strip() for s in out.split('class="mp-tier">')[1:]]
+    labels = [m.group(2).strip() for m in re.finditer(r'class="mp-tier tier-([a-z]+)">([^<]*)<', out)]
     assert labels == ["Top picks", "Strong", "Worth a look"], labels
+    assert re.findall(r'class="mp-tier tier-([a-z]+)"', out) == ["top", "strong", "look"], "each label wears its tier"
 
 
 def test_the_default_is_the_hit_rate_and_the_label_is_styled():

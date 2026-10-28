@@ -11172,7 +11172,7 @@ function obTierSections(rows, opts = {}) {
     const body = `<div class="ob-cards">${rs.map((r, i) => obCardHTML(r, i + 1)).join("")}</div>`;
     const head = `<div class="ob-sec-head"><h2 class="ob-sec-title">${title} <span class="ob-count">${rs.length}</span></h2>
       <p class="ob-sec-sub">${sub}</p>${first && first[0] === t ? obSortHTML() : ""}</div>`;
-    return `<section class="likely-shelf ob-tier" id="ob-${t}">${head}${body}</section>`;
+    return `<section class="likely-shelf ob-tier tier-${t}" id="ob-${t}">${head}${body}</section>`;
   }).join("");
 }
 function obByGameHTML(rows) {
@@ -11184,12 +11184,12 @@ function obByGameHTML(rows) {
   // Worth a look, each under its name and highest hit rate first — a
   // Worth-a-look 76% no longer sits between two Top picks unlabelled.
   const tiered = (rs) => {
-    const groups = OB_TIERS.map(([t, title]) => [title, obSorted(rs.filter((r) => r.tier === t))])
-      .filter(([, g]) => g.length);
+    const groups = OB_TIERS.map(([t, title]) => [t, title, obSorted(rs.filter((r) => r.tier === t))])
+      .filter(([, , g]) => g.length);
     const loose = obSorted(rs.filter((r) => !OB_TIERS.some(([t]) => t === r.tier)));
-    if (loose.length) groups.push(["", loose]);
-    if (groups.length === 1) return `<div class="ob-cards">${groups[0][1].map((r) => obCardHTML(r, 0)).join("")}</div>`;
-    return groups.map(([title, g]) => `${title ? `<div class="mp-tier">${escapeHtml(title)} <span class="ob-count">${g.length}</span></div>` : ""}
+    if (loose.length) groups.push(["", "", loose]);
+    if (groups.length === 1) return `<div class="ob-cards">${groups[0][2].map((r) => obCardHTML(r, 0)).join("")}</div>`;
+    return groups.map(([t, title, g]) => `${title ? `<div class="mp-tier tier-${t}">${escapeHtml(title)} <span class="ob-count">${g.length}</span></div>` : ""}
       <div class="ob-cards">${g.map((r) => obCardHTML(r, 0)).join("")}</div>`).join("");
   };
   const block = (k, rs) => {

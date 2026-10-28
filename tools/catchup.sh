@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GC "Each Most Likely tier in its colour" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c -- '--tier: var(--brand); }'
+SH
 run GB "What you circled on the Home: the tile, the pick numbers, the iPhone bar" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -c -- '--mask-teams-rise: linear-gradient'
 SH
