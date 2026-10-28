@@ -24,7 +24,8 @@ In Xcode:
 1. Signing & Capabilities → your team (needs the Apple Developer Program).
 2. **+ Capability → Push Notifications.** And Background Modes → Remote notifications.
 3. Bundle identifier `com.qellysbook.app` (the Play app's package id too).
-4. App icon: `web/icon-512.png` scaled to 1024×1024 with no transparency.
+4. App icon: `brand/appicon-1024.png` (1024×1024, no transparency: Ethan's icon
+   fitted to the square by `tools/appiconfit.py`). Drag it into Assets → AppIcon.
 5. Product → Archive → Distribute → App Store Connect.
 
 ## The Apple key, so the box can send

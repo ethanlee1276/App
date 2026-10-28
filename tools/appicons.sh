@@ -1,54 +1,45 @@
 #!/usr/bin/env bash
-# Rebuild the home-screen icons from Ethan's artwork.
+# Rebuild the home-screen icons and the site logo from Ethan's artwork.
 #
 #   ./tools/appicons.sh
 #
+# TWO SOURCES SINCE 2026-10-28, committed in brand/ so nothing has to come
+# back out of a chat log:
+#   * brand/appicon-2026-10-28.png, the app icon he sent that day ("here is
+#     the new app icon too use. Make it fit right."): tools/appiconfit.py
+#     fits its tile to the square, redraws its gold rim inside the shape iOS
+#     cuts icons to, and writes the 1024 master (brand/appicon-1024.png, the
+#     iOS build's icon), the 180, 192 and 512 icons and the maskable one;
+#   * brand/appicon-1254.png, the first artwork (2026-08-22, "Use the actual
+#     image, don't make your own"), which the header logo is still cut from
+#     (below).
+# `make_icon.py`, which DRAWS a flat Q mark, is not what ships and must not
+# be run over these.
+#
 # THE HEADER/TAB CROP, recorded here because this script owns it and a
-# test reads it back. The home-screen icon is the WHOLE artwork — the
-# wordmark belongs on a phone tile — but the site logo sits beside
-# `.brand-words`, which already prints the name, so it is cropped to the
-# mark alone. Ethan, 2026-08-23: "take away where it says qellys book
-# below it".
+# test reads it back. The site logo sits beside `.brand-words`, which
+# already prints the name, so it is cropped to the mark alone. Ethan,
+# 2026-08-23: "take away where it says qellys book below it".
 #
 # 825 is the middle of the empty band under the QB: rows 804-846 of the
 # source carry no ink at all, which is why the cut can be a constant
 # rather than a judgement.
 QB_CROP="214,0,1039,825"
 
-# THE SOURCE IS `brand/appicon-1254.png`, committed beside these so the
-# icons can be rebuilt without going back to a chat log for the file.
-# Ethan, 2026-08-22: "Use the actual image, don't make your own" — so
-# `make_icon.py`, which DRAWS a flat Q mark, is no longer what ships and
-# must not be run over these.
-#
-# Needs ffmpeg, which is why this is a hand-run tool and not part of the
+# Needs Pillow, which is why this is a hand-run tool and not part of the
 # test suite: the suite is standard-library only and runs on a box that
 # has no image libraries at all. The outputs are committed instead.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-SRC="brand/appicon-1254.png"
-[ -f "$SRC" ] || { echo "missing $SRC"; exit 1; }
-command -v ffmpeg >/dev/null || { echo "needs ffmpeg"; exit 1; }
-
-for spec in "192:web/icon-192.png" "512:web/icon-512.png" \
-            "180:web/apple-touch-icon.png"; do
-  n=${spec%%:*}; out=${spec##*:}
-  ffmpeg -y -hide_banner -loglevel error -i "$SRC" \
-    -vf "scale=${n}:${n}:flags=lanczos" -pix_fmt rgb24 "$out"
-  echo "  ${n}x${n}  $out"
+for f in brand/appicon-2026-10-28.png brand/appicon-1254.png; do
+  [ -f "$f" ] || { echo "missing $f"; exit 1; }
 done
 
-# MASKABLE IS A DIFFERENT PICTURE, not a different size. Android crops it
-# to a circle or squircle and keeps only the central 80%, so the
-# full-bleed artwork would lose the crown off the top and BOOK off the
-# bottom. Inset into the safe zone, on the black the artwork already has.
-ffmpeg -y -hide_banner -loglevel error -i "$SRC" \
-  -vf "scale=400:400:flags=lanczos,pad=512:512:56:56:black" -pix_fmt rgb24 \
-  web/icon-maskable-512.png
-echo "  512x512  web/icon-maskable-512.png  (inset for Android's mask)"
+python3 tools/appiconfit.py
+
 # --- the site logo, which is a CUT rather than a scale -----------------
-# The home-screen tile above is the whole artwork. The header logo is not,
-# twice over:
+# Cut from the first artwork, the whole of which was the home-screen tile
+# until 2026-10-28. The header logo was never that tile, twice over:
 #
 #   * it sits beside `.brand-words`, which already prints "QELLYS BOOK",
 #     so an icon carrying the words prints the name twice at two sizes

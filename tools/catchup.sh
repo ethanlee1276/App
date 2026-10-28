@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HM "The new app icon, fitted to the tile" 30 <<'SH'
+curl -s https://qellysbook.com/apple-touch-icon.png | wc -c
+SH
 run HL "The iPhone app's tab bar sits lower" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -cF 'html.store-ios, html.ios-home { --tb-drop: min(20px, env(safe-area-inset-bottom, 0px)); }'
 SH

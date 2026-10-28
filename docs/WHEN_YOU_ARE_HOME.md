@@ -7712,6 +7712,44 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HL 2>&1 | tee /tmp/hl.txt
 ```
 
+**HM. The new app icon, fitted to the tile** (step 273; your artwork:
+"here is the new app icon too use. Make it fit right."). Your file is a
+picture of an icon: the dark tile with its gold rim, floating on a darker
+backdrop with a margin all round, so used whole a phone would show a small
+tile inside its own. Fitted (`tools/appiconfit.py`, your file kept as
+`brand/appicon-2026-10-28.png`):
+
+- the tile fills the icon edge to edge: no margin, no second tile;
+- the gold rim is drawn again in its own colours (bright along the top,
+  bronze down the sides) just inside the shape an iPhone cuts icons to, so
+  the corners never clip it, and a hair wider than in the picture so it
+  still shows at the phone's size;
+- Android's round icon gets the tile without the rim (a circle would cut
+  it into four arcs), with the crown and the QB inside its circle;
+- the App Store build's icon is `brand/appicon-1024.png`
+  (deploy/ios/README.md);
+- the logo at the top of the site is unchanged.
+
+Nothing to set: the updater picks it up within five minutes. Read-only,
+any time. It prints `35467` (the new icon's size in bytes) once this
+version is live:
+
+```
+curl -s https://qellysbook.com/apple-touch-icon.png | wc -c
+```
+
+On your phone: an icon already on the Home Screen keeps the picture it
+was saved with (iOS never refreshes it). To get the new one, press and hold
+the Qellys icon → **Remove App** → **Delete from Home Screen**, then open
+qellysbook.com in Safari → **Share** → **Add to Home Screen**. You may have
+to sign in again in the new one.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HM 2>&1 | tee /tmp/hm.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 
