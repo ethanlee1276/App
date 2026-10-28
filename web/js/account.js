@@ -911,6 +911,7 @@ function acctSignInHTML() {
         : `Open the site at its <b>https</b> address and sign in there.`}</div>` : ""}
     ${acctFieldsHTML("login")}
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
+    ${pkDoorHTML()}
     ${phoneDoorHTML("login")}
     <div class="acct-alt">
       <span>Don’t have an account?</span>
@@ -2347,6 +2348,157 @@ if (typeof window !== "undefined" && !window._giftBound) {
   });
 }
 
+/* PASSKEYS (2026-10-28, engine/passkeys; docs/IDEAS.md 8). Face ID, Touch ID
+   or the phone's own lock instead of a password or a texted code: added in
+   Settings once signed in, used from the sign-in card. Only where the
+   browser can (WebAuthn), and not inside the iPhone app, whose web view
+   needs the app's own passkey entitlement first (runbook GA). The server
+   checks every answer; this only carries bytes between it and the device. */
+const pkOK = () => typeof window !== "undefined" && !!window.PublicKeyCredential
+  && !!(navigator.credentials && navigator.credentials.create)
+  && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const pkBytes = (s) => Uint8Array.from(atob(String(s).replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+const pkB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+let _pkList = null;
+async function pkPost(step, body) {
+  const r = await fetch(`/api/passkey/${step}`, { method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || "Couldn’t reach the server — try again.");
+  return out;
+}
+// THE CHALLENGE IS FETCHED BEFORE THE TAP. Safari opens the passkey prompt
+// only close behind a tap, and a round trip to the box in between can cost
+// it; so the screen asks for the next ceremony's options as it draws, and
+// the tap goes straight to the device. Each is used once, and only while
+// well inside the box's three minutes; otherwise the tap fetches its own.
+const PK_NONE = { kind: "", at: 0, p: null };
+let _pkPre = PK_NONE;
+function pkPrefetch(kind) {
+  if (_pkPre.kind === kind && Date.now() - _pkPre.at < 120000) return;
+  const pre = { kind, at: Date.now(), p: pkPost(`${kind}-options`) };
+  _pkPre = pre;
+  pre.p.catch(() => { if (_pkPre === pre) _pkPre = PK_NONE; });
+}
+// The options fetched ahead (or still on their way), once; else its own.
+function pkOptions(kind) {
+  const pre = _pkPre;
+  _pkPre = PK_NONE;
+  return pre.kind === kind && Date.now() - pre.at < 120000 ? pre.p.catch(() => pkPost(`${kind}-options`)) : pkPost(`${kind}-options`);
+}
+// What the device is, to name the passkey it makes ("iPhone", "Mac").
+function pkDeviceName() {
+  const ua = navigator.userAgent || "";
+  return /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android phone"
+    : /Macintosh/.test(ua) ? (navigator.maxTouchPoints > 1 ? "iPad" : "Mac") : /Windows/.test(ua) ? "Windows PC"
+    : /CrOS/.test(ua) ? "Chromebook" : /Linux/.test(ua) ? "Linux computer" : "Passkey";
+}
+// What unlocks a passkey on this device, in its maker's words.
+function pkLock() {
+  const d = pkDeviceName();
+  return d === "iPhone" || d === "iPad" || d === "Mac" ? ["Face ID · Touch ID", "Face ID or Touch ID"]
+    : d === "Android phone" ? ["Fingerprint · face", "your fingerprint or face"]
+    : d === "Windows PC" ? ["Windows Hello", "Windows Hello"] : ["No password", "this device’s lock"];
+}
+// A refusal from the device, in a sentence: cancelled is not an error.
+function pkSay(err) {
+  const n = err && err.name;
+  if (n === "NotAllowedError" || n === "AbortError") return "Cancelled — nothing changed.";
+  if (n === "InvalidStateError") return "This device already has a passkey for this account.";
+  if (n === "SecurityError") return "Passkeys need the site’s own https address.";
+  if (n === "NotSupportedError") return "This device can’t make a passkey.";
+  return (err && err.message) || "That didn’t work — try again.";
+}
+function pkHTML() {
+  if (_pkList === null) return `<p class="set-foot">Loading…</p>`;
+  const when = (t) => new Date(t * 1000).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  const rows = _pkList.map((k) => setItem({ ico: "shield", tone: "gold", title: escapeHtml(k.name),
+    sub: escapeHtml(`Added ${when(k.made)}${k.used ? ` · last used ${when(k.used)}` : ""}`),
+    end: `<button type="button" class="set-val pk-rm" data-pk="remove" data-id="${escapeAttr(k.id)}" aria-label="${escapeAttr(`Remove ${k.name}`)}">Remove</button>`,
+    tag: "div" }));
+  return (rows.length ? setGroup("On this account", rows) : "")
+    + setGroup("", [setItem({ ico: "shield", tone: "gold", title: "Add a passkey", sub: `Use ${pkLock()[1]} to sign in`,
+                              chev: true, attrs: 'data-pk="add"' })],
+      "A passkey stays on your device; this site keeps only the half that can check it. Your face and fingerprint never leave the phone.")
+    + `<p class="set-foot pk-note" role="status"></p>`;
+}
+async function pkFill() {
+  const box = document.getElementById("set-pk");
+  if (!box) return;
+  try {
+    const r = await fetch("/api/passkey/list", { credentials: "same-origin", cache: "no-store" });
+    _pkList = r.ok ? ((await r.json()).passkeys || []) : [];
+  } catch (e) { _pkList = []; }
+  if (box.isConnected) box.innerHTML = pkHTML();
+  pkPrefetch("register");
+}
+async function pkAdd() {
+  const o = await pkOptions("register");
+  const cred = await navigator.credentials.create({ publicKey: { ...o, challenge: pkBytes(o.challenge),
+    user: { ...o.user, id: pkBytes(o.user.id) },
+    excludeCredentials: (o.excludeCredentials || []).map((c) => ({ ...c, id: pkBytes(c.id) })) } });
+  const r = cred.response;
+  const out = await pkPost("register", { clientDataJSON: pkB64(r.clientDataJSON),
+    attestationObject: pkB64(r.attestationObject), name: pkDeviceName() });
+  _pkList = out.passkeys || _pkList;
+}
+// Signing in: the device lists this site's passkeys, the person picks one.
+async function pkSignIn(card) {
+  const say = (t) => { const n = card.querySelector(".acct-note"); if (n) n.textContent = t; };
+  say("Waiting for your passkey…");
+  try {
+    const o = await pkOptions("login");
+    const cred = await navigator.credentials.get({ publicKey: { ...o, challenge: pkBytes(o.challenge), allowCredentials: [] } });
+    const r = cred.response;
+    say("Signing in…");
+    const out = await pkPost("login", { id: cred.id, rawId: pkB64(cred.rawId), clientDataJSON: pkB64(r.clientDataJSON),
+      authenticatorData: pkB64(r.authenticatorData), signature: pkB64(r.signature),
+      userHandle: r.userHandle ? pkB64(r.userHandle) : "" });
+    // Signed in: the same steps a phone sign-in takes (phoneGo).
+    _acctUser = { signed_in: true, email: out.email, phone: out.phone };
+    if (typeof pushRelink === "function") pushRelink();
+    welcomeDone();
+    if (typeof a2hsArm === "function") a2hsArm();
+    if (typeof acceptPendingInvite === "function") acceptPendingInvite();
+    try { await acctSync(); } catch (e) {}
+    if (typeof renderGreeting === "function") renderGreeting();
+    return acctLandAfterAuth();
+  } catch (e) { say(pkSay(e)); pkPrefetch("login"); }
+}
+function pkDoorHTML() {
+  if (!pkOK()) return "";
+  setTimeout(() => pkPrefetch("login"), 0);
+  return `<button type="button" class="acct-forgot ph-door pk-door" data-pk="signin">Sign in with a passkey</button>`;
+}
+if (typeof window !== "undefined" && !window._pkBound) {
+  window._pkBound = true;
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("[data-pk]");
+    if (!b || b.disabled) return;
+    const act = b.dataset.pk;
+    if (act === "signin") {
+      const card = b.closest(".card");
+      if (!card) return;
+      b.disabled = true;
+      try { await pkSignIn(card); } finally { b.disabled = false; }
+      return;
+    }
+    const note = (t) => { const n = document.querySelector(".pk-note"); if (n) n.textContent = t; };
+    const paint = (t) => { const box = document.getElementById("set-pk"); if (box) box.innerHTML = pkHTML(); note(t); pkPrefetch("register"); };
+    b.disabled = true;
+    try {
+      if (act === "add") {
+        note("Follow your device’s prompt…");
+        await pkAdd();
+        paint("Added. Next time, sign in with it — no password.");
+      } else if (act === "remove") {
+        _pkList = (await pkPost("remove", { id: b.dataset.id })).passkeys || [];
+        paint("Removed. That device’s passkey no longer signs in here; delete it from the device too.");
+      }
+    } catch (err) { b.disabled = false; note(pkSay(err)); if (act === "add") pkPrefetch("register"); }
+  });
+}
+
 /* The code's own screen (Settings › Redeem a code), redrawn from a fresh
    status: a code just applied shows what it covers. */
 function codeScreenRedraw(s) {
@@ -3323,6 +3475,8 @@ function setListHTML() {
         : [setItem({ ico: "mail", tone: "gold", title: "Email", val: escapeHtml(u.email) }),
            setItem({ ico: "lock", tone: "gold", title: "Password", val: "Change", chev: true,
                      attrs: 'data-set-open="password"' })]),
+      ...(pkOK() ? [setItem({ ico: "shield", tone: "gold", title: "Passkeys", val: pkLock()[0], chev: true,
+                              attrs: 'data-set-open="passkeys"' })] : []),
       setItem({ ico: "sync", tone: "gold", title: "Sync now", sub: escapeHtml(_acctNote || ""), subCls: "acct-note",
                 attrs: 'data-act="acctSyncNow"' }),
     ], "Your bets, fantasy leagues, settings and searches follow this account to every device you sign in on."));
@@ -3428,6 +3582,10 @@ function setPageHTML(page) {
   if (page === "invite") {
     setTimeout(invFill, 0);
     return head("Invite friends") + `<div id="set-invite" class="inv-screen"><p class="set-foot">Loading…</p></div>`;
+  }
+  if (page === "passkeys") {
+    setTimeout(pkFill, 0);
+    return head("Passkeys") + `<div id="set-pk">${pkHTML()}</div>`;
   }
   if (page === "gift") {
     setTimeout(giftFill, 0);

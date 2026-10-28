@@ -60,6 +60,16 @@
       <li><b>A password verifier</b> — a scrypt hash. <b>We do not store
         your password</b> and cannot recover it; we can only reset it.
         (<code>users.verifier</code>)</li>
+      <li><b>Passkeys, if you add one</b> — Face ID, Touch ID or a phone’s
+        own lock in place of a password. For each: the id your device gave
+        it, its public key (the half that can only check a signature), the
+        count the device keeps of its uses, a name for it, and when it was
+        added and last used; and one random handle the passkeys carry for
+        your account in place of its number. Your face, your fingerprint
+        and the passkey’s private key never leave your device. Each
+        sign-in’s one-time challenge is kept for three minutes at most.
+        (<code>passkeys</code>, <code>passkey_users</code>,
+        <code>passkey_challenges</code>)</li>
       <li><b>Account created and last seen timestamps</b> (last seen is
         refreshed at most once a day while you are signed in).
         (<code>users.created_at</code>, <code>users.last_seen</code>)</li>

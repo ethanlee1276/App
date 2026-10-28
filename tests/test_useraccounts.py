@@ -137,16 +137,20 @@ def test_an_unknown_email_costs_the_same_time_as_a_known_one():
     conn, _ = _db()
     A.create_user(conn, "ethan@example.com", GOOD, confirmed=True)
 
-    def timed(email):
-        best = 9e9
-        for _ in range(3):                     # min: least affected by noise
+    # INTERLEAVED, the min of each. Timed one address after the other, a
+    # busy neighbour in the parallel gate slowed only whichever ran second
+    # and read as an oracle (3.1x, 3.3x, 3.5x in three gates, 2026-10-28);
+    # taking turns, a busy machine slows both alike, and a hash skipped
+    # for a missing user is still ten times faster every turn.
+    best = {"ethan@example.com": 9e9, "ghost@example.com": 9e9}
+    for _ in range(5):
+        for email in best:
             t0 = time.perf_counter()
             A.authenticate(conn, email, "wrong-password-here")
             A._fails.clear()                   # not what is under test here
-            best = min(best, time.perf_counter() - t0)
-        return best
+            best[email] = min(best[email], time.perf_counter() - t0)
 
-    known, unknown = timed("ethan@example.com"), timed("ghost@example.com")
+    known, unknown = best["ethan@example.com"], best["ghost@example.com"]
     ratio = max(known, unknown) / max(1e-6, min(known, unknown))
     assert ratio < 3.0, f"timing differs {ratio:.1f}x — that is an oracle"
 

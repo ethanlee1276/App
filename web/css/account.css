@@ -927,3 +927,9 @@ a.pw-door-go { text-decoration: none; }
 .acct-why-b { padding: 7px 14px; border-radius: 999px; border: 0; background: var(--fill-tone); color: var(--text-dim);
   font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
 .acct-why-b.on { background: color-mix(in oklab, var(--brand) 18%, transparent); color: var(--text); }
+
+/* Passkeys (Settings › Passkeys): a row's own Remove, a quiet pill. */
+.pk-rm { font: inherit; font-size: var(--fs-sm); color: var(--bad); background: var(--fill-tone-2); border: 0;
+  border-radius: var(--radius-sm); padding: 6px 12px; cursor: pointer; }
+.pk-rm:disabled { opacity: .5; cursor: default; }
+.pk-note:empty { display: none; }

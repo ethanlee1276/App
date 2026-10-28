@@ -140,8 +140,15 @@ unit of work first:
 7. **Not today? Keep the door open.** BUILT 2026-10-26 (step 201,
    account.js pwLaterHTML): under the plans page's two cards, signed in,
    where alerts work — with its own Turn off.
-8. **Passkeys.** Face ID / Touch ID sign-in (WebAuthn): no password to
-   forget and no text-message cost per sign-in. Medium.
+8. **Passkeys.** BUILT 2026-10-28 (step 235, runbook GA): Settings →
+   Passkeys adds one (Face ID, Touch ID, a fingerprint, Windows Hello) to
+   a signed-in account, and "Sign in with a passkey" on the sign-in card
+   uses it: no password and no text. Every check of the WebAuthn spec on
+   the server, the P-256 and RSA signatures in plain Python (the box has
+   no crypto package), our challenge once in three minutes, the person
+   verified, a count that moved on. Not inside the iPhone app yet: its
+   web view needs Apple's passkey entitlement for the site first.
+   engine/passkeys, server.py _passkey, js/account.js pkHTML.
 9. **Gift a month.** BUILT 2026-10-28, OFF until runbook FZ: Settings →
    Gift a month, $25 once on Stripe's Checkout, a code like GIFT-7KQ2-M9XR
    to send, redeemed in the Redeem a code box for a month from that day.

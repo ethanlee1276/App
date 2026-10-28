@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import ipaddress
 import json
 import os
 import re
@@ -1259,6 +1260,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._callit(parsed.path[len("/api/callit/"):].strip("/"))
         if parsed.path.startswith("/api/trivia/"):
             return self._trivia(parsed.path[len("/api/trivia/"):].strip("/"))
+        if parsed.path in ("/api/passkey/list", "/api/passkey/list/"):
+            return self._passkey("list", None)
         if parsed.path.startswith("/api/calendar/"):
             return self._calendar_get(parsed.path[len("/api/calendar/"):].strip("/"))
         if parsed.path in ("/api/widget/mine", "/api/widget/mine/"):
@@ -1339,7 +1342,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.do_POST_unsubscribe({"t": [parsed.path[13:]]})
             return self.do_POST_unsubscribe(parse_qs(parsed.query))
         if not parsed.path.startswith("/api/billing/webhook"):
-            auth = parsed.path.startswith("/api/account/")
+            # Passkeys (engine/passkeys) sign people in: the auth bucket too.
+            auth = parsed.path.startswith(("/api/account/", "/api/passkey/"))
             if self._rate_limited(
                     RATE_AUTH_PER_MIN if auth else RATE_READ_PER_MIN,
                     "auth" if auth else "read"):
@@ -1379,6 +1383,21 @@ class Handler(BaseHTTPRequestHandler):
                                   ".json")
             return self._account_post(
                 parsed.path[len("/api/account/"):].strip("/"), body)
+        if parsed.path.startswith("/api/passkey/"):
+            # PASSKEYS (engine/passkeys), counted in the auth bucket above.
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._passkey(parsed.path[len("/api/passkey/"):].strip("/"), body)
         if parsed.path.startswith("/api/streak/"):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -3414,6 +3433,95 @@ class Handler(BaseHTTPRequestHandler):
             code, out = CI.call(conn, who["id"], doc, str(body.get("unit") or "")[:40],
                                 str(body.get("call") or "")[:12])
             return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _passkey_site(self):
+        """(relying party id, origin) for a passkey ceremony, or None.
+
+        The id is the site's own name (QB_PASSKEY_RP_ID, or the host this
+        browser reached us on); the origin is the one the browser itself
+        says it is on (its Origin header), taken only when it is that name
+        or one under it, over https (http for localhost, to test on).
+        The browser's signed record must then name the same origin."""
+        from engine import secrets as _s
+        _s.load_local_secrets()
+        origin = str(self.headers.get("Origin") or "").strip().rstrip("/")
+        u = urlparse(origin)
+        host = (u.hostname or "").lower()
+        base_host = (urlparse(self._site_base()).hostname or "").lower()
+        rp = os.environ.get("QB_PASSKEY_RP_ID", "").strip().lower() or base_host
+        if not rp or not host or not (host == rp or host.endswith("." + rp)):
+            return None
+        try:                      # a browser refuses a number address as a site's id
+            ipaddress.ip_address(rp.strip("[]"))
+            return None
+        except ValueError:
+            pass
+        if u.scheme != "https" and not (u.scheme == "http" and host == "localhost"):
+            return None
+        return rp, origin
+
+    @staticmethod
+    def _passkey_label(conn, user_id: int, email: str) -> str:
+        """The address, or for an account made with a phone (engine/
+        smsverify) its number as a page shows it."""
+        from engine import smsverify as SV
+        if not SV.is_placeholder(email):
+            return str(email or "")
+        row = conn.execute("SELECT phone FROM users WHERE id=?", (int(user_id),)).fetchone()
+        return SV.say(row[0]) if row and row[0] else "Your account"
+
+    def _passkey(self, path: str, body: dict | None):
+        """PASSKEYS (engine/passkeys): add one to a signed-in account, sign
+        in with one, list and remove the account's own."""
+        from engine import passkeys as PK
+        A = _acct()
+        conn = A.connect()
+        try:
+            PK.ensure_tables(conn)
+            who = self._account(conn)
+            if path in ("list", "remove", "register-options", "register") and not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "list":
+                return self._send(200, json.dumps({"passkeys": PK.mine(conn, who["id"])}).encode(), ".json")
+            if path == "remove":
+                if PK.remove(conn, who["id"], str((body or {}).get("id") or "")[:1400]):
+                    _seclog("passkey_remove", "ok", self._client_ip(), email=who["email"])
+                return self._send(200, json.dumps({"passkeys": PK.mine(conn, who["id"])}).encode(), ".json")
+            if path not in ("register-options", "register", "login-options", "login"):
+                return self._send(404, b'{"error":"unknown passkey endpoint"}', ".json")
+            site = self._passkey_site()
+            if not site:
+                return self._send(400, b'{"error":"Passkeys work on the site itself, over https."}', ".json")
+            rp, origin = site
+            try:
+                if path == "register-options":
+                    # What the phone lists the passkey under: the address,
+                    # or the number for an account made with one.
+                    out = PK.register_options(conn, who["id"], self._passkey_label(conn, who["id"], who["email"]), rp)
+                elif path == "register":
+                    out = PK.register(conn, who["id"], body or {}, rp, origin)
+                    # A new way into the account goes in the security log.
+                    _seclog("passkey_add", "ok", self._client_ip(), email=who["email"])
+                    out["passkeys"] = PK.mine(conn, who["id"])
+                elif path == "login-options":
+                    out = PK.login_options(conn, rp)
+                else:
+                    uid = PK.login(conn, body or {}, rp, origin)
+                    row = conn.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+                    _seclog("passkey_login", "ok", self._client_ip(), status=200)
+                    token = A.start_session(conn, uid)
+                    em = row[0] if row else ""
+                    label = self._passkey_label(conn, uid, em)
+                    return self._send(200, json.dumps({"signed_in": True, "email": em,
+                                                       **({"phone": label} if label != em else {})}).encode(),
+                                      ".json", headers=self._session_cookie(token))
+            except PK.PasskeyError as exc:
+                if path == "login":
+                    _seclog("passkey_login", "fail", self._client_ip(), status=400)
+                return self._send(400, json.dumps({"error": str(exc)}).encode(), ".json")
+            return self._send(200, json.dumps(out).encode(), ".json")
         finally:
             conn.close()
 

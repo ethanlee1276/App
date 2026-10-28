@@ -147,7 +147,7 @@ def test_settings_offers_it_only_in_the_app_and_sign_out_clears_it():
     assert "<code>widget_links</code>" in priv and "<code>calendar_links</code>" in priv
     accts = (ROOT / "engine" / "accounts.py").read_text()
     gone = accts[accts.index("def delete_user("):accts.index("def export_user(")]
-    assert '"calendar_links", "widget_links"):' in gone
+    assert '"calendar_links", "widget_links"' in gone
 
 
 if __name__ == "__main__":

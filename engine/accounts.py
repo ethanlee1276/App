@@ -922,7 +922,11 @@ def delete_user(conn, user_id: int) -> None:
                   # been left behind, and the iPhone widget's
                   # (engine/widgetfeed): with the row gone, neither address
                   # answers again.
-                  "calendar_links", "widget_links"):
+                  "calendar_links", "widget_links",
+                  # Passkeys (engine/passkeys): the keys, the account's
+                  # handle and any challenge it had open. With the keys
+                  # gone the devices' halves sign nobody in.
+                  "passkeys", "passkey_users", "passkey_challenges"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     # A watch party they started stays for its friends, with them off it.
@@ -1093,6 +1097,13 @@ def export_user(conn, user_id: int) -> dict:
                                               "WHERE user_id=? ORDER BY at", (int(user_id),))]
         if rows:
             out["trivia_answers"] = rows
+    # A passkey's name and dates; its public key and id stay out, like the
+    # links below (they are for checking a sign-in, not anybody's data).
+    if "passkeys" in have:
+        rows = [dict(r) for r in conn.execute("SELECT name, created_at, last_used FROM passkeys "
+                                              "WHERE user_id=? ORDER BY created_at", (int(user_id),))]
+        if rows:
+            out["passkeys"] = rows
     # The two links exist or not; their values are keys, not data, and are
     # never exported (a copy of the file would open the calendar).
     for table, label in (("calendar_links", "calendar_link_made"), ("widget_links", "iphone_widget_on_since")):

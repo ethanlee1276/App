@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GA "Passkeys" 30 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'function pkHTML('
+curl -s -X POST -H 'Origin: https://qellysbook.com' -H 'Content-Type: application/json' -d '{}' https://qellysbook.com/api/passkey/login-options | python3 -c "import json,sys; print(json.load(sys.stdin).get('rpId'))"
+SH
 run FZ "Gift a month (off until a gift price is set)" 30 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'function giftHTML('
 curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('gifts'))"
