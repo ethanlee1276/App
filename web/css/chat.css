@@ -27,8 +27,8 @@
   background: var(--bad); color: var(--brand-ink); font-size: var(--fs-2xs); font-weight: 900; }
 .gch-fab-go { flex: none; font-size: var(--fs-xl); color: var(--brand-2); line-height: 1; }
 @media (max-width: 760px) {
-  .gch-fab { left: 10px; right: 10px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
-  body.has-tray .gch-fab { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
+  .gch-fab { left: 10px; right: 10px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }
+  body.has-tray .gch-fab { bottom: calc(144px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }
   /* Room at the foot of the game page for the bar, so its last lines are
      never under it. */
   body:has(#gch-fab:not([hidden])) #view-pbp { padding-bottom: 72px; }

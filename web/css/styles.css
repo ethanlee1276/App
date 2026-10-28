@@ -481,6 +481,10 @@
      measurements beside `.shell`. */
   --sidebar-w: 208px;
   --rail-w: 280px;
+  /* How much lower the iPhone app's capsule tab bar sits than 8px above
+     the home indicator's strip ("the capsule's foot" below). 0 anywhere
+     else; whatever rides above the bar comes down by it too. */
+  --tb-drop: 0px;
 
   /* ---- FIXED COLOURS (audit #50): the same in both themes, which is why
      they are declared here only and never in the light block. Ink that
@@ -3608,7 +3612,7 @@ body.msg-thread-open .footer { display: none; }
 .slip-chip.on { border-color: transparent; color: var(--brand); }
 @media (max-width: 720px) {
   /* Above the tab bar, not under it — the dock is the point. */
-  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom)); }
+  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop)); }
 }
 
 /* The game page's cards follow `.cards` (left-aligned, filling the row);
@@ -3848,7 +3852,7 @@ body.pk-open { overflow: hidden; }
    is measured from the real edge. */
 #ffd-overlay, #pk-overlay, #tour-overlay { bottom: calc(-1 * var(--vgap)); }
 @media (max-width: 720px) {
-  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--vgap)); }
+  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop) - var(--vgap)); }
 }
 .tour-card { position: relative; width: 100%; max-width: 440px; background: var(--panel);
   border: var(--hairline) solid transparent; border-radius: var(--radius-lg); padding: 22px 20px 18px; }
@@ -10580,14 +10584,26 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
      tab its first (deepened under white, pulled toward the text colour,
      so a pale or a black colour still reads on either theme).
    ========================================================================== */
+/* THE CAPSULE'S FOOT (Ethan, 2026-10-28, his iPhone with the bar circled:
+   "this bar should be lower on the screen"). It stood 8px above the home
+   indicator's whole strip, 42pt off the bottom of his screen with the page
+   showing under it. It comes down by as much of that strip as there is, up
+   to 20px: its foot 22pt off the edge on a phone with a home indicator,
+   the indicator itself still clear below it (it is drawn 8-13pt up), where
+   iOS 26's own floating tab bars sit. A phone with a Home button has no
+   strip and nothing moves. --tb-drop carries the same 20px to everything
+   that rides above the bar, so each keeps its gap to it. */
 @media (max-width: 760px) {
+  html.store-ios, html.ios-home { --tb-drop: min(20px, env(safe-area-inset-bottom, 0px)); }
   html.store-ios .tabbar, html.ios-home .tabbar {
-    left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom));
+    left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom) - var(--tb-drop));
     padding: 6px 4px; border-radius: 999px; border-top: 0;
     box-shadow: var(--glass-rim), var(--glass-depth); }
-  html.store-ios body, html.ios-home body { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
-  html.store-ios body.has-tray, html.ios-home body.has-tray { padding-bottom: calc(156px + env(safe-area-inset-bottom)); }
-  html.store-ios .riding-tray, html.ios-home .riding-tray { bottom: calc(98px + env(safe-area-inset-bottom, 0px)); }
+  html.store-ios body, html.ios-home body { padding-bottom: calc(96px + env(safe-area-inset-bottom) - var(--tb-drop)); }
+  html.store-ios body.has-tray, html.ios-home body.has-tray {
+    padding-bottom: calc(156px + env(safe-area-inset-bottom) - var(--tb-drop)); }
+  html.store-ios .riding-tray, html.ios-home .riding-tray {
+    bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }
 }
 /* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from his iPhone: "Fix this
    black bar"). iOS 26 can open a Home Screen app with its page a status
@@ -10601,9 +10617,10 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    always did. */
 @media (max-width: 760px) {
   .more-scrim, .more-sheet { bottom: calc(-1 * var(--vgap)); }
-  html.store-ios .tabbar, html.ios-home .tabbar { bottom: calc(8px + env(safe-area-inset-bottom) - var(--vgap)); }
+  html.store-ios .tabbar, html.ios-home .tabbar {
+    bottom: calc(8px + env(safe-area-inset-bottom) - var(--tb-drop) - var(--vgap)); }
   html.store-ios .riding-tray, html.ios-home .riding-tray {
-    bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--vgap)); }
+    bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--tb-drop) - var(--vgap)); }
 }
 .betit-sheet { bottom: calc(-1 * var(--vgap)); }
 @media (pointer: coarse) {
@@ -11154,7 +11171,8 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
      the Live button); above the capsule in the iPhone app. */
   .tf-toast { bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
   html.store-ios .tf-toast, html.ios-home .tf-toast,
-  html.store-ios .crash-note, html.ios-home .crash-note { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  html.store-ios .crash-note, html.ios-home .crash-note {
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .tf-toast, .crash-note, .slip-bar, [id="ptr"], .slip-panel, .pk-card, .ffd-card, .tour-card, .a2hs-card,

@@ -95,7 +95,8 @@ def test_the_dock_exists_and_sits_above_the_phone_tab_bar():
     assert HTML.index('id="qb-slip"') < HTML.index('class="tabbar"'), \
         "the dock markup should precede the tab bar it docks above"
     assert "#qb-slip { position: fixed" in CSS
-    assert "#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom)); }" in CSS, \
+    # Less the iPhone app's lowered capsule (tests/test_the_iphone_tab_bar_sits_low.py).
+    assert "#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop)); }" in CSS, \
         "on a phone the slip would hide underneath the tab bar"
 
 

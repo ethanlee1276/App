@@ -7685,6 +7685,33 @@ settings lines need the setup script, which the catch-up never runs):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HK 2>&1 | tee /tmp/hk.txt
 ```
 
+**HL. The iPhone app's tab bar sits lower** (step 272; your screenshot
+with the bar circled: "this bar should be lower on the screen"). In the
+iPhone app (the Home Screen app and the iOS build) the bar floated 8pt
+above the home indicator's whole strip, about 42pt off the bottom of the
+screen, with the page showing under it. It now sits 22pt off the bottom,
+where iOS 26's own floating tab bars sit, still clear of the home
+indicator below it. Everything that rides above the bar comes down with it
+(the riding pill, the slip, the game chat bar, the toasts, the plans
+button), and a page's last lines still end above it. A phone with a Home
+button, a Safari tab and a computer look as they did.
+
+Nothing to set: the updater picks it up within five minutes. Read-only,
+any time. It prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/css/styles.css | grep -cF 'html.store-ios, html.ios-home { --tb-drop: min(20px, env(safe-area-inset-bottom, 0px)); }'
+```
+
+On your phone: swipe Qellys up out of the app switcher and open it again
+(it keeps the old look until it reloads).
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HL 2>&1 | tee /tmp/hl.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

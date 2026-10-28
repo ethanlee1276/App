@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HL "The iPhone app's tab bar sits lower" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -cF 'html.store-ios, html.ios-home { --tb-drop: min(20px, env(safe-area-inset-bottom, 0px)); }'
+SH
 run HK "The Discord link, the Instagram link, the defenses' turnovers" 30 <<'SH'
 curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('instagram'))"
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A; [print(r[0], r[1], 'accounts, the last on', r[2]) for r in A.connect().execute(\"SELECT code, COUNT(*), date(MAX(created_at), 'unixepoch') FROM code_redemptions GROUP BY code\")]"

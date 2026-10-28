@@ -60,15 +60,18 @@ def test_the_layers_pinned_to_the_bottom_reach_down_by_it():
     sheet = ".more-sheet { display: block; position: fixed; top: 0; left: 0; bottom: 0;"
     reach = ".more-scrim, .more-sheet { bottom: calc(-1 * var(--vgap)); }"
     assert sheet in CSS and reach in CSS and CSS.index(sheet) < CSS.index(reach), "after the sheet's own rule"
-    capsule = "left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom));"
-    floats = "html.store-ios .tabbar, html.ios-home .tabbar { bottom: calc(8px + env(safe-area-inset-bottom) - var(--vgap)); }"
+    # Less the capsule's own drop (tests/test_the_iphone_tab_bar_sits_low.py).
+    capsule = "left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom) - var(--tb-drop));"
+    floats = ("html.store-ios .tabbar, html.ios-home .tabbar {\n"
+              "    bottom: calc(8px + env(safe-area-inset-bottom) - var(--tb-drop) - var(--vgap)); }")
     assert capsule in CSS and floats in CSS and CSS.index(capsule) < CSS.index(floats)
-    assert "bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--vgap)); }" in CSS, "the riding pill rides with it"
+    assert "bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--tb-drop) - var(--vgap)); }" in CSS, \
+        "the riding pill rides with it"
     # The ids sit after their own rules and before the sheet's tokens-only
     # tail (tests/test_most_likely_opens_its_own_page.py: no "#" past it).
     tail = CSS.index("A Most Likely pick, explained")
-    for own, reach in (("#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom)); }",
-                        "#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--vgap)); }"),
+    for own, reach in (("#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop)); }",
+                        "#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop) - var(--vgap)); }"),
                        ("#tour-overlay { position: fixed; inset: 0;",
                         "#ffd-overlay, #pk-overlay, #tour-overlay { bottom: calc(-1 * var(--vgap)); }"),
                        (".betit-sheet { position: fixed; inset: 0;", ".betit-sheet { bottom: calc(-1 * var(--vgap)); }")):

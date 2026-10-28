@@ -50,7 +50,7 @@ def test_the_plans_screen_keeps_its_button_in_reach_on_a_phone():
     assert "if (!go || !plans) return;" in dock, "no plan to offer, no dock"
     assert ".pw-dock { display: none; }" in ACCOUNT_CSS
     phone = ACCOUNT_CSS[ACCOUNT_CSS.index("@media (max-width: 720px) {\n  .pw-dock"):]
-    assert "position: fixed" in phone and "bottom: calc(74px + env(safe-area-inset-bottom, 0px));" in phone
+    assert "position: fixed" in phone and "bottom: calc(74px + env(safe-area-inset-bottom, 0px) - var(--tb-drop));" in phone
     assert ".pw-dock.away { opacity: 0; transform: translateY(10px); pointer-events: none; }" in phone
 
 
