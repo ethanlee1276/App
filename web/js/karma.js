@@ -23,7 +23,7 @@
      (karmaProfileMount).
    Free for every account: nothing here is paid data. */
 
-const KR = { me: null, at: 0, busy: null, scope: "week", lad: {} };
+const KR = { me: null, at: 0, busy: null, scope: "week", lad: {}, daily: null, dailyAt: 0 };
 const KR_FRESH_MS = 60000;
 const KR_SEEN_KEY = "qb_kr_level";
 /* engine/karma TIERS: the first level of each, its name and its class. */
@@ -110,7 +110,8 @@ function krLevelUp(level) {
       <h3>Level ${level}${newTier ? ` · ${krEsc(t.name)}` : ""}</h3>
       <p class="kr-up-sub">${newTier ? `A new tier: you wear ${krEsc(t.name)} in every chat now.` : `${krEsc(t.name)} · keep watching and talking.`}</p>
       ${opened.map((n) => `<p class="kr-up-open">${krEsc(KR_UNLOCK[n])}</p>`).join("")}
-      <button type="button" class="kr-btn" data-kr="up-close">Nice</button></div>`;
+      <div class="kr-up-row"><button type="button" class="kr-btn" data-kr="up-close">Nice</button>
+        <button type="button" class="kr-btn ghost" data-kr="share">Share</button></div></div>`;
   document.body.appendChild(host);
   host.querySelector(".kr-btn").focus({ preventScroll: true });
   if (!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) {
@@ -166,10 +167,75 @@ function krStripHTML(v) {
 
 async function karmaStripMount(host) {
   if (!host) return;
-  if (KR.me) host.innerHTML = krStripHTML(KR.me);
+  const draw = (v) => { host.innerHTML = krStripHTML(v) + krDailyHTML(KR.daily, true); };
+  if (KR.me) draw(KR.me);
+  // The strip does not wait for the day's question: it joins when it lands.
+  const daily = krDailyLoad();
   const v = await krLoad();
   if (!host.isConnected || !v) return;
-  host.innerHTML = krStripHTML(v);
+  draw(v);
+  await daily;
+  if (host.isConnected && KR.me) draw(KR.me);
+}
+
+/* TODAY'S QUESTION (engine/trivia daily; Wordle's one a day): one trivia
+   question for everybody each day, off one of the day's games, +10 karma
+   right. Answered, the Live tab folds it to a line; the Karma tab keeps
+   the whole card. */
+const KR_DAILY_MS = 10 * 60000;
+async function krDailyLoad(force) {
+  if (!force && KR.daily && Date.now() - KR.dailyAt < KR_DAILY_MS) return KR.daily;
+  try {
+    const r = await fetch("/api/trivia/daily", { credentials: "same-origin", cache: "no-store" });
+    if (r.ok) { KR.daily = await r.json(); KR.dailyAt = Date.now(); }
+  } catch (e) { /* kept as it was */ }
+  return KR.daily;
+}
+
+function krDailyHTML(d, fold) {
+  const q = d && d.q;
+  if (!q) return "";
+  const done = q.mine != null && q.answer != null;
+  const total = done ? Math.max(1, Number(q.n) || (q.split || []).reduce((a, b) => a + b, 0)) : 0;
+  const pct = (i) => Math.round(((q.split || [])[i] || 0) * 100 / total);
+  const head = `<div class="kr-h"><b>🧠 Today's question</b><span>${done
+    ? (q.mine === q.answer ? "Right · +10" : "Not this time") : "+10 karma right"}${q.game ? ` · ${krEsc(q.game)}` : ""}</span></div>`;
+  if (done && fold) {
+    return `<button type="button" class="kr-daily folded" data-kr="open" aria-label="Today's question: open the Karma tab">
+      <span>🧠 ${q.mine === q.answer ? "You got today's question" : "Today's question"}: <b>${krEsc(q.options[q.answer])}</b></span>
+      <span class="kr-daily-n">${pct(q.answer)}% got it</span></button>`;
+  }
+  const opts = q.options.map((o, i) => {
+    const cls = !done ? "" : i === q.answer ? " right" : i === q.mine ? " wrong" : "";
+    return `<button type="button" class="kr-opt${cls}" data-kr="daily" data-v="${i}"${done ? ` disabled style="--p:${pct(i)}%"` : ""}>
+      <span>${krEsc(o)}</span>${done ? `<b>${pct(i)}%</b>` : ""}</button>`;
+  }).join("");
+  return `<section class="kr-card kr-daily">${head}<p class="kr-daily-q">${krEsc(q.text)}</p>
+    <div class="kr-opts">${opts}</div>
+    ${done ? `<p class="kr-fine">${krEsc(q.why)} · ${krNum(total)} answered · a new one at midnight Eastern</p>` : ""}</section>`;
+}
+
+async function krDailyAnswer(b) {
+  const box = b.closest(".kr-daily");
+  if (box) box.querySelectorAll("[data-kr=daily]").forEach((x) => { x.disabled = true; });
+  let out = null, ok = false;
+  try {
+    const r = await fetch("/api/trivia/daily", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pick: Number(b.dataset.v) }) });
+    out = await r.json().catch(() => ({}));
+    ok = r.ok;
+  } catch (e) { out = { error: "No connection — try again." }; }
+  if (!ok) {
+    if (typeof tfToast === "function") tfToast((out && out.error) || "That did not go through.");
+    await krDailyLoad(true);
+  } else {
+    KR.daily = { ...(KR.daily || {}), q: out };
+    KR.dailyAt = Date.now();
+    if (out.karma) karmaNote(out.karma);
+  }
+  document.querySelectorAll(".kr-daily").forEach((el) => {
+    el.outerHTML = krDailyHTML(KR.daily, !el.closest(".kr-panel-host"));
+  });
 }
 
 /* ---------------- the Karma tab ---------------- */
@@ -232,7 +298,7 @@ function krLadderRowsHTML(lad) {
 const KR_RULE_GROUPS = [["Watching", ["watch_join", "watch", "witness"]],
   ["Talking", ["chat_day", "chat", "liked", "react_day", "hype"]],
   ["Playing along", ["vote", "vote_won", "call_won", "call_streak", "trivia"]],
-  ["Every day", ["day", "quest", "quests_all"]],
+  ["Every day", ["day", "daily_q", "quest", "quests_all"]],
   ["Friends", ["follow", "party_host", "party_join", "recruit"]],
   ["Your first two weeks", ["camp", "camp_done"]]];
 function krRulesHTML(v) {
@@ -270,6 +336,102 @@ function krPrefsHTML(v) {
       ${krSwitch(v.remind, "remind", "Karma alerts")}</div></section>`;
 }
 
+/* SHARE MY LEVEL (Duolingo's streak card, Strava's): a picture of the
+   level, the karma, the days in a row and the best badges (pinned first),
+   drawn on the site's own card (app.js cardStage and exportCard) for the
+   phone's share sheet. Nothing about a bet or a pick is on it. */
+const KR_TIER_HEX = { t1: "#D2CEC8", t2: "#4EC577", t3: "#71C1F7", t4: "#C0A9C1", t5: "#FFB000", t6: "#FE7F7A", t7: "#FFB000" };
+
+function krShareBadges(v) {
+  const pins = v.pins || [];
+  const rank = (b) => (pins.includes(b.key) ? -10 + pins.indexOf(b.key) : -(b.tier / Math.max(1, b.of || 1)));
+  return (v.badges || []).filter((b) => b.tier).sort((a, b) => rank(a) - rank(b) || b.tier - a.tier).slice(0, 4);
+}
+
+function krShareCanvas(v, handle) {
+  const c = document.createElement("canvas");
+  c.width = CARD_W;
+  c.height = CARD_H;
+  const x = c.getContext("2d");
+  cardStage(x);
+  const col = KR_TIER_HEX[v.cls] || CARD_BRAND;
+  // The ring: the level, and the way to the next around it.
+  const cx = 250, cy = 262, r = 150;
+  x.lineCap = "round";
+  x.lineWidth = 22;
+  x.strokeStyle = "rgba(232,228,217,.1)";
+  x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.stroke();
+  x.strokeStyle = col;
+  x.beginPath();
+  x.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.03, Math.min(1, Number(v.progress) || 0)));
+  x.stroke();
+  x.textAlign = "center";
+  x.textBaseline = "alphabetic";
+  x.fillStyle = "rgba(232,228,217,.55)";
+  x.font = cardFont(22, 700);
+  x.fillText("LEVEL", cx, cy - 62);
+  x.fillStyle = CARD_INK;
+  x.font = cardSerif(132, 700);
+  x.fillText(String(Number(v.level) || 1), cx, cy + 56);
+  // The words.
+  const X = 470;
+  x.textAlign = "left";
+  x.font = cardSerif(62, 700);
+  x.fillText(handle ? `@${handle}` : "My karma", X, 148, CARD_W - X - 60);
+  x.fillStyle = col;
+  x.font = cardFont(40, 800);
+  x.fillText(String(v.tier || ""), X, 208);
+  x.fillStyle = CARD_INK;
+  x.font = cardFont(34, 600);
+  const st = v.streak || {};
+  x.fillText(`${krNum(v.points)} karma${st.now ? `  ·  🔥 ${Number(st.now)} day${st.now === 1 ? "" : "s"} in a row` : ""}`, X, 262, CARD_W - X - 60);
+  // The best badges, pinned first.
+  krShareBadges(v).forEach((b, i) => {
+    const bx = X + i * 170, by = 316;
+    x.fillStyle = "rgba(232,228,217,.07)";
+    _cardRR(x, bx, by, 154, 150, 18);
+    x.fill();
+    x.textAlign = "center";
+    x.fillStyle = CARD_INK;
+    x.font = cardFont(48, 400);
+    x.fillText(KR_BADGE_ICON[b.key] || "★", bx + 77, by + 66);
+    x.font = cardFont(19, 700);
+    x.fillText(String(b.name || ""), bx + 77, by + 106, 140);
+    x.fillStyle = CARD_BRAND;
+    x.font = cardFont(15, 800);
+    x.fillText(b.one ? "EARNED" : String(b.tier_name || "").toUpperCase(), bx + 77, by + 132, 140);
+  });
+  // The foot: what this is, and where.
+  x.strokeStyle = "rgba(232,228,217,.12)";
+  x.lineWidth = 1;
+  x.beginPath(); x.moveTo(48, 542.5); x.lineTo(CARD_W - 48, 542.5); x.stroke();
+  x.textAlign = "left";
+  x.fillStyle = "rgba(232,228,217,.45)";
+  x.font = cardFont(22, 400);
+  x.fillText("Live games, the chat and karma · free", 48, 580);
+  x.textAlign = "right";
+  x.fillStyle = "rgba(255,176,0,.8)";
+  x.font = cardFont(24, 600);
+  x.fillText("qellysbook.com", CARD_W - 48, 580);
+  x.textAlign = "left";
+  return c;
+}
+
+async function krShare(btn) {
+  if (typeof cardStage !== "function" || typeof exportCard !== "function") return;
+  const was = btn.textContent;
+  btn.textContent = "Drawing…";
+  btn.disabled = true;
+  const done = () => { btn.textContent = was; btn.disabled = false; };
+  const v = await krLoad(true);
+  if (!v) { done(); if (typeof tfToast === "function") tfToast("That did not load — try again."); return; }
+  const who = typeof _acctUser !== "undefined" && _acctUser && _acctUser.profile ? _acctUser.profile.handle : "";
+  let c = null;
+  try { c = krShareCanvas(v, who || ""); } catch (e) { c = null; }
+  if (!c) { done(); if (typeof tfToast === "function") tfToast("That card could not be drawn."); return; }
+  exportCard(c, `qellys-level-${Number(v.level) || 1}.png`, done);
+}
+
 function krRecentHTML(v) {
   const rows = v.recent || [];
   if (!rows.length) return "";
@@ -290,11 +452,13 @@ function krPanelHTML(v) {
         <h2>Level ${Number(v.level)} · ${krEsc(v.tier)}</h2>
         <p class="kr-pts-big"><b>${krNum(v.points)}</b> karma</p>
         <span class="kr-bar wide"><i style="--p:${Math.round((Number(v.progress) || 0) * 100)}%"></i></span>
-        <p class="kr-fine">${krNum(v.to - v.points)} to level ${Number(v.level) + 1}${next ? ` · ${krEsc(next[1])} at level ${next[0]}` : ""}</p></div>
+        <p class="kr-fine">${krNum(v.to - v.points)} to level ${Number(v.level) + 1}${next ? ` · ${krEsc(next[1])} at level ${next[0]}` : ""}</p>
+        <button type="button" class="kr-share" data-kr="share">Share my level</button></div>
       <div class="kr-streak${st.now ? " lit" : ""}"><b>🔥 ${Number(st.now || 0)}</b><span>day${st.now === 1 ? "" : "s"} in a row</span>
         <i>${st.best ? `best ${Number(st.best)}` : "earn karma today to start"}${st.rest ? " · a rest day in hand" : ""}</i></div>
     </section>
     ${krCampHTML(v)}
+    ${krDailyHTML(KR.daily, false)}
     ${krQuestsHTML(v)}
     ${krBadgesHTML(v)}
     <section class="kr-card"><div class="kr-h"><b>Karma ladder</b>
@@ -311,7 +475,7 @@ function krPanelHTML(v) {
 async function karmaPanelMount(el) {
   if (!el) return;
   el.innerHTML = KR.me ? krPanelHTML(KR.me) : `<section class="kr-card kr-wait"><p class="kr-fine">Loading your karma…</p></section>`;
-  const v = await krLoad(true);
+  const [v] = await Promise.all([krLoad(true), krDailyLoad()]);
   if (!el.isConnected) return;
   if (!v) {
     el.innerHTML = `<section class="kr-card"><p class="kr-fine">Your karma could not load. Check your connection and open the tab again.</p></section>`;
@@ -390,6 +554,8 @@ document.addEventListener("click", (e) => {
   const act = b.dataset.kr;
   if (act === "open") { e.preventDefault(); krOpenTab(); return; }
   if (act === "up-close") { const up = b.closest(".kr-up"); if (up) up.remove(); return; }
+  if (act === "share") { krShare(b); return; }
+  if (act === "daily") { krDailyAnswer(b); return; }
   const root = b.closest(".kr-panel-host");
   if (act === "scope" && root) { krLadder(root, ["all", "friends"].includes(b.dataset.v) ? b.dataset.v : "week"); return; }
   if (act === "pin" && root && KR.me) {

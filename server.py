@@ -3591,6 +3591,8 @@ class Handler(BaseHTTPRequestHandler):
         history database's season logs."""
         from engine import trivia as TV
         from engine.db import connect as hist_connect
+        if path == "daily":
+            return self._trivia_daily(body)
         league, _, event = path.partition("/")
         if league not in TV.LEAGUES or not event.isdigit() or len(event) > 14:
             return self._send(404, b'{"error":"no such game"}', ".json")
@@ -3618,6 +3620,38 @@ class Handler(BaseHTTPRequestHandler):
                 # A right answer earns karma (engine/karma).
                 k = _karma_note(lambda K: K.on_trivia(conn, who["id"], TV.room_of(doc), out["qkey"],
                                                       out.get("mine") == out.get("answer")))
+                if k:
+                    out["karma"] = k
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+            if hist is not None:
+                hist.close()
+
+    def _trivia_daily(self, body: dict | None = None):
+        """TODAY'S QUESTION (engine/trivia daily): one a day for everybody,
+        Eastern, off one of the day's games; GET it, POST an answer (a free
+        account, once a day; right pays karma)."""
+        from engine import karma as K
+        from engine import trivia as TV
+        from engine.db import connect as hist_connect
+        A = _acct()
+        conn = A.connect()
+        hist = None
+        try:
+            TV.ensure_tables(conn)
+            who = self._account(conn)
+            hist = hist_connect()
+            day = K.day_of(time.time())
+            data = WEB / "data"
+            if body is None:
+                out = TV.daily_state(conn, hist, who["id"] if who else None, day, data)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to answer."}', ".json")
+            code, out = TV.daily_answer(conn, hist, who["id"], day, body.get("pick"), data)
+            if code == 200:
+                k = _karma_note(lambda K: K.on_daily(conn, who["id"], day, out.get("mine") == out.get("answer")))
                 if k:
                     out["karma"] = k
             return self._send(code, json.dumps(out).encode(), ".json")

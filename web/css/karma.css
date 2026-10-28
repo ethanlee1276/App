@@ -211,3 +211,30 @@ button.kr-prof:hover { background: var(--fill-hover); }
   .kr-prof-medals { order: 3; flex-basis: 100%; max-width: none; justify-content: flex-start; padding-left: 52px; }
 }
 @media (prefers-reduced-motion: reduce) { .kr-note, .kr-up { animation: none; } }
+
+/* Share my level: a quiet pill under the way to the next level; on the
+   level-up card, beside "Nice". */
+.kr-share { justify-self: start; margin-top: 8px; min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: color-mix(in oklab, var(--kr-c, var(--brand)) 18%, transparent); color: var(--text); font: inherit;
+  font-size: var(--fs-xs); font-weight: 800; }
+.kr-up-row { display: flex; gap: 8px; justify-content: center; }
+.kr-btn.ghost { background: color-mix(in oklab, var(--text) 9%, transparent); color: var(--text); }
+/* Today's question (engine/trivia daily): four names in a two-by-two grid;
+   answered, each wears how many picked it, the right one green. */
+.kr-strip-host .kr-daily { margin-top: 8px; }
+.kr-daily-q { margin: 0; font-size: var(--fs-md); font-weight: 700; line-height: 1.35; }
+.kr-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kr-opt { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  min-height: 44px; padding: 8px 12px; border: 0; border-radius: var(--radius-sm); cursor: pointer; text-align: left;
+  background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--fs-xs); font-weight: 700; }
+.kr-opt::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p, 0%);
+  background: color-mix(in oklab, var(--text) 8%, transparent); }
+.kr-opt > * { position: relative; }
+.kr-opt.right { background: color-mix(in oklab, var(--good) 16%, var(--panel-2)); }
+.kr-opt.right::before { background: color-mix(in oklab, var(--good) 24%, transparent); }
+.kr-opt.wrong { background: color-mix(in oklab, var(--bad) 14%, var(--panel-2)); }
+.kr-opt:disabled { cursor: default; opacity: 1; }
+.kr-daily.folded { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  padding: 10px 14px; border: 0; border-radius: var(--radius-sm); cursor: pointer; text-align: left;
+  background: var(--panel); color: var(--text); font: inherit; font-size: var(--fs-xs); }
+.kr-daily-n { flex: none; color: var(--text-mute); }

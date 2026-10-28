@@ -36,6 +36,7 @@ import hashlib
 import json
 import re
 import time
+from pathlib import Path
 
 LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
 #: The stats asked about, per kind of game: (market in the logs, words).
@@ -289,6 +290,84 @@ def answer(conn, hist, user_id, doc: dict, qkey: str, pick, now: float | None = 
                  (int(user_id), room, qkey, pick, t))
     conn.commit()
     return 200, _view(conn, user_id, room, qkey, q, True)
+
+
+# ─── today's question ────────────────────────────────────────────────────────
+#: TODAY'S QUESTION (2026-10-28; Wordle's one a day): one question for
+#: everybody each day, Eastern, off one of the day's games on the
+#: scoreboards, asked the first time anyone reads it and kept for the day.
+#: One answer an account; the right name and how everybody answered after.
+DAILY_ROOM = "daily"
+#: The day's games tried for a question before the day goes without one.
+DAILY_TRIES = 12
+
+
+def _slate(data_dir) -> list:
+    """The games on the scoreboards (web/data/live_{league}.json): (league,
+    home, away), every league, in a fixed order."""
+    out = set()
+    for lg in LEAGUES:
+        try:
+            blob = json.loads((Path(data_dir) / f"live_{lg}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for g in (blob.get("games") or []) if isinstance(blob, dict) else []:
+            if isinstance(g, dict) and g.get("home") and g.get("away"):
+                out.add((lg, str(g["home"]), str(g["away"])))
+    return sorted(out)
+
+
+def daily(conn, hist, day: str, data_dir, now: float | None = None):
+    """Today's question, the same for everybody, or None on a day with no
+    game to ask about."""
+    q, _at = _asked(conn, DAILY_ROOM, day)
+    if q is not None:
+        return q
+    t = time.time() if now is None else now
+    for lg, home, away in _shuffled(_slate(data_dir), _seed("daily", day))[:DAILY_TRIES]:
+        pool = bank(hist, lg, home, away, t)
+        if pool:
+            pick = dict(pool[_seed("daily", day, lg, home) % len(pool)], league=lg, game=f"{away} @ {home}")
+            conn.execute("INSERT OR IGNORE INTO trivia_asked (room, qkey, q, at) VALUES (?, ?, ?, ?)",
+                         (DAILY_ROOM, day, json.dumps(pick), t))
+            conn.commit()
+            return _asked(conn, DAILY_ROOM, day)[0]
+    return None
+
+
+def _daily_view(conn, user_id, day: str, q: dict) -> dict:
+    out = _view(conn, user_id, DAILY_ROOM, day, q, True)
+    out.update(day=day, league=q.get("league", ""), game=q.get("game", ""))
+    if "split" in out:
+        out["n"] = sum(out["split"])
+    return out
+
+
+def daily_state(conn, hist, user_id, day: str, data_dir, now: float | None = None) -> dict:
+    """The card: today's question, and once this reader has answered, the
+    right name and the split."""
+    q = daily(conn, hist, day, data_dir, now)
+    return {"signed_in": bool(user_id), "day": day, "q": _daily_view(conn, user_id, day, q) if q else None}
+
+
+def daily_answer(conn, hist, user_id, day: str, pick, data_dir, now: float | None = None) -> tuple:
+    """(code, body): one answer per account per day."""
+    t = time.time() if now is None else now
+    q = daily(conn, hist, day, data_dir, t)
+    if q is None:
+        return 404, {"error": "No question today: there is no game on to ask about."}
+    try:
+        pick = int(pick)
+    except (TypeError, ValueError):
+        return 400, {"error": "Pick one of the four names."}
+    if not 0 <= pick < len(q["options"]):
+        return 400, {"error": "Pick one of the four names."}
+    if _mine(conn, user_id, DAILY_ROOM, day) is not None:
+        return 409, {"error": "You answered today's already. A new one comes at midnight Eastern."}
+    conn.execute("INSERT OR IGNORE INTO trivia_answers (user_id, room, qkey, pick, at) VALUES (?, ?, ?, ?, ?)",
+                 (int(user_id), DAILY_ROOM, day, pick, t))
+    conn.commit()
+    return 200, _daily_view(conn, user_id, day, q)
 
 
 def prune(conn, now: float | None = None) -> None:

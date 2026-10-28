@@ -122,6 +122,7 @@ RULES = {
     "call_won": (5, 75, "Called it"),
     "call_streak": (25, None, "Five calls right in a row"),
     "trivia": (5, 30, "Trivia right"),
+    "daily_q": (10, None, "Today's question right"),
     "hype": (5, 50, "The room's heat climbed"),
     "day": (5, None, "Checked in"),
     "quest": (10, None, "Daily quest"),
@@ -481,6 +482,14 @@ def on_vote(conn, user_id, room: str, now: float | None = None) -> dict | None:
     return note(conn, user_id, award(conn, user_id, "vote", room, now=now), "vote")
 
 
+def on_daily(conn, user_id, day: str, right: bool, now: float | None = None) -> dict | None:
+    """Today's question right (engine/trivia daily): +10, once a day."""
+    ensure_tables(conn)
+    if not right:
+        return None
+    return note(conn, user_id, award(conn, user_id, "daily_q", str(day)[:10], now=now), "daily_q")
+
+
 def on_trivia(conn, user_id, room: str, qkey: str, right: bool, now: float | None = None) -> dict | None:
     ensure_tables(conn)
     if not right:
@@ -667,10 +676,12 @@ def sync_user(conn, user_id, now: float | None = None, data_dir: Path | None = N
                 "ON q.room=a.room AND q.qkey=a.qkey WHERE a.user_id=?", (uid,)):
             try:
                 if int(json.loads(q).get("answer")) == int(pick):
-                    rows.append((f"{room}:{qkey}", at))
+                    rows.append((room, qkey, at))
             except (ValueError, TypeError, AttributeError):
                 continue
-        _award_rows(conn, uid, "trivia", rows)
+        # Today's question (engine/trivia daily) pays as itself, once a day.
+        _award_rows(conn, uid, "trivia", [(f"{r}:{k}", at) for r, k, at in rows if r != "daily"])
+        _award_rows(conn, uid, "daily_q", [(k, at) for r, k, at in rows if r == "daily"])
     if _has(conn, "alert_watches"):
         have = conn.execute("SELECT COUNT(*) FROM karma_events WHERE user_id=? AND kind='follow'", (uid,)).fetchone()[0]
         if have < FOLLOW_MAX:
@@ -848,7 +859,7 @@ def badge_counts(conn, user_id, points: int | None = None, best_days: int | None
         "crowd": _count(conn, uid, "liked"),
         "caller": _count(conn, uid, "call_won"),
         "hothand": int(best_call),
-        "trivia": _count(conn, uid, "trivia"),
+        "trivia": _count(conn, uid, "trivia", "daily_q"),
         "winner": _count(conn, uid, "vote_won"),
         "streak": int(best_days),
         "sports": int(conn.execute("SELECT COUNT(DISTINCT league) FROM karma_watch WHERE user_id=?",
