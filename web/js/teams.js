@@ -1,4 +1,7 @@
 // Auto-generated from nflverse teamcolors.csv + teams.csv. NFL team colors & names.
+// Corrected by hand 2026-10-28, because the game cards are lit in these: the
+// Jets carried the Packers' green, the Rams and the Commanders colours they
+// wore before 2020 and 2022. Regenerating must keep the three.
 const TEAMS = {
   "ARI": {
     "name": "Arizona Cardinals",
@@ -132,9 +135,9 @@ const TEAMS = {
     "name": "Los Angeles Rams",
     "nick": "Rams",
     "loc": "LA Rams",
-    "primary": "#002244",
-    "secondary": "#b3995d",
-    "tertiary": "#001532"
+    "primary": "#003594",
+    "secondary": "#ffa300",
+    "tertiary": "#ff8200"
   },
   "LAC": {
     "name": "Los Angeles Chargers",
@@ -196,8 +199,8 @@ const TEAMS = {
     "name": "New York Jets",
     "nick": "Jets",
     "loc": "NY Jets",
-    "primary": "#203731",
-    "secondary": "#1c2d25",
+    "primary": "#125740",
+    "secondary": "#000000",
     "tertiary": ""
   },
   "PHI": {
@@ -252,7 +255,7 @@ const TEAMS = {
     "name": "Washington Commanders",
     "nick": "Commanders",
     "loc": "Washington",
-    "primary": "#773141",
+    "primary": "#5a1414",
     "secondary": "#ffb612",
     "tertiary": "#000000"
   },
@@ -260,9 +263,9 @@ const TEAMS = {
     "name": "Los Angeles Rams",
     "nick": "Rams",
     "loc": "LA Rams",
-    "primary": "#002244",
-    "secondary": "#b3995d",
-    "tertiary": "#001532"
+    "primary": "#003594",
+    "secondary": "#ffa300",
+    "tertiary": "#ff8200"
   },
   "OAK": {
     "name": "Las Vegas Raiders",

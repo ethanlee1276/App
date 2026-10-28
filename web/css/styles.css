@@ -546,13 +546,13 @@
   --glow-cutout: 0 0 0 2px var(--panel);
   --grad-rim-gold: linear-gradient(155deg, color-mix(in oklab, var(--brand) 85%, transparent), color-mix(in oklab, var(--brand) 18%, transparent) 30%, transparent 55%);
   --venue-grade: saturate(.55) brightness(.72) contrast(1.05);
+  /* A stadium its teams light (the game card, the game page): grey, so the
+     only colours on it are theirs. */
+  --venue-grade-lit: grayscale(1) brightness(.84) contrast(1.1);
   --grad-hero-veil: linear-gradient(90deg, var(--panel) 25%, color-mix(in oklab, var(--panel) 55%, transparent));
   /* NO HARD LINES (2026-10-27, later): edges that fade instead of stopping. */
   --grad-bar-fade: linear-gradient(180deg, var(--topbar-bg), transparent);
   --grad-team-spill: linear-gradient(180deg, color-mix(in oklab, var(--team-1) 22%, transparent), transparent);
-  /* The teams' light on a game card rises out of the photograph's fade
-     and runs to the card's foot: no edge where it starts or stops. */
-  --mask-teams-rise: linear-gradient(to bottom, transparent 12%, #000 52%);
 }
 
 * { box-sizing: border-box; }
@@ -5053,6 +5053,7 @@ body.pk-open { overflow: hidden; }
   --glow-card: 0 1px 2px rgba(23, 22, 19, .05), 0 8px 24px rgba(23, 22, 19, .06);
   --glow-cutout: 0 0 0 2px var(--panel);
   --venue-grade: saturate(.7) brightness(.95);
+  --venue-grade-lit: grayscale(1) brightness(.95) contrast(1.05);
 }
 
 /* The page never scrolls sideways — Ethan's screen recording
@@ -9652,7 +9653,7 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .hero-games .stadium-wrap .venue-photo { height: calc(100% + var(--tile-fade-run)); }
 .hero-games .stadium-wrap::after {
   content: ""; position: absolute; left: 0; right: 0; top: 0; z-index: 2;
-  height: calc(100% + var(--tile-fade-run)); background: var(--grad-tile-fade); pointer-events: none;
+  height: calc(100% + var(--tile-fade-run)); background: var(--grad-tile-fade), var(--grad-teams-glow); pointer-events: none;
 }
 .hero-games .game-card .game-info { position: relative; z-index: 3; }
 .hero-games .stadium-wrap .game-wx-chip, .hero-games .stadium-wrap .fav-tag { z-index: 3; }
@@ -11006,22 +11007,36 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
   100% { opacity: 0; transform: translate(calc(var(--x) * 1.25), calc(var(--y) + 260px)) rotate(var(--r)); }
 }
 
-/* EVERY GAME IN ITS TEAMS' COLOURS (app.js teamVivid; Apple Sports' tiles):
-   the away side's light washed in from the left, the home side's from the
-   right. ONE LAYER OVER THE WHOLE CARD (Ethan, 2026-10-28, circling a Home
-   tile: "The stadium thing has these hard lines that look gross"). Painted
-   on the facts' own box, with a band of colour along its top, the wash
-   began in a line across the photograph and stopped in another over the
-   weather. It rises out of the photograph's fade now and runs to the
-   card's foot, under the chips and the words. */
-.game-card {
+/* EVERY GAME IN ITS TEAMS' COLOURS (Apple Sports' tiles), AS THE LIGHT ITS
+   STADIUM IS LIT BY (Ethan, 2026-10-28, two Home tiles circled: "these
+   colors are not blending well at all and not matching the teams"). The
+   photograph was the home kit's render, Miami's stadium green and Denver's
+   blue, and the teams' colours a wash laid over it: three colours on one
+   tile, one of them nobody's, going brown where they met. The render is
+   neutral now (app.js VENUE_LIT_BASE) and the two teams light it, the away
+   side's colour from the left and the home side's from the right (app.js
+   teamLight). Overlay keeps the photograph's own light and shade, so the
+   floodlights and the stands take the colour and the dark stays dark; a
+   faint glow of the same two colours under the fade gives a black arena
+   some colour too; the fade carries both into the panel, so nothing starts
+   or stops in a line. Overlay, not `color`: Safari has no hue blend modes.
+   The stadium is its own group (isolation), so the light reaches the
+   photograph and nothing past it — and in a group of its own an overlay
+   on nothing is its colour at full strength, so the light draws only
+   while there is a photograph (:has), and a photograph still loading is
+   night under it, not a hole. The game page is lit the same way
+   (css/detail.css). */
+.game-card, .gp-hero {
   --ta: var(--brand);
   --tb: var(--brand-2);
-  --grad-teams-wash: linear-gradient(90deg, color-mix(in oklab, var(--ta) 12%, transparent), transparent 45%, transparent 55%, color-mix(in oklab, var(--tb) 12%, transparent));
-  position: relative;
+  --grad-teams-light: linear-gradient(90deg, var(--ta), var(--ta) 30%, var(--tb) 70%, var(--tb));
+  --grad-teams-glow: linear-gradient(90deg, color-mix(in oklab, var(--ta) 24%, transparent), color-mix(in oklab, var(--ta) 10%, transparent) 42%, color-mix(in oklab, var(--tb) 10%, transparent) 58%, color-mix(in oklab, var(--tb) 24%, transparent));
 }
-.game-card::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
-  background-image: var(--grad-teams-wash); -webkit-mask-image: var(--mask-teams-rise); mask-image: var(--mask-teams-rise); }
+.game-card { position: relative; }
+.hero-games .stadium-wrap { isolation: isolate; }
+.hero-games .stadium-wrap .venue-photo { filter: var(--venue-grade-lit); background-color: var(--night); }
+.hero-games .stadium-wrap:has(.venue-photo)::before { content: ""; position: absolute; left: 0; right: 0; top: 0; z-index: 2; pointer-events: none;
+  height: calc(100% + var(--tile-fade-run)); background-image: var(--grad-teams-light); mix-blend-mode: overlay; }
 .game-card .game-info, .game-card .wind-wrap { position: relative; z-index: 3; }
 
 /* ==========================================================================

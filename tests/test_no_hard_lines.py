@@ -232,14 +232,21 @@ def test_a_games_colours_are_light_not_a_rule():
     """Ethan, 2026-10-28, circling a Home tile: "The stadium thing has these
     hard lines that look gross." The teams' wash was painted on the facts'
     own box, with a band of colour along its top: it began in a line across
-    the photograph and ended in another over the weather. It is one layer
-    over the whole card now, rising through a mask and running to the foot,
-    with the chips and the words above it."""
-    wash = BLEND[BLEND.index(".game-card::after {"):]
-    wash = wash[:wash.index("}") + 1]
-    assert "inset: 0;" in wash and "background-image: var(--grad-teams-wash);" in wash, wash
-    assert "mask-image: var(--mask-teams-rise);" in wash and "z-index: 2;" in wash, wash
-    assert re.search(r"--mask-teams-rise: linear-gradient\(to bottom, transparent \d+%, #000 \d+%\);", CSS)
+    the photograph and ended in another over the weather. It became one
+    layer over the whole card, rising through a mask — and the same evening
+    ("these colors are not blending well at all and not matching the
+    teams") the light the stadium itself is lit by: laid over the
+    photograph and the photograph's run behind the facts, ending where the
+    fade does, under the chips and the words
+    (tests/test_the_stadium_wears_its_teams_light.py)."""
+    light = BLEND[BLEND.index(".hero-games .stadium-wrap:has(.venue-photo)::before {"):]
+    light = light[:light.index("}") + 1]
+    assert "height: calc(100% + var(--tile-fade-run));" in light and "z-index: 2;" in light, light
+    assert "background-image: var(--grad-teams-light);" in light, light
+    fade = CSS[CSS.index(".hero-games .stadium-wrap::after {"):]
+    assert "height: calc(100% + var(--tile-fade-run)); background: var(--grad-tile-fade), var(--grad-teams-glow);" \
+        in fade[:fade.index("}")], "the light ends where the fade ends, inside it"
+    assert ".game-card::after" not in CSS and "--mask-teams-rise" not in CSS, "no wash over the whole card"
     assert ".game-card .game-info::before" not in CSS, "no band along the top of the facts"
     assert not re.search(r"\.game-card \.game-info \{[^}]*background", CSS), "the facts' box paints nothing of its own"
     assert ".game-card .game-info, .game-card .wind-wrap { position: relative; z-index: 3; }" in BLEND

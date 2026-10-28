@@ -148,8 +148,11 @@ const activeTeams = () => TEAMS;
 """ + fn + """
 process.stdout.write(JSON.stringify(["CHI", "GB", "KC", "LV", "XX"].map(teamVivid)));""")
     assert got == ["#C83803", "#FFB612", "#E31837", "#000000", "var(--brand)"], got
-    assert 'style="--ta:${escapeAttr(teamVivid(g.away))};--tb:${escapeAttr(teamVivid(g.home))}"' in APP
-    assert ".game-card::after {" in CSS and "background-image: var(--grad-teams-wash);" in CSS
+    # The card wears them as the light its stadium is lit by since
+    # 2026-10-28 (tests/test_the_stadium_wears_its_teams_light.py).
+    assert 'style="--ta:${escapeAttr(teamLight(g.away))};--tb:${escapeAttr(teamLight(g.home))}"' in APP
+    assert "const hex = teamVivid(a);" in _fn(APP, "function teamLight(a) {")
+    assert "background-image: var(--grad-teams-light); mix-blend-mode: overlay;" in CSS
 
 
 # --- numbers that tick ------------------------------------------------------------------------

@@ -572,7 +572,16 @@
 .gp-hero.is-hero .gp-art svg { width: 100%; height: 100%; max-height: none; }
 .gp-hero.is-hero .gp-art .venue-photo { border-radius: 0; object-fit: cover; }
 .gp-hero.is-hero .gp-art::after {
-  content: ""; position: absolute; inset: 0; z-index: 1; background: var(--grad-gp-fade); pointer-events: none;
+  content: ""; position: absolute; inset: 0; z-index: 2; background: var(--grad-gp-fade), var(--grad-teams-glow); pointer-events: none;
+}
+/* The page a tile opens is lit as the tile is (styles.css, "Every game in
+   its teams' colours"): the neutral render in the two teams' light, under
+   the fade. */
+.gp-hero.is-hero .gp-art { isolation: isolate; }
+.gp-hero.is-hero .gp-art .venue-photo { filter: var(--venue-grade-lit); background-color: var(--night); }
+.gp-hero.is-hero .gp-art:has(.venue-photo)::before {
+  content: ""; position: absolute; inset: 0; z-index: 2; background-image: var(--grad-teams-light);
+  mix-blend-mode: overlay; pointer-events: none;
 }
 .gp-hero.is-hero .gp-art .status-badge, .gp-hero.is-hero .gp-art .venue-runners { z-index: 3; }
 .gp-hero.is-hero .gp-meta { position: relative; z-index: 1; padding: 150px 20px 20px; }

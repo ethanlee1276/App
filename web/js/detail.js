@@ -1837,7 +1837,7 @@ function renderGamePage() {
   // lost by showing it.
   // The board card's own tag, so the strip and the page behind it can
   // never disagree about the venue.
-  const gpPhoto = venuePhotoTag(state.sport, g.home, (window.ACTIVE_TEAMS || {})[g.home] || {});
+  const gpPhoto = venuePhotoTag(state.sport, g.home, (window.ACTIVE_TEAMS || {})[g.home] || {}, false, true);
   // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
   // straight off the slate; a cell without a real price shows a dash.
   // Insights are the game's own data fields, not narratives.
@@ -2022,7 +2022,7 @@ function renderGamePage() {
           of the day"). The venue fills the top of the card and fades into
           it; a gold eyebrow, the matchup in the headline serif, the when
           in mono — the potd-hero's dress on the game page's own pieces. */""}
-    <div class="gp-hero is-hero">
+    <div class="gp-hero is-hero" style="--ta:${escapeAttr(teamLight(g.away))};--tb:${escapeAttr(teamLight(g.home))}">
       <div class="gp-art">${art}${gpPhoto}
         ${mlb && isLive ? runnerOverlay(g) : ""}
         ${isLive ? `<div class="status-badge live"><span class="live-dot"></span>LIVE

@@ -184,7 +184,10 @@ def test_a_teams_colour_is_one_that_shows_on_the_black():
     assert tb == "#d50a0a", "the Bucs' red stands 3.7:1 off the black: it shows as it is"
     assert dal == "#b0b7bc", "the Cowboys' navy would vanish: their silver"
     assert hou == "#a71930", "no colour of the Texans' reaches 3:1; their red is the brightest past 2:1"
-    assert nyj == unknown == "#8c95a8", "the table's two Jets greens are both too dark: the board's grey"
+    # The table gave the Jets two greens too dark for any board until
+    # 2026-10-28 (the Packers' among them); their own green shows past 2:1.
+    assert nyj == "#125740", "the Jets' green, their brightest past 2:1"
+    assert unknown == "#8c95a8", "a team the table does not know: the board's grey"
     assert cin == "#c6011f" and mil == "#ffc52f", "the Reds' red, the Brewers' gold"
 
 

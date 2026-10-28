@@ -97,7 +97,7 @@ def test_the_header_is_dressed_as_the_pick_of_the_day():
     fills the top band and fades into the panel under a gold eyebrow and
     the matchup in the headline serif."""
     page = _fn("renderGamePage")
-    assert '<div class="gp-hero is-hero">' in page and 'class="gp-eyebrow"' in page
+    assert '<div class="gp-hero is-hero" style="--ta:' in page and 'class="gp-eyebrow"' in page
     hero = CSS[CSS.index(".gp-hero.is-hero { display: block;"):]
     assert "background: var(--grad-gp-fade)" in hero and "z-index: 1" in hero
     assert "font-family: var(--font-headline)" in hero, "the matchup in the POTD's serif"

@@ -940,6 +940,30 @@ function teamVivid(a) {
   }
   return t.primary || "var(--brand)";
 }
+/* …AND AS LIGHT (Ethan, 2026-10-28, on two Home tiles: the colours "not
+   matching the teams"). A stadium is lit in its two teams' colours, and a
+   colour lights only what it is bright enough to: teamVivid at no less
+   than a set lightness, lifted in OKLab so a navy and a gold rise alike,
+   its hue and its strength kept (the Ravens' purple stays a purple, the
+   Eagles' midnight green a green, the Commanders' burgundy a deep red). A
+   kit with no colour comes back grey, which lights nothing. */
+function teamLight(a) {
+  const hex = teamVivid(a);
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  const v = [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255) ** 2.2);
+  const [l, m, s] = [[.4122, .5363, .0514], [.2119, .6807, .1074], [.0883, .2817, .63]]
+    .map((w) => Math.cbrt(w[0] * v[0] + w[1] * v[1] + w[2] * v[2]));
+  const L = Math.max(.62, .2105 * l + .7936 * m - .0041 * s);
+  const A = 1.978 * l - 2.4286 * m + .4506 * s, B = .0259 * l + .7828 * m - .8087 * s;
+  // The lighter colour may not exist at full strength on a screen: ease
+  // the strength until it does.
+  for (let k = 1; ; k -= .05) {
+    const [p, q, r] = [[.3963, .2158], [-.1056, -.0639], [-.0895, -1.2915]].map(([x, y]) => (L + x * A * k + y * B * k) ** 3);
+    const rgb = [4.0767 * p - 3.3077 * q + .231 * r, -1.2684 * p + 2.6098 * q - .3413 * r, -.0042 * p - .7034 * q + 1.7076 * r];
+    if (k < .05 || rgb.every((c) => c >= 0 && c <= 1))
+      return "#" + rgb.map((c) => Math.round(255 * Math.min(1, Math.max(0, c)) ** (1 / 2.2)).toString(16).padStart(2, "0")).join("");
+  }
+}
 
 /* THE SAME ABBREVIATION IS FOUR DIFFERENT CLUBS. CIN, ATL, SF and TB all
    exist in more than one league, and `activeTeams()` is whichever tab the
@@ -7261,10 +7285,20 @@ const VENUE_TEAM_PHOTOS = new Set([]);
    THE FIRST CARD'S PHOTO (`lead`) is the first screen's largest thing, and
    it painted last on a slow phone because `lazy` told the browser to wait
    (2026-10-24): it is asked for at once and ahead of everything else; the
-   other cards stay lazy. */
-function venuePhotoTag(sport, home, homeTeam, lead) {
+   other cards stay lazy.
+   A STADIUM LIT BY ITS TEAMS (`lit`, 2026-10-28) takes its family's neutral
+   render instead, the one VENUE_LIT_BASE names: the game card and the game
+   page light it in the two teams' colours (styles.css, "Every game in its
+   teams' colours"), and a render already tinted for the home kit fought
+   that light — Miami's stadium green, Denver's blue, under the Patriots'
+   red and the Chiefs'. */
+const VENUE_LIT_BASE = { football: "steel", baseball: "steel", hockey: "steel",
+                         // The neutral arena is black above its court in a
+                         // tile's crop; the gold one, made grey, has stands.
+                         basketball: "gold" };
+function venuePhotoTag(sport, home, homeTeam, lead, lit) {
   const fam = VENUE_FAMILY[sport];
-  const render = fam ? venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`) : "";
+  const render = fam ? venueSrc(`img/venues/variants/${fam}-${lit ? VENUE_LIT_BASE[fam] : venueVariant(homeTeam)}.jpg`) : "";
   const own = VENUE_TEAM_PHOTOS.has(`${sport}/${home}`)
     ? venueSrc(`img/venues/${escapeHtml(sport)}/${escapeHtml(home)}.jpg`) : "";
   if (!own && !render) return "";
@@ -7662,7 +7696,7 @@ function gameCard(g, i) {
     + (n ? `, ${n} pick${n === 1 ? "" : "s"}` : ""));
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
-             style="--ta:${escapeAttr(teamVivid(g.away))};--tb:${escapeAttr(teamVivid(g.home))}"
+             style="--ta:${escapeAttr(teamLight(g.away))};--tb:${escapeAttr(teamLight(g.home))}"
              role="button" tabindex="0"
              aria-label="${isLive ? "Open the live play-by-play for" : "Open picks for"} ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}${doorFacts}">
       <div class="stadium-wrap">${art}${
@@ -7681,7 +7715,7 @@ function gameCard(g, i) {
         // one neither the cache token nor the one-generation gate could
         // reach. He chose photo-everywhere with the runners kept on top;
         // `runnerOverlay` is that, and it is why nothing is lost here.
-        venuePhotoTag(state.sport, g.home, homeTeam, i === 0)}${
+        venuePhotoTag(state.sport, g.home, homeTeam, i === 0, true)}${
         // The one thing the drawing carried that a photo cannot.
         mlb && isLive ? runnerOverlay(g) : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
