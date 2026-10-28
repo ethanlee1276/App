@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GB "What you circled on the Home: the tile, the pick numbers, the iPhone bar" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c -- '--mask-teams-rise: linear-gradient'
+SH
 run GA "Passkeys" 30 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'function pkHTML('
 curl -s -X POST -H 'Origin: https://qellysbook.com' -H 'Content-Type: application/json' -d '{}' https://qellysbook.com/api/passkey/login-options | python3 -c "import json,sys; print(json.load(sys.stdin).get('rpId'))"

@@ -61,7 +61,7 @@ def test_the_build_moves_to_the_next_slate_and_says_so():
     js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     fn = js[js.index("function renderGames()"):]
     fn = fn[:fn.index("\nfunction ", 10)]
-    assert "const up = state.data.upcoming;" in fn and "No games today — this is the next slate" in fn, \
+    assert "const up = (state.data || {}).upcoming;" in fn and "No games today — this is the next slate" in fn, \
         "the page's banner reads the same field for every sport"
 
 

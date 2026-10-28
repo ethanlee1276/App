@@ -540,13 +540,19 @@
   --fill-tone: rgba(255, 255, 255, .055);
   --fill-tone-2: rgba(255, 255, 255, .085);
   --glow-card: inset 0 1px 0 rgba(255, 255, 255, .035), 0 10px 30px rgba(0, 0, 0, .28);
+  /* A badge's cut-out: the card's own ground around a pill that sits on a
+     picture (a pick's rank on its player), so it reads as laid on top. The
+     card's colour, so it is never a ring that shows on the card itself. */
+  --glow-cutout: 0 0 0 2px var(--panel);
   --grad-rim-gold: linear-gradient(155deg, color-mix(in oklab, var(--brand) 85%, transparent), color-mix(in oklab, var(--brand) 18%, transparent) 30%, transparent 55%);
   --venue-grade: saturate(.55) brightness(.72) contrast(1.05);
   --grad-hero-veil: linear-gradient(90deg, var(--panel) 25%, color-mix(in oklab, var(--panel) 55%, transparent));
   /* NO HARD LINES (2026-10-27, later): edges that fade instead of stopping. */
   --grad-bar-fade: linear-gradient(180deg, var(--topbar-bg), transparent);
   --grad-team-spill: linear-gradient(180deg, color-mix(in oklab, var(--team-1) 22%, transparent), transparent);
-  --mask-spill: linear-gradient(to bottom, #000, transparent);
+  /* The teams' light on a game card rises out of the photograph's fade
+     and runs to the card's foot: no edge where it starts or stops. */
+  --mask-teams-rise: linear-gradient(to bottom, transparent 12%, #000 52%);
 }
 
 * { box-sizing: border-box; }
@@ -930,8 +936,14 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    belongs to the page. */
 .games-scroller { display: flex; gap: 15px; overflow-x: auto; overflow-y: hidden;
   padding: 4px 2px 14px; scroll-snap-type: x mandatory; }
-.games-scroller::-webkit-scrollbar { height: 8px; }
-.games-scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; }
+.games-scroller::-webkit-scrollbar { height: 6px; }
+.games-scroller::-webkit-scrollbar-thumb { background: var(--fill-tone-2); border-radius: 999px; }
+/* A finger swipes the strip; the bar was a grey dash under the first card
+   (Ethan's screenshot, 2026-10-28). Only a mouse needs one. */
+@media (pointer: coarse) {
+  .games-scroller { scrollbar-width: none; }
+  .games-scroller::-webkit-scrollbar { display: none; }
+}
 .game-card {
   flex: 0 0 272px; scroll-snap-align: start; overflow: hidden;
   background: var(--panel-2);
@@ -5047,6 +5059,7 @@ body.pk-open { overflow: hidden; }
   --fill-tone: rgba(23, 22, 19, .045);
   --fill-tone-2: rgba(23, 22, 19, .07);
   --glow-card: 0 1px 2px rgba(23, 22, 19, .05), 0 8px 24px rgba(23, 22, 19, .06);
+  --glow-cutout: 0 0 0 2px var(--panel);
   --venue-grade: saturate(.7) brightness(.95);
 }
 
@@ -6730,9 +6743,10 @@ body.has-deck #rail-live { display: none; }
 /* …and each chip sets its own line back. `.stadium-wrap { line-height: 0 }`
    (the image-gap fix) was inherited by the text chips, so the Top game
    ribbon drew as an 8px strip with its words half above the card
-   (the 2026-09-27 sweep). */
+   (the 2026-09-27 sweep). The weather chip was missed until 2026-10-28:
+   its pill was a 6px bar through the middle of "50° · 8mph". */
 .stadium-wrap .top-game-tag, .stadium-wrap .game-time-chip,
-.stadium-wrap .gc-picks { line-height: var(--lh-tight); }
+.stadium-wrap .gc-picks, .stadium-wrap .game-wx-chip { line-height: var(--lh-tight); }
 /* The live base diamond, over the photo. Bottom-left is the one corner
    nothing else on this card claims: the LIVE badge is top-left, the time
    and weather chips are top-right, and the picks chip is bottom-right. */
@@ -9889,9 +9903,9 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   background: var(--grad-ob-card);
   border: var(--hairline) solid transparent; }
 .ob-card.tier-top { border-color: transparent; }
-.ob-rank { grid-area: rank; align-self: start; justify-self: start; font-weight: 800; font-size: var(--fs-sm); color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 14%, transparent); border: var(--hairline) solid
-  transparent; border-radius: var(--radius-sm); padding: 3px 7px; }
+.ob-rank { grid-area: rank; align-self: start; justify-self: start; display: inline-flex; align-items: center;
+  justify-content: center; min-width: 24px; font-weight: 800; font-size: var(--fs-sm); line-height: 1; color: var(--brand);
+  border-radius: 999px; padding: 4px 8px; box-shadow: var(--glow-cutout); }
 .ob-who { grid-area: who; display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 0;
   color: inherit; text-align: left; cursor: pointer; min-width: 0; font: inherit; }
 .ob-face { position: relative; flex: none; display: inline-flex; }
@@ -9975,8 +9989,13 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   .ob-card { position: relative; padding: 10px 10px 8px 12px; gap: 6px 8px;
     grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas: "who odds ring" "checks checks checks"; }
-  .ob-rank { position: absolute; top: 0; left: 0; padding: 1px 5px; font-size: var(--fs-2xs);
-    border-radius: var(--radius-lg) 0 var(--radius-sm) 0; z-index: 1; }
+  /* THE RANK FITS ITS PILL (Ethan, 2026-10-28, circling the third pick's: "the numbers
+     ... doesn't fit the box"). It was a tab cut into the card's corner, so
+     the corner's curve ate the number, and it still named the desktop's
+     rank column, which Safari answered by drawing it above the card. A pill
+     of its own now, in the corner's room, placed by the card alone. */
+  .ob-card .ob-rank { grid-area: auto; position: absolute; top: 7px; left: 7px; z-index: 1;
+    height: 20px; padding: 0 6px; font-size: var(--fs-2xs); }
   .ob-who { gap: 10px; }
   .ob-face .avatar-stack, .ob-face svg { width: 40px !important; height: 40px !important; }
   .ob-logo { width: 16px; height: 16px; right: -3px; bottom: -3px; }
@@ -10340,8 +10359,8 @@ body.two-pane .view.pane-list, body.two-pane .view.active { position: sticky; to
 /* The list pane is a phone's width, so its picks wear the phone's card. */
 body.two-pane .pane-list .ob-card { position: relative; padding: 10px 10px 8px 12px; gap: 6px 8px;
   grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "who odds ring" "checks checks checks"; }
-body.two-pane .pane-list .ob-rank { position: absolute; top: 0; left: 0; padding: 1px 5px;
-  font-size: var(--fs-2xs); border-radius: var(--radius-lg) 0 var(--radius-sm) 0; z-index: 1; }
+body.two-pane .pane-list .ob-card .ob-rank { grid-area: auto; position: absolute; top: 7px; left: 7px; z-index: 1;
+  height: 20px; padding: 0 6px; font-size: var(--fs-2xs); }
 body.two-pane .pane-list .ob-checkcol { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
 body.two-pane .pane-list .ob-door, body.two-pane .pane-list .ob-view { display: none; }
 body.two-pane .pane-list .ob-ring { width: 44px; height: 44px; }
@@ -10897,7 +10916,8 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 .ob-ring.tier-look .ob-ring-fg { stroke: var(--sky); }
 .ob-tierword.tier-look { color: var(--sky); }
 .ob-card.tier-top { border-color: transparent; }
-.ob-rank { background: color-mix(in oklab, var(--brand) 16%, transparent); }
+.ob-rank { background: color-mix(in oklab, var(--brand) 18%, var(--panel)); }
+.ob-card.is-first .ob-rank { background: var(--brand-solid); color: var(--brand-ink); }
 .ob-card.is-first { position: relative; z-index: 0; border-color: transparent; box-shadow: var(--glow-card), var(--glow-gold); }
 .ob-card.is-first::before { content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: calc(var(--radius-lg) + 1px);
   background: var(--grad-rim-gold); pointer-events: none; }
@@ -10992,18 +11012,22 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 }
 
 /* EVERY GAME IN ITS TEAMS' COLOURS (app.js teamVivid; Apple Sports' tiles):
-   a fine line from the away side's colour to the home side's across the top
-   of the card's facts, and their light washed faintly under the names. */
+   the away side's light washed in from the left, the home side's from the
+   right. ONE LAYER OVER THE WHOLE CARD (Ethan, 2026-10-28, circling a Home
+   tile: "The stadium thing has these hard lines that look gross"). Painted
+   on the facts' own box, with a band of colour along its top, the wash
+   began in a line across the photograph and stopped in another over the
+   weather. It rises out of the photograph's fade now and runs to the
+   card's foot, under the chips and the words. */
 .game-card {
   --ta: var(--brand);
   --tb: var(--brand-2);
-  --grad-teams: linear-gradient(90deg, var(--ta), var(--tb));
   --grad-teams-wash: linear-gradient(90deg, color-mix(in oklab, var(--ta) 12%, transparent), transparent 45%, transparent 55%, color-mix(in oklab, var(--tb) 12%, transparent));
+  position: relative;
 }
-.game-card .game-info { position: relative; background-image: var(--grad-teams-wash); }
-.game-card .game-info::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 28px;
-  background: var(--grad-teams); opacity: .2; -webkit-mask-image: var(--mask-spill); mask-image: var(--mask-spill);
-  pointer-events: none; }
+.game-card::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
+  background-image: var(--grad-teams-wash); -webkit-mask-image: var(--mask-teams-rise); mask-image: var(--mask-teams-rise); }
+.game-card .game-info, .game-card .wind-wrap { position: relative; z-index: 3; }
 
 /* ==========================================================================
    GLASS FOR WHAT FLOATS (2026-10-24, Ethan: "carry the Liquid Glass look onto
@@ -11014,7 +11038,7 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
    toasts and the crash note, the slip's pill and its sheet, the
    pull-to-refresh pill, a chart's tooltip, the dialogs (a player, a fantasy
    dossier, the tour, the install prompt; the chart card in css/carrychart.css), the
-   feed's ⋯ menus (css/social.css), and the iPhone app's top bar, the capsule tab bar's twin. The Duo's tokens, both themes,
+   feed's ⋯ menus (css/social.css); the iPhone app's top bar is ruled here too, solid since 2026-10-28. The Duo's tokens, both themes,
    no blur; solid for anyone asking for less transparency or more contrast.
    ========================================================================== */
 .tf-toast, .crash-note, .slip-bar, [id="ptr"] {
@@ -11024,9 +11048,18 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
   background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
 .graph-tip { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim-soft), var(--glass-depth); }
 @media (max-width: 760px) {
+  /* SOLID, WITH THE CLOCK'S STRIP HELD STILL (Ethan's screenshots,
+     2026-10-28). Glass with nothing behind it to blur is a window: the
+     page's words ran behind the logo. And retracting, the bar slid up
+     under the clock, logo and all. The bar is the page's own ground now,
+     and a strip of it holds the status bar's place while the bar slides
+     away beneath, as a native app's does. */
   html.store-ios .topbar, html.ios-home .topbar {
-    background: var(--glass-sheen), var(--glass-tint-strong); box-shadow: var(--glass-rim-soft);
+    background: var(--bg); box-shadow: var(--glass-rim-soft);
     border-bottom-color: transparent; }
+  html.store-ios body::before, html.ios-home body::before {
+    content: ""; position: fixed; top: 0; left: 0; right: 0; z-index: 41; pointer-events: none;
+    height: env(safe-area-inset-top, 0px); background: var(--bg); }
   /* A toast floats above the tab bar, never on it (it sat 26px up, over
      the Live button); above the capsule in the iPhone app. */
   .tf-toast { bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
@@ -11036,5 +11069,4 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .tf-toast, .crash-note, .slip-bar, [id="ptr"], .slip-panel, .pk-card, .ffd-card, .tour-card, .a2hs-card,
   .graph-tip { background-image: none; }
-  html.store-ios .topbar, html.ios-home .topbar { background: var(--topbar-bg); }
 }

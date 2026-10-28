@@ -149,7 +149,7 @@ const activeTeams = () => TEAMS;
 process.stdout.write(JSON.stringify(["CHI", "GB", "KC", "LV", "XX"].map(teamVivid)));""")
     assert got == ["#C83803", "#FFB612", "#E31837", "#000000", "var(--brand)"], got
     assert 'style="--ta:${escapeAttr(teamVivid(g.away))};--tb:${escapeAttr(teamVivid(g.home))}"' in APP
-    assert ".game-card .game-info::before {" in CSS and "background: var(--grad-teams);" in CSS
+    assert ".game-card::after {" in CSS and "background-image: var(--grad-teams-wash);" in CSS
 
 
 # --- numbers that tick ------------------------------------------------------------------------

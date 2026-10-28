@@ -60,7 +60,10 @@ def test_less_transparency_or_more_contrast_gets_solid_panes():
     solid = CODE[at:]
     for sel in FLOATS:
         assert sel in solid, sel
-    assert "background-image: none" in solid and "background: var(--topbar-bg)" in solid
+    assert "background-image: none" in solid
+    # The iPhone app's bar needs no rule here: it is solid already (2026-10-28).
+    bar = CODE[CODE.index("html.store-ios .topbar, html.ios-home .topbar {"):]
+    assert bar[:bar.index("}")].split("{", 1)[1].strip().startswith("background: var(--bg);"), bar[:200]
     assert "prefers-reduced-transparency: reduce" in CC
     assert re.search(r"prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{\s*\.fd-popover \{ background-image: none;", SOCIAL)
 
@@ -79,7 +82,7 @@ def test_in_a_browser_the_layers_are_lit_panes_and_a_tabs_bar_is_not_glass():
     srv, port = rendercheck._serve()
     got = {}
     probe = """() => { const s = (q) => { const e = document.querySelector(q); if (!e) return null;
-        const c = getComputedStyle(e); return { bg: c.backgroundImage, shadow: c.boxShadow, blur: c.backdropFilter }; };
+        const c = getComputedStyle(e); return { bg: c.backgroundImage, color: c.backgroundColor, shadow: c.boxShadow, blur: c.backdropFilter }; };
         const t = document.querySelector('.tf-toast'), b = document.querySelector('.tabbar');
         const gap = t && b ? b.getBoundingClientRect().top - t.getBoundingClientRect().bottom : null;
         return { tour: s('.tour-card'), toast: s('.tf-toast'), bar: s('.topbar'), gap }; }"""
@@ -120,7 +123,10 @@ def test_in_a_browser_the_layers_are_lit_panes_and_a_tabs_bar_is_not_glass():
         g = got[name]
         for layer in ("tour", "toast"):
             assert g[layer] and "gradient" in g[layer]["bg"] and "inset" in g[layer]["shadow"], (name, layer, g[layer])
-        assert "gradient" in g["bar"]["bg"] and "inset" in g["bar"]["shadow"], (name, g["bar"])
+        # THE iPHONE APP'S BAR IS SOLID (Ethan's screenshots, 2026-10-28): glass
+        # with nothing behind it to blur let the page's words run behind the logo.
+        assert g["bar"]["bg"] == "none" and g["bar"]["color"].startswith("rgb(") and "inset" in g["bar"]["shadow"], \
+            (name, g["bar"])
         assert all(not isinstance(v, dict) or v["blur"] in ("none", "") for v in g.values()), g
         assert g["gap"] is not None and g["gap"] > 0, ("the toast sits on the tab bar", g["gap"])
     assert got["ios"]["tour"]["bg"] != got["ios light"]["tour"]["bg"], "the light theme has its own panes"

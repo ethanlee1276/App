@@ -7034,7 +7034,9 @@ function renderGames() {
      an unlabelled future slate reads as today's and sends someone
      looking for a 3:30 kick that is five days out. */
   let upEl = document.getElementById("upcoming-banner");
-  const up = state.data.upcoming;
+  // No board yet (a cold open, a league mid-switch): the fast scoreboard's
+  // live redraw can land first, and it is not a reason to throw.
+  const up = (state.data || {}).upcoming;
   if (up && up.date && games.length) {
     if (!upEl) {
       upEl = document.createElement("div");
@@ -7730,11 +7732,12 @@ function gameBetCount(g) {
 function gamePickCounts(g) {
   const key = (r) => [r.player || r.team || "", r.market || r.bet_type || "",
     String(r.side || "").toLowerCase(), r.line ?? ""].join("|");
+  const d = state.data || {};
   const edge = [
-    ...(state.data.recommendations || []).filter((r) => propInGame(r, g) && passesFilters(r)),
-    ...(state.data.game_bets || []).filter(
+    ...(d.recommendations || []).filter((r) => propInGame(r, g) && passesFilters(r)),
+    ...(d.game_bets || []).filter(
       (b) => b.home === g.home && b.away === g.away && passesGameBet(b))];
-  const likely = (state.data.most_likely || []).filter(showableLikelyRow)
+  const likely = (d.most_likely || []).filter(showableLikelyRow)
     .filter((r) => propInGame(r, g));
   const seen = new Set(edge.map(key));
   const extra = likely.filter((r) => !seen.has(key(r))).length;

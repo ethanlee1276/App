@@ -157,6 +157,19 @@ def test_no_view_throws_or_draws_nothing_when_tapped_before_the_board():
                   return { len: t.length,
                            head: t.replace(/\\s+/g, ' ').slice(0, 60) }; }""")
                 res[v] = {"threw": thrown, **info}
+            # THE STRIP'S LIVE REDRAW, BOARD OR NOT (2026-10-28): the fast
+            # scoreboard's redraw and its live timer call renderGames on
+            # their own clock, and one landed while the board was still
+            # null — "Cannot read properties of null (reading 'upcoming')",
+            # once in a busy gate. Called outright here, so it cannot hide
+            # behind the timing.
+            page.evaluate("() => switchView('recommended', false)")
+            page.wait_for_timeout(300)
+            res["renderGames"] = {"threw": page.evaluate(
+                """() => { state.data = null;
+                            try { renderGames(); return null; }
+                            catch (e) { return String((e && e.message) || e); } }"""),
+                "len": 99, "head": ""}
             browser.close()
     finally:
         srv.shutdown()

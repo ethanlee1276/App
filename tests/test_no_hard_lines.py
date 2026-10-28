@@ -14,7 +14,10 @@ blended and just like feel more professional." What these hold:
     through, the bar casts a soft fade, a team's colour spills from the bar
     rather than drawing a stripe, and the iPhone app's glass bar has no rim;
   * a league button is a tint and its light, never a ring;
-  * a game card's team colours are light from the photo, not a 2px rule;
+  * a game card's team colours are one layer over the whole card, rising
+    out of the photograph and running to its foot: no band where they start
+    or stop (2026-10-28), and the strip's bar is no grey dash on a phone;
+  * a pick's rank is a pill that fits its number, placed by the card alone;
   * every field is a filled well;
   * (the sweep after, 2026-10-28) a badge, a note or a frame is a tint; a
     stripe is light from the left edge; an open tab is a tinted pill; what
@@ -226,9 +229,42 @@ def test_a_league_button_is_a_tint_and_its_light():
 
 
 def test_a_games_colours_are_light_not_a_rule():
-    rule = BLEND[BLEND.index(".game-card .game-info::before {"):]
-    rule = rule[:rule.index("}") + 1]
-    assert "height: 2px" not in rule and "mask-image: var(--mask-spill);" in rule
+    """Ethan, 2026-10-28, circling a Home tile: "The stadium thing has these
+    hard lines that look gross." The teams' wash was painted on the facts'
+    own box, with a band of colour along its top: it began in a line across
+    the photograph and ended in another over the weather. It is one layer
+    over the whole card now, rising through a mask and running to the foot,
+    with the chips and the words above it."""
+    wash = BLEND[BLEND.index(".game-card::after {"):]
+    wash = wash[:wash.index("}") + 1]
+    assert "inset: 0;" in wash and "background-image: var(--grad-teams-wash);" in wash, wash
+    assert "mask-image: var(--mask-teams-rise);" in wash and "z-index: 2;" in wash, wash
+    assert re.search(r"--mask-teams-rise: linear-gradient\(to bottom, transparent \d+%, #000 \d+%\);", CSS)
+    assert ".game-card .game-info::before" not in CSS, "no band along the top of the facts"
+    assert not re.search(r"\.game-card \.game-info \{[^}]*background", CSS), "the facts' box paints nothing of its own"
+    assert ".game-card .game-info, .game-card .wind-wrap { position: relative; z-index: 3; }" in BLEND
+    # The strip scrolls under a finger with no bar; a mouse gets a round one.
+    assert "@media (pointer: coarse) {\n  .games-scroller { scrollbar-width: none; }\n" \
+           "  .games-scroller::-webkit-scrollbar { display: none; }" in CSS
+    assert ".games-scroller::-webkit-scrollbar-thumb { background: var(--fill-tone-2); border-radius: 999px; }" in CSS
+
+
+def test_a_picks_rank_is_a_pill_that_fits_its_number():
+    """Ethan, 2026-10-28, circling "#3": "the numbers ... doesn't fit the
+    box". On a phone the rank was a tab cut into the card's corner, so the
+    corner's curve ate the number, and it still named the desktop's rank
+    column, which Safari answered by drawing it above the card."""
+    look = CSS[CSS.index(".ob-rank { grid-area: rank;"):]
+    look = look[:look.index("}") + 1]
+    for want in ("border-radius: 999px;", "min-width: 24px;", "box-shadow: var(--glow-cutout);", "line-height: 1;"):
+        assert want in look, want
+    assert ".ob-rank { background: color-mix(in oklab, var(--brand) 18%, var(--panel)); }" in CSS, "opaque on a picture"
+    for pre in ("  .ob-card .ob-rank {", "body.two-pane .pane-list .ob-card .ob-rank {"):
+        rule = CSS[CSS.index(pre):]
+        rule = rule[:rule.index("}") + 1]
+        for want in ("grid-area: auto;", "position: absolute;", "top: 7px; left: 7px;", "height: 20px;"):
+            assert want in rule, (pre, want)
+        assert "border-radius" not in rule, "not a tab cut into the corner"
 
 
 def test_every_field_is_a_filled_well():
