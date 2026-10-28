@@ -330,6 +330,8 @@ async function liveChatCounts(games) {
    it never blinks out while the tab repaints. */
 let _ypLast = "";
 function ypHTML(rows) {
+  // A game saved for later (app.js spoiledG) keeps its players' lines to itself.
+  rows = rows.filter((r) => !spoiledG(r.league, { event_id: r.event_id }));
   if (!rows.length) return "";
   return `<div class="yp"><div class="section-title">Your players
       <span class="sub">— their lines right now, from every game</span></div>

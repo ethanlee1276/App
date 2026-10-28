@@ -333,6 +333,9 @@
   function liveHTML(l) {
     const g = l.live;
     if (!g || (g.state !== "live" && g.state !== "final")) return "";
+    // A game saved for later (app.js spoiledG): the leg stays, what its game has done to it waits.
+    if (typeof spoiledG === "function" && spoiledG(String(l.league || l.sport || "").toLowerCase(), g))
+      return `<div class="pgr-live"><span class="pgr-live-tag fin">Spoiler-free</span> open the game to see it</div>`;
     const tag = g.state === "live" ? `<span class="pgr-live-tag">Live</span>` : `<span class="pgr-live-tag fin">Final</span>`;
     const score = g.home_score != null && g.away_score != null
       ? `${esc(g.away)} ${esc(g.away_score)} – ${esc(g.home_score)} ${esc(g.home)}` : "";

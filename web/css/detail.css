@@ -714,6 +714,14 @@
 @media (max-width: 720px) { .pbp-moment-banner { display: flex; } }
 @media (prefers-reduced-motion: reduce) { .pbp-moment-banner { animation: none; } }
 
+/* Spoiler-free later (pbpSpoilHTML, pbpSpoilVeilHTML): the door beside the
+   TV delay, and the veil a saved game draws instead of itself. */
+.pbp-spoil-go { margin: 8px 0 0; font-size: var(--fs-sm); }
+.pbp-spoil { display: grid; gap: 8px; justify-items: start; margin-top: 14px; padding: 22px 20px; }
+.pbp-spoil-k { margin: 0; font-size: var(--fs-xs); font-weight: 700; color: var(--sky); }
+.pbp-spoil-t { margin: 0; font-size: var(--fs-2xl); }
+.pbp-spoil .mini { margin: 0; max-width: var(--measure-tight); color: var(--text-dim); }
+
 /* The game's win chance (pbpWinChartHTML). */
 .pbp-wp { display: block; width: 100%; height: 110px; margin-top: 6px; }
 .pbp-wp-mid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }

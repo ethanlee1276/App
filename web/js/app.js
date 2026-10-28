@@ -5595,6 +5595,21 @@ function trackerCurrent(r, g) {
 }
 
 function liveTrackerRows(rows) {
+  return trackerFastRows(rows).map(spoilRow);
+}
+
+/* A bet on a game saved for later (spoiledG) keeps its ticket and loses
+   what the game has done to it: the number, the verdict, the live chance,
+   and the score, bases and box under it. Its phase still moves. */
+function spoilRow(r) {
+  const gm = (r && r.game) || {};
+  if (!spoiledG(state.sport, gm)) return r;
+  return { ...r, current: null, live_prob: null, history: [], spoiled: true,
+    status: r.status === "upcoming" || r.status === "unmapped" ? r.status : "spoiled",
+    game: { ...gm, home_score: null, away_score: null, situation: null, live: {}, plays: [], players: [] } };
+}
+
+function trackerFastRows(rows) {
   const fast = (typeof _liveAll !== "undefined" && _liveAll && _liveAll.games) || [];
   // The finished games too (`fetchAllLive` keeps them apart because the
   // cards draw only the live list): a bet on a game that has ended
@@ -5799,6 +5814,9 @@ function renderLivePicks() {
   const offBoard = (r) => r.phase === "upcoming" && r.status !== "unmapped"
     && !onBoard.has(`${norm(r.player)}|${norm(r.market)}`);
   const statusBits = (r) => {
+    if (r.spoiled)
+      return `<span style="color:var(--text-mute);font-weight:700">SPOILER-FREE</span>
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">open the game to see it</span>`;
     if (r.status === "cleared")
       return `<span style="color:var(--good);font-weight:800">${icon('check')} CLEARED</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${r.current} so far — over ${r.line} is locked</span>`;
@@ -5867,7 +5885,7 @@ function renderLivePicks() {
      state.data.games by matchup. */
   const TEAM_MKTS = new Set(["moneyline", "spread", "team_total", "total"]);
   const betTrack = (r) => {
-    if (r.phase !== "live" || !TEAM_MKTS.has(r.market) || !r.game) return "";
+    if (r.phase !== "live" || r.spoiled || !TEAM_MKTS.has(r.market) || !r.game) return "";
     const g = (state.data.games || []).find((x) =>
       x.home === r.game.home && x.away === r.game.away);
     if (!g || !g.line_track) return "";
@@ -7450,7 +7468,26 @@ function liveLineTitle(L) {
   return `Live line${clock ? ` as of ${clock}` : ""}${books ? ` · best price across ${books} book${books === 1 ? "" : "s"}` : ""}`;
 }
 
+/* SPOILER-FREE LATER (the ideas list, 2026-10-28): the games a reader is
+   saving for later, kept on this device for 36 hours at most (js/detail.js
+   sets and clears them). Matched by the game's id, or by its teams where a
+   card has none; every card that draws a score asks first. */
+const SPOIL_KEY = "qb_spoil_v1";
+function spoiledG(sport, g) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(SPOIL_KEY) || "{}") || {}; } catch (e) { all = {}; }
+  // A live page's id is ESPN's or MLB's number; a board that keys its games
+  // by the odds feed's id (college) is matched by its teams instead.
+  const id = g && /^\d+$/.test(g.event_id || g.game_pk) && (g.event_id || g.game_pk), now = Date.now();
+  return !!g && Object.entries(all).some(([k, v]) => v && v.exp > now
+    && (id ? k === `${sport}_${id}` : v.l === sport && v.a === g.away && v.h === g.home));
+}
+
 function gameCard(g, i) {
+  // Saved for later: the game keeps its state and nothing else of the live
+  // file (no score, clock, count or runners), here and on the photo's board.
+  const hid = spoiledG(state.sport, g);
+  if (hid) g = { ...g, live: { state: (g.live || {}).state } };
   const mlb = state.sport === "mlb";
   // The market row carries the spread and the total in columns, so the
   // sub-line under the name stops repeating them where the row draws.
@@ -7560,6 +7597,7 @@ function gameCard(g, i) {
   } else if (isFinal) {
     badge = `<div class="status-badge final">FINAL${live.period && live.period !== "Final" ? " · " + escapeHtml(live.period) : ""}</div>`;
   }
+  if (hid && (isLive || isFinal)) badge = `<div class="status-badge">Spoiler-free</div>`;
   // MLB live: the count and the outs. The runners are on the park art
   // above, lit on the bases they are standing on, so this line no longer
   // repeats them.
@@ -28144,7 +28182,7 @@ function renderRail() {
     liv.innerHTML = `<div class="rail-title">Live now
         <a class="rail-see" href="#live">See all</a></div>
       ${games.slice(0, 3).map((g) => {
-        const lv = g.live || {};
+        const lv = spoiledG(state.sport, g) ? {} : g.live || {};
         const fav = g.favorite || g.home;
         const sp = (side) => g.spread == null ? ""
           : `${side} ${side === fav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
@@ -28694,6 +28732,10 @@ function watchHTML(g, league, cls) {
 }
 
 function liveCardHTML({ sport, g, bets }) {
+  // Saved for later: the clock stays, the score, plays and line go.
+  const hid = spoiledG(sport, g);
+  const lv0 = g.live || {};
+  if (hid) g = { ...g, live: { state: lv0.state, period: lv0.period, clock: lv0.clock }, plays: [], line_track: null };
   const lv = g.live || {};
   const teams = teamsForSport(sport);
   const mark = (abbr) => teamMark(abbr, 34, teams, sport);
@@ -28744,6 +28786,7 @@ function liveCardHTML({ sport, g, bets }) {
         lv.home_score != null ? lv.home_score : "–"}</b>
       <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
     </div>
+    ${hid ? `<p class="rail-quiet lb-why">Spoiler-free: the score and the plays wait until you open the game.</p>` : ""}
     ${linesGrid}
     ${pressureLiveHTML(sport, g)}
     ${playsHTML({ ...g, room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : "" })}
@@ -30572,7 +30615,7 @@ async function renderLiveBoard() {
   ypMount(host);
   if (games.length) loadRoom("js/chat.js", "css/chat.css").then((ok) => {
     if (!ok) return;
-    if (pfHost && pfHost.isConnected) playFeedMount(pfHost, shown);
+    if (pfHost && pfHost.isConnected) playFeedMount(pfHost, shown.filter((x) => !spoiledG(x.sport, x.g)));
     liveChatCounts(games);
   });
   /* A LEAGUE CHIP MOVES THE WHOLE TAB, NOT THE TOP HALF OF IT.
@@ -31204,6 +31247,7 @@ function deckStateWord(r) {
   if (s === "cleared" || s === "won_pending") return ["Won", "good"];
   if (s === "busted" || s === "lost_pending" || s === "dead") return ["Gone", "bad"];
   if (s === "push_pending") return ["Push", ""];
+  if (s === "spoiled") return ["Hidden", ""];
   return ["Tracking", ""];
 }
 
@@ -31231,11 +31275,12 @@ function deckHead(title, href, view, link) {
 }
 
 function deckGameHTML(x) {
-  const g = x.g, lv = g.live || {};
+  const hid = spoiledG(x.sport, x.g);
+  const g = hid ? { ...x.g, live: { state: (x.g.live || {}).state } } : x.g, lv = g.live || {};
   const hold = liveHoldWord(lv);
   const row = (abbr, score) => `<div class="hd-team"><span>${teamMarkIn(x.sport, abbr, 22)}<em>${
     escapeHtml(teamNameIn(x.sport, abbr))}</em></span><b>${score != null ? score : "–"}</b></div>`;
-  const sit = [lv.period, lv.clock].filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
+  const sit = hid ? "Spoiler-free" : [lv.period, lv.clock].filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
   // v3: the thin win-probability bar every book's live card carries —
   // drawn only when the fast scoreboard read the clock and priced one
   // (livescore_build._win_prob returns None otherwise), never a coin flip.

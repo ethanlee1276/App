@@ -34,6 +34,7 @@ def _run(rows, fast, sport="nfl", finals=None):
     on UPCOMING the moment its game ended)."""
     js = f"""
     const state = {{ sport: {json.dumps(sport)} }};
+    const spoiledG = () => false;   // nothing saved for later (tests/test_spoiler_free_later.py)
     const _liveAll = {{ at: 1, games: {json.dumps(fast)},
                        finals: {json.dumps(finals or [])} }};
     {_fn()}

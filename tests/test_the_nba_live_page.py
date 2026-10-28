@@ -539,7 +539,7 @@ def test_the_views_draw_the_shots_the_five_and_the_flow():
 # --- the page: the wiring ----------------------------------------------------------
 def test_the_page_is_handed_over_and_loaded_the_way_the_others_are():
     assert ('if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, '
-            'callit: pbpTvHTML(d) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) '
+            'callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) '
             '{ if (lv.state === "live") again(); return; }') in APP
     assert "function hoops(host, ctx)" in GC and 'css.href = "css/hoopscast.css";' in GC and 'el.src = "js/hoopscast.js";' in GC
     assert 'el.addEventListener("error", () => { _hoopsFailed = true; resolve(false); });' in GC

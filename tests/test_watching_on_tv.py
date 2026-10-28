@@ -68,8 +68,8 @@ def test_the_page_holds_the_final_and_the_strip_and_offers_the_choice():
         "the chat's scoreboard is the held one too"
     assert "? { ...g, live: { ...(g.live || {}), ...(d.live || {}) } } : g));" in fn[i:i + 600]
     assert '(!tvHeld.held && fast && (fast.live || {}).state === "final")' in fn
-    assert "${pbpTvHTML(d)}${pbpAwayHTML(d, league)}" in DET
-    assert "callit: pbpTvHTML(d) + pbpAwayHTML(d, league)" in DET, "basketball and hockey too"
+    assert "${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}" in DET
+    assert "callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league)" in DET, "basketball and hockey too"
     tv = DET[DET.index("function pbpTvHTML("):]
     assert 'if (!d || (d.live || {}).state !== "live") return "";' in tv[:120]
 

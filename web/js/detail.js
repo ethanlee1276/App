@@ -1723,7 +1723,7 @@ function renderGamePage() {
   if (!host) return;
   // A deep link renders before the slate arrives; renderAll calls back.
   if (!state.data) { host.innerHTML = `<p class="loading">Loading the slate…</p>`; return; }
-  const g = findGame(state.gameId);
+  let g = findGame(state.gameId);
   if (!g) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("stadium", 30)}</div>
       <div class="es-title">That game isn’t on the current slate</div>
@@ -1734,6 +1734,9 @@ function renderGamePage() {
     if (b) b.addEventListener("click", detailBack);
     return;
   }
+  // Saved for later (app.js spoiledG): the page says the game is on, and
+  // its score, its bases and its room wait until it is opened.
+  if (spoiledG(state.sport, g)) g = { ...g, live: { state: (g.live || {}).state, period: (g.live || {}).period } };
   // The cards drawn below know they are on their own game's page
   // (app.js cardInGame): the matchup, the kickoff and the weather lines
   // the header carries are not printed again on every one of them.
@@ -1990,7 +1993,8 @@ function renderGamePage() {
       // THE GAME'S CHAT BEFORE KICKOFF TOO (Real's pregame room and its
       // "who wins" poll): the same room the play-by-play page opens, keyed
       // by the fast scoreboard's own id for this game.
-      if (row && (row.event_id || row.game_pk) && state.view === "game") chatMount(state.sport, row.event_id || row.game_pk, row);
+      if (row && (row.event_id || row.game_pk) && state.view === "game" && !spoiledG(state.sport, row))
+        chatMount(state.sport, row.event_id || row.game_pk, row);
       if (isFinal) return;
       if (slot && row && state.view === "game") {
         slot.innerHTML = (row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : "";
@@ -2733,6 +2737,46 @@ function pbpTvHTML(d) {
       n ? ` aria-label="${n} seconds behind"` : ""}>${n ? `${n}s` : "Off"}</button>`).join("")}${
     dl ? `<span class="pbp-tv-note">Plays and chat held ${dl}s so nothing spoils your TV</span>` : ""}</div>`;
 }
+/* SPOILER-FREE LATER (the ideas list, 2026-10-28). "Watching later? Hide
+   the score" saves a game for later on this device: its page draws a veil
+   instead of the game (no score, no plays, no chart, no chat), and every
+   card that draws a score asks first (app.js spoiledG), for 36 hours or
+   until "Show the game". The phone's alerts come from the box and are not
+   held, as the TV delay says of itself. */
+const SPOIL_MS = 36 * 3600 * 1000;
+function spoilSet(room, on, away, home, league) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(SPOIL_KEY) || "{}") || {}; } catch (e) { all = {}; }
+  const now = Date.now();
+  for (const k of Object.keys(all)) if (!all[k] || all[k].exp <= now) delete all[k];
+  if (on) all[room] = { l: league, a: away, h: home, exp: now + SPOIL_MS };
+  else delete all[room];
+  try { localStorage.setItem(SPOIL_KEY, JSON.stringify(all)); } catch (e) { /* private mode: nothing kept */ }
+}
+function pbpSpoilHTML(d, league, event) {
+  if (!d || !league || !event) return "";
+  return `<button type="button" class="btn ghost pbp-spoil-go" data-spoil="${escapeAttr(`${league}_${event}`)}"
+    data-l="${escapeAttr(league)}" data-a="${escapeAttr(d.away || "")}" data-h="${escapeAttr(d.home || "")}">Watching later? Hide the score</button>`;
+}
+function pbpSpoilVeilHTML(d, league, event) {
+  return `<div class="card pbp-spoil">
+    <p class="pbp-spoil-k">Spoiler-free</p>
+    <h2 class="pbp-spoil-t">${escapeHtml(teamNameIn(league, d.away))} at ${escapeHtml(teamNameIn(league, d.home))}</h2>
+    <p class="mini">You’re saving this one for later. Its score, its plays and its chat are hidden on this
+      device, here and on every card, until you open it. Phone alerts come from the box and are not held.</p>
+    <button type="button" class="btn primary" data-spoil-show="${escapeAttr(`${league}_${event}`)}">Show the game</button>
+  </div>`;
+}
+if (typeof window !== "undefined" && !window._spoilBound) {
+  window._spoilBound = true;
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-spoil], [data-spoil-show]");
+    if (!b) return;
+    if (b.dataset.spoilShow) spoilSet(b.dataset.spoilShow, false);
+    else spoilSet(b.dataset.spoil, true, b.dataset.a, b.dataset.h, b.dataset.l);
+    if (typeof renderPbpPage === "function") renderPbpPage();
+  });
+}
 if (typeof window !== "undefined" && !window._tvBound) {
   window._tvBound = true;
   document.addEventListener("click", (e) => {
@@ -3130,7 +3174,7 @@ function pbpBack() {
 function pbpStripHTML(league, games, current) {
   if (!games.length) return "";
   const chip = (g) => {
-    const lv = g.live || {};
+    const lv = g.live || {}, hid = spoiledG(league, g);
     const id = String(g.event_id || g.game_pk || "");
     const on = !!id && id === current;
     const door = !!id && (lv.state === "live" || lv.state === "final");
@@ -3155,7 +3199,7 @@ function pbpStripHTML(league, games, current) {
       door ? ` data-pbp="${escapeAttr(id)}"` : bg ? ` data-pbp-game="${escapeAttr(gameId(bg))}"
       title="Open this game’s page"` : " disabled"}>
       <div class="pbp-chip-head">${head}</div>
-      ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}
+      ${row(g.away, hid ? null : lv.away_score)}${row(g.home, hid ? null : lv.home_score)}
       <div class="pbp-chip-foot">${escapeHtml(lv.state === "live" ? (lv.period || "") : "")}</div>
     </button>`;
   };
@@ -4308,6 +4352,15 @@ async function renderPbpPage(tick) {
     strip = (strip || []).map((g) => (String(g.event_id) === String(event)
       ? { ...g, live: { ...(g.live || {}), ...(d.live || {}) } } : g));
   }
+  // Saved for later: the veil instead of the game, and no chat for it.
+  if (d && spoiledG(league, { event_id: event, away: d.away, home: d.home })) {
+    // No room, and so no chat bar at the foot of the page either (chatFab
+    // takes it down once the room is gone).
+    if (typeof chatReset === "function") { chatReset(); chatFab(); }
+    host.innerHTML = pbpSpoilVeilHTML(d, league, event) + back;
+    wire();
+    return;
+  }
   // The game's chat: its button on every game page, whichever layout draws
   // below (js/chat.js keeps the conversation across redraws).
   chatMount(league, event, d);
@@ -4430,7 +4483,7 @@ async function renderPbpPage(tick) {
   }
   // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
   // Call it rides in on the basketball and hockey pages too, under the arena (pbpCallItHTML).
-  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) { if (lv.state === "live") again(); return; }
+  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) { if (lv.state === "live") again(); return; }
   const panel = tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
@@ -4444,7 +4497,7 @@ async function renderPbpPage(tick) {
     <div class="pbp-layout${league === "mlb" ? "" : " pbp-has-tabs"}">
       <div class="pbp-main">
         ${pbpBoardHTML(d, league, lv)}
-        ${pbpTvHTML(d)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
+        ${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
         <div class="gch-entry-slot"></div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}

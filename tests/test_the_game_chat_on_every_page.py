@@ -162,7 +162,8 @@ def test_the_live_tab_has_games_and_a_play_feed():
     # The Games / Play feed switch is drawn by the shared league chips (one
     # pill look, and the bytes the app's budget needed).
     assert '{ group: "pf-view", attr: "data-live-view", active: _liveView' in board
-    assert "playFeedMount(pfHost, shown)" in board
+    # Less a game saved for later (spoiledG, tests/test_spoiler_free_later.py).
+    assert "playFeedMount(pfHost, shown.filter((x) => !spoiledG(x.sport, x.g)));" in board
     assert '<div class="pf-host"></div>' in board, "the feed's slot is the games' slot"
     assert "liveChatCounts(games);" in board and "async function liveChatCounts(" in CHAT
     assert "g.big," in APP[APP.index("const liveSig = "):APP.index("const liveSig = ") + 300], \

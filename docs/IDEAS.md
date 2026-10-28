@@ -185,9 +185,15 @@ of work first, each with what it is built from:
 8. **Watch-party rooms.** A private thread inside a game's chat for a
    friend group, by invite link. Built from: engine/gamechat rooms + an
    invite token; the moderation is already there. Medium.
-9. **Spoiler-free later.** Hide scores across the site for chosen games
-   until tapped, for watching a recording. Built from: a per-game flag on
-   the device. Small to medium.
+9. **Spoiler-free later.** BUILT 2026-10-28 (runbook FT): "Watching
+   later? Hide the score" on a game's page saves it for later on the
+   device for up to 36 hours: its page is a veil with "Show the game",
+   and the game cards, the photo's board, the Live tab's card and feed,
+   the home deck, both game pages (no score, no bases, no chat), the Your
+   players strip and the bet slip show no score for it. A tracked bet on
+   it keeps its ticket and moves with the clock, but its number, verdict
+   and live chance wait (app.js spoilRow). js/detail.js pbpSpoilHTML,
+   app.js spoiledG. Phone alerts come from the box and are not held.
 10. **Crew watch.** Penalties and the strike zone tallied live against the
     crew's season norm. Built from: the plays' penalty rows + the referee
     assignments already read. Medium.
