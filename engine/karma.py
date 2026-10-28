@@ -131,6 +131,8 @@ RULES = {
     "party_host": (15, 30, "A friend joined your watch party"),
     "party_join": (5, 15, "Joined a watch party"),
     "recruit": (100, None, "A friend you invited became a member"),
+    "camp": (20, None, "Getting started"),
+    "camp_done": (50, None, "Getting started: all five"),
     "trophy": (0, None, "Top ten for the week"),
     "night": (0, None, "Watching after 1 a.m."),
 }
@@ -183,6 +185,7 @@ FAMILIES = (
     ("host", "Host", "watch parties friends joined", (1, 5, 25)),
     ("recruiter", "Recruiter", "friends who became members", (1, 5, 10)),
     ("weeks", "Week's best", "weeks in the top ten", (1, 5, 10, 25)),
+    ("season", "Season ticket", "live games of one league this season", (5, 10, 25, 50, 100)),
     ("karma", "Karma", "karma earned", (1000, 5000, 10000, 50000, 100000)),
 )
 TIER_NAMES = ("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Legend")
@@ -209,6 +212,24 @@ QUEST_FIRST = "watch"
 HYPE_S = 300
 HYPE_PEOPLE = 3
 HYPE_LEVELS = (10, 25, 50, 100, 200)
+
+#: THE SEASON (a Season ticket badge's count): live games of one league
+#: since 1 Aug 2026, Eastern — the 2026-27 season, the date Call it's
+#: season ladder starts from. Move both when a new season starts.
+SEASON_START = _dt.datetime(2026, 8, 1, tzinfo=_ET).timestamp()
+
+#: GETTING STARTED (2026-10-28; the first-week checklists Duolingo and
+#: Strava open with): five firsts, each worth CAMP karma once, and a bonus
+#: for all five. Shown to an account for its first CAMP_DAYS, or until done.
+CAMP = (("profile", "Pick a username"), ("follow", "Follow a team or a player"),
+        ("watch", "Open a live game"), ("chat", "Say something in a game chat"),
+        ("call", "Make a Call it call"))
+CAMP_DAYS = 14
+
+#: FRIENDS WATCHING NOW (2026-10-28; Discord's and Xbox's "playing now"): a
+#: friend's live game shows while their page asked within this long, unless
+#: they turned it off.
+FRIEND_FRESH_S = 150
 
 #: KARMA ALERTS (2026-10-28, Ethan: "keep user retainment"), one switch on
 #: the Karma tab, sent as the account's own phone alerts (engine/pushmine,
@@ -271,11 +292,12 @@ def ensure_tables(conn) -> None:
     # level its last "a new tier" alert was for. Added rather than declared
     # (the table shipped first), and raced like gamechat's party column.
     have = {r[1] for r in conn.execute("PRAGMA table_info(karma_prefs)")}
-    for col in ("remind", "told_level"):
+    # And (the same day) whether friends may see the live game it is on.
+    for col, default in (("remind", 0), ("told_level", 0), ("share", 1)):
         if col not in have:
             from .db import column_exists_or_raise
             try:
-                conn.execute(f"ALTER TABLE karma_prefs ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
+                conn.execute(f"ALTER TABLE karma_prefs ADD COLUMN {col} INTEGER NOT NULL DEFAULT {default}")
             except sqlite3.OperationalError as exc:
                 column_exists_or_raise(exc)
 
@@ -833,6 +855,7 @@ def badge_counts(conn, user_id, points: int | None = None, best_days: int | None
         "host": _count(conn, uid, "party_host"),
         "recruiter": _count(conn, uid, "recruit"),
         "weeks": _count(conn, uid, "trophy"),
+        "season": season_best(conn, uid)[1],
         "karma": total(conn, uid) if points is None else int(points),
     }
 
@@ -997,6 +1020,85 @@ def hype(conn, room: str, viewer=None, now: float | None = None) -> dict:
     return out
 
 
+# ─── the season, getting started, friends watching ──────────────────────────
+
+def season_best(conn, user_id) -> tuple:
+    """``(league, games)``: the league this account watched most this
+    season, live, and how many of its games."""
+    row = conn.execute("SELECT league, COUNT(*) AS n FROM karma_watch WHERE user_id=? AND first_at>=? "
+                       "GROUP BY league ORDER BY n DESC, league LIMIT 1", (int(user_id), SEASON_START)).fetchone()
+    return (row[0], int(row[1])) if row else ("", 0)
+
+
+def _camp_done(conn, uid: int, key: str) -> bool:
+    one = lambda sql, args=(): conn.execute(sql, (uid, *args)).fetchone() is not None    # noqa: E731
+    if key == "profile":
+        return _has(conn, "feed_profiles") and one("SELECT 1 FROM feed_profiles WHERE user_id=?")
+    if key == "follow":
+        return (_has(conn, "alert_watches")
+                and one("SELECT 1 FROM alert_watches WHERE user_id=? AND kind IN ('team','player') LIMIT 1"))
+    if key == "watch":
+        return one("SELECT 1 FROM karma_watch WHERE user_id=? LIMIT 1")
+    if key == "chat":
+        return one("SELECT 1 FROM karma_events WHERE user_id=? AND kind IN ('chat_day','chat') LIMIT 1")
+    if key == "call":
+        return _has(conn, "callit_calls") and one("SELECT 1 FROM callit_calls WHERE user_id=? LIMIT 1")
+    return False
+
+
+def camp(conn, user_id, now: float | None = None) -> dict | None:
+    """The getting-started list while it is worth showing (an account's first
+    CAMP_DAYS, until all five are done), paying each first once."""
+    uid = int(user_id)
+    t = time.time() if now is None else float(now)
+    steps = [{"key": k, "text": w, "done": bool(_camp_done(conn, uid, k))} for k, w in CAMP]
+    for x in steps:
+        if x["done"]:
+            award(conn, uid, "camp", x["key"], now=t, commit=False)
+    finished = all(x["done"] for x in steps)
+    if finished:
+        award(conn, uid, "camp_done", "camp", now=t, commit=False)
+    conn.commit()
+    made = conn.execute("SELECT created_at FROM users WHERE id=?", (uid,)).fetchone() if _has(conn, "users") else None
+    young = bool(made) and t - float(made[0] or 0) < CAMP_DAYS * 86400
+    if finished or not young:
+        return None
+    return {"steps": steps, "done": sum(x["done"] for x in steps), "of": len(steps),
+            "pts": RULES["camp"][0], "bonus": RULES["camp_done"][0]}
+
+
+def friends_watching(conn, user_id, now: float | None = None, room: str = "") -> list:
+    """Friends whose page is on a live game now (``room``: that game only),
+    newest first, unless they turned it off. Friends only: both sides of a
+    friendship (engine/social), never followers or strangers."""
+    if not _has(conn, "friendships"):
+        return []
+    t = time.time() if now is None else float(now)
+    where = " AND w.room=?" if room else ""
+    rows = conn.execute(
+        "SELECT w.user_id, w.room, w.league, p.handle, p.display_name, p.color FROM karma_watch w "
+        "JOIN friendships f ON f.friend_id=w.user_id AND f.user_id=? "
+        "JOIN friendships b ON b.user_id=w.user_id AND b.friend_id=? "
+        "LEFT JOIN feed_profiles p ON p.user_id=w.user_id "
+        "LEFT JOIN karma_prefs k ON k.user_id=w.user_id "
+        f"WHERE w.last_at>=? AND COALESCE(k.share, 1)=1{where} ORDER BY w.last_at DESC LIMIT 40",
+        (int(user_id), int(user_id), t - FRIEND_FRESH_S, *((room,) if room else ()))).fetchall() \
+        if _has(conn, "feed_profiles") else []
+    seen, out = set(), []
+    for uid, rm, lg, handle, name, color in rows:
+        if uid in seen or not handle:
+            continue
+        seen.add(uid)
+        # A game the scoreboard calls over drops off; one it no longer
+        # carries is taken on the page's word.
+        g = _live_game(rm)
+        if (g.get("state") or "") not in ("live", ""):
+            continue
+        out.append({"handle": handle, "name": name or "", "color": int(color or 0), "room": rm, "league": lg,
+                    "away": g.get("away", ""), "home": g.get("home", "")})
+    return out
+
+
 # ─── karma alerts ───────────────────────────────────────────────────────────
 
 def _next_mark(n: int):
@@ -1058,10 +1160,11 @@ def alerts_pass(conn, now: float | None = None) -> int:
 # ─── what the pages read ────────────────────────────────────────────────────
 
 def _prefs(conn, user_id) -> dict:
-    row = conn.execute("SELECT flair, ladder, seen_level, remind FROM karma_prefs WHERE user_id=?",
+    row = conn.execute("SELECT flair, ladder, seen_level, remind, share FROM karma_prefs WHERE user_id=?",
                        (int(user_id),)).fetchone()
     return {"flair": row[0] if row else "", "ladder": bool(row[1]) if row else True,
-            "seen_level": int(row[2]) if row else 0, "remind": bool(row[3]) if row else False}
+            "seen_level": int(row[2]) if row else 0, "remind": bool(row[3]) if row else False,
+            "share": bool(row[4]) if row else True}
 
 
 def reminds(conn, user_id) -> bool:
@@ -1093,9 +1196,11 @@ def _relink(conn, user_id, on: bool) -> None:
                      (",".join(have + ([ALERT_TOPIC] if on else [])), endpoint))
 
 
-def set_prefs(conn, user_id, flair=None, ladder=None, remind=None) -> tuple[int, dict]:
+def set_prefs(conn, user_id, flair=None, ladder=None, remind=None, share=None) -> tuple[int, dict]:
     ensure_tables(conn)
     conn.execute("INSERT OR IGNORE INTO karma_prefs (user_id) VALUES (?)", (int(user_id),))
+    if share is not None:
+        conn.execute("UPDATE karma_prefs SET share=? WHERE user_id=?", (1 if share else 0, int(user_id)))
     if remind is not None:
         # From now on: the tiers already reached are not news.
         conn.execute("UPDATE karma_prefs SET remind=?, told_level=? WHERE user_id=?",
@@ -1190,6 +1295,8 @@ def me(conn, user_id, now: float | None = None, data_dir: Path | None = None, ch
     out = {**lv, "streak": st, "quests": q, "badges": badges(conn, uid, pts, st["best"]),
            "flair": prefs["flair"] if lv["level"] >= FLAIR_AT else "", "flairs": list(FLAIRS),
            "ladder_on": prefs["ladder"], "remind": prefs["remind"], "phones": phones(conn, uid),
+           "share": prefs["share"], "camp": camp(conn, uid, t), "friends": friends_watching(conn, uid, t),
+           "season": dict(zip(("league", "games"), season_best(conn, uid))),
            "unlocks": {"flair": FLAIR_AT, "color": COLOR_AT, "ring": RING_AT},
            "week": ladder(conn, "week", uid, t, n=10),
            "today": int(conn.execute("SELECT COALESCE(SUM(pts), 0) FROM karma_events WHERE user_id=? AND day=?",

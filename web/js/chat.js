@@ -33,7 +33,7 @@ const CHAT_REASONS = [["spam", "Spam"], ["abuse", "Abuse"], ["hate", "Hate"], ["
 const CH = {
   room: "", league: "", event: "", d: null,
   msgs: [], byId: new Map(), lastId: 0, firstId: 0, older: false, since: 0,
-  plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0, me: null,
+  plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0, me: null, friends: [],
   open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false,
   unread: 0, timer: 0, busy: false, loaded: false, err: "", menu: 0,
   // A watch party (engine/gamechat): the reader's parties in this game, the
@@ -600,7 +600,7 @@ function chatReset() {
   clearTimeout(CH.timer);
   clearTimeout(CH.wtimer);
   Object.assign(CH, { room: "", league: "", event: "", d: null, msgs: [], byId: new Map(), lastId: 0,
-    firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0,
+    firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0, friends: [],
     open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false, unread: 0, timer: 0,
     loaded: false, err: "", menu: 0, parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
     hype: null, wtimer: 0, wfirst: false });
@@ -694,6 +694,7 @@ async function chatPull(older) {
   // through the game (js/detail.js pbpRoomLine) whenever it moves.
   if (typeof pbpRoomLine === "function") pbpRoomLine();
   CH.here = v.here || 0;
+  CH.friends = Array.isArray(v.friends) ? v.friends : [];
   CH.me = v.me || CH.me;
   CH.hype = v.hype || null;
   if (CH.hype && CH.hype.karma) chatKarma(CH.hype.karma);
@@ -907,12 +908,21 @@ function chatDrawHead() {
     : `<span class="gch-clock">${chEsc(lv.detail || "Pregame")}</span>`;
   s.querySelector(".gch-head").innerHTML = `
     <div class="gch-headrow"><span class="gch-title">${chatIcon()}Game chat</span><span class="gch-here">${
-      CH.here ? `<i></i>${CH.here} watching` : ""}</span>
+      CH.here ? `<i></i>${CH.here} watching` : ""}${chatFriendsHere()}</span>
       <button type="button" class="gch-x" data-gch="close" aria-label="Close the chat">${typeof icon === "function" ? icon("cross", 16) : "×"}</button></div>
     <div class="gch-board">${side(d.away, lv.away_score, false)}<div class="gch-mid">${mid}</div>${side(d.home, lv.home_score, true)}</div>`;
   chatDrawPoll();
   chatDrawHeat();
   chatDrawTix();
+}
+
+/* FRIENDS HERE (engine/karma friends_watching): the reader's friends on
+   this game's page now — Discord's "playing now" — unless they hid it. */
+function chatFriendsHere() {
+  const f = CH.friends || [];
+  if (!f.length) return "";
+  const who = `@${chEsc(f[0])}${f.length > 1 ? ` and ${f.length - 1} friend${f.length > 2 ? "s" : ""}` : ""}`;
+  return `<span class="gch-friends"> · ${who} here</span>`;
 }
 
 /* THE ROOM'S HEAT (Twitch's Hype Train; engine/karma hype): the last five

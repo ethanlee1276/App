@@ -88,6 +88,17 @@
   font-size: var(--fs-2xs); font-weight: 700; color: var(--text-dim); white-space: nowrap; }
 .kr-q.done { background: color-mix(in oklab, var(--good) 18%, transparent); color: var(--good); }
 .kr-go { flex: none; font-size: var(--fs-xl); line-height: 1; color: var(--text-mute); }
+.kr-camp-h { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--good); }
+/* Friends watching now, under the strip. */
+.kr-strip-host:has(.kr-friends) .kr-strip { margin-bottom: 6px; }
+.kr-friends { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.kr-fr { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 10px; border: 0; border-radius: 999px;
+  background: color-mix(in oklab, var(--good) 12%, var(--panel)); color: var(--text); font: inherit; font-size: var(--fs-xs);
+  cursor: pointer; }
+.kr-fr b { font-weight: 800; white-space: nowrap; }
+.kr-fr span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.kr-fr-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: lfPulse 1.6s ease-in-out infinite; }
+.kr-camp { --kr-c: var(--good); }
 
 /* ── the Karma tab ─────────────────────────────────────────────────────── */
 .kr-panel-host { display: grid; gap: 12px; }

@@ -433,7 +433,7 @@ def test_the_flair_opens_at_level_three_and_the_chat_wears_the_level():
     K.award(conn, me, "recruit", "x", pts=300, now=T0)
     assert K.set_prefs(conn, me, flair="💩")[0] == 400
     assert K.set_prefs(conn, me, flair="🔥") == (200, {"ok": True, "flair": "🔥", "ladder": True, "remind": False,
-                                                    "phones": 0})
+                                                    "share": True, "phones": 0})
     GC.send(conn, me, ROOM, "hello", now=T0)
     _, v = GC.room_view(conn, ROOM, ids[1], now=T0 + 1)
     by = v["messages"][0]["by"]
@@ -445,8 +445,10 @@ def test_the_day_check_in_and_a_level_crossed_said_once():
     conn, ids = _db()
     me = ids[0]
     first = K.me(conn, me, now=T0)
-    assert first["today"] == 5 and "up_from" not in first
-    assert K.me(conn, me, now=T0 + 60)["today"] == 5, "once a day"
+    # The check-in, and getting started's first step (a username: this
+    # account has one).
+    assert first["today"] == 5 + 20 and "up_from" not in first, first["today"]
+    assert K.me(conn, me, now=T0 + 60)["today"] == 25, "once a day"
     K.award(conn, me, "recruit", "x", pts=200, now=T0 + 61)
     up = K.me(conn, me, now=T0 + 120)
     assert up["level"] == 2 and up["up_from"] == 1, up
@@ -644,7 +646,7 @@ def test_in_a_browser_the_chat_the_strip_the_tab_and_a_level_crossed():
     assert f"Level {v['level']}" in got["strip"] and "karma" in got["strip"], got
     assert got["badges"] == len(K.FAMILIES) + len(K.ONE_OFF) and got["hero"].startswith(f"Level {v['level']}"), got
     assert f"Level {v['level']}" in got["row"], got
-    assert got["switches"] == 2, got
+    assert got["switches"] == 3, got
     assert got["up"] == "Level 60", got
     assert got["closed"], got
 

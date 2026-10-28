@@ -185,6 +185,8 @@ body.gch-on { overflow: hidden; }
 .gch-heat-bar i { display: block; width: var(--p, 0%); height: 100%; border-radius: inherit; background: var(--grad-heat); }
 .gch-heat-bar.lv4 i, .gch-heat-bar.lv5 i { --glow-heat: 0 0 10px color-mix(in oklab, var(--bad) 60%, transparent); box-shadow: var(--glow-heat); }
 .gch-heat-n { white-space: nowrap; color: var(--text-mute); }
+/* Friends in this game now (engine/karma friends_watching). */
+.gch-friends { color: var(--good); font-weight: 700; }
 .gch-c0 { --gch-tint: var(--brand); }
 .gch-c1 { --gch-tint: var(--good); }
 .gch-c2 { --gch-tint: var(--bad); }

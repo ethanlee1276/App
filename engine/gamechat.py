@@ -623,6 +623,8 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
            # a meter, paying a viewer who is part of it (engine/karma).
            "hype": K.hype(conn, room, viewer, now)}
     if viewer:
+        # Friends in this game now (engine/karma), unless they hid it.
+        out["friends"] = [f["handle"] for f in K.friends_watching(conn, viewer, now, room=room)]
         out["parties"] = my_parties(conn, viewer, room)
         if party and any(p["id"] == int(party) for p in out["parties"]):
             out["party"] = party_view(conn, viewer, int(party), pafter, strong, hide)

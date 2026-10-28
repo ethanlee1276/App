@@ -35,7 +35,9 @@ const KR_UNLOCK = { 3: "A flair: an emoji worn beside your name in the chats.",
   20: "A glow in your tier's colour around your picture in the chats." };
 const KR_QUEST_SHORT = { watch: "Watch 10 min", chat: "Chat", react: "React", call: "Call it", trivia: "Trivia", vote: "Vote" };
 const KR_BADGE_ICON = { live: "📺", voice: "💬", crowd: "👏", caller: "🎯", hothand: "🔥", trivia: "🧠", winner: "🏆",
-  streak: "📅", sports: "🌎", there: "⚡", host: "🎉", recruiter: "🤝", weeks: "🥇", karma: "✨", founding: "🌱", nightowl: "🦉" };
+  streak: "📅", sports: "🌎", there: "⚡", host: "🎉", recruiter: "🤝", weeks: "🥇", season: "🎟️", karma: "✨",
+  founding: "🌱", nightowl: "🦉" };
+const KR_LEAGUE = { nfl: "NFL", cfb: "college football", nba: "NBA", wnba: "WNBA", nhl: "NHL", mlb: "MLB" };
 
 const krEsc = (s) => escapeHtml(String(s == null ? "" : s));
 const krNum = (n) => Number(n || 0).toLocaleString("en-US");
@@ -126,17 +128,40 @@ function krLevelUp(level) {
 
 /* ---------------- the Live tab's strip ---------------- */
 
+/* FRIENDS WATCHING NOW (engine/karma friends_watching; Discord's "playing
+   now"): a row under the strip, a tap into the game. */
+function krFriendsHTML(v) {
+  const f = v.friends || [];
+  if (!f.length) return "";
+  const byRoom = {};
+  f.forEach((x) => { (byRoom[x.room] = byRoom[x.room] || []).push(x); });
+  return `<div class="kr-friends">${Object.values(byRoom).slice(0, 3).map((g) => {
+    const x = g[0];
+    const [lg, ev] = String(x.room).split("_");
+    const who = `@${krEsc(x.handle)}${g.length > 1 ? ` +${g.length - 1}` : ""}`;
+    const game = x.away && x.home ? `${krEsc(x.away)} @ ${krEsc(x.home)}` : krEsc((KR_LEAGUE[lg] || lg).toUpperCase());
+    return `<button type="button" class="kr-fr" data-kr="game" data-lg="${krEsc(lg)}" data-ev="${krEsc(ev)}">
+      <i class="kr-fr-dot" aria-hidden="true"></i><b>${who}</b><span>watching ${game}</span></button>`;
+  }).join("")}</div>`;
+}
+
 function krStripHTML(v) {
   const st = v.streak || {};
-  const q = (v.quests || []).map((x) => `<span class="kr-q${x.done ? " done" : ""}" title="${krEsc(x.text)}">${
+  // An account's first days: the next of its five firsts instead of the
+  // day's quests (the Karma tab has all five).
+  const camp = v.camp;
+  const next = camp && camp.steps.find((x) => !x.done);
+  const q = camp ? (next ? `<span class="kr-q">Next: ${krEsc(next.text)} · +${Number(camp.pts)}</span>` : "")
+    : (v.quests || []).map((x) => `<span class="kr-q${x.done ? " done" : ""}" title="${krEsc(x.text)}">${
     x.done ? "✓" : `${x.n}/${x.goal}`} ${krEsc(KR_QUEST_SHORT[x.key] || x.text)}</span>`).join("");
   return `<button type="button" class="kr-strip" data-kr="open" aria-label="Your karma: level ${Number(v.level)}, open the Karma tab">
       ${krRingHTML(v)}
       <span class="kr-strip-main"><b>Level ${Number(v.level)} · ${krEsc(v.tier)}</b>
         <span class="kr-strip-sub">${krNum(v.points)} karma · ${krNum(v.to - v.points)} to level ${Number(v.level) + 1}${
           st.now ? ` · <span class="kr-fire">🔥 ${Number(st.now)}</span>` : ""}</span>
+        ${camp ? `<span class="kr-camp-h">Getting started · ${camp.done} of ${camp.of}</span>` : ""}
         <span class="kr-qs">${q}</span></span>
-      <span class="kr-go" aria-hidden="true">›</span></button>`;
+      <span class="kr-go" aria-hidden="true">›</span></button>${krFriendsHTML(v)}`;
 }
 
 async function karmaStripMount(host) {
@@ -148,6 +173,16 @@ async function karmaStripMount(host) {
 }
 
 /* ---------------- the Karma tab ---------------- */
+
+/* GETTING STARTED (engine/karma camp): an account's five firsts, each
+   +20 once and +50 for all five, shown its first two weeks or until done. */
+function krCampHTML(v) {
+  const c = v.camp;
+  if (!c) return "";
+  return `<section class="kr-card kr-camp"><div class="kr-h"><b>Getting started</b><span>${c.done} of ${c.of} · +${Number(c.pts)} each, +${Number(c.bonus)} for all five</span></div>
+    <ul class="kr-quests">${c.steps.map((x) => `<li class="${x.done ? "done" : ""}"><span class="kr-tick" aria-hidden="true">${x.done ? "✓" : ""}</span>
+      <span class="kr-qt">${krEsc(x.text)}</span><span class="kr-qn">${x.done ? `+${Number(c.pts)}` : ""}</span></li>`).join("")}</ul></section>`;
+}
 
 function krQuestsHTML(v) {
   const q = v.quests || [];
@@ -191,7 +226,8 @@ const KR_RULE_GROUPS = [["Watching", ["watch_join", "watch", "witness"]],
   ["Talking", ["chat_day", "chat", "liked", "react_day", "hype"]],
   ["Playing along", ["vote", "vote_won", "call_won", "call_streak", "trivia"]],
   ["Every day", ["day", "quest", "quests_all"]],
-  ["Friends", ["follow", "party_host", "party_join", "recruit"]]];
+  ["Friends", ["follow", "party_host", "party_join", "recruit"]],
+  ["Your first two weeks", ["camp", "camp_done"]]];
 function krRulesHTML(v) {
   const by = Object.fromEntries((v.rules || []).map((r) => [r.kind, r]));
   const row = (r) => `<li><span>${krEsc(r.why)}</span><b>+${Number(r.pts)}</b>${r.cap ? `<i>up to ${Number(r.cap)} a day</i>` : ""}</li>`;
@@ -220,6 +256,8 @@ function krPrefsHTML(v) {
       open && v.flair ? `<button type="button" class="kr-flair none" data-kr="flair" data-v="">None</button>` : ""}</div>
     <div class="kr-switch"><span><b>Show me on the karma ladders</b><span>Your username and karma on the week's and the all-time ladders.</span></span>
       ${krSwitch(v.ladder_on, "ladder", "Show me on the karma ladders")}</div>
+    <div class="kr-switch"><span><b>Let friends see the game I'm watching</b><span>Your friends see which live game you have open, and you see theirs.</span></span>
+      ${krSwitch(v.share !== false, "share", "Let friends see the game I'm watching")}</div>
     <div class="kr-switch"><span><b>Karma alerts</b><span>A nudge at 8 p.m. Eastern when your days in a row would end at midnight, your week's trophy and each new tier.</span>
       ${v.remind && !Number(v.phones) ? `<span class="kr-warn">Turn on alerts for this phone in Settings, under Alerts, and these come with them.</span>` : ""}</span>
       ${krSwitch(v.remind, "remind", "Karma alerts")}</div></section>`;
@@ -249,6 +287,7 @@ function krPanelHTML(v) {
       <div class="kr-streak${st.now ? " lit" : ""}"><b>🔥 ${Number(st.now || 0)}</b><span>day${st.now === 1 ? "" : "s"} in a row</span>
         <i>${st.best ? `best ${Number(st.best)}` : "earn karma today to start"}${st.rest ? " · a rest day in hand" : ""}</i></div>
     </section>
+    ${krCampHTML(v)}
     ${krQuestsHTML(v)}
     ${krBadgesHTML(v)}
     <section class="kr-card"><div class="kr-h"><b>Karma ladder</b>
@@ -294,9 +333,10 @@ async function krPrefs(body, root) {
       headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const out = await r.json().catch(() => ({}));
     if (!r.ok) { if (typeof tfToast === "function") tfToast(out.error || "That did not save."); return; }
-    if (KR.me) Object.assign(KR.me, { flair: out.flair, ladder_on: out.ladder, remind: out.remind, phones: out.phones });
+    if (KR.me) Object.assign(KR.me, { flair: out.flair, ladder_on: out.ladder, remind: out.remind, phones: out.phones, share: out.share });
     if (root && KR.me) root.innerHTML = krPanelHTML(KR.me);
-    const said = body.remind !== undefined ? (out.remind ? (out.phones ? "Karma alerts on" : "Karma alerts on — turn on this phone's alerts too")
+    const said = body.share !== undefined ? (out.share ? "Friends see your game" : "Your game is hidden from friends")
+      : body.remind !== undefined ? (out.remind ? (out.phones ? "Karma alerts on" : "Karma alerts on — turn on this phone's alerts too")
       : "Karma alerts off")
       : body.ladder !== undefined ? (out.ladder ? "You're on the ladders" : "You're off the ladders")
       : out.flair ? `Wearing ${out.flair}` : "Flair off";
@@ -343,14 +383,15 @@ document.addEventListener("click", (e) => {
   const root = b.closest(".kr-panel-host");
   if (act === "scope" && root) { krLadder(root, b.dataset.v === "all" ? "all" : "week"); return; }
   if (act === "flair" && root && !b.disabled) krPrefs({ flair: b.dataset.v || "" }, root);
-  if ((act === "ladder" || act === "remind") && b.getAttribute("role") === "switch") {
+  if (act === "game") { e.preventDefault(); if (typeof openPbp === "function") openPbp(b.dataset.lg, b.dataset.ev); return; }
+  if ((act === "ladder" || act === "remind" || act === "share") && b.getAttribute("role") === "switch") {
     const on = b.getAttribute("aria-checked") !== "true";
     b.setAttribute("aria-checked", on ? "true" : "false");
     krPrefs({ [act]: on }, root);
   }
 });
 document.addEventListener("change", (e) => {
-  const b = e.target.closest && e.target.closest('[data-kr="ladder"], [data-kr="remind"]');
+  const b = e.target.closest && e.target.closest('[data-kr="ladder"], [data-kr="remind"], [data-kr="share"]');
   if (b) krPrefs({ [b.dataset.kr]: !!b.checked }, b.closest(".kr-panel-host"));
 });
 document.addEventListener("keydown", (e) => {

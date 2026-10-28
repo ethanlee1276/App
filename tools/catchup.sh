@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GL "Friends watching now, getting started, the Season ticket" 30 <<'SH'
+curl -s https://qellysbook.com/js/karma.js | grep -c 'function krFriendsHTML('
+SH
 run GK "Karma alerts, and levels on Social" 60 <<'SH'
 curl -s https://qellysbook.com/js/karma.js | grep -c 'const krSwitch = '
 cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
