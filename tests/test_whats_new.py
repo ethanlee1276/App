@@ -48,7 +48,7 @@ def test_every_line_is_short_and_names_something_real():
     for icon, title, words in rows:
         assert len(title) <= 24 and len(words) <= 100, (title, words)
     titles = [t for _i, t, _w in rows]
-    assert "Today's question" in titles and "Player of the game" in titles and "Remind me" in titles
+    assert "Pick'em pushes" in titles and "Pick'em with friends" in titles and "Pick'em karma" in titles
 
 
 def test_in_a_browser_it_shows_goes_away_and_stays_away():
@@ -104,7 +104,7 @@ def test_in_a_browser_it_shows_goes_away_and_stays_away():
     finally:
         srv.shutdown()
     assert not errs, errs
-    assert "What's new" in got["shown"] and "Today's question" in got["shown"], got
+    assert "What's new" in got["shown"] and "Pick'em pushes" in got["shown"], got
     assert got["gone"] and got["strip"] and got["still_gone"], got
 
 

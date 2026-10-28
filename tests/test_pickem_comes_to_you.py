@@ -206,7 +206,7 @@ def test_the_pages_draw_it_and_the_policy_names_it():
     pm = (ROOT / "engine" / "pushmine.py").read_text(encoding="utf-8")
     assert "told += _pk.alerts_pass(conn, now=t)" in pm
     policy = " ".join((ROOT / "web" / "privacy.html").read_text(encoding="utf-8").split())
-    for want in ("<code>pickem_picks</code>", "<code>pickem_prefs</code>", "Remind me before picks lock",
+    for want in ("<code>pickem_picks</code>", "<code>pickem_prefs</code>", "Pick’em pushes",
                  "a pick'em winner or a perfect pick'em week"):
         assert want in policy, want
 
@@ -269,7 +269,7 @@ def test_in_a_phone_browser_friends_the_switch_and_the_live_line():
                 page.route("**/api/trivia/daily*", ful(json.dumps({"signed_in": True, "day": TQ.DAY, "q": old_q})))
                 page.route("**/api/alerts/**", ful(json.dumps({"players": []})))
                 page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');"
-                                     f"localStorage.setItem('qb_new_2026_10_28b','1');localStorage.setItem('qb_kr_level','{v['level']}');}}catch(e){{}}")
+                                     f"localStorage.setItem('qb_new_2026_10_28c','1');localStorage.setItem('qb_kr_level','{v['level']}');}}catch(e){{}}")
                 page.goto(f"http://127.0.0.1:{port}/index.html#feed/pickem/nfl", wait_until="load")
                 page.wait_for_selector(".fd-pk-scope", timeout=15000)
                 lead = "[...document.querySelectorAll('.fd-pk-tables .fd-lead .fd-person span span')].map((s) => s.textContent)"

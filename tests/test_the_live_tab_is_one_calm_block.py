@@ -118,7 +118,7 @@ def test_in_a_phone_browser_the_live_tab_says_it_once():
                     page.route("**/api/trivia/daily*", ful(json.dumps({"signed_in": True, "day": TQ.DAY, "q": q})))
                     page.route("**/api/alerts/**", ful(json.dumps({"players": []})))
                     page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');"
-                                         "localStorage.setItem('qb_new_2026_10_28b','1');"
+                                         "localStorage.setItem('qb_new_2026_10_28c','1');"
                                          f"localStorage.setItem('qb_kr_level','{me_v['level']}');}}catch(e){{}}")
                     page.goto(f"http://127.0.0.1:{port}/index.html#live", wait_until="load")
                     page.wait_for_timeout(3500)

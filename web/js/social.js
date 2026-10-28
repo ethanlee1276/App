@@ -978,6 +978,8 @@
           ${stat(big(p.followers), "Followers", "", "follows")}${stat(big(p.following_count), "Following", "", "following-list")}${stat(big(p.tails), "Tails")}</div>
         ${r30.n ? `<p class="fd-prof-30">Last 30 days <b>${r30.w}-${r30.l}${r30.p ? `-${r30.p}` : ""}</b> · ${units(r30.units)}${
           r30.roi != null ? ` · ${r30.roi > 0 ? "+" : ""}${r30.roi}% ROI` : ""}</p>` : ""}
+        ${(p.pickem || []).length ? `<p class="fd-prof-30 fd-prof-pk">Pick’em this season ${p.pickem.map((x) =>
+          `<span><b>${escapeHtml(SPORT_NAME[x.sport] || x.sport)} ${Number(x.w)}-${Number(x.l)}${x.p ? `-${Number(x.p)}` : ""}</b> #${Number(x.rank)} of ${Number(x.players)}</span>`).join(" · ")}</p>` : ""}
         <p class="fd-fine">One unit a post at the posted price, graded from the same results as the Record page. Picks lock at kickoff — nobody can type in a result.</p>
       </div></section>`;
   }
@@ -1103,10 +1105,10 @@
   }
   function pickemRemindHTML(P) {
     if (!P.signed_in || !P.has_handle || !["nfl", "cfb"].includes(P.sport)) return "";
-    const sw = typeof setSwitch === "function" ? setSwitch(!!P.remind, `data-fd="pk-remind" aria-label="Remind me before picks lock"`)
+    const sw = typeof setSwitch === "function" ? setSwitch(!!P.remind, `data-fd="pk-remind" aria-label="Pick’em pushes"`)
       : `<button type="button" data-fd="pk-remind" aria-pressed="${!!P.remind}">${P.remind ? "On" : "Off"}</button>`;
-    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Remind me before picks lock</b>
-      <span>A push about three hours before the week's first game, and before a day's first kickoff of four games or more, while you have games there still to pick. One a day at most.</span></span>${sw}</section>`;
+    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Pick’em pushes</b>
+      <span>About three hours before picks lock (before the week's first game and a day's first kickoff of four games or more, one a day at most, while you have games there to pick), and your week's result on Tuesday.</span></span>${sw}</section>`;
   }
   function pickemPageHTML(P) {
     const head = headHTML("Pick’em", "Free every week: pick the winner of every game on the board before it starts. Picks lock at kickoff and are graded from the final score — nobody types in a result. No entry fee, no prizes: bragging rights.");
@@ -1470,7 +1472,7 @@
       const on = t.getAttribute("aria-checked") !== "true" && t.getAttribute("aria-pressed") !== "true";
       const res = await api("pickem-remind", { on });
       if (!res.ok) { tfToast(res.out.error || "That did not save."); return; }
-      tfToast(on ? "On: a push before your picks lock." : "Pick'em reminders off.");
+      tfToast(on ? "On: pick’em pushes." : "Pick’em pushes off.");
       return render();
     }
     if (act === "lb-metric" || act === "lb-days") {
@@ -1997,5 +1999,5 @@
     location.hash = `#feed/post/${res.out.id}`;
   }
 
-  window.QBSocial = { render, slipPostStart, slipPost, mountAccount, avatar, pickemPageHTML };
+  window.QBSocial = { render, slipPostStart, slipPost, mountAccount, avatar, pickemPageHTML, profileHeaderHTML };
 })();

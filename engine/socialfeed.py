@@ -1682,7 +1682,10 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
     # may see them; the site's own account has none.
     if not prof["official"]:
         from . import karma as K
+        from . import pickem as PK
         prof["karma"] = K.public(conn, uid)
+        # This season's pick'em (engine/pickem): the record and the place.
+        prof["pickem"] = PK.season_lines(conn, uid)
     if tab == "record":
         rows = conn.execute(_POST_SQL + "WHERE p.user_id=? AND p.hidden=0 AND p.kind='parlay' "
                             "AND p.result IN ('won','lost','push') ORDER BY p.created_at DESC LIMIT 100",
@@ -2351,5 +2354,5 @@ def export_user(conn, user_id: int) -> dict:
                        for r in conn.execute("SELECT sport, week, gid, pick, result FROM pickem_picks "
                                              "WHERE user_id=? ORDER BY kickoff", (uid,))]
                       if "pickem_picks" in have else [],
-            "pickem_remind": [{"remind": int(r[0])} for r in conn.execute(
-                "SELECT remind FROM pickem_prefs WHERE user_id=?", (uid,))] if "pickem_prefs" in have else []}
+            "pickem_remind": [{"remind": int(r[0]), "recap": r[1]} for r in conn.execute(
+                "SELECT remind, recap FROM pickem_prefs WHERE user_id=?", (uid,))] if "pickem_prefs" in have else []}

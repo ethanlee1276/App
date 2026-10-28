@@ -191,6 +191,8 @@ FAMILIES = (
     ("weeks", "Week's best", "weeks in the top ten", (1, 5, 10, 25)),
     ("season", "Season ticket", "live games of one league this season", (5, 10, 25, 50, 100)),
     ("karma", "Karma", "karma earned", (1000, 5000, 10000, 50000, 100000)),
+    ("pickem", "Pick'em", "pick'em winners", (10, 50, 100, 250, 500)),
+    ("perfect", "Perfect week", "perfect pick'em weeks", (1, 3, 5, 10)),
 )
 TIER_NAMES = ("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Legend")
 #: One-off badges: (key, name, how).
@@ -884,6 +886,8 @@ def badge_counts(conn, user_id, points: int | None = None, best_days: int | None
         "weeks": _count(conn, uid, "trophy"),
         "season": season_best(conn, uid)[1],
         "karma": total(conn, uid) if points is None else int(points),
+        "pickem": _count(conn, uid, "pickem_won"),
+        "perfect": _count(conn, uid, "pickem_week"),
     }
 
 

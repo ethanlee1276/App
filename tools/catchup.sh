@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HF "Your pick'em week comes back" 30 <<'SH'
+curl -s https://qellysbook.com/js/social.js | grep -c 'fd-prof-30 fd-prof-pk'
+curl -s https://qellysbook.com/js/karma.js | grep -c 'pickem: "'
+SH
 run HE "The pick'em comes to you" 30 <<'SH'
 curl -s https://qellysbook.com/js/karma.js | grep -c 'function krPickemHTML(p)'
 curl -s https://qellysbook.com/js/social.js | grep -c 'function pickemRemindHTML(P)'

@@ -641,6 +641,8 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-pk-gate { padding: 12px 14px; color: var(--text-dim); }
 /* Everyone's standings or your friends' (2026-10-28). */
 .fd-pk-scope { margin: 14px 0 0; }
+/* A profile's pick'em season: a sport's line never splits. */
+.fd-prof-pk > span { white-space: nowrap; }
 .fd-pk-games { display: grid; gap: 0; padding: 4px 14px; }
 .fd-pk-game { display: grid; gap: 6px; padding: 12px 0; }
 .fd-pk-game + .fd-pk-game { border-top: var(--hairline) solid var(--fd-line); }

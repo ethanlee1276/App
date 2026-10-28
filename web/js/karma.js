@@ -36,7 +36,7 @@ const KR_UNLOCK = { 3: "A flair: an emoji worn beside your name in the chats.",
 const KR_QUEST_SHORT = { watch: "Watch 10 min", chat: "Chat", react: "React", call: "Call it", trivia: "Trivia", vote: "Vote" };
 const KR_BADGE_ICON = { live: "📺", voice: "💬", crowd: "👏", caller: "🎯", hothand: "🔥", trivia: "🧠", winner: "🏆",
   streak: "📅", sports: "🌎", there: "⚡", host: "🎉", recruiter: "🤝", weeks: "🥇", season: "🎟️", karma: "✨",
-  founding: "🌱", nightowl: "🦉" };
+  pickem: "🏈", perfect: "💯", founding: "🌱", nightowl: "🦉" };
 const KR_LEAGUE = { nfl: "NFL", cfb: "college football", nba: "NBA", wnba: "WNBA", nhl: "NHL", mlb: "MLB" };
 
 const krEsc = (s) => escapeHtml(String(s == null ? "" : s));
@@ -220,14 +220,13 @@ async function karmaStripMount(host) {
 /* WHAT'S NEW (an app store's release notes, inside the app): once, to an
    account past its getting-started list, what the last round added, a line
    each; "Got it" puts it away on this device. */
-const KR_NEW_KEY = "qb_new_2026_10_28b";
+const KR_NEW_KEY = "qb_new_2026_10_28c";
 const KR_NEW = [
-  ["🔎", "Find people", "Social → Search: anybody by name or @handle — follow them or add them as a friend."],
-  ["📣", "@ anyone", "Name anybody with an @ in a chat, a post or a comment — their phone hears it."],
-  ["🧠", "Today's question", "One trivia question a day for everybody, +10 karma right, here and on the Karma tab."],
-  ["🏅", "Player of the game", "When a game goes final, its chat votes the player of the game."],
-  ["🔔", "Remind me", "A bell under the chat of a game that has not started: a push 10 minutes before."],
-  ["👥", "Friends", "Who is watching what, here, and your friends' karma race on the Karma tab."]];
+  ["🏈", "Pick'em pushes", "Before a football week's picks lock, and your week's result on Tuesday. Off on the Pick'em page."],
+  ["👥", "Pick'em with friends", "Everyone | Friends over the Pick'em tables: your week against your friends'."],
+  ["✨", "Pick'em karma", "+5 a winner, +25 a perfect week, and two new badges on the Karma tab."],
+  ["🗓️", "Picks left", "While the NFL week has games to pick, the card above says how many and when they lock."],
+  ["👤", "Pick'em on profiles", "This season's pick'em record and place, on every player's profile."]];
 function krNewHTML(v) {
   if (!v || v.camp) return "";
   try { if (localStorage.getItem(KR_NEW_KEY)) return ""; } catch (e) { return ""; }

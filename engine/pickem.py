@@ -71,6 +71,10 @@ REMIND_SPORTS = ("nfl", "cfb")
 #: a college Saturday has four or five kickoffs that big.
 REMIND_LEAD_S = (2 * 3600, 3 * 3600)
 BIG_SLOT = 4
+#: Tuesday's line on the week just over (Wednesday too, for a final that
+#: came in late), in the day's hours, once every pick of it is graded.
+RECAP_DAYS = (1, 2)
+RECAP_HOURS = (10, 21)
 SPORT_WORD = {"nfl": "NFL", "cfb": "College football"}
 
 
@@ -97,6 +101,15 @@ def ensure_tables(conn) -> None:
         user_id INTEGER PRIMARY KEY,
         remind  INTEGER NOT NULL DEFAULT 0
     )""")
+    # The week each sport's Tuesday line last went out ("nfl:2026-10-20").
+    # Added rather than declared (the table shipped first), and raced: the
+    # API and the push loop both come through here.
+    if "recap" not in {r[1] for r in conn.execute("PRAGMA table_info(pickem_prefs)")}:
+        from .db import column_exists_or_raise
+        try:
+            conn.execute("ALTER TABLE pickem_prefs ADD COLUMN recap TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
 
 
 def _ts(iso) -> float | None:
@@ -322,30 +335,70 @@ def standings(conn, sport: str, week: str | None, viewer=None, now: float | None
     ensure_tables(conn)
     SF.ensure_tables(conn)
     now = time.time() if now is None else float(now)
+    hide = SF.blocked_ids(conn, viewer)
+    table = []
+    for r in _lines(conn, sport, week, now):
+        if int(r["user_id"]) in hide or (only is not None and int(r["user_id"]) not in only):
+            continue
+        table.append({**SF._person(r), "w": int(r["w"] or 0), "l": int(r["l"] or 0), "p": int(r["pu"] or 0),
+                      "open": int(r["open"] or 0), "me": viewer is not None and int(r["user_id"]) == int(viewer)})
+    _rank(table)
+    me = next((x for x in table if x["me"]), None)
+    return {"rows": table[:TOP], "me": me, "players": len(table)}
+
+
+def _lines(conn, sport: str, week: str | None, now: float) -> list:
+    """Each named player's line for one week, or the season (``week``
+    None): the rows every table here ranks."""
     where, args = ("p.week=?", [week]) if week else ("p.kickoff>?", [now - SEASON_DAYS * 86400])
-    rows = conn.execute(
+    return conn.execute(
         "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, f.founder, "
         "SUM(p.result='won') AS w, SUM(p.result='lost') AS l, SUM(p.result='push') AS pu, "
         "SUM(p.result IS NULL) AS open FROM pickem_picks p JOIN feed_profiles f ON f.user_id=p.user_id "
         f"WHERE p.sport=? AND f.handle IS NOT NULL AND f.handle!='' AND {where} GROUP BY p.user_id",
         [sport] + args).fetchall()
-    hide = SF.blocked_ids(conn, viewer)
-    table = []
-    for r in rows:
-        if int(r["user_id"]) in hide or (only is not None and int(r["user_id"]) not in only):
-            continue
-        table.append({**SF._person(r), "w": int(r["w"] or 0), "l": int(r["l"] or 0), "p": int(r["pu"] or 0),
-                      "open": int(r["open"] or 0), "me": viewer is not None and int(r["user_id"]) == int(viewer)})
+
+
+def _rank(table: list[dict]) -> list[dict]:
+    """Wins, then fewest losses; a tie shares the place (pushes, then the
+    handle, only order its rows)."""
     table.sort(key=lambda x: (-x["w"], x["l"], -x["p"], str(x["handle"]).lower()))
-    rank = 0
-    last = None
+    rank, last = 0, None
     for i, x in enumerate(table):
         k = (x["w"], x["l"])
         if k != last:
             rank, last = i + 1, k
         x["rank"] = rank
-    me = next((x for x in table if x["me"]), None)
-    return {"rows": table[:TOP], "me": me, "players": len(table)}
+    return table
+
+
+def _places(conn, sport: str, week: str | None, now: float) -> dict:
+    """Every named player's line and place, by account, as the public
+    table ranks them: the Tuesday line and a profile read it."""
+    from . import socialfeed as SF
+    SF.ensure_tables(conn)
+    return {x["uid"]: x for x in _rank([
+        {"uid": int(r["user_id"]), "handle": r["handle"], "w": int(r["w"] or 0), "l": int(r["l"] or 0),
+         "p": int(r["pu"] or 0), "open": int(r["open"] or 0)} for r in _lines(conn, sport, week, now)])}
+
+
+def season_lines(conn, user_id, now: float | None = None) -> list[dict]:
+    """A profile's pick'em this season: the (at most two) sports it has
+    the most graded picks in, each with its record and its place on that
+    sport's season table."""
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    uid = int(user_id)
+    out = []
+    for (sport,) in conn.execute(
+            "SELECT sport FROM pickem_picks WHERE user_id=? AND kickoff>? AND result IN ('won','lost','push') "
+            "GROUP BY sport ORDER BY COUNT(*) DESC, sport LIMIT 2", (uid, t - SEASON_DAYS * 86400)).fetchall():
+        places = _places(conn, sport, None, t)
+        x = places.get(uid)
+        if x:
+            out.append({"sport": sport, "w": x["w"], "l": x["l"], "p": x["p"], "rank": x["rank"],
+                        "players": len(places)})
+    return out
 
 
 def view(conn, sport: str, viewer=None, week: str | None = None, now: float | None = None,
@@ -533,4 +586,62 @@ def alerts_pass(conn, now: float | None = None, data_dir: Path | None = None) ->
                                 (f"{what} off then, and you have {todo} pick{'s' if todo != 1 else ''} left "
                                  f"this week."),
                                 f"/#feed/pickem/{sport}", ttl="pickem", now=t)
+    return told + recap_pass(conn, now=t)
+
+
+def _nth(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def _recapped(conn, uid: int) -> dict:
+    row = conn.execute("SELECT recap FROM pickem_prefs WHERE user_id=?", (uid,)).fetchone()
+    return dict(x.split(":", 1) for x in str(row[0] if row else "").split(",") if ":" in x)
+
+
+def _mark_recap(conn, uid: int, sport: str, week: str) -> None:
+    done = {**_recapped(conn, uid), sport: week}
+    conn.execute("INSERT INTO pickem_prefs (user_id, recap) VALUES (?, ?) "
+                 "ON CONFLICT(user_id) DO UPDATE SET recap=excluded.recap",
+                 (uid, ",".join(f"{k}:{v}" for k, v in sorted(done.items()))))
+
+
+def recap_pass(conn, now: float | None = None) -> int:
+    """Tuesday's line on the week just over, once a sport a week, to each
+    player who has not turned the pick'em pushes off and whose picks of it
+    are all graded: the record, the place, and the place among the friends
+    who played. A week still being graded waits (to Wednesday); a week of
+    pushes and voids says nothing."""
+    from . import karma as K
+    from . import pushalerts as PA
+    from . import pushmine as PM
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    et = _dt.datetime.fromtimestamp(t, ET)
+    if et.weekday() not in RECAP_DAYS or not RECAP_HOURS[0] <= et.hour < RECAP_HOURS[1]:
+        return 0
+    week = shift(week_of(t), -1)
+    told = 0
+    for sport in REMIND_SPORTS:
+        places = _places(conn, sport, week, t)
+        for uid, x in places.items():
+            if x["open"] or not x["w"] + x["l"]:
+                continue
+            if _remind_pref(conn, uid) == REMIND_OFF or _recapped(conn, uid).get(sport) == week:
+                continue
+            bits = [f"{_nth(x['rank'])} of {len(places)}"]
+            pals = (K.friend_ids(conn, uid) & set(places)) - {uid}
+            if pals:
+                ahead = sum((places[f]["w"], -places[f]["l"]) > (x["w"], -x["l"]) for f in pals)
+                bits.append(f"{_nth(ahead + 1)} of {len(pals) + 1} among your friends")
+            if not x["l"] and x["w"] >= PERFECT_MIN:
+                bits.append(f"a perfect week, +{K.RULES['pickem_week'][0]} karma")
+            rec = f"{x['w']}-{x['l']}" + (f"-{x['p']}" if x["p"] else "")
+            if not PM.asked(conn, uid, ALERT_TOPIC) and PA.phones(conn, uid):
+                PA.relink(conn, uid, ALERT_TOPIC, True)
+            told += PM.tell(conn, uid, f"pickem:recap:{sport}:{week}", ALERT_TOPIC,
+                            f"Your {SPORT_WORD[sport]} pick'em week: {rec}",
+                            f"{' · '.join(bits)}. This week's games are up.", f"/#feed/pickem/{sport}",
+                            ttl="pickem_recap", now=t)
+            _mark_recap(conn, uid, sport, week)
+    conn.commit()
     return told

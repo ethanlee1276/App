@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import (accounts, billing, digest, gamechat, karma, parlayledger,  # noqa: E402
-                    predmarket, slipwatch, socialfeed)
+                    pickem, predmarket, slipwatch, socialfeed)
 
 #: (the file, a name for the failure, the migration to run on a connection).
 #: `__wrapped__` steps past `once_per_db`, which is a memo and would skip
@@ -62,6 +62,8 @@ MIGRATORS = (
     ("engine/gamechat.py", "gamechat.ensure_tables", gamechat.ensure_tables),
     # Karma alerts' two columns on the karma settings (2026-10-28).
     ("engine/karma.py", "karma.ensure_tables", karma.ensure_tables),
+    # The pick'em's Tuesday-line marker on its settings (2026-10-28).
+    ("engine/pickem.py", "pickem.ensure_tables", pickem.ensure_tables),
 )
 
 #: Files that ALTER a table and are covered somewhere else, with the reason.

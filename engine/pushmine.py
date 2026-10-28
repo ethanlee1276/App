@@ -83,7 +83,9 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          # A game's reminder (engine/gamechat remind): worth it until the game is on.
          "reminders": 20 * 60,
          # The pick'em's push before picks lock (engine/pickem): until they do.
-         "pickem": 3 * 3600}
+         "pickem": 3 * 3600,
+         # The pick'em's Tuesday line on the week just over: that day.
+         "pickem_recap": 12 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0}
