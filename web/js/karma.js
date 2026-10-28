@@ -148,8 +148,8 @@ function krFriendsHTML(v) {
 
 function krStripHTML(v) {
   const st = v.streak || {};
-  // An account's first days: the next of its five firsts instead of the
-  // day's quests (the Karma tab has all five).
+  // An account's first days: the next of its six firsts instead of the
+  // day's quests (the Karma tab has all six).
   const camp = v.camp;
   const next = camp && camp.steps.find((x) => !x.done);
   const q = camp ? (next ? `<span class="kr-q">Next: ${krEsc(next.text)} · +${Number(camp.pts)}</span>` : "")
@@ -260,14 +260,18 @@ async function krDailyAnswer(b) {
 
 /* ---------------- the Karma tab ---------------- */
 
-/* GETTING STARTED (engine/karma camp): an account's five firsts, each
-   +20 once and +50 for all five, shown its first two weeks or until done. */
+/* GETTING STARTED (engine/karma camp): an account's six firsts, each
+   +20 once and +50 for all six, shown its first two weeks or until done.
+   A step with one place to go links there (the friend step: Find people);
+   only the site's own routes. */
 function krCampHTML(v) {
   const c = v.camp;
   if (!c) return "";
-  return `<section class="kr-card kr-camp"><div class="kr-h"><b>Getting started</b><span>${c.done} of ${c.of} · +${Number(c.pts)} each, +${Number(c.bonus)} for all five</span></div>
+  const step = (x) => (!x.done && /^#[a-z0-9/-]+$/i.test(x.href || "")
+    ? `<a class="kr-qt" href="${krEsc(x.href)}">${krEsc(x.text)}</a>` : `<span class="kr-qt">${krEsc(x.text)}</span>`);
+  return `<section class="kr-card kr-camp"><div class="kr-h"><b>Getting started</b><span>${c.done} of ${c.of} · +${Number(c.pts)} each, +${Number(c.bonus)} for all ${Number(c.of)}</span></div>
     <ul class="kr-quests">${c.steps.map((x) => `<li class="${x.done ? "done" : ""}"><span class="kr-tick" aria-hidden="true">${x.done ? "✓" : ""}</span>
-      <span class="kr-qt">${krEsc(x.text)}</span><span class="kr-qn">${x.done ? `+${Number(c.pts)}` : ""}</span></li>`).join("")}</ul></section>`;
+      ${step(x)}<span class="kr-qn">${x.done ? `+${Number(c.pts)}` : ""}</span></li>`).join("")}</ul></section>`;
 }
 
 function krQuestsHTML(v) {

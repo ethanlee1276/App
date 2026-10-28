@@ -132,6 +132,9 @@
   background: color-mix(in oklab, var(--text) 10%, transparent); color: var(--brand-ink); font-size: 12px; font-weight: 900; }
 .kr-quests li.done .kr-tick { background: var(--good); }
 .kr-qt { flex: 1; min-width: 0; font-size: var(--fs-sm); }
+/* A step with one place to go (the friend step: Find people). */
+a.kr-qt { color: var(--brand-2); font-weight: 700; text-decoration: none; }
+a.kr-qt:hover { text-decoration: underline; }
 .kr-qn { flex: none; font-size: var(--fs-xs); font-weight: 800; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .kr-quests li.done .kr-qn { color: var(--good); }
 .kr-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }

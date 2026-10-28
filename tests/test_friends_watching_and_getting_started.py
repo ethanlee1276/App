@@ -128,8 +128,11 @@ def test_getting_started_pays_each_first_once_and_goes_when_done():
     conn, ids = _db()
     me = ids[0]
     c = K.camp(conn, me)
-    assert c and c["of"] == 5 and [x["key"] for x in c["steps"]] == [k for k, _ in K.CAMP]
+    assert c and c["of"] == 6 and [x["key"] for x in c["steps"]] == [k for k, _ in K.CAMP]
     assert c["done"] == 1 and c["steps"][0]["done"], "a username is the first, and this account has one"
+    assert c["steps"][-1] == {"key": "friend", "text": "Add a friend or follow someone", "done": False,
+                              "href": "#feed/search"}, "the sixth opens Find people"
+    assert all("href" not in x for x in c["steps"][:-1])
     from engine import alerts as AL
     AL.ensure_tables(conn) if hasattr(AL, "ensure_tables") else None
     conn.execute("INSERT INTO alert_watches (user_id, kind, value, created_at) VALUES (?, 'team', 'nfl:GB', ?)",
@@ -143,12 +146,17 @@ def test_getting_started_pays_each_first_once_and_goes_when_done():
     conn.execute("INSERT INTO callit_calls (user_id, game, unit, call, at) VALUES (?, 'mlb_1', 'ab1', 'hit', ?)",
                  (me, time.time()))
     conn.commit()
-    assert K.camp(conn, me) is None, "all five: the list goes"
+    assert K.camp(conn, me)["done"] == 5, "five of six: the list stays"
+    # Somebody followed (or a friend asked, or a friend made): the sixth.
+    SF.toggle_follow(conn, me, "sam")
+    assert K.camp(conn, me) is None, "all six: the list goes"
     paid = {k: int(s) for k, s in conn.execute(
         "SELECT kind, SUM(pts) FROM karma_events WHERE user_id=? AND kind IN ('camp','camp_done') GROUP BY kind", (me,))}
-    assert paid == {"camp": 100, "camp_done": 50}, paid
+    assert paid == {"camp": 120, "camp_done": 50}, paid
     K.camp(conn, me)
-    assert conn.execute("SELECT SUM(pts) FROM karma_events WHERE user_id=? AND kind LIKE 'camp%'", (me,)).fetchone()[0] == 150
+    assert conn.execute("SELECT SUM(pts) FROM karma_events WHERE user_id=? AND kind LIKE 'camp%'", (me,)).fetchone()[0] == 170
+    js = Path(ROOT, "web", "js", "karma.js").read_text(encoding="utf-8")
+    assert '`<a class="kr-qt" href="${krEsc(x.href)}">${krEsc(x.text)}</a>`' in js and "for all ${Number(c.of)}" in js
 
 
 def test_getting_started_is_for_the_first_two_weeks():

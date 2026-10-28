@@ -134,7 +134,7 @@ RULES = {
     "party_join": (5, 15, "Joined a watch party"),
     "recruit": (100, None, "A friend you invited became a member"),
     "camp": (20, None, "Getting started"),
-    "camp_done": (50, None, "Getting started: all five"),
+    "camp_done": (50, None, "Getting started: all six"),
     "trophy": (0, None, "Top ten for the week"),
     "night": (0, None, "Watching after 1 a.m."),
 }
@@ -221,11 +221,16 @@ HYPE_LEVELS = (10, 25, 50, 100, 200)
 SEASON_START = _dt.datetime(2026, 8, 1, tzinfo=_ET).timestamp()
 
 #: GETTING STARTED (2026-10-28; the first-week checklists Duolingo and
-#: Strava open with): five firsts, each worth CAMP karma once, and a bonus
-#: for all five. Shown to an account for its first CAMP_DAYS, or until done.
+#: Strava open with): six firsts, each worth CAMP karma once, and a bonus
+#: for all six. Shown to an account for its first CAMP_DAYS, or until done.
+#: The sixth (2026-10-28, with Find people): somebody to follow or a friend,
+#: the people a new account comes back for.
 CAMP = (("profile", "Pick a username"), ("follow", "Follow a team or a player"),
         ("watch", "Open a live game"), ("chat", "Say something in a game chat"),
-        ("call", "Make a Call it call"))
+        ("call", "Make a Call it call"), ("friend", "Add a friend or follow someone"))
+#: Where a step is done, for the steps with one place to go: the friend
+#: step opens Find people (js/social.js, the Search tab).
+CAMP_LINKS = {"friend": "#feed/search"}
 CAMP_DAYS = 14
 
 #: FRIENDS WATCHING NOW (2026-10-28; Discord's and Xbox's "playing now"): a
@@ -1105,15 +1110,20 @@ def _camp_done(conn, uid: int, key: str) -> bool:
         return one("SELECT 1 FROM karma_events WHERE user_id=? AND kind IN ('chat_day','chat') LIMIT 1")
     if key == "call":
         return _has(conn, "callit_calls") and one("SELECT 1 FROM callit_calls WHERE user_id=? LIMIT 1")
+    if key == "friend":
+        return ((_has(conn, "feed_follows") and one("SELECT 1 FROM feed_follows WHERE follower_id=? LIMIT 1"))
+                or (_has(conn, "friend_requests") and one("SELECT 1 FROM friend_requests WHERE from_id=? LIMIT 1"))
+                or (_has(conn, "friendships") and one("SELECT 1 FROM friendships WHERE user_id=? LIMIT 1")))
     return False
 
 
 def camp(conn, user_id, now: float | None = None) -> dict | None:
     """The getting-started list while it is worth showing (an account's first
-    CAMP_DAYS, until all five are done), paying each first once."""
+    CAMP_DAYS, until all six are done), paying each first once."""
     uid = int(user_id)
     t = time.time() if now is None else float(now)
-    steps = [{"key": k, "text": w, "done": bool(_camp_done(conn, uid, k))} for k, w in CAMP]
+    steps = [{"key": k, "text": w, "done": bool(_camp_done(conn, uid, k)),
+              **({"href": CAMP_LINKS[k]} if k in CAMP_LINKS else {})} for k, w in CAMP]
     for x in steps:
         if x["done"]:
             award(conn, uid, "camp", x["key"], now=t, commit=False)
