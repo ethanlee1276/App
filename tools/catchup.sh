@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GZ "Find people, round two: Recent and who you know that follows them" 30 <<'SH'
+curl -s https://qellysbook.com/js/social.js | grep -c 'function mutualHTML(m)'
+SH
 run GY "Getting started points new accounts at Find people" 30 <<'SH'
 curl -s https://qellysbook.com/js/karma.js | grep -c 'a class="kr-qt" href='
 SH

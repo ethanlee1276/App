@@ -766,9 +766,47 @@
     const n = Number(p.followers || 0);
     const sub = [`@${escapeHtml(p.handle)}`, p.why ? escapeHtml(p.why) : p.follows_you ? "Follows you" : "",
                  n ? `${big(n)} follower${n === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
-    return `<div class="fd-prow"><a class="fd-prow-who" href="${profHref(p.handle)}">${avatar(p, "md")}
+    return `<div class="fd-prow"><a class="fd-prow-who" href="${profHref(p.handle)}" data-find="${escapeAttr(p.handle)}">${avatar(p, "md")}
         <span class="fd-prow-t"><b>${displayName(p)}${badge(p)}</b><span>${sub}</span></span></a>
       <span class="fd-prow-act">${followBtnHTML(p)}${friendBtnHTML(p)}</span></div>`;
+  }
+
+  /* "Followed by @a, @b and 3 others you follow" (Instagram's and X's): who
+     the viewer follows that follows this profile (engine/socialfeed
+     profile_page), the three latest named. */
+  function mutualHTML(m) {
+    const names = (m.names || []).map((h) => `<a href="${profHref(h)}">@${escapeHtml(h)}</a>`);
+    const more = Math.max(0, Number(m.n || 0) - names.length);
+    const list = more ? `${names.join(", ")} and ${more} other${more === 1 ? "" : "s"}`
+      : names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names.join("");
+    return `Followed by ${list} you follow`;
+  }
+
+  /* RECENT (Instagram's search): the profiles opened from Search, newest
+     first, eight at most, on this device only (a device that cannot keep
+     them shows none). A person's public name, handle and colour; a tap
+     opens them again, an × forgets one. */
+  const FIND_RECENT_KEY = "qb_find_recent";
+  function findRecent() {
+    try {
+      const v = JSON.parse(localStorage.getItem(FIND_RECENT_KEY) || "[]");
+      return Array.isArray(v) ? v.filter((p) => p && /^[A-Za-z0-9_]{3,20}$/.test(p.handle || "")).slice(0, 8) : [];
+    } catch (e) { return []; }
+  }
+  function findRemember(p, forget) {
+    try {
+      const rest = findRecent().filter((x) => x.handle.toLowerCase() !== String(p.handle || "").toLowerCase());
+      const keep = forget ? rest : [{ handle: p.handle, name: String(p.name || "").slice(0, 30), color: Number(p.color) || 0 }, ...rest];
+      localStorage.setItem(FIND_RECENT_KEY, JSON.stringify(keep.slice(0, 8)));
+    } catch (e) { /* this device keeps no list */ }
+  }
+  function findRecentHTML() {
+    const list = findRecent();
+    if (!list.length) return "";
+    return `<section class="fd-card fd-findc"><div class="fd-row-between"><h3>Recent</h3>
+        <button class="fd-btn ghost sm" data-fd="find-forget-all" type="button">Clear</button></div>
+      <div class="fd-recent">${list.map((p) => `<span class="fd-rchip"><a href="${profHref(p.handle)}" data-find="${escapeAttr(p.handle)}">${avatar(p, "sm")}<b>@${escapeHtml(p.handle)}</b></a>
+        <button type="button" data-fd="find-forget" data-handle="${escapeAttr(p.handle)}" aria-label="Forget @${escapeAttr(p.handle)}">${ico("x", 12)}</button></span>`).join("")}</div></section>`;
   }
 
   // Somebody not here yet: the friends layer's invite link (app.js
@@ -787,10 +825,10 @@
     const people = s.people || [];
     const posts = s.posts || [];
     const q = String(s.q || "");
-    let out = people.length
+    let out = (s.suggested ? findRecentHTML() : "") + (people.length
       ? `<section class="fd-card fd-findc"><h3>${s.suggested ? "People you may know" : "People"}</h3>
           <div class="fd-prows">${people.map(personRowHTML).join("")}</div></section>`
-      : q ? `<div class="fd-card fd-empty">Nobody goes by “${escapeHtml(q)}”.</div>` : "";
+      : q ? `<div class="fd-card fd-empty">Nobody goes by “${escapeHtml(q)}”.</div>` : "");
     if (s.suggested || (q && !people.length)) out += inviteCardHTML();
     if (posts.length) out += `<h3 class="fd-findh">Posts</h3><div class="fd-list">${posts.map((p) => postHTML(p)).join("")}</div>`;
     return out;
@@ -929,6 +967,7 @@
         <h2 class="fd-prof-name">${displayName(p)}${badge(p)}</h2>
         <p class="fd-prof-h">@${escapeHtml(p.handle)}${p.follows_you ? ` <span class="fd-tag">Follows you</span>` : ""}${
           p.streak ? ` <span class="fd-tag ${p.streak[0] === "W" ? "up" : "down"}">${escapeHtml(p.streak)} streak</span>` : ""}</p>
+        ${!o.mine && p.mutual && Number(p.mutual.n) ? `<p class="fd-prof-mut">${mutualHTML(p.mutual)}</p>` : ""}
         ${p.karma ? `<div class="kr-prof-host"></div>` : ""}
         ${p.founder ? `<p class="fd-prof-crown">${ico("crown", 16)}<span><b>Founder</b> · built Qellys Book</span>${
           o.mine && isBoss() ? `<button class="fd-crown-go" data-fd="acct-tab" data-v="mod" type="button">${ico("flag", 12)} Moderation</button>` : ""}</p>` : ""}
@@ -1611,6 +1650,13 @@
       return render();
     }
     if (act === "at") { atPut(d.handle); return; }
+    if (act === "find-forget" || act === "find-forget-all") {
+      if (act === "find-forget") findRemember({ handle: d.handle }, true);
+      else { try { localStorage.removeItem(FIND_RECENT_KEY); } catch (e) { /* nothing kept */ } }
+      const out = document.getElementById("fd-find-out");
+      if (out) out.innerHTML = findResultsHTML();
+      return;
+    }
     if (act === "reply") {
       const slot = document.getElementById(`fd-rslot-${id}`);
       if (!slot) return;
@@ -1656,6 +1702,13 @@
   }
 
   document.addEventListener("click", (e) => {
+    // A person opened from Search goes to the front of its Recent.
+    const opened = e.target.closest && e.target.closest("a[data-find]");
+    if (opened) {
+      const h = opened.dataset.find;
+      const who = [...((F.find || {}).people || []), ...findRecent()].find((x) => x.handle === h);
+      if (who) findRemember(who);
+    }
     const t = e.target.closest && e.target.closest("[data-fd]");
     if (!t || !t.closest("#view-feed, #acct-prof")) {
       if (!(e.target.closest && e.target.closest(".fd-popover"))) closeMenus();

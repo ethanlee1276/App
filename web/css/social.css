@@ -453,6 +453,18 @@ a.fd-slip:hover { border-color: transparent; }
   .fd-prow-act { flex: 1 1 100%; padding-left: 55px; }
   .fd-prow-act .fd-btn { flex: 1; }
 }
+.fd-recent { display: flex; flex-wrap: wrap; gap: 8px; }
+.fd-rchip { display: inline-flex; align-items: center; gap: 2px; padding: 4px 4px 4px 5px; border-radius: 999px;
+  background: var(--fill-tone); }
+.fd-rchip a { display: inline-flex; align-items: center; gap: 7px; color: var(--text); text-decoration: none;
+  font-size: var(--fs-sm); }
+.fd-rchip a:hover b { color: var(--brand-2); }
+.fd-rchip button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--text-mute); cursor: pointer; }
+.fd-rchip button:hover { color: var(--text); }
+.fd-prof-mut { margin: 4px 0 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.fd-prof-mut a { color: var(--text); font-weight: 700; text-decoration: none; }
+.fd-prof-mut a:hover { color: var(--brand-2); }
 .fd-invite { display: flex; align-items: center; gap: 12px; }
 .fd-invite-ic { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 999px;
   background: var(--fill-tone); color: var(--brand-2); }

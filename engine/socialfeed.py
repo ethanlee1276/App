@@ -1651,7 +1651,7 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
     following = int(conn.execute("SELECT COUNT(*) FROM feed_follows WHERE follower_id=?", (uid,)).fetchone()[0])
     me = int(viewer) if viewer else None
     rel = {"mine": me == uid, "following": False, "follows_you": False, "blocked": False, "friend": False,
-           "standing": ""}
+           "standing": "", "mutual": {"names": [], "n": 0}}
     if me and me != uid:
         rel["following"] = bool(conn.execute("SELECT 1 FROM feed_follows WHERE follower_id=? AND followee_id=?",
                                              (me, uid)).fetchone())
@@ -1663,6 +1663,14 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
         # says Add friend, Requested, Accept or Message.
         rel["standing"] = _standing(conn, me, [uid])[uid]
         rel["friend"] = rel["standing"] == "friend"
+        # Who the viewer follows that follows them (Instagram's and X's
+        # "Followed by …"): the three most recent named, the rest counted.
+        hide = blocked_ids(conn, me)
+        mut = [h for f, h in conn.execute(
+            "SELECT b.follower_id, p.handle FROM feed_follows a JOIN feed_follows b ON b.follower_id=a.followee_id "
+            "JOIN feed_profiles p ON p.user_id=b.follower_id WHERE a.follower_id=? AND b.followee_id=? "
+            "ORDER BY b.created_at DESC", (me, uid)) if int(f) not in hide]
+        rel["mutual"] = {"names": mut[:3], "n": len(mut)}
     prof = {"handle": r["handle"], "name": r["display_name"], "bio": _text(r["bio"], strong),
             "color": int(r["color"] or 0), "team": r["fav_team"], "since": r["created_at"],
             "verified": bool(r["verified"]), "official": _official(r), "founder": _founder(r),

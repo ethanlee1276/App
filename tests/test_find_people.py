@@ -141,6 +141,24 @@ def test_before_a_name_who_to_add_and_why():
     assert set(_handles(SF.people_suggest(conn, None))) == {h for h, _ in PEOPLE}, "signed out: who is popular"
 
 
+def test_a_profile_says_who_you_follow_that_follows_it():
+    """Instagram's and X's "Followed by @a, @b and 3 others you follow": the
+    three latest named, the rest counted, never past a block, nothing for
+    nobody signed in."""
+    conn, ids = _db()
+    me = ids["ethan"]
+    for h in ("sam_k", "casey", "drew_99", "jordan"):
+        SF.toggle_follow(conn, me, h)
+        SF.toggle_follow(conn, ids[h], "samuel")
+    got = SF.profile_page(conn, "samuel", me)[1]["profile"]["mutual"]
+    assert got == {"names": ["jordan", "drew_99", "casey"], "n": 4}, got
+    SF.toggle_block(conn, me, "jordan")
+    assert SF.profile_page(conn, "samuel", me)[1]["profile"]["mutual"]["n"] == 3
+    assert SF.profile_page(conn, "samuel", None)[1]["profile"]["mutual"] == {"names": [], "n": 0}
+    assert "function mutualHTML(m)" in JS and "you follow`;" in JS
+    assert '${!o.mine && p.mutual && Number(p.mutual.n) ? `<p class="fd-prof-mut">${mutualHTML(p.mutual)}</p>` : ""}' in JS
+
+
 # --- an @ anywhere -----------------------------------------------------------------
 def _phone(conn, uid):
     code, out = PA.subscribe(conn, FCM + str(uid), kind="web", user_id=uid, topics=["bets"])
@@ -245,6 +263,18 @@ def test_the_search_tab_is_second_and_its_page_is_wired():
         assert want in css, want
 
 
+def test_recent_keeps_the_profiles_opened_from_search_on_the_device():
+    for want in ('const FIND_RECENT_KEY = "qb_find_recent";', "function findRecent()", "function findRemember(p, forget)",
+                 "(s.suggested ? findRecentHTML() : \"\")", 'data-find="${escapeAttr(p.handle)}"',
+                 'const opened = e.target.closest && e.target.closest("a[data-find]");',
+                 'if (act === "find-forget" || act === "find-forget-all") {'):
+        assert want in JS, want
+    body = JS[JS.index("function findRecent()"):JS.index("function findRecentHTML()")]
+    assert body.count("try {") == 2 and ".slice(0, 8)" in body, "a device that cannot keep it keeps nothing, eight at most"
+    policy = " ".join(Path(ROOT, "web", "privacy.html").read_text(encoding="utf-8").split())
+    assert "the profiles you opened from Social’s Search (its Recent list" in policy
+
+
 def test_activity_words_a_friend_request_and_opens_messages():
     for want in ('friend_request: "wants to be friends"', "friend_accept: \"said yes: you're friends now\"",
                  'const FRIEND_NOTES = ["friend_request", "friend_accept"];', ': fr ? "#messages" :',
@@ -339,6 +369,13 @@ def test_in_a_browser_a_phone_finds_adds_and_opens_a_profile():
                 page.click('.fd-prow a[href="#feed/u/sam_k"]')
                 page.wait_for_selector(".fd-prof", timeout=8000)
                 got["profile"] = page.evaluate("(document.querySelector('.fd-prof-btns') || {}).textContent || ''")
+                page.goto(f"http://127.0.0.1:{port}/index.html#feed/search", wait_until="load")
+                page.wait_for_selector("#fd-find", timeout=15000)
+                _until(page, "document.querySelectorAll('.fd-rchip').length === 1")
+                got["recent"] = page.evaluate("[...document.querySelectorAll('.fd-rchip b')].map((b) => b.textContent)")
+                page.click('.fd-rchip [data-fd="find-forget"]')
+                _until(page, "!document.querySelector('.fd-rchip')")
+                got["kept"] = page.evaluate("localStorage.getItem('qb_find_recent')")
                 ctx.close()
             finally:
                 browser.close()
@@ -352,6 +389,8 @@ def test_in_a_browser_a_phone_finds_adds_and_opens_a_profile():
     assert [t.strip() for t in got["accept"]] == ["Add friend", "Accept"], got
     assert asked == [{"handle": "sam_k"}], asked
     assert "Requested" in got["profile"], got
+    assert got["recent"] == ["@sam_k"], "opened from Search: under Recent"
+    assert got["kept"] == "[]", "forgotten"
 
 
 if __name__ == "__main__":
