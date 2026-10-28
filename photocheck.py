@@ -43,6 +43,8 @@ CARD_PX = 160
 #: visuals.js's resizes, as `facePreview` splices them into a Cloudinary path.
 FACE_TRANSFORM = "w_{W},h_{W},c_fill,g_face"
 FACE_TRANSFORM_NFL = "w_{W}"
+#: ESPN's faces are 1040x760 (or 350x254); visuals.js asks the combiner for that shape.
+ESPN_FACE_ASPECT = 1.37
 TIMEOUT = 15
 #: Read at most this much of one photo (a whole NFL headshot runs 3 to 4 MB).
 CAP = 8 * 1024 * 1024
@@ -58,7 +60,9 @@ def face_preview(url: str, px: int) -> str:
         if "/combiner/" in url:
             return url
         path = url[url.index(host) + len(host):].split("?")[0]
-        return f"https://{host}/combiner/i?img={path}&w={w}&h={w}" if path else url
+        # In the photo's own shape (visuals.js ESPN_FACE_ASPECT): asked for
+        # a square, the combiner stretches the face to it.
+        return f"https://{host}/combiner/i?img={path}&w={math.floor(w * ESPN_FACE_ASPECT + 0.5)}&h={w}" if path else url
     marker = "/image/upload/"
     if marker not in url:
         return url

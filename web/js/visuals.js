@@ -141,15 +141,25 @@ const FACE_TRANSFORM_NFL = "w_${W}";
    because that is the form that answered 200. Whether the combiner serves
    /i/headshots the way it serves /i/teamlogos is NOT verified, so this is
    still a guess — and it fails onto the untransformed href, which the probe
-   did verify, and then onto the initials chip. */
+   did verify, and then onto the initials chip.
+
+   IN THE PHOTO'S OWN SHAPE (Ethan, 2026-10-28, a pick page's face circled:
+   "a lot of the headshots are distorted for all sports"). ESPN's faces are
+   1040x760 (the older files 350x254, the same shape), and asked for a
+   square the combiner STRETCHES to it rather than crop: every face it
+   served was squeezed to 73% of its width, in every frame that drew one.
+   Asked in their own shape, tall enough for a square frame at 2x, the
+   round and square frames crop them (object-fit: cover), the way ESPN's
+   own pages ask for them. */
+const ESPN_FACE_ASPECT = 1.37;
 function espnFacePreview(url, px) {
   const host = "a.espncdn.com";
   const i = url.indexOf(host);
   if (i < 0 || url.indexOf("/combiner/") >= 0) return url;   // already sized
   const path = url.slice(i + host.length).split("?")[0];
   if (!path) return url;
-  const w = Math.max(48, Math.round(px * 2));
-  return `https://${host}/combiner/i?img=${path}&w=${w}&h=${w}`;
+  const h = Math.max(48, Math.round(px * 2));
+  return `https://${host}/combiner/i?img=${path}&w=${Math.round(h * ESPN_FACE_ASPECT)}&h=${h}`;
 }
 
 /* In the store app (boot.js QB_STORE_APP) no league logo and no player

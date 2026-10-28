@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GH "No player's face stretched" 30 <<'SH'
+curl -s https://qellysbook.com/js/visuals.js | grep -c 'const ESPN_FACE_ASPECT = 1.37;'
+SH
 run GG "The Under pressure card, one thing to a line" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'gold is what the score is testing'
 SH

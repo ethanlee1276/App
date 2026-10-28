@@ -240,7 +240,9 @@ def test_the_box_check_sizes_a_photo_the_way_the_page_does():
     urls = [nfl, MLB_FACE, ESPN_FACE, nba, NHL_FACE, ""]
     mine = [PC.face_preview(u, PC.CARD_PX) for u in urls]
     assert mine[0] == "https://static.www.nfl.com/image/upload/f_auto,q_auto,w_320/league/gainwell", mine[0]
-    assert mine[2] == "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/4430737.png&w=320&h=320"
+    # In the photo's own shape since 2026-10-28: asked for a square, ESPN's
+    # combiner stretched the face to it (tests/test_no_face_is_stretched.py).
+    assert mine[2] == "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/4430737.png&w=438&h=320"
     assert mine[3] == nba and mine[4] == NHL_FACE and mine[5] == ""
     assert "facePreview(full, 160)" in CC_JS, "the card's size, as the page asks for it"
     node = shutil.which("node")

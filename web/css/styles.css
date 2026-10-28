@@ -236,10 +236,6 @@
      different outcome and nowhere near the indigo everything else uses. */
   --plum: #8A8375;
 
-  --grad-violet: #4A3B14;
-  --grad-hot: #E5484D;
-  --grad-cold: #A8A090;
-
   --fill-subtle: rgba(255, 255, 255, .03);
   --fill-hover: rgba(255, 255, 255, .06);
   --skeleton: linear-gradient(100deg, var(--panel-2) 30%, var(--panel-3) 50%, var(--panel-2) 70%);
@@ -369,7 +365,6 @@
   /* The venue band's fade into the page (#51), a token like every gradient. */
   --venue-fade: linear-gradient(180deg, transparent 0%, var(--bg) 100%);
   --shadow: none;
-  --shadow-lg: none;
   --ring: 0 0 0 2px rgba(230, 220, 203, 0.30);
   /* NOT A SHADOW — a paint-over. Autofill draws its own background and
      neither WebKit nor Blink will let CSS set it, for anti-clickjacking
@@ -4978,12 +4973,10 @@ body.pk-open { overflow: hidden; }
   --good: #12734B;
   --bad: #C8102E;
   --plum: #7A7263;                 /* darker: it sits on paper, not ink */
-  --grad-violet: #E0C58A;
   --fill-subtle: rgba(23, 22, 19, .025);
   --fill-hover: rgba(23, 22, 19, .05);
   --skeleton: linear-gradient(100deg, #f4f4f6 30%, #ebebee 50%, #f4f4f6 70%);
   --shadow: none;
-  --shadow-lg: none;
   --ring: 0 0 0 2px rgba(58, 111, 216, 0.30);
 
   /* ---- the new look's light values (formerly a second light block) ---- */
