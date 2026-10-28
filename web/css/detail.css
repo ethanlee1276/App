@@ -117,17 +117,25 @@
 .pr-table .lb-th:first-child { text-align: left; }
 .pr-table .lb-tm { color: var(--text-mute); font-size: var(--fs-sm); display: flex;
   align-items: center; gap: 6px; min-width: 0; }
+/* The club over its record, which no longer breaks at its hyphens. */
+.pr-table .pr-tm { display: grid; line-height: var(--lh-tight); }
+.pr-table .pr-tm .k { font-size: var(--fs-2xs); white-space: nowrap; }
 .pr-table b { text-align: right; font-family: var(--font-mono); font-weight: 600; }
 .pr-defs { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
   color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); }
 .pr-defs b { color: var(--text-dim); font-weight: 600; }
-/* The play-by-play page's under-pressure card (2026-09-08): the moment's
-   chips, the one-line reading, the live market's number, and the two-team
-   table with the two cells the scoreboard is asking lit. */
-.pbp-pressure .pbp-rail-head .lb-live { margin-left: 6px; }
-.pbp-pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+/* The play-by-play page's under-pressure card (2026-09-08): the title and
+   LIVE, the season under them, the one-line reading led by the state of
+   the game, the live market's number, and the two-team table with the two
+   cells the scoreboard is asking lit (one thing to a line since
+   2026-10-28; detail.js pbpPressureHTML). */
+.pbp-pressure .pbp-rail-head { align-items: center; margin-bottom: 2px; }
+.pbp-pr-sub { margin: 0 0 10px; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); }
 .pbp-pr-line { margin: 0 0 8px; color: var(--text-dim); font-size: var(--fs-sm);
   line-height: var(--lh-body); }
+.pbp-pr-line b { color: var(--text); font-weight: 700; }
+.pbp-pr-foot { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); }
+.gp-pressure .gp-panel-title { margin-bottom: 2px; }
 .pbp-pr-market { margin: 0 0 10px; color: var(--text-body); font-size: var(--fs-sm);
   line-height: var(--lh-body); }
 .pbp-pr-asked { color: var(--gold); }

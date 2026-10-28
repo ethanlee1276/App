@@ -2248,14 +2248,14 @@ function pressurePairHTML(sport, g) {
   const rows = [g.away, g.home].map((t) => [t, pr.teams[t]]).filter(([, r]) => r);
   if (!rows.length) return "";
   return `
-    <div class="card gp-pressure" id="gp-pressure"><div class="gp-panel-title">Under pressure
-        <span class="k">${escapeHtml(String(pr.season_used))} · one-score means within ${
-          escapeHtml(pressureUnit(pr))}</span></div>
+    <div class="card gp-pressure" id="gp-pressure"><div class="gp-panel-title">Under pressure</div>
+      <p class="pbp-pr-sub">${escapeHtml(String(pr.season_used))} season · one-score means within ${
+        escapeHtml(pressureUnit(pr))}</p>
       <div class="pr-table">
         <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
           `<span class="lb-th">${t}</span>`).join("")}
-        ${rows.map(([t, r]) => `<span class="lb-tm">${teamMark(t, 20)} ${escapeHtml(t)}
-            <span class="k">${escapeHtml(r.record)}</span></span>${
+        ${rows.map(([t, r]) => `<span class="lb-tm">${teamMark(t, 20)}<span class="pr-tm">${
+            escapeHtml(t)}<span class="k">${escapeHtml(r.record)}</span></span></span>${
           PRESSURE_RATES.map(([k]) => `<b>${pressurePct(r[k])}</b>`).join("")}`).join("")}
       </div>
       ${pr.note ? `<div class="pr-defs">${escapeHtml(pr.note)}</div>` : ""}
@@ -2319,9 +2319,22 @@ function pressureMoment({ sport, d, boardGame, pr }) {
     if (fav && lead && lead !== fav) chips.push(`${fav} trails as the favourite`);
     if (lv.possession) chips.push(`${lv.possession} has the ball`);
   }
+  // THE STATE IN WORDS, for the card's line (2026-10-28): the chips said it
+  // in pills above a sentence that often said it again. It leads the line
+  // only when the sentence does not already name it (a favourite trailing,
+  // a one-score game late: pressureSituation's own readings).
+  const F = fav ? teams[fav] : null, D = dog ? teams[dog] : null;
+  const said = (F && D && lead && lead !== fav && F.reliability != null) || (one && late);
+  let state = "";
+  if (live && !said) {
+    state = margin === 0 ? "Tied" : one ? (sport === "mlb" ? "One-run game" : "One-score game")
+      : `${margin}-${sport === "mlb" ? "run" : "point"} game`;
+    if (late) state += sport === "mlb" ? ", late innings" : ", late";
+    if (fav && lead && lead !== fav) state = `${fav} trails as the favourite`;
+  }
   const t = (boardGame || {}).line_track;
   const market = t && t.now != null ? { home, now: t.now, opened: t.opened } : null;
-  return { line, asks, chips, live, market, fav, lead, margin, one, late };
+  return { line, asks, chips, state, live, market, fav, lead, margin, one, late };
 }
 
 function pbpModelWinProbHTML(d) {
@@ -2417,30 +2430,34 @@ function pbpPressureHTML(d, league, boardGame) {
   const teams = pr.teams || {};
   const asked = (t, k) => m.asks.some((x) => x.team === t && x.rate === k);
   const rows = [d.away, d.home].map((t) => [t, teams[t] || {}]);
+  /* ONE THING TO A LINE (Ethan, 2026-10-28, the card's head circled on a
+     live Brewers–Rays page: "the wording is getting cluttered"). The title
+     wrapped beside "LIVE" run into the season note; a pill said "one-score
+     game" over a sentence; the records broke at their hyphens; the footnote
+     was full size and spoke of the fast loop. The title and LIVE share the
+     head, the note is a quiet line under it, the state leads the sentence,
+     and the footnote says only what the gold marks. */
   return `<div class="card pbp-pressure">
     <div class="pbp-rail-head">Under pressure${
-      m.live ? ` <span class="lb-live">${icon("dot", 10)} LIVE</span>` : ""}
-      <span class="mini">${escapeHtml(String(pr.season_used))} · one-score means within ${
-        escapeHtml(pressureUnit(pr))}</span></div>
-    ${m.chips.length ? `<div class="pbp-pr-chips">${m.chips.map((c) =>
-      `<span class="chip">${escapeHtml(c)}</span>`).join("")}</div>` : ""}
-    <p class="pbp-pr-line">${escapeHtml(m.line)}</p>
+      m.live ? `<span class="lb-live">${icon("dot", 10)} LIVE</span>` : ""}</div>
+    <p class="pbp-pr-sub">${escapeHtml(String(pr.season_used))} season · one-score means within ${
+      escapeHtml(pressureUnit(pr))}</p>
+    <p class="pbp-pr-line">${m.state ? `<b>${escapeHtml(m.state)}</b> · ` : ""}${escapeHtml(m.line)}</p>
     ${m.market ? `<p class="pbp-pr-market">Live market: <b>${escapeHtml(d.home)} ${
       Number(m.market.now).toFixed(0)}%</b> to win, from ${
       Number(m.market.opened).toFixed(0)}% at the open — the market’s number, not ours.</p>` : ""}
     <div class="pr-table">
       <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
         `<span class="lb-th">${t}</span>`).join("")}
-      ${rows.map(([t, r]) => `<span class="lb-tm">${teamMarkIn(league, t, 20)} ${escapeHtml(t)}
-          <span class="k">${escapeHtml(r.record || "")}</span></span>${
+      ${rows.map(([t, r]) => `<span class="lb-tm">${teamMarkIn(league, t, 20)}<span class="pr-tm">${
+          escapeHtml(t)}<span class="k">${escapeHtml(r.record || "")}</span></span></span>${
         PRESSURE_RATES.map(([k]) => `<b${asked(t, k) ? ' class="pbp-pr-asked"' : ""}>${
           pressurePct(r[k])}</b>`).join("")}`).join("")}
     </div>
     <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
       `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
-    <p class="mini" style="opacity:.6">Season counts from ${escapeHtml(String(pr.season_used))}
-      finished games; the scoreboard decides which one is being asked, ${
-      m.live ? "re-read with every pass of the fast loop" : "and asks nothing until the game starts"}.</p>
+    <p class="pbp-pr-foot">From ${escapeHtml(String(pr.season_used))}’s finished games${
+      m.asks.length ? " · gold is what the score is testing" : ""}.</p>
   </div>`;
 }              // { view, y } while inside a detail
 

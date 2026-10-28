@@ -78,8 +78,11 @@ def test_the_card_reads_the_cache_and_lights_the_cells_being_asked():
     assert "pressureMoment({ sport: league, d, boardGame, pr })" in card
     assert 'class="pbp-pr-asked"' in card
     assert "the market’s number, not ours" in card
-    assert "re-read with every pass of the fast loop" in card
-    for sel in (".pbp-pr-chips", ".pbp-pr-line", ".pbp-pr-market", ".pbp-pr-asked"):
+    # One thing to a line since 2026-10-28 (tests/test_the_under_pressure_card_reads_cleanly.py):
+    # the state leads the sentence, the footnote says what the gold marks.
+    assert '${m.state ? `<b>${escapeHtml(m.state)}</b> · ` : ""}${escapeHtml(m.line)}' in card
+    assert 'm.asks.length ? " · gold is what the score is testing" : ""' in card
+    for sel in (".pbp-pr-sub", ".pbp-pr-line", ".pbp-pr-market", ".pbp-pr-asked", ".pbp-pr-foot"):
         assert sel in CSS, sel
 
 
@@ -137,6 +140,9 @@ def test_the_moment_says_which_rate_the_scoreboard_is_asking_of_whom():
                   {{ ...board, line_track: {{ home: "KC", away: "DEN", now: 31.5, opened: 58.0 }} }}),
         stranger: pressureMoment({{ sport: "nfl", d: d({{ state: "live" }}).home = "NYJ" && {{ home: "NYJ", away: "DEN", live: {{ state: "live" }} }}, boardGame: board, pr }}),
         run: pressureMoment({{ sport: "mlb", d: {{ home: "KC", away: "DEN", live: {{ state: "live", home_score: 3, away_score: 2, period: "Bot 8th" }} }}, boardGame: null, pr }}),
+        runEarly: pressureMoment({{ sport: "mlb", d: {{ home: "KC", away: "DEN", live: {{ state: "live", home_score: 2, away_score: 1, period: "Top 2nd" }} }}, boardGame: null, pr }}),
+        tied: pressureMoment({{ sport: "mlb", d: {{ home: "KC", away: "DEN", live: {{ state: "live", home_score: 1, away_score: 1, period: "Top 4th" }} }}, boardGame: null, pr }}),
+        wideLate: pressureMoment({{ sport: "mlb", d: {{ home: "KC", away: "DEN", live: {{ state: "live", home_score: 5, away_score: 2, period: "Bot 8th" }} }}, boardGame: null, pr }}),
       }};
     """)
     if got is None:
@@ -165,6 +171,15 @@ def test_the_moment_says_which_rate_the_scoreboard_is_asking_of_whom():
     run = got["run"]
     assert run["chips"] == ["one-score game", "late innings"], run["chips"]
     assert _asks(run) == [["KC", "clutch"], ["DEN", "clutch"]]
+    # THE STATE THAT LEADS THE CARD'S LINE (2026-10-28): said in words only
+    # where the sentence does not already say it.
+    assert pre["state"] == "", "nothing before the game"
+    for said in ("trailing", "oneLate", "oneLateNoFav", "ball", "run"):
+        assert got[said]["state"] == "", (said, got[said]["state"], got[said]["line"])
+    assert ec["state"] == "One-score game", ec["state"]
+    assert got["runEarly"]["state"] == "One-run game", got["runEarly"]["state"]
+    assert got["tied"]["state"] == "Tied", got["tied"]["state"]
+    assert got["wideLate"]["state"] == "3-run game, late innings", got["wideLate"]["state"]
 
 
 if __name__ == "__main__":
