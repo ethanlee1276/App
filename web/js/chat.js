@@ -40,6 +40,8 @@ const CH = {
   // one on the Party tab, its messages (kept apart from the room's), and an
   // invite read off the address waiting for an account.
   parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
+  // Karma (engine/karma): the room's heat, and the watching clock.
+  hype: null, wtimer: 0, wfirst: false,
 };
 
 const chEsc = (s) => escapeHtml(String(s == null ? "" : s));
@@ -404,12 +406,26 @@ function ffLiveHTML() {
     <span class="ffl-s"><span>You <b>${pts(v.me.points)}</b></span> <span>${chEsc(v.opponent || "Them")} <b>${pts(them.points)}</b></span></span>
     <span class="ffl-sub">${sub}${wp}</span></a>`;
 }
+/* Karma (js/karma.js): the level, the way to the next and the day's quests,
+   in a strip over Your players. */
+function ypKarma(host) {
+  let kh = host.previousElementSibling;
+  if (!(kh && kh.classList.contains("kr-strip-host"))) {
+    kh = document.createElement("div");
+    kh.className = "kr-strip-host";
+    host.before(kh);
+  }
+  if (typeof loadRoom === "function") {
+    loadRoom("js/karma.js", "css/karma.css").then((ok) => { if (ok && typeof karmaStripMount === "function") karmaStripMount(kh); });
+  }
+}
 function ypBind(host) {
   host.querySelectorAll(".yp-item").forEach((b) =>
     b.addEventListener("click", () => openPbp(b.dataset.ypSport, b.dataset.ypEvent)));
 }
 async function yourPlayersMount(host) {
   if (!host || !(typeof _acctUser !== "undefined" && _acctUser && _acctUser.signed_in)) return;
+  ypKarma(host);
   if (_ypLast || _lvmLast) { host.innerHTML = _lvmLast + _ypLast; ypBind(host); }
   let v = null;
   try {
@@ -508,6 +524,10 @@ function chatMount(league, event, d) {
   chatFab();
   if (CH.open) { chatDrawHead(); if (CH.tab === "plays" || CH.thread) chatDrawBody(); }
   if (!CH.timer) chatSchedule(0);
+  // Karma: the tiers' colours for the levels beside names, and the
+  // watching clock (chatWatchTick).
+  if (typeof loadRoom === "function") loadRoom("js/karma.js", "css/karma.css");
+  if (!CH.wtimer) chatWatchArm();
   // A shared play's link lands on its thread (pcShare; app.js openPbpHash).
   const want = window._chatWantPlay;
   if (want && want.room === room) { window._chatWantPlay = null; chatOpen({ play: want.play }); }
@@ -578,10 +598,12 @@ function chatVotePath() {
 
 function chatReset() {
   clearTimeout(CH.timer);
+  clearTimeout(CH.wtimer);
   Object.assign(CH, { room: "", league: "", event: "", d: null, msgs: [], byId: new Map(), lastId: 0,
     firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0,
     open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false, unread: 0, timer: 0,
-    loaded: false, err: "", menu: 0, parties: [], party: null, pmsgs: [], pLastId: 0, invite: "" });
+    loaded: false, err: "", menu: 0, parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
+    hype: null, wtimer: 0, wfirst: false });
   const s = document.getElementById("gch-sheet");
   if (s) s.remove();
   document.body.classList.remove("gch-on");
@@ -673,6 +695,8 @@ async function chatPull(older) {
   if (typeof pbpRoomLine === "function") pbpRoomLine();
   CH.here = v.here || 0;
   CH.me = v.me || CH.me;
+  CH.hype = v.hype || null;
+  if (CH.hype && CH.hype.karma) chatKarma(CH.hype.karma);
   // The reader's parties: the newest joined is the Party tab's, unless one is chosen.
   // (Not when a party was started, joined or left while this ask was out.)
   if (Array.isArray(v.parties) && (CH.party ? CH.party.id : 0) === asked) {
@@ -733,6 +757,8 @@ async function chatPost(path, body) {
     });
     let out = {};
     try { out = await r.json(); } catch (e) { out = {}; }
+    // What it earned (engine/karma): a message, a reaction, a vote, a party.
+    if (out && out.karma) chatKarma(out.karma);
     return { status: r.status, ...out };
   } catch (e) {
     return { status: 0, error: "No connection — try again." };
@@ -834,7 +860,7 @@ function chatSheet() {
     s.className = "gch-sheet";
     s.setAttribute("role", "dialog");
     s.setAttribute("aria-label", "Game chat");
-    s.innerHTML = `<header class="gch-head"></header><div class="gch-poll"></div><div class="gch-tix" hidden></div>
+    s.innerHTML = `<header class="gch-head"></header><div class="gch-poll"></div><div class="gch-heat" hidden></div><div class="gch-tix" hidden></div>
       <nav class="gch-tabs" role="tablist"></nav>
       <div class="gch-body" tabindex="-1"></div>
       <button type="button" class="gch-newpill" hidden></button>
@@ -885,7 +911,58 @@ function chatDrawHead() {
       <button type="button" class="gch-x" data-gch="close" aria-label="Close the chat">${typeof icon === "function" ? icon("cross", 16) : "×"}</button></div>
     <div class="gch-board">${side(d.away, lv.away_score, false)}<div class="gch-mid">${mid}</div>${side(d.home, lv.home_score, true)}</div>`;
   chatDrawPoll();
+  chatDrawHeat();
   chatDrawTix();
+}
+
+/* THE ROOM'S HEAT (Twitch's Hype Train; engine/karma hype): the last five
+   minutes of messages and reactions, from three people or more, as five
+   levels. Everyone taking part while it climbs earns karma for each. */
+function chatDrawHeat() {
+  const s = document.getElementById("gch-sheet");
+  const box = s && s.querySelector(".gch-heat");
+  if (!box) return;
+  const h = CH.hype;
+  if (!h || CH.thread || !(h.level || h.n)) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  const lvl = Math.min(5, Number(h.level) || 0);
+  const pct = lvl >= 5 ? 100 : Math.round(Math.max(0, Math.min(1, Number(h.progress) || 0)) * 100);
+  box.innerHTML = `<span class="gch-heat-l">${lvl ? "🔥".repeat(lvl) : "🔥"} Room heat${lvl ? ` · level ${lvl}` : ""}</span>
+    <span class="gch-heat-bar lv${lvl}"><i style="--p:${pct}%"></i></span>
+    <span class="gch-heat-n">${lvl >= 5 ? "On fire" : lvl ? "Keep it going" : "Three of you talking lights it"}</span>`;
+}
+
+/* KARMA FOR WATCHING (engine/karma, 2026-10-28: Real's karma for a live
+   game opened, Twitch's points by the five minutes watched). While a live
+   game's page is open and in view, a signed-in reader's page says so about
+   once a minute; the server pays the game joined, each five minutes and a
+   big play seen while here. Nothing is sent when the game is not on, the
+   tab is out of sight or nobody is signed in. */
+const CHAT_WATCH_MS = 60000;
+function chatWatchArm() {
+  clearTimeout(CH.wtimer);
+  CH.wtimer = setTimeout(chatWatchTick, CH.wfirst ? CHAT_WATCH_MS : 4000);
+}
+async function chatWatchTick() {
+  CH.wtimer = 0;
+  if (!CH.room || !chatOnGame()) return;
+  const live = ((CH.d || {}).live || {}).state === "live";
+  const signed = typeof _acctUser !== "undefined" && _acctUser && _acctUser.signed_in;
+  if (live && signed && !document.hidden) {
+    CH.wfirst = true;
+    try {
+      const r = await fetch("/api/karma/watch", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ room: CH.room }) });
+      const v = r.ok ? await r.json() : null;
+      if (v && v.karma) chatKarma(v.karma);
+    } catch (e) { /* the next minute asks again */ }
+  }
+  if (CH.room) chatWatchArm();
+}
+/* What an action earned, as js/karma.js's note (and a level crossed). */
+function chatKarma(k) {
+  if (!k || !k.got || typeof loadRoom !== "function") return;
+  loadRoom("js/karma.js", "css/karma.css").then((ok) => { if (ok && typeof karmaNote === "function") karmaNote(k); });
 }
 
 /* YOUR TICKETS IN THIS GAME (2026-10-25). The reader's saved slips from My
@@ -1157,14 +1234,18 @@ function chatMsgHTML(m, prev) {
   const badge = (p.verified ? `<span class="gch-tick" title="Verified">${typeof icon === "function" ? icon("check", 10) : "✓"}</span>` : "")
     + (p.founder ? `<span class="gch-founder">Founder</span>` : "")
     // Call it's flame: this many calls right in a row now (engine/callit).
-    + (Number(p.streak) >= 3 ? `<span class="gch-flame" title="${Number(p.streak)} Call it calls right in a row">🔥${Number(p.streak)}</span>` : "");
+    + (Number(p.streak) >= 3 ? `<span class="gch-flame" title="${Number(p.streak)} Call it calls right in a row">🔥${Number(p.streak)}</span>` : "")
+    // The writer's karma level, and the flair level 3 opens (engine/karma).
+    + (Number(p.lv) ? `<span class="gch-lv kr-lv kr-${chEsc(p.cls || "t1")}${Number(p.lv) >= 10 ? " hi" : ""}" title="Karma level ${
+      Number(p.lv)}">${Number(p.lv)}</span>` : "")
+    + (p.flair ? `<span class="gch-flair" aria-hidden="true">${chEsc(p.flair)}</span>` : "");
   const menu = CH.menu === m.id ? chatMenuHTML(m) : "";
   const cont = chatJoins(m, prev && typeof prev === "object" ? prev : null);
   // The site's own account (engine/housepost posts each big play as it) wears the site's mark.
   return `<article class="gch-msg${m.own ? " own" : ""}${cont ? " cont" : ""}${CH.sel === m.id ? " sel" : ""}${p.founder ? " staff" : ""}${p.official ? " house" : ""}" data-id="${m.id}">
     ${cont ? `<time class="gch-gutter" aria-hidden="true">${chatClock(m.at)}</time>`
       : p.official ? `<span class="gch-av gch-house" aria-hidden="true">${brandMarkHTML(24)}</span>`
-      : `<span class="gch-av gch-c${c}${p.founder ? " gold" : ""}" aria-hidden="true">${chEsc(chatInitials(p))}</span>`}
+      : `<span class="gch-av gch-c${c}${p.founder ? " gold" : ""}${Number(p.lv) >= 20 ? ` kr-glow kr-${chEsc(p.cls || "t5")}` : ""}" aria-hidden="true">${chEsc(chatInitials(p))}</span>`}
     <div class="gch-bub">
       ${cont ? "" : `<div class="gch-meta"><b class="gch-name gch-c${c}">@${chEsc(p.handle || "")}</b>${badge}${
         p.team ? `<span class="gch-team">${chEsc(p.team)}</span>` : ""}<time>${chatAgo(m.at)}</time></div>`}

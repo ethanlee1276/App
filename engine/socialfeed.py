@@ -1552,6 +1552,11 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
             "followers": _n_followers(conn, uid), "following_count": following,
             "record": record_of(conn, uid), "record30": record_of(conn, uid, time.time() - 30 * 86400),
             "streak": _streak(conn, uid), **rel}
+    # The level, its tier and the best badges (engine/karma), as anybody
+    # may see them; the site's own account has none.
+    if not prof["official"]:
+        from . import karma as K
+        prof["karma"] = K.public(conn, uid)
     if tab == "record":
         rows = conn.execute(_POST_SQL + "WHERE p.user_id=? AND p.hidden=0 AND p.kind='parlay' "
                             "AND p.result IN ('won','lost','push') ORDER BY p.created_at DESC LIMIT 100",

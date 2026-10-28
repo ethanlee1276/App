@@ -214,6 +214,7 @@ def grade(conn, doc: dict) -> int:
                            (game,)).fetchall()
     n = 0
     over = str((doc.get("live") or {}).get("state") or "") in ("final", "post")
+    paid = []
     for (unit,) in pending:
         res = result_of(doc, unit) or ("void" if over else "")
         if not res:
@@ -224,8 +225,17 @@ def grade(conn, doc: dict) -> int:
         else:
             cur = conn.execute("UPDATE callit_calls SET result = ?, won = (call = ?) "
                                "WHERE game = ? AND unit = ? AND result IS NULL", (res, res, game, unit))
+            paid.append(unit)
         n += cur.rowcount
     conn.commit()
+    # Each call right earns its caller karma (engine/karma), as it grades.
+    if paid:
+        try:
+            from . import karma as K
+            for unit in paid:
+                K.grade_calls(conn, game, unit)
+        except sqlite3.Error:
+            pass
     return n
 
 

@@ -167,6 +167,24 @@ body.gch-on { overflow: hidden; }
 .gch-av.gold { outline: 2px solid var(--brand); }
 /* Call it's flame beside a handle (engine/callit current_streaks). */
 .gch-flame { font-size: var(--fs-2xs); font-weight: 800; color: var(--warn); font-variant-numeric: tabular-nums; }
+/* Karma beside a name (engine/karma): the level, in its tier's colour
+   (css/karma.css holds the tiers), shining from level 10; the flair level 3
+   opens; from level 20 a glow round the picture. */
+.gch-lv { align-self: center; min-width: 18px; height: 16px; padding: 0 4px; }
+.gch-lv.hi { --glow-kr: 0 0 10px color-mix(in oklab, var(--kr-c, var(--brand)) 45%, transparent); box-shadow: var(--glow-kr); }
+.gch-flair { align-self: center; font-size: var(--fs-xs); line-height: 1; }
+.gch-av.kr-glow { --glow-kr: 0 0 12px 2px color-mix(in oklab, var(--kr-c, var(--brand)) 55%, transparent); box-shadow: var(--glow-kr); }
+/* The room's heat (Twitch's Hype Train): five levels over the chat. */
+.gch-heat {
+  --grad-heat: linear-gradient(90deg, var(--warn), var(--bad));
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 6px 14px;
+  font-size: var(--fs-2xs); font-weight: 700; color: var(--text-dim); }
+.gch-heat[hidden] { display: none; }
+.gch-heat-l { white-space: nowrap; color: var(--text); }
+.gch-heat-bar { height: 6px; border-radius: 999px; background: color-mix(in oklab, var(--text) 10%, transparent); overflow: hidden; }
+.gch-heat-bar i { display: block; width: var(--p, 0%); height: 100%; border-radius: inherit; background: var(--grad-heat); }
+.gch-heat-bar.lv4 i, .gch-heat-bar.lv5 i { --glow-heat: 0 0 10px color-mix(in oklab, var(--bad) 60%, transparent); box-shadow: var(--glow-heat); }
+.gch-heat-n { white-space: nowrap; color: var(--text-mute); }
 .gch-c0 { --gch-tint: var(--brand); }
 .gch-c1 { --gch-tint: var(--good); }
 .gch-c2 { --gch-tint: var(--bad); }

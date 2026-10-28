@@ -369,6 +369,18 @@ def _int(v) -> int:
         return 0
 
 
+def _karma_note(fn):
+    """Run one karma step (engine/karma) beside an action: what it paid,
+    for the page's toast, or None. Karma never fails the action it rides
+    on — a message is posted, a vote counted, whatever this says."""
+    try:
+        from engine import karma as K
+        out = fn(K)
+        return out if isinstance(out, dict) else None
+    except Exception:                                    # noqa: BLE001
+        return None
+
+
 def _acct():
     """`engine.accounts`, imported on first use.
 
@@ -1260,6 +1272,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._callit(parsed.path[len("/api/callit/"):].strip("/"))
         if parsed.path.startswith("/api/trivia/"):
             return self._trivia(parsed.path[len("/api/trivia/"):].strip("/"))
+        if parsed.path.startswith("/api/karma/"):
+            return self._karma(parsed.path[len("/api/karma/"):].strip("/"), None, parse_qs(parsed.query))
         if parsed.path in ("/api/passkey/list", "/api/passkey/list/"):
             return self._passkey("list", None)
         if parsed.path.startswith("/api/calendar/"):
@@ -1436,6 +1450,7 @@ class Handler(BaseHTTPRequestHandler):
                 or parsed.path.startswith("/api/alerts/")
                 or parsed.path.startswith("/api/callit/")
                 or parsed.path.startswith("/api/trivia/")
+                or parsed.path.startswith("/api/karma/")
                 or parsed.path in ("/api/widget/key", "/api/widget/key/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
                 or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
@@ -1462,6 +1477,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._callit(parsed.path[len("/api/callit/"):].strip("/"), body)
             if parsed.path.startswith("/api/trivia/"):
                 return self._trivia(parsed.path[len("/api/trivia/"):].strip("/"), body)
+            if parsed.path.startswith("/api/karma/"):
+                return self._karma(parsed.path[len("/api/karma/"):].strip("/"), body, {})
             if parsed.path.startswith("/api/widget/key"):
                 return self._widget_key(body)
             if parsed.path.startswith("/api/parlay/check"):
@@ -3525,6 +3542,41 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def _karma(self, path: str, body: dict | None, q: dict):
+        """KARMA (engine/karma): GET ``me`` (the Karma tab and the Live
+        tab's strip; opening it is the day's check-in) and ``ladder`` (the
+        week's or all-time, by username — open to read); POST ``watch`` (a
+        live game's page, open and in view, about once a minute) and
+        ``prefs`` (the flair and the ladder choice)."""
+        from engine import karma as K
+        one = lambda k, d="": (q.get(k) or [d])[0]                # noqa: E731
+        if path not in ("me", "ladder", "watch", "prefs"):
+            return self._send(404, b'{"error":"unknown karma endpoint"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            K.ensure_tables(conn)
+            who = self._account(conn)
+            if path == "ladder" and body is None:
+                scope = "all" if one("scope") == "all" else "week"
+                out = K.ladder(conn, scope, who["id"] if who else None)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to earn karma."}', ".json")
+            if path == "me" and body is None:
+                return self._send(200, json.dumps(K.me(conn, who["id"])).encode(), ".json")
+            if path == "watch" and body is not None:
+                code, out = K.watch(conn, who["id"], str(body.get("room") or "")[:24])
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "prefs" and body is not None:
+                code, out = K.set_prefs(conn, who["id"],
+                                        flair=body.get("flair") if isinstance(body.get("flair"), str) else None,
+                                        ladder=body.get("ladder") if isinstance(body.get("ladder"), bool) else None)
+                return self._send(code, json.dumps(out).encode(), ".json")
+            return self._send(405, b'{"error":"wrong method"}', ".json")
+        finally:
+            conn.close()
+
     def _trivia(self, path: str, body: dict | None = None):
         """TRIVIA IN THE STOPPAGES (engine/trivia): GET the game's question
         for the break it is in (or the last one, answered), POST an answer.
@@ -3556,6 +3608,12 @@ class Handler(BaseHTTPRequestHandler):
             if not who:
                 return self._send(401, b'{"error":"Make a free account to answer."}', ".json")
             code, out = TV.answer(conn, hist, who["id"], doc, str(body.get("qkey") or "")[:60], body.get("pick"))
+            if code == 200 and out.get("answer") is not None:
+                # A right answer earns karma (engine/karma).
+                k = _karma_note(lambda K: K.on_trivia(conn, who["id"], TV.room_of(doc), out["qkey"],
+                                                      out.get("mine") == out.get("answer")))
+                if k:
+                    out["karma"] = k
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()
@@ -3576,6 +3634,11 @@ class Handler(BaseHTTPRequestHandler):
             if path == "watch":
                 code, out = AL.add_watch(conn, who["id"], body.get("kind"),
                                          body.get("value"))
+                # A team or a player followed earns karma (engine/karma).
+                k = _karma_note(lambda K: K.on_follow(conn, who["id"], str(body.get("kind") or ""),
+                                                      str(body.get("value") or "")[:80])) if code == 200 else None
+                if k and isinstance(out, dict):
+                    out["karma"] = k
             elif path == "unwatch":
                 code, out = AL.remove_watch(conn, who["id"], body.get("id"))
             else:
@@ -3831,6 +3894,9 @@ class Handler(BaseHTTPRequestHandler):
                                          before=_int(one("before")), since=since,
                                          strong=one("strong") == "1", here_key=key,
                                          party=_int(one("party")), pafter=_int(one("pafter")))
+                if code == 200 and not (out.get("votes") or {}).get("open", True):
+                    # The game is final: its who-wins vote pays the right side.
+                    _karma_note(lambda K: K.grade_votes(conn, out["room"]))
                 if code == 200:
                     from engine import socialfeed as SF
                     out["me"] = {"signed_in": bool(who),
@@ -3896,6 +3962,16 @@ class Handler(BaseHTTPRequestHandler):
                                     play=str(body.get("play") or "")[:40],
                                     bet=body.get("bet") if isinstance(body.get("bet"), dict) else None,
                                     reply_to=_int(body.get("reply_to")) or None, party=_int(body.get("party")))
+            if code == 200:
+                # What it earned (engine/karma), for the page's toast.
+                earn = {"send": lambda K: K.on_message(conn, uid, out.get("id")),
+                        "react": lambda K: K.on_react(conn, uid, _int(body.get("id")), out.get("mine") or ""),
+                        "play": lambda K: K.on_play_react(conn, uid, out.get("mine") or ""),
+                        "vote": lambda K: K.on_vote(conn, uid, room),
+                        "join": lambda K: K.on_party_join(conn, uid, out.get("id"))}.get(path)
+                k = _karma_note(earn) if earn else None
+                if k:
+                    out["karma"] = k
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()

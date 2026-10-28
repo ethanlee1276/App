@@ -419,6 +419,8 @@ def report(conn, user_id: int, msg_id, reason="other", now: float | None = None)
     if n >= REPORTS_TO_HIDE:
         conn.execute("UPDATE chat_msgs SET hidden=1 WHERE id=?", (int(msg_id),))
     conn.commit()
+    if n >= REPORTS_TO_HIDE:
+        _unpay(conn, msg_id)
     return 200, {"ok": True}
 
 
@@ -441,7 +443,15 @@ def set_hidden(conn, msg_id, hidden: bool) -> tuple[int, dict]:
     if not hidden:
         conn.execute("DELETE FROM chat_reports WHERE msg_id=?", (int(msg_id or 0),))
     conn.commit()
+    if hidden and cur.rowcount:
+        _unpay(conn, msg_id)
     return (200, {"ok": True}) if cur.rowcount else (404, {"error": "No such message."})
+
+
+def _unpay(conn, msg_id) -> None:
+    """A hidden message keeps none of the karma it earned (engine/karma)."""
+    from . import karma as K
+    K.revoke_message(conn, int(msg_id or 0))
 
 
 def reported(conn) -> list:
@@ -564,9 +574,14 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
     # The Call it flame beside a handle: its author's calls right in a row now.
     from . import callit as CI
     flames = CI.current_streaks(conn, {int(r["user_id"]) for r in rows}, now)
+    # And the author's karma level, with the flair it opened (engine/karma).
+    from . import karma as K
+    levels = K.cards(conn, {int(r["user_id"]) for r in rows}, now)
     for m, r in zip(msgs, rows):
         if int(r["user_id"]) in flames:
             m["by"]["streak"] = flames[int(r["user_id"])]
+        if int(r["user_id"]) in levels:
+            m["by"].update(levels[int(r["user_id"])])
     # Plays: the faces and the thread sizes, for every play that moved.
     cut = since - 1 if since else 0
     plays = _counts(conn, "SELECT play, kind, COUNT(*) FROM chat_play_reacts WHERE room=? AND kind<>'' "
@@ -603,7 +618,10 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
            # The room against the math: the vote through the game, drawn on
            # the game page's win-chance chart (detail.js pbpRoomLine).
            "vote_path": vote_path(conn, room),
-           "here": touch(room, here_key, now) if here_key else here(room, now)}
+           "here": touch(room, here_key, now) if here_key else here(room, now),
+           # The room's heat (Twitch's Hype Train): the last five minutes as
+           # a meter, paying a viewer who is part of it (engine/karma).
+           "hype": K.hype(conn, room, viewer, now)}
     if viewer:
         out["parties"] = my_parties(conn, viewer, room)
         if party and any(p["id"] == int(party) for p in out["parties"]):
@@ -705,7 +723,12 @@ def party_view(conn, viewer, party_id: int, after: int = 0, strong: bool = False
                                "AND kind<>'' GROUP BY msg_id, kind", ids)
         mine = {int(x[0]): x[1] for x in conn.execute(
             f"SELECT msg_id, kind FROM chat_reacts WHERE user_id=? AND msg_id IN ({q})", [int(viewer), *ids])}
-    return {"id": int(party_id), "messages": [_msg_view(r, strong, viewer, reacts, mine) for r in rows]}
+    msgs = [_msg_view(r, strong, viewer, reacts, mine) for r in rows]
+    from . import karma as K
+    levels = K.cards(conn, {int(r["user_id"]) for r in rows})
+    for m, r in zip(msgs, rows):
+        m["by"].update(levels.get(int(r["user_id"]), {}))
+    return {"id": int(party_id), "messages": msgs}
 
 
 def counts(conn, rooms, now: float | None = None) -> dict:

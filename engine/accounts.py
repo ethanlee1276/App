@@ -926,7 +926,11 @@ def delete_user(conn, user_id: int) -> None:
                   # Passkeys (engine/passkeys): the keys, the account's
                   # handle and any challenge it had open. With the keys
                   # gone the devices' halves sign nobody in.
-                  "passkeys", "passkey_users", "passkey_challenges"):
+                  "passkeys", "passkey_users", "passkey_challenges",
+                  # Karma (engine/karma): what it was for, the games
+                  # watched live, the flair and the ladder choice, and the
+                  # account's places in the weeks' top tens.
+                  "karma_events", "karma_watch", "karma_prefs", "karma_weeks"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     # A watch party they started stays for its friends, with them off it.
@@ -1087,6 +1091,8 @@ def export_user(conn, user_id: int) -> dict:
                                                "WHERE user_id=? ORDER BY at", (int(user_id),))]
         if calls:
             out["call_it_calls"] = calls
+    from . import karma as _karma
+    out.update(_karma.export_user(conn, user_id))
     if "gift_codes" in have:
         rows = [dict(r) for r in conn.execute("SELECT code, created_at, redeemed_by IS NOT NULL AS redeemed "
                                               "FROM gift_codes WHERE user_id=? ORDER BY created_at", (int(user_id),))]

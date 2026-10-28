@@ -788,6 +788,7 @@
         <h2 class="fd-prof-name">${displayName(p)}${badge(p)}</h2>
         <p class="fd-prof-h">@${escapeHtml(p.handle)}${p.follows_you ? ` <span class="fd-tag">Follows you</span>` : ""}${
           p.streak ? ` <span class="fd-tag ${p.streak[0] === "W" ? "up" : "down"}">${escapeHtml(p.streak)} streak</span>` : ""}</p>
+        ${p.karma ? `<div class="kr-prof-host"></div>` : ""}
         ${p.founder ? `<p class="fd-prof-crown">${ico("crown", 16)}<span><b>Founder</b> · built Qellys Book</span>${
           o.mine && isBoss() ? `<button class="fd-crown-go" data-fd="acct-tab" data-v="mod" type="button">${ico("flag", 12)} Moderation</button>` : ""}</p>` : ""}
         ${p.bio ? `<p class="fd-prof-bio">${rich(p.bio)}</p>` : o.mine ? `<p class="fd-prof-bio dim">Add a bio — who you are, what you bet.</p>` : ""}
@@ -807,6 +808,16 @@
         <button class="fd-btn ghost" data-fd="close-follows" type="button">Close</button></div>
       ${(F.follows.people || []).map((q) => `<a class="fd-person" href="${profHref(q.handle)}">${avatar(q, "sm")}
         <span><b>${displayName(q)}${badge(q)}</b><span>@${escapeHtml(q.handle)}</span></span></a>`).join("") || `<p class="fd-fine">Nobody yet.</p>`}</section>`;
+  }
+
+  // KARMA (js/karma.js): a profile's level, its karma and its best badges;
+  // the reader's own opens the Karma tab.
+  function mountKarma(root, p, mine) {
+    const host = root && root.querySelector(".kr-prof-host");
+    if (!host || !p || !p.karma || typeof loadRoom !== "function") return;
+    loadRoom("js/karma.js", "css/karma.css").then((ok) => {
+      if (ok && host.isConnected && typeof karmaProfileMount === "function") karmaProfileMount(host, p.karma, mine);
+    });
   }
 
   function profileTabs(tab, base) {
@@ -1062,6 +1073,7 @@
       if (!append) F.follows = null;
       await railP;
       paint(seq, "", profilePageHTML(tab), { hero: false });
+      mountKarma(document.getElementById("fd-main"), F.profile, false);
       return;
     }
     if (kind === "activity" || kind === "notifications") {
@@ -1581,7 +1593,7 @@
   }
 
   function acctTabsHTML() {
-    const tabs = [["posts", "Posts"], ["picks", "Graded picks"], ["friends", "Friends"], ["settings", "Settings"]];
+    const tabs = [["posts", "Posts"], ["picks", "Graded picks"], ["karma", "Karma"], ["friends", "Friends"], ["settings", "Settings"]];
     if (isBoss()) tabs.push(["mod", "Moderation"]);
     return `<nav class="fd-ptabs acct" aria-label="Your account">${tabs.map(([k, t]) =>
       `<button class="${ACCT.tab === k ? "on" : ""}" data-fd="acct-tab" data-v="${k}" type="button"${ACCT.tab === k ? ' aria-current="page"' : ""}>${t}</button>`).join("")}</nav>`;
@@ -1661,7 +1673,8 @@
       ACCT.mod = r.ok ? r.out : { items: [], error: r.out.error || "Could not load the reports." };
       if (!document.body.contains(el)) return;
     }
-    const list = ACCT.tab === "mod" && isBoss() ? modHTML() : ACCT.tab === "posts" || ACCT.tab === "picks"
+    const list = ACCT.tab === "mod" && isBoss() ? modHTML() : ACCT.tab === "karma" ? `<div class="kr-panel-host"></div>`
+      : ACCT.tab === "posts" || ACCT.tab === "picks"
       ? `<div class="fd-list">${ACCT.posts.length ? ACCT.posts.map((q) => postHTML(q)).join("")
           : `<div class="fd-card fd-empty">${ACCT.tab === "picks" ? "No graded picks yet — results land here once their games are final."
             : `Nothing posted yet. <a href="#feed">Head to Social</a> to share a take or build a parlay.`}</div>`}</div>
@@ -1669,6 +1682,13 @@
       : "";
     el.innerHTML = `${ACCT.edit ? profileFormHTML(F.me, "", false) : profileHeaderHTML(p, { mine: true })}
       <div id="acct-follows">${followsHTML()}</div>${acctTabsHTML()}${list}`;
+    mountKarma(el, p, true);
+    // The Karma tab (js/karma.js): the level, the quests, every badge, the
+    // ladders, the flair and how karma works.
+    const kp = el.querySelector(".kr-panel-host");
+    if (kp && typeof loadRoom === "function") {
+      loadRoom("js/karma.js", "css/karma.css").then((ok) => { if (ok && kp.isConnected && typeof karmaPanelMount === "function") karmaPanelMount(kp); });
+    }
     showAcctPanels(ACCT.tab === "friends" || ACCT.tab === "settings" ? ACCT.tab : "none");
     // On a phone the tab row scrolls sideways: keep the open tab in view.
     const row = el.querySelector(".fd-ptabs.acct"), on = row && row.querySelector(".on");

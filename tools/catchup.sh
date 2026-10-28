@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GJ "Karma: levels and badges for watching and talking" 60 <<'SH'
+curl -s https://qellysbook.com/js/karma.js | grep -c 'function karmaStripMount('
+cd /srv/qellys && sudo -u qellys python3 -m engine.karma
+SH
 run GI "Each stadium half in each team's colour" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -c -- 'var(--ta) 40%, var(--tb) 60%'
 curl -s https://qellysbook.com/js/app.js | grep -c 'C > .02 ? Math.max(1, .08 / C) : 1'
