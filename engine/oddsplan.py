@@ -1,8 +1,16 @@
-"""The month's odds plan — who gets the plan's credits, NFL first.
+"""The month's odds plan — every sport in season its own budget, NFL first.
 
 Ethan, 2026-10-21: *"we have 100k credit per month for figure out how too
 budget in all the sports that are currently active while keeping NFL at
-number one priority"*.
+number one priority"*. And 2026-10-28, after October's credits ran out for
+every league after football: *"NHL, NBA, WNBA, NFL, college football, MLB,
+all of that needs its own budget and needs to be able to budget every
+single sport every month with that 100K credit ... NFL comes first, then
+college football, then NBA, then baseball since it's about to be over. So
+once baseball is over, we can take baseball out of the credit pool, and
+whatever other sport is not being played needs to be taken out of the
+credit pool ... and make sure we're not running through credits like
+crazy."*
 
 WHAT THIS REPLACES. A league's slice of the day used to be a weight
 (`launch.SPORT_WEIGHT`, times 7 over the days a week it plays),
@@ -26,17 +34,27 @@ plan's RENEWAL — the day the API's month turns over, which need not be the
 1. HELD BACK: `oddsbudget.RESERVE`; the closing-line harvest's day cap
    (`maintenance.HARVEST_DAY_BUDGET`) for every day left, because it
    spends on its own meter; and `BUFFER_SHARE` of the pool, never planned.
-2. TARGETS, TIER BY TIER (`TIERS`). Every league in season is owed what its
-   target cadence costs for the rest of the month (`day_need`). The NFL's
-   is funded first and in full; then college's; then every other league in
-   season shares what is left IN PROPORTION TO ITS NEED — one fill for the
-   tier, so a short month thins every one of them a little rather than
-   switching the last on the list off.
+2. TARGETS, IN ETHAN'S ORDER (`TIERS`). Every league in season is owed what
+   its target cadence costs for the rest of the month (`day_need`); a
+   league out of season, or whose own board says its season is over
+   (`over`: baseball the morning after the World Series), is owed nothing
+   and is out of the pool. The NFL's target is funded first and in full.
+   Then EVERY OTHER LEAGUE IN SEASON gets `FLOOR_SHARE` of its target
+   together — its own budget, which no league below the NFL can take: a
+   short month can thin a sport, never switch it off, which is what
+   October did to basketball and hockey. Then the rest of each target,
+   tier by tier: college, the NBA, baseball, then hockey, UFC and the WNBA
+   at one fill (proportional within a tier).
 3. HEADROOM, IN THE SAME ORDER: the NFL up to `NFL_HEADROOM` more, then
    each later tier up to `HEADROOM` more — extra pulls on a busy news day
    rather than credits that expire at the reset. A tier whose target was
    cut gets none.
 4. Whatever is left is UNPLANNED, and the report says how much.
+
+EACH SPORT'S BUDGET FOR THE MONTH is what it has spent since the renewal
+plus what the plan holds for it from today: the report prints it that way
+("budget = spent + left"), beside the pace the pool is going at and the day
+that pace would empty it.
 
 HOW A DAY IS METERED. A league's ceiling today is its need today times the
 share of its month the plan could fund (its FILL): `envelope`. The launcher
@@ -51,9 +69,10 @@ window's horizon paces off-peak (`oddsbudget.slate_is_far`).
 
 IT IS RECOMPUTED FROM THE REAL BALANCE every cycle (`current`), so it
 corrects itself: a league that ran over leaves less in the pool, and the
-next plan cuts from the last tier, never from the NFL's target; credits a
-lane did not spend (the harvest's unused cap, a quiet day) come back as
-fill for the days after.
+next plan cuts from the last tier's share past its floor, never from the
+NFL's target and never below anyone's floor until the NFL's own target
+needs it; credits a lane did not spend (the harvest's unused cap, a quiet
+day, a season that ended early) come back as fill for the days after.
 
 THE NUMBERS BELOW ARE A MODEL, NOT A MEASUREMENT: a typical week of each
 league at the cadence its machinery spends at full strength — the prop
@@ -75,14 +94,24 @@ import time
 from dataclasses import dataclass, field
 
 #: WHO IS FUNDED FIRST when the month cannot fund everyone, tier by tier.
-#: Ethan, 2026-10-21: "keeping NFL at number one priority" — and "budget in
-#: all the sports that are currently active". The NFL alone first; college
-#: second, because football has led every budget call he has made
-#: (2026-09-07: "prioritize NFL and CFB over anything"); then every other
-#: league together, at one fill, so none of them is the one switched off.
-TIERS = (("nfl",), ("cfb",), ("mlb", "nba", "nhl", "ufc", "wnba"))
+#: Ethan, 2026-10-28: "NFL comes first, then college football, then NBA,
+#: then baseball since it's about to be over". Hockey, UFC and the WNBA,
+#: which he did not place, come after baseball together, at one fill
+#: (proportional within the tier), so none of them is the one cut first.
+#: Every one of them past the NFL is owed its floor before any of them is
+#: owed more (`FLOOR_SHARE`).
+TIERS = (("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba"))
 #: Every league, in the order the report lists them.
 PRIORITY = tuple(lg for tier in TIERS for lg in tier)
+
+#: EVERY SPORT ITS OWN BUDGET (Ethan, 2026-10-28: "all of that needs its own
+#: budget"). After the NFL's target, every other league in season is funded
+#: this share of its own target before any of them gets more — together, in
+#: proportion, when the month cannot cover even that. October funded the
+#: NFL and college in full and left basketball and hockey nothing (DK: 0
+#: NBA props priced); half a target is a prop pull or two on every game
+#: night, which is Edge and Most Likely on the board.
+FLOOR_SHARE = 0.5
 
 #: ETHAN'S CALL, 2026-10-28: "we still don't have edge bets or most likely
 #: bets for nba. We need that now". October's credits had run out for every
@@ -97,7 +126,7 @@ def tiers(day: _dt.date) -> tuple:
     """The order the plan funds the leagues in on ``day`` (TIERS, but for
     NBA_FIRST_UNTIL)."""
     if day < NBA_FIRST_UNTIL:
-        return (("nfl",), ("nba",), ("cfb",), tuple(lg for lg in TIERS[2] if lg != "nba"))
+        return (("nfl",), ("nba",), ("cfb",)) + TIERS[3:]
     return TIERS
 
 #: Headroom on top of the target, funded only after every tier's target:
@@ -410,6 +439,7 @@ class LeaguePlan:
     extra: int = 0            # headroom on top
     today_need: int = 0
     envelope: int = 0         # today's ceiling: today_need × fill
+    over: bool = False        # its own board says its season is over (`build`)
 
     @property
     def alloc(self) -> int:
@@ -442,7 +472,8 @@ class Plan:
 
 def build(day: _dt.date, pool: int, games_today: dict | None = None,
           end: _dt.date | None = None, reset: str = "assumed",
-          start: _dt.date | None = None, headroom: bool = True) -> Plan:
+          start: _dt.date | None = None, headroom: bool = True,
+          over=()) -> Plan:
     """The month's plan from ``pool``, the credits at the start of ``day``,
     to ``end`` (the renewal; the calendar month's end when not given).
 
@@ -451,6 +482,11 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
     what lets a league spend past its cadence, and a month planned to the
     wrong end would spend it on days that belong to the next one; the
     targets alone are what the leagues need, whichever month it is.
+
+    ``over`` names the leagues whose own board says the season has ended
+    (`launch._seasons_over`): owed nothing today or after, whatever the
+    season table says, so what the table would have held for them goes to
+    the leagues still playing.
 
     Pure arithmetic: no file, no clock. See the module docstring for the
     order things are funded in.
@@ -470,24 +506,38 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
     order = tiers(day)
     for i, tier in enumerate(order, 1):
         for lg in tier:
-            today = day_need(lg, day, games_today.get(lg))
-            rest = sum(day_need(lg, d) for d in days[1:])
-            plan.leagues[lg] = LeaguePlan(league=lg, priority=i,
+            done = lg in over
+            today = 0 if done else day_need(lg, day, games_today.get(lg))
+            rest = 0 if done else sum(day_need(lg, d) for d in days[1:])
+            plan.leagues[lg] = LeaguePlan(league=lg, priority=i, over=done,
                                           need=today + rest, today_need=today)
 
-    def share_out(tier, owed, left):
-        """Hand ``left`` across ``tier`` in proportion to what each is
+    def share_out(tier, owed, money):
+        """Hand ``money`` across ``tier`` in proportion to what each is
         ``owed``; every league in the tier gets the same fraction."""
         total = sum(owed.values())
-        frac = min(1.0, left / total) if total > 0 else 0.0
+        if money >= total:
+            return {lg: owed[lg] for lg in tier}
+        if len(tier) == 1:                   # a tier of one takes every credit
+            return {lg: int(money) for lg in tier}
+        frac = money / total if total > 0 else 0.0
         return {lg: int(owed[lg] * frac) for lg in tier}
 
-    left = spendable
-    for tier in order:                                   # 2. targets, NFL first
-        got = share_out(tier, {lg: plan.leagues[lg].need for lg in tier}, left)
-        for lg, n in got.items():
-            plan.leagues[lg].target = n
+    def fund(tier, owed):
+        """Add to the targets in ``tier`` out of what is ``left``."""
+        nonlocal left
+        for lg, n in share_out(tier, owed, left).items():
+            plan.leagues[lg].target += n
             left -= n
+
+    left = spendable
+    first, later = order[0], [lg for tier in order[1:] for lg in tier]
+    fund(first, {lg: plan.leagues[lg].need for lg in first})   # 2. the NFL's target,
+    fund(later, {lg: int(plan.leagues[lg].need * FLOOR_SHARE)  # every floor after it,
+                 for lg in later})
+    for tier in order[1:]:                                      # then the rest, in order
+        fund(tier, {lg: plan.leagues[lg].need - plan.leagues[lg].target
+                    for lg in tier})
     short = (not headroom
              or any(lp.target < lp.need for lp in plan.leagues.values()))
     for i, tier in enumerate(order):                     # 3. headroom, same order
@@ -530,14 +580,15 @@ def renewal(day: _dt.date, state=None) -> tuple[_dt.date, _dt.date, str]:
 
 
 def current(games_today: dict | None = None, now: float | None = None,
-            path=None) -> Plan:
+            path=None, over=()) -> Plan:
     """Today's plan from the real budget state.
 
     The pool is taken AT THE START OF THE DAY — what is left now plus what
     the ledger says today already spent — so a pull made this morning does
     not shrink this afternoon's plan a second time on top of counting
     against today's ceiling. The day is the pacer's own (the box's local
-    date, the one `oddsbudget.spent_today` keys on).
+    date, the one `oddsbudget.spent_today` keys on). ``over``: the leagues
+    whose own board says the season has ended (`build`).
     """
     from . import oddsbudget as ob
     now = time.time() if now is None else now
@@ -547,22 +598,23 @@ def current(games_today: dict | None = None, now: float | None = None,
     day = _dt.date.fromtimestamp(now)
     pool = int(state.remaining) + int(ob.spent_today(now) or 0)
     start, end, how = renewal(day, state)
-    key = (day, pool, end, tuple(sorted((games_today or {}).items())))
+    over = frozenset(over or ())
+    key = (day, pool, end, tuple(sorted((games_today or {}).items())), over)
     hit = _CACHE.get(key)
     if hit is not None:
         return hit
     plan = build(day, pool, games_today, end=end, reset=how, start=start,
-                 headroom=how != "assumed")
+                 headroom=how != "assumed", over=over)
     _CACHE.clear()                                       # one day's plan at a time
     _CACHE[key] = plan
     return plan
 
 
 def envelope(league: str, games_today: dict | None = None,
-             now: float | None = None, path=None) -> int:
+             now: float | None = None, path=None, over=()) -> int:
     """This league's ceiling for today, in credits."""
     from .oddsbudget import budget_sport
-    lp = current(games_today, now, path).get(budget_sport(league))
+    lp = current(games_today, now, path, over).get(budget_sport(league))
     return lp.envelope if lp else 0
 
 
@@ -601,12 +653,20 @@ RESET_WORDS = {
 
 def report(plan: Plan, spent_month: dict | None = None,
            spent_today: dict | None = None, pool_now: int | None = None,
-           recent: dict | None = None) -> str:
-    """The plan in words a phone screen holds."""
+           recent: dict | None = None, recent_days: int = 7) -> str:
+    """The plan in words a phone screen holds.
+
+    Each sport's line is its MONTH: what it has spent since the renewal
+    plus what the plan holds for it from now — its own budget — with the
+    share of its need that covers, then today's ceiling. ``recent`` is a
+    day's spend by lane over the last ``recent_days`` full days
+    (`recent_daily`), and the pace line says how long the pool lasts at it.
+    """
     spent_month = spent_month or {}
     spent_today = spent_today or {}
     d = plan.day
     ends = plan.ends or period(d)[1]
+    order = tiers(d)
     lines = [f"ODDS PLAN · {d.strftime('%a %b')} {d.day} · {plan.days_left} day(s) "
              f"left · renews {ends.strftime('%b')} {ends.day}",
              f"  renewal day {RESET_WORDS.get(plan.reset, plan.reset)}"
@@ -616,18 +676,26 @@ def report(plan: Plan, spent_month: dict | None = None,
              f"  held back: reserve {plan.reserve:,} · closing lines "
              f"{plan.harvest:,} ({HARVEST_DAY} a day) · buffer {plan.buffer:,} "
              f"({int(BUFFER_SHARE * 100)}%)",
-             f"  planned for the leagues: {plan.spendable - plan.unplanned:,}"
+             f"  planned for the sports: {plan.spendable - plan.unplanned:,}"
              f" · unplanned {plan.unplanned:,}",
+             "  order: " + " > ".join(" · ".join(LABEL[lg] for lg in t) for t in order),
+             f"  after the NFL, every sport playing is held {int(FLOOR_SHARE * 100)}% "
+             f"of its need before any gets more",
              "",
-             "  rest of month: need -> planned (fill) | today: need -> ceiling, spent"]
-    for lg in PRIORITY:
+             "  each sport's month: budget = spent + left (fill) | today: need -> ceiling, spent"]
+    for lg in (lg for t in order for lg in t):
         lp = plan.leagues[lg]
-        if lp.need <= 0 and not spent_month.get(lg):
-            lines.append(f"  {LABEL[lg]:<5} out of season")
+        spent = int(spent_month.get(lg, 0))
+        if lp.need <= 0:
+            word = "season over — out of the pool" if lp.over else "out of season"
+            lines.append(f"  {LABEL[lg]:<5} {word}"
+                         + (f" (spent {spent:,} this month)" if spent else ""))
             continue
-        lines.append(f"  {LABEL[lg]:<5} {lp.need:>7,} -> {lp.alloc:>7,} "
+        today = int(spent_today.get(lg, 0))
+        left = max(0, lp.alloc - today)
+        lines.append(f"  {LABEL[lg]:<5} {spent + left:>7,} = {spent:>6,} + {left:>6,} "
                      f"({lp.fill * 100:>3.0f}%) | {lp.today_need:>5,} -> "
-                     f"{lp.envelope:>5,}, {int(spent_today.get(lg, 0)):,}")
+                     f"{lp.envelope:>5,}, {today:,}")
     month = [f"{LABEL.get(k, k)} {v:,}" for k, v in
              sorted(spent_month.items(), key=lambda t: -t[1])]
     if month:
@@ -635,8 +703,33 @@ def report(plan: Plan, spent_month: dict | None = None,
     week = [f"{LABEL.get(k, k)} {v:,}" for k, v in
             sorted((recent or {}).items(), key=lambda t: -t[1]) if v]
     if week:
-        lines += ["  last 7 days, a day: " + " · ".join(week)]
+        lines += [f"  last {recent_days} day{'s' if recent_days != 1 else ''}, a day: "
+                  + " · ".join(week)]
+    pace = pace_line(plan, recent, pool_now)
+    if pace:
+        lines.append(pace)
     return "\n".join(lines)
+
+
+def pace_line(plan: Plan, recent: dict | None, pool_now: int | None = None) -> str:
+    """How long the pool lasts at the recent pace, every lane counted —
+    Ethan's "make sure we're not running through credits like crazy" as a
+    line to read. The plan slows every sport to fit whatever this says;
+    a pace that would empty the pool before the renewal is the sign the
+    tables are short of what the box really spends."""
+    from .oddsbudget import RESERVE
+    per_day = sum(int(v) for v in (recent or {}).values() if v)
+    if per_day <= 0:
+        return ""
+    ends = plan.ends or period(plan.day)[1]
+    have = max(0, (plan.pool if pool_now is None else pool_now) - RESERVE)
+    dry = plan.day + _dt.timedelta(days=have // per_day)
+    if dry >= ends:
+        return (f"  pace: {per_day:,} a day — the pool outlasts the renewal "
+                f"({ends.strftime('%b')} {ends.day}) ✓")
+    return (f"  pace: {per_day:,} a day — at that pace the pool runs dry "
+            f"{dry.strftime('%b')} {dry.day}, {(ends - dry).days} day(s) before the "
+            f"renewal; the plan slows every sport to fit ⚠️")
 
 
 def recent_daily(rows: list, today: _dt.date, days: int = 7) -> dict:
@@ -651,21 +744,23 @@ def main() -> int:
     from . import oddsbudget as ob
     try:
         import launch
-        games = launch._games_today()
+        games, over = launch._games_today(), launch._seasons_over()
     except Exception:                                        # noqa: BLE001
-        games = None
+        games, over = None, ()
     try:
-        plan = current(games)
+        plan = current(games, over=over)
     except PlanUnavailable as exc:
         print(f"No plan yet: {exc}.")
         return 1
     rows = ob.read_spend()
-    today = {lg: ob.spent_today(sport=lg, exclude=ob.HARVEST_KINDS | ob.SLIP_KINDS)
-             for lg in PRIORITY}
     start = plan.starts or period(plan.day)[0]
-    print(report(plan, month_spend(rows, start), today,
+    # The pace is this billing month's: the last days of the one before
+    # it were spent to another month's plan.
+    n = min(7, (plan.day - start).days)
+    print(report(plan, month_spend(rows, start), month_spend(rows, plan.day),
                  pool_now=int(ob.load().remaining),
-                 recent=recent_daily(rows, plan.day)))
+                 recent=recent_daily(rows, plan.day, n) if n else None,
+                 recent_days=n or 7))
     return 0
 
 

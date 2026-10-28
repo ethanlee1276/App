@@ -1,12 +1,21 @@
-# The odds plan: 100k credits a month, NFL first
+# The odds plan: 100k credits a month, every sport its own budget, NFL first
 
 Ethan, 2026-10-21: *"we have 100k credit per month for figure out how too
 budget in all the sports that are currently active while keeping NFL at
 number one priority"*.
 
+Ethan, 2026-10-28, after October's credits ran out for every league after
+football: *"NHL, NBA, WNBA, NFL, college football, MLB, all of that needs
+its own budget and needs to be able to budget every single sport every
+month with that 100K credit ... NFL comes first, then college football,
+then NBA, then baseball since it's about to be over. So once baseball is
+over, we can take baseball out of the credit pool, and whatever other sport
+is not being played needs to be taken out of the credit pool ... and make
+sure we're not running through credits like crazy."*
+
 The code is `engine/oddsplan.py`. The launcher reads it for every paid odds
-pull (`launch._budget_share`). On the box, this prints today's plan next to
-what each league has actually spent:
+pull (`launch._budget_share`). On the box, this prints today's plan: each
+sport's month, today's ceilings, and the pace:
 
     cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan
 
@@ -15,44 +24,93 @@ what each league has actually spent:
 1. **Held back first.** The reserve (500), the closing-line harvest's daily
    cap (400 a day for every day left) and a 5% buffer. The plan never
    spends these.
-2. **Every league in season is owed what its normal cadence costs** for the
-   rest of the month. The NFL's share is funded first, in full. College is
-   second. Every other league in season (NBA, NHL, MLB, UFC, WNBA) then
-   splits what's left **in proportion to what it needs**, so they all get
-   the same percentage. A short month trims each of them a little instead
-   of shutting the last one off.
-3. **Headroom only once every league is fully funded.** The NFL gets up to
-   50% extra first. Then college and the rest get up to 25% each, for extra
-   pulls on a big news day.
-4. **Today's ceiling** for each league is today's need times the share of
-   its month the plan could fund. The pacer can't spend more than that on a
-   league's ordinary pulls, but closing-line, readiness and inactives pulls
-   still go through when needed.
+2. **Only sports being played are in the pool.** Every sport in season is
+   owed what its normal cadence costs for the rest of the month. A sport out
+   of season is owed nothing (the WNBA now). So is **a sport whose season
+   just ended**: baseball leaves the pool the morning after the World
+   Series' last game, when its board is empty and finds no game in the next
+   five days. A basketball or college board that says "offseason" in its
+   postseason does the same. What the table held for them goes to the
+   sports still playing.
+3. **The NFL's share first, in full.**
+4. **Then every other sport playing gets half its share** (`FLOOR_SHARE`),
+   all together. That half is its own budget: no sport but the NFL comes
+   before it. A short month thins a sport; it never switches it off, which
+   is what October did to the NBA and the NHL.
+5. **Then the rest, in Ethan's order:** college, then the NBA, then
+   baseball, then hockey, UFC and the WNBA together (they split what's
+   left by need, so they all get the same percentage).
+6. **Headroom only once every sport is fully funded.** The NFL gets up to
+   50% extra first. Then the others get up to 25% each, in the same order,
+   for extra pulls on a big news day.
+7. **Today's ceiling** for each sport is today's need times the share of
+   its month the plan could fund. The pacer can't spend more than that on
+   a sport's ordinary pulls, but closing-line, readiness and inactives
+   pulls still go through when needed.
+
+Until November 1 the NBA comes right after the NFL, ahead of college. That
+was Ethan's call on October 28 to get NBA picks back for the month's last
+days (runbook GU). From the renewal his order above stands.
 
 It's recomputed from the real balance every cycle, so it corrects itself.
-If a league overspends, the pool shrinks and the next plan trims the last
-tier, never the NFL. Credits nobody spent (a quiet night, the harvest using
-less than 400) become extra room for the days after.
+If a sport overspends, the pool shrinks and the next plan trims the last
+tier's share above its half, never the NFL's and never anyone's half
+unless the NFL's own need takes it. Credits nobody spent (a quiet night,
+the harvest using less than 400, a season that ended early) become extra
+room for the days after.
 
 ## What November looks like at 100,000
 
-| | need (rest of month) | planned | fill |
+| | need (the month) | planned | fill |
 |---|---:|---:|---:|
 | NFL | 42,020 | 42,020 | 100% |
 | College | 13,940 | 13,940 | 100% |
-| NBA | 19,398 | 16,667 | 86% |
-| NHL | 10,476 | 9,001 | 86% |
-| MLB (World Series to Nov 4) | 496 | 426 | 86% |
-| UFC | 518 | 445 | 86% |
+| NBA | 19,398 | 19,398 | 100% |
+| MLB (World Series, to Nov 4 at most) | 496 | 496 | 100% |
+| NHL | 10,476 | 6,332 | 60% |
+| UFC | 518 | 313 | 60% |
 | WNBA | off-season | 0 | |
 | Held back: closing lines 12,000 · buffer 5,000 · reserve 500 | | | |
 
-All target cadences together come to about 104k for November, a bit more
-than one plan buys. So football is funded in full and everyone else runs at
-86% of their target. As the month goes on and the buffer and unspent
-credits come back, that fill rises. A month where every league spends its
-full ceiling every day still ends above the reserve; that's tested in
-`tests/test_the_odds_plan.py`.
+All target cadences together come to about 87k for November, a bit more
+than the 82,500 a 100k plan leaves after what's held back. So football,
+the NBA and baseball are funded in full, and hockey and UFC run at 60%,
+above their 50% floor. Once baseball is out, they go to 65%. As the month
+goes on and the buffer and unspent credits come back, that rises. December
+looks the same, with hockey at 73%. In January, after college's regular
+season, every sport is funded in full with headroom on top.
+
+A month where every sport spends its full ceiling every day still ends
+above the reserve; that's tested in `tests/test_the_odds_plan.py`.
+
+## Each sport's budget, in the report
+
+Each sport gets one line: its budget for the month, which is what it has
+spent since the renewal plus what the plan holds for it from today, the
+share of its need that covers, and today's need, ceiling and spend:
+
+    order: NFL > CFB > NBA > MLB > NHL · UFC · WNBA
+    after the NFL, every sport playing is held 50% of its need before any gets more
+
+    each sport's month: budget = spent + left (fill) | today: need -> ceiling, spent
+    NFL    43,860 = 15,800 + 28,060 (100%) |   500 ->   500, 380
+    NBA    15,445 =  6,100 +  9,345 ( 70%) |   753 ->   523, 230
+    MLB   season over — out of the pool (spent 140 this month)
+    WNBA  out of season
+
+    pace: 3,282 a day — at that pace the pool runs dry Nov 29, 2 day(s) before the renewal; the plan slows every sport to fit ⚠️
+
+## Not running through credits
+
+* **Every ceiling is a day's share of the month**, worked out from what's
+  really left, so no sport can spend next week's credits today.
+* **The pace line** counts every credit spent over the last seven days of
+  this month: every sport, the harvest and the slips. It says the day the
+  pool would run dry at that pace. ✓ means it lasts past the renewal. ⚠️
+  means spending is ahead of the tables; the plan slows every sport to fit,
+  the last tier first. The "last 7 days, a day" line shows which sport.
+* **A season that's over spends nothing**, and its share goes to the
+  sports still playing.
 
 ## What a league's day buys (the targets)
 
@@ -128,13 +186,15 @@ set the right day of the month:
 
 | | what it does |
 |---|---|
-| `TIERS` | who's funded first: `("nfl",), ("cfb",), (everyone else)` |
+| `TIERS` | the order: `("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba")` |
+| `FLOOR_SHARE` | after the NFL, every sport playing gets this share of its need first (50%) |
+| `NBA_FIRST_UNTIL` | the NBA before college until Nov 1, 2026 (Ethan's October call) |
 | `NFL_HEADROOM`, `HEADROOM` | 50% and 25% extra, only after every target is funded |
 | `BUFFER_SHARE` | 5% of the pool, never planned |
 | `NFL_REGULAR`, `NFL_PLAYOFFS` | the NFL's day, Monday to Sunday |
 | `PULLS`, `PULLS_ON` | prop pulls per game day, per league |
 | `LINES_BY_WEEKDAY`, `LIVE_HOURS` | the three-credit lanes |
-| `SEASONS` | when each league plays. Today's real slate always overrides it |
+| `SEASONS` | when each league plays. Today's real slate always overrides it, and a board that says its season is over (`launch._seasons_over`) ends it early |
 
 ## Known limits
 
@@ -147,9 +207,14 @@ set the right day of the month:
   inactives and closing pulls still apply. That's on purpose, since the
   NFL comes first. The real balance absorbs it, and the next plan trims
   the last tier.
-* **A league the plan can't fund at all** (only in a very tight month)
-  still gets the pacer's old safety net: one sparse pull every 12 hours,
-  if the month can afford it.
+* **A sport the plan can't fund at all** (only when the NFL's own need
+  takes the whole pool, as at the very end of October) still gets the
+  pacer's old safety net: one sparse pull every 12 hours, if the month can
+  afford it.
+* **A season ending is read off its board**: baseball's the morning after
+  its last game; the NBA, WNBA and college once their board says
+  "offseason", which waits for a look back with no games (up to 10 days);
+  hockey and the NFL by the season table.
 * **Leftover credits in quiet months** (March, with no football) show up
   as "unplanned" in the report. They're Ethan's to spend: more NBA pulls,
   a wider college cap, or nothing.

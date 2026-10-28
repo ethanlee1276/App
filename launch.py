@@ -556,7 +556,8 @@ def _budget_share(sport: str | None = None) -> float:
     try:
         from engine import oddsplan
         from engine.oddsbudget import daily_allowance, load
-        env = oddsplan.envelope(sport, games_today=_games_today())
+        env = oddsplan.envelope(sport, games_today=_games_today(),
+                                over=_seasons_over())
         allowance = daily_allowance(load())
         # Half a credit over, so the pacer's int(allowance × share) lands
         # on the envelope itself and not one credit under it.
@@ -597,6 +598,56 @@ def _games_today() -> dict:
                      if isinstance(k, (int, float)) and now < k <= now + hours * 3600)
     _GAMES_TODAY[0], _GAMES_TODAY[1] = now, out
     return dict(out)
+
+
+_SEASONS_OVER: list = [0.0, frozenset()]
+
+
+def _seasons_over(day: _dt.date | None = None) -> frozenset:
+    """The leagues whose own board says their season is over — out of the
+    month's plan for the rest of the month (engine/oddsplan `build`).
+
+    Ethan, 2026-10-28: "once baseball is over, we can take baseball out of
+    the credit pool, and whatever other sport is not being played needs to
+    be taken out of the credit pool". The plan's season table runs
+    baseball's postseason to November 4 whatever the World Series does; a
+    board knows the night the last game is played.
+
+    Only in a league's POSTSEASON (the plan's own table), the one stretch a
+    season ends on a date no table holds. A board says it in one of two
+    ways: its build wrote `status: offseason` (the basketball and college
+    builds, after looking back and finding no games), or — baseball's — it
+    is empty and its look ahead found no next slate
+    (`mlb_build.MLB_LOOKAHEAD_DAYS`, five days, past any gap between two
+    World Series games; a longer wait between two rounds reads as over
+    until the look ahead reaches the next game, and the plan takes the
+    league back that morning). A board that cannot be read says nothing.
+    Read once a minute, with the games (`_games_today`).
+    """
+    from engine import oddsplan
+    now = time.time()
+    if day is None and now - _SEASONS_OVER[0] < GAMES_TODAY_TTL_S:
+        return _SEASONS_OVER[1]
+    when = day or _dt.date.fromtimestamp(now)
+    out = set()
+    for name, path in (("mlb", MLB_OUT), ("nba", NBA_OUT), ("wnba", WNBA_OUT),
+                       ("nhl", NHL_OUT), ("cfb", CFB_OUT)):
+        if oddsplan.season_phase(name, when) in (None, "regular"):
+            continue
+        try:
+            with open(path) as fh:
+                b = json.load(fh)
+        except Exception:                                    # noqa: BLE001
+            continue
+        if not isinstance(b, dict):
+            continue
+        if b.get("status") == "offseason" or (
+                name == "mlb" and not b.get("games") and not b.get("upcoming")):
+            out.add(name)
+    got = frozenset(out)
+    if day is None:
+        _SEASONS_OVER[0], _SEASONS_OVER[1] = now, got
+    return got
 
 
 def _weighted_share(sport: str | None = None) -> float:

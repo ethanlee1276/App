@@ -2,15 +2,21 @@
 
 Ethan, 2026-10-21: "we have 100k credit per month for figure out how too
 budget in all the sports that are currently active while keeping NFL at
-number one priority".
+number one priority". And 2026-10-28: "all of that needs its own budget
+... NFL comes first, then college football, then NBA, then baseball ...
+once baseball is over, we can take baseball out of the credit pool".
 
 What this file holds the plan (engine/oddsplan) to:
 
-* THE NFL FIRST. A month that cannot fund everyone funds the NFL's target
-  in full before anyone else's, then college's; the other leagues share
-  what is left at one fill, so a short month thins them all a little
-  rather than switching the last one off. Nobody gets headroom while any
-  league's target is cut.
+* THE NFL FIRST, THEN EVERY SPORT ITS FLOOR. A month that cannot fund
+  everyone funds the NFL's target in full before anyone else's; then every
+  other league in season gets half its target together, so a short month
+  thins a sport and never switches it off; then the rest in Ethan's order —
+  college, the NBA, baseball, then hockey, UFC and the WNBA at one fill.
+  Nobody gets headroom while any league's target is cut.
+* A SEASON THAT IS OVER IS OUT OF THE POOL, the morning its own board says
+  so (`launch._seasons_over`), and what it would have held goes to the
+  leagues still playing.
 * NEVER MORE THAN THE POOL. Targets, headroom and the unplanned remainder
   add up to the spendable pool; a month spent at every league's ceiling
   every day still ends above the reserve.
@@ -111,24 +117,92 @@ def test_the_nfl_is_funded_first_when_the_month_is_short():
         assert plan.get(lg).alloc == 0, f"{lg} was funded before the NFL's target"
 
 
-def _short_plan():
-    """A November pool that funds the NFL and college in full and the rest
-    in part — found, not hand-computed, so it survives the tables moving."""
-    for pool in range(40_000, 200_000, 500):
-        plan = P.build(NOV1, pool)
-        rest = [plan.get(lg) for lg in P.TIERS[2] if plan.get(lg).need > 0]
-        if plan.get("nfl").fill == 1 and plan.get("cfb").fill == 1 \
-                and all(0.3 < lp.fill < 0.9 for lp in rest):
-            return plan
-    raise AssertionError("no pool funds football in full and the rest in part")
+def _floor(lp) -> int:
+    return int(lp.need * P.FLOOR_SHARE)
 
 
-def test_college_comes_second_and_the_rest_share_one_fill():
-    plan = _short_plan()
-    fills = [plan.get(lg).fill for lg in P.TIERS[2] if plan.get(lg).need > 0]
-    assert len(fills) >= 3, fills
-    assert max(fills) - min(fills) < 0.01, \
-        f"the third tier is not at one fill: {fills} — someone was cut before the rest"
+def test_the_order_is_ethans():
+    """"NFL comes first, then college football, then NBA, then baseball";
+    hockey, UFC and the WNBA, which he did not place, after them at one fill."""
+    assert P.TIERS == (("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba"))
+    assert P.PRIORITY == ("nfl", "cfb", "nba", "mlb", "nhl", "ufc", "wnba")
+    assert P.tiers(NOV1) == P.TIERS
+    assert 0 < P.FLOOR_SHARE < 1
+
+
+def _pools(day, lo=1_000, hi=200_000, step=250, **kw):
+    for pool in range(lo, hi, step):
+        yield pool, P.build(day, pool, **kw)
+
+
+def test_every_sport_playing_gets_its_floor_before_any_but_the_nfl_gets_more():
+    """THE OCTOBER BUG: the NFL and college funded in full and basketball
+    and hockey left nothing (DK: 0 NBA props priced). Past the NFL's
+    target, while anyone is short of half their target, nobody is past
+    half theirs — the floors fill together, at one fill."""
+    for day in (NOV1, TUE, dt.date(2026, 10, 28)):
+        thin = 0
+        for pool, plan in _pools(day):
+            later = [plan.get(lg) for t in P.tiers(day)[1:] for lg in t if plan.get(lg).need > 0]
+            if any(lp.target < _floor(lp) - 1 for lp in later):
+                thin += 1
+                assert all(lp.target <= _floor(lp) + 1 for lp in later), \
+                    (day, pool, {lp.league: (lp.target, _floor(lp)) for lp in later})
+                fills = [lp.target / _floor(lp) for lp in later if _floor(lp) > 50]
+                assert max(fills) - min(fills) < 0.02, (day, pool, fills)
+                if plan.get("nfl").fill < 1:
+                    assert all(lp.target == 0 for lp in later), "the NFL's target comes before every floor"
+        assert thin, f"{day}: no pool short of the floors"
+
+
+def test_past_the_floors_each_tier_waits_for_the_one_above():
+    """College, then the NBA, then baseball, then the rest: a tier past its
+    floor means every tier above it has its whole target."""
+    for day in (NOV1, TUE):
+        order = P.tiers(day)
+        seen = set()
+        for pool, plan in _pools(day):
+            for i, tier in enumerate(order[1:], 1):
+                if any(plan.get(lg).target > _floor(plan.get(lg)) + 1 for lg in tier):
+                    seen.add(i)
+                    for above in order[:i]:
+                        for lg in above:
+                            lp = plan.get(lg)
+                            assert lp.need - lp.target <= 2, \
+                                f"{day} {pool}: {tier} past its floor before {lg}'s target"
+        assert {1, 2, 4} <= seen, (day, seen)
+
+
+def test_the_last_tier_shares_one_fill():
+    for pool, plan in _pools(NOV1, 60_000, 120_000, 500):
+        nhl, ufc = plan.get("nhl"), plan.get("ufc")
+        if 0.55 < nhl.fill < 0.95:
+            assert abs(nhl.fill - ufc.fill) < 0.01, (pool, nhl.fill, ufc.fill)
+            return
+    raise AssertionError("no pool funds the last tier in part")
+
+
+def test_november_at_100k_funds_football_the_nba_and_baseball_and_holds_hockey_its_floor():
+    """The page's numbers (docs/ODDS_PLAN.md): the whole plan on the 1st."""
+    plan = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
+    for lg in ("nfl", "cfb", "nba", "mlb"):
+        assert plan.get(lg).fill == 1.0, (lg, plan.get(lg).fill)
+    for lg in ("nhl", "ufc"):
+        assert 0.5 <= plan.get(lg).fill < 1.0, (lg, plan.get(lg).fill)
+    assert plan.get("wnba").need == 0 and plan.unplanned <= 2
+    gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1,
+                   over={"mlb"})
+    assert gone.get("nhl").fill > plan.get("nhl").fill, "baseball's share went to the leagues still playing"
+
+
+def test_a_season_that_is_over_leaves_the_pool():
+    plan = P.build(NOV1, 100_000, TONIGHT, over={"mlb"})
+    mlb = plan.get("mlb")
+    assert mlb.over and mlb.need == mlb.today_need == mlb.alloc == mlb.envelope == 0
+    assert P.build(NOV1, 100_000, TONIGHT).get("mlb").need > 0, "the table alone still holds November 1-4"
+    text = P.report(plan, {"mlb": 1_240})
+    assert "MLB   season over — out of the pool (spent 1,240 this month)" in text
+    assert "WNBA  out of season" in text
 
 
 def test_until_the_renewal_the_nba_is_funded_right_after_the_nfl():
@@ -136,7 +210,7 @@ def test_until_the_renewal_the_nba_is_funded_right_after_the_nfl():
     for nba. We need that now" — October's credits had run out after the
     NFL and college, and he chose the NBA before college until Nov 1."""
     oct28, end = dt.date(2026, 10, 28), dt.date(2026, 11, 1)
-    assert P.tiers(oct28)[:3] == (("nfl",), ("nba",), ("cfb",))
+    assert P.tiers(oct28) == (("nfl",), ("nba",), ("cfb",), ("mlb",), ("nhl", "ufc", "wnba"))
     assert sorted(lg for t in P.tiers(oct28) for lg in t) == sorted(P.PRIORITY), "nobody dropped"
     assert P.tiers(P.NBA_FIRST_UNTIL) == P.TIERS and P.tiers(NOV1) == P.TIERS, "from the renewal, as before"
     seen = 0
@@ -147,16 +221,20 @@ def test_until_the_renewal_the_nba_is_funded_right_after_the_nfl():
         # A share is cut to whole credits, so one can trickle past a tier.
         if nba.target > 1:
             assert nfl.need - nfl.target <= 1, "the NFL's target still comes first"
-        if cfb.target > 1:
-            assert nba.need - nba.target <= 1, f"college funded at {pool} before the NBA's target was met"
+        if cfb.target > _floor(cfb) + 1:
+            assert nba.need - nba.target <= 1, f"college past its floor at {pool} before the NBA's target was met"
             seen += 1
     assert seen, "some pool funds both"
 
 
 def test_nobody_gets_headroom_while_a_target_is_cut():
-    plan = _short_plan()
-    assert all(lp.extra == 0 for lp in plan.leagues.values()), \
-        {lg: lp.extra for lg, lp in plan.leagues.items()}
+    short = 0
+    for pool, plan in _pools(NOV1, 20_000, 120_000, 1_000):
+        if any(lp.target < lp.need for lp in plan.leagues.values()):
+            short += 1
+            assert all(lp.extra == 0 for lp in plan.leagues.values()), \
+                (pool, {lg: lp.extra for lg, lp in plan.leagues.items()})
+    assert short, "no pool short of a target"
 
 
 def test_headroom_goes_to_the_nfl_first_once_every_target_is_met():
@@ -281,8 +359,9 @@ def test_no_measured_balance_is_no_plan():
 
 def test_the_launcher_hands_the_pacer_the_plans_ceiling():
     import launch
-    saved = launch._games_today
+    saved = launch._games_today, launch._seasons_over
     launch._games_today = lambda: dict(TONIGHT)
+    launch._seasons_over = lambda day=None: frozenset()
     try:
         with _Swap(_state(remaining=60_000), _ledger([])):
             allowance = ob.daily_allowance(ob.load())
@@ -293,8 +372,14 @@ def test_the_launcher_hands_the_pacer_the_plans_ceiling():
             # A lines lane spends its league's money, so it reads its league's ceiling.
             assert launch._budget_share("nba_board_lines") == launch._budget_share("nba")
             assert launch._budget_share("wnba") == 0.0, "an out-of-season league has no ceiling"
+            # …and a season its board calls over has none either, its share the others'.
+            launch._seasons_over = lambda day=None: frozenset({"nba"})
+            P._CACHE.clear()
+            assert launch._budget_share("nba") == 0.0
+            env = P.envelope("nhl", games_today=TONIGHT, over={"nba"})
+            assert int(allowance * launch._budget_share("nhl")) == env
     finally:
-        launch._games_today = saved
+        launch._games_today, launch._seasons_over = saved
 
 
 def test_the_launcher_falls_back_to_the_weights_without_a_plan():
@@ -348,6 +433,49 @@ def test_todays_games_come_off_the_built_boards():
         for k, v in saved.items():
             setattr(launch, k, v)
         launch._GAMES_TODAY[:] = [0.0, {}]
+
+
+def test_a_board_says_when_its_season_is_over():
+    """Ethan, 2026-10-28: "once baseball is over, we can take baseball out of
+    the credit pool". The table runs baseball's postseason to November 4;
+    the board knows the morning after the last game: empty, and its five-day
+    look ahead found no next slate. A hoops or college board says it outright
+    (`status: offseason`). Only in a league's postseason, and a board that
+    cannot be read says nothing."""
+    import launch
+    d = tempfile.mkdtemp()
+
+    def board(name, body):
+        path = os.path.join(d, name)
+        with open(path, "w") as fh:
+            json.dump(body, fh)
+        return path
+
+    names = ("MLB_OUT", "NBA_OUT", "WNBA_OUT", "NHL_OUT", "CFB_OUT")
+    saved = {k: getattr(launch, k) for k in names}
+    nov1, june, july = NOV1, dt.date(2027, 6, 18), dt.date(2027, 7, 15)
+    try:
+        for k in names:
+            setattr(launch, k, os.path.join(d, "missing.json"))
+        assert launch._seasons_over(nov1) == frozenset(), "a missing board says nothing"
+        launch.MLB_OUT = board("mlb.json", {"games": []})
+        assert launch._seasons_over(nov1) == {"mlb"}, "the World Series is over"
+        assert launch._seasons_over(july) == frozenset(), "a blank July board is the All-Star break, not the end"
+        launch.MLB_OUT = board("mlb2.json", {"games": [{}], "upcoming": {"date": "2026-11-02", "days_ahead": 1}})
+        assert launch._seasons_over(nov1) == frozenset(), "a travel day, game six tomorrow"
+        launch.MLB_OUT = board("mlb3.json", {"games": [], "upcoming": {"date": "2026-11-03"}})
+        assert launch._seasons_over(nov1) == frozenset()
+        launch.NBA_OUT = board("nba.json", {"games": [], "status": "offseason"})
+        assert launch._seasons_over(june) == {"nba"}, "the Finals are over"
+        assert launch._seasons_over(nov1) == frozenset(), "never in the regular season"
+        launch.NBA_OUT = board("nba2.json", {"games": [], "status": "no games today"})
+        assert launch._seasons_over(june) == frozenset(), "a quiet date between two Finals games"
+        launch.MLB_OUT = board("mlb4.json", ["not", "a", "board"])
+        assert launch._seasons_over(nov1) == frozenset()
+    finally:
+        for k, v in saved.items():
+            setattr(launch, k, v)
+        launch._SEASONS_OVER[:] = [0.0, frozenset()]
 
 
 # --- the renewal day -------------------------------------------------------------
@@ -435,6 +563,39 @@ def test_the_report_says_where_the_month_stands():
     assert "last 7 days, a day: NFL 2,400 · NBA 600" in text
     assert "ASSUMED" in P.report(P.build(NOV1, 100_000)), \
         "an assumed renewal day is said out loud"
+
+
+def test_the_report_gives_each_sport_its_month():
+    """Ethan: "all of that needs its own budget". Each sport's line is its
+    month: what it spent since the renewal plus what the plan holds for it
+    from now, the order and the floor said above them."""
+    plan = P.build(TUE, 70_000, {"nba": 9, "nhl": 6}, end=dt.date(2026, 12, 1), reset="measured",
+                   start=NOV1)
+    nba = plan.get("nba")
+    text = P.report(plan, {"nfl": 30_000, "nba": 6_200, "harvest": 3_600}, {"nba": 400},
+                    pool_now=69_000)
+    assert "order: NFL > CFB > NBA > MLB > NHL · UFC · WNBA" in text
+    assert "after the NFL, every sport playing is held 50% of its need before any gets more" in text
+    assert "each sport's month: budget = spent + left (fill)" in text
+    left = nba.alloc - 400
+    assert f"NBA   {6_200 + left:>7,} = {6_200:>6,} + {left:>6,} ({nba.fill * 100:>3.0f}%)" in text, text
+    assert "MLB   out of season" in text, "baseball's table ends November 4"
+    early = P.report(P.build(dt.date(2026, 10, 28), 9_000), {})
+    assert "order: NFL > NBA > CFB > MLB > NHL · UFC · WNBA" in early, "Ethan's October call, said"
+
+
+def test_the_pace_line_says_whether_the_pool_lasts():
+    """Ethan: "make sure we're not running through credits like crazy" —
+    every lane's spend a day, and the day the pool runs dry at it."""
+    plan = P.build(TUE, 60_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
+    calm = P.pace_line(plan, {"nfl": 1_200, "nba": 500, "harvest": 300}, 60_000)
+    assert calm == "  pace: 2,000 a day — the pool outlasts the renewal (Dec 1) ✓", calm
+    hot = P.pace_line(plan, {"nfl": 4_000, "nba": 1_000}, 60_000)
+    assert hot.startswith("  pace: 5,000 a day — at that pace the pool runs dry Nov 21, 10 day(s) "
+                          "before the renewal"), hot
+    assert P.pace_line(plan, {}, 60_000) == "" and P.pace_line(plan, None) == ""
+    text = P.report(plan, {}, {}, pool_now=60_000, recent={"nfl": 4_000, "nba": 1_000}, recent_days=3)
+    assert "last 3 days, a day: NFL 4,000 · NBA 1,000" in text and "runs dry Nov 21" in text
 
 
 def test_month_spend_and_the_last_seven_days():
