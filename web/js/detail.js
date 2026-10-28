@@ -2355,6 +2355,60 @@ function pbpModelWinProbHTML(d) {
   </div>`;
 }
 
+/* CREW WATCH (2026-10-28; docs/IDEAS.md). The NFL referee's crew, live:
+   the flags thrown so far (every play the feed marks a penalty on, declined
+   or offset ones too), the pace they are on once a quarter is played, and
+   his games' average beside the league's (engine/nflrefs, on the board's
+   game since 2026-10-24). Context, as the game report says of him: his
+   record added nothing the closing line did not hold. Baseball's half is
+   the plate umpire's zone (pbpUmpHTML). */
+function pbpCrewHTML(d, league, boardGame) {
+  if (league === "mlb") return pbpUmpHTML(d);
+  const o = (boardGame || {}).officials || {}, lv = d.live || {};
+  if (league !== "nfl" || !o.referee || (lv.state !== "live" && lv.state !== "final")) return "";
+  const seen = new Set();
+  const flags = [...(d.drives || []).flatMap((dr) => (dr && dr.plays) || []), ...(d.plays || [])]
+    .filter((p) => p && p.penalty && !seen.has(p.id) && seen.add(p.id)).length;
+  const rec = o.record || {}, lg = o.league || {};
+  const q = Number(String(lv.period || "").replace(/\D/g, "")) || 0;
+  const m = /^(\d+):(\d+)/.exec(String(lv.clock || ""));
+  const played = lv.state === "final" || q > 4 ? 1 : q ? Math.min(1, ((q - 1) * 900 + 900 - (m ? m[1] * 60 + Number(m[2]) : 0)) / 3600) : 0;
+  const pace = played >= 0.25 && played < 1 ? ` · on pace for ${Math.round(flags / played)}` : "";
+  const avg = rec.flags != null ? `His games average ${Number(rec.flags).toFixed(1)} penalties${
+    lg.flags != null ? ` (league ${Number(lg.flags).toFixed(1)})` : ""}${(rec.games || 0) < 12 ? ` over ${Number(rec.games || 0)} games` : ""}.` : "";
+  return `<div class="card pbp-crew"><div class="pbp-rail-head">Crew watch <span class="mini">${escapeHtml(o.referee)}’s crew</span></div>
+    <p class="pbp-crew-n"><b>${flags}</b> flag${flags === 1 ? "" : "s"} ${lv.state === "final" ? "in the game" : "so far"}${pace}</p>
+    <p class="mini pbp-crew-why">${escapeHtml(avg)} Context only: a referee's record adds nothing the closing line doesn't hold.</p></div>`;
+}
+
+/* THE PLATE UMPIRE'S ZONE, LIVE: every called pitch the league's tracking
+   located (a called strike, a ball, a ball in the dirt), against the
+   rulebook zone with the batter's own top and bottom: a strike is a ball
+   any part of which crosses it, so a miss is a called strike that never
+   touched it or a ball that did. Who each miss went against: a strike that
+   wasn't, the hitters; a ball that wasn't, the pitchers. Live only, with no
+   season norm beside it: nothing here keeps a season of an umpire's calls. */
+const UMP_R = 1.45 / 12, UMP_HALF = 17 / 24;
+function pbpUmpHTML(d) {
+  const lv = d.live || {};
+  if (lv.state !== "live" && lv.state !== "final") return "";
+  let n = 0, missed = 0;
+  const cost = { away: 0, home: 0 };
+  for (const p of d.events || []) {
+    if (!p || p.kind !== "pitch" || !["C", "B", "*B"].includes(p.code) || p.px == null || p.pz == null || !p.sz) continue;
+    n += 1;
+    const out = Math.hypot(Math.max(0, Math.abs(p.px) - UMP_HALF), Math.max(0, p.sz[1] - p.pz, p.pz - p.sz[0]));
+    if ((p.code === "C") === (out <= UMP_R)) continue;
+    missed += 1;
+    const bat = p.half === "T" ? "away" : "home";
+    cost[p.code === "C" ? bat : bat === "away" ? "home" : "away"] += 1;
+  }
+  if (!n) return "";
+  return `<div class="card pbp-crew"><div class="pbp-rail-head">Umpire watch <span class="mini">the plate umpire’s zone</span></div>
+    <p class="pbp-crew-n"><b>${missed}</b> missed of ${n} called pitch${n === 1 ? "" : "es"} · ${Math.round((100 * (n - missed)) / n)}% right</p>
+    <p class="mini pbp-crew-why">${missed ? `Against ${escapeHtml(d.away)} ${cost.away}, against ${escapeHtml(d.home)} ${cost.home}. ` : ""}By the league’s own pitch tracking, to the edge of the ball. Live only: no season of an umpire’s calls is kept here to set it beside.</p></div>`;
+}
+
 function pbpPressureHTML(d, league, boardGame) {
   const pr = (_standingsCache[league] || {}).pressure;
   if (!pr) return "";
@@ -4604,6 +4658,7 @@ async function renderPbpPage(tick) {
         ${winProb}
         ${pbpModelWinProbHTML(d)}
         ${pbpPressureHTML(d, league, boardGame)}
+        ${pbpCrewHTML(d, league, boardGame)}
       </aside>
     </div>`;
   wire();

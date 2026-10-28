@@ -661,6 +661,16 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run FZ "Gift a month (off until a gift price is set)" 30 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'function giftHTML('
+curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('gifts'))"
+SH
+run FY "Yearly at month two (off until switched on)" 30 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'function yearlyOfferHTML('
+SH
+run FX "Crew watch" 30 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpUmpHTML('
+SH
 run FW "Watch parties" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatPartyHTML('
 SH

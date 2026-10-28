@@ -107,13 +107,22 @@
     <h3>2.3 Subscription</h3>
     <ul>
       <li><b>A Stripe customer id and subscription id, the status, the
-        paid-through date, and which plan.</b> That is the entire
-        payment-related record on our side. During a free trial, also the
+        paid-through date, which plan, and the date the subscription
+        began.</b> That is the entire payment-related record on our side.
+        The date it began is Stripe's own, and tells us when a monthly
+        plan has reached its third bill, when we may offer the yearly plan
+        once. During a free trial, also the
         trial end we last sent the one reminder email about, so it goes
         once.
         (<code>subscriptions</code>)</li>
       <li><b>Stripe event ids we have already processed</b>, so a repeated
         webhook cannot grant twice. (<code>billing_events</code>)</li>
+      <li><b>A month you give.</b> If you buy a month for a friend, the gift
+        code, which account bought it and when, the Stripe Checkout it was
+        paid in, and, once it is used, which account used it and when — so
+        a code works once and you can see whether yours has been.
+        Deleting either account takes it off the gift; the gift stays
+        bought, and stays used. (<code>gift_codes</code>)</li>
       <li><b>Discount codes you redeemed, and failed attempts</b>, the
         latter only to rate-limit guessing.
         (<code>code_redemptions</code>, <code>code_attempts</code>)</li>

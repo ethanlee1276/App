@@ -4556,6 +4556,19 @@ class Handler(BaseHTTPRequestHandler):
     def _billing_get(self, path: str, qs: dict | None = None):
         from engine import billing as BI
         A = _acct()
+        if path == "gifts":
+            # The gifts this account bought (engine/gifts): each code, and
+            # whether it is spent. The buyer's own, signed in.
+            from engine import gifts as GF
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                return self._send(200, json.dumps({"on": GF.enabled(), "gifts": GF.mine(conn, who["id"])}).encode(),
+                                  ".json")
+            finally:
+                conn.close()
         if path != "status":
             return self._send(404, b'{"error":"unknown billing endpoint"}',
                               ".json")
@@ -4578,6 +4591,9 @@ class Handler(BaseHTTPRequestHandler):
             # for.
             out["trial_days"] = BI.TRIAL_DAYS
             out["trial_plan"] = BI.TRIAL_PLAN
+            # Whether a month can be bought for a friend (engine/gifts).
+            from engine import gifts as _GF
+            out["gifts"] = _GF.enabled()
             # WHETHER THE PAGE MAY COUNT ANYTHING. Off unless QB_ANALYTICS=1
             # (engine/analytics.py), and while off the page sends nothing.
             from engine import analytics as AN
@@ -4631,6 +4647,11 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:                            # noqa: BLE001
                     pass
                 out.update(BI.status_for(conn, who["id"]))
+                # THE YEARLY OFFER (BI.yearly_offer): a monthly member past
+                # their second bill, while QB_YEARLY_OFFER is on.
+                offer = BI.yearly_offer(conn, who["id"])
+                if offer:
+                    out["yearly_offer"] = offer
                 # Codes ride alongside rather than inside the subscription
                 # status: a redeemed code is not a subscription and saying
                 # it is would put a status on the page that no processor
@@ -4773,9 +4794,11 @@ class Handler(BaseHTTPRequestHandler):
             # of being called invalid — and `redeem` still needs no
             # import from the module that moves money.
             from engine import billing as _BI
+            from engine import gifts as GF
             try:
-                got = RD.redeem(conn, who["id"], code,
-                                elsewhere=_BI.promo_misdirect())
+                # A gift a friend bought (engine/gifts), or a code of ours.
+                got = (GF.redeem(conn, who["id"], code) if GF.looks_like(code) else
+                       RD.redeem(conn, who["id"], code, elsewhere=_BI.promo_misdirect()))
             except RD.RedeemError as exc:
                 _seclog("redeem", "refused", self._client_ip(),
                         email=who["email"], reason=str(exc)[:80])
@@ -4802,7 +4825,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._billing_redeem(raw)
         if path == "confirm":
             return self._billing_confirm(raw)
-        if path not in ("checkout", "portal"):
+        if path not in ("checkout", "portal", "yearly", "gift", "gift_confirm"):
             return self._send(404, b'{"error":"unknown billing endpoint"}',
                               ".json")
         conn = A.connect()
@@ -4876,6 +4899,27 @@ class Handler(BaseHTTPRequestHandler):
                         f"{base}/?paid=1&s={{CHECKOUT_SESSION_ID}}#account",
                         f"{base}/#paywall", plan, trial_days=trial,
                         allow_promo=fresh and not coupon, coupon=coupon)
+                elif path in ("gift", "gift_confirm"):
+                    # GIFT A MONTH (engine/gifts): Stripe's Checkout for one
+                    # gift, or, coming back from it, Stripe asked whether it
+                    # was paid; the code is minted only on Stripe's word.
+                    from engine import gifts as GF
+                    if path == "gift":
+                        url = GF.start_checkout(who["id"], who["email"],
+                                                f"{base}/?gift=1&s={{CHECKOUT_SESSION_ID}}#account",
+                                                f"{base}/#account")
+                    else:
+                        try:
+                            body = json.loads(raw.decode() or "{}")
+                        except Exception:                    # noqa: BLE001
+                            body = {}
+                        GF.confirm(conn, who["id"], str(body.get("s") or "")[:200])
+                        return self._send(200, json.dumps({"on": GF.enabled(), "gifts": GF.mine(conn, who["id"])}).encode(),
+                                          ".json")
+                elif path == "yearly":
+                    # Stripe's page confirming the switch, for a member the
+                    # offer is for (BI.open_yearly_switch refuses anyone else).
+                    url = BI.open_yearly_switch(conn, who["id"], f"{base}/#account")
                 else:
                     cust = BI.status_for(conn, who["id"]).get("customer_id")
                     if not cust:
@@ -4971,6 +5015,13 @@ class Handler(BaseHTTPRequestHandler):
                                   or payload.get("event_id")):
                 return self._send(200, b'{"received":true,"duplicate":true}',
                                   ".json")
+            # A GIFT (engine/gifts) is not a subscription: its paid Checkout
+            # mints a code and touches nobody's plan, so it is answered here,
+            # before read_event could take it for a subscription's Checkout.
+            from engine import gifts as GF
+            if GF.is_gift(payload):
+                made = GF.from_webhook(conn, payload)
+                return self._send(200, json.dumps({"received": True, "gift": bool(made)}).encode(), ".json")
             event = BI.read_event(payload)
             applied = BI.apply_event(conn, event) if event else False
             # 200 EVEN WHEN WE DID NOTHING. Stripe retries anything that is

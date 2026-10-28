@@ -928,6 +928,11 @@ def delete_user(conn, user_id: int) -> None:
     # A watch party they started stays for its friends, with them off it.
     if "chat_parties" in have:
         conn.execute("UPDATE chat_parties SET user_id=0 WHERE user_id=?", (int(user_id),))
+    # A gift they bought stays bought, and one they used stays spent, with
+    # them off both sides (engine/gifts).
+    if "gift_codes" in have:
+        conn.execute("UPDATE gift_codes SET user_id=0 WHERE user_id=?", (int(user_id),))
+        conn.execute("UPDATE gift_codes SET redeemed_by=0 WHERE redeemed_by=?", (int(user_id),))
     if "chat_msgs" in have:
         for table in ("chat_reacts", "chat_reports"):
             if table in have:
@@ -1078,6 +1083,11 @@ def export_user(conn, user_id: int) -> dict:
                                                "WHERE user_id=? ORDER BY at", (int(user_id),))]
         if calls:
             out["call_it_calls"] = calls
+    if "gift_codes" in have:
+        rows = [dict(r) for r in conn.execute("SELECT code, created_at, redeemed_by IS NOT NULL AS redeemed "
+                                              "FROM gift_codes WHERE user_id=? ORDER BY created_at", (int(user_id),))]
+        if rows:
+            out["gifts_bought"] = rows
     if "trivia_answers" in have:
         rows = [dict(r) for r in conn.execute("SELECT room, qkey, pick, at FROM trivia_answers "
                                               "WHERE user_id=? ORDER BY at", (int(user_id),))]

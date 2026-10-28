@@ -2249,7 +2249,7 @@ async function renderBilling() {
     ? "Card payment is not switched on on this server yet. Access is by code for now — if you have one, enter it below."
     : "Everything is free right now, so there is nothing to pay for. A code still works and starts its clock from the day you enter it.");
   slot.innerHTML = (s.configured ? `
-    ${s.entitled ? planPanelHTML(s) : none}
+    ${s.entitled ? planPanelHTML(s) + yearlyOfferHTML(s) : none}
     ${s.customer_id
       // Only with somebody to bill. Entitled with nobody — a comped
       // address or a redeemed code — "Manage billing" opened Stripe's
@@ -2269,6 +2269,82 @@ async function renderBilling() {
     // lands on. A third copy on the account panel was the version
     // somebody had to go looking for.
     + codeBoxHTML(codes);
+}
+
+/* YEARLY AT MONTH TWO (2026-10-28, engine/billing.yearly_offer; docs/IDEAS.md).
+   A monthly member past their second bill sees the switch here once: "See
+   the switch" opens Stripe's own page confirming it, with the new price and
+   what this month's bill credits, before anything is charged; "Not now"
+   puts it away on this device. Off until the server's QB_YEARLY_OFFER is on. */
+const YEARLY_SEEN_KEY = "qb_yearly_seen";
+function yearlyOfferHTML(s) {
+  const o = s && s.yearly_offer;
+  if (!o) return "";
+  try { if (localStorage.getItem(YEARLY_SEEN_KEY)) return ""; } catch (e) { /* storage off: shown */ }
+  const usd = (c) => `$${(Number(c) / 100).toFixed(Number(c) % 100 ? 2 : 0)}`;
+  return `<div class="set-yearly">${setGroup("Switch to yearly", [
+    setItem({ ico: "gem", tone: "gold", title: `Save ${usd(o.save_cents)} a year`, chev: true, attrs: 'data-yearly="go"',
+              sub: `${usd(o.yearly_cents)} once a year instead of $25 a month. Stripe shows what this month’s bill credits before anything is charged.` }),
+    setItem({ title: "Not now", attrs: 'data-yearly="no"' })])}</div>`;
+}
+if (typeof window !== "undefined" && !window._yearlyBound) {
+  window._yearlyBound = true;
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-yearly]");
+    if (!b) return;
+    if (b.dataset.yearly === "go") { _billGo(b, "yearly"); return; }
+    try { localStorage.setItem(YEARLY_SEEN_KEY, "1"); } catch (err) { /* gone for this visit only */ }
+    const box = b.closest(".set-yearly");
+    if (box) box.remove();
+  });
+}
+
+/* GIFT A MONTH (2026-10-28, engine/gifts; docs/IDEAS.md). A month for a
+   friend, $25 once on Stripe's Checkout, delivered as a code to send: they
+   enter it under Redeem a code. Coming back from Checkout (?gift=1&s=…),
+   the screen asks the server to read the payment off Stripe, so the code is
+   here even before Stripe's own word arrives. */
+if (typeof location !== "undefined" && /[?&]gift=1(&|$)/.test(location.search)) window._setOpen = "gift";
+async function giftFill() {
+  const box = document.getElementById("set-gift");
+  if (!box) return;
+  const q = new URLSearchParams(location.search);
+  const sid = q.get("gift") === "1" ? q.get("s") || "" : "";
+  let v = null;
+  try {
+    if (/^cs_[A-Za-z0-9_]{8,200}$/.test(sid)) {
+      try { const u = new URL(location.href); u.searchParams.delete("gift"); u.searchParams.delete("s"); history.replaceState(null, "", u.toString()); } catch (e) { /* the address keeps it */ }
+      const r = await fetch("/api/billing/gift_confirm", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ s: sid }) });
+      v = r.ok ? await r.json() : null;
+    }
+    if (!v) { const r = await fetch("/api/billing/gifts", { credentials: "same-origin", cache: "no-store" }); v = r.ok ? await r.json() : null; }
+  } catch (e) { v = null; }
+  if (box.isConnected) box.innerHTML = giftHTML(v, !!sid);
+}
+function giftHTML(v, back) {
+  const list = (v && v.gifts) || [];
+  const buy = v && v.on ? setGroup("", [setItem({ ico: "ticket", tone: "gold", title: "Buy a month for a friend", chev: true, attrs: 'data-gift="buy"',
+      sub: "$25, once — not a subscription. You get a code to send; they enter it under Redeem a code for a month of everything." })],
+    "Card details go to Stripe, never to this server.") : `<p class="set-foot">Gifts aren’t on yet.</p>`;
+  const wait = back && !list.length ? `<p class="set-foot">Stripe is confirming the payment — your code appears here in a moment. Pull to refresh if it doesn’t.</p>` : "";
+  const mine = list.length ? setGroup("Your gifts", list.map((g) => setItem({ ico: "ticket", tone: "gold", title: escapeHtml(g.code),
+    sub: g.redeemed ? "Used" : "Not used yet — tap to send it", attrs: g.redeemed ? "" : `data-gift-share="${escapeAttr(g.code)}"` })),
+    "A code works once, for a month from the day it is entered.") : "";
+  return wait + mine + buy + `<p class="set-foot bill-note" role="status"></p>`;
+}
+if (typeof window !== "undefined" && !window._giftBound) {
+  window._giftBound = true;
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("[data-gift], [data-gift-share]");
+    if (!b) return;
+    if (b.dataset.gift === "buy") { _billGo(b, "gift"); return; }
+    const text = `A month of Qellys Book, on me. Enter ${b.dataset.giftShare} under Settings → Redeem a code at ${location.origin}`;
+    try {
+      if (navigator.share) await navigator.share({ title: "A month of Qellys Book", text });
+      else { await navigator.clipboard.writeText(text); const t = b.querySelector(".set-sub"); if (t) t.textContent = "Copied — send it to them"; }
+    } catch (err) { /* the reader closed the sheet */ }
+  });
 }
 
 /* The code's own screen (Settings › Redeem a code), redrawn from a fresh
@@ -3353,6 +3429,10 @@ function setPageHTML(page) {
     setTimeout(invFill, 0);
     return head("Invite friends") + `<div id="set-invite" class="inv-screen"><p class="set-foot">Loading…</p></div>`;
   }
+  if (page === "gift") {
+    setTimeout(giftFill, 0);
+    return head("Gift a month") + `<div id="set-gift"><p class="set-foot">Loading…</p></div>`;
+  }
   if (page === "fantasy") return head("Fantasy leagues") + ffLinksHTML();
   if (page === "calendar") return head("Calendar") + `<div id="set-cal">${calRowHTML()}</div>`;
   _setPage = "";
@@ -3448,6 +3528,8 @@ function planRowsHTML(s) {
     if (s.configured) rows.push(setItem({ ico: "card", tone: "gold", title: "See the plans", gold: true, chev: true,
                                           attrs: 'data-act="billSeePlans"' }));
   }
+  // GIFT A MONTH (engine/gifts), once a gift price is set at Stripe.
+  if (s.gifts) rows.push(setItem({ ico: "ticket", tone: "gold", title: "Gift a month", val: "$25", chev: true, attrs: 'data-set-open="gift"' }));
   rows.push(setItem({ ico: "ticket", tone: "gold", title: "Redeem a code", chev: true, attrs: 'data-set-open="code"' }));
   rows.push(setItem({ ico: "people", tone: "gold", title: "Invite friends",
                       val: s.entitled ? "Give $6.25, get $6.25" : "Have a friend’s code?", chev: true, attrs: 'data-set-open="invite"' }));

@@ -129,15 +129,27 @@ unit of work first:
    "4 of tonight's picks are on teams you follow" — the private board
    against the account's watches, a count and never a pick. Small; your
    call, since a count by team says a little more than a count by league.
-6. **Yearly at month two.** A monthly member on their third bill sees
-   "switch to yearly, save $75" once, in Settings. Small.
+6. **Yearly at month two.** BUILT 2026-10-28, OFF until runbook FY: a
+   monthly member past their second bill (Stripe's own start date, kept
+   from the subscription updates) sees "Save $75 a year" once on Settings →
+   Plan; the switch is Stripe's portal confirming it
+   (subscription_update_confirm). On when Ethan allows plan switching in
+   Stripe's customer portal and sets QB_YEARLY_OFFER=1.
+   engine/billing.yearly_offer / open_yearly_switch, js/account.js
+   yearlyOfferHTML.
 7. **Not today? Keep the door open.** BUILT 2026-10-26 (step 201,
    account.js pwLaterHTML): under the plans page's two cards, signed in,
    where alerts work — with its own Turn off.
 8. **Passkeys.** Face ID / Touch ID sign-in (WebAuthn): no password to
    forget and no text-message cost per sign-in. Medium.
-9. **Gift a month.** Buy a month for a friend, delivered as a code
-   (engine/redeem already grants one). Medium.
+9. **Gift a month.** BUILT 2026-10-28, OFF until runbook FZ: Settings →
+   Gift a month, $25 once on Stripe's Checkout, a code like GIFT-7KQ2-M9XR
+   to send, redeemed in the Redeem a code box for a month from that day.
+   Minted only on Stripe's word (the signed webhook, or the buyer's return
+   trip read back from Stripe), one session one code, and never a plan for
+   the buyer (the subscription return check now refuses one-time and gift
+   sessions). engine/gifts, js/account.js giftHTML. On when
+   STRIPE_PRICE_GIFT names a one-time $25 price.
 10. **One free pick a day — your call.** A random one of tonight's (never
     the best), opened for free accounts 15 minutes before its game, the
     way most pick apps let a stranger taste the product. It makes a paid
@@ -201,9 +213,15 @@ of work first, each with what it is built from:
    it keeps its ticket and moves with the clock, but its number, verdict
    and live chance wait (app.js spoilRow). js/detail.js pbpSpoilHTML,
    app.js spoiledG. Phone alerts come from the box and are not held.
-10. **Crew watch.** Penalties and the strike zone tallied live against the
-    crew's season norm. Built from: the plays' penalty rows + the referee
-    assignments already read. Medium.
+10. **Crew watch.** BUILT 2026-10-28 for the NFL (runbook FX): on a live
+    or finished NFL game's page, the flags thrown so far (every play the
+    file marks a penalty on), the pace once a quarter is played, and the
+    referee's games' average beside the league's (engine/nflrefs, on the
+    board's game), with the report's caveat. js/detail.js pbpCrewHTML. And
+    baseball's plate umpire, live (pbpUmpHTML): every called pitch the
+    league's tracking located, against the rulebook zone with the batter's
+    own top and bottom, the misses and whom they went against. No season
+    norm beside it: nothing here keeps a season of an umpire's calls.
 11. **Trivia in the stoppages.** BUILT 2026-10-28 (runbook FV): at a
     timeout, the two-minute warning, the clock run out, a held scoreboard
     (halftime, the end of a period) or between innings, one question off

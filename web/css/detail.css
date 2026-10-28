@@ -765,6 +765,11 @@
 .ci-share { justify-self: start; padding: 6px 12px; border-radius: 999px; border: 0; background: var(--grad-brand);
   color: var(--brand-ink); font: inherit; font-size: var(--fs-xs); font-weight: 900; cursor: pointer; }
 
+/* Crew watch (pbpCrewHTML): the flags so far, and the referee's games beside the league's. */
+.pbp-crew-n { margin: 0; font-size: var(--fs-sm); color: var(--text-mute); }
+.pbp-crew-n b { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 800; color: var(--text); }
+.pbp-crew-why { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
+
 /* Trivia in the stoppages (pbpTriviaHTML): four names, then the right one and the room's split. */
 .tr-card { display: grid; gap: 8px; }
 .tr-card[hidden] { display: none; }

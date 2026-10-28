@@ -898,6 +898,87 @@ def open_portal(customer_id: str, return_url: str) -> str:
     return str(got)
 
 
+# --- yearly at month two --------------------------------------------------------
+# The ideas list (docs/IDEAS.md, "Yearly at month two"): a monthly member
+# on their third bill sees "switch to yearly, save $75" once, in Settings.
+# The switch is Stripe's to make, on its own page: the customer portal's
+# confirm-a-change screen (`flow_data[type]=subscription_update_confirm`),
+# which shows the new price and what is credited for the month already
+# paid before anything is charged — the same reason cancelling is theirs
+# on Stripe's page and not ours.
+#
+# OFF until QB_YEARLY_OFFER=1, because the portal only makes the change
+# when its settings allow switching plans (Stripe dashboard: Settings,
+# Billing, Customer portal, "Customers can switch plans", with this
+# product's prices listed). Runbook FY says it step by step.
+ENV_YEARLY_OFFER = "QB_YEARLY_OFFER"
+#: The third bill: two monthly periods paid, the third about to be.
+YEARLY_AFTER_S = 56 * 86400
+
+
+def yearly_saving_cents() -> int:
+    """A year of monthly bills less the yearly price: $300 - $225."""
+    return PLANS["monthly"]["cents"] * 12 - PLANS["yearly"]["cents"]
+
+
+def yearly_offer(conn, user_id, now: float | None = None) -> dict | None:
+    """``{"save_cents", "yearly_cents"}`` for an active monthly member past
+    their second bill, while the offer is switched on and the yearly price
+    is set; None otherwise. Read off our own row: no call to Stripe."""
+    _env()
+    if os.environ.get(ENV_YEARLY_OFFER, "").strip() != "1" or not _price_env("yearly"):
+        return None
+    now = time.time() if now is None else now
+    row = conn.execute("SELECT status, plan, cancel_at_end, started_at FROM subscriptions WHERE user_id=?",
+                       (int(user_id),)).fetchone()
+    if not row or str(row[0] or "") != "active" or row[1] != "monthly" or row[2] or not row[3]:
+        return None
+    if now - float(row[3]) < YEARLY_AFTER_S:
+        return None
+    return {"save_cents": yearly_saving_cents(), "yearly_cents": PLANS["yearly"]["cents"]}
+
+
+def yearly_switch_request(secret_key: str, customer_id: str, return_url: str, subscription_id: str,
+                          item_id: str, price_id: str) -> tuple[str, dict, bytes]:
+    """Stripe's portal, opened on the confirmation of one change: this
+    subscription's one item to the yearly price."""
+    body = _form({"customer": customer_id, "return_url": return_url,
+                  "flow_data[type]": "subscription_update_confirm",
+                  "flow_data[subscription_update_confirm][subscription]": subscription_id,
+                  "flow_data[subscription_update_confirm][items][0][id]": item_id,
+                  "flow_data[subscription_update_confirm][items][0][price]": price_id,
+                  "flow_data[subscription_update_confirm][items][0][quantity]": "1",
+                  "flow_data[after_completion][type]": "redirect",
+                  "flow_data[after_completion][redirect][return_url]": return_url})
+    return f"{API}/billing_portal/sessions", {
+        "Authorization": f"Bearer {secret_key}",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }, body
+
+
+def open_yearly_switch(conn, user_id, return_url: str, fetch=None, post=None, now: float | None = None) -> str:
+    """The address of Stripe's page confirming the switch to yearly, for a
+    member the offer is for. Reads the subscription from Stripe for its item
+    (one item, on the monthly price, or nothing is offered); ``fetch`` and
+    ``post`` stand in for Stripe in a test."""
+    if not yearly_offer(conn, user_id, now):
+        raise BillingUnavailable("The yearly switch isn't open for this account.")
+    row = conn.execute("SELECT customer_id, subscription_id FROM subscriptions WHERE user_id=?",
+                       (int(user_id),)).fetchone()
+    sk = keys()[0]
+    sub = (fetch or (lambda sid: _get(f"{API}/subscriptions/{sid}", sk, timeout=10)))(str(row[1] or ""))
+    items = ((sub or {}).get("items") or {}).get("data") or []
+    if len(items) != 1 or ((items[0] or {}).get("price") or {}).get("id") != _price_env("monthly"):
+        raise BillingUnavailable("This subscription isn't the monthly plan on its own, so it can't switch here.")
+    url, headers, body = yearly_switch_request(sk, str(row[0]), return_url, str(sub.get("id")),
+                                               str(items[0].get("id")), _price_env("yearly"))
+    out = (post or _post)(url, headers, body)
+    if not out.get("url"):
+        raise BillingUnavailable("Stripe did not return a page for the switch.")
+    recheck_soon(conn, user_id)
+    return str(out["url"])
+
+
 # --- reading an event ---------------------------------------------------------
 def read_event(payload: dict) -> dict | None:
     """``{user_id, customer_id, subscription_id, status, period_end}``.
@@ -984,6 +1065,12 @@ def read_event(payload: dict) -> dict | None:
     # so the stored flag is cleared rather than kept.
     out["cancel_at_end"] = bool(obj.get("cancel_at_period_end")
                                 or obj.get("cancel_at"))
+    # WHEN IT BEGAN (Stripe's `start_date`), for the yearly offer's third
+    # bill (`yearly_offer`). Only a subscription carries it.
+    try:
+        out["started_at"] = float(obj["start_date"]) if obj.get("start_date") else None
+    except (TypeError, ValueError):
+        out["started_at"] = None
     return out
 
 
@@ -1082,8 +1169,9 @@ def init(conn) -> None:
     # newest event the row reflects (`apply_event`'s ordering).
     # And the trial reminder (engine/trialnote, 2026-10-26): the trial end
     # this row was last reminded about, so the day-before email goes once.
+    # And when the subscription began (2026-10-28, the yearly offer).
     for col, kind in (("cancel_at_end", "INTEGER"), ("checked_at", "REAL"),
-                      ("event_at", "REAL"), ("trial_noted", "REAL")):
+                      ("event_at", "REAL"), ("trial_noted", "REAL"), ("started_at", "REAL")):
         if col not in have:
             try:
                 conn.execute(f"ALTER TABLE subscriptions ADD COLUMN {col} {kind}")
@@ -1178,6 +1266,11 @@ def apply_event(conn, event: dict) -> bool:
          str(event.get("status") or "none"), event.get("period_end"),
          event.get("plan"), None if cancel is None else int(bool(cancel)),
          None if at is None else float(at), time.time()))
+    # When this subscription began, from the events that carry it (the
+    # subscription's own and every read of it); a new one carries its own.
+    if event.get("started_at"):
+        conn.execute("UPDATE subscriptions SET started_at=? WHERE user_id=?",
+                     (float(event["started_at"]), int(uid)))
     conn.commit()
     # A trial, a subscription, a conversion, a cancellation or a renewal,
     # counted (no account attached) when analytics is switched on; a no-op
@@ -1262,6 +1355,13 @@ def reconcile_session(conn, user_id: int, session_id: str) -> dict:
     # ownership check.
     pay = str(sess.get("payment_status") or "")
     if pay not in ("paid", "no_payment_required"):
+        return out
+    # A SUBSCRIPTION'S CHECKOUT ONLY. A paid one-time Checkout — a gift
+    # (engine/gifts) — is paid and this buyer's, and without this it would
+    # be written up here as an active plan with no end: $25 for a gift
+    # turned into the site for good.
+    if str(sess.get("mode") or "subscription") != "subscription" \
+            or str((sess.get("metadata") or {}).get("kind") or "") == "gift":
         return out
     # THE OWNERSHIP CHECK, and it is the whole security of this endpoint.
     ref = str(sess.get("client_reference_id") or "")
