@@ -221,7 +221,8 @@ def test_the_pages_carry_the_switch_the_words_and_the_suggestions():
     srv = Path(ROOT, "server.py").read_text(encoding="utf-8")
     assert '"friend", "mention-alerts",' in srv and "SF.set_mention_alerts(conn, uid, body.get(\"on\") is True)" in srv
     policy = " ".join(Path(ROOT, "web", "privacy.html").read_text(encoding="utf-8").split())
-    for want in ('unless you turned off "Push me mentions and replies" on Activity', "with an @ or answers yours",
+    for want in ('unless you turned off "Push me mentions, replies and friend requests" on Activity',
+                 "with an @ or answers yours",
                  "in a game chat, a watch party, a post or a comment"):
         assert want in policy, want
 

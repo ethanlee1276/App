@@ -180,6 +180,44 @@ def test_a_posts_and_a_comments_mention_push_unless_the_account_said_no():
     assert len(_pushes(conn, sam)) == n
 
 
+def test_a_friend_request_and_its_yes_reach_the_other_side():
+    """An Add friend showed only as a count on the Messages icon: the request
+    now lands in the other's Activity, opening Messages, and on their phone;
+    its yes on the asker's; a no is never said; the phone once a pair; a
+    block stops it."""
+    conn, ids = _db()
+    me, sam, casey = ids["ethan"], ids["sam_k"], ids["casey"]
+    for uid in (me, sam, casey):
+        _phone(conn, uid)
+    assert SOC.request_send(conn, me, sam)[1]["requested"]
+    got = [n for n in SF.notifications(conn, sam)["items"] if n["kind"] == "friend_request"]
+    assert [(n["handle"], n["link"]) for n in got] == [("ethan", "#messages")], got
+    assert _pushes(conn, sam) == [{"id": f"friend_request:{me}:{sam}", "title": "@ethan wants to be friends",
+                                   "body": "Say yes in Messages.", "url": "/#messages"}], _pushes(conn, sam)
+    rid = conn.execute("SELECT id FROM friend_requests WHERE to_id=?", (sam,)).fetchone()[0]
+    assert SOC.request_answer(conn, sam, rid, True)[1]["accepted"]
+    assert [n["kind"] for n in SF.notifications(conn, me)["items"]] == ["friend_accept"]
+    assert _pushes(conn, me)[-1]["title"] == "@sam_k said yes: you're friends"
+    # A no is never said; asked again, Activity again but the phone once a pair.
+    SOC.request_send(conn, casey, me)
+    rid = conn.execute("SELECT id FROM friend_requests WHERE to_id=?", (me,)).fetchone()[0]
+    SOC.request_answer(conn, me, rid, False)
+    assert not [n for n in SF.notifications(conn, casey)["items"] if n["kind"] == "friend_accept"]
+    pushed = len(_pushes(conn, me))
+    SOC.request_send(conn, casey, me)
+    assert len(_pushes(conn, me)) == pushed
+    # A block stops it.
+    SF.toggle_block(conn, ids["jordan"], "ethan")
+    SOC.request_send(conn, me, ids["jordan"])
+    assert not [n for n in SF.notifications(conn, ids["jordan"])["items"] if n["kind"] == "friend_request"]
+    # No username: named in Activity as Messages names it, "Someone" on a lock screen.
+    _, nameless = A.create_user(conn, "nameless@example.com", GOOD, confirmed=True)
+    SOC.request_send(conn, nameless["id"], sam)
+    row = [n for n in SF.notifications(conn, sam)["items"] if n["kind"] == "friend_request"][0]
+    assert row["handle"] == "" and row["snippet"] == SOC.display_name(conn, nameless["id"])
+    assert _pushes(conn, sam)[-1]["title"] == "Someone wants to be friends"
+
+
 # --- the pages ------------------------------------------------------------------
 def test_the_search_tab_is_second_and_its_page_is_wired():
     nav = JS[JS.index("const NAV = ["):JS.index("];", JS.index("const NAV = ["))]
@@ -205,6 +243,13 @@ def test_the_search_tab_is_second_and_its_page_is_wired():
     css = Path(ROOT, "web", "css", "social.css").read_text(encoding="utf-8")
     for want in (".fd-prow {", ".fd-prow-act {", "@container fd (max-width: 460px)", ".fd-atrow {"):
         assert want in css, want
+
+
+def test_activity_words_a_friend_request_and_opens_messages():
+    for want in ('friend_request: "wants to be friends"', "friend_accept: \"said yes: you're friends now\"",
+                 'const FRIEND_NOTES = ["friend_request", "friend_accept"];', ': fr ? "#messages" :',
+                 "<b>Push me mentions, replies and friend requests</b>"):
+        assert want in JS, want
 
 
 def test_the_at_names_reach_past_the_room():

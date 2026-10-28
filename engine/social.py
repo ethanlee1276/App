@@ -435,6 +435,10 @@ def request_send(conn, from_id: int, to_id: int) -> tuple[int, dict]:
     conn.execute("INSERT INTO friend_requests (from_id, to_id, created_at) "
                  "VALUES (?,?,?)", (me, them, time.time()))
     conn.commit()
+    # Their Activity and their phone (engine/socialfeed.friend_notice).
+    from . import socialfeed as _sf
+    _sf.friend_notice(conn, them, me, "friend_request")
+    conn.commit()
     return 200, {"requested": True, "already": False}
 
 
@@ -465,6 +469,10 @@ def request_answer(conn, me: int, req_id: int,
     # A stray mirror request between the same pair is settled too.
     conn.execute("DELETE FROM friend_requests WHERE from_id=? AND to_id=?",
                  (int(me), asker))
+    conn.commit()
+    # The asker hears the yes (a no is never said, above).
+    from . import socialfeed as _sf
+    _sf.friend_notice(conn, asker, int(me), "friend_accept")
     conn.commit()
     return 200, {"friend": display_name(conn, asker), "accepted": True}
 

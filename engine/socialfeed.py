@@ -647,7 +647,8 @@ def notifications(conn, user_id: int, strong: bool = False) -> dict:
 
 
 #: The push topic (engine/pushmine) for an @mention anywhere — a game
-#: chat, a watch party, a post or a comment — and a reply in a game chat.
+#: chat, a watch party, a post or a comment — a reply in a game chat, and
+#: a friend request or its yes (`friend_notice`).
 MENTION_TOPIC = "mentions"
 #: `feed_profiles.push_mentions`: 0 never chosen, which is ON (Ethan,
 #: 2026-10-28: "@ any profile in a chat should notify them they were
@@ -657,8 +658,9 @@ MENTION_OFF = 2
 
 
 def mention_alerts(conn, user_id) -> bool:
-    """Does this account want a push when somebody @mentions it or answers
-    its message in a game chat? Yes, unless it said no on Activity
+    """Does this account want a push when somebody @mentions it, answers
+    its message in a game chat or asks to be its friend? Yes, unless it
+    said no on Activity
     (engine/pushalerts.subscribe asks, so a phone signed in to it carries
     the topic). An account with no handle cannot be named, so no."""
     try:
@@ -683,6 +685,38 @@ def mention_push(conn, uid, msg_id: str, title: str, body: str, url: str, now: f
         return PM.tell(conn, uid, msg_id, MENTION_TOPIC, title, body, url, now=now)
     except sqlite3.Error:
         return False
+
+
+#: The friends layer's two notices (engine/social): what the Activity row
+#: says after the name, and the push's line under it.
+FRIEND_WORDS = {"friend_request": ("wants to be friends", "Say yes in Messages."),
+                "friend_accept": ("said yes: you're friends", "Say hi in Messages.")}
+
+
+def friend_notice(conn, to_id, from_id, kind: str) -> None:
+    """A friend request, or its yes, in the other's Activity (opening
+    Messages, where a request is answered) and on their phone unless they
+    said no to these pushes (`mention_push`), once a pair. Ethan,
+    2026-10-28, asking for a way "to add people": a request the other side
+    never hears of was a badge on an icon. A sender with no username is
+    named in Activity as the Messages inbox names it (engine/social.
+    display_name) and on a lock screen as "Someone", since that name can
+    be the start of an email address; a block either way stops it."""
+    if kind not in FRIEND_WORDS:
+        return
+    try:
+        ensure_tables(conn)
+        if int(from_id) in blocked_ids(conn, to_id):
+            return
+        from . import social as SOC
+        who = (profile_of(conn, from_id) or {}).get("handle")
+        name = SOC.display_name(conn, from_id)
+        _notify(conn, to_id, from_id, kind, link="#messages", note="" if who else name)
+        did, then = FRIEND_WORDS[kind]
+        mention_push(conn, to_id, f"{kind}:{int(from_id)}:{int(to_id)}",
+                     f"{'@' + who if who else 'Someone'} {did}", then, "/#messages")
+    except sqlite3.Error:
+        return
 
 
 def set_mention_alerts(conn, user_id, on: bool) -> tuple[int, dict]:

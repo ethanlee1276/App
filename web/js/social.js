@@ -980,31 +980,39 @@
     reply: "replied to your comment", mention: "mentioned you", follow: "started following you",
     comment_like: "liked your comment", won: "Your parlay won", lost: "Your parlay lost",
     chat_mention: "mentioned you in a game chat", chat_reply: "replied to you in a game chat",
+    friend_request: "wants to be friends", friend_accept: "said yes: you're friends now",
   };
+  // A friend request and its yes (engine/socialfeed friend_notice) open
+  // Messages, where requests are answered; a sender with no username
+  // comes named by the name it chose, in the row's words.
+  const FRIEND_NOTES = ["friend_request", "friend_accept"];
 
-  /* A push when a game chat names or answers you (engine/gamechat _ping):
-     the account's switch, carried by every phone signed in to it. */
+  /* A push when somebody names you, answers you in a game chat or asks to
+     be your friend (engine/socialfeed mention_push): the account's switch,
+     carried by every phone signed in to it, on until turned off. */
   function mentionAlertsHTML(a) {
     if (!a) return "";
-    const sw = typeof setSwitch === "function" ? setSwitch(!!a.on, `data-fd="mention-alerts" aria-label="Push me mentions and replies"`)
+    const sw = typeof setSwitch === "function" ? setSwitch(!!a.on, `data-fd="mention-alerts" aria-label="Push me mentions, replies and friend requests"`)
       : `<button type="button" data-fd="mention-alerts" aria-pressed="${!!a.on}">${a.on ? "On" : "Off"}</button>`;
-    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Push me mentions and replies</b>
-      <span>When someone @mentions you — in a game chat, a watch party, a post or a comment — or answers your message in a game chat, on the phones you are signed in on. Not while you have that game open.</span>
+    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Push me mentions, replies and friend requests</b>
+      <span>When someone @mentions you — in a game chat, a watch party, a post or a comment — answers your message in a game chat, or asks to be your friend, on the phones you are signed in on. Not while you have that game open.</span>
       ${a.on && !Number(a.phones) ? `<span class="fd-warn">Turn on alerts for this phone in Settings, under Alerts, and these come with them.</span>` : ""}</span>${sw}</section>`;
   }
 
   function activityHTML(items, alerts) {
     const rows = (items || []).map((n) => {
-      const actor = n.handle ? `<b>${escapeHtml(n.name || n.handle)}</b> ` : "";
+      const fr = FRIEND_NOTES.includes(n.kind);
+      const actor = n.handle ? `<b>${escapeHtml(n.name || n.handle)}</b> ` : fr && n.snippet ? `<b>${escapeHtml(n.snippet)}</b> ` : "";
       // A game chat's @mention opens its game (engine/gamechat _mention).
       const href = /^#pbp\/[a-z]+\/\d+(\/party\/[A-Za-z0-9_-]{8,40})?$/.test(n.link || "") ? n.link
-        : n.post_id ? `#feed/post/${n.post_id}` : n.handle ? profHref(n.handle) : "#feed";
-      const mark = n.handle ? avatar(n, "sm") : `<span class="fd-av fd-av-sm fd-note-ic ${escapeAttr(n.kind)}">${icon(n.kind === "won" ? "check" : "cross", 13)}</span>`;
+        : fr ? "#messages" : n.post_id ? `#feed/post/${n.post_id}` : n.handle ? profHref(n.handle) : "#feed";
+      const mark = n.handle ? avatar(n, "sm") : fr ? avatar({ name: n.snippet || "?", color: 0 }, "sm")
+        : `<span class="fd-av fd-av-sm fd-note-ic ${escapeAttr(n.kind)}">${icon(n.kind === "won" ? "check" : "cross", 13)}</span>`;
       return `<a class="fd-note${n.seen ? "" : " unseen"}" href="${href}">${mark}
-        <span class="fd-note-t">${actor}${NOTE_WORDS[n.kind] || escapeHtml(n.kind)}${n.snippet ? `: <i>${escapeHtml(n.snippet)}</i>` : ""}
+        <span class="fd-note-t">${actor}${NOTE_WORDS[n.kind] || escapeHtml(n.kind)}${n.snippet && !fr ? `: <i>${escapeHtml(n.snippet)}</i>` : ""}
         <span class="fd-ago">${ago(n.at)}</span></span></a>`;
     }).join("");
-    return `${headHTML("Activity", "Likes, tails, comments, follows, mentions and your graded parlays.")}
+    return `${headHTML("Activity", "Likes, tails, comments, follows, mentions, friend requests and your graded parlays.")}
       <section class="fd-card fd-notes">${rows || `<p class="fd-fine">Nothing yet. Likes, comments, tails, new followers and your graded parlays show up here.</p>`}</section>
       ${mentionAlertsHTML(alerts)}`;
   }

@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GX "A friend request reaches the other person" 30 <<'SH'
+curl -s https://qellysbook.com/js/social.js | grep -c 'const FRIEND_NOTES'
+SH
 run GW "Find people, and an @ that reaches anybody" 30 <<'SH'
 curl -s https://qellysbook.com/js/social.js | grep -c 'function findPageHTML()'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatAtFar(q)'
