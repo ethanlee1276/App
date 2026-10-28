@@ -97,7 +97,7 @@ def test_the_right_values_are_accepted():
                 ("STRIPE_PRICE_MONTHLY", "price_abcdef"),
                 ("QB_SITE_URL", "https://qellysbook.com"),
                 ("QB_DISCORD_INVITE", "https://discord.gg/abc"),
-                ("QB_CODES", "USFARATHANE:12:100"),
+                ("QB_CODES", "EXAMPLECODE:12:100"),
                 ("QB_PAYWALL", "1"),
         ):
             got = run(key, good, env_file=e.path)

@@ -156,7 +156,7 @@ fi
 
 # --- 4b. the discount codes -------------------------------------------
 # Ethan, 2026-08-22, on being told to run --stripe-setup by hand: "why
-# cant you do it for me since you did the USFARATHANE code for me."
+# cant you do it for me since you did the [twelve-month] code for me."
 #
 # Correct, and the difference was never about permission. A redemption
 # code is an environment variable on this box, so golive.sh could just

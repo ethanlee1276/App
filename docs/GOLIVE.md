@@ -64,10 +64,10 @@ That is the only thing you have to go and find. The rest:
 | `STRIPE_PRICE_MONTHLY` / `SIXMONTH` / `YEARLY` | created in Stripe by the script, written straight in |
 | `STRIPE_WEBHOOK_SECRET` | the script creates the endpoint through Stripe's API and takes the secret from the reply — you never see it |
 | `QB_SITE_URL` | set to `https://qellysbook.com` |
-| `QB_DISCORD_INVITE` | offered as your invite; press Enter |
+| `QB_DISCORD_INVITE` | pasted at its prompt (never in this repository, which is public) |
 | `QB_INSTAGRAM` | optional — your profile URL, or press Enter to skip |
-| `QB_CODES` | set to `USFARATHANE:12:100` |
-| `QB_COMP_EMAILS` | offered as your address; press Enter |
+| `QB_CODES` | not set by the script: a code goes in at its own prompt (step 6) |
+| `QB_COMP_EMAILS` | typed at its prompt |
 
 Nothing that can be looked up is typed. The three price ids and the
 signing secret are the four strings most often pasted into the wrong
@@ -293,14 +293,17 @@ what it says.
 🖥️ **Droplet:**
 
 ```bash
-sudo ./deploy/setenv.sh QB_DISCORD_INVITE https://discord.gg/vCAZjntyX
-sudo ./deploy/setenv.sh QB_CODES USFARATHANE:12:100
+sudo ./deploy/setenv.sh QB_DISCORD_INVITE
+sudo ./deploy/setenv.sh QB_CODES
 sudo systemctl restart qellys
 ```
 
-`QB_CODES` is `CODE:months:max_uses`. **The last number is uses, not a
-percent** — that is 12 months of full access, redeemable 100 times. A
-code opens the whole site; there is no partial discount.
+Each asks for its value; paste it there, never in a file here (this
+repository is public). The invite starts `https://discord.gg/` and is set
+to never expire. `QB_CODES` is `CODE:months:max_uses`. **The last number
+is uses, not a percent** — `EXAMPLECODE:12:100` is 12 months of full
+access, redeemable 100 times. A code opens the whole site; there is no
+partial discount.
 
 ---
 
@@ -353,7 +356,7 @@ It should now say **LIVE**.
 🖥️ **Droplet:**
 
 ```bash
-sudo ./deploy/setenv.sh QB_COMP_EMAILS ethanlee1276@gmail.com
+sudo ./deploy/setenv.sh QB_COMP_EMAILS you@example.com
 sudo ./deploy/setenv.sh QB_PAYWALL 1
 sudo systemctl restart qellys
 ```

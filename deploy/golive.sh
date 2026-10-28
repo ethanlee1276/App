@@ -88,7 +88,9 @@ ask() {   # ask KEY "what it is" — prompts, validates via setenv.sh
 # correct value is already known — the Discord invite and the owner's own
 # address — there is nothing to look up and nothing to get wrong, so
 # asking somebody to type them is asking them to make a typo. Still a
-# question rather than an assumption: both are his to change.
+# question rather than an assumption: both are his to change. The known
+# values come from the shell (QB_DEFAULT_DISCORD, QB_DEFAULT_EMAIL), never
+# from this file, which is public (2026-10-28); with none, Enter skips.
 ask_or_default() {
   local key="$1" what="$2" default="$3" reply=""
   if have "$key"; then
@@ -96,9 +98,17 @@ ask_or_default() {
     return 0
   fi
   printf '\n  %s%s%s — %s\n' "$B" "$key" "$N" "$what"
-  printf '  Press Enter for %s%s%s, or type a different one: ' "$B" "$default" "$N"
+  if [[ -n "$default" ]]; then
+    printf '  Press Enter for %s%s%s, or type a different one: ' "$B" "$default" "$N"
+  else
+    printf '  Paste it, or press Enter to skip: '
+  fi
   read -r reply || reply=""
   [[ -z "$reply" ]] && reply="$default"
+  if [[ -z "$reply" ]]; then
+    ok "skipped — $key is not set"
+    return 0
+  fi
   if as_root "$SETENV" "$key" "$reply" >/dev/null; then
     ok "$key = $reply"
   else
@@ -329,7 +339,7 @@ step "6 of 8 — the Discord invite and your promo code"
 here
 ask_or_default QB_DISCORD_INVITE \
   "the invite for the members' room" \
-  "${QB_DEFAULT_DISCORD:-https://discord.gg/vCAZjntyX}"
+  "${QB_DEFAULT_DISCORD:-}"      # no default: the invite is members-only and this file is public
 # Optional, and it is fine to skip: the Discord page just drops the
 # sentence that cites it. Not a secret — it is quoted TO people who have
 # not paid, which is why it is not gated the way the invite is.
@@ -347,10 +357,11 @@ fi
 if have QB_CODES; then
   ok "QB_CODES is already set"
 else
-  as_root "$SETENV" QB_CODES "USFARATHANE:12:100" >/dev/null
-  ok "QB_CODES = USFARATHANE:12:100  (12 months, up to 100 uses)"
-  echo "      The last number is USES, not a percent. A code opens the"
-  echo "      whole site — there is no partial discount."
+  # No code is written from here (2026-10-28): this file is public, and a
+  # code in it is a free year for whoever reads it.
+  ok "no redemption code set (optional): sudo ./deploy/setenv.sh QB_CODES"
+  echo "      It asks for CODE:months:uses. The last number is USES, not a"
+  echo "      percent. A code opens the whole site — there is no partial discount."
 fi
 restart
 
@@ -399,7 +410,7 @@ else
     echo "  Your own address goes in FIRST. With an empty comp list the"
     echo "  first thing the paywall does is lock you out of your own board."
     ask_or_default QB_COMP_EMAILS "your own email address" \
-      "${QB_DEFAULT_EMAIL:-ethanlee1276@gmail.com}"
+      "${QB_DEFAULT_EMAIL:-}"
   fi
   printf '\n%sTurn the paywall ON now? Everything paid becomes members-only. [y/N]%s ' "$B" "$N"
   read -r yn

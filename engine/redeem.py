@@ -1,7 +1,9 @@
 """Redemption codes — access granted without a payment.
 
 Ethan, 2026-08-20: *"i also want a spot for discount codes. i want code
-'USFARATHANE' to give you 100% off 1 year."*
+[the code] to give you 100% off 1 year."* (Its name lives on the box and
+nowhere else since 2026-10-28: this repository is public, and a code in it
+was a free year for anybody who read it.)
 
 WHY THIS IS NOT A PADDLE COUPON, which is the obvious first answer.
 
@@ -30,7 +32,7 @@ unlimited free-subscription generator, and that endpoint would have to be
 written, guarded and kept guarded forever. An environment variable cannot
 be written by an HTTP request at all.
 
-    QB_CODES="USFARATHANE:12:100, FRIENDS:1:25"
+    QB_CODES="EXAMPLECODE:12:100, ONEMONTH:1:25"
                     │        │   │
                     │        │   └── how many accounts may ever redeem it
                     │        └────── months of access granted

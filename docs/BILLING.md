@@ -183,11 +183,11 @@ the *next* build writes and touches nothing already on disk.
 card, no subscription, nothing to cancel.
 
 ```
-QB_CODES=USFARATHANE:12:100
+QB_CODES=EXAMPLECODE:12:100
 ```
 
 The format is `CODE:months:max_uses`. **The last number is not a
-percentage** — that is `USFARATHANE`, giving 12 months of full access,
+percentage** — that is `EXAMPLECODE`, giving 12 months of full access,
 redeemable 100 times in total. There is no partial-discount concept: a
 code opens the whole site, so "100% off a year" and "12 months of access"
 are the same grant. The cap exists because a code posted somewhere public

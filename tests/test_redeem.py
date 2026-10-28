@@ -1,7 +1,9 @@
 """Discount codes — access granted without a payment.
 
 Ethan, 2026-08-20: *"i also want a spot for discount codes. i want code
-'USFARATHANE' to give you 100% off 1 year."*
+[the code] to give you 100% off 1 year."* (Its name lives on the box and
+nowhere else since 2026-10-28: this repository is public, and a code in it
+was a free year for anybody who read it.)
 
 A hundred-percent-off code means THERE IS NO PAYMENT, so it does not go
 through the payment processor. Routing a zero-dollar transaction through
@@ -33,7 +35,7 @@ from engine import redeem as RD
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ENV = {"QB_CODES": "USFARATHANE:12:100, FRIENDS:1:2, SOLO:3:1"}
+ENV = {"QB_CODES": "EXAMPLECODE:12:100, PAIR:1:2, SOLO:3:1"}
 
 
 def _read(*parts):
@@ -65,9 +67,9 @@ def _db(users=6):
 
 
 # --- the code Ethan asked for -------------------------------------------------
-def test_usfarathane_grants_a_full_year():
+def test_a_twelve_month_code_grants_a_full_year():
     conn = _db()
-    got = RD.redeem(conn, 1, "USFARATHANE", env=ENV)
+    got = RD.redeem(conn, 1, "EXAMPLECODE", env=ENV)
     assert got["months"] == 12
     days = (got["granted_to"] - time.time()) / 86400
     assert 360 <= days <= 370, f"a 12-month grant landed {days:.0f} days out"
@@ -76,7 +78,7 @@ def test_usfarathane_grants_a_full_year():
 
 def test_the_code_is_typed_by_a_human_so_case_and_space_do_not_matter():
     conn = _db()
-    RD.redeem(conn, 1, "  usfarathane  ", env=ENV)
+    RD.redeem(conn, 1, "  examplecode  ", env=ENV)
     assert RD.active(conn, 1)
 
 
@@ -113,9 +115,9 @@ def test_a_code_cannot_be_redeemed_twice_by_one_account():
     repeatedly. Enforced by a PRIMARY KEY rather than a check, because a
     check races with itself under two simultaneous requests."""
     conn = _db()
-    RD.redeem(conn, 1, "USFARATHANE", env=ENV)
+    RD.redeem(conn, 1, "EXAMPLECODE", env=ENV)
     try:
-        RD.redeem(conn, 1, "USFARATHANE", env=ENV)
+        RD.redeem(conn, 1, "EXAMPLECODE", env=ENV)
         assert False, "redeemed the same code twice"
     except RD.RedeemError as exc:
         assert "already" in str(exc).lower()
@@ -126,10 +128,10 @@ def test_a_code_cannot_be_redeemed_twice_by_one_account():
 
 def test_a_shared_code_stops_at_its_cap():
     conn = _db()
-    RD.redeem(conn, 1, "FRIENDS", env=ENV)
-    RD.redeem(conn, 2, "FRIENDS", env=ENV)          # cap is 2
+    RD.redeem(conn, 1, "PAIR", env=ENV)
+    RD.redeem(conn, 2, "PAIR", env=ENV)          # cap is 2
     try:
-        RD.redeem(conn, 3, "FRIENDS", env=ENV)
+        RD.redeem(conn, 3, "PAIR", env=ENV)
         assert False, "the third redemption walked past a cap of two"
     except RD.RedeemError:
         pass
@@ -182,8 +184,8 @@ def test_two_codes_are_the_furthest_date_not_the_sum():
     until June. Summing them would let a pile of one-month codes stack
     into years."""
     conn = _db()
-    a = RD.redeem(conn, 1, "FRIENDS", env=ENV)      # 1 month
-    b = RD.redeem(conn, 1, "USFARATHANE", env=ENV)  # 12 months
+    a = RD.redeem(conn, 1, "PAIR", env=ENV)      # 1 month
+    b = RD.redeem(conn, 1, "EXAMPLECODE", env=ENV)  # 12 months
     assert RD.granted_until(conn, 1) == max(a["granted_to"], b["granted_to"])
 
 
