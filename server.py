@@ -3816,7 +3816,7 @@ class Handler(BaseHTTPRequestHandler):
         from engine import socialfeed as SF
         if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
                         "delete", "report", "profile", "follow", "block", "seen", "friend", "mention-alerts",
-                        "hide", "vote", "verify", "pin", "pickem"):
+                        "hide", "vote", "verify", "pin", "pickem", "pickem-remind"):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
         txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
         A = _acct()
@@ -3892,6 +3892,10 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = 200, {"ok": True}
             elif path == "mention-alerts":
                 code, out = SF.set_mention_alerts(conn, uid, body.get("on") is True)
+            elif path == "pickem-remind":
+                # The Pick'em page's switch for the push before picks lock.
+                from engine import pickem as PK
+                code, out = PK.set_remind(conn, uid, body.get("on") is True)
             else:
                 code, out = SF.profile_set(conn, uid, txt("handle"), txt("bio"), name=txt("name"),
                                            color=body.get("color"), team=txt("team"))

@@ -97,6 +97,8 @@
   gap: 10px; padding: 10px 12px; border: 0; border-radius: var(--radius-sm); cursor: pointer; text-align: left;
   background: color-mix(in oklab, var(--text) 6%, transparent); color: var(--text-dim); font: inherit; font-size: var(--fs-xs); }
 .kr-ask b { color: var(--text); font-weight: 800; }
+a.kr-ask { text-decoration: none; }
+.kr-pk-when { white-space: nowrap; }
 .kr-ask-go { flex: none; color: var(--brand-2); font-weight: 800; }
 .kr-live .kr-daily { padding: 2px 12px 14px; background: none; }
 /* With games on, the games lead: the question waits on the Karma tab and

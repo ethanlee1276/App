@@ -24,11 +24,22 @@ final): more than one candidate row is ambiguity, refused rather than
 guessed; a tie is a push; a game with no final ten days on is void.
 Nothing here reads or writes a model number, and nothing on the board
 moves for it.
+
+IT COMES TO YOU (Ethan, 2026-10-28: "keep building and adding more
+features"). A weekly game nobody is reminded of is a tab people forget, so:
+a winner pays karma (+5, and +25 for a perfect week of five or more), the
+standings have a friends table beside everyone's, the Live tab's karma card
+carries one line while the NFL week's picks are open, and a phone hears
+about three hours before a week's picks lock (football only: the week's
+first kickoff, and a day's first kickoff of four games or more, so one a
+day at most), for an account that has played in the last four weeks,
+unless it says no.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import sqlite3
 import time
 from pathlib import Path
 
@@ -45,6 +56,22 @@ GRADE_RETRY_S = 15 * 60
 VOID_AFTER_S = 10 * 86400
 SEASON_DAYS = 200
 TOP = 50
+#: A perfect week pays once it is over, with at least this many winners.
+PERFECT_MIN = 5
+#: The push before picks lock (engine/pushmine sends it, engine/pushalerts
+#: carries the topic): on for an account that played in the last
+#: PLAYER_DAYS, unless it said no (``pickem_prefs.remind`` REMIND_OFF; 0 is
+#: never chosen, 1 on).
+ALERT_TOPIC = "pickem"
+REMIND_OFF = 2
+PLAYER_DAYS = 28
+REMIND_SPORTS = ("nfl", "cfb")
+#: Sent between three and two hours before a kickoff worth it: the week's
+#: first, or a day's first with BIG_SLOT games or more. One a day at most:
+#: a college Saturday has four or five kickoffs that big.
+REMIND_LEAD_S = (2 * 3600, 3 * 3600)
+BIG_SLOT = 4
+SPORT_WORD = {"nfl": "NFL", "cfb": "College football"}
 
 
 def ensure_tables(conn) -> None:
@@ -66,6 +93,10 @@ def ensure_tables(conn) -> None:
         PRIMARY KEY (user_id, sport, gid)
     )""")
     conn.execute("CREATE INDEX IF NOT EXISTS pickem_week ON pickem_picks (sport, week)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS pickem_prefs (
+        user_id INTEGER PRIMARY KEY,
+        remind  INTEGER NOT NULL DEFAULT 0
+    )""")
 
 
 def _ts(iso) -> float | None:
@@ -209,6 +240,7 @@ def grade(conn, opener, now: float | None = None, limit: int = 300) -> int:
     when a pick is due."""
     ensure_tables(conn)
     now = time.time() if now is None else float(now)
+    _pay_weeks(conn, now)
     due = conn.execute("SELECT rowid, * FROM pickem_picks WHERE result IS NULL AND kickoff<? AND last_try<? "
                        "ORDER BY kickoff LIMIT ?", (now - GRADE_AFTER_S, now - GRADE_RETRY_S, limit)).fetchall()
     if not due:
@@ -238,6 +270,8 @@ def grade(conn, opener, now: float | None = None, limit: int = 300) -> int:
             conn.execute("UPDATE pickem_picks SET result=?, graded_at=?, last_try=? WHERE rowid=?",
                          (result, now if result else None, now, r["rowid"]))
             n += result is not None
+            if result == "won":
+                _pay(conn, r["user_id"], "pickem_won", f"{r['sport']}:{r['gid']}", now)
         conn.commit()
     finally:
         try:
@@ -247,11 +281,43 @@ def grade(conn, opener, now: float | None = None, limit: int = 300) -> int:
     return n
 
 
-def standings(conn, sport: str, week: str | None, viewer=None, now: float | None = None) -> dict:
+def _pay(conn, user_id, kind: str, ref: str, now: float) -> int:
+    """Karma for the pick'em (engine/karma), once a ref. A karma table that
+    cannot be written never stops a grade."""
+    from . import karma as K
+    try:
+        try:
+            return K.award(conn, int(user_id), kind, ref, now=now, commit=False)
+        except sqlite3.OperationalError:                  # karma's tables not made yet on this database
+            K.ensure_tables(conn)
+            return K.award(conn, int(user_id), kind, ref, now=now, commit=False)
+    except Exception:                                     # noqa: BLE001
+        return 0
+
+
+def _pay_weeks(conn, now: float) -> int:
+    """A perfect week pays once it is over: at least PERFECT_MIN winners,
+    no loss and nothing still open in the two weeks before this one (a
+    push or a void is not a loss). Over first, because a pick made later in
+    the week could still lose."""
+    this = week_of(now)
+    weeks = (shift(this, -1), shift(this, -2))
+    rows = conn.execute("SELECT user_id, sport, week FROM pickem_picks WHERE week IN (?,?) "
+                        "GROUP BY user_id, sport, week HAVING SUM(result='lost')=0 AND SUM(result IS NULL)=0 "
+                        "AND SUM(result='won')>=?", (*weeks, PERFECT_MIN)).fetchall()
+    paid = sum(_pay(conn, r[0], "pickem_week", f"{r[1]}:{r[2]}", now) for r in rows)
+    if rows:
+        conn.commit()
+    return paid
+
+
+def standings(conn, sport: str, week: str | None, viewer=None, now: float | None = None,
+              only: set | None = None) -> dict:
     """The table: a person's wins, losses, pushes and open picks for one
     week, or the season (``week`` None: every week of the last
     SEASON_DAYS). Ranked by wins, then fewest losses. Only people with a
-    Social handle are named; a block hides both ways, as on the feed."""
+    Social handle are named; a block hides both ways, as on the feed.
+    ``only``: just these accounts (the friends table)."""
     from . import socialfeed as SF
     ensure_tables(conn)
     SF.ensure_tables(conn)
@@ -266,7 +332,7 @@ def standings(conn, sport: str, week: str | None, viewer=None, now: float | None
     hide = SF.blocked_ids(conn, viewer)
     table = []
     for r in rows:
-        if int(r["user_id"]) in hide:
+        if int(r["user_id"]) in hide or (only is not None and int(r["user_id"]) not in only):
             continue
         table.append({**SF._person(r), "w": int(r["w"] or 0), "l": int(r["l"] or 0), "p": int(r["pu"] or 0),
                       "open": int(r["open"] or 0), "me": viewer is not None and int(r["user_id"]) == int(viewer)})
@@ -317,10 +383,154 @@ def view(conn, sport: str, viewer=None, week: str | None = None, now: float | No
                     "locked": _started(g, now), "pick": m.get("pick"), "result": m.get("result"),
                     "n_home": s.get(g["home"], 0), "n_away": s.get(g["away"], 0)})
     prof = SF.profile_of(conn, viewer) if viewer is not None else None
+    # The friends table: the viewer and their friends, both sides of the
+    # friendship (engine/karma.friend_ids, the karma friends ladder's).
+    pals = None
+    if viewer is not None:
+        from . import karma as K
+        pals = K.friend_ids(conn, viewer) | {int(viewer)}
     return {"sport": sport, "week": week, "label": week_label(week), "current": week == current,
             "prev": shift(week, -1), "next": shift(week, 1) if week < current else None,
             "games": out, "week_table": standings(conn, sport, week, viewer, now),
             "season_table": standings(conn, sport, None, viewer, now),
+            "week_friends": standings(conn, sport, week, viewer, now, only=pals) if pals else None,
+            "season_friends": standings(conn, sport, None, viewer, now, only=pals) if pals else None,
+            "friends": len(pals) - 1 if pals else 0,
+            "remind": reminds(conn, viewer, switch_only=True) if viewer is not None else False,
             "signed_in": viewer is not None, "has_handle": bool(prof and prof.get("handle")),
             "season_days": SEASON_DAYS}
 
+
+# ─── the push before picks lock ─────────────────────────────────────────────
+
+def _remind_pref(conn, user_id) -> int:
+    row = conn.execute("SELECT remind FROM pickem_prefs WHERE user_id=?", (int(user_id),)).fetchone()
+    return int(row[0]) if row else 0
+
+
+def played(conn, user_id, now: float | None = None) -> bool:
+    """A pick'em pick in the last PLAYER_DAYS: a player, whom the push is for."""
+    t = time.time() if now is None else float(now)
+    return conn.execute("SELECT 1 FROM pickem_picks WHERE user_id=? AND created_at>? LIMIT 1",
+                        (int(user_id), t - PLAYER_DAYS * 86400)).fetchone() is not None
+
+
+def reminds(conn, user_id, switch_only: bool = False) -> bool:
+    """Does this account want the push before picks lock? Yes for a player
+    who has not said no (engine/pushalerts.subscribe asks, so a phone
+    signed in to it carries the topic). ``switch_only``: the switch alone,
+    as the Pick'em page shows it."""
+    try:
+        ensure_tables(conn)
+        if _remind_pref(conn, user_id) == REMIND_OFF:
+            return False
+        return switch_only or played(conn, user_id)
+    except Exception:                                     # noqa: BLE001
+        return False
+
+
+def set_remind(conn, user_id, on: bool) -> tuple[int, dict]:
+    """The Pick'em page's switch: kept as chosen, and put on (or taken off)
+    every phone signed in to the account."""
+    from . import pushalerts as PA
+    ensure_tables(conn)
+    conn.execute("INSERT INTO pickem_prefs (user_id, remind) VALUES (?, ?) "
+                 "ON CONFLICT(user_id) DO UPDATE SET remind=excluded.remind",
+                 (int(user_id), 1 if on else REMIND_OFF))
+    PA.relink(conn, user_id, ALERT_TOPIC, bool(on))
+    conn.commit()
+    return 200, {"ok": True, "remind": bool(on)}
+
+
+def _slots(games: list[dict]) -> list[tuple[float, list[dict]]]:
+    """The week's kickoffs, each with its games, in order."""
+    by: dict = {}
+    for g in games:
+        by.setdefault(round(float(g["kickoff"]) / 60) * 60, []).append(g)
+    return sorted(by.items())
+
+
+def next_up(conn, viewer, sport: str = "nfl", now: float | None = None,
+            data_dir: Path | None = None) -> dict | None:
+    """The Live tab's line (js/karma.js): this week's picks still to make,
+    while any game of the week is still ahead and unpicked. None otherwise.
+    ``lock`` is the next unpicked kickoff in UTC: the phone words it in its
+    own time zone."""
+    if viewer is None:
+        return None
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    week = week_of(t)
+    games = [g for g in board_games(sport, data_dir) if week_of(g["kickoff"]) == week]
+    if not games:
+        return None
+    mine = {r[0] for r in conn.execute("SELECT gid FROM pickem_picks WHERE user_id=? AND sport=? AND week=?",
+                                       (int(viewer), sport, week))}
+    open_ = [g for g in games if not _started(g, t) and g["gid"] not in mine]
+    if not open_:
+        return None
+    lock = min(float(g["kickoff"]) for g in open_)
+    return {"sport": sport, "picked": sum(g["gid"] in mine for g in games), "games": len(games),
+            "lock": _dt.datetime.fromtimestamp(lock, _dt.timezone.utc).isoformat().replace("+00:00", "Z")}
+
+
+def alerts_pass(conn, now: float | None = None, data_dir: Path | None = None) -> int:
+    """Queue the push before picks lock (engine/pushmine sends it): between
+    three and two hours before the week's first kickoff, and before a day's
+    first kickoff of BIG_SLOT games or more, to each player (``reminds``)
+    who has a game there still unpicked. One a day at most (the day's first
+    such kickoff claims it, picked or not), once a kickoff (its id), never
+    in the quiet hours. Grades what is due first, so a perfect week and a
+    winner's karma land without anybody opening the page."""
+    from . import pushalerts as PA
+    from . import pushmine as PM
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    try:
+        from .db import DEFAULT_DB
+        grade(conn, lambda: sqlite3.connect(f"file:{DEFAULT_DB}?mode=ro", uri=True), now=t)
+    except Exception:                                     # noqa: BLE001
+        pass
+    if PA.quiet_now(_dt.datetime.fromtimestamp(t, ET)):
+        return 0
+    week = week_of(t)
+    lo, hi = REMIND_LEAD_S
+    told = 0
+    for sport in REMIND_SPORTS:
+        games = [g for g in board_games(sport, data_dir) if week_of(g["kickoff"]) == week]
+        slots = _slots(games)
+        if not slots:
+            continue
+        first, days = slots[0][0], set()
+        for at, gs in slots:
+            if not (at == first or len(gs) >= BIG_SLOT):
+                continue
+            day = _dt.datetime.fromtimestamp(at, ET).date()
+            if day in days:                                # the day's first big kickoff had it
+                continue
+            days.add(day)
+            if not lo <= at - t < hi:
+                continue
+            gids = {g["gid"] for g in gs}
+            players = conn.execute("SELECT DISTINCT user_id FROM pickem_picks WHERE sport=? AND created_at>?",
+                                   (sport, t - PLAYER_DAYS * 86400)).fetchall()
+            for (uid,) in players:
+                uid = int(uid)
+                if _remind_pref(conn, uid) == REMIND_OFF:
+                    continue
+                mine = {r[0] for r in conn.execute("SELECT gid FROM pickem_picks WHERE user_id=? AND sport=? "
+                                                   "AND week=?", (uid, sport, week))}
+                left = len(gids - mine)
+                if not left:
+                    continue
+                if not PM.asked(conn, uid, ALERT_TOPIC) and PA.phones(conn, uid):
+                    PA.relink(conn, uid, ALERT_TOPIC, True)
+                todo = sum(g["gid"] not in mine and not _started(g, t) for g in games)
+                h = round((at - t) / 3600)
+                what = f"{gs[0]['away']} at {gs[0]['home']} kicks" if len(gs) == 1 else f"{len(gs)} games kick"
+                told += PM.tell(conn, uid, f"pickem:{sport}:{int(at)}", ALERT_TOPIC,
+                                f"{SPORT_WORD[sport]} Pick'em locks in {h} hour{'s' if h != 1 else ''}",
+                                (f"{what} off then, and you have {todo} pick{'s' if todo != 1 else ''} left "
+                                 f"this week."),
+                                f"/#feed/pickem/{sport}", ttl="pickem", now=t)
+    return told

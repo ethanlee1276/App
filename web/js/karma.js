@@ -164,6 +164,25 @@ function krAskHTML(d) {
       <span>🧠 <b>Today's question</b> · +10 karma</span><span class="kr-ask-go">Answer ›</span></button>`;
 }
 
+/* The pick'em's line (engine/pickem.next_up, Ethan 2026-10-28: "keep
+   building"): while the NFL week has games still to pick, one line in the
+   card, after today's question, never beside it. */
+// The next lock in the phone's own time: "today 8:15 PM", else "Sun 1:00 PM"
+// (a pick'em week is Tuesday to Monday, so a weekday is never ambiguous).
+function krLockWhen(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const day = d.toDateString() === new Date().toDateString() ? "today" : d.toLocaleDateString([], { weekday: "short" });
+  return `${day} ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function krPickemHTML(p) {
+  if (!p) return "";
+  const when = krLockWhen(p.lock);
+  return `<a class="kr-ask kr-pk" href="#feed/pickem/${krEsc(p.sport)}">
+      <span>🏈 <b>Pick'em</b> · ${Number(p.picked)} of ${Number(p.games)} picked${when ? ` · <span class="kr-pk-when">locks ${krEsc(when)}</span>` : ""}</span><span class="kr-ask-go">Pick ›</span></a>`;
+}
+
 function krStripHTML(v, d) {
   const st = v.streak || {};
   const camp = v.camp;
@@ -179,7 +198,7 @@ function krStripHTML(v, d) {
         <span class="kr-strip-sub">${krNum(v.points)} karma · ${krNum(v.to - v.points)} to level ${Number(v.level) + 1}${
           st.now ? ` · <span class="kr-fire">🔥 ${Number(st.now)}</span>` : ""}</span>${
         next ? `<span class="kr-strip-sub kr-next">Getting started: ${krEsc(next.text)} · +${Number(camp.pts)}</span>` : ""}</span>
-      ${side}<span class="kr-go" aria-hidden="true">›</span></button>${krAskHTML(d)}</div>${krFriendsHTML(v)}`;
+      ${side}<span class="kr-go" aria-hidden="true">›</span></button>${krAskHTML(d) || krPickemHTML(v.pickem)}</div>${krFriendsHTML(v)}`;
 }
 
 function krStripDraw(host) {
@@ -335,7 +354,7 @@ function krLadderRowsHTML(lad) {
 /* The ways to earn, grouped the way a reader looks for them. */
 const KR_RULE_GROUPS = [["Watching", ["watch_join", "watch", "witness"]],
   ["Talking", ["chat_day", "chat", "liked", "react_day", "hype"]],
-  ["Playing along", ["vote", "vote_won", "potg", "call_won", "call_streak", "trivia"]],
+  ["Playing along", ["vote", "vote_won", "potg", "call_won", "call_streak", "trivia", "pickem_won", "pickem_week"]],
   ["Every day", ["day", "daily_q", "quest", "quests_all"]],
   ["Friends", ["follow", "party_host", "party_join", "recruit"]],
   ["Your first two weeks", ["camp", "camp_done"]]];

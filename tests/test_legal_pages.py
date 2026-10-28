@@ -204,7 +204,7 @@ def test_the_privacy_policy_names_every_table_that_holds_personal_data():
         ("accounts.py", "billing.py", "redeem.py", "socialfeed.py", "social.py",
          "pushalerts.py", "pushmine.py", "slipwatch.py", "digest.py", "gamechat.py",
          "referrals.py", "alerts.py", "streak.py", "tailfade.py", "callit.py", "calfeed.py",
-         "widgetfeed.py", "trivia.py", "gifts.py", "passkeys.py", "karma.py"))
+         "widgetfeed.py", "trivia.py", "gifts.py", "passkeys.py", "karma.py", "pickem.py"))
     tables = set(re.findall(r"CREATE TABLE IF NOT EXISTS ([a-z_]+)", schema))
     assert tables, "no schema found — this test has stopped checking anything"
     for table in sorted(tables):
@@ -224,7 +224,7 @@ def test_deleting_an_account_names_every_table_that_holds_a_person():
     mods = ("accounts.py", "billing.py", "redeem.py", "socialfeed.py", "social.py", "pushalerts.py",
             "pushmine.py", "slipwatch.py", "digest.py", "gamechat.py", "referrals.py", "alerts.py",
             "streak.py", "tailfade.py", "callit.py", "calfeed.py", "widgetfeed.py", "trivia.py", "gifts.py",
-            "passkeys.py", "karma.py")
+            "passkeys.py", "karma.py", "pickem.py")
     tables = set()
     for m in mods:
         for t in re.finditer(r"CREATE TABLE IF NOT EXISTS ([a-z_]+)\s*\((.*?)\);", _read("engine", m), re.S):

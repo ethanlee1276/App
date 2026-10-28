@@ -2319,6 +2319,8 @@ def delete_user(conn, user_id: int) -> None:
     conn.execute("DELETE FROM feed_profiles WHERE user_id=?", (uid,))
     if "pickem_picks" in have:                   # the weekly pick'em (engine/pickem)
         conn.execute("DELETE FROM pickem_picks WHERE user_id=?", (uid,))
+    if "pickem_prefs" in have:                   # and its push before picks lock
+        conn.execute("DELETE FROM pickem_prefs WHERE user_id=?", (uid,))
 
 
 def export_user(conn, user_id: int) -> dict:
@@ -2348,4 +2350,6 @@ def export_user(conn, user_id: int) -> dict:
             "pickem": [{"sport": r[0], "week": r[1], "game": r[2], "pick": r[3], "result": r[4]}
                        for r in conn.execute("SELECT sport, week, gid, pick, result FROM pickem_picks "
                                              "WHERE user_id=? ORDER BY kickoff", (uid,))]
-                      if "pickem_picks" in have else []}
+                      if "pickem_picks" in have else [],
+            "pickem_remind": [{"remind": int(r[0])} for r in conn.execute(
+                "SELECT remind FROM pickem_prefs WHERE user_id=?", (uid,))] if "pickem_prefs" in have else []}

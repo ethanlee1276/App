@@ -1090,10 +1090,28 @@
     const me = T && T.me && !(T.rows || []).some((r) => r.me) ? `<p class="fd-fine">You: #${T.me.rank} at ${T.me.w}-${T.me.l}.</p>` : "";
     return rows ? `${rows}${me}` : `<p class="fd-fine">${empty}</p>`;
   }
+  /* IT COMES TO YOU (Ethan, 2026-10-28: "keep building and adding more
+     features"): the standings among your friends beside everyone's, and
+     the push before a football week's picks lock (engine/pickem), on for
+     a player unless turned off here. */
+  function pickemScopeHTML(P) {
+    if (!P.signed_in) return "";
+    const s = F.pkScope === "friends" ? "friends" : "all";
+    const b = (k, label) => `<button type="button" class="${s === k ? "on" : ""}" data-fd="pk-scope" data-v="${k}" role="tab" aria-selected="${s === k}">${label}</button>`;
+    return `<div class="fd-seg fd-pk-scope" role="tablist" aria-label="Whose standings">${b("all", "Everyone")}${
+      b("friends", `Friends${P.friends ? ` · ${Number(P.friends)}` : ""}`)}</div>`;
+  }
+  function pickemRemindHTML(P) {
+    if (!P.signed_in || !P.has_handle || !["nfl", "cfb"].includes(P.sport)) return "";
+    const sw = typeof setSwitch === "function" ? setSwitch(!!P.remind, `data-fd="pk-remind" aria-label="Remind me before picks lock"`)
+      : `<button type="button" data-fd="pk-remind" aria-pressed="${!!P.remind}">${P.remind ? "On" : "Off"}</button>`;
+    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Remind me before picks lock</b>
+      <span>A push about three hours before the week's first game, and before a day's first kickoff of four games or more, while you have games there still to pick. One a day at most.</span></span>${sw}</section>`;
+  }
   function pickemPageHTML(P) {
     const head = headHTML("Pick’em", "Free every week: pick the winner of every game on the board before it starts. Picks lock at kickoff and are graded from the final score — nobody types in a result. No entry fee, no prizes: bragging rights.");
     if (!P) return `${head}<div class="fd-card fd-empty">The pick’em did not load — try again in a moment.</div>`;
-    const s = P.sport, can = P.signed_in && P.has_handle;
+    const s = P.sport, can = P.signed_in && P.has_handle, fr = F.pkScope === "friends" && P.signed_in;
     const when = (iso) => { try { return new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } };
     const side = (g, team) => {
       const on = g.pick === team;
@@ -1117,10 +1135,12 @@
         ${P.next ? `<a class="fd-btn ghost sm" href="#feed/pickem/${s}/${P.next}">Later ${ico("chevr", 14)}</a>` : "<span></span>"}</div>
       ${gate ? `<div class="fd-card fd-pk-gate">${gate}</div>` : ""}
       <section class="fd-card fd-pk-games">${games || `<p class="fd-fine">No ${SPORT_NAME[s]} games on the board this week${P.current ? " yet — they appear as the board posts them" : ""}.</p>`}</section>
-      <div class="fd-pk-tables">
-        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemTable(P.week_table, "No picks graded or made this week yet.")}</section>
-        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemTable(P.season_table, "The season table fills as picks are graded.")}</section>
-      </div>
+      ${pickemScopeHTML(P)}
+      ${fr && !P.friends ? `<div class="fd-card fd-pk-gate">Your friends' standings show here. <a href="#feed/search">Find people</a> to add.</div>` : `<div class="fd-pk-tables">
+        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemTable(fr ? P.week_friends : P.week_table, fr ? "No picks from you or your friends this week yet." : "No picks graded or made this week yet.")}</section>
+        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemTable(fr ? P.season_friends : P.season_table, "The season table fills as picks are graded.")}</section>
+      </div>`}
+      ${pickemRemindHTML(P)}
       <p class="fd-fine">Ranked by wins, then fewest losses. A week runs Tuesday to Monday, Eastern time; the season is every week of the last ${P.season_days || 200} days. A tie is a push; a game with no final ten days on is void.</p>`;
   }
 
@@ -1443,6 +1463,14 @@
       const r = await api("pickem", { sport: F.pk.sport, gid: d.gid, team: d.team });
       if (!r.ok) { tfToast(r.out.error || "That pick did not save."); t.disabled = false; return; }
       try { buzz("tap"); } catch (e) { /* no haptics */ }
+      return render();
+    }
+    if (act === "pk-scope") { F.pkScope = d.v === "friends" ? "friends" : "all"; return render(); }
+    if (act === "pk-remind") {
+      const on = t.getAttribute("aria-checked") !== "true" && t.getAttribute("aria-pressed") !== "true";
+      const res = await api("pickem-remind", { on });
+      if (!res.ok) { tfToast(res.out.error || "That did not save."); return; }
+      tfToast(on ? "On: a push before your picks lock." : "Pick'em reminders off.");
       return render();
     }
     if (act === "lb-metric" || act === "lb-days") {

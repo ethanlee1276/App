@@ -42,7 +42,7 @@ def test_one_card_the_quests_as_dots_and_the_question_as_a_line():
                  "qs.map((x) => `<i${x.done ? ' class=\"on\"' : \"\"}></i>`)",
                  '<span class="kr-of">${Number(camp.done)}/${Number(camp.of)}</span>',
                  '<span class="kr-strip-sub kr-next">Getting started: ${krEsc(next.text)} · +${Number(camp.pts)}</span>',
-                 "${krAskHTML(d)}</div>${krFriendsHTML(v)}"):
+                 "${krAskHTML(d) || krPickemHTML(v.pickem)}</div>${krFriendsHTML(v)}"):
         assert want in fn, want
     for gone in ('<span class="kr-q${', '<span class="kr-qs">', "kr-camp-h"):
         assert gone not in KJS, ("the chips and the shouted header are gone", gone)

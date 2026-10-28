@@ -81,10 +81,12 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          # still on for a couple of hours at most.
          "mentions": 2 * 3600,
          # A game's reminder (engine/gamechat remind): worth it until the game is on.
-         "reminders": 20 * 60}
+         "reminders": 20 * 60,
+         # The pick'em's push before picks lock (engine/pickem): until they do.
+         "pickem": 3 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
-_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0}
+_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0}
 #: Karma alerts' pass looks at most this often.
 KARMA_EVERY_S = 15 * 60
 #: Your week's pass looks at most this often, and only on a Monday morning.
@@ -731,6 +733,14 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 told += _karma.alerts_pass(conn, now=t)
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  karma alerts: {type(exc).__name__}: {exc}")
+        # The pick'em (engine/pickem): its grading, and the push before picks lock.
+        if t - _looked["pickem"] >= KARMA_EVERY_S:
+            _looked["pickem"] = t
+            from engine import pickem as _pk
+            try:
+                told += _pk.alerts_pass(conn, now=t)
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  pick'em: {type(exc).__name__}: {exc}")
         # Remind me (engine/gamechat): games starting in ten minutes.
         from engine import gamechat as _gc
         try:

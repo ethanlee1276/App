@@ -124,6 +124,8 @@ RULES = {
     "call_streak": (25, None, "Five calls right in a row"),
     "trivia": (5, 30, "Trivia right"),
     "daily_q": (10, None, "Today's question right"),
+    "pickem_won": (5, None, "A pick'em winner"),
+    "pickem_week": (25, None, "A perfect pick'em week"),
     "hype": (5, 50, "The room's heat climbed"),
     "day": (5, None, "Checked in"),
     "quest": (10, None, "Daily quest"),
@@ -1344,6 +1346,16 @@ def public(conn, user_id) -> dict:
             "badges": top_badges(badges(conn, user_id, pts, st["best"]), pins=prefs["pins"])}
 
 
+def _pickem_next(conn, uid, t: float, data_dir: Path | None) -> dict | None:
+    """The NFL week's picks still to make, for the Live tab's card
+    (engine/pickem.next_up); nothing when the board cannot say."""
+    from . import pickem as PK
+    try:
+        return PK.next_up(conn, uid, "nfl", now=t, data_dir=data_dir)
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
 def me(conn, user_id, now: float | None = None, data_dir: Path | None = None, checkin: bool = True) -> dict:
     """The Karma tab and the Live tab's strip: the level and the way to the
     next, the days in a row, the day's quests, every badge, the week's
@@ -1390,7 +1402,8 @@ def me(conn, user_id, now: float | None = None, data_dir: Path | None = None, ch
            "recent": [{"kind": k, "why": RULES.get(k, (0, 0, k))[2], "pts": int(p), "at": float(a)}
                       for k, p, a in conn.execute("SELECT kind, pts, at FROM karma_events WHERE user_id=? AND pts>0 "
                                                   "ORDER BY at DESC LIMIT 12", (uid,))],
-           "rules": [{"kind": k, "pts": v[0], "cap": v[1], "why": v[2]} for k, v in RULES.items() if v[0] > 0]}
+           "rules": [{"kind": k, "pts": v[0], "cap": v[1], "why": v[2]} for k, v in RULES.items() if v[0] > 0],
+           "pickem": _pickem_next(conn, uid, t, data_dir)}
     if prefs["seen_level"] and lv["level"] > prefs["seen_level"]:
         out["up_from"] = prefs["seen_level"]
     if lv["level"] != prefs["seen_level"]:

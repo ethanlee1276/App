@@ -47,7 +47,7 @@ LATEST = ROOT / "data" / "push" / "latest.json"
 KINDS = ("posted", "settled")
 #: A member's own alerts (engine/pushmine): a phone signed in when it
 #: subscribed may ask for these too.
-PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions", "reminders")
+PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions", "reminders", "pickem")
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300
@@ -122,10 +122,12 @@ def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=KINDS
 def _account_topics(conn, user_id) -> list:
     from engine import gamechat as _gc
     from engine import karma as _karma
+    from engine import pickem as _pk
     from engine import socialfeed as _sf
     return [(_karma.ALERT_TOPIC, _karma.reminds(conn, user_id)),
             (_sf.MENTION_TOPIC, _sf.mention_alerts(conn, user_id)),
-            (_gc.REMIND_TOPIC, _gc.reminds(conn, user_id))]
+            (_gc.REMIND_TOPIC, _gc.reminds(conn, user_id)),
+            (_pk.ALERT_TOPIC, _pk.reminds(conn, user_id))]
 
 
 def phones(conn, user_id) -> int:

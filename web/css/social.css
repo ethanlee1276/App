@@ -639,6 +639,8 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-pk-week { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin: 12px 0; }
 .fd-pk-week b { text-align: center; font-size: var(--fs-md); }
 .fd-pk-gate { padding: 12px 14px; color: var(--text-dim); }
+/* Everyone's standings or your friends' (2026-10-28). */
+.fd-pk-scope { margin: 14px 0 0; }
 .fd-pk-games { display: grid; gap: 0; padding: 4px 14px; }
 .fd-pk-game { display: grid; gap: 6px; padding: 12px 0; }
 .fd-pk-game + .fd-pk-game { border-top: var(--hairline) solid var(--fd-line); }
