@@ -233,9 +233,14 @@
         room. A count of who is in a room is kept in memory for
         under a minute — an account, or a scrambled form of the address of
         a visitor who isn’t signed in — and never written down.
-        (<code>chat_msgs</code>, <code>chat_reacts</code>,
+        A watch party is a private part of a game’s room: we keep its name,
+        who started it, its invite and who is in it; its messages are read
+        only by its members, and it goes after 14 days. If you delete your
+        account, a party you started stays for its friends, with you taken
+        off it. (<code>chat_msgs</code>, <code>chat_reacts</code>,
         <code>chat_play_reacts</code>, <code>chat_votes</code>,
-        <code>chat_vote_marks</code>, <code>chat_reports</code>)</li>
+        <code>chat_vote_marks</code>, <code>chat_reports</code>,
+        <code>chat_parties</code>, <code>chat_party_members</code>)</li>
       <li><b>Referrals</b> — a member’s referral code, and which account
         joined with whose code, whether its first payment went through and
         when the $6.25 credit was paid, so each side’s discount can be given

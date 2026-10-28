@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run FW "Watch parties" 30 <<'SH'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatPartyHTML('
+SH
 run FV "Trivia in the stoppages" 120 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpTriviaHTML('
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import trivia, db; [print(q['text'], '->', q['why']) for q in trivia.bank(db.connect(), 'nfl', 'KC', 'BUF')[:4]]"

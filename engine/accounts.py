@@ -906,7 +906,7 @@ def delete_user(conn, user_id: int) -> None:
     # (engine/pushmine), and both sides of a referral (engine/referrals).
     # A phone's own subscription is the device's: it keeps the public
     # alerts it asked for, with this account unlinked from it.
-    for table in ("chat_msgs", "chat_reacts", "chat_play_reacts", "chat_votes", "chat_reports",
+    for table in ("chat_msgs", "chat_reacts", "chat_play_reacts", "chat_votes", "chat_reports", "chat_party_members",
                   "push_mine", "push_watch_seen", "push_activities", "push_lineup_leagues", "referral_codes",
                   # The Alerts page's watches (engine/alerts), which had
                   # leaned on ON DELETE CASCADE alone — the very thing this
@@ -925,6 +925,9 @@ def delete_user(conn, user_id: int) -> None:
                   "calendar_links", "widget_links"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
+    # A watch party they started stays for its friends, with them off it.
+    if "chat_parties" in have:
+        conn.execute("UPDATE chat_parties SET user_id=0 WHERE user_id=?", (int(user_id),))
     if "chat_msgs" in have:
         for table in ("chat_reacts", "chat_reports"):
             if table in have:

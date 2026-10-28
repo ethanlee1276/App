@@ -36,6 +36,10 @@ const CH = {
   plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0, me: null,
   open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false,
   unread: 0, timer: 0, busy: false, loaded: false, err: "", menu: 0,
+  // A watch party (engine/gamechat): the reader's parties in this game, the
+  // one on the Party tab, its messages (kept apart from the room's), and an
+  // invite read off the address waiting for an account.
+  parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
 };
 
 const chEsc = (s) => escapeHtml(String(s == null ? "" : s));
@@ -507,6 +511,46 @@ function chatMount(league, event, d) {
   // A shared play's link lands on its thread (pcShare; app.js openPbpHash).
   const want = window._chatWantPlay;
   if (want && want.room === room) { window._chatWantPlay = null; chatOpen({ play: want.play }); }
+  // A watch party's invite, #pbp/{league}/{event}/party/{token} (chatPartyLink),
+  // handed over by app.js openPbpHash before the page's own address replaced it.
+  const inv = window._chatWantParty;
+  if (inv && inv.room === room) window._chatWantParty = null;
+  let kept = null;
+  try { kept = JSON.parse(localStorage.getItem(PARTY_INVITE_KEY) || "null"); } catch (e) { kept = null; }
+  const token = inv && inv.room === room && /^[A-Za-z0-9_-]{8,40}$/.test(inv.token) ? inv.token
+    : kept && kept.room === room && Date.now() - kept.at < 86400000
+      && typeof _acctUser !== "undefined" && _acctUser && _acctUser.signed_in ? kept.token : "";
+  if (token && token !== CH.invite) { CH.invite = token; chatJoinParty(); }
+}
+
+/* WATCH PARTIES (2026-10-28, engine/gamechat; docs/IDEAS.md). A private
+   thread inside the game's room for a group of friends: start one on the
+   Party tab, send its link, and whoever opens it with a free account is in.
+   Its messages are its members' alone; the room's rules hold in it. */
+function chatPartyLink(p) {
+  return `${location.origin}/#pbp/${encodeURIComponent(CH.league)}/${encodeURIComponent(CH.event)}/party/${encodeURIComponent(p.token)}`;
+}
+const PARTY_INVITE_KEY = "qb_party_invite";
+async function chatJoinParty() {
+  const out = await chatPost("join", { token: CH.invite });
+  if (out.status === 401) {
+    // Kept for when this game is opened again with an account (a day at most).
+    try { localStorage.setItem(PARTY_INVITE_KEY, JSON.stringify({ room: CH.room, token: CH.invite, at: Date.now() })); } catch (e) {}
+    chatOpen({ tab: "party" });  // the composer becomes the account door
+    return;
+  }
+  try { localStorage.removeItem(PARTY_INVITE_KEY); } catch (e) {}
+  if (out.status !== 200) { CH.err = out.error || ""; chatOpen({ tab: "party" }); return; }
+  CH.invite = "";
+  chatUseParty(out);
+  chatOpen({ tab: "party" });
+}
+function chatUseParty(p) {
+  if (p && CH.party && CH.party.id === p.id) { CH.party = { ...CH.party, ...p }; return; }
+  (CH.pmsgs || []).forEach((m) => CH.byId.delete(m.id));
+  CH.party = p || null;
+  CH.pmsgs = [];
+  CH.pLastId = 0;
 }
 
 /* Open the sheet — on a play's thread when one is named. */
@@ -537,7 +581,7 @@ function chatReset() {
   Object.assign(CH, { room: "", league: "", event: "", d: null, msgs: [], byId: new Map(), lastId: 0,
     firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, votePath: [], here: 0,
     open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false, unread: 0, timer: 0,
-    loaded: false, err: "", menu: 0 });
+    loaded: false, err: "", menu: 0, parties: [], party: null, pmsgs: [], pLastId: 0, invite: "" });
   const s = document.getElementById("gch-sheet");
   if (s) s.remove();
   document.body.classList.remove("gch-on");
@@ -584,10 +628,12 @@ async function chatPull(older) {
   if (CH.busy) return;
   CH.busy = true;
   const q = new URLSearchParams({ room: CH.room });
+  const asked = CH.party ? CH.party.id : 0;
   if (older) q.set("before", String(CH.firstId));
   else if (CH.lastId) { q.set("after", String(CH.lastId)); q.set("since", String(CH.since)); }
   // The feed's own switch for strong language (Social settings): the reader's choice, kept in one place.
   try { if (localStorage.getItem("qb_feed_strong") === "1") q.set("strong", "1"); } catch (e) {}
+  if (CH.party) { q.set("party", String(CH.party.id)); if (CH.pLastId) q.set("pafter", String(CH.pLastId)); }
   let v = null;
   try {
     const r = await fetch(`/api/chat/room?${q}`, { credentials: "same-origin", cache: "no-store" });
@@ -627,6 +673,19 @@ async function chatPull(older) {
   if (typeof pbpRoomLine === "function") pbpRoomLine();
   CH.here = v.here || 0;
   CH.me = v.me || CH.me;
+  // The reader's parties: the newest joined is the Party tab's, unless one is chosen.
+  // (Not when a party was started, joined or left while this ask was out.)
+  if (Array.isArray(v.parties) && (CH.party ? CH.party.id : 0) === asked) {
+    CH.parties = v.parties;
+    chatUseParty((CH.party && v.parties.find((p) => p.id === CH.party.id)) || v.parties[0] || null);
+  }
+  let pfresh = [];
+  if (v.party && CH.party && v.party.id === CH.party.id) {
+    pfresh = (v.party.messages || []).filter((m) => !CH.byId.has(m.id));
+    pfresh.forEach((m) => CH.byId.set(m.id, m));
+    CH.pmsgs = CH.pmsgs.concat(pfresh).sort((a, b) => a.id - b.id);
+    if (CH.pmsgs.length) CH.pLastId = CH.pmsgs[CH.pmsgs.length - 1].id;
+  }
   if (!older) CH.since = v.t || CH.since;
   // The play bubbles on the page read these (app.js chatPlayBadge).
   chatShareCounts();
@@ -635,9 +694,13 @@ async function chatPull(older) {
   CH.loaded = true;
   chatFab();
   if (CH.open) {
+    // Opened before the first answer (an invite does): who is reading is known now.
+    if (first) chatDrawFoot();
     if (first || older) chatDrawBody({ keep: older });
+    else if (CH.tab === "party" && !CH.thread) { if (pfresh.length) chatDrawBody(); }
     else chatAppend(fresh, v);
     chatDrawHead();
+    chatDrawTabs();
   }
 }
 
@@ -905,9 +968,10 @@ function chatDrawTabs() {
   const nav = s.querySelector(".gch-tabs");
   if (CH.thread) { nav.innerHTML = ""; nav.hidden = true; return; }
   nav.hidden = false;
-  const tabs = [["all", "All"], ["plays", "Big plays"], ["game", "Game talk"]];
+  const tabs = [["all", "All"], ["plays", "Big plays"], ["game", "Game talk"],
+    ["party", CH.party ? `Party · ${CH.party.name}` : "Watch party"]];
   nav.innerHTML = tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${CH.tab === k}"
-    class="gch-tab${CH.tab === k ? " on" : ""}" data-gch="tab" data-tab="${k}">${l}</button>`).join("");
+    class="gch-tab${CH.tab === k ? " on" : ""}" data-gch="tab" data-tab="${k}">${chEsc(l)}</button>`).join("");
 }
 
 /* ---------------- what the body shows ---------------- */
@@ -923,6 +987,7 @@ function chatDrawBody(opts) {
   const keep = opts && opts.keep;
   const before = keep ? body.scrollHeight - body.scrollTop : 0;
   if (CH.thread) body.innerHTML = chatThreadHTML();
+  else if (CH.tab === "party") body.innerHTML = chatPartyHTML();
   else if (CH.tab === "plays") body.innerHTML = chatPlaysHTML();
   else body.innerHTML = chatListHTML(CH.tab === "game" ? (m) => !m.play : () => true);
   if (keep) body.scrollTop = body.scrollHeight - before;
@@ -980,6 +1045,26 @@ function chatPill(add) {
   p.dataset.n = String(n);
   p.hidden = !n;
   p.textContent = n ? `${n} new message${n === 1 ? "" : "s"} ↓` : "";
+}
+
+function chatPartyHTML() {
+  const me = CH.me || {};
+  const p = CH.party;
+  if (!p) {
+    return `<div class="gch-party-start"><b>Watch with your friends</b>
+      <span>A private thread inside this game's chat: only the people you send the link to can read it.</span>
+      ${me.signed_in ? `<button type="button" class="btn" data-gch="party-new">Start a watch party</button>`
+        : `<span class="gch-party-note">Make a free account below to start one or join one.</span>`}${
+      CH.err ? `<p class="gch-err">${chEsc(CH.err)}</p>` : ""}</div>`;
+  }
+  const link = chatPartyLink(p);
+  const strip = `<div class="gch-party-bar"><div class="gch-party-who"><b>${chEsc(p.name)}</b>
+      <span>${chEsc(p.members)} in it · only they can read it</span></div>
+    <div class="gch-party-acts"><button type="button" class="gch-party-btn" data-gch="party-share" data-link="${chEsc(link)}">Invite</button>
+      <button type="button" class="gch-party-btn quiet" data-gch="party-leave">Leave</button></div></div>`;
+  const rows = CH.pmsgs.filter(chatReady);
+  return strip + (rows.length ? rows.map((m, i) => chatMsgHTML(m, rows[i - 1])).join("")
+    : `<div class="gch-empty"><b>Just you so far.</b><span>Tap Invite and send the link — it opens this game with the party on.</span></div>`);
 }
 
 function chatListHTML(want) {
@@ -1194,6 +1279,7 @@ function chatDrawFoot() {
       <button type="submit" class="btn">Save</button></div><p class="gch-err">${chEsc(CH.err)}</p></form>`;
     return;
   }
+  if (CH.tab === "party" && !CH.party && !CH.thread) { foot.innerHTML = ""; return; }
   let rules = "";
   try { rules = localStorage.getItem(CHAT_RULES_KEY) ? "" : "show"; } catch (e) { rules = ""; }
   const reply = CH.replyTo ? CH.byId.get(CH.replyTo) : null;
@@ -1206,7 +1292,7 @@ function chatDrawFoot() {
     ${CH.betOpen ? chatBetFormHTML() : ""}
     <form class="gch-compose" data-gch-form="send">
       <button type="button" class="gch-addbet" data-gch="bet" aria-label="Add the bet you’re on" title="Add the bet you’re on">+</button>
-      <textarea class="gch-input" name="body" rows="1" maxlength="280" placeholder="${thread ? "Reply about this play…" : "Send a message"}"
+      <textarea class="gch-input" name="body" rows="1" maxlength="280" placeholder="${thread ? "Reply about this play…" : CH.tab === "party" && CH.party ? "Message the party" : "Send a message"}"
         aria-label="Message"></textarea>
       <button type="submit" class="gch-send" aria-label="Send"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 8.6 14 2.5l-3.6 11.2-2.3-4.4z"/></svg></button>
     </form><p class="gch-err">${chEsc(CH.err)}</p>`;
@@ -1236,7 +1322,8 @@ async function chatSend(form) {
   if (!text && !CH.bet) return;
   const btn = form.querySelector(".gch-send");
   btn.disabled = true;
-  const out = await chatPost("send", { body: text, play: CH.thread || "", reply_to: CH.replyTo || 0, bet: CH.bet || undefined });
+  const party = CH.tab === "party" && !CH.thread && CH.party ? CH.party.id : 0;
+  const out = await chatPost("send", { body: text, play: CH.thread || "", reply_to: CH.replyTo || 0, bet: CH.bet || undefined, party });
   btn.disabled = false;
   if (out.status === 200) {
     box.value = "";
@@ -1277,7 +1364,7 @@ async function chatClick(e) {
   }
   const act = t.dataset.gch;
   if (act === "close") return chatClose();
-  if (act === "tab") { CH.tab = t.dataset.tab; CH.menu = 0; chatDrawTabs(); chatDrawBody(); return; }
+  if (act === "tab") { CH.tab = t.dataset.tab; CH.menu = 0; chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
   if (act === "thread") { CH.thread = t.dataset.play; CH.menu = 0; chatDrawPoll(); chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
   if (act === "unthread") { CH.thread = ""; chatDrawPoll(); chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
   if (act === "older") { await chatPull(true); return; }
@@ -1287,6 +1374,31 @@ async function chatClick(e) {
     return;
   }
   if (act === "rules") { try { localStorage.setItem(CHAT_RULES_KEY, "1"); } catch (err) {} chatDrawFoot(); return; }
+  if (act === "party-new") {
+    const out = await chatPost("party", {});
+    if (out.status === 401) return chatNeedAccount();
+    if (out.need_handle && CH.me) { CH.me.handle = null; chatDrawFoot(); return; }
+    CH.err = out.status === 200 ? "" : out.error || "That didn’t go through — try again.";
+    if (out.status === 200) chatUseParty(out);
+    chatDrawTabs(); chatDrawBody(); chatDrawFoot();
+    return;
+  }
+  if (act === "party-share") {
+    const link = t.dataset.link, text = `Watch ${CH.d ? `${CH.d.away} at ${CH.d.home}` : "the game"} with me on Qellys Book:`;
+    try {
+      if (navigator.share) await navigator.share({ title: "Watch party", text, url: link });
+      else { await navigator.clipboard.writeText(link); t.textContent = "Link copied"; }
+    } catch (err) { /* the reader closed the sheet */ }
+    return;
+  }
+  if (act === "party-leave") {
+    if (!CH.party) return;
+    await chatPost("leave", { party: CH.party.id });
+    CH.parties = CH.parties.filter((p) => p.id !== CH.party.id);
+    chatUseParty(CH.parties[0] || null);
+    chatDrawTabs(); chatDrawBody(); chatDrawFoot();
+    return;
+  }
   if (act === "reply") { CH.replyTo = Number(t.dataset.id); chatDrawFoot(); const b = document.querySelector("#gch-sheet .gch-input"); if (b) b.focus(); return; }
   if (act === "unreply") { CH.replyTo = 0; chatDrawFoot(); return; }
   if (act === "bet") { CH.betOpen = !CH.betOpen; chatDrawFoot(); return; }
@@ -1370,6 +1482,7 @@ async function chatClick(e) {
       // Reported, deleted or hidden, it leaves this reader's screen now.
       CH.byId.delete(id);
       CH.msgs = CH.msgs.filter((m) => m.id !== id);
+      CH.pmsgs = CH.pmsgs.filter((m) => m.id !== id);
       CH.menu = 0;
       const el = document.querySelector(`#gch-sheet .gch-msg[data-id="${id}"]`);
       if (el) el.remove();
@@ -1384,7 +1497,8 @@ async function chatClick(e) {
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle }) });
       if (r.ok) {
         CH.msgs = CH.msgs.filter((m) => (m.by || {}).handle !== handle);
-        CH.byId = new Map(CH.msgs.map((m) => [m.id, m]));
+        CH.pmsgs = CH.pmsgs.filter((m) => (m.by || {}).handle !== handle);
+        CH.byId = new Map([...CH.msgs, ...CH.pmsgs].map((m) => [m.id, m]));
         CH.menu = 0;
         chatDrawBody();
         if (typeof tfToast === "function") tfToast(`@${handle} is blocked. Neither of you will see the other.`);

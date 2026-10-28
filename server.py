@@ -3721,7 +3721,8 @@ class Handler(BaseHTTPRequestHandler):
                     since = 0.0
                 code, out = GC.room_view(conn, one("room")[:24], uid, after=_int(one("after")),
                                          before=_int(one("before")), since=since,
-                                         strong=one("strong") == "1", here_key=key)
+                                         strong=one("strong") == "1", here_key=key,
+                                         party=_int(one("party")), pafter=_int(one("pafter")))
                 if code == 200:
                     from engine import socialfeed as SF
                     out["me"] = {"signed_in": bool(who),
@@ -3741,7 +3742,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _chat_post(self, path: str, body: dict):
         from engine import gamechat as GC
-        if path not in ("send", "react", "play", "vote", "report", "delete", "hide", "ticket"):
+        if path not in ("send", "react", "play", "vote", "report", "delete", "hide", "ticket",
+                        "party", "join", "leave"):
             return self._send(404, b'{"error":"unknown chat endpoint"}', ".json")
         if path == "ticket":
             return self._chat_ticket(body)
@@ -3769,6 +3771,14 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = GC.report(conn, uid, _int(body.get("id")), str(body.get("reason") or "other")[:12])
             elif path == "delete":
                 code, out = GC.delete(conn, uid, _int(body.get("id")))
+            elif path == "party":
+                # WATCH PARTIES (engine/gamechat): start one in this game's
+                # room, join one by its invite, or leave one.
+                code, out = GC.party_create(conn, uid, room, str(body.get("name") or "")[:80])
+            elif path == "join":
+                code, out = GC.party_join(conn, uid, str(body.get("token") or "")[:40])
+            elif path == "leave":
+                code, out = GC.party_leave(conn, uid, _int(body.get("party")))
             else:
                 # A message: what the writer typed, the play it answers, the
                 # message it replies to, and the bet THEY say they are on —
@@ -3777,7 +3787,7 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = GC.send(conn, uid, room, body.get("body") if isinstance(body.get("body"), str) else "",
                                     play=str(body.get("play") or "")[:40],
                                     bet=body.get("bet") if isinstance(body.get("bet"), dict) else None,
-                                    reply_to=_int(body.get("reply_to")) or None)
+                                    reply_to=_int(body.get("reply_to")) or None, party=_int(body.get("party")))
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()

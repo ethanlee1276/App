@@ -42,6 +42,8 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -74,6 +76,16 @@ KEEP_DAYS = 14
 #: VOTE_PATH_MAX marks — a game's worth at a busy minute.
 VOTE_MARK_EVERY_S = 60
 VOTE_PATH_MAX = 240
+#: WATCH PARTIES (2026-10-28, docs/IDEAS.md): a private thread inside a
+#: game's room for a group of friends, by invite link. An invite is a random
+#: token; a party holds PARTY_MAX members, an account starts PARTY_PER_ROOM
+#: in one game at most, and a party goes with the game's messages after
+#: KEEP_DAYS. The room's rules are the party's: the same caps, the same
+#: three reports, the same founder's switch.
+PARTY_RE = re.compile(r"^[A-Za-z0-9_-]{8,40}$")
+PARTY_MAX = 50
+PARTY_PER_ROOM = 3
+PARTY_NAME_MAX = 40
 #: How long a page counts as "here" after its last ask.
 HERE_S = 45
 #: The most rooms one counts call may ask about (the Live tab's games).
@@ -140,7 +152,36 @@ def ensure_tables(conn) -> None:
         created_at REAL NOT NULL,
         PRIMARY KEY (msg_id, user_id)
       );
+      -- WATCH PARTIES: who started one (user_id, cleared when they delete
+      -- their account: the party stays for its friends), its name and its
+      -- invite; and who is in it.
+      CREATE TABLE IF NOT EXISTS chat_parties (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        room       TEXT NOT NULL,
+        token      TEXT NOT NULL UNIQUE,
+        name       TEXT NOT NULL,
+        user_id    INTEGER NOT NULL,
+        created_at REAL NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS chat_parties_room ON chat_parties (room, user_id);
+      CREATE TABLE IF NOT EXISTS chat_party_members (
+        party_id  INTEGER NOT NULL,
+        user_id   INTEGER NOT NULL,
+        joined_at REAL NOT NULL,
+        PRIMARY KEY (party_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS chat_party_members_user ON chat_party_members (user_id);
     """)
+    # A party's messages are the room's rows with its id; the room's own are
+    # 0. Added rather than declared (the table shipped first), and raced:
+    # two first requests after a deploy both find the column missing.
+    if "party" not in {r[1] for r in conn.execute("PRAGMA table_info(chat_msgs)")}:
+        from .db import column_exists_or_raise
+        try:
+            conn.execute("ALTER TABLE chat_msgs ADD COLUMN party INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
+    conn.execute("CREATE INDEX IF NOT EXISTS chat_msgs_party ON chat_msgs (party, id)")
 
 
 def room_ok(room) -> bool:
@@ -231,15 +272,21 @@ def _prune(conn, now: float) -> None:
     conn.execute("DELETE FROM chat_play_reacts WHERE changed_at<?", (old,))
     conn.execute("DELETE FROM chat_votes WHERE changed_at<?", (old,))
     conn.execute("DELETE FROM chat_vote_marks WHERE at<?", (old,))
+    conn.execute("DELETE FROM chat_party_members WHERE party_id IN (SELECT id FROM chat_parties WHERE created_at<?)",
+                 (old,))
+    conn.execute("DELETE FROM chat_parties WHERE created_at<?", (old,))
 
 
 def send(conn, user_id: int, room, body, play="", bet=None, reply_to=None,
-         now: float | None = None) -> tuple[int, dict]:
+         now: float | None = None, party: int = 0) -> tuple[int, dict]:
     ensure_tables(conn)
     now = time.time() if now is None else now
     room = str(room or "")
     if not room_ok(room):
         return 400, {"error": "That game has no room."}
+    party = int(party or 0)
+    if party and not _in_party(conn, user_id, party, room):
+        return 403, {"error": "You are not in that watch party."}
     if not _profile(conn, user_id):
         return 409, {"error": "Pick a username first.", "need_handle": True}
     body = re.sub(r"[ \t]+", " ", str(body or "")).strip()[:MAX_BODY]
@@ -257,16 +304,16 @@ def send(conn, user_id: int, room, body, play="", bet=None, reply_to=None,
         return 429, {"error": why}
     parent = None
     if reply_to:
-        p = conn.execute("SELECT id, play FROM chat_msgs WHERE id=? AND room=? AND hidden=0",
-                         (int(reply_to), room)).fetchone()
+        p = conn.execute("SELECT id, play FROM chat_msgs WHERE id=? AND room=? AND party=? AND hidden=0",
+                         (int(reply_to), room, party)).fetchone()
         if not p:
             return 404, {"error": "That message is gone."}
         parent = int(p["id"])
         # A reply stays in the thread it answers.
         play = play or str(p["play"] or "")
-    cur = conn.execute("INSERT INTO chat_msgs (room, user_id, body, play, bet, reply_to, created_at) "
-                       "VALUES (?,?,?,?,?,?,?)",
-                       (room, int(user_id), body, play, json.dumps(chip) if chip else "", parent, now))
+    cur = conn.execute("INSERT INTO chat_msgs (room, user_id, body, play, bet, reply_to, created_at, party) "
+                       "VALUES (?,?,?,?,?,?,?,?)",
+                       (room, int(user_id), body, play, json.dumps(chip) if chip else "", parent, now, party))
     mid = int(cur.lastrowid)
     if mid % 200 == 0:
         _prune(conn, now)
@@ -280,8 +327,8 @@ def react(conn, user_id: int, msg_id, kind, now: float | None = None) -> tuple[i
     now = time.time() if now is None else now
     if kind not in REACTIONS:
         return 400, {"error": "Unknown reaction."}
-    m = conn.execute("SELECT room FROM chat_msgs WHERE id=? AND hidden=0", (int(msg_id or 0),)).fetchone()
-    if not m:
+    m = conn.execute("SELECT room, party FROM chat_msgs WHERE id=? AND hidden=0", (int(msg_id or 0),)).fetchone()
+    if not m or (m["party"] and not _in_party(conn, user_id, m["party"])):
         return 404, {"error": "That message is gone."}
     was = conn.execute("SELECT kind FROM chat_reacts WHERE msg_id=? AND user_id=?",
                        (int(msg_id), int(user_id))).fetchone()
@@ -360,8 +407,8 @@ def vote_path(conn, room: str) -> list:
 def report(conn, user_id: int, msg_id, reason="other", now: float | None = None) -> tuple[int, dict]:
     ensure_tables(conn)
     now = time.time() if now is None else now
-    m = conn.execute("SELECT id, user_id FROM chat_msgs WHERE id=?", (int(msg_id or 0),)).fetchone()
-    if not m:
+    m = conn.execute("SELECT id, user_id, party FROM chat_msgs WHERE id=?", (int(msg_id or 0),)).fetchone()
+    if not m or (m["party"] and not _in_party(conn, user_id, m["party"])):
         return 404, {"error": "That is gone already."}
     if int(m["user_id"]) == int(user_id):
         return 400, {"error": "That one is yours — delete it instead."}
@@ -476,7 +523,8 @@ _MSG_SQL = ("SELECT m.id, m.user_id, m.body, m.play, m.bet, m.reply_to, m.create
 
 def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
               since: float = 0.0, strong: bool = False, here_key: str = "",
-              now: float | None = None, data_dir: Path | None = None) -> tuple[int, dict]:
+              now: float | None = None, data_dir: Path | None = None,
+              party: int = 0, pafter: int = 0) -> tuple[int, dict]:
     """One poll's answer: messages after ``after`` (or the newest page, or
     the page before ``before``), and every count that moved since
     ``since``. ``t`` is the stamp to send back as ``since`` next time."""
@@ -489,13 +537,13 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
         return 400, {"error": "That game has no room."}
     hide = SF.blocked_ids(conn, viewer)
     if after:
-        rows = conn.execute(_MSG_SQL + "WHERE m.room=? AND m.id>? AND m.hidden=0 ORDER BY m.id LIMIT ?",
+        rows = conn.execute(_MSG_SQL + "WHERE m.room=? AND m.party=0 AND m.id>? AND m.hidden=0 ORDER BY m.id LIMIT ?",
                             (room, int(after), PAGE * 2)).fetchall()
     elif before:
-        rows = conn.execute(_MSG_SQL + "WHERE m.room=? AND m.id<? AND m.hidden=0 ORDER BY m.id DESC LIMIT ?",
-                            (room, int(before), PAGE)).fetchall()[::-1]
+        rows = conn.execute(_MSG_SQL + "WHERE m.room=? AND m.party=0 AND m.id<? AND m.hidden=0 "
+                            "ORDER BY m.id DESC LIMIT ?", (room, int(before), PAGE)).fetchall()[::-1]
     else:
-        rows = conn.execute(_MSG_SQL + "WHERE m.room=? AND m.hidden=0 ORDER BY m.id DESC LIMIT ?",
+        rows = conn.execute(_MSG_SQL + "WHERE m.room=? AND m.party=0 AND m.hidden=0 ORDER BY m.id DESC LIMIT ?",
                             (room, PAGE)).fetchall()[::-1]
     rows = [r for r in rows if int(r["user_id"]) not in hide]
     ids = [int(r["id"]) for r in rows]
@@ -528,9 +576,9 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
     for x in conn.execute("SELECT DISTINCT play FROM chat_play_reacts WHERE room=? AND changed_at>=?", (room, cut)):
         plays.setdefault(str(x[0]), {})
     threads = {str(x[0]): int(x[1]) for x in conn.execute(
-        "SELECT play, COUNT(*) FROM chat_msgs WHERE room=? AND play<>'' AND hidden=0 "
-        "AND play IN (SELECT play FROM chat_msgs WHERE room=? AND play<>'' AND created_at>=?) GROUP BY play",
-        (room, room, cut))}
+        "SELECT play, COUNT(*) FROM chat_msgs WHERE room=? AND party=0 AND play<>'' AND hidden=0 "
+        "AND play IN (SELECT play FROM chat_msgs WHERE room=? AND party=0 AND play<>'' AND created_at>=?) "
+        "GROUP BY play", (room, room, cut))}
     mine_plays = {}
     if viewer:
         mine_plays = {str(x[0]): x[1] for x in conn.execute(
@@ -545,7 +593,7 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
     game = game_of(room, data_dir)
     out = {"room": room, "t": now, "messages": msgs,
            "older": bool(rows) and not after and conn.execute(
-               "SELECT 1 FROM chat_msgs WHERE room=? AND id<? AND hidden=0 LIMIT 1",
+               "SELECT 1 FROM chat_msgs WHERE room=? AND party=0 AND id<? AND hidden=0 LIMIT 1",
                (room, ids[0] if ids else 0)).fetchone() is not None,
            # An older message whose faces moved — to zero, too.
            "reacts": {str(m): reacts.get(str(m), {}) for m in moved if m not in ids},
@@ -556,7 +604,108 @@ def room_view(conn, room: str, viewer=None, after: int = 0, before: int = 0,
            # the game page's win-chance chart (detail.js pbpRoomLine).
            "vote_path": vote_path(conn, room),
            "here": touch(room, here_key, now) if here_key else here(room, now)}
+    if viewer:
+        out["parties"] = my_parties(conn, viewer, room)
+        if party and any(p["id"] == int(party) for p in out["parties"]):
+            out["party"] = party_view(conn, viewer, int(party), pafter, strong, hide)
     return 200, out
+
+
+# ─── watch parties ──────────────────────────────────────────────────────────
+
+def _in_party(conn, user_id, party_id, room: str = "") -> bool:
+    if not user_id or not party_id:
+        return False
+    row = conn.execute("SELECT p.room FROM chat_party_members m JOIN chat_parties p ON p.id=m.party_id "
+                       "WHERE m.party_id=? AND m.user_id=?", (int(party_id), int(user_id))).fetchone()
+    return bool(row) and (not room or row[0] == room)
+
+
+def _party_out(conn, row) -> dict:
+    n = conn.execute("SELECT COUNT(*) FROM chat_party_members WHERE party_id=?", (int(row["id"]),)).fetchone()[0]
+    return {"id": int(row["id"]), "room": row["room"], "name": row["name"], "token": row["token"], "members": int(n)}
+
+
+def party_create(conn, user_id: int, room, name="", now: float | None = None) -> tuple[int, dict]:
+    """A watch party in this game's room, its starter its first member."""
+    ensure_tables(conn)
+    now = time.time() if now is None else now
+    room = str(room or "")
+    if not room_ok(room):
+        return 400, {"error": "That game has no room."}
+    me = _profile(conn, user_id)
+    if not me:
+        return 409, {"error": "Pick a username first.", "need_handle": True}
+    n = conn.execute("SELECT COUNT(*) FROM chat_parties WHERE room=? AND user_id=?", (room, int(user_id))).fetchone()[0]
+    if n >= PARTY_PER_ROOM:
+        return 429, {"error": f"You have {PARTY_PER_ROOM} watch parties in this game already."}
+    name = re.sub(r"\s+", " ", str(name or "")).strip()[:PARTY_NAME_MAX] or f"{me.get('handle') or 'Your'}’s party"
+    why = profanity.check(name, "The party's name")
+    if why:
+        return 400, {"error": why}
+    # A name is a label every member sees, whatever they chose for swearing.
+    name = profanity.mask(name)
+    token = secrets.token_urlsafe(9)
+    cur = conn.execute("INSERT INTO chat_parties (room, token, name, user_id, created_at) VALUES (?,?,?,?,?)",
+                       (room, token, name, int(user_id), now))
+    pid = int(cur.lastrowid)
+    conn.execute("INSERT OR IGNORE INTO chat_party_members (party_id, user_id, joined_at) VALUES (?,?,?)",
+                 (pid, int(user_id), now))
+    conn.commit()
+    return 200, _party_out(conn, conn.execute("SELECT * FROM chat_parties WHERE id=?", (pid,)).fetchone())
+
+
+def party_join(conn, user_id: int, token, now: float | None = None) -> tuple[int, dict]:
+    """In by the invite's token; joining twice is joining once."""
+    ensure_tables(conn)
+    now = time.time() if now is None else now
+    token = str(token or "")
+    row = conn.execute("SELECT * FROM chat_parties WHERE token=?", (token,)).fetchone() \
+        if PARTY_RE.match(token) else None
+    if not row:
+        return 404, {"error": "That invite has run out."}
+    if not _in_party(conn, user_id, row["id"]):
+        n = conn.execute("SELECT COUNT(*) FROM chat_party_members WHERE party_id=?", (int(row["id"]),)).fetchone()[0]
+        if n >= PARTY_MAX:
+            return 409, {"error": "That watch party is full."}
+        conn.execute("INSERT OR IGNORE INTO chat_party_members (party_id, user_id, joined_at) VALUES (?,?,?)",
+                     (int(row["id"]), int(user_id), now))
+        conn.commit()
+    return 200, _party_out(conn, row)
+
+
+def party_leave(conn, user_id: int, party_id) -> tuple[int, dict]:
+    ensure_tables(conn)
+    conn.execute("DELETE FROM chat_party_members WHERE party_id=? AND user_id=?", (int(party_id or 0), int(user_id)))
+    conn.commit()
+    return 200, {"ok": True}
+
+
+def my_parties(conn, user_id, room: str) -> list:
+    """The reader's parties in this game, the newest joined first."""
+    rows = conn.execute("SELECT p.* FROM chat_parties p JOIN chat_party_members m ON m.party_id=p.id "
+                        "WHERE p.room=? AND m.user_id=? ORDER BY m.joined_at DESC", (room, int(user_id))).fetchall()
+    return [_party_out(conn, r) for r in rows]
+
+
+def party_view(conn, viewer, party_id: int, after: int = 0, strong: bool = False, hide=()) -> dict:
+    """A party's messages after ``after`` (or its newest page), with their faces."""
+    if after:
+        rows = conn.execute(_MSG_SQL + "WHERE m.party=? AND m.id>? AND m.hidden=0 ORDER BY m.id LIMIT ?",
+                            (party_id, int(after), PAGE * 2)).fetchall()
+    else:
+        rows = conn.execute(_MSG_SQL + "WHERE m.party=? AND m.hidden=0 ORDER BY m.id DESC LIMIT ?",
+                            (party_id, PAGE)).fetchall()[::-1]
+    rows = [r for r in rows if int(r["user_id"]) not in set(hide or ())]
+    ids = [int(r["id"]) for r in rows]
+    reacts, mine = {}, {}
+    if ids:
+        q = ",".join("?" * len(ids))
+        reacts = _counts(conn, f"SELECT msg_id, kind, COUNT(*) FROM chat_reacts WHERE msg_id IN ({q}) "
+                               "AND kind<>'' GROUP BY msg_id, kind", ids)
+        mine = {int(x[0]): x[1] for x in conn.execute(
+            f"SELECT msg_id, kind FROM chat_reacts WHERE user_id=? AND msg_id IN ({q})", [int(viewer), *ids])}
+    return {"id": int(party_id), "messages": [_msg_view(r, strong, viewer, reacts, mine) for r in rows]}
 
 
 def counts(conn, rooms, now: float | None = None) -> dict:
@@ -568,14 +717,14 @@ def counts(conn, rooms, now: float | None = None) -> dict:
     rooms = [r for r in dict.fromkeys(str(x) for x in (rooms or [])) if room_ok(r)][:MAX_ROOMS]
     out = {}
     for room in rooms:
-        recent = conn.execute("SELECT COUNT(*) FROM chat_msgs WHERE room=? AND hidden=0 AND created_at>?",
-                              (room, now - 600)).fetchone()[0]
+        recent = conn.execute("SELECT COUNT(*) FROM chat_msgs WHERE room=? AND party=0 AND hidden=0 "
+                              "AND created_at>?", (room, now - 600)).fetchone()[0]
         plays: dict = {}
         for x in conn.execute("SELECT play, COUNT(*) FROM chat_play_reacts WHERE room=? AND kind<>'' "
                               "GROUP BY play", (room,)):
             plays[str(x[0])] = int(x[1])
-        for x in conn.execute("SELECT play, COUNT(*) FROM chat_msgs WHERE room=? AND play<>'' AND hidden=0 "
-                              "GROUP BY play", (room,)):
+        for x in conn.execute("SELECT play, COUNT(*) FROM chat_msgs WHERE room=? AND party=0 AND play<>'' "
+                              "AND hidden=0 GROUP BY play", (room,)):
             plays[str(x[0])] = plays.get(str(x[0]), 0) + int(x[1])
         out[room] = {"here": here(room, now), "recent": int(recent), "plays": plays}
     return out

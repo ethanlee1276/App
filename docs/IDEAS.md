@@ -186,9 +186,12 @@ of work first, each with what it is built from:
    lines join the Your players strip with their fantasy points so far,
    looked up by name and never kept (engine/yourplayers `lineup`, js/chat.js
    ffLiveLoad). Sleeper only, as the desk's live matchup is (engine/fantasy_live).
-8. **Watch-party rooms.** A private thread inside a game's chat for a
-   friend group, by invite link. Built from: engine/gamechat rooms + an
-   invite token; the moderation is already there. Medium.
+8. **Watch-party rooms.** BUILT 2026-10-28 (runbook FW): a fourth tab in
+   the game chat, Watch party: start one, Invite sends a link that opens
+   the game with the party on (app.js openPbpHash hands it to the chat),
+   and its messages are its members' alone, under the room's own rules.
+   engine/gamechat party_create / party_join / party_view, chat_msgs.party;
+   js/chat.js chatPartyHTML.
 9. **Spoiler-free later.** BUILT 2026-10-28 (runbook FT): "Watching
    later? Hide the score" on a game's page saves it for later on the
    device for up to 36 hours: its page is a veil with "Show the game",

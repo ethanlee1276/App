@@ -29074,6 +29074,8 @@ function openPbpHash(rest) {
   if (parts.length < 2 || !parts[0] || !parts[1]) { switchView("live"); return; }
   // A shared play (js/chat.js pcShare): the game, opened on its thread.
   if (parts[2] === "play" && parts[3]) window._chatWantPlay = { room: `${parts[0]}_${parts[1]}`, play: parts[3] };
+  // A watch party's invite (js/chat.js chatPartyLink): the game, its party on.
+  if (parts[2] === "party" && parts[3]) window._chatWantParty = { room: `${parts[0]}_${parts[1]}`, token: parts[3] };
   openPbp(parts[0], parts[1], "live");
 }
 

@@ -110,7 +110,9 @@ body.gch-on { overflow: hidden; }
 .gch-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px 6px; border-bottom: var(--hairline) solid transparent; }
 .gch-tabs[hidden] { display: none; }
 .gch-tab { padding: 9px 6px; border: 0; border-bottom: 2px solid transparent; background: transparent;
-  color: var(--text-mute); font: inherit; font-size: var(--fs-sm); font-weight: 800; cursor: pointer; }
+  color: var(--text-mute); font: inherit; font-size: var(--fs-sm); font-weight: 800; cursor: pointer;
+  /* Four now, one a party's name ("Party · Sunday crew"): it gives way, not the row. */
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gch-tab.on { color: var(--text); border-bottom-color: transparent; border-radius: 999px; background: color-mix(in oklab, var(--brand) 12%, transparent); }
 
 /* ── the list ───────────────────────────────────────────────────────────── */
@@ -120,6 +122,24 @@ body.gch-on { overflow: hidden; }
 .gch-empty { display: grid; gap: 4px; padding: 26px 16px; text-align: center; color: var(--text-mute);
   font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .gch-empty b { color: var(--text); }
+/* A watch party (chatPartyHTML): how to start one, and, in one, its name, who is in it, Invite and Leave. */
+.gch-party-start { display: grid; gap: 8px; justify-items: center; padding: 26px 16px; text-align: center;
+  color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.gch-party-start b { color: var(--text); font-size: var(--fs-md); }
+.gch-party-note { font-size: var(--fs-xs); }
+/* The bar holds the top of the thread; its messages keep the room's bottom-up flow under it. */
+.gch-body > .gch-party-bar:first-child { margin-top: 0; }
+.gch-body > .gch-party-bar + * { margin-top: auto; }
+.gch-party-bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 0 0 8px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--brand-2) 10%, var(--panel)); }
+.gch-party-who { display: grid; gap: 1px; min-width: 0; }
+.gch-party-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.gch-party-who span { font-size: var(--fs-xs); color: var(--text-mute); }
+.gch-party-acts { display: flex; gap: 6px; flex: none; }
+.gch-party-btn { min-height: 34px; padding: 6px 12px; border-radius: 999px; border: 0; background: var(--grad-brand);
+  color: var(--brand-ink); font: inherit; font-size: var(--fs-xs); font-weight: 800; cursor: pointer; }
+.gch-party-btn.quiet { background: var(--fill-tone-2); color: var(--text-mute); }
 .gch-older { align-self: center; margin: 4px 0 8px; padding: 6px 12px; border-radius: 999px; border: var(--hairline) solid transparent;
   background: var(--panel); color: var(--text-mute); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
 
