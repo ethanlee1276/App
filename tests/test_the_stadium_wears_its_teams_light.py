@@ -99,7 +99,8 @@ def test_a_teams_light_is_its_colour_lifted_not_changed():
     kits = {"PHI": ("#004953", "#a5acaf"), "BAL": ("#241773", "#000000"), "WAS": ("#5a1414", "#ffb612"),
             "NYY": ("#0c2340", "#c4ced3"), "NYJ": ("#125740", "#000000"), "DEN": ("#002244", "#fb4f14"),
             "PIT": ("#000000", "#ffb612"), "MIA": ("#008e97", "#fc4c02"), "SEA": ("#002244", "#69be28"),
-            "LV": ("#000000", "#a5acaf")}
+            "LV": ("#000000", "#a5acaf"), "GB": ("#203731", "#ffb612"), "CHI": ("#0b162a", "#c83803"),
+            "CWS": ("#27251f", "#c4ced4")}
     table = {k: {"primary": p, "secondary": s} for k, (p, s) in kits.items()}
     prog = (f"const T = {json.dumps(table)};\nconst activeTeams = () => T;\n"
             + _fn(APP, "function teamVivid(a) {") + _fn(APP, "function teamLight(a) {")
@@ -113,12 +114,22 @@ def test_a_teams_light_is_its_colour_lifted_not_changed():
         L1, C1, H1 = _oklch(light)
         assert L1 >= 0.59, (team, vivid, light, "bright enough to light a dark tile")
         assert _apart(H0, H1) <= 12, (team, vivid, light, "the same hue")
-        assert C1 <= C0 * 1.08 + 0.01, (team, vivid, light, "no stronger than the kit: a burgundy stays deep")
+        # No stronger than the kit (a burgundy stays deep), past the least a
+        # light needs to read as a colour at all (0.08: the Packers' sage).
+        assert C1 <= max(C0 * 1.08 + 0.01, 0.085) and C1 >= 0.07, (team, vivid, light, C0, C1)
     for team in ("DEN", "PIT", "SEA"):
         vivid, light = got[team]
         assert vivid == light, (team, got[team], "a colour bright enough already is left alone")
     L, C, _ = _oklch(got["LV"][1])
     assert C < 0.02 and 0.55 < L < 0.7, (got["LV"], "black and silver light nothing: a mid grey")
+    # …nor does a black a shade warm: the White Sox are not lit khaki.
+    L, C, _ = _oklch(got["CWS"][1])
+    assert got["CWS"][0] == "#27251f" and C < 0.02 and 0.55 < L < 0.7, (got["CWS"], C)
+    # A dark green keeps itself and is lifted (the Packers were lit gold); a
+    # navy still gives way to the club's bright colour (the Bears' orange).
+    gb = _oklch(got["GB"][1])
+    assert got["GB"][0] == "#203731" and _apart(gb[2], _oklch("#203731")[2]) <= 12 and gb[1] >= 0.07, (got["GB"], gb)
+    assert got["CHI"][0] == "#c83803", got["CHI"]
 
 
 def test_the_card_and_the_page_it_opens_are_lit_by_both_teams():
@@ -152,7 +163,9 @@ def test_a_lit_stadium_takes_its_familys_neutral_render():
 
 def test_the_light_is_an_overlay_on_a_grey_photograph():
     tokens = _rule(CSS, ".game-card, .gp-hero")
-    assert "--grad-teams-light: linear-gradient(90deg, var(--ta), var(--ta) 30%, var(--tb) 70%, var(--tb));" in tokens
+    # Each half its own team's (Ethan, the same evening: "the stadium art
+    # should be half each color"): the two meet in the middle fifth.
+    assert "--grad-teams-light: linear-gradient(90deg, var(--ta) 40%, var(--tb) 60%);" in tokens
     assert "--grad-teams-glow: linear-gradient(90deg, color-mix(in oklab, var(--ta) 24%, transparent)" in tokens
     assert ".hero-games .stadium-wrap { isolation: isolate; }" in CSS, "the light reaches the photograph and nothing past it"
     # In a group of its own, an overlay on nothing is its colour at full

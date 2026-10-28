@@ -147,7 +147,9 @@ const TEAMS = { CHI: { primary: "#0B162A", secondary: "#C83803" }, GB: { primary
 const activeTeams = () => TEAMS;
 """ + fn + """
 process.stdout.write(JSON.stringify(["CHI", "GB", "KC", "LV", "XX"].map(teamVivid)));""")
-    assert got == ["#C83803", "#FFB612", "#E31837", "#000000", "var(--brand)"], got
+    # The Packers keep their green since 2026-10-28: a dark green primary
+    # stays itself, because teamLight lifts it (it fell back to their gold).
+    assert got == ["#C83803", "#203731", "#E31837", "#000000", "var(--brand)"], got
     # The card wears them as the light its stadium is lit by since
     # 2026-10-28 (tests/test_the_stadium_wears_its_teams_light.py).
     assert 'style="--ta:${escapeAttr(teamLight(g.away))};--tb:${escapeAttr(teamLight(g.home))}"' in APP

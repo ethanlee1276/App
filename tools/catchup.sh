@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GI "Each stadium half in each team's colour" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c -- 'var(--ta) 40%, var(--tb) 60%'
+curl -s https://qellysbook.com/js/app.js | grep -c 'C > .02 ? Math.max(1, .08 / C) : 1'
+SH
 run GH "No player's face stretched" 30 <<'SH'
 curl -s https://qellysbook.com/js/visuals.js | grep -c 'const ESPN_FACE_ASPECT = 1.37;'
 SH

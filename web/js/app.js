@@ -929,14 +929,16 @@ const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || String(a 
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
 /* A TEAM'S COLOUR THAT SHOWS ON A DARK PAGE (2026-10-27): its primary,
    unless that is a near-black, a navy or a grey, then its secondary — the
-   Bears' navy defers to their orange, the Patriots' to their red. */
+   Bears' navy defers to their orange, the Patriots' to their red. A dark
+   GREEN keeps itself (2026-10-28, since teamLight lifts it): the Packers
+   lit gold and the Wild red were not those clubs. */
 function teamVivid(a) {
   const t = activeTeams()[a] || {};
   for (const hex of [t.primary, t.secondary]) {
     if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) continue;
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
     const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
-    if (mx >= .35 && d / mx >= .22) return hex;
+    if ((mx >= .35 || g === mx) && d / mx >= .22) return hex;
   }
   return t.primary || "var(--brand)";
 }
@@ -954,10 +956,12 @@ function teamLight(a) {
   const [l, m, s] = [[.4122, .5363, .0514], [.2119, .6807, .1074], [.0883, .2817, .63]]
     .map((w) => Math.cbrt(w[0] * v[0] + w[1] * v[1] + w[2] * v[2]));
   const L = Math.max(.62, .2105 * l + .7936 * m - .0041 * s);
-  const A = 1.978 * l - 2.4286 * m + .4506 * s, B = .0259 * l + .7828 * m - .8087 * s;
+  const A = 1.978 * l - 2.4286 * m + .4506 * s, B = .0259 * l + .7828 * m - .8087 * s, C = Math.hypot(A, B);
   // The lighter colour may not exist at full strength on a screen: ease
-  // the strength until it does.
-  for (let k = 1; ; k -= .05) {
+  // the strength until it does. A muted one starts at the least a light
+  // needs to read as itself (the Packers' green, lifted, was a sage); a
+  // grey with a tint stays a grey (the White Sox' black).
+  for (let k = C > .02 ? Math.max(1, .08 / C) : 1; ; k -= .05) {
     const [p, q, r] = [[.3963, .2158], [-.1056, -.0639], [-.0895, -1.2915]].map(([x, y]) => (L + x * A * k + y * B * k) ** 3);
     const rgb = [4.0767 * p - 3.3077 * q + .231 * r, -1.2684 * p + 2.6098 * q - .3413 * r, -.0042 * p - .7034 * q + 1.7076 * r];
     if (k < .05 || rgb.every((c) => c >= 0 && c <= 1))
