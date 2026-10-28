@@ -91,9 +91,10 @@ def test_the_switch_is_the_accounts_and_its_phones_carry_it():
     code, out = K.set_prefs(conn, me, remind=True)
     assert code == 200 and out["remind"] is True and out["phones"] == 1, out
     topics = conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (me,)).fetchone()[0]
-    assert topics.split(",") == ["bets", "karma"], topics
+    # (with the mentions every account carries unless it said no, engine/socialfeed)
+    assert topics.split(",") == ["bets", "mentions", "karma"], topics
     # The Alerts page re-subscribes without knowing about karma: it stays.
-    assert _phone(conn, me, ("bets", "clutch")) == ["bets", "clutch", "karma"]
+    assert _phone(conn, me, ("bets", "clutch")) == ["bets", "clutch", "karma", "mentions"]
     # Signed out, a phone never carries an account's alerts.
     code, out = PA.subscribe(conn, FCM + "a", kind="web", user_id=None, topics=["posted", "karma"])
     assert code == 200 and "karma" not in out["topics"], out
@@ -101,7 +102,7 @@ def test_the_switch_is_the_accounts_and_its_phones_carry_it():
     assert K.set_prefs(conn, ids[1], remind=True)[1]["phones"] == 0, "no phone yet: the page says to turn alerts on"
     _phone(conn, me, ("bets",))
     K.set_prefs(conn, me, remind=False)
-    assert conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (me,)).fetchone()[0] == "bets"
+    assert conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (me,)).fetchone()[0] == "bets,mentions"
     assert K.me(conn, me, now=EVENING)["remind"] is False
 
 

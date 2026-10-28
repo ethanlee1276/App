@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GW "Find people, and an @ that reaches anybody" 30 <<'SH'
+curl -s https://qellysbook.com/js/social.js | grep -c 'function findPageHTML()'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatAtFar(q)'
+SH
 run GV "Every sport its own budget out of the 100k" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan
 cd /srv/qellys && sudo -u qellys python3 -c "import launch; print('seasons over:', ', '.join(sorted(launch._seasons_over())) or 'none')"

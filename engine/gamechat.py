@@ -365,9 +365,12 @@ def _mention(conn, user_id, room: str, mid: int, body: str, party: int = 0, answ
              now: float | None = None) -> None:
     """Who a message speaks to: each @handle in it (Social's own rule,
     socialfeed.MENTION_RE) and the writer of the message it answers. Each
-    hears it in their Activity with the game to open, and on their phone if
-    they asked (_ping); in a watch party only its members; never the
-    writer; a block either way stops it."""
+    hears it in their Activity with the game to open, and on their phone
+    unless they said no (_ping); never the writer; a block either way stops
+    it. Ethan, 2026-10-28: "@ any profile in a chat should notify them they
+    were mentioned" — so in a watch party too, member or not: the notice
+    opens the party, which is its writer asking them in (any member may
+    hand anyone its link)."""
     from . import socialfeed as SF
     told: dict = {}
     if answers and int(answers) != int(user_id):
@@ -388,8 +391,6 @@ def _mention(conn, user_id, room: str, mid: int, body: str, party: int = 0, answ
             row = conn.execute("SELECT token FROM chat_parties WHERE id=?", (int(party),)).fetchone()
             link = f"{link}/party/{row['token']}" if row else link
         for uid, kind in told.items():
-            if party and not _in_party(conn, uid, party):
-                continue
             if int(user_id) in SF.blocked_ids(conn, uid):
                 continue
             # The message's id, negative, keeps each message's notice its
@@ -408,10 +409,9 @@ PING_HERE_S = 90
 
 def _ping(conn, uid, writer, room: str, kind: str, body: str, link: str, party, now=None) -> None:
     """A push for a mention or a reply (topic "mentions", engine/pushmine),
-    for an account that asked (the switch on Activity): one a game every
+    unless the account said no (the switch on Activity): one a game every
     five minutes, never while their page is on the game."""
     from . import karma as K
-    from . import pushmine as PM
     from . import socialfeed as SF
     if not SF.mention_alerts(conn, uid):
         return
@@ -425,11 +425,11 @@ def _ping(conn, uid, writer, room: str, kind: str, body: str, link: str, party, 
         return
     who = (SF.profile_of(conn, writer) or {}).get("handle") or "someone"
     g = K._live_game(room)
-    where = "your watch party" if party else (f"{g['away']} @ {g['home']}" if g.get("away") and g.get("home")
-                                              else "a game chat")
+    where = (("your watch party" if _in_party(conn, uid, party) else "a watch party") if party
+             else f"{g['away']} @ {g['home']}" if g.get("away") and g.get("home") else "a game chat")
     did = "replied to you" if kind == "chat_reply" else "mentioned you"
-    PM.tell(conn, uid, f"chat:{room}:{int(t // PING_EVERY_S)}", SF.MENTION_TOPIC, f"@{who} {did} in {where}",
-            body, "/" + link if link else "/#live", now=t)
+    SF.mention_push(conn, uid, f"chat:{room}:{int(t // PING_EVERY_S)}", f"@{who} {did} in {where}",
+                    body, "/" + link if link else "/#live", now=t)
 
 
 def _unmention(conn, msg_id) -> None:

@@ -598,12 +598,21 @@ def _notify(conn, user_id, actor_id, kind: str, post_id=None, comment_id=None, l
 
 
 def _mentions(conn, text: str, actor: int, post_id: int, comment_id=None) -> None:
+    """Each @handle in a post or a comment: their Activity, and their phone
+    (`mention_push`) — Ethan, 2026-10-28: "@ any profile in a chat should
+    notify them they were mentioned". Never the writer, never past a block."""
     seen = set()
+    who = None
     for h in MENTION_RE.findall(str(text or ""))[:MAX_MENTIONS]:
         uid = _uid_of(conn, h)
-        if uid is not None and uid not in seen:
-            seen.add(uid)
-            _notify(conn, uid, actor, "mention", post_id, comment_id)
+        if uid is None or uid in seen or uid == int(actor) or int(actor) in blocked_ids(conn, uid):
+            continue
+        seen.add(uid)
+        _notify(conn, uid, actor, "mention", post_id, comment_id)
+        who = who or (profile_of(conn, actor) or {}).get("handle") or "someone"
+        mention_push(conn, uid, f"feed:{int(post_id)}:{int(comment_id or 0)}",
+                     f"@{who} mentioned you in {'a comment' if comment_id else 'a post'}",
+                     str(text or ""), f"/#feed/post/{int(post_id)}")
 
 
 def unseen(conn, user_id) -> int:
@@ -637,19 +646,43 @@ def notifications(conn, user_id: int, strong: bool = False) -> dict:
             "alerts": {"on": mention_alerts(conn, user_id), "phones": PA.phones(conn, user_id)}}
 
 
-#: The push topic (engine/pushmine) for a game chat's mentions and replies.
+#: The push topic (engine/pushmine) for an @mention anywhere — a game
+#: chat, a watch party, a post or a comment — and a reply in a game chat.
 MENTION_TOPIC = "mentions"
+#: `feed_profiles.push_mentions`: 0 never chosen, which is ON (Ethan,
+#: 2026-10-28: "@ any profile in a chat should notify them they were
+#: mentioned" — the one alert every social app sends unasked), 1 chosen
+#: on, MENTION_OFF chosen off on Activity.
+MENTION_OFF = 2
 
 
 def mention_alerts(conn, user_id) -> bool:
-    """Does this account want a push when a game chat @mentions it or
-    answers its message? (engine/pushalerts.subscribe asks, so a phone
-    signed in to it carries the topic.)"""
+    """Does this account want a push when somebody @mentions it or answers
+    its message in a game chat? Yes, unless it said no on Activity
+    (engine/pushalerts.subscribe asks, so a phone signed in to it carries
+    the topic). An account with no handle cannot be named, so no."""
     try:
         row = conn.execute("SELECT push_mentions FROM feed_profiles WHERE user_id=?", (int(user_id),)).fetchone()
     except sqlite3.Error:
         return False
-    return bool(row and row[0])
+    return bool(row) and int(row[0] or 0) != MENTION_OFF
+
+
+def mention_push(conn, uid, msg_id: str, title: str, body: str, url: str, now: float | None = None) -> bool:
+    """A mention's push to every phone signed in to ``uid``, once a message
+    (``msg_id``), for an account that has not said no. A phone that took
+    alerts before mentions were on by default learns the topic here, the
+    first time it is wanted (engine/pushalerts.relink)."""
+    from . import pushalerts as PA
+    from . import pushmine as PM
+    if not mention_alerts(conn, uid):
+        return False
+    try:
+        if not PM.asked(conn, uid, MENTION_TOPIC) and PA.phones(conn, uid):
+            PA.relink(conn, uid, MENTION_TOPIC, True)
+        return PM.tell(conn, uid, msg_id, MENTION_TOPIC, title, body, url, now=now)
+    except sqlite3.Error:
+        return False
 
 
 def set_mention_alerts(conn, user_id, on: bool) -> tuple[int, dict]:
@@ -659,7 +692,7 @@ def set_mention_alerts(conn, user_id, on: bool) -> tuple[int, dict]:
     ensure_tables(conn)
     if not profile_of(conn, user_id):
         return 409, {"error": "Pick a username first: a mention names one.", "need_handle": True}
-    conn.execute("UPDATE feed_profiles SET push_mentions=? WHERE user_id=?", (1 if on else 0, int(user_id)))
+    conn.execute("UPDATE feed_profiles SET push_mentions=? WHERE user_id=?", (1 if on else MENTION_OFF, int(user_id)))
     PA.relink(conn, user_id, MENTION_TOPIC, bool(on))
     conn.commit()
     return 200, {"ok": True, "on": bool(on), "phones": PA.phones(conn, user_id)}
@@ -1583,7 +1616,8 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
         "FROM feed_posts p WHERE p.user_id=? AND p.hidden=0", (uid,)).fetchone()
     following = int(conn.execute("SELECT COUNT(*) FROM feed_follows WHERE follower_id=?", (uid,)).fetchone()[0])
     me = int(viewer) if viewer else None
-    rel = {"mine": me == uid, "following": False, "follows_you": False, "blocked": False, "friend": False}
+    rel = {"mine": me == uid, "following": False, "follows_you": False, "blocked": False, "friend": False,
+           "standing": ""}
     if me and me != uid:
         rel["following"] = bool(conn.execute("SELECT 1 FROM feed_follows WHERE follower_id=? AND followee_id=?",
                                              (me, uid)).fetchone())
@@ -1591,10 +1625,10 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
                                                (uid, me)).fetchone())
         rel["blocked"] = bool(conn.execute("SELECT 1 FROM feed_blocks WHERE user_id=? AND blocked_id=?",
                                            (me, uid)).fetchone())
-        have = {t[0] for t in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "friendships" in have:
-            rel["friend"] = bool(conn.execute("SELECT 1 FROM friendships WHERE user_id=? AND friend_id=?",
-                                              (me, uid)).fetchone())
+        # Where the two stand in the friends layer, so the profile's button
+        # says Add friend, Requested, Accept or Message.
+        rel["standing"] = _standing(conn, me, [uid])[uid]
+        rel["friend"] = rel["standing"] == "friend"
     prof = {"handle": r["handle"], "name": r["display_name"], "bio": _text(r["bio"], strong),
             "color": int(r["color"] or 0), "team": r["fav_team"], "since": r["created_at"],
             "verified": bool(r["verified"]), "official": _official(r), "founder": _founder(r),
@@ -2063,21 +2097,139 @@ def suggestions(conn, viewer=None, n: int = 5) -> list:
 
 def search(conn, q: str, viewer=None, entitled: bool = False, strong: bool = False) -> dict:
     ensure_tables(conn)
-    q = re.sub(r"[%_]", "", str(q or "")).strip()[:40]
-    if len(q) < 2:
+    q = str(q or "").strip()[:40]
+    if len(q.lstrip("@")) < 2:
         return {"people": [], "posts": []}
     hide = blocked_ids(conn, viewer)
-    mine = _following_set(conn, viewer)
-    people = [_person(r, mine) for r in conn.execute(
-        "SELECT * FROM feed_profiles WHERE handle LIKE ? OR display_name LIKE ? "
-        "ORDER BY (handle LIKE ?) DESC, handle LIMIT 8", (f"%{q}%", f"%{q}%", f"{q}%"))
-        if int(r["user_id"]) not in hide]
-    like = f"%{q}%"
+    like = f"%{_like(q)}%"
     rows = [r for r in conn.execute(
-        _POST_SQL + "WHERE p.hidden=0 AND (p.caption LIKE ? OR p.title LIKE ? OR p.body LIKE ? "
-        "OR p.legs LIKE ?) ORDER BY p.id DESC LIMIT 20", (like, like, like, like))
+        _POST_SQL + "WHERE p.hidden=0 AND (p.caption LIKE ? ESCAPE '\\' OR p.title LIKE ? ESCAPE '\\' "
+        "OR p.body LIKE ? ESCAPE '\\' OR p.legs LIKE ? ESCAPE '\\') ORDER BY p.id DESC LIMIT 20",
+        (like, like, like, like))
         if int(r["user_id"]) not in hide]
-    return {"people": people, "posts": _views(conn, rows, viewer, entitled, strong)}
+    return {"people": people(conn, q, viewer, 8), "posts": _views(conn, rows, viewer, entitled, strong)}
+
+
+# ─── find people ──────────────────────────────────────────────────────────────
+# Ethan, 2026-10-28: "There should be a search tab too look up accounts and
+# shit to add people and see there profile. It shouldn't be just a link
+# share too find the account". The Social page's Search tab: anybody's
+# profile by @handle or name, with Follow and Add friend on the row.
+
+#: Rows a search or the suggestions return at most.
+PEOPLE_PAGE = 20
+
+
+def _like(q: str) -> str:
+    """``q`` for a LIKE ... ESCAPE '\\': its own % and _ matched as letters —
+    an underscore is half the handles here, and stripping it (as the first
+    search did) found nobody named with one."""
+    return str(q).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _standing(conn, viewer, uids) -> dict:
+    """``{uid: "friend" | "asked" | "asked_me" | ""}`` — where each stands
+    with ``viewer`` in the private friends layer (engine/social), which the
+    profile's Add friend asks into."""
+    out = {int(u): "" for u in uids}
+    if not viewer or not out:
+        return out
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    me = int(viewer)
+    if "friend_requests" in have:
+        for (u,) in conn.execute("SELECT from_id FROM friend_requests WHERE to_id=?", (me,)):
+            if int(u) in out:
+                out[int(u)] = "asked_me"
+        for (u,) in conn.execute("SELECT to_id FROM friend_requests WHERE from_id=?", (me,)):
+            if int(u) in out:
+                out[int(u)] = "asked"
+    if "friendships" in have:
+        for (u,) in conn.execute("SELECT friend_id FROM friendships WHERE user_id=?", (me,)):
+            if int(u) in out:
+                out[int(u)] = "friend"
+    return out
+
+
+def _people_out(conn, rows, viewer, why: dict | None = None) -> list:
+    """Person rows with how each stands with the viewer — following, follows
+    you, the friends layer's standing — their followers and the karma level
+    the chats show beside a name (engine/karma.cards)."""
+    from . import karma as K
+    uids = [int(r["user_id"]) for r in rows]
+    mine = _following_set(conn, viewer)
+    fans = ({int(x[0]) for x in conn.execute("SELECT follower_id FROM feed_follows WHERE followee_id=?",
+                                             (int(viewer),))} if viewer else set())
+    stand = _standing(conn, viewer, uids)
+    cards = K.cards(conn, uids)
+    out = []
+    for r in rows:
+        uid = int(r["user_id"])
+        out.append({**_person(r, mine), **cards.get(uid, {}), "followers": int(r["n"] or 0),
+                    "follows_you": uid in fans, "standing": stand.get(uid, ""),
+                    **({"why": why[uid]} if why and why.get(uid) else {})})
+    return out
+
+
+_PEOPLE_SQL = ("SELECT f.*, (SELECT COUNT(*) FROM feed_follows x WHERE x.followee_id=f.user_id) AS n "
+               "FROM feed_profiles f ")
+
+
+def people(conn, q: str, viewer=None, n: int = PEOPLE_PAGE) -> list:
+    """Accounts whose @handle or name holds ``q``: handles that START with it
+    first, then the most followed. One letter matches the start of a handle
+    or a name only; two or more, anywhere in either. Profiles only — a
+    handle is what a profile is found by and opened at — never the viewer,
+    and a block either way hides."""
+    ensure_tables(conn)
+    q = str(q or "").strip().lstrip("@")[:30]
+    if not q:
+        return []
+    e = _like(q)
+    hide = blocked_ids(conn, viewer) | ({int(viewer)} if viewer else set())
+    where = ("WHERE f.handle LIKE ? ESCAPE '\\' OR f.display_name LIKE ? ESCAPE '\\' "
+             "OR f.display_name LIKE ? ESCAPE '\\'")
+    args = (f"{e}%", f"{e}%", f"% {e}%") if len(q) == 1 else (f"%{e}%", f"%{e}%", f"%{e}%")
+    rows = [r for r in conn.execute(
+        _PEOPLE_SQL + where + " ORDER BY (f.handle LIKE ? ESCAPE '\\') DESC, n DESC, f.handle COLLATE NOCASE "
+        "LIMIT ?", (*args, f"{e}%", max(1, min(int(n), PEOPLE_PAGE)) + len(hide)))
+        if int(r["user_id"]) not in hide]
+    return _people_out(conn, rows[:max(1, min(int(n), PEOPLE_PAGE))], viewer)
+
+
+def people_suggest(conn, viewer=None, n: int = 12) -> list:
+    """Who to add, before a name is typed: people who follow you that you
+    do not follow back; then the people the people you follow follow, most
+    shared first; then the leaderboard and the most followed
+    (`suggestions`). Each says why."""
+    ensure_tables(conn)
+    skip = blocked_ids(conn, viewer) | _following_set(conn, viewer) | ({int(viewer)} if viewer else set())
+    why: dict = {}
+    order: list = []
+
+    def take(uid, reason):
+        if uid not in skip and uid not in why and len(order) < n:
+            why[uid] = reason
+            order.append(uid)
+
+    if viewer:
+        me = int(viewer)
+        for (uid,) in conn.execute("SELECT follower_id FROM feed_follows WHERE followee_id=? "
+                                   "ORDER BY created_at DESC LIMIT 40", (me,)):
+            take(int(uid), "Follows you")
+        for uid, k in conn.execute(
+                "SELECT b.followee_id, COUNT(*) AS k FROM feed_follows a JOIN feed_follows b "
+                "ON b.follower_id=a.followee_id WHERE a.follower_id=? GROUP BY b.followee_id "
+                "ORDER BY k DESC LIMIT 40", (me,)):
+            take(int(uid), f"Followed by {k} you follow" if k > 1 else "Followed by someone you follow")
+    for p in suggestions(conn, viewer, n):
+        uid = _uid_of(conn, p["handle"])
+        if uid is not None:
+            take(uid, "Popular on Social")
+    if not order:
+        return []
+    rows = {int(r["user_id"]): r for r in conn.execute(
+        _PEOPLE_SQL + f"WHERE f.user_id IN ({','.join('?' * len(order))})", order)}
+    return _people_out(conn, [rows[u] for u in order if u in rows], viewer, why)
 
 
 def add_friend(conn, user_id: int, handle: str) -> tuple[int, dict]:
@@ -2119,6 +2271,8 @@ def delete_user(conn, user_id: int) -> None:
     conn.execute("DELETE FROM feed_reports WHERE user_id=?", (uid,))
     conn.execute("DELETE FROM feed_follows WHERE follower_id=? OR followee_id=?", (uid, uid))
     conn.execute("DELETE FROM feed_blocks WHERE user_id=? OR blocked_id=?", (uid, uid))
+    # A pin the account set, or one on its own post, goes with it.
+    conn.execute(f"DELETE FROM feed_pins WHERE user_id=? OR post_id IN ({mine})", (uid, uid))
     conn.execute("DELETE FROM feed_posts WHERE user_id=?", (uid,))
     conn.execute("DELETE FROM feed_profiles WHERE user_id=?", (uid,))
     if "pickem_picks" in have:                   # the weekly pick'em (engine/pickem)

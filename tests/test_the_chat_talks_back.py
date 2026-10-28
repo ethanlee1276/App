@@ -6,11 +6,14 @@ keep inventing … we want to keep user retainment").
     every messaging app's): "replied to you in a game chat", the words and a
     tap into the game. Never for your own message, once when a reply also
     names you, never past a block; a hidden or deleted reply takes it back.
-  * A PUSH for a mention or a reply, for an account that turned on "Push me
-    game chat mentions and replies" on Activity: the account's choice, so
-    every phone signed in to it carries the topic whatever the Alerts page
-    sends, and a phone signed out never does. One a game every five
-    minutes; none while the page is on that game; quiet hours hold them.
+  * A PUSH for a mention or a reply, unless the account turned off "Push me
+    mentions and replies" on Activity (Ethan, 2026-10-28: "@ any profile in
+    a chat should notify them they were mentioned" — on until said no): the
+    account's choice, so every phone signed in to it carries the topic
+    whatever the Alerts page sends, a phone that subscribed before learns it
+    at the first mention, and a phone signed out never does. One a game
+    every five minutes; none while the page is on that game; quiet hours
+    hold them.
   * @ SUGGESTIONS in the composer: an @ and the start of a name offers the
     room's names and friends; a tap puts the name in.
 
@@ -110,23 +113,43 @@ def test_a_reply_lands_in_activity_once_and_never_for_your_own():
 def test_the_switch_is_the_accounts_and_its_phones_carry_it():
     conn, ids = _db()
     sam = ids[1]
-    assert "mentions" not in _phone(conn, sam)
+    # On until said no: a phone signed in to the account carries the topic.
+    assert SF.mention_alerts(conn, sam) and _phone(conn, sam) == ["bets", "mentions"]
+    assert SF.notifications(conn, sam)["alerts"] == {"on": True, "phones": 1}
+    code, out = SF.set_mention_alerts(conn, sam, False)
+    assert code == 200 and out == {"ok": True, "on": False, "phones": 1}, out
+    assert conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (sam,)).fetchone()[0] == "bets"
+    # The Alerts page re-subscribes knowing nothing of it: the no stays.
+    assert _phone(conn, sam, ("bets", "clutch")) == ["bets", "clutch"]
+    assert SF.export_user(conn, sam)["mention_alerts"] is False
     code, out = SF.set_mention_alerts(conn, sam, True)
     assert code == 200 and out == {"ok": True, "on": True, "phones": 1}, out
-    topics = conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (sam,)).fetchone()[0]
-    assert topics.split(",") == ["bets", "mentions"], topics
-    # The Alerts page re-subscribes knowing nothing of it: it stays.
     assert _phone(conn, sam, ("bets", "clutch")) == ["bets", "clutch", "mentions"]
-    assert SF.notifications(conn, sam)["alerts"] == {"on": True, "phones": 1}
     # Signed out, a phone never carries an account's alerts.
     code, out = PA.subscribe(conn, FCM + "x", kind="web", user_id=None, topics=["posted", "mentions"])
     assert code == 200 and "mentions" not in out["topics"], out
-    SF.set_mention_alerts(conn, sam, False)
-    assert conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (sam,)).fetchone()[0] == "bets,clutch"
-    assert SF.export_user(conn, sam)["mention_alerts"] is False
     _, nobody = A.create_user(conn, "nohandle@example.com", GOOD, confirmed=True)
+    assert not SF.mention_alerts(conn, nobody["id"]), "no username, nothing to be named by"
     assert SF.set_mention_alerts(conn, nobody["id"], True)[0] == 409, "a mention names a username"
     assert "mentions" in PA.PERSONAL and PM.TOPICS == PA.PERSONAL
+
+
+def test_a_phone_that_subscribed_before_learns_the_topic_at_the_first_mention():
+    """Phones that took alerts while mentions were off by default carry no
+    "mentions": the first mention puts it on every phone of the account
+    that has not said no, and the push goes."""
+    conn, ids = _db(3)
+    me, sam, casey = ids
+    for uid in (sam, casey):
+        _phone(conn, uid)
+        conn.execute("UPDATE push_subs SET topics='bets' WHERE user_id=?", (uid,))   # the old row
+    conn.execute("UPDATE feed_profiles SET push_mentions=? WHERE user_id=?", (SF.MENTION_OFF, casey))
+    conn.commit()
+    GC.send(conn, me, ROOM, "@sam @casey look", now=T0)
+    assert [p["kind"] for p in _pushes(conn, sam)] == ["mentions"]
+    assert conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (sam,)).fetchone()[0] == "bets,mentions"
+    assert _pushes(conn, casey) == [] and len(_notes(conn, casey)) == 1, "said no: Activity only"
+    assert conn.execute("SELECT topics FROM push_subs WHERE user_id=?", (casey,)).fetchone()[0] == "bets"
 
 
 def test_a_mention_or_a_reply_buzzes_once_a_game_every_five_minutes():
@@ -134,7 +157,6 @@ def test_a_mention_or_a_reply_buzzes_once_a_game_every_five_minutes():
     me, sam, casey, drew = ids
     for uid in (sam, casey):
         _phone(conn, uid)
-        SF.set_mention_alerts(conn, uid, True)
     keep = K.DATA
     try:
         K.DATA = _live()
@@ -152,7 +174,7 @@ def test_a_mention_or_a_reply_buzzes_once_a_game_every_five_minutes():
         conn.commit()
         GC.send(conn, me, ROOM, "@casey you here", now=T0 + 120)
         assert _pushes(conn, casey) == [] and len(_notes(conn, casey)) == 1
-        # Never asked: Activity only.
+        # No phone takes alerts: Activity only.
         GC.send(conn, me, ROOM, "@drew hi", now=T0 + 180)
         assert _pushes(conn, drew) == [] and len(_notes(conn, drew)) == 1
         # A reply, a later stretch.
@@ -161,20 +183,23 @@ def test_a_mention_or_a_reply_buzzes_once_a_game_every_five_minutes():
         assert _pushes(conn, sam)[-1]["title"] == "@ethan replied to you in CAR @ GB"
     finally:
         K.DATA = keep
-    # A watch party's: its own words, to the party.
+    # A watch party's: its own words, to the party — and to anyone named,
+    # member or not, the party's link asking them in.
     code, party = GC.party_create(conn, me, ROOM, "Sunday crew")
     assert code == 200 and GC.party_join(conn, sam, party["token"])[0] == 200
-    GC.send(conn, me, ROOM, "@sam party's on", now=T0 + 900, party=party["id"])
+    GC.send(conn, me, ROOM, "@sam @casey party's on", now=T0 + 900, party=party["id"])
     last = _pushes(conn, sam)[-1]
     assert last["title"] == "@ethan mentioned you in your watch party", last
     assert last["url"] == f"/#pbp/nfl/401873017/party/{party['token']}", last
+    asked = _pushes(conn, casey)[-1]
+    assert asked["title"] == "@ethan mentioned you in a watch party", asked
+    assert asked["url"] == f"/#pbp/nfl/401873017/party/{party['token']}", asked
 
 
 def test_quiet_hours_hold_them():
     conn, ids = _db(2)
     sam = ids[1]
     _phone(conn, sam)
-    SF.set_mention_alerts(conn, sam, True)
     GC.send(conn, ids[0], ROOM, "@sam late one", now=T0)
     sent = []
     stats = PM.flush(conn, knock=lambda *a, **k: sent.append(a) or 201, vapid={"x": 1}, now=T0 + 60, quiet=True)
@@ -196,7 +221,8 @@ def test_the_pages_carry_the_switch_the_words_and_the_suggestions():
     srv = Path(ROOT, "server.py").read_text(encoding="utf-8")
     assert '"friend", "mention-alerts",' in srv and "SF.set_mention_alerts(conn, uid, body.get(\"on\") is True)" in srv
     policy = " ".join(Path(ROOT, "web", "privacy.html").read_text(encoding="utf-8").split())
-    for want in ("Push me game chat mentions and replies", "with an @ or answers yours"):
+    for want in ('unless you turned off "Push me mentions and replies" on Activity', "with an @ or answers yours",
+                 "in a game chat, a watch party, a post or a comment"):
         assert want in policy, want
 
 

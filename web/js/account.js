@@ -4248,14 +4248,18 @@ function friendsCardHTML() {
   const days = inv ? Math.max(1, Math.round(inv.expires_in_s / 86400)) : 0;
   // Settings rows since 2026-10-25 (docs/VISUAL_AUDIT.md): a friend a row,
   // the invite link a group of its own.
+  // Find people (js/social.js, the Search tab): anybody by name or
+  // @handle, not only a link sent to them.
   return `<section class="qb-friends set-screen">
+    ${setGroup("", [setItem({ href: "#feed/search", ico: "search", tone: "gold", title: "Find people",
+        sub: "Search anyone by name or @handle — follow them or add them", chev: true })])}
     ${setGroup("Friends", friends.length ? friends.map((f) => setItem({ lead: msgAvatar(f.name), title: escapeHtml(f.name),
         end: `<button type="button" class="btn ghost fr-x" data-unfriend="${escapeAttr(String(f.id))}"
           title="Remove — closes the channel both ways" aria-label="Remove ${escapeAttr(f.name)}">Remove</button>` }))
       : [setItem({ ico: "user", title: "No friends yet", sub: "Text somebody your invite link" })],
-      `Send picks back and forth. Friends are made with your invite link, or by name from the
-      <a href="#messages">Messages page</a> — requests wait for a yes, and nobody you didn’t say yes to
-      can message you.`)}
+      `Send picks back and forth. Friends are made by name from <a href="#feed/search">Find people</a>
+      or the <a href="#messages">Messages page</a>, or with your invite link — requests wait for a yes,
+      and nobody you didn’t say yes to can message you.`)}
     ${inv ? setGroup("Your invite link", [
       setItem({ ico: "link", tone: "gold", title: "Copy my invite link",
                 sub: `Good for ${days} day${days === 1 ? "" : "s"}`, attrs: `data-copy-invite="${escapeAttr(inv.token)}"` }),
@@ -4330,9 +4334,9 @@ async function renderMessages() {
     : `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">No conversations yet</div>
-      <div class="es-sub">Add a friend by name with New message, or text
-        somebody your invite link below — every friend gets a thread
-        here.</div></div>`;
+      <div class="es-sub">Add a friend by name with Find people or New
+        message, or text somebody your invite link below — every friend
+        gets a thread here.</div></div>`;
   const banner = `<div class="card msg-invite">
     <span class="msg-invite-words"><b>Invite friends. Share picks.</b>
       <span>Send invite links, share parlays, and talk it over.</span></span>
@@ -4340,8 +4344,9 @@ async function renderMessages() {
       data-copy-invite="${escapeAttr(soc.invite.token)}">Invite friends</button>` : ""}
   </div>`;
   host.innerHTML = `
-    <div class="msg-head">
+    <div class="msg-head inbox-acts">
       <button class="btn" id="msg-new" type="button">New message</button>
+      <a class="btn ghost" href="#feed/search">Find people</a>
     </div>
     <div id="msg-finder" hidden></div>
     ${reqBlock}${list}${banner}`;

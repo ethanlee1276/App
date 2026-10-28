@@ -181,13 +181,14 @@ async function karmaStripMount(host) {
 /* WHAT'S NEW (an app store's release notes, inside the app): once, to an
    account past its getting-started list, what the last round added, a line
    each; "Got it" puts it away on this device. */
-const KR_NEW_KEY = "qb_new_2026_10_28";
+const KR_NEW_KEY = "qb_new_2026_10_28b";
 const KR_NEW = [
+  ["🔎", "Find people", "Social → Search: anybody by name or @handle — follow them or add them as a friend."],
+  ["📣", "@ anyone", "Name anybody with an @ in a chat, a post or a comment — their phone hears it."],
   ["🧠", "Today's question", "One trivia question a day for everybody, +10 karma right, here and on the Karma tab."],
   ["🏅", "Player of the game", "When a game goes final, its chat votes the player of the game."],
   ["🔔", "Remind me", "A bell under the chat of a game that has not started: a push 10 minutes before."],
-  ["👥", "Friends", "Who is watching what, here, and your friends' karma race on the Karma tab."],
-  ["📌", "Pin and share", "Pin three badges to your profile, and share a picture of your level."]];
+  ["👥", "Friends", "Who is watching what, here, and your friends' karma race on the Karma tab."]];
 function krNewHTML(v) {
   if (!v || v.camp) return "";
   try { if (localStorage.getItem(KR_NEW_KEY)) return ""; } catch (e) { return ""; }

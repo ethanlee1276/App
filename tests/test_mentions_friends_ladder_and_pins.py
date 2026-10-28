@@ -5,9 +5,11 @@ we want to keep user retainment").
 
   * @MENTIONS (Discord's and Slack's, and Social's own): a game chat
     message that names a reader lands in their Activity with the words and
-    the game to open; in a watch party, only its members, and the link
-    opens the party. Never the writer, never past a block, three names a
-    message at most; a message hidden or deleted takes its notices back.
+    the game to open; in a watch party, anyone it names, member or not,
+    the link opening the party (Ethan, 2026-10-28: "@ any profile in a chat
+    should notify them they were mentioned"). Never the writer, never past
+    a block, three names a message at most; a message hidden or deleted
+    takes its notices back.
   * THE FRIENDS LADDER (Duolingo's friends league): this week's karma among
     the viewer and their friends (both sides of the friendship), never a
     one-way follow or a stranger, never a friend who took themselves off
@@ -116,7 +118,7 @@ def test_a_hidden_or_deleted_message_takes_its_mentions_back():
     assert _notes(conn, casey) == [], "deleted: gone from Activity"
 
 
-def test_in_a_watch_party_only_members_are_told_and_the_link_opens_the_party():
+def test_a_watch_partys_mention_reaches_anyone_named_and_the_link_opens_the_party():
     conn, ids = _db()
     me, sam, casey = ids[:3]
     code, party = GC.party_create(conn, me, ROOM, "Sunday crew")
@@ -124,9 +126,14 @@ def test_in_a_watch_party_only_members_are_told_and_the_link_opens_the_party():
     assert GC.party_join(conn, sam, party["token"])[0] == 200
     code, out = GC.send(conn, me, ROOM, "@sam @casey party time", now=time.time(), party=party["id"])
     assert code == 200, out
-    got = _notes(conn, sam)
-    assert len(got) == 1 and got[0]["link"] == f"#pbp/nfl/401873017/party/{party['token']}", got
-    assert _notes(conn, casey) == [], "not a member: never told what the party said"
+    for uid in (sam, casey):
+        got = _notes(conn, uid)
+        assert len(got) == 1 and got[0]["link"] == f"#pbp/nfl/401873017/party/{party['token']}", (uid, got)
+    assert GC.party_join(conn, casey, party["token"])[0] == 200, "named, and the link lets them in"
+    drew = ids[3]
+    SF.toggle_block(conn, drew, "ethan")
+    GC.send(conn, me, ROOM, "@drew too", now=time.time(), party=party["id"])
+    assert _notes(conn, drew) == [], "a block still stops it"
     js = Path(ROOT, "web", "js", "social.js").read_text(encoding="utf-8")
     assert 'chat_mention: "mentioned you in a game chat"' in js
     assert r"/^#pbp\/[a-z]+\/\d+(\/party\/[A-Za-z0-9_-]{8,40})?$/.test(n.link" in js

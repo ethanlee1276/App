@@ -1701,7 +1701,9 @@ document.addEventListener("submit", async (e) => {
 
 /* @ SUGGESTIONS (Discord's and Slack's): an @ and the start of a name
    offers up to five, your friends here and the room's latest writers
-   first; a tap puts the name in (engine/gamechat tells whoever is named). */
+   first, then anybody's handle that starts that way (chatAtFar; Ethan,
+   2026-10-28: "@ any profile in a chat should notify them"); a tap puts
+   the name in (engine/gamechat tells whoever is named). */
 function chatAtWord(box) {
   const upto = box.value.slice(0, box.selectionStart == null ? box.value.length : box.selectionStart);
   const m = /(^|\s)@([A-Za-z0-9_]{0,20})$/.exec(upto);
@@ -1716,7 +1718,28 @@ function chatAtNames(q) {
   };
   (CH.friends || []).forEach(add);
   [...CH.byId.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).forEach((m) => add((m.by || {}).handle));
+  if (out.length < 5 && q) (chatAtFar(q) || []).forEach(add);
   return out.slice(0, 5);
+}
+/* The handles past the room, from the box's people search (GET
+   /api/feed/people), once a typed start: the row draws what it has at
+   once and again when the answer lands, if the word is still the same. */
+const CH_AT_FAR = new Map();
+function chatAtFar(q) {
+  if (CH_AT_FAR.has(q)) return CH_AT_FAR.get(q);
+  if (CH_AT_FAR.size > 200) CH_AT_FAR.clear();
+  CH_AT_FAR.set(q, null);
+  fetch(`/api/feed/people?q=${encodeURIComponent(q)}&n=5`, { credentials: "same-origin" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((out) => {
+      CH_AT_FAR.set(q, ((out && out.people) || []).map((x) => String(x.handle || ""))
+        .filter((h) => h.toLowerCase().startsWith(q)));
+      const box = document.querySelector("#gch-sheet .gch-input");
+      const w = box && chatAtWord(box);
+      if (w && w.q === q) chatAtDraw(box);
+    })
+    .catch(() => CH_AT_FAR.delete(q));
+  return null;
 }
 function chatAtDraw(box) {
   const f = box.closest("form");

@@ -3776,6 +3776,14 @@ class Handler(BaseHTTPRequestHandler):
             if path == "search":
                 return self._send(200, json.dumps(
                     SF.search(conn, one("q"), uid, entitled, strong)).encode(), ".json")
+            if path == "people":
+                # Find people (the Search tab, and the game chat's @ names):
+                # a name typed, or who to add before one is.
+                q_ = one("q")[:30]
+                n_ = max(1, min(_int(one("n")) or SF.PEOPLE_PAGE, SF.PEOPLE_PAGE))
+                out = ({"q": q_, "people": SF.people(conn, q_, uid, n_)} if q_.strip().lstrip("@")
+                       else {"q": "", "people": SF.people_suggest(conn, uid, n_), "suggested": True})
+                return self._send(200, json.dumps(out).encode(), ".json")
             if path == "notifications":
                 if not who:
                     return self._send(401, b'{"error":"sign in first"}', ".json")

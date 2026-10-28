@@ -337,6 +337,11 @@ a.fd-slip:hover { border-color: transparent; }
 /* ── the thread ─────────────────────────────────────────────────────────── */
 .fd-thread h3 { margin: 0 0 12px; font-size: var(--fs-xl); }
 .fd-cbox { display: flex; align-items: flex-start; gap: 10px; }
+/* @ names as you type (js/social.js atDraw), under the box they fill. */
+.fd-atrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.fd-atrow button { padding: 6px 11px; border: 0; border-radius: 999px; background: var(--fill-tone); color: var(--text);
+  font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
+.fd-atrow button:hover { color: var(--brand-2); }
 .fd-cbox .fd-input { flex: 1; border-radius: 18px; padding: 9px 14px; resize: none; }
 .fd-cbox .fd-input:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
 .fd-com { display: flex; gap: 10px; margin-top: 14px; }
@@ -421,13 +426,38 @@ a.fd-slip:hover { border-color: transparent; }
   border: var(--hairline) solid transparent; background: var(--panel); color: var(--text); cursor: pointer; }
 .fd-back:hover { border-color: transparent; color: var(--brand-2); }
 .fd-sub { margin: 6px 0 -2px; font-size: var(--fs-xl); }
-.fd-results { display: grid; gap: 10px; }
-.fd-people { display: grid; gap: 4px; }
 .fd-person { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text); text-decoration: none; padding: 4px 0; }
 .fd-person > span { display: grid; min-width: 0; line-height: var(--lh-tight); }
 .fd-person b { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-md); overflow: hidden; white-space: nowrap; }
 .fd-person span span { color: var(--text-mute); font-size: var(--fs-sm); }
 .fd-person:hover b { color: var(--brand-2); }
+
+/* ── find people: the Search tab (js/social.js findPageHTML) ─────────────── */
+.fd-findbar { height: 52px; background: var(--panel); }
+.fd-findbar input { font-size: var(--fs-lg); }
+.fd-findbar input::-webkit-search-cancel-button { filter: grayscale(1); }
+.fd-findc h3, .fd-findh { margin: 0 0 6px; color: var(--text-mute); font-size: var(--fs-md); font-weight: 700; }
+.fd-findh { margin: 4px 2px -4px; }
+.fd-prows { display: grid; gap: 2px; }
+.fd-prow { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.fd-prow-who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px; color: var(--text); text-decoration: none; }
+.fd-prow-who:hover b { color: var(--brand-2); }
+.fd-prow-t { display: grid; gap: 2px; min-width: 0; line-height: var(--lh-tight); }
+.fd-prow-t b { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: var(--fs-md); }
+.fd-prow-t > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-mute); font-size: var(--fs-sm); }
+.fd-prow-act { flex: none; display: flex; gap: 6px; }
+.fd-prow-act .fd-btn { padding: 7px 13px; font-size: var(--fs-sm); }
+/* A phone: the two buttons under the name, each half the row. */
+@container fd (max-width: 460px) {
+  .fd-prow { flex-wrap: wrap; row-gap: 8px; }
+  .fd-prow-act { flex: 1 1 100%; padding-left: 55px; }
+  .fd-prow-act .fd-btn { flex: 1; }
+}
+.fd-invite { display: flex; align-items: center; gap: 12px; }
+.fd-invite-ic { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 999px;
+  background: var(--fill-tone); color: var(--brand-2); }
+.fd-invite-t { flex: 1; min-width: 0; display: grid; gap: 2px; line-height: var(--lh-snug); }
+.fd-invite-t span { color: var(--text-mute); font-size: var(--fs-sm); }
 
 /* ── a profile ──────────────────────────────────────────────────────────── */
 .fd-prof { padding: 0; overflow: visible; }

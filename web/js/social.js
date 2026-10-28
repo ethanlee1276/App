@@ -27,7 +27,7 @@
    ROUTES (in the address bar, so back, forward and shared links work):
      #feed  #feed/following  #feed/mine  #feed/s/<sport>  #feed/tag/<tag>
      #feed/trending  #feed/leaders  #feed/tags  #feed/activity
-     #feed/post/<id>  #feed/u/<handle>[/picks]  #feed/search/<q>
+     #feed/post/<id>  #feed/u/<handle>[/picks]  #feed/search[/<q>]
 
    THE PAGE SENDS WHICH ROWS, NEVER WHAT THEY SAY. A posted leg is a game id
    or player · market · side · line; the server reads every number off its
@@ -47,7 +47,8 @@
                    ["scam", "Scam or selling picks"], ["other", "Something else"]];
   const METRICS = [["win", "Win %"], ["units", "Units"], ["followers", "Followers"]];
   const DAYS = [["7", "7D"], ["30", "30D"], ["all", "All"]];
-  const NAV = [["feed", "#feed", "home", "Feed"], ["following", "#feed/following", "userplus", "Following"],
+  const NAV = [["feed", "#feed", "home", "Feed"], ["search", "#feed/search", "search", "Search"],
+               ["following", "#feed/following", "userplus", "Following"],
                ["mine", "#feed/mine", "doc", "My Posts"], ["trending", "#feed/trending", "trend", "Trending"],
                ["leaders", "#feed/leaders", "people", "Top Bettors"], ["pickem", "#feed/pickem", "trophy", "Pick’em"],
                ["tags", "#feed/tags", "tag", "Tags"],
@@ -55,7 +56,7 @@
   const MAX_LEGS = 3;
 
   const F = { posts: [], more: false, next: 0, paged: "offset", me: null, signedIn: false, unseen: 0,
-              rail: null, railMetric: "win", railDays: "30", search: null, profile: null, follows: null,
+              rail: null, railMetric: "win", railDays: "30", find: null, profile: null, follows: null,
               post: null, page: null, leaders: null, metric: "win", days: "30",
               comp: { text: "", mode: "", legs: [], sport: "nfl", q: "", results: null, open: false,
                       poll: ["", ""], link: "", talkSport: "" } };
@@ -646,9 +647,8 @@
   function railHTML() {
     const r = F.rail || {};
     const loading = !F.rail;
-    return `<form class="fd-search" data-fd-form="search" role="search">${icon("search", 15)}
-        <input name="q" maxlength="40" placeholder="Search people, posts and #tags" aria-label="Search Social"
-          value="${escapeAttr((F.search && F.search.q) || "")}"></form>
+    return `${route().split("/")[0] === "search" ? "" : `<form class="fd-search" data-fd-form="search" role="search">${icon("search", 15)}
+        <input name="q" maxlength="40" placeholder="Search people, posts and #tags" aria-label="Search Social"></form>`}
       ${trendCardHTML(r.trending, loading)}
       ${bettorsCardHTML(r.leaders, loading)}
       <section class="fd-card fd-rc"><div class="fd-rc-h"><h3>${sportIcon("nba", 17)} Popular Sports</h3></div>
@@ -740,15 +740,153 @@
       <div class="fd-list">${listHTML(F.posts, empty)}</div>${moreHTML()}`;
   }
 
-  function searchResultsHTML() {
-    const s = F.search;
-    const people = (s.people || []).map((p) => `<a class="fd-person" href="${profHref(p.handle)}">${avatar(p, "sm")}
-      <span><b>${displayName(p)}${badge(p)}</b><span>@${escapeHtml(p.handle)}</span></span></a>`).join("");
-    return `<div class="fd-card fd-results"><div class="fd-row-between"><b>Results for “${escapeHtml(s.q)}”</b>
-        <button class="fd-btn ghost" data-fd="clear-search" type="button">Clear</button></div>
-      ${people ? `<div class="fd-people">${people}</div>` : ""}
-      ${people || (s.posts || []).length ? "" : `<p class="fd-fine">Nothing matched.</p>`}</div>
-      <div class="fd-list">${(s.posts || []).map((p) => postHTML(p)).join("")}</div>`;
+  // ── find people ─────────────────────────────────────────────────────────
+  /* Ethan, 2026-10-28: "There should be a search tab too look up accounts
+     and shit to add people and see there profile. It shouldn't be just a
+     link share too find the account". The Search tab: anybody by name or
+     @handle as you type, each row opening the profile with Follow and Add
+     friend on it; before a name is typed, who to add; the invite link for
+     somebody not here yet. */
+  function followBtnHTML(p) {
+    return `<button class="fd-btn${p.following ? " ghost" : ""}" data-fd="follow" data-handle="${escapeAttr(p.handle)}" type="button">${
+      p.following ? "Following" : "Follow"}</button>`;
+  }
+
+  // The friends layer's button by where the two stand (engine/socialfeed
+  // _standing): Add friend, Requested, Accept, or Message once friends.
+  function friendBtnHTML(p) {
+    const st = p.standing || (p.friend ? "friend" : "");
+    if (st === "friend") return `<a class="fd-btn ghost" href="#messages">Message</a>`;
+    if (st === "asked") return `<button class="fd-btn ghost" type="button" disabled>Requested</button>`;
+    return `<button class="fd-btn${st === "asked_me" ? "" : " ghost"}" data-fd="friend" data-handle="${escapeAttr(p.handle)}" type="button">${
+      st === "asked_me" ? "Accept" : "Add friend"}</button>`;
+  }
+
+  function personRowHTML(p) {
+    const n = Number(p.followers || 0);
+    const sub = [`@${escapeHtml(p.handle)}`, p.why ? escapeHtml(p.why) : p.follows_you ? "Follows you" : "",
+                 n ? `${big(n)} follower${n === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+    return `<div class="fd-prow"><a class="fd-prow-who" href="${profHref(p.handle)}">${avatar(p, "md")}
+        <span class="fd-prow-t"><b>${displayName(p)}${badge(p)}</b><span>${sub}</span></span></a>
+      <span class="fd-prow-act">${followBtnHTML(p)}${friendBtnHTML(p)}</span></div>`;
+  }
+
+  // Somebody not here yet: the friends layer's invite link (app.js
+  // data-copy-invite), a friend the moment they join.
+  function inviteCardHTML() {
+    const soc = typeof _socCache !== "undefined" ? _socCache : null;
+    const tok = (soc && soc.invite && soc.invite.token) || "";
+    return `<section class="fd-card fd-invite"><span class="fd-invite-ic">${ico("userplus", 20)}</span>
+      <span class="fd-invite-t"><b>Not on Qellys yet?</b><span>Send them your invite link — you’re friends the moment they join.</span></span>
+      ${tok ? `<button class="fd-btn ghost" data-copy-invite="${escapeAttr(tok)}" type="button">${ico("link", 15)} Copy link</button>`
+        : F.signedIn ? "" : `<a class="fd-btn ghost" href="#account">Sign in</a>`}</section>`;
+  }
+
+  function findResultsHTML() {
+    const s = F.find || {};
+    const people = s.people || [];
+    const posts = s.posts || [];
+    const q = String(s.q || "");
+    let out = people.length
+      ? `<section class="fd-card fd-findc"><h3>${s.suggested ? "People you may know" : "People"}</h3>
+          <div class="fd-prows">${people.map(personRowHTML).join("")}</div></section>`
+      : q ? `<div class="fd-card fd-empty">Nobody goes by “${escapeHtml(q)}”.</div>` : "";
+    if (s.suggested || (q && !people.length)) out += inviteCardHTML();
+    if (posts.length) out += `<h3 class="fd-findh">Posts</h3><div class="fd-list">${posts.map((p) => postHTML(p)).join("")}</div>`;
+    return out;
+  }
+
+  function findPageHTML() {
+    const q = String((F.find && F.find.q) || "");
+    return `${headHTML("Search", "Find anyone by name or @handle — open their profile, follow them or add them as a friend.")}
+      <form class="fd-search fd-findbar" data-fd-form="search" role="search">${icon("search", 18)}
+        <input id="fd-find" name="q" type="search" maxlength="40" value="${escapeAttr(q)}"
+          placeholder="Search people, posts and #tags" aria-label="Search people, posts and tags"
+          autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"></form>
+      <div id="fd-find-out" aria-live="polite">${findResultsHTML()}</div>`;
+  }
+
+  /* What the box finds for ``q``: people (twenty, handles that start with
+     it first; who to add when ``q`` is empty) and, from two letters, the
+     posts that carry it — not for an @handle, which is a person. */
+  async function findLoad(q) {
+    const word = String(q || "").trim();
+    const bare = word.replace(/^@/, "");
+    const [pp, ps] = await Promise.all([api(`people?q=${encodeURIComponent(word)}`),
+      bare.length >= 2 && bare === word ? api(`search?q=${encodeURIComponent(word)}`) : null]);
+    return { q: word, people: pp.ok ? pp.out.people || [] : [], suggested: !!(pp.ok && pp.out.suggested),
+             posts: ps && ps.ok ? ps.out.posts || [] : [] };
+  }
+
+  /* @ NAMES AS YOU TYPE in a post or a comment — the game chat's own row
+     (js/chat.js chatAtFar): anybody's handle that starts with what follows
+     the @, five at most, a tap putting it in. Whoever is named hears it
+     (engine/socialfeed _mentions). */
+  const AT_FAR = new Map();
+  let _atTimer = null, _atBox = null;
+  function atWord(box) {
+    const upto = box.value.slice(0, box.selectionStart == null ? box.value.length : box.selectionStart);
+    const m = /(^|\s)@([A-Za-z0-9_]{1,20})$/.exec(upto);
+    return m ? { q: m[2].toLowerCase(), at: upto.length - m[2].length - 1, end: upto.length } : null;
+  }
+  function atRow(box, names) {
+    const host = box.closest(".fd-cbox, .fd-comp-row") || box.parentElement;
+    let row = host.parentElement && host.parentElement.querySelector(":scope > .fd-atrow");
+    if (!names.length) { if (row) row.remove(); return; }
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "fd-atrow";
+      row.setAttribute("aria-label", "Names to mention");
+      // A tap here must not take the focus (and a phone's keyboard) away.
+      row.addEventListener("mousedown", (e) => e.preventDefault());
+      host.after(row);
+    }
+    row.innerHTML = names.map((h) => `<button type="button" data-fd="at" data-handle="${escapeAttr(h)}">@${escapeHtml(h)}</button>`).join("");
+  }
+  function atDraw(box) {
+    clearTimeout(_atTimer);
+    const w = atWord(box);
+    if (!w) { atRow(box, []); return; }
+    _atBox = box;
+    if (AT_FAR.has(w.q)) { atRow(box, AT_FAR.get(w.q)); return; }
+    _atTimer = setTimeout(async () => {
+      const res = await api(`people?q=${encodeURIComponent(w.q)}&n=5`);
+      const mine = String((F.me || {}).handle || "").toLowerCase();
+      if (AT_FAR.size > 200) AT_FAR.clear();
+      AT_FAR.set(w.q, res.ok ? (res.out.people || []).map((x) => String(x.handle || ""))
+        .filter((h) => h.toLowerCase().startsWith(w.q) && h.toLowerCase() !== mine) : []);
+      const now = atWord(box);
+      if (now && now.q === w.q) atRow(box, AT_FAR.get(w.q));
+    }, 160);
+  }
+  function atPut(handle) {
+    const box = _atBox;
+    if (!box || !document.body.contains(box) || !/^[A-Za-z0-9_]{3,20}$/.test(handle || "")) return;
+    const w = atWord(box);
+    if (w) {
+      box.value = `${box.value.slice(0, w.at)}@${handle} ${box.value.slice(w.end)}`.slice(0, Number(box.maxLength) > 0 ? box.maxLength : 2000);
+      const pos = Math.min(box.value.length, w.at + handle.length + 2);
+      box.setSelectionRange(pos, pos);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    box.focus();
+    atRow(box, []);
+  }
+
+  // As you type: the results redraw under the box (the box, its keyboard
+  // and its caret stay), and the address follows without a redraw.
+  let _findTimer = null, _findSeq = 0;
+  function findLive(q) {
+    clearTimeout(_findTimer);
+    _findTimer = setTimeout(async () => {
+      const mine = ++_findSeq;
+      const got = await findLoad(q);
+      if (mine !== _findSeq || route().split("/")[0] !== "search") return;
+      F.find = got;
+      const out = document.getElementById("fd-find-out");
+      if (out) out.innerHTML = findResultsHTML();
+      try { history.replaceState(history.state, "", `#feed/search${got.q ? `/${encodeURIComponent(got.q)}` : ""}`); } catch (e) { /* file:// */ }
+    }, 250);
   }
 
   function postPageHTML() {
@@ -776,8 +914,7 @@
       ? `<button class="fd-btn" data-fd="acct-edit" type="button">${ico("edit", 15)} Edit profile</button>
          <button class="fd-btn ghost" data-fd="share-profile" data-handle="${escapeAttr(p.handle)}" type="button">${ico("share", 15)} Share</button>`
       : F.signedIn ? `<button class="fd-btn${p.following ? " ghost" : ""}" data-fd="follow" data-handle="${escapeAttr(p.handle)}" type="button">${p.following ? "Following" : "Follow"}</button>
-          ${p.friend ? `<a class="fd-btn ghost" href="#messages">Message</a>`
-            : `<button class="fd-btn ghost" data-fd="friend" data-handle="${escapeAttr(p.handle)}" type="button">Add friend</button>`}
+          ${friendBtnHTML(p)}
           <button class="fd-btn ghost icon" data-fd="pmenu" data-handle="${escapeAttr(p.handle)}" type="button" aria-label="More">${ico("dots", 16)}</button>`
       : `<a class="fd-btn" href="#account">Sign in to follow</a>`;
     const stat = (v, label, cls, act) => {
@@ -849,10 +986,10 @@
      the account's switch, carried by every phone signed in to it. */
   function mentionAlertsHTML(a) {
     if (!a) return "";
-    const sw = typeof setSwitch === "function" ? setSwitch(!!a.on, `data-fd="mention-alerts" aria-label="Push me game chat mentions and replies"`)
+    const sw = typeof setSwitch === "function" ? setSwitch(!!a.on, `data-fd="mention-alerts" aria-label="Push me mentions and replies"`)
       : `<button type="button" data-fd="mention-alerts" aria-pressed="${!!a.on}">${a.on ? "On" : "Off"}</button>`;
-    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Push me game chat mentions and replies</b>
-      <span>When someone @mentions you or answers your message, on the phones you are signed in on. Not while you have that game open.</span>
+    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Push me mentions and replies</b>
+      <span>When someone @mentions you — in a game chat, a watch party, a post or a comment — or answers your message in a game chat, on the phones you are signed in on. Not while you have that game open.</span>
       ${a.on && !Number(a.phones) ? `<span class="fd-warn">Turn on alerts for this phone in Settings, under Alerts, and these come with them.</span>` : ""}</span>${sw}</section>`;
   }
 
@@ -1044,7 +1181,7 @@
       let cur = "foryou", active = "feed", title = "", empty = "Nothing here yet — be the first to post.";
       if (kind === "following") {
         cur = "following"; active = "following";
-        empty = F.signedIn ? "Nobody you follow has posted yet. Find people on Top Bettors or in search." : "Sign in to see posts from people you follow.";
+        empty = F.signedIn ? `Nobody you follow has posted yet. Find people in <a href="#feed/search">Search</a> or on Top Bettors.` : "Sign in to see posts from people you follow.";
       } else if (kind === "s" && SPORT_NAME[arg]) {
         params.sport = arg; cur = arg; active = `s:${arg}`;
         empty = `No ${SPORT_NAME[arg]} posts yet — be the first.`;
@@ -1066,7 +1203,7 @@
         empty = "You haven’t posted yet. Share a take or build a parlay above.";
       }
       // Search has its own page (#feed/search/…); a feed is never results.
-      F.search = null;
+      F.find = null;
       const okP = loadList(params, append);
       await Promise.all([okP, railP]);
       paint(seq, active, feedPage(cur, title, empty), { hero: !kind || kind === "following" || kind === "s" });
@@ -1137,11 +1274,15 @@
       paint(seq, "tags", tagsPageHTML(res.ok ? res.out.tags : []), { hero: false });
       return;
     }
-    if (kind === "search" && arg) {
-      const res = await api(`search?q=${encodeURIComponent(arg)}`);
-      F.search = res.ok ? { q: arg, ...res.out } : { q: arg, people: [], posts: [] };
-      await railP;
-      paint(seq, "feed", `${headHTML("Search", "", true)}${searchResultsHTML()}`, { hero: false });
+    if (kind === "search") {
+      // The invite link for the card under the results (app.js socFetch).
+      const socP = F.signedIn && typeof socFetch === "function" ? socFetch().catch(() => null) : null;
+      const [got] = await Promise.all([findLoad(arg || ""), socP, railP]);
+      F.find = got;
+      paint(seq, "search", findPageHTML(), { hero: false });
+      const box = document.getElementById("fd-find");
+      // A computer starts typing at once; a phone's keyboard waits for a tap.
+      if (box && !arg && seq === _drawSeq && matchMedia("(hover: hover)").matches) box.focus();
       return;
     }
     go("");
@@ -1154,7 +1295,7 @@
   }
 
   // ── finding things on the page ────────────────────────────────────────────
-  const allPosts = () => [...F.posts, ...ACCT.posts, ...(F.search ? F.search.posts || [] : []), ...(F.post ? [F.post] : [])];
+  const allPosts = () => [...F.posts, ...ACCT.posts, ...(F.find ? F.find.posts || [] : []), ...(F.post ? [F.post] : [])];
   const findPost = (id) => allPosts().find((p) => p.id === Number(id));
 
   /* A post can be on the page twice at once — in the Social view and on
@@ -1263,7 +1404,7 @@
     }
     if (act === "load") return inAccount() ? acctMore() : render(true);
     if (act === "back") { if (history.length > 1) history.back(); else go(""); return; }
-    if (act === "clear-search") { F.search = null; return go(""); }
+    if (act === "clear-search") { F.find = null; return go("search"); }
     if (act === "like") {
       if (needProfile("like posts")) return;
       const res = await api("like", { id: Number(id) });
@@ -1422,7 +1563,8 @@
       const res = await api("follow", { handle: d.handle });
       if (!res.ok) { tfToast(res.out.error || "That did not go through."); return; }
       if (F.profile && F.profile.handle === d.handle) { F.profile.following = res.out.following; F.profile.followers = res.out.followers; }
-      [...((F.rail || {}).leaders || []), ...((F.rail || {}).suggest || [])].forEach((p) => { if (p.handle === d.handle) p.following = res.out.following; });
+      [...((F.rail || {}).leaders || []), ...((F.rail || {}).suggest || []), ...((F.find || {}).people || [])]
+        .forEach((p) => { if (p.handle === d.handle) p.following = res.out.following; });
       document.querySelectorAll(`[data-fd="follow"][data-handle="${CSS.escape(d.handle)}"]`).forEach((b) => {
         b.textContent = res.out.following ? "Following" : "Follow";
         b.classList.toggle("ghost", res.out.following || b.classList.contains("sm"));
@@ -1431,9 +1573,21 @@
       return;
     }
     if (act === "friend") {
+      if (!F.signedIn) { tfToast("Sign in (free) to add friends."); switchView("account", true); return; }
+      t.disabled = true;
       const res = await api("friend", { handle: d.handle });
-      tfToast(res.ok ? (res.out.already ? "Request already sent." : res.out.already_friends ? "You’re already friends."
-        : "Friend request sent — it lands in their inbox.") : (res.out.error || "That did not go through."));
+      t.disabled = false;
+      if (!res.ok) { tfToast(res.out.error || "That did not go through."); return; }
+      const st = res.out.accepted || res.out.already_friends ? "friend" : "asked";
+      tfToast(res.out.accepted ? "You’re friends now — say hi in Messages." : res.out.already_friends ? "You’re already friends."
+        : res.out.already ? "Request already sent." : "Friend request sent — it lands in their inbox.");
+      [F.profile, ...((F.find || {}).people || [])].forEach((p) => {
+        if (p && p.handle === d.handle) { p.standing = st; p.friend = st === "friend"; }
+      });
+      document.querySelectorAll(`[data-fd="friend"][data-handle="${CSS.escape(d.handle)}"]`).forEach((b) => {
+        b.outerHTML = friendBtnHTML({ handle: d.handle, standing: st });
+      });
+      if (st === "friend" && typeof socFetch === "function") socFetch(true).catch(() => null);
       return;
     }
     if (act === "follows" || act === "following-list") {
@@ -1448,6 +1602,7 @@
       if (inAccount()) { const box = document.getElementById("acct-follows"); if (box) box.innerHTML = ""; return; }
       return render();
     }
+    if (act === "at") { atPut(d.handle); return; }
     if (act === "reply") {
       const slot = document.getElementById(`fd-rslot-${id}`);
       if (!slot) return;
@@ -1518,10 +1673,12 @@
     const f = e.target.closest && e.target.closest('[data-fd-form="search"]');
     if (!f) return;
     e.preventDefault();
-    const q = ((f.querySelector("input") || {}).value || "").trim();
+    const inp = f.querySelector("input");
+    const q = ((inp || {}).value || "").trim();
     if (q.startsWith("#") && q.length > 2) { go(`tag/${encodeURIComponent(q.slice(1))}`); return; }
-    if (q.length < 2) { tfToast("Type at least two letters to search."); return; }
-    go(`search/${encodeURIComponent(q)}`);
+    // Enter puts a phone's keyboard away; the results are already there.
+    if (inp && inp.id === "fd-find") inp.blur();
+    go(q ? `search/${encodeURIComponent(q)}` : "search");
   });
 
   document.addEventListener("change", (e) => {
@@ -1558,6 +1715,8 @@
       const c = document.getElementById("fd-p-count");
       if (c) c.textContent = `${t.value.length}/200`;
     }
+    if (t.id === "fd-find") findLive(t.value);
+    if (t.id === "fd-comp-text" || /^fd-(cc|rc)-/.test(t.id || "")) atDraw(t);
   });
 
   document.addEventListener("focusin", (e) => {

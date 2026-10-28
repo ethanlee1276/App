@@ -99,15 +99,16 @@ def test_setting_it_puts_the_topic_on_the_accounts_phones():
     assert "reminders" not in _phone(conn, me)
     code, out = GC.remind(conn, me, ROOM, True, d, t)
     assert code == 200 and out == {"ok": True, "on": True, "phones": 1}, out
-    assert _topics(conn, me) == ["bets", "reminders"]
+    # (with the mentions every account carries unless it said no, engine/socialfeed)
+    assert _topics(conn, me) == ["bets", "mentions", "reminders"]
     assert GC.remind_view(conn, ROOM, me, d, t)["on"] is True
     # The Alerts page re-subscribes knowing nothing of it: it stays.
-    assert _phone(conn, me, ("bets", "clutch")) == ["bets", "clutch", "reminders"]
+    assert _phone(conn, me, ("bets", "clutch")) == ["bets", "clutch", "mentions", "reminders"]
     # Signed out, never.
     code, out = PA.subscribe(conn, FCM + "x", kind="web", user_id=None, topics=["posted", "reminders"])
     assert "reminders" not in out["topics"], out
     GC.remind(conn, me, ROOM, False, d, t)
-    assert _topics(conn, me) == ["bets", "clutch"], "no reminder left, no topic"
+    assert _topics(conn, me) == ["bets", "clutch", "mentions"], "no reminder left, no topic"
     assert "reminders" in PA.PERSONAL and PM.TOPICS == PA.PERSONAL
 
 
