@@ -3773,7 +3773,7 @@ class Handler(BaseHTTPRequestHandler):
     def _feed_post(self, path: str, body: dict):
         from engine import socialfeed as SF
         if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
-                        "delete", "report", "profile", "follow", "block", "seen", "friend",
+                        "delete", "report", "profile", "follow", "block", "seen", "friend", "mention-alerts",
                         "hide", "vote", "verify", "pin", "pickem"):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
         txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
@@ -3848,6 +3848,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "seen":
                 SF.mark_seen(conn, uid)
                 code, out = 200, {"ok": True}
+            elif path == "mention-alerts":
+                code, out = SF.set_mention_alerts(conn, uid, body.get("on") is True)
             else:
                 code, out = SF.profile_set(conn, uid, txt("handle"), txt("bio"), name=txt("name"),
                                            color=body.get("color"), team=txt("team"))

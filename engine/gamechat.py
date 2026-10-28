@@ -317,7 +317,8 @@ def send(conn, user_id: int, room, body, play="", bet=None, reply_to=None,
     mid = int(cur.lastrowid)
     if mid % 200 == 0:
         _prune(conn, now)
-    _mention(conn, user_id, room, mid, body, party)
+    answers = conn.execute("SELECT user_id FROM chat_msgs WHERE id=?", (parent,)).fetchone()[0] if parent else None
+    _mention(conn, user_id, room, mid, body, party, answers, now)
     conn.commit()
     return 200, {"ok": True, "id": mid}
 
@@ -325,40 +326,83 @@ def send(conn, user_id: int, room, body, play="", bet=None, reply_to=None,
 MENTIONS_PER_MSG = 3
 
 
-def _mention(conn, user_id, room: str, mid: int, body: str, party: int = 0) -> None:
-    """@handle in a message (Social's own rule, socialfeed.MENTION_RE): each
-    reader named hears it in their Activity, with the game to open — in a
-    watch party, only its members; never the writer; a block stops it."""
+def _mention(conn, user_id, room: str, mid: int, body: str, party: int = 0, answers=None,
+             now: float | None = None) -> None:
+    """Who a message speaks to: each @handle in it (Social's own rule,
+    socialfeed.MENTION_RE) and the writer of the message it answers. Each
+    hears it in their Activity with the game to open, and on their phone if
+    they asked (_ping); in a watch party only its members; never the
+    writer; a block either way stops it."""
     from . import socialfeed as SF
-    if "@" not in (body or ""):
-        return
-    m = ROOM_RE.match(room)
-    link = f"#pbp/{m.group(1)}/{m.group(2)}" if m else ""
-    if party and link:
-        # A party's words open the party (its invite link: a member
-        # joining again is joining once).
-        row = conn.execute("SELECT token FROM chat_parties WHERE id=?", (int(party),)).fetchone()
-        link = f"{link}/party/{row['token']}" if row else link
-    seen: set = set()
+    told: dict = {}
+    if answers and int(answers) != int(user_id):
+        told[int(answers)] = "chat_reply"
     try:
-        for h in SF.MENTION_RE.findall(body)[:MENTIONS_PER_MSG]:
-            uid = SF._uid_of(conn, h)
-            if not uid or uid == int(user_id) or uid in seen:
-                continue
+        if "@" in (body or ""):
+            for h in SF.MENTION_RE.findall(body)[:MENTIONS_PER_MSG]:
+                uid = SF._uid_of(conn, h)
+                if uid and uid != int(user_id):
+                    told.setdefault(uid, "chat_mention")
+        if not told:
+            return
+        m = ROOM_RE.match(room)
+        link = f"#pbp/{m.group(1)}/{m.group(2)}" if m else ""
+        if party and link:
+            # A party's words open the party (its invite link: a member
+            # joining again is joining once).
+            row = conn.execute("SELECT token FROM chat_parties WHERE id=?", (int(party),)).fetchone()
+            link = f"{link}/party/{row['token']}" if row else link
+        for uid, kind in told.items():
             if party and not _in_party(conn, uid, party):
                 continue
-            seen.add(uid)
+            if int(user_id) in SF.blocked_ids(conn, uid):
+                continue
             # The message's id, negative, keeps each message's notice its
             # own without pointing at a feed comment.
-            SF._notify(conn, uid, user_id, "chat_mention", comment_id=-int(mid), link=link, note=body)
+            SF._notify(conn, uid, user_id, kind, comment_id=-int(mid), link=link, note=body)
+            _ping(conn, uid, user_id, room, kind, body, link, party, now)
     except sqlite3.OperationalError:
         return                                   # no Social tables here: nobody to name
 
 
-def _unmention(conn, msg_id) -> None:
-    """A message hidden or deleted takes its @mentions out of Activity."""
+#: One push a reader a game chat this often at most: the rest wait in Activity.
+PING_EVERY_S = 300
+#: Their page on the game this recently: they see it land, no push.
+PING_HERE_S = 90
+
+
+def _ping(conn, uid, writer, room: str, kind: str, body: str, link: str, party, now=None) -> None:
+    """A push for a mention or a reply (topic "mentions", engine/pushmine),
+    for an account that asked (the switch on Activity): one a game every
+    five minutes, never while their page is on the game."""
+    from . import karma as K
+    from . import pushmine as PM
+    from . import socialfeed as SF
+    if not SF.mention_alerts(conn, uid):
+        return
+    t = time.time() if now is None else float(now)
     try:
-        conn.execute("DELETE FROM feed_notifs WHERE kind='chat_mention' AND comment_id=?", (-int(msg_id or 0),))
+        here = conn.execute("SELECT 1 FROM karma_watch WHERE user_id=? AND room=? AND last_at>=?",
+                            (int(uid), room, t - PING_HERE_S)).fetchone()
+    except sqlite3.OperationalError:
+        here = None
+    if here:
+        return
+    who = (SF.profile_of(conn, writer) or {}).get("handle") or "someone"
+    g = K._live_game(room)
+    where = "your watch party" if party else (f"{g['away']} @ {g['home']}" if g.get("away") and g.get("home")
+                                              else "a game chat")
+    did = "replied to you" if kind == "chat_reply" else "mentioned you"
+    PM.tell(conn, uid, f"chat:{room}:{int(t // PING_EVERY_S)}", SF.MENTION_TOPIC, f"@{who} {did} in {where}",
+            body, "/" + link if link else "/#live", now=t)
+
+
+def _unmention(conn, msg_id) -> None:
+    """A message hidden or deleted takes its @mentions and its reply's
+    notice out of Activity."""
+    try:
+        conn.execute("DELETE FROM feed_notifs WHERE kind IN ('chat_mention', 'chat_reply') AND comment_id=?",
+                     (-int(msg_id or 0),))
         conn.commit()
     except sqlite3.OperationalError:
         pass

@@ -562,7 +562,7 @@ def test_in_a_browser_the_chat_the_strip_the_tab_and_a_level_crossed():
     cards = K.cards(conn, ids)
     msgs = [{"id": 100 + i, "at": time.time() - 60 * (5 - i), "body": f"message {i}", "own": False, "reacts": {}, "mine": "",
              "by": {"handle": h, "color": i, **cards.get(ids[i], {})}} for i, h in enumerate(("ethan", "sam", "casey"))]
-    room = {"room": "nfl_990077", "t": time.time(), "messages": msgs, "older": False, "reacts": {}, "plays": {}, "threads": {},
+    room = {"room": "nfl_990177", "t": time.time(), "messages": msgs, "older": False, "reacts": {}, "plays": {}, "threads": {},
             "mine_plays": {}, "votes": {"home": 3, "away": 2, "mine": "", "open": True}, "vote_path": [], "here": 9,
             "me": {"signed_in": True, "handle": "ethan"}, "hype": {"level": 2, "n": 30, "next": 50, "progress": 0.2}}
     who = {"signed_in": True, "email": "you@example.com", "profile": {"handle": "ethan", "color": 1}}
@@ -573,9 +573,9 @@ def test_in_a_browser_the_chat_the_strip_the_tab_and_a_level_crossed():
     pbp = os.path.join(ROOT, "web", "data", "pbp")
     made = not os.path.isdir(pbp)
     os.makedirs(pbp, exist_ok=True)
-    path = os.path.join(pbp, "nfl_990077.json")
+    path = os.path.join(pbp, "nfl_990177.json")
     with open(path, "w") as fh:
-        fh.write(json.dumps(_game("990077", 1)))
+        fh.write(json.dumps(_game("990177", 1)))
     ful = lambda b: (lambda r: r.fulfill(status=200, content_type="application/json", body=b))  # noqa: E731
     srv, port = rendercheck._serve()
     errs, got = [], {}
@@ -606,7 +606,7 @@ def test_in_a_browser_the_chat_the_strip_the_tab_and_a_level_crossed():
                 page.route("**/api/callit/**", ful(json.dumps({"open": None, "kind": "football", "board": []})))
                 page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb_chat_rules_v1','1');"
                                      f"localStorage.setItem('qb_kr_level','{v['level']}');}}catch(e){{}}")
-                page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nfl/990077", wait_until="load")
+                page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nfl/990177", wait_until="load")
                 page.wait_for_timeout(6500)
                 got["note"] = page.evaluate("[...document.querySelectorAll('.kr-note')].map((n) => n.textContent).join('|')")
                 page.evaluate("(() => { const c = document.querySelector('.gch-entry'); c.scrollIntoView({block: 'center'}); c.click(); })()")

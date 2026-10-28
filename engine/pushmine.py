@@ -76,7 +76,10 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          "finals": 3 * 3600, "lineup": 18 * 3600, "week": 14 * 3600,
          # Karma (engine/karma.alerts_pass): the streak nudge is only worth
          # sending before midnight; a week's trophy is still news that day.
-         "karma": 3 * 3600, "karma_week": 12 * 3600}
+         "karma": 3 * 3600, "karma_week": 12 * 3600,
+         # A game chat's mention or reply (engine/gamechat): the game is
+         # still on for a couple of hours at most.
+         "mentions": 2 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0}
@@ -641,7 +644,7 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     # Kept a day at most (the privacy policy, 2.7): long enough for a late
     # knock to read it, no longer.
     conn.execute("DELETE FROM push_mine WHERE at < ?", (t - KEEP_S,))
-    held = " AND kind NOT IN ('watches', 'clutch', 'lineup', 'karma')" if quiet else ""
+    held = " AND kind NOT IN ('watches', 'clutch', 'lineup', 'karma', 'mentions')" if quiet else ""
     rows = conn.execute("SELECT user_id, id, kind, title, body, url FROM push_mine WHERE sent = 0" + held +
                         " ORDER BY at").fetchall()
     stats = {"messages": len(rows), "sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}

@@ -256,7 +256,9 @@ def ensure_tables(conn) -> None:
                       ("color", "INTEGER NOT NULL DEFAULT 0"),
                       ("fav_team", "TEXT NOT NULL DEFAULT ''"),
                       ("verified", "INTEGER NOT NULL DEFAULT 0"),
-                      ("founder", "INTEGER NOT NULL DEFAULT 0")):
+                      ("founder", "INTEGER NOT NULL DEFAULT 0"),
+                      # A push when a game chat names or answers them (2026-10-28).
+                      ("push_mentions", "INTEGER NOT NULL DEFAULT 0")):
         _add(conn, "feed_profiles", col, decl)
     # The one post the founder pins to the top of the feed (at most one row).
     conn.execute("CREATE TABLE IF NOT EXISTS feed_pins (post_id INTEGER PRIMARY KEY, "
@@ -630,7 +632,37 @@ def notifications(conn, user_id: int, strong: bool = False) -> dict:
                     "color": int(r["color"] or 0), "post_id": r["post_id"], "comment_id": r["comment_id"],
                     "result": r["result"] or "", "snippet": _text(what, strong)[:90],
                     "link": (r["link"] if "link" in keys else "") or ""})
-    return {"items": out, "unseen": unseen(conn, user_id)}
+    from . import pushalerts as PA
+    return {"items": out, "unseen": unseen(conn, user_id),
+            "alerts": {"on": mention_alerts(conn, user_id), "phones": PA.phones(conn, user_id)}}
+
+
+#: The push topic (engine/pushmine) for a game chat's mentions and replies.
+MENTION_TOPIC = "mentions"
+
+
+def mention_alerts(conn, user_id) -> bool:
+    """Does this account want a push when a game chat @mentions it or
+    answers its message? (engine/pushalerts.subscribe asks, so a phone
+    signed in to it carries the topic.)"""
+    try:
+        row = conn.execute("SELECT push_mentions FROM feed_profiles WHERE user_id=?", (int(user_id),)).fetchone()
+    except sqlite3.Error:
+        return False
+    return bool(row and row[0])
+
+
+def set_mention_alerts(conn, user_id, on: bool) -> tuple[int, dict]:
+    """The Activity page's switch: the account's choice, carried by every
+    phone signed in to it (engine/pushalerts.relink)."""
+    from . import pushalerts as PA
+    ensure_tables(conn)
+    if not profile_of(conn, user_id):
+        return 409, {"error": "Pick a username first: a mention names one.", "need_handle": True}
+    conn.execute("UPDATE feed_profiles SET push_mentions=? WHERE user_id=?", (1 if on else 0, int(user_id)))
+    PA.relink(conn, user_id, MENTION_TOPIC, bool(on))
+    conn.commit()
+    return 200, {"ok": True, "on": bool(on), "phones": PA.phones(conn, user_id)}
 
 
 def mark_seen(conn, user_id: int) -> None:
@@ -2108,7 +2140,7 @@ def export_user(conn, user_id: int) -> dict:
     comments = [{"post_id": int(r["post_id"]), "body": r["body"], "created_at": r["created_at"]}
                 for r in conn.execute("SELECT * FROM feed_comments WHERE user_id=? ORDER BY id", (uid,))]
     handles = lambda sql: [r[0] for r in conn.execute(sql, (uid,))]   # noqa: E731
-    return {"profile": prof, "posts": posts, "comments": comments,
+    return {"profile": prof, "mention_alerts": mention_alerts(conn, uid), "posts": posts, "comments": comments,
             "likes": [int(r[0]) for r in conn.execute("SELECT post_id FROM feed_likes WHERE user_id=?", (uid,))],
             "tails": [int(r[0]) for r in conn.execute("SELECT post_id FROM feed_tails WHERE user_id=?", (uid,))],
             "votes": [{"post_id": int(r[0]), "option": int(r[1])} for r in conn.execute(

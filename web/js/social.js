@@ -842,10 +842,21 @@
     like: "liked your post", tail: "tailed your parlay", comment: "commented on your post",
     reply: "replied to your comment", mention: "mentioned you", follow: "started following you",
     comment_like: "liked your comment", won: "Your parlay won", lost: "Your parlay lost",
-    chat_mention: "mentioned you in a game chat",
+    chat_mention: "mentioned you in a game chat", chat_reply: "replied to you in a game chat",
   };
 
-  function activityHTML(items) {
+  /* A push when a game chat names or answers you (engine/gamechat _ping):
+     the account's switch, carried by every phone signed in to it. */
+  function mentionAlertsHTML(a) {
+    if (!a) return "";
+    const sw = typeof setSwitch === "function" ? setSwitch(!!a.on, `data-fd="mention-alerts" aria-label="Push me game chat mentions and replies"`)
+      : `<button type="button" data-fd="mention-alerts" aria-pressed="${!!a.on}">${a.on ? "On" : "Off"}</button>`;
+    return `<section class="fd-card fd-pushrow"><span class="fd-pushrow-t"><b>Push me game chat mentions and replies</b>
+      <span>When someone @mentions you or answers your message, on the phones you are signed in on. Not while you have that game open.</span>
+      ${a.on && !Number(a.phones) ? `<span class="fd-warn">Turn on alerts for this phone in Settings, under Alerts, and these come with them.</span>` : ""}</span>${sw}</section>`;
+  }
+
+  function activityHTML(items, alerts) {
     const rows = (items || []).map((n) => {
       const actor = n.handle ? `<b>${escapeHtml(n.name || n.handle)}</b> ` : "";
       // A game chat's @mention opens its game (engine/gamechat _mention).
@@ -857,7 +868,8 @@
         <span class="fd-ago">${ago(n.at)}</span></span></a>`;
     }).join("");
     return `${headHTML("Activity", "Likes, tails, comments, follows, mentions and your graded parlays.")}
-      <section class="fd-card fd-notes">${rows || `<p class="fd-fine">Nothing yet. Likes, comments, tails, new followers and your graded parlays show up here.</p>`}</section>`;
+      <section class="fd-card fd-notes">${rows || `<p class="fd-fine">Nothing yet. Likes, comments, tails, new followers and your graded parlays show up here.</p>`}</section>
+      ${mentionAlertsHTML(alerts)}`;
   }
 
   function leadersPageHTML(L) {
@@ -1093,7 +1105,7 @@
       }
       const res = await api("notifications");
       await railP;
-      paint(seq, "activity", activityHTML(res.ok ? res.out.items : []), { hero: false });
+      paint(seq, "activity", activityHTML(res.ok ? res.out.items : [], res.ok ? res.out.alerts : null), { hero: false });
       if (res.ok && res.out.unseen) { await api("seen", {}); F.unseen = 0; syncBadge(); }
       return;
     }
@@ -1385,6 +1397,14 @@
       const res = await api("report", { kind: d.kind, id: Number(id), reason: d.v || "other" });
       tfToast(res.ok ? "Reported — thanks. Three reports hide it until it’s reviewed." : (res.out.error || "That did not go through."));
       return;
+    }
+    if (act === "mention-alerts") {
+      const on = t.getAttribute("aria-checked") !== "true" && t.getAttribute("aria-pressed") !== "true";
+      const res = await api("mention-alerts", { on });
+      if (!res.ok) { tfToast(res.out.error || "That did not save."); return; }
+      tfToast(!on ? "Game chat alerts off." : res.out.phones ? "On: a push when a game chat names or answers you."
+        : "On. Turn on alerts for this phone in Settings, under Alerts, and these come with them.");
+      return render();
     }
     if (act === "block") {
       closeMenus();

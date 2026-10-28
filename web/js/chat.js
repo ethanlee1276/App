@@ -1455,6 +1455,7 @@ async function chatClick(e) {
   }
   const act = t.dataset.gch;
   if (act === "close") return chatClose();
+  if (act === "at") return chatAtPut(t.dataset.handle);
   if (act === "tab") { CH.tab = t.dataset.tab; CH.menu = 0; chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
   if (act === "thread") { CH.thread = t.dataset.play; CH.menu = 0; chatDrawPoll(); chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
   if (act === "unthread") { CH.thread = ""; chatDrawPoll(); chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
@@ -1632,6 +1633,58 @@ document.addEventListener("submit", async (e) => {
     } catch (err) { CH.err = "No connection — try again."; }
     chatDrawFoot();
   }
+});
+
+/* @ SUGGESTIONS (Discord's and Slack's): an @ and the start of a name
+   offers up to five, your friends here and the room's latest writers
+   first; a tap puts the name in (engine/gamechat tells whoever is named). */
+function chatAtWord(box) {
+  const upto = box.value.slice(0, box.selectionStart == null ? box.value.length : box.selectionStart);
+  const m = /(^|\s)@([A-Za-z0-9_]{0,20})$/.exec(upto);
+  return m ? { q: m[2].toLowerCase(), at: upto.length - m[2].length - 1, end: upto.length } : null;
+}
+function chatAtNames(q) {
+  const me = String((CH.me || {}).handle || "").toLowerCase();
+  const seen = new Set(), out = [];
+  const add = (h) => {
+    const k = String(h || "").toLowerCase();
+    if (k && k !== me && !seen.has(k) && k.startsWith(q)) { seen.add(k); out.push(String(h)); }
+  };
+  (CH.friends || []).forEach(add);
+  [...CH.byId.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).forEach((m) => add((m.by || {}).handle));
+  return out.slice(0, 5);
+}
+function chatAtDraw(box) {
+  const f = box.closest("form");
+  if (!f) return;
+  let row = f.parentNode.querySelector(".gch-atrow");
+  const w = chatAtWord(box);
+  const names = w ? chatAtNames(w.q) : [];
+  if (!names.length) { if (row) row.remove(); return; }
+  if (!row) {
+    row = document.createElement("div");
+    row.className = "gch-atrow";
+    row.setAttribute("aria-label", "Names to mention");
+    // Keep the keyboard up: a tap here must not take the focus away.
+    row.addEventListener("mousedown", (e) => e.preventDefault());
+    f.parentNode.insertBefore(row, f);
+  }
+  row.innerHTML = names.map((h) => `<button type="button" data-gch="at" data-handle="${chEsc(h)}">@${chEsc(h)}</button>`).join("");
+}
+function chatAtPut(handle) {
+  const box = document.querySelector("#gch-sheet .gch-input");
+  if (!box || !/^[A-Za-z0-9_]{3,20}$/.test(handle || "")) return;
+  const w = chatAtWord(box);
+  if (w) {
+    box.value = `${box.value.slice(0, w.at)}@${handle} ${box.value.slice(w.end)}`.slice(0, 280);
+    const pos = Math.min(box.value.length, w.at + handle.length + 2);
+    box.setSelectionRange(pos, pos);
+  }
+  box.focus();
+  chatAtDraw(box);
+}
+document.addEventListener("input", (e) => {
+  if (e.target.classList && e.target.classList.contains("gch-input")) chatAtDraw(e.target);
 });
 
 /* Enter sends on a keyboard, Shift+Enter breaks the line; on a phone the

@@ -1237,21 +1237,8 @@ def reminds(conn, user_id) -> bool:
 
 def phones(conn, user_id) -> int:
     """How many phones signed in to this account take alerts at all."""
-    if not _has(conn, "push_subs"):
-        return 0
-    return int(conn.execute("SELECT COUNT(*) FROM push_subs WHERE user_id=?", (int(user_id),)).fetchone()[0] or 0)
-
-
-def _relink(conn, user_id, on: bool) -> None:
-    """Put the karma topic on (or take it off) every phone signed in to the
-    account, the way a subscribe from the Alerts page would."""
-    if not _has(conn, "push_subs"):
-        return
-    for endpoint, topics in conn.execute("SELECT endpoint, topics FROM push_subs WHERE user_id=?",
-                                         (int(user_id),)).fetchall():
-        have = [t for t in str(topics or "").split(",") if t and t != ALERT_TOPIC]
-        conn.execute("UPDATE push_subs SET topics=? WHERE endpoint=?",
-                     (",".join(have + ([ALERT_TOPIC] if on else [])), endpoint))
+    from . import pushalerts as PA
+    return PA.phones(conn, user_id)
 
 
 def set_prefs(conn, user_id, flair=None, ladder=None, remind=None, share=None, pins=None) -> tuple[int, dict]:
@@ -1272,7 +1259,8 @@ def set_prefs(conn, user_id, flair=None, ladder=None, remind=None, share=None, p
         # From now on: the tiers already reached are not news.
         conn.execute("UPDATE karma_prefs SET remind=?, told_level=? WHERE user_id=?",
                      (1 if remind else 0, level_of(total(conn, user_id)), int(user_id)))
-        _relink(conn, user_id, bool(remind))
+        from . import pushalerts as PA
+        PA.relink(conn, user_id, ALERT_TOPIC, bool(remind))
     if flair is not None:
         flair = str(flair)
         if flair and flair not in FLAIRS:

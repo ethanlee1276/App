@@ -476,6 +476,11 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 
 /* ── activity, leaders, tags ────────────────────────────────────────────── */
 .fd-notes { padding: 6px 12px; }
+/* Activity's switch: a push for a game chat's mentions and replies. */
+.fd-pushrow { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin-top: 12px; }
+.fd-pushrow-t { flex: 1; display: grid; gap: 3px; }
+.fd-pushrow-t > span { font-size: var(--fs-xs); color: var(--text-mute); }
+.fd-pushrow-t > .fd-warn { color: var(--warn); }
 .fd-note { display: flex; align-items: flex-start; gap: 12px; padding: 12px 6px; color: var(--text); text-decoration: none; border-radius: var(--radius-sm); }
 .fd-note + .fd-note { border-top: var(--hairline) solid var(--fd-line); }
 .fd-note.unseen { background: color-mix(in srgb, var(--brand) 6%, transparent); }

@@ -34,6 +34,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import sqlite3
 import time
 from pathlib import Path
 
@@ -46,7 +47,7 @@ LATEST = ROOT / "data" / "push" / "latest.json"
 KINDS = ("posted", "settled")
 #: A member's own alerts (engine/pushmine): a phone signed in when it
 #: subscribed may ask for these too.
-PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma")
+PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions")
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300
@@ -88,14 +89,14 @@ def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=KINDS
     # carries the shared two only, and its link to an account is whatever
     # its latest subscribe said (signing out re-subscribes, detaching it).
     t = _clean_list(topics, KINDS + (PERSONAL if user_id else ()))
-    # Karma alerts are switched on from the Karma tab, not this phone's
-    # list (engine/karma): a phone signed in to an account that wants them
-    # carries them, whatever the Alerts page sent.
+    # Karma alerts (the Karma tab, engine/karma) and a game chat's mentions
+    # and replies (Activity, engine/socialfeed) are the account's choices,
+    # not this phone's list: a phone signed in to an account that wants
+    # them carries them, whatever the Alerts page sent.
     if user_id:
-        from engine import karma as _karma
-        want = _karma.reminds(conn, user_id)
-        keep = [x for x in t.split(",") if x and x != _karma.ALERT_TOPIC]
-        t = ",".join(keep + ([_karma.ALERT_TOPIC] if want else []))
+        for topic, want in _account_topics(conn, user_id):
+            keep = [x for x in t.split(",") if x and x != topic]
+            t = ",".join(keep + ([topic] if want else []))
     if not t and not user_id and _clean_list(topics, PERSONAL):
         # Signed out with only their own alerts chosen: nothing left for
         # this phone, and it must not keep the last member's.
@@ -116,6 +117,35 @@ def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=KINDS
                  (endpoint, kind, user_id, t, lg, now))
     conn.commit()
     return 200, {"ok": True, "topics": t.split(","), "leagues": [x for x in lg.split(",") if x]}
+
+
+def _account_topics(conn, user_id) -> list:
+    from engine import karma as _karma
+    from engine import socialfeed as _sf
+    return [(_karma.ALERT_TOPIC, _karma.reminds(conn, user_id)),
+            (_sf.MENTION_TOPIC, _sf.mention_alerts(conn, user_id))]
+
+
+def phones(conn, user_id) -> int:
+    """How many phones signed in to this account take alerts at all."""
+    try:
+        return int(conn.execute("SELECT COUNT(*) FROM push_subs WHERE user_id=?",
+                                (int(user_id),)).fetchone()[0] or 0)
+    except sqlite3.OperationalError:
+        return 0
+
+
+def relink(conn, user_id, topic: str, on: bool) -> None:
+    """Put one of the account's own topics on (or take it off) every phone
+    signed in to it, the way a subscribe from the Alerts page would."""
+    try:
+        rows = conn.execute("SELECT endpoint, topics FROM push_subs WHERE user_id=?", (int(user_id),)).fetchall()
+    except sqlite3.OperationalError:
+        return
+    for endpoint, topics in rows:
+        have = [x for x in str(topics or "").split(",") if x and x != topic]
+        conn.execute("UPDATE push_subs SET topics=? WHERE endpoint=?",
+                     (",".join(have + ([topic] if on else [])), endpoint))
 
 
 def unsubscribe(conn, endpoint: str) -> tuple[int, dict]:
