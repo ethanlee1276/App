@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HB "The top of Live, uncluttered" 30 <<'SH'
+curl -s https://qellysbook.com/js/karma.js | grep -c 'function krAskHTML(d)'
+curl -s https://qellysbook.com/css/styles.css | grep -c '.hd-quiet.lv-rest { margin-bottom: 12px; }'
+SH
 run HA "The black bar under the menu on the iPhone" 30 <<'SH'
 curl -s https://qellysbook.com/js/boot.js | grep -c 'setProperty("--vgap"'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'more-sheet { bottom: calc(-1'

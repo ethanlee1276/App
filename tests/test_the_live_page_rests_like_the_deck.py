@@ -87,20 +87,32 @@ def test_the_quiet_line_says_only_what_the_card_holds():
       return out;""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["full"] == "No games live in any league we model. NFL kickoff 1:00 PM ET. 2 bets queued.", got["full"]
-    assert got["nothing"] == "No games live in any league we model."
-    assert got["allOn"] == "No games live in any league we model.", "every game begun, nothing queued: one clause"
-    assert got["mlb"].startswith("No games live in any league we model. MLB first pitch ") and got["mlb"].endswith(" 1 bet queued."), got["mlb"]
+    # The line under "No games live" (2026-10-28): what is next, one clause a fact.
+    assert got["full"] == "NFL kickoff 1:00 PM ET · 2 bets queued", got["full"]
+    assert got["nothing"] == "", "nothing ahead and nothing queued: no line at all"
+    assert got["allOn"] == "", "every game begun, nothing queued"
+    assert got["mlb"].startswith("MLB first pitch ") and got["mlb"].endswith(" · 1 bet queued"), got["mlb"]
 
 
-def test_the_live_page_opens_quiet_with_the_decks_card_and_the_doors():
+def test_the_live_page_opens_quiet_with_the_decks_card_and_nothing_twice():
+    """Ethan, 2026-10-28, the top of this tab circled: "fix how cluttered
+    this is". The page's name alone, then "No games live" over the line of
+    what is next, the feed's reason, and the karma card and your players
+    under it; no second line under the name, and no doors to Picks and the
+    Record, which the tab bar and the sidebar already are."""
     body = _fn("renderLiveBoard")
-    i = body.index('<div class="hd-quiet lv-quiet"><i class="live-dot paused"></i>${escapeHtml(liveQuietLine())}</div>')
-    assert body.index('<span class="sub">— every game in progress across the sports we model</span></div>') < i, "under the page's name"
-    assert '${why}${boardEmptyDoors("live")}`;\n    bindEmptyDoors(host);\n    return;' in body[i:i + 400], \
-        "the feed's own reason still follows, then the doors — minus this page — wired"
+    quiet = body[body.index("if (!games.length) {"):body.index("const darkWhy")]
+    card = ('<div class="hd-quiet lv-quiet lv-rest"><i class="live-dot paused"></i><span class="lv-rest-t"><b>No games live</b>${\n'
+            '        next ? `<span>${escapeHtml(next)}</span>` : ""}</span></div>')
+    assert card in quiet, "the deck's quiet card, said once"
+    assert '<div class="section-title">Live now</div>\n      ' + card + '\n      ${why}<div class="yp-host"></div>`;\n    return;' in quiet, \
+        "under the page's name; the feed's own reason, then the karma card and your players"
+    for gone in ("boardEmptyDoors(", "bindEmptyDoors(", "every game in progress across the sports we model"):
+        assert gone not in quiet, gone
+    assert "every game in progress across the sports we model" not in body, "nor with games on"
     assert "No games in progress\n      right now" not in body, "the two sentences are gone"
-    assert ".hd-quiet.lv-quiet { margin: 0 0 18px; }" in CSS
+    assert ".hd-quiet.lv-quiet { margin: 0 0 18px; }" in CSS and ".hd-quiet.lv-rest { margin-bottom: 12px; }" in CSS
+    assert ".lv-rest ~ .yp-host { margin-bottom: 18px; }" in CSS
 
 
 def test_six_crests_share_one_row_on_a_phone():

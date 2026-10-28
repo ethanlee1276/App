@@ -127,15 +127,18 @@ def test_the_route_the_card_and_the_policy():
     assert 'K.on_daily(conn, who["id"], day, out.get("mine") == out.get("answer"))' in body
     assert 'b\'{"error":"Make a free account to answer."}\'' in body
     kjs = Path(ROOT, "web", "js", "karma.js").read_text(encoding="utf-8")
-    for want in ("function krDailyHTML(d, fold)", 'data-kr="daily"', 'fetch("/api/trivia/daily"',
-                 "krStripHTML(v) + krNewHTML(v) + krDailyHTML(KR.daily, true)", "${krDailyHTML(KR.daily, false)}",
+    for want in ("function krDailyHTML(d)", 'data-kr="daily"', 'fetch("/api/trivia/daily"',
+                 "function krAskHTML(d)", 'data-kr="daily-open"', "${krAskHTML(d)}", "${krDailyHTML(KR.daily)}",
                  '["day", "daily_q", "quest", "quests_all"]'):
         assert want in kjs, want
     policy = " ".join(Path(ROOT, "web", "privacy.html").read_text(encoding="utf-8").split())
     assert "to today's question, one a day for everybody" in policy
 
 
-def test_in_a_browser_the_live_tab_asks_and_folds_once_answered():
+def test_in_a_browser_the_live_tab_asks_in_its_card_and_answers_in_place():
+    """The Live tab's karma card (Ethan, 2026-10-28: "fix how cluttered this
+    is"): one line until tapped, the question in the card, the result in
+    place, and on a later visit nothing (the Karma tab keeps the card)."""
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
         return
@@ -189,22 +192,31 @@ def test_in_a_browser_the_live_tab_asks_and_folds_once_answered():
                                      f"localStorage.setItem('qb_kr_level','{v['level']}');}}catch(e){{}}")
                 page.goto(f"http://127.0.0.1:{port}/index.html#live", wait_until="load")
                 page.wait_for_timeout(3500)
-                got["q"] = page.evaluate("(document.querySelector('.kr-strip-host .kr-daily-q') || {}).textContent || ''")
-                got["opts"] = page.evaluate("document.querySelectorAll('.kr-strip-host [data-kr=daily]').length")
-                page.click('.kr-strip-host [data-kr="daily"][data-v="1"]')
+                got["ask"] = page.evaluate("(document.querySelector('.kr-live .kr-ask') || {}).textContent || ''")
+                got["closed"] = page.evaluate("document.querySelectorAll('.kr-strip-host [data-kr=daily]').length")
+                page.click(".kr-live .kr-ask")
+                page.wait_for_timeout(300)
+                got["q"] = page.evaluate("(document.querySelector('.kr-live .kr-daily-q') || {}).textContent || ''")
+                got["opts"] = page.evaluate("document.querySelectorAll('.kr-live [data-kr=daily]').length")
+                page.click('.kr-live [data-kr="daily"][data-v="1"]')
                 page.wait_for_timeout(700)
-                got["folded"] = page.evaluate("(document.querySelector('.kr-strip-host .kr-daily.folded') || {}).textContent || ''")
+                got["result"] = page.evaluate("(document.querySelector('.kr-live .kr-daily') || {}).textContent || ''")
                 got["note"] = page.evaluate("[...document.querySelectorAll('.kr-note')].map((n) => n.textContent).join('|')")
+                got["later"] = page.evaluate("""(() => { KR.dailyJust = 0; krStripDraw(document.querySelector('.kr-strip-host'));
+                    return !!document.querySelector('.kr-strip-host .kr-daily, .kr-strip-host .kr-ask'); })()""")
                 ctx.close()
             finally:
                 browser.close()
     finally:
         srv.shutdown()
     assert not errs, errs
+    assert "Today's question" in got["ask"] and "Answer" in got["ask"] and got["closed"] == 0, \
+        "one line in the card until it is tapped"
     assert got["q"] == q["text"] and got["opts"] == 4, got
     assert posted == [{"pick": 1}], posted
-    assert "You got today's question" in got["folded"] and "Ja'Marr Chase" in got["folded"] and "69% got it" in got["folded"], got
+    assert "Right · +10" in got["result"] and "69%" in got["result"] and "Ja'Marr Chase: 600 receiving yards" in got["result"], got
     assert "Today's question right" in got["note"], got
+    assert got["later"] is False, "answered, a later visit leaves it to the Karma tab"
 
 
 if __name__ == "__main__":

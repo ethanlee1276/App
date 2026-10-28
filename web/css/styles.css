@@ -6114,6 +6114,14 @@ body.has-deck #rail-live { display: none; }
 .hd-strip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
   padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
 .hd-quiet.lv-quiet { margin: 0 0 18px; }   /* the Live page's own quiet card */
+/* The Live tab at rest (2026-10-28, Ethan: "fix how cluttered this is"):
+   "No games live" over one quiet line of what is next, and the cards
+   under it the page's 12px apart. */
+.hd-quiet.lv-rest { margin-bottom: 12px; }
+.lv-rest ~ .yp-host { margin-bottom: 18px; }   /* the room the doors' row used to leave */
+.lv-rest-t { display: grid; gap: 2px; min-width: 0; }
+.lv-rest-t b { color: var(--text); font-weight: 800; }
+.lv-rest-t span { color: var(--text-mute); font-size: var(--fs-xs); }
 .hd-game { flex: 0 0 232px; scroll-snap-align: start; text-align: left; padding: 12px 14px;
   border: var(--hairline) solid transparent; border-radius: var(--radius-lg);
   background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
@@ -10438,8 +10446,10 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   animation: shimmer 1.3s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .room-wait { animation: none; } }
 /* The Live page's scoreboard waits on the live feeds; until they answer it
-   holds the place its quiet state takes, so the bets under it stay put. */
-.lv-hold { height: 172px; margin-bottom: 14px; }
+   holds the place its quiet state takes, so the bets under it stay put:
+   the name, "No games live" over its line and the room under them, 125px
+   on any phone since that state was uncluttered (2026-10-28). */
+.lv-hold { height: 111px; margin-bottom: 14px; }
 @media (max-width: 760px) { main { min-height: calc(100svh - var(--topbar-h)); } }
 
 /* Alerts on this phone (app.js renderPushZone, 2026-10-24): settings rows

@@ -30513,19 +30513,20 @@ function liveHoldDetailHTML(live) {
   return h ? `<div class="live-detail hold"><span class="live-dot sm paused"></span>${escapeHtml(h)}</div>` : "";
 }
 
-/* The Live page's quiet line: no league is live; the sport in view's
+/* The Live page's quiet line, under "No games live": the sport in view's
    next start, if the card holds one still ahead; the journaled bets
-   waiting on it. Each clause is dropped when there is nothing behind it. */
+   waiting on it. Each clause is dropped when there is nothing behind it,
+   and nothing behind either is an empty line. */
 function liveQuietLine() {
   const d = state.data || {};
   const first = firstStartOnCard();
   const league = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
   const queued = liveTrackerRows([...(d.live_picks || []), ...(d.live_potd || [])])
     .filter((r) => r.phase === "upcoming").length;
-  const bits = ["No games live in any league we model."];
-  if (first) bits.push(`${league} ${deckFirstWord(state.sport).toLowerCase()} ${first}.`);
-  if (queued) bits.push(`${queued} bet${queued === 1 ? "" : "s"} queued.`);
-  return bits.join(" ");
+  const bits = [];
+  if (first) bits.push(`${league} ${deckFirstWord(state.sport).toLowerCase()} ${first}`);
+  if (queued) bits.push(`${queued} bet${queued === 1 ? "" : "s"} queued`);
+  return bits.join(" · ");
 }
 
 /* THE LIVE TAB'S OWN CLOCK (2026-10-25). The tab redrew when the board
@@ -30608,15 +30609,19 @@ async function renderLiveBoard() {
     // a guess dressed as a fact — see `liveFeedWhy`. The gap under the
     // sentence moves to whichever paragraph ends up last.
     const why = liveFeedWhyHTML(_liveChip, _liveFeedState, Date.now());
+    const next = liveQuietLine();
     ypMount(host);
-    /* v5: the quiet state is the deck's — one line behind the dot,
-       the card's next start and the bets queued to ride when it comes
-       (liveQuietLine) — then the doors, minus this page. */
-    host.innerHTML = `<div class="section-title">Live now
-        <span class="sub">— every game in progress across the sports we model</span></div><div class="yp-host"></div>
-      <div class="hd-quiet lv-quiet"><i class="live-dot paused"></i>${escapeHtml(liveQuietLine())}</div>
-      ${why}${boardEmptyDoors("live")}`;
-    bindEmptyDoors(host);
+    /* AT REST, SAID FIRST AND ONCE (Ethan, 2026-10-28, the top of this tab
+       circled: "fix how cluttered this is"). The page's name, then the
+       deck's quiet card — "No games live" over the card's next start and
+       the bets queued to ride when it comes (liveQuietLine) — then the
+       feed's reason if it has one, and the karma card and your players
+       under it. No second line under the name and no doors to Picks and
+       the Record: the tab bar and the sidebar are those doors already. */
+    host.innerHTML = `<div class="section-title">Live now</div>
+      <div class="hd-quiet lv-quiet lv-rest"><i class="live-dot paused"></i><span class="lv-rest-t"><b>No games live</b>${
+        next ? `<span>${escapeHtml(next)}</span>` : ""}</span></div>
+      ${why}<div class="yp-host"></div>`;
     return;
   }
   /* SHELVED BY LEAGUE ON "ALL". Ethan, 2026-09-01, from this very tab:
@@ -30649,8 +30654,7 @@ async function renderLiveBoard() {
           .map(liveCardHTML).join("")}</div>`).join("")
     : `<div class="lb-grid">${shown.map(liveCardHTML).join("")}</div>`;
   host.innerHTML = `
-    <div class="section-title">Live now
-      <span class="sub">— every game in progress across the sports we model</span></div><div class="yp-host"></div>
+    <div class="section-title">Live now</div><div class="yp-host"></div>
     ${leagueChipsHTML([{ key: "games", label: "Games" }, { key: "feed", label: "Play feed" }],
                       { group: "pf-view", attr: "data-live-view", active: _liveView, label: "How the live games are shown" })}
     ${leagueChipsHTML(chips.map((s) => ({ key: s, label: s === "all" ? "All" : s.toUpperCase(),

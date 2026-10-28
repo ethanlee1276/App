@@ -23,7 +23,7 @@
      (karmaProfileMount).
    Free for every account: nothing here is paid data. */
 
-const KR = { me: null, at: 0, busy: null, scope: "week", lad: {}, daily: null, dailyAt: 0 };
+const KR = { me: null, at: 0, busy: null, scope: "week", lad: {}, daily: null, dailyAt: 0, dailyOpen: false, dailyJust: 0 };
 const KR_FRESH_MS = 60000;
 const KR_SEEN_KEY = "qb_kr_level";
 /* engine/karma TIERS: the first level of each, its name and its class. */
@@ -146,36 +146,56 @@ function krFriendsHTML(v) {
   }).join("")}</div>`;
 }
 
-function krStripHTML(v) {
+/* THE LIVE TAB'S CARD (Ethan, 2026-10-28, the top of Live circled: "fix
+   how cluttered this is"). One card where there were three: the level and
+   the way to the next on one row, the day's quests as a dot each beside it
+   (the Karma tab names them; a new account's first days show its next
+   first and how many of six instead), and today's question as one line
+   under it while it waits. Tapped, the question opens in the card;
+   answered, its result stays there for this visit, and after that the
+   Live tab leaves it to the Karma tab. */
+const KR_JUST_MS = 10 * 60000;
+function krAskHTML(d) {
+  const q = d && d.q;
+  if (!q) return "";
+  if (q.mine != null && q.answer != null) return Date.now() - KR.dailyJust < KR_JUST_MS ? krDailyHTML(d) : "";
+  if (KR.dailyOpen) return krDailyHTML(d);
+  return `<button type="button" class="kr-ask" data-kr="daily-open">
+      <span>🧠 <b>Today's question</b> · +10 karma</span><span class="kr-ask-go">Answer ›</span></button>`;
+}
+
+function krStripHTML(v, d) {
   const st = v.streak || {};
-  // An account's first days: the next of its six firsts instead of the
-  // day's quests (the Karma tab has all six).
   const camp = v.camp;
   const next = camp && camp.steps.find((x) => !x.done);
-  const q = camp ? (next ? `<span class="kr-q">Next: ${krEsc(next.text)} · +${Number(camp.pts)}</span>` : "")
-    : (v.quests || []).map((x) => `<span class="kr-q${x.done ? " done" : ""}" title="${krEsc(x.text)}">${
-    x.done ? "✓" : `${x.n}/${x.goal}`} ${krEsc(KR_QUEST_SHORT[x.key] || x.text)}</span>`).join("");
-  return `<button type="button" class="kr-strip" data-kr="open" aria-label="Your karma: level ${Number(v.level)}, open the Karma tab">
+  const qs = v.quests || [];
+  const side = camp ? `<span class="kr-of">${Number(camp.done)}/${Number(camp.of)}</span>`
+    : qs.length ? `<span class="kr-dots" role="img" aria-label="Today's quests: ${qs.filter((x) => x.done).length} of ${qs.length} done" title="${
+      krEsc(qs.map((x) => `${x.done ? "✓" : `${x.n}/${x.goal}`} ${KR_QUEST_SHORT[x.key] || x.text}`).join(" · "))}">${
+      qs.map((x) => `<i${x.done ? ' class="on"' : ""}></i>`).join("")}</span>` : "";
+  return `<div class="kr-live"><button type="button" class="kr-strip" data-kr="open" aria-label="Your karma: level ${Number(v.level)}, open the Karma tab">
       ${krRingHTML(v)}
       <span class="kr-strip-main"><b>Level ${Number(v.level)} · ${krEsc(v.tier)}</b>
         <span class="kr-strip-sub">${krNum(v.points)} karma · ${krNum(v.to - v.points)} to level ${Number(v.level) + 1}${
-          st.now ? ` · <span class="kr-fire">🔥 ${Number(st.now)}</span>` : ""}</span>
-        ${camp ? `<span class="kr-camp-h">Getting started · ${camp.done} of ${camp.of}</span>` : ""}
-        <span class="kr-qs">${q}</span></span>
-      <span class="kr-go" aria-hidden="true">›</span></button>${krFriendsHTML(v)}`;
+          st.now ? ` · <span class="kr-fire">🔥 ${Number(st.now)}</span>` : ""}</span>${
+        next ? `<span class="kr-strip-sub kr-next">Getting started: ${krEsc(next.text)} · +${Number(camp.pts)}</span>` : ""}</span>
+      ${side}<span class="kr-go" aria-hidden="true">›</span></button>${krAskHTML(d)}</div>${krFriendsHTML(v)}`;
+}
+
+function krStripDraw(host) {
+  if (host && KR.me) host.innerHTML = krStripHTML(KR.me, KR.daily) + krNewHTML(KR.me);
 }
 
 async function karmaStripMount(host) {
   if (!host) return;
-  const draw = (v) => { host.innerHTML = krStripHTML(v) + krNewHTML(v) + krDailyHTML(KR.daily, true); };
-  if (KR.me) draw(KR.me);
-  // The strip does not wait for the day's question: it joins when it lands.
+  if (KR.me) krStripDraw(host);
+  // The card does not wait for the day's question: it joins when it lands.
   const daily = krDailyLoad();
   const v = await krLoad();
   if (!host.isConnected || !v) return;
-  draw(v);
+  krStripDraw(host);
   await daily;
-  if (host.isConnected && KR.me) draw(KR.me);
+  if (host.isConnected) krStripDraw(host);
 }
 
 /* WHAT'S NEW (an app store's release notes, inside the app): once, to an
@@ -212,7 +232,7 @@ async function krDailyLoad(force) {
   return KR.daily;
 }
 
-function krDailyHTML(d, fold) {
+function krDailyHTML(d) {
   const q = d && d.q;
   if (!q) return "";
   const done = q.mine != null && q.answer != null;
@@ -220,11 +240,6 @@ function krDailyHTML(d, fold) {
   const pct = (i) => Math.round(((q.split || [])[i] || 0) * 100 / total);
   const head = `<div class="kr-h"><b>🧠 Today's question</b><span>${done
     ? (q.mine === q.answer ? "Right · +10" : "Not this time") : "+10 karma right"}${q.game ? ` · ${krEsc(q.game)}` : ""}</span></div>`;
-  if (done && fold) {
-    return `<button type="button" class="kr-daily folded" data-kr="open" aria-label="Today's question: open the Karma tab">
-      <span>🧠 ${q.mine === q.answer ? "You got today's question" : "Today's question"}: <b>${krEsc(q.options[q.answer])}</b></span>
-      <span class="kr-daily-n">${pct(q.answer)}% got it</span></button>`;
-  }
   const opts = q.options.map((o, i) => {
     const cls = !done ? "" : i === q.answer ? " right" : i === q.mine ? " wrong" : "";
     return `<button type="button" class="kr-opt${cls}" data-kr="daily" data-v="${i}"${done ? ` disabled style="--p:${pct(i)}%"` : ""}>
@@ -251,11 +266,10 @@ async function krDailyAnswer(b) {
   } else {
     KR.daily = { ...(KR.daily || {}), q: out };
     KR.dailyAt = Date.now();
+    KR.dailyJust = Date.now();
     if (out.karma) karmaNote(out.karma);
   }
-  document.querySelectorAll(".kr-daily").forEach((el) => {
-    el.outerHTML = krDailyHTML(KR.daily, !el.closest(".kr-panel-host"));
-  });
+  document.querySelectorAll(".kr-daily").forEach((el) => { el.outerHTML = krDailyHTML(KR.daily); });
 }
 
 /* ---------------- the Karma tab ---------------- */
@@ -482,7 +496,7 @@ function krPanelHTML(v) {
         <i>${st.best ? `best ${Number(st.best)}` : "earn karma today to start"}${st.rest ? " · a rest day in hand" : ""}</i></div>
     </section>
     ${krCampHTML(v)}
-    ${krDailyHTML(KR.daily, false)}
+    ${krDailyHTML(KR.daily)}
     ${krQuestsHTML(v)}
     ${krBadgesHTML(v)}
     <section class="kr-card"><div class="kr-h"><b>Karma ladder</b>
@@ -580,6 +594,7 @@ document.addEventListener("click", (e) => {
   if (act === "up-close") { const up = b.closest(".kr-up"); if (up) up.remove(); return; }
   if (act === "share") { krShare(b); return; }
   if (act === "daily") { krDailyAnswer(b); return; }
+  if (act === "daily-open") { KR.dailyOpen = true; krStripDraw(b.closest(".kr-strip-host")); return; }
   if (act === "new-ok") {
     try { localStorage.setItem(KR_NEW_KEY, "1"); } catch (e) { /* gone for this view only */ }
     const card = b.closest(".kr-new");

@@ -33,7 +33,7 @@ def _body(name):
 
 
 def test_the_card_rides_the_strip_once_and_never_for_a_new_account():
-    assert "krStripHTML(v) + krNewHTML(v) + krDailyHTML(KR.daily, true)" in KJS
+    assert "host.innerHTML = krStripHTML(KR.me, KR.daily) + krNewHTML(KR.me);" in KJS
     body = _body("krNewHTML")
     assert 'if (!v || v.camp) return "";' in body, "a new account has its getting-started list instead"
     assert 'try { if (localStorage.getItem(KR_NEW_KEY)) return ""; } catch (e) { return ""; }' in body, \

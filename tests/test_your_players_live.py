@@ -93,11 +93,11 @@ def test_the_server_and_the_live_tab():
     assert "YP.mine(AL.list_watches(conn, who[\"id\"])," in get
     app = (ROOT / "web" / "js" / "app.js").read_text()
     board = app[app.index("async function renderLiveBoard()"):]
-    assert '— every game in progress across the sports we model</span></div><div class="yp-host"></div>' in board
+    assert '<div class="section-title">Live now</div><div class="yp-host"></div>' in board
     assert "const ypMount = (host) => _acctUser && _acctUser.signed_in && loadRoom(" in app
     assert '.then((ok) => ok && yourPlayersMount(host.querySelector(".yp-host")));' in app
     quiet = board[board.index("if (!games.length) {"):board.index("const darkWhy")]
-    assert 'sports we model</span></div><div class="yp-host"></div>' in quiet and "ypMount(host);" in quiet, \
+    assert '${why}<div class="yp-host"></div>' in quiet and "ypMount(host);" in quiet, \
         "the strip is on with nothing live too: a finished game's lines stay for hours"
     assert "ypMount(host);" in board[board.index("const darkWhy"):], "and with games on"
     chat = (ROOT / "web" / "js" / "chat.js").read_text()
