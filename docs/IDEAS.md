@@ -201,10 +201,15 @@ of work first, each with what it is built from:
 10. **Crew watch.** Penalties and the strike zone tallied live against the
     crew's season norm. Built from: the plays' penalty rows + the referee
     assignments already read. Medium.
-11. **Trivia in the stoppages.** At a timeout or between innings, one
-    question off the season logs ("Who leads CIN in receiving yards?"),
-    answered in the chat. Built from: the season logs the boards read.
-    Medium.
+11. **Trivia in the stoppages.** BUILT 2026-10-28 (runbook FV): at a
+    timeout, the two-minute warning, the clock run out, a held scoreboard
+    (halftime, the end of a period) or between innings, one question off
+    the two teams' season logs on the game page, above Call it: who leads
+    a team in a stat, or who has the most of four across both, answered
+    once by a free account, then the right name and the room's split.
+    engine/trivia (stoppage, bank, ask, answer), js/detail.js
+    pbpTriviaHTML; on the game's card rather than in the chat's stream,
+    where four buttons and a split read better than replies.
 
 ---
 

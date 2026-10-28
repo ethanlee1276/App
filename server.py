@@ -1257,6 +1257,8 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/alerts/"):].strip("/"), parse_qs(parsed.query))
         if parsed.path.startswith("/api/callit/"):
             return self._callit(parsed.path[len("/api/callit/"):].strip("/"))
+        if parsed.path.startswith("/api/trivia/"):
+            return self._trivia(parsed.path[len("/api/trivia/"):].strip("/"))
         if parsed.path.startswith("/api/calendar/"):
             return self._calendar_get(parsed.path[len("/api/calendar/"):].strip("/"))
         if parsed.path in ("/api/widget/mine", "/api/widget/mine/"):
@@ -1414,6 +1416,7 @@ class Handler(BaseHTTPRequestHandler):
                 or parsed.path.startswith("/api/chat/")
                 or parsed.path.startswith("/api/alerts/")
                 or parsed.path.startswith("/api/callit/")
+                or parsed.path.startswith("/api/trivia/")
                 or parsed.path in ("/api/widget/key", "/api/widget/key/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
                 or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
@@ -1438,6 +1441,8 @@ class Handler(BaseHTTPRequestHandler):
                     parsed.path[len("/api/alerts/"):].strip("/"), body)
             if parsed.path.startswith("/api/callit/"):
                 return self._callit(parsed.path[len("/api/callit/"):].strip("/"), body)
+            if parsed.path.startswith("/api/trivia/"):
+                return self._trivia(parsed.path[len("/api/trivia/"):].strip("/"), body)
             if parsed.path.startswith("/api/widget/key"):
                 return self._widget_key(body)
             if parsed.path.startswith("/api/parlay/check"):
@@ -3411,6 +3416,43 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()
+
+    def _trivia(self, path: str, body: dict | None = None):
+        """TRIVIA IN THE STOPPAGES (engine/trivia): GET the game's question
+        for the break it is in (or the last one, answered), POST an answer.
+        ``path`` is ``{league}/{event id}`` off the deep file the live loop
+        writes, exactly as Call it reads it; the questions come from the
+        history database's season logs."""
+        from engine import trivia as TV
+        from engine.db import connect as hist_connect
+        league, _, event = path.partition("/")
+        if league not in TV.LEAGUES or not event.isdigit() or len(event) > 14:
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        try:
+            doc = json.loads((WEB / "data" / "pbp" / f"{league}_{event}.json").read_text())
+            assert isinstance(doc, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        # The room is the path's: one key whatever the file spells.
+        doc["league"], doc["event_id"] = league, event
+        A = _acct()
+        conn = A.connect()
+        hist = None
+        try:
+            TV.ensure_tables(conn)
+            who = self._account(conn)
+            hist = hist_connect()
+            if body is None:
+                out = TV.state(conn, hist, who["id"] if who else None, doc)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to answer."}', ".json")
+            code, out = TV.answer(conn, hist, who["id"], doc, str(body.get("qkey") or "")[:60], body.get("pick"))
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+            if hist is not None:
+                hist.close()
 
     def _alerts_post(self, path: str, body: dict):
         from engine import alerts as AL

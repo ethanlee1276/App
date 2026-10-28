@@ -915,8 +915,9 @@ def delete_user(conn, user_id: int) -> None:
                   # Codes redeemed and the guesses counted against them
                   # (engine/redeem), likewise cascade-only until now.
                   "code_redemptions", "code_attempts",
-                  # Call it's calls on live games (engine/callit).
-                  "callit_calls",
+                  # Call it's calls on live games (engine/callit), and the
+                  # answers to the trivia in the stoppages (engine/trivia).
+                  "callit_calls", "trivia_answers",
                   # The calendar link's salt (engine/calfeed), which had
                   # been left behind, and the iPhone widget's
                   # (engine/widgetfeed): with the row gone, neither address
@@ -1074,6 +1075,11 @@ def export_user(conn, user_id: int) -> dict:
                                                "WHERE user_id=? ORDER BY at", (int(user_id),))]
         if calls:
             out["call_it_calls"] = calls
+    if "trivia_answers" in have:
+        rows = [dict(r) for r in conn.execute("SELECT room, qkey, pick, at FROM trivia_answers "
+                                              "WHERE user_id=? ORDER BY at", (int(user_id),))]
+        if rows:
+            out["trivia_answers"] = rows
     # The two links exist or not; their values are keys, not data, and are
     # never exported (a copy of the file would open the calendar).
     for table, label in (("calendar_links", "calendar_link_made"), ("widget_links", "iphone_widget_on_since")):

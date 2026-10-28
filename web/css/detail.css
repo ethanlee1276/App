@@ -450,6 +450,9 @@
 }
 .pbp-rail-head { display: flex; justify-content: space-between; align-items: baseline;
   font-weight: 800; margin-bottom: 6px; }
+/* Its note ("free · how does the next one end?", "64% now") is a note: it
+   had been drawn in the heading's own weight and size. */
+.pbp-rail-head .mini { font-size: var(--fs-xs); font-weight: 600; color: var(--text-mute); }
 .pbp-group { margin: 8px 0 14px; }
 .pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
   gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
@@ -738,8 +741,11 @@
 .ci-card { display: grid; gap: 8px; }
 .ci-q { margin: 0; font-weight: 700; font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text); }
 .ci-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* A raised tone, not the card's own panel: since the outlines went (2026-10-27)
+   a choice drawn in --panel-2 sat in a --panel-2 card with nothing to show it
+   was a button. */
 .ci-pick { min-height: 44px; padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
-  background: var(--panel-2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+  background: var(--fill-tone-2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
 .ci-pick.is-mine { border-color: transparent; color: var(--brand-2);
   background: color-mix(in oklab, var(--brand-2) 12%, var(--panel-2)); }
 .ci-join { width: 100%; }
@@ -758,6 +764,21 @@
 .ci-ladder-tab.on { border-color: transparent; color: var(--brand); }
 .ci-share { justify-self: start; padding: 6px 12px; border-radius: 999px; border: 0; background: var(--grad-brand);
   color: var(--brand-ink); font: inherit; font-size: var(--fs-xs); font-weight: 900; cursor: pointer; }
+
+/* Trivia in the stoppages (pbpTriviaHTML): four names, then the right one and the room's split. */
+.tr-card { display: grid; gap: 8px; }
+.tr-card[hidden] { display: none; }
+.tr-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tr-opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px;
+  padding: 8px 10px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
+  background: var(--fill-tone-2); color: var(--text); font: inherit; font-weight: 700; text-align: left; }
+button.tr-opt { cursor: pointer; }
+.tr-opt.is-right { color: var(--good); background: color-mix(in oklab, var(--good) 14%, var(--panel-2)); }
+.tr-opt.is-wrong { color: var(--bad); background: color-mix(in oklab, var(--bad) 12%, var(--panel-2)); }
+.tr-name { min-width: 0; overflow-wrap: anywhere; }
+.tr-pct { flex: none; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-mute); }
+.tr-opt.is-right .tr-pct, .tr-opt.is-wrong .tr-pct { color: inherit; }
+.tr-why, .tr-last { margin: 0; color: var(--text-mute); }
 
 /* While you were away (pbpAwayHTML): the score then and now, the swing, the biggest plays since. */
 .pbp-away { display: grid; gap: 6px; border-color: transparent; }

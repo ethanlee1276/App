@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run FV "Trivia in the stoppages" 120 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpTriviaHTML('
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import trivia, db; [print(q['text'], '->', q['why']) for q in trivia.bank(db.connect(), 'nfl', 'KC', 'BUF')[:4]]"
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"

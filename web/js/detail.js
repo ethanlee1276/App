@@ -2959,7 +2959,94 @@ function pbpCallItHTML(d, league) {
   const key = `${league}/${d.event_id}`;
   if (_ci.key !== key) Object.assign(_ci, { key, at: 0, v: null, note: "" });
   if (Date.now() - _ci.at > 5000) ciFetch(key);
-  return `<div class="card ci-card" data-ci-key="${escapeAttr(key)}">${ciBodyHTML(_ci.v)}</div>`;
+  // The trivia rides above it: a break is when nobody has a call to make.
+  return `${pbpTriviaHTML(d, league)}<div class="card ci-card" data-ci-key="${escapeAttr(key)}">${ciBodyHTML(_ci.v)}</div>`;
+}
+
+/* TRIVIA IN THE STOPPAGES (2026-10-28, engine/trivia; docs/IDEAS.md). At a
+   timeout, a break between periods or between innings, one question off the
+   two teams' season logs with four names to choose from, answered once; then
+   the right name and how the room answered, as counts. Free with an account,
+   like Call it under it. The page asks only in a break (trStop reads the
+   game's file the way engine/trivia.stoppage does) and once as it ends, for
+   the question's last word, which stays up ten minutes from the ask. */
+const _tr = { key: "", at: 0, v: null, note: "", stop: "" };
+const TR_RUN_OUT = new Set(["0:00", "0.0", "0:00.0", "00:00"]);
+function trStop(d, league) {
+  const lv = (d && d.live) || {};
+  if (lv.state !== "live") return "";
+  const period = String(lv.period || "").trim();
+  if (league === "mlb") return /^(middle|mid|end)\b/i.test(period) ? `inn:${period}` : "";
+  const hold = String(lv.hold || "").trim();
+  if (hold && /halftime|end of|delay|suspend/i.test(hold)) return `hold:${period}:${hold.toLowerCase().slice(0, 24)}`;
+  const plays = (d.plays || []).filter((p) => p && typeof p === "object");
+  const last = plays[plays.length - 1] || {};
+  if (/timeout|two[- ]minute/i.test(String(last.event || ""))) return `to:${last.id || plays.length}`;
+  return TR_RUN_OUT.has(String(lv.clock || "").trim()) ? `brk:${period}` : "";
+}
+function pbpTriviaHTML(d, league) {
+  const key = `${league}/${d.event_id}`, stop = trStop(d, league);
+  if (_tr.key !== key) Object.assign(_tr, { key, at: 0, v: null, note: "", stop: "" });
+  if (stop !== _tr.stop || (stop && Date.now() - _tr.at > 8000)) { _tr.stop = stop; trFetch(key); }
+  return `<div class="card tr-card" data-tr-key="${escapeAttr(key)}"${trShown(_tr.v) ? "" : " hidden"}>${trBodyHTML(_tr.v)}</div>`;
+}
+function trShown(v) {
+  return !!(v && (v.open || (v.last && Date.now() / 1000 - (v.last.at || 0) < 600)));
+}
+function trBodyHTML(v) {
+  const head = `<div class="pbp-rail-head">Trivia <span class="mini">free · while play is stopped</span></div>`;
+  const q = v && (v.open || v.last);
+  if (!q) return head;
+  const done = q.answer != null, split = q.split || [];
+  const total = split.reduce((a, n) => a + n, 0);
+  const ask = v.open && !done && v.signed_in;
+  const opts = q.options.map((name, i) => {
+    const pct = done && total ? Math.round((100 * (split[i] || 0)) / total) : null;
+    const cls = `tr-opt${done && i === q.answer ? " is-right" : ""}${done && q.mine === i && i !== q.answer ? " is-wrong" : ""}`;
+    const inner = `<span class="tr-name">${escapeHtml(name)}</span>${pct != null ? `<span class="tr-pct">${pct}%</span>` : ""}`;
+    return ask ? `<button type="button" class="${cls}" data-tr-pick="${i}" data-tr-q="${escapeAttr(q.qkey)}">${inner}</button>`
+      : `<div class="${cls}">${inner}</div>`;
+  }).join("");
+  const join = v.open && !v.signed_in && !done
+    ? `<button type="button" class="ci-pick ci-join" data-tr-join="1">Make a free account to answer</button>` : "";
+  const said = q.mine == null ? "" : q.mine === q.answer ? "Right — " : "Not this time — ";
+  const res = done ? `<p class="mini tr-why">${said}${escapeHtml(q.why)}${total ? ` · ${total} answered` : ""}</p>` : "";
+  return `${head}${v.open ? "" : `<p class="mini tr-last">The last break’s question</p>`}<p class="ci-q">${escapeHtml(q.text)}</p>
+    <div class="tr-opts" role="group" aria-label="Your answer">${opts}</div>${join}${res}${
+    _tr.note ? `<p class="mini ci-note" role="status">${escapeHtml(_tr.note)}</p>` : ""}`;
+}
+function trPaint(key) {
+  document.querySelectorAll(".tr-card").forEach((el) => {
+    if (el.dataset.trKey !== key) return;
+    el.innerHTML = trBodyHTML(_tr.v);
+    el.hidden = !trShown(_tr.v);
+  });
+}
+function trFetch(key) {
+  _tr.at = Date.now();
+  fetch(`/api/trivia/${key}`, { credentials: "same-origin", cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    .then((v) => { if (v && _tr.key === key) { _tr.v = v; trPaint(key); } });
+}
+if (typeof window !== "undefined" && !window._trBound) {
+  window._trBound = true;
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("[data-tr-pick], [data-tr-join]");
+    const card = b && b.closest(".tr-card");
+    if (!card) return;
+    if (b.dataset.trJoin) { switchView("signup"); return; }
+    const key = card.dataset.trKey;
+    card.querySelectorAll("[data-tr-pick]").forEach((x) => { x.disabled = true; });
+    try {
+      const r = await fetch(`/api/trivia/${key}`, { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qkey: b.dataset.trQ, pick: Number(b.dataset.trPick) }) });
+      const out = await r.json().catch(() => ({}));
+      if (r.ok && _tr.key === key && _tr.v) { _tr.v.open = out; _tr.note = ""; if (typeof buzz === "function") buzz("tap"); }
+      else _tr.note = out.error || "That didn’t go through — try again.";
+    } catch (err) { _tr.note = "That didn’t go through — try again."; }
+    trPaint(key);
+  });
 }
 function ciBodyHTML(v) {
   const head = `<div class="pbp-rail-head">Call it <span class="mini">free · how does the next one end?</span></div>`;
