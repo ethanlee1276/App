@@ -281,16 +281,29 @@ def test_in_a_browser_each_side_of_the_stadium_is_its_own_teams_hue():
                           return im && im.complete && im.naturalWidth > 0; }}""", timeout=20000)
                         page.wait_for_timeout(200)
                         card = page.locator("#games .game-card").nth(i)
-                        band = card.locator(".stadium-wrap").bounding_box()
-                        box = card.bounding_box()
-                        shot = Image.open(io.BytesIO(card.screenshot())).convert("RGB")
-                        k = shot.size[0] / box["width"]
-                        top, bottom = int((band["y"] - box["y"]) * k), int((band["y"] - box["y"] + band["height"]) * k)
-                        w = shot.size[0]
-                        pix = shot.load()
-                        side = lambda x0, x1: [pix[x, y] for y in range(top + 4, bottom) for x in range(x0, x1)]  # noqa: E731
+                        # A BUSY MACHINE PAINTS THE LIGHT LATE (2026-10-28: the full browser
+                        # run read the Dolphins' side grey once, and alone it passed four
+                        # times in four). The photograph is in, but the overlay over it can
+                        # land a frame or two after: the sides are read again, a few times,
+                        # until each wears its team's hue. A wrong colour still fails; it is
+                        # only no longer judged before it has painted.
+                        ta, tb = re.search(r"--ta: ?(#[0-9a-f]{6}); ?--tb: ?(#[0-9a-f]{6})",
+                                           card.get_attribute("style")).groups()
+                        for _ in range(5):
+                            band = card.locator(".stadium-wrap").bounding_box()
+                            box = card.bounding_box()
+                            shot = Image.open(io.BytesIO(card.screenshot())).convert("RGB")
+                            k = shot.size[0] / box["width"]
+                            top, bottom = int((band["y"] - box["y"]) * k), int((band["y"] - box["y"] + band["height"]) * k)
+                            w = shot.size[0]
+                            pix = shot.load()
+                            side = lambda x0, x1: [pix[x, y] for y in range(top + 4, bottom) for x in range(x0, x1)]  # noqa: E731
+                            left, right = _hue(side(int(w * .04), int(w * .3))), _hue(side(int(w * .7), int(w * .96)))
+                            if _apart(left, _srgb_hue(ta)) <= 30 and _apart(right, _srgb_hue(tb)) <= 30:
+                                break
+                            page.wait_for_timeout(300)
                         found[(theme, i)] = {
-                            "left": _hue(side(int(w * .04), int(w * .3))), "right": _hue(side(int(w * .7), int(w * .96))),
+                            "left": left, "right": right,
                             "style": card.get_attribute("style"),
                             "src": card.locator(".venue-photo").get_attribute("src"),
                             "filter": card.locator(".venue-photo").evaluate("(e) => getComputedStyle(e).filter"),
