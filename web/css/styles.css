@@ -10556,11 +10556,13 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    tapped button, start selecting a tab's label on a long press, or offer
    "Save Image" on its own logo; the press feedback (the :active rules) is
    what answers a finger. Only the chrome: picks, reports and the record
-   stay selectable, because people copy them. */
+   stay selectable, because people copy them. A game's tile is a door too
+   (Ethan, 2026-10-28: a finger held on a Home tile raised iOS's selection
+   handles and its magnifier over the team names). */
 @media (pointer: coarse) {
   html { -webkit-tap-highlight-color: transparent; }
   .topbar, .tabbar, .sidebar, .sportbar, .more-sheet, .btn, .chip, .tb-item, .sb-item,
-  .qt-chip, .sport-btn, .nav-btn, .al-cat, .seg button {
+  .qt-chip, .sport-btn, .nav-btn, .al-cat, .seg button, .game-card, .hd-game {
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 }
 

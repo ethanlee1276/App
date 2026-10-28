@@ -61,6 +61,17 @@ def _reach(shadow: str):
     return up, down
 
 
+def test_a_finger_held_on_a_tile_opens_it_and_selects_nothing():
+    """The same screenshot: the held tile raised iOS's selection handles and
+    its magnifier over the team names. A tile is a door, like the tab bar's
+    buttons, so a finger on it selects nothing and gets no callout; picks,
+    reports and the record stay selectable."""
+    i = CSS.index("@media (pointer: coarse) {\n  html { -webkit-tap-highlight-color: transparent; }")
+    block = CSS[i:CSS.index("}\n}", i)]
+    assert ".seg button, .game-card, .hd-game {" in block
+    assert "-webkit-user-select: none; user-select: none; -webkit-touch-callout: none;" in block
+
+
 # --- in a browser ----------------------------------------------------------------
 MEASURE = """(() => {
   const s = document.querySelector('.games-scroller'), c = s.querySelector('.game-card');

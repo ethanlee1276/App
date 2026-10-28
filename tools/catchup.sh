@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HD "A held game tile selects nothing" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c '.seg button, .game-card, .hd-game {'
+SH
 run HC "A highlight fades out, not into a box" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'games-scroller { padding: 24px 2px 40px 26px;'
 SH
