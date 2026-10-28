@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run GF "Your team's colour through the top bar" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c -- '--grad-team-ground: linear-gradient'
+SH
 run GE "Each stadium lit in its two teams' colours" 30 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function teamLight('
 curl -s https://qellysbook.com/css/styles.css | grep -c 'stadium-wrap:has(.venue-photo)::before {'

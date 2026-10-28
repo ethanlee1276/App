@@ -207,9 +207,13 @@ def test_the_top_of_the_page_is_one_surface():
     bar = BLEND[BLEND.index(".topbar::before {"):]
     bar = bar[:bar.index("}") + 1]
     assert "top: 100%;" in bar and "background: var(--grad-bar-fade);" in bar, "a soft edge, not a line"
+    # Your team's colour runs through the bar and out of it since
+    # 2026-10-28 (tests/test_your_teams_colour_runs_through_the_bar.py): it
+    # started at the bar's foot at full strength, a rule of its own.
     team = CSS[CSS.index(".team-tint .topbar::after {"):]
     team = team[:team.index("}") + 1]
-    assert "top: 100%;" in team and "background: var(--grad-team-spill);" in team and "height: 2px" not in team
+    assert "top: 0; z-index: -1; height: calc(100% + 48px);" in team and "background: var(--grad-team-spill);" in team
+    assert "height: 2px" not in team
     glass = CSS[CSS.index("html.store-ios .topbar, html.ios-home .topbar {"):]
     # Lit glass along its top (under the status bar), and no ring: the full
     # rim's 1px ring was the line along the bar's foot Ethan circled.

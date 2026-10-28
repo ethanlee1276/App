@@ -45,7 +45,10 @@ SEAM = 6
 def test_the_clock_keeps_a_solid_strip_in_the_iphone_app():
     i = CSS.index("html.store-ios body::before, html.ios-home body::before {")
     rule = CSS[i:CSS.index("}", i)]
-    assert "position: fixed; top: 0;" in rule and "height: env(safe-area-inset-top, 0px);" in rule, rule
+    # Its foot thins out over 8px since 2026-10-28, so with the bar away it
+    # meets the page softly (tests/test_your_teams_colour_runs_through_the_bar.py).
+    assert "position: fixed; top: 0;" in rule and "height: calc(env(safe-area-inset-top, 0px) + 8px);" in rule, rule
+    assert "mask-image: var(--mask-strip-foot);" in rule, rule
     assert "background: var(--bg);" in rule and "pointer-events: none;" in rule, rule
     z = int(re.search(r"z-index: (\d+);", rule).group(1))
     bar = CSS[CSS.index(".topbar {\n  position: sticky; top: 0; z-index: "):]

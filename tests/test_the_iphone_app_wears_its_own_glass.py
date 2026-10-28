@@ -109,7 +109,7 @@ def test_in_a_browser_the_ios_app_floats_a_capsule_a_tab_does_not_and_the_team_t
         const disc = getComputedStyle(document.querySelector('.tb-center-disc'));
         const edge = getComputedStyle(document.querySelector('.topbar'), '::after');
         const probe = document.createElement('i');
-        probe.style.color = 'color-mix(in oklab, var(--team-1) 22%, transparent)';
+        probe.style.color = 'color-mix(in oklab, var(--team-1) 12%, transparent)';
         document.querySelector('.topbar').appendChild(probe);
         const spill = getComputedStyle(probe).color; probe.remove();
         renderRidingTray([{ player: "Amon-Ra St. Brown", line: 5.5, current: 3, market: "receptions" }]);
@@ -155,7 +155,8 @@ def test_in_a_browser_the_ios_app_floats_a_capsule_a_tab_does_not_and_the_team_t
     assert ios["tint"] and ios["team"] == "#005a8b", ios
     assert "rgb(0, 90, 139)" in ios["disc"], ios
     # The bar's edge wears the team's colour as light spilling down from it
-    # since "No hard lines" (2026-10-27), not a 2px stripe: 22% of it, fading.
+    # since "No hard lines" (2026-10-27), not a 2px stripe; since 2026-10-28
+    # the bar wears it too, 12% of it, and the spill runs on from there.
     assert ios["edge"].startswith("linear-gradient(") and ios["spill"] in ios["edge"], ios
     for g in (ios, light, tab):
         tr = g["tray"]

@@ -263,6 +263,9 @@
   --grad-art-dim: linear-gradient(180deg, color-mix(in oklab, var(--panel-2) 35%, transparent),
     color-mix(in oklab, var(--panel-2) 70%, transparent));
   --mask-fade-down: linear-gradient(to bottom, #000 45%, transparent);
+  /* The strip under the clock in the iPhone app ends in a soft foot: over
+     the bar it is the bar's own colour, over the page it thins out. */
+  --mask-strip-foot: linear-gradient(to bottom, #000 calc(100% - 8px), transparent);
   --grad-gp-fade: linear-gradient(180deg, color-mix(in oklab, var(--panel-2) 35%, transparent) 0%,
     color-mix(in oklab, var(--panel-2) 72%, transparent) 50%, var(--panel-2) 96%);
   /* The Home game tile's version of it (2026-09-24): the photo stays
@@ -506,6 +509,10 @@
   --team-2: var(--brand-2);
   --grad-team: linear-gradient(90deg, var(--team-1), var(--team-2));
   --grad-team-disc: linear-gradient(160deg, var(--team-1), color-mix(in oklab, var(--team-1) 70%, black));
+  /* The ground the bar wears in your team's colour (the end of "Your team's
+     colours, through the bar and out of it"). */
+  --team-ground: color-mix(in oklab, var(--team-1) 12%, transparent);
+  --grad-team-ground: linear-gradient(var(--team-ground), var(--team-ground));
   /* Liquid Glass on the Duo (the section near the end of the sheet). */
 
   --glass-tint: color-mix(in oklab, var(--panel) 74%, transparent);
@@ -552,7 +559,7 @@
   --grad-hero-veil: linear-gradient(90deg, var(--panel) 25%, color-mix(in oklab, var(--panel) 55%, transparent));
   /* NO HARD LINES (2026-10-27, later): edges that fade instead of stopping. */
   --grad-bar-fade: linear-gradient(180deg, var(--topbar-bg), transparent);
-  --grad-team-spill: linear-gradient(180deg, color-mix(in oklab, var(--team-1) 22%, transparent), transparent);
+  --grad-team-spill: linear-gradient(180deg, var(--team-ground) calc(100% - 48px), color-mix(in oklab, var(--team-1) 6%, transparent) calc(100% - 30px), color-mix(in oklab, var(--team-1) 2%, transparent) calc(100% - 12px), transparent);
 }
 
 * { box-sizing: border-box; }
@@ -10559,7 +10566,18 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   .rt-dot { animation: rt-breathe 1.6s ease-in-out infinite; }
 }
 @keyframes rt-breathe { 50% { opacity: .35; transform: scale(.8); } }
-.team-tint .topbar::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 28px;
+/* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
+   his phone's top bar and league row circled again: "the colors up here
+   could be blended better too. Still have sharp lines"). The colour spilled
+   from the bar's foot at full strength, under a bar that had none of it: a
+   dark band, then a blue one, ruled where they met. The bar wears the colour
+   now, the way a themed app's header does, and so does the strip under the
+   clock; the same colour runs on past the bar's foot and thins out over the
+   league row, and the bar's soft edge starts from the bar's tinted ground.
+   Under the bar's own words (z-index -1 in the bar's stacking context). */
+.team-tint {
+  --grad-bar-fade: linear-gradient(180deg, color-mix(in oklab, var(--team-1) 12%, var(--topbar-bg)), transparent); }
+.team-tint .topbar::after { content: ""; position: absolute; left: 0; right: 0; top: 0; z-index: -1; height: calc(100% + 48px);
   background: var(--grad-team-spill); pointer-events: none; }
 .team-tint .tb-center-disc { background-image: var(--glass-gold), var(--grad-team-disc); color: white; }
 .team-tint .tb-item.active { color: color-mix(in oklab, var(--team-1) 60%, var(--text)); }
@@ -11063,13 +11081,17 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
      page's words ran behind the logo. And retracting, the bar slid up
      under the clock, logo and all. The bar is the page's own ground now,
      and a strip of it holds the status bar's place while the bar slides
-     away beneath, as a native app's does. */
+     away beneath, as a native app's does. Its foot thins out over 8px
+     (later the same day): over the bar it is the bar's own colour, and
+     with the bar away it meets the page without a rule. */
   html.store-ios .topbar, html.ios-home .topbar {
     background: var(--bg); box-shadow: var(--glass-rim-soft);
     border-bottom-color: transparent; }
   html.store-ios body::before, html.ios-home body::before {
     content: ""; position: fixed; top: 0; left: 0; right: 0; z-index: 41; pointer-events: none;
-    height: env(safe-area-inset-top, 0px); background: var(--bg); }
+    height: calc(env(safe-area-inset-top, 0px) + 8px); background: var(--bg);
+    -webkit-mask-image: var(--mask-strip-foot); mask-image: var(--mask-strip-foot); }
+  html.store-ios.team-tint body::before, html.ios-home.team-tint body::before { background: var(--grad-team-ground), var(--bg); }
   /* A toast floats above the tab bar, never on it (it sat 26px up, over
      the Live button); above the capsule in the iPhone app. */
   .tf-toast { bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
