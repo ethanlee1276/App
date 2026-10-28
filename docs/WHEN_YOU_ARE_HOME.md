@@ -5341,11 +5341,12 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh EV 2>&1 | tee /tmp/ev.txt
 ```
 
-**EW. Tonight, 2026-10-26 — everything above, in order** (Ethan: "give me
-all the code to run"). Every command runs on the box (`ssh` in first).
+**EW. Tonight, 2026-10-28 — everything, in order** (Ethan: "give me
+all the code for all the work and anything else you need me to run including
+that"). Every command runs on the box (`ssh` in first).
 
-1. The box has the latest code. It should print `No hard lines: every outline
-   a fill, every edge a fade` or a newer line:
+1. The box has the latest code. It should print `Runbook: tonight's whole
+   list in one order (EW)` or a newer line:
 
    ```
    git -C /srv/qellys log --oneline -1
@@ -5358,52 +5359,31 @@ all the code to run"). Every command runs on the box (`ssh` in first).
    sudo systemctl start qellys-update
    ```
 
-2. Phone sign-up (EC): **skip it for now** (Ethan, 2026-10-27: "There is
-   no service sid, just a account sid and authentication token and an
-   option to create a api key … I don't have a paid twillo account so I
-   don't get the VA key thing"). Right: a free Twilio trial has no Verify
-   service to copy, and it only texts codes to numbers you have verified
-   yourself, five at most, so it could not sign anybody else up anyway.
-   The site keeps the phone option hidden until all three values are
-   right, and email sign-up works as it is: nothing is broken, and
-   nothing needs a restart. The API key is not needed at all.
+2. The yearly offer and Gift a month: step HJ, top to bottom (the two
+   prices checked, two things in Stripe's dashboard, two settings and one
+   restart, and its checks).
 
-   Optional tidy-up: the Verify slot still holds the Account SID from
-   2026-10-26. It is harmless (the site treats it as not set); this clears
-   it:
+3. Every read-only check since the chat shipped (DX to HJ) in one go, a
+   few minutes. Paste back what it prints:
 
    ```
-   cd /srv/qellys && sudo ./deploy/setenv.sh --unset TWILIO_VERIFY_SID
+   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM FN FO FP FQ FR FS FT FU FV FW FX FY FZ GA GB GC GD GE GF GG GH GI GJ GK GL GM GN GO GP GQ GR GS GT GU GV GW GX GY GZ HA HB HC HD HE HF HG HH HI HJ 2>&1 | tee /tmp/round.txt
    ```
 
-   If you ever want phone sign-up: upgrade the Twilio account (a card and
-   a starting balance; Twilio also asks for a business profile before it
-   texts any number), then Verify → Services → Create new (any name, e.g.
-   Qellys Book), copy its Service SID (it starts with `VA`), and:
+   One of its lines (EZ) measures the fantasy defenses; from what it
+   prints I'll say whether to run that step's one save.
 
-   ```
-   cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_VERIFY_SID
-   sudo systemctl restart qellys
-   cd /srv/qellys && sudo python3 -m engine.smsverify --check
-   ```
+4. On your phone: swipe Qellys up out of the app switcher, open it again,
+   and once more if it still looks old.
 
-   Every code texted is billed by Twilio, a few cents each.
+Skipped on purpose: phone sign-up (EC: it needs a paid Twilio account, and
+email sign-up works as it is) and the site's own account (ES: set up on
+2026-10-07; step 3's ES line confirms it). An optional tidy-up from EC,
+harmless either way (the Verify slot still holds an Account SID):
 
-3. The site's own account (ES): **already done** — the Founder crown and
-   `Qellys_Book` were set up on 2026-10-07, so skip the claim. The big
-   plays post as `Qellys_Book`; step 4's ES line confirms it, reading "The
-   site's own account: account … — big plays post as it." If it says NONE
-   instead, paste it back and I'll say which part to redo.
-
-4. Every read-only check since the chat shipped (DX to HI) in one go,
-   a couple of minutes. Paste back what it prints:
-
-   ```
-   cd /srv/qellys && nice -n 19 bash tools/catchup.sh DX DY DZ EA EB EC ED EE EF EG EH EI EJ EK EL EM EN EO EP EQ ER ES ET EU EV EX EY EZ FA FB FC FD FE FF FG FH FI FJ FK FL FM FN FO FP FQ FR FS FT FU FV FW FX FY FZ GA GB GC GD GE GF GG GH GI GJ GK GL GM GN GO GP GQ GR GS GT GU GV GW GX GY GZ HA HB HC HD HE HF HG HH HI 2>&1 | tee /tmp/round.txt
-   ```
-
-5. On your phone: swipe Qellys up out of the app switcher, open it again,
-   and once more if the old error is still there (EV).
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh --unset TWILIO_VERIFY_SID
+```
 
 **EX. Every sport's scoreboard is the basketball page's** (step 206). Your
 two screenshots, the NBA game's scoreboard circled beside the NFL one ("We
