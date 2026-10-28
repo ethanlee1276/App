@@ -144,7 +144,16 @@ def test_the_pages_that_stay_open_are_named_once():
                           # the app's chrome behind the wall and draws a
                           # member lock where the paid sections were
                           # (tests/test_the_free_tier.py).
-                          "live", "pbp", "game", "fantasy", "mybets"}, open_
+                          "live", "pbp", "game", "fantasy", "mybets",
+                          # The pages that sell the plan, Status, and Alerts
+                          # (2026-10-28, Ethan: "whatever you think makes the
+                          # most sense"): no pick, price or bet, only free
+                          # files, and Alerts' feed empty without a plan.
+                          # Each rendered as a free account with body.walled
+                          # set: the tab bar there with Live, not a wall
+                          # screen (tests/test_the_free_side_opens_its_
+                          # reference_pages.py). The Lab stays walled.
+                          "why", "about", "features", "methodology", "status", "alerts"}, open_
 
 
 def test_every_open_page_is_a_real_view():

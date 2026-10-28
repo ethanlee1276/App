@@ -287,15 +287,19 @@ def test_an_alert_is_only_ever_a_filter_over_a_board_you_may_read():
     assert "return []" in body, "outside the wall this must answer nothing"
 
 
-def test_the_page_still_says_it_is_not_a_push_service():
-    """It said so when it was only a digest, and a watch does not change
-    the fact — Web Push needs crypto the standard library does not have,
-    and that refusal is written up rather than quietly worked around."""
+def test_the_page_says_where_a_watch_reaches_your_phone():
+    """It used to say it was not a push service, which was true while it
+    was only a digest. Phone alerts changed that (engine/pushalerts and
+    engine/pushmine: a watched player or team on the board, its games'
+    kickoff, big moments and final scores), so it now says where the
+    switches are, member or free, and never that the lock screen is out
+    of reach."""
     app = _read("web", "js", "app.js")
     i = app.index("async function renderWatchZone(")
     body = app[i:app.index("\n/* THE FEED LEADS", i)]
-    assert "not a push notification" in body
-    assert "lock screen" in body
+    assert "Your phone hears about them with the switches above, under Yours" in body
+    assert "Turn on the switches above, under Yours, and your phone hears when their games start" in body
+    assert "cannot reach your lock screen" not in body
 
 
 if __name__ == "__main__":

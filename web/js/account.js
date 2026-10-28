@@ -2662,12 +2662,13 @@ const FL_ROWS = [
   ["A chat for every game, a thread on every play", 1],
   ["Call it, and your players’ lines live", 1],
   ["Fantasy lineups and start/sit help, your bet tracker", 1],
+  ["Alerts for your teams: kickoff, big moments, final scores", 1],
   ["The Record — every pick we post, graded", 1],
   ["Tonight’s picks, props and parlays, before the game", 0],
   ["Most Likely — every pick, tiered by its chance", 0],
   ["Ask Qellys, the AI, on any team or player", 0],
   ["Zeno’s bets as he places them, verified on Pikkit", 0],
-  ["Game reports, matchups, line moves and alerts", 0],
+  ["Game reports, matchups, line moves and pick alerts", 0],
   ["The members’ Discord", 0],
 ];
 

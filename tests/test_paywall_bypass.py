@@ -794,9 +794,16 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     # standalone screens and leads to #live. Every one was rendered with
     # body.walled set (tests/test_the_free_tier.py): the game page drops its
     # paid sections for a member lock, the Live tab's picks rail likewise.
+    # "why", "about", "features", "methodology", "status", "alerts" added
+    # 2026-10-28 (Ethan: "whatever you think makes the most sense"): the
+    # pages that sell the plan and Status read only free files and show no
+    # pick; Alerts' feed is empty on the server without a plan. Way back
+    # confirmed by rendering each as a free account with body.walled set:
+    # the tab bar is there with Live, and none is drawn as a wall screen.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
                       "signup", "streak", "messages", "zeno", "feed", "reset",
-                      "tools", "live", "game", "pbp", "fantasy", "mybets"}, (
+                      "tools", "live", "game", "pbp", "fantasy", "mybets",
+                      "why", "about", "features", "methodology", "status", "alerts"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

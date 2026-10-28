@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HI "The free side opens the pages that sell the plan, and Alerts" 30 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c '"why", "about", "features", "methodology", "status", "alerts"'
+SH
 run HH "A game saved for later never shows its chat bar" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'spoiledG(league, { event_id: event'
 SH

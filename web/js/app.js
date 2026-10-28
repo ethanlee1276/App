@@ -17848,8 +17848,8 @@ async function alertsPost(path, body) {
 function watchChipsHTML(d) {
   const ws = d.watches || [];
   if (!ws.length) return `<p class="rank-help">Nothing watched yet — add a
-    player, a team, or an edge size and the ones that matter to you rise to
-    the top of this page.</p>`;
+    ${isWalled() ? "player or a team" : "player, a team, or an edge size"} and the ones that matter
+    to you rise to the top of this page.</p>`;
   return `<div class="al-watches">${ws.map((w) => `
     <span class="chip al-watch">${escapeHtml(w.label)}
       <button type="button" class="al-unwatch" data-unwatch="${w.id}"
@@ -17900,25 +17900,29 @@ async function renderWatchZone() {
   if (!_acctUser) await acctWho();
   if (!_acctUser || !_acctUser.signed_in) {
     host.innerHTML = `<div class="card"><p class="rank-help">Sign in to watch
-      a player, a team or an edge size — the feed below is everything, and a
-      watch is the part of it that is yours.</p></div>`;
+      a player or a team: their games reach your phone with the switches
+      above, and here they rise to the top.</p></div>`;
     alertBadge(0);
     return;
   }
   const d = await alertsFetch();
   if (!d) { host.innerHTML = ""; return; }
+  // A free account (Alerts opened to it 2026-10-28): its watches drive its
+  // own switches (kickoff, big moments, final scores) and count on the
+  // board's alert; an edge size is a member's, the feed below being theirs.
+  const free = isWalled();
+  const n = (d.watches || []).length;
   host.innerHTML = `
     <div class="section-title">Watching
-      <span class="sub">— three shapes, no query builder: a player, a team,
-      or an edge size. Matched against the same feed below, so a watch can
-      never disagree with it.</span></div>
+      <span class="sub">${free ? "— a player or a team. Members also see which of them made tonight’s board."
+        : "— three shapes, no query builder: a player, a team, or an edge size. Matched against the same feed below, so a watch can never disagree with it."}</span></div>
     <div class="card">
       ${watchChipsHTML(d)}
       <div class="al-addrow">
         <select id="al-kind" aria-label="What to watch">
           <option value="player">Player</option>
           <option value="team">Team</option>
-          <option value="edge">Edge at least</option>
+          ${free ? "" : `<option value="edge">Edge at least</option>`}
         </select>
         <input id="al-val" type="text" maxlength="40"
           placeholder="Ja’Marr Chase" aria-label="What to watch for"/>
@@ -17926,11 +17930,9 @@ async function renderWatchZone() {
       </div>
       <div id="al-err" class="rank-help"></div>
       ${firedHTML(d)}
-      <p class="rank-help">This is a filter, not a push notification — the
-        site cannot reach your lock screen and says so rather than
-        pretending. What it can do is put your ${(d.watches || []).length ||
-        "own"} thing${(d.watches || []).length === 1 ? "" : "s"} above the
-        two hundred that are not.</p>
+      <p class="rank-help">${free
+        ? "Turn on the switches above, under Yours, and your phone hears when their games start, their big moments and the final scores."
+        : `Your phone hears about them with the switches above, under Yours, and here your ${n || "own"} thing${n === 1 ? "" : "s"} rise above the two hundred that are not.`}</p>
     </div>`;
   const kind = document.getElementById("al-kind");
   const val = document.getElementById("al-val");
@@ -18335,7 +18337,11 @@ function renderAlerts() {
     + friendInboxHTML()
     + `<div id="feed-zone"></div>`
     + (moved.length + inj.length + recs.length ? chips : "")
-    + (sections.join("") || `<div class="empty-slate">
+    // A free account: what is a member's here says so, rather than a quiet
+    // page that would stay quiet (the moves, the desk and the feed are paid).
+    + (isWalled() ? sections.join("") + memberLockHTML("Line moves and the desk are for members",
+        "A member’s alerts also follow tonight’s picks: their line moves, edges as they appear and go, and the prediction desk.")
+      : sections.join("") || `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">Nothing moving right now</div>
       <div class="es-sub">Alerts fill from four real feeds — the live board diff,
@@ -24233,7 +24239,18 @@ const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    // Zeno's PAGE stays open: his record there is the
                    // proof, like the Record's. His BETS inside it are for
                    // members (engine/zeno.PAID_BOARD, zenoTickets).
-                   "zeno"];
+                   "zeno",
+                   // THE PAGES THAT SELL THE PLAN, AND ALERTS (Ethan,
+                   // 2026-10-28: "whatever you think makes the most sense").
+                   // Why Us, About, Features and Methodology are the case for
+                   // paying, and Status says whether the boards are current:
+                   // none shows a pick, price or bet (QUIET_FOOTER_VIEWS), and
+                   // they read only free files (record.json, heartbeat.json).
+                   // Alerts holds the free account's own switches (kickoff, big
+                   // moments, final scores) and watches; the server gives it no
+                   // pick there (server._alerts_feed is empty without a plan).
+                   // The Lab stays a member's: it reads the paid backtest.
+                   "why", "about", "features", "methodology", "status", "alerts"];
 
 /* The screens that ARE the wall — the plans, checkout, sign-up, a reset —
    are standalone pages with their own masthead, so the app's own chrome
