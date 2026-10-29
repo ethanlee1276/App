@@ -49,7 +49,12 @@ KINDS = ("posted", "settled")
 #: subscribed may ask for these too.
 PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions", "reminders", "pickem", "kickoff",
             # "While you were away" (engine/engagement.away_pass).
-            "away")
+            "away",
+            # The research's alerts (2026-10-29): a line moved from the
+            # member's price, a close finish, injury news for their players,
+            # the morning's slate of their teams (engine/slipwatch.moments,
+            # engine/kickoffs).
+            "lines", "closegame", "news", "today")
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300

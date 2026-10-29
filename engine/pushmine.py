@@ -89,13 +89,20 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          # A followed team's game about to start (engine/kickoffs): until it does.
          "kickoff": 15 * 60,
          # "While you were away" (engine/engagement): the evening it went.
-         "away": 3 * 3600}
+         "away": 3 * 3600,
+         # The research's bet-linked alerts (engine/slipwatch.moments): close
+         # to hitting while it still is, a line move until the game starts,
+         # a close finish for its last minutes.
+         "close": 20 * 60, "lines": 3 * 3600, "closegame": 15 * 60, "news": 6 * 3600, "today": 8 * 3600}
 #: Held through quiet hours where the member is; the rest go at any hour
 #: (their own bet, a game they asked to be told about, a final).
-HELD = ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away')
+HELD = ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away', 'lines', 'closegame', 'news')
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
-_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0, "away": 0.0}
+_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0, "away": 0.0, "news": 0.0,
+           "today": 0.0}
+#: Injury news (engine/newsalerts) looks this often; the boards change every half hour.
+NEWS_EVERY_S = 5 * 60
 #: Karma alerts' pass looks at most this often.
 KARMA_EVERY_S = 15 * 60
 #: Your week's pass looks at most this often, and only on a Monday morning.
@@ -329,6 +336,29 @@ def week_summary(bets, start: str, end: str) -> dict | None:
     return {"w": w, "l": l, "p": p, "net": round(net, 2), "best": best[1] if best else ""}
 
 
+def week_clv(conn, user_id, bets, start: str, end: str) -> str:
+    """The research's weekly CLV report, in a line: how the week's saved
+    slips' prices did against their closes on average, and the best-priced
+    one (engine/betclv) — or "" when no close was seen."""
+    from engine import betclv as BC
+    got = []
+    for b in bets if isinstance(bets, list) else []:
+        if not isinstance(b, dict) or b.get("src") != "slip" or not (start <= str(b.get("date") or "")[:10] <= end):
+            continue
+        legs = b.get("legs") if isinstance(b.get("legs"), list) else []
+        c = BC.ticket(conn, user_id, str(b.get("id")), legs=len(legs), payout=b.get("odds"))["clv"]
+        if c is not None:
+            got.append((c, str(b.get("desc") or "")[:60]))
+    if not got:
+        return ""
+    avg = sum(c for c, _ in got) / len(got)
+    best = max(got)
+    line = f"Your prices {BC.words(avg)} on average ({len(got)} bet{'' if len(got) == 1 else 's'})."
+    if best[0] > 0 and best[1] and len(got) > 1:
+        line += f" Best price: {best[1]}."
+    return line
+
+
 def week_pass(conn, now: float | None = None) -> int:
     """Monday from nine in the morning, Eastern: each member whose phone gets
     their bets hears last week's record, what it made or lost and the best
@@ -352,21 +382,70 @@ def week_pass(conn, now: float | None = None) -> int:
             data = json.loads(row[0]) if row is not None else None
         except (ValueError, TypeError):
             data = None
-        got = week_summary((data or {}).get("rows") if isinstance(data, dict) else None, start, end)
+        rows = (data or {}).get("rows") if isinstance(data, dict) else None
+        got = week_summary(rows, start, end)
         if not got:
             continue
         rec = f"{got['w']}–{got['l']}" + (f"–{got['p']}" if got["p"] else "")
         sign = "+" if got["net"] >= 0 else "−"
         title = f"Your week: {rec}, {sign}{_money(abs(got['net']))}"
-        body = (f"Best win: {got['best']}. " if got["best"] else "") + "My Bets has every one."
+        clv = week_clv(conn, uid, rows, start, end)
+        body = (f"Best win: {got['best']}. " if got["best"] else "") + (clv + " " if clv else "") + "My Bets has every one."
         told += bool(tell(conn, uid, f"bets:week:{year}-W{week:02d}", "bets", title, body, "/#mybets",
                           ttl="week", now=t))
     return told
 
 
+def bet_soon(conn, user_id, bet_id: str, game: str, where: str, mins: int, now: float | None = None) -> bool:
+    """A game of the member's ticket starts in about ten minutes (the
+    research's "Your game starts", T-10), once a ticket and game."""
+    return tell(conn, user_id, f"bets:soon:{bet_id}:{game}", "bets",
+                f"Your bet’s game starts in {mins} minute{'' if mins == 1 else 's'}",
+                f"{where}. Your ticket, live, on the Live tab." if where else "Your ticket, live, on the Live tab.",
+                "/#live", ttl="on", now=now)
+
+
+def bet_close(conn, user_id, bet_id: str, leg: str, where: str, now: float | None = None) -> bool:
+    """A live leg within a unit of its number, or 85% likely (the
+    research's "Prop close to hitting"), once a ticket."""
+    return tell(conn, user_id, f"bets:close:{bet_id}", "bets", f"Close: {leg}"[:120],
+                (where or "Live now") + ". Your ticket and the hedge are on the Live tab.", "/#live",
+                ttl="close", now=now)
+
+
+def bet_line(conn, user_id, bet_id: str, leg: str, took, now_odds, book: str, move: float,
+             now: float | None = None) -> bool:
+    """Before the start, the best price now 2%+ (implied) from the one the
+    member took — either way, said which (topic "lines", their switch)."""
+    def am(o):
+        try:
+            v = float(o)
+        except (TypeError, ValueError):
+            return str(o)
+        return f"+{v:g}" if v > 0 else f"−{abs(v):g}"
+    way = "your way" if move > 0 else "against you"
+    return tell(conn, user_id, f"lines:{bet_id}", "lines", f"The line moved {way}: {leg}"[:120],
+                f"You took {am(took)}; the best now is {am(now_odds)}{' at ' + book if book else ''}"
+                + (" — you beat the market." if move > 0 else ". Information, not advice."),
+                "/#mybets", ttl="lines", now=now)
+
+
+def bet_line_points(conn, user_id, bet_id: str, leg: str, line, main, now: float | None = None) -> bool:
+    return tell(conn, user_id, f"lines:{bet_id}", "lines", f"The line moved: {leg}"[:120],
+                f"You have {line}; the main line is now {main}.", "/#mybets", ttl="lines", now=now)
+
+
+def bet_close_game(conn, user_id, bet_id: str, game: str, where: str, now: float | None = None) -> bool:
+    """A game on the member's ticket in its last minutes, within one score
+    (topic "closegame"), once a game."""
+    return tell(conn, user_id, f"closegame:{game}", "closegame", f"Close game: {where}"[:120],
+                "Final minutes, within one score — and you have a bet on it.", "/#live", ttl="closegame", now=now)
+
+
 def bet_settled(conn, user_id, bet: dict, done: dict, now: float | None = None) -> bool:
     """Won (and what it pays back), lost, or pushed — the result slipwatch
-    just wrote to the member's My Bets."""
+    just wrote to the member's My Bets — and, where every leg's close was
+    seen, whether the price beat it (engine/betclv)."""
     res = done.get("result")
     stake = bet.get("stake")
     noun = _noun(len(bet.get("legs") or []) if isinstance(bet.get("legs"), list) else 0)
@@ -384,6 +463,14 @@ def bet_settled(conn, user_id, bet: dict, done: dict, now: float | None = None) 
         title, body = f"Your {noun} pushed", f"Your {_money(stake)} comes back. My Bets has it."
     else:
         return False
+    try:
+        from engine import betclv as BC
+        n = len(bet.get("legs") or []) if isinstance(bet.get("legs"), list) else None
+        said = BC.words(BC.ticket(conn, user_id, str(bet.get("id")), legs=n, payout=bet.get("odds"))["clv"])
+        if said:
+            body = f"{body} Your price {said}."
+    except Exception:                                             # noqa: BLE001 — the result goes without it
+        pass
     return tell(conn, user_id, f"bets:settled:{bet.get('id')}", "bets", title, body, "/#mybets",
                 ttl="settled", now=now)
 
@@ -790,6 +877,23 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 told += _en.away_pass(conn, Path(web) / "data", now=t)
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  while you were away: {type(exc).__name__}: {exc}")
+        # The research's follow alerts (2026-10-29): a followed team's close
+        # finish every minute, the morning slate, injury news for the
+        # member's own players (engine/kickoffs, engine/newsalerts).
+        try:
+            told += _ko.closegame_pass(conn, Path(web) / "data", now=t)
+            if t - _looked["today"] >= KARMA_EVERY_S:
+                _looked["today"] = t
+                told += _ko.today_pass(conn, Path(web) / "data", now=t)
+        except Exception as exc:                                  # noqa: BLE001 — the rest of the minute still runs
+            log(f"  ⚠️  close games / today: {type(exc).__name__}: {exc}")
+        if t - _looked["news"] >= NEWS_EVERY_S:
+            _looked["news"] = t
+            from engine import newsalerts as _na
+            try:
+                told += _na.news_pass(conn, Path(web) / "data", now=t)
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  injury news: {type(exc).__name__}: {exc}")
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         from engine import finals as _fin
         moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)

@@ -17782,7 +17782,7 @@ async function pushOn(topics, leagues) {
 /* What a phone that just turned alerts on keeps: the shared kinds apart
    from its member's own (pushRelink sends the second only signed in). */
 function pushRemember(got) {
-  const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup" || t === "away";
+  const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup" || t === "away" || t === "lines" || t === "closegame" || t === "news" || t === "today";
   try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
     topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
 }
@@ -17866,6 +17866,10 @@ function renderPushZone(note) {
         box("kickoff", "My teams’ games, 10 minutes before they start", !signedIn),
         box("clutch", "Big moments in games I follow", !signedIn),
         box("finals", "Final scores of games I follow", !signedIn),
+        box("closegame", "Close games: my teams or my bets, the last minutes within one score", !signedIn),
+        box("news", "Injury news: a status change for a player I follow or bet on", !signedIn),
+        box("today", "This morning: my teams’ games today, with the times", !signedIn),
+        box("lines", "A line moves 2% or a point from my bet, before it starts", !signedIn),
         box("lineup", "My fantasy lineup: a starter out or on a bye", !signedIn),
         // While you were away (engine/engagement): only while the site keeps activity.
         ...(_pwStatus && _pwStatus.activity_switch

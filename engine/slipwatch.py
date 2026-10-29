@@ -394,11 +394,24 @@ def sweep(conn, boards: dict, live, *, rows: list | None = None, send=None, enti
                 conn.commit()
         except sqlite3.Error as exc:
             log(f"  slip watch: a replay point could not be kept ({type(exc).__name__})")
+        # ITS CLOSE (engine/betclv): each leg's latest prices until its game
+        # starts, so the result can say whether the price beat the close.
+        try:
+            from . import betclv as BC
+            if BC.note(conn, r["user_id"], bid, card, t):
+                conn.commit()
+        except sqlite3.Error as exc:
+            log(f"  slip watch: a close could not be kept ({type(exc).__name__})")
         done = settled(bet, card)
         if done is not None:
             settles.setdefault(r["user_id"], {})[str(bet["id"])] = done
             tickets[(r["user_id"], str(bet["id"]))] = bet
             continue
+        # THE RESEARCH'S BET-LINKED ALERTS (2026-10-29): its game about to
+        # start, a leg close to hitting, the line moved from the price taken,
+        # a close finish — each once (engine/pushmine), each its own switch.
+        for kind, args in moments(card, t):
+            _tell(kind, conn, r["user_id"], bid, *args, now=t, log=log)
         # YOUR TICKET ON YOUR PHONE (engine/pushmine, 2026-10-24): its first
         # game live, then its last leg, then its result — once each, to the
         # member's phones that asked for their bets.
@@ -573,6 +586,98 @@ def leg_name(card: dict) -> str:
     from . import slipgrade as SG
     leg = open_leg(card or {})
     return ((card or {}).get("hedge") or {}).get("leg") or (SG._name(leg) if leg else "")
+
+
+#: A bet's game this close to its start is "about to start" (research: T-10).
+SOON_S = 10 * 60
+#: A leg this close to its number, or this likely, is "close to hitting".
+CLOSE_UNITS = 1.0
+CLOSE_CHANCE = 0.85
+#: The price taken against the best price now, in implied chance, that is a
+#: line worth hearing about; or the main line a point from the bet's.
+LINE_MOVE = 0.02
+LINE_POINTS = 1.0
+#: "Within one score", by league, in the last LATE_SHARE of regulation.
+ONE_SCORE = {"nfl": 8, "cfb": 8, "nba": 5, "wnba": 5, "nhl": 1, "mlb": 1}
+LATE_SHARE = 0.10
+
+
+def _start(leg: dict) -> float | None:
+    from .gamechat import _when
+    return _when((leg.get("live") or {}).get("start") or leg.get("kickoff"))
+
+
+def _leg_words(leg: dict) -> str:
+    from . import slipgrade as SG
+    try:
+        return SG._name(leg) or "your bet"
+    except Exception:                                              # noqa: BLE001
+        return "your bet"
+
+
+def game_key(leg: dict) -> str:
+    g = leg.get("live") or {}
+    return f"{leg.get('league') or ''}:{g.get('away') or ''}@{g.get('home') or ''}"
+
+
+def moments(card: dict, now: float) -> list:
+    """What a graded open slip has to say this minute, as (kind, args) for
+    `_tell`: "bet_soon" (a leg's game starts within SOON_S), "bet_close" (a
+    live leg within CLOSE_UNITS of its number, or CLOSE_CHANCE likely),
+    "bet_line" (before the start, the best price now CLOSE from the one
+    taken by LINE_MOVE in implied chance, or the main line LINE_POINTS off
+    the bet's), "bet_close_game" (a live game of the ticket in its last
+    LATE_SHARE, within one score). Pushmine says each once."""
+    out = []
+    seen_games: set = set()
+    for leg in (card or {}).get("legs") or []:
+        g = leg.get("live") or {}
+        state = str(g.get("state") or "")
+        key = game_key(leg)
+        if state not in ("live", "final"):
+            st = _start(leg)
+            if st is not None and 0 < st - now <= SOON_S and key not in seen_games:
+                seen_games.add(key)
+                out.append(("bet_soon", (key, f"{g.get('away') or ''} @ {g.get('home') or ''}".strip(" @"),
+                                         max(1, round((st - now) / 60)))))
+            pr = leg.get("price") or {}
+            took, best = _dec(leg.get("odds")), _dec(pr.get("best"))
+            if took and best:
+                move = 1 / best - 1 / took
+                if abs(move) >= LINE_MOVE:
+                    out.append(("bet_line", (_leg_words(leg), leg.get("odds"), pr.get("best"),
+                                             pr.get("book") or "", move)))
+                    continue
+            main, line = pr.get("main_line"), leg.get("line")
+            try:
+                if main is not None and line is not None and abs(float(main) - float(line)) >= LINE_POINTS:
+                    out.append(("bet_line_points", (_leg_words(leg), line, main)))
+            except (TypeError, ValueError):
+                pass
+            continue
+        if state != "live" or g.get("result"):
+            continue
+        cur, side = g.get("current"), str(leg.get("side") or "").lower()
+        try:
+            gap = float(leg.get("line")) - float(cur) if cur is not None and leg.get("line") is not None else None
+        except (TypeError, ValueError):
+            gap = None
+        chance = g.get("chance")
+        if (side == "over" and gap is not None and 0 < gap <= CLOSE_UNITS) or \
+                (isinstance(chance, (int, float)) and chance >= CLOSE_CHANCE):
+            out.append(("bet_close", (_leg_words(leg), where(leg))))
+        lg = str(leg.get("league") or "")
+        try:
+            margin = abs(float(g.get("home_score")) - float(g.get("away_score")))
+        except (TypeError, ValueError):
+            margin = None
+        share = g.get("share_left")
+        if (lg in ONE_SCORE and margin is not None and margin <= ONE_SCORE[lg] and isinstance(share, (int, float))
+                and 0 < share <= LATE_SHARE and key not in seen_games):
+            seen_games.add(key)
+            out.append(("bet_close_game", (key, f"{g.get('away')} {g.get('away_score')} – {g.get('home_score')} "
+                                                f"{g.get('home')}" + (f", {g['clock']}" if g.get("clock") else ""))))
+    return out
 
 
 def where(leg: dict) -> str:

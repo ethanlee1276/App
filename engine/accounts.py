@@ -938,7 +938,10 @@ def delete_user(conn, user_id: int) -> None:
                   # Your own time here (engine/activity) and its switch, and
                   # when the "while you were away" alert last went
                   # (engine/engagement).
-                  "activity_days", "activity_prefs", "engagement_away"):
+                  "activity_days", "activity_prefs", "engagement_away",
+                  # Their bets' closing prices (engine/betclv) and the injury
+                  # statuses last told them (engine/newsalerts).
+                  "bet_clv", "news_seen"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     # A watch party they started stays for its friends, with them off it.
@@ -1106,6 +1109,12 @@ def export_user(conn, user_id: int) -> dict:
     if "activity_days" in have:
         from . import activity as _act
         out.update(_act.export_user(conn, user_id))
+    # The closing prices seen for their saved slips (engine/betclv).
+    if "bet_clv" in have:
+        rows = [dict(zip(("bet", "leg", "entry", "close", "fair", "at"), r)) for r in conn.execute(
+            "SELECT bet_id, leg, entry, best, fair, at FROM bet_clv WHERE user_id=? ORDER BY at", (int(user_id),))]
+        if rows:
+            out["closing_prices_of_your_bets"] = rows
     if "gift_codes" in have:
         rows = [dict(r) for r in conn.execute("SELECT code, created_at, redeemed_by IS NOT NULL AS redeemed "
                                               "FROM gift_codes WHERE user_id=? ORDER BY created_at", (int(user_id),))]

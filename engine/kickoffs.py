@@ -113,3 +113,107 @@ def kickoff_pass(conn, data_dir: Path | None = None, now: float | None = None) -
                             f"{away} @ {home} starts in {mins} minute{'' if mins == 1 else 's'}",
                             "Tap for the game, its chat and Call it.", f"/#pbp/{lg}/{event}", now=t)
     return told
+
+
+# ─── the research's two follow alerts (2026-10-29) ──────────────────────────
+#: A followed team's game in its last LATE_SHARE of regulation (the 9th
+#: inning on, in baseball) within one score is a close game (topic
+#: "closegame", the same message id as a ticket's, so a member with both
+#: hears it once). Apple's TV app had editors flag exactly these.
+CLOSE_TOPIC = "closegame"
+TODAY_TOPIC = "today"
+#: The morning slate goes from this hour where the member is (their
+#: Settings' zone, Eastern when they named none), once a day.
+TODAY_HOUR = 10
+
+
+def late_and_close(league: str, live: dict) -> bool:
+    """In its last minutes (or the 9th inning on) and within one score."""
+    from engine import slipwatch as SW
+    from engine.proplive import share_left
+    lg = str(league or "").lower()
+    if lg not in SW.ONE_SCORE or str((live or {}).get("state") or "").lower() != "live":
+        return False
+    try:
+        margin = abs(float(live.get("home_score")) - float(live.get("away_score")))
+    except (TypeError, ValueError):
+        return False
+    if margin > SW.ONE_SCORE[lg]:
+        return False
+    if lg == "mlb":
+        try:
+            return int(live.get("period") or 0) >= 9
+        except (TypeError, ValueError):
+            return False
+    f = share_left(lg, live)
+    return f is not None and 0 < f <= SW.LATE_SHARE
+
+
+def closegame_pass(conn, data_dir: Path | None = None, now: float | None = None) -> int:
+    """Tell each account whose phone carries "closegame" about a followed
+    team's game that is late and close. Returns how many were told."""
+    from engine.socialfeed import _read
+    PM.ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    users = conn.execute("SELECT DISTINCT user_id FROM push_subs WHERE user_id IS NOT NULL "
+                         "AND (',' || topics || ',') LIKE ?", (f"%,{CLOSE_TOPIC},%",)).fetchall()
+    if not users:
+        return 0
+    base = Path(data_dir) if data_dir else PM.WEB / "data"
+    close = []
+    for lg in LEAGUES:
+        for g in (_read(base / f"live_{lg}.json") or {}).get("games") or []:
+            live = g.get("live") or {}
+            if late_and_close(lg, live):
+                away, home = str(g.get("away") or "").upper(), str(g.get("home") or "").upper()
+                event = str(g.get("event_id") or g.get("game_pk") or "")
+                close.append((lg, event, away, home, live))
+    told = 0
+    for (uid,) in users:
+        mine = follows(conn, uid)
+        for lg, event, away, home, live in close:
+            if (lg, DV.canonical(lg, away)) not in mine and (lg, DV.canonical(lg, home)) not in mine:
+                continue
+            score = f"{away} {live.get('away_score')} – {live.get('home_score')} {home}"
+            clock = live.get("clock") or ""
+            told += PM.tell(conn, uid, f"closegame:{lg}:{away}@{home}", CLOSE_TOPIC,
+                            f"Close game: {score}" + (f", {clock}" if clock else ""),
+                            "Final minutes, within one score.", f"/#pbp/{lg}/{event}" if event else "/#live",
+                            now=t)
+    return told
+
+
+def today_pass(conn, data_dir: Path | None = None, now: float | None = None) -> int:
+    """The morning slate (topic "today"): once a day, from TODAY_HOUR where
+    the member is, the games their teams play today, with the times. A day
+    with none of their teams playing says nothing."""
+    from engine import engagement as EN
+    from engine import pushalerts as PA
+    PM.ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    users = conn.execute("SELECT DISTINCT user_id FROM push_subs WHERE user_id IS NOT NULL "
+                         "AND (',' || topics || ',') LIKE ?", (f"%,{TODAY_TOPIC},%",)).fetchall()
+    if not users:
+        return 0
+    games = None
+    told = 0
+    for (uid,) in users:
+        try:
+            from zoneinfo import ZoneInfo
+            local = __import__("datetime").datetime.fromtimestamp(t, ZoneInfo(PA.member_tz(conn, uid) or "America/New_York"))
+        except Exception:                                     # noqa: BLE001 — an unknown zone: Eastern
+            local = EN.ACT.eastern(t)
+        if local.hour < TODAY_HOUR:
+            continue
+        if games is None:
+            games = EN._today_games(Path(data_dir) if data_dir else PM.WEB / "data", t)
+        mine = follows(conn, uid)
+        theirs = sorted((g for g in games if (g[0], DV.canonical(g[0], g[2])) in mine
+                         or (g[0], DV.canonical(g[0], g[3])) in mine), key=lambda g: g[4])
+        if not theirs:
+            continue
+        line = ", ".join(f"{a} @ {h} {EN._clock(st).replace(' ET', '')}" for _lg, _ev, a, h, st in theirs[:3])
+        told += PM.tell(conn, uid, f"today:{local.date().isoformat()}", TODAY_TOPIC,
+                        f"Today: {line}"[:120] + (" ET" if len(theirs) <= 3 else " ET and more"),
+                        "Your teams’ games — the slate, the chats and Call it.", "/#live", now=t)
+    return told
