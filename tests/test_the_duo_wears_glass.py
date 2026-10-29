@@ -57,7 +57,10 @@ def test_the_open_duo_is_told_by_finger_and_a_mouse_keeps_the_desktop():
     queries = re.findall(r"@media ([^{]+)\{\s*\.topbar \{", GLASS_CODE)
     assert queries, "the glass block is found"
     clauses = [c.strip() for c in queries[0].split(",")]
-    assert len(clauses) == 3 and all(c.startswith("(pointer: coarse)") for c in clauses), clauses
+    # Two since 2026-10-29: the Duo upright is a phone (its tab bar wears the
+    # glass bar material) and on its side wears the app, so the floating pane
+    # is a tablet's on its side and a Fold's inner screen's.
+    assert len(clauses) == 2 and all(c.startswith("(pointer: coarse)") for c in clauses), clauses
     assert clauses[0] == "(pointer: coarse) and (min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4)"
 
 
@@ -104,8 +107,11 @@ def test_in_a_browser_the_duo_gets_a_lit_floating_pane_and_a_laptop_does_not():
                 kw["executable_path"] = "/opt/pw-browsers/chromium"
             browser = pw.chromium.launch(**kw)
             try:
-                for name, touch, theme in (("duo", True, "dark"), ("duo light", True, "light"), ("laptop", False, "dark")):
-                    ctx = browser.new_context(viewport={"width": 951, "height": 543}, is_mobile=touch, has_touch=touch,
+                # The floating pane: a tablet held on its side (the open Duo on its
+                # side wears the app's tab bar instead, and keeps the glass bar).
+                for name, touch, theme, w, h in (("duo", True, "dark", 1133, 744), ("duo light", True, "light", 1133, 744),
+                                                 ("laptop", False, "dark", 951, 543), ("duo side", True, "dark", 951, 543)):
+                    ctx = browser.new_context(viewport={"width": w, "height": h}, is_mobile=touch, has_touch=touch,
                                               service_workers="block")
                     page = ctx.new_page()
                     page.add_init_script("try { localStorage.setItem('qb-seen-intro', '1'); localStorage.setItem('qb.tour', 'done'); } catch (e) {}")
@@ -124,6 +130,7 @@ def test_in_a_browser_the_duo_gets_a_lit_floating_pane_and_a_laptop_does_not():
     finally:
         srv.shutdown()
     duo, light, laptop = got["duo"], got["duo light"], got["laptop"]
+    assert "gradient" in got["duo side"]["bar"], ("the open Duo on its side keeps the glass bar", got["duo side"])
     assert duo["radius"] > 0 and "inset" in duo["shadow"] and "gradient" in duo["bg"] and "gradient" in duo["bar"], duo
     assert "none" in duo["blur"] or not duo["blur"].strip(), duo["blur"]
     assert light["bg"] != duo["bg"], "the light theme has its own panes"

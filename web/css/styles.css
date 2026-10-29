@@ -3861,6 +3861,8 @@ body.pk-open { overflow: hidden; }
   html.side-rail #qb-slip { right: var(--strip-w); bottom: calc(8px + env(safe-area-inset-bottom) - var(--vgap)); }
   html.side-rail-left #qb-slip { right: 0; left: var(--strip-w); }
 }
+/* …and on the open Duo on its side, where the slip is the desktop's dock. */
+html.duo-side #qb-slip { right: var(--strip-w); }
 .tour-card { position: relative; width: 100%; max-width: 440px; background: var(--panel);
   border: var(--hairline) solid transparent; border-radius: var(--radius-lg); padding: 22px 20px 18px; }
 .tour-step { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .04em; text-transform: uppercase; }
@@ -6722,18 +6724,23 @@ body.has-deck #rail-live { display: none; }
    Every pose reports a finger.
 
    Two shapes get the desktop shell where a phone or tablet would get
-   the drawer: the sidebar beside the page, no hamburger, no tab bar (a
-   third, the near-square inner screen of a Fold, is under "EVERY FOLD
-   AND FLIP" below).
+   the drawer: the sidebar beside the page, no hamburger, no tab bar.
      on its side  (min-width: 700px) and (min-height: 480px) and
                   (min-aspect-ratio: 5/4). Any pointer, so a small
                   laptop window gets the same; a phone on its side is
                   under 480 tall and keeps its own layout.
-     upright      (pointer: coarse) and (min-width: 600px) and
-                  (max-width: 720px) and (min-height: 700px): a finger
-                  on a screen no phone has, under the iPad mini's 744.
-   The same two lines are UNFOLDED_MQ in app.js, which keeps the header
-   in place on these shapes and closes the drawer when the screen opens.
+     a Fold's inner screen, near square: under "EVERY FOLD AND FLIP".
+   The same lines are UNFOLDED_MQ in app.js, which keeps the header in
+   place on these shapes and closes the drawer when the screen opens.
+
+   THE DUO ITSELF WEARS THE APP SINCE 2026-10-29 (Ethan: the tab bar "on
+   the side like how we do in the folded view"; Apple's guide for the Duo
+   keeps bars on the side when it opens on its side, and at the bottom
+   upright). Upright (669 by 825) it is a phone: the "upright" line that
+   gave it the desktop shell is gone. On its side, a finger on a short
+   screen, boot.js sets html.duo-side: "THE DUO OPEN ON ITS SIDE WEARS THE
+   APP" below takes the sidebar away and gives the page the phone's tab
+   bar on the right edge and its menu sheet.
 
    OVERRIDES, NOT A NEW CONDITION ON THE OLD BLOCKS. "Up to 900px, but
    not the open Duo" needs Media Queries 4's `not`, and a browser without
@@ -6741,7 +6748,6 @@ body.has-deck #rail-live { display: none; }
    would vanish on exactly the oldest phones. These are plain `and`s.
    ============================================================ */
 @media (min-width: 700px) and (max-width: 900px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
-       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px),
        (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
   .shell, body.has-rail .shell { display: grid; }
   .rail { padding: 0 26px 26px; }
@@ -6757,7 +6763,6 @@ body.has-deck #rail-live { display: none; }
    bar and the riding tray that floats on it, the room kept for them, and
    the search, bell and theme buttons the tab bar's More sheet took over. */
 @media (min-width: 700px) and (max-width: 760px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
-       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px),
        (pointer: coarse) and (min-width: 721px) and (max-width: 760px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
   .tabbar, .riding-tray { display: none; }
   body, body.has-tray { padding-bottom: 0; }
@@ -6772,6 +6777,112 @@ body.has-deck #rail-live { display: none; }
 @media (max-width: 999px) {
   #slate-date { display: none; }
 }
+/* THE DUO OPEN ON ITS SIDE WEARS THE APP (Ethan, 2026-10-29, the open Duo
+   on its side: "I kind of prefer it to have the tab bar that we have on the
+   regular mobile app with the live button ... on the side like how we do in
+   the folded view"). Apple's guide for the Duo says the same: "The controls
+   remain on the side when the device opens in landscape to ensure a
+   consistent experience as people move between displays." boot.js sets
+   html.duo-side, with html.side-rail, on a finger's wide, short screen: the
+   open Duo on its side (951 by 543 to 589 in Safari, 890 by 626 by Apple's
+   pixels) or a small tablet held the same way. The page keeps its wide
+   layout; its way around is the phone app's: the tab bar on the right edge,
+   as when the Duo is shut (the side strip's rules below), and the menu sheet
+   behind the button at the top left, the sidebar's rows as its pills. The
+   rules for the bar, the sheet and the button are the phone's own, copied
+   out of its width blocks (tests pin those blocks' lines);
+   tests/test_the_open_duo_wears_the_app.py holds each copy to its original.
+   Upright, the open Duo is a phone, and its block below 761px does it all. */
+html.duo-side .shell, html.duo-side body.has-rail .shell { display: block; }
+html.duo-side .sidebar, html.duo-side .tb-ask { display: none; }
+html.duo-side .menu-toggle { display: grid; place-items: center; width: 42px; height: 42px;
+    border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: var(--fill-tone);
+    color: var(--text); cursor: pointer; flex: 0 0 auto; }
+html.duo-side .mt-bars { position: relative; width: 16px; height: 2px; border-radius: 1px;
+    background: currentColor; }
+html.duo-side .mt-bars::before, html.duo-side .mt-bars::after { content: ""; position: absolute; left: 0;
+    width: 16px; height: 2px; border-radius: 1px; background: currentColor;
+    transition: transform var(--dur-base) var(--ease-out); }
+html.duo-side .mt-bars::before { top: -5px; }
+html.duo-side .mt-bars::after { top: 5px; }
+html.duo-side .mt-label { display: none; }
+html.duo-side .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
+    display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
+    padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+    background: color-mix(in oklab, var(--panel) 55%, var(--bg));
+    border-top: var(--hairline) solid var(--border-soft); }
+html.duo-side .tb-item { display: flex; flex-direction: column; align-items: center; gap: 3px;
+    border: 0; background: transparent; color: var(--text-mute); cursor: pointer;
+    font: inherit; font-size: var(--fs-2xs); font-weight: 700; padding: 4px 2px;
+    letter-spacing: .02em; position: relative; text-transform: none; }
+html.duo-side .tb-item svg { width: 21px; height: 21px; }
+html.duo-side .tb-item.active { color: var(--brand-2); }
+html.duo-side .tb-center { color: var(--text-dim); }
+html.duo-side .tb-center-disc { display: grid; place-items: center; width: 46px; height: 46px;
+    margin-top: -22px; border-radius: 50%; background: var(--grad-brand);
+    color: var(--brand-ink); box-shadow: var(--glow); }
+html.duo-side .tb-center-disc { position: relative; }
+html.duo-side .tb-center-disc svg { width: 21px; height: 21px; }
+html.duo-side .tb-center.active { color: var(--text); }
+html.duo-side .tb-badge { position: absolute; top: -3px; right: -3px;
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+    display: inline-grid; place-items: center; background: var(--bad);
+    color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
+html.duo-side .tb-badge[hidden] { display: none; }
+html.duo-side .tb-item[aria-expanded="true"] { color: var(--brand-2); }
+html.duo-side .tb-item > svg { transition: transform var(--dur-base) var(--ease-out); }
+html.duo-side .tb-item.active > svg { transform: translateY(-2px); }
+html.duo-side .tb-item::after { content: ""; position: absolute; left: 50%; bottom: -1px; width: 4px; height: 4px;
+    margin-left: -2px; border-radius: 50%; background: currentColor; transform: scale(0);
+    transition: transform var(--dur-base) var(--ease-out); }
+html.duo-side .tb-item.active::after, html.duo-side .tb-item[aria-expanded="true"]::after { transform: scale(1); }
+html.duo-side .tb-center::after { display: none; }
+html.duo-side .more-scrim { display: block; position: fixed; inset: 0; z-index: 57; touch-action: none;
+    background: rgba(0, 0, 0, .62); opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-base) var(--ease-out); }
+html.duo-side .more-sheet { display: block; position: fixed; top: 0; left: 0; bottom: 0; z-index: 58;
+    width: min(86vw, 360px); overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;   /* a swipe past the sheet's end stays in the sheet */
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0; background: var(--panel);
+    border-right: var(--hairline) solid var(--border);
+    transform: translateX(-103%); will-change: transform;
+    transition: transform var(--dur-base) var(--ease-out); }
+html.duo-side .more-scrim[hidden], html.duo-side .more-sheet[hidden] { display: none; }
+html.duo-side body.more-open { position: fixed; left: 0; right: 0; width: 100%; overflow: hidden; }
+html.duo-side body.more-open .more-scrim { opacity: 1; pointer-events: auto; }
+html.duo-side body.more-open .more-sheet { transform: translateX(0); }
+html.duo-side .more-handle { display: none; }
+html.duo-side .more-search { display: flex; align-items: center; gap: 10px; width: 100%;
+    margin: 4px 0 2px; padding: 11px 14px; min-height: 44px;
+    border: var(--hairline) solid transparent; border-radius: var(--radius);
+    background: var(--bg); color: var(--text-dim); cursor: pointer;
+    font: inherit; font-size: var(--fs-sm); text-align: left; }
+html.duo-side .more-search svg { width: 18px; height: 18px; flex: 0 0 auto; }
+html.duo-side .more-group { margin-top: 16px; }
+html.duo-side .more-foot { margin-top: 18px; padding-top: 14px; border-top: var(--hairline) solid var(--border-soft);
+    display: grid; gap: 8px; }
+html.duo-side .more-foot .more-pills:empty { display: none; }
+html.duo-side .more-switch i { margin-left: auto; font-style: normal; font-family: var(--font-mono);
+    font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+html.duo-side .more-switch[aria-checked="true"] i { color: var(--good); }
+html.duo-side .more-switch[aria-checked="true"] svg { color: var(--good); }
+html.duo-side .more-group h3 { margin: 0 0 8px; color: var(--text-mute);
+    font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .07em;
+    text-transform: uppercase; }
+html.duo-side .more-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+html.duo-side .more-pill { display: flex; align-items: center; gap: 10px; min-height: 44px; min-width: 0;
+    border: var(--hairline) solid transparent; border-radius: var(--radius);
+    background: var(--bg); color: var(--text); cursor: pointer; text-align: left;
+    font: inherit; font-size: var(--fs-sm); font-weight: 700; padding: 8px 12px; }
+html.duo-side .more-pill svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--brand-2); }
+html.duo-side .more-pill.active { background: var(--grad-brand); border-color: transparent;
+    color: var(--brand-ink); }
+html.duo-side .more-pill.active svg { color: inherit; }
+html.duo-side .more-pill b { font-family: var(--font-mono); font-size: var(--fs-2xs);
+    font-weight: 800; min-width: 16px; padding: 0 5px; border-radius: 999px;
+    background: var(--bad); color: #fff; text-align: center; }
+
 .mc-pick.active { background: var(--grad-chip); box-shadow: inset 2px 0 0 var(--brand); }
 
 /* Parlay Mode rides directly under High Confidence — the first card
@@ -10529,7 +10640,6 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
 
 /* The open Duo, by finger and shape: the whole set. */
 @media (pointer: coarse) and (min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
-       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px),
        (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
   .topbar { background: var(--glass-sheen), var(--glass-tint-strong); box-shadow: var(--glass-rim);
     border-bottom-color: transparent; }
@@ -10554,8 +10664,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
 @supports (animation-timeline: scroll()) {
   @media (prefers-reduced-motion: no-preference) {
     @media (pointer: coarse) and (min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
-           (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px),
-           (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
+               (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
       .topbar, .sidebar { background-size: 100% 260%, auto; animation: glass-drift linear both; animation-timeline: scroll(root); }
     }
   }
@@ -10660,7 +10769,8 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    camera, the way the system's own bars do there; the page keeps clear of
    the strip; and what floated above the bar's old place comes down to the
    foot and keeps out of the strip too (the slip's rule is with the slip's). */
-@media (max-width: 760px) {
+@media (max-width: 760px),
+       (pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 700px) and (min-aspect-ratio: 4/3) {
   html.side-rail .tabbar, html.side-rail.store-ios .tabbar, html.side-rail.ios-home .tabbar {
     display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 10px;
     left: auto; right: 0; top: 0; bottom: 0; width: var(--strip-w);
@@ -10703,6 +10813,11 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   html.side-rail-left .crash-note, html.side-rail-left.store-ios .crash-note, html.side-rail-left.ios-home .crash-note {
     right: 12px; left: calc(var(--strip-w) + 12px); }
 }
+
+/* The open Duo on its side, drawn beside the system's strip (a Home Screen
+   app today): the clock is out there, so the bar starts under the header.
+   Given the strip itself, it clears the clock as it does folded. */
+html.duo-side.side-rail:not(.side-rail-inset) .tabbar { padding-top: calc(var(--topbar-h) + 8px); }
 
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
    his phone's top bar and league row circled again: "the colors up here

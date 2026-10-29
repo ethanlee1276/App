@@ -71,7 +71,7 @@ TOUCH = """async ({x0, y0, x1, y1}) => {
 }"""
 
 
-def test_on_the_open_duo_the_pane_holds_and_the_page_still_refreshes():
+def test_by_finger_the_pane_holds_and_the_page_still_refreshes():
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
         return
@@ -90,8 +90,10 @@ def test_on_the_open_duo_the_pane_holds_and_the_page_still_refreshes():
                 kw["executable_path"] = "/opt/pw-browsers/chromium"
             browser = pw.chromium.launch(**kw)
             try:
-                # The open Duo: a finger, 703 by 1000 (styles.css "The open Duo").
-                ctx = browser.new_context(viewport={"width": 703, "height": 1000}, service_workers="block",
+                # A finger beside the floating sidebar: a tablet on its side (the
+                # open Duo wears the app's tab bar since 2026-10-29, and its
+                # sheet is the menu; the sidebar is a tablet's and a computer's).
+                ctx = browser.new_context(viewport={"width": 1133, "height": 744}, service_workers="block",
                                           is_mobile=True, has_touch=True)
                 page = ctx.new_page()
                 page.on("pageerror", lambda e: errs.append(str(e)))

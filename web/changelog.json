@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-29",
+      "kind": "ship",
+      "title": "The open iPhone Duo wears the app",
+      "body": "Open on its side, the Duo now has the app's tab bar on the right edge, where it is when the Duo is shut, and the menu behind the button at the top left; open upright it is the phone app, the bar at the bottom. Computers and tablets keep the sidebar."
+    },
+    {
+      "date": "2026-10-29",
       "kind": "fix",
       "title": "The sidebar stays put",
       "body": "On a tablet or an open foldable, the sidebar's list could be dragged sideways and pulled past its ends, and pulling it down refreshed the page. It now scrolls up and down only, and a pull or a swipe that starts in it stays in it."

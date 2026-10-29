@@ -8651,6 +8651,42 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IE 2>&1 | tee /tmp/ie.txt
 ```
 
+**IF. The open Duo wears the app** (step 292; you, with the open Duo on its
+side: "I kind of prefer it to have the tab bar that we have on the regular
+mobile app with the live button ... on the side like how we do in the
+folded view", and you chose Apple's layout). Apple's design guide for the
+Duo: "The controls remain on the side when the device opens in landscape
+to ensure a consistent experience as people move between displays", with
+standard bars at the bottom upright. So:
+
+- **Open on its side:** the five tabs (Home, Picks, Live, Record, Ask) stand
+  on the right edge, where they are when the Duo is shut, and the menu is
+  behind the button at the top left (the same sheet as the phone's, every
+  page in it). The page keeps its full width, the sidebar is gone, and the
+  header's Ask button too (Ask is a tab). Opening a pick still puts it
+  beside the board.
+- **Open upright:** it is the phone app, the bar at the bottom.
+- **Computers, iPads and other tablets** keep the sidebar as before.
+- Today the Duo draws a Home Screen app beside its clock strip, so the bar
+  stands at the right edge of the page, next to the strip. Once the store
+  app is built for iOS 27.1 and iOS gives the page the strip, the bar
+  stands in the strip itself, under the clock, as it does folded.
+
+Nothing to set: the updater picks it up within five minutes. Close the app
+from the app switcher and open it again to see it. Read-only, any time; each
+prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/boot.js | grep -c 'root.classList.toggle("duo-side", duo);'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'html.duo-side .sidebar, html.duo-side .tb-ask { display: none; }'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IF 2>&1 | tee /tmp/if.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

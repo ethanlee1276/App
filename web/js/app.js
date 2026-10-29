@@ -26896,14 +26896,23 @@ const HEADER_TUCK_MQ =
   "(max-width: 760px), (pointer: coarse) and (max-width: 1024px)";
 
 /* EVERY OPEN FOLDABLE, by its shape (styles.css, "THE OPEN iPHONE DUO"
-   and "EVERY FOLD AND FLIP"): on its side, upright on a screen no phone
-   has, or the near-square inner screen of a Fold, a Pixel Fold or an
-   OnePlus Open. Where these match, the page wears the desktop shell: the
-   header stays put (a retracted header would leave the sticky sidebar a
-   gap over it), the phone's sheet is not the menu, an open drawer closes. */
+   and "EVERY FOLD AND FLIP"): on its side, or the near-square inner screen
+   of a Fold, a Pixel Fold or an OnePlus Open. Where these match, the page
+   wears the desktop shell: the header stays put (a retracted header would
+   leave the sticky sidebar a gap over it), the phone's sheet is not the
+   menu, an open drawer closes. The open Duo upright is a phone since
+   2026-10-29, and on its side it wears the app (duoSide below). */
 const UNFOLDED_MQ = "(min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4), "
-  + "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px), "
   + "(pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5)";
+/* THE OPEN DUO ON ITS SIDE WEARS THE APP (Ethan, 2026-10-29: the tab bar "on
+   the side like how we do in the folded view"): a finger on a wide, short
+   screen, the open Duo on its side (951 by 543 to 589 in Safari, 890 by 626
+   by Apple's pixels) or a small tablet held the same way. boot.js marks it
+   html.duo-side for the stylesheet (styles.css "THE DUO OPEN ON ITS SIDE");
+   here the hamburger opens the phone's sheet (isPhone). The same query in
+   boot.js and in the side strip's block; tests/test_the_open_duo_wears_the_
+   app.py keeps the three the same. */
+const DUO_SIDE_MQ = "(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 700px) and (min-aspect-ratio: 4/3)";
 /* LIST BESIDE DETAIL (Ethan, 2026-10-24: "make it unique for that phone").
    The Duo's own Notes and Messages, Inoreader and every Fold app open a
    list and its item side by side on the big screen; so does this, on a
@@ -27079,7 +27088,8 @@ function initFoldSeams() {
     if (_paneList && !split.matches) paneSplit(state.view, "");
   };
   const split = matchMedia(TWO_PANE_MQ);
-  [narrow, phone, open, split].forEach((mq) => { if (mq.addEventListener) mq.addEventListener("change", shut); });
+  const side = matchMedia(DUO_SIDE_MQ);
+  [narrow, phone, open, split, side].forEach((mq) => { if (mq.addEventListener) mq.addEventListener("change", shut); });
 }
 
 /* ---------------- wiring ---------------- */
@@ -30705,8 +30715,14 @@ function sidebarDestinations(root) {
   return out;
 }
 
+/* THE OPEN DUO ON ITS SIDE WEARS THE APP (DUO_SIDE_MQ, beside UNFOLDED_MQ):
+   there the hamburger opens the phone's sheet, the menu, as it does folded. */
+function duoSide() {
+  return !!(window.matchMedia && matchMedia(DUO_SIDE_MQ).matches);
+}
+
 function isPhone() {
-  return !!(window.matchMedia && matchMedia("(max-width: 760px)").matches) && !unfolded();
+  return !!(window.matchMedia && matchMedia("(max-width: 760px)").matches) && !unfolded() || duoSide();
 }
 
 function morePillLabel(src) {

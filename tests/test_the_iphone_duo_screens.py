@@ -1,4 +1,4 @@
-"""The iPhone Duo: the phone on its front screen, the desktop on the big one, and nothing lost between them.
+"""The iPhone Duo: the phone on its front screen, the app's own way around on the big one, and nothing lost between them.
 
 Ethan, 2026-10-23: "Make app work seamlessly with iPhone duo. We need to
 make it work with the front screen and the phone being open and big
@@ -12,11 +12,21 @@ Safari gives the page, measured in the iOS 27.1 simulator: folded
 Apple's pixels over three say 466 x 678 and 890 x 626. Half-folding has
 been measured moving Safari to the front screen.
 
-What these hold: the open shapes get the desktop shell (the sidebar, no
+Ethan, 2026-10-29, changed the big screen: "I kind of prefer it to have
+the tab bar that we have on the regular mobile app with the live button
+... on the side like how we do in the folded view", and chose Apple's
+layout for the Duo (its design guide: bars stay on the side when it opens
+on its side, at the bottom upright). So open on its side the Duo wears the
+app (tests/test_the_open_duo_wears_the_app.py), and open upright it is a
+phone; the desktop shell is left to the shapes that are not the Duo: a
+laptop window on its side, a tablet, a Fold's near-square inner screen.
+
+What these hold: those shapes get the desktop shell (the sidebar, no
 drawer, no tab bar, the header kept in place) through overrides an old
-Safari can still parse, with the same two shapes in the stylesheet and in
+Safari can still parse, with the same shapes in the stylesheet and in
 app.js; a phone, a phone on its side and an iPad mini keep their layouts;
-an open drawer or phone sheet closes when the screen opens; the block at
+the phone's sheet stays open when the Duo opens on its side (it is the same
+menu there) and closes on a screen whose menu is the sidebar; the block at
 the top of the reading column is put back where it was after a fold, by
 a jump rather than a glide; the header's date range steps aside where it
 would run off the screen; and the short front screen sheds its
@@ -37,7 +47,6 @@ CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").rea
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 SIDE = "(min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4)"
-UPRIGHT = "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px)"
 #: The third open shape (tests/test_every_fold_and_flip.py): a Fold's inner screen.
 FOLD_INNER = "(pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5)"
 
@@ -76,13 +85,14 @@ def test_the_open_shapes_are_the_same_in_the_stylesheet_and_the_script():
     m = re.search(r'const UNFOLDED_MQ = ((?:"[^"]+"\s*\+?\s*)+);', APP)
     assert m, "UNFOLDED_MQ is defined in app.js"
     js = "".join(re.findall(r'"([^"]+)"', m.group(1))).split(", ")
-    assert js == [SIDE, UPRIGHT, FOLD_INNER], js
+    assert js == [SIDE, FOLD_INNER], js
+    assert "(max-width: 720px) and (min-height: 700px)" not in m.group(1), "the Duo upright is a phone"
     for _i, block in _open_shape_blocks():
         query = block[:block.index("{")]
-        side, upright, inner = [q.strip() for q in query[len("@media "):].split(",\n")]
+        side, inner = [q.strip() for q in query[len("@media "):].split(",\n")]
         assert side.replace(" and (max-width: 900px)", "").replace(" and (max-width: 760px)", "") == SIDE, side
-        assert upright == UPRIGHT, upright
         assert inner.replace("(max-width: 760px)", "(max-width: 900px)") == FOLD_INNER, inner
+    assert "(max-width: 720px) and (min-height: 700px)" not in CSS, "no upright Duo shell left anywhere"
 
 
 def test_the_overrides_are_plain_ands_an_old_safari_can_read():
@@ -108,7 +118,8 @@ def test_the_open_shell_comes_after_what_it_overrides():
 
 def test_the_script_treats_the_open_screen_as_the_desktop():
     assert "if (!touch.matches || open.matches ||" in APP, "the header stays put on the open screen"
-    assert 'matchMedia("(max-width: 760px)").matches) && !unfolded();' in APP, "not a phone when open"
+    assert 'matchMedia("(max-width: 760px)").matches) && !unfolded() || duoSide();' in APP, \
+        "not a phone when open, unless it is the Duo on its side, which wears the app"
     assert "\ninitFoldSeams();\n" in APP
     at = APP.index("function initFoldSeams()")
     body = APP[at:APP.index("\n}\n", at)]
@@ -135,10 +146,13 @@ SHAPES = {
     # name: (width, height, touch, shell expected, tab bar expected)
     "folded": (382, 580, True, "drawer", True),
     "folded, by Apple's pixels": (466, 678, True, "drawer", True),
-    "open on its side": (951, 543, True, "sidebar", False),
-    "open on its side, by Apple's pixels": (890, 626, True, "sidebar", False),
-    "open upright": (669, 825, True, "sidebar", False),
-    "open upright, by Apple's pixels": (626, 890, True, "sidebar", False),
+    # On its side the app's tab bar stands on the right edge (the menu sheet
+    # holds the sidebar's rows); upright it is a phone.
+    "open on its side": (951, 543, True, "drawer", True),
+    "open on its side, by Apple's pixels": (890, 626, True, "drawer", True),
+    "open upright": (669, 825, True, "drawer", True),
+    "open upright, by Apple's pixels": (626, 890, True, "drawer", True),
+    "a tablet on its side": (1133, 744, True, "sidebar", False),
     "a phone": (390, 844, True, "drawer", True),
     "a phone on its side": (874, 402, True, "drawer", False),
     "an iPad mini": (744, 1133, True, "drawer", True),
@@ -223,12 +237,17 @@ def test_in_a_browser_every_shape_gets_its_layout_and_a_fold_keeps_your_place():
                     page.wait_for_timeout(600)
                     now = page.evaluate("Math.round(window.__held.getBoundingClientRect().top)")
                     assert abs(now - was) <= 2, (w, h, was, now)
-                # the phone's sheet, open on the front screen, closes when the screen opens
+                # the phone's sheet, open on the front screen, stays open when the
+                # Duo opens on its side (the same menu there), and closes on a
+                # screen whose menu is the sidebar
                 page.click("#menu-toggle")
                 page.wait_for_timeout(300)
                 assert page.evaluate("document.body.classList.contains('more-open')")
                 page.set_viewport_size({"width": 951, "height": 543})
-                page.wait_for_timeout(300)
+                page.wait_for_timeout(400)
+                assert page.evaluate("document.body.classList.contains('more-open')"), "the same menu on its side"
+                page.set_viewport_size({"width": 1133, "height": 744})
+                page.wait_for_timeout(400)
                 assert not page.evaluate("document.body.classList.contains('more-open')")
                 assert not errors, errors
                 ctx.close()
