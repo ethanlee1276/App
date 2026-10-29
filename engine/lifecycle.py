@@ -256,6 +256,65 @@ def winbacks(conn, now: float | None = None, web: Path = WEB) -> int:
     return told
 
 
+# ---- the season bridge ------------------------------------------------------------------
+#: A league with no game on its board in the next BRIDGE_AHEAD_DAYS, whose
+#: last game was within BRIDGE_RECENT_DAYS, has just finished its season.
+BRIDGE_AHEAD_DAYS = 7
+BRIDGE_RECENT_DAYS = 7
+BRIDGE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+
+
+def seasons(data_dir: Path, now: float | None = None) -> tuple:
+    """(leagues playing, leagues just finished), off each public board's games."""
+    from engine import pickem as PK
+    t = time.time() if now is None else float(now)
+    on, done = set(), set()
+    for lg in BRIDGE_LEAGUES:
+        ks = [g["kickoff"] for g in PK.board_games(lg, Path(data_dir))]
+        if any(t <= k <= t + BRIDGE_AHEAD_DAYS * 86400 for k in ks):
+            on.add(lg)
+        elif ks and t - BRIDGE_RECENT_DAYS * 86400 <= max(ks) < t:
+            done.add(lg)
+    return on, done
+
+
+def season_bridge(conn, now: float | None = None, web: Path = WEB) -> int:
+    """The second paper's season bridge ("when a user's sport ends, suggests
+    players to follow in the next one"): a member whose followed teams are
+    all in leagues that just finished hears, once, which leagues are on
+    and that following a team there brings its games, big moments and
+    finals. By "When I've been away", sharing its one a week."""
+    from engine import engagement as E
+    from engine import pushmine as PM
+    from engine import smartwall as SW
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    on, done = seasons(Path(web) / "data", t)
+    if not on or not done:
+        return 0
+    playing = [E.LEAGUE_NAME.get(lg, lg.upper()) for lg in BRIDGE_LEAGUES if lg in on]
+    words = playing[0] if len(playing) == 1 else ", ".join(playing[:-1]) + f" and {playing[-1]}"
+    told = 0
+    for uid, payload in conn.execute("SELECT user_id, payload FROM user_data WHERE section = 'settings'").fetchall():
+        try:
+            leagues = {lg for lg, _abbr in SW._teams(json.loads(payload))}
+        except (TypeError, ValueError):
+            continue
+        if not leagues or leagues & on or not leagues & done or not _week_ok(conn, uid, t):
+            continue
+        ended = [E.LEAGUE_NAME.get(lg, lg.upper()) for lg in BRIDGE_LEAGUES if lg in leagues & done]
+        title = f"{' and '.join(ended)} {'is' if len(ended) == 1 else 'are'} done for the season"
+        if PM.tell(conn, uid, f"away:bridge:{'-'.join(sorted(leagues & done))}:{_dt.datetime.fromtimestamp(t, ET).year}",
+                   AWAY_TOPIC, title[:1].upper() + title[1:],
+                   f"{words[:1].upper() + words[1:]} {'is' if len(playing) == 1 else 'are'} on: follow a team "
+                   "there for its games, big moments and final scores.",
+                   "/#live", ttl="away", now=t):
+            _sent(conn, uid, t)
+            told += 1
+    conn.commit()
+    return told
+
+
 #: The recaps go out in the day, Eastern: never a buzz at night, and inside
 #: the away alert's three hours (pushmine.TTL_S) before quiet hours.
 RECAP_HOURS = (11, 19)
@@ -266,7 +325,8 @@ def run(conn, now: float | None = None, web: Path = WEB, log=print) -> int:
     t = time.time() if now is None else float(now)
     steps = [lambda: renewals(conn, now=t, log=log)]
     if RECAP_HOURS[0] <= _dt.datetime.fromtimestamp(t, ET).hour < RECAP_HOURS[1]:
-        steps += [lambda: payer_recaps(conn, now=t, web=web), lambda: winbacks(conn, now=t, web=web)]
+        steps += [lambda: payer_recaps(conn, now=t, web=web), lambda: winbacks(conn, now=t, web=web),
+                  lambda: season_bridge(conn, now=t, web=web)]
     told = 0
     for step in steps:
         try:

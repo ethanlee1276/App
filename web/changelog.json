@@ -4,6 +4,21 @@
     {
       "date": "2026-10-29",
       "kind": "ship",
+      "title": "A morning line about your teams",
+      "body": "The morning alert on your teams' games now says who on those teams is out, doubtful or questionable, which spreads have moved a point or more since they opened, and how many of our picks are on those games. And when every league you follow has just finished its season, When I've been away tells you once which leagues are on.",
+      "alert": "Your morning alert now says who's hurt and how the line moved.",
+      "url": "/#alerts"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "What the board did on your teams",
+      "body": "Signed in without a plan and following teams? The plans page now counts the picks the board posted on those teams last week and how the graded ones went, losses and all, before it asks for anything.",
+      "url": "/#paywall"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
       "title": "Your membership, on your phone",
       "body": "The note before a free trial turns into a charge now reaches every phone you are signed in on as well as your inbox, and a six-month or yearly plan says when it renews and what it costs about two weeks ahead. Turn on When I've been away and a week off brings one line: your week and ours, losses included.",
       "url": "/#alerts"

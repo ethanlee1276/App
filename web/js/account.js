@@ -1599,7 +1599,7 @@ function paywallHTML(rec, status) {
       ${/* Tonight's picks, locked, with their counts (flTonightHTML) —
             drawn by pwTonight once the numbers are in, and only on a day
             with picks up. */""}
-      <div class="pw-fl"></div>
+      <div class="pw-fl"></div><div class="pw-caught" hidden></div>
       ${/* SPORTS FIRST (audit item 6, 2026-09-23): the lede sold three
             audiences at once — "bettors, fantasy players and market
             traders" — and the audit's question was which one this is.
@@ -2108,6 +2108,29 @@ async function renderPaywall() {
   pwDock(host);
   pwReferral(host);
   pwTonight(host);
+  pwCaught(host);
+}
+
+/* WHAT MEMBERS' ALERTS CAUGHT ON YOUR TEAMS (engine/smartwall, GET
+   /api/billing/caught; the second paper's "smart paywall"): for a
+   signed-in account without a plan that follows teams, last week's picks
+   on those teams as counts and how the graded ones went, win or lose.
+   Never a pick by name; nothing for anybody else. */
+async function pwCaught(host) {
+  const box = host.querySelector(".pw-caught");
+  if (!box || !(_pwStatus && _pwStatus.signed_in && !_pwStatus.entitled) || !settings().teams.length) return;
+  let v = null;
+  try {
+    const r = await fetch("/api/billing/caught", { credentials: "same-origin", cache: "no-store" });
+    v = r.ok ? (await r.json()).caught : null;
+  } catch (e) { v = null; }
+  if (!v || !box.isConnected) return;
+  const graded = v.w + v.l + v.p;
+  box.innerHTML = `<p class="pw-caught-k">On your teams last week</p>
+    <p><b>${v.n} pick${v.n === 1 ? "" : "s"}</b> on ${escapeHtml(v.teams.join(", "))}${graded
+      ? ` — <b>${v.w}–${v.l}${v.p ? `–${v.p}` : ""}</b> where graded, losses and all` : ""}${v.open ? `, ${v.open} still open` : ""}.
+      Members saw each one when it posted: the player, the price and our chance.</p>`;
+  box.hidden = false;
 }
 
 /* Tonight's picks on the plans, the same locked cards as the sign-up's. */

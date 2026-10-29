@@ -4758,7 +4758,7 @@ function renderPushZone(note) {
         box("finals", "Final scores of games I follow", !signedIn),
         box("closegame", "Close games: my teams or my bets, the last minutes within one score", !signedIn),
         box("news", "Injury news: a status change for a player I follow or bet on", !signedIn),
-        box("today", "This morning: my teams’ games today, with the times", !signedIn),
+        box("today", "This morning: my teams’ games today, with the times, who’s hurt and how the line moved", !signedIn),
         box("lines", "A line moves 2% or a point from my bet, before it starts", !signedIn),
         box("lineup", "My fantasy lineup: a starter out or on a bye", !signedIn),
         // When you've been away (engine/engagement, engine/lifecycle): your

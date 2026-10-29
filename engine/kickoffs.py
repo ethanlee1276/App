@@ -213,7 +213,62 @@ def today_pass(conn, data_dir: Path | None = None, now: float | None = None) -> 
         if not theirs:
             continue
         line = ", ".join(f"{a} @ {h} {EN._clock(st).replace(' ET', '')}" for _lg, _ev, a, h, st in theirs[:3])
+        body = ""
+        for x in brief_extras(theirs, mine, Path(data_dir) if data_dir else PM.WEB / "data"):
+            if len(body) + 1 + len(x) <= BRIEF_CHARS:               # whole sentences only, on a lock screen
+                body = f"{body} {x}".strip()
         told += PM.tell(conn, uid, f"today:{local.date().isoformat()}", TODAY_TOPIC,
                         f"Today: {line}"[:120] + (" ET" if len(theirs) <= 3 else " ET and more"),
-                        "Your teams’ games — the slate, the chats and Call it.", "/#live", now=t)
+                        body or "Your teams’ games — the slate, the chats and Call it.", "/#live", now=t)
     return told
+
+
+#: The statuses the morning brief names, most serious first.
+BRIEF_STATUSES = ("OUT", "DOUBTFUL", "QUESTIONABLE")
+#: What a push body holds (pushmine.tell keeps 240), and the line moves named.
+BRIEF_CHARS = 240
+BRIEF_MOVES = 2
+
+
+def brief_extras(games: list, mine: set, data_dir: Path) -> list:
+    """The morning brief's own lines past the slate (the second paper: "each
+    user's games, model edges, injuries and line moves, every morning"):
+    who on their teams is out, doubtful or questionable; a spread that has
+    moved a point or more since it opened; and how many picks the board has
+    on those games — a count, the pick itself a member's."""
+    from engine import gate
+    from engine import newsalerts as NA
+    from engine import socialfeed as SF
+    out = []
+    hurt: dict = {}
+    for _k, (lg, name, team, status, _inj) in NA.board(data_dir).items():
+        if status in BRIEF_STATUSES and (lg, DV.canonical(lg, team.upper())) in mine:
+            hurt.setdefault(status, []).append(f"{name} ({team.upper()})")
+    said = [f"{st.title()}: {', '.join(sorted(hurt[st])[:2])}." for st in BRIEF_STATUSES if hurt.get(st)]
+    if said:
+        out.append(" ".join(said[:2]))
+    picks = moves = 0
+    for lg, _ev, away, home, _st in games:
+        name = SF.SPORT_FILE.get(lg)
+        if not name:
+            continue
+        public = SF._read(Path(data_dir) / name) or {}
+        for g in public.get("games") or []:
+            if str(g.get("home") or "").upper() != home or str(g.get("away") or "").upper() != away:
+                continue
+            lo = g.get("line_open") or {}
+            try:
+                was, move = float(lo["spread_home"]), float(lo["spread_move"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if abs(move) >= 1 and moves < BRIEF_MOVES:
+                fmt = lambda x: "PK" if abs(x) < 0.25 else f"{'+' if x > 0 else '−'}{abs(x):g}"   # noqa: E731
+                out.append(f"{home} opened {fmt(was)}, now {fmt(was + move)}.")
+                moves += 1
+        private = SF._read(gate.board_source(Path(data_dir) / name)) or {}
+        picks += sum(1 for r in private.get("recommendations") or []
+                     if isinstance(r, dict) and str(r.get("team") or "").upper() in (away, home)
+                     and str(r.get("opponent") or "").upper() in (away, home, ""))
+    if picks:
+        out.append(f"{picks} pick{'s' if picks != 1 else ''} on {'this game' if len(games) == 1 else 'these games'} — members see them.")
+    return out

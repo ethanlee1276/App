@@ -4977,6 +4977,33 @@ class Handler(BaseHTTPRequestHandler):
                                   ".json")
             finally:
                 conn.close()
+        if path == "caught":
+            # THE SMART PAYWALL (engine/smartwall): for a signed-in account
+            # without a plan that follows teams, how many picks the board
+            # posted on those teams last week and how the graded ones went.
+            # Counts only, never a pick; nothing for a member or a stranger.
+            from engine import ledger as L, smartwall as SW
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                if self._entitled(conn, who):
+                    return self._send(200, b'{"caught":null}', ".json")
+                teams = SW._teams((A.get_sections(conn, who["id"]).get("settings") or {}).get("data"))
+            finally:
+                conn.close()
+            out = None
+            if teams:
+                try:
+                    lconn = L.connect()
+                    try:
+                        out = SW.caught(lconn, teams)
+                    finally:
+                        lconn.close()
+                except Exception:                            # noqa: BLE001 — the plans page draws without it
+                    out = None
+            return self._send(200, json.dumps({"caught": out}).encode(), ".json")
         if path != "status":
             return self._send(404, b'{"error":"unknown billing endpoint"}',
                               ".json")

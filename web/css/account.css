@@ -967,3 +967,10 @@ a.pw-door-go { text-decoration: none; }
 .edge-row b.warn { color: var(--warn); }
 .edge-row .mini { grid-column: 1 / -1; }
 .edge-foot { margin-top: 6px; }
+
+/* THE SMART PAYWALL (pwCaught): last week on the reader's own teams, as
+   counts, between tonight's cards and the plans. */
+.pw-caught { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius); background: var(--fill-tone); }
+.pw-caught p { margin: 0; line-height: var(--lh-snug); }
+.pw-caught .pw-caught-k { margin-bottom: 4px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-mute); }
