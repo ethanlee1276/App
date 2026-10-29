@@ -366,15 +366,22 @@ def week_clv(conn, user_id, bets, start: str, end: str) -> str:
     return line
 
 
+#: Monday's hours, Eastern, that "Your week" goes in.
+WEEK_HOURS = (9, 21)
+
+
 def week_pass(conn, now: float | None = None) -> int:
     """Monday from nine in the morning, Eastern: each member whose phone gets
     their bets hears last week's record, what it made or lost and the best
-    win, once a week (the message id is the week)."""
+    win, once a week (the message id is the week). A member who said yes to
+    keeping their activity hears it at the hour they usually look
+    (engine/engagement.usual_hours; the last of Monday's hours if theirs is
+    later); everybody else at nine."""
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
     t = time.time() if now is None else now
     et = datetime.fromtimestamp(t, ZoneInfo("America/New_York"))
-    if et.weekday() != 0 or not 9 <= et.hour < 21:
+    if et.weekday() != 0 or not WEEK_HOURS[0] <= et.hour < WEEK_HOURS[1]:
         return 0
     start = (et - timedelta(days=7)).date().isoformat()
     end = (et - timedelta(days=1)).date().isoformat()
@@ -382,8 +389,16 @@ def week_pass(conn, now: float | None = None) -> int:
     users = [r[0] for r in conn.execute(
         "SELECT DISTINCT user_id FROM push_subs WHERE user_id IS NOT NULL "
         "AND (',' || topics || ',') LIKE '%,bets,%'").fetchall()]
+    try:
+        from engine import engagement as EN
+        usual = EN.usual_hours(conn, users, t)
+    except Exception:                                          # noqa: BLE001 — at nine, as before
+        usual = {}
     told = 0
     for uid in users:
+        hour = usual.get(int(uid))
+        if hour is not None and et.hour < min(hour, WEEK_HOURS[1] - 1):
+            continue                                           # their hour comes later today
         row = conn.execute("SELECT payload FROM user_data WHERE user_id=? AND section='mybets'", (int(uid),)).fetchone()
         try:
             data = json.loads(row[0]) if row is not None else None

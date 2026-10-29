@@ -809,6 +809,27 @@ def _churn(conn, now: float | None = None) -> tuple | None:
     return (cancels / exposure, cancels, exposure) if exposure >= 10 else None
 
 
+def usual_hours(conn, user_ids, now: float | None = None) -> dict:
+    """{user_id: Eastern hour}: the hour each of these members usually looks
+    (best_hour), for the alerts that are not tied to a game — the Privacy
+    Policy's §2.10: "to send the ones not tied to a game at the hour you
+    usually look". Only members who said yes to keeping their activity and
+    have an hour to read; nothing at all while the activity's locks are shut."""
+    if not ACT.enabled():
+        return {}
+    t = time.time() if now is None else float(now)
+    today = ACT.eastern(t).date()
+    since = first_day(conn)
+    out = {}
+    for uid, m in members(conn, t, user_ids).items():
+        if m["opted_out"] or not m["rows"]:
+            continue
+        h = features(m["rows"], m["signup"], today, since)["best_hour"]
+        if h is not None:
+            out[uid] = int(h)
+    return out
+
+
 # ---- acting on it: "while you were away" ---------------------------------------------------
 """THE "WHILE YOU WERE AWAY" ALERT (topic "away", its own switch in Alerts).
 
