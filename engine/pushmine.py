@@ -65,7 +65,10 @@ from engine import webpush
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
-TOPICS = PA.PERSONAL + (PA.ACCOUNT,)
+TOPICS = PA.PERSONAL
+#: Wanted by every signed-in phone, never a switch (pushalerts.ACCOUNT: a
+#: member's own membership notices, engine/lifecycle).
+IMPLIED = (PA.ACCOUNT,)
 #: The watches look at most this often (the feed changes on a build, minutes apart).
 WATCH_EVERY_S = 120
 #: The lineup alert's pass (engine/lineupalerts) looks at most this often.
@@ -150,7 +153,7 @@ def tell(conn, user_id, msg_id: str, topic: str, title: str, body: str, url: str
          ttl: str = "", now: float | None = None) -> bool:
     """Queue one message for a member, once ever (its id). False when it was
     queued before or nobody of theirs asked for the topic."""
-    if topic not in TOPICS or not asked(conn, user_id, topic):
+    if topic not in TOPICS + IMPLIED or not asked(conn, user_id, topic):
         return False
     t = time.time() if now is None else now
     cur = conn.execute("INSERT OR IGNORE INTO push_mine (user_id, id, kind, title, body, url, at, until) "

@@ -291,7 +291,11 @@ def test_settings_and_alerts_offer_it_only_while_kept():
     assert '"/api/account/activity"' in acct
     more = READ("web", "js", "more.js")              # the Alerts page loads on first use
     at = more.index('box("lineup", "My fantasy lineup')
-    assert '_pwStatus && _pwStatus.activity_switch' in more[at:at + 900] and 'box("away"' in more[at:at + 900]
+    # PHONE FIRST (Ethan, 2026-10-29): "When I've been away" is every
+    # signed-in member's, whatever this lock says, because its recaps read
+    # only the account's own last-seen day (engine/lifecycle), never this log.
+    assert 'box("away", "When I’ve been away' in more[at:at + 900]
+    assert "activity_switch" not in more[at:at + 900]
 
 
 def test_in_a_browser_the_beat_goes_and_says_only_this():

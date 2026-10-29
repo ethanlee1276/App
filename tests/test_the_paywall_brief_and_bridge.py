@@ -16,7 +16,11 @@ next one". What these hold:
     spread that moved a point or more since it opened, and a count of the
     picks on those games;
   * the bridge tells a member whose teams' leagues have all just finished,
-    once, which leagues are on — and nobody whose league still plays.
+    once, which leagues are on — and nobody whose league still plays; a
+    break inside a season (the All-Star weeks, the Super Bowl's bye) is not
+    an end;
+  * a league back after its break tells its fans who have been away a
+    week, once a season, when their team plays first.
 
 Run directly: `python3 tests/test_the_paywall_brief_and_bridge.py`
 """
@@ -108,40 +112,90 @@ def test_the_brief_says_injuries_the_line_and_how_many_picks():
     assert "len(body) + 1 + len(x) <= BRIEF_CHARS" in src, "whole sentences, never one cut off on a lock screen"
 
 
+def test_the_server_answers_a_free_reader_and_nobody_else():
+    import server
+    from engine import accounts as A
+    tmp = Path(tempfile.mkdtemp())
+    conn = A.connect(tmp / "a.db")
+    uid = int(conn.execute("INSERT INTO users (email, verifier, created_at) VALUES ('free@example.com', 'x', ?)",
+                           (NOW,)).lastrowid)
+    A.save_sections(conn, uid, {"settings": {"ts": 1, "data": {"teams": ["nfl:KC"]}}})
+    conn.commit()
+    conn.close()
+    lc = L.connect(tmp / "l.db")
+    today = dt.date.today().isoformat()
+    _pick(lc, "nfl", "KC", today, "won")
+    _pick(lc, "nfl", "KC", today, "lost")
+    lc.commit()
+    lc.close()
+    saved = (A.DB_PATH, L.DEFAULT_DB)
+    A.DB_PATH, L.DEFAULT_DB = tmp / "a.db", tmp / "l.db"
+    try:
+        h = object.__new__(server.Handler)
+        sent = []
+        h._send = lambda code, body, ext=".json": sent.append((code, json.loads(body)))
+        h._entitled = lambda conn, who: False
+        h._account = lambda conn: None
+        h._billing_get("caught")
+        assert sent[-1][0] == 401, sent[-1]
+        h._account = lambda conn: {"id": uid, "email": "free@example.com"}
+        h._billing_get("caught")
+        assert sent[-1] == (200, {"caught": {"n": 2, "w": 1, "l": 1, "p": 0, "open": 0, "teams": ["KC"]}}), sent[-1]
+        h._entitled = lambda conn, who: True
+        h._billing_get("caught")
+        assert sent[-1] == (200, {"caught": None}), "a member is sold nothing"
+    finally:
+        A.DB_PATH, L.DEFAULT_DB = saved
+
+
 def _boards(d, lg_games):
     from engine import socialfeed as SF
     for lg, games in lg_games.items():
         (d / SF.SPORT_FILE[lg]).write_text(json.dumps({"games": games}))
 
 
-def test_the_bridge_tells_a_finished_league_s_fans_once_which_are_on():
+def _iso(t):
+    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _accounts(tmp):
     from engine import accounts as A
     from engine import lifecycle as LC
     from engine import pushalerts as PA
     from engine import pushmine as PM
+    conn = A.connect(Path(tmp) / "a.db")
+    LC.ensure_tables(conn)
+    PA.ensure_tables(conn)
+    PM.ensure_tables(conn)
+    web = Path(tmp) / "web"
+    (web / "data").mkdir(parents=True)
+    return conn, web
+
+
+def _fan(conn, i, teams, seen_days_ago=0.0, now=NOW):
+    from engine import accounts as A
+    from engine import pushalerts as PA
+    cur = conn.execute("INSERT INTO users (email, verifier, created_at, last_seen) VALUES (?, 'x', ?, ?)",
+                       (f"f{i}@example.com", now - 200 * DAY, now - seen_days_ago * DAY))
+    uid = int(cur.lastrowid)
+    A.save_sections(conn, uid, {"settings": {"ts": 1, "data": {"teams": teams}}})
+    PA.subscribe(conn, f"{i:02d}" * 16, kind="apns", user_id=uid, topics=["away"])
+    return uid
+
+
+def test_the_bridge_tells_a_finished_league_s_fans_once_which_are_on():
+    from engine import lifecycle as LC
     with tempfile.TemporaryDirectory() as tmp:
-        conn = A.connect(Path(tmp) / "a.db")
-        LC.ensure_tables(conn)
-        PA.ensure_tables(conn)
-        PM.ensure_tables(conn)
-        web = Path(tmp) / "web"
-        (web / "data").mkdir(parents=True)
-        iso = lambda days: dt.datetime.fromtimestamp(NOW + days * DAY, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+        conn, web = _accounts(tmp)
+        at = lambda days: _iso(NOW + days * DAY)                            # noqa: E731
         _boards(web / "data", {
-            "mlb": [{"home": "LAD", "away": "NYY", "kickoff": iso(-2)}],          # the World Series, just over
-            "nba": [{"home": "LAL", "away": "BOS", "kickoff": iso(1)}, {"home": "BOS", "away": "LAL", "kickoff": iso(5)}],
-            "nhl": [{"home": "NYR", "away": "BOS", "kickoff": iso(2)}, {"home": "BOS", "away": "NYR", "kickoff": iso(6)}],
-            "nfl": [{"home": "KC", "away": "DEN", "kickoff": iso(3)}, {"home": "DEN", "away": "KC", "kickoff": iso(9)}]})
-        on, done = LC.seasons(web / "data", NOW)
-        assert done == {"mlb"} and {"nba", "nhl", "nfl"} <= on, (on, done)
-        uids = []
-        for i, teams in enumerate((["mlb:NYY"], ["mlb:NYY", "nfl:KC"], ["nba:LAL"])):
-            cur = conn.execute("INSERT INTO users (email, verifier, created_at) VALUES (?, 'x', ?)",
-                               (f"f{i}@example.com", NOW))
-            uid = int(cur.lastrowid)
-            uids.append(uid)
-            A.save_sections(conn, uid, {"settings": {"ts": 1, "data": {"teams": teams}}})
-            PA.subscribe(conn, f"{i:02d}" * 16, kind="apns", user_id=uid, topics=["away"])
+            "mlb": [{"home": "LAD", "away": "NYY", "kickoff": at(-12)}],    # the World Series, over
+            "nba": [{"home": "LAL", "away": "BOS", "kickoff": at(1)}, {"home": "BOS", "away": "LAL", "kickoff": at(5)}],
+            "nhl": [{"home": "NYR", "away": "BOS", "kickoff": at(2)}, {"home": "BOS", "away": "NYR", "kickoff": at(6)}],
+            "nfl": [{"home": "KC", "away": "DEN", "kickoff": at(3)}, {"home": "DEN", "away": "KC", "kickoff": at(9)}]})
+        on, done, back = LC.seasons(web / "data", NOW)
+        assert done == {"mlb"} and {"nba", "nhl", "nfl"} <= on and not back, (on, done, back)
+        uids = [_fan(conn, i, teams) for i, teams in enumerate((["mlb:NYY"], ["mlb:NYY", "nfl:KC"], ["nba:LAL"]))]
         assert LC.season_bridge(conn, now=NOW, web=web) == 1
         (title, body), = conn.execute("SELECT title, body FROM push_mine WHERE user_id = ?", (uids[0],)).fetchall()
         assert title == "MLB is done for the season", title
@@ -151,7 +205,54 @@ def test_the_bridge_tells_a_finished_league_s_fans_once_which_are_on():
         assert LC.season_bridge(conn, now=NOW + 3 * DAY, web=web) == 0, "the away alert's one a week"
         conn.execute("DELETE FROM engagement_away")
         assert LC.season_bridge(conn, now=NOW + 3 * DAY, web=web) == 0, "and the bridge itself once"
-        assert LC.season_bridge(conn, now=NOW + 12 * DAY, web=web) == 0, "a season over two weeks ago is no news"
+        # THE BOARD EMPTIED after the final: the marks still know when it was.
+        _boards(web / "data", {"mlb": []})
+        assert "mlb" in LC.seasons(web / "data", NOW + 4 * DAY, conn)[1]
+        assert "mlb" not in LC.seasons(web / "data", NOW + 20 * DAY, conn)[1], "a month on, no news"
+
+
+def test_a_break_is_not_the_end_of_a_season():
+    from engine import lifecycle as LC
+    feb = dt.datetime(2027, 2, 16, 14, 0, tzinfo=ET).timestamp()        # the NBA's All-Star break
+    may = dt.datetime(2027, 5, 26, 14, 0, tzinfo=ET).timestamp()        # between two playoff rounds
+    bye = dt.datetime(2027, 2, 2, 14, 0, tzinfo=ET).timestamp()         # the Super Bowl's bye week
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        _boards(d, {"nba": [{"home": "LAL", "away": "BOS", "kickoff": _iso(feb - 12 * DAY)}]})
+        assert "nba" not in LC.seasons(d, feb)[1], "the Olympics and the All-Star weeks are not in May to July"
+        _boards(d, {"nba": [{"home": "LAL", "away": "BOS", "kickoff": _iso(may - 3 * DAY)}]})
+        assert "nba" not in LC.seasons(d, may)[1], "three quiet days is a gap between rounds"
+        _boards(d, {"nfl": [{"home": "KC", "away": "DEN", "kickoff": _iso(bye - 9 * DAY)},
+                            {"home": "KC", "away": "SF", "kickoff": _iso(bye + 5 * DAY)}]})
+        on, done, _back = LC.seasons(d, bye)
+        assert "nfl" in on and "nfl" not in done, (on, done)
+
+
+def test_a_league_back_tells_its_away_fans_once_when_their_team_plays():
+    from engine import lifecycle as LC
+    with tempfile.TemporaryDirectory() as tmp:
+        conn, web = _accounts(tmp)
+        tip = NOW + 2 * DAY
+        _boards(web / "data", {"nba": [{"home": "LAL", "away": "BOS", "kickoff": _iso(tip)},
+                                       {"home": "BOS", "away": "NYK", "kickoff": _iso(NOW + 9 * DAY)}],
+                               "nfl": [{"home": "KC", "away": "DEN", "kickoff": _iso(NOW + 3 * DAY)}]})
+        LC.seasons(web / "data", NOW, conn)
+        assert not LC.seasons(web / "data", NOW, conn)[2], "first sight, in season: already playing, not back"
+        conn.execute("UPDATE season_marks SET last_on = ? WHERE league = 'nba'", (NOW - 40 * DAY,))
+        away = _fan(conn, 1, ["nba:BOS"], seen_days_ago=60)
+        here = _fan(conn, 2, ["nba:LAL"], seen_days_ago=1)
+        nfl = _fan(conn, 3, ["nfl:KC"], seen_days_ago=60)
+        assert LC.season_bridge(conn, now=NOW, web=web) == 1
+        (title, body), = conn.execute("SELECT title, body FROM push_mine WHERE user_id = ?", (away,)).fetchall()
+        assert title == "The NBA is back", title
+        assert body.startswith(f"BOS play LAL {LC._day(tip)}, ") and "Live tab" in body, body
+        assert not conn.execute("SELECT 1 FROM push_mine WHERE user_id IN (?, ?)", (here, nfl)).fetchone(), \
+            "somebody here this week, or whose league never stopped, hears nothing"
+        conn.execute("DELETE FROM engagement_away")
+        assert LC.season_bridge(conn, now=NOW + DAY, web=web) == 0, "once a season"
+        late = _fan(conn, 4, ["nba:LAL"], seen_days_ago=60, now=NOW)
+        assert LC.season_bridge(conn, now=NOW + 8 * DAY, web=web) == 0, "a week after it is back, no news"
+        assert not conn.execute("SELECT 1 FROM push_mine WHERE user_id = ?", (late,)).fetchone()
 
 
 if __name__ == "__main__":

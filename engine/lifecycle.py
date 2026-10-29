@@ -25,9 +25,11 @@ the model saw this week, including the losses":
     DORMANT_DAYS): their own week from My Bets and the board's, losses
     included, and that the plan is theirs to manage — once a week at most;
   * a member whose plan ended: what the board did since, win or lose, on
-    the days in WINBACK_DAYS after it ended, then never again.
+    the days in WINBACK_DAYS after it ended, then never again;
+  * the season bridge: anybody whose followed teams' leagues have all just
+    finished their seasons hears, once, which leagues are on.
 
-Both are promotional: a reached weekly limit or a pause silences them
+All three are promotional: a reached weekly limit or a pause silences them
 (engine/limits.PROMO counts "away"), and they share the away alert's own
 once-a-week (engine/engagement's `engagement_away`), so a member never
 hears two in one week. "Seen" is the account's own last-seen day
@@ -256,59 +258,152 @@ def winbacks(conn, now: float | None = None, web: Path = WEB) -> int:
     return told
 
 
-# ---- the season bridge ------------------------------------------------------------------
-#: A league with no game on its board in the next BRIDGE_AHEAD_DAYS, whose
-#: last game was within BRIDGE_RECENT_DAYS, has just finished its season.
+# ---- a season's end and its start ----------------------------------------------------------
+#: A league is ON with a game on its board in the next BRIDGE_AHEAD_DAYS.
 BRIDGE_AHEAD_DAYS = 7
-BRIDGE_RECENT_DAYS = 7
+#: It has just FINISHED when nothing is ahead, its last game was
+#: BRIDGE_QUIET_DAYS to BRIDGE_RECENT_DAYS ago, and the month is one its
+#: season ends in. Ten quiet days outlast every break in a season's last
+#: months (the Super Bowl's bye is two weeks, and by its tenth day the game
+#: itself is in the week ahead; college's semifinals to its final, ten or
+#: eleven); the months keep out the long breaks that come earlier (the
+#: Olympics, the All-Star weeks).
+BRIDGE_QUIET_DAYS = 10
+BRIDGE_RECENT_DAYS = 24
+BRIDGE_END_MONTHS = {"mlb": (10, 11), "nba": (5, 6, 7), "nhl": (5, 6, 7), "wnba": (9, 10, 11),
+                     "nfl": (2, 3), "cfb": (1, 2)}
 BRIDGE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+#: It is BACK when it is on again after OPENER_GAP_DAYS off, and the note
+#: goes out over the OPENER_DAYS after, to members away AWAY_DAYS or more.
+OPENER_GAP_DAYS = 30
+OPENER_DAYS = 7
+AWAY_DAYS = 7
 
 
-def seasons(data_dir: Path, now: float | None = None) -> tuple:
-    """(leagues playing, leagues just finished), off each public board's games."""
+def _marks(conn) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS season_marks (league TEXT PRIMARY KEY, last_on REAL NOT NULL, "
+                 "last_game REAL NOT NULL DEFAULT 0, back_at REAL NOT NULL DEFAULT 0)")
+
+
+def _in_window(lg: str, t: float) -> bool:
+    """Inside the league's season window (engine/seasons), a week wider than its schedule."""
+    from engine import seasons as SE
+    day = _dt.datetime.fromtimestamp(t, ET).date()
+    for start in (day.year - 1, day.year):
+        try:
+            a, b = SE.window(lg, start)
+        except ValueError:
+            return False
+        if a <= day.isoformat() <= b:
+            return True
+    return False
+
+
+def seasons(data_dir: Path, now: float | None = None, conn=None) -> tuple:
+    """(leagues on, leagues just finished, leagues back after a break), off
+    each public board's games. Given the accounts database it also keeps what
+    it has seen of each league (season_marks: when it was last on, its last
+    game, when it came back), so a board emptied after a final still knows
+    when that final was, and a league's return is a change it saw."""
     from engine import pickem as PK
     t = time.time() if now is None else float(now)
-    on, done = set(), set()
+    month = _dt.datetime.fromtimestamp(t, ET).month
+    if conn is not None:
+        _marks(conn)
+    on, done, back = set(), set(), set()
     for lg in BRIDGE_LEAGUES:
         ks = [g["kickoff"] for g in PK.board_games(lg, Path(data_dir))]
-        if any(t <= k <= t + BRIDGE_AHEAD_DAYS * 86400 for k in ks):
+        is_on = any(t <= k <= t + BRIDGE_AHEAD_DAYS * 86400 for k in ks)
+        last = max([k for k in ks if k < t], default=0.0)
+        if conn is not None:
+            row = conn.execute("SELECT last_on, last_game, back_at FROM season_marks WHERE league = ?",
+                               (lg,)).fetchone()
+            if row is None:
+                # FIRST SIGHT: inside its season, take it as on until now (no
+                # "back" for a league already playing the day this ships).
+                row = (t if _in_window(lg, t) else 0.0, 0.0, 0.0)
+                conn.execute("INSERT INTO season_marks (league, last_on, last_game, back_at) VALUES (?,?,?,?)",
+                             (lg, *row))
+            last_on, last_game, back_at = (float(x or 0) for x in row)
+            last = max(last, last_game)
+            if is_on and t - last_on >= OPENER_GAP_DAYS * 86400:
+                back_at = t
+            conn.execute("UPDATE season_marks SET last_on = ?, last_game = ?, back_at = ? WHERE league = ?",
+                         (t if is_on else last_on, last, back_at, lg))
+            if is_on and back_at and t - back_at < OPENER_DAYS * 86400:
+                back.add(lg)
+        if is_on:
             on.add(lg)
-        elif ks and t - BRIDGE_RECENT_DAYS * 86400 <= max(ks) < t:
+        elif last and BRIDGE_QUIET_DAYS * 86400 <= t - last <= BRIDGE_RECENT_DAYS * 86400 \
+                and month in BRIDGE_END_MONTHS.get(lg, ()):
             done.add(lg)
-    return on, done
+    if conn is not None:
+        conn.commit()
+    return on, done, back
+
+
+def _and(words: list) -> str:
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + f" and {words[-1]}"
 
 
 def season_bridge(conn, now: float | None = None, web: Path = WEB) -> int:
     """The second paper's season bridge ("when a user's sport ends, suggests
-    players to follow in the next one"): a member whose followed teams are
-    all in leagues that just finished hears, once, which leagues are on
-    and that following a team there brings its games, big moments and
-    finals. By "When I've been away", sharing its one a week."""
+    players to follow in the next one") and the report's "one note at a
+    season's start" for the dormant, both by "When I've been away":
+
+      * a member whose followed teams are all in leagues that just finished
+        hears, once, which leagues are on and that following a team there
+        brings its games, big moments and finals;
+      * a member away AWAY_DAYS or more who follows a team in a league just
+        back hears, once a season, that it is back and when their team
+        plays first.
+
+    Leagues, never players: a player to follow would be a pick by another
+    name. Both share the away alert's one a week."""
     from engine import engagement as E
+    from engine import kickoffs as KO
+    from engine import pickem as PK
     from engine import pushmine as PM
-    from engine import smartwall as SW
     ensure_tables(conn)
     t = time.time() if now is None else float(now)
-    on, done = seasons(Path(web) / "data", t)
-    if not on or not done:
+    on, done, back = seasons(Path(web) / "data", t, conn)
+    if not on:
         return 0
-    playing = [E.LEAGUE_NAME.get(lg, lg.upper()) for lg in BRIDGE_LEAGUES if lg in on]
-    words = playing[0] if len(playing) == 1 else ", ".join(playing[:-1]) + f" and {playing[-1]}"
+    name = lambda lg: E.LEAGUE_NAME.get(lg, lg.upper())                 # noqa: E731
+    playing = [name(lg) for lg in BRIDGE_LEAGUES if lg in on]
+    year = _dt.datetime.fromtimestamp(t, ET).year
+    firsts: dict = {}
+    if back:
+        for lg in back:
+            for g in sorted(PK.board_games(lg, Path(web) / "data"), key=lambda g: g["kickoff"]):
+                if g["kickoff"] >= t:
+                    for us, them in ((g["home"], g["away"]), (g["away"], g["home"])):
+                        firsts.setdefault((lg, KO.DV.canonical(lg, us.upper())), (us.upper(), them.upper(),
+                                                                                 g["kickoff"]))
     told = 0
-    for uid, payload in conn.execute("SELECT user_id, payload FROM user_data WHERE section = 'settings'").fetchall():
-        try:
-            leagues = {lg for lg, _abbr in SW._teams(json.loads(payload))}
-        except (TypeError, ValueError):
+    rows = conn.execute("SELECT d.user_id, u.last_seen, u.created_at FROM user_data d JOIN users u ON u.id = d.user_id "
+                        "WHERE d.section = 'settings'").fetchall()
+    for uid, seen, created in rows:
+        mine = KO.follows(conn, uid)
+        leagues = {lg for lg, _abbr in mine}
+        if not leagues or not _week_ok(conn, uid, t):
             continue
-        if not leagues or leagues & on or not leagues & done or not _week_ok(conn, uid, t):
-            continue
-        ended = [E.LEAGUE_NAME.get(lg, lg.upper()) for lg in BRIDGE_LEAGUES if lg in leagues & done]
-        title = f"{' and '.join(ended)} {'is' if len(ended) == 1 else 'are'} done for the season"
-        if PM.tell(conn, uid, f"away:bridge:{'-'.join(sorted(leagues & done))}:{_dt.datetime.fromtimestamp(t, ET).year}",
-                   AWAY_TOPIC, title[:1].upper() + title[1:],
-                   f"{words[:1].upper() + words[1:]} {'is' if len(playing) == 1 else 'are'} on: follow a team "
-                   "there for its games, big moments and final scores.",
-                   "/#live", ttl="away", now=t):
+        msg = None
+        if done and not leagues & on and leagues & done:
+            ended = [name(lg) for lg in BRIDGE_LEAGUES if lg in leagues & done]
+            title = f"{' and '.join(ended)} {'is' if len(ended) == 1 else 'are'} done for the season"
+            msg = (f"away:bridge:{'-'.join(sorted(leagues & done))}:{year}", title,
+                   f"{_and(playing)} {'is' if len(playing) == 1 else 'are'} on: follow a team there for its "
+                   "games, big moments and final scores.")
+        elif leagues & back and t - float(seen or created or t) >= AWAY_DAYS * 86400:
+            lg = next(x for x in BRIDGE_LEAGUES if x in leagues & back)
+            first = min((firsts[k] for k in mine if k in firsts and k[0] == lg), key=lambda f: f[2], default=None)
+            body = (f"{first[0]} play {first[1]} {_day(first[2])}, {E._clock(first[2])}: the slate, the chats "
+                    "and Call it are on the Live tab." if first else
+                    "The slate, the chats and Call it are on the Live tab.")
+            msg = (f"away:back:{lg}:{year}", f"The {name(lg)} is back", body)
+        if msg and PM.tell(conn, uid, msg[0], AWAY_TOPIC, msg[1][:1].upper() + msg[1][1:], msg[2], "/#live",
+                           ttl="away", now=t):
             _sent(conn, uid, t)
             told += 1
     conn.commit()

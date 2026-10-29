@@ -44,7 +44,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from engine import (accounts, billing, digest, gamechat, karma, parlayledger,  # noqa: E402
+from engine import (accounts, billing, digest, gamechat, karma, lifecycle, parlayledger,  # noqa: E402
                     pickem, predmarket, pushalerts, slipwatch, socialfeed)
 
 #: (the file, a name for the failure, the migration to run on a connection).
@@ -66,6 +66,8 @@ MIGRATORS = (
     ("engine/pickem.py", "pickem.ensure_tables", pickem.ensure_tables),
     # A phone's last picks-are-up alert, for the three-hour gap (2026-10-29).
     ("engine/pushalerts.py", "pushalerts.ensure_tables", pushalerts.ensure_tables),
+    # A longer plan's renewal notice, sent once (2026-10-29, phone first).
+    ("engine/lifecycle.py", "lifecycle.ensure_tables", lifecycle.ensure_tables),
 )
 
 #: Files that ALTER a table and are covered somewhere else, with the reason.

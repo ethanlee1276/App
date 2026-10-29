@@ -360,6 +360,7 @@ never instead of the phone.
 | A six-month or yearly plan renews in ~15 days | every signed-in phone (`account`) | yes, unless `QB_RENEW_EMAIL=0` (when Stripe's own renewal emails are on) | pause only |
 | A paying member not here in 5 days: their week and the board's, losses included | "When I've been away" (`away`) | no | yes |
 | A plan that ended: what the board did since, days 3, 14 and 30, then never | "When I've been away" (`away`) | no | yes |
+| Every league of the teams they follow has just finished its season: which leagues are on, once | "When I've been away" (`away`) | no | yes |
 | Password reset | — | yes (security) | — |
 
 `account` is not a switch anybody sees: every phone signed in to the account
@@ -370,3 +371,13 @@ log's lock, because these recaps read only the account's own last-seen
 day. The recaps go out between 11:00 and 19:00 Eastern and share the away
 alert's one a week. Never "bet now", never a discount, never "we miss you".
 (engine/lifecycle, engine/trialnote)
+
+## 9. The rest of the second paper (2026-10-29, round four)
+
+| The paper | Built | Where |
+| --- | --- | --- |
+| "Sort users into four groups and treat each differently" | The owner report opens with Champions (paying, here in the last 5 days), At-risk payers (paying, not here in 5 or more), Engaged free (never paid, here in the last 7) and Dormant (not paying, not here in 30 or more), with the monthly money in each and what to do; off each account's own last-seen day and plan, so it needs no activity log | engine/engagement.four_groups |
+| "Start with rules, not models" | Four flags, counted for members who said yes to keeping their activity: gone 5+ days while their league plays, this week's bets under half their usual, fewer alerts opened two weeks running, paying with no pick opened in 5 days | engine/engagement.churn_flags |
+| "Smart paywall: shows a free user what paid alerts caught on their teams last week" | The plans page, for a signed-in account without a plan that follows teams: how many picks the board posted on those teams in the last week, how the graded ones went (losses included) and how many are still open. Counts only, never a pick: the same level a free account's own team alert already tells it | engine/smartwall, GET /api/billing/caught, account.js pwCaught |
+| "Morning brief: each user's games, model edges, injuries and line moves" | The morning alert on their teams' games adds who on those teams is out, doubtful or questionable, a spread that moved a point or more since it opened (two at most), and how many picks the board has on those games. Whole sentences only, inside what a lock screen shows | engine/kickoffs.brief_extras |
+| "Season bridge: when a user's sport ends, suggests players to follow in the next one" | When every league of the teams someone follows has just finished (nothing on its board in the next week, its last game 10 to 24 days ago, in a month its season ends in, so an All-Star week or the Super Bowl's bye never reads as an end), "When I've been away" says once which leagues are on and that following a team there brings its games, big moments and finals. And when a league is back after a month off, its fans who have been away a week hear once when their team plays first: the report's "one note at a season's start" for the dormant. Leagues, not players: a player suggestion would be a pick by another name | engine/lifecycle.seasons, season_bridge (season_marks keeps when each league last played) |

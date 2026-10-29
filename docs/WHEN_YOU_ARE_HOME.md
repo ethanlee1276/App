@@ -8138,6 +8138,142 @@ report or why it is off):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HW 2>&1 | tee /tmp/hw.txt
 ```
 
+**HX. Alerts on your terms, bets that speak up, and the live page as a
+second screen** (step 284; your first paper, "Making Qellys Book a Daily
+Habit"). What it built:
+
+- **Alerts → Take a break:** every alert to that phone off for a day or a
+  week, back on with one tap, the problem-gambling helpline beside it. At
+  most five alerts an Eastern day (eight on a plan), and quiet hours read in
+  the member's own time zone from Settings (Eastern when they chose none).
+- **Your bets speak up** (four new switches on Alerts: close games, injury
+  news, this morning, line moves): a saved slip's game in ten minutes, a
+  live leg a unit from its number or 85% likely, the line 2% or a point
+  away from the price taken, a close finish, a followed or bet player's
+  injury status changing, and the result saying whether the price beat the
+  closing line; Monday's week gives the average.
+- **The live page:** Your action (your saved slips' legs in the game and what
+  each still needs), Prop pace (every prop on the game at the market's own
+  line and price, his number so far and his pace; free, never our pick),
+  the market's chance on the win chart, a 21+ footer with 1-800-GAMBLER,
+  and an address of its own, `/live/{league}/{game}`, for search and shares.
+- The research's events (sign-up, a bet logged, a game page opened, the
+  alerts ask, an install, the Kelly calculator, the billing page, the
+  Discord invite) are counted as daily totals in HV's report, and the
+  Alerts page now loads only when it is opened (5 KB off every first paint).
+
+Nothing to set: the push loop runs it, and `deploy.sh` installs the
+Caddyfile line for the `/live/` address itself (it validates first).
+Read-only, any time; each prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/more.js | grep -c 'box("closegame"'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpActionHTML('
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpPaceHTML('
+sudo grep -cF '/pick/* /live/*' /etc/caddy/Caddyfile
+```
+
+The week's counts, the new events among them (read-only):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.analytics report 7
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HX 2>&1 | tee /tmp/hx.txt
+```
+
+**HY. Your data, your limits, your games first, and your membership on
+your phone** (step 285; your second paper, "Data, Retention & the ESPN
+Playbook", and your "they'll just check their actual phone notifications
+more"). The research write-up and what was not built are docs/RETENTION.md
+§7 to §9. What it built:
+
+- **Consent first.** Every yes and no (the Terms at sign-up, alerts on or
+  off, a break, a weekly limit, the activity yes, the members' split) is
+  written down with the Privacy Policy's date, in the member's export and
+  deleted with the account. "Make it yours", once, on a signed-in member's
+  second visit: what they are here for and their books (which then lead
+  the Bet it sheet), and the unticked activity box.
+- **A weekly limit of their own** (Settings → Limits). My Bets shows the
+  week against it and says so when a bet crosses it, and until Monday no
+  alert that only invites them back reaches them. Their own tickets,
+  reminders and people talking to them still come.
+- **Your Edge Report** on My Bets (your price against the close, by market,
+  your best and worst, when you bet) and **What we keep about you** in
+  Settings (everything kept about you, in words, and every choice you made).
+- **Your games first:** games your open bets ride on lead the home strip
+  and get a "Your games" shelf on top of Live; **Second screen** on a live
+  game's TV row puts the score as big as the phone allows and keeps it awake.
+- **The pick'em ranked by beating the close:** Social → Pick'em → "Beat
+  the close" (each pick keeps the market's chance when it was made and at
+  kickoff).
+- **Phone first:** every notice about a member's own membership goes to
+  every phone they are signed in on: the trial's charge warning (the email
+  still goes too) and a six-month or yearly plan renewing in about two
+  weeks. "When I've been away" is now offered to every signed-in member: a
+  payer gone five days gets their week and the board's, losses included; a
+  plan that ended gets what the board did on days 3, 14 and 30, then
+  nothing; when every league they follow has just finished, which leagues
+  are on; when one is back after its break, when their team plays first.
+  Once a week at most, 11:00 to 19:00 Eastern, never "bet now", never a
+  discount.
+- **The plans page** shows a signed-in free account that follows teams how
+  many picks the board posted on those teams last week and how they went,
+  losses and all (counts, never a pick). **The morning alert** adds who on
+  their teams is out or questionable, a spread that moved a point or more,
+  and how many picks are on those games.
+- **Your report** opens with the four groups (Champions, At-risk payers,
+  Engaged free, Dormant), the money in each and what to do, activity log or
+  not; the churn rules count only members who said yes to it.
+
+**Waiting on you: two yeses.** The activity wording (docs/RETENTION.md §6,
+HW) and the members' split (§7): a game's page shows how members' saved
+game-line legs split, once 50 or more are in, and the Edge Report shows the
+members' closing-line value pooled; never a name, never a player prop, and
+anyone can leave it in Settings. Tell me "approved" or what to change and I
+put each in the Privacy Policy. After the split's is in (not before), its
+switch; the switch alone does nothing until the policy has the section:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_SPLIT 1 && sudo systemctl restart qellys
+```
+
+Only if you turn on Stripe's own emails about upcoming renewals, so a
+member does not get two (ours go out otherwise, and the phone notice
+always does):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_RENEW_EMAIL 0 && sudo systemctl restart qellys
+```
+
+Read-only, any time; each prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/account.js | grep -c 'function mineSheet('
+curl -s https://qellysbook.com/js/app.js | grep -c 'function limitWeek('
+curl -s https://qellysbook.com/js/account.js | grep -c 'function mbEdgeHTML('
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpBigHTML('
+curl -s https://qellysbook.com/js/social.js | grep -c 'function pickemClvTable('
+curl -s https://qellysbook.com/js/account.js | grep -c 'async function pwCaught('
+```
+
+The four groups, and what each league is doing as the push loop sees it
+(on, just finished, back after a break), both read-only:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement report 28
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import lifecycle as LC; print(LC.seasons(LC.WEB / 'data'))"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HY 2>&1 | tee /tmp/hy.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

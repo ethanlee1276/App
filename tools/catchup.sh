@@ -661,6 +661,23 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HY "Your data, your limits, your games first, and your membership on your phone" 120 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'function mineSheet('
+curl -s https://qellysbook.com/js/app.js | grep -c 'function limitWeek('
+curl -s https://qellysbook.com/js/account.js | grep -c 'function mbEdgeHTML('
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpBigHTML('
+curl -s https://qellysbook.com/js/social.js | grep -c 'function pickemClvTable('
+curl -s https://qellysbook.com/js/account.js | grep -c 'async function pwCaught('
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement report 28
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import lifecycle as LC; print(LC.seasons(LC.WEB / 'data'))"
+SH
+run HX "Alerts on your terms, bets that speak up, and the live page as a second screen" 60 <<'SH'
+curl -s https://qellysbook.com/js/more.js | grep -c 'box("closegame"'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpActionHTML('
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpPaceHTML('
+sudo grep -cF '/pick/* /live/*' /etc/caddy/Caddyfile
+cd /srv/qellys && sudo -u qellys python3 -m engine.analytics report 7
+SH
 run HW "Your members' own activity, what they are worth, and while you were away" 120 <<'SH'
 curl -s https://qellysbook.com/js/activity.js | grep -c 'JSON.stringify({ s: secs, v: views, sp: sports'
 cd /srv/qellys && sudo -u qellys python3 -m engine.engagement report 28
