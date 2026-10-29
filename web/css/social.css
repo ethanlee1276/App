@@ -654,8 +654,7 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-pk-group-h span { color: var(--text-mute); font-size: var(--fs-xs); white-space: nowrap; }
 .fd-pk-group-act { display: flex; flex-wrap: wrap; gap: 8px; }
 .fd-pk-form { display: flex; gap: 8px; }
-.fd-pk-form input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--fd-line); background: var(--bg); color: var(--text); font: inherit; }
+.fd-pk-form .fd-input { flex: 1; }
 /* A profile's pick'em season: a sport's line never splits. */
 .fd-prof-pk > span { white-space: nowrap; }
 .fd-pk-games { display: grid; gap: 0; padding: 4px 14px; }

@@ -1138,7 +1138,7 @@
       <div class="fd-pk-group-act"><button type="button" class="fd-btn sm" data-fd="pk-invite">${ico("share", 14)} Invite</button>
         ${g.owner ? `<button type="button" class="fd-btn ghost sm" data-fd="pk-manage">${manage ? "Done" : "Manage"}</button>` : ""}
         <button type="button" class="fd-btn ghost sm" data-fd="pk-leave">Leave</button></div>
-      ${manage ? `<form class="fd-pk-form" data-fd-form="pk-rename"><input name="name" maxlength="40" value="${escapeAttr(g.name)}" aria-label="Group name">
+      ${manage ? `<form class="fd-pk-form" data-fd-form="pk-rename"><input class="fd-input" name="name" maxlength="40" value="${escapeAttr(g.name)}" aria-label="Group name">
           <button class="fd-btn sm" type="submit">Rename</button></form>
         <div class="fd-pk-group-act"><button type="button" class="fd-btn ghost sm" data-fd="pk-gnew">New link</button></div>
         <p class="fd-fine">A new link stops the old one working. Remove someone from the table below.</p>` : ""}
@@ -1146,7 +1146,7 @@
   }
   function pickemNewGroupHTML() {
     return `<section class="fd-card fd-pk-group"><h3>Start a group</h3>
-      <form class="fd-pk-form" data-fd-form="pk-create"><input name="name" maxlength="40" placeholder="Name it, like Sunday Squad" aria-label="Group name" required>
+      <form class="fd-pk-form" data-fd-form="pk-create"><input class="fd-input" name="name" maxlength="40" placeholder="Name it, like Sunday Squad" aria-label="Group name" required>
         <button class="fd-btn sm" type="submit">Start it</button></form>
       <p class="fd-fine">You get a link to send. Your group’s table counts only the people who join, by wins or by beating the close. Got a link? Open it and you’re in.</p></section>`;
   }
