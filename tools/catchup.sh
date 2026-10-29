@@ -501,7 +501,7 @@ curl -s https://qellysbook.com/js/chat.js | grep -c 'function pcBodyHTML('
 curl -s https://qellysbook.com/js/account.js | grep -c 'function introHTML('
 python3 -c "import json,glob;rows=[r for f in glob.glob('/srv/qellys/web/data/live_*.json') if '_box' not in f for g in json.load(open(f)).get('games',[]) for r in (g.get('plays') or [])+(g.get('big') or [])];print(len(rows),sum('rating' in r for r in rows),sum('wp' in r for r in rows))"
 SH
-run DZ "Referral codes: $6.25 off for both sides" 60 <<'SH'
+run DZ "Referral codes: \$6.25 off for both sides" 60 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'async function invFill('
 curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/api/account/referral
 SH

@@ -10,6 +10,7 @@ one's lines nor stop the rest by running long.
 
 Run directly: `python3 tests/test_the_catchup_script_is_the_runbooks_own_checks.py`
 """
+import os
 import re
 import subprocess
 import sys
@@ -137,6 +138,20 @@ def test_a_block_cannot_swallow_the_next_or_stop_the_rest():
     assert "after-cat" in out and "third-ran" in out, out
     assert "never" not in out and "(stopped after 1s)" in out, out
     assert out.index("===== X1.") < out.index("===== X2.") < out.index("===== X3."), out
+
+
+def test_the_whole_script_gets_to_its_end():
+    """Ethan's run of 2026-10-29 stopped at the first block's title it
+    reached: DZ's "$6.25" is a variable to bash in double quotes, and
+    `set -u` ends the script on an unset one, so no check ran, whatever
+    letters were asked for (every title is read on the way past). The
+    script now runs top to bottom here with a letter no block has, as
+    root would see it."""
+    env = dict(os.environ, **{"BASH_FUNC_id%%": "() { echo 0; }"})
+    r = subprocess.run(["bash", str(SCRIPT), "ZZ9"], capture_output=True, text=True, timeout=60, env=env)
+    assert r.returncode == 0 and "unbound variable" not in r.stderr, (r.returncode, r.stderr[-400:])
+    assert "catch-up " in r.stdout and "===== done in" in r.stdout, r.stdout[-400:]
+    assert not re.search(r"^===== [A-Z]{1,2}\d*\. ", r.stdout, re.M), "no block was asked for, none ran"
 
 
 def test_letters_run_those_blocks_only():
