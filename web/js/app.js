@@ -7132,7 +7132,10 @@ function renderGames() {
      must never do to make somebody comfortable. They get a star instead,
      and they keep their real place. */
   const fav = (g) => (isFavTeam(g.home) || isFavTeam(g.away)) ? 0 : 1;
+  // A game an open bet of yours rides on goes ahead even of your teams.
+  const mine = myBetTeams(state.sport), bet = (g) => myBetOn(g, mine) ? 0 : 1;
   games.sort((a, b) => rank(a) - rank(b)
+    || bet(a) - bet(b)
     || fav(a) - fav(b)
     || (sortMode === "picks" ? gameBetCount(b) - gameBetCount(a) : 0)
     || startKey(a).localeCompare(startKey(b)));
@@ -16812,6 +16815,25 @@ function mbLoad() {
     return Array.isArray(arr) ? arr : [];
   } catch (e) { return []; }
 }
+/* YOUR GAMES FIRST (the second paper: "a user's tracked bet counts most,
+   then followed players and teams ... then how close the game is to
+   starting"): the teams an open bet of yours rides on, in one league, read
+   off the legs My Bets keeps ("BUF @ LA" and each leg's team). */
+function myBetTeams(sport) {
+  const out = new Set();
+  for (const b of mbLoad()) {
+    if (!b || b.result !== "pending" || !Array.isArray(b.legs)) continue;
+    for (const l of b.legs) {
+      if (!l || (l.sport && String(l.sport).toLowerCase() !== sport)) continue;
+      [l.team, ...String(l.game || "").split(/\s*@\s*|\s+vs\.?\s+/i)].forEach((t) => t && out.add(String(t).trim().toUpperCase()));
+    }
+  }
+  return out;
+}
+function myBetOn(g, teams) {
+  return !!g && (teams.has(String(g.home || "").toUpperCase()) || teams.has(String(g.away || "").toUpperCase()));
+}
+
 /* THEIR OWN WEEKLY LIMIT (Settings → Limits; engine/limits): dollars logged
    Monday to Sunday, Eastern. Crossing it is said once, as it happens; the
    box stops the promotional alerts. */
@@ -30223,9 +30245,20 @@ async function renderLiveBoard() {
         right now — ${games.length} live across the other leagues (choose All).</p>
        ${darkWhy}`
     : "";
+  // THE SWEAT BOARD (the second paper: "every game you have action on, one
+  // screen", ESPN's Multiview): with every league showing, the games your
+  // open bets ride on get their own shelf first, the full slate below it the
+  // way a scoreboard's favourites sit over its list; one league, your games
+  // lead its grid.
+  const betTeams = {};
+  const isYours = (x) => myBetOn(x.g, betTeams[x.sport] || (betTeams[x.sport] = myBetTeams(x.sport)));
+  const yours = _liveChip === "all" ? games.filter(isYours) : [];
+  shown.sort((a, b) => isYours(b) - isYours(a));
   const shelved = _liveView === "feed" ? (shown.length ? `<div class="pf-host"></div>` : "")
     : _liveChip === "all"
-    ? Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
+    ? (yours.length ? `<div class="lb-shelf lb-yours">Your games <span class="mini">— ${yours.length} with your bets on</span></div>
+        <div class="lb-grid">${yours.map(liveCardHTML).join("")}</div>` : "")
+      + Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
         <div class="lb-shelf">
           <span class="lb-shelf-logo">${(SPORT_META[s] || {}).logo || ""}</span>
           ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}

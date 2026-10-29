@@ -62,7 +62,9 @@ CLIENT_EVENTS = ("visit", "view", "ask", "checkout_click",
                  "sweat",
                  # The second paper's (the ESPN Playbook): "Make it yours"
                  # answered (what they are here for), a limit or break set.
-                 "onboarding", "limit_set")
+                 "onboarding", "limit_set",
+                 # A live game opened as the phone's second screen (detail.js).
+                 "second_screen")
 #: What only the server knows: a Stripe status change (see transition()).
 SERVER_EVENTS = ("trial_started", "subscribed", "trial_converted", "canceled", "renewed",
                  # An alert that reached a phone, by its kind (the page column

@@ -6429,6 +6429,7 @@ body.has-deck #rail-live { display: none; }
   font-size: var(--fs-md); font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text); }
 .lb-shelf .lb-shelf-logo { font-size: var(--fs-lg); }
+.lb-shelf.lb-yours { color: var(--brand-2); }   /* the Sweat Board: the games your bets ride on */
 .lb-shelf .mini { color: var(--text-mute); font-weight: 600;
   letter-spacing: 0; text-transform: none; }
 .lb-shelf + .lb-grid { margin-bottom: 24px; }

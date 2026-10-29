@@ -4,6 +4,29 @@
     {
       "date": "2026-10-29",
       "kind": "ship",
+      "title": "Your games first, and a second screen",
+      "body": "Games your open bets ride on lead the home strip and get their own shelf at the top of the Live tab, over the full slate. And a live game's TV row has Second screen: the score as big as your phone allows, the clock, the last play and your own legs, kept awake and lit up when the score changes.",
+      "alert": "Second screen: a live game, big, for the phone beside your TV.",
+      "url": "/#live"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "Your Edge Report, and what we keep",
+      "body": "My Bets now reads your own log back to you: your price against the closing line, where you win and where you don't by market, your best and worst result, and when you bet. Settings has What we keep about you: every row the site holds about you, counted, with every yes and no you gave us.",
+      "alert": "Your Edge Report: your price against the close, and where you really win.",
+      "url": "/#mybets"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "A weekly limit of your own",
+      "body": "Settings has Limits: set a weekly limit on what you stake, and My Bets shows the week against it. Reach it and we send none of our promotional alerts until Monday; your own bets' alerts still come. Take a break from alerts is beside it.",
+      "url": "/#account"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
       "title": "Make it yours",
       "body": "Once, on your second visit (or any time in Settings), tell us what you are here for and the books you use; your books lead the Bet it sheet. Nothing about how you use the site is kept unless you say yes, and every yes and no you give us is written down with the date of the policy you were shown.",
       "alert": "Make it yours: your books first on Bet it, and nothing kept without your yes.",

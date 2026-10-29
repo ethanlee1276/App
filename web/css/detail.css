@@ -887,3 +887,20 @@ button.tr-opt { cursor: pointer; }
 .pbp-wp-mktkey { margin: 4px 0 0; color: var(--text-mute); }
 .pbp-foot { margin: 18px 0 6px; font-size: var(--fs-2xs); line-height: var(--lh-snug); color: var(--text-mute); text-align: center; }
 .pbp-foot a { color: inherit; }
+
+/* SECOND SCREEN (pbpBigHTML): the phone beside the TV — the score as big as
+   the screen allows, read across a room; the rest of the page underneath. */
+.pbp-big { position: fixed; inset: 0; z-index: 85; background: var(--bg); display: grid; place-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px calc(env(safe-area-inset-bottom, 0px) + 18px); overflow-y: auto; }
+.pbp-big-in { width: min(100%, 720px); display: grid; gap: 14px; text-align: center; position: relative; }
+.pbp-big-x { position: absolute; top: -6px; right: -6px; width: 44px; height: 44px; border-radius: 999px; border: 0;
+  background: var(--fill-tone); color: var(--text-body); cursor: pointer; display: grid; place-items: center; }
+.pbp-big-score { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pbp-big-score div { display: grid; gap: 4px; }
+.pbp-big-score span { font-size: clamp(18px, 5vw, 32px); font-weight: 800; color: var(--text-mute); letter-spacing: .04em; }
+.pbp-big-score b { font-size: clamp(72px, 24vw, 168px); line-height: 1; font-variant-numeric: tabular-nums; color: var(--text); }
+.pbp-big-clock { margin: 0; font-size: clamp(20px, 6vw, 36px); font-weight: 800; font-variant-numeric: tabular-nums; }
+.pbp-big-last { margin: 0; font-size: clamp(16px, 4.4vw, 24px); line-height: 1.3; color: var(--text-body); }
+.pbp-big-wp, .pbp-big-note { margin: 0; font-size: var(--fs-sm); color: var(--text-mute); }
+.pbp-big-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; text-align: left; font-size: clamp(15px, 4vw, 20px); }
+.pbp-big-go { margin-left: auto; }

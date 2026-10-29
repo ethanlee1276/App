@@ -2924,7 +2924,88 @@ function pbpTvHTML(d) {
   return `<div class="pbp-tv" role="group" aria-label="Watching on TV: hold the page back"><span class="pbp-tv-q">Watching on TV? Delay</span>${
     TV_CHOICES.map((n) => `<button type="button" class="pbp-tv-b${n === dl ? " on" : ""}" data-tv="${n}" aria-pressed="${n === dl}"${
       n ? ` aria-label="${n} seconds behind"` : ""}>${n ? `${n}s` : "Off"}</button>`).join("")}${
-    dl ? `<span class="pbp-tv-note">Plays and chat held ${dl}s so nothing spoils your TV</span>` : ""}</div>`;
+    dl ? `<span class="pbp-tv-note">Plays and chat held ${dl}s so nothing spoils your TV</span>` : ""}<button type="button"
+      class="pbp-tv-b pbp-big-go" data-big="on">Second screen</button></div>`;
+}
+/* SECOND SCREEN (Ethan's second research paper, 2026-10-29: "Second-screen
+   mode: big-text live view built for a phone next to the TV, with alerts" —
+   ESPN's StreamCenter, whose interactive panels doubled watch time). One
+   tap from the TV row of a live game: the score as big as the phone allows,
+   the period and clock, the last play, who the plays favour, and the
+   reader's own legs in this game; the score flashes when it changes, the
+   screen is kept awake while it is open, and it shows the page's own copy,
+   so the TV delay holds it too. ×, Escape or leaving the game closes it. */
+const PBP_BIG = { on: false, d: null, score: "", lock: null };
+function pbpBigHTML() {
+  const d = PBP_BIG.d || {}, lv = d.live || {};
+  const plays = (d.plays && d.plays.length ? d.plays : (d.events || []).filter((e) => e && e.kind === "atbat"))
+    .filter((x) => x && typeof x === "object");
+  const last = plays[plays.length - 1] || {};
+  const said = String(last.desc || last.event || last.text || "");
+  const wp = typeof last.wp === "number" ? last.wp : null;
+  const legs = (PBP_ACT.list || []).flatMap((t) => t.legs || []);
+  const side = (team, score) => `<div><span>${escapeHtml(team || "")}</span><b>${escapeHtml(score == null ? "–" : score)}</b></div>`;
+  return `<div class="pbp-big-in">
+    <button type="button" class="pbp-big-x" data-big="off" aria-label="Close the second screen">${icon("cross", 18)}</button>
+    <div class="pbp-big-score">${side(d.away, lv.away_score)}${side(d.home, lv.home_score)}</div>
+    <p class="pbp-big-clock">${escapeHtml([lv.period, lv.clock].filter(Boolean).join(" · ") || (lv.state === "final" ? "Final" : ""))}</p>
+    ${said ? `<p class="pbp-big-last">${escapeHtml(said.slice(0, 160))}</p>` : ""}
+    ${wp != null ? `<p class="pbp-big-wp">${escapeHtml(wp >= 50 ? d.home || "" : d.away || "")} ${Math.round(wp >= 50 ? wp : 100 - wp)}% to win</p>` : ""}
+    ${legs.length ? `<ul class="pbp-big-legs">${legs.map(pbpLegLine).join("")}</ul>` : ""}
+    ${tvDelay() ? `<p class="pbp-big-note">${tvDelay()}s behind, with your TV</p>` : ""}</div>`;
+}
+async function pbpBigLock(on) {
+  try {
+    if (on && !PBP_BIG.lock && navigator.wakeLock) PBP_BIG.lock = await navigator.wakeLock.request("screen");
+    if (!on && PBP_BIG.lock) { await PBP_BIG.lock.release(); PBP_BIG.lock = null; }
+  } catch (e) { PBP_BIG.lock = null; }             // no wake lock: the phone's own timer stands
+}
+function pbpBigPaint() {
+  let box = document.getElementById("pbp-big");
+  if (!PBP_BIG.on || state.view !== "pbp" || !PBP_BIG.d) {
+    if (box) box.remove();
+    if (PBP_BIG.lock) pbpBigLock(false);
+    PBP_BIG.on = PBP_BIG.on && state.view === "pbp";
+    return;
+  }
+  const lv = PBP_BIG.d.live || {}, score = `${lv.away_score}-${lv.home_score}`;
+  const scored = PBP_BIG.score && score !== PBP_BIG.score;
+  PBP_BIG.score = score;
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "pbp-big";
+    box.className = "pbp-big";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", "Second screen");
+    document.body.appendChild(box);
+  }
+  box.innerHTML = pbpBigHTML();
+  // The alert: a score lights up and the phone taps once (no motion asked for, no glow).
+  if (scored) {
+    buzz("tap");
+    const still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.querySelectorAll(".pbp-big-score b").forEach((b) => b.animate && b.animate(
+      still ? [{ color: "var(--brand)" }, { color: "var(--brand)" }]
+        : [{ color: "var(--brand)", textShadow: "0 0 24px var(--brand)" }, { color: "var(--text)", textShadow: "none" }],
+      { duration: 1400, easing: "ease-out" }));
+  }
+  pbpBigLock(true);
+}
+if (typeof document !== "undefined" && typeof document.addEventListener === "function" && !window._bigBound) {
+  window._bigBound = true;
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-big]");
+    if (!b) return;
+    PBP_BIG.on = b.dataset.big === "on";
+    PBP_BIG.score = "";
+    if (PBP_BIG.on) track("second_screen", (state.pbp || {}).league || "");
+    pbpBigPaint();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && PBP_BIG.on) { PBP_BIG.on = false; pbpBigPaint(); } });
+  // A wake lock is let go when the page is hidden; asked for again on return.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && PBP_BIG.on) { PBP_BIG.lock = null; pbpBigLock(true); }
+  });
 }
 /* SPOILER-FREE LATER (the ideas list, 2026-10-28). "Watching later? Hide
    the score" saves a game for later on this device: its page draws a veil
@@ -4650,6 +4731,7 @@ async function renderPbpPage(tick) {
     pbpRoomLine();
     pbpActionFill(league, event);
     pbpPaceFill(league, event);
+    pbpBigPaint();
     const b = document.getElementById("pbp-back");
     if (b) b.addEventListener("click", () => { markBackNav(); switchView(way.view); });
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>
@@ -4700,6 +4782,7 @@ async function renderPbpPage(tick) {
   const tvHeld = tvPick(`${league}_${event}`, raw, d);
   raw = tvHeld.raw;
   d = tvHeld.d;
+  PBP_BIG.d = null;
   if (tvHeld.held && d) {
     strip = (strip || []).map((g) => (String(g.event_id) === String(event)
       ? { ...g, live: { ...(g.live || {}), ...(d.live || {}) } } : g));
@@ -4713,6 +4796,8 @@ async function renderPbpPage(tick) {
     wire();
     return;
   }
+  // The second screen shows this copy: held for the TV, never a veiled game's.
+  PBP_BIG.d = d;
   // The game's chat: its button on every game page, whichever layout draws
   // below (js/chat.js keeps the conversation across redraws).
   chatMount(league, event, d);
