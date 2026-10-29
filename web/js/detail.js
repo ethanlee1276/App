@@ -4426,7 +4426,7 @@ function pbpCfbTeamsWarm() {
 const LOCK_GAMES = "qb.lockgames";
 const _lockRows = {};
 function gameLockPlugin() {
-  const C = window.Capacitor;
+  const C = typeof window !== "undefined" && window.Capacitor;
   return C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.GameActivity;
 }
 function gameLocked(key) {
