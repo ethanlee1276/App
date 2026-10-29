@@ -157,7 +157,7 @@
          chip and the bet slip. This site never holds money and never
          takes a bet — guards in tests/test_newlook.py pin that no
          "Place Bet" / "Deposit" / balance UI can ship. -->
-    <button class="menu-toggle" id="menu-toggle" aria-label="Menu"
+    <button class="menu-toggle" id="menu-toggle" aria-label="Open menu"
             aria-expanded="false" aria-controls="sidebar">
       <span class="mt-bars" aria-hidden="true"></span>
       <span class="mt-label" id="menu-label">Menu</span>
@@ -665,6 +665,12 @@
       </div>
     </div>
   </aside>
+  <!-- THE SIDEBAR'S THREE DOTS (Ethan, 2026-10-29): wherever the sidebar
+       stands beside the page they slide it away, and back; hidden, they wait
+       at the left edge. styles.css "THE SIDEBAR SLIDES AWAY", app.js
+       initSidebarGrip. -->
+  <button class="sb-grip" id="sb-grip" type="button" aria-label="Side menu"
+          aria-controls="sidebar" aria-expanded="true"></button>
 
   <main>
   <!-- WHICH LEAGUE, OUT OF THE DRAWER.

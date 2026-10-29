@@ -33,8 +33,7 @@ READ = lambda *p: ROOT.joinpath(*p).read_text(encoding="utf-8")   # noqa: E731
 def test_boot_measures_a_strip_on_one_side_only():
     boot = READ("web", "js", "boot.js")
     for want in ('padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)',
-                 'var side = r >= 60 && l <= 16 ? "right" : l >= 60 && r <= 16 ? "left" : duo ? "right" : "";',
-                 'root.classList.toggle("duo-side", duo);',
+                 'var side = r >= 60 && l <= 16 ? "right" : l >= 60 && r <= 16 ? "left" : "";',
                  'root.classList.toggle("side-rail", !!side);', 'root.classList.toggle("side-rail-left", side === "left");',
                  'root.style.setProperty("--strip-w"', 'addEventListener("resize", rail);'):
         assert want in boot, want

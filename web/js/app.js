@@ -26764,50 +26764,75 @@ function verifyDrawer() {
 }
 
 /* THE SIDEBAR SLIDES AWAY (styles.css "THE SIDEBAR SLIDES AWAY"; Ethan,
-   2026-10-29: "add the slide button for ipads and computers too"). Where the
-   sidebar stands beside the page, the menu button hides it and the page
-   takes its width; again, and it comes back. Remembered on this device
-   (boot.js applies it before the first paint). */
+   2026-10-29, his open Duo upright with its sidebar: "put like three dots on
+   the right side of the menu ... click the three dots and it'll just swipe
+   the bar to the left, or you can physically slide it yourself"). Where the
+   sidebar stands beside the page, the dots slide it away and the page takes
+   its width; again, and it comes back. A drag does the same, the dots by any
+   pointer and the bar itself by a finger (a mouse on the bar is clicking
+   and selecting). Remembered on this device (boot.js applies it before the
+   first paint). */
 const SB_HIDDEN_KEY = "qb_sb_hidden";
-function sidebarDocked() {
-  const sb = document.getElementById("sidebar");
-  return !!sb && getComputedStyle(sb).position === "sticky";
-}
-function sidebarSlide() {
-  const hide = document.documentElement.classList.toggle("sb-hidden");
+function sidebarSlide(hide) {
+  hide = document.documentElement.classList.toggle("sb-hidden", hide);
   try {
     if (hide) localStorage.setItem(SB_HIDDEN_KEY, "1");
     else localStorage.removeItem(SB_HIDDEN_KEY);
   } catch (e) { /* this visit only */ }
-  sidebarSlideSync();
+  const grip = document.getElementById("sb-grip");
+  if (grip) grip.setAttribute("aria-expanded", String(!hide));
 }
-function sidebarSlideSync() {
-  const btn = document.getElementById("menu-toggle");
-  if (!btn) return;
-  // One name, "Menu"; aria-expanded says whether what it opens is open: the
-  // sidebar beside the page, or the drawer or the sheet where it is one.
-  const phone = isPhone(), body = document.body.classList;
-  btn.setAttribute("aria-controls", phone ? "more-sheet" : "sidebar");
-  btn.setAttribute("aria-expanded", String(!phone && sidebarDocked()
-    ? !document.documentElement.classList.contains("sb-hidden")
-    : body.contains("menu-open") || body.contains("more-open")));
+function initSidebarGrip() {
+  const grip = document.getElementById("sb-grip"), sb = document.getElementById("sidebar"), root = document.documentElement;
+  if (!grip || !sb) return;
+  sidebarSlide(root.classList.contains("sb-hidden"));     // the dots' aria-expanded, as boot.js left the bar
+  let drag = null, quietUntil = 0;
+  const down = (e) => {
+    // Only where the bar stands beside the page; a mouse drags the dots, not the bar.
+    if (e.button || getComputedStyle(sb).position !== "sticky" || (e.pointerType === "mouse" && e.currentTarget === sb)) return;
+    drag = { x: e.clientX, y: e.clientY, dx: 0, on: false, hidden: root.classList.contains("sb-hidden"), w: sb.offsetWidth };
+  };
+  const end = (commit) => {
+    if (drag && drag.on) {
+      quietUntil = performance.now() + 400;          // the lift that ends a drag is not a tap
+      root.classList.remove("sb-drag");
+      root.style.removeProperty("--sb-drag");
+      // Far enough, and the way it goes: away when shown, back when hidden.
+      if (commit && Math.abs(drag.dx) > drag.w / 4 && (drag.dx < 0) !== drag.hidden) sidebarSlide(!drag.hidden);
+    }
+    drag = null;
+  };
+  grip.addEventListener("pointerdown", down);
+  sb.addEventListener("pointerdown", down);
+  addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.on) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }   // a scroll
+      if (Math.abs(dx) < 8) return;
+      drag.on = true;
+      root.classList.add("sb-drag");
+    }
+    drag.dx = dx;
+    // The bar follows the finger, never past its own place.
+    root.style.setProperty("--sb-drag", Math.min(0, Math.max(-drag.w, (drag.hidden ? -drag.w : 0) + dx)) + "px");
+  });
+  addEventListener("pointerup", () => end(true));
+  addEventListener("pointercancel", () => end(false));
+  document.addEventListener("click", (e) => {
+    if (performance.now() < quietUntil) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  grip.addEventListener("click", () => sidebarSlide());
 }
 
 function initMobileMenu() {
   const btn = document.getElementById("menu-toggle");
   if (!btn) return;
-  sidebarSlideSync();
-  addEventListener("resize", sidebarSlideSync);
   btn.addEventListener("click", () => {
     // Phones: the sheet, the one menu (Ethan, 2026-09-23). The drawer below is the tablet's.
     if (isPhone()) {
       btn.setAttribute("aria-controls", "more-sheet");
       moreSheetOpen(!document.body.classList.contains("more-open"));
-      return;
-    }
-    // A sidebar beside the page slides away, or back (iPads and computers).
-    if (sidebarDocked()) {
-      sidebarSlide();
       return;
     }
     // The drawer is position:fixed, so the page does NOT need anchoring
@@ -26933,25 +26958,14 @@ const HEADER_TUCK_MQ =
   "(max-width: 760px), (pointer: coarse) and (max-width: 1024px)";
 
 /* EVERY OPEN FOLDABLE, by its shape (styles.css, "THE OPEN iPHONE DUO"
-   and "EVERY FOLD AND FLIP"): on its side, or the near-square inner screen
-   of a Fold, a Pixel Fold or an OnePlus Open. Where these match, the page
-   wears the desktop shell: the header stays put (a retracted header would
-   leave the sticky sidebar a gap over it), the phone's sheet is not the
-   menu, an open drawer closes. The open Duo upright is a phone since
-   2026-10-29, and on its side it wears the app (duoSide below). */
+   and "EVERY FOLD AND FLIP"): on its side, upright on a screen no phone
+   has, or the near-square inner screen of a Fold, a Pixel Fold or an
+   OnePlus Open. Where these match, the page wears the desktop shell: the
+   header stays put (a retracted header would leave the sticky sidebar a
+   gap over it), the phone's sheet is not the menu, an open drawer closes. */
 const UNFOLDED_MQ = "(min-width: 700px) and (min-height: 480px) and (min-aspect-ratio: 5/4), "
+  + "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px), "
   + "(pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5)";
-/* THE OPEN DUO ON ITS SIDE WEARS THE APP (Ethan, 2026-10-29: the tab bar "on
-   the side like how we do in the folded view"): a finger on a wide, short
-   screen, the open Duo on its side (951 by 543 to 589 in Safari, 890 by 626
-   by Apple's pixels, 910 by 703 as a Home Screen app on Ethan's own) or a
-   small tablet held the same way; a Fold's near-square inner screen (at most
-   6:5) keeps its desktop shell. boot.js marks it
-   html.duo-side for the stylesheet (styles.css "THE DUO OPEN ON ITS SIDE");
-   here the hamburger opens the phone's sheet (isPhone). The same query in
-   boot.js and in the side strip's block; tests/test_the_open_duo_wears_the_
-   app.py keeps the three the same. */
-const DUO_SIDE_MQ = "(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 760px) and (min-aspect-ratio: 5/4)";
 /* LIST BESIDE DETAIL (Ethan, 2026-10-24: "make it unique for that phone").
    The Duo's own Notes and Messages, Inoreader and every Fold app open a
    list and its item side by side on the big screen; so does this, on a
@@ -27127,8 +27141,7 @@ function initFoldSeams() {
     if (_paneList && !split.matches) paneSplit(state.view, "");
   };
   const split = matchMedia(TWO_PANE_MQ);
-  const side = matchMedia(DUO_SIDE_MQ);
-  [narrow, phone, open, split, side].forEach((mq) => { if (mq.addEventListener) mq.addEventListener("change", shut); });
+  [narrow, phone, open, split].forEach((mq) => { if (mq.addEventListener) mq.addEventListener("change", shut); });
 }
 
 /* ---------------- wiring ---------------- */
@@ -27348,6 +27361,7 @@ initialView();
 watchSectionSubs();
 leagueCrests();
 initMobileMenu();
+initSidebarGrip();
 initMoreMenu();
 initHeaderTuck();
 initFoldSeams();
@@ -30618,7 +30632,7 @@ function swipeTarget(dx, dy, sports, current) {
    field, belongs to that thing. */
 function swipeOwned(el) {
   for (let n = el; n && n !== document.body; n = n.parentElement) {
-    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sportbar-in, .lb-table, table, .sidebar, .more-sheet")) return true;
+    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sportbar-in, .lb-table, table, .sidebar, .sb-grip, .more-sheet")) return true;
     if (n.scrollWidth > n.clientWidth + 4) {
       const o = getComputedStyle(n).overflowX;
       if (o === "auto" || o === "scroll") return true;
@@ -30633,7 +30647,7 @@ function swipeOwned(el) {
    said "Release to refresh" and the sidebar came with it). */
 function paneOwned(el) {
   for (let n = el; n && n !== document.body; n = n.parentElement) {
-    if (n.matches && n.matches(".sidebar, .more-sheet, .rail")) return true;
+    if (n.matches && n.matches(".sidebar, .sb-grip, .more-sheet, .rail")) return true;
     if (n.scrollHeight > n.clientHeight + 4) {
       const o = getComputedStyle(n).overflowY;
       if (o === "auto" || o === "scroll") return true;
@@ -30754,14 +30768,8 @@ function sidebarDestinations(root) {
   return out;
 }
 
-/* THE OPEN DUO ON ITS SIDE WEARS THE APP (DUO_SIDE_MQ, beside UNFOLDED_MQ):
-   there the hamburger opens the phone's sheet, the menu, as it does folded. */
-function duoSide() {
-  return !!(window.matchMedia && matchMedia(DUO_SIDE_MQ).matches);
-}
-
 function isPhone() {
-  return !!(window.matchMedia && matchMedia("(max-width: 760px)").matches) && !unfolded() || duoSide();
+  return !!(window.matchMedia && matchMedia("(max-width: 760px)").matches) && !unfolded();
 }
 
 function morePillLabel(src) {

@@ -661,13 +661,13 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
-run IG "The sidebar slides away, and the open Duo's bar beside the clock" 30 <<'SH'
-curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide()'
-curl -s https://qellysbook.com/css/styles.css | grep -c 'html.sb-hidden .sidebar { width: var(--sidebar-w);'
+run IH "The open Duo keeps its sidebar, and three dots slide it away" 30 <<'SH'
+curl -s https://qellysbook.com/index.html | grep -c 'id="sb-grip"'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function initSidebarGrip()'
 SH
-run IF "The open Duo wears the app" 30 <<'SH'
-curl -s https://qellysbook.com/js/boot.js | grep -c 'root.classList.toggle("duo-side", duo);'
-curl -s https://qellysbook.com/css/styles.css | grep -c 'html.duo-side .sidebar, html.duo-side .tb-ask { display: none; }'
+run IG "The top bar makes room, and why nothing stands under the Duo's clock" 30 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide(hide)'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'html.sb-hidden .sidebar { width: var(--sidebar-w);'
 SH
 run IE "The sidebar holds still" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'overscroll-behavior: none; touch-action: pan-y pinch-zoom;'

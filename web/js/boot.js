@@ -118,20 +118,10 @@ try {
    Split View), its width in --strip-w (styles.css). An iPhone on its side
    insets both sides alike and keeps its bar at the foot; an app built with
    an older SDK is never given the strip, so nothing moves there. Measured
-   again whenever the window changes: the Duo opens and closes.
-
-   OPEN ON ITS SIDE, TOO (Ethan, 2026-10-29: the tab bar "on the side like
-   how we do in the folded view"; Apple's guide for the Duo: "The controls
-   remain on the side when the device opens in landscape"). A finger on a
-   wide, short screen, the open Duo on its side (951 by 543 to 589 in
-   Safari, 890 by 626 by Apple's pixels, 910 by 703 as a Home Screen app on
-   Ethan's own) or a small tablet held the same way, is html.duo-side: the bar stands on the right edge whether or not
-   iOS gives the page the strip (a Home Screen app is still drawn beside it
-   today), the strip's own width when it does, 84px when not. */
+   again whenever the window changes: the Duo opens and closes. */
 try {
   (function () {
     var root = document.documentElement, probe = null, last = "";
-    var DUO_SIDE = "(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 760px) and (min-aspect-ratio: 5/4)";
     function rail() {
       if (!document.body) return;
       if (!probe) {
@@ -143,18 +133,13 @@ try {
       }
       var cs = getComputedStyle(probe);
       var l = parseFloat(cs.paddingLeft) || 0, r = parseFloat(cs.paddingRight) || 0;
-      var duo = !!(window.matchMedia && matchMedia(DUO_SIDE).matches);
-      var side = r >= 60 && l <= 16 ? "right" : l >= 60 && r <= 16 ? "left" : duo ? "right" : "";
-      var w = side === "left" ? l : r >= 60 ? r : 84;
-      var key = side + (side ? Math.round(w) : "") + (duo ? "+duo" : "");
+      var side = r >= 60 && l <= 16 ? "right" : l >= 60 && r <= 16 ? "left" : "";
+      var key = side + (side ? Math.round(side === "right" ? r : l) : "");
       if (key === last) return;
       last = key;
-      root.classList.toggle("duo-side", duo);
       root.classList.toggle("side-rail", !!side);
       root.classList.toggle("side-rail-left", side === "left");
-      // The bar in the system's own strip (the clock above it), or drawn beside it.
-      root.classList.toggle("side-rail-inset", !!side && (side === "left" ? l : r) >= 60);
-      if (side) root.style.setProperty("--strip-w", Math.round(w) + "px");
+      if (side) root.style.setProperty("--strip-w", Math.round(side === "right" ? r : l) + "px");
       else root.style.removeProperty("--strip-w");
     }
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", rail);

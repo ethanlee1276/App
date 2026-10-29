@@ -8651,84 +8651,42 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IE 2>&1 | tee /tmp/ie.txt
 ```
 
-**IF. The open Duo wears the app** (step 292; you, with the open Duo on its
-side: "I kind of prefer it to have the tab bar that we have on the regular
-mobile app with the live button ... on the side like how we do in the
-folded view", and you chose Apple's layout). Apple's design guide for the
-Duo: "The controls remain on the side when the device opens in landscape
-to ensure a consistent experience as people move between displays", with
-standard bars at the bottom upright. So:
+**IF. The open Duo wore the app, for an evening** (step 292; you chose
+the phone's tab bar for the open Duo, on the right edge on its side and at
+the bottom upright). Taken back the same evening at your word: the open Duo
+keeps its sidebar, with three dots to slide it away (IH). Nothing to run.
 
-- **Open on its side:** the five tabs (Home, Picks, Live, Record, Ask) stand
-  on the right edge, where they are when the Duo is shut, and the menu is
-  behind the button at the top left (the same sheet as the phone's, every
-  page in it). The page keeps its full width, the sidebar is gone, and the
-  header's Ask button too (Ask is a tab). Opening a pick still puts it
-  beside the board.
-- **Open upright:** it is the phone app, the bar at the bottom.
-- **Computers, iPads and other tablets** keep the sidebar as before.
-- Today the Duo draws a Home Screen app beside its clock strip, so the bar
-  stands at the right edge of the page, next to the strip. Once the store
-  app is built for iOS 27.1 and iOS gives the page the strip, the bar
-  stands in the strip itself, under the clock, as it does folded.
+**IG. The top bar makes room, and why nothing stands under the Duo's
+clock** (step 293; you: "add the slide button for ipads and computers too",
+and "it isnt below the wifi shit on the duo its to the left of that. we
+need it actually under it").
 
-Nothing to set: the updater picks it up within five minutes. Close the app
-from the app switcher and open it again to see it. Read-only, any time; each
-prints `1` once this version is live:
-
-```
-curl -s https://qellysbook.com/js/boot.js | grep -c 'root.classList.toggle("duo-side", duo);'
-curl -s https://qellysbook.com/css/styles.css | grep -c 'html.duo-side .sidebar, html.duo-side .tb-ask { display: none; }'
-```
-
-The check in one go:
-
-```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh IF 2>&1 | tee /tmp/if.txt
-```
-
-**IG. The sidebar slides away, and the open Duo's bar beside the clock**
-(step 293; you: "add the slide button for ipads and computers too", and
-"it isnt below the wifi shit on the duo its to the left of that. we need
-it actually under it").
-
-- **The slide:** wherever the sidebar stands beside the page (a computer,
-  an iPad on its side, a big iPad either way up, a Fold's inner screen),
-  the menu button at the top left now slides it away and the page takes
-  its width; tap it again and it comes back. Each device remembers how
-  you left it. Where the menu is a drawer or the phone's sheet (phones,
-  an iPad upright, a narrow window, the open Duo), the button does what
-  it did.
-- **The top bar makes room for it:** the date and the Live data pill now
-  step aside on windows narrower than about 1,520 and 1,440 pixels (both
-  are on the page already), and on wide windows the search box narrows
-  before anything else gives. Before this, the theme button hung partly
-  or wholly off the right edge on windows 1,024, 1,440 and 1,600 pixels
-  wide; now nothing does at any width.
-- **Under the clock on the open Duo** (your screenshot after this, with
-  the bar circled and an arrow to the clock: "It needs to be under it"):
-  not possible for the Home Screen app yet, and the limit is Apple's.
-  WebKit's own notes for Safari 27.1 say web content on the iPhone Duo
-  does not extend behind the system's side controls, and that Safari
+- **The slide** became three dots on the sidebar's edge the same evening
+  (IH); the menu button at the top left is the drawer's and the phone's
+  again.
+- **The top bar:** the date and the Live data pill step aside on windows
+  narrower than about 1,520 and 1,440 pixels (both are on the page
+  already), and on wide windows the search box narrows before anything
+  else gives. Before this, the theme button hung partly or wholly off the
+  right edge on windows 1,024, 1,440 and 1,600 pixels wide; now nothing
+  does at any width.
+- **Under the Duo's clock:** not possible for a web page, and the limit is
+  Apple's. WebKit's notes for Safari 27.1 say web content on the iPhone
+  Duo does not extend behind the system's side controls, and that Safari
   fills that space with the page's background colour. Your screenshot
-  shows exactly that: the strip under your clock is the site's own colour
-  (12, 11, 9, the same as the page and the bar), painted by iOS, and the
-  page ends at the strip's edge, 910 of the screen's 1,000 points. The bar
-  has no colour of its own there, so it and the strip read as one band.
-  For about an hour on 29 October it was black instead, which would have
-  drawn a seam against the strip; that is undone. The bar does stand
-  under the clock in the App Store app built in Xcode for iOS 27.1: iOS
-  hands that app the whole screen with the strip as its edge, the shell
-  in deploy/ios passes it to the page (`contentInset: never`), and the
-  page moves the bar into it, under the clock. That build needs a Mac
-  with Xcode (deploy/ios/README.md), and the Apple Developer Program ($99
-  a year) for TestFlight and the App Store.
+  showed exactly that: the strip under your clock was the site's own
+  colour (12, 11, 9), painted by iOS, and the page ended at its edge, 910
+  of the screen's 1,000 points. The App Store app built in Xcode for iOS
+  27.1 can: iOS hands it the strip, and the shell in deploy/ios passes it
+  to the page (`contentInset: never`). That build needs a Mac with Xcode
+  (deploy/ios/README.md), and the Apple Developer Program ($99 a year) for
+  TestFlight and the App Store. With the sidebar back on the open Duo
+  there is no bar beside the clock any more.
 
-Nothing to set: the updater picks it up within five minutes. Read-only, any
-time; each prints `1` once this version is live:
+Read-only, any time; each prints `1` once this version is live:
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide()'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide(hide)'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'html.sb-hidden .sidebar { width: var(--sidebar-w);'
 ```
 
@@ -8736,6 +8694,44 @@ The check in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IG 2>&1 | tee /tmp/ig.txt
+```
+
+**IH. The open Duo keeps its sidebar, and three dots slide it away**
+(step 294; your two screenshots: the open Duo on its side with the phone's
+tab bar and menu sheet, "I don't like the new design", and the open Duo
+upright with its sidebar circled, "I want to go back to the second
+screenshot, and then we can just put like three dots on the right side of
+the menu ... click the three dots and it'll just swipe the bar to the
+left, or you can physically slide it yourself").
+
+- **Back to the sidebar:** the open Duo, on its side and upright, has the
+  sidebar beside the page again, as in your second screenshot: no tab bar,
+  no menu button at the top left.
+- **The three dots:** on the sidebar's right edge, halfway down. Tap them
+  and the bar slides away to the left and the page takes the whole width;
+  the dots then wait at the left edge, and a tap on them, or dragging them
+  to the right, brings it back. Or slide the bar itself with your finger:
+  a swipe to the left on it slides it away (a short swipe springs back,
+  and scrolling up and down is still scrolling). Each device remembers how
+  you left it.
+- **Everywhere the sidebar stands beside the page:** computers, iPads on
+  their side, the open Duo either way up, a Fold's inner screen. Phones,
+  an iPad upright and narrow windows keep the menu button and their drawer
+  or sheet.
+
+Nothing to set: the updater picks it up within five minutes. Close the app
+from the app switcher and open it again to see it. Read-only, any time;
+each prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/index.html | grep -c 'id="sb-grip"'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function initSidebarGrip()'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IH 2>&1 | tee /tmp/ih.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
