@@ -646,7 +646,7 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-pk-scope button { flex: none; }
 /* A private group (social.js pickemGroupHTML): its name, its buttons, the
    start and rename forms. */
-.fd-pk-group { display: grid; gap: 8px; margin-top: 10px; padding: 14px 16px; }
+.fd-pk-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 10px; padding: 14px 16px; }
 .fd-pk-group h3, .fd-pk-group p { margin: 0; }
 .fd-pk-group h3 { font-size: var(--fs-md); }
 .fd-pk-group-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -654,7 +654,7 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-pk-group-h span { color: var(--text-mute); font-size: var(--fs-xs); white-space: nowrap; }
 .fd-pk-group-act { display: flex; flex-wrap: wrap; gap: 8px; }
 .fd-pk-form { display: flex; gap: 8px; }
-.fd-pk-form .fd-input { flex: 1; }
+.fd-pk-form .fd-input { flex: 1; width: 0; }
 /* A profile's pick'em season: a sport's line never splits. */
 .fd-prof-pk > span { white-space: nowrap; }
 .fd-pk-games { display: grid; gap: 0; padding: 4px 14px; }

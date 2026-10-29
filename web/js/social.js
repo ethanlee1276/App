@@ -1154,11 +1154,12 @@
     const head = headHTML("Pick’em", "Free every week: pick the winner of every game on the board. No entry fee, no prizes.");
     if (!G) return `${head}<div class="fd-card fd-empty">That invite link has expired or is not right. Ask for a new one.</div>`;
     const who = G.by ? ` Started by @${escapeHtml(G.by)}.` : "";
-    const next = !F.signedIn ? `<a class="fd-btn" href="#account">Sign up free</a> (or sign in), then open the link again.`
-      : `<a class="fd-btn" href="#account">Make your Social profile</a>: the table shows your handle. You’ll join right after.`;
+    const [say, cta] = !F.signedIn ? ["Sign up free (or sign in), then open this link again.", "Sign up free"]
+      : ["The table shows your handle, so make your Social profile first. You’ll join right after.", "Make your profile"];
     return `${head}<section class="fd-card fd-pk-group"><div class="fd-pk-group-h"><b>${escapeHtml(G.name)}</b>
         <span>${G.members} player${G.members === 1 ? "" : "s"}</span></div>
-      <p>You’re invited to this pick’em group.${who}</p><p>${next}</p>
+      <p>You’re invited to this pick’em group.${who} ${say}</p>
+      <div class="fd-pk-group-act"><a class="fd-btn" href="#account">${cta}</a></div>
       <p class="fd-fine">Code ${escapeHtml(code)}</p></section>`;
   }
   function pickemRemindHTML(P) {
@@ -1429,6 +1430,9 @@
       // A group left or removed from: back to everyone.
       if (gm && F.pk && !F.pk.group) F.pkScope = "all";
       paint(seq, "pickem", pickemPageHTML(F.pk), { hero: false });
+      // The chosen chip stays in sight when the row scrolls sideways.
+      const on = document.querySelector(".fd-pk-scope button.on");
+      if (on && on.parentElement) on.parentElement.scrollLeft = Math.max(0, on.offsetLeft - 16);
       return;
     }
     if (kind === "trending") {
