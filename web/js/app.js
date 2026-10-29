@@ -202,6 +202,7 @@ const SETTINGS_DEFAULTS = {
   teamColors: "off",    // "on": the bar, the Live disc and the tab wear your first team's colours
   books: [],            // the sportsbooks they use (js/account.js "Make it yours")
   goals: [],            // what they are here for: props · clv · parlays · live · fantasy
+  limit_week: 0,        // their own weekly limit in dollars staked, 0 = none (Settings → Limits; engine/limits)
 };
 let _settings = null;
 
@@ -16811,8 +16812,25 @@ function mbLoad() {
     return Array.isArray(arr) ? arr : [];
   } catch (e) { return []; }
 }
+/* THEIR OWN WEEKLY LIMIT (Settings → Limits; engine/limits): dollars logged
+   Monday to Sunday, Eastern. Crossing it is said once, as it happens; the
+   box stops the promotional alerts. */
+function limitWeek() {
+  const t = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = (n) => { const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - (t.getDay() + 6) % 7 + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  return [day(0), day(6)];
+}
+function limitStaked(bets) {
+  const [lo, hi] = limitWeek();
+  return bets.reduce((t, b) => { const d = String((b && b.date) || "").slice(0, 10), x = Number(b && b.stake);
+    return t + (d >= lo && d <= hi && x > 0 ? x : 0); }, 0);
+}
 function mbSave(bets) {
+  const lim = Number(settings().limit_week) || 0, was = lim ? limitStaked(mbLoad()) : 0;
   try { localStorage.setItem(MYBETS_KEY, JSON.stringify(bets)); } catch (e) {}
+  const now = lim ? limitStaked(bets) : 0;
+  if (lim && was < lim && now >= lim) tfToast(`That’s ${mbMoney(now)} this week, past the ${mbMoney(lim)} you set.`);
   acctTouch("mybets");   // signed in → the account copy follows this one
   // The tab badge counts what is still running, so it moves whenever the
   // book does — logging a bet, grading one, deleting one.

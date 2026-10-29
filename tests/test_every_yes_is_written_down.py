@@ -211,7 +211,7 @@ def test_in_a_browser_the_card_saves_the_answers_and_only_a_tick_says_yes():
             page = ctx.new_page()
             page.on("pageerror", lambda e: errors.append(str(e)[:200]))
             page.goto(origin + "/index.html#recommended", wait_until="load")
-            page.wait_for_selector("#mine .mine-card", timeout=8000)
+            page.wait_for_selector("#mine .yours-card", timeout=8000)
             got["box"] = page.evaluate("(() => { const b = document.querySelector('[data-mine-consent]');"
                                        " return b ? b.checked : null; })()")
             page.click("#mine [data-mine='goals'][data-v='props']")
@@ -231,7 +231,7 @@ def test_in_a_browser_the_card_saves_the_answers_and_only_a_tick_says_yes():
             page = ctx.new_page()
             page.on("pageerror", lambda e: errors.append(str(e)[:200]))
             page.goto(origin + "/index.html#recommended", wait_until="load")
-            page.wait_for_selector("#mine .mine-card", timeout=8000)
+            page.wait_for_selector("#mine .yours-card", timeout=8000)
             page.check("#mine [data-mine-consent]")
             page.click("#mine [data-mine-go='yes']")
             page.wait_for_timeout(800)

@@ -2562,8 +2562,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "latest":
                 from engine import pushmine as PM
+                from engine import limits as LM
                 sub = PA.subscription(conn, endpoint) if endpoint else None
-                out = PA.latest_for(sub, mine=PM.mine(conn, (sub or {}).get("user_id")))
+                uid = (sub or {}).get("user_id")
+                st = LM.standing(conn, uid) if uid else None
+                out = PA.latest_for(sub, mine=PM.mine(conn, uid),
+                                    skip=LM.PROMO if st and st["staked"] >= st["limit"] else ())
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "game-activity":
                 # A live game on the iOS app's lock screen (engine/gameactivity):
@@ -3084,6 +3088,13 @@ class Handler(BaseHTTPRequestHandler):
                     stored = A.get_sections(conn, who["id"])
                     merged = merge_sections(stored, sections)
                     A.save_sections(conn, who["id"], merged)
+                # A weekly limit set, changed or cleared (engine/limits) goes
+                # in the consent log with the policy's date.
+                from engine import consent as CS, limits as LM
+                said = LM.changed((stored.get("settings") or {}).get("data"),
+                                  (merged.get("settings") or {}).get("data"))
+                if said and CS.record(conn, who["id"], "limits", said):
+                    conn.commit()
                 A.touch_session(conn, token)
                 return self._send(200, json.dumps(
                     {"email": who["email"], "sections": merged}).encode(),

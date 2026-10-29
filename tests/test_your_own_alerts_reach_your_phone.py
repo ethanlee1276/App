@@ -286,7 +286,8 @@ def test_the_box_the_server_and_the_page_carry_it():
     assert body.index("_sw.run_once(entitled=_srv.account_entitled)") < body.index("_pm.run_once(entitled=_srv.account_entitled)")
     srv = READ("server.py")
     at = srv.index("def _push_post(self, path: str):")
-    assert "PA.latest_for(sub, mine=PM.mine(conn, (sub or {}).get(\"user_id\")))" in srv[at:at + 3000]
+    assert "out = PA.latest_for(sub, mine=PM.mine(conn, uid)," in srv[at:at + 3000] and \
+        'uid = (sub or {}).get("user_id")' in srv[at:at + 3000], "the member's own queue, with the shared one"
     from _app import app_js                    # the Alerts page loads on first use (js/more.js)
     app = app_js()
     assert 'box("watches", "My teams and players make the board (members see which)", !signedIn)' in app

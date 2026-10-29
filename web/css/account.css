@@ -939,11 +939,20 @@ a.pw-door-go { text-decoration: none; }
 
 /* MAKE IT YOURS (mineSheet, 2026-10-29): two quick choices and, only where
    the site keeps activity, an unticked yes. */
-.mine-card { display: grid; gap: 8px; }
-.mine-q { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 800; color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
-.mine-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.mine-chip { padding: 6px 12px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--fill-tone);
+.yours-card { display: grid; gap: 8px; }
+.yours-q { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 800; color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
+.yours-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.yours-chip { padding: 6px 12px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--fill-tone);
   color: var(--text-body); font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
-.mine-chip.on { color: var(--brand-2); background: color-mix(in oklab, var(--brand) 14%, transparent); }
-.mine-ok { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-body); }
-.mine-ok input { margin-top: 2px; }
+.yours-chip.on { color: var(--brand-2); background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.yours-ok { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-body); }
+.yours-ok input { margin-top: 2px; }
+
+/* YOUR WEEKLY LIMIT on My Bets (mbLimitHTML; engine/limits): where the week
+   stands against the member's own number, amber once it is reached. */
+.wk-limit { display: grid; gap: 6px; padding: 12px 14px; }
+.wk-limit p { margin: 0; }
+.wk-limit-bar { height: 6px; border-radius: 999px; background: var(--fill-tone); overflow: hidden; }
+.wk-limit-bar i { display: block; height: 100%; border-radius: inherit; background: var(--good); }
+.wk-limit.over .wk-limit-bar i { background: var(--warn); }
+.wk-limit-go { background: none; border: 0; padding: 0; color: var(--brand-2); font: inherit; font-weight: 700; cursor: pointer; }

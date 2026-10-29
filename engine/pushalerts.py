@@ -380,13 +380,15 @@ def quiet_now(now: _dt.datetime | None = None) -> bool:
 
 
 def latest_for(sub: dict | None, path: Path | None = None, now: float | None = None,
-               mine: list | None = None) -> dict:
+               mine: list | None = None, skip=()) -> dict:
     """What a knocked phone shows: its newest wanted message, fresh; the
     newest of all when it is not subscribed here; a plain line otherwise.
     ``mine`` is the member's own queue (engine/pushmine.mine), read with
-    the shared one, newest first."""
+    the shared one, newest first; ``skip`` the kinds it may not show (a
+    member at their own weekly limit, engine/limits.PROMO)."""
     msgs = sorted((_load(path or LATEST).get("messages") or []) + list(mine or []),
                   key=lambda m: float(m.get("at") or 0))[::-1]
+    msgs = [m for m in msgs if m.get("kind") not in skip]
     now = now or time.time()
     fresh = [m for m in msgs if now - float(m.get("at") or 0) < FRESH_S]
     def mine_(m):
@@ -437,13 +439,20 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
     now = _dt.datetime.fromtimestamp(now_ts, _dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
     tracked = _tracked(conn)
     today, paid = eastern_day(now_ts), paid_ids(conn)
-    capped = quieted = held = full = 0
+    from engine import limits as LM
+    limited = LM.reached(conn, now_ts)
+    capped = quieted = held = full = stopped = 0
     for endpoint, kind, topics, leagues, fails, posted_at, uid, unopened, last_ok, until, day, day_n in rows:
         mine = [m for m in msgs if wants(topics, leagues, m)]
         # Paused from the Alerts page: nothing at all until it runs out.
         if mine and paused(until, now_ts):
             held += 1
             continue
+        # The member's own weekly limit reached (engine/limits): no
+        # promotional alert until Monday.
+        if mine and uid in limited:
+            mine = [m for m in mine if m.get("kind") not in LM.PROMO]
+            stopped += int(not mine)
         # At most one picks-are-up alert in POSTED_GAP_S: a board due sooner
         # is said with the next one.
         if posted_at and now_ts - float(posted_at) < POSTED_GAP_S and any(m.get("kind") == "posted" for m in mine):
@@ -498,6 +507,8 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
         stats["paused"] = held
     if full:
         stats["day_capped"] = full
+    if stopped:
+        stats["limited"] = stopped
     return stats
 
 

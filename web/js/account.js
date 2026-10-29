@@ -329,6 +329,20 @@ function mbMonthHTML(bets, today) {
     l.settled ? `<span class="mb-month-prev">${mbMonthName(prev)} ${mbMoney(l.profit, true)}</span>` : ""}</p>`;
 }
 
+/* Where the week stands against the member's own limit (Settings →
+   Limits; engine/limits), when they set one. */
+function mbLimitHTML(bets) {
+  const lim = Number(settings().limit_week) || 0;
+  if (!lim) return "";
+  const st = limitStaked(bets), over = st >= lim;
+  return `<div class="card wk-limit${over ? " over" : ""}">
+    <p><b>This week: ${mbMoney(st)}</b> of your ${mbMoney(lim)} limit</p>
+    <div class="wk-limit-bar" role="img" aria-label="${escapeAttr(`${Math.round(100 * st / lim)}% of your weekly limit`)}"><i
+      style="width:${Math.min(100, Math.round(100 * st / lim))}%"></i></div>
+    <p class="mini">${over ? "You’ve reached the limit you set. Our promotional alerts are off until Monday; your own bets’ alerts still come."
+      : "Monday to Sunday, Eastern."} <button type="button" class="wk-limit-go" data-act="toAccount" data-arg="limit">Change it</button></p></div>`;
+}
+
 function renderMyBets() {
   const host = document.getElementById("mybets-body");
   if (!host) return;
@@ -525,6 +539,7 @@ function renderMyBets() {
     </div>
     ${acctStripHTML()}
     ${form}
+    ${mbLimitHTML(bets)}
     ${ribbon}
     ${mbMonthHTML(bets, today)}
     ${st.settled ? `<div id="mb-report"></div>` : `<div id="mb-risk"></div>`}
@@ -2121,19 +2136,19 @@ async function mineSheet() {
   if (document.querySelector("#mine, #pushask, #a2hs")) return;
   const s = settings();
   const ask = !!(_pwStatus && _pwStatus.activity_switch && !_pwStatus.activity);
-  const chip = (group, k, label, on) => `<button type="button" class="mine-chip${on ? " on" : ""}" data-mine="${group}"
+  const chip = (group, k, label, on) => `<button type="button" class="yours-chip${on ? " on" : ""}" data-mine="${group}"
     data-v="${escapeAttr(k)}" aria-pressed="${on}">${escapeHtml(label)}</button>`;
   const host = document.createElement("div");
   host.id = "mine";
   host.className = "a2hs";
-  host.innerHTML = `<div class="a2hs-card mine-card" role="dialog" aria-modal="false" aria-labelledby="mine-t">
+  host.innerHTML = `<div class="a2hs-card yours-card" role="dialog" aria-modal="false" aria-labelledby="mine-t">
     <button class="a2hs-x" data-mine-go="no" aria-label="Not now">${icon("cross", 14)}</button>
     <b id="mine-t">Make Qellys yours</b>
-    <p class="mine-q">What are you here for?</p>
-    <div class="mine-chips">${MINE_GOALS.map(([k, l]) => chip("goals", k, l, s.goals.includes(k))).join("")}</div>
-    <p class="mine-q">Your books</p>
-    <div class="mine-chips">${MINE_BOOKS.map((b) => chip("books", b, BOOKS[b][0], s.books.includes(b))).join("")}</div>
-    ${ask ? `<label class="mine-ok"><input type="checkbox" data-mine-consent /> Keep how I use the site to time my alerts.
+    <p class="yours-q">What are you here for?</p>
+    <div class="yours-chips">${MINE_GOALS.map(([k, l]) => chip("goals", k, l, s.goals.includes(k))).join("")}</div>
+    <p class="yours-q">Your books</p>
+    <div class="yours-chips">${MINE_BOOKS.map((b) => chip("books", b, BOOKS[b][0], s.books.includes(b))).join("")}</div>
+    ${ask ? `<label class="yours-ok"><input type="checkbox" data-mine-consent /> Keep how I use the site to time my alerts.
       You can see all of it, and delete it, in Settings → Your activity.</label>` : ""}
     <div class="a2hs-go"><button class="btn primary" data-mine-go="yes">Save</button>
       <button class="btn ghost" data-mine-go="no">Not now</button></div></div>`;
@@ -3575,6 +3590,14 @@ function setListHTML() {
               end: setSwitch(s.teamColors === "on", `data-set-switch="teamColors"${s.teams.length ? "" : " disabled"}`) }),
   ]));
   out.push(`<div id="set-notif">${notifGroupHTML()}</div>`);
+  // YOUR OWN LIMITS (engine/limits; the second paper: "Self-set limits (alert
+  // pause, weekly bet cap) ... Settings, always visible").
+  const lim = Number(s.limit_week) || 0;
+  out.push(setGroup("Limits", [
+    setItem({ ico: "scale", tone: "red", title: "Weekly limit", val: lim ? mbMoney(lim) : "Off", chev: true,
+              attrs: 'data-set-open="limit"' }),
+    setItem({ ico: "bell", tone: "red", title: "Take a break from alerts", href: "#alerts", chev: true }),
+  ], "Your own number for a week’s stakes, Monday to Sunday. Once the bets you log reach it, our promotional alerts stop until Monday. Gambling problem? Call or text 1-800-GAMBLER."));
   const sl = localStorage.getItem("ff_user"), es = localStorage.getItem("ff_espn_league");
   out.push(setGroup("Connected", [
     setItem({ ico: "football", tone: "amber", title: "Fantasy leagues",
@@ -3733,6 +3756,22 @@ function setPageHTML(page) {
                        attrs: `data-set-multi="${page}" data-set-val="${escapeAttr(k)}" aria-pressed="${on}"` });
     }), page === "books" ? "The books you bet at lead the Bet it sheet, tagged “Your book”."
       : "What you came for. It stays with your account, in Download my data, and you can change it here any time.");
+  }
+  if (page === "limit") {
+    const lim = Number(s.limit_week) || 0, st = limitStaked(mbLoad());
+    return head("Weekly limit") + `<div class="set-list">
+        <label class="set-field"><span>Dollars staked a week, at most</span>
+          <input type="number" class="set-limit" min="1" max="1000000" step="1" inputmode="numeric"
+            value="${lim || ""}" placeholder="200"></label>
+      </div>
+      <div class="set-actions">
+        <button type="button" class="btn primary" data-set-limit="save">Save</button>
+        ${lim ? `<button type="button" class="btn ghost" data-set-limit="off">Turn it off</button>` : ""}
+      </div>
+      <p class="set-foot">This week so far: ${mbMoney(st)} logged in My Bets${lim ? ` of your ${mbMoney(lim)}` : ""}.
+        We take no bets, so a limit stops nothing at a book: it is your own line, said back to you when you log a
+        bet. Signed in, reaching it also stops our promotional alerts (picks up, reminders, your teams’ games)
+        until Monday; your own bets’ alerts still come. Each change is kept in your record of choices.</p>`;
   }
   if (page === "activity") {
     setTimeout(() => actFill(), 0);
@@ -4046,6 +4085,18 @@ function bindSettings() {
       const k = flip.dataset.setSwitch;
       setSetting(k, settings()[k] === "on" ? "off" : "on");
       redraw();
+      return;
+    }
+    const limit = hit("[data-set-limit]");
+    if (limit) {
+      const off = limit.dataset.setLimit === "off";
+      const v = off ? 0 : Math.round(Number((document.querySelector(".set-limit") || {}).value) || 0);
+      if (!off && !(v > 0 && v <= 1e6)) { tfToast("A whole number of dollars, more than 0."); return; }
+      setSetting("limit_week", v);
+      track("limit_set", off ? "off" : "week");
+      tfToast(off ? "Weekly limit off." : `Weekly limit: ${mbMoney(v)}.`);
+      _setPage = "";
+      setRepaint();
       return;
     }
     const multi = hit("[data-set-multi]");

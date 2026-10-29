@@ -275,3 +275,30 @@ Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
 3. `sudo ./deploy/setenv.sh QB_ACTIVITY 1` and restart.
 4. After four weeks of rows: `python3 -m engine.engagement fit`, then with
    `--save` only if it says it holds.
+
+## 7. The second paper: consent first, limits, and the bettor's own record (2026-10-29, round three)
+
+Ethan's "Data, Retention & the ESPN Playbook" (uploaded 2026-10-29). Its
+spine: collect four layers in order of value — what members tell us, what
+they bet, what they do here, what we compute from those — nothing from the
+phone itself, nothing before consent, and a consent record for every
+choice. What it asked for and where it now lives:
+
+| The paper | Built | Where |
+| --- | --- | --- |
+| "A consent log ... what each user agreed to, which policy version, and when" | Every yes and no — the 21+ and Terms at sign-up, alerts on (the kinds) or off, a break, a weekly limit, the activity yes or no — with the Privacy Policy's own "Last updated" date; append-only, in the export, deleted with the account | engine/consent |
+| "Nothing fires before consent" | Activity is opt-in: both locks AND the member's own yes; a yes before the locks open is not written | engine/activity.consented |
+| Layer 1, asked "at the moment each one is needed": what they are here for, their books | "Make it yours", once, on a signed-in reader's second visit, never over another sheet: goals, books, and an unticked activity box while the site keeps any; editable in Settings. Their books lead the Bet it sheet | js/account.js mineSheet, app.js mineTick |
+| "Self-set limits (alert pause, weekly bet cap) — Settings, always visible" and "zero promotional alerts until it ends" | Settings → Limits: a weekly limit in dollars (Monday to Sunday, Eastern) and the way to Alerts → Take a break. My Bets shows the week against it and says so once when a bet crosses it. Reached, no promotional alert (picks up, last night, picks on their players, away, morning, karma, pick'em, kickoff, big moments, finals, close finishes) reaches the member until Monday — shared, their own queue, or what a knocked phone is shown. Their tickets, lineup, reminders and people talking to them still come | engine/limits, pushalerts.send, pushmine.flush, latest_for |
+| `onboarding_completed`, `limit_set` | Counted as daily totals, never per person | engine/analytics |
+
+Not taken, and why:
+
+- **State, "checked against IP"** — we take no bets, so a state gates
+  nothing here, and reading one off an address is the location we promise
+  never to collect. Books' availability by state is not in our data either.
+- **PostHog, session replay** — first-party daily totals only (engine/analytics);
+  no third-party tracker on the site.
+- **"Which modules lead the home screen" from the goals** — the home's order
+  is Ethan's own call (the stadiums, then Most Likely); the goals are kept
+  for the features that ask for them, and Settings says only what they do.

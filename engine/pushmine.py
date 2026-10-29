@@ -765,11 +765,20 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     k = vapid or webpush.keys()
     cfg = webpush.apns_config() if apns_cfg is None else apns_cfg
     today, paid = PA.eastern_day(t), PA.paid_ids(conn)
+    from engine import limits as LM
+    limited = LM.reached(conn, t)
     for uid, msgs in by_user.items():
+        # Their own weekly limit reached (engine/limits): the promotional
+        # kinds are dropped, not held for Monday.
+        if uid in limited:
+            stats["limited"] = stats.get("limited", 0) + sum(m["kind"] in LM.PROMO for m in msgs)
+            send_now = [m for m in msgs if m["kind"] not in LM.PROMO]
+        else:
+            send_now = msgs
         for endpoint, kind, topics, fails, until, day, day_n in conn.execute(
                 "SELECT endpoint, kind, topics, fails, paused_until, day, day_n FROM push_subs WHERE user_id = ?",
                 (uid,)).fetchall():
-            want = [m for m in msgs if PA.wants(topics, "", m)]
+            want = [m for m in send_now if PA.wants(topics, "", m)]
             if not want:
                 continue
             # Paused (Alerts → Pause), or the day's alerts all used

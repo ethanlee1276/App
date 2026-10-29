@@ -4780,6 +4780,7 @@ function renderPushZone(note) {
   host.querySelectorAll("[data-push-pause]").forEach((el) => el.addEventListener("click", async () => {
     try {
       const got = await pushSend("pause", { endpoint: saved.endpoint, hours: Number(el.dataset.pushPause) });
+      if (got.paused_until) track("limit_set", `pause${el.dataset.pushPause}`);
       try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, pushSaved(), { paused_until: got.paused_until || 0 }))); } catch (e) {}
       renderPushZone(got.paused_until ? "Paused. Nothing comes to this phone until then." : "Alerts are back on.");
     } catch (err) { renderPushZone(err && err.message ? err.message : "That did not work — try again."); }
