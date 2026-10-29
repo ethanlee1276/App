@@ -26907,12 +26907,14 @@ const UNFOLDED_MQ = "(min-width: 700px) and (min-height: 480px) and (min-aspect-
 /* THE OPEN DUO ON ITS SIDE WEARS THE APP (Ethan, 2026-10-29: the tab bar "on
    the side like how we do in the folded view"): a finger on a wide, short
    screen, the open Duo on its side (951 by 543 to 589 in Safari, 890 by 626
-   by Apple's pixels) or a small tablet held the same way. boot.js marks it
+   by Apple's pixels, 910 by 703 as a Home Screen app on Ethan's own) or a
+   small tablet held the same way; a Fold's near-square inner screen (at most
+   6:5) keeps its desktop shell. boot.js marks it
    html.duo-side for the stylesheet (styles.css "THE DUO OPEN ON ITS SIDE");
    here the hamburger opens the phone's sheet (isPhone). The same query in
    boot.js and in the side strip's block; tests/test_the_open_duo_wears_the_
    app.py keeps the three the same. */
-const DUO_SIDE_MQ = "(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 700px) and (min-aspect-ratio: 4/3)";
+const DUO_SIDE_MQ = "(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 760px) and (min-aspect-ratio: 5/4)";
 /* LIST BESIDE DETAIL (Ethan, 2026-10-24: "make it unique for that phone").
    The Duo's own Notes and Messages, Inoreader and every Fold app open a
    list and its item side by side on the big screen; so does this, on a

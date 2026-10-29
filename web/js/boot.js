@@ -117,14 +117,14 @@ try {
    how we do in the folded view"; Apple's guide for the Duo: "The controls
    remain on the side when the device opens in landscape"). A finger on a
    wide, short screen, the open Duo on its side (951 by 543 to 589 in
-   Safari, 890 by 626 by Apple's pixels) or a small tablet held the same
-   way, is html.duo-side: the bar stands on the right edge whether or not
+   Safari, 890 by 626 by Apple's pixels, 910 by 703 as a Home Screen app on
+   Ethan's own) or a small tablet held the same way, is html.duo-side: the bar stands on the right edge whether or not
    iOS gives the page the strip (a Home Screen app is still drawn beside it
    today), the strip's own width when it does, 84px when not. */
 try {
   (function () {
     var root = document.documentElement, probe = null, last = "";
-    var DUO_SIDE = "(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 700px) and (min-aspect-ratio: 4/3)";
+    var DUO_SIDE = "(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 760px) and (min-aspect-ratio: 5/4)";
     function rail() {
       if (!document.body) return;
       if (!probe) {

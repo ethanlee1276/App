@@ -6785,7 +6785,8 @@ body.has-deck #rail-live { display: none; }
    consistent experience as people move between displays." boot.js sets
    html.duo-side, with html.side-rail, on a finger's wide, short screen: the
    open Duo on its side (951 by 543 to 589 in Safari, 890 by 626 by Apple's
-   pixels) or a small tablet held the same way. The page keeps its wide
+   pixels, 910 by 703 as a Home Screen app on Ethan's own) or a small tablet
+   held the same way. The page keeps its wide
    layout; its way around is the phone app's: the tab bar on the right edge,
    as when the Duo is shut (the side strip's rules below), and the menu sheet
    behind the button at the top left, the sidebar's rows as its pills. The
@@ -10770,7 +10771,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    the strip; and what floated above the bar's old place comes down to the
    foot and keeps out of the strip too (the slip's rule is with the slip's). */
 @media (max-width: 760px),
-       (pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 700px) and (min-aspect-ratio: 4/3) {
+       (pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) and (max-height: 760px) and (min-aspect-ratio: 5/4) {
   html.side-rail .tabbar, html.side-rail.store-ios .tabbar, html.side-rail.ios-home .tabbar {
     display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 10px;
     left: auto; right: 0; top: 0; bottom: 0; width: var(--strip-w);

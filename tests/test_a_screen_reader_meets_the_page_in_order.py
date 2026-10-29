@@ -43,7 +43,7 @@ def test_the_closed_drawer_is_hidden_and_the_open_one_shown():
     assert "visibility 0s linear var(--dur-base)" in block, "hidden only once the slide out has ended"
     assert re.search(r"body\.menu-open \.sidebar \{[^}]*visibility: visible; transition-delay: 0s;", block), \
         "shown before the slide in starts"
-    # The open Duo's sidebar sits beside the page, never closed.
+    # A tablet's sidebar on its side sits beside the page, never closed.
     assert "will-change: auto; transform: none; transition: none; visibility: visible;" in CSS
     # The rescue for a drawer that does not arrive forces it visible too.
     assert '["visibility", "visible"]' in APP
@@ -89,7 +89,7 @@ def test_in_a_browser_the_drawer_is_out_of_reach_until_it_opens():
             browser = pw.chromium.launch(**kw)
             try:
                 for name, (w, h, touch) in {"phone": (390, 844, True), "tablet": (820, 1180, True),
-                                             "duo open": (951, 720, True), "desktop": (1280, 900, False)}.items():
+                                             "tablet on its side": (1133, 744, True), "desktop": (1280, 900, False)}.items():
                     ctx = browser.new_context(viewport={"width": w, "height": h}, is_mobile=touch, has_touch=touch,
                                               service_workers="block", reduced_motion="reduce")
                     page = ctx.new_page()
@@ -131,7 +131,9 @@ def test_in_a_browser_the_drawer_is_out_of_reach_until_it_opens():
         assert got[name]["closed"]["vis"] == "hidden" and not got[name]["tab_reaches_it"], (name, got[name])
     assert got["tablet"]["open"] == {"vis": "visible", "onscreen": True}, got["tablet"]
     assert got["tablet"]["reclosed"]["vis"] == "hidden", got["tablet"]
-    for name in ("duo open", "desktop"):
+    # The sidebar beside the page, never closed: a tablet on its side and a
+    # desktop (the open Duo wears the app since 2026-10-29: its menu is the sheet).
+    for name in ("tablet on its side", "desktop"):
         assert got[name]["closed"] == {"vis": "visible", "onscreen": True} and got[name]["tab_reaches_it"], (name, got[name])
     levels = got["phone"]["levels"]
     assert levels and all(b - a <= 1 for a, b in zip(levels, levels[1:])), ("a heading skips a level", levels)

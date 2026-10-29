@@ -35,7 +35,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 READ = lambda *p: ROOT.joinpath(*p).read_text(encoding="utf-8")   # noqa: E731
 CSS, APP, BOOT = READ("web", "css", "styles.css"), READ("web", "js", "app.js"), READ("web", "js", "boot.js")
 DUO_SIDE = ("(pointer: coarse) and (min-width: 761px) and (max-width: 1060px) and (min-height: 500px) "
-            "and (max-height: 700px) and (min-aspect-ratio: 4/3)")
+            "and (max-height: 760px) and (min-aspect-ratio: 5/4)")
 
 
 def _block(start):
@@ -119,7 +119,12 @@ SHAPES = {
     # name: (width, height, touch, the Duo on its side, the bar's place)
     "on its side": (951, 543, True, True, "right"),
     "on its side, by Apple's pixels": (890, 626, True, True, "right"),
+    # Ethan's own Duo, as a Home Screen app (his screenshots, two pixels a point).
+    "on its side, his Home Screen app": (910, 703, True, True, "right"),
     "upright": (669, 825, True, False, "bottom"),
+    "upright, his Home Screen app": (703, 1000, True, False, "bottom"),
+    # A Fold's near-square inner screen keeps its desktop shell.
+    "a Pixel Fold's inner screen": (841, 701, True, False, None),
     "a tablet on its side": (1133, 744, True, False, None),
     "a laptop": (951, 543, False, False, None),
     "a phone on its side": (874, 402, True, False, None),
@@ -200,7 +205,7 @@ def test_in_a_browser_each_shape_and_the_menu_on_its_side():
             assert not g["sidebar"] and g["menu"], (name, g)
         else:
             assert g["bar"] is None or name == "a phone on its side", (name, g)
-    for name in ("a tablet on its side", "a laptop"):
+    for name in ("a tablet on its side", "a laptop", "a Pixel Fold's inner screen"):
         assert got[name]["sidebar"] and not got[name]["menu"], (name, "the sidebar stays theirs", got[name])
     sheet = got["sheet"]
     assert sheet["open"] and len(sheet["pills"]) >= 20, sheet
