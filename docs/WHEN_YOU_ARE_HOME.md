@@ -8075,9 +8075,11 @@ that"). The research and the full list are docs/RETENTION.md §6. In short:
 - **What it keeps, per member, a row a day:** time with the site in front
   of them, which pages and leagues, what hour, how many visits and how many
   an alert opened. Never clicks, typing, location, device or other apps.
-  Kept 120 days, deleted with the account, in their export, and each member
-  can see all of it and switch it off (which deletes it) in Settings → Your
-  activity.
+  Kept 120 days, deleted with the account, in their export — and **only for
+  a member who says yes** (Settings → Your activity, or the unticked box on
+  the "Make it yours" card on their second visit; your second paper:
+  "nothing fires before consent"). Each yes and no is in the consent log
+  with the policy's date; no deletes everything kept.
 - **What it does with it:** stages (new, power, regular, casual, lapsing,
   dormant, gone — "lapsing" measured against each member's own rhythm, so a
   Sunday-only fan isn't "drifting" on Friday); a proper "still around?"

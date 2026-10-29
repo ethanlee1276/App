@@ -31,12 +31,16 @@ opens them, and a "while you were away" alert built from the member's own
 teams when they have been gone longer than their own rhythm. And the
 owner's report, as totals. Never sold, shared, or used for an advert.
 
-TWO LOCKS. QB_ACTIVITY=1 (deploy/setenv.sh) AND the Privacy Policy's own
-section on it (web/privacy.html, id="your-activity"): the switch does
-nothing until the policy says what it does, so the switch and the wording
-go live together, the way the paywall and the usage counts did. Then each
-member's own switch in Settings → Your activity: on once the site's is,
-and turning it off deletes every row kept and stops the next.
+TWO LOCKS, THEN A YES. QB_ACTIVITY=1 (deploy/setenv.sh) AND the Privacy
+Policy's own section on it (web/privacy.html, id="your-activity"): the
+switch does nothing until the policy says what it does, so the switch and
+the wording go live together, the way the paywall and the usage counts did.
+And then nothing is kept for a member until THEY say yes — in Settings →
+Your activity, or on the "Make it yours" card — because Ethan's second
+research paper (2026-10-29, "the ESPN Playbook") is plain that nothing
+fires before consent and that a consent record is the strongest defence.
+Each yes and each no is written to the consent log (engine/consent) with
+the policy's date; turning it off deletes every row kept and stops the next.
 
 Kept KEEP_DAYS days, then deleted; deleted with the account
 (engine/accounts.delete_user); in the account's export.
@@ -138,27 +142,38 @@ def ensure_tables(conn) -> None:
     conn.executescript(SCHEMA)
 
 
-# ---- the member's own switch ------------------------------------------------------
+# ---- the member's own yes ---------------------------------------------------------
 def opted_out(conn, user_id) -> bool:
+    """Did this member say no (as opposed to never being asked)?"""
     ensure_tables(conn)
     row = conn.execute("SELECT off FROM activity_prefs WHERE user_id = ?", (int(user_id),)).fetchone()
     return bool(row and row[0])
 
 
-def set_off(conn, user_id, off: bool, now: float | None = None) -> None:
-    """Turn it off (deleting every row kept) or back on."""
+def consented(conn, user_id) -> bool:
+    """Did this member say yes, and not take it back?"""
     ensure_tables(conn)
+    row = conn.execute("SELECT off FROM activity_prefs WHERE user_id = ?", (int(user_id),)).fetchone()
+    return bool(row) and not row[0]
+
+
+def set_off(conn, user_id, off: bool, now: float | None = None) -> None:
+    """Their no (deleting every row kept) or their yes, each written to the consent log."""
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
     conn.execute("INSERT INTO activity_prefs (user_id, off, at) VALUES (?, ?, ?) "
                  "ON CONFLICT(user_id) DO UPDATE SET off = excluded.off, at = excluded.at",
-                 (int(user_id), 1 if off else 0, time.time() if now is None else float(now)))
+                 (int(user_id), 1 if off else 0, t))
     if off:
         conn.execute("DELETE FROM activity_days WHERE user_id = ?", (int(user_id),))
+    from engine import consent
+    consent.record(conn, user_id, "activity", "no" if off else "yes", t)
     conn.commit()
 
 
 def on_for(conn, user_id) -> bool:
-    """Is anything being kept for this member right now?"""
-    return bool(user_id) and enabled() and not opted_out(conn, user_id)
+    """Is anything being kept for this member right now? Both locks, and their yes."""
+    return bool(user_id) and enabled() and consented(conn, user_id)
 
 
 # ---- a beat from the page -----------------------------------------------------------

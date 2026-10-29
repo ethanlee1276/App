@@ -442,7 +442,19 @@ def create_user(conn, email, password, confirmed=False) -> tuple[int, dict]:
         # signup form would reveal anyway by refusing, and the cost of
         # coyness here is a person who cannot tell why they cannot sign up.
         return 409, {"error": "There is already an account with that email."}
+    _consented(conn, cur.lastrowid)
     return 200, {"id": int(cur.lastrowid), "email": e}
+
+
+def _consented(conn, user_id) -> None:
+    """The 21+ and terms confirmation, in the consent log too (engine/consent:
+    which policy, when) — never in the way of the account it records."""
+    try:
+        from . import consent
+        consent.record(conn, user_id, "terms", "21 or older; the Terms and Privacy Policy")
+        conn.commit()
+    except sqlite3.Error:
+        pass
 
 
 def create_phone_user(conn, phone: str, confirmed=False) -> tuple[int, dict]:
@@ -465,6 +477,7 @@ def create_phone_user(conn, phone: str, confirmed=False) -> tuple[int, dict]:
         conn.commit()
     except sqlite3.IntegrityError:
         return 409, {"error": "There is already an account with that number."}
+    _consented(conn, cur.lastrowid)
     return 200, {"id": int(cur.lastrowid), "email": SV.placeholder_email(phone), "phone": phone}
 
 
@@ -941,7 +954,9 @@ def delete_user(conn, user_id: int) -> None:
                   "activity_days", "activity_prefs", "engagement_away",
                   # Their bets' closing prices (engine/betclv) and the injury
                   # statuses last told them (engine/newsalerts).
-                  "bet_clv", "news_seen"):
+                  "bet_clv", "news_seen",
+                  # What they said yes and no to (engine/consent).
+                  "consent_log"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     # A watch party they started stays for its friends, with them off it.
@@ -1109,6 +1124,10 @@ def export_user(conn, user_id: int) -> dict:
     if "activity_days" in have:
         from . import activity as _act
         out.update(_act.export_user(conn, user_id))
+    # Every yes and no they gave us, with the policy's date (engine/consent).
+    if "consent_log" in have:
+        from . import consent as _consent
+        out["consent_log"] = _consent.history(conn, user_id)
     # The closing prices seen for their saved slips (engine/betclv).
     if "bet_clv" in have:
         rows = [dict(zip(("bet", "leg", "entry", "close", "fair", "at"), r)) for r in conn.execute(

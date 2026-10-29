@@ -284,9 +284,10 @@ def members(conn, now: float | None = None, user_ids=None) -> dict:
         for r in ACT.rows(conn, None, ACT.KEEP_DAYS, now):
             if r["user_id"] in out:
                 out[r["user_id"]]["rows"].append(r)
-    for (uid,) in conn.execute("SELECT user_id FROM activity_prefs WHERE off = 1"):
-        if uid in out:
-            out[uid]["opted_out"] = True
+    # Only members who said yes are read at all (engine/activity: consent first).
+    yes = {u for (u,) in conn.execute("SELECT user_id FROM activity_prefs WHERE off = 0")}
+    for uid in out:
+        out[uid]["opted_out"] = uid not in yes
     if _table(conn, "subscriptions"):
         cols = {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")}
         plan = "plan" if "plan" in cols else "''"
@@ -413,7 +414,7 @@ def _body(ms: dict, today: _dt.date, since, days: int, model: dict | None, conn=
     risk = sum(monthly(ms[u]) for u, v in st.items() if v in ("lapsing", "dormant"))
     out.append(f"  revenue at risk (paying members lapsing or dormant): ${risk:.0f} a month")
     if opted:
-        out.append(f"  ({opted} turned it off in Settings and are not counted)")
+        out.append(f"  ({opted} have not said yes to keeping their activity, or said no, and are not counted)")
     # 2. The power-user curve (L28).
     hist = [0] * 29
     for f in fs.values():

@@ -59,7 +59,10 @@ CLIENT_EVENTS = ("visit", "view", "ask", "checkout_click",
                  "billing_portal", "discord",
                  # A game's page showing the reader their own bets in it
                  # (detail.js, "Your action"): the research's "sweat".
-                 "sweat")
+                 "sweat",
+                 # The second paper's (the ESPN Playbook): "Make it yours"
+                 # answered (what they are here for), a limit or break set.
+                 "onboarding", "limit_set")
 #: What only the server knows: a Stripe status change (see transition()).
 SERVER_EVENTS = ("trial_started", "subscribed", "trial_converted", "canceled", "renewed",
                  # An alert that reached a phone, by its kind (the page column

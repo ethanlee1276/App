@@ -2106,6 +2106,68 @@ async function pwLater(btn) {
   }
 }
 
+/* MAKE IT YOURS (app.js mineTick; Ethan's research, 2026-10-29: "ask at
+   most three questions ... the rest at the moment each one is needed" and
+   "nothing fires before consent"). Asked once, on a signed-in member's
+   second visit: what they are here for and the books they use (synced
+   settings, zero-party: what they tell us), and — only while the site keeps
+   activity at all — whether to keep theirs, unticked until they tick it.
+   Their answer to that goes to the consent log with the policy's date. */
+const MINE_GOALS = [["props", "Player props"], ["clv", "Beating the close"], ["parlays", "Parlays"],
+  ["live", "Live games"], ["fantasy", "Fantasy"]];
+const MINE_BOOKS = ["draftkings", "fanduel", "betmgm", "caesars", "fanatics", "espnbet", "thescorebet", "hardrock",
+  "betrivers", "bet365", "fliff", "novig"].filter((b) => typeof BOOKS !== "undefined" && BOOKS[b]);
+async function mineSheet() {
+  if (document.querySelector("#mine, #pushask, #a2hs")) return;
+  const s = settings();
+  const ask = !!(_pwStatus && _pwStatus.activity_switch && !_pwStatus.activity);
+  const chip = (group, k, label, on) => `<button type="button" class="mine-chip${on ? " on" : ""}" data-mine="${group}"
+    data-v="${escapeAttr(k)}" aria-pressed="${on}">${escapeHtml(label)}</button>`;
+  const host = document.createElement("div");
+  host.id = "mine";
+  host.className = "a2hs";
+  host.innerHTML = `<div class="a2hs-card mine-card" role="dialog" aria-modal="false" aria-labelledby="mine-t">
+    <button class="a2hs-x" data-mine-go="no" aria-label="Not now">${icon("cross", 14)}</button>
+    <b id="mine-t">Make Qellys yours</b>
+    <p class="mine-q">What are you here for?</p>
+    <div class="mine-chips">${MINE_GOALS.map(([k, l]) => chip("goals", k, l, s.goals.includes(k))).join("")}</div>
+    <p class="mine-q">Your books</p>
+    <div class="mine-chips">${MINE_BOOKS.map((b) => chip("books", b, BOOKS[b][0], s.books.includes(b))).join("")}</div>
+    ${ask ? `<label class="mine-ok"><input type="checkbox" data-mine-consent /> Keep how I use the site to time my alerts.
+      You can see all of it, and delete it, in Settings → Your activity.</label>` : ""}
+    <div class="a2hs-go"><button class="btn primary" data-mine-go="yes">Save</button>
+      <button class="btn ghost" data-mine-go="no">Not now</button></div></div>`;
+  document.body.appendChild(host);
+  requestAnimationFrame(() => host.classList.add("in"));
+  host.addEventListener("click", async (e) => {
+    const c = e.target.closest("[data-mine]");
+    if (c) {
+      c.classList.toggle("on");
+      c.setAttribute("aria-pressed", c.classList.contains("on") ? "true" : "false");
+      return;
+    }
+    const go = e.target.closest("[data-mine-go]");
+    if (!go) return;
+    try { localStorage.setItem("qb.mine", go.dataset.mineGo === "yes" ? "done" : "no"); } catch (err) {}
+    if (go.dataset.mineGo === "yes") {
+      const picked = (g) => [...host.querySelectorAll(`[data-mine="${g}"].on`)].map((b) => b.dataset.v);
+      setSetting("goals", picked("goals"));
+      setSetting("books", picked("books"));
+      track("onboarding", picked("goals").join("-").slice(0, 32) || "none");
+      const ok = host.querySelector("[data-mine-consent]");
+      if (ok && ok.checked) {
+        try {
+          const r = await fetch("/api/account/activity", { method: "POST", credentials: "same-origin",
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ off: false }) });
+          if (r.ok && _pwStatus) { _pwStatus.activity = true; loadRoom("js/activity.js"); }
+        } catch (err) { /* asked again from Settings */ }
+      }
+      tfToast("Saved. Change any of it in Settings.");
+    }
+    host.remove();
+  });
+}
+
 /* A plan tapped before the account exists: the sign-up first, the plan kept
    (rememberPendingPlan), checkout straight after (acctLandAfterAuth). */
 let _suNote = "";
@@ -3499,6 +3561,12 @@ function setListHTML() {
     setItem({ ico: "list", tone: "green", title: "Leagues in the nav",
               val: !s.leagues.length || s.leagues.length >= SPORT_CODES.length ? "All"
                 : `${s.leagues.length} of ${SPORT_CODES.length}`, chev: true, attrs: 'data-set-open="leagues"' }),
+    setItem({ ico: "tag", tone: "green", title: "Your books",
+              val: !s.books.length ? "None" : s.books.length > 2 ? `${s.books.length} books`
+                : escapeHtml(s.books.map((b) => (BOOKS[b] || [b])[0]).join(", ")), chev: true, attrs: 'data-set-open="books"' }),
+    setItem({ ico: "target", tone: "green", title: "Here for",
+              val: !s.goals.length ? "Everything" : escapeHtml(s.goals.map((g) => (MINE_GOALS.find(([k]) => k === g) || [g, g])[1]).join(", ")),
+              chev: true, attrs: 'data-set-open="goals"' }),
     setItem({ ico: "star", tone: "green", title: "Your teams",
               val: !s.teams.length ? "None" : s.teams.length > 2 ? `${s.teams.length} teams`
                 : escapeHtml(s.teams.map(setTeamName).join(", ")), chev: true, attrs: 'data-set-open="teams"' }),
@@ -3544,7 +3612,9 @@ function setListHTML() {
 /* YOUR ACTIVITY (engine/activity; Ethan, 2026-10-29: "recording what users
    do on the app, how long they spend on it, and we can base notifications
    off that"). Everything the site keeps of your own time here, said back in
-   words, and the switch that stops it and deletes what was kept. Only drawn
+   words, and the member's own yes (nothing is kept before it; each yes and
+   no goes in the consent log, engine/consent) and no, which deletes what
+   was kept. Only drawn
    while the site keeps it at all (QB_ACTIVITY=1 with the Privacy Policy's
    section on it): a switch for something that is not happening is noise. */
 let _actInfo = null;
@@ -3571,10 +3641,10 @@ function actHTML() {
     fact("Opened from our alerts", `${s.from_alerts} of ${s.visits} visits`),
   ] : [];
   return setGroup("", [setItem({ tag: "div", ico: "chart", tone: "green", title: "Learn from what I do here",
-      sub: on ? "On" : "Off: nothing is kept",
+      sub: on ? "On — you said yes" : "Off: nothing is kept until you say yes",
       end: setSwitch(on, 'data-act-flip="1" aria-label="Learn from what I do here"') })],
     on ? "Kept: how long you spend here each day, on which pages and leagues, at what hour, and whether one of our alerts brought you. Used for your own alerts: the hour you usually look, fewer of the kinds you never open, and a line with your team’s next game when you’ve been away. Never sold, never shared, never an ad. Off deletes all of it."
-      : "Nothing is kept. Turn it back on and it starts again from today.")
+      : "Nothing is kept until you say yes. Turn it on and it starts from today; turn it off and everything kept is deleted.")
     + (facts.length ? setGroup(`Your last ${s.days} days`, facts,
       `Kept ${s.kept_days} days, then deleted, and all of it is in Download my data.`) : "")
     + `<p class="set-foot act-note" role="status"></p>`;
@@ -3654,6 +3724,15 @@ function setPageHTML(page) {
   if (page === "gift") {
     setTimeout(giftFill, 0);
     return head("Gift a month") + `<div id="set-gift"><p class="set-foot">Loading…</p></div>`;
+  }
+  if (page === "books" || page === "goals") {
+    const list = page === "books" ? MINE_BOOKS.map((b) => [b, BOOKS[b][0]]) : MINE_GOALS;
+    return head(page === "books" ? "Your books" : "Here for") + setGroup("", list.map(([k, label]) => {
+      const on = s[page].includes(k);
+      return setItem({ title: escapeHtml(label), end: on ? setCheck() : "",
+                       attrs: `data-set-multi="${page}" data-set-val="${escapeAttr(k)}" aria-pressed="${on}"` });
+    }), page === "books" ? "The books you bet at lead the Bet it sheet, tagged “Your book”."
+      : "What you came for. It stays with your account, in Download my data, and you can change it here any time.");
   }
   if (page === "activity") {
     setTimeout(() => actFill(), 0);
@@ -3966,6 +4045,16 @@ function bindSettings() {
       if (flip.disabled) return;
       const k = flip.dataset.setSwitch;
       setSetting(k, settings()[k] === "on" ? "off" : "on");
+      redraw();
+      return;
+    }
+    const multi = hit("[data-set-multi]");
+    if (multi) {
+      const k = multi.dataset.setMulti, v = multi.dataset.setVal;
+      const cur = settings()[k].slice();
+      const i = cur.indexOf(v);
+      if (i >= 0) cur.splice(i, 1); else cur.push(v);
+      setSetting(k, cur);
       redraw();
       return;
     }

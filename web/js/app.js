@@ -200,6 +200,8 @@ const SETTINGS_DEFAULTS = {
   teams: [],            // "nfl:DET" — sport-tagged, because CIN is two teams
   leagues: [],          // [] = every league in the nav
   teamColors: "off",    // "on": the bar, the Live disc and the tab wear your first team's colours
+  books: [],            // the sportsbooks they use (js/account.js "Make it yours")
+  goals: [],            // what they are here for: props · clv · parlays · live · fantasy
 };
 let _settings = null;
 
@@ -211,8 +213,7 @@ function settings() {
   _settings = Object.assign({}, SETTINGS_DEFAULTS, stored);
   // Arrays survive a bad write: a string here would make `.includes`
   // match substrings and quietly hide the wrong leagues.
-  if (!Array.isArray(_settings.teams)) _settings.teams = [];
-  if (!Array.isArray(_settings.leagues)) _settings.leagues = [];
+  ["teams", "leagues", "books", "goals"].forEach((k) => { if (!Array.isArray(_settings[k])) _settings[k] = []; });
   return _settings;
 }
 
@@ -229,8 +230,7 @@ function setSetting(key, value) {
 function settingsAdopt(data) {
   if (!data || typeof data !== "object") return;
   _settings = Object.assign({}, SETTINGS_DEFAULTS, data);
-  if (!Array.isArray(_settings.teams)) _settings.teams = [];
-  if (!Array.isArray(_settings.leagues)) _settings.leagues = [];
+  ["teams", "leagues", "books", "goals"].forEach((k) => { if (!Array.isArray(_settings[k])) _settings[k] = []; });
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings)); }
   catch (e) {}
 }
@@ -1634,6 +1634,13 @@ function betSheetShow(html, label) {
   const body = host.querySelector(".betit-body");
   host.querySelector(".betit-panel").setAttribute("aria-label", label || "Bet it");
   body.innerHTML = html;
+  // Their own books lead every list (Settings → Your books), tagged.
+  const own = settings().books;
+  body.querySelectorAll(".betit-grid").forEach((g) => [...g.querySelectorAll(".bk-tile")]
+    .filter((t) => own.includes(t.dataset.book)).reverse().forEach((t) => {
+      g.prepend(t);
+      if (!t.querySelector(".bk-tag")) t.insertAdjacentHTML("beforeend", `<i class="bk-tag mine">Your book</i>`);
+    }));
   const mine = betBookRemembered();
   if (mine) {
     const tile = body.querySelector(`.betit-grid:not(.pages) .bk-tile[data-book="${mine}"]`);
@@ -17810,10 +17817,24 @@ window.pushAskArm = () => { try { localStorage.setItem(PUSH_ASK + ".due", "1"); 
 window.pushAskTick = (ctx) => {
   let due = !!ctx;
   try { due = due || localStorage.getItem(PUSH_ASK + ".due") === "1"; } catch (e) { return; }
-  if (!due || !pushAskDue()) return;
+  if (!due || !pushAskDue()) { if (!ctx) mineTick(); return; }
   try { localStorage.removeItem(PUSH_ASK + ".due"); } catch (e) {}
   loadRoom("js/account.js", "css/account.css").then((ok) => { if (ok && window.pushAskSheet) pushAskSheet(ctx || null); });
 };
+/* MAKE IT YOURS (js/account.js mineSheet; Ethan's research, 2026-10-29:
+   ask "sports, teams, books" and "what they're here for" at the moment they
+   matter, and nothing kept before a yes). On a signed-in reader's second
+   visit, never over another sheet, once. */
+function mineTick() {
+  let n = 0;
+  try {
+    n = Number(localStorage.getItem("qb.visits") || 0);
+    if (!sessionStorage.getItem("qb.v")) { sessionStorage.setItem("qb.v", "1"); localStorage.setItem("qb.visits", String(++n)); }
+    if (n < 2 || localStorage.getItem("qb.mine")) return;
+  } catch (e) { return; }
+  if (!(_acctUser && _acctUser.signed_in) || document.querySelector("#a2hs, #pushask, #mine")) return;
+  loadRoom("js/account.js", "css/account.css").then((ok) => { if (ok && window.mineSheet) mineSheet(); });
+}
 /* YOUR OWN ALERTS (engine/pushmine): a phone signed in when it subscribes
    may ask for its member's watches and tickets. Signing in or out says so
    again, so a shared phone stops showing the last person's bets. */

@@ -180,10 +180,12 @@ def _db():
     return conn
 
 
-def _member(conn, uid, signup_ago, days_ago, **kw):
+def _member(conn, uid, signup_ago, days_ago, yes=True, **kw):
     created = NOW - signup_ago * 86400
     conn.execute("INSERT INTO users (id, email, verifier, created_at) VALUES (?, ?, 'x', ?)",
                  (uid, f"m{uid}@example.com", created))
+    if yes:                                       # they said yes (engine/activity: consent first)
+        conn.execute("INSERT INTO activity_prefs (user_id, off, at) VALUES (?, 0, ?)", (uid, created))
     for r in _rows(days_ago, **kw):
         conn.execute("INSERT INTO activity_days (user_id, day, seconds, visits, taps, views, sports, hours) "
                      "VALUES (?,?,?,?,?,?,?,?)", (uid, r["day"], r["seconds"], r["visits"], r["taps"],
@@ -228,6 +230,7 @@ def test_the_report_says_what_it_is():
     with _Locks():
         assert "Nothing has been kept yet" in E.report(conn, now=NOW)
         _population(conn, 80)
+        _member(conn, 81, 60, list(range(1, 50)), yes=False)
         conn.execute("CREATE TABLE subscriptions (user_id INTEGER PRIMARY KEY, status TEXT, plan TEXT, "
                      "updated_at REAL NOT NULL, period_end REAL)")
         conn.executemany("INSERT INTO subscriptions (user_id, status, plan, updated_at) VALUES (?,?,?,?)",
@@ -236,7 +239,7 @@ def test_the_report_says_what_it_is():
         rep = E.report(conn, now=NOW)
     for line in ("Activity: ON.", "members by stage", "revenue at risk", "the power-user curve", "DAU/MAU",
                  "new members by signup week", "visit model: not fitted yet", "paying members: 20",
-                 "lifetime value"):
+                 "lifetime value", "(1 have not said yes to keeping their activity, or said no, and are not counted)"):
         assert line in rep, (line, rep)
     assert "Activity: OFF" in E.report(conn, now=NOW), "the switch's state is the first line"
     demo = E.demo(n=150)
@@ -335,13 +338,16 @@ def test_a_phone_that_never_opens_them_hears_them_once_a_day():
     PA.send(conn, [msg], now_s=NOW, **kw)
     assert conn.execute("SELECT unopened FROM push_subs").fetchone()[0] == 0, "activity off: nothing counted"
     with _Locks():
+        PA.send(conn, [dict(msg, id="settled:d2")], now_s=NOW + 30, **kw)
+        assert conn.execute("SELECT unopened FROM push_subs").fetchone()[0] == 0, "no yes from them: nothing counted"
+        ACT.set_off(conn, 8, False, NOW)
         conn.execute("UPDATE push_subs SET unopened = ?", (PA.IGNORED_N - 1,))
         PA.send(conn, [dict(msg, id="settled:e")], now_s=NOW + 60, **kw)
         assert conn.execute("SELECT unopened FROM push_subs").fetchone()[0] == PA.IGNORED_N
         st = PA.send(conn, [dict(msg, id="settled:f")], now_s=NOW + 3600, **kw)
-        assert st.get("quieted") == 1 and len(sent) == 2, (st, sent)
+        assert st.get("quieted") == 1 and len(sent) == 3, (st, sent)
         st = PA.send(conn, [dict(msg, id="settled:g")], now_s=NOW + 60 + PA.IGNORED_GAP_S + 1, **kw)
-        assert st["sent"] == 1 and len(sent) == 3, "a day later it goes"
+        assert st["sent"] == 1 and len(sent) == 4, "a day later it goes"
         ACT.beat(conn, 8, {"s": 5, "n": 1, "a": 1}, NOW + 2 * PA.IGNORED_GAP_S)
         assert conn.execute("SELECT unopened FROM push_subs").fetchone()[0] == 0, "they opened one"
         ACT.set_off(conn, 8, True)

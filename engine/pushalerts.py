@@ -508,8 +508,8 @@ def _tracked(conn):
     if not ACT.enabled():
         return lambda uid: False
     ACT.ensure_tables(conn)
-    off = {u for (u,) in conn.execute("SELECT user_id FROM activity_prefs WHERE off = 1")}
-    return lambda uid: bool(uid) and uid not in off
+    yes = {u for (u,) in conn.execute("SELECT user_id FROM activity_prefs WHERE off = 0")}
+    return lambda uid: bool(uid) and uid in yes
 
 
 def _age_s(iso, now_ts: float) -> float:

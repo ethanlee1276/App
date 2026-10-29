@@ -76,6 +76,13 @@
       <li><b>That you confirmed you are 21 or over, and when you accepted
         the Terms.</b> (<code>users.age_confirmed</code>,
         <code>users.terms_accepted_at</code>)</li>
+      <li><b>A record of each yes and no you give us</b> about your data or
+        our messages — the 21+ and Terms confirmation, alerts turned on (which
+        kinds) or off, a break from alerts or a limit you set — with the date
+        of this policy at the time, and when. A change of mind is a new line,
+        never an edit, so the record says what you chose and what you were
+        shown. It is in Download my data and deleted with your account.
+        (<code>consent_log</code>)</li>
       <li><b>Session tokens, stored hashed</b>, with an expiry. The cookie
         in your browser is the only copy of the raw token; a stolen
         database does not yield a working session.
@@ -189,12 +196,12 @@
       its last leg, or settled — with whether the price you took beat the
       closing price, for which we keep, for each saved parlay's legs, the
       price you took and the last price and market chance the books showed
-      before its game started, for 90 days — and, if you chose them, that
+      before its game started, for 90 days (<code>bet_clv</code>) — and, if you chose them, that
       the line moved two points of chance or a point from the price you took
       before the start, that a game on your parlay or of a team you follow
       is in its last minutes within one score, that a player you follow or
       have in an open parlay changed injury status (we keep the last status
-      we told you about for each), and, from ten in the morning where you
+      we told you about for each, <code>news_seen</code>), and, from ten in the morning where you
       are, your teams’ games that day with the times; a game
       of a team you follow starting in about ten minutes (the two teams;
       which league a team is in comes from the teams you followed, kept with
@@ -528,6 +535,9 @@
         comes first; deleted when you change your password.</li>
       <li><b>Failed code attempts</b> — rolled off after one hour.</li>
       <li><b>Processed webhook ids</b> — 60 days.</li>
+      <li><b>The closing prices of your saved parlays’ legs</b> — 90 days.
+        <b>The record of your yeses and noes</b> — until you delete your
+        account.</li>
       <li><b>Feed posts</b> — 120 days, or until you delete them or your
         account. <b>A game’s chat</b> — 14 days. <b>Direct messages</b> — the
         latest 500 between two people, until either account is deleted.</li>

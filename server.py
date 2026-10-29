@@ -2576,19 +2576,31 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = (GA.remove(conn, who["id"], lg, ev) if body.get("end")
                              else GA.add(conn, who["id"], lg, ev, str(body.get("token") or "")))
                 return self._send(code, json.dumps(out).encode(), ".json")
+            from engine import consent as CS
             if path == "pause":
                 # Alerts → Pause (engine/pushalerts.pause): nothing to this
                 # phone for a day or a week, or on again. The phone's own
                 # address is the key, as for unsubscribe.
                 code, out = PA.pause(conn, endpoint, body.get("hours"))
+                if code == 200:
+                    sub = PA.subscription(conn, endpoint) or {}
+                    CS.record(conn, sub.get("user_id"), "limits",
+                              f"alerts paused {body.get('hours')} hours" if out.get("paused_until") else "alerts resumed")
+                    conn.commit()
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "unsubscribe":
+                sub = PA.subscription(conn, endpoint) or {}
                 code, out = PA.unsubscribe(conn, endpoint)
+                if CS.record(conn, sub.get("user_id"), "alerts", "off on a phone"):
+                    conn.commit()
             else:
                 who = self._account(conn)
                 code, out = PA.subscribe(conn, endpoint, kind=str(body.get("kind") or "web"),
                                          user_id=(who or {}).get("id"),
                                          topics=body.get("topics") or PA.KINDS, leagues=body.get("leagues") or ())
+                # The kinds a member turned on, in the consent log (engine/consent).
+                if code == 200 and who and CS.record(conn, who["id"], "alerts", "on: " + ",".join(out.get("topics") or [])):
+                    conn.commit()
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()
@@ -2791,10 +2803,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "activity":
                 # Your activity (engine/activity): whether the site keeps
-                # it, whether you turned it off, and everything it knows
-                # about your last four weeks, in words.
+                # it, whether you said yes (nothing is kept until you do),
+                # and everything it knows about your last four weeks, in words.
                 from engine import activity as ACT
-                out = {"switch": ACT.enabled(), "off": ACT.opted_out(conn, who["id"])}
+                out = {"switch": ACT.enabled(), "off": not ACT.consented(conn, who["id"])}
                 if out["switch"] and not out["off"]:
                     out["summary"] = ACT.summary(conn, who["id"])
                 return self._send(200, json.dumps(out).encode(), ".json")
@@ -3089,12 +3101,16 @@ class Handler(BaseHTTPRequestHandler):
                 A.touch_session(conn, token)
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "activity":
-                # Your own switch (engine/activity): off deletes every row
-                # kept and stops the next; on starts again from today.
+                # Your own yes or no (engine/activity), each in the consent
+                # log: no deletes every row kept and stops the next; yes
+                # starts from today.
                 from engine import activity as ACT
-                ACT.set_off(conn, who["id"], bool(body.get("off")))
+                # A yes to a policy section that is not there yet means
+                # nothing, so nothing is written until both locks are open.
+                if ACT.enabled():
+                    ACT.set_off(conn, who["id"], bool(body.get("off")))
                 A.touch_session(conn, token)
-                out = {"switch": ACT.enabled(), "off": ACT.opted_out(conn, who["id"])}
+                out = {"switch": ACT.enabled(), "off": not ACT.consented(conn, who["id"])}
                 if out["switch"] and not out["off"]:
                     out["summary"] = ACT.summary(conn, who["id"])
                 return self._send(200, json.dumps(out).encode(), ".json")
@@ -4938,8 +4954,8 @@ class Handler(BaseHTTPRequestHandler):
             out["analytics"] = AN.enabled()
             # AND WHETHER IT MAY KEEP THIS MEMBER'S OWN TIME HERE
             # (engine/activity): both locks open (QB_ACTIVITY=1 and the
-            # Privacy Policy's section on it), signed in, and not turned off
-            # in Settings. `activity_switch` is the site's half alone, for
+            # Privacy Policy's section on it), signed in, and a yes from the
+            # member (Settings or the "Make it yours" card). `activity_switch` is the site's half alone, for
             # the Settings row and the Alerts page's "away" switch.
             from engine import activity as ACT
             out["activity_switch"] = ACT.enabled()

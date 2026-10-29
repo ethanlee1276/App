@@ -2,6 +2,44 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "Make it yours",
+      "body": "Once, on your second visit (or any time in Settings), tell us what you are here for and the books you use; your books lead the Bet it sheet. Nothing about how you use the site is kept unless you say yes, and every yes and no you give us is written down with the date of the policy you were shown.",
+      "alert": "Make it yours: your books first on Bet it, and nothing kept without your yes.",
+      "url": "/#account"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "The live page, your second screen",
+      "body": "Every live game's page shows your own tickets in it with what each leg still needs, every prop priced on the game with the player's pace and the market's own chance as it plays out, the market's line on the win chart, and an address of its own to share.",
+      "alert": "Every prop on a live game, with its pace and the market's chance, free.",
+      "url": "/#live"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "Your bets tell you when it matters",
+      "body": "A saved parlay hears from us when its game is ten minutes away, when a leg is close to hitting, when the line moves away from your price before the start, when its game is close late, and when a player on it changes injury status; and when it settles, whether your price beat the closing line.",
+      "alert": "Your bets, told when it matters: game in ten, close to hitting, the line moved.",
+      "url": "/#mybets"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "Alerts on your terms",
+      "body": "Take a break from alerts for a day or a week, get five a day at most (eight on a plan), and quiet hours where you are rather than where we are. A phone that never opens a kind of alert gets fewer of them.",
+      "alert": "Alerts on your terms: a day or a week off, five a day at most, quiet where you are.",
+      "url": "/#alerts"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "refuse",
+      "title": "No gambler scores, no personal prices",
+      "body": "We do not score members on how much they might bet, change a price or an offer by how much someone has lost, or put an advertiser's tracker on the site. What we keep about you is in the Privacy Policy and in Download my data, and how you use the site is kept only if you said yes."
+    },
+    {
       "date": "2026-10-28",
       "kind": "ship",
       "title": "Pick'em with your friends",

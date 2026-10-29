@@ -226,7 +226,7 @@ app, when, and whether they open its alerts. Not their other apps (§2).
 | | What | Where |
 |---|---|---|
 | Your activity | Per member, a row a day: seconds with the site in front of them (visible and touched in the last two minutes; half an hour on a live game), visits, visits an alert opened, seconds by page, by league and by hour. Kept 120 days, deleted with the account, in the export. | engine/activity.py, web/js/activity.js |
-| Two locks | Nothing is kept until `QB_ACTIVITY=1` **and** the Privacy Policy carries the section below (`id="your-activity"`). Then each member has a switch in Settings → Your activity, which shows them everything kept, in words; off deletes it all. | engine/activity.enabled, account.js actHTML |
+| Two locks, then a yes | Nothing is kept until `QB_ACTIVITY=1` **and** the Privacy Policy carries the section below (`id="your-activity"`) — and then, for each member, only after **they** say yes: in Settings → Your activity, or with the unticked box on the "Make it yours" card. Settings shows them everything kept, in words; no deletes it all. Each yes and no goes in the consent log with the policy's date. | engine/activity.consented, engine/consent, account.js actHTML / mineSheet |
 | Stages | new · power · regular · casual · lapsing · dormant · gone — "lapsing" measured against the member's **own** rhythm (2.5 × their usual gap, at least a week), so a Sunday-only football fan is not "drifting" on Friday. | engine/engagement.stage |
 | Still around? | BG/BB fitted on our own members; kept only if, on members it never saw, it predicts who comes back better than the stages do (`fit --save`). Checked against simulation: calibrated across every quintile. | engine/engagement.fit |
 | The owner's report | Stages with revenue in each and **revenue at risk**, the power-user curve, DAU/MAU, minutes a day, leagues, busiest hours, share of visits from alerts, new members still here in weeks 1, 2 and 4 by signup week, the model's view, ARPU, monthly churn and lifetime value. `demo` prints it on a made-up population. | `python3 -m engine.engagement report` |
@@ -239,8 +239,9 @@ Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
 
 ```html
 <h3 id="your-activity">2.8 Your activity here</h3>
-<p>While you are signed in, and unless you turn it off in Settings → Your
-  activity, we keep a daily record of your own time on this site: how many
+<p>Only if you say yes — in Settings → Your activity, or on the "Make it
+  yours" card — and while you are signed in, we keep a daily record of your
+  own time on this site: how many
   seconds a page of it was in front of you (only while the tab is visible and
   you have used it in the last two minutes, or watched a live game in the last
   half hour), on which of our pages and for which leagues, in which hours of
@@ -255,8 +256,10 @@ Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
   game or what is new — and, as totals, to see how the site is used. It is
   never sold, shared, or used for advertising, and nothing about what you pay
   changes how we treat you. Each day’s row is deleted after 120 days, all of
-  it when you turn the switch off or delete your account, and it is in
-  Download my data.</p>
+  it when you say no or delete your account, and it is in Download my data.
+  We keep a record of each yes and no you give us — what it was about, the
+  date of this policy at the time, and when (<code>consent_log</code>) —
+  until you delete your account; it is in Download my data too.</p>
 ```
 
 ### Before switching it on (the runbook's step HW)
