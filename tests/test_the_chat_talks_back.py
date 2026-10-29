@@ -316,7 +316,13 @@ def test_in_a_browser_an_at_offers_names_and_activity_has_the_switch():
         if os.path.exists(path):
             os.remove(path)
         if made:
-            shutil.rmtree(pbp, ignore_errors=True)
+            # Only if empty (2026-10-29): the browser gate runs three at a time and
+            # five tests share this folder, so the one that made it could delete it
+            # under another's file (a clean checkout has no web/data at all).
+            try:
+                os.rmdir(pbp)
+            except OSError:
+                pass
     assert not errs, errs
     assert got["offered"] == ["@samantha_k", "@sam"], "the room's latest writer first, never your own name"
     assert got["typed"] == "nice @sam " and got["gone"], got

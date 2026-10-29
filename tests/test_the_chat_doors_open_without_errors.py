@@ -18,7 +18,6 @@ state.view, which a view transition leaves on the game for a moment.
 """
 import json
 import os
-import shutil
 import sys
 import time
 from datetime import datetime, timezone
@@ -133,7 +132,13 @@ def test_in_a_browser_every_door_opens_the_whole_sheet_and_nothing_throws():
         srv.shutdown()
         os.remove(path)
         if made:
-            shutil.rmtree(pbp, ignore_errors=True)
+            # Only if empty (2026-10-29): the browser gate runs three at a time and
+            # five tests share this folder, so the one that made it could delete it
+            # under another's file (a clean checkout has no web/data at all).
+            try:
+                os.rmdir(pbp)
+            except OSError:
+                pass
     assert not errs, errs[:3]
     assert got["card"] and got["bar"], got
     assert got["buttons"] == 1, f"the card was rebuilt across redraws ({got['buttons']} buttons)"

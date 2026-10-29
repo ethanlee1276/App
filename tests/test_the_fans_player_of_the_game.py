@@ -239,7 +239,13 @@ def test_in_a_browser_a_final_games_chat_asks_and_shows_the_room():
         if os.path.exists(path):
             os.remove(path)
         if made:
-            shutil.rmtree(pbp, ignore_errors=True)
+            # Only if empty (2026-10-29): the browser gate runs three at a time and
+            # five tests share this folder, so the one that made it could delete it
+            # under another's file (a clean checkout has no web/data at all).
+            try:
+                os.rmdir(pbp)
+            except OSError:
+                pass
     assert not errs, errs
     assert "Player of the game?" in got["ask"] and "+5 karma" in got["ask"], got
     assert got["names"] == [n["name"] for n in names], got

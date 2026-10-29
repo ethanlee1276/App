@@ -637,7 +637,13 @@ def test_in_a_browser_the_chat_the_strip_the_tab_and_a_level_crossed():
         srv.shutdown()
         os.remove(path)
         if made:
-            shutil.rmtree(pbp, ignore_errors=True)
+            # Only if empty (2026-10-29): the browser gate runs three at a time and
+            # five tests share this folder, so the one that made it could delete it
+            # under another's file (a clean checkout has no web/data at all).
+            try:
+                os.rmdir(pbp)
+            except OSError:
+                pass
     assert not errs, errs[:3]
     assert "+10Joined a live game" in got["note"], got
     assert got["chips"] == [str(v["level"]), "3", "1"] and got["flair"] == ["🏈"], got

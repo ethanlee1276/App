@@ -236,7 +236,13 @@ def test_in_a_browser_the_bell_sits_under_the_chat_card_and_sets():
         if os.path.exists(path):
             os.remove(path)
         if made:
-            shutil.rmtree(pbp, ignore_errors=True)
+            # Only if empty (2026-10-29): the browser gate runs three at a time and
+            # five tests share this folder, so the one that made it could delete it
+            # under another's file (a clean checkout has no web/data at all).
+            try:
+                os.rmdir(pbp)
+            except OSError:
+                pass
     assert not errs, errs
     assert "Remind me 10 minutes before it starts" in got["bell"], got
     assert posted and posted[0] == {"room": "nfl_990399", "on": True}, posted
