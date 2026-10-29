@@ -8498,6 +8498,135 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IC 2>&1 | tee /tmp/ic.txt
 ```
 
+**ID. The Duo's bar, your free access kept, your month, and the reports
+that said OFF** (step 290; you, with your closed iPhone Duo's tab bar
+circled: "keep building and give me the code to run after ... move this
+bar ... to the right side ... only for the iPhone Duo"; and "I want to
+keep the free year code, and we should just hide it"). What it did:
+
+- **The iPhone Duo's side strip.** When the screen gives the page a strip
+  on one side only (your closed Duo's, beside the clock), the tab bar
+  stands in it on end, under the clock: Home, Picks, Live, Record, Ask,
+  with the page clear of it (on the left too, for Split View). Today iOS
+  gives that strip only to an app built with Xcode for iOS 27.1 or later;
+  a Home Screen web app is still drawn beside it with the strip left
+  black, so on your Duo nothing moves yet. It switches on by itself the
+  day the store app is built that way, or iOS gives web apps the strip. A
+  phone in your hand, or on its side, keeps its bar at the bottom.
+- **Your month** (the Karma tab): the month's live games watched, days
+  with karma, karma, pick'em record and Call it record, and **Share my
+  month** for a picture. From the 1st to the 7th it is the month just
+  ended, and the Live tab's karma card says so in its one line. Never a
+  bet or what anybody won, and nothing new is kept.
+- **Monday's "Your week" at your hour.** A member who said yes to keeping
+  their activity hears Monday's recap at the hour they usually look (the
+  Privacy Policy's §2.10 already says so); everybody else at nine, as
+  before.
+- **The reports that said OFF.** In your catch-up, `engine.analytics
+  report` said "Switched OFF" and `engine.engagement report` "activity
+  OFF" while the site was counting: they run as the site's user, which
+  cannot read the settings file. They now ask the running site and say so
+  ("Switched ON (the running site says so; QB_ANALYTICS).").
+- **What's new** (the Live tab, once a device, for accounts past getting
+  started) lists this week's: your month, the Edge Report, the
+  leaderboard, pick'em groups, limits and breaks, and Your data.
+
+What you said is still to do, in order.
+
+**Your free access, kept, and the code hidden.** The free-year code cannot
+be hidden now: it was in this public repository, so its history keeps it
+(the files no longer do). Two settings do what you want. First, your own
+account free for good, with no code at all: your account's email on the
+comp list. See what is on the list now (it prints the line, on your own
+screen only):
+
+```
+cd /srv/qellys && sudo grep '^QB_COMP_EMAILS=' /etc/qellys/env
+```
+
+Then set it: at the prompt, paste your account's email, and any address
+the line above printed, with commas between (this replaces the list):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_COMP_EMAILS
+```
+
+Then retire the public code. Whoever redeemed it keeps their months; only
+new redemptions stop:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh --unset QB_CODES
+```
+
+Or, to keep a code for friends, a new one only you know instead of that:
+make one up, 3 to 32 letters and numbers, and paste it at this prompt as
+the code, a colon, the months, a colon and how many accounts may use it
+(for a year and a hundred accounts, your code then `:12:100`). Never
+write it anywhere public, this chat included:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_CODES
+```
+
+**The Discord invite** (HK's step: Discord → the server's name → Invite
+people → Edit invite link → Expire after Never, Max uses No limit →
+Generate a new link). Paste it at the prompt:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_DISCORD_INVITE
+```
+
+One restart for all of it:
+
+```
+sudo systemctl restart qellys
+```
+
+The check: each line says `set` (or QB_CODES is gone, if you retired it).
+Then, signed in as yourself, any paid page opens, and More → The Discord →
+Join the Discord opens the new invite:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh --show | grep -E '^  (QB_COMP_EMAILS|QB_CODES|QB_DISCORD_INVITE) '
+```
+
+**The email members get** is already going out (it needs nothing from
+you). To read it the way they get it:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview
+```
+
+**The App Store privacy label** waits for the Apple Developer Program
+($99 a year): App Store Connect needs the membership, which is why it
+said you had no access. The label is filled in when the app is first
+submitted, and no build has been, so there is nothing for it to describe
+yet. Every answer is in docs/APP_STORES.md, the Data forms row.
+
+**Still optional; nothing breaks without them:** the BALLDONTLIE feed
+(it needs a key), a postal address for the Privacy Policy's §14 and the
+Terms (a PO box or a mailbox service rather than your home: both pages
+are public), and a lawyer's read of both pages (docs/LAUNCH.md has the
+four questions for a gaming attorney licensed in Michigan).
+
+Read-only, any time; the first two print `1` once this version is live,
+the third `(9, 21)`, and the reports' first lines say what the running
+site says:
+
+```
+curl -s https://qellysbook.com/js/boot.js | grep -c 'var side = r >= 60'
+curl -s https://qellysbook.com/js/karma.js | grep -c 'function krMonthCanvas(m, handle)'
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import pushmine as PM; print(PM.WEEK_HOURS)"
+cd /srv/qellys && sudo -u qellys python3 -m engine.analytics report 7 | head -1
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement report 28 | head -1
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh ID 2>&1 | tee /tmp/id.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

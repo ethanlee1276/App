@@ -661,6 +661,13 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run ID "The Duo's bar, your month, Monday at your hour, and the reports that said OFF" 60 <<'SH'
+curl -s https://qellysbook.com/js/boot.js | grep -c 'var side = r >= 60'
+curl -s https://qellysbook.com/js/karma.js | grep -c 'function krMonthCanvas(m, handle)'
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import pushmine as PM; print(PM.WEEK_HOURS)"
+cd /srv/qellys && sudo -u qellys python3 -m engine.analytics report 7 | head -1
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement report 28 | head -1
+SH
 run IC "Your activity, the members' split, the leaderboards, and the change notice" 60 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'async function mbBoardFill('
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="close-board"'

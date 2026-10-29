@@ -150,6 +150,11 @@ stoppages, karma, streaks, pick'em, the Monday recap.
 2. **Each person's own best hour** for the alerts that are not tied to a
    game (picks up, last night, the Monday recap): learned on the phone from
    when it opens the app, sent to the box as a setting, never as a log.
+   **Built for the Monday recap, 2026-10-29**, from the activity record
+   instead (members who said yes; the policy's §2.10 already names this
+   use): engine/engagement.usual_hours, pushmine.week_pass. The picks-up
+   alert stays with the board (it is about tonight's games); last night's
+   results could follow the same way.
 3. **A/B the ask's wording** once analytics is on: two versions of the card,
    split by a coin flip on the phone, compared as daily totals.
 4. **A recovering bandit for recurring alert wording** (Duolingo's method)
@@ -422,4 +427,16 @@ Not built, and why:
   open rate takes thousands of sends of each; no alert kind sends that many
   a week yet. The daily totals by kind (HV) already say which alerts get
   opened. Revisit when one kind passes a thousand a week.
+
+## 11. Your month (2026-10-29, round six; Ethan: "keep building")
+
+| What | Built | Where |
+| --- | --- | --- |
+| A month's recap, the reason to come back on the 1st that a week's is on a Monday (Strava's month, Spotify's Wrapped) | The Karma tab's "Your month": live games watched here, days with karma, karma, the pick'em record and Call it record, from the tables the karma already reads; the month just ended for a new month's first week, else this one so far; a picture for the share sheet; the Live card's one line in the first week. Never a bet, a stake or a pick (karma never pays for bets, and a picture of winnings would be an ad for betting); nothing new kept, nothing sent | engine/yourmonth, karma.me `month`, js/karma.js krMonthHTML, krMonthCanvas |
+| Each person's own best hour (§4, item 2) | Monday's "Your week" at the hour a member usually looks, for members who said yes to keeping their activity; nine for everybody else | engine/engagement.usual_hours, pushmine.week_pass |
+
+Not built: a push on the 1st for the month. A new kind of alert is a new
+line in the policy's list of what we send, and the Live card's line and
+What's new already reach the members who come; the members who do not are
+the away alert's.
 
