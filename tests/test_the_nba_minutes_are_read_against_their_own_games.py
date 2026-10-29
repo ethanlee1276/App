@@ -157,7 +157,6 @@ def test_the_lean_report_reads_the_level_on_one_scale():
 def test_the_report_reads_the_minutes_base_at_the_seasons_start():
     """A lottery club's April (24 minutes) under a starter's 34 this season:
     the twenty-game window runs light, this season's games alone do not."""
-    import nbalean
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE player_game_logs (sport TEXT, season INTEGER, period TEXT, player TEXT, "
                  "market TEXT, value REAL)")
@@ -169,9 +168,13 @@ def test_the_report_reads_the_minutes_base_at_the_seasons_start():
         for i in range(6):
             conn.execute("INSERT INTO player_game_logs VALUES ('nba', 2026, ?, ?, 'min', 34)",
                          (f"2026-10-{21 + i:02d}", name))
-    got = nbalean.minutes_check(conn, 2026)
+    from engine.nba import window as W
+    got = W.measure(conn, "nba", 2026)
     assert got["n"] == 90, got                                  # games 4-6 of each of thirty men
-    assert got["window"] > 1.10 and abs(got["season_only"] - 1.0) < 0.01, got
+    assert got["ratio_twenty"] > 1.10 and abs(got["ratio_season"] - 1.0) < 0.01, got
+    assert got["mae_season"] < got["mae_twenty"] - 3, got
+    assert W.choose(got) == "twenty", "ninety games is under the bar, however clear"
+    assert W.choose(dict(got, n=W.MIN_GAMES)) == "season"
 
 
 if __name__ == "__main__":

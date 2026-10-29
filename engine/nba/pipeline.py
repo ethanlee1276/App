@@ -62,7 +62,13 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # and the stability read when his last five are clean; a recent one
     # stays (engine/nba/minutes.role_minutes, measured). The per-minute
     # rate keeps every game — what he did in the minutes he played.
-    role, left_out = role_minutes(minutes)
+    # THE SEASON'S OWN GAMES, once measured to read better (engine/nba/window):
+    # ``base_games`` is how many of his newest games are this season's, set by
+    # the build only when the day's measurement chose them. The per-minute
+    # rate keeps all his games; only the minutes base is read from these.
+    n_base = int(prop.get("base_games") or 0)
+    base_list = minutes[:n_base] if 3 <= n_base < len(minutes) else minutes
+    role, left_out = role_minutes(base_list)
     base = base_minutes(role, tune)
     rate = _rate_per_min(minutes, values)
     if base is None or rate is None:
@@ -140,6 +146,9 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     ], proj, rate_per_min=round(rate, 4), minutes=proj_min)
     context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note"),
                                  prop.get("lineup_note")) if n]
+    if base_list is not minutes:
+        context_notes.append(f"Minutes read from his {len(base_list)} games this season, "
+                             f"not last season's end (measured: they read closer)")
     from ..exitfit import exits as _exits, RECENT as _RECENT
     from .minutes import EXIT_ROLE_MINUTES
     _ex = _exits([float(m) for m in minutes], EXIT_ROLE_MINUTES)

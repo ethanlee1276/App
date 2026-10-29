@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HO "NBA minutes at the season's start, and the teammate-out minutes" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 nbalean.py
+SH
 run HN "NBA Most Likely stops leaning under" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 nbalean.py
 SH

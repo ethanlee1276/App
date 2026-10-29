@@ -942,6 +942,13 @@ def main() -> None:
         # The league's own recent scoring, the norm tonight's total is read
         # against (engine/nba/context.env_factor).
         norm_total = total_norm(conn, args.league, args.date)
+        # Which games his minutes base reads at the season's start, as the
+        # day's measurement chose (engine/nba/window): this season's alone
+        # only once they have read closer, the twenty-game window otherwise.
+        from engine.nba import window as _window
+        minutes_window = _window.window_for(conn, args.league, args.date)
+        print(f"  Minutes window      {minutes_window.get('window')} "
+              f"({minutes_window.get('n', 0)} games of this season measured)")
         from engine.sources.oddsapi import normalize_name as _nn
         listed = {p: injuries[_nn(p)] for p in hist if _nn(p) in injuries}
         gone = absences(hist, injuries)
@@ -1233,6 +1240,9 @@ def main() -> None:
                 "spread": spread, "is_favorite": fav,
                 # What his history's games carried (`history_context`).
                 "margins": h.get("margins"), "rests": h.get("rests"),
+                "base_games": (_window.this_season(h.get("dates"), args.league,
+                                                   minutes_window.get("season") or 0)
+                               if minutes_window.get("window") == "season" else 0),
                 # The context layer's inputs (engine/nba/context.py):
                 # tonight's total prices the scoring environment, and the
                 # gap since the team's last logged game prices the

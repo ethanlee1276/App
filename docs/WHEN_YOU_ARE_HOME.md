@@ -7793,6 +7793,50 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HN 2>&1 | tee /tmp/hn.txt
 ```
 
+**HO. NBA minutes at the season's start, and the teammate-out minutes**
+(step 275; "Ok keep going"). A week into a season, a player's last twenty
+games are mostly last season's final weeks: a lottery team resting
+starters in April, or a contender's playoff minutes. A pro reads his
+role off this season's games once he has a few, but measures first, so
+the build now does both: every day it scores this season's games against
+the minutes it would have projected two ways (the twenty-game window, and
+this season's games alone), and switches to this season's games only
+once 150+ games say they are at least a quarter-minute a game closer.
+Until then nothing changes. Only the minutes move; the per-minute rate
+still reads all twenty games. A card that uses it says so ("Minutes read
+from his 6 games this season").
+
+Nothing to set for that. The report shows which one the board is reading
+and the numbers behind it (read-only):
+
+```
+cd /srv/qellys && sudo -u qellys python3 nbalean.py
+```
+
+The other half is the biggest edge in NBA props: when a regular is ruled
+out, his minutes go to his teammates, and the books raise their lines.
+The model for that (engine/nba/vacancy, first measured 2026-10-17) only
+switches on once it beats leaving the slot empty on seasons it never saw,
+and the report says whether it has. If it says "not measured on this box yet", run the test (a few
+minutes, read-only):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout
+```
+
+Only if that ends saying HOLDS, keep its verdict (this writes one file,
+data/models/nba_vacancy.json, and the next NBA build fills the slot):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout --save
+```
+
+The check in one go (the report; the test above stays a hand-run):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HO 2>&1 | tee /tmp/ho.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

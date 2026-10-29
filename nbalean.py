@@ -24,14 +24,13 @@ nothing is written.
   3. THE RECORD. The graded NBA Most Likely picks (the ledger, as
      likelyfit.py reads it), by side: how many, how often they hit, how
      often we said they would, and the return at a flat unit.
-  4. THE MINUTES BASE THIS SEASON. Every game played this season by a man
-     with three earlier ones this season: his minutes against the base the
-     board would have read before it, over the board's own window (his last
-     twenty games, which early on are mostly last season's end: a lottery
-     club's April, a contender's playoffs) and over this season's games
-     alone. The median of minutes over base: above 1.00 the base runs light,
-     which reads as unders, below it heavy. If this season's own games read
-     nearer 1.00 than the twenty, the window is the next thing to change.
+  4. THE MINUTES BASE THIS SEASON (engine/nba/window, which the build
+     measures each day and acts on): every game played this season by a man
+     with three earlier ones this season, his minutes against the base read
+     before it, over the board's twenty-game window (early on mostly last
+     season's end: a lottery club's April, a contender's playoffs) and over
+     this season's games alone, and which one the board is reading. Then
+     whether the teammate-out minutes (engine/nba/vacancy) are on.
 
 WHAT MOVED (2026-10-29, engine/nba/minutes.context_norms): the minutes
 model laid tonight's blowout and rest haircuts on a base that already
@@ -123,37 +122,6 @@ def record(conn) -> dict:
     return out
 
 
-def minutes_check(conn, season: int, min_prior: int = 3) -> dict:
-    """``{"n", "window", "season_only"}``: the median of a game's minutes
-    over the base read before it (engine/nba/minutes), on the board's
-    twenty-game window and on this season's games alone, over every game of
-    ``season`` with ``min_prior`` earlier ones in it. Nothing for fewer
-    than 20 such games."""
-    from engine.nba.minutes import base_minutes, role_minutes
-    games: dict = defaultdict(list)                       # player -> [(date, season, minutes)]
-    for r in conn.execute("SELECT player, period, season, value FROM player_game_logs "
-                          "WHERE sport='nba' AND market='min' AND season IN (?, ?) ORDER BY period",
-                          (season, season - 1)):
-        games[r[0]].append((str(r[1]), int(r[2]), float(r[3] or 0.0)))
-    window, own = [], []
-    for rows in games.values():
-        for i, (_day, sea, actual) in enumerate(rows):
-            if sea != season or actual <= 0:
-                continue
-            before = [m for _d, _s, m in reversed(rows[:i])][:20]
-            this = [m for _d, s_, m in reversed(rows[:i]) if s_ == season][:20]
-            if len(this) < min_prior:
-                continue
-            b_all = base_minutes(role_minutes(before)[0])
-            b_own = base_minutes(role_minutes(this)[0])
-            if b_all and b_own:
-                window.append(actual / b_all)
-                own.append(actual / b_own)
-    if len(window) < 20:
-        return {"n": len(window)}
-    return {"n": len(window), "window": statistics.median(window), "season_only": statistics.median(own)}
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--board", default=str(ROOT / "web" / "data" / "nba.json"))
@@ -193,19 +161,34 @@ def main(argv=None) -> int:
         from engine.db import connect
         from engine.seasons import season_of
         import datetime as _dt
+        from engine.nba import window as W
         hconn = connect()
         try:
-            mc = minutes_check(hconn, season_of("nba", doc.get("date") or _dt.date.today().isoformat()))
+            mc = W.measure(hconn, "nba", season_of("nba", doc.get("date") or _dt.date.today().isoformat()))
         finally:
             hconn.close()
-        if mc.get("window"):
-            print(f"  Minutes against the base read before each game, {mc['n']} games this season "
-                  f"(median; over 1.00 the base runs light): the board's twenty-game window "
-                  f"{mc['window']:.3f}, this season's games alone {mc['season_only']:.3f}")
+        if mc.get("mae_twenty") is not None:
+            print(f"  Minutes base this season, {mc['n']} games with three of this season's before them:")
+            print(f"    the twenty-game window   off by {mc['mae_twenty']:.2f} min a game, "
+                  f"minutes over base {mc['ratio_twenty']:.3f} (over 1.00: it runs light)")
+            print(f"    this season's games      off by {mc['mae_season']:.2f} min a game, "
+                  f"minutes over base {mc['ratio_season']:.3f}")
+            print(f"    the board reads: {W.choose(mc)} (this season's alone once {W.MIN_GAMES}+ games "
+                  f"say they are {W.MARGIN:g} min closer)")
         else:
             print(f"  Minutes base this season: {mc['n']} games with three before them — too few to read yet.")
     except Exception as exc:                                # noqa: BLE001 — no history, no check
         print(f"  Minutes base this season: not readable here ({type(exc).__name__}).")
+    try:
+        from engine.nba import vacancy as V
+        v = V.verdict("nba")
+        if v:
+            print(f"  Teammate-out minutes (nbavacancy.py --heldout): "
+                  f"{'on, k ' + format(V.k_for('nba'), 'g') if v.get('holds') else 'measured, did not hold — off'}")
+        else:
+            print("  Teammate-out minutes: not measured on this box yet (nbavacancy.py --heldout) — off")
+    except Exception as exc:                                # noqa: BLE001
+        print(f"  Teammate-out minutes: not readable here ({type(exc).__name__}).")
     try:
         from engine import ledger as L
         conn = L.connect()
