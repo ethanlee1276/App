@@ -99,6 +99,13 @@ try {
   })();
 } catch (e) {}
 
+/* THE SIDEBAR SLID AWAY, before the first paint (app.js sidebarSlide;
+   styles.css "THE SIDEBAR SLIDES AWAY"): only where it stands beside the
+   page does the class do anything. */
+try {
+  if (localStorage.getItem("qb_sb_hidden") === "1") document.documentElement.classList.add("sb-hidden");
+} catch (e) {}
+
 /* THE IPHONE DUO'S SIDE STRIP (Ethan, 2026-10-29, his closed iPhone Duo
    with the tab bar circled and an arrow to the black strip beside the
    clock: "move this bar ... to the right side ... only for the iPhone

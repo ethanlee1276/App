@@ -106,13 +106,17 @@ def test_the_hamburger_is_the_phones_way_into_the_sheet_and_the_tablets_drawer()
     2026-09-23: "move the 3 bar menu back up too the top left", with Ask
     in the fifth slot. So: shown on phones, where it opens the sheet and
     returns before the drawer's toggle; shown between 761 and 900px,
-    where there is no tab bar and it opens the drawer. One menu either way."""
+    where there is no tab bar and it opens the drawer. One menu either way.
+    Then Ethan, 2026-10-29: "add the slide button for ipads and computers
+    too". Shown at every width now, by its base rule; beside a docked
+    sidebar it slides the sidebar away (tests/test_the_sidebar_slides_away.py)."""
     hits = re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", _media("760px"))
     assert hits, "the phone block says nothing about the hamburger"
     assert any("display: grid" in h for h in hits), "the hamburger is hidden on phones: %r" % hits
     assert not any("display: none" in h for h in hits)
     tablet = re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", _media("900px"))
-    assert any("display: grid" in h for h in tablet), "the tablet band lost its only menu"
+    assert not any("display: none" in h for h in tablet), "the tablet band lost its only menu"
+    assert re.search(r"(?m)^\.menu-toggle \{ display: grid;", _decls()), "the base rule hides the hamburger again"
     assert 'getElementById("menu-toggle")' not in _code() or ".click()" not in _code()[_code().index('getElementById("menu-toggle")'):][:600]
     assert 'id="tb-more"' not in _markup(), "the fifth slot is Ask now"
     code = _code()

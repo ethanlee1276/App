@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IG "The sidebar slides away, and the open Duo's bar wears the strip's black" 30 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide(show)'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'background: var(--strip-black); }'
+SH
 run IF "The open Duo wears the app" 30 <<'SH'
 curl -s https://qellysbook.com/js/boot.js | grep -c 'root.classList.toggle("duo-side", duo);'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'html.duo-side .sidebar, html.duo-side .tb-ask { display: none; }'

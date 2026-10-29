@@ -4,6 +4,12 @@
     {
       "date": "2026-10-29",
       "kind": "ship",
+      "title": "Slide the sidebar away",
+      "body": "On a computer, an iPad on its side or an open foldable, the menu button at the top left now slides the sidebar away and the page takes the whole width; tap it again and it comes back. Each device remembers how you left it. On the open iPhone Duo in the dark look, the tab bar beside the clock now wears the clock strip's black, so the two read as one."
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
       "title": "The open iPhone Duo wears the app",
       "body": "Open on its side, the Duo now has the app's tab bar on the right edge, where it is when the Duo is shut, and the menu behind the button at the top left; open upright it is the phone app, the bar at the bottom. Computers and tablets keep the sidebar."
     },

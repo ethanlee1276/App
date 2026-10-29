@@ -26763,14 +26763,51 @@ function verifyDrawer() {
   });
 }
 
+/* THE SIDEBAR SLIDES AWAY (styles.css "THE SIDEBAR SLIDES AWAY"; Ethan,
+   2026-10-29: "add the slide button for ipads and computers too"). Where the
+   sidebar stands beside the page, the menu button hides it and the page
+   takes its width; again, and it comes back. Remembered on this device
+   (boot.js applies it before the first paint). */
+const SB_HIDDEN_KEY = "qb_sb_hidden";
+function sidebarDocked() {
+  const sb = document.getElementById("sidebar");
+  return !!sb && getComputedStyle(sb).position === "sticky";
+}
+function sidebarSlide() {
+  const hide = document.documentElement.classList.toggle("sb-hidden");
+  try {
+    if (hide) localStorage.setItem(SB_HIDDEN_KEY, "1");
+    else localStorage.removeItem(SB_HIDDEN_KEY);
+  } catch (e) { /* this visit only */ }
+  sidebarSlideSync();
+}
+function sidebarSlideSync() {
+  const btn = document.getElementById("menu-toggle");
+  if (!btn) return;
+  // One name, "Menu"; aria-expanded says whether what it opens is open: the
+  // sidebar beside the page, or the drawer or the sheet where it is one.
+  const phone = isPhone(), body = document.body.classList;
+  btn.setAttribute("aria-controls", phone ? "more-sheet" : "sidebar");
+  btn.setAttribute("aria-expanded", String(!phone && sidebarDocked()
+    ? !document.documentElement.classList.contains("sb-hidden")
+    : body.contains("menu-open") || body.contains("more-open")));
+}
+
 function initMobileMenu() {
   const btn = document.getElementById("menu-toggle");
   if (!btn) return;
+  sidebarSlideSync();
+  addEventListener("resize", sidebarSlideSync);
   btn.addEventListener("click", () => {
     // Phones: the sheet, the one menu (Ethan, 2026-09-23). The drawer below is the tablet's.
     if (isPhone()) {
       btn.setAttribute("aria-controls", "more-sheet");
       moreSheetOpen(!document.body.classList.contains("more-open"));
+      return;
+    }
+    // A sidebar beside the page slides away, or back (iPads and computers).
+    if (sidebarDocked()) {
+      sidebarSlide();
       return;
     }
     // The drawer is position:fixed, so the page does NOT need anchoring

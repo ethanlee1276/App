@@ -488,6 +488,8 @@
   /* The width of the iPhone Duo's side strip when the tab bar stands in it
      (boot.js writes the measured width; "THE IPHONE DUO'S SIDE STRIP"). */
   --strip-w: 84px;
+  /* The black of the system's own strip beside the Duo's page. */
+  --strip-black: #000;
 
   /* ---- FIXED COLOURS (audit #50): the same in both themes, which is why
      they are declared here only and never in the light block. Ink that
@@ -5130,7 +5132,7 @@ html, body { overflow-x: clip; }
    without cover the insets are all reported as 0. */
 .topbar {
   position: sticky; top: 0; z-index: 40;
-  display: flex; align-items: center; gap: 18px;
+  display: flex; align-items: center; gap: 12px;
   height: var(--topbar-h);
   padding: env(safe-area-inset-top) 20px 0;
   background: var(--topbar-bg);
@@ -5148,7 +5150,17 @@ html, body { overflow-x: clip; }
      carry the look; nothing a blur did here was worth a phone reboot. */
   border-bottom: var(--hairline) solid var(--border-soft);
 }
-.menu-toggle { display: none; }
+.menu-toggle { display: grid; place-items: center; width: 42px; height: 42px;
+  border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: var(--fill-tone);
+  color: var(--text); cursor: pointer; flex: 0 0 auto; }
+.mt-bars { position: relative; width: 16px; height: 2px; border-radius: 1px;
+  background: currentColor; }
+.mt-bars::before, .mt-bars::after { content: ""; position: absolute; left: 0;
+  width: 16px; height: 2px; border-radius: 1px; background: currentColor;
+  transition: transform var(--dur-base) var(--ease-out); }
+.mt-bars::before { top: -5px; }
+.mt-bars::after { top: 5px; }
+.mt-label { display: none; }
 .brand-home { display: flex; align-items: center; gap: 11px; color: inherit;
   text-decoration: none; flex: 0 0 auto; }
 .logo { width: 38px; height: 38px; display: grid; place-items: center;
@@ -5242,10 +5254,10 @@ html, body { overflow-x: clip; }
    The two tokens are declared with --topbar-h above, where the layout
    tokens live — one per line, which is also what the token census reads.
    Declared here in a :root of their own, they were invisible to it. */
-.shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+.shell { display: grid; grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr);
   max-width: 1760px; margin: 0 auto; align-items: start; }
 body.has-rail .shell {
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w); }
+  grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr) var(--rail-w); }
 .shell main { max-width: none; margin: 0; min-width: 0; }
 
 /* THE LEAGUE STRIP — scope, where the content it scopes can see it.
@@ -5789,7 +5801,7 @@ body.has-rail .shell {
 /* ---------------- Responsive: rail folds, sidebar becomes drawer ------- */
 @media (max-width: 1279px) {
   body.has-rail .shell {
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+    grid-template-columns: var(--side-col, var(--sidebar-w)) minmax(0, 1fr); }
   /* A pick board's rail is a wide-screen column, not a fold under it. */
   body.rail-wide-only .rail { display: none; }
   .rail { position: static; max-height: none; grid-column: 2;
@@ -5802,20 +5814,9 @@ body.has-rail .shell {
   .shell, body.has-rail .shell { display: block; }
   .rail { padding: 0 16px 22px; }
 
-  .menu-toggle { display: grid; place-items: center; width: 42px; height: 42px;
-    border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: var(--fill-tone);
-    color: var(--text); cursor: pointer; flex: 0 0 auto; }
-  .mt-bars { position: relative; width: 16px; height: 2px; border-radius: 1px;
-    background: currentColor; }
-  .mt-bars::before, .mt-bars::after { content: ""; position: absolute; left: 0;
-    width: 16px; height: 2px; border-radius: 1px; background: currentColor;
-    transition: transform var(--dur-base) var(--ease-out); }
-  .mt-bars::before { top: -5px; }
-  .mt-bars::after { top: 5px; }
   .menu-open .mt-bars { background: transparent; }
   .menu-open .mt-bars::before { transform: translateY(5px) rotate(45deg); }
   .menu-open .mt-bars::after { transform: translateY(-5px) rotate(-45deg); }
-  .mt-label { display: none; }
 
   /* The drawer: the SAME sidebar, slid in from the left under the bar.
      Nothing is a second copy of anything — one rail, two positions. */
@@ -5893,7 +5894,7 @@ body.has-rail .shell {
   .topbar { gap: 12px; }
   .brand-home { flex: 0 1 auto; min-width: 0; }
   .slate-meta { flex: 0 1 auto; min-width: 0; justify-content: flex-end; }
-  .meta-ico, .theme-toggle, .menu-toggle { flex-shrink: 0; }
+  .meta-ico, .theme-toggle { flex-shrink: 0; }
   #data-source, #slate-date { display: none; }
 
   /* The drawer's nav rows. This guarantee used to hang on
@@ -6751,7 +6752,6 @@ body.has-deck #rail-live { display: none; }
        (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
   .shell, body.has-rail .shell { display: grid; }
   .rail { padding: 0 26px 26px; }
-  .menu-toggle { display: none; }
   .sidebar { position: sticky; top: var(--topbar-h); left: auto; bottom: auto; z-index: auto;
     width: auto; height: calc(100vh - var(--topbar-h)); height: calc(100dvh - var(--topbar-h));
     will-change: auto; transform: none; transition: none; visibility: visible;
@@ -6796,17 +6796,6 @@ body.has-deck #rail-live { display: none; }
    Upright, the open Duo is a phone, and its block below 761px does it all. */
 html.duo-side .shell, html.duo-side body.has-rail .shell { display: block; }
 html.duo-side .sidebar, html.duo-side .tb-ask { display: none; }
-html.duo-side .menu-toggle { display: grid; place-items: center; width: 42px; height: 42px;
-    border: var(--hairline) solid transparent; border-radius: var(--radius-sm); background: var(--fill-tone);
-    color: var(--text); cursor: pointer; flex: 0 0 auto; }
-html.duo-side .mt-bars { position: relative; width: 16px; height: 2px; border-radius: 1px;
-    background: currentColor; }
-html.duo-side .mt-bars::before, html.duo-side .mt-bars::after { content: ""; position: absolute; left: 0;
-    width: 16px; height: 2px; border-radius: 1px; background: currentColor;
-    transition: transform var(--dur-base) var(--ease-out); }
-html.duo-side .mt-bars::before { top: -5px; }
-html.duo-side .mt-bars::after { top: 5px; }
-html.duo-side .mt-label { display: none; }
 html.duo-side .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
     display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
     padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
@@ -6883,6 +6872,34 @@ html.duo-side .more-pill.active svg { color: inherit; }
 html.duo-side .more-pill b { font-family: var(--font-mono); font-size: var(--fs-2xs);
     font-weight: 800; min-width: 16px; padding: 0 5px; border-radius: 999px;
     background: var(--bad); color: #fff; text-align: center; }
+
+/* THE SIDEBAR SLIDES AWAY (Ethan, 2026-10-29: "add the slide button for
+   ipads and computers too", after "an option to slide this menu bar over
+   too the side and make the Main screen bigger"). Wherever the sidebar
+   stands beside the page (a computer, an iPad or a small window on its
+   side, a Fold's inner screen), the menu button at the top left slides it
+   away and the page takes its width; again, and it slides back. Remembered
+   on this device: boot.js sets html.sb-hidden before the first paint. A
+   phone's button opens its sheet, a narrow window's its drawer, and the
+   open Duo's its sheet, as before (app.js initMobileMenu). The button is
+   one rule at every width (its base rule). The column goes at once and the
+   sidebar slides and fades out over the page, by transform and opacity
+   only; hidden, it is out of the Tab order too (visibility, once the slide
+   has ended). */
+@media (min-width: 901px),
+       (min-width: 700px) and (max-width: 900px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
+       (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
+  /* A pick open beside its board has put the sidebar aside already. */
+  html:not(.duo-side) body.two-pane .menu-toggle { display: none; }
+  .sidebar { transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out),
+    visibility 0s linear 0s; }
+  /* Its column is nothing in every shell (the right rail's too); the wall's one column is its own. */
+  html.sb-hidden .shell {
+    --side-col: 0px; }
+  html.sb-hidden .sidebar { width: var(--sidebar-w); transform: translateX(-100%); opacity: 0; visibility: hidden;
+    transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out),
+      visibility 0s linear var(--dur-base); }
+}
 
 .mc-pick.active { background: var(--grad-chip); box-shadow: inset 2px 0 0 var(--brand); }
 
@@ -9696,14 +9713,20 @@ a.ask-chip.web:hover { color: var(--text); border-color: transparent; }
   .ns-input { display: block; flex: 1; min-width: 0; height: 100%; padding: 0; border: 0;
     background: transparent; color: var(--text); font: inherit; font-size: var(--fs-sm); outline: none; }
   .ns-input::placeholder { color: var(--text-mute); }
+  /* The search field gives way first, so no control runs off the edge. */
+  .slate-meta { flex: 0 1 auto; }
+  .slate-meta > * { flex-shrink: 0; }
+  .ns-field { flex-shrink: 1; min-width: 72px; }
 }
-/* The date range steps aside first when the bar runs short. */
-@media (min-width: 1280px) and (max-width: 1520px) {
+/* The date range steps aside first when the bar runs short. Narrower than
+   the wide bar too, where the menu button took their room (2026-10-29);
+   at 900px and under they were gone already. */
+@media (max-width: 1520px) {
   .topbar #slate-date { display: none; }
 }
 /* …then, on the narrowest of these, the source pill (the freshness chip
    beside it still says how old the board is) and a shorter search box. */
-@media (min-width: 1280px) and (max-width: 1439px) {
+@media (max-width: 1439px) {
   .topbar #data-source { display: none; }
   .ns-field { width: 132px; }
 }
@@ -10819,6 +10842,10 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    app today): the clock is out there, so the bar starts under the header.
    Given the strip itself, it clears the clock as it does folded. */
 html.duo-side.side-rail:not(.side-rail-inset) .tabbar { padding-top: calc(var(--topbar-h) + 8px); }
+/* …and wears the strip's black, so the bar and the strip read as one side
+   bar with the clock at its head (Ethan, 2026-10-29: "we need it actually
+   under it"; a Home Screen app cannot draw in the strip itself). */
+html.duo-side.side-rail:not(.side-rail-inset):not([data-theme="light"]) .tabbar { background: var(--strip-black); }
 
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
    his phone's top bar and league row circled again: "the colors up here

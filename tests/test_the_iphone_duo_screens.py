@@ -107,7 +107,8 @@ def test_the_open_shell_comes_after_what_it_overrides():
     (shell_at, shell), (chrome_at, chrome) = _duo_blocks()
     assert drawer < shell_at and phone < chrome_at, "a later rule of the same weight wins"
     assert ".shell, body.has-rail .shell { display: grid; }" in shell
-    assert ".menu-toggle { display: none; }" in shell
+    assert ".menu-toggle { display: none; }" not in shell, \
+        "the button slides the sidebar away (tests/test_the_sidebar_slides_away.py)"
     assert "position: sticky;" in shell and "transform: none;" in shell
     assert "body.menu-open #scrim { display: none; }" in shell
     assert ".tabbar, .riding-tray { display: none; }" in chrome

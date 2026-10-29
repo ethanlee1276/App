@@ -16,10 +16,12 @@ horizontal bars on the inner display upright. What these hold:
     tabs on the right edge, the hamburger opening the menu sheet, the
     sidebar and the header's Ask button gone (Ask is a tab);
   * upright (669 by 825) it is a phone, with the bar at the bottom;
-  * a tablet on its side, a laptop and a phone on its side keep theirs;
-  * the bar's, the sheet's and the button's rules are the phone's own,
-    copied out of its width blocks, and held to them here; the shape is one
-    query in boot.js, app.js and the side strip's block.
+  * a tablet on its side, a laptop and a phone on its side keep theirs
+    (the sidebar, with the button that slides it away since 2026-10-29);
+  * the bar's and the sheet's rules are the phone's own, copied out of its
+    width blocks, and held to them here; the button's look is one rule at
+    every width; the shape is one query in boot.js, app.js and the side
+    strip's block.
 
 Run directly: `python3 tests/test_the_open_duo_wears_the_app.py`
 """
@@ -81,10 +83,15 @@ def _prefix(sel):
 
 def test_the_bar_the_sheet_and_the_button_are_the_phones_own():
     duo = _duo_block()
-    for originals, sels in ((PHONE, TAB), (PHONE, SHEET), (DRAWER, BUTTON)):
+    for originals, sels in ((PHONE, TAB), (PHONE, SHEET)):
         for sel in sels:
             want, got = _bodies(originals, sel), _bodies(duo, _prefix(sel))
             assert want and got == want, (sel, want, got)
+    # The button shows at every width now (tests/test_the_sidebar_slides_away.py):
+    # its look is the base rule's, and no width block carries a copy.
+    assert "\n.menu-toggle { display: grid; place-items: center; width: 42px; height: 42px;" in CSS
+    for sel in BUTTON:
+        assert not _bodies(duo, _prefix(sel)) and not _bodies(DRAWER, sel), sel
     for want in ("html.duo-side .shell, html.duo-side body.has-rail .shell { display: block; }",
                  "html.duo-side .sidebar, html.duo-side .tb-ask { display: none; }"):
         assert want in duo, want
@@ -206,7 +213,7 @@ def test_in_a_browser_each_shape_and_the_menu_on_its_side():
         else:
             assert g["bar"] is None or name == "a phone on its side", (name, g)
     for name in ("a tablet on its side", "a laptop", "a Pixel Fold's inner screen"):
-        assert got[name]["sidebar"] and not got[name]["menu"], (name, "the sidebar stays theirs", got[name])
+        assert got[name]["sidebar"] and got[name]["menu"], (name, "the sidebar stays theirs, and slides", got[name])
     sheet = got["sheet"]
     assert sheet["open"] and len(sheet["pills"]) >= 20, sheet
     for want in ("Most Likely", "Long Shots", "Over / Under", "Game Lines", "Injuries & News"):

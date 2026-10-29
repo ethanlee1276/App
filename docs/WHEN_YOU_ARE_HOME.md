@@ -8687,6 +8687,49 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IF 2>&1 | tee /tmp/if.txt
 ```
 
+**IG. The sidebar slides away, and the open Duo's bar beside the clock**
+(step 293; you: "add the slide button for ipads and computers too", and
+"it isnt below the wifi shit on the duo its to the left of that. we need
+it actually under it").
+
+- **The slide:** wherever the sidebar stands beside the page (a computer,
+  an iPad on its side, a big iPad either way up, a Fold's inner screen),
+  the menu button at the top left now slides it away and the page takes
+  its width; tap it again and it comes back. Each device remembers how
+  you left it. Where the menu is a drawer or the phone's sheet (phones,
+  an iPad upright, a narrow window, the open Duo), the button does what
+  it did.
+- **The top bar makes room for it:** the date and the Live data pill now
+  step aside on windows narrower than about 1,520 and 1,440 pixels (both
+  are on the page already), and on wide windows the search box narrows
+  before anything else gives. Before this, the theme button hung partly
+  or wholly off the right edge on windows 1,024, 1,440 and 1,600 pixels
+  wide; now nothing does at any width.
+- **Under the clock on the open Duo:** a Home Screen app cannot draw
+  there. iOS gives an app that was not built for the Duo, and every Home
+  Screen web app, only the screen outside that strip, so the page ends at
+  the strip's edge and the bar can only stand beside it. What changed:
+  the bar now wears the strip's own black (in the dark look), so the two
+  read as one band with the clock at its top. The bar inside the strip,
+  under the clock, comes with the store app built in Xcode for iOS 27.1;
+  the page already handles it (when iOS hands it the strip, the bar moves
+  in, under the clock). That build needs a Mac with Xcode, and the Apple
+  Developer Program ($99 a year) for TestFlight and the App Store.
+
+Nothing to set: the updater picks it up within five minutes. Read-only, any
+time; each prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide(show)'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'background: var(--strip-black); }'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IG 2>&1 | tee /tmp/ig.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 
