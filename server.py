@@ -3921,7 +3921,16 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as exc:                 # noqa: BLE001
                     _seclog("pickem_grade", "failed", self._client_ip(), error=type(exc).__name__)
                 return self._send(200, json.dumps(PK.view(conn, one("sport", "nfl")[:8].lower(), uid,
-                                                          one("week")[:10] or None)).encode(), ".json")
+                                                          one("week")[:10] or None,
+                                                          group=_int(one("group")) or None)).encode(), ".json")
+            if path == "pickem-group":
+                # An invite link's landing (engine/pickgroups.peek): the
+                # group's name, how many are in it and who started it.
+                from engine import pickgroups as PG
+                if not rate_ok(f"pkgroup:{self._client_ip()}", 30):
+                    return self._send(429, b'{"error":"slow down"}', ".json")
+                got = PG.peek(conn, one("code")[:16])
+                return self._send(200 if got else 404, json.dumps(got or {"error": "That invite link has expired or is not right."}).encode(), ".json")
             if path == "search":
                 return self._send(200, json.dumps(
                     SF.search(conn, one("q"), uid, entitled, strong)).encode(), ".json")
@@ -3965,7 +3974,7 @@ class Handler(BaseHTTPRequestHandler):
         from engine import socialfeed as SF
         if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
                         "delete", "report", "profile", "follow", "block", "seen", "friend", "mention-alerts",
-                        "hide", "vote", "verify", "pin", "pickem", "pickem-remind"):
+                        "hide", "vote", "verify", "pin", "pickem", "pickem-remind", "pickem-group"):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
         txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
         A = _acct()
@@ -4045,6 +4054,12 @@ class Handler(BaseHTTPRequestHandler):
                 # The Pick'em page's switch for the push before picks lock.
                 from engine import pickem as PK
                 code, out = PK.set_remind(conn, uid, body.get("on") is True)
+            elif path == "pickem-group":
+                # Private groups (engine/pickgroups): start, join by code,
+                # leave; the owner renames, removes, makes a new link.
+                from engine import pickgroups as PG
+                code, out = PG.act(conn, uid, {k: body.get(k) for k in ("do", "group", "name", "code", "handle")
+                                               if isinstance(body.get(k), (str, int))})
             else:
                 code, out = SF.profile_set(conn, uid, txt("handle"), txt("bio"), name=txt("name"),
                                            color=body.get("color"), team=txt("team"))

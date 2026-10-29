@@ -143,7 +143,7 @@ def test_the_page_carries_the_prices_and_the_switch():
         assert k in v, k
     soc = (ROOT / "web" / "js" / "social.js").read_text(encoding="utf-8")
     assert 'data-fd="pk-rank"' in soc and 'if (act === "pk-rank")' in soc
-    assert "pickemClvTable(fr ? P.week_clv_friends : P.week_clv," in soc
+    assert "pickemClvTable(tbl(1, 1)," in soc and '(fr ? "clv_friends" : "clv")' in soc
     assert "when you picked" in soc and "Ranked by beating the close" in soc
     pm = (ROOT / "engine" / "pushmine.py").read_text(encoding="utf-8")
     assert "_pk.note_closes(conn, now=t, data_dir=Path(web) / \"data\")" in pm

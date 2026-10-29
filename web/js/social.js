@@ -1085,10 +1085,11 @@
      sport's board, pick who wins; picks lock at kickoff and the server
      grades them from the final. Free with a profile; no entry, no prize. */
   const PK_RES = { won: "Won", lost: "Lost", push: "Push", void: "Void" };
-  function pickemTable(T, empty) {
+  function pickemTable(T, empty, rm) {
     const rows = ((T && T.rows) || []).map((p) => `<div class="fd-lead${p.me ? " me" : ""}"><span class="fd-rank${p.rank <= 3 ? ` top${p.rank}` : ""}">${p.rank}</span>
       <a class="fd-person" href="${profHref(p.handle)}">${avatar(p, "sm")}<span><b>${displayName(p)}${badge(p)}</b><span>@${escapeHtml(p.handle)}</span></span></a>
-      <span class="fd-lead-rec">${p.open ? `${p.open} open` : ""}</span><b class="fd-lead-v">${p.w}-${p.l}${p.p ? `-${p.p}` : ""}</b></div>`).join("");
+      <span class="fd-lead-rec">${p.open ? `${p.open} open` : ""}</span><b class="fd-lead-v">${p.w}-${p.l}${p.p ? `-${p.p}` : ""}</b>${
+      rm && !p.me ? `<button type="button" class="fd-btn ghost sm" data-fd="pk-kick" data-handle="${escapeAttr(p.handle)}">Remove</button>` : ""}</div>`).join("");
     const me = T && T.me && !(T.rows || []).some((r) => r.me) ? `<p class="fd-fine">You: #${T.me.rank} at ${T.me.w}-${T.me.l}.</p>` : "";
     return rows ? `${rows}${me}` : `<p class="fd-fine">${empty}</p>`;
   }
@@ -1115,10 +1116,50 @@
      a player unless turned off here. */
   function pickemScopeHTML(P) {
     if (!P.signed_in) return "";
-    const s = F.pkScope === "friends" ? "friends" : "all";
-    const b = (k, label) => `<button type="button" class="${s === k ? "on" : ""}" data-fd="pk-scope" data-v="${k}" role="tab" aria-selected="${s === k}">${label}</button>`;
+    const s = F.pkScope || "all";
+    const b = (k, label) => `<button type="button" class="${s === k ? "on" : ""}" data-fd="pk-scope" data-v="${escapeAttr(k)}" role="tab" aria-selected="${s === k}">${label}</button>`;
     return `<div class="fd-seg fd-pk-scope" role="tablist" aria-label="Whose standings">${b("all", "Everyone")}${
-      b("friends", `Friends${P.friends ? ` · ${Number(P.friends)}` : ""}`)}</div>`;
+      b("friends", `Friends${P.friends ? ` · ${Number(P.friends)}` : ""}`)}${
+      (P.groups || []).map((g) => b(`g${g.id}`, escapeHtml(g.name))).join("")}${
+      P.has_handle ? b("new", `${ico("people", 13)} New group`) : ""}</div>`;
+  }
+  /* PRIVATE GROUPS (engine/pickgroups): your own table with the people you
+     pick against, and a link that brings them in. The tables are the
+     public ones cut to the group's members, so a group shows nothing the
+     public table does not. */
+  const PK_JOIN_KEY = "qb_pk_join";
+  const pkLink = (code) => `${location.origin}/#feed/pickem/join/${code}`;
+  function pickemGroupHTML(P) {
+    const g = P.group;
+    if (!g) return "";
+    const manage = F.pkManage === g.id && g.owner;
+    return `<section class="fd-card fd-pk-group"><div class="fd-pk-group-h"><b>${escapeHtml(g.name)}</b>
+        <span>${g.members} player${g.members === 1 ? "" : "s"}${g.owner ? " · you started it" : ""}</span></div>
+      <div class="fd-pk-group-act"><button type="button" class="fd-btn sm" data-fd="pk-invite">${ico("share", 14)} Invite</button>
+        ${g.owner ? `<button type="button" class="fd-btn ghost sm" data-fd="pk-manage">${manage ? "Done" : "Manage"}</button>` : ""}
+        <button type="button" class="fd-btn ghost sm" data-fd="pk-leave">Leave</button></div>
+      ${manage ? `<form class="fd-pk-form" data-fd-form="pk-rename"><input name="name" maxlength="40" value="${escapeAttr(g.name)}" aria-label="Group name">
+          <button class="fd-btn sm" type="submit">Rename</button></form>
+        <div class="fd-pk-group-act"><button type="button" class="fd-btn ghost sm" data-fd="pk-gnew">New link</button></div>
+        <p class="fd-fine">A new link stops the old one working. Remove someone from the table below.</p>` : ""}
+      <p class="fd-fine">Anyone with the link can join. The same picks as everyone’s table, counted for the people in this group only.</p></section>`;
+  }
+  function pickemNewGroupHTML() {
+    return `<section class="fd-card fd-pk-group"><h3>Start a group</h3>
+      <form class="fd-pk-form" data-fd-form="pk-create"><input name="name" maxlength="40" placeholder="Name it, like Sunday Squad" aria-label="Group name" required>
+        <button class="fd-btn sm" type="submit">Start it</button></form>
+      <p class="fd-fine">You get a link to send. Your group’s table counts only the people who join, by wins or by beating the close. Got a link? Open it and you’re in.</p></section>`;
+  }
+  function pickemJoinHTML(G, code) {
+    const head = headHTML("Pick’em", "Free every week: pick the winner of every game on the board. No entry fee, no prizes.");
+    if (!G) return `${head}<div class="fd-card fd-empty">That invite link has expired or is not right. Ask for a new one.</div>`;
+    const who = G.by ? ` Started by @${escapeHtml(G.by)}.` : "";
+    const next = !F.signedIn ? `<a class="fd-btn" href="#account">Sign up free</a> (or sign in), then open the link again.`
+      : `<a class="fd-btn" href="#account">Make your Social profile</a>: the table shows your handle. You’ll join right after.`;
+    return `${head}<section class="fd-card fd-pk-group"><div class="fd-pk-group-h"><b>${escapeHtml(G.name)}</b>
+        <span>${G.members} player${G.members === 1 ? "" : "s"}</span></div>
+      <p>You’re invited to this pick’em group.${who}</p><p>${next}</p>
+      <p class="fd-fine">Code ${escapeHtml(code)}</p></section>`;
   }
   function pickemRemindHTML(P) {
     if (!P.signed_in || !P.has_handle || !["nfl", "cfb"].includes(P.sport)) return "";
@@ -1130,7 +1171,11 @@
   function pickemPageHTML(P) {
     const head = headHTML("Pick’em", "Free every week: pick the winner of every game on the board before it starts. Picks lock at kickoff and are graded from the final score — nobody types in a result. No entry fee, no prizes: bragging rights.");
     if (!P) return `${head}<div class="fd-card fd-empty">The pick’em did not load — try again in a moment.</div>`;
-    const s = P.sport, can = P.signed_in && P.has_handle, fr = F.pkScope === "friends" && P.signed_in;
+    const s = P.sport, can = P.signed_in && P.has_handle, fr = F.pkScope === "friends" && P.signed_in, grp = P.group;
+    // The table for a scope: a group's, the friends', or everyone's.
+    const tbl = (wk, clv) => grp ? grp[`${wk ? "week" : "season"}_${clv ? "clv" : "table"}`]
+      : P[`${wk ? "week" : "season"}_${clv ? (fr ? "clv_friends" : "clv") : (fr ? "friends" : "table")}`];
+    const rm = grp && grp.owner && F.pkManage === grp.id ? grp.id : 0;
     const when = (iso) => { try { return new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } };
     const side = (g, team) => {
       const on = g.pick === team;
@@ -1158,13 +1203,13 @@
         ${P.next ? `<a class="fd-btn ghost sm" href="#feed/pickem/${s}/${P.next}">Later ${ico("chevr", 14)}</a>` : "<span></span>"}</div>
       ${gate ? `<div class="fd-card fd-pk-gate">${gate}</div>` : ""}
       <section class="fd-card fd-pk-games">${games || `<p class="fd-fine">No ${SPORT_NAME[s]} games on the board this week${P.current ? " yet — they appear as the board posts them" : ""}.</p>`}</section>
-      ${pickemScopeHTML(P)}${pickemRankHTML()}
+      ${pickemScopeHTML(P)}${F.pkScope === "new" && can ? pickemNewGroupHTML() : pickemGroupHTML(P)}${pickemRankHTML()}
       ${fr && !P.friends ? `<div class="fd-card fd-pk-gate">Your friends' standings show here. <a href="#feed/search">Find people</a> to add.</div>` : F.pkRank === "clv" ? `<div class="fd-pk-tables">
-        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemClvTable(fr ? P.week_clv_friends : P.week_clv, "Nobody has enough picks with a price this week yet.")}</section>
-        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemClvTable(fr ? P.season_clv_friends : P.season_clv, "The season table fills as games start.")}</section>
+        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemClvTable(tbl(1, 1), "Nobody has enough picks with a price this week yet.")}</section>
+        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemClvTable(tbl(0, 1), "The season table fills as games start.")}</section>
       </div>` : `<div class="fd-pk-tables">
-        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemTable(fr ? P.week_friends : P.week_table, fr ? "No picks from you or your friends this week yet." : "No picks graded or made this week yet.")}</section>
-        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemTable(fr ? P.season_friends : P.season_table, "The season table fills as picks are graded.")}</section>
+        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemTable(tbl(1, 0), grp ? "No picks from your group this week yet." : fr ? "No picks from you or your friends this week yet." : "No picks graded or made this week yet.", rm)}</section>
+        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemTable(tbl(0, 0), "The season table fills as picks are graded.", rm)}</section>
       </div>`}
       ${pickemRemindHTML(P)}
       <p class="fd-fine">${F.pkRank === "clv" ? "Ranked by beating the close: how far the market’s chance for your team moved after you picked it, to the last price we saw before kickoff, in points, averaged over your picks made with a price (three a week, ten a season). It is how sharp bettors are measured, because it shows a read before the result does."
@@ -1346,14 +1391,43 @@
       paint(seq, "leaders", leadersPageHTML(res.ok ? res.out : {}), { hero: false });
       return;
     }
+    if (kind === "pickem" && arg === "join") {
+      // AN INVITE LINK (engine/pickgroups): who it is, then in. Signed out or
+      // without a profile, the code waits here and joins them after.
+      const code = String(sub || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+      const peek = await api(`pickem-group?code=${encodeURIComponent(code)}`);
+      if (peek.ok && F.signedIn && F.me) {
+        const r = await api("pickem-group", { do: "join", code });
+        if (r.ok && r.out.group) {
+          try { localStorage.removeItem(PK_JOIN_KEY); } catch (e) { /* private mode */ }
+          F.pkScope = `g${r.out.group.id}`;
+          tfToast(r.out.already ? `You’re in ${r.out.group.name}.` : `You joined ${r.out.group.name}.`);
+          go(`pickem/${F.pkSport || "nfl"}`);
+          return;
+        }
+        tfToast(r.out.error || "That did not go through.");
+      } else if (peek.ok) {
+        try { localStorage.setItem(PK_JOIN_KEY, code); } catch (e) { /* private mode */ }
+      }
+      await railP;
+      paint(seq, "pickem", pickemJoinHTML(peek.ok ? peek.out : null, code), { hero: false });
+      return;
+    }
     if (kind === "pickem") {
+      // A link opened before the profile existed joins once it does.
+      let waiting = "";
+      try { waiting = localStorage.getItem(PK_JOIN_KEY) || ""; } catch (e) { /* private mode */ }
+      if (waiting && F.signedIn && F.me) { go(`pickem/join/${waiting}`); return; }
       const sport = BOARD_SPORTS.includes(arg) ? arg
         : F.pkSport || (typeof state !== "undefined" && BOARD_SPORTS.includes(state.sport) ? state.sport : "nfl");
       F.pkSport = sport;
       const wk = /^\d{4}-\d{2}-\d{2}$/.test(sub || "") ? sub : "";
-      const res = await api(`pickem?sport=${sport}${wk ? `&week=${wk}` : ""}`);
+      const gm = /^g(\d+)$/.exec(F.pkScope || "");
+      const res = await api(`pickem?sport=${sport}${wk ? `&week=${wk}` : ""}${gm ? `&group=${gm[1]}` : ""}`);
       await railP;
       F.pk = res.ok ? res.out : null;
+      // A group left or removed from: back to everyone.
+      if (gm && F.pk && !F.pk.group) F.pkScope = "all";
       paint(seq, "pickem", pickemPageHTML(F.pk), { hero: false });
       return;
     }
@@ -1492,7 +1566,27 @@
       try { buzz("tap"); } catch (e) { /* no haptics */ }
       return render();
     }
-    if (act === "pk-scope") { F.pkScope = d.v === "friends" ? "friends" : "all"; return render(); }
+    if (act === "pk-scope") { F.pkScope = /^(friends|new|g\d+)$/.test(d.v || "") ? d.v : "all"; F.pkManage = 0; return render(); }
+    if (act === "pk-invite" && F.pk && F.pk.group) {
+      const g = F.pk.group, url = pkLink(g.code);
+      if (navigator.share) {
+        try { await navigator.share({ title: g.name, text: `Join ${g.name} in the Qellys Book pick’em: free, every week.`, url }); return; }
+        catch (e) { if (e && e.name === "AbortError") return; }
+      }
+      try { await navigator.clipboard.writeText(url); tfToast("Link copied."); } catch (e) { tfToast(url); }
+      return;
+    }
+    if (act === "pk-manage" && F.pk && F.pk.group) { F.pkManage = F.pkManage === F.pk.group.id ? 0 : F.pk.group.id; return render(); }
+    if ((act === "pk-leave" || act === "pk-gnew" || act === "pk-kick") && F.pk && F.pk.group) {
+      const g = F.pk.group;
+      const body = act === "pk-leave" ? { do: "leave", group: g.id } : act === "pk-gnew" ? { do: "code", group: g.id }
+        : { do: "remove", group: g.id, handle: d.handle };
+      const r = await api("pickem-group", body);
+      if (!r.ok) { tfToast(r.out.error || "That did not go through."); return; }
+      if (act === "pk-leave") { F.pkScope = "all"; F.pkManage = 0; tfToast(`You left ${g.name}.`); }
+      else tfToast(act === "pk-gnew" ? "New link made. The old one no longer works." : `@${d.handle} is out of ${g.name}.`);
+      return render();
+    }
     if (act === "pk-rank") { F.pkRank = d.v === "clv" ? "clv" : "wins"; return render(); }
     if (act === "pk-remind") {
       const on = t.getAttribute("aria-checked") !== "true" && t.getAttribute("aria-pressed") !== "true";
@@ -1786,7 +1880,20 @@
     }
   });
 
-  document.addEventListener("submit", (e) => {
+  document.addEventListener("submit", async (e) => {
+    const g = e.target.closest && e.target.closest('[data-fd-form="pk-create"], [data-fd-form="pk-rename"]');
+    if (g) {
+      e.preventDefault();
+      const name = String(new FormData(g).get("name") || "").trim();
+      const make = g.dataset.fdForm === "pk-create";
+      if (!name || (!make && !(F.pk && F.pk.group))) return;
+      const r = await api("pickem-group", make ? { do: "create", name } : { do: "rename", group: F.pk.group.id, name });
+      if (!r.ok) { tfToast(r.out.error || "That did not go through."); return; }
+      F.pkScope = `g${r.out.group.id}`;
+      F.pkManage = 0;
+      tfToast(make ? `${r.out.group.name} is yours. Send the link to bring people in.` : "Renamed.");
+      return render();
+    }
     const f = e.target.closest && e.target.closest('[data-fd-form="search"]');
     if (!f) return;
     e.preventDefault();
@@ -1893,6 +2000,10 @@
     ACCT.prof = null;          // the header redraws from the saved row
     if (typeof _acctUser !== "undefined" && _acctUser) _acctUser.profile = res.out.profile;
     if (typeof acctChipPaint === "function") acctChipPaint();
+    // An invite link opened before the profile existed joins now.
+    let waiting = "";
+    try { waiting = localStorage.getItem(PK_JOIN_KEY) || ""; } catch (e) { /* private mode */ }
+    if (waiting) { location.hash = `#feed/pickem/join/${waiting}`; return; }
     tfToast("Profile saved.");
     mountAccount(ACCT.el);
   }

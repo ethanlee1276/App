@@ -4,6 +4,14 @@
     {
       "date": "2026-10-29",
       "kind": "ship",
+      "title": "Pick'em groups",
+      "body": "Start a group on the Pick'em page, name it, and send the link: your group gets its own table, by wins or by beating the close, counted for the people in it. Anyone with the link can join, signing up first if they need to. The owner can rename it, remove someone, or make a new link that retires the old one. Still free, still no prizes.",
+      "alert": "Pick'em groups: your own table, and a link to send.",
+      "url": "/#feed/pickem"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
       "title": "Your best-priced bet of the week",
       "body": "Your Edge Report on My Bets now names your best-priced bet this week: the one whose price beat the closing line by the most, win or lose. And once you have three weeks of priced bets, how many weeks you beat the close. It's graded on the price, never on luck.",
       "alert": "Your Edge Report names your best-priced bet of the week.",

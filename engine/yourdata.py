@@ -55,7 +55,8 @@ GROUPS = (
         ("parlay_shares", "parlays shared"), ("pick_shares", "picks shared"), ("friendships", "friends"),
         ("friend_requests", "friend requests"), ("friend_invites", "friend invites"),
         ("friend_nicknames", "nicknames"), ("callit_calls", "Call it calls"), ("trivia_answers", "trivia answers"),
-        ("pickem_picks", "pick'em picks"), ("pickem_prefs", "pick'em choices"), ("tf_calls", "tail or fade calls"),
+        ("pickem_picks", "pick'em picks"), ("pickem_prefs", "pick'em choices"),
+        ("pickem_group_members", "pick'em groups you are in"), ("tf_calls", "tail or fade calls"),
         ("karma_events", "karma"), ("karma_weeks", "karma weeks"), ("karma_prefs", "karma choices"),
         ("karma_watch", "games watched for karma"))),
     ("How you use the site", "only with your yes; 120 days", (

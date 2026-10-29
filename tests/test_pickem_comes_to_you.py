@@ -193,7 +193,7 @@ def test_the_live_card_line_says_what_is_left_and_when_it_locks():
 def test_the_pages_draw_it_and_the_policy_names_it():
     social = (ROOT / "web" / "js" / "social.js").read_text(encoding="utf-8")
     for want in ("function pickemScopeHTML(P)", "function pickemRemindHTML(P)", 'data-fd="pk-scope"', 'data-fd="pk-remind"',
-                 'api("pickem-remind", { on })', "fr ? P.week_friends : P.week_table", '<a href="#feed/search">Find people</a> to add'):
+                 'api("pickem-remind", { on })', '(fr ? "friends" : "table")', '<a href="#feed/search">Find people</a> to add'):
         assert want in social, want
     kjs = (ROOT / "web" / "js" / "karma.js").read_text(encoding="utf-8")
     assert "function krPickemHTML(p)" in kjs and "${krAskHTML(d) || krPickemHTML(v.pickem)}" in kjs, \
@@ -201,7 +201,7 @@ def test_the_pages_draw_it_and_the_policy_names_it():
     assert '"trivia", "pickem_won", "pickem_week"]]' in kjs, "How karma works lists both"
     assert "a.kr-ask { text-decoration: none; }" in (ROOT / "web" / "css" / "karma.css").read_text(encoding="utf-8")
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
-    assert '"pin", "pickem", "pickem-remind"):' in srv and "PK.set_remind(conn, uid, body.get(\"on\") is True)" in srv
+    assert '"pin", "pickem", "pickem-remind", "pickem-group"):' in srv and "PK.set_remind(conn, uid, body.get(\"on\") is True)" in srv
     assert "pickem" in PA.PERSONAL and PM.TTL_S["pickem"] == 3 * 3600
     pm = (ROOT / "engine" / "pushmine.py").read_text(encoding="utf-8")
     assert "told += _pk.alerts_pass(conn, now=t)" in pm

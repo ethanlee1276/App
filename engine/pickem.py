@@ -495,9 +495,10 @@ def clv_table(conn, sport: str, week: str | None, viewer=None, now: float | None
 
 
 def view(conn, sport: str, viewer=None, week: str | None = None, now: float | None = None,
-         data_dir: Path | None = None) -> dict:
+         data_dir: Path | None = None, group: int | None = None) -> dict:
     """The page: this week's games with the viewer's pick and the room's
-    split, the week's standings and the season's."""
+    split, the week's standings and the season's; the viewer's groups, and
+    the one asked for (``group``, theirs only) cut to its members."""
     from . import socialfeed as SF
     ensure_tables(conn)
     now = time.time() if now is None else float(now)
@@ -536,7 +537,19 @@ def view(conn, sport: str, viewer=None, week: str | None = None, now: float | No
     if viewer is not None:
         from . import karma as K
         pals = K.friend_ids(conn, viewer) | {int(viewer)}
+    # PRIVATE GROUPS (engine/pickgroups): the same tables, its members only.
+    from . import pickgroups as PG
+    groups = PG.mine(conn, viewer) if viewer is not None else []
+    grp = None
+    if viewer is not None and group is not None and any(g["id"] == int(group) for g in groups):
+        ids = PG.members(conn, group)
+        grp = {**next(g for g in groups if g["id"] == int(group)),
+               "week_table": standings(conn, sport, week, viewer, now, only=ids),
+               "season_table": standings(conn, sport, None, viewer, now, only=ids),
+               "week_clv": clv_table(conn, sport, week, viewer, now, only=ids),
+               "season_clv": clv_table(conn, sport, None, viewer, now, only=ids)}
     return {"sport": sport, "week": week, "label": week_label(week), "current": week == current,
+            "groups": groups, "group": grp,
             "prev": shift(week, -1), "next": shift(week, 1) if week < current else None,
             "games": out, "week_table": standings(conn, sport, week, viewer, now),
             "season_table": standings(conn, sport, None, viewer, now),
@@ -731,6 +744,14 @@ def recap_pass(conn, now: float | None = None) -> int:
             if pals:
                 ahead = sum((places[f]["w"], -places[f]["l"]) > (x["w"], -x["l"]) for f in pals)
                 bits.append(f"{_nth(ahead + 1)} of {len(pals) + 1} among your friends")
+            # Their first group with somebody else who played (engine/pickgroups).
+            from . import pickgroups as PG
+            for g in PG.mine(conn, uid):
+                mates = (PG.members(conn, g["id"]) & set(places)) - {uid}
+                if mates:
+                    ahead = sum((places[f]["w"], -places[f]["l"]) > (x["w"], -x["l"]) for f in mates)
+                    bits.append(f"{_nth(ahead + 1)} of {len(mates) + 1} in {g['name']}")
+                    break
             if not x["l"] and x["w"] >= PERFECT_MIN:
                 bits.append(f"a perfect week, +{K.RULES['pickem_week'][0]} karma")
             rec = f"{x['w']}-{x['l']}" + (f"-{x['p']}" if x["p"] else "")

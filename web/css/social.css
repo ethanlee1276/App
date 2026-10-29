@@ -639,8 +639,23 @@ button.fd-pstat:hover b { color: var(--brand-2); }
 .fd-pk-week { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin: 12px 0; }
 .fd-pk-week b { text-align: center; font-size: var(--fs-md); }
 .fd-pk-gate { padding: 12px 14px; color: var(--text-dim); }
-/* Everyone's standings or your friends' (2026-10-28). */
-.fd-pk-scope { margin: 14px 0 0; }
+/* Everyone's standings or your friends' (2026-10-28), and each of your
+   groups (2026-10-29): one row that scrolls sideways when they are many. */
+.fd-pk-scope { margin: 14px 0 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.fd-pk-scope::-webkit-scrollbar { display: none; }
+.fd-pk-scope button { flex: none; }
+/* A private group (social.js pickemGroupHTML): its name, its buttons, the
+   start and rename forms. */
+.fd-pk-group { display: grid; gap: 8px; margin-top: 10px; padding: 14px 16px; }
+.fd-pk-group h3, .fd-pk-group p { margin: 0; }
+.fd-pk-group h3 { font-size: var(--fs-md); }
+.fd-pk-group-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.fd-pk-group-h b { font-size: var(--fs-md); }
+.fd-pk-group-h span { color: var(--text-mute); font-size: var(--fs-xs); white-space: nowrap; }
+.fd-pk-group-act { display: flex; flex-wrap: wrap; gap: 8px; }
+.fd-pk-form { display: flex; gap: 8px; }
+.fd-pk-form input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--fd-line); background: var(--bg); color: var(--text); font: inherit; }
 /* A profile's pick'em season: a sport's line never splits. */
 .fd-prof-pk > span { white-space: nowrap; }
 .fd-pk-games { display: grid; gap: 0; padding: 4px 14px; }

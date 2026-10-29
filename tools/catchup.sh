@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IA "Pick'em groups" 30 <<'SH'
+curl -s https://qellysbook.com/js/social.js | grep -c 'function pickemGroupHTML(P)'
+SH
 run HZ "Your best-priced bet of the week, and the North Star in your report" 60 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'Weeks you beat the close'
 cd /srv/qellys && sudo -u qellys python3 -m engine.engagement demo

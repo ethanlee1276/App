@@ -2324,6 +2324,9 @@ def delete_user(conn, user_id: int) -> None:
         conn.execute("DELETE FROM pickem_picks WHERE user_id=?", (uid,))
     if "pickem_prefs" in have:                   # and its push before picks lock
         conn.execute("DELETE FROM pickem_prefs WHERE user_id=?", (uid,))
+    if "pickem_group_members" in have:           # its groups, left the way leaving does (engine/pickgroups)
+        from . import pickgroups as PG
+        PG.forget(conn, uid)
 
 
 def export_user(conn, user_id: int) -> dict:
@@ -2355,4 +2358,8 @@ def export_user(conn, user_id: int) -> dict:
                                              "WHERE user_id=? ORDER BY kickoff", (uid,))]
                       if "pickem_picks" in have else [],
             "pickem_remind": [{"remind": int(r[0]), "recap": r[1]} for r in conn.execute(
-                "SELECT remind, recap FROM pickem_prefs WHERE user_id=?", (uid,))] if "pickem_prefs" in have else []}
+                "SELECT remind, recap FROM pickem_prefs WHERE user_id=?", (uid,))] if "pickem_prefs" in have else [],
+            "pickem_groups": [{"name": r[0], "owner": int(r[1]) == uid, "joined_at": r[2]} for r in conn.execute(
+                "SELECT g.name, g.owner, m.joined_at FROM pickem_group_members m JOIN pickem_groups g "
+                "ON g.id = m.group_id WHERE m.user_id=? ORDER BY m.joined_at", (uid,))]
+            if "pickem_group_members" in have else []}

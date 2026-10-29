@@ -206,7 +206,7 @@ def test_the_endpoints_read_only_the_game_and_the_team():
     assert 'if path == "pickem":' in get and '?mode=ro", uri=True' in get and "PK.grade(conn," in get
     j = srv.index("def _feed_post(")
     post = srv[j:srv.index("\n    def ", j + 10)]
-    assert '"pin", "pickem", "pickem-remind"):' in post
+    assert '"pin", "pickem", "pickem-remind", "pickem-group"):' in post
     assert 'PK.pick(conn, uid, txt("sport"), str(body.get("gid") or "")[:80],' in post
     assert post.index('if not who:') < post.index('elif path == "pickem":'), "a pick needs a session"
     c = _conn("ann")

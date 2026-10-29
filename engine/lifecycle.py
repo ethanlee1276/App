@@ -381,8 +381,10 @@ def season_bridge(conn, now: float | None = None, web: Path = WEB) -> int:
                         firsts.setdefault((lg, KO.DV.canonical(lg, us.upper())), (us.upper(), them.upper(),
                                                                                  g["kickoff"]))
     told = 0
-    rows = conn.execute("SELECT d.user_id, u.last_seen, u.created_at FROM user_data d JOIN users u ON u.id = d.user_id "
-                        "WHERE d.section = 'settings'").fetchall()
+    # Only accounts with a phone that asked for "When I've been away" (a
+    # team followed by a watch alone counts too: kickoffs.follows reads both).
+    rows = conn.execute("SELECT DISTINCT u.id, u.last_seen, u.created_at FROM push_subs s JOIN users u "
+                        "ON u.id = s.user_id WHERE (',' || s.topics || ',') LIKE ?", (f"%,{AWAY_TOPIC},%",)).fetchall()
     for uid, seen, created in rows:
         mine = KO.follows(conn, uid)
         leagues = {lg for lg, _abbr in mine}

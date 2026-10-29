@@ -8312,6 +8312,39 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HZ 2>&1 | tee /tmp/hz.txt
 ```
 
+**IA. Pick'em groups** (step 287; you: "keep building ... we want to keep
+user retainment"). The office pool, inside the pick'em:
+
+- **Social → Pick'em → New group:** name it, and it is yours with a link to
+  send. Each group gets a chip beside Everyone and Friends, and its own
+  table, this week's and the season's, by wins or by beating the close,
+  counted for its members only.
+- **The link** (`/#feed/pickem/join/CODE`) joins anybody with a Social
+  profile. Somebody without an account signs up first, and the link waits
+  for them. Codes are eight characters with no look-alikes (no 0/O, 1/I/L).
+- **The owner** can rename the group, remove someone, or make a new link
+  (the old one stops working). Leaving is one tap: an owner who leaves
+  hands it to the earliest member, and the last one out deletes it.
+  Deleting an account leaves its groups the same way.
+- Ten groups an account and 200 members a group at most. Names are
+  screened like display names, and a link can't be a name. The invite
+  page's lookup is rate-limited.
+- The privacy policy names both new tables, and it says what a link shows
+  (the name, how many are in it, who started it).
+
+Nothing to set. Read-only, any time; it prints `1` once this version is
+live:
+
+```
+curl -s https://qellysbook.com/js/social.js | grep -c 'function pickemGroupHTML(P)'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IA 2>&1 | tee /tmp/ia.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 
