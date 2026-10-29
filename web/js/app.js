@@ -16829,13 +16829,13 @@ function limitStaked(bets) {
 function mbSave(bets) {
   const lim = Number(settings().limit_week) || 0, was = lim ? limitStaked(mbLoad()) : 0;
   try { localStorage.setItem(MYBETS_KEY, JSON.stringify(bets)); } catch (e) {}
-  const now = lim ? limitStaked(bets) : 0;
-  if (lim && was < lim && now >= lim) tfToast(`That’s ${mbMoney(now)} this week, past the ${mbMoney(lim)} you set.`);
   acctTouch("mybets");   // signed in → the account copy follows this one
   // The tab badge counts what is still running, so it moves whenever the
   // book does — logging a bet, grading one, deleting one.
   faviconBadge();
   winCheck();
+  const now = lim ? limitStaked(bets) : 0;
+  if (lim && was < lim && now >= lim) tfToast(`That’s ${mbMoney(now)} this week, past the ${mbMoney(lim)} you set.`);
 }
 
 /* A WIN, CELEBRATED (2026-10-27, docs/IDEAS.md; Underdog and Robinhood

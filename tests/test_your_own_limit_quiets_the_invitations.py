@@ -186,7 +186,7 @@ def test_setting_changing_and_clearing_it_is_written_down():
 def test_settings_my_bets_and_the_counts():
     app = READ("web", "js", "app.js")
     assert "  limit_week: 0," in app
-    save = app[app.index("function mbSave(bets) {"):app.index("function mbSave(bets) {") + 700]
+    save = app[app.index("function mbSave(bets) {"):app.index("function mbSave(bets) {") + 900]
     assert "if (lim && was < lim && now >= lim) tfToast(" in save, "said once, as a bet crosses it"
     acct = READ("web", "js", "account.js")
     lst = acct[acct.index('out.push(setGroup("Limits", ['):acct.index('out.push(setGroup("Limits", [') + 900]
