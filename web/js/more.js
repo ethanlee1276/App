@@ -4922,3 +4922,249 @@ function renderAlerts() {
   renderFeedZone();
   renderRailDesk();
 }
+
+/* ============================================================
+   Methodology — how the numbers are made
+   ============================================================
+   Ethan, 2026-08-25: "Methodology page — 'how the model works', in the
+   same honest voice as your commit messages."
+
+   THE RULE THIS PAGE IS WRITTEN UNDER: it may describe mechanisms and
+   it may print numbers that are PUBLISHED, and it may not print a
+   number that lives as a constant in the Python. A methodology page
+   that types "we shrink 50% toward the market" is a page that will
+   still say 50% the day somebody changes it to 0.4, and a stale claim
+   about how the model works is worse than no claim — it is the one
+   page a sceptical reader checks the others against.
+
+   So the live figures here come off record.json, which the pipeline
+   writes: the calibration table, the selection haircut, the model eras.
+   Everything else names the shape of the thing and leaves the value
+   where it is measured.
+   ============================================================ */
+async function renderMethodology() {
+  const host = document.getElementById("methodology-body");
+  if (!host) return;
+  const src = document.getElementById("data-source");
+  if (src) {
+    src.className = "data-source";
+    src.textContent = "Reference";
+    src.title = "How the model works — no live board involved";
+  }
+  const dt = document.getElementById("slate-date");
+  if (dt) dt.textContent = "Methodology · what’s new";
+  const rec = await loadRecordOnce();
+  const cal = rec.calibration || {};
+  const hair = rec.selection_haircut || {};
+  const step = (n, title, body) => `
+    <article class="card mth-step">
+      <div class="mth-n">${n}</div>
+      <div>
+        <div class="player">${title}</div>
+        <div class="about-body">${body}</div>
+      </div>
+    </article>`;
+  host.innerHTML = `
+    <div class="about-lede">
+      <p><strong>A pick here is a disagreement with a price.</strong> Not a
+      prediction of what will happen — a claim that the market’s number for
+      something is further from the truth than our own margin for error. If
+      the two agree, there is no pick, and most of the time they agree.</p>
+    </div>
+
+    <div class="section-title">The five steps, in order</div>
+    ${step(1, "Ingest what happened",
+      `Game logs, play-by-play, snap counts, pitch-level events, depth charts,
+       injury designations, venues and weather. All of it is stored locally
+       before anything is modelled — the model never reads a live feed at
+       pricing time, so a slow API cannot change tonight’s numbers.`)}
+    ${step(2, "Project the player, not the market",
+      `Each sport has its own model and they do not share a shape: baseball
+       prices contact quality and the park, football prices opportunity —
+       carries, targets, snap share — and basketball starts from minutes and
+       works outward. The projection is a DISTRIBUTION, not a point: the
+       floor and ceiling on every card are that distribution, and the hit
+       probability is the share of it on the right side of the line.`)}
+    ${step(3, "Read the price honestly",
+      `The book’s number is de-vigged before it is compared to anything — a
+       −110/−110 market is 52.4% + 52.4% = 104.8%, and the 4.8% is the
+       house’s, not information. Prices come from up to ten books; the one
+       shown is the one that would actually be bet.`)}
+    ${step(4, "Take the haircuts",
+      `Three of them, and they all cut in the same direction — against us.
+       The model is shrunk toward the de-vigged market, because the market is
+       usually right and a model that ignores that is a model that has not
+       met one. An edge above a ceiling is treated as a mistake rather than a
+       jackpot, because in a liquid market it almost always is. And the
+       claims are cut by what our own picks have historically LANDED versus
+       what they claimed${hair.settled ? ` — measured over
+       ${escapeHtml(String(hair.settled))} settled picks` : ""}. Whatever is
+       left after all three is the edge you see.`)}
+    ${step(5, "Size it, or pass",
+      `A fraction of Kelly on what survives, capped, with per-slate limits on
+       how many picks can exist at all. "No qualifying plays tonight" is a
+       correct output, and a service that must sell picks every night can
+       never produce it.`)}
+
+    <div class="section-title">What is fitted, and what is still an assumption
+      <span class="sub">— the difference matters, and most sites will not tell
+      you which is which.</span></div>
+    <div class="card mth-fit">
+      <p><b>Fitted against results:</b> the probability calibration (does
+      "60%" mean 60%?), the recency blend, per-player corrections, and the
+      loss-pattern miner. Each one is refit nightly from settled picks, and
+      each one refuses to apply itself until it has enough of them —
+      an unfitted correction is 1.0, which is the same as not being there.</p>
+      <p><b>Still an assumption:</b> the structural priors each sport model
+      starts from — league-average rates, positional shares, the shape of a
+      game script. They are chosen from published research and this
+      database’s own history, not fitted to our picks, and they are the part
+      most likely to be wrong in a way nothing here would catch.</p>
+      ${cal && cal.buckets && cal.buckets.length ? `<p><b>Right now:</b>
+        the calibration curve is built from
+        ${escapeHtml(String(cal.n || 0))} settled ${pluralWord(cal.n || 0, "pick")}. The Record page
+        draws it — claimed against landed, bucket by bucket. If those two
+        columns diverge, the model is over-claiming and that is visible
+        there before it is visible anywhere else.</p>` : ""}
+    </div>
+
+    <div class="section-title">What we do not model
+      <span class="sub">— named, so the gaps are known rather than
+      discovered.</span></div>
+    <div class="card mth-fit">
+      <ul>
+        <li>Anything that needs a beat writer’s judgement. There is no
+          sentiment layer; a rumour with a number printed on it is still a
+          rumour.</li>
+        <li>In-game state. Live win probability needs play-by-play at a
+          latency we do not have, so nothing here re-prices mid-game.</li>
+        <li>Contest ownership for DFS, which is paid and licence-restricted
+          data we do not buy.</li>
+        <li>Your book’s specific rules — voids, pushes on exact numbers,
+          same-game restrictions. Grade against your own slip, not ours.</li>
+      </ul>
+    </div>
+
+    <div class="section-title">How a pick is graded
+      <span class="sub">— the part that decides whether any of the above is
+      working.</span></div>
+    <div class="card mth-fit">
+      <p>Every recommended pick is journaled at the price it appeared at, in
+      the moment it appeared, before anything is known. It settles against
+      the real result and is graded twice: on the RESULT, and on the
+      PROCESS — against the closing line. A win at a price that closed worse
+      than we bet is flagged as lucky; a loss that beat the close was a good
+      bet that lost. Both are on the Record page, and the second one is the
+      honest measure of whether the model sees anything.</p>
+      <p><a href="/api/record/receipts.csv" download>Download every settled
+      pick as a spreadsheet →</a> Each row carries the date, the price, the
+      stake, the result and the closing line, in every bucket — long shots
+      and prediction markets included, with the category on the row rather
+      than quietly left out.</p>
+    </div>
+
+    <div class="section-title" id="changelog">What’s new
+      <span class="sub">— shipped changes above, and below them the dates the
+      model’s own numbers changed. A pick from before one of those lines is
+      a different animal from a pick after it.</span></div>
+    <div id="mth-changelog" class="card mth-fit"><p class="es-sub">Loading…</p></div>
+    ${(rec.model_eras && rec.model_eras.eras || []).length
+      ? `<div class="card mth-fit"><h3>Model eras</h3>
+          <p>The Record page keeps these apart rather than blending them, so
+          a re-tune cannot be judged by results it never produced.</p>
+          <div class="mth-eras">${rec.model_eras.eras.map((e) => `
+            <div class="mth-era">
+              <b>${escapeHtml(e.label || e.key)}</b>
+              <span class="set-note">${escapeHtml(e.from || "the beginning")}
+                → ${escapeHtml(e.to || "now")}</span>
+              <span>${e.settled || 0} settled${e.settled
+                ? ` · ${e.net_units >= 0 ? "+" : ""}${
+                    Number(e.net_units || 0).toFixed(2)}u` : ""}</span>
+            </div>`).join("")}</div></div>`
+      : ""}`;
+  renderChangelog();
+}
+
+/* The written half of the what's-new feed. A static file in web/ rather
+   than web/data/ — that directory is generated and gitignored, and this
+   is a record somebody wrote, not an output something produced. */
+async function renderChangelog() {
+  const host = document.getElementById("mth-changelog");
+  if (!host) return;
+  let doc = null;
+  try {
+    const res = await fetch("changelog.json", { cache: "no-cache" });
+    doc = res.ok ? await res.json() : null;
+  } catch (e) { doc = null; }
+  const entries = (doc && doc.entries) || [];
+  if (!entries.length) {
+    host.innerHTML = `<p class="es-sub">The change log could not be
+      loaded — which is itself a bug, and not a claim that nothing has
+      changed.</p>`;
+    return;
+  }
+  const LABEL = { ship: "Shipped", model: "The numbers moved",
+                  fix: "Fixed", refuse: "Measured and refused" };
+  host.innerHTML = entries.slice(0, 40).map((e) => `
+    <div class="cl-row">
+      <div class="cl-when">${escapeHtml(formatGameDate(e.date) || e.date || "")}
+        <span class="cl-kind cl-${escapeAttr(e.kind || "ship")}">${
+          escapeHtml(LABEL[e.kind] || "Shipped")}</span></div>
+      <div class="cl-what"><b>${escapeHtml(e.title || "")}</b>
+        <p>${escapeHtml(e.body || "")}</p></div>
+    </div>`).join("");
+}
+
+/* THE OUTSIDE WITNESS (engine/witness). Ethan, 2026-10-06: "our record
+   could be verified from recommending those bets." Every pick is sealed
+   into a hash chain when it is journaled; the chain head is stamped on
+   OpenTimestamps (a Bitcoin timestamp) and posted whenever it moves. This
+   page lists the anchors with their proofs and each day's picks under
+   the anchor that covers them — the picks themselves once the games are
+   over. Reads web/data/witness.json, a free file. */
+async function renderVerify() {
+  const host = document.getElementById("verify-body");
+  if (!host) return;
+  const dt = document.getElementById("slate-date");
+  if (dt) dt.textContent = "Verify · the record’s witness";
+  host.innerHTML = `<p class="es-sub">Reading the anchors…</p>`;
+  let w = null;
+  try {
+    const r = await boardFetch("data/witness.json", { cache: "no-store" });
+    w = r.ok ? await r.json() : null;
+  } catch (e) { w = null; }
+  if (!w) {
+    host.innerHTML = `<div class="card"><p>No witness file yet — the box writes it after its first anchor.</p></div>`;
+    return;
+  }
+  const when = (t) => `${escapeHtml(String(t || "").replace("T", " ").slice(0, 16))} UTC`;
+  const n = (x, one, many) => `${x} ${x === 1 ? one : many}`;
+  const row = (k, v, cls, sub, indent) => `<div class="st-row${indent ? " st-indent" : ""}"><span class="st-k">${k}</span>
+      <span class="st-v ${cls}">${v}</span><span class="st-sub">${sub}</span></div>`;
+  const anchors = (w.anchors || []).slice(0, 60).map((a) => {
+    const proof = safeHref(`${location.origin}/data/ots/${String(a.head || "").replace(/[^0-9a-f]/g, "")}.ots`);
+    return row(when(a.ts),
+      a.status === "bitcoin" ? `Bitcoin block ${escapeHtml(String(a.height))}` : "stamped — Bitcoin proof pending",
+      a.status === "bitcoin" ? "st-good" : "st-off",
+      `through pick #${escapeHtml(String(a.seq_to))} · head <code>${escapeHtml(String(a.head || "").slice(0, 16))}…</code>
+       · <a href="${proof}" download>proof (.ots)</a>${a.posted ? " · posted publicly" : ""}`);
+  }).join("");
+  const days = (w.days || []).map((d) => {
+    const picks = (d.picks || []).map((p) => row(
+      escapeHtml(`${p.player || ""} ${String(p.side || "").toLowerCase()} ${p.line == null ? "" : p.line} ${p.market || ""}`.replace(/\s+/g, " ").trim()),
+      p.height ? `block ${escapeHtml(String(p.height))}` : p.anchor ? "stamped, pending" : "not yet anchored",
+      p.height ? "st-good" : "st-off",
+      `sealed ${when(p.sealed)}${p.lead_min != null ? ` · ${Math.round(p.lead_min)} min before the game` : ""}`, true)).join("");
+    return `<details class="st-mech"><summary>${escapeHtml(d.date)} — ${n(d.n, "pick", "picks")}, ${d.anchored} anchored, ${d.bitcoin} on Bitcoin${
+      picks ? "" : " · the picks show once the games are over"}</summary>${picks}</details>`;
+  }).join("");
+  host.innerHTML = `<div class="card"><p>Every pick is sealed into a hash chain the moment it is journaled: each link
+      covers the pick and the link before it, so nothing past can be edited or removed without changing every hash
+      after it. Whenever the chain grows, its head is stamped on <b>OpenTimestamps</b> — a Bitcoin timestamp nobody,
+      including us, can backdate — and posted publicly. A pick sealed before an anchor existed before that anchor’s block.</p>
+      <p>Current head <code>${escapeHtml(String(w.head || "—"))}</code>, through pick #${escapeHtml(String(w.seq || 0))}.
+      To check an anchor yourself, download its proof and run <code>ots verify</code> (opentimestamps.org) against the
+      head shown; it needs nothing from us but the bytes of the proof.</p></div>
+    <div class="section-title">Anchors</div><div class="card st-card">${anchors || "<p>None yet.</p>"}</div>
+    <div class="section-title">Days</div><div class="card st-card">${days || "<p>Nothing sealed in the last 45 days.</p>"}</div>`;
+}

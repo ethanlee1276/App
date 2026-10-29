@@ -174,7 +174,11 @@ def test_the_sweep_calls_the_witness_after_the_heads_and_the_page_is_wired():
     app = (ROOT / "web" / "js" / "app.js").read_text()
     html = (ROOT / "web" / "index.html").read_text()
     assert '"verify"' in app.split("const VIEW_ORDER = [", 1)[1].split("];", 1)[0]
-    assert 'if (name === "verify") renderVerify();' in app and "async function renderVerify()" in app
+    # The page itself loads with the More menu's room since 2026-10-29
+    # (js/more.js); app.js keeps the route and the stub that fetches it.
+    more = (ROOT / "web" / "js" / "more.js").read_text()
+    assert 'if (name === "verify") renderVerify();' in app and "async function renderVerify()" in more
+    assert 'roomCall(renderVerify, "renderVerify", "js/more.js"' in app
     assert 'id="view-verify"' in html and 'id="verify-body"' in html
     from engine import gate
     assert "witness.json" in gate.FREE_FILES

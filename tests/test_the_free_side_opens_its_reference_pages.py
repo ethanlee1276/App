@@ -52,7 +52,9 @@ def test_what_each_page_reads_is_free():
     from engine import gate
     assert "record.json" in gate.FREE_FILES and "heartbeat.json" in gate.FREE_FILES
     assert 'boardFetch("data/record.json"' in _fn(APP, "renderWhy")
-    assert "const rec = await loadRecordOnce();" in _fn(APP, "renderMethodology")
+    # The Methodology page moved to more.js on 2026-10-29 (the first visit's
+    # budget); it reads the same free record from there.
+    assert "const rec = await loadRecordOnce();" in _fn(MORE, "renderMethodology")
     status = MORE[MORE.index("async function renderStatus("):]
     assert 'boardFetch("data/heartbeat.json"' in status[:status.index("\n}\n")]
     for name in ("renderAbout", "renderFeatures"):

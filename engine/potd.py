@@ -1222,6 +1222,11 @@ def relock(payload: dict, most_likely, locked_key, journal_pick=None) -> dict:
     """
     out = _repoint(payload, most_likely, locked_key, journal_pick)
     out["verdict"] = verdict(out)
+    # The board's best bet is for a day this sport names no pick
+    # (`board_best`); a card re-pointed at today's lock has one.
+    if has_pick(out) or out.get("relocked"):
+        out.pop("board_best", None)
+        out.pop("board_staked", None)
     return out
 
 
@@ -1755,6 +1760,90 @@ def _board_date(result: dict) -> str:
     return str(result.get("date") or result.get("event_date") or "")
 
 
+#: What the card prints of the board's best bet on a day it names no pick.
+BOARD_BEST_FIELDS = ("player", "team", "market", "market_label", "side",
+                     "line", "odds", "book", "stake_units", "ev_per_unit",
+                     "game_date", "kickoff")
+
+
+def _bet_words(row: dict) -> str:
+    """The bet in words, once: "DAL +3.5 Spread", "Over 221.5 · BOS @ NYK",
+    "Jalen Brunson Over 26.5 Points". A spread row carries its signed number
+    as `side` and again as `line` (the card's 2026-09-15 "LAA +1.5 1.5"), so
+    a side that is already the number is the number."""
+    m = str(row.get("market") or "")
+    team = str(row.get("team") or row.get("pick") or "")
+    side = str(row.get("side") or "").strip()
+    line = row.get("line")
+    num = f"{float(line):g}" if isinstance(line, (int, float)) else ""
+    if m == "moneyline":
+        return f"{team} Moneyline"
+    if m == "spread":
+        signed = side if side.startswith(("+", "-")) else (f"{float(line):+g}" if num else "")
+        return f"{team} {signed} Spread".replace("  ", " ")
+    if m == "total":
+        where = f" · {row.get('away')} @ {row.get('home')}" if row.get("home") else ""
+        return f"{side.title()} {num}{where}"
+    if m == "team_total":
+        return f"{team} {side.title()} {num} Team Total"
+    return str(row.get("headline") or " ".join(
+        str(x) for x in (row.get("player"), side, num, row.get("market_label") or m) if x))
+
+
+def board_best(result: dict, now=None) -> tuple:
+    """(the board's strongest staked bet still to play, or None; how many
+    staked bets it has still to play).
+
+    Ethan, 2026-10-29, to "on NO BET days, show the best on the board
+    tonight for members": "do all 3". His screenshots that day were the
+    NBA card reading NO BET over a board that staked 66 bets — so the card
+    told a member there was nothing to bet when the board was full of them.
+
+    NOT THE LEAN, and that difference is why this may sit under a card that
+    names no pick. The lean `build` keeps is a row the day's bar refused,
+    which the product does not stand behind (`ledger.log_pick_of_the_day`
+    will not journal it; a named lean under NO BET was the page arguing
+    with itself, 2026-09-16). These are bets the board itself STAKES —
+    `recommended`, sized above zero, journaled as money — under the
+    board's own bar, which is looser than the day's on purpose: the day's
+    pick is one game line against a sharp fair, the board is every edge it
+    prices. A day the stricter bar sits out is not a day without a bet.
+
+    STAKED THE WAY THE HEARTBEAT COUNTS (launch._board_counts), with a real
+    price, and still to play by the journal's own clock (`_started`).
+    STRONGEST BY THE BOARD'S OWN MEASURE: today's games first, then the
+    stake it sized, then the edge a unit.
+    """
+    today = slate_day(now)
+    staked = []
+    for key in ("recommendations", "game_bets"):
+        for r in result.get(key) or []:
+            if not isinstance(r, dict) or not r.get("recommended") \
+                    or r.get("has_market") is False \
+                    or str(r.get("book") or "").lower() == "proxy":
+                continue
+            try:
+                stake, odds = float(r.get("stake_units") or 0), int(r.get("odds") or 0)
+            except (TypeError, ValueError):
+                continue
+            if stake > 0 and abs(odds) >= 100 and not _started(r, now):
+                staked.append(r)
+    if not staked:
+        return None, 0
+
+    def strength(r):
+        ev = r.get("ev_per_unit")
+        return (_row_day(r) == today, float(r.get("stake_units") or 0),
+                float(ev) if isinstance(ev, (int, float)) else 0.0)
+    best = max(staked, key=strength)
+    out = {k: best[k] for k in BOARD_BEST_FIELDS if best.get(k) not in (None, "")}
+    out["label"] = _bet_words(best)
+    # The card says "tonight" only of tonight: an NFL Thursday's best can be
+    # Sunday's game.
+    out["tonight"] = _row_day(best) == today
+    return out, len(staked)
+
+
 def attach(result: dict, sport: str, now=None, cut=None,
            prev: dict | None = None, built_dir=None, lines=None) -> str:
     """Put the day's pick on a finished board. Returns a build-log line.
@@ -1900,6 +1989,19 @@ def attach(result: dict, sport: str, now=None, cut=None,
                     result["most_likely"] = seated
                     got["from_beyond_the_cap"] = True
                     break
+    except Exception:                                         # noqa: BLE001
+        pass
+    # A DAY THE PICK SITS OUT, AND THE BOARD STILL BETS (`board_best`).
+    # Recomputed every build and dropped when gone: a card carried from an
+    # earlier build must not name a bet that has since started. Inside the
+    # card, so it is paid exactly as the card is (gate.PAID_KEYS).
+    got.pop("board_best", None)
+    got.pop("board_staked", None)
+    try:
+        if not got.get("off_day") and not has_pick(got):
+            best, n = board_best(result, now=now)
+            if best:
+                got["board_best"], got["board_staked"] = best, n
     except Exception:                                         # noqa: BLE001
         pass
     if pick is None:

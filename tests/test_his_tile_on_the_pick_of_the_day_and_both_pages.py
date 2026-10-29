@@ -119,7 +119,9 @@ def test_the_three_places_draw_it():
     potd = potd[:potd.index("\nfunction ", 10)]
     assert 'const tile = isTeam || !pick.headshot ? "" : playerTileHTML(pick, 140);' in potd
     assert '${tile ? "" : `<span class="pick-id">${betMark(pick, 30)}</span>`}' in potd, "one face on the card, not two"
-    end = potd.index('<div id="potd-record"')
+    # The BET card's record line, which is the last one: since 2026-10-29 the
+    # no-pick card carries a record line of its own, earlier in the function.
+    end = potd.rindex('<div id="potd-record"')
     assert "${tile}\n    </div>`;" in potd[end:end + 200], "last in the card; the styles place it"
     assert "headshot: pick.headshot," in _fn("potdHeroHTML"), "the deck's row shows his face too"
 

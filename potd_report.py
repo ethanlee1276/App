@@ -19,6 +19,7 @@ fetched, so it is safe to run on the production box mid-cycle.
     python3 potd_report.py nfl cfb            # just these
     python3 potd_report.py --dir /srv/qellys/web/data
     python3 potd_report.py nfl --rows 12      # show the near misses
+    python3 potd_report.py --sitout           # how often it named one, 28 days
 
 WHY IT LIVES AT THE ROOT rather than under engine/: it is a droplet
 tool, in the same family as `stale_lines.py` and `shopping_value.py`,
@@ -400,7 +401,18 @@ def _published_call(payload: dict) -> list:
         return [f"  PUBLISHED   BET {v.get('stake'):g}u on "
                 f"{where}{at}{price}{tail}"]
     why = str(v.get("why") or "").strip() or "nothing cleared the bar"
-    return [f"  PUBLISHED   NO BET — {why}{tail}"]
+    out = [f"  PUBLISHED   NO BET — {why}{tail}"]
+    # WHAT THE MEMBER'S CARD NAMES INSTEAD (potd.board_best): the board's
+    # own strongest staked bet still to play, and how many it stakes.
+    best = card.get("board_best")
+    if isinstance(best, dict) and best:
+        odds = best.get("odds")
+        price = f" ({odds:+d})" if isinstance(odds, int) else ""
+        at = f" at {best['book']}" if best.get("book") else ""
+        out.append(f"  BOARD BEST  {best.get('label', '?')}{at}{price} · "
+                   f"{float(best.get('stake_units') or 0):g}u — "
+                   f"{card.get('board_staked', '?')} staked bet(s) still to play")
+    return out
 
 
 def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
@@ -567,6 +579,34 @@ def read_lock(today: str):
         return None
 
 
+def sitout_report(days: int) -> int:
+    """How often the Pick of the Day named one (`ledger.potd_days`), as a
+    table: every league's slates over the window and the share that carried
+    a pick, then the site as a whole. Read-only, like the rest of this tool.
+
+    Ethan, 2026-10-29: the card had read NO BET on his screen often enough to
+    ask; this is the count, the same one the Record page prints."""
+    try:
+        from engine import ledger
+        with ledger.connect() as conn:
+            got = ledger.potd_days(conn, days=days)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"Could not read the journal here — {type(exc).__name__}: {exc}")
+        return 1
+    print(f"Pick of the Day — slates with a pick, {days} days through {got['through']}")
+    if not got["by_sport"]:
+        print("  No league journaled a slate in that window.")
+        return 0
+    for sport, s in sorted(got["by_sport"].items()):
+        n, k = s["slates"], s["picked"]
+        print(f"  {sport.upper():5} {k:3d} of {n:3d} slates   "
+              f"{(k / n if n else 0):5.0%} named a pick   {n - k} sat out")
+    n, k = got["slates"], got["picked"]
+    print(f"  {'ANY':5} {k:3d} of {n:3d} days     "
+          f"{(k / n if n else 0):5.0%} had a pick in at least one league")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("sports", nargs="*", help="leagues to report (default: all found)")
@@ -576,7 +616,14 @@ def main(argv=None) -> int:
                     help="how many near misses to print per board (0 for none)")
     ap.add_argument("--top", action="store_true",
                     help="the cross-league day top pick, board vs locked")
+    ap.add_argument("--sitout", nargs="?", type=int, const=28, default=None,
+                    metavar="DAYS",
+                    help="how often the pick named one over the last DAYS "
+                         "days (default 28), per league, from the journal")
     args = ap.parse_args(argv)
+
+    if args.sitout is not None:
+        return sitout_report(args.sitout)
 
     if args.top:
         import datetime as _dt

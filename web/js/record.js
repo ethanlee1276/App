@@ -3068,7 +3068,7 @@ function recPotdClaims(days, scope) {
   </details>`;
 }
 
-function recPotdSection(rep, scope, recent) {
+function recPotdSection(rep, scope, recent, sit) {
   /* EVERY LEAGUE THAT NAMES ONE GETS ITS SECTION, an empty one included
      (Ethan, 2026-10-14: "we only show the pick of the day record for nfl
      and mlb but no other sport"). The record carries an entry for each
@@ -3082,6 +3082,16 @@ function recPotdSection(rep, scope, recent) {
   const n = rep.settled || 0;
   const units = Number(rep.net_units || 0);
   const rows = (recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10);
+  /* HOW OFTEN IT NAMES ONE (Ethan, 2026-10-29, after a run of NO BET cards:
+     measure it). `ledger.potd_days`: the slates of the last four weeks and
+     how many carried a pick, through yesterday — a league's own, or for All
+     bets the days any league had one. A day it sits out is the bar working,
+     and nothing is recorded for it. */
+  const sd = scope ? ((sit || {}).by_sport || {})[scope] : sit;
+  const sitOut = sd && sd.slates ? `<div style="margin-top:5px;font-size:var(--fs-sm);color:var(--text-mute)">${scope
+    ? `A pick on ${sd.picked} of the last ${plural(sd.slates, "slate")}`
+    : `A pick in at least one league on ${sd.picked} of the last ${plural(sd.slates, "day")}`}
+    — on the others nothing cleared the bar, and nothing was recorded.</div>` : "";
   const line = n
     ? `<b style="font-size:var(--fs-lg)">${rep.wins}-${rep.losses}${
         rep.pushes ? `-${rep.pushes}` : ""}</b>
@@ -3097,6 +3107,7 @@ function recPotdSection(rep, scope, recent) {
         ${escapeHtml(where)}</span></div>
     <div class="card" style="--tone:var(--brand)">
       <div>${line}</div>
+      ${sitOut}
       ${n && n < POTD_MIN_N ? `<div style="margin-top:5px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${plural(n, "settled pick")} is too few to judge a hit rate on. This line is the
         record so far, not a claim about what it will do — it needs about ${POTD_MIN_N}
@@ -3355,7 +3366,7 @@ async function renderRecord() {
     + recZenoSection(d.zeno, scope, _zenoTixRec)
     + recPotdClaims(d.potd_claims, scoped ? scope : "")
     + recPotdSection(scoped ? (d.potd_by_sport || {})[scope] : d.potd,
-                     scope, d.potd_recent || [])
+                     scope, d.potd_recent || [], d.potd_days)
     + recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)
     + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
                        scope)

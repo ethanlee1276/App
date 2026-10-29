@@ -1956,6 +1956,51 @@ POTD_RECENT_LIMIT = 40
 #: showcase pick inside the bankroll's own curve.
 POTD_STAKE = 1.0
 
+#: How far back the Pick of the Day's sit-out count looks, in calendar days.
+POTD_DAYS_WINDOW = 28
+
+
+def potd_days(conn, days: int = POTD_DAYS_WINDOW, today: str | None = None) -> dict:
+    """How often the Pick of the Day names one: per league, the slates it
+    had in the last `days` days and how many of them carried a pick.
+
+    Ethan, 2026-10-29, after a run of NO BET cards: "do all 3" — the first
+    of which was to measure how often the card comes up empty. Measured
+    here so it is a number on the record rather than a feeling, and public
+    like the rest of the record: a count of days, nothing about a bet.
+
+    A SLATE IS A DAY THE LEAGUE JOURNALED A GAME ROW (WITNESSED_BOOKS, by
+    `game_day`), on the league's pick weekdays (potd.PICK_WEEKDAYS: an NFL
+    Saturday was never a pick day). THROUGH YESTERDAY, never today: today's
+    count would say whether today has a pick, and that is the paid card.
+    Benched leagues are left out, as they are of the rest of the record.
+    """
+    from .potd import PICK_WEEKDAYS, slate_day
+    end = datetime.date.fromisoformat((today or slate_day())[:10])
+    lo = (end - datetime.timedelta(days=int(days))).isoformat()
+    books = WITNESSED_BOOKS
+    rows = conn.execute(
+        "SELECT sport, game_day, MAX(category = ?) FROM bets "
+        f"WHERE category IN ({','.join('?' * len(books))}) "
+        "AND game_day >= ? AND game_day < ? "
+        "AND game_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
+        "GROUP BY sport, game_day",
+        (POTD_CATEGORY, *books, lo, end.isoformat())).fetchall()
+    by: dict = {}
+    every: dict = {}
+    for sport, day, picked in rows:
+        if sport not in POTD_LEAGUES or is_benched(sport):
+            continue
+        weekdays = PICK_WEEKDAYS.get(sport)
+        if weekdays and datetime.date.fromisoformat(day).weekday() not in weekdays:
+            continue
+        s = by.setdefault(sport, {"slates": 0, "picked": 0})
+        s["slates"] += 1
+        s["picked"] += 1 if picked else 0
+        every[day] = every.get(day, False) or bool(picked)
+    return {"days": int(days), "through": (end - datetime.timedelta(days=1)).isoformat(),
+            "slates": len(every), "picked": sum(every.values()), "by_sport": by}
+
 
 def log_pick_of_the_day(conn, payload: dict) -> int:
     """Journal one Pick of the Day. Returns 1 if a row was written.
@@ -7341,6 +7386,15 @@ def _recap_or_empty(conn) -> dict:
         return {"books": []}
 
 
+def _potd_days_or_empty(conn) -> dict:
+    """`potd_days`, or nothing: a count that fails must never cost the
+    Record page its export."""
+    try:
+        return potd_days(conn)
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
 def recent_settled(conn, limit: int = 30,
                    category: str | tuple[str, ...] = "main",
                    sport: str | None = None,
@@ -10595,6 +10649,9 @@ def export_json(conn, path) -> None:
         # section can show the run rather than only its total.
         "potd_recent": recent_settled(conn, POTD_RECENT_LIMIT,
                                       category=POTD_CATEGORY, since=since),
+        # HOW OFTEN IT NAMES ONE — the slates of the last four weeks and
+        # how many carried a pick (`potd_days`). Through yesterday.
+        "potd_days": _potd_days_or_empty(conn),
         # Per sport × per book × per market — the Record page's section
         # spots (edge / most likely / long shots), with the market rows
         # the page labels via market_words above.
