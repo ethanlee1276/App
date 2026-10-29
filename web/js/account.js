@@ -329,6 +329,103 @@ function mbMonthHTML(bets, today) {
     l.settled ? `<span class="mb-month-prev">${mbMonthName(prev)} ${mbMoney(l.profit, true)}</span>` : ""}</p>`;
 }
 
+/* YOUR EDGE REPORT (Ethan's second research paper, 2026-10-29: "Show users
+   their own computed profile as an 'Edge Report' ... their history becomes
+   a reason to stay: a bettor with six months of CLV history on Qellys Book
+   won't restart that somewhere else"). Read off this log alone, plus —
+   signed in — the closes the box noted for saved parlays (GET
+   /api/account/edge, engine/betclv). Your price against the close (the
+   entry's decimal over the close's, less one; the box's measure where it
+   has one), where you win and where you don't by market, your best and
+   worst result, and when you bet (off the moment each bet was logged).
+   Never a pick, and nothing here leaves the page. */
+let _mbEdgeClv = null;
+function mbEdge(bets, server) {
+  const clvs = [];
+  for (const b of bets) {
+    const s = server && server[String(b.id)];
+    const mine = mbDecimal(b.odds), close = b.close == null || b.close === "" ? null : mbDecimal(b.close);
+    if (s != null) clvs.push(s);
+    else if (mine && close) clvs.push(mine / close - 1);
+  }
+  const settled = bets.filter((b) => ["win", "loss", "push"].includes(b.result));
+  const mk = {};
+  for (const b of settled) {
+    const m = (Array.isArray(b.legs) && b.legs.length > 1) ? "parlays" : (mbMarket(b.desc) || {}).market;
+    if (!m) continue;
+    const g = mk[m] || (mk[m] = { n: 0, wins: 0, losses: 0, staked: 0, profit: 0 });
+    g.n += 1; g.wins += b.result === "win" ? 1 : 0; g.losses += b.result === "loss" ? 1 : 0;
+    g.staked += Number(b.stake) || 0; g.profit += mbProfit(b);
+  }
+  const markets = Object.entries(mk).filter(([, g]) => g.n >= 3 && g.staked > 0)
+    .map(([m, g]) => Object.assign({ m, roi: g.profit / g.staked }, g)).sort((a, b) => b.roi - a.roi);
+  const ranked = settled.filter((b) => b.result !== "push").sort((a, b) => mbProfit(b) - mbProfit(a));
+  const hours = Array(24).fill(0);
+  for (const b of bets) {
+    const at = Number(String(b.id || "").slice(0, 13));
+    if (at > 1.5e12 && at < Date.now() + 864e5) hours[new Date(at).getHours()] += 1;
+  }
+  const timed = hours.reduce((a, v) => a + v, 0);
+  let peak = null;
+  if (timed >= 8) {
+    for (let h = 0; h < 24; h++) {
+      const v = hours[h] + hours[(h + 1) % 24];
+      if (!peak || v > peak.n) peak = { from: h, n: v };
+    }
+    peak.share = peak.n / timed;
+  }
+  return { clv: clvs.length ? { n: clvs.length, beat: clvs.filter((c) => c > 0).length,
+                                 avg: clvs.reduce((a, v) => a + v, 0) / clvs.length } : null,
+           markets, best: ranked.length >= 2 ? ranked[0] : null, worst: ranked.length >= 2 ? ranked[ranked.length - 1] : null,
+           peak, timed };
+}
+function mbEdgeHTML(bets) {
+  if (!bets.length) return "";
+  const e = mbEdge(bets, (_mbEdgeClv || {}).by_bet);
+  const pctS = (v) => `${v >= 0 ? "+" : MINUS}${Math.abs(v * 100).toFixed(1)}%`;
+  const hour = (h) => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
+  const rows = [];
+  if (e.clv) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Your price against the close</span>
+      <b class="${e.clv.avg >= 0 ? "good" : "warn"}">${pctS(e.clv.avg)}</b>
+      <span class="mini">a bet on average · beat it on ${e.clv.beat} of ${plural(e.clv.n, "bet")}</span></div>`);
+  }
+  const top = e.markets[0], low = e.markets.length > 1 ? e.markets[e.markets.length - 1] : null;
+  if (top) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Where you win</span><b class="${top.roi >= 0 ? "good" : "warn"}">${
+      escapeHtml(top.m)}</b><span class="mini">${top.wins}–${top.losses} · ${pctS(top.roi)} ROI on ${mbMoney(top.staked)}</span></div>`);
+  }
+  if (low && low.roi < 0) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Where you don’t</span><b class="warn">${escapeHtml(low.m)}</b>
+      <span class="mini">${low.wins}–${low.losses} · ${pctS(low.roi)} ROI on ${mbMoney(low.staked)}</span></div>`);
+  }
+  if (e.best && mbProfit(e.best) > 0) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Best result</span><b class="good">${mbMoney(mbProfit(e.best), true)}</b>
+      <span class="mini">${escapeHtml(String(e.best.desc || "").slice(0, 60))} · ${escapeHtml(e.best.date || "")}</span></div>`);
+  }
+  if (e.worst && mbProfit(e.worst) < 0) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Worst result</span><b class="warn">${mbMoney(mbProfit(e.worst), true)}</b>
+      <span class="mini">${escapeHtml(String(e.worst.desc || "").slice(0, 60))} · ${escapeHtml(e.worst.date || "")}</span></div>`);
+  }
+  if (e.peak) {
+    rows.push(`<div class="edge-row"><span class="edge-k">When you bet</span><b>${hour(e.peak.from)}–${hour((e.peak.from + 2) % 24)}</b>
+      <span class="mini">${Math.round(e.peak.share * 100)}% of the ${e.timed} bets logged here</span></div>`);
+  }
+  return `<div class="card edge-card" id="mb-edge"><div class="ffd-h">Your Edge Report</div>${rows.length ? rows.join("")
+    : `<p class="mini">Log a few bets, with the closing price when you have it, and this fills in: your price against the close, where you win, and when you bet.</p>`}
+    <p class="mini edge-foot">The close is the market’s last word before the game; beating it is the measure of a bet before its result. Saved parlays have theirs noted for you; for others, add the closing price in an import.</p></div>`;
+}
+async function mbEdgeFill() {
+  if (_mbEdgeClv !== null || !(typeof _acctUser !== "undefined" && _acctUser && _acctUser.signed_in)) return;
+  _mbEdgeClv = {};
+  try {
+    const r = await fetch("/api/account/edge", { credentials: "same-origin", cache: "no-store" });
+    if (r.ok) _mbEdgeClv = await r.json();
+  } catch (e) { /* the page's own closes still count */ }
+  const box = document.getElementById("mb-edge");
+  if (box && Object.keys(_mbEdgeClv.by_bet || {}).length) box.outerHTML = mbEdgeHTML(mbLoad());
+}
+
 /* Where the week stands against the member's own limit (Settings →
    Limits; engine/limits), when they set one. */
 function mbLimitHTML(bets) {
@@ -541,6 +638,7 @@ function renderMyBets() {
     ${form}
     ${mbLimitHTML(bets)}
     ${ribbon}
+    ${mbEdgeHTML(bets)}
     ${mbMonthHTML(bets, today)}
     ${st.settled ? `<div id="mb-report"></div>` : `<div id="mb-risk"></div>`}
     ${(() => {
@@ -647,6 +745,7 @@ function renderMyBets() {
   sweepRings(host);
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
   loadExtras().then((X) => X && (st.settled ? X.reportCard(document.getElementById("mb-report")) : X.riskView(document.getElementById("mb-risk"))));
+  mbEdgeFill();
 }
 
 /* ============================================================
@@ -3619,6 +3718,7 @@ function setListHTML() {
       ...(_pwStatus && _pwStatus.activity_switch
         ? [setItem({ ico: "chart", title: "Your activity", val: _pwStatus.activity ? "On" : "Off", chev: true,
                      attrs: 'data-set-open="activity"' })] : []),
+      setItem({ ico: "shield", title: "What we keep about you", chev: true, attrs: 'data-set-open="yourdata"' }),
       setItem({ ico: "download", title: "Download my data", attrs: 'data-act="acctExport"' }),
       setItem({ ico: "search", title: "Clear search history", attrs: 'data-act="acctSearchClear"' }),
       setItem({ ico: "logout", title: "Sign out everywhere", sub: "Every device, this one too",
@@ -3691,6 +3791,36 @@ async function actFill(off) {
   };
 }
 
+/* WHAT WE KEEP ABOUT YOU (engine/yourdata, engine/consent; the second
+   paper: "your transparency promise made visible"). Every row the site
+   holds about the member, counted and grouped, how long each is kept, and
+   every yes and no they gave us with the policy's date; the rows
+   themselves are in Download my data. */
+const YD_KIND = { terms: "Terms and 21+", activity: "Keeping your activity", alerts: "Alerts",
+                  limits: "Limits", split: "The members' split" };
+async function ydFill() {
+  const box = document.getElementById("set-yd");
+  if (!box) return;
+  let v = null;
+  try {
+    const r = await fetch("/api/account/yourdata", { credentials: "same-origin", cache: "no-store" });
+    v = r.ok ? await r.json() : null;
+  } catch (e) { v = null; }
+  if (!box.isConnected) return;
+  if (!v) { box.innerHTML = `<p class="set-foot">That did not load. Try again in a moment.</p>`; return; }
+  const day = (at) => { try { return new Date(at * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); } catch (e) { return ""; } };
+  box.innerHTML = (v.groups || []).map((g) => setGroup(`${g.title} · ${g.n}`, g.items.map((x) => setItem({
+      tag: "div", title: escapeHtml(x.what), val: escapeHtml(String(x.n)) })), `Kept ${escapeHtml(g.kept)}.`)).join("")
+    + ((v.choices || []).length ? setGroup("Your choices", v.choices.map((c) => setItem({
+      tag: "div", title: escapeHtml(`${YD_KIND[c.kind] || c.kind}: ${c.choice}`),
+      sub: escapeHtml(`${day(c.at)}${c.policy ? ` · under the policy of ${c.policy}` : ""}`) })),
+      "Each yes and no, newest first, with the date of the Privacy Policy you were shown.") : "")
+    + setGroup("", [setItem({ ico: "download", title: "Download all of it", attrs: 'data-act="acctExport"' }),
+                    setItem({ ico: "trash", tone: "red", title: "Delete my account and all of it", danger: true,
+                              attrs: 'data-act="acctDelete"' })],
+      "Counts only here; Download my data has every row. Never sold, never shared, never an ad.");
+}
+
 /* The screen a row opens: Back, its title, its own list or form. */
 function setPageHTML(page) {
   const s = settings();
@@ -3756,6 +3886,10 @@ function setPageHTML(page) {
                        attrs: `data-set-multi="${page}" data-set-val="${escapeAttr(k)}" aria-pressed="${on}"` });
     }), page === "books" ? "The books you bet at lead the Bet it sheet, tagged “Your book”."
       : "What you came for. It stays with your account, in Download my data, and you can change it here any time.");
+  }
+  if (page === "yourdata") {
+    setTimeout(ydFill, 0);
+    return head("What we keep") + `<div id="set-yd"><p class="set-foot">Loading…</p></div>`;
   }
   if (page === "limit") {
     const lim = Number(s.limit_week) || 0, st = limitStaked(mbLoad());

@@ -2789,6 +2789,26 @@ class Handler(BaseHTTPRequestHandler):
                 # people's data we have to be able to hand it back.
                 return self._send(200, json.dumps(
                     A.export_user(conn, who["id"]), indent=1).encode(), ".json")
+            if path == "yourdata":
+                # What we keep, counted (engine/yourdata), and every yes and
+                # no they gave us (engine/consent): Settings → Your data.
+                from engine import consent as CS, yourdata as YD
+                return self._send(200, json.dumps({"groups": YD.summary(conn, who["id"]),
+                                                   "choices": CS.history(conn, who["id"])[::-1][:60]}).encode(),
+                                  ".json")
+            if path == "edge":
+                # The Edge Report's closing-line value for the member's saved
+                # parlays (engine/betclv): each ticket's, when every leg has
+                # its close. Hand-logged closes are the page's own to read.
+                from engine import betclv as BC
+                rows = ((A.get_sections(conn, who["id"]).get("mybets") or {}).get("data") or {}).get("rows") or []
+                by_bet = {}
+                for b in rows if isinstance(rows, list) else []:
+                    if isinstance(b, dict) and b.get("src") == "slip" and b.get("id") and isinstance(b.get("legs"), list):
+                        clv = BC.ticket(conn, who["id"], str(b["id"]), legs=len(b["legs"]), payout=b.get("odds"))["clv"]
+                        if clv is not None:
+                            by_bet[str(b["id"])[:40]] = round(clv, 4)
+                return self._send(200, json.dumps({"by_bet": by_bet}).encode(), ".json")
             if path == "digest":
                 from engine import digest as DG, mailer
                 out = DG.optin_get(conn, who["id"])

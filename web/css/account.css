@@ -956,3 +956,14 @@ a.pw-door-go { text-decoration: none; }
 .wk-limit-bar i { display: block; height: 100%; border-radius: inherit; background: var(--good); }
 .wk-limit.over .wk-limit-bar i { background: var(--warn); }
 .wk-limit-go { background: none; border: 0; padding: 0; color: var(--brand-2); font: inherit; font-weight: 700; cursor: pointer; }
+
+/* YOUR EDGE REPORT on My Bets (mbEdgeHTML): one line a finding — what it
+   is, the number, and what the number is made of. */
+.edge-card { display: grid; gap: 2px; }
+.edge-row { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; align-items: baseline; padding: 8px 0; }
+.edge-k { font-size: var(--fs-sm); color: var(--text-mute); }
+.edge-row b { font-variant-numeric: tabular-nums; text-align: right; }
+.edge-row b.good { color: var(--good); }
+.edge-row b.warn { color: var(--warn); }
+.edge-row .mini { grid-column: 1 / -1; }
+.edge-foot { margin-top: 6px; }
