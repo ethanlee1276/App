@@ -191,6 +191,16 @@ def test_a_prop_opens_at_the_top_and_the_board_keeps_its_place():
               return performance.now() - w._qbSince > 1000;
             }""", polling=200, timeout=15000)
             got = page.evaluate("""async () => {
+              // THE APP'S RESTORE, NOT THE BROWSER'S ANCHORING (2026-10-28).
+              // The board renders again on the way back, and a section above
+              // the reader can fill after the offset is put back (the record,
+              // once a record.json is on disk, as the main suite leaves one:
+              // ~440px). Scroll anchoring then moves the offset by exactly
+              // that much to keep the same rows in view, which is the
+              // browser keeping the place, and read as a number it looked
+              // like the app losing it. Anchoring off, the number is the app's.
+              document.documentElement.style.overflowAnchor = 'none';
+              document.body.style.overflowAnchor = 'none';
               // This container has no slate, so the board is short. Give it
               // the height a real one has — the offset is the whole point.
               const v = document.getElementById('view-recommended');
