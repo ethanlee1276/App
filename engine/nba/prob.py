@@ -120,6 +120,25 @@ def p_over(stat: str, proj: float, line: float,
     return round(p_over_normal(proj, line, sd_for(stat, proj, tune)), 4)
 
 
+def implied_mean(stat: str, line: float, q_over: float,
+                 tune: LeagueTuning = NBA) -> float | None:
+    """The mean at which this stat's curve (`p_over`) gives the over
+    ``q_over`` at ``line``: a market's price read as a projection on our own
+    scale. None when the price sits outside what the curve can reach."""
+    if not (0.02 < q_over < 0.98) or line <= 0:
+        return None
+    lo, hi = 0.01, max(3.0 * line, line + 15.0)
+    if p_over(stat, hi, line, tune) < q_over or p_over(stat, lo, line, tune) > q_over:
+        return None
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if p_over(stat, mid, line, tune) < q_over:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
 # --- market math ------------------------------------------------------------
 def devig_multiplicative(odds_a: int, odds_b: int) -> tuple[float, float]:
     qa, qb = 1.0 / _dec(odds_a), 1.0 / _dec(odds_b)

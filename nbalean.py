@@ -9,8 +9,10 @@ seems wrong and we need to work on that and calibrate that more."
 Three reads, all off what the box already holds; nothing is fetched and
 nothing is written.
 
-  1. THE BOARD. Tonight's NBA Most Likely picks (web/data/nba.json), over
-     against under, by market.
+  1. THE BOARD. Tonight's NBA Most Likely picks, over against under, by
+     market: off the full copy in data/built (`gate.board_source`), never
+     web/data/nba.json, which with the paywall on has the picks taken out
+     (tests/test_tools_read_the_full_board.py, the eleventh such tool).
   2. THE LEVEL. Every NBA prop the build priced at its main line, the
      model's projection against the mean the market's own price implies
      there: the de-vigged chance of the over, turned back into a mean
@@ -34,6 +36,11 @@ nothing is written.
      season's end: a lottery club's April, a contender's playoffs) and over
      this season's games alone, and which one the board is reading. Then
      whether the teammate-out minutes (engine/nba/vacancy) are on.
+
+  5. THE LADDERS. Tonight's alternate rungs, how many are quoted one way
+     only. Those carried the model's raw number until 2026-10-29; now each
+     is clamped toward the main line's market read at that rung
+     (engine/nba/pipeline.rung_probs), the way a two-way rung always was.
 
 WHAT MOVED (2026-10-29, engine/nba/minutes.context_norms): the minutes
 model laid tonight's blowout and rest haircuts on a base that already
@@ -62,22 +69,10 @@ MIN_PROPS = 8
 
 
 def implied_mean(stat: str, line: float, q_over: float) -> float | None:
-    """The mean at which the model's own curve gives the over ``q_over`` at
-    ``line`` — the market's price read as a projection. None when the price
-    sits outside what the curve can reach."""
-    from engine.nba.prob import p_over
-    if not (0.02 < q_over < 0.98) or line <= 0:
-        return None
-    lo, hi = 0.01, max(3.0 * line, line + 15.0)
-    if p_over(stat, hi, line) < q_over or p_over(stat, lo, line) > q_over:
-        return None
-    for _ in range(60):
-        mid = (lo + hi) / 2.0
-        if p_over(stat, mid, line) < q_over:
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2.0
+    """The market's price read as a mean on the model's own curve
+    (engine/nba/prob.implied_mean)."""
+    from engine.nba.prob import implied_mean as _implied_mean
+    return _implied_mean(stat, line, q_over)
 
 
 def board_sides(doc: dict) -> dict:
@@ -108,6 +103,21 @@ def levels(doc: dict) -> dict:
         if mean:
             out[r.get("market") or "?"].append(proj / mean)
     return out
+
+
+def ladder_shape(doc: dict) -> dict:
+    """``{"rungs", "one_way"}``: distinct alternate numbers on tonight's
+    rows (player, market, line), and how many no book quotes both ways."""
+    seen: dict = {}
+    for r in doc.get("recommendations") or []:
+        for ln in r.get("alt_lines") or []:
+            try:
+                k = (r.get("player"), r.get("market"), float(ln.get("line")))
+                two = bool(int(ln.get("over_odds") or 0) and int(ln.get("under_odds") or 0))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            seen[k] = seen.get(k, False) or two
+    return {"rungs": len(seen), "one_way": sum(1 for two in seen.values() if not two)}
 
 
 def record(conn) -> dict:
@@ -177,12 +187,15 @@ def clv(conn) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--board", default=str(ROOT / "web" / "data" / "nba.json"))
+    ap.add_argument("--board", default=None,
+                    help="a board file to read (default: the full copy of web/data/nba.json)")
     args = ap.parse_args(argv)
+    from engine import gate
+    board = Path(args.board) if args.board else gate.board_source(ROOT / "web" / "data" / "nba.json")
     try:
-        doc = json.loads(Path(args.board).read_text(encoding="utf-8"))
+        doc = json.loads(board.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        print(f"No NBA board to read at {args.board} ({type(exc).__name__}).")
+        print(f"No NBA board to read at {board} ({type(exc).__name__}).")
         doc = {}
 
     sides = board_sides(doc)
@@ -209,6 +222,10 @@ def main(argv=None) -> int:
                   f"below the market on {below:.0%}")
     else:
         print("  No priced NBA props on the board to compare.")
+    lad = ladder_shape(doc)
+    if lad["rungs"]:
+        print(f"  Alternate lines tonight: {lad['rungs']} numbers, {lad['one_way']} quoted one way only "
+              f"({lad['one_way'] / lad['rungs']:.0%}) — each now clamped toward the main line's market")
 
     try:
         from engine.db import connect

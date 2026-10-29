@@ -7840,6 +7840,37 @@ The check in one go (the report; the test above stays a hand-run):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HO 2>&1 | tee /tmp/ho.txt
 ```
 
+**HP. Every NBA alternate line meets the market** (step 276; "Ok keep
+going"). The alternate lines (the "15+ points, 20+ points" ladders) are
+often quoted one way only, over. A line quoted both ways was always pulled
+toward its own price before Most Likely ranked it; a one-way line carried
+the model's raw number. So with the model running a little low, every over
+on those ladders read below the market's view and missed the 55% floor,
+which handed the unders more seats; running high, those overs would have
+taken seats on numbers nothing had checked. Now a one-way line is checked
+against the main line: its price, vig out, is read as the player's
+average, that average prices the rung, and the model is pulled toward it
+at the same weight as every other line. A rung where the two are far
+apart is dropped, as a main line would be.
+
+The report had a bug of its own, caught before you ran it: it read the
+public copy of the board, which has the picks taken out, so it would have
+said there were no NBA picks. It reads the full copy now, and adds one
+line: how many of tonight's alternate lines are one way.
+
+Nothing to set: the updater picks it up within five minutes and the next
+NBA build uses it. Read-only, after that build:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nbalean.py
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HP 2>&1 | tee /tmp/hp.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

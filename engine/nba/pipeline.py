@@ -533,43 +533,73 @@ def _face(assets, player: str) -> str:
 
 
 def rung_probs(stat: str, proj: float, alts: list, w: float,
-               tune: LeagueTuning = NBA) -> dict:
+               tune: LeagueTuning = NBA, main_line=None, main_over=None) -> dict:
     """``{"14.5": 0.71, ...}`` — the board's number at every distinct rung
     of a prop's alternate ladder, priced EXACTLY as the main line is:
     the model's curve at the rung (`p_over`, negative binomial for the
     low-count stats), the market's live correction, then the humility
     clamp toward the rung's own de-vigged price at the weight the main
-    line was clamped at. A rung quoted one-sided has no market number to
-    clamp toward and carries the model's; a rung the clamp KILLS (model
-    and market apart by more than CLAMP_KILL_DIFF) is left out, so
+    line was clamped at. A rung quoted one-sided is clamped toward the
+    main line's market instead (below); a rung the clamp KILLS (model and
+    market apart by more than CLAMP_KILL_DIFF) is left out, so
     `likely._best_rung` cannot price it from a football curve instead.
     Keyed the way `_best_rung` looks them up (``f"{line:g}"``).
+
+    A ONE-SIDED RUNG IS CLAMPED TOO (2026-10-29, "think like a pro"). The
+    alternate ladders are often quoted one way only ("15+ points"), and
+    such a rung used to carry the model's raw number while a two-sided one
+    beside it was pulled toward its price. On a board ranked by chance the
+    raw numbers took the seats; the credibility bar (`likely._credible`)
+    only refuses one past ten points from the rung's own price, and never
+    pulls it. Now the main line's de-vigged price (``main_line``,
+    ``main_over``: its chance of the over) is read as a mean on this stat's
+    own curve (`implied_mean`), and that mean prices the rung: the market's
+    number there, clamped toward at the same weight, killed past the same
+    gap. The main line, not the rung's own one-way price: a one-way rung
+    carries a hold nobody quotes, the main line the thinnest on the board.
+    A number some book quotes both ways is read off that quote, whichever
+    book came first. With no main price to read, the model's number, as
+    before.
     """
     from ..calibrate import calibrated
-    out: dict = {}
+    from .prob import implied_mean
+    quotes: dict = {}                                       # key -> (line, over, under)
     for ln in alts or []:
         try:
             line = float(ln.get("line") if isinstance(ln, dict) else ln.line)
         except (TypeError, ValueError, AttributeError):
             continue
-        key = f"{line:g}"
-        if key in out:
-            continue
         over = ln.get("over_odds") if isinstance(ln, dict) else getattr(ln, "over_odds", 0)
         under = ln.get("under_odds") if isinstance(ln, dict) else getattr(ln, "under_odds", 0)
-        p_model = calibrated(tune.key, stat, p_over(stat, proj, line, tune))
         try:
             over, under = int(over or 0), int(under or 0)
         except (TypeError, ValueError):
             over, under = 0, 0
+        key = f"{line:g}"
+        had = quotes.get(key)
+        if had is None or (not (had[1] and had[2]) and over and under):
+            quotes[key] = (line, over, under)
+    mkt_mean = None
+    if main_line is not None and main_over is not None and \
+            any(not (o and u) for _l, o, u in quotes.values()):
+        try:
+            mkt_mean = implied_mean(stat, float(main_line), float(main_over), tune)
+        except (TypeError, ValueError):
+            mkt_mean = None
+    out: dict = {}
+    for key, (line, over, under) in quotes.items():
+        p_model = calibrated(tune.key, stat, p_over(stat, proj, line, tune))
         if over and under:
             mkt_over, _ = devig(over, under)
-            p_final, _note = humility_clamp(p_model, mkt_over, w)
-            if p_final is None:
-                continue
-            out[key] = round(float(p_final), 4)
+        elif mkt_mean is not None:
+            mkt_over = p_over(stat, mkt_mean, line, tune)
         else:
             out[key] = round(float(p_model), 4)
+            continue
+        p_final, _note = humility_clamp(p_model, mkt_over, w)
+        if p_final is None:
+            continue
+        out[key] = round(float(p_final), 4)
     return out
 
 
@@ -680,7 +710,9 @@ def shared_recommendations(props: list[dict],
             "rung_probs": rung_probs(
                 r["market"], float(r["projection"]),
                 (alt_map or {}).get((r["player"], r["market"]), []),
-                float(r.get("w", 0.0) or 0.0), tune),
+                float(r.get("w", 0.0) or 0.0), tune,
+                main_line=r["line"],
+                main_over=(r["p_market"] if r["side"] == "OVER" else 1.0 - r["p_market"])),
             "logs": [{"week": i + 1,
                       "date": dates[i] if i < len(dates) else "",
                       "opponent": opps[i] if i < len(opps) else "", "value": v,

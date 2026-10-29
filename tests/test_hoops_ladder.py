@@ -85,7 +85,8 @@ def test_a_rung_is_priced_the_way_the_main_line_is():
 
 def test_a_one_sided_rung_carries_the_model_and_a_killed_rung_is_left_out():
     tune = hoops.NBA
-    # One side only: nothing to clamp toward, so the model's own number.
+    # One side only and no main price to read: the model's own number
+    # (with one, tests/test_every_nba_alternate_line_meets_the_market.py).
     got = P.rung_probs("reb", 8.0, [_ln(5.5, -300)], 0.45, tune)
     assert abs(got["5.5"] - round(p_over("reb", 8.0, 5.5, tune), 4)) < 1e-9, got
     # A rung the market prices far from the model is what the clamp

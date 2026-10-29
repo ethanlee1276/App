@@ -47,6 +47,12 @@ morning. `most_likely` and `pick_of_the_day` are on PAID_KEYS too:
 
 The first one is why the second went unnoticed: the tool you would open
 to check the card was reading the same empty file the card was.
+
+THE ELEVENTH, 2026-10-29, caught before it ever ran on the box:
+nbalean.py, written to answer "almost every NBA most likely bet is an
+under", opened web/data/nba.json and would have reported "no NBA picks on
+the board" and "no priced NBA props" in answer to a question about the
+picks on the board.
 """
 
 import contextlib
@@ -496,6 +502,36 @@ def test_both_potd_readers_resolve_through_board_source():
     rep = open(os.path.join(ROOT, "potd_report.py"), encoding="utf-8").read()
     paths = rep.split("def board_paths", 1)[1].split("\ndef ", 1)[0]
     assert "gate.board_source" in paths, paths[:400]
+
+
+def test_the_nba_lean_report_reads_the_full_board():
+    """nbalean.py, on a paywalled tree, counts the picks the private copy
+    holds; with the private copy gone it says the board has none, which
+    is the reading it would have given every night on the box."""
+    import nbalean
+    from engine import db as history
+    tmp = _paywalled_likely(rows=[_likely(player=f"P{i}") for i in range(3)])
+    (tmp / "data" / "built" / "recommendations.json").rename(tmp / "data" / "built" / "nba.json")
+    (tmp / "web" / "data" / "recommendations.json").rename(tmp / "web" / "data" / "nba.json")
+    old_root, old_connect, old_history = nbalean.ROOT, ledger.connect, history.connect
+    db = _empty_ledger()
+    nbalean.ROOT = tmp
+    ledger.connect = lambda *a_, **k_: old_connect(db)
+    history.connect = lambda *a_, **k_: old_history(":memory:")      # never this box's box scores
+    try:
+        for full in (True, False):
+            if not full:
+                (tmp / "data" / "built" / "nba.json").unlink()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                nbalean.main([])
+            out = buf.getvalue()
+            assert ("Most Likely: 3 picks" in out) is full, out
+            assert ("no NBA picks on the board" in out) is not full, out
+    finally:
+        nbalean.ROOT, ledger.connect, history.connect = old_root, old_connect, old_history
+    src = open(os.path.join(ROOT, "nbalean.py"), encoding="utf-8").read()
+    assert 'gate.board_source(ROOT / "web" / "data" / "nba.json")' in src
 
 
 if __name__ == "__main__":
