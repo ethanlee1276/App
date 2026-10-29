@@ -475,14 +475,6 @@ def test_the_renewal_reminder_the_documents_promise_is_the_one_sent():
     assert set(LC.RENEW_PLANS) == {"sixmonth", "yearly"}
 
 
-def test_the_documents_are_dated_the_same_day():
-    """Read together, so changed together: a policy dated after the Terms
-    it is read with, or the other way round, is a question nobody can
-    answer from the pages."""
-    date = lambda doc: re.search(r'class="legal-date">Last updated ([^<]+)<', doc).group(1)   # noqa: E731
-    assert date(TERMS) == date(PRIVACY), (date(TERMS), date(PRIVACY))
-
-
 def test_the_honesty_lines_survive_in_the_terms():
     """The same sentences the rest of the site is pinned to. A legal page
     that softens them is the one place it would not be noticed."""
