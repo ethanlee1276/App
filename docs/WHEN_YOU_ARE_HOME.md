@@ -8627,6 +8627,30 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh ID 2>&1 | tee /tmp/id.txt
 ```
 
+**IE. The sidebar holds still** (step 291; your open Duo's sidebar
+circled: "I'm able to move this bar around and it's weird so make it
+solid and only able to scroll up and down"). Its list could be dragged
+sideways and pulled past either end with the rubber band, and a pull down
+inside it was the page's pull to refresh ("Release to refresh" on your
+screen). Now it scrolls up and down only: nothing sideways, no rubber band,
+and a pull or a sideways swipe that starts inside it (or inside the phone's
+menu sheet) stays its own, with no refresh and no jump to the next league.
+A pull on the page itself still refreshes it.
+
+Nothing to set: the updater picks it up within five minutes. Read-only, any
+time; each prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/css/styles.css | grep -c 'overscroll-behavior: none; touch-action: pan-y pinch-zoom;'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function paneOwned(el)'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IE 2>&1 | tee /tmp/ie.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

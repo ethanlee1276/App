@@ -5386,7 +5386,13 @@ body.has-rail .shell {
 
 .sidebar { position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
   height: calc(100dvh - var(--topbar-h));
-  overflow-y: auto; overscroll-behavior: contain;
+  /* SOLID, AND IT SCROLLS UP AND DOWN ONLY (Ethan, 2026-10-29, the open
+     Duo's sidebar circled: "I'm able to move this bar around and it's
+     weird so make it solid and only able to scroll up and down"). Its
+     content could be dragged sideways and pulled past either end with
+     the rubber band. Now nothing scrolls sideways, there is no rubber
+     band, and a finger pans it up and down only (pinching still zooms). */
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: pan-y pinch-zoom;
   display: flex; flex-direction: column; gap: 14px;
   padding: 18px 14px 20px; border-right: var(--hairline) solid var(--border-soft);
   background: var(--bg-2); scrollbar-width: thin; }

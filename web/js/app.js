@@ -30569,9 +30569,24 @@ function swipeTarget(dx, dy, sports, current) {
    field, belongs to that thing. */
 function swipeOwned(el) {
   for (let n = el; n && n !== document.body; n = n.parentElement) {
-    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sportbar-in, .lb-table, table")) return true;
+    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sportbar-in, .lb-table, table, .sidebar, .more-sheet")) return true;
     if (n.scrollWidth > n.clientWidth + 4) {
       const o = getComputedStyle(n).overflowX;
+      if (o === "auto" || o === "scroll") return true;
+    }
+  }
+  return false;
+}
+
+/* A pull that began inside something that scrolls up and down on its own —
+   the sidebar, the menu sheet, a panel — is that thing's, never the page's
+   pull to refresh (Ethan, 2026-10-29: pulling the open Duo's sidebar down
+   said "Release to refresh" and the sidebar came with it). */
+function paneOwned(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.matches && n.matches(".sidebar, .more-sheet, .rail")) return true;
+    if (n.scrollHeight > n.clientHeight + 4) {
+      const o = getComputedStyle(n).overflowY;
       if (o === "auto" || o === "scroll") return true;
     }
   }
@@ -30608,7 +30623,7 @@ document.addEventListener("touchstart", (e) => {
   if (!e.touches || e.touches.length !== 1) { _touch = null; return; }
   const t = e.touches[0];
   _touch = { x: t.clientX, y: t.clientY, owned: swipeOwned(e.target),
-             atTop: window.scrollY <= 0, phase: "idle" };
+             atTop: window.scrollY <= 0 && !paneOwned(e.target), phase: "idle" };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!_touch || !_touch.atTop || !SWIPE_VIEWS.includes(state.view)) return;

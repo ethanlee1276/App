@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IE "The sidebar holds still" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'overscroll-behavior: none; touch-action: pan-y pinch-zoom;'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function paneOwned(el)'
+SH
 run ID "The Duo's bar, your month, Monday at your hour, and the reports that said OFF" 60 <<'SH'
 curl -s https://qellysbook.com/js/boot.js | grep -c 'var side = r >= 60'
 curl -s https://qellysbook.com/js/karma.js | grep -c 'function krMonthCanvas(m, handle)'
