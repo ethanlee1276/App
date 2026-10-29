@@ -1397,10 +1397,14 @@
       // without a profile, the code waits here and joins them after.
       const code = String(sub || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
       const peek = await api(`pickem-group?code=${encodeURIComponent(code)}`);
+      // A code kept for later is spent here, whatever happens to it: a link
+      // that died meanwhile (a new link, a full group) must not send every
+      // later visit to Pick'em back to this page.
+      const drop = () => { try { localStorage.removeItem(PK_JOIN_KEY); } catch (e) { /* private mode */ } };
       if (peek.ok && F.signedIn && F.me) {
         const r = await api("pickem-group", { do: "join", code });
+        drop();
         if (r.ok && r.out.group) {
-          try { localStorage.removeItem(PK_JOIN_KEY); } catch (e) { /* private mode */ }
           F.pkScope = `g${r.out.group.id}`;
           tfToast(r.out.already ? `You’re in ${r.out.group.name}.` : `You joined ${r.out.group.name}.`);
           go(`pickem/${F.pkSport || "nfl"}`);
@@ -1409,6 +1413,8 @@
         tfToast(r.out.error || "That did not go through.");
       } else if (peek.ok) {
         try { localStorage.setItem(PK_JOIN_KEY, code); } catch (e) { /* private mode */ }
+      } else if (peek.status === 404) {
+        drop();                                  // a dead code; a dropped connection keeps it
       }
       await railP;
       paint(seq, "pickem", pickemJoinHTML(peek.ok ? peek.out : null, code), { hero: false });

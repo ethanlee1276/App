@@ -139,6 +139,32 @@ def test_the_page_offers_the_break_and_says_the_limits():
     assert '"pause"' in srv[at:at + 900] and "PA.pause(conn, endpoint, body.get(\"hours\"))" in srv[at:]
 
 
+def test_a_break_survives_a_change_of_switches():
+    """The review of 2026-10-29: turning a switch on while paused rewrote the
+    phone's memory without its pause, so the page said "active" while the
+    box was still holding everything. Run under Node with a stand-in
+    localStorage."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        print("      (skipped: no node)")
+        return
+    app = READ("web", "js", "app.js")
+    fn = lambda name: app[app.index(f"function {name}("):app.index("\n}\n", app.index(f"function {name}(")) + 2]  # noqa: E731
+    js = "\n".join([
+        "const store = {}; const localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); } };",
+        'const PUSH_KEY = "qb_push";', fn("pushSaved"), fn("pushRemember"),
+        'localStorage.setItem(PUSH_KEY, JSON.stringify({ topics: ["posted"], paused_until: 1900000000 }));',
+        'pushRemember({ endpoint: "e", topics: ["posted", "news"] });',
+        "const a = JSON.parse(localStorage.getItem(PUSH_KEY));",
+        'pushRemember({ endpoint: "e", topics: ["posted"], paused_until: 0 });',
+        "const b = JSON.parse(localStorage.getItem(PUSH_KEY));",
+        "console.log(JSON.stringify([a.paused_until, a.mine, b.paused_until]));"])
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=30)
+    assert json.loads(out.stdout) == [1900000000, ["news"], 0], (out.stdout, out.stderr)
+
+
 def test_the_research_s_events_are_counted_where_they_happen():
     from _app import app_js
     every = app_js() + READ("web", "js", "slip.js")

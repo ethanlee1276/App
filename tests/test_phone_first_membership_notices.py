@@ -146,6 +146,51 @@ def test_a_longer_plan_hears_about_its_renewal_once():
             os.environ.pop(LC.ENV_RENEW_EMAIL, None)
 
 
+def test_a_failed_email_is_tried_again_and_a_full_day_still_carries_the_notice():
+    """The review of 2026-10-29: a queued push is not a delivered one (a
+    paused phone never shows it), so a failed email is retried, push or no
+    push; and the day's cap stops noise, never a charge warning."""
+    def boom(*_a):
+        raise OSError("relay down")
+    with tempfile.TemporaryDirectory() as d:
+        conn = _db(d)
+        uid = _member(conn, "trial@example.com", status="trialing", ends_in=20 * HOUR, plan="monthly")
+        _phone(conn, uid)
+        assert TN.run(conn, send=boom, now=NOW, site="https://example.com", log=QUIET) == 0
+        assert len(_queued(conn, uid, "account")) == 1, "the push went"
+        assert uid in {r["user_id"] for r in TN.due(conn, NOW + HOUR)}, "not marked: the email is owed"
+        box = []
+        assert TN.run(conn, send=lambda *a: box.append(a), now=NOW + HOUR, site="https://example.com", log=QUIET) == 1
+        assert [a[0] for a in box] == ["trial@example.com"] and len(_queued(conn, uid, "account")) == 1, \
+            "the email went on the retry, and the push did not go twice"
+        year = _member(conn, "year@example.com", plan="yearly", ends_in=10 * DAY)
+        _phone(conn, year)
+        assert LC.renewals(conn, now=NOW, send=boom, site="https://example.com", log=QUIET) == 0
+        assert LC.renewals(conn, now=NOW + HOUR, send=lambda *a: box.append(a), site="https://example.com",
+                           log=QUIET) == 1 and box[-1][0] == "year@example.com"
+        # A phone whose day is used up: the promotional line waits, the notice goes.
+        conn.execute("UPDATE push_subs SET day = ?, day_n = 99 WHERE user_id = ?", (PA.eastern_day(NOW), year))
+        PM.tell(conn, year, "away:test", "away", "A line", "Body", "/", now=NOW) if PM.asked(conn, year, "away") else None
+        conn.execute("UPDATE subscriptions SET period_end = ?, renew_noted = NULL WHERE user_id = ?",
+                     (NOW + 12 * DAY, year))
+        LC.renewals(conn, now=NOW + 2 * HOUR, send=lambda *a: None, site="https://example.com", log=QUIET)
+        sent = []
+        PM.flush(conn, apns=lambda ep, m, cfg: sent.append(m["kind"]) or 200, apns_cfg={"x": 1},
+                 now=NOW + 2 * HOUR, quiet=False)
+        assert sent and set(sent) == {"account"}, sent
+
+
+def test_close_finishes_are_one_a_game_a_day():
+    a = PM.close_id("mlb:NYY@BOS", NOW)
+    assert a == PM.close_id("mlb:NYY@BOS", NOW + 2 * HOUR), "the same game, whoever says it"
+    assert a != PM.close_id("mlb:NYY@BOS", NOW + DAY), "the same two teams tomorrow are a new game"
+    late = dt.datetime(2026, 10, 30, 0, 40, tzinfo=ET).timestamp()
+    assert PM.close_id("nba:LAL@BOS", late) == PM.close_id("nba:LAL@BOS", late - 3 * HOUR), \
+        "a finish after midnight is still last night's game"
+    src = READ("engine", "kickoffs.py")
+    assert 'PM.close_id(f"{lg}:{away}@{home}", t)' in src
+
+
 def _web(days):
     web = Path(tempfile.mkdtemp())
     (web / "data").mkdir()

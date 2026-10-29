@@ -27,8 +27,9 @@ once, mail relay or not.
 
 Marked once it reached them by either: without a mail relay and with no
 phone signed in, nothing is marked, so the reminder still goes if a relay
-is set before the trial ends. An email that fails, with no push either, is
-not marked; the next sweep tries again.
+is set before the trial ends. An email that fails is not marked, push or
+no push (a queued push is not a delivered one: a paused phone never shows
+it); the next sweep tries the email again, and the push is not repeated.
 
 Standard library only. The address is never printed or logged.
 """
@@ -148,9 +149,12 @@ def run(conn, send=None, now: float | None = None, site: str | None = None, log=
                 send(to, subject, text, html)
                 mailed = True
             except Exception as e:                    # noqa: BLE001 — the next sweep tries again
+                # Not marked, push or no push: a queued push is not a
+                # delivered one (a paused phone never shows it), and the
+                # email is the warning in writing. The push went once (its
+                # id); the next sweep tries the email again.
                 log(f"trial reminder: one send failed ({type(e).__name__}); trying again next sweep")
-                if not pushed:
-                    continue
+                continue
         # Marked once it reached them either way; a phone account's that
         # reached neither still has the Live tab's line.
         if pushed or mailed or (send and (not to or SV.is_placeholder(to))):

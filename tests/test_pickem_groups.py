@@ -131,6 +131,25 @@ def test_tuesday_s_line_names_the_group_place():
     assert " in " not in amy.split(". ")[0], "no group, no group line"
 
 
+def test_an_account_going_stays_one_transaction_and_a_new_link_never_lies():
+    c = _conn("amy", "bob")
+    g = PG.create(c, 1, "Pool")[1]["group"]
+    PG.join(c, 2, g["code"])
+    c.execute("DELETE FROM feed_follows WHERE follower_id = 2")      # the deletion's transaction is open
+    SF.delete_user(c, 2)
+    assert c.in_transaction, "nothing committed in the middle of an account's deletion"
+    c.rollback()
+    assert PG.members(c, g["id"]) == {1, 2}, "and a rollback takes all of it back"
+    taken = PG.create(c, 2, "Other")[1]["group"]["code"]
+    keep = PG._code
+    PG._code = lambda: taken
+    try:
+        code, out = PG.new_code(c, 1, g["id"])
+    finally:
+        PG._code = keep
+    assert code == 503 and PG.mine(c, 1)[0]["code"] == g["code"], "no new link, and it says so"
+
+
 def test_the_server_routes_and_the_page():
     srv = READ("server.py")
     assert '"pickem-remind", "pickem-group"):' in srv and 'code, out = PG.act(conn, uid,' in srv
@@ -142,7 +161,8 @@ def test_the_server_routes_and_the_page():
                  'const PK_JOIN_KEY = "qb_pk_join";', 'if (kind === "pickem" && arg === "join") {',
                  "`${location.origin}/#feed/pickem/join/${code}`", 'data-fd-form="pk-create"',
                  'data-fd="pk-kick"', "A new link stops the old one working.",
-                 "if (waiting) { location.hash = `#feed/pickem/join/${waiting}`; return; }"):
+                 "if (waiting) { location.hash = `#feed/pickem/join/${waiting}`; return; }",
+                 "} else if (peek.status === 404) {\n        drop();"):
         assert want in js, want
     # The scope's own chips drive the tables: a group's, the friends', everyone's.
     assert 'tbl(1, 1)' in js and 'tbl(0, 0)' in js

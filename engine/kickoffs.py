@@ -176,7 +176,7 @@ def closegame_pass(conn, data_dir: Path | None = None, now: float | None = None)
                 continue
             score = f"{away} {live.get('away_score')} – {live.get('home_score')} {home}"
             clock = live.get("clock") or ""
-            told += PM.tell(conn, uid, f"closegame:{lg}:{away}@{home}", CLOSE_TOPIC,
+            told += PM.tell(conn, uid, PM.close_id(f"{lg}:{away}@{home}", t), CLOSE_TOPIC,
                             f"Close game: {score}" + (f", {clock}" if clock else ""),
                             "Final minutes, within one score.", f"/#pbp/{lg}/{event}" if event else "/#live",
                             now=t)

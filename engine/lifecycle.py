@@ -165,7 +165,11 @@ def renewals(conn, now: float | None = None, send=None, site: str | None = None,
                      f"<p>{title}.</p><p>{body}</p><p><a href=\"{link}\">Your account</a></p>")
                 mailed = True
             except Exception as exc:                          # noqa: BLE001 — the next pass tries again
+                # Not marked: the email is tried again next pass (the push
+                # went once already, by its id). A queued push is not a
+                # delivered one: a paused phone never shows it.
                 log(f"renewal notice: one email failed ({type(exc).__name__})")
+                continue
         if pushed or mailed:
             conn.execute("UPDATE subscriptions SET renew_noted = ? WHERE user_id = ?", (end, uid))
             told += 1

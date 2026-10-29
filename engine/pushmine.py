@@ -442,10 +442,19 @@ def bet_line_points(conn, user_id, bet_id: str, leg: str, line, main, now: float
                 f"You have {line}; the main line is now {main}.", "/#mybets", ttl="lines", now=now)
 
 
+def close_id(game: str, t: float) -> str:
+    """A close finish's message id: the game and its day, so a member with
+    the team followed and a ticket on it hears it once, and the same two
+    teams tomorrow (a baseball series) are a new game. The day runs six to
+    six, Eastern, so a finish after midnight is still last night's game."""
+    return f"closegame:{game}:{PA.eastern_day(t - 6 * 3600)}"
+
+
 def bet_close_game(conn, user_id, bet_id: str, game: str, where: str, now: float | None = None) -> bool:
     """A game on the member's ticket in its last minutes, within one score
     (topic "closegame"), once a game."""
-    return tell(conn, user_id, f"closegame:{game}", "closegame", f"Close game: {where}"[:120],
+    t = time.time() if now is None else now
+    return tell(conn, user_id, close_id(game, t), "closegame", f"Close game: {where}"[:120],
                 "Final minutes, within one score — and you have a bet on it.", "/#live", ttl="closegame", now=now)
 
 
@@ -759,8 +768,10 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
         # Settings' time zone, Eastern when they named none). What waits
         # stays unsent and goes when their morning comes, or runs out.
         late: dict = {}
-        rows = [r for r in rows if r[2] not in HELD
-                or not late.setdefault(r[0], PA.quiet_for(conn, r[0], t))]
+        for r in rows:
+            if r[2] in HELD and r[0] not in late:
+                late[r[0]] = PA.quiet_for(conn, r[0], t)      # once a member, not once a message
+        rows = [r for r in rows if r[2] not in HELD or not late[r[0]]]
     stats = {"messages": len(rows), "sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
     if not rows:
         conn.commit()
@@ -773,7 +784,7 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     cfg = webpush.apns_config() if apns_cfg is None else apns_cfg
     today, paid = PA.eastern_day(t), PA.paid_ids(conn)
     from engine import limits as LM
-    limited = LM.reached(conn, t)
+    limited = LM.reached(conn, t, among=set(by_user))
     for uid, msgs in by_user.items():
         # Their own weekly limit reached (engine/limits): the promotional
         # kinds are dropped, not held for Monday.
@@ -788,12 +799,21 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
             want = [m for m in send_now if PA.wants(topics, "", m)]
             if not want:
                 continue
-            # Paused (Alerts → Pause), or the day's alerts all used
-            # (pushalerts.DAY_CAP): this phone hears none of these.
+            # Paused (Alerts → Pause): this phone hears none of these. The
+            # day's alerts all used (pushalerts.DAY_CAP): only a notice
+            # about the member's own membership (a charge tomorrow, a
+            # renewal) still goes; the cap is there to stop noise, and a
+            # charge warning is not noise.
             left = PA.room_today(day, day_n, today, uid, paid)
-            if PA.paused(until, t) or left <= 0:
+            if PA.paused(until, t):
                 stats["held"] = stats.get("held", 0) + 1
                 continue
+            if left <= 0:
+                want = [m for m in want if m["kind"] == PA.ACCOUNT]
+                if not want:
+                    stats["held"] = stats.get("held", 0) + 1
+                    continue
+                left = len(want)
             if kind == "apns":
                 if not cfg:
                     stats["skipped_apns"] += 1

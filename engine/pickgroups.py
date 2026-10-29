@@ -188,9 +188,10 @@ def join(conn, user_id, code, now: float | None = None) -> tuple[int, dict]:
     return 200, {"group": _out(conn, row, user_id)}
 
 
-def leave(conn, user_id, group_id) -> tuple[int, dict]:
+def leave(conn, user_id, group_id, commit: bool = True) -> tuple[int, dict]:
     """Out of a group; an owner hands it to the earliest member left, and
-    the last one out deletes it."""
+    the last one out deletes it. ``commit=False`` leaves the transaction to
+    the caller (an account's deletion is one transaction: engine/accounts)."""
     ensure_tables(conn)
     row = _group(conn, group_id)
     if not row or not is_member(conn, group_id, user_id):
@@ -202,7 +203,8 @@ def leave(conn, user_id, group_id) -> tuple[int, dict]:
         conn.execute("DELETE FROM pickem_groups WHERE id = ?", (int(group_id),))
     elif int(row[3]) == int(user_id):
         conn.execute("UPDATE pickem_groups SET owner = ? WHERE id = ?", (int(nxt[0]), int(group_id)))
-    conn.commit()
+    if commit:
+        conn.commit()
     return 200, {"ok": True}
 
 
@@ -235,6 +237,9 @@ def new_code(conn, user_id, group_id) -> tuple[int, dict]:
         except Exception as exc:                              # noqa: BLE001
             if "UNIQUE" not in str(exc):
                 raise
+    else:
+        # Never "a new link" while the old one still works.
+        return 503, {"error": "Could not make a new link just now. Try again."}
     conn.commit()
     return 200, {"group": _out(conn, _group(conn, group_id), user_id)}
 
@@ -256,11 +261,12 @@ def remove(conn, user_id, group_id, handle) -> tuple[int, dict]:
 
 
 def forget(conn, user_id) -> None:
-    """An account going: out of every group, the way leaving does."""
+    """An account going: out of every group, the way leaving does, inside the
+    deletion's own transaction (nothing committed here)."""
     ensure_tables(conn)
     for (gid,) in conn.execute("SELECT group_id FROM pickem_group_members WHERE user_id = ?",
                                (int(user_id),)).fetchall():
-        leave(conn, user_id, gid)
+        leave(conn, user_id, gid, commit=False)
 
 
 def act(conn, user_id, body: dict, now: float | None = None) -> tuple[int, dict]:

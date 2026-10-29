@@ -4774,7 +4774,7 @@ function renderPushZone(note) {
               { weekday: "short", hour: "numeric", minute: "2-digit" }))}`, end: `<button type="button" class="set-val" data-push-pause="0">Resume</button>` })
           : setItem({ tag: "div", ico: "clock", tone: "amber", title: "Pause every alert",
               end: `<span class="set-seg"><button type="button" data-push-pause="24">A day</button><button type="button" data-push-pause="168">A week</button></span>` })],
-        "Five alerts a day at most (eight on a plan), none overnight where you are. Gambling problem? Call or text 1-800-GAMBLER.") : ""))
+        "Five alerts a day at most (eight on a plan), none overnight where you are. A notice about your own membership still comes. Gambling problem? Call or text 1-800-GAMBLER.") : ""))
     + (note ? `<p class="set-foot push-note" role="status">${escapeHtml(note)}</p>` : "");
   // Off, each kind is a choice for later, drawn dimmer than a live one.
   host.classList.toggle("push-off", !on);

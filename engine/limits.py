@@ -96,10 +96,20 @@ def standing(conn, user_id, now: float | None = None) -> dict | None:
     return {"limit": lim, "staked": staked(rows if isinstance(rows, list) else [], week), "week": week}
 
 
-def reached(conn, now: float | None = None) -> set:
-    """The members whose logged stakes this week have reached their limit."""
+def reached(conn, now: float | None = None, among=None) -> set:
+    """The members whose logged stakes this week have reached their limit;
+    ``among``: only these accounts (the ones a send is about), so the minute's
+    send reads the few it is sending to, not every member's settings."""
     try:
-        rows = conn.execute("SELECT user_id, payload FROM user_data WHERE section = 'settings'").fetchall()
+        if among is None:
+            rows = conn.execute("SELECT user_id, payload FROM user_data WHERE section = 'settings'").fetchall()
+        else:
+            ids = sorted({int(u) for u in among if u is not None})
+            rows = []
+            for i in range(0, len(ids), 500):
+                part = ids[i:i + 500]
+                rows += conn.execute("SELECT user_id, payload FROM user_data WHERE section = 'settings' "
+                                     f"AND user_id IN ({','.join('?' * len(part))})", part).fetchall()
     except sqlite3.Error:
         return set()
     out = set()

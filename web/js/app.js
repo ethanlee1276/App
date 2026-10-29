@@ -17831,8 +17831,12 @@ async function pushOn(topics, leagues) {
    from its member's own (pushRelink sends the second only signed in). */
 function pushRemember(got) {
   const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup" || t === "away" || t === "lines" || t === "closegame" || t === "news" || t === "today";
+  // A break outlives a change of switches: the phone's row keeps its pause
+  // (push_subs.paused_until), so the page keeps saying so until it ends.
+  const was = pushSaved() || {};
   try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
-    topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
+    topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT),
+    paused_until: got.paused_until != null ? got.paused_until : (was.paused_until || 0) }))); } catch (e) {}
 }
 /* ALERTS, ASKED FOR WHEN THEY MEAN SOMETHING (2026-10-29; Ethan: "when you
    first log into the app ... it'll prompt you to turn on notifications").

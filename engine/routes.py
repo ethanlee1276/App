@@ -375,6 +375,16 @@ def live_meta(sport: str, event: str, web: Path = WEB) -> dict | None:
     if sport not in LIVE_LEAGUES or not _EVENT.match(str(event or "")):
         return None
     doc = _load(web / "data" / "pbp" / f"{sport}_{event}.json")
+    if not doc:
+        # NOT A GAME WE KNOW, NOT A PAGE: a game without its play file yet
+        # (it has not started) is still on its league's live board; an id on
+        # neither is a typo or made up, and gets the real 404, never an
+        # indexable "The game" page (resolve's own rule).
+        board = _load(web / "data" / f"live_{sport}.json")
+        doc = next((g for g in board.get("games") or [] if isinstance(g, dict)
+                    and str(g.get("event_id") or g.get("game_pk") or "") == str(event)), None)
+        if not doc:
+            return None
     away, home = str(doc.get("away_name") or doc.get("away") or ""), str(doc.get("home_name") or doc.get("home") or "")
     label = f"{away} vs {home}" if away and home else "The game"
     return {"title": _title(f"{label} live: score, stats and prop pace"),

@@ -450,7 +450,7 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
     tracked = _tracked(conn)
     today, paid = eastern_day(now_ts), paid_ids(conn)
     from engine import limits as LM
-    limited = LM.reached(conn, now_ts)
+    limited = LM.reached(conn, now_ts, among={r[6] for r in rows})
     capped = quieted = held = full = stopped = 0
     for endpoint, kind, topics, leagues, fails, posted_at, uid, unopened, last_ok, until, day, day_n in rows:
         mine = [m for m in msgs if wants(topics, leagues, m)]

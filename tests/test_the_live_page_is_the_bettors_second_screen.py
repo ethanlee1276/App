@@ -113,6 +113,11 @@ def test_a_live_game_has_its_own_address():
     assert r["canonical"].endswith("/live/nba/401")
     assert routes.resolve("/live/xfl/401", web) is None and routes.resolve("/live/nba/abc", web) is None
     assert routes.resolve("/live/nba/401/extra", web) is None
+    # An id with no play file and not on the league's live board is not a game: the real 404.
+    assert routes.resolve("/live/nba/999999", web) is None
+    (web / "data" / "live_nba.json").write_text(json.dumps({"games": [{"event_id": "402", "away": "NYK", "home": "MIA"}]}))
+    soon = routes.resolve("/live/nba/402", web)
+    assert soon and soon["title"].startswith("NYK vs MIA live"), "a game not started yet is on its live board"
     assert "@entity path /player/* /game/* /pick/* /live/*" in READ("deploy", "Caddyfile")
     doc = routes.document(r, "<html><head><!-- QB:META --><title>x</title><!-- /QB:META --></head><body></body></html>")
     assert "BOS vs LAL live" in doc and 'name="qb-route"' in doc and "pbp/nba/401" in doc
