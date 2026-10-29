@@ -488,8 +488,6 @@
   /* The width of the iPhone Duo's side strip when the tab bar stands in it
      (boot.js writes the measured width; "THE IPHONE DUO'S SIDE STRIP"). */
   --strip-w: 84px;
-  /* The black of the system's own strip beside the Duo's page. */
-  --strip-black: #000;
 
   /* ---- FIXED COLOURS (audit #50): the same in both themes, which is why
      they are declared here only and never in the light block. Ink that
@@ -10842,10 +10840,13 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    app today): the clock is out there, so the bar starts under the header.
    Given the strip itself, it clears the clock as it does folded. */
 html.duo-side.side-rail:not(.side-rail-inset) .tabbar { padding-top: calc(var(--topbar-h) + 8px); }
-/* …and wears the strip's black, so the bar and the strip read as one side
-   bar with the clock at its head (Ethan, 2026-10-29: "we need it actually
-   under it"; a Home Screen app cannot draw in the strip itself). */
-html.duo-side.side-rail:not(.side-rail-inset):not([data-theme="light"]) .tabbar { background: var(--strip-black); }
+/* NO COLOUR OF ITS OWN THERE. Safari 27.1 keeps web content out of the
+   strip and paints it with the page's own background (Ethan's screenshot,
+   2026-10-29: the bar and the strip under his clock both 12,11,9), so the
+   bar, with no background, already reads as one band with it. Black was
+   tried for an hour and drew the very seam it meant to hide. Under the
+   clock itself is the App Store app's: given the strip, the bar stands in
+   it (html.side-rail-inset), as it does folded. */
 
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
    his phone's top bar and league row circled again: "the colors up here

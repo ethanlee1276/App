@@ -8705,23 +8705,31 @@ it actually under it").
   before anything else gives. Before this, the theme button hung partly
   or wholly off the right edge on windows 1,024, 1,440 and 1,600 pixels
   wide; now nothing does at any width.
-- **Under the clock on the open Duo:** a Home Screen app cannot draw
-  there. iOS gives an app that was not built for the Duo, and every Home
-  Screen web app, only the screen outside that strip, so the page ends at
-  the strip's edge and the bar can only stand beside it. What changed:
-  the bar now wears the strip's own black (in the dark look), so the two
-  read as one band with the clock at its top. The bar inside the strip,
-  under the clock, comes with the store app built in Xcode for iOS 27.1;
-  the page already handles it (when iOS hands it the strip, the bar moves
-  in, under the clock). That build needs a Mac with Xcode, and the Apple
-  Developer Program ($99 a year) for TestFlight and the App Store.
+- **Under the clock on the open Duo** (your screenshot after this, with
+  the bar circled and an arrow to the clock: "It needs to be under it"):
+  not possible for the Home Screen app yet, and the limit is Apple's.
+  WebKit's own notes for Safari 27.1 say web content on the iPhone Duo
+  does not extend behind the system's side controls, and that Safari
+  fills that space with the page's background colour. Your screenshot
+  shows exactly that: the strip under your clock is the site's own colour
+  (12, 11, 9, the same as the page and the bar), painted by iOS, and the
+  page ends at the strip's edge, 910 of the screen's 1,000 points. The bar
+  has no colour of its own there, so it and the strip read as one band.
+  For about an hour on 29 October it was black instead, which would have
+  drawn a seam against the strip; that is undone. The bar does stand
+  under the clock in the App Store app built in Xcode for iOS 27.1: iOS
+  hands that app the whole screen with the strip as its edge, the shell
+  in deploy/ios passes it to the page (`contentInset: never`), and the
+  page moves the bar into it, under the clock. That build needs a Mac
+  with Xcode (deploy/ios/README.md), and the Apple Developer Program ($99
+  a year) for TestFlight and the App Store.
 
 Nothing to set: the updater picks it up within five minutes. Read-only, any
 time; each prints `1` once this version is live:
 
 ```
 curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide()'
-curl -s https://qellysbook.com/css/styles.css | grep -c 'background: var(--strip-black); }'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'html.sb-hidden .sidebar { width: var(--sidebar-w);'
 ```
 
 The check in one go:

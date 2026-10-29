@@ -20,8 +20,10 @@ comes back. What these hold:
   * the choice is remembered on this device, before the first paint;
   * a phone's button opens its sheet, the open Duo's its sheet, a narrow
     window's its drawer, as before, and says so again when a window narrows;
-  * the open Duo's bar beside the clock wears the strip's black (dark look):
-    a Home Screen app cannot draw under the clock, so the two read as one.
+  * the open Duo's bar beside the clock has no colour of its own: Safari
+    keeps a page out of the strip under the clock and paints it with the
+    page's own background, so bar and strip read as one band (a black bar,
+    tried for an hour, drew a seam between them).
 
 Run directly: `python3 tests/test_the_sidebar_slides_away.py`
 """
@@ -109,11 +111,11 @@ def test_remembered_before_the_first_paint():
     assert '<script src="js/boot.js"></script>' in html[:html.index("</head>")], "a plain script in the head"
 
 
-def test_the_open_duos_bar_wears_the_strips_black():
-    root = CSS[CSS.index(":root {"):]
-    assert "--strip-black: #000;" in root[:root.index("\n}\n")]
-    assert ('html.duo-side.side-rail:not(.side-rail-inset):not([data-theme="light"]) .tabbar '
-            '{ background: var(--strip-black); }') in CSS
+def test_the_open_duos_bar_beside_the_strip_is_the_pages_own_colour():
+    assert "--strip-black" not in CSS, "the strip is the page's colour, not black"
+    strip = CSS[CSS.index("/* THE IPHONE DUO'S SIDE STRIP"):]
+    assert "border: 0; border-radius: 0; background: none; box-shadow: none; }" in strip[:strip.index("\n}\n")]
+    assert not re.search(r"html\.duo-side[^{]*\.tabbar \{[^}]*background", strip), "no colour of its own there"
     assert 'root.classList.toggle("side-rail-inset"' in BOOT, \
         "an app given the strip draws under the clock itself (tests/test_the_iphone_duo_side_strip.py)"
 
@@ -122,6 +124,7 @@ SEE = """() => { const s = document.getElementById('sidebar'), b = document.getE
   const r = s.getBoundingClientRect();
   return {hidden: document.documentElement.classList.contains('sb-hidden'), duo: document.documentElement.classList.contains('duo-side'),
           sheet: document.body.classList.contains('more-open'), drawer: document.body.classList.contains('menu-open'),
+          barBg: getComputedStyle(document.getElementById('tabbar')).backgroundColor,
           side: [Math.round(r.left), Math.round(r.width)], vis: getComputedStyle(s).visibility,
           main: Math.round(document.querySelector('main').getBoundingClientRect().width),
           aria: b.getAttribute('aria-expanded'), label: b.getAttribute('aria-label'),
@@ -264,6 +267,7 @@ def test_in_a_browser_it_slides_where_it_stands_and_nowhere_else():
     assert ipad_hidden["main"] > ipad["main"], ipad
     duo = got["duo"]
     assert duo["duo"] and duo["sheet"] and not duo["drawer"] and duo["aria"] == "true", ("the open Duo's sheet", duo)
+    assert duo["barBg"] == "rgba(0, 0, 0, 0)", ("the bar beside the strip shows the page's own colour", duo)
     phone = got["phone"]
     assert phone["sheet"] and not phone["drawer"], ("the phone's sheet", phone)
     up = got["ipad_upright"]

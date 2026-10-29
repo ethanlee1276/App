@@ -3,9 +3,15 @@
   "entries": [
     {
       "date": "2026-10-29",
+      "kind": "refuse",
+      "title": "The tab bar under the Duo's clock, for now",
+      "body": "On the open iPhone Duo, the strip with the clock is outside what a web page may draw: Safari 27.1 keeps web content out of it and paints it with the page's own colour. So in Safari and the Home Screen app the tab bar stands beside the strip, not under the clock, with no colour of its own so that the two read as one (a black bar was tried for an hour and drew a seam). Under the clock is the App Store app's: there iOS hands the page the strip, and the bar moves into it."
+    },
+    {
+      "date": "2026-10-29",
       "kind": "ship",
       "title": "Slide the sidebar away",
-      "body": "On a computer, an iPad on its side or an open foldable, the menu button at the top left now slides the sidebar away and the page takes the whole width; tap it again and it comes back. Each device remembers how you left it. On the open iPhone Duo in the dark look, the tab bar beside the clock now wears the clock strip's black, so the two read as one."
+      "body": "On a computer, an iPad on its side or an open foldable, the menu button at the top left now slides the sidebar away and the page takes the whole width; tap it again and it comes back. Each device remembers how you left it."
     },
     {
       "date": "2026-10-29",
