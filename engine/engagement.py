@@ -387,10 +387,126 @@ def _bar(n: int, top: int, width: int = 24) -> str:
     return "█" * max(1, round(width * n / top)) if n and top else ""
 
 
+# ---- the four groups (the second paper, 2026-10-29) ------------------------------------
+#: (name, who, what to do) — "Sort users into four groups and treat each
+#: differently", read off each account's own last-seen day and its plan, so
+#: they need no activity log.
+GROUPS = (
+    ("Champions", "paying, here in the last 5 days",
+     "ask them for referrals (Invite friends) and early feedback on what is new"),
+    ("At-risk payers", "paying, not here in 5 days or more",
+     "their week and the board's go by push once a week (engine/lifecycle); cancelling stays one tap"),
+    ("Engaged free", "never paid, here in the last 7 days",
+     "the plans page shows what members' alerts caught on their teams"),
+    ("Dormant", "not paying, not here in 30 days or more",
+     "one note at a season's start at most, then nothing"),
+)
+
+
+def four_groups(conn, now: float | None = None) -> dict:
+    """{name: {"n", "monthly"}} plus "Everyone else", for every account."""
+    t = time.time() if now is None else float(now)
+    out = {g[0]: {"n": 0, "monthly": 0.0} for g in GROUPS}
+    out["Everyone else"] = {"n": 0, "monthly": 0.0}
+    subs = _table(conn, "subscriptions")
+    plan = "s.plan" if subs and "plan" in {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")} else "''"
+    sql = (f"SELECT u.last_seen, u.created_at, s.status, {plan} FROM users u LEFT JOIN subscriptions s "
+           "ON s.user_id = u.id") if subs else "SELECT last_seen, created_at, NULL, '' FROM users"
+    for last, created, status, p in conn.execute(sql):
+        away = (t - float(last or created or t)) / 86400
+        paying = str(status or "") in ("active", "trialing")
+        m = {"status": str(status or ""), "plan": str(p or "")}
+        if paying:
+            name = "Champions" if away < 5 else "At-risk payers"
+        elif away >= 30:
+            name = "Dormant"
+        elif status is None and away < 7:
+            name = "Engaged free"
+        else:
+            name = "Everyone else"
+        out[name]["n"] += 1
+        out[name]["monthly"] += monthly(m)
+    return out
+
+
+def groups_lines(conn, now: float | None = None) -> list:
+    if not _table(conn, "users"):
+        return []
+    got = four_groups(conn, now)
+    lines = ["the four groups (each account's own last-seen day and its plan; no activity log needed):"]
+    for name, who, do in GROUPS:
+        g = got[name]
+        money = f"${g['monthly']:.0f}/month" if g["monthly"] else ""
+        lines.append(f"  {name:<16}{g['n']:>6}  {money:<12}{who} — {do}")
+    lines.append(f"  {'Everyone else':<16}{got['Everyone else']['n']:>6}")
+    return lines
+
+
+#: The pages that are a pick, for "paying, no pick opened in 5 days".
+PICK_VIEWS = ("prop", "likely", "edge", "recommended", "tonight", "props", "longshots", "scanner", "record")
+
+
+def churn_flags(ms: dict, today: _dt.date, conn=None) -> dict:
+    """The paper's rules, over members who said yes: no visit in 5+ days while
+    their league plays; bets logged this week under half their four-week
+    average; fewer alerts opened two weeks running; paying and no pick
+    opened in 5 days. Counts only."""
+    live = set()                                         # leagues anybody read in the last week
+    for m in ms.values():
+        for r in m["rows"]:
+            if not m["opted_out"] and (today - _day(r["day"])).days < 7:
+                live |= set(r["sports"])
+    flags = {"no visit in 5+ days while their league plays": 0,
+             "bets logged this week under half their 4-week average": 0,
+             "fewer alerts opened two weeks running": 0,
+             "paying, no pick opened in 5 days": 0}
+    for uid, m in ms.items():
+        if m["opted_out"] or not m["rows"]:
+            continue
+        rows = m["rows"]
+        last = max(_day(r["day"]) for r in rows if r["seconds"] or r["visits"]) if any(
+            r["seconds"] or r["visits"] for r in rows) else None
+        theirs = {k for r in rows for k in r["sports"]}
+        if last and (today - last).days >= 5 and theirs & live:
+            flags["no visit in 5+ days while their league plays"] += 1
+        weeks = [0, 0, 0]
+        for r in rows:
+            ago = (today - _day(r["day"])).days
+            if 0 <= ago < 21:
+                weeks[ago // 7] += r["taps"]
+        if weeks[2] >= 2 and weeks[1] < weeks[2] and weeks[0] < weeks[1]:
+            flags["fewer alerts opened two weeks running"] += 1
+        if monthly(m) > 0 and not any(r["views"].get(v) for r in rows
+                                      if (today - _day(r["day"])).days < 5 for v in PICK_VIEWS):
+            flags["paying, no pick opened in 5 days"] += 1
+        if conn is not None and _table(conn, "user_data"):
+            row = conn.execute("SELECT payload FROM user_data WHERE user_id = ? AND section = 'mybets'",
+                               (uid,)).fetchone()
+            try:
+                bets = (json.loads(row[0]) or {}).get("rows") if row else None
+            except (TypeError, ValueError, AttributeError):
+                bets = None
+            per = [0] * 5
+            for b in bets if isinstance(bets, list) else []:
+                try:
+                    ago = (today - _dt.date.fromisoformat(str((b or {}).get("date") or "")[:10])).days
+                except ValueError:
+                    continue
+                if 0 <= ago < 35:
+                    per[ago // 7] += 1
+            usual = sum(per[1:]) / 4
+            if usual >= 2 and per[0] < usual / 2:
+                flags["bets logged this week under half their 4-week average"] += 1
+    return flags
+
+
 def report(conn, days: int = 28, now: float | None = None, model_path: Path | None = None) -> str:
     on = ACT.enabled()
     head = [f"Qellys engagement, the last {days} days (Eastern days). Activity: "
             + ("ON." if on else f"OFF — {ACT.why_off()}.")]
+    groups = groups_lines(conn, now)
+    if groups:
+        head += [""] + groups
     kept = _table(conn, "activity_days") and conn.execute("SELECT 1 FROM activity_days LIMIT 1").fetchone()
     if not kept:
         return "\n".join(head + ["", "Nothing has been kept yet, so there is nothing to report. "
@@ -415,6 +531,10 @@ def _body(ms: dict, today: _dt.date, since, days: int, model: dict | None, conn=
     out.append(f"  revenue at risk (paying members lapsing or dormant): ${risk:.0f} a month")
     if opted:
         out.append(f"  ({opted} have not said yes to keeping their activity, or said no, and are not counted)")
+    # 1b. The churn rules (the second paper: "start with rules, not models").
+    out += ["", "churn flags (members who said yes; the paper's four rules):"]
+    for rule, n in churn_flags(ms, today, conn).items():
+        out.append(f"  {rule:<56}{n:>5}")
     # 2. The power-user curve (L28).
     hist = [0] * 29
     for f in fs.values():
