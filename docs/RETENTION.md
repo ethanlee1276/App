@@ -246,14 +246,17 @@ Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
   you have used it in the last two minutes, or watched a live game in the last
   half hour), on which of our pages and for which leagues, in which hours of
   the day, how many visits you made and how many of them one of our alerts
-  opened. Never your clicks, anything you type, your location, your device, or
-  anything about other apps or sites.
+  opened; and, on each phone you get alerts on, how many picks-up and
+  last-night alerts it has had since you last opened one of ours. Never your
+  clicks, anything you type, your location, your device, or anything about
+  other apps or sites.
   (<code>activity_days</code>, <code>activity_prefs</code>,
-  <code>engagement_away</code>)</p>
+  <code>engagement_away</code>, and that count in <code>push_subs</code>)</p>
 <p>We use it for your own alerts — to send the ones not tied to a game at the
-  hour you usually look, to send fewer of the kinds you never open, and, if you
-  turned on "When I’ve been away", one line a week at most with your team’s next
-  game or what is new — and, as totals, to see how the site is used: for
+  hour you usually look; to send the picks-up and last-night alerts once a day
+  at most to a phone that has left fifteen in a row unopened, until you open
+  one; and, if you turned on "When I’ve been away", one line a week at most
+  with your team’s next game or what is new — and, as totals, to see how the site is used: for
   that, it is read beside your My Bets dates and the teams you follow, to
   count, say, how many members watched a live game here with a bet on it or a
   team in it, or how many who logged a bet in their first two days were still
@@ -261,9 +264,7 @@ Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
   never sold, shared, or used for advertising, and nothing about what you pay
   changes how we treat you. Each day’s row is deleted after 120 days, all of
   it when you say no or delete your account, and it is in Download my data.
-  We keep a record of each yes and no you give us — what it was about, the
-  date of this policy at the time, and when (<code>consent_log</code>) —
-  until you delete your account; it is in Download my data too.</p>
+  Each yes and no you give is kept in the record described in §2.1.</p>
 ```
 
 ### Before switching it on (the runbook's step HW)
@@ -339,8 +340,9 @@ The wording to approve (a new subsection of §2 in `web/privacy.html`; the
   team on a moneyline or a spread, over or under on a total, from the last
   three days — are counted with every other member's, and a game's page
   shows the share on each side once 50 or more are in; and the closing-line
-  value we note for your saved parlays (§2.7) is pooled with every other
-  member's into one number on the Edge Report. Only counts and shares are
+  value we note for your saved parlays (§2.7) over the last 30 days is
+  pooled with every other member's into one number on the Edge Report, once
+  50 or more legs are in. Only counts and shares are
   ever shown, never who, and never a player prop. Nothing new is kept for
   it: it reads what My Bets already syncs and the closing prices in §2.7,
   and turning it off takes you out of the next count.</p>

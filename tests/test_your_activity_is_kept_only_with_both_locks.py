@@ -150,6 +150,12 @@ def test_an_alert_opened_resets_the_phone_s_unopened_count():
         assert c.execute("SELECT unopened FROM push_subs").fetchone()[0] == 20, "a visit of their own is not a tap"
         ACT.beat(c, 5, {"s": 10, "n": 1, "a": 1}, NOW)
     assert c.execute("SELECT unopened FROM push_subs").fetchone()[0] == 0
+    # A no takes the count back with the days (the policy wording: "all of it
+    # when you say no"), 2026-10-29.
+    with _Locks():
+        c.execute("UPDATE push_subs SET unopened = 7")
+        ACT.set_off(c, 5, True, NOW + 60)
+    assert c.execute("SELECT unopened FROM push_subs").fetchone()[0] == 0, "a no resets the phones' count"
 
 
 def test_nothing_is_kept_for_a_member_until_they_say_yes():

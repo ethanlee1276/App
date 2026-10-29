@@ -166,6 +166,12 @@ def set_off(conn, user_id, off: bool, now: float | None = None) -> None:
                  (int(user_id), 1 if off else 0, t))
     if off:
         conn.execute("DELETE FROM activity_days WHERE user_id = ?", (int(user_id),))
+        # So is their phones' count of alerts left unopened (pushalerts.IGNORED_N),
+        # which only a yes keeps: the policy's "all of it when you say no".
+        try:
+            conn.execute("UPDATE push_subs SET unopened = 0 WHERE user_id = ?", (int(user_id),))
+        except sqlite3.OperationalError:
+            pass                                              # no alerts table yet on this database
     from engine import consent
     consent.record(conn, user_id, "activity", "no" if off else "yes", t)
     conn.commit()
