@@ -302,3 +302,42 @@ Not taken, and why:
 - **"Which modules lead the home screen" from the goals** — the home's order
   is Ethan's own call (the stadiums, then Most Likely); the goals are kept
   for the features that ask for them, and Settings says only what they do.
+
+### Pooled content: the members' split and the members against the close
+
+The paper: "Qellys consensus. The share of tracked bets on each side of a
+game" and "Users vs. the market", with "only show a split once it covers
+50+ bets so no one can be picked out. Let users opt out of being counted.
+Never sell user-level data." Built (engine/consensus) behind two locks, the
+way the activity switch is: `QB_SPLIT=1` and a section in the Privacy Policy
+with `id="members-split"`. It is a new use of what members log, so it is
+off until Ethan approves this wording; then everybody is counted unless they
+say no (Settings → Your data → "Count my bets in the members' split"; each
+change in the consent log). What it shows: on a game's page, the share of
+members' open saved-parlay legs on each side (moneyline and spread by team,
+totals over or under), a market only with 50 or more; on the Edge Report,
+the members' pooled closing-line value beside the reader's own, once 50
+legs are in. Never a player prop (one player's line among a few members
+points at somebody), never a name.
+
+Also built, with no lock because nothing new is kept and nothing is pooled
+from other people's bets: the pick'em ranked by beating the close (each
+pick keeps the market's chance for its team when it was made and the last
+before kickoff; Social → Pick'em → "Beat the close").
+
+The wording to approve (a new subsection of §2 in `web/privacy.html`; the
+`id` is the lock):
+
+```html
+<h3 id="members-split">2.10 The members' split</h3>
+<p>Unless you turn it off in Settings → Your data ("Count my bets in the
+  members' split"), the game-line legs of your open saved parlays — which
+  team on a moneyline or a spread, over or under on a total, from the last
+  three days — are counted with every other member's, and a game's page
+  shows the share on each side once 50 or more are in; and the closing-line
+  value we note for your saved parlays (§2.7) is pooled with every other
+  member's into one number on the Edge Report. Only counts and shares are
+  ever shown, never who, and never a player prop. Nothing new is kept for
+  it: it reads what My Bets already syncs and the closing prices in §2.7,
+  and turning it off takes you out of the next count.</p>
+```

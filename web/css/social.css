@@ -677,3 +677,10 @@ button.fd-pstat:hover b { color: var(--brand-2); }
    loaded with the feed): the level chip and the flair. */
 .fd-lv { margin-left: 5px; vertical-align: 1px; min-width: 18px; height: 16px; padding: 0 4px; }
 .fd-flair { margin-left: 3px; font-size: var(--fs-xs); line-height: 1; }
+
+/* BEAT THE CLOSE on the pick'em (pickemRankHTML, pickemClvTable): the
+   second switch beside Everyone | Friends, and each pick's own price. */
+.fd-pk-rank { margin: 8px 0 0; }
+.fd-pk-price { margin-top: 6px; font-size: var(--fs-xs); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.fd-pk-price b.up { color: var(--good); }
+.fd-pk-price b.down { color: var(--warn); }

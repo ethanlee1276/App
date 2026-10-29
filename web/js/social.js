@@ -1092,6 +1092,23 @@
     const me = T && T.me && !(T.rows || []).some((r) => r.me) ? `<p class="fd-fine">You: #${T.me.rank} at ${T.me.w}-${T.me.l}.</p>` : "";
     return rows ? `${rows}${me}` : `<p class="fd-fine">${empty}</p>`;
   }
+  /* BEAT THE CLOSE (the second paper, 2026-10-29: "CLV pick'em ... a
+     leaderboard ranked by beating the close, not by wins"; engine/pickem
+     clv_table). The same picks, ranked by how far the market moved toward
+     the team after it was picked: the measure of a read before the result. */
+  const pts = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}`;
+  function pickemClvTable(T, empty) {
+    const rows = ((T && T.rows) || []).map((p) => `<div class="fd-lead${p.me ? " me" : ""}"><span class="fd-rank${p.rank <= 3 ? ` top${p.rank}` : ""}">${p.rank}</span>
+      <a class="fd-person" href="${profHref(p.handle)}">${avatar(p, "sm")}<span><b>${displayName(p)}${badge(p)}</b><span>@${escapeHtml(p.handle)}</span></span></a>
+      <span class="fd-lead-rec">beat it ${p.beat} of ${p.n}</span><b class="fd-lead-v">${pts(p.clv)}</b></div>`).join("");
+    const me = T && T.me && !(T.rows || []).some((r) => r.me) ? `<p class="fd-fine">You: #${T.me.rank} at ${pts(T.me.clv)}.</p>` : "";
+    return rows ? `${rows}${me}` : `<p class="fd-fine">${empty}${T && T.min ? ` It takes ${T.min} picks made with a price.` : ""}</p>`;
+  }
+  function pickemRankHTML() {
+    const r = F.pkRank === "clv" ? "clv" : "wins";
+    const b = (k, label) => `<button type="button" class="${r === k ? "on" : ""}" data-fd="pk-rank" data-v="${k}" role="tab" aria-selected="${r === k}">${label}</button>`;
+    return `<div class="fd-seg fd-pk-rank" role="tablist" aria-label="Ranked by">${b("wins", "Wins")}${b("clv", "Beat the close")}</div>`;
+  }
   /* IT COMES TO YOU (Ethan, 2026-10-28: "keep building and adding more
      features"): the standings among your friends beside everyone's, and
      the push before a football week's picks lock (engine/pickem), on for
@@ -1123,10 +1140,14 @@
     };
     const games = (P.games || []).map((g) => {
       const n = g.n_home + g.n_away, pa = n ? Math.round((g.n_away / n) * 100) : 50;
+      // Your pick's price: the market's chance when you picked, and where it closed (or stands).
+      const mv = g.pick && g.p_pick != null && g.p_close != null ? Math.round((g.p_close - g.p_pick) * 1000) / 10 : null;
+      const price = mv == null ? "" : `<div class="fd-pk-price">${escapeHtml(g.pick)} at ${Math.round(g.p_pick * 100)}% when you picked · ${
+        g.locked ? "closed" : "now"} ${Math.round(g.p_close * 100)}%${mv ? ` <b class="${mv > 0 ? "up" : "down"}">${pts(mv)}</b>` : ""}</div>`;
       return `<div class="fd-pk-game${g.locked ? " locked" : ""}"><div class="fd-pk-when">${g.locked ? `${icon("lock", 12)} Locked` : escapeHtml(when(g.kickoff))}</div>
         <div class="fd-pk-row">${side(g, g.away)}<span class="fd-pk-at">at</span>${side(g, g.home)}</div>
         ${n ? `<div class="fd-pk-split" aria-hidden="true"><i style="width:${pa}%"></i></div>
-          <div class="fd-pk-pct"><span>${pa}% ${escapeHtml(g.away)}</span><span>${n} pick${n === 1 ? "" : "s"}</span><span>${100 - pa}% ${escapeHtml(g.home)}</span></div>` : ""}</div>`;
+          <div class="fd-pk-pct"><span>${pa}% ${escapeHtml(g.away)}</span><span>${n} pick${n === 1 ? "" : "s"}</span><span>${100 - pa}% ${escapeHtml(g.home)}</span></div>` : ""}${price}</div>`;
     }).join("");
     const gate = !P.signed_in ? `<a href="#account">Sign in (free)</a> to play.` : !P.has_handle ? `<a href="#account">Make your Social profile</a> to play — the standings show your handle.` : "";
     return `${head}
@@ -1137,13 +1158,17 @@
         ${P.next ? `<a class="fd-btn ghost sm" href="#feed/pickem/${s}/${P.next}">Later ${ico("chevr", 14)}</a>` : "<span></span>"}</div>
       ${gate ? `<div class="fd-card fd-pk-gate">${gate}</div>` : ""}
       <section class="fd-card fd-pk-games">${games || `<p class="fd-fine">No ${SPORT_NAME[s]} games on the board this week${P.current ? " yet — they appear as the board posts them" : ""}.</p>`}</section>
-      ${pickemScopeHTML(P)}
-      ${fr && !P.friends ? `<div class="fd-card fd-pk-gate">Your friends' standings show here. <a href="#feed/search">Find people</a> to add.</div>` : `<div class="fd-pk-tables">
+      ${pickemScopeHTML(P)}${pickemRankHTML()}
+      ${fr && !P.friends ? `<div class="fd-card fd-pk-gate">Your friends' standings show here. <a href="#feed/search">Find people</a> to add.</div>` : F.pkRank === "clv" ? `<div class="fd-pk-tables">
+        <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemClvTable(fr ? P.week_clv_friends : P.week_clv, "Nobody has enough picks with a price this week yet.")}</section>
+        <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemClvTable(fr ? P.season_clv_friends : P.season_clv, "The season table fills as games start.")}</section>
+      </div>` : `<div class="fd-pk-tables">
         <section class="fd-card fd-leads"><h3>${ico("crown", 16)} This week</h3>${pickemTable(fr ? P.week_friends : P.week_table, fr ? "No picks from you or your friends this week yet." : "No picks graded or made this week yet.")}</section>
         <section class="fd-card fd-leads"><h3>${icon("trophy", 16)} Season</h3>${pickemTable(fr ? P.season_friends : P.season_table, "The season table fills as picks are graded.")}</section>
       </div>`}
       ${pickemRemindHTML(P)}
-      <p class="fd-fine">Ranked by wins, then fewest losses. A week runs Tuesday to Monday, Eastern time; the season is every week of the last ${P.season_days || 200} days. A tie is a push; a game with no final ten days on is void.</p>`;
+      <p class="fd-fine">${F.pkRank === "clv" ? "Ranked by beating the close: how far the market’s chance for your team moved after you picked it, to the last price we saw before kickoff, in points, averaged over your picks made with a price (three a week, ten a season). It is how sharp bettors are measured, because it shows a read before the result does."
+        : "Ranked by wins, then fewest losses."} A week runs Tuesday to Monday, Eastern time; the season is every week of the last ${P.season_days || 200} days. A tie is a push; a game with no final ten days on is void.</p>`;
   }
 
   function trendingPageHTML(T) {
@@ -1468,6 +1493,7 @@
       return render();
     }
     if (act === "pk-scope") { F.pkScope = d.v === "friends" ? "friends" : "all"; return render(); }
+    if (act === "pk-rank") { F.pkRank = d.v === "clv" ? "clv" : "wins"; return render(); }
     if (act === "pk-remind") {
       const on = t.getAttribute("aria-checked") !== "true" && t.getAttribute("aria-pressed") !== "true";
       const res = await api("pickem-remind", { on });

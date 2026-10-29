@@ -110,6 +110,17 @@ def ensure_tables(conn) -> None:
             conn.execute("ALTER TABLE pickem_prefs ADD COLUMN recap TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError as exc:
             column_exists_or_raise(exc)
+    # BEAT THE CLOSE (the second paper, 2026-10-29: "CLV pick'em ... leaderboard
+    # ranked by beating the close, not by wins"): the market's chance for the
+    # picked team when it was picked, and the last one seen before kickoff.
+    have = {r[1] for r in conn.execute("PRAGMA table_info(pickem_picks)")}
+    for col in ("p_pick", "p_close"):
+        if col not in have:
+            from .db import column_exists_or_raise
+            try:
+                conn.execute(f"ALTER TABLE pickem_picks ADD COLUMN {col} REAL")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
 
 
 def _ts(iso) -> float | None:
@@ -181,8 +192,24 @@ def board_games(sport: str, data_dir: Path | None = None) -> list[dict]:
         lv = g.get("live")
         begun = lv is True or (isinstance(lv, dict) and str(lv.get("state") or "") in ("live", "final"))
         out.append({"gid": gid_of({**g, "date": date}), "home": str(g["home"]), "away": str(g["away"]),
-                    "game_date": date, "kickoff": k, "live": begun})
+                    "game_date": date, "kickoff": k, "live": begun,
+                    "ml": (g.get("home_ml"), g.get("away_ml"))})
     return out
+
+
+def chance(g: dict, team: str) -> float | None:
+    """The market's chance for one of a game's teams, the two moneylines
+    with the margin taken out; None without both."""
+    from .odds import devig_two_way
+    hm, am = (g.get("ml") or (None, None))[:2]
+    try:
+        if not hm or not am or abs(float(hm)) < 100 or abs(float(am)) < 100:
+            return None
+        ph, pa = devig_two_way(int(float(hm)), int(float(am)))
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+    p = ph if team == g.get("home") else pa if team == g.get("away") else None
+    return round(p, 4) if p is not None and 0 < p < 1 else None
 
 
 def _started(g: dict, now: float) -> bool:
@@ -213,14 +240,19 @@ def pick(conn, user_id: int, sport, gid, team, now: float | None = None,
     week = week_of(g["kickoff"])
     old = conn.execute("SELECT pick FROM pickem_picks WHERE user_id=? AND sport=? AND gid=?",
                        (int(user_id), sport, g["gid"])).fetchone()
+    price = chance(g, team)
     if old is None:
         conn.execute("INSERT INTO pickem_picks (user_id, sport, week, gid, home, away, game_date, kickoff, pick, "
-                     "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                     "created_at, updated_at, p_pick, p_close) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      (int(user_id), sport, week, g["gid"], g["home"], g["away"], g["game_date"], g["kickoff"],
-                      team, now, now))
+                      team, now, now, price, price))
+    elif old[0] != team:
+        conn.execute("UPDATE pickem_picks SET pick=?, updated_at=?, week=?, kickoff=?, p_pick=?, p_close=? "
+                     "WHERE user_id=? AND sport=? AND gid=?",
+                     (team, now, week, g["kickoff"], price, price, int(user_id), sport, g["gid"]))
     else:
-        conn.execute("UPDATE pickem_picks SET pick=?, updated_at=?, week=?, kickoff=? WHERE user_id=? AND sport=? AND gid=?",
-                     (team, now, week, g["kickoff"], int(user_id), sport, g["gid"]))
+        conn.execute("UPDATE pickem_picks SET updated_at=?, week=?, kickoff=? WHERE user_id=? AND sport=? AND gid=?",
+                     (now, week, g["kickoff"], int(user_id), sport, g["gid"]))
     conn.commit()
     return 200, {"ok": True, "gid": g["gid"], "pick": team, "week": week}
 
@@ -401,6 +433,67 @@ def season_lines(conn, user_id, now: float | None = None) -> list[dict]:
     return out
 
 
+# ─── beat the close ─────────────────────────────────────────────────────────
+#: Picks with both prices it takes to be on a table: a week's, a season's.
+CLV_MIN_WEEK, CLV_MIN_SEASON = 3, 10
+
+
+def note_closes(conn, now: float | None = None, data_dir: Path | None = None) -> int:
+    """Keep the market's latest chance for every pick on a game not yet
+    begun; the last one kept before kickoff is the pick's close. Reads only
+    the boards of sports with a pick still open. Returns picks noted."""
+    ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    n = 0
+    for (sport,) in conn.execute("SELECT DISTINCT sport FROM pickem_picks WHERE kickoff > ?", (t,)).fetchall():
+        for g in board_games(sport, data_dir):
+            if _started(g, t):
+                continue
+            ph, pa = chance(g, g["home"]), chance(g, g["away"])
+            if ph is None or pa is None:
+                continue
+            cur = conn.execute("UPDATE pickem_picks SET p_close = CASE pick WHEN ? THEN ? ELSE ? END "
+                               "WHERE sport = ? AND gid = ? AND kickoff > ?", (g["home"], ph, pa, sport, g["gid"], t))
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def clv_table(conn, sport: str, week: str | None, viewer=None, now: float | None = None,
+              only: set | None = None) -> dict:
+    """The table by beating the close: each named player's average, in
+    points of the market's chance, of where it closed against where they
+    picked — games begun only, CLV_MIN_* picks to be on it."""
+    from . import socialfeed as SF
+    ensure_tables(conn)
+    SF.ensure_tables(conn)
+    t = time.time() if now is None else float(now)
+    where, args = ("p.week=?", [week]) if week else ("p.kickoff>?", [t - SEASON_DAYS * 86400])
+    need = CLV_MIN_WEEK if week else CLV_MIN_SEASON
+    hide = SF.blocked_ids(conn, viewer)
+    rows = conn.execute(
+        "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, f.founder, "
+        "AVG(p.p_close - p.p_pick) AS clv, COUNT(*) AS n, SUM(p.p_close > p.p_pick) AS beat "
+        "FROM pickem_picks p JOIN feed_profiles f ON f.user_id=p.user_id "
+        f"WHERE p.sport=? AND f.handle IS NOT NULL AND f.handle!='' AND {where} AND p.kickoff<=? "
+        "AND p.p_pick IS NOT NULL AND p.p_close IS NOT NULL GROUP BY p.user_id HAVING COUNT(*) >= ?",
+        [sport] + args + [t, need]).fetchall()
+    table = []
+    for r in rows:
+        if int(r["user_id"]) in hide or (only is not None and int(r["user_id"]) not in only):
+            continue
+        table.append({**SF._person(r), "clv": round(float(r["clv"]) * 100, 1), "n": int(r["n"]),
+                      "beat": int(r["beat"] or 0), "me": viewer is not None and int(r["user_id"]) == int(viewer)})
+    table.sort(key=lambda x: (-x["clv"], -x["n"], str(x["handle"]).lower()))
+    rank, last = 0, None
+    for i, x in enumerate(table):
+        if x["clv"] != last:
+            rank, last = i + 1, x["clv"]
+        x["rank"] = rank
+    me = next((x for x in table if x["me"]), None)
+    return {"rows": table[:TOP], "me": me, "players": len(table), "min": need}
+
+
 def view(conn, sport: str, viewer=None, week: str | None = None, now: float | None = None,
          data_dir: Path | None = None) -> dict:
     """The page: this week's games with the viewer's pick and the room's
@@ -424,9 +517,9 @@ def view(conn, sport: str, viewer=None, week: str | None = None, now: float | No
         split.setdefault(r["gid"], {})[r["pick"]] = int(r["n"])
     mine = {}
     if viewer is not None:
-        for r in conn.execute("SELECT gid, pick, result FROM pickem_picks WHERE user_id=? AND sport=? AND week=?",
-                              (int(viewer), sport, week)):
-            mine[r["gid"]] = {"pick": r["pick"], "result": r["result"]}
+        for r in conn.execute("SELECT gid, pick, result, p_pick, p_close FROM pickem_picks WHERE user_id=? AND sport=? "
+                              "AND week=?", (int(viewer), sport, week)):
+            mine[r["gid"]] = {"pick": r["pick"], "result": r["result"], "p_pick": r["p_pick"], "p_close": r["p_close"]}
     out = []
     for g in sorted(games.values(), key=lambda x: (x["kickoff"], x["gid"])):
         s = split.get(g["gid"], {})
@@ -434,6 +527,7 @@ def view(conn, sport: str, viewer=None, week: str | None = None, now: float | No
         out.append({"gid": g["gid"], "home": g["home"], "away": g["away"],
                     "kickoff": _dt.datetime.fromtimestamp(g["kickoff"], _dt.timezone.utc).isoformat().replace("+00:00", "Z"),
                     "locked": _started(g, now), "pick": m.get("pick"), "result": m.get("result"),
+                    "p_pick": m.get("p_pick"), "p_close": m.get("p_close"),
                     "n_home": s.get(g["home"], 0), "n_away": s.get(g["away"], 0)})
     prof = SF.profile_of(conn, viewer) if viewer is not None else None
     # The friends table: the viewer and their friends, both sides of the
@@ -448,6 +542,10 @@ def view(conn, sport: str, viewer=None, week: str | None = None, now: float | No
             "season_table": standings(conn, sport, None, viewer, now),
             "week_friends": standings(conn, sport, week, viewer, now, only=pals) if pals else None,
             "season_friends": standings(conn, sport, None, viewer, now, only=pals) if pals else None,
+            "week_clv": clv_table(conn, sport, week, viewer, now),
+            "season_clv": clv_table(conn, sport, None, viewer, now),
+            "week_clv_friends": clv_table(conn, sport, week, viewer, now, only=pals) if pals else None,
+            "season_clv_friends": clv_table(conn, sport, None, viewer, now, only=pals) if pals else None,
             "friends": len(pals) - 1 if pals else 0,
             "remind": reminds(conn, viewer, switch_only=True) if viewer is not None else False,
             "signed_in": viewer is not None, "has_handle": bool(prof and prof.get("handle")),

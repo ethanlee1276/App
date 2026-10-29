@@ -203,6 +203,7 @@ const SETTINGS_DEFAULTS = {
   books: [],            // the sportsbooks they use (js/account.js "Make it yours")
   goals: [],            // what they are here for: props · clv · parlays · live · fantasy
   limit_week: 0,        // their own weekly limit in dollars staked, 0 = none (Settings → Limits; engine/limits)
+  split: "on",          // counted in the members' split unless "off" (engine/consensus)
 };
 let _settings = null;
 
@@ -30251,7 +30252,8 @@ async function renderLiveBoard() {
   // way a scoreboard's favourites sit over its list; one league, your games
   // lead its grid.
   const betTeams = {};
-  const isYours = (x) => myBetOn(x.g, betTeams[x.sport] || (betTeams[x.sport] = myBetTeams(x.sport)));
+  const isYours = (x) => typeof myBetOn === "function"
+    && myBetOn(x.g, betTeams[x.sport] || (betTeams[x.sport] = myBetTeams(x.sport)));
   const yours = _liveChip === "all" ? games.filter(isYours) : [];
   shown.sort((a, b) => isYours(b) - isYours(a));
   const shelved = _liveView === "feed" ? (shown.length ? `<div class="pf-host"></div>` : "")

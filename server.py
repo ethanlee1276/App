@@ -1297,6 +1297,22 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(parsed.query)
             out = LP.rows_for((q.get("league") or [""])[0], (q.get("event") or [""])[0], WEB)
             return self._send(200, json.dumps(out).encode(), ".json")
+        if parsed.path in ("/api/split", "/api/split/"):
+            # THE MEMBERS' SPLIT on one game (engine/consensus): pooled
+            # counts of members' game-line legs, a market only once it has
+            # 50 or more, nothing while its two locks are shut. Never a person.
+            from engine import consensus as CN
+            if self._rate_limited(RATE_CALENDAR_PER_MIN, "split"):
+                return
+            q = parse_qs(parsed.query)
+            arg = lambda k: str((q.get(k) or [""])[0])[:8]                 # noqa: E731
+            A = _acct()
+            conn = A.connect()
+            try:
+                out = {"split": CN.for_game(conn, arg("sport"), arg("away"), arg("home"))}
+            finally:
+                conn.close()
+            return self._send(200, json.dumps(out).encode(), ".json")
         if parsed.path in ("/api/push/key", "/api/push/key/"):
             # The server's public VAPID key: what a browser subscribes with.
             from engine import webpush
@@ -2808,7 +2824,10 @@ class Handler(BaseHTTPRequestHandler):
                         clv = BC.ticket(conn, who["id"], str(b["id"]), legs=len(b["legs"]), payout=b.get("odds"))["clv"]
                         if clv is not None:
                             by_bet[str(b["id"])[:40]] = round(clv, 4)
-                return self._send(200, json.dumps({"by_bet": by_bet}).encode(), ".json")
+                # And the members' own, pooled (engine/consensus), beside theirs.
+                from engine import consensus as CN
+                return self._send(200, json.dumps({"by_bet": by_bet,
+                                                   "members": CN.against_the_close(conn)}).encode(), ".json")
             if path == "digest":
                 from engine import digest as DG, mailer
                 out = DG.optin_get(conn, who["id"])
@@ -3110,10 +3129,14 @@ class Handler(BaseHTTPRequestHandler):
                     A.save_sections(conn, who["id"], merged)
                 # A weekly limit set, changed or cleared (engine/limits) goes
                 # in the consent log with the policy's date.
-                from engine import consent as CS, limits as LM
-                said = LM.changed((stored.get("settings") or {}).get("data"),
-                                  (merged.get("settings") or {}).get("data"))
+                from engine import consensus as CN, consent as CS, limits as LM
+                before, after = (stored.get("settings") or {}).get("data"), (merged.get("settings") or {}).get("data")
+                said = LM.changed(before, after)
                 if said and CS.record(conn, who["id"], "limits", said):
+                    conn.commit()
+                # In or out of the members' split (engine/consensus), likewise.
+                said = CN.changed(before, after)
+                if said and CS.record(conn, who["id"], "split", said):
                     conn.commit()
                 A.touch_session(conn, token)
                 return self._send(200, json.dumps(
@@ -4990,6 +5013,10 @@ class Handler(BaseHTTPRequestHandler):
             # the Settings row and the Alerts page's "away" switch.
             from engine import activity as ACT
             out["activity_switch"] = ACT.enabled()
+            # The members' split (engine/consensus): its Settings switch is
+            # drawn only while the site counts anybody at all.
+            from engine import consensus as CN
+            out["split_switch"] = CN.enabled()
             out["activity"] = bool(who) and ACT.on_for(conn, who["id"])
             # NO PROMO CODES HERE. This endpoint is public — it renders
             # the plans page before anybody signs in — so anything in it

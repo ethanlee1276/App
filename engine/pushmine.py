@@ -864,6 +864,12 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 told += _pk.alerts_pass(conn, now=t)
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  pick'em: {type(exc).__name__}: {exc}")
+            # Each open pick's latest market price: the last before kickoff
+            # is its close (the "beat the close" table).
+            try:
+                _pk.note_closes(conn, now=t, data_dir=Path(web) / "data")
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  pick'em closes: {type(exc).__name__}: {exc}")
         # Remind me (engine/gamechat): games starting in ten minutes.
         from engine import gamechat as _gc
         try:

@@ -2479,7 +2479,42 @@ function pbpMarketHome(boardGame) {
 // The two cards' empty places, filled once the page is drawn (pbpActionFill,
 // pbpPaceFill), in the shared layout and on the basketball and hockey pages.
 function pbpMineSlotsHTML() {
-  return `<div class="card pbp-action" id="pbp-action" hidden></div><div class="card pbp-pace" id="pbp-pace" hidden></div>`;
+  return `<div class="card pbp-action" id="pbp-action" hidden></div><div class="card pbp-pace" id="pbp-pace" hidden></div>`
+    + `<div class="card pbp-split" id="pbp-split" hidden></div>`;
+}
+/* THE MEMBERS' SPLIT (engine/consensus, GET /api/split; the second paper:
+   "Qellys consensus. The share of tracked bets on each side of a game ...
+   only once it covers 50+ bets"): pooled counts of members' game-line
+   legs, a market only with 50 or more, never anyone by name. Nothing while
+   the site's two locks are shut, and nothing for a veiled game. */
+const PBP_SPLIT = { key: "", at: 0, v: null };
+async function pbpSplitFill(league) {
+  const box = document.getElementById("pbp-split"), d = PBP_BIG.d;
+  if (!box || !d || !d.home || !d.away) return;
+  const key = `${league}:${d.away}@${d.home}`;
+  if (PBP_SPLIT.key !== key || Date.now() - PBP_SPLIT.at > 300000) {
+    Object.assign(PBP_SPLIT, { key, at: Date.now(), v: null });
+    try {
+      const r = await fetch(`/api/split?sport=${encodeURIComponent(league)}&away=${encodeURIComponent(d.away)}&home=${
+        encodeURIComponent(d.home)}`, { credentials: "same-origin" });
+      if (r.ok) PBP_SPLIT.v = (await r.json()).split || null;
+    } catch (e) { /* the page goes on without it */ }
+  }
+  const v = PBP_SPLIT.key === key ? PBP_SPLIT.v : null;
+  if (!box.isConnected) return;
+  box.hidden = !v;
+  if (!v) return;
+  const bar = (shares, n, label) => {
+    const ks = Object.keys(shares);
+    if (ks.length < 1) return "";
+    const a = shares[ks[0]], b = ks[1] ? shares[ks[1]] : 1 - a;
+    return `<div class="pbp-split-m"><span class="mini">${escapeHtml(label)} · ${n} bets</span>
+      <div class="pbp-split-bar" role="img" aria-label="${escapeAttr(ks.map((k) => `${k} ${Math.round(shares[k] * 100)}%`).join(", "))}"><i style="width:${Math.round(a * 100)}%"></i></div>
+      <div class="pbp-split-ends"><span>${escapeHtml(ks[0])} ${Math.round(a * 100)}%</span><span>${escapeHtml(ks[1] || "")} ${Math.round(b * 100)}%</span></div></div>`;
+  };
+  box.innerHTML = `<div class="pbp-rail-head">The members’ split <span class="mini">what members’ saved bets are on</span></div>
+    ${v.sides ? bar(v.sides.share, v.sides.n, "Side") : ""}${v.totals ? bar(v.totals.share, v.totals.n, "Total") : ""}
+    <p class="mini">Pooled from members’ saved parlays, shown once a market has 50 bets; never anyone by name. Not our pick.</p>`;
 }
 function pbpFootHTML() {
   return `<p class="pbp-foot">21+ · Analytics, not guarantees · Gambling problem? Call or text <b>1-800-GAMBLER</b> ·
@@ -4732,6 +4767,7 @@ async function renderPbpPage(tick) {
     pbpActionFill(league, event);
     pbpPaceFill(league, event);
     pbpBigPaint();
+    pbpSplitFill(league);
     const b = document.getElementById("pbp-back");
     if (b) b.addEventListener("click", () => { markBackNav(); switchView(way.view); });
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>

@@ -900,7 +900,13 @@ button.tr-opt { cursor: pointer; }
 .pbp-big-score span { font-size: clamp(18px, 5vw, 32px); font-weight: 800; color: var(--text-mute); letter-spacing: .04em; }
 .pbp-big-score b { font-size: clamp(72px, 24vw, 168px); line-height: 1; font-variant-numeric: tabular-nums; color: var(--text); }
 .pbp-big-clock { margin: 0; font-size: clamp(20px, 6vw, 36px); font-weight: 800; font-variant-numeric: tabular-nums; }
-.pbp-big-last { margin: 0; font-size: clamp(16px, 4.4vw, 24px); line-height: 1.3; color: var(--text-body); }
+.pbp-big-last { margin: 0; font-size: clamp(16px, 4.4vw, 24px); line-height: var(--lh-snug); color: var(--text-body); }
 .pbp-big-wp, .pbp-big-note { margin: 0; font-size: var(--fs-sm); color: var(--text-mute); }
 .pbp-big-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; text-align: left; font-size: clamp(15px, 4vw, 20px); }
 .pbp-big-go { margin-left: auto; }
+
+/* THE MEMBERS' SPLIT (pbpSplitFill): a bar a market, the two shares at its ends. */
+.pbp-split-m { display: grid; gap: 4px; margin-top: 8px; }
+.pbp-split-bar { height: 8px; border-radius: 999px; background: var(--fill-tone); overflow: hidden; }
+.pbp-split-bar i { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
+.pbp-split-ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; }

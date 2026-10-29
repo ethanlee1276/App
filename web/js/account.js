@@ -407,6 +407,13 @@ function mbEdgeHTML(bets) {
     rows.push(`<div class="edge-row"><span class="edge-k">Worst result</span><b class="warn">${mbMoney(mbProfit(e.worst), true)}</b>
       <span class="mini">${escapeHtml(String(e.worst.desc || "").slice(0, 60))} · ${escapeHtml(e.worst.date || "")}</span></div>`);
   }
+  // The members, pooled (engine/consensus), beside your own number.
+  const mem = (_mbEdgeClv || {}).members;
+  if (mem && mem.n) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Members against the close</span>
+      <b class="${mem.avg >= 0 ? "good" : "warn"}">${pctS(mem.avg)}</b>
+      <span class="mini">beat it on ${Math.round(100 * mem.beat / mem.n)}% of ${mem.n} legs in 30 days, all members pooled</span></div>`);
+  }
   if (e.peak) {
     rows.push(`<div class="edge-row"><span class="edge-k">When you bet</span><b>${hour(e.peak.from)}–${hour((e.peak.from + 2) % 24)}</b>
       <span class="mini">${Math.round(e.peak.share * 100)}% of the ${e.timed} bets logged here</span></div>`);
@@ -423,7 +430,7 @@ async function mbEdgeFill() {
     if (r.ok) _mbEdgeClv = await r.json();
   } catch (e) { /* the page's own closes still count */ }
   const box = document.getElementById("mb-edge");
-  if (box && Object.keys(_mbEdgeClv.by_bet || {}).length) box.outerHTML = mbEdgeHTML(mbLoad());
+  if (box && (Object.keys(_mbEdgeClv.by_bet || {}).length || _mbEdgeClv.members)) box.outerHTML = mbEdgeHTML(mbLoad());
 }
 
 /* Where the week stands against the member's own limit (Settings →
@@ -638,8 +645,8 @@ function renderMyBets() {
     ${form}
     ${mbLimitHTML(bets)}
     ${ribbon}
-    ${mbEdgeHTML(bets)}
     ${mbMonthHTML(bets, today)}
+    ${mbEdgeHTML(bets)}
     ${st.settled ? `<div id="mb-report"></div>` : `<div id="mb-risk"></div>`}
     ${(() => {
       if (st.settled < 3) return "";
@@ -3719,6 +3726,11 @@ function setListHTML() {
         ? [setItem({ ico: "chart", title: "Your activity", val: _pwStatus.activity ? "On" : "Off", chev: true,
                      attrs: 'data-set-open="activity"' })] : []),
       setItem({ ico: "shield", title: "What we keep about you", chev: true, attrs: 'data-set-open="yourdata"' }),
+      // The members' split (engine/consensus), only while the site counts anybody.
+      ...(_pwStatus && _pwStatus.split_switch
+        ? [setItem({ tag: "label", ico: "people", title: "Count my bets in the members’ split",
+                     sub: "Pooled, 50 bets or more a side, never you by name",
+                     end: setSwitch(s.split !== "off", 'data-set-switch="split"') })] : []),
       setItem({ ico: "download", title: "Download my data", attrs: 'data-act="acctExport"' }),
       setItem({ ico: "search", title: "Clear search history", attrs: 'data-act="acctSearchClear"' }),
       setItem({ ico: "logout", title: "Sign out everywhere", sub: "Every device, this one too",
