@@ -23,7 +23,7 @@
      (karmaProfileMount).
    Free for every account: nothing here is paid data. */
 
-const KR = { me: null, at: 0, busy: null, scope: "week", lad: {}, daily: null, dailyAt: 0, dailyOpen: false, dailyJust: 0 };
+const KR = { me: null, at: 0, busy: null, scope: "week", lad: {}, daily: null, dailyAt: 0, dailyOpen: false, dailyJust: 0, toMonth: false };
 const KR_FRESH_MS = 60000;
 const KR_SEEN_KEY = "qb_kr_level";
 /* engine/karma TIERS: the first level of each, its name and its class. */
@@ -198,7 +198,7 @@ function krStripHTML(v, d) {
         <span class="kr-strip-sub">${krNum(v.points)} karma · ${krNum(v.to - v.points)} to level ${Number(v.level) + 1}${
           st.now ? ` · <span class="kr-fire">🔥 ${Number(st.now)}</span>` : ""}</span>${
         next ? `<span class="kr-strip-sub kr-next">Getting started: ${krEsc(next.text)} · +${Number(camp.pts)}</span>` : ""}</span>
-      ${side}<span class="kr-go" aria-hidden="true">›</span></button>${krAskHTML(d) || krPickemHTML(v.pickem)}</div>${krFriendsHTML(v)}`;
+      ${side}<span class="kr-go" aria-hidden="true">›</span></button>${krAskHTML(d) || krMonthLineHTML(v.month) || krPickemHTML(v.pickem)}</div>${krFriendsHTML(v)}`;
 }
 
 function krStripDraw(host) {
@@ -220,14 +220,14 @@ async function karmaStripMount(host) {
 /* WHAT'S NEW (an app store's release notes, inside the app): once, to an
    account past its getting-started list, what the last round added, a line
    each; "Got it" puts it away on this device. */
-const KR_NEW_KEY = "qb_new_2026_10_28c";
+const KR_NEW_KEY = "qb_new_2026_10_29";
 const KR_NEW = [
-  ["🏈", "Pick'em pushes", "Before a football week's picks lock, and your week's result on Tuesday. Off on the Pick'em page."],
-  ["👥", "Pick'em with friends", "Everyone | Friends over the Pick'em tables: your week against your friends'."],
-  ["✨", "Pick'em karma", "+5 a winner, +25 a perfect week, and two new badges on the Karma tab."],
-  ["🗓️", "Picks left", "While the NFL week has games to pick, the card above says how many and when they lock."],
-  ["👤", "Pick'em on profiles", "This season's pick'em record and place, on every player's profile."],
-  ["⏰", "Kickoff alerts", "Alerts → My teams' games: a push 10 minutes before your teams play."]];
+  ["🗓️", "Your month", "The Karma tab adds up your month: live games, days, karma, pick'em and calls. Share it as a picture."],
+  ["📈", "Your Edge Report", "My Bets: your price against the close, where you win and where you don't, your best-priced bet."],
+  ["🏆", "The leaderboard", "My Bets: members ranked by price against the close, never by what they won. Only if you join it."],
+  ["👥", "Pick'em groups", "A private pick'em table for you and your friends: make one, send its link."],
+  ["⏸️", "Limits and breaks", "Settings → Limits: a weekly limit of your own, and a break from alerts whenever you want one."],
+  ["🗂️", "Your data", "Settings → Your data: everything we keep about you, every choice you made, and a download."]];
 function krNewHTML(v) {
   if (!v || v.camp) return "";
   try { if (localStorage.getItem(KR_NEW_KEY)) return ""; } catch (e) { return ""; }
@@ -489,6 +489,101 @@ async function krShare(btn) {
   exportCard(c, `qellys-level-${Number(v.level) || 1}.png`, done);
 }
 
+/* YOUR MONTH (engine/yourmonth; Ethan, 2026-10-29: "keep building"): the
+   month's live games watched, days with karma, karma, pick'em and Call it,
+   from what the karma already reads. The month just ended for a new
+   month's first week (`whole`), else this one so far. Never a bet, a stake
+   or a pick: karma never pays for bets, and a picture of winnings would be
+   an ad for betting. Its picture goes to the share sheet the way the
+   level's does. */
+function krMonthStats(m) {
+  const out = [];
+  const s = (n, one, many) => (Number(n) === 1 ? one : many);
+  if (m.watched) out.push([krNum(m.watched), s(m.watched, "live game watched", "live games watched")]);
+  if (m.days) out.push([krNum(m.days), s(m.days, "day with karma", "days with karma")]);
+  if (m.karma > 0) out.push([`+${krNum(m.karma)}`, "karma"]);
+  if (m.pickem) out.push([`${Number(m.pickem.w)}–${Number(m.pickem.l)}${m.pickem.p ? `–${Number(m.pickem.p)}` : ""}`, "in pick'em"]);
+  if (m.calls) out.push([`${Number(m.calls.right)} of ${Number(m.calls.n)}`, s(m.calls.n, "call right", "calls right")]);
+  return out;
+}
+
+function krMonthHTML(m) {
+  if (!m || !m.any) return "";
+  return `<section class="kr-card kr-month" id="kr-month"><div class="kr-h"><b>Your ${krEsc(m.name)}</b><span>${m.whole ? "the whole month" : "so far"}</span></div>
+    <div class="krm-grid">${krMonthStats(m).map(([n, w]) => `<div class="krm-stat"><b>${krEsc(n)}</b><span>${krEsc(w)}</span></div>`).join("")}</div>
+    ${m.league && Number(m.league_games) > 1 ? `<p class="kr-fine">Watched most: ${krEsc(m.league)}, ${krNum(m.league_games)} games.</p>` : ""}
+    <button type="button" class="kr-share" data-kr="month-share">Share my month</button></section>`;
+}
+
+// The Live card's one line under the strip, for a new month's first week.
+function krMonthLineHTML(m) {
+  if (!m || !m.whole || !m.any) return "";
+  const bits = krMonthStats(m).slice(0, 1).map(([n, w]) => `${n} ${w}`).join("");
+  return `<button type="button" class="kr-ask kr-month-line" data-kr="month-open">
+      <span>🗓️ <b>Your ${krEsc(m.name)}</b>${bits ? ` · ${krEsc(bits)}` : ""}</span><span class="kr-ask-go">See it ›</span></button>`;
+}
+
+function krMonthCanvas(m, handle) {
+  const c = document.createElement("canvas");
+  c.width = CARD_W;
+  c.height = CARD_H;
+  const x = c.getContext("2d");
+  cardStage(x);
+  x.textBaseline = "alphabetic";
+  x.textAlign = "left";
+  x.fillStyle = CARD_INK;
+  x.font = cardSerif(64, 700);
+  x.fillText(`My ${m.name}`, 60, 132, CARD_W - 120);
+  x.fillStyle = "rgba(232,228,217,.55)";
+  x.font = cardFont(28, 600);
+  x.fillText(`${handle ? `@${handle} · ` : ""}${m.whole ? "the whole month" : "so far"} on Qellys Book`, 60, 182, CARD_W - 120);
+  // The numbers, a tile each, as wide as there are of them.
+  const stats = krMonthStats(m).slice(0, 5);
+  const gap = 16, w = Math.min(260, (CARD_W - 96 - gap * (stats.length - 1)) / Math.max(1, stats.length));
+  stats.forEach(([n, label], i) => {
+    const bx = 48 + i * (w + gap), by = 236;
+    x.fillStyle = "rgba(232,228,217,.07)";
+    _cardRR(x, bx, by, w, 230, 22);
+    x.fill();
+    x.textAlign = "center";
+    x.fillStyle = i ? CARD_INK : CARD_BRAND;
+    x.font = cardSerif(n.length > 6 ? 58 : 76, 700);
+    x.fillText(n, bx + w / 2, by + 122, w - 24);
+    x.fillStyle = "rgba(232,228,217,.7)";
+    x.font = cardFont(22, 700);
+    x.fillText(label, bx + w / 2, by + 178, w - 24);
+  });
+  x.strokeStyle = "rgba(232,228,217,.12)";
+  x.lineWidth = 1;
+  x.beginPath(); x.moveTo(48, 542.5); x.lineTo(CARD_W - 48, 542.5); x.stroke();
+  x.textAlign = "left";
+  x.fillStyle = "rgba(232,228,217,.45)";
+  x.font = cardFont(22, 400);
+  x.fillText("Live games, the chat and karma · free", 48, 580);
+  x.textAlign = "right";
+  x.fillStyle = "rgba(255,176,0,.8)";
+  x.font = cardFont(24, 600);
+  x.fillText("qellysbook.com", CARD_W - 48, 580);
+  x.textAlign = "left";
+  return c;
+}
+
+async function krMonthShare(btn) {
+  if (typeof cardStage !== "function" || typeof exportCard !== "function") return;
+  const was = btn.textContent;
+  btn.textContent = "Drawing…";
+  btn.disabled = true;
+  const done = () => { btn.textContent = was; btn.disabled = false; };
+  const v = await krLoad(true);
+  const m = v && v.month;
+  if (!m || !m.any) { done(); if (typeof tfToast === "function") tfToast("That did not load — try again."); return; }
+  const who = typeof _acctUser !== "undefined" && _acctUser && _acctUser.profile ? _acctUser.profile.handle : "";
+  let c = null;
+  try { c = krMonthCanvas(m, who || ""); } catch (e) { c = null; }
+  if (!c) { done(); if (typeof tfToast === "function") tfToast("That card could not be drawn."); return; }
+  exportCard(c, `qellys-${String(m.month || "month")}.png`, done);
+}
+
 function krRecentHTML(v) {
   const rows = v.recent || [];
   if (!rows.length) return "";
@@ -514,6 +609,7 @@ function krPanelHTML(v) {
       <div class="kr-streak${st.now ? " lit" : ""}"><b>🔥 ${Number(st.now || 0)}</b><span>day${st.now === 1 ? "" : "s"} in a row</span>
         <i>${st.best ? `best ${Number(st.best)}` : "earn karma today to start"}${st.rest ? " · a rest day in hand" : ""}</i></div>
     </section>
+    ${krMonthHTML(v.month)}
     ${krCampHTML(v)}
     ${krDailyHTML(KR.daily)}
     ${krQuestsHTML(v)}
@@ -540,6 +636,11 @@ async function karmaPanelMount(el) {
   }
   el.innerHTML = krPanelHTML(v);
   if (KR.scope !== "week") krLadder(el, KR.scope);
+  if (KR.toMonth) {
+    KR.toMonth = false;
+    const m = document.getElementById("kr-month");
+    if (m) m.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 }
 
 async function krLadder(root, scope) {
@@ -612,6 +713,8 @@ document.addEventListener("click", (e) => {
   if (act === "open") { e.preventDefault(); krOpenTab(); return; }
   if (act === "up-close") { const up = b.closest(".kr-up"); if (up) up.remove(); return; }
   if (act === "share") { krShare(b); return; }
+  if (act === "month-share") { krMonthShare(b); return; }
+  if (act === "month-open") { e.preventDefault(); KR.toMonth = true; krOpenTab(); return; }
   if (act === "daily") { krDailyAnswer(b); return; }
   if (act === "daily-open") { KR.dailyOpen = true; krStripDraw(b.closest(".kr-strip-host")); return; }
   if (act === "new-ok") {

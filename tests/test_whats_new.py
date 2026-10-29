@@ -48,7 +48,7 @@ def test_every_line_is_short_and_names_something_real():
     for icon, title, words in rows:
         assert len(title) <= 24 and len(words) <= 100, (title, words)
     titles = [t for _i, t, _w in rows]
-    assert "Pick'em pushes" in titles and "Pick'em with friends" in titles and "Pick'em karma" in titles
+    assert "Your month" in titles and "The leaderboard" in titles and "Your Edge Report" in titles
 
 
 def test_in_a_browser_it_shows_goes_away_and_stays_away():

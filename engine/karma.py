@@ -103,6 +103,8 @@ import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import yourmonth as YM
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "web" / "data"
 _ET = ZoneInfo("America/New_York")
@@ -1407,7 +1409,9 @@ def me(conn, user_id, now: float | None = None, data_dir: Path | None = None, ch
                       for k, p, a in conn.execute("SELECT kind, pts, at FROM karma_events WHERE user_id=? AND pts>0 "
                                                   "ORDER BY at DESC LIMIT 12", (uid,))],
            "rules": [{"kind": k, "pts": v[0], "cap": v[1], "why": v[2]} for k, v in RULES.items() if v[0] > 0],
-           "pickem": _pickem_next(conn, uid, t, data_dir)}
+           "pickem": _pickem_next(conn, uid, t, data_dir),
+           # Your month (engine/yourmonth): the Karma tab's card and its picture.
+           "month": YM.summary(conn, uid, now=t)}
     if prefs["seen_level"] and lv["level"] > prefs["seen_level"]:
         out["up_from"] = prefs["seen_level"]
     if lv["level"] != prefs["seen_level"]:

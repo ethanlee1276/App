@@ -42,7 +42,7 @@ def test_one_card_the_quests_as_dots_and_the_question_as_a_line():
                  "qs.map((x) => `<i${x.done ? ' class=\"on\"' : \"\"}></i>`)",
                  '<span class="kr-of">${Number(camp.done)}/${Number(camp.of)}</span>',
                  '<span class="kr-strip-sub kr-next">Getting started: ${krEsc(next.text)} · +${Number(camp.pts)}</span>',
-                 "${krAskHTML(d) || krPickemHTML(v.pickem)}</div>${krFriendsHTML(v)}"):
+                 "${krAskHTML(d) || krMonthLineHTML(v.month) || krPickemHTML(v.pickem)}</div>${krFriendsHTML(v)}"):
         assert want in fn, want
     for gone in ('<span class="kr-q${', '<span class="kr-qs">', "kr-camp-h"):
         assert gone not in KJS, ("the chips and the shouted header are gone", gone)
@@ -118,7 +118,7 @@ def test_in_a_phone_browser_the_live_tab_says_it_once():
                     page.route("**/api/trivia/daily*", ful(json.dumps({"signed_in": True, "day": TQ.DAY, "q": q})))
                     page.route("**/api/alerts/**", ful(json.dumps({"players": []})))
                     page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');"
-                                         "localStorage.setItem('qb_new_2026_10_28c','1');"
+                                         "localStorage.setItem('qb_new_2026_10_29','1');"
                                          f"localStorage.setItem('qb_kr_level','{me_v['level']}');}}catch(e){{}}")
                     page.goto(f"http://127.0.0.1:{port}/index.html#live", wait_until="load")
                     page.wait_for_timeout(3500)

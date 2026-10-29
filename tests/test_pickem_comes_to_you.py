@@ -196,7 +196,7 @@ def test_the_pages_draw_it_and_the_policy_names_it():
                  'api("pickem-remind", { on })', '(fr ? "friends" : "table")', '<a href="#feed/search">Find people</a> to add'):
         assert want in social, want
     kjs = (ROOT / "web" / "js" / "karma.js").read_text(encoding="utf-8")
-    assert "function krPickemHTML(p)" in kjs and "${krAskHTML(d) || krPickemHTML(v.pickem)}" in kjs, \
+    assert "function krPickemHTML(p)" in kjs and "${krAskHTML(d) || krMonthLineHTML(v.month) || krPickemHTML(v.pickem)}" in kjs, \
         "after today's question, never beside it"
     assert '"trivia", "pickem_won", "pickem_week"]]' in kjs, "How karma works lists both"
     assert "a.kr-ask { text-decoration: none; }" in (ROOT / "web" / "css" / "karma.css").read_text(encoding="utf-8")
@@ -269,7 +269,7 @@ def test_in_a_phone_browser_friends_the_switch_and_the_live_line():
                 page.route("**/api/trivia/daily*", ful(json.dumps({"signed_in": True, "day": TQ.DAY, "q": old_q})))
                 page.route("**/api/alerts/**", ful(json.dumps({"players": []})))
                 page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');"
-                                     f"localStorage.setItem('qb_new_2026_10_28c','1');localStorage.setItem('qb_kr_level','{v['level']}');}}catch(e){{}}")
+                                     f"localStorage.setItem('qb_new_2026_10_29','1');localStorage.setItem('qb_kr_level','{v['level']}');}}catch(e){{}}")
                 page.goto(f"http://127.0.0.1:{port}/index.html#feed/pickem/nfl", wait_until="load")
                 page.wait_for_selector(".fd-pk-scope", timeout=15000)
                 lead = "[...document.querySelectorAll('.fd-pk-tables .fd-lead .fd-person span span')].map((s) => s.textContent)"

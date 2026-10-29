@@ -258,6 +258,15 @@ button.kr-prof:hover { background: var(--fill-hover); }
 .kr-new-ok { min-height: 32px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
   background: color-mix(in oklab, var(--brand) 18%, transparent); color: var(--text); font: inherit;
   font-size: var(--fs-xs); font-weight: 800; }
+/* Your month (js/karma.js krMonthHTML): its numbers, a tile each; opened
+   from the Live card's line, it stops clear of the top bar. */
+.kr-month { scroll-margin-top: calc(var(--topbar-h) + 12px); }
+.krm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.krm-stat { display: grid; align-content: start; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--text) 5%, transparent); }
+.krm-stat b { font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; }
+.krm-stat:first-child b { color: var(--brand-2); }
+.krm-stat span { font-size: var(--fs-2xs); color: var(--text-mute); }
 .kr-new-l { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .kr-new-l li { display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; align-items: baseline; }
 .kr-new-l li b { font-size: var(--fs-xs); }
