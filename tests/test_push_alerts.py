@@ -327,10 +327,13 @@ def test_the_server_the_worker_the_page_the_policy_and_the_play_build_carry_it()
     click = sw[sw.index('self.addEventListener("notificationclick"'):]
     assert "u.origin === self.location.origin" in click, "a tap opens this site and nowhere else"
     app = READ("web", "js", "app.js")
-    at = app.index("function renderPushZone(note) {")
-    page = app[at:app.index("\nfunction renderAlerts() {", at)]
+    # The Alerts page's renderers live in js/more.js since 2026-10-29 (loaded on first use).
+    more = READ("web", "js", "more.js")
+    at = more.index("function renderPushZone(note) {")
+    page = more[at:more.index("\nfunction renderAlerts() {", at)]
     assert "Add to Home Screen" in page and "never a pick on a lock screen" in page
-    assert 'kind: "apns"' in app and "userVisibleOnly: true" in app and "renderPushZone();" in app
+    assert 'kind: "apns"' in app and "userVisibleOnly: true" in app and "renderPushZone();" in more
+    assert 'function renderPushZone(...a) { return roomCall(renderPushZone, "renderPushZone", "js/more.js"' in app
     assert "<h3>2.7 Alerts on your phone</h3>" in READ("web", "privacy.html")
     assert json.loads(READ("deploy", "twa", "twa-manifest.json"))["enableNotifications"] is True
     assert '"ab"' not in json.dumps(PA.KINDS) and set(PA.KINDS) == {"posted", "settled"}

@@ -82,7 +82,8 @@ def test_yes_turns_on_what_a_new_member_wants_first():
     assert "Never a “bet now”" in sheet and "each kind is a switch in Alerts" in sheet
     on = _fn(APP, "async function pushOn(")
     assert on.count("...lg") == 4, "the leagues travel to the box on both paths"
-    assert "pushRemember(await pushOn(" in APP, "the Alerts switch keeps what the sheet keeps"
+    more = (ROOT / "web" / "js" / "more.js").read_text(encoding="utf-8")   # the Alerts page, loaded on first use
+    assert "pushRemember(await pushOn(" in more, "the Alerts switch keeps what the sheet keeps"
 
 
 def test_in_a_browser_it_asks_counts_and_waits():

@@ -162,7 +162,9 @@ def test_sign_in_fields_are_labelled_and_the_action_is_gold():
 
 
 def test_alerts_are_switches_in_rows():
-    zone = APP[APP.index("function renderPushZone(note) {"):APP.index("\nfunction renderAlerts() {")]
+    # The Alerts page's renderer lives in js/more.js since 2026-10-29 (loaded on first use).
+    more = open(os.path.join(ROOT, "web", "js", "more.js"), encoding="utf-8").read()
+    zone = more[more.index("function renderPushZone(note) {"):more.index("\nfunction renderAlerts() {")]
     assert 'type="checkbox"' not in zone and "setSwitch(" in zone and "setGroup(" in zone
     assert '[data-push-topic][aria-checked="true"]' in zone, "the choice is read off the switches"
     assert 'host.classList.toggle("push-off", !on);' in zone

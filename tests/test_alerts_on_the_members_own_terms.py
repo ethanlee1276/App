@@ -129,8 +129,8 @@ def test_quiet_hours_are_where_the_member_is():
 
 
 def test_the_page_offers_the_break_and_says_the_limits():
-    app = READ("web", "js", "app.js")
-    zone = app[app.index("function renderPushZone("):app.index("function renderAlerts(")]
+    more = READ("web", "js", "more.js")              # the Alerts page loads on first use
+    zone = more[more.index("function renderPushZone("):more.index("function renderAlerts(")]
     assert 'data-push-pause="24"' in zone and 'data-push-pause="168"' in zone and 'data-push-pause="0"' in zone
     assert "Five alerts a day at most (eight on a plan), none overnight where you are." in zone
     assert "1-800-GAMBLER" in zone

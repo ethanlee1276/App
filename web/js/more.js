@@ -4721,3 +4721,202 @@ async function renderBookReport() {
         from ${d.min_series}+ tracked series per book. Books below the sample bar are unranked, not absent.</p>
     </div>`);
 }
+
+/* THE ALERTS PAGE (moved from app.js 2026-10-29, the way the Scanner was):
+   this phone's alerts and their switches, Take a break, the watches and
+   the feed. Fetched the first time the page opens. */
+function renderPushZone(note) {
+  const host = document.getElementById("push-zone");
+  if (!host) return;
+  const kind = pushKind(), saved = pushSaved();
+  if (!kind) { host.innerHTML = ""; return; }
+  const on = !!(saved && saved.endpoint);
+  const signedIn = !!(_acctUser && _acctUser.signed_in);
+  const topics = ((saved && saved.topics) || ["posted", "settled"]).concat((saved && saved.mine) || []);
+  // A SETTINGS SCREEN, NOT A FORM (2026-10-25, docs/VISUAL_AUDIT.md S9): one
+  // switch for the phone, a switch a row for each kind of alert, the way a
+  // phone's own notification settings read. Until alerts are on, a kind's
+  // switch is only a choice.
+  const box = (t, label, off) => setItem({ title: label, end: setSwitch(topics.includes(t),
+    `data-push-topic="${t}" aria-label="${label}"${off ? " disabled" : ""}`) });
+  host.innerHTML = (kind === "home-screen"
+    ? setGroup("Alerts on this phone", [setItem({ ico: "bell", tone: "red", title: "Add Qellys to your Home Screen",
+        sub: "Then open it from there and turn alerts on here" })],
+      "On iPhone, Apple sends a site’s alerts only once it is on your Home Screen: tap Share, then <b>Add to Home Screen</b>.")
+    : setGroup("Alerts on this phone", [
+        setItem({ ico: "bell", tone: "red", title: "Alerts", sub: on ? "On for this phone" : "Off",
+                  end: setSwitch(on, `data-push-go="${on ? "off" : "on"}" aria-label="Alerts on this phone"`) }),
+        box("posted", "Tonight’s picks are up"),
+        box("settled", "Last night is graded"),
+      ], "A tap on your lock screen when tonight’s picks go up and when last night is graded. "
+        + "Counts and the record only — never a pick on a lock screen.")
+      + setGroup("Yours", [
+        box("watches", "My teams and players make the board (members see which)", !signedIn),
+        box("bets", "My parlay: on, last leg, settled", !signedIn),
+        box("kickoff", "My teams’ games, 10 minutes before they start", !signedIn),
+        box("clutch", "Big moments in games I follow", !signedIn),
+        box("finals", "Final scores of games I follow", !signedIn),
+        box("closegame", "Close games: my teams or my bets, the last minutes within one score", !signedIn),
+        box("news", "Injury news: a status change for a player I follow or bet on", !signedIn),
+        box("today", "This morning: my teams’ games today, with the times", !signedIn),
+        box("lines", "A line moves 2% or a point from my bet, before it starts", !signedIn),
+        box("lineup", "My fantasy lineup: a starter out or on a bye", !signedIn),
+        // While you were away (engine/engagement): only while the site keeps activity.
+        ...(_pwStatus && _pwStatus.activity_switch
+          ? [box("away", "When I’ve been away: my team’s next game or what’s new, once a week at most", !signedIn)] : []),
+      ], signedIn ? "Your own watches, saved parlays and fantasy lineup (the Sleeper league your league desk last opened). Only your words and your ticket, only on phones you are signed in on."
+        : "Sign in for alerts on your own watches and saved parlays.")
+      // TAKE A BREAK (engine/pushalerts.pause; the research's one-tap pause):
+      // a day or a week of nothing, and the day's limit said plainly.
+      + (on ? setGroup("Take a break", [(saved.paused_until || 0) * 1000 > Date.now()
+          ? setItem({ ico: "clock", tone: "amber", title: "Paused", sub: `Until ${escapeHtml(tzTime(saved.paused_until * 1000,
+              { weekday: "short", hour: "numeric", minute: "2-digit" }))}`, end: `<button type="button" class="set-val" data-push-pause="0">Resume</button>` })
+          : setItem({ tag: "div", ico: "clock", tone: "amber", title: "Pause every alert",
+              end: `<span class="set-seg"><button type="button" data-push-pause="24">A day</button><button type="button" data-push-pause="168">A week</button></span>` })],
+        "Five alerts a day at most (eight on a plan), none overnight where you are. Gambling problem? Call or text 1-800-GAMBLER.") : ""))
+    + (note ? `<p class="set-foot push-note" role="status">${escapeHtml(note)}</p>` : "");
+  // Off, each kind is a choice for later, drawn dimmer than a live one.
+  host.classList.toggle("push-off", !on);
+  host.querySelectorAll("[data-push-pause]").forEach((el) => el.addEventListener("click", async () => {
+    try {
+      const got = await pushSend("pause", { endpoint: saved.endpoint, hours: Number(el.dataset.pushPause) });
+      try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, pushSaved(), { paused_until: got.paused_until || 0 }))); } catch (e) {}
+      renderPushZone(got.paused_until ? "Paused. Nothing comes to this phone until then." : "Alerts are back on.");
+    } catch (err) { renderPushZone(err && err.message ? err.message : "That did not work — try again."); }
+  }));
+  host.querySelectorAll("[data-push-go], [data-push-topic]").forEach((el) => el.addEventListener(
+    "click", async () => {
+      if (el.disabled) return;
+      if (el.matches("[data-push-topic]")) {
+        el.setAttribute("aria-checked", el.getAttribute("aria-checked") === "true" ? "false" : "true");
+      }
+      const picked = [...host.querySelectorAll('[data-push-topic][aria-checked="true"]')].map((c) => c.dataset.pushTopic);
+      const turnOff = el.dataset.pushGo === "off" || (el.matches("[data-push-topic]") && !picked.length);
+      if (el.matches("[data-push-topic]") && !on) return;           // just a choice until it is on
+      try {
+        if (turnOff) {
+          await pushOff(saved);
+          try { localStorage.removeItem(PUSH_KEY); } catch (e) {}
+          renderPushZone("Alerts are off on this phone.");
+        } else {
+          pushRemember(await pushOn(picked.length ? picked : ["posted", "settled"], saved && saved.leagues));
+          if (!on) track("push_on", "alerts");
+          buzz("tap");
+          renderPushZone(on ? "Saved." : "Alerts are on. The next one comes when a board goes up.");
+        }
+      } catch (err) {
+        renderPushZone(err && err.message ? err.message : "That did not work — try again.");
+      }
+    }));
+}
+
+function renderAlerts() {
+  const host = document.getElementById("alerts-body");
+  if (!host) return;
+  const d = state.data || {};
+  // Friends first: fetch once if signed in and redraw when it lands.
+  // Seen is marked AFTER the rows have actually been shown — a
+  // background poll must not eat the unread state.
+  //
+  // `_acctUser` is null until boot's acctWho() answers, and a cold load
+  // of #alerts renders before that. Null means UNKNOWN, not signed out:
+  // ask, then redraw if the answer is yes — otherwise a signed-in
+  // reader who lands here directly never sees the inbox at all.
+  if (!_acctUser) {
+    acctWho().then((u) => {
+      if (u && u.signed_in && state.view === "alerts") renderAlerts();
+    });
+  } else if (_acctUser.signed_in && !_socCache) {
+    socFetch().then((got) => {
+      if (got && state.view === "alerts") renderAlerts();
+    });
+  }
+  const _frUnseen = !!(_socCache && _socCache.inbox && _socCache.inbox.unseen);
+  if (_frUnseen && state.view === "alerts") {
+    setTimeout(() => {
+      fetch("/api/social/seen", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(() => { if (_socCache) _socCache.inbox.unseen = 0; })
+        .catch(() => {});
+    }, 1200);
+  }
+  // Render 14's list: an icon chip, the alert on one line, the CONDITION
+  // that fired it underneath. What never crosses is the render's per-row
+  // toggle and "Create New Alert" — this page is a digest of feeds we
+  // already hold, not a subscription service, and a switch that turns
+  // nothing on would be a lie you can click.
+  const alRow = (ic, tone, title, cond, right) => `
+    <div class="al-row">
+      <span class="al-ic ${tone}">${icon(ic, 15)}</span>
+      <span class="al-t"><b>${title}</b><span class="al-c">${cond}</span></span>
+      ${right || ""}
+    </div>`;
+  const moved = (d.recommendations || []).filter((r) =>
+    r.move_delta != null && (Math.abs(r.move_delta) >= 0.5 || r.move_steam));
+  const inj = (d.injury_watch || []).filter((i) => i && i.player);
+  const k = _railDeskCache || {};
+  const recs = [...(k.rows || []).filter((r) => r.rec),
+                ...(k.weather || []).filter((r) => r.rec)];
+  const cats = [["all", "All alerts", moved.length + inj.length + recs.length],
+                ["moves", "Line moves", moved.length],
+                ["injuries", "Injuries", inj.length],
+                ["desk", "The desk", recs.length]];
+  if (!cats.some(([kk, , n]) => kk === _alFilter && n)) _alFilter = "all";
+  const chips = `<div class="al-cats">${cats.filter(([kk, , n]) => n || kk === "all")
+    .map(([kk, label, n]) => `<button class="al-cat${kk === _alFilter ? " on" : ""}"
+      type="button" data-act="alSet" data-arg="${kk}">${escapeHtml(label)}
+      <span class="al-n">${n}</span></button>`).join("")}</div>`;
+  const show = (kk) => _alFilter === "all" || _alFilter === kk;
+  const sections = [];
+  if (moved.length && show("moves")) {
+    sections.push(`<div class="section-title">Line movement
+        <span class="sub">— tonight’s picks whose line has moved since open. Steam =
+        several books moved together, which is the market talking.</span></div>
+      <div class="card al-list">${moved.slice(0, 12).map((r) => alRow(
+        r.move_delta > 0 ? "rising" : "falling",
+        r.move_delta > 0 ? "good" : "bad",
+        `${escapeHtml(r.player)} ${escapeHtml(r.side || "")} ${r.line}`,
+        `${escapeHtml(r.market_label || r.market || "")} moved
+         ${r.move_delta > 0 ? "+" : ""}${r.move_delta} since open`,
+        `<span class="kx-num" style="color:var(--${r.move_delta > 0 ? "good" : "bad"})">
+           ${r.move_delta > 0 ? "+" : ""}${r.move_delta}</span>${r.move_steam
+          ? `<span class="chip down">steam</span>` : ""}`)).join("")}</div>`);
+  }
+  if (inj.length && show("injuries")) {
+    sections.push(`<div class="section-title">Injury watch
+        <span class="sub">— designations touching tonight’s board.
+        <a href="#injuries">Full report &#8594;</a></span></div>
+      <div class="card al-list">${inj.slice(0, 12).map((i) => alRow(
+        "warn", "warn", escapeHtml(i.player),
+        `${i.team ? escapeHtml(i.team) + " · " : ""}on tonight’s board with a designation`,
+        `<span class="chip down">${escapeHtml(i.status || "")}</span>`)).join("")}</div>`);
+  }
+  if (recs.length && show("desk")) {
+    sections.push(`<div class="section-title">The desk
+        <span class="sub">— paper recommendations live right now.
+        <a href="#intel">The full board &#8594;</a></span></div>
+      <div class="card al-list">${recs.slice(0, 6).map((r) => alRow(
+        "gem", "brand", escapeHtml(r.title),
+        `cleared the desk’s gate at ${(r.prob * 100).toFixed(0)}¢`,
+        `${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
+         <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>`)).join("")}</div>`);
+  }
+  host.innerHTML = `<div id="push-zone"></div><div id="watch-zone"></div>`
+    + friendInboxHTML()
+    + `<div id="feed-zone"></div>`
+    + (moved.length + inj.length + recs.length ? chips : "")
+    // A free account: what is a member's here says so, rather than a quiet
+    // page that would stay quiet (the moves, the desk and the feed are paid).
+    + (isWalled() ? sections.join("") + memberLockHTML("Line moves and the desk are for members",
+        "A member’s alerts also follow tonight’s picks: their line moves, edges as they appear and go, and the prediction desk.")
+      : sections.join("") || `<div class="empty-slate">
+      <div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">Nothing moving right now</div>
+      <div class="es-sub">Alerts fill from four real feeds — the live board diff,
+      line movement on tonight’s picks, the injury watch, and the prediction
+      desk. A quiet page means a quiet slate, not a broken one.</div></div>`);
+  renderPushZone();
+  renderWatchZone();
+  renderFeedZone();
+  renderRailDesk();
+}

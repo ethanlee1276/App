@@ -250,9 +250,9 @@ def test_settings_and_alerts_offer_it_only_while_kept():
     page = acct[acct.index("function actHTML()"):acct.index("async function actFill(")]
     assert "Never sold, never shared, never an ad. Off deletes all of it." in page
     assert '"/api/account/activity"' in acct
-    app = READ("web", "js", "app.js")
-    at = app.index('box("lineup", "My fantasy lineup')
-    assert '_pwStatus && _pwStatus.activity_switch' in app[at:at + 400] and 'box("away"' in app[at:at + 400]
+    more = READ("web", "js", "more.js")              # the Alerts page loads on first use
+    at = more.index('box("lineup", "My fantasy lineup')
+    assert '_pwStatus && _pwStatus.activity_switch' in more[at:at + 900] and 'box("away"' in more[at:at + 900]
 
 
 def test_in_a_browser_the_beat_goes_and_says_only_this():

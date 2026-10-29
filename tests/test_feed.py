@@ -271,8 +271,10 @@ def test_the_loop_publishes_it_as_a_sweep():
 
 
 def test_the_page_leads_with_the_feed():
-    i = APP.index("function renderAlerts(")
-    body = APP[i:APP.index("\nfunction ", i + 10)]
+    # The Alerts page's renderer lives in js/more.js since 2026-10-29 (loaded on first use).
+    more = open(os.path.join(ROOT, "web", "js", "more.js"), encoding="utf-8").read()
+    i = more.index("function renderAlerts(")
+    body = more[i:more.index("\n}\n", i + 10)]
     # TWO THINGS ARE ALLOWED ABOVE THE FEED, and both are there for the
     # same reason: they are PERSONAL where the feed is ambient.
     #

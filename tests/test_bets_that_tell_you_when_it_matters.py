@@ -210,9 +210,9 @@ def test_wired_switched_deleted_and_exported():
     assert "_ko.closegame_pass(conn" in run and "_ko.today_pass(conn" in run and "_na.news_pass(conn" in run
     sweep = READ("engine", "slipwatch.py")
     assert "BC.note(conn, r[\"user_id\"], bid, card, t)" in sweep and "for kind, args in moments(card, t):" in sweep
-    app = READ("web", "js", "app.js")
+    more = READ("web", "js", "more.js")              # the Alerts page loads on first use
     for t in ("closegame", "news", "today", "lines"):
-        assert f'box("{t}",' in app
+        assert f'box("{t}",' in more
     assert '"bet_clv", "news_seen"' in READ("engine", "accounts.py")
     assert "closing_prices_of_your_bets" in READ("engine", "accounts.py")
 
