@@ -4515,6 +4515,11 @@ async function renderPbpPage(tick) {
   if (!host) return;
   if (_pbpTimer) { clearTimeout(_pbpTimer); _pbpTimer = null; }
   const { league, event } = state.pbp || {};
+  // A game's page opened, once a game a load (engine/analytics: a count by league).
+  if (!tick && league && renderPbpPage.seen !== `${league}:${event}`) {
+    renderPbpPage.seen = `${league}:${event}`;
+    track("game_view", league);
+  }
   const way = pbpBack();
   const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">${way.label}</button>`;
   const wire = () => {

@@ -685,6 +685,8 @@
     if (!bets.some((x) => x && x.slip_key === box.dataset.saveKey)) {
       bets.push(entryOf(s, stake, odds, box.dataset.saveKey));
       b.save(bets);
+      // A count, never the bet (app.js track; this file has its own `track`).
+      if (typeof window.track === "function") window.track("bet_logged", "slip");
     }
     box.outerHTML = `<div class="pgr-save done">Saved to My Bets · followed on the Live tab.</div>`;
   }

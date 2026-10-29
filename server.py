@@ -2518,7 +2518,7 @@ class Handler(BaseHTTPRequestHandler):
         phone, by the push service's address it alone was given. A phone
         that subscribes signed out is detached from any account. Nothing
         else about the caller is kept."""
-        if path not in ("subscribe", "unsubscribe", "latest", "activity", "game-activity"):
+        if path not in ("subscribe", "unsubscribe", "latest", "activity", "game-activity", "pause"):
             return self._send(404, b'{"error":"unknown push endpoint"}', ".json")
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -2565,6 +2565,12 @@ class Handler(BaseHTTPRequestHandler):
                 lg, ev = str(body.get("league") or ""), str(body.get("event") or "")
                 code, out = (GA.remove(conn, who["id"], lg, ev) if body.get("end")
                              else GA.add(conn, who["id"], lg, ev, str(body.get("token") or "")))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "pause":
+                # Alerts → Pause (engine/pushalerts.pause): nothing to this
+                # phone for a day or a week, or on again. The phone's own
+                # address is the key, as for unsubscribe.
+                code, out = PA.pause(conn, endpoint, body.get("hours"))
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "unsubscribe":
                 code, out = PA.unsubscribe(conn, endpoint)

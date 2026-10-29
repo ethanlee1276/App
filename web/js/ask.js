@@ -447,6 +447,7 @@ function askActTrack(form, b) {
   }
   form.hidden = true;
   tfToast(b.trackable ? "In My Bets: we follow it on the Live tab." : "In My Bets.");
+  track("bet_logged", "ask");
   if (typeof pushAskTick === "function") pushAskTick({ bet: true });
   askActsPaint();
 }

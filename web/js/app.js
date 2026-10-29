@@ -16949,6 +16949,7 @@ window.mbAdd = function () {
   });
   mbSave(bets);
   renderMyBets();
+  track("bet_logged", "hand");
   pushAskTick({ bet: true });
   /* THE MOMENT TO ASK. Ethan, 2026-08-25: "Install prompt at the right
      moment (after a user journals their first bet, not on first visit)."
@@ -17870,10 +17871,25 @@ function renderPushZone(note) {
         ...(_pwStatus && _pwStatus.activity_switch
           ? [box("away", "When I’ve been away: my team’s next game or what’s new, once a week at most", !signedIn)] : []),
       ], signedIn ? "Your own watches, saved parlays and fantasy lineup (the Sleeper league your league desk last opened). Only your words and your ticket, only on phones you are signed in on."
-        : "Sign in for alerts on your own watches and saved parlays."))
+        : "Sign in for alerts on your own watches and saved parlays.")
+      // TAKE A BREAK (engine/pushalerts.pause; the research's one-tap pause):
+      // a day or a week of nothing, and the day's limit said plainly.
+      + (on ? setGroup("Take a break", [(saved.paused_until || 0) * 1000 > Date.now()
+          ? setItem({ ico: "clock", tone: "amber", title: "Paused", sub: `Until ${escapeHtml(tzTime(saved.paused_until * 1000,
+              { weekday: "short", hour: "numeric", minute: "2-digit" }))}`, end: `<button type="button" class="set-val" data-push-pause="0">Resume</button>` })
+          : setItem({ tag: "div", ico: "clock", tone: "amber", title: "Pause every alert",
+              end: `<span class="set-seg"><button type="button" data-push-pause="24">A day</button><button type="button" data-push-pause="168">A week</button></span>` })],
+        "Five alerts a day at most (eight on a plan), none overnight where you are. Gambling problem? Call or text 1-800-GAMBLER.") : ""))
     + (note ? `<p class="set-foot push-note" role="status">${escapeHtml(note)}</p>` : "");
   // Off, each kind is a choice for later, drawn dimmer than a live one.
   host.classList.toggle("push-off", !on);
+  host.querySelectorAll("[data-push-pause]").forEach((el) => el.addEventListener("click", async () => {
+    try {
+      const got = await pushSend("pause", { endpoint: saved.endpoint, hours: Number(el.dataset.pushPause) });
+      try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, pushSaved(), { paused_until: got.paused_until || 0 }))); } catch (e) {}
+      renderPushZone(got.paused_until ? "Paused. Nothing comes to this phone until then." : "Alerts are back on.");
+    } catch (err) { renderPushZone(err && err.message ? err.message : "That did not work — try again."); }
+  }));
   host.querySelectorAll("[data-push-go], [data-push-topic]").forEach((el) => el.addEventListener(
     "click", async () => {
       if (el.disabled) return;
@@ -17890,6 +17906,7 @@ function renderPushZone(note) {
           renderPushZone("Alerts are off on this phone.");
         } else {
           pushRemember(await pushOn(picked.length ? picked : ["posted", "settled"], saved && saved.leagues));
+          if (!on) track("push_on", "alerts");
           buzz("tap");
           renderPushZone(on ? "Saved." : "Alerts are on. The next one comes when a board goes up.");
         }
@@ -18217,6 +18234,12 @@ function anSource() {
     return "referral";
   } catch (e) { return ""; }
 }
+
+// A tap on a marked link (data-an="discord") is that event, from this page.
+if (typeof document !== "undefined") document.addEventListener("click", (e) => {
+  const a = e.target && e.target.closest && e.target.closest("[data-an]");
+  if (a) track(a.dataset.an, state.view);
+}, true);
 
 function anSend(e, page) {
   _anSrc = _anSrc || anSource();
@@ -19014,7 +19037,7 @@ window.acctAuth = async function (btn, mode) {
     // give them the link to join the discord server." Armed here, at the
     // moment the account exists; spent the first time this reader is
     // entitled, which behind the wall is after they pay and not before.
-    if (mode === "signup") dcMarkWelcome();
+    if (mode === "signup") { dcMarkWelcome(); track("signup", "email"); }
     // "a little popup on the moible site only after someone logs into
     // there account". Armed on BOTH sign-up and sign-in: somebody
     // returning on a new phone is exactly who should be offered this,
@@ -19403,7 +19426,15 @@ addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   _a2hsEvent = e;
 });
+// An iPhone fires no "appinstalled": its first open from the Home Screen is the install.
+try {
+  if (a2hsInstalled() && !localStorage.getItem("qb.installed")) {
+    localStorage.setItem("qb.installed", "1");
+    track("installed", "home-screen");
+  }
+} catch (e) { /* counted next time, or never */ }
 addEventListener("appinstalled", () => {
+  track("installed", "web");
   try { localStorage.setItem(A2HS_KEY, "off"); } catch (e) {}
   const el = document.getElementById("a2hs");
   if (el) el.remove();
@@ -19869,7 +19900,7 @@ window.coStart = function (btn) {
   window.scrollTo({ top: 0, behavior: "auto" });
 };
 
-window.billPortal = (btn) => _billGo(btn, "portal");
+window.billPortal = (btn) => { track("billing_portal", _anFrom); return _billGo(btn, "portal"); };
 
 /* The account card does not price anything — one pricing surface, and it
    is the plans page. This just goes there. */
@@ -22995,6 +23026,7 @@ function whyCalcDevig() {
 }
 
 function whyCalcKelly() {
+  if (!whyCalcKelly.n) { whyCalcKelly.n = 1; track("kelly", state.view); }
   const p = parseFloat(document.getElementById("ky-p")?.value) / 100;
   const odds = parseFloat(document.getElementById("ky-odds")?.value);
   const roll = parseFloat(document.getElementById("ky-roll")?.value);

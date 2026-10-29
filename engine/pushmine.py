@@ -90,6 +90,9 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          "kickoff": 15 * 60,
          # "While you were away" (engine/engagement): the evening it went.
          "away": 3 * 3600}
+#: Held through quiet hours where the member is; the rest go at any hour
+#: (their own bet, a game they asked to be told about, a final).
+HELD = ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away')
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0, "away": 0.0}
@@ -650,14 +653,20 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     tried once (a phone that misses it reads it from latest_for)."""
     ensure_tables(conn)
     t = time.time() if now is None else now
-    quiet = PA.quiet_now() if quiet is None else quiet
     conn.execute("UPDATE push_mine SET sent = 1 WHERE sent = 0 AND until <= ?", (t,))
     # Kept a day at most (the privacy policy, 2.7): long enough for a late
     # knock to read it, no longer.
     conn.execute("DELETE FROM push_mine WHERE at < ?", (t - KEEP_S,))
-    held = " AND kind NOT IN ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away')" if quiet else ""
+    held = " AND kind NOT IN (" + ", ".join(f"'{k}'" for k in HELD) + ")" if quiet else ""
     rows = conn.execute("SELECT user_id, id, kind, title, body, url FROM push_mine WHERE sent = 0" + held +
                         " ORDER BY at").fetchall()
+    if quiet is None:
+        # QUIET HOURS WHERE THE MEMBER IS (pushalerts.quiet_for: their
+        # Settings' time zone, Eastern when they named none). What waits
+        # stays unsent and goes when their morning comes, or runs out.
+        late: dict = {}
+        rows = [r for r in rows if r[2] not in HELD
+                or not late.setdefault(r[0], PA.quiet_for(conn, r[0], t))]
     stats = {"messages": len(rows), "sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
     if not rows:
         conn.commit()
@@ -668,21 +677,31 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
                                             "body": body, "url": url})
     k = vapid or webpush.keys()
     cfg = webpush.apns_config() if apns_cfg is None else apns_cfg
+    today, paid = PA.eastern_day(t), PA.paid_ids(conn)
     for uid, msgs in by_user.items():
-        for endpoint, kind, topics, fails in conn.execute(
-                "SELECT endpoint, kind, topics, fails FROM push_subs WHERE user_id = ?", (uid,)).fetchall():
+        for endpoint, kind, topics, fails, until, day, day_n in conn.execute(
+                "SELECT endpoint, kind, topics, fails, paused_until, day, day_n FROM push_subs WHERE user_id = ?",
+                (uid,)).fetchall():
             want = [m for m in msgs if PA.wants(topics, "", m)]
             if not want:
+                continue
+            # Paused (Alerts → Pause), or the day's alerts all used
+            # (pushalerts.DAY_CAP): this phone hears none of these.
+            left = PA.room_today(day, day_n, today, uid, paid)
+            if PA.paused(until, t) or left <= 0:
+                stats["held"] = stats.get("held", 0) + 1
                 continue
             if kind == "apns":
                 if not cfg:
                     stats["skipped_apns"] += 1
                     continue
+                want = want[:left]
                 codes = [apns(endpoint, m, cfg) for m in want]
             else:
                 codes = [knock(endpoint, k, topic=want[-1]["id"].replace(":", "-")[:32])]
             if all(c in (200, 201) for c in codes):
                 stats["sent"] += 1
+                PA.spend(conn, endpoint, len(want) if kind == "apns" else 1, today)
                 PA.counted(want)
             elif any(c in (404, 410) for c in codes) or (kind == "apns" and 400 in codes):
                 stats["gone"] += 1

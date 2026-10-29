@@ -1778,7 +1778,7 @@ function discordPageHTML(s, welcome, feed) {
      being set up, and pretending otherwise wastes the reader's click.
      Not entitled: the plans. */
   const cta = invite
-    ? `<a class="btn primary dc-go" href="${safeHref(invite)}"
+    ? `<a class="btn primary dc-go" href="${safeHref(invite)}" data-an="discord"
           target="_blank" rel="noopener noreferrer">
          ${iconMark("discord", 18)} Join the Discord</a>`
     : (s && s.entitled
@@ -4735,6 +4735,7 @@ async function pushAskSheet(ctx) {
       <button class="btn ghost" data-pa="no">Not now</button></div></div>`;
   document.body.appendChild(host);
   requestAnimationFrame(() => host.classList.add("in"));
+  track("push_prompt", ctx && ctx.team ? "team" : ctx && ctx.bet ? "bet" : "sign-in");
   const counted = () => {
     let a = {};
     try { a = JSON.parse(localStorage.getItem(PUSH_ASK) || "{}") || {}; } catch (e) {}
@@ -4747,6 +4748,7 @@ async function pushAskSheet(ctx) {
     b.disabled = true;
     try {
       pushRemember(await pushOn(PUSH_ASK_TOPICS.concat(away), pushAskLeagues()));
+      track("push_on", "ask");
       buzz("tap");
       host.remove();
       tfToast("Alerts are on. Change them any time in Alerts.");

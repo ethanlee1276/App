@@ -353,7 +353,7 @@ def test_a_phone_that_never_opens_them_hears_them_once_a_day():
 def test_wired_into_the_alerts():
     assert "away" in PA.PERSONAL and PM.TTL_S["away"] == 3 * 3600
     src = READ("engine", "pushmine.py")
-    assert "'mentions', 'away')" in src, "held through quiet hours"
+    assert "away" in PM.HELD, "held through quiet hours"
     assert "_en.away_pass(conn, Path(web) / \"data\", now=t)" in src
     acct = READ("web", "js", "account.js")
     assert 'pushRemember(await pushOn(PUSH_ASK_TOPICS.concat(away), pushAskLeagues()));' in acct

@@ -75,6 +75,15 @@ POSTED_GAP_S = 3 * 3600
 #: the member's own alerts are a glance and are left alone.
 IGNORED_N = 15
 IGNORED_GAP_S = 24 * 3600
+#: ON THE MEMBER'S OWN TERMS (Ethan's research, 2026-10-29: "a hard cap of
+#: 5 pushes a day for free users and 8 for paid ... quiet hours ... local
+#: ... a one-tap 'pause alerts for 24h/7d'"). A phone gets at most this many
+#: alerts an Eastern day, every kind counted (a lock-screen game or parlay
+#: updating is not an alert); the member's own quiet hours are QUIET read
+#: in the time zone their Settings name (Eastern when they named none); and
+#: Alerts → Pause stops every alert to this phone for a day or a week.
+DAY_CAP = {"free": 5, "paid": 8}
+PAUSE_HOURS = (24, 168)
 
 
 # --- the subscriptions (accounts DB) ------------------------------------------
@@ -89,7 +98,9 @@ def ensure_tables(conn) -> None:
     have = {r[1] for r in conn.execute("PRAGMA table_info(push_subs)")}
     # And how many of the shared kinds it has had since its member last
     # opened one of our alerts (IGNORED_N; engine/activity resets it).
-    for col, decl in (("posted_at", "REAL"), ("unopened", "INTEGER NOT NULL DEFAULT 0")):
+    for col, decl in (("posted_at", "REAL"), ("unopened", "INTEGER NOT NULL DEFAULT 0"),
+                      # The pause (PAUSE_HOURS) and the day's count (DAY_CAP).
+                      ("paused_until", "REAL"), ("day", "TEXT"), ("day_n", "INTEGER NOT NULL DEFAULT 0")):
         if col not in have:
             from engine.db import column_exists_or_raise
             try:
@@ -179,6 +190,85 @@ def relink(conn, user_id, topic: str, on: bool) -> None:
         have = [x for x in str(topics or "").split(",") if x and x != topic]
         conn.execute("UPDATE push_subs SET topics=? WHERE endpoint=?",
                      (",".join(have + ([topic] if on else [])), endpoint))
+
+
+def pause(conn, endpoint: str, hours, now: float | None = None) -> tuple[int, dict]:
+    """Stop every alert to this phone for `hours` (one of PAUSE_HOURS), or
+    start them again (0)."""
+    ensure_tables(conn)
+    try:
+        h = int(hours)
+    except (TypeError, ValueError):
+        h = -1
+    if h not in PAUSE_HOURS + (0,):
+        return 400, {"error": "pause for a day or a week"}
+    if not conn.execute("SELECT 1 FROM push_subs WHERE endpoint = ?", (str(endpoint or ""),)).fetchone():
+        return 404, {"error": "alerts are not on for this phone"}
+    until = (time.time() if now is None else float(now)) + h * 3600 if h else None
+    conn.execute("UPDATE push_subs SET paused_until = ? WHERE endpoint = ?", (until, str(endpoint)))
+    conn.commit()
+    return 200, {"ok": True, "paused_until": until}
+
+
+def eastern_day(t: float) -> str:
+    try:
+        from zoneinfo import ZoneInfo
+        return _dt.datetime.fromtimestamp(t, ZoneInfo("America/New_York")).date().isoformat()
+    except Exception:                                         # noqa: BLE001
+        return (_dt.datetime.utcfromtimestamp(t) - _dt.timedelta(hours=4)).date().isoformat()
+
+
+def member_tz(conn, user_id) -> str:
+    """The time zone a member chose in Settings (their synced settings),
+    or "" when they left it to the device."""
+    if not user_id:
+        return ""
+    try:
+        row = conn.execute("SELECT payload FROM user_data WHERE user_id = ? AND section = 'settings'",
+                           (int(user_id),)).fetchone()
+        tz = (json.loads(row[0]) or {}).get("tz") if row else ""
+    except (sqlite3.Error, ValueError, TypeError, AttributeError):
+        return ""
+    return tz if isinstance(tz, str) and len(tz) < 40 else ""
+
+
+def quiet_for(conn, user_id, t: float) -> bool:
+    """Is it quiet hours where this member is? QUIET in their own zone,
+    Eastern when they named none."""
+    tz = member_tz(conn, user_id) or "America/New_York"
+    try:
+        from zoneinfo import ZoneInfo
+        h = _dt.datetime.fromtimestamp(t, ZoneInfo(tz)).hour
+    except Exception:                                         # noqa: BLE001 — an unknown zone: Eastern
+        return quiet_now(_dt.datetime.utcfromtimestamp(t) - _dt.timedelta(hours=4))
+    return h >= QUIET[0] or h < QUIET[1]
+
+
+def paid_ids(conn) -> set:
+    """Members on a plan (DAY_CAP["paid"])."""
+    try:
+        return {u for (u,) in conn.execute("SELECT user_id FROM subscriptions WHERE status IN ('active', 'trialing')")}
+    except sqlite3.Error:
+        return set()
+
+
+def room_today(day, day_n, today: str, uid, paid: set) -> int:
+    """How many more alerts this phone may get today."""
+    cap = DAY_CAP["paid" if uid and uid in paid else "free"]
+    return cap - (int(day_n or 0) if day == today else 0)
+
+
+def spend(conn, endpoint: str, n: int, today: str) -> None:
+    """Count `n` alerts delivered to this phone today."""
+    conn.execute("UPDATE push_subs SET day_n = CASE WHEN day = ? THEN day_n + ? ELSE ? END, day = ? "
+                 "WHERE endpoint = ?", (today, n, n, today, endpoint))
+
+
+def paused(paused_until, t: float) -> bool:
+    try:
+        return bool(paused_until) and float(paused_until) > t
+    except (TypeError, ValueError):
+        return False
 
 
 def unsubscribe(conn, endpoint: str) -> tuple[int, dict]:
@@ -331,8 +421,8 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
          vapid: dict | None = None, apns_cfg=None, now_s: float | None = None) -> dict:
     """Knock every subscription that wants each message. Returns counts."""
     ensure_tables(conn)
-    rows = conn.execute("SELECT endpoint, kind, topics, leagues, fails, posted_at, user_id, unopened, last_ok "
-                        "FROM push_subs").fetchall()
+    rows = conn.execute("SELECT endpoint, kind, topics, leagues, fails, posted_at, user_id, unopened, last_ok, "
+                        "paused_until, day, day_n FROM push_subs").fetchall()
     stats = {"sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
     if not rows or not msgs:
         return stats
@@ -341,9 +431,14 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
     now_ts = time.time() if now_s is None else float(now_s)
     now = _dt.datetime.fromtimestamp(now_ts, _dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
     tracked = _tracked(conn)
-    capped = quieted = 0
-    for endpoint, kind, topics, leagues, fails, posted_at, uid, unopened, last_ok in rows:
+    today, paid = eastern_day(now_ts), paid_ids(conn)
+    capped = quieted = held = full = 0
+    for endpoint, kind, topics, leagues, fails, posted_at, uid, unopened, last_ok, until, day, day_n in rows:
         mine = [m for m in msgs if wants(topics, leagues, m)]
+        # Paused from the Alerts page: nothing at all until it runs out.
+        if mine and paused(until, now_ts):
+            held += 1
+            continue
         # At most one picks-are-up alert in POSTED_GAP_S: a board due sooner
         # is said with the next one.
         if posted_at and now_ts - float(posted_at) < POSTED_GAP_S and any(m.get("kind") == "posted" for m in mine):
@@ -356,23 +451,30 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
         if not mine:
             continue
         posted = [m for m in mine if m.get("kind") == "posted"]
+        # The day's cap (DAY_CAP): what is left of it, said in alerts.
+        left = room_today(day, day_n, today, uid, paid)
+        if left <= 0:
+            full += 1
+            continue
         if kind == "apns":
             if not cfg:
                 stats["skipped_apns"] += 1
                 continue
-            codes = [apns(endpoint, m, cfg) for m in
-                     [m for m in mine if m.get("kind") != "posted"] + ([merge_posted(posted)] if posted else [])]
+            out = ([m for m in mine if m.get("kind") != "posted"] + ([merge_posted(posted)] if posted else []))[:left]
+            codes = [apns(endpoint, m, cfg) for m in out]
         else:
             # One knock is enough: the worker shows the newest message it wants.
+            out = mine[-1:]
             codes = [knock(endpoint, k, topic=mine[-1]["id"].replace(":", "-"))]
         if all(c in (200, 201) for c in codes):
             stats["sent"] += 1
             conn.execute("UPDATE push_subs SET last_ok = ?, fails = 0 WHERE endpoint = ?", (now, endpoint))
+            spend(conn, endpoint, len(out), today)
             if posted:
                 conn.execute("UPDATE push_subs SET posted_at = ? WHERE endpoint = ?", (now_ts, endpoint))
             if tracked(uid):
                 conn.execute("UPDATE push_subs SET unopened = unopened + 1 WHERE endpoint = ?", (endpoint,))
-            counted(mine)
+            counted(out if kind == "apns" else mine)
         elif any(c in (404, 410) for c in codes) or (kind == "apns" and 400 in codes):
             stats["gone"] += 1
             conn.execute("DELETE FROM push_subs WHERE endpoint = ?", (endpoint,))
@@ -387,6 +489,10 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
         stats["capped"] = capped
     if quieted:
         stats["quieted"] = quieted
+    if held:
+        stats["paused"] = held
+    if full:
+        stats["day_capped"] = full
     return stats
 
 

@@ -46,7 +46,20 @@ ENV = "QB_ANALYTICS"
 #: What the page may send. `view` carries the page's own name; `ask` is a
 #: question put to Ask; `checkout_click` is the plan button, with the page
 #: the reader came from before the plans.
-CLIENT_EVENTS = ("visit", "view", "ask", "checkout_click")
+CLIENT_EVENTS = ("visit", "view", "ask", "checkout_click",
+                 # The research's list (Ethan, 2026-10-29: docs/RETENTION.md
+                 # §7), as counts: an account made, a bet put in My Bets (the
+                 # page column says how: by hand, from Ask, a saved slip), a
+                 # game's page opened (its league, "-bet" when the reader has
+                 # a bet on it), the alerts ask shown and alerts turned on
+                 # (where), the app added to a home screen, the Kelly
+                 # calculator used, Stripe's billing page opened, the Discord
+                 # invite tapped.
+                 "signup", "bet_logged", "game_view", "push_prompt", "push_on", "installed", "kelly",
+                 "billing_portal", "discord",
+                 # A game's page showing the reader their own bets in it
+                 # (detail.js, "Your action"): the research's "sweat".
+                 "sweat")
 #: What only the server knows: a Stripe status change (see transition()).
 SERVER_EVENTS = ("trial_started", "subscribed", "trial_converted", "canceled", "renewed",
                  # An alert that reached a phone, by its kind (the page column
@@ -237,6 +250,15 @@ def report(days: int = 7, path=None, accounts_path=None) -> str:
         opened = (src.get("alert") or {}).get("visit", 0)
         out += ["", f"alerts sent: {sent}; visits from tapping one: {opened} ({_pct(opened, sent)})"]
         out += [f"  {k:<16}{n:>7}" for k, n in sorted(alerts.items(), key=lambda kv: -kv[1])]
+    did: dict = {}
+    for _day, event, page, _source, _who, n in rows:
+        if event in CLIENT_EVENTS[4:]:
+            did.setdefault(event, {}).setdefault(page or "-", 0)
+            did[event][page or "-"] += n
+    if did:
+        out += ["", "what readers did (the research's events):"]
+        out += [f"  {e:<16}{sum(v.values()):>7}  " + ", ".join(f"{k} {n}" for k, n in sorted(v.items(), key=lambda kv: -kv[1])[:6])
+                for e, v in sorted(did.items(), key=lambda kv: -sum(kv[1].values()))]
     if conv:
         out += ["", "the page a checkout click came from:"]
         out += [f"  {p:<16}{n:>7}" for p, n in sorted(conv.items(), key=lambda kv: -kv[1])[:8]]
