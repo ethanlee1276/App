@@ -188,7 +188,11 @@ def test_the_board_comes_alive_in_a_browser():
         r["recent_values"] = [v - i for v in vals]
     body = json.dumps(b)
     bets = [{"id": "17000000000009", "desc": "Josh Allen Under 259.5 Passing Yards", "odds": -110, "stake": 50,
-             "book": "FanDuel", "sport": "NFL", "date": "2026-10-27", "result": "pending"}]
+             # TODAY, not a fixed day: the party is only for a bet on the last
+             # two days' games (winCheck), so a dated fixture passed until noon
+             # two days after it was written and failed for good after that.
+             "book": "FanDuel", "sport": "NFL", "date": __import__("datetime").date.today().isoformat(),
+             "result": "pending"}]
     chromium = os.environ.get("CHROMIUM_PATH", "/opt/pw-browsers/chromium")
     srv, port = rendercheck._serve()
     try:
