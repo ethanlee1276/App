@@ -131,7 +131,8 @@ def test_big_moments_and_finals_keep_to_the_league_you_named():
 
 
 def test_the_alerts_page_the_loop_and_the_policy():
-    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    from _app import app_js                    # the Alerts page loads on first use (js/more.js)
+    app = app_js()
     acct = (ROOT / "web" / "js" / "account.js").read_text(encoding="utf-8")
     assert 'box("kickoff", "My teams’ games, 10 minutes before they start", !signedIn),' in app
     assert app.index('box("kickoff"') < app.index('box("clutch"') < app.index('box("finals"'), "start, middle, end"

@@ -156,7 +156,8 @@ def test_quiet_hours_hold_a_moment_until_it_runs_out():
 
 def test_the_switch_the_topic_and_the_privacy_page():
     assert "clutch" in PA.PERSONAL and PM.TOPICS == PA.PERSONAL
-    app = (ROOT / "web" / "js" / "app.js").read_text()
+    from _app import app_js                    # the Alerts page loads on first use (js/more.js)
+    app = app_js()
     assert 'box("clutch", "Big moments in games I follow", !signedIn)' in app
     assert '|| t === "clutch"' in app
     src = (ROOT / "engine" / "pushmine.py").read_text()

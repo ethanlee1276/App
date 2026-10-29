@@ -30,7 +30,8 @@ from engine import finals as FN           # noqa: E402
 from engine import pushalerts as PA       # noqa: E402
 
 DETAIL = open(os.path.join(ROOT, "web", "js", "detail.js"), encoding="utf-8").read()
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+from _app import app_js  # noqa: E402  (app.js and the rooms: the Alerts page is js/more.js)
+APP = app_js()
 ACCOUNT = open(os.path.join(ROOT, "web", "js", "account.js"), encoding="utf-8").read()
 
 

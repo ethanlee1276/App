@@ -287,7 +287,8 @@ def test_the_box_the_server_and_the_page_carry_it():
     srv = READ("server.py")
     at = srv.index("def _push_post(self, path: str):")
     assert "PA.latest_for(sub, mine=PM.mine(conn, (sub or {}).get(\"user_id\")))" in srv[at:at + 3000]
-    app = READ("web", "js", "app.js")
+    from _app import app_js                    # the Alerts page loads on first use (js/more.js)
+    app = app_js()
     assert 'box("watches", "My teams and players make the board (members see which)", !signedIn)' in app
     assert 'box("bets", "My parlay: on, last leg, settled", !signedIn)' in app
     assert app.count("    _acctUser = { signed_in: true, email: body.email };\n    pushRelink();\n") == 2

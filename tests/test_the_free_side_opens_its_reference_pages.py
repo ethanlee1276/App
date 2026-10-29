@@ -73,7 +73,7 @@ def test_alerts_gives_a_free_account_its_own_and_no_pick():
     assert '${free ? "" : `<option value="edge">Edge at least</option>`}' in watch, "an edge size is a member's"
     assert "the site cannot reach your lock screen" not in APP, "it can: the switches above"
     assert '${isWalled() ? "player or a team" : "player, a team, or an edge size"}' in _fn(APP, "watchChipsHTML")
-    alerts = _fn(APP, "renderAlerts")
+    alerts = _fn(MORE, "renderAlerts")              # the Alerts page loads on first use
     assert 'isWalled() ? sections.join("") + memberLockHTML("Line moves and the desk are for members",' in alerts
     rows = ACCOUNT[ACCOUNT.index("const FL_ROWS = ["):ACCOUNT.index("];", ACCOUNT.index("const FL_ROWS = ["))]
     assert '["Alerts for your teams: kickoff, big moments, final scores", 1],' in rows

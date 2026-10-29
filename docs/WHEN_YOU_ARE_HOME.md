@@ -4643,7 +4643,7 @@ Nothing to install. Read-only, any time:
 
 ```
 curl -s https://qellysbook.com/js/account.js | grep -c 'function followStep('
-curl -s https://qellysbook.com/js/app.js | grep -c 'My teams and players make the board'
+curl -s https://qellysbook.com/js/more.js | grep -c 'My teams and players make the board'
 ```
 
 Both print `1` once this version is live.
@@ -4846,7 +4846,7 @@ after twenty minutes, so the night's moments are dropped, not sent at nine.
 Nothing to install. Read-only, any time:
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'Big moments in games I follow'
+curl -s https://qellysbook.com/js/more.js | grep -c 'Big moments in games I follow'
 cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
 ```
 
@@ -5303,7 +5303,7 @@ starts with the same restart as EO. Read-only, any time — prints `1` once
 this version is live:
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'Final scores of games I follow'
+curl -s https://qellysbook.com/js/more.js | grep -c 'Final scores of games I follow'
 ```
 
 The check in one go:
@@ -7447,7 +7447,7 @@ is live (the push needs the API restart the box does by itself after its
 sweep):
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'box("kickoff"'
+curl -s https://qellysbook.com/js/more.js | grep -c 'box("kickoff"'
 ```
 
 The check in one go:

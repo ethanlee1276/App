@@ -507,7 +507,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/api/account/refe
 SH
 run EA "Follow your teams and players after sign-up (count-only alerts for free accounts)" 60 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'function followStep('
-curl -s https://qellysbook.com/js/app.js | grep -c 'My teams and players make the board'
+curl -s https://qellysbook.com/js/more.js | grep -c 'My teams and players make the board'
 SH
 run EB "Live injuries and birthdays on the game" 60 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function pbpNewInjuriesHTML('
@@ -526,7 +526,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://qellysbook.com/api/alerts/live
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import yourplayers as YP; print(len(YP.index()), 'players with a line right now')"
 SH
 run EF "Big moments by push (the clutch switch in Alerts)" 60 <<'SH'
-curl -s https://qellysbook.com/js/app.js | grep -c 'Big moments in games I follow'
+curl -s https://qellysbook.com/js/more.js | grep -c 'Big moments in games I follow'
 cd /srv/qellys && sudo -u qellys python3 -m engine.pushmine
 SH
 run EG "Call it on live games" 60 <<'SH'
@@ -579,7 +579,7 @@ run ET "Call it across every game: ladders, the flame, the share" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -c 'function ciLadderHTML('
 SH
 run EU "Final scores by push" 30 <<'SH'
-curl -s https://qellysbook.com/js/app.js | grep -c 'Final scores of games I follow'
+curl -s https://qellysbook.com/js/more.js | grep -c 'Final scores of games I follow'
 SH
 run EV "The app replaces its old copy on your phone" 30 <<'SH'
 curl -s https://qellysbook.com/js/register-sw.js | grep -c 'function reloadNow('
@@ -713,7 +713,7 @@ run HH "A game saved for later never shows its chat bar" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'spoiledG(league, { event_id: event'
 SH
 run HG "Kickoff for your teams, each in its own league" 30 <<'SH'
-curl -s https://qellysbook.com/js/app.js | grep -c 'box("kickoff"'
+curl -s https://qellysbook.com/js/more.js | grep -c 'box("kickoff"'
 SH
 run HF "Your pick'em week comes back" 30 <<'SH'
 curl -s https://qellysbook.com/js/social.js | grep -c 'fd-prof-30 fd-prof-pk'
