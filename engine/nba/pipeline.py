@@ -15,7 +15,7 @@ from .minutes import (base_minutes, project_minutes, minutes_grade,
                       blowout_prob, role_minutes, context_norms, GRADE_STAKE)
 from .prob import (p_over, sd_for, devig, market_hold, humility_clamp,
                    approval_gate, required_edge, break_even, ev_per_unit,
-                   _dec, CLAMP_W_DEFAULT, HIGH_HOLD)
+                   sharp_fair, _dec, CLAMP_W_DEFAULT, HIGH_HOLD)
 from .quality import (usage_stability, stability_blocks, quality_score,
                       grade_label, kelly_stake, apply_exposure_caps)
 
@@ -201,6 +201,16 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     p_model_over = calibrated(tune.key, stat, p_over(stat, proj, line, tune))
     mkt_over, mkt_under = devig(over_odds, under_odds)
     hold = market_hold(over_odds, under_odds)
+    # THE SHARP BOOK'S PRICE IS THE MARKET when it quoted the prop
+    # (`prob.sharp_fair`, 2026-10-29): the side, the clamp and the edge are
+    # all read against it; the price we would take is still the shop's.
+    books_over, anchor_note, sharp = mkt_over, "", sharp_fair(stat, line, prop.get("sharp_lines"), tune)
+    if sharp is not None:
+        mkt_over, sharp_line, sharp_book = sharp
+        mkt_under = 1.0 - mkt_over
+        anchor_note = (f"Market: {sharp_book}'s price, vig out"
+                       + (f", read across from its {sharp_line:g}" if sharp_line != line else "")
+                       + f" — {mkt_over:.0%} over (the other books' best prices say {books_over:.0%})")
 
     # Take the side where the model sees more than the market does.
     if p_model_over - mkt_over >= (1 - p_model_over) - mkt_under:
@@ -313,6 +323,10 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         "kill_if": ("late scratch, minutes restriction, or lineup change "
                     "touching this player → automatic void"),
         "clamp_note": clamp_note,
+        # Which market the clamp trusted, and what the other books said.
+        "market_source": "sharp" if sharp is not None else "books",
+        "anchor_note": anchor_note,
+        "books_over": round(books_over, 4),
         "context": context_notes,
         "chain": pj.get("chain"),
     }
@@ -532,8 +546,16 @@ def _face(assets, player: str) -> str:
     return url
 
 
+def _same_line(ln, line: float) -> bool:
+    try:
+        return abs(float(ln.get("line") if isinstance(ln, dict) else ln.line) - line) < 1e-9
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
 def rung_probs(stat: str, proj: float, alts: list, w: float,
-               tune: LeagueTuning = NBA, main_line=None, main_over=None) -> dict:
+               tune: LeagueTuning = NBA, main_line=None, main_over=None,
+               sharp_alts=None) -> dict:
     """``{"14.5": 0.71, ...}`` — the board's number at every distinct rung
     of a prop's alternate ladder, priced EXACTLY as the main line is:
     the model's curve at the rung (`p_over`, negative binomial for the
@@ -560,6 +582,11 @@ def rung_probs(stat: str, proj: float, alts: list, w: float,
     A number some book quotes both ways is read off that quote, whichever
     book came first. With no main price to read, the model's number, as
     before.
+
+    THE SHARP BOOK'S RUNG FIRST (``sharp_alts``, its own ladder): where it
+    quotes a number both ways, that quote is the market the rung is clamped
+    toward, whatever the other books hang there (`prob.sharp_fair`, the
+    same rule as the main line).
     """
     from ..calibrate import calibrated
     from .prob import implied_mean
@@ -589,7 +616,11 @@ def rung_probs(stat: str, proj: float, alts: list, w: float,
     out: dict = {}
     for key, (line, over, under) in quotes.items():
         p_model = calibrated(tune.key, stat, p_over(stat, proj, line, tune))
-        if over and under:
+        sharp = sharp_fair(stat, line, [s_ for s_ in sharp_alts or []
+                                        if _same_line(s_, line)], tune) if sharp_alts else None
+        if sharp is not None:
+            mkt_over = sharp[0]
+        elif over and under:
             mkt_over, _ = devig(over, under)
         elif mkt_mean is not None:
             mkt_over = p_over(stat, mkt_mean, line, tune)
@@ -653,6 +684,8 @@ def shared_recommendations(props: list[dict],
                    f"{r['projection']} {r['market_label'].lower()}",
                    f"Minutes grade {r['minutes_grade']} · blowout risk "
                    f"{r['blowout_prob']:.0%}"]
+        if r.get("anchor_note"):
+            reasons.append(r["anchor_note"])
         if r.get("clamp_note"):
             reasons.append(r["clamp_note"])
         # A teammate ruled out tonight, and what the logs show when he sat
@@ -681,6 +714,8 @@ def shared_recommendations(props: list[dict],
             "proj_low": round(r["projection"] - r["sd"], 1),
             "proj_high": round(r["projection"] + r["sd"], 1),
             "hit_prob": r["p_final"], "fair_prob": r["p_market"],
+            "market_source": r.get("market_source", "books"),
+            "books_fair": round(r["books_over"] if r["side"] == "OVER" else 1.0 - r["books_over"], 4),
             "edge": round(r["p_final"] - r["p_market"], 4),
             "ev_per_unit": r["ev"],
             # Confidence feeds the site's min-confidence slider (default
@@ -712,7 +747,8 @@ def shared_recommendations(props: list[dict],
                 (alt_map or {}).get((r["player"], r["market"]), []),
                 float(r.get("w", 0.0) or 0.0), tune,
                 main_line=r["line"],
-                main_over=(r["p_market"] if r["side"] == "OVER" else 1.0 - r["p_market"])),
+                main_over=(r["p_market"] if r["side"] == "OVER" else 1.0 - r["p_market"]),
+                sharp_alts=(alt_sharp_map or {}).get((r["player"], r["market"]), [])),
             "logs": [{"week": i + 1,
                       "date": dates[i] if i < len(dates) else "",
                       "opponent": opps[i] if i < len(opps) else "", "value": v,

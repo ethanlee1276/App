@@ -7871,6 +7871,39 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HP 2>&1 | tee /tmp/hp.txt
 ```
 
+**HQ. The NBA board checks itself against the sharp book** (step 277;
+"think like a pro sports better ... use the data and resources we have").
+Pinnacle is the book the betting world treats as the market's best guess:
+it takes big bets from sharp players and moves its number when they hit
+it, so its price with the vig taken out is the best single estimate of a
+prop's real chance. The NFL board already prices props against it first.
+The NBA board pulled Pinnacle's prices in the same odds call and threw
+them away, so its "market" was the best over and the best under across
+the other books: a pair no single book offers, set by whichever book is
+slowest to move.
+
+Now, when Pinnacle prices a prop, its number is the market: the side, the
+model check and the edge are all read against it (a Pinnacle line a point
+or two away is converted through the same curve the model uses), while
+the price you take is still the best one at a book you can bet. The same
+on any alternate line Pinnacle prices both ways. The card says so
+("Market: Pinnacle's price, vig out — 52% over (the other books' best
+prices say 49%)"). Where Pinnacle has no price, nothing changes.
+
+Nothing to set, and no extra odds credits: Pinnacle was already in the
+call. Read-only, after the next NBA build; the new line says how many
+props Pinnacle priced tonight and how far the other books sat from it:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nbalean.py
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HQ 2>&1 | tee /tmp/hq.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

@@ -104,9 +104,12 @@ def test_a_one_sided_rung_carries_the_model_and_a_killed_rung_is_left_out():
 def test_the_row_carries_the_ladder_and_its_prices():
     prop = _prop()
     alts = [_ln(14.5, -300, 230), _ln(24.5, 230, -300)]
+    # The sharp book's rung is the market its number is clamped toward
+    # since 2026-10-29 (tests/test_the_nba_market_is_the_sharp_books.py),
+    # so it is priced inside the clamp's tolerance of the model here.
     rows = P.shared_recommendations([prop], {}, {}, tune=hoops.NBA,
                                     alt_map={("A Guard", "pts"): alts},
-                                    alt_sharp_map={("A Guard", "pts"): [_ln(14.5, -240, 200, "Pinnacle")]})
+                                    alt_sharp_map={("A Guard", "pts"): [_ln(14.5, -280, 225, "Pinnacle")]})
     assert len(rows) == 1, rows
     r = rows[0]
     assert r["alt_lines"] == alts

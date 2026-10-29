@@ -172,6 +172,62 @@ def devig(odds_a: int, odds_b: int) -> tuple[float, float]:
     return devig_multiplicative(odds_a, odds_b)
 
 
+# --- the sharp book ----------------------------------------------------------
+#: How far a sharp quote at ANOTHER number may sit from ours, in the stat's
+#: own units, and still be read across through the curve (`sharp_fair`): a
+#: point or two on a scorer's line, a point on a count. Past that, the
+#: books' own pair, as before.
+SHARP_SHIFT_MAX = {"pts": 2.0, "pra": 2.0, "pts_reb": 2.0, "pts_ast": 2.0}
+SHARP_SHIFT_DEFAULT = 1.0
+
+
+def sharp_fair(stat: str, line: float, sharp_lines,
+               tune: LeagueTuning = NBA) -> tuple[float, float, str] | None:
+    """``(p_over, sharp_line, book)``: the sharp book's chance of the over
+    at ``line``, vig out, or None.
+
+    THE MARKET A PRO TRUSTS (2026-10-29, Ethan: "think like a pro sports
+    better ... use the data and resources we have"). The football boards
+    price a prop against the sharp book first (`betting.sharp_anchor_for`);
+    the NBA board pulled the same book's quotes (`oddsapi.SHARP_BOOKS`)
+    and never read them, so its humility clamp leaned on the retail books'
+    best two prices, a pair no single book offers and the one most moved
+    by whichever book is slowest. Off the sharp book's two-way quote at
+    ``line`` when it has one; else its nearest two-way number within
+    SHARP_SHIFT_MAX, read as a mean on this stat's own curve
+    (`implied_mean`) and priced at ``line``. A pair holding more than
+    GATE_MAX_HOLD, or less than nothing, is no market and is not read."""
+    best = None
+    for ln in sharp_lines or []:
+        try:
+            if isinstance(ln, dict):
+                at, over, under, book = ln.get("line"), ln.get("over_odds"), ln.get("under_odds"), ln.get("book")
+            else:
+                at, over, under, book = ln.line, ln.over_odds, ln.under_odds, getattr(ln, "book", "")
+            at, over, under = float(at), int(over or 0), int(under or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if abs(over) < 100 or abs(under) < 100:
+            continue
+        if not (0.0 < market_hold(over, under) <= GATE_MAX_HOLD):
+            continue
+        gap = abs(at - float(line))
+        if gap > SHARP_SHIFT_MAX.get(stat, SHARP_SHIFT_DEFAULT) + 1e-9:
+            continue
+        if best is None or gap < best[0]:
+            best = (gap, at, over, under, str(book or "the sharp book"))
+    if best is None:
+        return None
+    gap, at, over, under, book = best
+    p, _ = devig(over, under)
+    if gap > 1e-9:
+        mean = implied_mean(stat, at, p, tune)
+        if mean is None:
+            return None
+        p = p_over(stat, mean, float(line), tune)
+    return round(float(p), 4), at, book
+
+
 # --- the discipline ---------------------------------------------------------
 def humility_clamp(p_model: float, p_market: float,
                    w: float = CLAMP_W_DEFAULT) -> tuple[float | None, str]:

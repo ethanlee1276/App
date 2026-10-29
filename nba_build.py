@@ -1235,6 +1235,12 @@ def main() -> None:
                                   if h["team"] in (g["home"], g["away"])), ""),
                 "market": prop.market, "line": line,
                 "over_odds": over_odds, "under_odds": under_odds,
+                # The sharp book's own quotes (oddsapi.SHARP_BOOKS), never
+                # shopped: the market the clamp trusts when it priced this
+                # prop (engine/nba/prob.sharp_fair, 2026-10-29).
+                "sharp_lines": [{"book": ln.book, "line": ln.line, "over_odds": ln.over_odds,
+                                 "under_odds": ln.under_odds}
+                                for ln in (getattr(prop, "sharp_lines", None) or [])],
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
                 "spread": spread, "is_favorite": fav,

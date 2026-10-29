@@ -6,7 +6,7 @@
 Ethan, 2026-10-29: "almost ever nba most likely bet is an under bet so that
 seems wrong and we need to work on that and calibrate that more."
 
-Three reads, all off what the box already holds; nothing is fetched and
+Six reads, all off what the box already holds; nothing is fetched and
 nothing is written.
 
   1. THE BOARD. Tonight's NBA Most Likely picks, over against under, by
@@ -41,6 +41,10 @@ nothing is written.
      only. Those carried the model's raw number until 2026-10-29; now each
      is clamped toward the main line's market read at that rung
      (engine/nba/pipeline.rung_probs), the way a two-way rung always was.
+  6. THE SHARP BOOK. How many of tonight's props the sharp book (Pinnacle)
+     priced, so the clamp trusted its number there (engine/nba/prob.
+     sharp_fair, 2026-10-29), and how far the other books' best prices sat
+     from it.
 
 WHAT MOVED (2026-10-29, engine/nba/minutes.context_norms): the minutes
 model laid tonight's blowout and rest haircuts on a base that already
@@ -118,6 +122,21 @@ def ladder_shape(doc: dict) -> dict:
                 continue
             seen[k] = seen.get(k, False) or two
     return {"rungs": len(seen), "one_way": sum(1 for two in seen.values() if not two)}
+
+
+def anchors(doc: dict) -> dict:
+    """``{"props", "sharp", "gap"}``: tonight's priced props, how many the
+    sharp book priced, and the mean distance (in chance) between its number
+    and the other books' on those."""
+    rows = [r for r in doc.get("recommendations") or [] if r.get("fair_prob") is not None]
+    sharp = [r for r in rows if r.get("market_source") == "sharp"]
+    gaps = []
+    for r in sharp:
+        try:
+            gaps.append(abs(float(r["fair_prob"]) - float(r["books_fair"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return {"props": len(rows), "sharp": len(sharp), "gap": statistics.fmean(gaps) if gaps else None}
 
 
 def record(conn) -> dict:
@@ -222,6 +241,13 @@ def main(argv=None) -> int:
                   f"below the market on {below:.0%}")
     else:
         print("  No priced NBA props on the board to compare.")
+    an = anchors(doc)
+    if an["props"]:
+        line = f"  The sharp book priced {an['sharp']} of {an['props']} props tonight"
+        if an["gap"] is not None:
+            line += (f"; on those the other books' best prices sat {an['gap'] * 100:.1f} points of "
+                     f"chance from it on average, and the model was checked against the sharp number")
+        print(line)
     lad = ladder_shape(doc)
     if lad["rungs"]:
         print(f"  Alternate lines tonight: {lad['rungs']} numbers, {lad['one_way']} quoted one way only "

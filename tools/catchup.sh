@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HQ "The NBA board checks itself against the sharp book" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 nbalean.py
+SH
 run HP "Every NBA alternate line meets the market" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 nbalean.py
 SH
