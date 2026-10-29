@@ -18240,7 +18240,7 @@ function anSource() {
 }
 
 // A tap on a marked link (data-an="discord") is that event, from this page.
-if (typeof document !== "undefined") document.addEventListener("click", (e) => {
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("click", (e) => {
   const a = e.target && e.target.closest && e.target.closest("[data-an]");
   if (a) track(a.dataset.an, state.view);
 }, true);
@@ -25643,6 +25643,9 @@ function routeFromPath(path) {
   }
   if (segs.length === 2 && ["player", "game", "pick"].includes(segs[0].toLowerCase()))
     return { hash: `${segs[0].toLowerCase()}/${segs[1]}`, sport: "" };
+  // A live game's own address (engine/routes.live_meta): /live/nba/401…
+  if (segs.length === 3 && segs[0].toLowerCase() === "live" && /^\d{1,14}$/.test(segs[2]))
+    return { hash: `pbp/${segs[1].toLowerCase()}/${segs[2]}`, sport: "" };
   return null;
 }
 
