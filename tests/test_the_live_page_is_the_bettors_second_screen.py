@@ -132,14 +132,14 @@ def test_the_server_answers_pace_and_ticket_clv():
 def test_the_page_draws_both_cards_the_market_and_the_footer():
     from _app import app_js
     js = READ("web", "js", "detail.js")
-    assert js.count('id="pbp-action"') == 2 and js.count('id="pbp-pace"') == 2, "both layouts"
+    assert js.count('id="pbp-action"') == 1 and js.count("pbpMineSlotsHTML()") == 3, "both layouts"
     assert js.count("pbpFootHTML()") >= 2
     wire = js[js.index("  const wire = () => {"):js.index("  const wire = () => {") + 900]
     assert "pbpActionFill(league, event);" in wire and "pbpPaceFill(league, event);" in wire
     foot = js[js.index("function pbpFootHTML()"):js.index("function pbpFootHTML()") + 400]
     for w in ("21+", "Analytics, not guarantees", "1-800-GAMBLER", "#record"):
         assert w in foot, w
-    assert "pbpWinChartHTML(d, league, boardGame)" in js and "const mkt = pbpMarketHome(boardGame);" in js
+    assert "pbpWinChartHTML(d, league, boardGame)" in js and "const mkt = typeof pbpMarketHome === \"function\" ? pbpMarketHome(boardGame) : null;" in js
     assert 'track("sweat", league);' in js
     assert "not our pick" in js[js.index("function pbpPaceHTML()"):js.index("async function pbpPaceFill(")]
     assert "function pbpActionFill(" in app_js()

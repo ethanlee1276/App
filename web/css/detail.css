@@ -875,7 +875,7 @@ button.tr-opt { cursor: pointer; }
 .pbp-pace-r > span:not(:first-child) { text-align: right; font-family: var(--font-mono); font-size: var(--fs-xs); }
 .pbp-pace-r.head { border-top: 0; font-size: var(--fs-2xs); font-weight: 900; color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
 .pbp-pace-r.head > span { font-family: inherit; font-size: inherit; }
-.pbp-pace-r.mine { background: color-mix(in oklab, var(--brand) 7%, transparent); border-radius: 8px; padding-inline: 6px; }
+.pbp-pace-r.mine { background: color-mix(in oklab, var(--brand) 7%, transparent); border-radius: var(--radius-sm); padding-inline: 6px; }
 .pbp-pace-r .good { color: var(--good); }
 .pbp-pace-r .warn { color: var(--text-mute); }
 .pbp-pace-r.r-won > span:first-child b { color: var(--good); }
@@ -883,7 +883,7 @@ button.tr-opt { cursor: pointer; }
   color: var(--brand-2); background: color-mix(in oklab, var(--brand) 12%, transparent); }
 .pbp-pace-more { margin-top: 6px; }
 .pbp-pace-foot { margin: 6px 0 0; color: var(--text-mute); }
-.pbp-wp-mkt { stroke: var(--gold, var(--warn)); stroke-width: 1.2; stroke-dasharray: 1 3; vector-effect: non-scaling-stroke; }
+.pbp-wp-mkt { stroke: var(--gold); stroke-width: 1.2; stroke-dasharray: 1 3; vector-effect: non-scaling-stroke; }
 .pbp-wp-mktkey { margin: 4px 0 0; color: var(--text-mute); }
 .pbp-foot { margin: 18px 0 6px; font-size: var(--fs-2xs); line-height: var(--lh-snug); color: var(--text-mute); text-align: center; }
 .pbp-foot a { color: inherit; }

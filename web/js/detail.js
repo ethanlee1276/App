@@ -2437,7 +2437,6 @@ function pbpPaceHTML() {
   const mine = new Set(pbpActionMine().flatMap((b) => b.legs.map((l) => String(l.player || "").toLowerCase())));
   const sorted = rows.slice().sort((a, b) => mine.has(b.player.toLowerCase()) - mine.has(a.player.toLowerCase()));
   const shown = PBP_PACE.all ? sorted : sorted.slice(0, 12);
-  const pct = (x) => x == null ? "—" : `${Math.round(x * 100)}%`;
   return `<div class="pbp-rail-head">Prop pace <span class="mini">${rows.length} prop${rows.length === 1 ? "" : "s"} on the game</span></div>
     <div class="pbp-pace-t" role="table" aria-label="Every prop priced on this game against its line">
       <div class="pbp-pace-r head" role="row"><span>Player</span><span>Line</span><span>Now</span><span>Pace</span><span>Over</span></div>
@@ -2445,7 +2444,7 @@ function pbpPaceHTML() {
         <span><b>${escapeHtml(r.player)}</b><span class="mini"> ${escapeHtml(r.market)}</span>${mine.has(r.player.toLowerCase()) ? `<span class="pbp-pace-tag">your bet</span>` : ""}</span>
         <span>${escapeHtml(r.line)}</span><span>${r.current == null ? "—" : escapeHtml(r.current)}</span>
         <span class="${r.pace == null ? "" : r.pace > Number(r.line) ? "good" : "warn"}">${r.pace == null ? "—" : escapeHtml(r.pace)}</span>
-        <span>${pct(r.chance)}</span></div>`).join("")}
+        <span>${pctRoundOr(r.chance)}</span></div>`).join("")}
     </div>
     ${rows.length > 12 ? `<button type="button" class="btn ghost pbp-pace-more" data-pace-all>${PBP_PACE.all ? "Fewer" : `All ${rows.length}`}</button>` : ""}
     <p class="mini pbp-pace-foot">Pace is his number over the share of the game played. Over is the market’s own chance at
@@ -2476,6 +2475,11 @@ function pbpMarketHome(boardGame) {
   const dec = (o) => { const v = Number(o); return !Number.isFinite(v) || Math.abs(v) < 100 ? null : v > 0 ? 1 + v / 100 : 1 + 100 / Math.abs(v); };
   const h = dec((boardGame || {}).home_ml), a = dec((boardGame || {}).away_ml);
   return h && a ? (1 / h) / (1 / h + 1 / a) : null;
+}
+// The two cards' empty places, filled once the page is drawn (pbpActionFill,
+// pbpPaceFill), in the shared layout and on the basketball and hockey pages.
+function pbpMineSlotsHTML() {
+  return `<div class="card pbp-action" id="pbp-action" hidden></div><div class="card pbp-pace" id="pbp-pace" hidden></div>`;
 }
 function pbpFootHTML() {
   return `<p class="pbp-foot">21+ · Analytics, not guarantees · Gambling problem? Call or text <b>1-800-GAMBLER</b> ·
@@ -3330,7 +3334,7 @@ function pbpWinChartHTML(d, league, boardGame) {
   const last = rows[n - 1].wp;
   const lead = last >= 50 ? d.home : d.away;
   const swings = rows.map((r, i) => [r, i]).filter(([r]) => Math.abs(Number(r.wpa) || 0) >= 15).slice(-8);
-  const mkt = pbpMarketHome(boardGame);
+  const mkt = typeof pbpMarketHome === "function" ? pbpMarketHome(boardGame) : null;
   return `<div class="card pbp-wpcard">
     <div class="pbp-rail-head">Win chance <span class="mini">${escapeHtml(lead || "")} ${Math.round(last >= 50 ? last : 100 - last)}% now</span></div>
     <svg class="pbp-wp" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
@@ -4831,7 +4835,7 @@ async function renderPbpPage(tick) {
   }
   // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
   // Call it rides in on the basketball and hockey pages too, under the arena (pbpCallItHTML).
-  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + `<div class="card pbp-action" id="pbp-action" hidden></div><div class="card pbp-pace" id="pbp-pace" hidden></div>` + pbpCallItHTML(d, league) + pbpFootHTML() })) { if (lv.state === "live") again(); return; }
+  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpMineSlotsHTML() + pbpCallItHTML(d, league) + pbpFootHTML() })) { if (lv.state === "live") again(); return; }
   const panel = tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
@@ -4847,8 +4851,7 @@ async function renderPbpPage(tick) {
         ${pbpBoardHTML(d, league, lv)}
         ${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
         <div class="gch-entry-slot"></div>
-        <div class="card pbp-action" id="pbp-action" hidden></div>
-        <div class="card pbp-pace" id="pbp-pace" hidden></div>
+        ${pbpMineSlotsHTML()}
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
           ${pbpParkHTML(d, league, boardGame, lastPlay)}

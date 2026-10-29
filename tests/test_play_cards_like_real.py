@@ -279,7 +279,7 @@ def test_the_game_page_draws_the_win_chance_across_the_game():
     one line, the swings of fifteen points or more dotted. Absent until a
     handful of plays carry a number."""
     detail = (ROOT / "web" / "js" / "detail.js").read_text()
-    assert "${pbpWinChartHTML(d, league)}" in detail
+    assert "${pbpWinChartHTML(d, league, boardGame)}" in detail
     fn = detail[detail.index("function pbpWinChartHTML("):]
     fn = fn[:fn.index("\n}\n")]
     assert 'typeof r.wp === "number"' in fn and "if (rows.length < 4) return \"\";" in fn

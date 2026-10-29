@@ -192,7 +192,7 @@ def test_the_server_reads_only_a_league_it_plays_and_an_id_of_digits():
 def test_the_page_the_privacy_page_and_deletion():
     det = (ROOT / "web" / "js" / "detail.js").read_text()
     assert "${pbpCallItHTML(d, league)}" in det
-    assert "pbpCallItHTML(d, league) })) {" in det, "the basketball page draws its own layout"
+    assert "pbpCallItHTML(d, league) + pbpFootHTML() })) {" in det, "the basketball page draws its own layout"
     for page in ("hoopscast.js", "rinkcast.js"):
         assert '${(ctx && ctx.callit) || ""}' in (ROOT / "web" / "js" / page).read_text(), page
     fn = det[det.index("function ciBodyHTML("):det.index("function ciPaint(")]
