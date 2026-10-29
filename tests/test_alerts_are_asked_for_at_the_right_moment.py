@@ -66,7 +66,7 @@ def test_the_rules_it_keeps():
     assert "(pushSaved() || {}).endpoint" in due, "never once alerts are on"
     assert 'Notification.permission === "denied"' in due, "never once the phone refused"
     assert "(a.n || 0) < 3 && Date.now() - (a.last || 0) > 14 * 864e5" in due, "three asks, two weeks apart"
-    sheet = ACCT[ACCT.index("window.pushAskSheet = async function"):]
+    sheet = ACCT[ACCT.index("async function pushAskSheet("):]
     assert 'p.receive === "denied"' in sheet, "the iPhone app asks Apple first"
     assert sheet.count("counted();") == 2, "Not now and a refusal are both counted"
 
@@ -75,7 +75,7 @@ def test_yes_turns_on_what_a_new_member_wants_first():
     assert 'const PUSH_ASK_TOPICS = ["posted", "settled", "kickoff", "clutch", "finals", "bets", "watches"];' in ACCT
     lg = _fn(ACCT, "function pushAskLeagues(")
     assert 'split(":")[0]' in lg and "[state.sport]" in lg, "the followed teams' leagues, else the one on screen"
-    sheet = ACCT[ACCT.index("window.pushAskSheet = async function"):]
+    sheet = ACCT[ACCT.index("async function pushAskSheet("):]
     assert "pushRemember(await pushOn(PUSH_ASK_TOPICS, pushAskLeagues()));" in sheet
     assert "Never a “bet now”" in sheet and "each kind is a switch in Alerts" in sheet
     on = _fn(APP, "async function pushOn(")

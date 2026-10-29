@@ -4640,7 +4640,7 @@ function pushAskLeagues() {
   const lg = [...new Set((settings().teams || []).map((t) => String(t).split(":")[0]).filter(Boolean))];
   return lg.length ? lg : [state.sport].filter(Boolean);
 }
-window.pushAskSheet = async function (ctx) {
+async function pushAskSheet(ctx) {
   if (document.getElementById("pushask")) return;
   if (pushKind() === "native") {
     try {
@@ -4691,4 +4691,4 @@ window.pushAskSheet = async function (ctx) {
       b.disabled = false;
     }
   });
-};
+}
