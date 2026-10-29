@@ -726,8 +726,10 @@ def test_a_forced_drawer_is_released_by_every_way_out():
     i = APP.index("function closeMobileMenu(")
     assert "releaseDrawer(" in APP[i:APP.index("\n}", i)], \
         "closeMobileMenu leaves the forced styles on"
-    j = APP.index("function initMobileMenu(")
-    toggle = APP[j:j + 1800]
+    # The button's own click handler, end to end (a fixed window ran out when
+    # the handler grew a branch for the sidebar beside the page, 2026-10-29).
+    j = APP.index('btn.addEventListener("click"', APP.index("function initMobileMenu("))
+    toggle = APP[j:APP.index("\n  });", j)]
     assert "releaseDrawer(" in toggle, \
         "the Menu button closes without releasing — the drawer stays pinned"
 

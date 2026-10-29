@@ -55,6 +55,10 @@ def _resolved(decl):
     zero-width column.
     """
     body = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    # A token set only under a condition reads its fallback, which is what
+    # paints by default: --side-col is set only once the sidebar has slid
+    # away (tests/test_the_sidebar_slides_away.py).
+    decl = re.sub(r"var\(--[\w-]+,\s*(var\(--[\w-]+\))\)", r"\1", decl)
     for tok in set(re.findall(r"var\((--[\w-]+)\)", decl)):
         val = re.search(rf"{tok}:\s*([^;]+);", body)
         assert val, f"{tok} is used by the shell but never defined"

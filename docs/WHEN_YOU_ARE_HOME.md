@@ -8720,7 +8720,7 @@ Nothing to set: the updater picks it up within five minutes. Read-only, any
 time; each prints `1` once this version is live:
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide(show)'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function sidebarSlide()'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'background: var(--strip-black); }'
 ```
 
