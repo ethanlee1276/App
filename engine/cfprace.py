@@ -491,18 +491,22 @@ def standings(fbs, conf_of, w0, l0, cw0, cl0, ranks, name) -> dict:
 
 
 def load_season(season: int, today: _dt.date) -> list:
-    """The season's FBS slate off the scoreboard cache: settled days on the
-    long TTL the futures board already keeps them under, the days around
-    today short enough that last night's results are in."""
+    """The season's FBS slate off the scoreboard cache, each day on the
+    lifetime it needs: settled days on the day the futures board already
+    keeps them, the last three days and today on half an hour so a result
+    lands within the hour, the weeks to come on six hours (a schedule moves
+    rarely, and the college build runs every cycle)."""
     from .sources import cfbdata
     lo = _dt.date(int(season), 8, 20)
     hi = ccg_start(season) + _dt.timedelta(days=3)
-    near = today - _dt.timedelta(days=3)
+    near = max(lo, today - _dt.timedelta(days=3))
     games = []
-    if near > lo:
-        games += cfbdata.load_range(lo.isoformat(), (near - _dt.timedelta(days=1)).isoformat(),
-                                    ttl=24 * 3600)
-    games += cfbdata.load_range(max(lo, near).isoformat(), hi.isoformat(), ttl=3 * 3600)
+    spans = ((lo, near - _dt.timedelta(days=1), 24 * 3600),
+             (near, min(hi, today), 30 * 60),
+             (max(near, today + _dt.timedelta(days=1)), hi, 6 * 3600))
+    for a, b, ttl in spans:
+        if a <= b:
+            games += cfbdata.load_range(a.isoformat(), b.isoformat(), ttl=ttl)
     return games
 
 

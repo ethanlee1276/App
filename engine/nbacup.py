@@ -305,16 +305,25 @@ def build(games: list, ratings: dict, today: str, home_edge: float, scale: float
     }
 
 
+#: How long a group night still to come is kept: its schedule moves rarely,
+#: and the NBA build runs every cycle — at the five minutes `espnhoops`
+#: gives an unsettled day, the window's nights to come would be asked for
+#: again on every build.
+FUTURE_TTL = 6 * 3600
+
+
 def load_window(today: _dt.date) -> list:
     """The group-play nights off the scoreboard cache: settled nights on the
-    long lifetime `espnhoops` gives a finished day, the rest on its own."""
+    long lifetime `espnhoops` gives a finished day, tonight on its live one,
+    the nights to come on FUTURE_TTL."""
     from .sources import espnhoops
     from .sources.fetch import DataUnavailable
     lo, hi = (_dt.date.fromisoformat(d) for d in GROUP_PLAY)
     out, day = [], lo
     while day <= hi:
         try:
-            got = espnhoops.load_day(day.isoformat(), league="nba")
+            got = espnhoops.load_day(day.isoformat(), ttl=FUTURE_TTL if day > today else None,
+                                     league="nba")
         except (DataUnavailable, ValueError):
             got = []
         # The night it was billed for, not the UTC instant: a 10 PM Eastern

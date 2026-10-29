@@ -178,6 +178,21 @@ def test_the_nba_build_runs_it_for_the_nba_only():
     assert "except Exception as _cx:" in block
 
 
+def test_the_nights_to_come_are_not_asked_for_every_build():
+    import datetime as dt
+    asked = {}
+    real = espnhoops.load_day
+    espnhoops.load_day = lambda date, ttl=None, league="wnba": asked.setdefault(date, (ttl, league)) and []
+    try:
+        nbacup.load_window(dt.date(2026, 11, 10))
+    finally:
+        espnhoops.load_day = real
+    assert asked["2026-11-09"] == (None, "nba"), "a past night: espnhoops' own lifetime"
+    assert asked["2026-11-10"] == (None, "nba"), "tonight: live"
+    assert asked["2026-11-11"] == (nbacup.FUTURE_TTL, "nba") and nbacup.FUTURE_TTL >= 3600
+    assert sorted(asked)[0] == "2026-10-30" and sorted(asked)[-1] == "2026-11-27"
+
+
 if __name__ == "__main__":
     import inspect
     fails = 0

@@ -196,6 +196,21 @@ def test_the_college_build_runs_it_off_its_own_ratings():
     assert "gate.publish(out, p, p.name)" in pub
 
 
+def test_each_day_is_read_on_the_lifetime_it_needs():
+    """The college build runs every cycle: settled days on a day's cache,
+    the last three and today on half an hour, the weeks ahead on six."""
+    asked = []
+    real = cfbdata.load_range
+    cfbdata.load_range = lambda a, b, ttl=None, conferences=None: asked.append((a, b, ttl)) or []
+    try:
+        cfprace.load_season(2026, dt.date(2026, 10, 29))
+    finally:
+        cfbdata.load_range = real
+    assert asked == [("2026-08-20", "2026-10-25", 24 * 3600),
+                     ("2026-10-26", "2026-10-29", 30 * 60),
+                     ("2026-10-30", "2026-12-06", 6 * 3600)], asked
+
+
 if __name__ == "__main__":
     import inspect
     fails = 0
