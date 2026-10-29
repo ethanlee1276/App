@@ -7750,6 +7750,49 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HM 2>&1 | tee /tmp/hm.txt
 ```
 
+**HN. NBA Most Likely stops leaning under** (step 274; your words: "almost
+ever nba most likely bet is an under bet so that seems wrong and we need
+to work on that and calibrate that more"). You were right, and it was a
+bug in the minutes, not the market. Every NBA projection is minutes times
+a per-minute rate, and the minutes start from a weighted average of his
+recent games. Tonight's blowout risk and back-to-back were then taken off
+that average, but the average already held his own blowouts and
+back-to-backs, so they were counted twice, and only ever downward. A
+starter on an even team read about 2% light; one on a team favoured most
+nights (the Thunder, the Celtics) about 7% light. Most Likely picks the
+likeliest number near −250, where a few percent of a player's average is
+several points of chance, so the under won nearly every seat.
+
+Now each haircut is measured against what his own last twenty games
+carried (their final margins and their rest, read off the results we
+store): a bigger spread than his usual still costs minutes, an extra
+day's rest still adds, but on average the projection sits on his own
+level, which is what the replay the board is calibrated on assumes. The
+scoring-environment adjustment got the same treatment: tonight's total is
+read against the league's real recent average instead of a fixed 225.
+
+Nothing to set: the updater picks it up within five minutes and the next
+NBA build uses it. The read-only check, after the next build (a minute;
+paste what it prints):
+
+```
+cd /srv/qellys && sudo -u qellys python3 nbalean.py
+```
+
+It prints four things: tonight's Most Likely picks over against under;
+where our projection sits against the market's own number for each stat
+(1.00 is level, the medians should be near it now, not under it); the
+graded NBA Most Likely picks by side (how often each hit against how
+often we said); and whether the minutes base runs light this early in
+the season, when a player's last twenty games are mostly last season's
+final weeks. That last one decides the next change.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HN 2>&1 | tee /tmp/hn.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

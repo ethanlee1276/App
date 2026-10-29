@@ -394,15 +394,96 @@ def schedule_density(schedule_days: dict, team: str, date: str) -> dict:
                 played.add(offset)
     in_4 = sum(1 for o in played if o <= 3)
     in_6 = sum(1 for o in played if o <= 5)
+    return {"rest": rest_from(played), "games_in_4": in_4 + 1, "games_in_6": in_6 + 1}
+
+
+def rest_from(played: set) -> str:
+    """A rest category from the days before a game the club played on (1 =
+    the night before, up to 6): `schedule_density`'s names, for tonight and
+    for every game in a man's history alike (`history_context`)."""
+    in_4 = sum(1 for o in played if o <= 3)
+    in_6 = sum(1 for o in played if o <= 5)
     if 1 in played:
-        rest = "3in4" if in_4 >= 2 else "b2b_home"
-    elif in_6 >= 3:
-        rest = "4in6_road"
-    elif not played:
-        rest = "2plus"
-    else:
-        rest = "1day"
-    return {"rest": rest, "games_in_4": in_4 + 1, "games_in_6": in_6 + 1}
+        return "3in4" if in_4 >= 2 else "b2b_home"
+    if in_6 >= 3:
+        return "4in6_road"
+    if not played:
+        return "2plus"
+    return "1day"
+
+
+#: How many of the league's latest finals the scoring norm averages, and
+#: the fewest it will read one from (`total_norm`).
+NORM_FINALS = 200
+NORM_MIN_FINALS = 50
+
+
+def total_norm(conn, sport: str, date: str):
+    """The league's average total over its latest finals before ``date``,
+    the norm tonight's total is read against (engine/nba/context.env_factor),
+    or None with fewer than NORM_MIN_FINALS stored."""
+    try:
+        rows = conn.execute("SELECT home_score + away_score FROM games WHERE sport=? AND period < ? "
+                            "AND home_score IS NOT NULL AND away_score IS NOT NULL "
+                            "AND home_score + away_score > 0 ORDER BY period DESC LIMIT ?",
+                            (sport, date, NORM_FINALS)).fetchall()
+    except Exception:                                       # noqa: BLE001 — no games table
+        return None
+    totals = [float(r[0]) for r in rows if r[0] is not None]
+    if len(totals) < NORM_MIN_FINALS:
+        return None
+    return round(sum(totals) / len(totals), 1)
+
+
+def history_context(conn, sport: str, hist: dict) -> None:
+    """Each game in a man's history, as the minutes model needs to read it
+    back (engine/nba/minutes.context_norms): his club's final margin in it
+    (positive when it won) and its rest category, onto ``hist`` as
+    ``margins`` and ``rests``, aligned with his minutes, newest first, None
+    where the games table holds no such game. The game is found by its date
+    and his opponent, so a man who changed clubs inside the window is read
+    against the club he played for. One read of the league's finals."""
+    import datetime as _d
+    from engine import divisions
+    dates = sorted({str(d)[:10] for h in hist.values() for d in h.get("dates") or []})
+    if not dates:
+        return
+    try:
+        start = (_d.date.fromisoformat(dates[0]) - _d.timedelta(days=6)).isoformat()
+        rows = conn.execute("SELECT period, home, away, home_score, away_score FROM games "
+                            "WHERE sport=? AND period BETWEEN ? AND ?", (sport, start, dates[-1])).fetchall()
+    except Exception:                                       # noqa: BLE001 — no games table, no context
+        return
+    canon = (lambda t: divisions.canonical(sport, t or "")) if sport == "nba" else (lambda t: t or "")
+    game: dict = {}                      # (club, date) -> (the other club, the club's margin or None)
+    played: dict = {}                    # club -> its game dates
+    for r in rows:
+        day, home, away = str(r[0])[:10], canon(r[1]), canon(r[2])
+        margin = None
+        if r[3] is not None and r[4] is not None:
+            margin = float(r[3]) - float(r[4])
+        game[(home, day)] = (away, margin)
+        game[(away, day)] = (home, None if margin is None else -margin)
+        played.setdefault(home, set()).add(day)
+        played.setdefault(away, set()).add(day)
+    for h in hist.values():
+        margins, rests = [], []
+        for i, d in enumerate(h.get("dates") or []):
+            day = str(d)[:10]
+            opps = h.get("opps") or []
+            club, margin = None, None
+            if i < len(opps) and (canon(opps[i]), day) in game:
+                club, opp_margin = game[(canon(opps[i]), day)]
+                margin = None if opp_margin is None else -opp_margin
+            margins.append(margin)
+            if club is None:
+                rests.append(None)
+                continue
+            d0 = _d.date.fromisoformat(day)
+            seen = played.get(club, set())
+            rests.append(rest_from({o for o in range(1, 7)
+                                    if (d0 - _d.timedelta(days=o)).isoformat() in seen}))
+        h["margins"], h["rests"] = margins, rests
 
 
 def schedule_fit(density: dict) -> float:
@@ -854,6 +935,13 @@ def main() -> None:
         hist = player_history(conn, teams, sport=args.league,
                               seasons=recent_seasons(args.league, args.date),
                               roster=roster, moved=moved)
+        # His games' margins and rest, so tonight's blowout and rest
+        # haircuts are read against what his minutes base already holds
+        # (engine/nba/minutes.context_norms).
+        history_context(conn, args.league, hist)
+        # The league's own recent scoring, the norm tonight's total is read
+        # against (engine/nba/context.env_factor).
+        norm_total = total_norm(conn, args.league, args.date)
         from engine.sources.oddsapi import normalize_name as _nn
         listed = {p: injuries[_nn(p)] for p in hist if _nn(p) in injuries}
         gone = absences(hist, injuries)
@@ -1143,11 +1231,14 @@ def main() -> None:
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
                 "spread": spread, "is_favorite": fav,
+                # What his history's games carried (`history_context`).
+                "margins": h.get("margins"), "rests": h.get("rests"),
                 # The context layer's inputs (engine/nba/context.py):
                 # tonight's total prices the scoring environment, and the
                 # gap since the team's last logged game prices the
                 # first-game-back dip — the World Cup resumption above all.
                 "game_total": total_by_team.get(h["team"]),
+                "total_norm": norm_total,
                 "days_off": _ctx_layoff(h.get("dates"), args.date),
                 "rest": density.get(h["team"], {}).get(
                     "rest", "b2b_home" if h["team"] in played_yday else "1day"),

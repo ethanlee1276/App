@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HN "NBA Most Likely stops leaning under" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 nbalean.py
+SH
 run HM "The new app icon, fitted to the tile" 30 <<'SH'
 curl -s https://qellysbook.com/apple-touch-icon.png | wc -c
 SH

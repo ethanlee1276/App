@@ -62,13 +62,24 @@ MARQUEE_PROJ_PTS = 20.0
 STAR_TAX_EDGE = 0.01
 
 
-def env_factor(game_total, league: str = "wnba") -> tuple[float, str | None]:
-    """``(volume multiplier, reason line or None)`` from tonight's total."""
+def env_factor(game_total, league: str = "wnba", norm=None) -> tuple[float, str | None]:
+    """``(volume multiplier, reason line or None)`` from tonight's total.
+
+    ``norm``: the league's own recent average total (`nba_build.total_norm`,
+    2026-10-29), which the build reads off the finals it holds. The factor
+    multiplies a projection whose history already played at the league's
+    level, so it has to average one there: measured against a norm under the
+    league's real scoring, every night reads as a fast one. LEAGUE_TOTAL is
+    the fallback where too few finals are stored."""
     try:
         total = float(game_total or 0.0)
     except (TypeError, ValueError):
         return 1.0, None
-    norm = LEAGUE_TOTAL.get((league or "").lower())
+    try:
+        norm = float(norm) if norm else None
+    except (TypeError, ValueError):
+        norm = None
+    norm = norm or LEAGUE_TOTAL.get((league or "").lower())
     if not norm or total <= 0:
         return 1.0, None
     raw = (total / norm - 1.0) * ENV_DAMP

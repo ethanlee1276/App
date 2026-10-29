@@ -43,6 +43,24 @@ BLOWOUT_GRADE_DROP = 0.25          # P(blowout) above this drops one grade
 
 GRADE_STAKE = {"A": 1.0, "B": 0.75, "C": 0.5, "D": 0.0}
 
+#: HOW FAR A CLUB'S SPREADS RUN ABOUT ITS RESULTS, in points (2026-10-29;
+#: see `context_norms`). Home and away alone swing a line about six points,
+#: and the opponent moves it more; a starting value, not a fit.
+SPREAD_SD = 6.0
+
+
+def _recency(values: list, tune: LeagueTuning = NBA) -> float | None:
+    """The nested-window weighted mean of a series aligned with his games,
+    newest first: last 5, games 6-10, games 11-20, at `recency_weights`."""
+    vals = list(values)[:20]
+    w5, w10, w20 = (tune.recency_weights + (0.0, 0.0, 0.0))[:3]
+    num = den = 0.0
+    for chunk, w in ((vals[:5], w5), (vals[5:10], w10), (vals[10:20], w20)):
+        if chunk and w:
+            num += w * (sum(chunk) / len(chunk))
+            den += w
+    return num / den if den else None
+
 
 def base_minutes(recent_minutes: list[float],
                  tune: LeagueTuning = NBA) -> float | None:
@@ -56,15 +74,8 @@ def base_minutes(recent_minutes: list[float],
     """
     if len(recent_minutes) < 3:
         return None
-    m = recent_minutes[:20]
-    w5, w10, w20 = (tune.recency_weights + (0.0, 0.0, 0.0))[:3]
-    chunks = ((m[:5], w5), (m[5:10], w10), (m[10:20], w20))
-    num = den = 0.0
-    for vals, w in chunks:
-        if vals and w:
-            num += w * (sum(vals) / len(vals))
-            den += w
-    return round(num / den, 2) if den else None
+    mean = _recency(recent_minutes, tune)
+    return round(mean, 2) if mean is not None else None
 
 
 #: A GAME HE LEFT EARLY — under half of his usual minutes, for a player
@@ -115,13 +126,70 @@ def blowout_prob(spread: float, sd: float | None = None,
     return round(1.0 - 0.5 * (1.0 + math.erf(z / math.sqrt(2))), 4)
 
 
+def expected_blowout(margin_mean: float, is_starter: bool,
+                     tune: LeagueTuning = NBA) -> float:
+    """The blowout multiplier his club's games carried on average: their
+    spreads ~ Normal(``margin_mean``, SPREAD_SD), each taken through
+    `blowout_mult`, a favourite when the spread is his club's way."""
+    n = 41
+    total = weight = 0.0
+    for i in range(n):
+        z = -4.0 + 8.0 * i / (n - 1)
+        w = math.exp(-0.5 * z * z)
+        s = margin_mean + z * SPREAD_SD
+        total += w * blowout_mult(s, is_starter, s > 0, tune)
+        weight += w
+    return total / weight
+
+
+def context_norms(margins, rests, kept, is_starter: bool,
+                  tune: LeagueTuning = NBA) -> tuple[float, float]:
+    """``(blowout norm, rest norm)``: the minutes multipliers the games his
+    base is read from carried, on the base's own weights.
+
+    THE BASE ALREADY HOLDS THEM (Ethan, 2026-10-29: "almost ever nba most
+    likely bet is an under bet so that seems wrong"). His minutes base is a
+    weighted average of his recent games, and those games had their own
+    spreads and their own back-to-backs; tonight's haircut was then laid on
+    top of an average that had taken it already, and only ever downward:
+    every blowout step is 1.00 or less, every rest step but one too. A good
+    club's starters, favoured most nights, read about 7% light; an even
+    club's about 2%; and on a board ranked by our chance at a number near
+    −250, a few percent off the mean is the four points that seat the under
+    every time. Divided by what his own games carried, the haircut keeps
+    its shape (a bigger spread than usual still costs minutes, a rested
+    night still adds) and averages one, so the projection averages his
+    base — the level the replay the board is calibrated on reads it at.
+
+    ``margins`` and ``rests`` are aligned with his minutes, newest first: his
+    club's final margin in each game (positive when it won), and that
+    game's rest category (`nba_build.schedule_density`'s names). ``kept`` is
+    the indexes `role_minutes` kept. Either norm is 1.0 when fewer than
+    three of the kept games carry its context (a replay, an old database),
+    which is exactly the multiplier the board used before.
+    """
+    margins, rests = list(margins or []), list(rests or [])
+    known_m = [float(margins[i]) for i in kept if i < len(margins) and margins[i] is not None]
+    known_r = [tune.rest_mult.get(rests[i], 1.0) for i in kept if i < len(rests) and rests[i]]
+    b_norm = r_norm = 1.0
+    if len(known_m) >= 3:
+        b_norm = expected_blowout(_recency(known_m, tune), is_starter, tune)
+    if len(known_r) >= 3:
+        r_norm = _recency(known_r, tune) or 1.0
+    return round(b_norm, 4), round(r_norm, 4)
+
+
 def project_minutes(base: float, spread: float, is_starter: bool,
                     is_favorite: bool, rest: str = "1day",
                     vacancy_minutes: float = 0.0,
                     recent_high: float | None = None,
-                    tune: LeagueTuning = NBA) -> float:
-    proj = base * blowout_mult(spread, is_starter, is_favorite, tune) \
-        * tune.rest_mult.get(rest, 1.0) + vacancy_minutes
+                    tune: LeagueTuning = NBA,
+                    blowout_norm: float = 1.0, rest_norm: float = 1.0) -> float:
+    """Tonight's minutes: the base, tonight's blowout and rest multipliers
+    each divided by what the base's own games carried (`context_norms`),
+    and any vacancy minutes."""
+    proj = base * blowout_mult(spread, is_starter, is_favorite, tune) / (blowout_norm or 1.0) \
+        * tune.rest_mult.get(rest, 1.0) / (rest_norm or 1.0) + vacancy_minutes
     if recent_high is not None:
         proj = min(proj, recent_high + tune.vacancy_cap_over_high)
     # Nobody plays more minutes than the game has. Obvious, and the reason

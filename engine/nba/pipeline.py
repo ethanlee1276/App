@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ..hoops import NBA, LeagueTuning
 from .minutes import (base_minutes, project_minutes, minutes_grade,
-                      blowout_prob, role_minutes, GRADE_STAKE)
+                      blowout_prob, role_minutes, context_norms, GRADE_STAKE)
 from .prob import (p_over, sd_for, devig, market_hold, humility_clamp,
                    approval_gate, required_edge, break_even, ev_per_unit,
                    _dec, CLAMP_W_DEFAULT, HIGH_HOLD)
@@ -87,12 +87,17 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # THE MINUTES A TEAMMATE'S ABSENCE OPENS (engine/nba/vacancy): filled
     # by the build only once nbavacancy.py's held-out verdict holds; 0.0
     # otherwise, so the slot stays empty exactly as before.
+    # Tonight's blowout and rest haircuts, against what his base's own games
+    # carried (`context_norms`): 1.0 each where the history has no context.
+    kept = [i for i in range(len(minutes)) if i not in left_out]
+    b_norm, r_norm = context_norms(prop.get("margins"), prop.get("rests"), kept,
+                                   prop.get("is_starter", False), tune)
     proj_min = project_minutes(base, spread, prop.get("is_starter", False),
                                prop.get("is_favorite", False),
                                prop.get("rest", "1day"),
                                vacancy_minutes=float(prop.get("vacancy_minutes") or 0.0),
                                recent_high=max(minutes) if minutes else None,
-                               tune=tune)
+                               tune=tune, blowout_norm=b_norm, rest_norm=r_norm)
     # Player memory (engine/playerfit.py): the record's earned correction
     # for players this model persistently misreads — same store, same
     # restraints (shrinkage, ±15% clamp, causal adoption) as every sport.
@@ -111,7 +116,7 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # season's premier mispriced window, and the rule keys on the GAP so
     # it prices every future break too).
     from .context import env_factor, layoff_adjustment, star_tax
-    env_m, env_note = env_factor(prop.get("game_total"), tune.key)
+    env_m, env_note = env_factor(prop.get("game_total"), tune.key, prop.get("total_norm"))
     lay_m, lay_note = layoff_adjustment(prop.get("days_off"), stat)
     # TONIGHT'S DEFENCE (engine/hoopsdvp.projection_mult), measured on the
     # box 2026-09-27: what it allows in this stat, at the share of its lean
@@ -155,7 +160,8 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
 
     return {"projection": proj, "proj_min": proj_min, "base": base, "grade": grade,
             "stability": stability, "context": context_notes, "early_exits": early_exits,
-            "minutes": minutes, "spread": spread, "chain": chain}
+            "minutes": minutes, "spread": spread, "chain": chain,
+            "minutes_norms": {"blowout": b_norm, "rest": r_norm}}
 
 
 def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
