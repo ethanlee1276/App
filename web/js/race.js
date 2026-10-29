@@ -12,6 +12,10 @@
 
 const RACE_FILES = { cfb: "cfp_race.json", nba: "nba_cup.json" };
 
+/* A chance as a reader takes it in: whole points, and never "0%" or
+   "100%" for something a run of the season merely did not see happen —
+   a thousand draws that never put a team in the field say "<1%", because
+   the next thousand might. Only a settled fact prints as a certainty. */
 function rcPct(x) {
   if (x == null || !isFinite(x)) return "—";
   if (x <= 0) return "0%";
@@ -74,6 +78,13 @@ function rcSide(s, sport) {
       s.bid ? ` · ${escapeHtml(s.bid)}` : ""}</span></div>`;
 }
 
+/* THE FIELD IF IT STARTED TODAY. The four bye seeds in one column, each
+   with the first-round game whose winner it meets (1 meets 8/9, 2 meets
+   7/10, 3 meets 6/11, 4 meets 5/12, the 2026 bracket), and the four
+   first-round games in the next, at the better seed's campus. Each team
+   wears the reason it is in — a conference leader, the Group of Six's best,
+   Notre Dame in the top twelve, or at large — because "why is that team
+   here" is the first question a bracket gets. */
 function cfpBracketHTML(d) {
   const t = d.today || {};
   const by = {};
@@ -127,6 +138,11 @@ function cfpTeamsHTML(d) {
     </div>`;
 }
 
+/* THE GAMES THAT SWING IT: each of this week's games that moves the field
+   most, with every team it moves — that team's chance to get in if the
+   home side wins, and if it loses. The better of the two is green for that
+   team, so a reader scanning for their own side sees at once whom to
+   root for, including in games their team is not playing in. */
 function cfpSwingHTML(d) {
   const sw = d.swing || [];
   if (!sw.length) return "";
@@ -181,6 +197,12 @@ function cfpHTML(d) {
 
 /* ---------------- the NBA Cup ---------------- */
 
+/* ONE GROUP: the table in the league's own order (the engine applies the
+   tiebreakers, so the rows already stand as they would be read out), the
+   differential in its own coloured column because it is the tiebreaker
+   most often reached, and for a member each game left listed once — from
+   the home side — with our chance and the margin we expect, since a margin
+   is what moves the differential. */
 function cupGroupHTML(name, rows, d, locked) {
   const ch = d.chances || {}, rem = d.remaining || {};
   const today = d.today || {};
@@ -207,6 +229,11 @@ function cupGroupHTML(name, rows, d, locked) {
   </div>`;
 }
 
+/* THE WILD CARD RACE, by conference: every club that is not leading its
+   group, best record first, then the differential, then points — the
+   league's order for the wild card, which has no head-to-head because the
+   clubs come from different groups. The holder is the engine's own pick,
+   so this list and the tag can never disagree about who holds it. */
 function cupWildHTML(d) {
   const g = d.groups || {}, today = d.today || {};
   return ["East", "West"].map((conf) => {
