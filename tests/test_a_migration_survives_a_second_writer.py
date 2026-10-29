@@ -44,7 +44,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from engine import (accounts, billing, digest, gamechat, karma, lifecycle, parlayledger,  # noqa: E402
+from engine import (accounts, betclv, billing, digest, gamechat, karma, lifecycle, parlayledger,  # noqa: E402
                     pickem, predmarket, pushalerts, slipwatch, socialfeed)
 
 #: (the file, a name for the failure, the migration to run on a connection).
@@ -68,6 +68,8 @@ MIGRATORS = (
     ("engine/pushalerts.py", "pushalerts.ensure_tables", pushalerts.ensure_tables),
     # A longer plan's renewal notice, sent once (2026-10-29, phone first).
     ("engine/lifecycle.py", "lifecycle.ensure_tables", lifecycle.ensure_tables),
+    # The first price seen and the start, for the leaderboards (2026-10-29).
+    ("engine/betclv.py", "betclv.ensure_tables", betclv.ensure_tables),
 )
 
 #: Files that ALTER a table and are covered somewhere else, with the reason.

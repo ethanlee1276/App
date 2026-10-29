@@ -958,6 +958,9 @@ def delete_user(conn, user_id: int) -> None:
                   # A saved parlay's chance through its night, for the replay
                   # (engine/slipreplay): it had been left to the 30-day prune.
                   "slip_chance",
+                  # When we emailed them about a change to our documents
+                  # (engine/policynotice).
+                  "policy_notices",
                   # What they said yes and no to (engine/consent).
                   "consent_log"):
         if table in have:
@@ -1143,6 +1146,12 @@ def export_user(conn, user_id: int) -> dict:
             "SELECT bet_id, at, p, kind FROM slip_chance WHERE user_id=? ORDER BY bet_id, at", (int(user_id),))]
         if rows:
             out["your_parlays_chance_through_the_night"] = rows
+    # The changes to our documents we emailed them about (engine/policynotice).
+    if "policy_notices" in have:
+        rows = [dict(zip(("notice", "sent_at"), r)) for r in conn.execute(
+            "SELECT notice, sent_at FROM policy_notices WHERE user_id=? ORDER BY sent_at", (int(user_id),))]
+        if rows:
+            out["changes_we_emailed_you_about"] = rows
     if "gift_codes" in have:
         rows = [dict(r) for r in conn.execute("SELECT code, created_at, redeemed_by IS NOT NULL AS redeemed "
                                               "FROM gift_codes WHERE user_id=? ORDER BY created_at", (int(user_id),))]

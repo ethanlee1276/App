@@ -67,10 +67,16 @@ def _db():
     c = sqlite3.connect(":memory:")
     c.execute("CREATE TABLE user_data (user_id INTEGER, section TEXT, ts INTEGER, payload TEXT, "
               "PRIMARY KEY (user_id, section))")
+    c.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, created_at REAL)")
     return c
 
 
-def _member(c, uid, legs, settings=None, date="2026-10-29", result="pending"):
+def _member(c, uid, legs, settings=None, date="2026-10-29", result="pending", made=None):
+    # Made after the change of 29 October by default, so counted at once
+    # (engine/policynotice: an older account waits a week after its email).
+    from engine import policynotice as PN
+    c.execute("INSERT OR IGNORE INTO users VALUES (?, ?, ?)",
+              (uid, f"m{uid}@example.com", PN.SINCE + 3600 if made is None else made))
     c.execute("INSERT INTO user_data VALUES (?, 'mybets', 1, ?)", (uid, json.dumps(
         {"rows": [{"id": f"t{uid}", "src": "slip", "date": date, "result": result, "legs": legs}], "deleted": []})))
     if settings is not None:
@@ -96,8 +102,12 @@ def test_nothing_until_both_locks_open():
         _member(c, uid, [ML_BOS])
     assert CN.for_game(c, "nba", "BOS", "LAL", NOW) is None, "locks shut: nothing"
     assert CN.against_the_close(c, NOW) is None
-    assert 'id="members-split"' not in READ("web", "privacy.html"), "the wording waits for Ethan"
-    assert 'id="members-split"' in READ("docs", "RETENTION.md")
+    # Approved by Ethan on 2026-10-29 ("approve all"): the live policy has it,
+    # so the switch on the box is the one lock left.
+    assert 'id="members-split"' in READ("web", "privacy.html"), "the approved wording is in the policy"
+    CN.POLICY = ROOT / "web" / "privacy.html"
+    assert CN.policy_ready()
+    assert "as §13 promises" in " ".join(READ("web", "privacy.html").split())
 
 
 def test_what_is_counted_and_what_never_is():
@@ -135,6 +145,31 @@ def test_members_against_the_close_is_pooled():
     assert abs(got["avg"] - round(want, 4)) < 1e-3, (got, want)
     c.execute("DELETE FROM bet_clv WHERE bet_id LIKE 'b1%'")
     assert CN.members_clv(c, NOW) is None, "under MIN_BETS legs: nothing"
+
+
+def test_an_older_account_waits_a_week_after_it_is_told():
+    """The Privacy Policy's §13: a change that affects a member is emailed
+    before it takes effect. An account made before the change is counted
+    only once its email is a week old; one with no email address (a phone
+    sign-in), a week after the change was posted; a new account at once."""
+    from engine import policynotice as PN
+    c = _db()
+    PN.ensure_tables(c)
+    old_at = PN.SINCE - 30 * 86400
+    for uid in range(1, 61):
+        _member(c, uid, [ML_BOS], made=old_at, date="2026-11-01")
+    later = PN.SINCE + 3 * 86400
+    with _Locks():
+        assert CN.for_game(c, "nba", "BOS", "LAL", later) is None, "nobody told yet: nobody counted"
+        c.executemany("INSERT INTO policy_notices VALUES (?, ?, ?)",
+                      [(uid, PN.NOTICE, later - 8 * 86400) for uid in range(1, 51)]
+                      + [(uid, PN.NOTICE, later - 2 * 86400) for uid in range(51, 61)])
+        CN._cache.update(at=0.0, key=None)
+        got = CN.for_game(c, "nba", "BOS", "LAL", later)
+        assert got and got["sides"]["n"] == 50, ("told a week ago or more: 50; two days ago: not yet", got)
+        c.execute("UPDATE users SET email = '+15555550100@phone.invalid' WHERE id = 55")
+        assert PN.may_count(c, {55}, later) == set(), "a phone account: not before the site's week is up"
+        assert PN.may_count(c, {55}, PN.PHONE_FROM - 60) == set() and PN.may_count(c, {55}, PN.PHONE_FROM) == {55}
 
 
 def test_a_change_of_mind_is_written_down_and_the_page_asks_only_when_on():

@@ -3138,6 +3138,11 @@ class Handler(BaseHTTPRequestHandler):
                 said = CN.changed(before, after)
                 if said and CS.record(conn, who["id"], "split", said):
                     conn.commit()
+                # On or off the closing-line leaderboard (engine/closeboard).
+                from engine import closeboard as CB
+                said = CB.changed(before, after)
+                if said and CS.record(conn, who["id"], "closeboard", said):
+                    conn.commit()
                 A.touch_session(conn, token)
                 return self._send(200, json.dumps(
                     {"email": who["email"], "sections": merged}).encode(),
@@ -3923,6 +3928,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(PK.view(conn, one("sport", "nfl")[:8].lower(), uid,
                                                           one("week")[:10] or None,
                                                           group=_int(one("group")) or None)).encode(), ".json")
+            if path == "closeboard":
+                # The members' closing-line leaderboards (engine/closeboard):
+                # for signed-in readers, and nothing while either lock is shut.
+                from engine import closeboard as CB
+                if not uid:
+                    return self._send(401, b'{"error":"Sign in to see the leaderboard."}', ".json")
+                return self._send(200, json.dumps(CB.board(conn, one("window", "week")[:4], uid,
+                                                           one("scope", "all")[:8])).encode(), ".json")
             if path == "pickem-group":
                 # An invite link's landing (engine/pickgroups.peek): the
                 # group's name, how many are in it and who started it.
@@ -5059,6 +5072,10 @@ class Handler(BaseHTTPRequestHandler):
             # drawn only while the site counts anybody at all.
             from engine import consensus as CN
             out["split_switch"] = CN.enabled()
+            # The closing-line leaderboard (engine/closeboard), likewise:
+            # its card and its Settings switch only while both locks are open.
+            from engine import closeboard as CB
+            out["closeboard_switch"] = CB.enabled()
             out["activity"] = bool(who) and ACT.on_for(conn, who["id"])
             # NO PROMO CODES HERE. This endpoint is public — it renders
             # the plans page before anybody signs in — so anything in it

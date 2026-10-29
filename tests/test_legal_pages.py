@@ -123,6 +123,8 @@ def test_the_terms_cover_every_section_a_paid_service_needs():
             ("user content licence and moderation", ["What you post", "report a post"]),
             ("pick'em groups", ["Pick’em groups", "new invite link"]),
             ("alerts are not guaranteed", ["Alerts are a convenience, not a guarantee"]),
+            # §15's 30 days for an older account, and the version it keeps.
+            ("when a change applies", ["When this version applies.", "version of 26 October 2026"]),
     ):
         for needle in needles:
             assert needle.lower() in TERMS_TEXT.lower(), \
@@ -225,10 +227,11 @@ def test_the_privacy_policy_names_every_table_that_holds_personal_data():
          # parlay's chance through its night (which the policy had never
          # named, and an account's deletion had left to a 30-day prune),
          # pick'em groups, a game on the lock screen, the finals told, and
-         # when each league last played. engine/activity is the one left
-         # out on purpose: its tables are named by the policy section that
-         # is its own lock (tests/test_your_activity_is_kept_only_with_both_locks).
-         "slipreplay.py", "pickgroups.py", "gameactivity.py", "finals.py", "lifecycle.py"))
+         # when each league last played. And, once Ethan approved its
+         # section the same day, your activity (engine/activity), with the
+         # change notice that comes with it (engine/policynotice).
+         "slipreplay.py", "pickgroups.py", "gameactivity.py", "finals.py", "lifecycle.py",
+         "activity.py", "policynotice.py"))
     tables = set(re.findall(r"CREATE TABLE IF NOT EXISTS ([a-z_]+)", schema))
     assert tables, "no schema found — this test has stopped checking anything"
     for table in sorted(tables):
@@ -249,7 +252,8 @@ def test_deleting_an_account_names_every_table_that_holds_a_person():
             "pushmine.py", "slipwatch.py", "digest.py", "gamechat.py", "referrals.py", "alerts.py",
             "streak.py", "tailfade.py", "callit.py", "calfeed.py", "widgetfeed.py", "trivia.py", "gifts.py",
             "passkeys.py", "karma.py", "pickem.py", "consent.py", "betclv.py", "newsalerts.py",
-            "engagement.py", "slipreplay.py", "pickgroups.py", "gameactivity.py", "activity.py")
+            "engagement.py", "slipreplay.py", "pickgroups.py", "gameactivity.py", "activity.py",
+            "policynotice.py")
     tables = set()
     for m in mods:
         # A table ends at ");" in a script, or at the quotes closing a

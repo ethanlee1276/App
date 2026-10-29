@@ -31,10 +31,21 @@ CLV.
 KEPT per bet and leg: the entry price, the last pre-game best price and fair
 chance, and when — deleted with the account (engine/accounts) and
 KEEP_DAYS after. Standard library only.
+
+WHAT A LEADERBOARD CAN TRUST (engine/clvboard, 2026-10-29). Two more per
+leg: the best price the books showed the first time the sweep saw it
+(`first_best`, `first_at`), and when the sweep first saw its game under way
+(`closed`). A leg's price comes from the member's own synced bet log, which
+is enough for their own Edge Report and not for a public table: so a
+leaderboard counts a leg at the price taken only up to what was on offer
+when it was first seen, and only once `closed` says the close was watched
+to the start (a slip deleted before the start keeps whatever price it last
+had, which is not a close).
 """
 from __future__ import annotations
 
 import math
+import sqlite3
 import time
 
 #: Rows older than this go.
@@ -48,6 +59,16 @@ def ensure_tables(conn) -> None:
         user_id INTEGER NOT NULL, bet_id TEXT NOT NULL, leg INTEGER NOT NULL,
         entry REAL, best REAL, fair REAL, at REAL NOT NULL,
         PRIMARY KEY (user_id, bet_id, leg))""")
+    # Added, not declared: the table shipped first (the leaderboard's two
+    # checks, above).
+    have = {r[1] for r in conn.execute("PRAGMA table_info(bet_clv)")}
+    for col in ("first_best", "first_at", "closed"):
+        if col not in have:
+            from engine.db import column_exists_or_raise
+            try:
+                conn.execute(f"ALTER TABLE bet_clv ADD COLUMN {col} REAL")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
 
 
 def _american(o) -> float | None:
@@ -83,24 +104,43 @@ def leg_clv(entry, fair, best=None) -> float | None:
 
 def note(conn, user_id, bet_id: str, card: dict, now: float | None = None) -> int:
     """Keep each not-yet-started leg's latest prices from a graded card
-    (engine/slipgrade.grade with a live reader). Returns legs kept."""
+    (engine/slipgrade.grade with a live reader), the first best price kept
+    as it was, and mark a leg whose game is under way closed. Returns legs
+    kept or marked."""
     ensure_tables(conn)
     t = time.time() if now is None else float(now)
     kept = 0
     for i, leg in enumerate((card or {}).get("legs") or []):
         if str(((leg or {}).get("live") or {}).get("state") or "") in STARTED:
+            kept += conn.execute("UPDATE bet_clv SET closed = ? WHERE user_id = ? AND bet_id = ? AND leg = ? "
+                                 "AND closed IS NULL", (t, int(user_id), str(bet_id)[:40], i)).rowcount
             continue
         pr = leg.get("price") or {}
         best, fair = _american(pr.get("best")), pr.get("fair")
         if best is None and not isinstance(fair, (int, float)):
             continue
-        conn.execute("INSERT INTO bet_clv (user_id, bet_id, leg, entry, best, fair, at) VALUES (?,?,?,?,?,?,?) "
+        conn.execute("INSERT INTO bet_clv (user_id, bet_id, leg, entry, best, fair, at, first_best, first_at) "
+                     "VALUES (?,?,?,?,?,?,?,?,?) "
                      "ON CONFLICT(user_id, bet_id, leg) DO UPDATE SET entry = excluded.entry, best = excluded.best, "
-                     "fair = excluded.fair, at = excluded.at",
+                     "fair = excluded.fair, at = excluded.at, "
+                     "first_best = COALESCE(bet_clv.first_best, excluded.first_best), "
+                     "first_at = COALESCE(bet_clv.first_at, excluded.first_at)",
                      (int(user_id), str(bet_id)[:40], i, _american(leg.get("odds")), best,
-                      float(fair) if isinstance(fair, (int, float)) else None, t))
+                      float(fair) if isinstance(fair, (int, float)) else None, t, best, t))
         kept += 1
     return kept
+
+
+def verified_entry(entry, first_best) -> float | None:
+    """The price a leaderboard counts: the price taken, but never better
+    than the best one the books showed when the leg was first seen; None
+    when there was none to check it against."""
+    d_first = decimal(first_best)
+    if not d_first:
+        return None
+    d = decimal(entry)
+    take = first_best if not d or d > d_first else entry
+    return _american(take)
 
 
 def ticket(conn, user_id, bet_id: str, legs: int | None = None, payout=None) -> dict:

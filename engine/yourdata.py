@@ -63,7 +63,8 @@ GROUPS = (
         ("activity_days", "days of your activity"), ("activity_prefs", "your yes or no"),
         ("engagement_away", "\"while you were away\" alerts"))),
     ("Your choices", "until you delete the account", (
-        ("consent_log", "yeses and noes, each with the policy's date"),)),
+        ("consent_log", "yeses and noes, each with the policy's date"),
+        ("policy_notices", "changes to our documents we emailed you about"))),
 )
 
 

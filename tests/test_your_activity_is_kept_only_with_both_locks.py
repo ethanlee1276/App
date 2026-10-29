@@ -101,9 +101,12 @@ def test_nothing_until_both_locks_open():
     with _Locks():
         assert ACT.enabled() and ACT.why_off() == ""
     assert c.execute("SELECT COUNT(*) FROM activity_days").fetchone()[0] == 0
-    # The live policy has no section yet: the wording waits for Ethan.
-    assert 'id="your-activity"' not in READ("web", "privacy.html")
-    assert 'id="your-activity"' in READ("docs", "RETENTION.md"), "the draft for him to approve"
+    # Approved by Ethan on 2026-10-29 ("approve all"): the live policy has the
+    # section, word for word, so QB_ACTIVITY on the box is the lock left.
+    live = READ("web", "privacy.html")
+    assert 'id="your-activity"' in live and 'id="your-activity"' in READ("docs", "RETENTION.md")
+    assert ACT.policy_ready(ROOT / "web" / "privacy.html")
+    assert "how many picks-up and\n      last-night alerts it has had since you last opened one of ours" in live
 
 
 def test_a_beat_is_checked_and_kept_as_a_day():

@@ -100,8 +100,10 @@ def game_key(sport, game) -> str | None:
     return f"{sport}:{m.group(1).upper()}@{m.group(2).upper()}" if m and sport else None
 
 
-def _members(conn) -> dict:
-    """{user_id: (settings, mybets rows)} for every member counted."""
+def _members(conn, now: float | None = None) -> dict:
+    """{user_id: (settings, mybets rows)} for every member counted: in, and
+    told of the change a week ago or more, or joined after it
+    (engine/policynotice.may_count, the Privacy Policy's §13)."""
     out: dict = {}
     try:
         rows = conn.execute("SELECT user_id, section, payload FROM user_data WHERE section IN ('settings', 'mybets')"
@@ -120,7 +122,13 @@ def _members(conn) -> dict:
             got = data.get("rows") if isinstance(data, dict) else data
             b = got if isinstance(got, list) else []
         out[uid] = (s, b)
-    return {u: v for u, v in out.items() if counted(v[0])}
+    out = {u: v for u, v in out.items() if counted(v[0])}
+    from engine import policynotice as PN
+    try:
+        ok = PN.may_count(conn, out, now)
+    except sqlite3.Error:
+        return {}
+    return {u: v for u, v in out.items() if u in ok}
 
 
 def build(conn, now: float | None = None) -> dict:
@@ -129,7 +137,7 @@ def build(conn, now: float | None = None) -> dict:
     t = time.time() if now is None else float(now)
     since = (_dt.datetime.fromtimestamp(t, _dt.timezone.utc) - _dt.timedelta(days=RECENT_DAYS)).date().isoformat()
     out: dict = {}
-    for _uid, (_s, bets) in _members(conn).items():
+    for _uid, (_s, bets) in _members(conn, t).items():
         for b in bets:
             if not isinstance(b, dict) or b.get("result") != "pending" or not isinstance(b.get("legs"), list):
                 continue
@@ -157,7 +165,7 @@ def members_clv(conn, now: float | None = None) -> dict | None:
     CLV_DAYS, once MIN_BETS legs are in; else None."""
     from engine import betclv as BC
     t = time.time() if now is None else float(now)
-    who = set(_members(conn))
+    who = set(_members(conn, t))
     if not who:
         return None
     try:

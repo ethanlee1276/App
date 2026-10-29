@@ -118,7 +118,7 @@ def test_the_week_s_best_priced_bet_and_the_weeks_beat():
 
 def test_my_bets_draws_it_and_the_box_fills_the_closes():
     acct = READ("web", "js", "account.js")
-    assert "${mbEdgeHTML(bets)}" in acct and "  mbEdgeFill();\n}" in acct
+    assert "${mbEdgeHTML(bets)}" in acct and "  mbEdgeFill();\n  mbBoardFill();\n}" in acct
     card = _fn(acct, "mbEdgeHTML")
     for words in ("Your Edge Report", "Your price against the close", "Where you win", "Where you don’t",
                   "Best result", "Worst result", "When you bet"):

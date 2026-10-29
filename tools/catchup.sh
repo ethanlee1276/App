@@ -661,6 +661,13 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IC "Your activity, the members' split, the leaderboards, and the change notice" 60 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'async function mbBoardFill('
+curl -s https://qellysbook.com/privacy.html | grep -c 'id="close-board"'
+curl -s https://qellysbook.com/terms-2026-10-26.html | grep -c 'Last updated 26 October 2026'
+curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('activity_switch'), d.get('split_switch'), d.get('closeboard_switch'))"
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
+SH
 run IB "The review's fixes, and the Privacy Policy and Terms brought up to date" 60 <<'SH'
 curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 29 October 2026'
 curl -s https://qellysbook.com/terms.html | grep -c 'We remind you before a longer plan renews'

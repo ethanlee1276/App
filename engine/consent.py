@@ -30,7 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 POLICY = ROOT / "web" / "privacy.html"
-KINDS = ("terms", "activity", "alerts", "limits", "split")
+KINDS = ("terms", "activity", "alerts", "limits", "split", "closeboard")
 _DATE = re.compile(r'class="legal-date">Last updated (\d{1,2} \w+ \d{4})<')
 _version: dict = {"key": None, "v": ""}
 

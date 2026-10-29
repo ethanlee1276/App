@@ -427,7 +427,10 @@ RECAP_HOURS = (11, 19)
 def run(conn, now: float | None = None, web: Path = WEB, log=print) -> int:
     """The push loop's pass: renewals at any hour, the recaps in the day."""
     t = time.time() if now is None else float(now)
-    steps = [lambda: renewals(conn, now=t, log=log)]
+    from engine import policynotice as PN
+    # The change notice our own documents promise (engine/policynotice):
+    # it keeps its own hours, allowance and switch.
+    steps = [lambda: renewals(conn, now=t, log=log), lambda: PN.run(conn, now=t, log=log)]
     if RECAP_HOURS[0] <= _dt.datetime.fromtimestamp(t, ET).hour < RECAP_HOURS[1]:
         steps += [lambda: payer_recaps(conn, now=t, web=web), lambda: winbacks(conn, now=t, web=web),
                   lambda: season_bridge(conn, now=t, web=web)]

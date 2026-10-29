@@ -465,6 +465,68 @@ async function mbEdgeFill() {
   if (box && (Object.keys(_mbEdgeClv.by_bet || {}).length || _mbEdgeClv.members)) box.outerHTML = mbEdgeHTML(mbLoad());
 }
 
+/* THE MEMBERS' CLOSING-LINE LEADERBOARDS (engine/closeboard; Ethan,
+   2026-10-29: "build leaderboards"). Each member's average price against
+   the close, over their saved parlays' legs watched to the start, never
+   what anyone won; this week or the last 90 days, everyone or friends.
+   Only members who put themselves on it, with a username, and drawn only
+   while the site's two locks are open (`closeboard_switch`). Its taps are
+   its own (data-cb), so nothing here is added to app.js's first load. */
+const _cbView = { window: "week", scope: "all" };
+function mbBoardHTML(v) {
+  const pctS = (x) => `${x >= 0 ? "+" : MINUS}${Math.abs(x).toFixed(1)}%`;
+  const chip = (k, val, label) => `<button type="button" class="mbc-chip ${_cbView[k] === val ? "active" : ""}"
+      data-cb="${k}" data-arg="${val}">${label}</button>`;
+  const span = v.window === "week" ? "this week" : "in the last 90 days";
+  const rows = (v.rows || []).map((r) => `<div class="edge-row cb-row${r.me ? " me" : ""}">
+      <span class="edge-k"><b class="cb-rank">${r.rank}</b> ${escapeHtml(r.name || r.handle)} <span class="cb-handle">@${escapeHtml(r.handle)}</span></span>
+      <b class="${r.clv >= 0 ? "good" : "warn"}">${pctS(r.clv)}</b>
+      <span class="mini">beat the close on ${r.beat} of ${plural(r.n, "leg")}</span></div>`).join("");
+  const off = `<button type="button" class="wk-limit-go" data-cb="leave">Take me off</button>`;
+  const me = !v.on
+    ? (v.has_handle
+      ? `<p class="mini cb-me">You’re not on it. It would show your username and your average, never a bet.
+          <button type="button" class="wk-limit-go" data-cb="join">Put me on it</button></p>`
+      : `<p class="mini cb-me">To be on it, pick a username on Social first.</p>`)
+    : v.me && v.me.need
+      ? `<p class="mini cb-me">You’re on it: ${plural(v.me.n, "leg")} ${span} so far, ${v.me.need} more to be ranked. ${off}</p>`
+      : `<p class="mini cb-me">You’re on it${v.me && v.me.rank ? `, ${ordinal(v.me.rank)} ${span}` : ""}. ${off}</p>`;
+  return `<div class="card edge-card cb-card" id="mb-board"><div class="ffd-h">${icon("trophy", 14)} Beat the close: the leaderboard</div>
+    <div class="cb-chips"><div class="mbc-chips">${chip("window", "week", "This week")}${chip("window", "90d", "90 days")}</div>
+      <div class="mbc-chips">${chip("scope", "all", "Everyone")}${chip("scope", "friends", "Friends")}</div></div>
+    ${rows || `<p class="mini">Nobody ranked ${span} yet: it takes ${plural(v.min, "leg")} of saved parlays watched to the start.</p>`}
+    ${me}
+    <p class="mini edge-foot">Each member’s average price against the close, over the legs of their saved parlays watched to the start, at the price taken but never better than the books showed. Never what anyone won, and never a reason to bet more.</p></div>`;
+}
+async function mbBoardFill() {
+  if (!document.getElementById("mb-board")) return;
+  let v = null;
+  try {
+    const r = await fetch(`/api/feed/closeboard?window=${_cbView.window}&scope=${_cbView.scope}`,
+                          { credentials: "same-origin", cache: "no-store" });
+    if (r.ok) v = await r.json();
+  } catch (e) { /* no board this time */ }
+  const box = document.getElementById("mb-board");
+  if (!box) return;
+  if (!v || !v.enabled) { box.remove(); return; }
+  box.outerHTML = mbBoardHTML(v);
+  document.getElementById("mb-board").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-cb]");
+    if (!b) return;
+    const k = b.dataset.cb;
+    if (k === "join" || k === "leave") {
+      // On or off is a setting (and a line in the consent log); the box
+      // reads it, so it goes now rather than with the next sync.
+      setSetting("closeboard", k === "join" ? "on" : "off");
+      try { await acctSync(); } catch (e2) { /* the next sync carries it */ }
+      tfToast(k === "join" ? "You’re on the leaderboard." : "You’re off the leaderboard.");
+    } else {
+      _cbView[k] = b.dataset.arg;
+    }
+    mbBoardFill();
+  });
+}
+
 /* Where the week stands against the member's own limit (Settings →
    Limits; engine/limits), when they set one. */
 function mbLimitHTML(bets) {
@@ -679,6 +741,8 @@ function renderMyBets() {
     ${ribbon}
     ${mbMonthHTML(bets, today)}
     ${mbEdgeHTML(bets)}
+    ${typeof _pwStatus !== "undefined" && _pwStatus && _pwStatus.closeboard_switch && typeof _acctUser !== "undefined"
+      && _acctUser && _acctUser.signed_in ? `<div class="card edge-card cb-card" id="mb-board"><p class="mini">The leaderboard…</p></div>` : ""}
     ${st.settled ? `<div id="mb-report"></div>` : `<div id="mb-risk"></div>`}
     ${(() => {
       if (st.settled < 3) return "";
@@ -785,6 +849,7 @@ function renderMyBets() {
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
   loadExtras().then((X) => X && (st.settled ? X.reportCard(document.getElementById("mb-report")) : X.riskView(document.getElementById("mb-risk"))));
   mbEdgeFill();
+  mbBoardFill();
 }
 
 /* ============================================================
@@ -3786,6 +3851,11 @@ function setListHTML() {
         ? [setItem({ tag: "label", ico: "people", title: "Count my bets in the members’ split",
                      sub: "Pooled, 50 bets or more a side, never you by name",
                      end: setSwitch(s.split !== "off", 'data-set-switch="split"') })] : []),
+      // The closing-line leaderboard (engine/closeboard), only while it is on.
+      ...(_pwStatus && _pwStatus.closeboard_switch
+        ? [setItem({ tag: "label", ico: "trophy", title: "Show me on the closing-line leaderboard",
+                     sub: "Your username and your average against the close, never a bet",
+                     end: setSwitch(s.closeboard === "on", 'data-set-switch="closeboard"') })] : []),
       setItem({ ico: "download", title: "Download my data", attrs: 'data-act="acctExport"' }),
       setItem({ ico: "search", title: "Clear search history", attrs: 'data-act="acctSearchClear"' }),
       setItem({ ico: "logout", title: "Sign out everywhere", sub: "Every device, this one too",
@@ -3864,7 +3934,7 @@ async function actFill(off) {
    every yes and no they gave us with the policy's date; the rows
    themselves are in Download my data. */
 const YD_KIND = { terms: "Terms and 21+", activity: "Keeping your activity", alerts: "Alerts",
-                  limits: "Limits", split: "The members' split" };
+                  limits: "Limits", split: "The members' split", closeboard: "The closing-line leaderboard" };
 async function ydFill() {
   const box = document.getElementById("set-yd");
   if (!box) return;
@@ -4284,7 +4354,10 @@ function bindSettings() {
     if (flip) {
       if (flip.disabled) return;
       const k = flip.dataset.setSwitch;
-      setSetting(k, settings()[k] === "on" ? "off" : "on");
+      // What the switch shows, not the stored word: the members' split is on
+      // until a member says "off", so its first tap has to turn it off (it
+      // took two, 2026-10-29).
+      setSetting(k, flip.getAttribute("aria-checked") === "true" ? "off" : "on");
       redraw();
       return;
     }

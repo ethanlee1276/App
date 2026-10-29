@@ -967,6 +967,13 @@ a.pw-door-go { text-decoration: none; }
 .edge-row b.warn { color: var(--warn); }
 .edge-row .mini { grid-column: 1 / -1; }
 .edge-foot { margin-top: 6px; }
+/* The closing-line leaderboard (js/account.js mbBoardHTML): the Edge
+   Report's rows, a place and a username in front. */
+.cb-chips { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 4px 0 6px; }
+.cb-rank { display: inline-block; min-width: 1.6em; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.cb-handle { color: var(--text-mute); font-size: var(--fs-xs); }
+.cb-row.me { background: var(--fill-subtle); border-radius: var(--radius-sm); padding-inline: 6px; }
+.cb-me { margin-top: 6px; }
 
 /* THE SMART PAYWALL (pwCaught): last week on the reader's own teams, as
    counts, between tonight's cards and the plans. */

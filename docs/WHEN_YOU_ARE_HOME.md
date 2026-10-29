@@ -8420,6 +8420,84 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IB 2>&1 | tee /tmp/ib.txt
 ```
 
+**IC. Your yeses: your activity, the members' split, the closing-line
+leaderboards, and the notice our documents promise** (step 289; you:
+"approve all. and build leaderboards"). What it did:
+
+- **The two sections you approved are in the Privacy Policy**, word for
+  word: your activity (§2.10) and the members' split (§2.11). The split's
+  has one sentence added, below.
+- **The closing-line leaderboards** (My Bets, under the Edge Report): this
+  week or the last 90 days, everyone or friends, ranked by each member's
+  average price against the close, never by winnings. Only members who
+  put themselves on it (My Bets or Settings → Your data), with a username;
+  5 legs to be ranked in a week, 25 in 90 days. A leg counts at the price
+  taken but never better than the books showed when the box first saw the
+  parlay, and only once its game started with the parlay still saved, so
+  nobody can type a price or delete a parlay to climb it. Its own section
+  in the policy (§2.12).
+- **The notice our own documents promise.** The policy's §13 says a change
+  that affects a member is emailed before it takes effect, and the Terms'
+  §15 says 30 days before. So once you switch it on below, the box emails
+  every account made by today, once, about the changes (60 a day at most,
+  10:00 to 20:00 Eastern, through the same mail as password resets). The
+  split counts such an account only a week after its email (a phone-only
+  account, from 6 November); a new account, at once. The Terms say today's
+  changes apply to an older account 30 days after its email, and keep the
+  26 October version at `terms-2026-10-26.html` until then.
+- **A bug in Settings:** the split's switch is on until a member turns it
+  off, and its first tap set it "on" again, so leaving took two taps. A
+  switch now flips from what it shows.
+
+In this order. First, before the activity switch, **the App Store privacy
+label** (the iPhone app shows the site, so it collects this too): App
+Store Connect → your app → **App Privacy** → Edit → **Usage Data** →
+**Product Interaction**: linked to the user's identity **Yes**, purposes
+**App Functionality** and **Analytics**, used for tracking **No**. Publish
+it.
+
+Then the four switches and one restart. Each is safe on its own: the
+activity and the leaderboard keep nothing for anybody until that member
+says yes, and the split waits a week after each email:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_ACTIVITY 1
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_SPLIT 1
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_CLOSEBOARD 1
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_POLICY_NOTICE 2026-10-29
+sudo systemctl restart qellys
+```
+
+The checks: the first prints `True True True`; the second, how many have
+been emailed and how many are to go (it climbs by up to 60 a day); the
+third, the email as a member gets it:
+
+```
+curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('activity_switch'), d.get('split_switch'), d.get('closeboard_switch'))"
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview
+```
+
+Whether the box is sending (a setting, so it needs the setup script):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh --show | grep -E '^  (QB_ACTIVITY|QB_SPLIT|QB_CLOSEBOARD|QB_POLICY_NOTICE) '
+```
+
+Read-only, any time; each prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/account.js | grep -c 'async function mbBoardFill('
+curl -s https://qellysbook.com/privacy.html | grep -c 'id="close-board"'
+curl -s https://qellysbook.com/terms-2026-10-26.html | grep -c 'Last updated 26 October 2026'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IC 2>&1 | tee /tmp/ic.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

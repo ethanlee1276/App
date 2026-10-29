@@ -235,6 +235,9 @@ app, when, and whether they open its alerts. Not their other apps (§2).
 
 ### The Privacy Policy wording to approve (it turns the switch on)
 
+**Approved by Ethan on 2026-10-29 ("approve all"), and in the policy as
+§2.10, word for word.** What is below is the record of what he approved.
+
 Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
 
 ```html
@@ -269,8 +272,7 @@ Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
 
 ### Before switching it on (the runbook's step HW)
 
-1. Ethan approves (or edits) the wording above; it goes into the policy in a
-   commit, and the policy's date at the top moves.
+1. Done 2026-10-29: approved, and in the policy as §2.10.
 2. **The App Store privacy label** must say it before the iPhone app ships
    with it: App Store Connect → App Privacy → Usage Data → **Product
    Interaction**, "Linked to the user's identity: Yes", purposes **App
@@ -331,7 +333,10 @@ pick keeps the market's chance for its team when it was made and the last
 before kickoff; Social → Pick'em → "Beat the close").
 
 The wording to approve (a new subsection of §2 in `web/privacy.html`; the
-`id` is the lock):
+`id` is the lock). **Approved by Ethan on 2026-10-29 and in the policy as
+§2.11, with one sentence added for the notice its §13 promises: an account
+made before the change is counted only a week after it is emailed about it
+(engine/policynotice; one without an email address, from 6 November 2026).**
 
 ```html
 <h3 id="members-split">2.11 The members' split</h3>
@@ -398,13 +403,21 @@ alert's one a week. Never "bet now", never a discount, never "we miss you".
 | The aha moment, "a hypothesis to test" | Of members who said yes and signed up 4 to 12 weeks ago: who logged a bet and watched a live game's page in their first two days, and how many of them and of the rest were here in days 22 to 28. Under ten members it says too few; it says "who did it, not why they stayed" | engine/engagement.aha |
 | RFM | Recency by frequency (days since last here × days here of the last 28), with the paying members in each cell; the four groups above are its money cut | engine/engagement.rfm_lines |
 
-Not built, and why:
+Built after all, 2026-10-29 (Ethan: "approve all. and build leaderboards"):
 
-- **An opt-in CLV leaderboard of members' own bets.** It would be a public
-  record of who bets and how, a new use of what members log (like the
-  members' split), and the pick'em's "Beat the close" table already ranks
-  people on the closing line with no money in it. It needs its own wording
-  and Ethan's yes; asked in the runbook's HZ.
+- **The closing-line leaderboards** (engine/closeboard; My Bets, under the
+  Edge Report). This week and the last 90 days, everyone or friends, ranked
+  by each member's average price against the close over their saved
+  parlays' legs, never by profit. Opt-in (My Bets or Settings → Your data),
+  a username needed, five legs to be ranked in a week and 25 in 90 days.
+  Because a public table invites gaming that a private report did not, a
+  leg counts only at the price taken capped at the best price the books
+  showed when the box first saw it (`bet_clv.first_best`), and only once
+  the box saw its game start with the parlay still saved (`closed`): a
+  parlay deleted mid-move keeps a price that is not a close. Two locks, as
+  the split: `QB_CLOSEBOARD=1` and the policy's §2.12 (id="close-board").
+
+Not built, and why:
 - **The alert-copy bandit.** Telling two wordings apart by a few points of
   open rate takes thousands of sends of each; no alert kind sends that many
   a week yet. The daily totals by kind (HV) already say which alerts get

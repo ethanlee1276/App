@@ -36,6 +36,9 @@
         totals carry no cookie, no identifier and no IP address, and cannot
         say what any one person did. Nothing on this site follows you anywhere
         else.</li>
+      <li><b>Only if you say yes</b>, we also keep a daily record of your own
+        time on the site, to time your alerts and to count how the site is
+        used (§2.10). Say no at any time and it is deleted.</li>
       <li><b>We never see your card details.</b> Stripe takes the payment
         on its own page; we hold a customer reference and a status.</li>
       <li><b>We do not sell or share your personal information</b>, and we
@@ -79,11 +82,15 @@
         <code>users.terms_accepted_at</code>)</li>
       <li><b>A record of each yes and no you give us</b> about your data or
         our messages — the 21+ and Terms confirmation, alerts turned on (which
-        kinds) or off, a break from alerts or a limit you set — with the date
+        kinds) or off, a break from alerts or a limit you set, and keeping your
+        activity, the members' split and the leaderboard (§2.10–2.12) — with the date
         of this policy at the time, and when. A change of mind is a new line,
         never an edit, so the record says what you chose and what you were
         shown. It is in Download my data and deleted with your account.
         (<code>consent_log</code>)</li>
+      <li><b>That we emailed you about a change to these documents, and
+        when</b> — so it goes once, and so a change that would count you waits
+        a week after it (§2.11). (<code>policy_notices</code>)</li>
       <li><b>Session tokens, stored hashed</b>, with an expiry. The cookie
         in your browser is the only copy of the raw token; a stolen
         database does not yield a working session.
@@ -126,14 +133,16 @@
         menu, the teams and players you follow, whether the bar wears your
         team’s colours, what you told us you are here for and the books you
         bet at (the “Make it yours” card, or Settings; your books lead the
-        Bet it sheet), and a weekly limit, if you set one (Settings →
-        Limits). (<code>user_data</code>, section <code>settings</code>)</li>
+        Bet it sheet), a weekly limit, if you set one (Settings →
+        Limits), and whether you are counted in the members' split (§2.11)
+        and on the leaderboard (§2.12). (<code>user_data</code>, section
+        <code>settings</code>)</li>
     </ul>
     <p>Those five sections — <code>mybets</code>, <code>fantasy</code>,
       <code>bankroll</code>, <code>search</code>, <code>settings</code> — are
       the complete list of what the synced part of an account holds. It is
       the same list the code enforces (<code>accounts.SECTIONS</code>). The
-      features in §2.7–2.9 keep their own rows, each named there.</p>
+      features in §2.7–2.12 keep their own rows, each named there.</p>
 
     <h3>2.3 Subscription</h3>
     <ul>
@@ -216,8 +225,9 @@
       saved to My Bets starting in about ten minutes, close to hitting, down to
       its last leg, or settled — with whether the price you took beat the
       closing price, for which we keep, for each saved parlay's legs, the
-      price you took and the last price and market chance the books showed
-      before its game started, for 90 days (<code>bet_clv</code>) — and, on a
+      price you took, the best price the books showed when we first saw it,
+      the last price and market chance they showed before its game started,
+      and when it started, for 90 days (<code>bet_clv</code>) — and, on a
       Monday, last week’s record from My Bets with what it made or lost, its
       best win and how its prices did against the close; and, if you chose them, that
       the line moved two points of chance or a point from the price you took
@@ -437,6 +447,64 @@
       games' final scores were told in <code>push_final_seen</code>, three
       days at most, neither with an account on it.</p>
 
+    <h3 id="your-activity">2.10 Your activity here</h3>
+    <p>Only if you say yes — in Settings → Your activity, or on the "Make it
+      yours" card — and while you are signed in, we keep a daily record of your
+      own time on this site: how many
+      seconds a page of it was in front of you (only while the tab is visible and
+      you have used it in the last two minutes, or watched a live game in the last
+      half hour), on which of our pages and for which leagues, in which hours of
+      the day, how many visits you made and how many of them one of our alerts
+      opened; and, on each phone you get alerts on, how many picks-up and
+      last-night alerts it has had since you last opened one of ours. Never your
+      clicks, anything you type, your location, your device, or anything about
+      other apps or sites.
+      (<code>activity_days</code>, <code>activity_prefs</code>,
+      <code>engagement_away</code>, and that count in <code>push_subs</code>)</p>
+    <p>We use it for your own alerts — to send the ones not tied to a game at the
+      hour you usually look; to send the picks-up and last-night alerts once a day
+      at most to a phone that has left fifteen in a row unopened, until you open
+      one; and, if you turned on "When I’ve been away", one line a week at most
+      with your team’s next game or what is new — and, as totals, to see how the site is used: for
+      that, it is read beside your My Bets dates and the teams you follow, to
+      count, say, how many members watched a live game here with a bet on it or a
+      team in it, or how many who logged a bet in their first two days were still
+      here a month later. It is
+      never sold, shared, or used for advertising, and nothing about what you pay
+      changes how we treat you. Each day’s row is deleted after 120 days, all of
+      it when you say no or delete your account, and it is in Download my data.
+      Each yes and no you give is kept in the record described in §2.1.</p>
+
+    <h3 id="members-split">2.11 The members' split</h3>
+    <p>Unless you turn it off in Settings → Your data ("Count my bets in the
+      members' split"), the game-line legs of your open saved parlays — which
+      team on a moneyline or a spread, over or under on a total, from the last
+      three days — are counted with every other member's, and a game's page
+      shows the share on each side once 50 or more are in; and the closing-line
+      value we note for your saved parlays (§2.7) over the last 30 days is
+      pooled with every other member's into one number on the Edge Report, once
+      50 or more legs are in. Only counts and shares are
+      ever shown, never who, and never a player prop. Nothing new is kept for
+      it: it reads what My Bets already syncs and the closing prices in §2.7,
+      and turning it off takes you out of the next count. An account made before 30 October 2026 is counted only from a
+      week after we email it about this change (one without an email address,
+      from 6 November 2026), as §13 promises.</p>
+
+    <h3 id="close-board">2.12 The closing-line leaderboard</h3>
+    <p>Only if you turn it on (My Bets, or Settings → Your data → "Show me on the
+      closing-line leaderboard") and have a username. Then your username, display
+      name and colour, and, for this week and for the last 90 days, how many legs
+      of your saved parlays we watched to their close, how many of them beat it,
+      and your average, are shown on the leaderboard to anyone signed in, and on
+      its Friends tab to your friends, once you have enough legs to be ranked. A
+      leg counts once its game has started with your parlay still saved, at the
+      price you took or, where that is better than any book showed when we first
+      saw your parlay, at the best one they did show. Never a bet, a team, a
+      player, a stake or a result, and never what you won or lost. Nothing new is
+      kept for it but your choice, with your settings, and its line in the record
+      in §2.1; it reads the prices in §2.7. Turning it off takes you off at
+      once.</p>
+
     <h2>3. What we do NOT collect</h2>
     <ul>
       <li><b>Your sportsbook password</b>, or any betting-account
@@ -484,6 +552,18 @@
       <tr><td>The record of your yeses and noes</td>
           <td>To show what you agreed to, when, and what you were shown</td>
           <td>Legal obligation / legitimate interest</td></tr>
+      <tr><td>Your activity here (only with your yes)</td>
+          <td>To send your own alerts at your hour and fewer of the kinds you
+            never open, and to count how the site is used (§2.10)</td>
+          <td>Consent, withdrawn in Settings at any time</td></tr>
+      <tr><td>The members' split</td>
+          <td>To show, as counts and shares only, how members' game-line
+            bets split and how members' prices did against the close
+            (§2.11)</td>
+          <td>Legitimate interest; turn it off in Settings</td></tr>
+      <tr><td>The closing-line leaderboard (only if you turn it on)</td>
+          <td>To show your closing-line numbers to other members (§2.12)</td>
+          <td>Consent, withdrawn in My Bets or Settings</td></tr>
       <tr><td>When you were last here, and your plan</td>
           <td>To count, as totals, how many members are here often, slipping
             away or gone, with the monthly revenue in each group, for our own
@@ -518,8 +598,9 @@
     <ul>
       <li><b>Other people on this site</b> — only what you make public: your
         username and profile, your Feed posts and comments, your messages in
-        a game’s chat, and your username with your record or karma on the
-        standings and ladders you appear on (§2.9). A direct message is seen
+        a game’s chat, your username with your record or karma on the
+        standings and ladders you appear on (§2.9), and, if you turn it on,
+        your closing-line numbers on the leaderboard (§2.12). A direct message is seen
         by the friend you send it to, and a private pick’em group’s table by
         the people in it.</li>
       <li><b>Twilio Inc.</b> — only if you sign up or sign in with your
@@ -605,6 +686,8 @@
         comes first; deleted when you change your password.</li>
       <li><b>Failed code attempts</b> — rolled off after one hour.</li>
       <li><b>Processed webhook ids</b> — 60 days.</li>
+      <li><b>Your activity here</b> — each day's row 120 days, and all of it
+        the moment you say no.</li>
       <li><b>The closing prices of your saved parlays’ legs</b> — 90 days;
         <b>their chance through the night</b>, for the replay — 30 days.
         <b>The record of your yeses and noes</b> — until you delete your
