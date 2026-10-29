@@ -7930,6 +7930,38 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HR 2>&1 | tee /tmp/hr.txt
 ```
 
+**HS. A book paying more than Pinnacle's fair price, listed** (step 279;
+"Ok keep going"). Now that the NBA and NHL boards read Pinnacle's price,
+the same numbers answer the first question a pro asks of a screen: is any
+book I can bet paying more than Pinnacle's fair price? No model is in that
+number; it is one book against the sharpest one. Where it is true by 2% to
+15%, the prop card says so ("Beats Pinnacle: FanDuel +108 on the over pays
+more than Pinnacle's fair (51%), +6.3% EV on the price alone"), and the
+Line Shopping page lists them under Sharp money, best first. Past 7% the
+line warns that a gap that big usually means news moved Pinnacle first, so
+check the price still stands; past 15% it is a broken price and is not
+shown.
+
+The Line Shopping page's code also moved out of the part of the site every
+first visit downloads (it now loads when you open the page), which made
+the first load about 6 KB lighter.
+
+Nothing to set. Read-only, any time. It prints `1` once this version is
+live:
+
+```
+curl -s https://qellysbook.com/js/more.js | grep -c 'pays more than the sharp book’s fair'
+```
+
+After the next NBA build, `nbalean.py` (HP) also prints how many props a
+book prices better than Pinnacle's fair.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HS 2>&1 | tee /tmp/hs.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

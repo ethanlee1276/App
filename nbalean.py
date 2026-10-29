@@ -136,7 +136,8 @@ def anchors(doc: dict) -> dict:
             gaps.append(abs(float(r["fair_prob"]) - float(r["books_fair"])))
         except (KeyError, TypeError, ValueError):
             continue
-    return {"props": len(rows), "sharp": len(sharp), "gap": statistics.fmean(gaps) if gaps else None}
+    return {"props": len(rows), "sharp": len(sharp), "gap": statistics.fmean(gaps) if gaps else None,
+            "value": sum(1 for r in rows if r.get("sharp_value"))}
 
 
 def record(conn) -> dict:
@@ -248,6 +249,9 @@ def main(argv=None) -> int:
             line += (f"; on those the other books' best prices sat {an['gap'] * 100:.1f} points of "
                      f"chance from it on average, and the model was checked against the sharp number")
         print(line)
+        if an.get("value"):
+            print(f"  {an['value']} of them a book prices better than the sharp book's fair "
+                  f"(listed on the Line Shopping page, under Sharp money)")
     lad = ladder_shape(doc)
     if lad["rungs"]:
         print(f"  Alternate lines tonight: {lad['rungs']} numbers, {lad['one_way']} quoted one way only "

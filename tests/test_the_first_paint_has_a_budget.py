@@ -240,7 +240,12 @@ APP_JS_BUDGET_KB = 290
 #: free account can access"): the sheet's pills wear the sidebar's lock and
 #: the tools and the board's tabs get one (400,456 B, 72 over 391; nothing
 #: dead was left in styles.css to pay for it). Told to Ethan.
-BOOT_BUDGET_KB = 392
+#: 392 -> 388 on 2026-10-29: the Market Scanner moved to js/more.js with
+#: every helper only it uses (418 lines), and the budget keeps the saving
+#: rather than spending it. Measured with the Scanner's new list of props a
+#: book prices past the sharp book's fair (which alone was 315 B over the
+#: old 392): 401,572 -> 395,689 B.
+BOOT_BUDGET_KB = 388
 
 
 def _gz_trimmed(rel: str) -> int:

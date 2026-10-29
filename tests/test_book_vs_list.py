@@ -44,7 +44,10 @@ if not shutil.which("node"):
     print("\n0 tests passed.")
     raise SystemExit(0)
 
-APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+from _app import app_js  # noqa: E402
+
+APP = app_js()  # app.js and the rooms it loads on first use: the Scanner is in js/more.js since 2026-10-29
 
 _STUBS = """
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({

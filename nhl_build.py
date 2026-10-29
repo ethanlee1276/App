@@ -251,6 +251,13 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
                 f"{proj['mean']:.2f} {label.lower()}"])
     if anchor:
         reasons.append(anchor)
+    # A BOOK PAYING MORE THAN THE SHARP BOOK'S FAIR (engine/sharpvalue): the
+    # market's own value at this number, no model in it.
+    from engine.sharpvalue import note as _sv_note, sharp_value as _sharp_value
+    # (Not `sv`: that name is the opposing goalie's save rate further down.)
+    sharp_val = _sharp_value(fair_over, prop.lines, line) if sharp else None
+    if sharp_val:
+        reasons.append(_sv_note(sharp_val, sharp[2]))
     if not goalie and abs(proj.get("opp", 1.0) - 1.0) >= 0.02:
         reasons.append(f"{opponent} allows {abs(proj['opp'] - 1):.0%} "
                        f"{'more' if proj['opp'] > 1 else 'less'} than an average team")
@@ -334,6 +341,7 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "hit_prob": round(win, 4), "raw_prob": round(raw, 4), "fair_prob": round(fair, 4),
         # Which market the haircut trusted, and what the other books said.
         "market_source": "sharp" if sharp else "books",
+        "sharp_value": sharp_val,
         "books_fair": round(books_over if side == "OVER" else 1.0 - books_over, 4),
         "edge": round(edge, 4), "ev_per_unit": round(ev, 4),
         "confidence": (round(7.0 + min(max(edge, 0.0), 0.05) * 40, 1) if pick

@@ -139,7 +139,8 @@ def test_the_lean_report_counts_the_props_the_sharp_book_priced():
         {"fair_prob": None}]}
     got = nbalean.anchors(doc)
     assert got["props"] == 3 and got["sharp"] == 2 and abs(got["gap"] - 0.025) < 1e-9, got
-    assert nbalean.anchors({}) == {"props": 0, "sharp": 0, "gap": None}
+    assert got["value"] == 0
+    assert nbalean.anchors({}) == {"props": 0, "sharp": 0, "gap": None, "value": 0}
 
 
 def test_the_build_hands_the_sharp_quotes_over():

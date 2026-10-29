@@ -327,6 +327,11 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         "market_source": "sharp" if sharp is not None else "books",
         "anchor_note": anchor_note,
         "books_over": round(books_over, 4),
+        # The sharp book's own chance of the over AT THIS NUMBER (never one
+        # read across from another), for `engine.sharpvalue`.
+        "sharp_over": (round(mkt_over, 4) if sharp is not None and abs(sharp[1] - line) < 1e-9
+                       else None),
+        "sharp_book": sharp[2] if sharp is not None else "",
         "context": context_notes,
         "chain": pj.get("chain"),
     }
@@ -686,6 +691,13 @@ def shared_recommendations(props: list[dict],
                    f"{r['blowout_prob']:.0%}"]
         if r.get("anchor_note"):
             reasons.append(r["anchor_note"])
+        # A BOOK PAYING MORE THAN THE SHARP BOOK'S FAIR (engine/sharpvalue,
+        # 2026-10-29): the market's own value at this number, no model in it.
+        from ..sharpvalue import note as _sv_note, sharp_value as _sharp_value
+        sv = (_sharp_value(r["sharp_over"], (lines_map or {}).get((r["player"], r["market"]), []), r["line"])
+              if r.get("sharp_over") is not None else None)
+        if sv:
+            reasons.append(_sv_note(sv, r.get("sharp_book") or ""))
         if r.get("clamp_note"):
             reasons.append(r["clamp_note"])
         # A teammate ruled out tonight, and what the logs show when he sat
@@ -715,6 +727,7 @@ def shared_recommendations(props: list[dict],
             "proj_high": round(r["projection"] + r["sd"], 1),
             "hit_prob": r["p_final"], "fair_prob": r["p_market"],
             "market_source": r.get("market_source", "books"),
+            "sharp_value": sv,
             "books_fair": round(r["books_over"] if r["side"] == "OVER" else 1.0 - r["books_over"], 4),
             "edge": round(r["p_final"] - r["p_market"], 4),
             "ev_per_unit": r["ev"],
