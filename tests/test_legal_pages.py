@@ -113,6 +113,16 @@ def test_the_terms_cover_every_section_a_paid_service_needs():
             ("assignment", ["may not assign"]),
             ("force majeure", ["outside our control"]),
             ("copyright complaints", ["infringes your copyright"]),
+            # Added 2026-10-29, when the Terms caught up with the community,
+            # the free games, the alerts and the notices about a plan.
+            ("free games are not contests", ["games, not contests", "pay no prize", "no cash value"]),
+            ("own-bet numbers are measures", ["Edge Report", "do not predict what you will win"]),
+            ("tools to slow down", ["Settings → Limits", "Take a break"]),
+            ("renewal reminder", ["We remind you before a longer plan renews"]),
+            ("what members may not post", ["harassing", "tout picks", "under 21 to bet"]),
+            ("user content licence and moderation", ["What you post", "report a post"]),
+            ("pick'em groups", ["Pick’em groups", "new invite link"]),
+            ("alerts are not guaranteed", ["Alerts are a convenience, not a guarantee"]),
     ):
         for needle in needles:
             assert needle.lower() in TERMS_TEXT.lower(), \
@@ -210,7 +220,15 @@ def test_the_privacy_policy_names_every_table_that_holds_personal_data():
          "consent.py", "betclv.py", "newsalerts.py",
          # The away alert's once a week, now live for the membership recaps
          # (engine/lifecycle), whatever the activity log's switch.
-         "engagement.py"))
+         "engagement.py",
+         # 2026-10-29, the policy's pass for everything new: a saved
+         # parlay's chance through its night (which the policy had never
+         # named, and an account's deletion had left to a 30-day prune),
+         # pick'em groups, a game on the lock screen, the finals told, and
+         # when each league last played. engine/activity is the one left
+         # out on purpose: its tables are named by the policy section that
+         # is its own lock (tests/test_your_activity_is_kept_only_with_both_locks).
+         "slipreplay.py", "pickgroups.py", "gameactivity.py", "finals.py", "lifecycle.py"))
     tables = set(re.findall(r"CREATE TABLE IF NOT EXISTS ([a-z_]+)", schema))
     assert tables, "no schema found — this test has stopped checking anything"
     for table in sorted(tables):
@@ -231,10 +249,12 @@ def test_deleting_an_account_names_every_table_that_holds_a_person():
             "pushmine.py", "slipwatch.py", "digest.py", "gamechat.py", "referrals.py", "alerts.py",
             "streak.py", "tailfade.py", "callit.py", "calfeed.py", "widgetfeed.py", "trivia.py", "gifts.py",
             "passkeys.py", "karma.py", "pickem.py", "consent.py", "betclv.py", "newsalerts.py",
-            "engagement.py")
+            "engagement.py", "slipreplay.py", "pickgroups.py", "gameactivity.py", "activity.py")
     tables = set()
     for m in mods:
-        for t in re.finditer(r"CREATE TABLE IF NOT EXISTS ([a-z_]+)\s*\((.*?)\);", _read("engine", m), re.S):
+        # A table ends at ");" in a script, or at the quotes closing a
+        # single conn.execute — slip_chance was missed for want of that.
+        for t in re.finditer(r'CREATE TABLE IF NOT EXISTS ([a-z_]+)\s*\((.*?)\)\s*(?:;|"""|"\))', _read("engine", m), re.S):
             if re.search(r"\b(user_id|from_id|to_id|referred_id|referrer_id)\b", t.group(2)):
                 tables.add(t.group(1))
     acc = _read("engine", "accounts.py")
@@ -440,6 +460,27 @@ def test_both_documents_link_to_each_other_and_back():
         assert 'href="index.html"' in doc, f"{name} has no way back"
     assert 'href="privacy.html"' in TERMS
     assert 'href="terms.html"' in PRIVACY or "Terms" in PRIVACY_TEXT
+
+
+def test_the_renewal_reminder_the_documents_promise_is_the_one_sent():
+    """Both documents say "about three weeks"; engine/lifecycle sends it
+    RENEW_DAYS ahead. State automatic-renewal laws ask 15 to 45 days for a
+    yearly plan (California's among them), so the number is held inside
+    that window, and to the words."""
+    from engine import lifecycle as LC
+    assert 15 < LC.RENEW_DAYS <= 45, LC.RENEW_DAYS
+    assert 18 <= LC.RENEW_DAYS <= 24, "the documents say about three weeks"
+    assert "About three weeks before a six-month or yearly plan renews" in TERMS_TEXT
+    assert "renews in about three weeks" in PRIVACY_TEXT
+    assert set(LC.RENEW_PLANS) == {"sixmonth", "yearly"}
+
+
+def test_the_documents_are_dated_the_same_day():
+    """Read together, so changed together: a policy dated after the Terms
+    it is read with, or the other way round, is a question nobody can
+    answer from the pages."""
+    date = lambda doc: re.search(r'class="legal-date">Last updated ([^<]+)<', doc).group(1)   # noqa: E731
+    assert date(TERMS) == date(PRIVACY), (date(TERMS), date(PRIVACY))
 
 
 def test_the_honesty_lines_survive_in_the_terms():

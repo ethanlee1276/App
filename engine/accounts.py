@@ -955,6 +955,9 @@ def delete_user(conn, user_id: int) -> None:
                   # Their bets' closing prices (engine/betclv) and the injury
                   # statuses last told them (engine/newsalerts).
                   "bet_clv", "news_seen",
+                  # A saved parlay's chance through its night, for the replay
+                  # (engine/slipreplay): it had been left to the 30-day prune.
+                  "slip_chance",
                   # What they said yes and no to (engine/consent).
                   "consent_log"):
         if table in have:
@@ -1134,6 +1137,12 @@ def export_user(conn, user_id: int) -> dict:
             "SELECT bet_id, leg, entry, best, fair, at FROM bet_clv WHERE user_id=? ORDER BY at", (int(user_id),))]
         if rows:
             out["closing_prices_of_your_bets"] = rows
+    # Each saved parlay's chance through its night (engine/slipreplay).
+    if "slip_chance" in have:
+        rows = [dict(zip(("bet", "at", "chance", "kind"), r)) for r in conn.execute(
+            "SELECT bet_id, at, p, kind FROM slip_chance WHERE user_id=? ORDER BY bet_id, at", (int(user_id),))]
+        if rows:
+            out["your_parlays_chance_through_the_night"] = rows
     if "gift_codes" in have:
         rows = [dict(r) for r in conn.execute("SELECT code, created_at, redeemed_by IS NOT NULL AS redeemed "
                                               "FROM gift_codes WHERE user_id=? ORDER BY created_at", (int(user_id),))]

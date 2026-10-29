@@ -238,7 +238,7 @@ app, when, and whether they open its alerts. Not their other apps (§2).
 Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
 
 ```html
-<h3 id="your-activity">2.8 Your activity here</h3>
+<h3 id="your-activity">2.10 Your activity here</h3>
 <p>Only if you say yes — in Settings → Your activity, or on the "Make it
   yours" card — and while you are signed in, we keep a daily record of your
   own time on this site: how many
@@ -333,7 +333,7 @@ The wording to approve (a new subsection of §2 in `web/privacy.html`; the
 `id` is the lock):
 
 ```html
-<h3 id="members-split">2.10 The members' split</h3>
+<h3 id="members-split">2.11 The members' split</h3>
 <p>Unless you turn it off in Settings → Your data ("Count my bets in the
   members' split"), the game-line legs of your open saved parlays — which
   team on a moneyline or a spread, over or under on a total, from the last
@@ -361,7 +361,7 @@ never instead of the phone.
 | Message | Phone | Email | Silenced by a limit or a pause |
 | --- | --- | --- | --- |
 | Free trial turns into a charge tomorrow | every signed-in phone (`account`) | yes, as before | pause only (it is about money) |
-| A six-month or yearly plan renews in ~15 days | every signed-in phone (`account`) | yes, unless `QB_RENEW_EMAIL=0` (when Stripe's own renewal emails are on) | pause only |
+| A six-month or yearly plan renews in ~21 days (state renewal laws ask 15 to 45 for a yearly plan) | every signed-in phone (`account`) | yes, unless `QB_RENEW_EMAIL=0` (when Stripe's own renewal emails are on) | pause only |
 | A paying member not here in 5 days: their week and the board's, losses included | "When I've been away" (`away`) | no | yes |
 | A plan that ended: what the board did since, days 3, 14 and 30, then never | "When I've been away" (`away`) | no | yes |
 | Every league of the teams they follow has just finished its season: which leagues are on, once | "When I've been away" (`away`) | no | yes |

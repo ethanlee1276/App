@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-29",
+      "kind": "fix",
+      "title": "The Privacy Policy and the Terms, brought up to date",
+      "body": "Both now describe everything added this month: pick'em groups and the rules for running one, what the morning and Monday alerts say, the notices about your own plan on your phone, quiet hours, limits and breaks, and what may not be posted here. A six-month or yearly plan now hears about three weeks before it renews, inside what state renewal laws ask. And one thing was wrong: the chance a saved parlay had through its night, kept 30 days for the replay, now goes the moment you delete your account, is in Download my data, and is named in the policy. Nothing new is collected."
+    },
+    {
+      "date": "2026-10-29",
       "kind": "ship",
       "title": "Pick'em groups",
       "body": "Start a group on the Pick'em page, name it, and send the link: your group gets its own table, by wins or by beating the close, counted for the people in it. Anyone with the link can join, signing up first if they need to. The owner can rename it, remove someone, or make a new link that retires the old one. Still free, still no prizes.",
@@ -36,7 +42,7 @@
       "date": "2026-10-29",
       "kind": "ship",
       "title": "Your membership, on your phone",
-      "body": "The note before a free trial turns into a charge now reaches every phone you are signed in on as well as your inbox, and a six-month or yearly plan says when it renews and what it costs about two weeks ahead. Turn on When I've been away and a week off brings one line: your week and ours, losses included.",
+      "body": "The note before a free trial turns into a charge now reaches every phone you are signed in on as well as your inbox, and a six-month or yearly plan says when it renews and what it costs about three weeks ahead. Turn on When I've been away and a week off brings one line: your week and ours, losses included.",
       "url": "/#alerts"
     },
     {

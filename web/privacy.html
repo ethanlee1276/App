@@ -29,11 +29,12 @@
         whatever you choose to put into the Service (a bet log, fantasy
         settings).</li>
       <li><b>We run no advertising, no tracking pixels and no third-party
-        scripts.</b> We count how the site is used — visits, which pages are
-        opened, questions asked in Ask, plan buttons pressed, and trials and
-        subscriptions started or ended — as daily totals only. The totals
-        carry no cookie, no identifier and no IP address, and cannot say
-        what any one person did. Nothing on this site follows you anywhere
+        scripts.</b> We count how the site is used — visits, which pages and
+        games are opened, questions asked in Ask, bets put in My Bets, alerts
+        turned on and sent, limits and breaks set, plan buttons pressed, and
+        trials and subscriptions started or ended — as daily totals only. The
+        totals carry no cookie, no identifier and no IP address, and cannot
+        say what any one person did. Nothing on this site follows you anywhere
         else.</li>
       <li><b>We never see your card details.</b> Stripe takes the payment
         on its own page; we hold a customer reference and a status.</li>
@@ -98,7 +99,17 @@
       <li><b>Your bet log</b> — the wagers you choose to record: sport,
         market, price, stake, result. Entered by you, for your own
         record-keeping. We do not place these bets and cannot see any
-        account you placed them on. (<code>user_data</code>)</li>
+        account you placed them on. The Edge Report on My Bets — your return
+        by market, how the prices you took did against the close, your best-
+        and worst-priced bets, the hours you usually bet — is worked out from
+        this log and the closing prices in §2.7, for you alone.
+        (<code>user_data</code>)</li>
+      <li><b>Your parlays’ night, for the replay</b> — while the games of a
+        parlay you saved to My Bets are on, the chance we give it each time
+        it is graded: before the start, through the games (a point every two
+        minutes, or sooner when it moves two points), and how it ended, so My
+        Bets can play the night back. Kept 30 days.
+        (<code>slip_chance</code>)</li>
       <li><b>Your settings</b> — bankroll size, unit size, fantasy league
         preferences, alert choices. (<code>user_data</code>, sections
         <code>bankroll</code> and <code>fantasy</code>)</li>
@@ -111,9 +122,12 @@
     </ul>
     <ul>
       <li><b>Your preferences</b> — how prices and stakes are shown, your
-        time zone, the leagues in your menu, the teams and players you
-        follow, and whether the bar wears your team’s colours.
-        (<code>user_data</code>, section <code>settings</code>)</li>
+        time zone (your alerts’ quiet hours follow it), the leagues in your
+        menu, the teams and players you follow, whether the bar wears your
+        team’s colours, what you told us you are here for and the books you
+        bet at (the “Make it yours” card, or Settings; your books lead the
+        Bet it sheet), and a weekly limit, if you set one (Settings →
+        Limits). (<code>user_data</code>, section <code>settings</code>)</li>
     </ul>
     <p>Those five sections — <code>mybets</code>, <code>fantasy</code>,
       <code>bankroll</code>, <code>search</code>, <code>settings</code> — are
@@ -130,7 +144,8 @@
         plan has reached its third bill, when we may offer the yearly plan
         once. During a free trial, also the
         trial end we last sent the one reminder email about, so it goes
-        once.
+        once; and, on a six-month or yearly plan, the renewal we last told
+        you about, so that notice goes once too.
         (<code>subscriptions</code>)</li>
       <li><b>Stripe event ids we have already processed</b>, so a repeated
         webhook cannot grant twice. (<code>billing_events</code>)</li>
@@ -165,7 +180,9 @@
     <h3>2.5 Usage counts</h3>
     <ul>
       <li><b>Usage counts</b> (<code>analytics.counts</code>): per day, an
-        event name, the name of the page, a broad source (direct, search,
+        event name, the name of the page (or, for a few events, one detail of
+        it: a game’s league, how a bet was put in My Bets, what the “Make it
+        yours” card was answered with), a broad source (direct, search,
         social, another site, a campaign link, or one of our alerts) and
         whether the visitor was signed in or subscribed, with a count; and
         how many alerts reached phones, by kind (picks up, a final score
@@ -200,13 +217,18 @@
       its last leg, or settled — with whether the price you took beat the
       closing price, for which we keep, for each saved parlay's legs, the
       price you took and the last price and market chance the books showed
-      before its game started, for 90 days (<code>bet_clv</code>) — and, if you chose them, that
+      before its game started, for 90 days (<code>bet_clv</code>) — and, on a
+      Monday, last week’s record from My Bets with what it made or lost, its
+      best win and how its prices did against the close; and, if you chose them, that
       the line moved two points of chance or a point from the price you took
       before the start, that a game on your parlay or of a team you follow
       is in its last minutes within one score, that a player you follow or
       have in an open parlay changed injury status (we keep the last status
       we told you about for each, <code>news_seen</code>), and, from ten in the morning where you
-      are, your teams’ games that day with the times; a game
+      are, your teams’ games that day with the times, who on those teams is
+      out, doubtful or questionable, a spread that has moved a point or more
+      since it opened, and how many picks the board has on those games (a
+      count, never which); a game
       of a team you follow starting in about ten minutes (the two teams;
       which league a team is in comes from the teams you followed, kept with
       your account's settings), a big
@@ -241,7 +263,7 @@
       Whatever you chose, every phone signed in
       to your account also gets a notice about your own membership: that a
       free trial turns into a charge the next day (the same as the email), or
-      that a six-month or yearly plan renews in about two weeks and what it
+      that a six-month or yearly plan renews in about three weeks and what it
       costs. For the lineup alert, while it is on, we
       keep the ID of the Sleeper league your league desk last opened and
       your Sleeper user ID, to read the lineup you have set there, and we
@@ -253,7 +275,11 @@
       there, the same, until it is final (twelve hours at most), with the
       last score we sent it. The push itself carries no words in
       a browser; your phone asks our site what to show (in our iPhone app,
-      Apple carries the words). Turning alerts off, or a push service
+      Apple carries the words). Most alerts wait out the night, 11 p.m. to
+      9 a.m. — your own by the time zone in your settings (Eastern if you
+      set none), the ones that go to everybody by Eastern time — but a game
+      starting, a final score and news of a parlay you saved still come.
+      Turning alerts off, or a push service
       telling us the address is gone, deletes the row. Google, Apple,
       Mozilla or Microsoft deliver the knock under their own policies.</p>
 
@@ -447,9 +473,23 @@
       <tr><td>Server logs, crash reports, failed code attempts</td>
           <td>Security, abuse prevention, debugging</td>
           <td>Legitimate interest</td></tr>
-      <tr><td>Email about your subscription</td>
-          <td>Receipts, renewal notices, service notices</td>
+      <tr><td>Email and phone notices about your subscription</td>
+          <td>Receipts, a free trial about to charge, renewal notices,
+            service notices</td>
           <td>Performance of a contract</td></tr>
+      <tr><td>Phone alerts, and the choices behind them</td>
+          <td>To send the alerts you turned on, and to hold them for a break,
+            a limit you set or the night</td>
+          <td>Consent, withdrawn on the Alerts page at any time</td></tr>
+      <tr><td>The record of your yeses and noes</td>
+          <td>To show what you agreed to, when, and what you were shown</td>
+          <td>Legal obligation / legitimate interest</td></tr>
+      <tr><td>When you were last here, and your plan</td>
+          <td>To count, as totals, how many members are here often, slipping
+            away or gone, with the monthly revenue in each group, for our own
+            report (never shown to anyone, never used to price anything), and
+            to time the notes in §2.7 you turned on</td>
+          <td>Legitimate interest</td></tr>
     </table>
     <p>We do not use your data to train models. The models here are built
       from public sports statistics and market prices, not from
@@ -463,7 +503,8 @@
       about you.</p>
     <p>Some preferences (theme, bankroll display), the profiles you
       opened from Social’s Search (its Recent list: a username, display
-      name and colour, eight at most) and how many times this phone has
+      name and colour, eight at most), a pick’em group’s invite you opened
+      before you could join it (until you join) and how many times this phone has
       asked you to turn alerts on, and when it last did (so it asks three
       times at most, two weeks apart) are kept in your browser’s local
       storage. That never leaves your device and we cannot read it.</p>
@@ -476,9 +517,11 @@
       receiving the minimum:</p>
     <ul>
       <li><b>Other people on this site</b> — only what you make public: your
-        username and profile, your Feed posts and comments, and your
-        messages in a game’s chat. A direct message is seen by the friend
-        you send it to.</li>
+        username and profile, your Feed posts and comments, your messages in
+        a game’s chat, and your username with your record or karma on the
+        standings and ladders you appear on (§2.9). A direct message is seen
+        by the friend you send it to, and a private pick’em group’s table by
+        the people in it.</li>
       <li><b>Twilio Inc.</b> — only if you sign up or sign in with your
         phone number. They receive the number so they can text you the code
         and check it; the code itself never reaches us. Twilio’s privacy
@@ -562,7 +605,8 @@
         comes first; deleted when you change your password.</li>
       <li><b>Failed code attempts</b> — rolled off after one hour.</li>
       <li><b>Processed webhook ids</b> — 60 days.</li>
-      <li><b>The closing prices of your saved parlays’ legs</b> — 90 days.
+      <li><b>The closing prices of your saved parlays’ legs</b> — 90 days;
+        <b>their chance through the night</b>, for the replay — 30 days.
         <b>The record of your yeses and noes</b> — until you delete your
         account.</li>
       <li><b>Feed posts</b> — 120 days, or until you delete them or your
@@ -584,8 +628,10 @@
     <h2>8. Your rights, and how to use them</h2>
     <p>Wherever you live, you can:</p>
     <ul>
-      <li><b>See what we hold</b> — most of it is visible on your account
-        page; ask and we will send the rest;</li>
+      <li><b>See what we hold</b> — Settings → Your data → <b>What we keep
+        about you</b> lists every kind of record we hold about you, how many
+        and how long each is kept, with every yes and no you gave us; the
+        records themselves are in Download my data;</li>
       <li><b>Correct it</b> — change your email or password from the
         account page;</li>
       <li><b>Delete it</b> — the account panel deletes your account and
@@ -627,8 +673,9 @@
 
     <h2>9. Children</h2>
     <p>The Service is for adults aged 21 and over. We do not knowingly
-      collect information from anyone under 18. If you believe a child has
-      created an account, tell us and we will delete it.</p>
+      collect information from anyone under 21. If you believe a child, or
+      anyone else under 21, has created an account, tell us and we will
+      delete it.</p>
 
     <h2>10. Security</h2>
     <ul>

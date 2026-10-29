@@ -55,8 +55,11 @@ WEB = ROOT / "web"
 ET = ZoneInfo("America/New_York")
 ACCOUNT_TOPIC = "account"                # pushalerts.ACCOUNT: every signed-in phone wants it
 AWAY_TOPIC = "away"
-#: A longer plan's renewal is told this many days before it.
-RENEW_DAYS = 15
+#: A longer plan's renewal is told this many days before it: inside the
+#: 15 to 45 days that state automatic-renewal laws ask of a yearly plan
+#: (California's among them), with a margin for a pass that runs late.
+#: It was 15, which the first pass to see it could miss by hours.
+RENEW_DAYS = 21
 RENEW_PLANS = ("sixmonth", "yearly")
 #: Our own renewal email beside the push; QB_RENEW_EMAIL=0 leaves it to
 #: Stripe's own upcoming-renewal emails when those are switched on.

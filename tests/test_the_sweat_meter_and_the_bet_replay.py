@@ -94,6 +94,29 @@ def test_the_sweep_keeps_it_and_the_endpoint_is_the_members_own():
     assert "if not who or not self._entitled(conn, who):" in ep and "SR.history(conn, who[\"id\"], bid)" in ep
 
 
+def test_an_account_s_replay_is_in_its_export_and_goes_with_it():
+    """The Privacy Policy's pass of 2026-10-29: an account's deletion had
+    left these rows to the 30-day prune, Download my data never carried
+    them, and the policy never named the table."""
+    import tempfile
+    from engine import accounts as A
+    with tempfile.TemporaryDirectory() as d:
+        conn = A.connect(str(Path(d) / "acc.db"))
+        SR.ensure_table(conn)
+        _, who = A.create_user(conn, "you@example.com", "correct-horse-battery", confirmed=True)
+        uid = int(who["id"])
+        assert SR.bank(conn, uid, "s1", _card(ours=0.31), T0) and SR.bank(conn, uid, "s1", _card("won"), T0 + 3600)
+        assert SR.bank(conn, uid + 1, "s9", _card(ours=0.5), T0), "somebody else's slip"
+        conn.commit()
+        got = A.export_user(conn, uid)["your_parlays_chance_through_the_night"]
+        assert [(r["bet"], r["chance"], r["kind"]) for r in got] == [("s1", 0.31, "pre"), ("s1", 1.0, "won")], got
+        A.delete_user(conn, uid)
+        left = [tuple(r) for r in conn.execute("SELECT user_id FROM slip_chance")]
+        assert left == [(uid + 1,)], ("only theirs goes", left)
+    policy = (ROOT / "web" / "privacy.html").read_text(encoding="utf-8")
+    assert "<code>slip_chance</code>" in policy and "for the replay — 30 days" in policy
+
+
 def _node(path, body):
     node = shutil.which("node")
     if not node:
