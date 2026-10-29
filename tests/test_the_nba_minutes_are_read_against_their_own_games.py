@@ -177,6 +177,33 @@ def test_the_report_reads_the_minutes_base_at_the_seasons_start():
     assert W.choose(dict(got, n=W.MIN_GAMES)) == "season"
 
 
+def test_the_report_reads_the_close_by_side():
+    """Closing-line value, the test a pro trusts first: the close's chance
+    for our side less the price taken, at the same number; points of line
+    where the number moved."""
+    import nbalean
+    from engine import ledger as L
+    with tempfile.TemporaryDirectory() as d:
+        conn = L.connect(Path(d) / "ledger.db")
+        rows = [("nba", "A", "pts", "OVER", 24.5, -150, 24.5, -180, "likely"),
+                ("nba", "B", "reb", "UNDER", 8.5, -200, 8.5, -150, "likely"),
+                ("nba", "C", "pts", "OVER", 20.5, -120, 21.5, -110, "likely"),
+                ("wnba", "D", "pts", "OVER", 18.5, -150, 18.5, -300, "likely"),     # another league
+                ("nba", "E", "pts", "OVER", 30.5, -110, 30.5, -300, "main")]        # not Most Likely
+        for sport, player, market, side, line, odds, cl, co, cat in rows:
+            conn.execute("INSERT INTO bets (ts, sport, date, player, market, side, line, odds, stake_units, "
+                         "status, closing_line, closing_odds, category) VALUES "
+                         "('2026-10-28T19:00', ?, '2026-10-28', ?, ?, ?, ?, ?, 1, 'open', ?, ?, ?)",
+                         (sport, player, market, side, line, odds, cl, co, cat))
+        conn.commit()
+        got = nbalean.clv(conn)
+        conn.close()
+    over, under = got["over"], got["under"]
+    assert over["n"] == 1 and abs(over["price"] - (180 / 280 - 150 / 250)) < 1e-9 and over["beat"] == 1.0, over
+    assert over["n_line"] == 1 and over["line"] == 1.0, "an over at 20.5 that closed 21.5 is a point our way"
+    assert under["n"] == 1 and under["price"] < 0 and under["beat"] == 0.0, under
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

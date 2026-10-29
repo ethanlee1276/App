@@ -23,7 +23,10 @@ nothing is written.
      props where we sit under the market.
   3. THE RECORD. The graded NBA Most Likely picks (the ledger, as
      likelyfit.py reads it), by side: how many, how often they hit, how
-     often we said they would, and the return at a flat unit.
+     often we said they would, and the return at a flat unit. Then the
+     close: whether the market moved our way after each pick went up, the
+     test a pro trusts long before a win rate settles (a few hundred picks
+     decide a hit rate; the close says something after a few dozen).
   4. THE MINUTES BASE THIS SEASON (engine/nba/window, which the build
      measures each day and acts on): every game played this season by a man
      with three earlier ones this season, his minutes against the base read
@@ -122,6 +125,56 @@ def record(conn) -> dict:
     return out
 
 
+def _implied(odds) -> float:
+    o = float(odds)
+    return 100.0 / (o + 100.0) if o > 0 else -o / (-o + 100.0)
+
+
+def clv(conn) -> dict:
+    """``{side: {"n", "price", "beat", "n_line", "line"}}`` — how the NBA Most
+    Likely picks fared against the close, each pick once (ledger.books_sql),
+    settled or not. At the same number: the close's chance for our side
+    less the price's we took (``price``, vig in both; positive means the
+    market came our way after we took it) and the share that did
+    (``beat``). Where the number moved: the points it moved our way
+    (``line``: a lower number on an over, a higher one on an under)."""
+    from engine import ledger as L
+    sql, args = L.books_sql(L.LIKELY_BOOKS + (L.BOARD_CATEGORY,))
+    out: dict = {}
+    for r in conn.execute(f"SELECT UPPER(COALESCE(side,'')) side, line, odds, closing_line, closing_odds "
+                          f"FROM bets WHERE {sql} AND LOWER(sport)='nba' AND odds IS NOT NULL "
+                          f"AND closing_odds IS NOT NULL", args):
+        side = "over" if r[0] in ("OVER", "YES") else "under" if r[0] in ("UNDER", "NO") else ""
+        if not side:
+            continue
+        try:
+            odds, close = float(r[2]), float(r[4])
+            if abs(odds) < 100 or abs(close) < 100:
+                continue
+        except (TypeError, ValueError):
+            continue
+        s = out.setdefault(side, {"n": 0, "price": 0.0, "beat": 0, "n_line": 0, "line": 0.0})
+        try:
+            moved = r[1] is not None and r[3] is not None and abs(float(r[1]) - float(r[3])) > 1e-9
+        except (TypeError, ValueError):
+            moved = False
+        if moved:
+            pts = float(r[3]) - float(r[1]) if side == "over" else float(r[1]) - float(r[3])
+            s["n_line"] += 1
+            s["line"] += pts
+            continue
+        gain = _implied(close) - _implied(odds)
+        s["n"] += 1
+        s["price"] += gain
+        s["beat"] += int(gain > 0)
+    for s in out.values():
+        if s["n"]:
+            s["price"], s["beat"] = s["price"] / s["n"], s["beat"] / s["n"]
+        if s["n_line"]:
+            s["line"] /= s["n_line"]
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--board", default=str(ROOT / "web" / "data" / "nba.json"))
@@ -194,6 +247,7 @@ def main(argv=None) -> int:
         conn = L.connect()
         try:
             rec = record(conn)
+            closes = clv(conn)
         finally:
             conn.close()
     except Exception as exc:                                # noqa: BLE001 — no ledger, no record
@@ -210,6 +264,19 @@ def main(argv=None) -> int:
                 continue
             print(f"    {side:5}  {s['n']:4} picks  hit {s['won'] / s['n']:.0%}  "
                   f"we said {s['said'] / s['n']:.0%}  return {s['ret'] / s['n']:+.1%} a pick")
+    if closes:
+        print("  Against the close (a pro's first test: does the market come our way after we take it?):")
+        for side in ("over", "under"):
+            c = closes.get(side)
+            if not c:
+                continue
+            parts = []
+            if c["n"]:
+                parts.append(f"{c['n']} at the same number: {c['price'] * 100:+.1f} points of chance on "
+                             f"average, {c['beat']:.0%} beat it")
+            if c["n_line"]:
+                parts.append(f"{c['n_line']} where the number moved: {c['line']:+.2f} a pick our way")
+            print(f"    {side:5}  " + "; ".join(parts))
     return 0
 
 

@@ -7807,7 +7807,10 @@ still reads all twenty games. A card that uses it says so ("Minutes read
 from his 6 games this season").
 
 Nothing to set for that. The report shows which one the board is reading
-and the numbers behind it (read-only):
+and the numbers behind it, and now also the test pros trust before any win
+rate settles: for overs and unders separately, whether the market moved
+our way after each pick went up (the close). A few dozen picks say
+something there; a hit rate needs hundreds (read-only):
 
 ```
 cd /srv/qellys && sudo -u qellys python3 nbalean.py
