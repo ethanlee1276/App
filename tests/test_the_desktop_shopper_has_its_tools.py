@@ -19,7 +19,10 @@ sys.path.insert(0, str(ROOT))
 
 from engine.sources import oddsapi  # noqa: E402
 
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+sys.path.insert(0, str(ROOT / "tests"))
+from _app import app_js  # noqa: E402
+
+APP = app_js()  # app.js and the rooms it loads on first use: the Scanner is in js/more.js since 2026-10-29
 HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
 
