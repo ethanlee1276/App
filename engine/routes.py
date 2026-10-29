@@ -361,6 +361,28 @@ def pick_meta(slug: str, web: Path = WEB) -> dict:
     }
 
 
+#: A live game's own address (Ethan's research, 2026-10-29: "/live/{sport}/
+#: {game_id}. Public (no login), SEO-indexed with '[Team] vs [Team] live
+#: stats props' titles to capture Google traffic").
+LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+_EVENT = re.compile(r"^\d{1,14}$")
+
+
+def live_meta(sport: str, event: str, web: Path = WEB) -> dict | None:
+    """The preview for a live game's page: the two teams, from the game's own
+    play-by-play file (public facts), or None when it is not a game."""
+    sport = str(sport or "").lower()
+    if sport not in LIVE_LEAGUES or not _EVENT.match(str(event or "")):
+        return None
+    doc = _load(web / "data" / "pbp" / f"{sport}_{event}.json")
+    away, home = str(doc.get("away_name") or doc.get("away") or ""), str(doc.get("home_name") or doc.get("home") or "")
+    label = f"{away} vs {home}" if away and home else "The game"
+    return {"title": _title(f"{label} live: score, stats and prop pace"),
+            "description": (f"{label}, live: the score, the play by play, the box score, the win "
+                            "probability and every prop’s pace against its line. Free."),
+            "hash": f"pbp/{sport}/{event}", "sport": sport}
+
+
 def section_meta(name: str) -> dict:
     kind, target, label, desc = SECTIONS[name]
     return {
@@ -392,6 +414,13 @@ def resolve(path: str, web: Path = WEB) -> dict | None:
             out["canonical"] = f"{SITE}/{name}"
             return out
         return None
+    if len(segs) == 3 and segs[0].lower() == "live":
+        out = live_meta(segs[1], segs[2], web)
+        if out is None:
+            return None
+        out["kind"] = "live"
+        out["canonical"] = f"{SITE}/live/{segs[1].lower()}/{segs[2]}"
+        return out
     if len(segs) != 2:
         return None
     kind, slug = segs[0].lower(), segs[1]

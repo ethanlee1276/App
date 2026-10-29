@@ -1287,6 +1287,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(widgetfeed.build()).encode(), ".json")
         if parsed.path in ("/api/firstlook", "/api/firstlook/"):
             return self._firstlook()
+        if parsed.path in ("/api/live/pace", "/api/live/pace/"):
+            # PROP PACE (engine/livepace): every prop priced on a live game,
+            # where the player stands, his pace and the market's chance —
+            # the market's half of the board only, so open to everybody.
+            from engine import livepace as LP
+            if self._rate_limited(RATE_CALENDAR_PER_MIN, "pace"):
+                return
+            q = parse_qs(parsed.query)
+            out = LP.rows_for((q.get("league") or [""])[0], (q.get("event") or [""])[0], WEB)
+            return self._send(200, json.dumps(out).encode(), ".json")
         if parsed.path in ("/api/push/key", "/api/push/key/"):
             # The server's public VAPID key: what a browser subscribes with.
             from engine import webpush
@@ -3991,6 +4001,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, b'{"error":"no such game"}', ".json")
         tickets = body.get("tickets") if isinstance(body.get("tickets"), list) else []
         out = SL.room_tickets(tickets, m.group(1), home, away)
+        # AND, SIGNED IN, EACH TICKET'S PRICE AGAINST THE CLOSE (engine/betclv:
+        # the research's live CLV, free) — what the box saw for the member's
+        # own saved slips, never anybody else's.
+        if out:
+            A = _acct()
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if who:
+                    from engine import betclv as BC
+                    for t in out:
+                        got = BC.ticket(conn, who["id"], t["id"], legs=t.get("of"))
+                        if got["clv"] is not None:
+                            t["clv"] = round(got["clv"], 4)
+            finally:
+                conn.close()
         return self._send(200, json.dumps({"tickets": out}).encode(), ".json")
 
     def _chat_get(self, path: str, q: dict):

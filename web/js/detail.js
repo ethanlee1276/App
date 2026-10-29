@@ -2369,6 +2369,119 @@ function pbpModelWinProbHTML(d) {
   </div>`;
 }
 
+/* YOUR ACTION AND THE PROPS' PACE (Ethan's research, 2026-10-29: the live
+   page it specifies — a "My Action" strip of the reader's own bets with
+   "needs" and CLV, a Prop Pace table, the market beside the model, and the
+   21+ footer). Both are free: the reader's saved slips with each leg's
+   number so far off the box (POST /api/chat/ticket, engine/sliplive) and,
+   signed in, whether the ticket's price beat the close (engine/betclv);
+   every prop priced on the game with its pace and the MARKET's chance
+   watched live (GET /api/live/pace, engine/livepace — never our pick's).
+   The chance on a ticket and the hedge stay on the Live tab, for members.
+   Each is asked at most every thirty seconds while the page is open. */
+const PBP_ACT = { room: "", at: 0, list: null }, PBP_PACE = { key: "", at: 0, doc: null, all: false };
+function pbpActionMine() {
+  if (typeof mbLoad !== "function") return [];
+  return mbLoad().filter((b) => b && b.result === "pending" && b.src === "slip" && Array.isArray(b.legs) && b.legs.length)
+    .slice(-10);
+}
+function pbpLegLine(l) {
+  const word = typeof marketWord === "function" ? marketWord(l.market) : l.market;
+  const cur = Number(l.current), line = Number(l.line), side = String(l.side || "").toUpperCase();
+  let now = l.state === "scheduled" || !l.state ? "not started" : "";
+  if (Number.isFinite(cur)) {
+    const go = side === "OVER" && Number.isFinite(line) && !l.result ? `, ${Math.max(0, Math.floor(line) + 1 - cur)} to go`
+      : side === "UNDER" && Number.isFinite(line) && !l.result ? `, ${Math.max(0, Math.floor(line) - cur)} to spare` : "";
+    now = `${cur}${go}`;
+  }
+  const res = l.result === "won" ? "✓" : l.result === "lost" ? "✗" : l.result ? "push" : "";
+  return `<li class="pbp-act-leg${l.result === "won" ? " r-won" : l.result === "lost" ? " r-lost" : ""}"><b>${escapeHtml(l.player || "")}</b>
+    ${escapeHtml(side ? side[0].toLowerCase() : "")}${Number.isFinite(line) ? escapeHtml(line) : ""} ${escapeHtml(word || "")}
+    <span class="pbp-act-now">${escapeHtml(now)}${res ? ` ${res}` : ""}</span></li>`;
+}
+function pbpActionHTML() {
+  const t = PBP_ACT.list || [];
+  if (!t.length) return "";
+  const clv = (x) => x.clv == null ? "" : `<p class="mini pbp-act-clv ${x.clv >= 0 ? "good" : "warn"}">Your price ${
+    x.clv >= 0 ? `beat the close by ${(x.clv * 100).toFixed(1)}%` : `${Math.abs(x.clv * 100).toFixed(1)}% worse than the close`}</p>`;
+  return `<div class="pbp-rail-head">Your action <span class="mini">${t.length} ticket${t.length === 1 ? "" : "s"} in this game</span></div>
+    ${t.map((x) => `<div class="pbp-act-tik"><div class="pbp-act-desc">${escapeHtml(x.desc || "")}${
+      x.of > (x.legs || []).length ? `<span class="mini"> · ${(x.legs || []).length} of ${x.of} legs here</span>` : ""}</div>
+      <ul>${(x.legs || []).map(pbpLegLine).join("")}</ul>${clv(x)}</div>`).join("")}
+    <a class="pbp-act-go" href="#live">Your tickets live, with the chance and the hedge →</a>`;
+}
+async function pbpActionFill(league, event) {
+  const box = document.getElementById("pbp-action");
+  if (!box) return;
+  const room = `${league}_${event}`, mine = pbpActionMine();
+  if (!mine.length) { box.hidden = true; return; }
+  const paint = () => {
+    box.innerHTML = pbpActionHTML();
+    box.hidden = !(PBP_ACT.list || []).length;
+    if (!box.hidden && pbpActionFill.sweat !== room) { pbpActionFill.sweat = room; track("sweat", league); }
+  };
+  if (PBP_ACT.room === room && PBP_ACT.list && Date.now() - PBP_ACT.at < 30000) { paint(); return; }
+  try {
+    const r = await fetch("/api/chat/ticket", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room, tickets: mine.map((b) => ({ id: b.id, desc: b.desc, legs: b.legs })) }) });
+    const v = r.ok ? await r.json() : null;
+    if (v) Object.assign(PBP_ACT, { room, at: Date.now(), list: v.tickets || [] });
+  } catch (e) { /* the page goes on without it */ }
+  if (box.isConnected && PBP_ACT.room === room) paint();
+}
+function pbpPaceHTML() {
+  const d = PBP_PACE.doc;
+  const rows = (d && d.rows) || [];
+  if (!rows.length || !["live", "final"].includes(d.state)) return "";
+  const mine = new Set(pbpActionMine().flatMap((b) => b.legs.map((l) => String(l.player || "").toLowerCase())));
+  const sorted = rows.slice().sort((a, b) => mine.has(b.player.toLowerCase()) - mine.has(a.player.toLowerCase()));
+  const shown = PBP_PACE.all ? sorted : sorted.slice(0, 12);
+  const pct = (x) => x == null ? "—" : `${Math.round(x * 100)}%`;
+  return `<div class="pbp-rail-head">Prop pace <span class="mini">${rows.length} prop${rows.length === 1 ? "" : "s"} on the game</span></div>
+    <div class="pbp-pace-t" role="table" aria-label="Every prop priced on this game against its line">
+      <div class="pbp-pace-r head" role="row"><span>Player</span><span>Line</span><span>Now</span><span>Pace</span><span>Over</span></div>
+      ${shown.map((r) => `<div class="pbp-pace-r${mine.has(r.player.toLowerCase()) ? " mine" : ""}${r.result === "won" ? " r-won" : ""}" role="row">
+        <span><b>${escapeHtml(r.player)}</b><span class="mini"> ${escapeHtml(r.market)}</span>${mine.has(r.player.toLowerCase()) ? `<span class="pbp-pace-tag">your bet</span>` : ""}</span>
+        <span>${escapeHtml(r.line)}</span><span>${r.current == null ? "—" : escapeHtml(r.current)}</span>
+        <span class="${r.pace == null ? "" : r.pace > Number(r.line) ? "good" : "warn"}">${r.pace == null ? "—" : escapeHtml(r.pace)}</span>
+        <span>${pct(r.chance)}</span></div>`).join("")}
+    </div>
+    ${rows.length > 12 ? `<button type="button" class="btn ghost pbp-pace-more" data-pace-all>${PBP_PACE.all ? "Fewer" : `All ${rows.length}`}</button>` : ""}
+    <p class="mini pbp-pace-foot">Pace is his number over the share of the game played. Over is the market’s own chance at
+      the start, watched live — not our pick. Analytics, not guarantees.</p>`;
+}
+async function pbpPaceFill(league, event) {
+  const box = document.getElementById("pbp-pace");
+  if (!box) return;
+  const key = `${league}_${event}`;
+  const paint = () => {
+    box.innerHTML = pbpPaceHTML();
+    box.hidden = !box.innerHTML.trim();
+    const more = box.querySelector("[data-pace-all]");
+    if (more) more.addEventListener("click", () => { PBP_PACE.all = !PBP_PACE.all; paint(); });
+  };
+  if (PBP_PACE.key === key && PBP_PACE.doc && Date.now() - PBP_PACE.at < 30000) { paint(); return; }
+  try {
+    const r = await fetch(`/api/live/pace?league=${encodeURIComponent(league)}&event=${encodeURIComponent(event)}`,
+      { credentials: "same-origin" });
+    const v = r.ok ? await r.json() : null;
+    if (v) Object.assign(PBP_PACE, { key, at: Date.now(), doc: v });
+  } catch (e) { /* the page goes on without it */ }
+  if (box.isConnected && PBP_PACE.key === key) paint();
+}
+// The market's chance for the home side at the start: the board's two
+// moneylines with the margin taken out.
+function pbpMarketHome(boardGame) {
+  const dec = (o) => { const v = Number(o); return !Number.isFinite(v) || Math.abs(v) < 100 ? null : v > 0 ? 1 + v / 100 : 1 + 100 / Math.abs(v); };
+  const h = dec((boardGame || {}).home_ml), a = dec((boardGame || {}).away_ml);
+  return h && a ? (1 / h) / (1 / h + 1 / a) : null;
+}
+function pbpFootHTML() {
+  return `<p class="pbp-foot">21+ · Analytics, not guarantees · Gambling problem? Call or text <b>1-800-GAMBLER</b> ·
+    <a href="#record">Our whole record, losses too</a></p>`;
+}
+
 /* CREW WATCH (2026-10-28; docs/IDEAS.md). The NFL referee's crew, live:
    the flags thrown so far (every play the feed marks a penalty on, declined
    or offset ones too), the pace they are on once a quarter is played, and
@@ -3203,7 +3316,7 @@ if (typeof window !== "undefined" && !window._ciBound) {
 }
 
 const WP_W = 320, WP_H = 110;
-function pbpWinChartHTML(d, league) {
+function pbpWinChartHTML(d, league, boardGame) {
   const rows = (league === "mlb" ? (d.events || []).filter((e) => e && e.kind === "atbat") : (d.plays || []))
     .filter((r) => r && typeof r.wp === "number");
   if (rows.length < 4) return "";
@@ -3217,6 +3330,7 @@ function pbpWinChartHTML(d, league) {
   const last = rows[n - 1].wp;
   const lead = last >= 50 ? d.home : d.away;
   const swings = rows.map((r, i) => [r, i]).filter(([r]) => Math.abs(Number(r.wpa) || 0) >= 15).slice(-8);
+  const mkt = pbpMarketHome(boardGame);
   return `<div class="card pbp-wpcard">
     <div class="pbp-rail-head">Win chance <span class="mini">${escapeHtml(lead || "")} ${Math.round(last >= 50 ? last : 100 - last)}% now</span></div>
     <svg class="pbp-wp" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
@@ -3227,9 +3341,12 @@ function pbpWinChartHTML(d, league) {
       <polyline class="pbp-wp-line" fill="none" points="${rows.map((r, i) => `${x(i)},${y(r.wp)}`).join(" ")}"/>
       ${swings.map(([r, i]) => `<circle class="pbp-wp-dot" cx="${x(i)}" cy="${y(r.wp)}" r="3"/>`).join("")}
       ${timed ? `<polyline class="pbp-wp-room" fill="none" points=""/>` : ""}
+      ${mkt != null ? `<line class="pbp-wp-mkt" x1="0" y1="${y(mkt * 100)}" x2="${W}" y2="${y(mkt * 100)}"/>` : ""}
     </svg>
     <div class="pbp-wp-key"><span>Above the line: ${escapeHtml(d.home || "home")}</span>${timed
       ? `<span class="pbp-wp-roomkey" hidden>Dashed: the room’s vote</span>` : ""}<span>Below: ${escapeHtml(d.away || "away")}</span></div>
+    ${mkt != null ? `<p class="mini pbp-wp-mktkey">Dotted: the market at the start, ${escapeHtml(d.home || "home")} ${Math.round(mkt * 100)}%
+      (the two moneylines, margin out).</p>` : ""}
     ${timed ? `<p class="mini pbp-wp-says" hidden></p>` : ""}
   </div>`;
 }
@@ -4527,6 +4644,8 @@ async function renderPbpPage(tick) {
     // filled the moment the page is drawn, whichever layout drew it.
     if (typeof chatEntryPaint === "function") chatEntryPaint();
     pbpRoomLine();
+    pbpActionFill(league, event);
+    pbpPaceFill(league, event);
     const b = document.getElementById("pbp-back");
     if (b) b.addEventListener("click", () => { markBackNav(); switchView(way.view); });
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>
@@ -4712,7 +4831,7 @@ async function renderPbpPage(tick) {
   }
   // Basketball: Ethan's render, its own page (js/hoopscast.js via QBGamecast.hoops).
   // Call it rides in on the basketball and hockey pages too, under the arena (pbpCallItHTML).
-  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + pbpCallItHTML(d, league) })) { if (lv.state === "live") again(); return; }
+  if (GC && GC.hoops && GC.hoops(host, { d, league, stripHTML, back, boardGame, faces, wire, callit: pbpTvHTML(d) + pbpSpoilHTML(d, league, event) + pbpAwayHTML(d, league) + pbpRecapHTML(d, league) + `<div class="card pbp-action" id="pbp-action" hidden></div><div class="card pbp-pace" id="pbp-pace" hidden></div>` + pbpCallItHTML(d, league) + pbpFootHTML() })) { if (lv.state === "live") again(); return; }
   const panel = tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
@@ -4728,6 +4847,8 @@ async function renderPbpPage(tick) {
         ${pbpBoardHTML(d, league, lv)}
         ${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
         <div class="gch-entry-slot"></div>
+        <div class="card pbp-action" id="pbp-action" hidden></div>
+        <div class="card pbp-pace" id="pbp-pace" hidden></div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
           ${pbpParkHTML(d, league, boardGame, lastPlay)}
@@ -4736,13 +4857,14 @@ async function renderPbpPage(tick) {
         ${pbpCallItHTML(d, league)}
         ${infoHTML}
         ${back}
+        ${pbpFootHTML()}
       </div>
       <aside class="pbp-rail">
         <div class="card pbp-railcard">
           <div class="pbp-rail-head">Play by play <span class="mini">${(events.length || (d.plays || []).length)} on file</span></div>
           ${pbpRailHTML(d, league)}
         </div>
-        ${pbpWinChartHTML(d, league)}
+        ${pbpWinChartHTML(d, league, boardGame)}
         ${winProb}
         ${pbpModelWinProbHTML(d)}
         ${pbpPressureHTML(d, league, boardGame)}

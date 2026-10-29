@@ -192,7 +192,7 @@ qellysbook.com {
 	# deploy.sh's guard kept the OLD config serving, and every clean URL
 	# quietly stayed dead in production while the repo said otherwise.
 	# `path` matchers take the list; `handle` takes the matcher's name.
-	@entity path /player/* /game/* /pick/*
+	@entity path /player/* /game/* /pick/* /live/*
 	handle @entity {
 		reverse_proxy 127.0.0.1:8000 {
 			# HOLD THE REQUEST WHILE THE APP RESTARTS.
