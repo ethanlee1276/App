@@ -4,6 +4,24 @@
     {
       "date": "2026-10-29",
       "kind": "ship",
+      "title": "The NBA Cup, group by group",
+      "body": "NBA → NBA Cup: the six groups with point differential and points scored, the wild card race, and how a tie is broken — head-to-head, then differential (an overtime game counts zero), then points. Members also get our chance for every team to advance, reach the final and win the Cup, and each group game left at our price and margin. Group play runs October 30 to November 27."
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "The College Football Playoff race",
+      "body": "College football → Playoff race: the twelve-team bracket if it started today, from the poll (the committee's ranking from November 3) under the 2026 rules, and every conference's table. Members also get every contender's chance to make it, earn a bye, win its conference, win it all and win out, each game it has left at our price, and the games this week that swing the field. Our model plays the season out; the committee's final ranking is stood in for by a team's rating plus its strength of record, and the page says so."
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "A day without a Pick of the Day still names a bet",
+      "body": "The Pick of the Day sits out roughly one day in three — its bar is stricter than the board's. On those days a member's card now says NO PICK TODAY and names the board's own strongest staked bet still to play, never the lean the day's bar turned down. How often the pick names one is on the card and the Record page: a pick on N of the last M slates, through yesterday."
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
       "title": "Three dots slide the sidebar away",
       "body": "On a computer, an iPad on its side or an open foldable, three dots on the sidebar's right edge slide it away to the left and the page takes the whole width; tap them again, or drag the bar back, and it returns. On a touch screen you can also slide the bar away with your finger. Each device remembers how you left it."
     },

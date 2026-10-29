@@ -2758,6 +2758,14 @@ def main() -> None:
     _jn = _ledger.journal_potd(out.get("pick_of_the_day") or {})
     if _jn:
         print(_jn)
+    # THE PLAYOFF RACE (engine/cfprace; Ethan, 2026-10-29: "do all 3"), off
+    # the very ratings and fit this board priced with. Its own file and its
+    # own failure line: a race that cannot be run never costs the board.
+    try:
+        from engine import cfprace as _race
+        print(f"  {_race.publish(ratings, fit, day, teams=teams, out_path=str(Path(args.out).with_name('cfp_race.json')))}")
+    except Exception as _rx:                                  # noqa: BLE001
+        print(f"  ⚠️  playoff race skipped: {type(_rx).__name__}: {_rx}")
     conn.close()
     _sharp_picks = sum(1 for b in sharp_bets if b.get("recommended"))
     print(f"CFB {args.date}: {len(games)} game(s), {len(priced)} priced → "

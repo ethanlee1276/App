@@ -100,9 +100,13 @@ def parse_scoreboard(payload: dict) -> list[dict]:
             # league's abbreviations is the thing that rots every time a
             # team is added or renamed.
             t = c.get("team") or {}
+            # REGULATION'S POINTS, when the feed carries the periods: the
+            # NBA Cup's third tiebreaker leaves overtime out (engine/nbacup).
+            per = [_num((x or {}).get("value")) for x in (c.get("linescores") or [])]
             side = {"abbr": (t.get("abbreviation") or "").strip(),
                     "name": (t.get("displayName") or t.get("name") or "").strip(),
-                    "score": _num(c.get("score"))}
+                    "score": _num(c.get("score")),
+                    "reg": (sum(per[:4]) if len(per) >= 4 and None not in per[:4] else None)}
             if c.get("homeAway") == "home":
                 home = side
             else:
@@ -149,6 +153,12 @@ def parse_scoreboard(payload: dict) -> list[dict]:
             "clock": stype.get("shortDetail") or status.get("displayClock") or "",
             "completed": completed,
             "kickoff": ev.get("date", ""),
+            # The game's billing ("East Group B", an NBA Cup night), which
+            # is how engine/nbacup tells a Cup game from a regular meeting.
+            "notes": " · ".join(str(n.get("headline") or "") for n in (comp.get("notes") or [])
+                                if isinstance(n, dict) and n.get("headline")),
+            "home_reg": home["reg"] if completed else None,
+            "away_reg": away["reg"] if completed else None,
         })
     return out
 

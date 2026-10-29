@@ -461,10 +461,12 @@ const HIDDEN_VIEWS = {
   // the tab shows an honest "nothing measured yet" until the box that
   // holds the logs fits one, which beats a page that cannot exist.
   nba: ["longshots", "weather"],
+  // The race page is college football's playoff and the NBA Cup (js/race.js).
+  nfl: ["race"], mlb: ["race"],
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
-  wnba: ["longshots", "futures", "weather"],
+  wnba: ["longshots", "futures", "weather", "race"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
   // We price fight winners and nothing else, so there is no pair to screen
@@ -475,9 +477,9 @@ const HIDDEN_VIEWS = {
   // No commission publishes an MMA injury report and ESPN carries no
   // /injuries endpoint for it — what exists is camp rumor, which is
   // exactly what this site does not publish.
-  ufc: ["parlays", "futures", "injuries", "weather"],
-  polymarket: ["parlays", "futures", "weather"],
-  fantasy: ["parlays", "futures", "weather"],
+  ufc: ["parlays", "futures", "injuries", "weather", "race"],
+  polymarket: ["parlays", "futures", "weather", "race"],
+  fantasy: ["parlays", "futures", "weather", "race"],
   // Players and Rosters OPENED 2026-08-24: the "no free player-level
   // feed" claim was stale — ESPN's keyless box scores (the same API
   // family the CFB scoreboard reads) now feed player_game_logs, so both
@@ -495,7 +497,7 @@ const HIDDEN_VIEWS = {
   // difference for it to branch on.
   // Hockey has no long-shot board (the anytime scorer rides the props and
   // Most Likely) and no futures pull yet; every rink is indoors.
-  nhl: ["longshots", "futures", "weather"],
+  nhl: ["longshots", "futures", "weather", "race"],
   cfb: [],
 };
 
@@ -610,6 +612,7 @@ function applySport() {
   // projection layer, so every prop-shaped page goes with it.
   const hidden = HIDDEN_VIEWS[state.sport] || [];
   markOffRows(hidden);
+  document.querySelectorAll(".sb-race").forEach((el) => { el.textContent = state.sport === "nba" ? "NBA Cup" : "Playoff race"; });
   if (hidden.includes(state.view)) switchView("recommended");
   const gt = document.getElementById("games-title");
   // innerHTML, not textContent: this is the page's hero and it carries a
@@ -23000,6 +23003,9 @@ function whyCalcParlay() {
       Correlated same-game legs can flip this — but the books price those separately for exactly that reason.</p>`;
 }
 
+// renderRace is in js/race.js, loaded the first time its page opens (loadRoom).
+function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.js", "css/race.css", a); }
+
 // renderMethodology, renderChangelog and renderVerify are in js/more.js, loaded the
 // first time their page opens (loadRoom; 2026-10-29, to pay for the Pick of the
 // Day's board line and the two race pages on the first visit).
@@ -23529,7 +23535,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "race", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -23980,6 +23986,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "account") acctWho().then(renderAccount);
   if (name === "bankroll") renderBankrollExtras();
   if (name === "weather") renderWeather();
+  if (name === "race") renderRace();
   if (name === "alerts") renderAlerts();
   if (name === "messages") renderMessages();
   if (name === "streak") renderStreak();

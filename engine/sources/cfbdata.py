@@ -631,6 +631,52 @@ def fetch_scoreboard(date: str, ttl: int = 300) -> dict:
                       user_agent=DEFAULT_AGENT)
 
 
+RANKINGS = BASE + "/rankings"
+
+
+def parse_rankings(payload: dict) -> dict:
+    """The poll the playoff race ranks by (engine/cfprace): the selection
+    committee's once it has released one (Nov 3 in 2026), the AP Top 25
+    before it. ``{"name", "kind": "cfp"|"ap", "date", "ranks": {abbr: n}}``;
+    ``{}`` when neither poll is in the payload. Keys are the scoreboard's
+    own (`_team_key`), so a rank joins the game it is printed beside."""
+    def kind(poll: dict) -> str:
+        t = str(poll.get("type") or "").lower()
+        nm = str(poll.get("name") or poll.get("shortName") or "").lower()
+        if t == "cfp" or "playoff" in nm:
+            return "cfp"
+        if t == "ap" or nm.startswith("ap "):
+            return "ap"
+        return ""
+    found: dict = {}
+    for poll in (payload or {}).get("rankings") or []:
+        if isinstance(poll, dict) and kind(poll) and kind(poll) not in found:
+            found[kind(poll)] = poll
+    for k in ("cfp", "ap"):
+        poll = found.get(k)
+        if not poll:
+            continue
+        ranks = {}
+        for row in poll.get("ranks") or []:
+            try:
+                cur = int(row.get("current"))
+            except (TypeError, ValueError):
+                continue
+            key = _team_key(row.get("team") or {})
+            if key and 1 <= cur <= 25:
+                ranks[key] = cur
+        if ranks:
+            return {"name": poll.get("name") or ("CFP Rankings" if k == "cfp" else "AP Top 25"),
+                    "kind": k, "date": str(poll.get("date") or "")[:10], "ranks": ranks}
+    return {}
+
+
+def fetch_rankings(ttl: int = 3 * 3600) -> dict:
+    """This week's polls, keyless, off the same API as the scoreboard."""
+    return fetch_json(RANKINGS, "espn_cfb_rankings.json", ttl=ttl,
+                      user_agent=DEFAULT_AGENT)
+
+
 ROSTER = BASE + "/teams/{team_id}/roster"
 
 

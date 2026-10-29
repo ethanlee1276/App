@@ -2249,6 +2249,7 @@ const PW_WHY = {
   props: ["The props board is for members", "Every player prop we price, with our chance beside the book’s."],
   longshots: ["Long shots are for members", "The big prices our model still likes, every night."],
   futures: ["Futures are for members", "Season-long prices, with our number against the book’s."],
+  race: ["The races are for members", "Every playoff contender’s and NBA Cup team’s chances, and the games that swing them."],
   alerts: ["Alerts are for members", "Line moves, injuries and your players on tonight’s board, on your phone."],
 };
 

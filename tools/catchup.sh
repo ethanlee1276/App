@@ -661,6 +661,17 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run II "A day without a Pick of the Day, the playoff race and the NBA Cup" 120 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function renderRace(...a)'
+curl -s https://qellysbook.com/js/race.js | grep -c 'function cfpHTML(d)'
+curl -s https://qellysbook.com/js/app.js | grep -c 'NO PICK TODAY'
+cd /srv/qellys && sudo -u qellys python3 potd_report.py --sitout
+cd /srv/qellys && ls -la web/data/cfp_race.json web/data/nba_cup.json data/built/cfp_race.json data/built/nba_cup.json
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/cfp_race.json')); print(d['poll'].get('name'), d['games_left'], 'games left'); [print(r['team'], r['record'], d['chances'][r['team']]['playoff']) for r in d['teams'][:12]]"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba_cup.json')); print(d['played'], 'played', d['games_left'], 'left'); [print(g, [(r['team'], r['w'], r['l'], r['pd']) for r in rows]) for g, rows in d['groups'].items()]"
+curl -s https://qellysbook.com/data/cfp_race.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('chances') or {}))"
+curl -s https://qellysbook.com/data/record_head.json | python3 -c "import json,sys; print(json.load(sys.stdin).get('potd_days'))"
+SH
 run IH "The open Duo keeps its sidebar, and three dots slide it away" 30 <<'SH'
 curl -s https://qellysbook.com/index.html | grep -c 'id="sb-grip"'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function initSidebarGrip()'

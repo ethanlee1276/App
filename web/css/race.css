@@ -1,0 +1,70 @@
+/* The races (js/race.js), loaded with it: college football's playoff race
+   and the NBA Cup. The numbers sit in fixed columns and the team takes the
+   rest, the standings table's idiom, so nothing clips its own figures. */
+.rc-wait { padding: 24px 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.rc-note { margin: 8px 0 0; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.rc-lede { margin: 0 0 6px; }
+.rc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; align-items: start; }
+.rc-card { padding: 12px 14px; border-radius: var(--radius); background: var(--panel); min-width: 0; margin-bottom: 12px; }
+.rc-grid > .rc-card { margin-bottom: 0; }
+.rc-flush { padding: 0; overflow: hidden; }
+.rc-row { display: grid; grid-auto-flow: column; grid-template-columns: minmax(0, 1fr); grid-auto-columns: 48px;
+  align-items: center; gap: 6px; padding: 8px 14px; border-bottom: var(--hairline) solid var(--border-soft); }
+.rc-row:last-child { border-bottom: none; }
+.rc-row.rc-cup { grid-auto-columns: 42px; }
+.rc-head { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.rc-head > span:not(:first-child) { text-align: right; }
+.rc-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rc-who > span { min-width: 0; overflow-wrap: anywhere; }
+.rc-who small { display: block; color: var(--text-mute); font-size: var(--fs-2xs); }
+.rc-who small.pos { color: var(--good); }
+.rc-p { text-align: right; font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rc-lead { color: var(--text); font-weight: 800; }
+.rc-pd { font-weight: 800; }
+.rc-p.pos, .rc-game .pos { color: var(--good); }
+.rc-p.neg, .rc-game .neg { color: var(--bad); }
+.rc-team > summary, .rc-conf > summary, .rc-left > summary { cursor: pointer; list-style: none; }
+.rc-team > summary::-webkit-details-marker, .rc-conf > summary::-webkit-details-marker,
+.rc-left > summary::-webkit-details-marker { display: none; }
+.rc-team[open] > summary { background: var(--panel-2); }
+.rc-games { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 12px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.rc-games .rc-note { flex: 1 1 100%; margin: 4px 0 0; }
+.rc-game { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 4px 10px; border-radius: 999px;
+  background: var(--panel-2); font-size: var(--fs-xs); color: var(--text-dim); }
+.rc-game small { color: var(--text-mute); }
+/* If it started today: the byes in one column, the first round in the next. */
+.rc-brk { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.rc-col { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.rc-col-h { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.rc-match { display: grid; gap: 2px; padding: 6px 0 8px; border-radius: var(--radius-sm); background: var(--panel); min-width: 0; }
+.rc-side { display: grid; grid-template-columns: 22px 20px minmax(0, 1fr); column-gap: 8px; align-items: center; padding: 4px 12px; }
+.rc-side .rc-meta { grid-column: 3; color: var(--text-mute); font-size: var(--fs-2xs); }
+.rc-seed { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.rc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--fs-sm); }
+.rc-empty { color: var(--text-mute); }
+.rc-host { padding: 0 12px 0 62px; color: var(--text-mute); font-size: var(--fs-2xs); }
+/* A swing game: the matchup, then each team's chance either way it goes. */
+.rc-sw-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text); }
+.rc-row.rc-sw { grid-auto-columns: 86px; padding: 6px 0; }
+.rc-sw.rc-head > span { white-space: normal; text-transform: none; letter-spacing: 0; }
+.rc-sw .rc-p.pos { color: var(--good); }
+.rc-sw .rc-p.neg { color: var(--text-dim); }
+.rc-conf { margin-bottom: 8px; }
+.rc-conf-h { padding: 10px 14px 8px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text); background: var(--panel-2); }
+.rc-row.rc-crow { grid-auto-columns: 54px; }
+.rc-lead-row { background: color-mix(in oklab, var(--good) 8%, transparent); }
+.rc-left { padding: 8px 14px 12px; }
+.rc-left > summary { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
+.rc-left .rc-game { margin: 6px 6px 0 0; }
+.rc-tb { margin: 8px 0 0; padding-left: 20px; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+/* A phone: the numbers narrow; the team's name wraps everywhere rather
+   than ellipsing to "#1 …", which said nothing. */
+@media (max-width: 560px) {
+  .rc-row { grid-auto-columns: 40px; gap: 4px; padding: 8px 10px; }
+  .rc-row.rc-cup { grid-auto-columns: 36px; }
+  .rc-row.rc-crow { grid-auto-columns: 46px; }
+  .rc-row.rc-sw { grid-auto-columns: 74px; padding: 6px 0; }
+  .rc-p { font-size: var(--fs-xs); }
+}

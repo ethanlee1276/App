@@ -75,7 +75,7 @@ const LAZY = [
   "/js/rinkcast.js", "/css/rinkcast.css", "/js/slip.js", "/css/slip.css",
   "/js/chat.js", "/css/chat.css", "/js/ask.js", "/css/ask.css", "/js/karma.js", "/css/karma.css", "/js/activity.js",
   "/js/report.js", "/css/report.css", "/js/carrychart.js", "/css/carrychart.css",
-  "/js/fantasyweek.js", "/js/lab.js", "/css/lab.css",
+  "/js/fantasyweek.js", "/js/lab.js", "/css/lab.css", "/js/race.js", "/css/race.css",
   "/js/chart-hoops.js", "/js/chart-kicks.js", "/js/chart-matchup.js", "/js/chart-mlb.js",
   "/js/chart-nhl.js", "/js/chart-role.js", "/js/chart-ufc.js",
 ];

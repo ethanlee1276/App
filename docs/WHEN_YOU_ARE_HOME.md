@@ -8734,6 +8734,82 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IH 2>&1 | tee /tmp/ih.txt
 ```
 
+**II. A day without a Pick of the Day, the College Football Playoff race,
+and the NBA Cup** (step 295; you, to the three I suggested: "do all 3 and
+give me the code to run after").
+
+- **A NO BET day names the board's best bet.** Measured first, from the
+  public record: the Pick of the Day is 19–16 (+2.7%) since September 15,
+  and across the leagues it named a pick on about 10 of the last 14 days.
+  Your NBA card said NO BET while the NBA board staked 66 bets. Now, on a
+  day the Pick of the Day sits out but the board has staked bets, the card
+  says NO PICK TODAY and names the board's own strongest staked bet still
+  to play: today's games first, then the biggest stake, then the edge.
+  It's never the lean the day's bar turned down. Members only, paid like
+  the card. A day with nothing staked still says NO BET.
+- **How often it names one, on the record.** The card's record line now
+  ends "a pick on 5 of the last 9 slates", and the Record page's Pick of
+  the Day section says it for every reader. It counts through yesterday,
+  never today. `potd_report.py --sitout` prints the table on the box.
+- **The playoff race** (college football → Playoff race in the menu):
+  - the bracket if it started today: the AP Top 25 until the committee's
+    first ranking on November 3, then the committee's, with today's
+    conference leaders as the champions;
+  - every contender's chance to make the twelve, earn a bye, win its
+    conference, win it all and win out, and each game it has left at our
+    price;
+  - this week's games that swing the field, each team's chance either way;
+  - the conference tables.
+  It uses the 2026 rules: the four Power Four champions and the
+  highest-ranked Group of Six team get in automatically, and Notre Dame
+  does in the top 12. It's built on every college build, off the same
+  ratings the board prices with. The committee's own ranking can't be
+  modelled. Our stand-in is written on the page: a team's rating, plus 8
+  points for every win above an elite team's record against the same
+  schedule, plus 4 for a title.
+- **The NBA Cup** (NBA → NBA Cup in the menu): the six groups with point
+  differential and points scored, the wild card race, how a tie is broken
+  (head-to-head, then differential with overtime counting zero, then
+  points), our chance for every team to advance, reach the final and win
+  the Cup, and each group game left at our price and margin. Group play
+  starts tomorrow, October 30. It's built on every NBA build.
+- **The first visit got smaller.** The Methodology and Verify pages now
+  load the first time they open, which paid for all of this; the budget
+  went from 388 to 386 KB.
+
+Nothing to set: the updater picks it up within five minutes. Read-only, any
+time; each prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/app.js | grep -c 'function renderRace(...a)'
+curl -s https://qellysbook.com/js/race.js | grep -c 'function cfpHTML(d)'
+curl -s https://qellysbook.com/js/app.js | grep -c 'NO PICK TODAY'
+```
+
+After the next college and NBA builds (the cycle runs them; within the
+hour), all read-only. These show:
+
+- how often the pick named one, per league;
+- the two race files, public and members' copies;
+- the top of the race and the Cup's tables as members see them;
+- that the public copy carries none of our chances (prints `0`);
+- the record's new count.
+
+```
+cd /srv/qellys && sudo -u qellys python3 potd_report.py --sitout
+cd /srv/qellys && ls -la web/data/cfp_race.json web/data/nba_cup.json data/built/cfp_race.json data/built/nba_cup.json
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/cfp_race.json')); print(d['poll'].get('name'), d['games_left'], 'games left'); [print(r['team'], r['record'], d['chances'][r['team']]['playoff']) for r in d['teams'][:12]]"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba_cup.json')); print(d['played'], 'played', d['games_left'], 'left'); [print(g, [(r['team'], r['w'], r['l'], r['pd']) for r in rows]) for g, rows in d['groups'].items()]"
+curl -s https://qellysbook.com/data/cfp_race.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('chances') or {}))"
+curl -s https://qellysbook.com/data/record_head.json | python3 -c "import json,sys; print(json.load(sys.stdin).get('potd_days'))"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh II 2>&1 | tee /tmp/ii.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

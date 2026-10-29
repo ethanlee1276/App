@@ -1748,6 +1748,19 @@ def main() -> None:
     _jn = _led.journal_potd(out.get("pick_of_the_day") or {})
     if _jn:
         print(_jn)
+    # THE NBA CUP (engine/nbacup; Ethan, 2026-10-29: "do all 3"): its groups,
+    # the differential tiebreaker and our chances, off the futures board's
+    # ratings. The NBA's only, and never at the board's expense.
+    if args.league == "nba":
+        try:
+            from engine import nbacup as _cup
+            _cconn = connect()
+            try:
+                print(f"  {_cup.publish(_cconn, datetime.date.fromisoformat(args.date), out_path=str(Path(args.out).with_name('nba_cup.json')))}")
+            finally:
+                _cconn.close()
+        except Exception as _cx:                              # noqa: BLE001
+            print(f"  ⚠️  NBA Cup skipped: {type(_cx).__name__}: {_cx}")
     if picks_result:
         c = picks_result["counts"]
         print(f"NBA {args.date}: {c['props_analyzed']} props → "
