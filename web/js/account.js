@@ -2459,6 +2459,7 @@ async function pkSignIn(card) {
     if (typeof pushRelink === "function") pushRelink();
     welcomeDone();
     if (typeof a2hsArm === "function") a2hsArm();
+    if (typeof pushAskArm === "function") pushAskArm();
     if (typeof acceptPendingInvite === "function") acceptPendingInvite();
     try { await acctSync(); } catch (e) {}
     if (typeof renderGreeting === "function") renderGreeting();
@@ -3064,6 +3065,7 @@ async function phoneGo(card, mode) {
   _acctUser = { signed_in: true, email: out.email, phone: out.phone };
   if (typeof pushRelink === "function") pushRelink();
   welcomeDone();
+  if (typeof pushAskArm === "function") pushAskArm();
   if (mode === "signup" && typeof dcMarkWelcome === "function") dcMarkWelcome();
   if (typeof acceptPendingInvite === "function") acceptPendingInvite();
   try { await acctSync(); } catch (e) {}
@@ -4624,3 +4626,69 @@ function msgShareCard(it) {
     ${rows}
   </span>`;
 }
+
+/* THE ALERTS SHEET (app.js pushAskTick decides when; docs/RETENTION.md).
+   What turns on is what somebody who says yes wants first: their teams'
+   games (ten minutes before, the big moments, the final), their bets in My
+   Bets and their watches down to the last leg, last night's record, and
+   the picks going up — for the leagues of the teams they follow, or the
+   one they are reading. Each is a switch in Alerts afterwards. "Not now" is
+   counted: three asks at most, two weeks apart. Never a "bet now": the
+   alerts carry scores and records, never a pick. */
+const PUSH_ASK_TOPICS = ["posted", "settled", "kickoff", "clutch", "finals", "bets", "watches"];
+function pushAskLeagues() {
+  const lg = [...new Set((settings().teams || []).map((t) => String(t).split(":")[0]).filter(Boolean))];
+  return lg.length ? lg : [state.sport].filter(Boolean);
+}
+window.pushAskSheet = async function (ctx) {
+  if (document.getElementById("pushask")) return;
+  if (pushKind() === "native") {
+    try {
+      const p = await window.Capacitor.Plugins.PushNotifications.checkPermissions();
+      if (p.receive === "denied") return;
+    } catch (e) { /* asked below, by the plugin itself */ }
+  }
+  const followed = (settings().teams || []).length;
+  const lead = ctx && ctx.team
+    ? `A tap ten minutes before every ${escapeHtml(ctx.team)} game, its big moments and the final score.`
+    : ctx && ctx.bet
+      ? "A tap when your bet is down to its last leg, and when it settles."
+      : followed
+        ? "Your teams’ games ten minutes before they start, their big moments and final scores, your bets down to the last leg, and the picks as they go up."
+        : "The picks as they go up, last night’s record, your bets down to the last leg — and the games of any team you follow.";
+  const host = document.createElement("div");
+  host.id = "pushask";
+  host.className = "a2hs";
+  host.innerHTML = `<div class="a2hs-card" role="dialog" aria-modal="false" aria-labelledby="pushask-t">
+    <button class="a2hs-x" data-pa="no" aria-label="Not now">${icon("cross", 14)}</button>
+    <div class="a2hs-row"><img class="a2hs-icon" src="/icon-192.png" alt="" width="44" height="44" />
+      <div><b id="pushask-t">Turn on alerts?</b><p>${lead} Never a “bet now” — and each kind is a switch in Alerts.</p></div></div>
+    <p class="a2hs-how pushask-note" role="status" hidden></p>
+    <div class="a2hs-go"><button class="btn primary" data-pa="yes">Turn on alerts</button>
+      <button class="btn ghost" data-pa="no">Not now</button></div></div>`;
+  document.body.appendChild(host);
+  requestAnimationFrame(() => host.classList.add("in"));
+  const counted = () => {
+    let a = {};
+    try { a = JSON.parse(localStorage.getItem(PUSH_ASK) || "{}") || {}; } catch (e) {}
+    try { localStorage.setItem(PUSH_ASK, JSON.stringify({ n: (a.n || 0) + 1, last: Date.now() })); } catch (e) {}
+  };
+  host.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-pa]");
+    if (!b) return;
+    if (b.dataset.pa === "no") { counted(); host.remove(); return; }
+    b.disabled = true;
+    try {
+      pushRemember(await pushOn(PUSH_ASK_TOPICS, pushAskLeagues()));
+      buzz("tap");
+      host.remove();
+      tfToast("Alerts are on. Change them any time in Alerts.");
+    } catch (err) {
+      counted();
+      const note = host.querySelector(".pushask-note");
+      note.hidden = false;
+      note.textContent = err && err.message ? err.message : "That did not work — try again from Alerts.";
+      b.disabled = false;
+    }
+  });
+};

@@ -379,6 +379,7 @@ function favToggle(abbr, sport) {
   const i = teams.indexOf(key);
   if (i >= 0) teams.splice(i, 1); else teams.push(key);
   setSetting("teams", teams);
+  if (i < 0) pushAskTick({ team: teamName(abbr) });
 }
 function updateUnitNote() {
   const el = document.getElementById("unit-note");
@@ -16948,6 +16949,7 @@ window.mbAdd = function () {
   });
   mbSave(bets);
   renderMyBets();
+  pushAskTick({ bet: true });
   /* THE MOMENT TO ASK. Ethan, 2026-08-25: "Install prompt at the right
      moment (after a user journals their first bet, not on first visit)."
      Somebody who has logged a bet has a reason to come back tomorrow and
@@ -17741,8 +17743,9 @@ async function pushSend(path, body) {
   if (!r.ok) throw new Error(out.error || "The alert could not be saved.");
   return out;
 }
-async function pushOn(topics) {
+async function pushOn(topics, leagues) {
   const kind = pushKind();
+  const lg = leagues && leagues.length ? { leagues } : {};
   if (kind === "native") {
     const PN = window.Capacitor.Plugins.PushNotifications;
     let perm = await PN.checkPermissions();
@@ -17757,8 +17760,8 @@ async function pushOn(topics) {
       const u = ((a.notification || {}).data || {}).url;
       if (u && u.charAt(0) === "/") location.href = u;
     });
-    await pushSend("subscribe", { endpoint: token, kind: "apns", topics });
-    return { endpoint: token, topics };
+    await pushSend("subscribe", { endpoint: token, kind: "apns", topics, ...lg });
+    return { endpoint: token, topics, ...lg };
   }
   if (Notification.permission === "denied") throw new Error("Alerts are blocked for this site in your browser’s settings.");
   if ((await Notification.requestPermission()) !== "granted") throw new Error("Alerts stay off until you allow them.");
@@ -17768,9 +17771,44 @@ async function pushOn(topics) {
   const sub = (await reg.pushManager.getSubscription())
     || await reg.pushManager.subscribe({ userVisibleOnly: true,
          applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)) });
-  await pushSend("subscribe", { endpoint: sub.endpoint, topics });
-  return { endpoint: sub.endpoint, topics };
+  await pushSend("subscribe", { endpoint: sub.endpoint, topics, ...lg });
+  return { endpoint: sub.endpoint, topics, ...lg };
 }
+/* What a phone that just turned alerts on keeps: the shared kinds apart
+   from its member's own (pushRelink sends the second only signed in). */
+function pushRemember(got) {
+  const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup";
+  try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
+    topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
+}
+/* ALERTS, ASKED FOR WHEN THEY MEAN SOMETHING (2026-10-29; Ethan: "when you
+   first log into the app ... it'll prompt you to turn on notifications").
+   Armed by a sign-in the way the home-screen sheet is (a2hsArm) and shown
+   once the reader lands; asked again only beside something an alert would
+   serve (following a team, putting a bet in My Bets), three times at most,
+   two weeks apart, and never once alerts are on or the phone has said no.
+   Apple's own advice: ask in context, not before there is any. A phone or
+   the iPhone app only: a desktop browser's prompt is the one most often
+   refused for good. The sheet is js/account.js's (pushAskSheet);
+   docs/RETENTION.md has the reasons and the sources. */
+const PUSH_ASK = "qb.pushask";
+function pushAskDue() {
+  const k = pushKind();
+  if (!(k === "native" || (k === "web" && (a2hsMobile() || a2hsInstalled())))) return false;
+  if ((pushSaved() || {}).endpoint || document.getElementById("a2hs") || document.getElementById("pushask")) return false;
+  if (k === "web" && Notification.permission === "denied") return false;
+  let a;
+  try { a = JSON.parse(localStorage.getItem(PUSH_ASK) || "{}") || {}; } catch (e) { return false; }
+  return (a.n || 0) < 3 && Date.now() - (a.last || 0) > 14 * 864e5;
+}
+window.pushAskArm = () => { try { localStorage.setItem(PUSH_ASK + ".due", "1"); } catch (e) {} };
+window.pushAskTick = (ctx) => {
+  let due = !!ctx;
+  try { due = due || localStorage.getItem(PUSH_ASK + ".due") === "1"; } catch (e) { return; }
+  if (!due || !pushAskDue()) return;
+  try { localStorage.removeItem(PUSH_ASK + ".due"); } catch (e) {}
+  loadRoom("js/account.js", "css/account.css").then((ok) => { if (ok && window.pushAskSheet) pushAskSheet(ctx || null); });
+};
 /* YOUR OWN ALERTS (engine/pushmine): a phone signed in when it subscribes
    may ask for its member's watches and tickets. Signing in or out says so
    again, so a shared phone stops showing the last person's bets. */
@@ -17844,10 +17882,7 @@ function renderPushZone(note) {
           try { localStorage.removeItem(PUSH_KEY); } catch (e) {}
           renderPushZone("Alerts are off on this phone.");
         } else {
-          const got = await pushOn(picked.length ? picked : ["posted", "settled"]);
-          const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup";
-          try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
-            topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
+          pushRemember(await pushOn(picked.length ? picked : ["posted", "settled"], saved && saved.leagues));
           buzz("tap");
           renderPushZone(on ? "Saved." : "Alerts are on. The next one comes when a board goes up.");
         }
@@ -18906,6 +18941,7 @@ window.acctResetSave = async function (btn) {
     _acctNote = "Password changed — you are signed in.";
     say(_acctNote);
     a2hsArm();
+    pushAskArm();
     await acctSync();
     if (typeof renderGreeting === "function") renderGreeting();
     await acctLandAfterAuth(say);
@@ -18967,6 +19003,7 @@ window.acctAuth = async function (btn, mode) {
     // and they never sign up again. `a2hsTick` decides whether it is
     // wanted — phone, not installed, not previously dismissed.
     a2hsArm();
+    pushAskArm();
     // A friend's invite that hit the sign-in wall fires now — the link
     // is why this person just signed in, and forgetting it would be a
     // funnel with a hole in the bottom.
@@ -19081,6 +19118,7 @@ async function acctLandAfterAuth(say = () => {}) {
   }
   window.scrollTo({ top: 0, behavior: "auto" });
   a2hsTick();
+  pushAskTick();
 }
 
 /* ======================= THE PRICING WALL =======================
@@ -19389,6 +19427,7 @@ window.a2hsDismiss = function () {
   try { localStorage.setItem(A2HS_KEY, "off"); } catch (e) {}
   const el = document.getElementById("a2hs");
   if (el) el.remove();
+  pushAskTick();                         // the alerts sheet waited behind it
 };
 
 window.a2hsInstall = async function (btn) {
@@ -31886,11 +31925,13 @@ function buzzOnSettle(rows) {
       renderDiscord();
       _switchViewNow("discord", false, 0);
       a2hsTick();
+      pushAskTick();
       return;
     }
     // Spent here too, because the entitled sign-in RELOADS: the sheet is
     // armed on one page load and shown on the next.
     a2hsTick();
+    pushAskTick();
     const door = acctWallUp();
     if (!walled && !door) return;
     if (walled) {

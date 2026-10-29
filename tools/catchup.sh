@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HT "Alerts, asked for after you sign in" 30 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'window.pushAskSheet = async function'
+SH
 run HS "A book paying more than Pinnacle's fair price, listed" 30 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'pays more than the sharp book’s fair'
 SH

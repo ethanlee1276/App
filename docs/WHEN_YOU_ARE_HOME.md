@@ -7962,6 +7962,37 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HS 2>&1 | tee /tmp/hs.txt
 ```
 
+**HT. Alerts, asked for after you sign in** (step 280; your words: "when
+you first log into the app ... it'll prompt you to turn on
+notifications"). After a sign-in on a phone or in the iPhone app, once
+you land, a card asks "Turn on alerts?": your teams' games ten minutes
+before they start, their big moments and final scores, your bets down to
+the last leg, and the picks as they go up, for the leagues of the teams
+you follow. One tap turns them on (then the phone's own permission
+prompt); each kind stays a switch in Alerts. It never says "bet now".
+
+It follows what works (docs/RETENTION.md): ask with a reason on screen,
+not on a cold first open (Apple's own advice), so it asks again only when
+you do something an alert serves (follow a team: "a tap ten minutes
+before every Packers game"; put a bet in My Bets). Three asks at most, two
+weeks apart; never once alerts are on or the phone has refused them; not
+on a computer's browser. On an iPhone in Safari, the "Add to Home Screen"
+card comes first (Apple only allows a site's alerts from the Home
+Screen), and the alerts card follows inside the Home Screen app.
+
+Nothing to set. Read-only, any time. It prints `1` once this version is
+live:
+
+```
+curl -s https://qellysbook.com/js/account.js | grep -c 'window.pushAskSheet = async function'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HT 2>&1 | tee /tmp/ht.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 
