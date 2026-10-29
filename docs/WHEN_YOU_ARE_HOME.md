@@ -8021,6 +8021,52 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HU 2>&1 | tee /tmp/hu.txt
 ```
 
+**HV. Fewer, better alerts, and counting what they do** (step 282; the
+research is in docs/RETENTION.md — read it, it is short). How often alerts
+come is what makes people turn them off (in one survey 37% said they would
+at 2–5 a week). So:
+
+- a phone gets at most one "picks are up" alert every three hours, and
+  when several boards are up it is one alert naming them all ("Picks are
+  up: NBA, NHL and NFL — NBA 6 · NHL 4 · NFL 8 on the board"), not one
+  alert a league. Everything else (your teams, your bets, finals, last
+  night) is untouched;
+- the alerts ask (HT) turns "picks are up" on only for the leagues of the
+  teams you follow;
+- each alert that reaches a phone, and each visit that came from tapping
+  one, is counted, as a daily total by kind only (no person, no phone),
+  so you can see which alerts people open and drop the ones they don't.
+  The weekly report shows it, with who came back after day 1, 7 and now
+  30.
+
+Nothing to set for the first two. Read-only, any time; it prints `1` once
+this version is live:
+
+```
+curl -s https://qellysbook.com/sw.js | grep -c 'u.searchParams.set("from", "alert");'
+```
+
+The counts only run while the usage counts are on (step P31-a, which you
+approved). If you never flipped it, these two lines do (the first must
+print `1` before you run the second):
+
+```
+curl -s https://qellysbook.com/privacy.html | grep -c "as daily totals only"
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_ANALYTICS 1 && sudo systemctl restart qellys
+```
+
+A week later, the report (read-only):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.analytics report 7
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HV 2>&1 | tee /tmp/hv.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

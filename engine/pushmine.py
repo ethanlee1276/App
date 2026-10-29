@@ -681,6 +681,7 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
                 codes = [knock(endpoint, k, topic=want[-1]["id"].replace(":", "-")[:32])]
             if all(c in (200, 201) for c in codes):
                 stats["sent"] += 1
+                PA.counted(want)
             elif any(c in (404, 410) for c in codes) or (kind == "apns" and 400 in codes):
                 stats["gone"] += 1
                 conn.execute("DELETE FROM push_subs WHERE endpoint = ?", (endpoint,))

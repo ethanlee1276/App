@@ -58,6 +58,12 @@ FRESH_S = 12 * 3600
 MAX_SUBS = 50_000
 #: A subscription the push service has refused this many times running goes.
 MAX_FAILS = 5
+#: FEWER, BETTER (2026-10-29, docs/RETENTION.md: how often alerts come is
+#: what turns them off). A phone gets at most one picks-are-up alert in this
+#: long; a board that comes due sooner is said with the next one, and when
+#: several boards are up the alert names them all in one line
+#: (`merge_posted`) instead of one alert a league.
+POSTED_GAP_S = 3 * 3600
 
 
 # --- the subscriptions (accounts DB) ------------------------------------------
@@ -67,6 +73,14 @@ def ensure_tables(conn) -> None:
         user_id INTEGER, topics TEXT NOT NULL DEFAULT 'posted,settled',
         leagues TEXT NOT NULL DEFAULT '', created TEXT NOT NULL,
         last_ok TEXT, fails INTEGER NOT NULL DEFAULT 0)""")
+    # When this phone was last sent a picks-are-up alert (POSTED_GAP_S).
+    # Added rather than declared: the table shipped first.
+    if "posted_at" not in {r[1] for r in conn.execute("PRAGMA table_info(push_subs)")}:
+        from engine.db import column_exists_or_raise
+        try:
+            conn.execute("ALTER TABLE push_subs ADD COLUMN posted_at REAL")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     conn.commit()
 
 
@@ -213,7 +227,7 @@ def due(state: dict, web: Path = WEB, today: _dt.date | None = None) -> list[dic
         if key in sent:
             continue
         when = "This week’s" if sport == "nfl" else "Saturday’s" if sport == "cfb" else "Tonight’s"
-        out.append({"id": key, "kind": "posted", "league": sport,
+        out.append({"id": key, "kind": "posted", "league": sport, "label": label, "n": n,
                     "title": f"{when} {label} picks are up",
                     "body": f"{n} pick{'s' if n != 1 else ''} on the board — see them before the lines move.",
                     "url": f"/?sport={sport}#recommended"})
@@ -228,6 +242,22 @@ def due(state: dict, web: Path = WEB, today: _dt.date | None = None) -> list[dic
                         "body": "Every pick graded at the price we took it. The record is free to read.",
                         "url": "/#record"})
     return out
+
+
+def merge_posted(posted: list) -> dict:
+    """Several boards' picks-are-up alerts as one line, newest board first:
+    "Picks are up: NBA, NHL and NFL" / "NBA 6 · NHL 4 · NFL 8 on the board".
+    One alert is itself."""
+    posted = list(posted or [])
+    if len(posted) <= 1:
+        return posted[0] if posted else {}
+    labels = [str(m.get("label") or m.get("league") or "").upper() or "?" for m in posted]
+    named = ", ".join(labels[:-1]) + f" and {labels[-1]}"
+    counts = " · ".join(f"{lb} {m['n']}" if m.get("n") else lb for lb, m in zip(labels, posted))
+    return {"id": "posted:" + "+".join(str(m.get("league") or "") for m in posted), "kind": "posted", "league": "",
+            "title": f"Picks are up: {named}",
+            "body": f"{counts} on the board — see them before the lines move.",
+            "url": posted[0].get("url") or "/#recommended"}
 
 
 def quiet_now(now: _dt.datetime | None = None) -> bool:
@@ -249,8 +279,15 @@ def latest_for(sub: dict | None, path: Path | None = None, now: float | None = N
                   key=lambda m: float(m.get("at") or 0))[::-1]
     now = now or time.time()
     fresh = [m for m in msgs if now - float(m.get("at") or 0) < FRESH_S]
+    def mine_(m):
+        return not sub or wants(",".join(sub.get("topics") or []), ",".join(sub.get("leagues") or []), m)
     for m in fresh:
-        if not sub or wants(",".join(sub.get("topics") or []), ",".join(sub.get("leagues") or []), m):
+        if mine_(m):
+            if m.get("kind") == "posted":
+                # Every board up today that this phone wants, in one line.
+                today = [x for x in fresh if x.get("kind") == "posted" and mine_(x)
+                         and now - float(x.get("at") or 0) < POSTED_GAP_S + SCAN_EVERY_S]
+                m = merge_posted(today) if len(today) > 1 else m
             return {k: m[k] for k in ("title", "body", "url", "kind") if k in m} | {"tag": m.get("id", "")}
     return {"title": "Qellys Book", "body": "The board has moved — open it for the latest.", "url": "/", "tag": "qb"}
 
@@ -264,32 +301,55 @@ def _record(msg: dict, path: Path | None = None) -> None:
 
 
 # --- sending ---------------------------------------------------------------------
+def counted(msgs: list) -> None:
+    """One alert that reached a phone, by kind, as a daily total
+    (engine/analytics: nothing while it is switched off, never a person)."""
+    try:
+        from engine import analytics
+        for kind in {str(m.get("kind") or "") for m in msgs or []}:
+            analytics.record("push_sent", page=kind)
+    except Exception:                                         # noqa: BLE001 — a count is never worth an alert
+        pass
+
+
 def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=print,
-         vapid: dict | None = None, apns_cfg=None) -> dict:
+         vapid: dict | None = None, apns_cfg=None, now_s: float | None = None) -> dict:
     """Knock every subscription that wants each message. Returns counts."""
     ensure_tables(conn)
-    rows = conn.execute("SELECT endpoint, kind, topics, leagues, fails FROM push_subs").fetchall()
+    rows = conn.execute("SELECT endpoint, kind, topics, leagues, fails, posted_at FROM push_subs").fetchall()
     stats = {"sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
     if not rows or not msgs:
         return stats
     k = vapid or webpush.keys()
     cfg = webpush.apns_config() if apns_cfg is None else apns_cfg
     now = _dt.datetime.utcnow().isoformat(timespec="seconds")
-    for endpoint, kind, topics, leagues, fails in rows:
+    now_ts = time.time() if now_s is None else float(now_s)
+    capped = 0
+    for endpoint, kind, topics, leagues, fails, posted_at in rows:
         mine = [m for m in msgs if wants(topics, leagues, m)]
+        # At most one picks-are-up alert in POSTED_GAP_S: a board due sooner
+        # is said with the next one.
+        if posted_at and now_ts - float(posted_at) < POSTED_GAP_S and any(m.get("kind") == "posted" for m in mine):
+            mine = [m for m in mine if m.get("kind") != "posted"]
+            capped += 1
         if not mine:
             continue
+        posted = [m for m in mine if m.get("kind") == "posted"]
         if kind == "apns":
             if not cfg:
                 stats["skipped_apns"] += 1
                 continue
-            codes = [apns(endpoint, m, cfg) for m in mine]
+            codes = [apns(endpoint, m, cfg) for m in
+                     [m for m in mine if m.get("kind") != "posted"] + ([merge_posted(posted)] if posted else [])]
         else:
             # One knock is enough: the worker shows the newest message it wants.
             codes = [knock(endpoint, k, topic=mine[-1]["id"].replace(":", "-"))]
         if all(c in (200, 201) for c in codes):
             stats["sent"] += 1
             conn.execute("UPDATE push_subs SET last_ok = ?, fails = 0 WHERE endpoint = ?", (now, endpoint))
+            if posted:
+                conn.execute("UPDATE push_subs SET posted_at = ? WHERE endpoint = ?", (now_ts, endpoint))
+            counted(mine)
         elif any(c in (404, 410) for c in codes) or (kind == "apns" and 400 in codes):
             stats["gone"] += 1
             conn.execute("DELETE FROM push_subs WHERE endpoint = ?", (endpoint,))
@@ -300,6 +360,8 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
             else:
                 conn.execute("UPDATE push_subs SET fails = fails + 1 WHERE endpoint = ?", (endpoint,))
     conn.commit()
+    if capped:
+        stats["capped"] = capped
     return stats
 
 

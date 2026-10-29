@@ -159,9 +159,10 @@
     <ul>
       <li><b>Usage counts</b> (<code>analytics.counts</code>): per day, an
         event name, the name of the page, a broad source (direct, search,
-        social, another site, or a campaign link) and whether the visitor
-        was signed in or subscribed, with a count. No identifier of any
-        kind.</li>
+        social, another site, a campaign link, or one of our alerts) and
+        whether the visitor was signed in or subscribed, with a count; and
+        how many alerts reached phones, by kind (picks up, a final score
+        and so on), as a count. No identifier of any kind.</li>
     </ul>
 
     <h3>2.6 Crash reports</h3>
@@ -176,7 +177,9 @@
     <p>Only if you turn them on (Alerts → Alerts on this phone). We then keep
       the address your browser’s push service gives us (or, in our iPhone app,
       the device token Apple gives us), which alerts you chose and for
-      which leagues, and, if you were signed in, your account. An alert says that a league’s picks are
+      which leagues, when it was last sent a picks-are-up alert (so it gets
+      one every three hours at most, naming every board that is up), and,
+      if you were signed in, your account. An alert says that a league’s picks are
       up or how last night graded — never a pick. If you were signed in and
       chose them, your own alerts too: that one of your watches caught
       something (your words and a count, never the pick), a parlay you

@@ -48,9 +48,15 @@ ENV = "QB_ANALYTICS"
 #: the reader came from before the plans.
 CLIENT_EVENTS = ("visit", "view", "ask", "checkout_click")
 #: What only the server knows: a Stripe status change (see transition()).
-SERVER_EVENTS = ("trial_started", "subscribed", "trial_converted", "canceled", "renewed")
+SERVER_EVENTS = ("trial_started", "subscribed", "trial_converted", "canceled", "renewed",
+                 # An alert that reached a phone, by its kind (the page column
+                 # carries the kind): engine/pushalerts and engine/pushmine.
+                 "push_sent")
 EVENTS = CLIENT_EVENTS + SERVER_EVENTS
-SOURCES = ("direct", "search", "social", "referral", "campaign")
+SOURCES = ("direct", "search", "social", "referral", "campaign",
+           # A visit opened by tapping one of our alerts (sw.js and the iOS
+           # app add ?from=alert to the address the alert opens).
+           "alert")
 WHO = ("visitor", "member", "subscriber")
 PAGE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 #: A signed-in visit refreshes last_seen at most this often.
@@ -179,7 +185,7 @@ def accounts_summary(accounts_path=None, days: int = 7, now: float | None = None
             subs = []
         if subs:
             out.append("  subscriptions now: " + ", ".join(f"{s} {n}" for s, n in subs))
-        for after in (1, 7):
+        for after in (1, 7, 30):
             old, back = conn.execute(
                 "SELECT COUNT(*), SUM(CASE WHEN last_seen >= created_at + ? THEN 1 ELSE 0 END) "
                 "FROM users WHERE created_at <= ?", (after * DAY_S, t - (after + 1) * DAY_S)).fetchone()
@@ -198,7 +204,10 @@ def report(days: int = 7, path=None, accounts_path=None) -> str:
     pages: dict = {}
     src: dict = {}
     conv: dict = {}
+    alerts: dict = {}
     for day, event, page, source, _who, n in rows:
+        if event == "push_sent":
+            alerts[page or "?"] = alerts.get(page or "?", 0) + n
         d = by_day.setdefault(day, {})
         key = "paywall" if event == "view" and page == "paywall" else event
         d[key] = d.get(key, 0) + n
@@ -223,6 +232,11 @@ def report(days: int = 7, path=None, accounts_path=None) -> str:
         out += ["", "where visits came from:  visits  checkout clicks"]
         out += [f"  {s:<22}{v['visit']:>7}  {v['checkout_click']:>7}  ({_pct(v['checkout_click'], v['visit'])})"
                 for s, v in sorted(src.items(), key=lambda kv: -kv[1]["visit"])]
+    if alerts:
+        sent = sum(alerts.values())
+        opened = (src.get("alert") or {}).get("visit", 0)
+        out += ["", f"alerts sent: {sent}; visits from tapping one: {opened} ({_pct(opened, sent)})"]
+        out += [f"  {k:<16}{n:>7}" for k, n in sorted(alerts.items(), key=lambda kv: -kv[1])]
     if conv:
         out += ["", "the page a checkout click came from:"]
         out += [f"  {p:<16}{n:>7}" for p, n in sorted(conv.items(), key=lambda kv: -kv[1])[:8]]

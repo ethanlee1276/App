@@ -265,6 +265,9 @@ self.addEventListener("notificationclick", (e) => {
   let url = self.location.origin + "/";
   try {
     const u = new URL((e.notification.data || {}).url || "/", self.location.origin);
+    // Marked, so a visit an alert opened is counted as one (engine/analytics,
+    // daily totals only and only while analytics is on).
+    u.searchParams.set("from", "alert");
     if (u.origin === self.location.origin) url = u.href;
   } catch (err) { /* home */ }
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {

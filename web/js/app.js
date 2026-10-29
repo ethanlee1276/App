@@ -17758,7 +17758,11 @@ async function pushOn(topics, leagues) {
     });
     PN.addListener("pushNotificationActionPerformed", (a) => {
       const u = ((a.notification || {}).data || {}).url;
-      if (u && u.charAt(0) === "/") location.href = u;
+      if (u && u.charAt(0) === "/") {
+        const x = new URL(u, location.origin);
+        x.searchParams.set("from", "alert");               // counted as a visit from an alert (anSource)
+        location.href = x.pathname + x.search + x.hash;
+      }
     });
     await pushSend("subscribe", { endpoint: token, kind: "apns", topics, ...lg });
     return { endpoint: token, topics, ...lg };
@@ -18186,9 +18190,20 @@ let _anSrc = "";
 let _anFrom = "";
 let _anVisited = false;
 let _anLanded = false;          // the first page counts even though state.view already names it
+// A visit one of our alerts opened (sw.js, the iOS app: ?from=alert), read
+// before anything rewrites the address, and the mark taken back off it.
+const _anAlert = /[?&]from=alert(?:&|$)/.test(location.search);
+if (_anAlert) {
+  try {
+    const q = new URLSearchParams(location.search);
+    q.delete("from");
+    history.replaceState(history.state, "", location.pathname + (q.toString() ? `?${q}` : "") + location.hash);
+  } catch (e) { /* the mark stays; nothing reads it but this */ }
+}
 
 function anSource() {
   try {
+    if (_anAlert) return "alert";
     const q = new URLSearchParams(location.search);
     if (q.get("utm_source") || q.get("utm_campaign")) return "campaign";
     const host = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, "") : "";
