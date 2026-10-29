@@ -461,8 +461,6 @@ const HIDDEN_VIEWS = {
   // the tab shows an honest "nothing measured yet" until the box that
   // holds the logs fits one, which beats a page that cannot exist.
   nba: ["longshots", "weather"],
-  // The race page is college football's playoff and the NBA Cup (js/race.js).
-  nfl: ["race"], mlb: ["race"],
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
@@ -499,6 +497,8 @@ const HIDDEN_VIEWS = {
   // Most Likely) and no futures pull yet; every rink is indoors.
   nhl: ["longshots", "futures", "weather", "race"],
   cfb: [],
+  // The race page is college football's playoff and the NBA Cup (js/race.js).
+  nfl: ["race"], mlb: ["race"],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -677,6 +677,7 @@ function applyNavLeagues() {
  * because no weather feed covers college venues. One sentence for both
  * would have to be vague enough to be useless. These mirror the comments
  * already sitting on HIDDEN_VIEWS above. */
+const RACE_WHY = "the race pages are college football’s playoff and the NBA Cup";
 const HIDDEN_WHY = {
   // The "likely" reasons LEFT both hoops entries 2026-08-31 — the claim
   // "basketball prices neither" went stale when nba_build started
@@ -686,20 +687,20 @@ const HIDDEN_WHY = {
          weather: "played indoors" },
   wnba: { longshots: "no long-shot market exists in basketball",
           futures: "no outrights market is published for the league",
-          weather: "played indoors" },
+          weather: "played indoors", race: RACE_WHY },
   nhl: { longshots: "the anytime goal scorer rides the props and Most Likely instead",
          futures: "no hockey outrights are pulled yet",
-         weather: "played indoors" },
+         weather: "played indoors", race: RACE_WHY },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
                   + "fight winners only — there is no pair to screen",
          futures: "a fight card has no season-long market",
          injuries: "no commission publishes an MMA injury report",
-         weather: "fights are indoors" },
+         weather: "fights are indoors", race: RACE_WHY },
   polymarket: { parlays: "prediction-market contracts are not screened as a "
                          + "parlay", futures: "not a season-long market",
-                weather: "not a sporting venue" },
+                weather: "not a sporting venue", race: RACE_WHY },
   fantasy: { parlays: "not a betting market", futures: "not a betting market",
-             weather: "no single venue to report" },
+             weather: "no single venue to report", race: RACE_WHY },
   // Long Shots LEFT this list 2026-08-25: "full-game markets only" went
   // stale when engine/cfb/tds.py shipped — anytime-TD quotes are pulled
   // for the board's best games and priced off usage shares, the script,
@@ -709,6 +710,7 @@ const HIDDEN_WHY = {
   // engine/cfb/props.py shipped. College has nothing left to explain
   // away here.
   cfb: {},
+  nfl: { race: RACE_WHY }, mlb: { race: RACE_WHY },
 };
 
 const SPORT_LABEL = { nfl: "the NFL", mlb: "MLB", nba: "the NBA",
@@ -2757,6 +2759,7 @@ const FEATURES = [
     ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position.", "team"],
     ["Rosters", "Every team’s roster in every league, each row opening the player.", "rosters"],
     ["Standings & rankings", "Records, the bracket, and — for football — a ranking of every team’s offence and defence.", "standings"],
+    ["The races", "College football’s playoff race — the bracket if it started today, every contender’s chances, the games that swing it — and the NBA Cup’s groups, tiebreakers and odds.", "race"],
     ["Trending", "Form movers: who is climbing and who is falling, measured rather than asserted.", "trending"],
     ["Injuries & news", "Designations league-wide, who replaces the man who is out, and a rights-clean news section.", "injuries"],
     ["Weather", "Tonight’s conditions park by park, with the roof and the surface.", "weather"],
@@ -30518,7 +30521,7 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
    the sheet carried before is still here, regrouped. */
 const MORE_GROUPS = [
   ["Picks", ["view:likely", "view:longshots", "view:zeno", "view:feed"]],
-  ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures"]],
+  ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures", "view:race"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
                 "sport:memes"]],

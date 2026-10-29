@@ -248,8 +248,8 @@ APP_JS_BUDGET_KB = 290
 #: 388 -> 386 on 2026-10-29, DOWN again, for Ethan's "do all 3": the
 #: Methodology and Verify pages moved to js/more.js (4.0 KB gz), which paid
 #: for the Pick of the Day's board line on a NO BET day (+0.26 KB) and the
-#: race page's menu row, section and stub (+0.19 KB) — the races themselves
-#: load on first use (js/race.js, css/race.css). 397,297 -> 393,739 B, and
+#: race page's menu row, section, stub and Features line (+0.34 KB) — the races themselves
+#: load on first use (js/race.js, css/race.css). 397,297 -> 393,892 B, and
 #: the budget keeps the rest of the saving.
 BOOT_BUDGET_KB = 386
 

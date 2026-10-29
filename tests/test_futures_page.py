@@ -140,7 +140,9 @@ def test_sports_without_a_season_do_not_get_the_tab():
     """A fight card, a prediction market and a fantasy draft have no season
     to project, and a tab that can only ever say so is worse than no tab."""
     i = APP.index("const HIDDEN_VIEWS = {")
-    block = APP[i:i + 1400]
+    # The whole table, not a fixed window: the race row (2026-10-29) added a
+    # word to four lines and pushed the last of them past 1,400 characters.
+    block = APP[i:APP.index("\n};", i)]
     for sport in ("ufc", "polymarket", "fantasy", "wnba"):
         line = [l for l in block.splitlines() if l.strip().startswith(f"{sport}:")]
         assert line and "futures" in line[0], sport

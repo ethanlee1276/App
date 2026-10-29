@@ -8777,13 +8777,24 @@ give me the code to run after").
   load the first time they open, which paid for all of this; the budget
   went from 388 to 386 KB.
 
-Nothing to set: the updater picks it up within five minutes. Read-only, any
-time; each prints `1` once this version is live:
+The updater picks it up within five minutes. One command writes: it installs
+the new web server config, which serves the two race files trimmed like every
+other page (until then they are served whole, which works and is a little
+larger). It validates first and leaves the old config in place if anything
+is wrong:
+
+```
+cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+Read-only, any time; each prints `1` once this version is live (the last
+once the config above is installed):
 
 ```
 curl -s https://qellysbook.com/js/app.js | grep -c 'function renderRace(...a)'
 curl -s https://qellysbook.com/js/race.js | grep -c 'function cfpHTML(d)'
 curl -s https://qellysbook.com/js/app.js | grep -c 'NO PICK TODAY'
+sudo grep -cF '/js/race.js /css/race.css' /etc/caddy/Caddyfile
 ```
 
 After the next college and NBA builds (the cycle runs them; within the

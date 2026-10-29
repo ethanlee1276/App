@@ -184,13 +184,15 @@ def test_in_a_browser_both_pages_draw_at_a_phones_width():
 
 if __name__ == "__main__":
     import inspect
-    fails = 0
+    fails = ran = 0
     for name, fn in list(globals().items()):
         if name.startswith("test_") and inspect.isfunction(fn):
             try:
                 fn()
-                print(f"PASS {name}")
+                ran += 1
+                print(f"  ok  {name}")
             except Exception as exc:                          # noqa: BLE001
                 fails += 1
-                print(f"FAIL {name}: {exc!r}")
+                print(f"  FAIL {name}: {exc!r}")
+    print(f"\n{ran} tests passed." if not fails else f"\n{fails} failed")
     sys.exit(1 if fails else 0)
