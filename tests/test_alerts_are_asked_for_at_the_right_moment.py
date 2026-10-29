@@ -92,7 +92,7 @@ def test_in_a_browser_it_asks_counts_and_waits():
     except ImportError:
         print("      (skipped: no Playwright)")
         return
-    sys.path.insert(0, str(ROOT / "tests"))
+    sys.path.insert(0, str(ROOT))                         # rendercheck.py is the repository's own
     import rendercheck
     srv, port = rendercheck._serve()
     origin = f"http://127.0.0.1:{port}"
