@@ -7904,6 +7904,32 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HQ 2>&1 | tee /tmp/hq.txt
 ```
 
+**HR. The NHL board gets the same two fixes** (step 278). The hockey board
+had both of the NBA board's gaps: an alternate line offered one way only
+("2+ shots") used our raw number while a two-way line beside it was pulled
+toward its price, and Pinnacle's prices came in with the odds and were
+never read. Both are fixed the same way: a one-way line is pulled toward
+the main line's market, read on our own curve; and when Pinnacle prices a
+prop both ways at the same number, its price with the vig out is the
+market the pick is checked against, while the price you take is still the
+best one at a book you can bet. Hockey uses only the exact same number
+(2.5 shots and 3.5 shots are too far apart to convert). The card says so
+("Market: Pinnacle's price, vig out — 54% over ...").
+
+Nothing to set. Read-only, after the next NHL build; it prints how many
+props are on the board and how many read Pinnacle's price ("sharp") rather
+than the other books' ("books"):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json, collections; d=json.load(open('data/built/nhl.json')); r=d.get('recommendations') or []; print(len(r), 'NHL props;', dict(collections.Counter(x.get('market_source', 'built before this') for x in r)))"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HR 2>&1 | tee /tmp/hr.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

@@ -98,21 +98,100 @@ def _p_over(proj: dict, market: str, line: float) -> float:
     return M.skater_prob(proj, market, line, "OVER")
 
 
-def rung_probs(proj: dict, market: str, alts) -> dict:
+def _implied_mean(proj: dict, market: str, line: float, q_over: float) -> float | None:
+    """The mean at which our own curve (`_p_over`) gives the over ``q_over``
+    at ``line``: a market's price read as a projection on our scale, the
+    NBA's `engine/nba/prob.implied_mean` on this league's curves. None when
+    the price sits outside what the curve can reach."""
+    if not (0.02 < float(q_over) < 0.98):
+        return None
+    lo, hi = 1e-3, max(3.0 * float(line), float(line) + 10.0)
+
+    def at(m):
+        return _p_over(dict(proj, mean=m), market, float(line))
+    try:
+        if at(hi) < q_over or at(lo) > q_over:
+            return None
+        for _ in range(50):
+            mid = (lo + hi) / 2.0
+            if at(mid) < q_over:
+                lo = mid
+            else:
+                hi = mid
+    except (ArithmeticError, KeyError, TypeError, ValueError):
+        return None
+    return (lo + hi) / 2.0
+
+
+#: A sharp pair holding more than this is no market (a stale or half-pulled
+#: quote) and is not read.
+SHARP_MAX_HOLD = 0.10
+
+
+def _sharp_pair(sharp_lines, line: float):
+    """``(over_odds, under_odds, book)``: the sharp book's two-way quote at
+    exactly ``line``, or None (2026-10-29, the NBA's rule,
+    engine/nba/prob.sharp_fair, held here to the football one: a fair at 3.5
+    says nothing about 2.5, so no other number is read across)."""
+    from engine.odds import american_to_prob
+    for ln in sharp_lines or []:
+        try:
+            if abs(float(ln.line) - float(line)) > 1e-9:
+                continue
+            o, u = int(ln.over_odds or 0), int(ln.under_odds or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if abs(o) < 100 or abs(u) < 100:
+            continue
+        if 0.0 < american_to_prob(o) + american_to_prob(u) - 1.0 <= SHARP_MAX_HOLD:
+            return o, u, getattr(ln, "book", "") or "the sharp book"
+    return None
+
+
+def rung_probs(proj: dict, market: str, alts, main_line=None, main_over=None,
+               sharp_alts=None) -> dict:
     """{"1.5": 0.71, ...}: our number at each rung of the ladder, shrunk
-    toward that rung's own de-vigged price exactly as the main line is."""
+    toward that rung's market exactly as the main line is.
+
+    THE RUNG'S MARKET, in order (2026-10-29, the NBA board's two fixes the
+    same day): the sharp book's two-way quote at that number
+    (``sharp_alts``); the rung's own two-way price, a number some book quotes
+    both ways read off that quote; and a rung quoted ONE WAY only, toward
+    the main line's market (``main_line``, ``main_over``: its de-vigged
+    chance of the over) read at the rung through our own curve
+    (`_implied_mean`). Until then a one-way rung carried our raw number
+    beside two-way rungs pulled toward their price, and Most Likely ranks by
+    chance. With no main price to read, the raw number, as before."""
     from engine.betting import temper_edge
     from engine.odds import devig_two_way
-    out: dict = {}
+    quotes: dict = {}
     for ln in alts or []:
-        key = f"{float(ln.line):g}"
-        if key in out:
+        try:
+            key = f"{float(ln.line):g}"
+        except (TypeError, ValueError, AttributeError):
             continue
-        raw = _p_over(proj, market, float(ln.line))
-        if ln.over_odds and ln.under_odds:
+        had = quotes.get(key)
+        if had is None or (ln.over_odds and ln.under_odds and not (had.over_odds and had.under_odds)):
+            quotes[key] = ln
+    mean = None
+    if main_line is not None and main_over is not None and \
+            any(not (q.over_odds and q.under_odds) for q in quotes.values()):
+        mean = _implied_mean(proj, market, float(main_line), float(main_over))
+    out: dict = {}
+    for key, ln in quotes.items():
+        line = float(ln.line)
+        raw = _p_over(proj, market, line)
+        sharp = _sharp_pair(sharp_alts, line)
+        if sharp:
+            fair, _ = devig_two_way(sharp[0], sharp[1])
+        elif ln.over_odds and ln.under_odds:
             fair, _ = devig_two_way(int(ln.over_odds), int(ln.under_odds))
-            raw = temper_edge(raw, fair, ln.book or "")[0]
-        out[key] = round(raw, 4)
+        elif mean is not None:
+            fair = _p_over(dict(proj, mean=mean), market, line)
+        else:
+            out[key] = round(raw, 4)
+            continue
+        out[key] = round(temper_edge(raw, fair, ln.book or "")[0], 4)
     return out
 
 
@@ -135,6 +214,15 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         return None
     line, over_odds, under_odds, book = got
     fair_over, fair_under = devig_two_way(over_odds, under_odds or 0)
+    # THE SHARP BOOK'S PRICE IS THE MARKET when it quoted this number both
+    # ways (`_sharp_pair`, 2026-10-29): the side, the haircut and the edge
+    # are read against it; the price taken is still the shop's.
+    books_over, anchor = fair_over, ""
+    sharp = _sharp_pair(getattr(prop, "sharp_lines", None), line)
+    if sharp:
+        fair_over, fair_under = devig_two_way(sharp[0], sharp[1])
+        anchor = (f"Market: {sharp[2]}'s price, vig out — {fair_over:.0%} "
+                  f"{'yes' if scorer else 'over'} (the other books' best prices say {books_over:.0%})")
     p_over = _p_over(proj, prop.market, line)
     sides = [("OVER", p_over, over_odds, fair_over)]
     if under_odds:
@@ -161,6 +249,8 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
                 f"{proj['mean']:.1f} saves"] if goalie else
                [f"{proj['toi']:.1f} min of ice time × {proj['rate60']:.2f} per 60 → "
                 f"{proj['mean']:.2f} {label.lower()}"])
+    if anchor:
+        reasons.append(anchor)
     if not goalie and abs(proj.get("opp", 1.0) - 1.0) >= 0.02:
         reasons.append(f"{opponent} allows {abs(proj['opp'] - 1):.0%} "
                        f"{'more' if proj['opp'] > 1 else 'less'} than an average team")
@@ -242,6 +332,9 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "projection": round(proj["mean"], 2),
         "proj_low": round(max(0.0, proj["mean"] - sd), 1), "proj_high": round(proj["mean"] + sd, 1),
         "hit_prob": round(win, 4), "raw_prob": round(raw, 4), "fair_prob": round(fair, 4),
+        # Which market the haircut trusted, and what the other books said.
+        "market_source": "sharp" if sharp else "books",
+        "books_fair": round(books_over if side == "OVER" else 1.0 - books_over, 4),
         "edge": round(edge, 4), "ev_per_unit": round(ev, 4),
         "confidence": (round(7.0 + min(max(edge, 0.0), 0.05) * 40, 1) if pick
                        else round(min(6.9, win * 10), 1)),
@@ -261,7 +354,9 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "all_lines": _lines_dicts(prop.lines),
         "alt_lines": _lines_dicts(getattr(prop, "alt_lines", None)),
         "alt_sharp_lines": _lines_dicts(getattr(prop, "alt_sharp_lines", None)),
-        "rung_probs": rung_probs(proj, prop.market, getattr(prop, "alt_lines", None)),
+        "rung_probs": rung_probs(proj, prop.market, getattr(prop, "alt_lines", None),
+                                 main_line=line, main_over=fair_over,
+                                 sharp_alts=getattr(prop, "alt_sharp_lines", None)),
         "logs": [{"week": i + 1, "date": g.get("date", ""), "opponent": g.get("opponent", ""),
                   "value": g.get("saves" if goalie else M._STAT.get(prop.market, prop.market), 0.0),
                   "home": g.get("home", 1)} for i, g in enumerate(games[:20])],

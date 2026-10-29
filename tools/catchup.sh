@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HR "The NHL board gets the same two fixes" 30 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "import json, collections; d=json.load(open('data/built/nhl.json')); r=d.get('recommendations') or []; print(len(r), 'NHL props;', dict(collections.Counter(x.get('market_source', 'built before this') for x in r)))"
+SH
 run HQ "The NBA board checks itself against the sharp book" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 nbalean.py
 SH
