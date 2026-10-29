@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HW "Your members' own activity, what they are worth, and while you were away" 120 <<'SH'
+curl -s https://qellysbook.com/js/activity.js | grep -c 'JSON.stringify({ s: secs, v: views, sp: sports'
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement report 28
+SH
 run HV "Fewer, better alerts, and counting what they do" 60 <<'SH'
 curl -s https://qellysbook.com/sw.js | grep -c 'u.searchParams.set("from", "alert");'
 cd /srv/qellys && sudo -u qellys python3 -m engine.analytics report 7

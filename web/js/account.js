@@ -2095,7 +2095,7 @@ async function pwLater(btn) {
     const saved = pushSaved() || {};
     const topics = [...new Set((saved.topics || []).concat("posted"))];
     const got = await pushOn(topics.concat(saved.mine || []));
-    const mine = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup";
+    const mine = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup" || t === "away";
     try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
       topics: got.topics.filter((t) => !mine(t)), mine: got.topics.filter(mine) }))); } catch (e) {}
     buzz("tap");
@@ -3524,6 +3524,10 @@ function setListHTML() {
   ]));
   if (inn) {
     out.push(setGroup("Your data", [
+      // What the site keeps of your own time here (engine/activity), only while it keeps any.
+      ...(_pwStatus && _pwStatus.activity_switch
+        ? [setItem({ ico: "chart", title: "Your activity", val: _pwStatus.activity ? "On" : "Off", chev: true,
+                     attrs: 'data-set-open="activity"' })] : []),
       setItem({ ico: "download", title: "Download my data", attrs: 'data-act="acctExport"' }),
       setItem({ ico: "search", title: "Clear search history", attrs: 'data-act="acctSearchClear"' }),
       setItem({ ico: "logout", title: "Sign out everywhere", sub: "Every device, this one too",
@@ -3535,6 +3539,63 @@ function setListHTML() {
     ], "Delete removes the account and every bet, league and search we hold for it. It can’t be undone."));
   }
   return out.join("");
+}
+
+/* YOUR ACTIVITY (engine/activity; Ethan, 2026-10-29: "recording what users
+   do on the app, how long they spend on it, and we can base notifications
+   off that"). Everything the site keeps of your own time here, said back in
+   words, and the switch that stops it and deletes what was kept. Only drawn
+   while the site keeps it at all (QB_ACTIVITY=1 with the Privacy Policy's
+   section on it): a switch for something that is not happening is noise. */
+let _actInfo = null;
+// Today at an Eastern hour, read in the reader's own zone (tzTime).
+function actHour(h) {
+  try {
+    const now = new Date();
+    const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    return tzTime(new Date(et.getFullYear(), et.getMonth(), et.getDate(), h).getTime() + (now - et), { hour: "numeric" });
+  } catch (e) { return `${h % 12 || 12} ${h < 12 ? "AM" : "PM"} Eastern`; }
+}
+function actHTML() {
+  const a = _actInfo;
+  if (a === null) return `<p class="set-foot">Loading…</p>`;
+  if (!a || !a.switch) return `<p class="set-foot">The site is not keeping anybody’s activity right now.</p>`;
+  const on = !a.off, s = a.summary || {};
+  const lg = (c) => (typeof LEAGUE_LABEL !== "undefined" && LEAGUE_LABEL[c]) || String(c).toUpperCase();
+  const fact = (title, val) => setItem({ tag: "div", title, val: escapeHtml(val) });
+  const facts = on && s.days_active ? [
+    fact("Days here", `${s.days_active} of the last ${s.days}`),
+    fact("A typical day", `${s.minutes_a_day} min`),
+    ...(s.sports && s.sports.length ? [fact("Mostly", s.sports.map(lg).join(", "))] : []),
+    ...(s.hour_et != null ? [fact("Usually around", actHour(s.hour_et))] : []),
+    fact("Opened from our alerts", `${s.from_alerts} of ${s.visits} visits`),
+  ] : [];
+  return setGroup("", [setItem({ tag: "div", ico: "chart", tone: "green", title: "Learn from what I do here",
+      sub: on ? "On" : "Off: nothing is kept",
+      end: setSwitch(on, 'data-act-flip="1" aria-label="Learn from what I do here"') })],
+    on ? "Kept: how long you spend here each day, on which pages and leagues, at what hour, and whether one of our alerts brought you. Used for your own alerts: the hour you usually look, fewer of the kinds you never open, and a line with your team’s next game when you’ve been away. Never sold, never shared, never an ad. Off deletes all of it."
+      : "Nothing is kept. Turn it back on and it starts again from today.")
+    + (facts.length ? setGroup(`Your last ${s.days} days`, facts,
+      `Kept ${s.kept_days} days, then deleted, and all of it is in Download my data.`) : "")
+    + `<p class="set-foot act-note" role="status"></p>`;
+}
+async function actFill(off) {
+  const box = document.getElementById("set-act");
+  if (!box) return;
+  try {
+    const r = await fetch("/api/account/activity", off === undefined ? { credentials: "same-origin", cache: "no-store" }
+      : { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ off }) });
+    _actInfo = r.ok ? await r.json() : false;
+  } catch (e) { _actInfo = false; }
+  // The page stops (or starts) sending at once, not at the next status read.
+  if (_pwStatus && _actInfo) _pwStatus.activity = !!(_actInfo.switch && !_actInfo.off);
+  if (_pwStatus && _pwStatus.activity) loadRoom("js/activity.js");
+  if (!box.isConnected) return;
+  box.innerHTML = actHTML();
+  box.onclick = (e) => {
+    if (e.target.closest("[data-act-flip]") && _actInfo) actFill(!_actInfo.off);
+  };
 }
 
 /* The screen a row opens: Back, its title, its own list or form. */
@@ -3593,6 +3654,10 @@ function setPageHTML(page) {
   if (page === "gift") {
     setTimeout(giftFill, 0);
     return head("Gift a month") + `<div id="set-gift"><p class="set-foot">Loading…</p></div>`;
+  }
+  if (page === "activity") {
+    setTimeout(() => actFill(), 0);
+    return head("Your activity") + `<div id="set-act">${actHTML()}</div>`;
   }
   if (page === "fantasy") return head("Fantasy leagues") + ffLinksHTML();
   if (page === "calendar") return head("Calendar") + `<div id="set-cal">${calRowHTML()}</div>`;
@@ -4656,13 +4721,15 @@ async function pushAskSheet(ctx) {
       : followed
         ? "Your teams’ games ten minutes before they start, their big moments and final scores, your bets down to the last leg, and the picks as they go up."
         : "The picks as they go up, last night’s record, your bets down to the last leg — and the games of any team you follow.";
+  // While you were away (engine/engagement), only while the site keeps activity.
+  const away = _pwStatus && _pwStatus.activity_switch ? ["away"] : [];
   const host = document.createElement("div");
   host.id = "pushask";
   host.className = "a2hs";
   host.innerHTML = `<div class="a2hs-card" role="dialog" aria-modal="false" aria-labelledby="pushask-t">
     <button class="a2hs-x" data-pa="no" aria-label="Not now">${icon("cross", 14)}</button>
     <div class="a2hs-row"><img class="a2hs-icon" src="/icon-192.png" alt="" width="44" height="44" />
-      <div><b id="pushask-t">Turn on alerts?</b><p>${lead} Never a “bet now” — and each kind is a switch in Alerts.</p></div></div>
+      <div><b id="pushask-t">Turn on alerts?</b><p>${lead}${away.length ? " And one line when you’ve been away a while." : ""} Never a “bet now” — and each kind is a switch in Alerts.</p></div></div>
     <p class="a2hs-how pushask-note" role="status" hidden></p>
     <div class="a2hs-go"><button class="btn primary" data-pa="yes">Turn on alerts</button>
       <button class="btn ghost" data-pa="no">Not now</button></div></div>`;
@@ -4679,7 +4746,7 @@ async function pushAskSheet(ctx) {
     if (b.dataset.pa === "no") { counted(); host.remove(); return; }
     b.disabled = true;
     try {
-      pushRemember(await pushOn(PUSH_ASK_TOPICS, pushAskLeagues()));
+      pushRemember(await pushOn(PUSH_ASK_TOPICS.concat(away), pushAskLeagues()));
       buzz("tap");
       host.remove();
       tfToast("Alerts are on. Change them any time in Alerts.");

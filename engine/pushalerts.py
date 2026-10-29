@@ -47,7 +47,9 @@ LATEST = ROOT / "data" / "push" / "latest.json"
 KINDS = ("posted", "settled")
 #: A member's own alerts (engine/pushmine): a phone signed in when it
 #: subscribed may ask for these too.
-PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions", "reminders", "pickem", "kickoff")
+PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions", "reminders", "pickem", "kickoff",
+            # "While you were away" (engine/engagement.away_pass).
+            "away")
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300
@@ -64,6 +66,15 @@ MAX_FAILS = 5
 #: several boards are up the alert names them all in one line
 #: (`merge_posted`) instead of one alert a league.
 POSTED_GAP_S = 3 * 3600
+#: FEWER STILL FOR A PHONE THAT NEVER OPENS THEM (2026-10-29). While a
+#: member's own activity is kept (engine/activity), a phone of theirs that
+#: has had IGNORED_N of these two kinds in a row without the member opening
+#: any of our alerts gets them at most once in IGNORED_GAP_S, until they
+#: open one again. The point of both is the tap; a phone that never taps
+#: is a phone about to turn alerts off (docs/RETENTION.md §1). Scores and
+#: the member's own alerts are a glance and are left alone.
+IGNORED_N = 15
+IGNORED_GAP_S = 24 * 3600
 
 
 # --- the subscriptions (accounts DB) ------------------------------------------
@@ -75,12 +86,16 @@ def ensure_tables(conn) -> None:
         last_ok TEXT, fails INTEGER NOT NULL DEFAULT 0)""")
     # When this phone was last sent a picks-are-up alert (POSTED_GAP_S).
     # Added rather than declared: the table shipped first.
-    if "posted_at" not in {r[1] for r in conn.execute("PRAGMA table_info(push_subs)")}:
-        from engine.db import column_exists_or_raise
-        try:
-            conn.execute("ALTER TABLE push_subs ADD COLUMN posted_at REAL")
-        except sqlite3.OperationalError as exc:
-            column_exists_or_raise(exc)
+    have = {r[1] for r in conn.execute("PRAGMA table_info(push_subs)")}
+    # And how many of the shared kinds it has had since its member last
+    # opened one of our alerts (IGNORED_N; engine/activity resets it).
+    for col, decl in (("posted_at", "REAL"), ("unopened", "INTEGER NOT NULL DEFAULT 0")):
+        if col not in have:
+            from engine.db import column_exists_or_raise
+            try:
+                conn.execute(f"ALTER TABLE push_subs ADD COLUMN {col} {decl}")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
     conn.commit()
 
 
@@ -316,22 +331,28 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
          vapid: dict | None = None, apns_cfg=None, now_s: float | None = None) -> dict:
     """Knock every subscription that wants each message. Returns counts."""
     ensure_tables(conn)
-    rows = conn.execute("SELECT endpoint, kind, topics, leagues, fails, posted_at FROM push_subs").fetchall()
+    rows = conn.execute("SELECT endpoint, kind, topics, leagues, fails, posted_at, user_id, unopened, last_ok "
+                        "FROM push_subs").fetchall()
     stats = {"sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
     if not rows or not msgs:
         return stats
     k = vapid or webpush.keys()
     cfg = webpush.apns_config() if apns_cfg is None else apns_cfg
-    now = _dt.datetime.utcnow().isoformat(timespec="seconds")
     now_ts = time.time() if now_s is None else float(now_s)
-    capped = 0
-    for endpoint, kind, topics, leagues, fails, posted_at in rows:
+    now = _dt.datetime.fromtimestamp(now_ts, _dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
+    tracked = _tracked(conn)
+    capped = quieted = 0
+    for endpoint, kind, topics, leagues, fails, posted_at, uid, unopened, last_ok in rows:
         mine = [m for m in msgs if wants(topics, leagues, m)]
         # At most one picks-are-up alert in POSTED_GAP_S: a board due sooner
         # is said with the next one.
         if posted_at and now_ts - float(posted_at) < POSTED_GAP_S and any(m.get("kind") == "posted" for m in mine):
             mine = [m for m in mine if m.get("kind") != "posted"]
             capped += 1
+        # A phone that never opens them: once in IGNORED_GAP_S at most.
+        if mine and tracked(uid) and int(unopened or 0) >= IGNORED_N and _age_s(last_ok, now_ts) < IGNORED_GAP_S:
+            mine = []
+            quieted += 1
         if not mine:
             continue
         posted = [m for m in mine if m.get("kind") == "posted"]
@@ -349,6 +370,8 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
             conn.execute("UPDATE push_subs SET last_ok = ?, fails = 0 WHERE endpoint = ?", (now, endpoint))
             if posted:
                 conn.execute("UPDATE push_subs SET posted_at = ? WHERE endpoint = ?", (now_ts, endpoint))
+            if tracked(uid):
+                conn.execute("UPDATE push_subs SET unopened = unopened + 1 WHERE endpoint = ?", (endpoint,))
             counted(mine)
         elif any(c in (404, 410) for c in codes) or (kind == "apns" and 400 in codes):
             stats["gone"] += 1
@@ -362,7 +385,29 @@ def send(conn, msgs: list, knock=webpush.knock, apns=webpush.apns_send, log=prin
     conn.commit()
     if capped:
         stats["capped"] = capped
+    if quieted:
+        stats["quieted"] = quieted
     return stats
+
+
+def _tracked(conn):
+    """Is this subscription's member one whose opening an alert is known
+    (engine/activity on for them)? Nobody, while it is off."""
+    from engine import activity as ACT
+    if not ACT.enabled():
+        return lambda uid: False
+    ACT.ensure_tables(conn)
+    off = {u for (u,) in conn.execute("SELECT user_id FROM activity_prefs WHERE off = 1")}
+    return lambda uid: bool(uid) and uid not in off
+
+
+def _age_s(iso, now_ts: float) -> float:
+    """Seconds since a last_ok stamp (UTC, as send writes it); forever when there is none."""
+    try:
+        then = _dt.datetime.fromisoformat(str(iso)).replace(tzinfo=_dt.timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return float("inf")
+    return now_ts - then
 
 
 def scan_and_send(log=print, connect=None, state_path: Path | None = None, web: Path = WEB,

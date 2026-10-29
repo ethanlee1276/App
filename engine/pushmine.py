@@ -87,10 +87,12 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          # The pick'em's Tuesday line on the week just over: that day.
          "pickem_recap": 12 * 3600,
          # A followed team's game about to start (engine/kickoffs): until it does.
-         "kickoff": 15 * 60}
+         "kickoff": 15 * 60,
+         # "While you were away" (engine/engagement): the evening it went.
+         "away": 3 * 3600}
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
-_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0}
+_looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0, "away": 0.0}
 #: Karma alerts' pass looks at most this often.
 KARMA_EVERY_S = 15 * 60
 #: Your week's pass looks at most this often, and only on a Monday morning.
@@ -653,7 +655,7 @@ def flush(conn, knock=webpush.knock, apns=webpush.apns_send, vapid: dict | None 
     # Kept a day at most (the privacy policy, 2.7): long enough for a late
     # knock to read it, no longer.
     conn.execute("DELETE FROM push_mine WHERE at < ?", (t - KEEP_S,))
-    held = " AND kind NOT IN ('watches', 'clutch', 'lineup', 'karma', 'mentions')" if quiet else ""
+    held = " AND kind NOT IN ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away')" if quiet else ""
     rows = conn.execute("SELECT user_id, id, kind, title, body, url FROM push_mine WHERE sent = 0" + held +
                         " ORDER BY at").fetchall()
     stats = {"messages": len(rows), "sent": 0, "gone": 0, "failed": 0, "skipped_apns": 0}
@@ -760,6 +762,15 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
             told += _ko.kickoff_pass(conn, Path(web) / "data", now=t)
         except Exception as exc:                                  # noqa: BLE001 — the rest of the minute still runs
             log(f"  ⚠️  kickoff: {type(exc).__name__}: {exc}")
+        # While you were away (engine/engagement): at each member's own
+        # hour, so looked at every quarter hour; nothing while activity is off.
+        if t - _looked["away"] >= KARMA_EVERY_S:
+            _looked["away"] = t
+            from engine import engagement as _en
+            try:
+                told += _en.away_pass(conn, Path(web) / "data", now=t)
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  while you were away: {type(exc).__name__}: {exc}")
         moments = clutch_pass(conn, Path(web) / "data" / "pbp", now=t)
         from engine import finals as _fin
         moments += _fin.finals_pass(conn, Path(web) / "data" / "pbp", now=t)

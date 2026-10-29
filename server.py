@@ -1543,6 +1543,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._ask(body)
         if parsed.path in ("/api/event", "/api/event/"):
             return self._event()
+        if parsed.path in ("/api/activity", "/api/activity/"):
+            return self._activity()
         if parsed.path in ("/api/clienterror", "/api/clienterror/"):
             return self._client_error()
         if parsed.path.startswith("/api/push/"):
@@ -2668,6 +2670,36 @@ class Handler(BaseHTTPRequestHandler):
         AN.record(got["e"], str(got.get("page") or ""), str(got.get("src") or ""), kind)
         return self._send(204, b"", ".json")
 
+    def _activity(self):
+        """One beat of a member's own time here (engine/activity). 204
+        whatever happens: either lock shut, signed out, turned off in
+        Settings or a bad body all keep nothing, and a page never waits on
+        or reacts to a beat."""
+        from engine import activity as ACT
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 4000 else b""
+        if not ACT.enabled():
+            return self._send(204, b"", ".json")
+        if self._rate_limited(RATE_EVENT_PER_MIN, "activity"):
+            return                                      # the limiter has answered 429
+        try:
+            got = json.loads(body or b"{}")
+        except ValueError:
+            got = None
+        if isinstance(got, dict):
+            A = _acct()
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if who:
+                    ACT.beat(conn, who["id"], got)
+            finally:
+                conn.close()
+        return self._send(204, b"", ".json")
+
     def _account(self, conn):
         """The signed-in account for this request, or None."""
         return _acct().session_user(conn, self._cookie(SESSION_COOKIE))
@@ -2740,6 +2772,15 @@ class Handler(BaseHTTPRequestHandler):
                 # bulk_ok, not configured: the site's Gmail carries
                 # resets and alerts, never a mailing list (engine/mailer).
                 out["available"] = mailer.bulk_ok()
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "activity":
+                # Your activity (engine/activity): whether the site keeps
+                # it, whether you turned it off, and everything it knows
+                # about your last four weeks, in words.
+                from engine import activity as ACT
+                out = {"switch": ACT.enabled(), "off": ACT.opted_out(conn, who["id"])}
+                if out["switch"] and not out["off"]:
+                    out["summary"] = ACT.summary(conn, who["id"])
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "lastleg":
                 # The last-leg email (engine/slipwatch): on or off for this
@@ -2904,7 +2945,8 @@ class Handler(BaseHTTPRequestHandler):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
                         "delete", "signout-all", "digest", "forgot", "reset",
-                        "lastleg", "referral", "phone-start", "phone-verify"):
+                        "lastleg", "referral", "phone-start", "phone-verify",
+                        "activity"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         if path in self.PASSWORD_PATHS and not self._password_transport_ok():
@@ -3029,6 +3071,16 @@ class Handler(BaseHTTPRequestHandler):
                                    bool(body.get("nightly")))
                 out.pop("token", None)
                 A.touch_session(conn, token)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "activity":
+                # Your own switch (engine/activity): off deletes every row
+                # kept and stops the next; on starts again from today.
+                from engine import activity as ACT
+                ACT.set_off(conn, who["id"], bool(body.get("off")))
+                A.touch_session(conn, token)
+                out = {"switch": ACT.enabled(), "off": ACT.opted_out(conn, who["id"])}
+                if out["switch"] and not out["off"]:
+                    out["summary"] = ACT.summary(conn, who["id"])
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "lastleg":
                 # One boolean. The unsubscribe token is minted server-side
@@ -4852,6 +4904,14 @@ class Handler(BaseHTTPRequestHandler):
             # (engine/analytics.py), and while off the page sends nothing.
             from engine import analytics as AN
             out["analytics"] = AN.enabled()
+            # AND WHETHER IT MAY KEEP THIS MEMBER'S OWN TIME HERE
+            # (engine/activity): both locks open (QB_ACTIVITY=1 and the
+            # Privacy Policy's section on it), signed in, and not turned off
+            # in Settings. `activity_switch` is the site's half alone, for
+            # the Settings row and the Alerts page's "away" switch.
+            from engine import activity as ACT
+            out["activity_switch"] = ACT.enabled()
+            out["activity"] = bool(who) and ACT.on_for(conn, who["id"])
             # NO PROMO CODES HERE. This endpoint is public — it renders
             # the plans page before anybody signs in — so anything in it
             # is readable by anyone who opens the network tab. A promo

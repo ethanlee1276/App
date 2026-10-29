@@ -73,7 +73,7 @@ const LAZY = [
   "/js/fantasy.js", "/css/fantasy.css", "/js/record.js", "/css/record.css", "/js/detail.js", "/css/detail.css", "/js/account.js", "/css/account.css", "/js/more.js", "/css/more.css", "/js/memes.js", "/css/memes.css", "/js/extras.js", "/css/extras.css", "/js/social.js", "/css/social.css",
   "/js/gamecast.js", "/css/gamecast.css", "/js/hoopscast.js", "/css/hoopscast.css",
   "/js/rinkcast.js", "/css/rinkcast.css", "/js/slip.js", "/css/slip.css",
-  "/js/chat.js", "/css/chat.css", "/js/ask.js", "/css/ask.css", "/js/karma.js", "/css/karma.css",
+  "/js/chat.js", "/css/chat.css", "/js/ask.js", "/css/ask.css", "/js/karma.js", "/css/karma.css", "/js/activity.js",
   "/js/report.js", "/css/report.css", "/js/carrychart.js", "/css/carrychart.css",
   "/js/fantasyweek.js", "/js/lab.js", "/css/lab.css",
   "/js/chart-hoops.js", "/js/chart-kicks.js", "/js/chart-matchup.js", "/js/chart-mlb.js",

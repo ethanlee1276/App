@@ -17781,7 +17781,7 @@ async function pushOn(topics, leagues) {
 /* What a phone that just turned alerts on keeps: the shared kinds apart
    from its member's own (pushRelink sends the second only signed in). */
 function pushRemember(got) {
-  const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup";
+  const mineT = (t) => t === "watches" || t === "bets" || t === "kickoff" || t === "clutch" || t === "finals" || t === "lineup" || t === "away";
   try { localStorage.setItem(PUSH_KEY, JSON.stringify(Object.assign({}, got, {
     topics: got.topics.filter((t) => !mineT(t)), mine: got.topics.filter(mineT) }))); } catch (e) {}
 }
@@ -17866,6 +17866,9 @@ function renderPushZone(note) {
         box("clutch", "Big moments in games I follow", !signedIn),
         box("finals", "Final scores of games I follow", !signedIn),
         box("lineup", "My fantasy lineup: a starter out or on a bye", !signedIn),
+        // While you were away (engine/engagement): only while the site keeps activity.
+        ...(_pwStatus && _pwStatus.activity_switch
+          ? [box("away", "When I’ve been away: my team’s next game or what’s new, once a week at most", !signedIn)] : []),
       ], signedIn ? "Your own watches, saved parlays and fantasy lineup (the Sleeper league your league desk last opened). Only your words and your ticket, only on phones you are signed in on."
         : "Sign in for alerts on your own watches and saved parlays."))
     + (note ? `<p class="set-foot push-note" role="status">${escapeHtml(note)}</p>` : "");
@@ -19600,6 +19603,8 @@ async function paywallCheck(fresh) {
     if (!r.ok) return document.body.classList.contains("walled");
     _pwStatus = await r.json();
     anFlush();
+    // Your own time here (js/activity.js): fetched only while the site keeps it for you.
+    if (_pwStatus.activity) loadRoom("js/activity.js");
     igMount();
   } catch (e) { return document.body.classList.contains("walled"); }
   return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);

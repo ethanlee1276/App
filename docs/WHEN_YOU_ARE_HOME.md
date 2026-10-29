@@ -8067,6 +8067,75 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HV 2>&1 | tee /tmp/hv.txt
 ```
 
+**HW. Your members' own activity, what each one is worth together, and
+"while you were away"** (step 283; you: "we can be recording what users do
+on the app, how long they spend on it, and we can base notifications off
+that"). The research and the full list are docs/RETENTION.md §6. In short:
+
+- **What it keeps, per member, a row a day:** time with the site in front
+  of them, which pages and leagues, what hour, how many visits and how many
+  an alert opened. Never clicks, typing, location, device or other apps.
+  Kept 120 days, deleted with the account, in their export, and each member
+  can see all of it and switch it off (which deletes it) in Settings → Your
+  activity.
+- **What it does with it:** stages (new, power, regular, casual, lapsing,
+  dormant, gone — "lapsing" measured against each member's own rhythm, so a
+  Sunday-only fan isn't "drifting" on Friday); a proper "still around?"
+  model (BG/BB, the textbook one) fitted on your own members and kept only
+  if it beats the stages on members it never saw; your report with
+  **revenue at risk**, the power-user curve, cohorts, churn and lifetime
+  value; "While you were away", one alert a week at most at the member's
+  own usual hour (their team's game today, else what's new since they
+  left, else their league's slate), stopping after three unanswered; and
+  fewer "picks up" / "last night" alerts to phones that never open them.
+
+**It is OFF and stays off until two things are true:** you approve the
+policy wording (it is in docs/RETENTION.md §6 — tell me "approved" or what
+to change, and I'll put it in the Privacy Policy), and the switch below is
+on. The switch alone does nothing: the box checks the policy has the
+section first. Before the iPhone app ships with it, App Store Connect →
+App Privacy → Usage Data → Product Interaction must say "linked to the
+user", purposes App Functionality and Analytics, not used for tracking.
+
+Read-only, any time; it prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/activity.js | grep -c 'JSON.stringify({ s: secs, v: views, sp: sports'
+```
+
+See the report now on a made-up population (read-only, nothing real):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement demo
+```
+
+After the wording is in the policy (not before), the switch:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_ACTIVITY 1 && sudo systemctl restart qellys
+```
+
+Then any time (read-only):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement report 28
+```
+
+Four weeks after it is on, the model's held-out test; run the second line
+only if the first says `"holds": true`:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement fit
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement fit --save
+```
+
+The check in one go (it prints `1` once this version is live, then the
+report or why it is off):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HW 2>&1 | tee /tmp/hw.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

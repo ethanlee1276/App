@@ -170,3 +170,105 @@ numbers to watch, against the benchmarks in §1:
 - visits from alerts per alert sent, by kind (drop or rewrite the kinds
   that nobody opens);
 - day-7 and day-30 return rate of new accounts, before and after.
+
+---
+
+## 6. Each member's own activity, and what it is for (2026-10-29, round two)
+
+Ethan, the same day: *"I've been seeing research about how apps will use data
+off your phone to see how much worth you are to them, and how to get
+retention rate off of you ... look at other apps' algorithms and what they
+do, and let's start implementing that stuff"* — and *"we can be recording
+what users do on the app, how long they spend on it, and we can base
+notifications off that."*
+
+### What the apps that are good at this actually use
+
+Almost all of it is **first-party usage**: what a person does inside the
+app, when, and whether they open its alerts. Not their other apps (§2).
+
+- **Each person's own hour.** Braze's Intelligent Timing sends each message
+  in the person's "most engaged hour", read from their own session starts
+  and alert opens, with a chosen fallback when there is too little history
+  ([Braze docs](https://www.braze.com/docs/user_guide/brazeai/intelligence/intelligent_timing)).
+- **Who is drifting.** Airship's churn model found how recently and how
+  often someone opened the app, and how many alerts they were sent, the
+  strongest signs (vendor, 2017:
+  [Airship](https://www.airship.com/blog/churn-prediction-our-machine-learning-model/)).
+  A peer-reviewed study of mobile games found long-run frequency the single
+  most important feature among recency, frequency, money, lifetime and
+  intensity ([CRORR, RFM-LIR](https://ojs.srce.hr/crorr/article/view/12125)).
+- **The textbook model for "still a customer?"** when nobody cancels, they
+  just stop coming: Fader, Hardie and Shang's BG/BB, built for exactly this
+  data (a chance to come each day; a hidden moment someone stops for good)
+  ([Marketing Science 2010](https://faculty.wharton.upenn.edu/wp-content/uploads/2012/04/Fader_et_al_mksc_10.pdf)).
+- **Reading engagement as a curve, not one number.** The power-user curve
+  (L28: how many people were active 1, 2 ... 28 days of the last 28) shows
+  whether a core comes back daily, which DAU/MAU averages away
+  ([a16z, Chen and Jin](https://a16z.com/the-power-user-curve-the-best-way-to-understand-your-most-engaged-users/)).
+- **Stopping, not shouting.** Duolingo's reminders end after weeks of being
+  ignored ("These reminders don't seem to be working. We'll stop sending them
+  for now." — as a user reported it,
+  [Medium](https://debugger.medium.com/duolingo-needs-to-chill-8f1832745ca0)).
+- **Value per customer.** Every subscription business divides revenue per
+  member by the cancellation rate for a lifetime value, and segments it.
+  **What we will not copy:** the sportsbooks' "VIP" models that score each
+  bettor's lifetime value and then treat the high scorers differently, the
+  practice now under a US Senate inquiry (Blumenthal's letters, October
+  2026: [SBC Americas](https://sbcamericas.com/2026/10/22/congress-blumenthal-betting-vip-letter/))
+  and in lawsuits; even the industry's own group says no VIP incentives for
+  anyone in a cool-off ([ROGA](https://sbcamericas.com/2025/05/29/roga-sportsbooks-guidelines-vip-players/)).
+  Here value is a figure for the owner, by group, and nobody is treated
+  differently by what they pay or might pay.
+
+### What was built
+
+| | What | Where |
+|---|---|---|
+| Your activity | Per member, a row a day: seconds with the site in front of them (visible and touched in the last two minutes; half an hour on a live game), visits, visits an alert opened, seconds by page, by league and by hour. Kept 120 days, deleted with the account, in the export. | engine/activity.py, web/js/activity.js |
+| Two locks | Nothing is kept until `QB_ACTIVITY=1` **and** the Privacy Policy carries the section below (`id="your-activity"`). Then each member has a switch in Settings → Your activity, which shows them everything kept, in words; off deletes it all. | engine/activity.enabled, account.js actHTML |
+| Stages | new · power · regular · casual · lapsing · dormant · gone — "lapsing" measured against the member's **own** rhythm (2.5 × their usual gap, at least a week), so a Sunday-only football fan is not "drifting" on Friday. | engine/engagement.stage |
+| Still around? | BG/BB fitted on our own members; kept only if, on members it never saw, it predicts who comes back better than the stages do (`fit --save`). Checked against simulation: calibrated across every quintile. | engine/engagement.fit |
+| The owner's report | Stages with revenue in each and **revenue at risk**, the power-user curve, DAU/MAU, minutes a day, leagues, busiest hours, share of visits from alerts, new members still here in weeks 1, 2 and 4 by signup week, the model's view, ARPU, monthly churn and lifetime value. `demo` prints it on a made-up population. | `python3 -m engine.engagement report` |
+| While you were away | A member gone longer than their own rhythm (lapsing or dormant, never "gone"), with the switch on, hears once at their own best hour: their team's game today; else the newest thing shipped since they were last here; else today's slate in their league. One a week at most; after three unanswered, none until they come back. | engine/engagement.away_pass |
+| Fewer to the phones that never open them | A phone with 15 picks-up / last-night alerts in a row unopened gets those two kinds once a day at most, until its member opens any alert. Scores and their own alerts are untouched. | engine/pushalerts.IGNORED_N |
+
+### The Privacy Policy wording to approve (it turns the switch on)
+
+Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
+
+```html
+<h3 id="your-activity">2.8 Your activity here</h3>
+<p>While you are signed in, and unless you turn it off in Settings → Your
+  activity, we keep a daily record of your own time on this site: how many
+  seconds a page of it was in front of you (only while the tab is visible and
+  you have used it in the last two minutes, or watched a live game in the last
+  half hour), on which of our pages and for which leagues, in which hours of
+  the day, how many visits you made and how many of them one of our alerts
+  opened. Never your clicks, anything you type, your location, your device, or
+  anything about other apps or sites.
+  (<code>activity_days</code>, <code>activity_prefs</code>,
+  <code>engagement_away</code>)</p>
+<p>We use it for your own alerts — to send the ones not tied to a game at the
+  hour you usually look, to send fewer of the kinds you never open, and, if you
+  turned on "When I’ve been away", one line a week at most with your team’s next
+  game or what is new — and, as totals, to see how the site is used. It is
+  never sold, shared, or used for advertising, and nothing about what you pay
+  changes how we treat you. Each day’s row is deleted after 120 days, all of
+  it when you turn the switch off or delete your account, and it is in
+  Download my data.</p>
+```
+
+### Before switching it on (the runbook's step HW)
+
+1. Ethan approves (or edits) the wording above; it goes into the policy in a
+   commit, and the policy's date at the top moves.
+2. **The App Store privacy label** must say it before the iPhone app ships
+   with it: App Store Connect → App Privacy → Usage Data → **Product
+   Interaction**, "Linked to the user's identity: Yes", purposes **App
+   Functionality** and **Analytics**, "Used for tracking: No"
+   ([OneSignal's guide](https://documentation.onesignal.com/docs/apple-app-privacy-requirements),
+   [Apple's labels](https://www.apple.com/sg/privacy/labels/)).
+3. `sudo ./deploy/setenv.sh QB_ACTIVITY 1` and restart.
+4. After four weeks of rows: `python3 -m engine.engagement fit`, then with
+   `--save` only if it says it holds.

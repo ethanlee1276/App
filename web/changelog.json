@@ -2,6 +2,46 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-10-28",
+      "kind": "ship",
+      "title": "Pick'em with your friends",
+      "body": "The free weekly pick'em pays karma now (five a winner, twenty-five a perfect week), has standings among your friends as well as everyone, sends a push before picks lock if you want one, and comes back on Tuesday with your week's record and place. Badges for winners and perfect weeks, and a season record on your profile.",
+      "alert": "Pick'em against your friends: standings, karma and a push before picks lock.",
+      "url": "/#feed/pickem/nfl"
+    },
+    {
+      "date": "2026-10-28",
+      "kind": "ship",
+      "title": "Find people, and friend requests that reach them",
+      "body": "A Search tab on Social finds accounts by name, shows who you know that follows them, and opens their profile to add them. A friend request lands in the other person's Activity (and as a push if they want one), and so does the yes. An @ in any chat reaches the person it names.",
+      "alert": "Find your friends here: search accounts, add them, see who is watching now.",
+      "url": "/#feed/search"
+    },
+    {
+      "date": "2026-10-28",
+      "kind": "ship",
+      "title": "Karma, levels and watch parties",
+      "body": "Karma for watching games live, talking in a game's chat, calling plays and getting trivia right, with levels and badges beside your name, a weekly top ten and a race among friends. Watch parties put friends in one room for a game; the fans vote the player of the game when it ends; a bell on any game reminds you before it starts.",
+      "alert": "Karma for watching live and talking in the chat, levels, badges and watch parties.",
+      "url": "/#live"
+    },
+    {
+      "date": "2026-10-28",
+      "kind": "ship",
+      "title": "A tap before your teams play",
+      "body": "Kickoff alerts for the teams you follow, each in its own league (the Dolphins and the Heat are not the same MIA): a push ten minutes before the game, a tap into its page, its chat and Call it. A switch of its own on the Alerts page.",
+      "alert": "A tap ten minutes before your teams play: switch it on in Alerts.",
+      "url": "/#alerts"
+    },
+    {
+      "date": "2026-10-26",
+      "kind": "ship",
+      "title": "Call it on every live game",
+      "body": "Call the next play on any live game in every sport we cover, with a ladder for each game and the night, a flame in the chat for a run of right calls, and a card to share at five in a row.",
+      "alert": "Call the next play on any live game, with a ladder and a flame in the chat.",
+      "url": "/#live"
+    },
+    {
       "date": "2026-08-27",
       "kind": "model",
       "title": "The touchdown model was graded for the first time",
