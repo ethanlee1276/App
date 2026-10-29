@@ -4,6 +4,14 @@
     {
       "date": "2026-10-29",
       "kind": "ship",
+      "title": "Your best-priced bet of the week",
+      "body": "Your Edge Report on My Bets now names your best-priced bet this week: the one whose price beat the closing line by the most, win or lose. And once you have three weeks of priced bets, how many weeks you beat the close. It's graded on the price, never on luck.",
+      "alert": "Your Edge Report names your best-priced bet of the week.",
+      "url": "/#mybets"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
       "title": "A morning line about your teams",
       "body": "The morning alert on your teams' games now says who on those teams is out, doubtful or questionable, which spreads have moved a point or more since they opened, and how many of our picks are on those games. And with When I've been away on: when every league you follow has just finished its season, which leagues are on; when one is back, the day your team plays first. Once each.",
       "alert": "Your morning alert now says who's hurt and how the line moved.",

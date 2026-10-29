@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HZ "Your best-priced bet of the week, and the North Star in your report" 60 <<'SH'
+curl -s https://qellysbook.com/js/account.js | grep -c 'Weeks you beat the close'
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement demo
+SH
 run HY "Your data, your limits, your games first, and your membership on your phone" 120 <<'SH'
 curl -s https://qellysbook.com/js/account.js | grep -c 'function mineSheet('
 curl -s https://qellysbook.com/js/app.js | grep -c 'function limitWeek('

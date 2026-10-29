@@ -8274,6 +8274,44 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HY 2>&1 | tee /tmp/hy.txt
 ```
 
+**HZ. Your best-priced bet of the week, and the North Star in your
+report** (step 286; your first paper's "process badges", "a weekly 'your
+best-graded bet' card" and "metrics to run the business on"; docs/RETENTION.md
+§10). What it built:
+
+- **My Bets → Your Edge Report** now names your best-priced bet this week
+  (last week's on a Monday): the one whose price beat the closing line by
+  the most, win or lose. After three weeks of priced bets, it also shows
+  "Weeks you beat the close: 5 of 7". It is graded on the price, never the
+  result, and never pays karma.
+- **Your report** adds three lines for members who said yes to activity:
+  - the North Star, weekly active sweaters: members who watched a live
+    game's page with a bet that week or a team they follow;
+  - the aha test: who logged a bet and watched a live game in their first
+    two days, and whether they were still here a month later;
+  - recency by frequency, with the paying members in each cell.
+  Until the activity log is on, the report stops at the four groups.
+
+**Your call, not built:** an opt-in leaderboard of members' own bets, ranked
+by how they beat the close. Anyone could see who bets and how well, by
+name. The pick'em's "Beat the close" table already ranks people that way
+with no money in it. Say "build the CLV leaderboard" and I'll write its
+wording for your yes, behind the same two locks as the split.
+
+Read-only, any time. The first line prints `1` once this version is live;
+the second shows the report's new lines on a made-up population:
+
+```
+curl -s https://qellysbook.com/js/account.js | grep -c 'Weeks you beat the close'
+cd /srv/qellys && sudo -u qellys python3 -m engine.engagement demo
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HZ 2>&1 | tee /tmp/hz.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

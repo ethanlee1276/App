@@ -253,7 +253,11 @@ Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
 <p>We use it for your own alerts — to send the ones not tied to a game at the
   hour you usually look, to send fewer of the kinds you never open, and, if you
   turned on "When I’ve been away", one line a week at most with your team’s next
-  game or what is new — and, as totals, to see how the site is used. It is
+  game or what is new — and, as totals, to see how the site is used: for
+  that, it is read beside your My Bets dates and the teams you follow, to
+  count, say, how many members watched a live game here with a bet on it or a
+  team in it, or how many who logged a bet in their first two days were still
+  here a month later. It is
   never sold, shared, or used for advertising, and nothing about what you pay
   changes how we treat you. Each day’s row is deleted after 120 days, all of
   it when you say no or delete your account, and it is in Download my data.
@@ -381,3 +385,26 @@ alert's one a week. Never "bet now", never a discount, never "we miss you".
 | "Smart paywall: shows a free user what paid alerts caught on their teams last week" | The plans page, for a signed-in account without a plan that follows teams: how many picks the board posted on those teams in the last week, how the graded ones went (losses included) and how many are still open. Counts only, never a pick: the same level a free account's own team alert already tells it | engine/smartwall, GET /api/billing/caught, account.js pwCaught |
 | "Morning brief: each user's games, model edges, injuries and line moves" | The morning alert on their teams' games adds who on those teams is out, doubtful or questionable, a spread that moved a point or more since it opened (two at most), and how many picks the board has on those games. Whole sentences only, inside what a lock screen shows | engine/kickoffs.brief_extras |
 | "Season bridge: when a user's sport ends, suggests players to follow in the next one" | When every league of the teams someone follows has just finished (nothing on its board in the next week, its last game 10 to 24 days ago, in a month its season ends in, so an All-Star week or the Super Bowl's bye never reads as an end), "When I've been away" says once which leagues are on and that following a team there brings its games, big moments and finals. And when a league is back after a month off, its fans who have been away a week hear once when their team plays first: the report's "one note at a season's start" for the dormant. Leagues, not players: a player suggestion would be a pick by another name | engine/lifecycle.seasons, season_bridge (season_marks keeps when each league last played) |
+
+## 10. The first paper's mechanics and the owner's numbers (2026-10-29, round five)
+
+| The paper | Built | Where |
+| --- | --- | --- |
+| "A weekly 'your best-graded bet' card is a fine reward" | The Edge Report's best-priced bet this week (last week's on a Monday, or when nothing this week beat the close): graded on the price against the close, win or lose | js/account.js mbEdge |
+| Process marks, "Beat the close", never win streaks | "Weeks you beat the close": of the last eight weeks with a priced bet, how many beat the close on average. A mark on the member's own report, never an alert, never karma (Ethan's rule: karma never pays for bets). The "research streak" is karma's daily streak already: a day here, not a bet | js/account.js mbEdge |
+| North Star: "weekly active sweaters" | In the owner report: members who said yes who opened a live game's page in a week with a bet dated that week or a team or player they follow, this week and the three before | engine/engagement.north_star |
+| The aha moment, "a hypothesis to test" | Of members who said yes and signed up 4 to 12 weeks ago: who logged a bet and watched a live game's page in their first two days, and how many of them and of the rest were here in days 22 to 28. Under ten members it says too few; it says "who did it, not why they stayed" | engine/engagement.aha |
+| RFM | Recency by frequency (days since last here × days here of the last 28), with the paying members in each cell; the four groups above are its money cut | engine/engagement.rfm_lines |
+
+Not built, and why:
+
+- **An opt-in CLV leaderboard of members' own bets.** It would be a public
+  record of who bets and how, a new use of what members log (like the
+  members' split), and the pick'em's "Beat the close" table already ranks
+  people on the closing line with no money in it. It needs its own wording
+  and Ethan's yes; asked in the runbook's HZ.
+- **The alert-copy bandit.** Telling two wordings apart by a few points of
+  open rate takes thousands of sends of each; no alert kind sends that many
+  a week yet. The daily totals by kind (HV) already say which alerts get
+  opened. Revisit when one kind passes a thousand a week.
+

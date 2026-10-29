@@ -500,6 +500,130 @@ def churn_flags(ms: dict, today: _dt.date, conn=None) -> dict:
     return flags
 
 
+# ---- the first paper's numbers: the North Star, the aha moment, recency by frequency ----
+#: A live game's own pages, as js/activity.js names them.
+LIVE_VIEWS = ("pbp", "gamecast")
+#: "Logged first bet and watched it on the Sweat Board during a live game
+#: within 48 hours of signup": the signup day or the next (the log keeps days).
+AHA_DAYS = 2
+#: Under this many members in a test, the report says so instead of a share.
+AHA_MIN = 10
+
+
+def _logged(conn, uid) -> list:
+    """[(the bet's date, the day it was logged or None)] off a member's synced
+    My Bets; the logged day is read off the entry's id (its first thirteen
+    digits are the moment it was saved)."""
+    if conn is None or not _table(conn, "user_data"):
+        return []
+    row = conn.execute("SELECT payload FROM user_data WHERE user_id = ? AND section = 'mybets'", (uid,)).fetchone()
+    try:
+        rows = (json.loads(row[0]) or {}).get("rows") if row else None
+    except (TypeError, ValueError, AttributeError):
+        rows = None
+    out = []
+    for b in rows if isinstance(rows, list) else []:
+        if not isinstance(b, dict):
+            continue
+        sid = str(b.get("id") or "")
+        at = ACT.eastern(int(sid[:13]) / 1000).date() if len(sid) >= 13 and sid[:13].isdigit() else None
+        out.append((str(b.get("date") or "")[:10], at))
+    return out
+
+
+def _follows(conn, uid) -> bool:
+    """A team in their settings, or a player or team watch."""
+    if conn is None:
+        return False
+    if _table(conn, "user_data"):
+        row = conn.execute("SELECT payload FROM user_data WHERE user_id = ? AND section = 'settings'",
+                           (uid,)).fetchone()
+        try:
+            if row and (json.loads(row[0]) or {}).get("teams"):
+                return True
+        except (TypeError, ValueError, AttributeError):
+            pass
+    return bool(_table(conn, "alert_watches") and conn.execute(
+        "SELECT 1 FROM alert_watches WHERE user_id = ? AND kind IN ('player', 'team') LIMIT 1", (uid,)).fetchone())
+
+
+def _weeks_ago(day: _dt.date, today: _dt.date) -> int:
+    """0 for this Monday-to-Sunday week, 1 for the one before, and so on."""
+    return ((today - _dt.timedelta(days=today.weekday())) - (day - _dt.timedelta(days=day.weekday()))).days // 7
+
+
+def north_star(ms: dict, today: _dt.date, conn=None, weeks: int = 4) -> list:
+    """The first paper's North Star, weekly active sweaters: members who said
+    yes who opened a live game's page in the week, with a bet dated that week
+    or a team or player they follow. [this week, the week before, ...]."""
+    out = [0] * weeks
+    for uid, m in ms.items():
+        if m["opted_out"]:
+            continue
+        watched = {_weeks_ago(_day(r["day"]), today) for r in m["rows"]
+                   if any((r.get("views") or {}).get(v) for v in LIVE_VIEWS)}
+        watched = {k for k in watched if 0 <= k < weeks}
+        if not watched:
+            continue
+        follows = _follows(conn, uid)
+        bet = set()
+        for d, _at in _logged(conn, uid):
+            try:
+                bet.add(_weeks_ago(_dt.date.fromisoformat(d), today))
+            except ValueError:
+                continue
+        for k in watched:
+            out[k] += 1 if follows or k in bet else 0
+    return out
+
+
+def aha(ms: dict, today: _dt.date, conn=None) -> dict:
+    """The paper's aha moment as a test, not a belief: of members who said yes
+    and signed up 28 to 84 days ago, those who logged a bet and watched a live
+    game's page in their first AHA_DAYS, and how many of each kind were still
+    here in days 22 to 28 after signing up."""
+    got = {"n": 0, "aha": 0, "kept_aha": 0, "kept_rest": 0}
+    for uid, m in ms.items():
+        age = (today - m["signup"]).days
+        if m["opted_out"] or not 28 <= age <= 84:
+            continue
+        first = {m["signup"] + _dt.timedelta(days=i) for i in range(AHA_DAYS)}
+        watched = any(_day(r["day"]) in first and any((r.get("views") or {}).get(v) for v in LIVE_VIEWS)
+                      for r in m["rows"])
+        logged = any(at in first for _d, at in _logged(conn, uid))
+        kept = any(22 <= (_day(r["day"]) - m["signup"]).days <= 28 and (r.get("seconds") or r.get("visits"))
+                   for r in m["rows"])
+        got["n"] += 1
+        if watched and logged:
+            got["aha"] += 1
+            got["kept_aha"] += kept
+        else:
+            got["kept_rest"] += kept
+    return got
+
+
+#: Recency (days since last here) and frequency (days here of the last 28) bands.
+R_BANDS = ((0, 3, "here in 3 days"), (4, 13, "4 to 13 days"), (14, 10 ** 6, "14 days or more"))
+F_BANDS = ((1, 3, "1-3 days"), (4, 11, "4-11 days"), (12, 28, "12+ days"))
+
+
+def rfm_lines(ms: dict, fs: dict) -> list:
+    """Recency by frequency, with the paying members in each cell (the money):
+    members who said yes and were here at least once in the last 28 days."""
+    grid = {(r, f): [0, 0] for r in range(3) for f in range(3)}
+    for uid, f in fs.items():
+        if not f["l28"]:
+            continue
+        r = next(i for i, (lo, hi, _w) in enumerate(R_BANDS) if lo <= f["recency"] <= hi)
+        q = next(i for i, (lo, hi, _w) in enumerate(F_BANDS) if lo <= f["l28"] <= hi)
+        grid[(r, q)][0] += 1
+        grid[(r, q)][1] += monthly(ms[uid]) > 0
+    out = [f"  {'':<18}" + "".join(f"{w:>14}" for _lo, _hi, w in F_BANDS)]
+    for r, (_lo, _hi, w) in enumerate(R_BANDS):
+        out.append(f"  {w:<18}" + "".join(f"{f'{grid[(r, q)][0]} ({grid[(r, q)][1]})':>14}" for q in range(3)))
+    return out
+
+
 def report(conn, days: int = 28, now: float | None = None, model_path: Path | None = None) -> str:
     on = ACT.enabled()
     head = [f"Qellys engagement, the last {days} days (Eastern days). Activity: "
@@ -535,6 +659,22 @@ def _body(ms: dict, today: _dt.date, since, days: int, model: dict | None, conn=
     out += ["", "churn flags (members who said yes; the paper's four rules):"]
     for rule, n in churn_flags(ms, today, conn).items():
         out.append(f"  {rule:<56}{n:>5}")
+    # 1c. The first paper's numbers: the North Star, the aha moment, recency by frequency.
+    ns = north_star(ms, today, conn)
+    out += ["", "north star, weekly active sweaters (opened a live game's page with a bet that week or a team "
+                "or player they follow):",
+            "  this week " + " · ".join([str(ns[0])] + [f"{k} week{'s' if k > 1 else ''} ago {n}"
+                                                       for k, n in enumerate(ns[1:], 1)])]
+    a = aha(ms, today, conn)
+    if a["n"] < AHA_MIN:
+        out.append(f"aha moment (a bet logged and a live game watched in the first two days): "
+                   f"{a['n']} members signed up 4 to 12 weeks ago, too few to test yet")
+    else:
+        rest = a["n"] - a["aha"]
+        out.append(f"aha moment (a bet logged and a live game watched in the first two days): {a['aha']} of {a['n']} "
+                   f"({_pct(a['aha'], a['n'])}); here in days 22-28: {_pct(a['kept_aha'], a['aha'])} of them, "
+                   f"{_pct(a['kept_rest'], rest)} of the rest (who did it, not why they stayed)")
+    out += ["", "recency by frequency, members here in the last 28 days (paying in brackets):"] + rfm_lines(ms, fs)
     # 2. The power-user curve (L28).
     hist = [0] * 29
     for f in fs.values():
@@ -798,27 +938,45 @@ def demo(seed: int = 7, n: int = 400) -> str:
     """The report on `n` simulated members (BG/BB with known parameters),
     and the fit's recovery of them — nothing read, nothing kept."""
     import random
+    from zoneinfo import ZoneInfo
     rnd = random.Random(seed)
     today = _dt.date(2026, 10, 29)
     true = (0.9, 2.2, 0.35, 6.0)                         # p ~ Beta(0.9, 2.2), θ ~ Beta(0.35, 6)
     ms: dict = {}
+    # Their My Bets and teams, in memory only, for the lines that read them
+    # (the North Star, the aha moment). Logging a bet here is independent of
+    # staying, so the demo shows the test's form, never a finding.
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE user_data (user_id INTEGER, section TEXT, ts INTEGER, payload TEXT, "
+                 "PRIMARY KEY (user_id, section))")
     for uid in range(1, n + 1):
         signup = today - _dt.timedelta(days=rnd.randint(0, 110))
         p, th = rnd.betavariate(*true[:2]), rnd.betavariate(*true[2:])
         rows, d, alive = [], signup, True
         lg = rnd.choice(["nfl", "nfl", "nba", "nba", "cfb", "nhl", "mlb"])
         hour = rnd.choice([12, 13, 19, 20, 20, 21, 21, 22])
+        watcher, bettor = rnd.random() < 0.5, rnd.random() < 0.4
+        bets = []
         while d <= today:
             if d == signup or (alive and rnd.random() < p):
                 secs = int(rnd.expovariate(1 / 700)) + 30
                 hrs = [0] * 24
                 hrs[hour] = secs
+                views = {"live": secs, **({"pbp": secs // 2} if watcher and rnd.random() < 0.6 else {})}
                 rows.append({"day": d.isoformat(), "seconds": secs, "visits": 1 + (secs > 900),
-                             "taps": int(rnd.random() < 0.15), "views": {"live": secs}, "sports": {lg: secs},
+                             "taps": int(rnd.random() < 0.15), "views": views, "sports": {lg: secs},
                              "hours": hrs})
+                if bettor and rnd.random() < 0.4:
+                    at = _dt.datetime.combine(d, _dt.time(hour), tzinfo=ZoneInfo("America/New_York")).timestamp()
+                    bets.append({"id": f"{int(at * 1000)}{rnd.randint(1000, 9999)}", "date": d.isoformat()})
             d += _dt.timedelta(days=1)
             if alive and d > signup and rnd.random() < th:
                 alive = False
+        if bets:
+            conn.execute("INSERT INTO user_data VALUES (?, 'mybets', 1, ?)", (uid, json.dumps({"rows": bets})))
+        if rnd.random() < 0.6:
+            conn.execute("INSERT INTO user_data VALUES (?, 'settings', 1, ?)",
+                         (uid, json.dumps({"teams": [f"{lg}:DEMO"]})))
         ms[uid] = {"signup": signup, "rows": rows, "opted_out": rnd.random() < 0.03,
                    "status": "active" if rnd.random() < 0.18 else "", "plan": rnd.choice(["monthly", "yearly"]),
                    "alerts": rnd.random() < 0.45}
@@ -832,7 +990,7 @@ def demo(seed: int = 7, n: int = 400) -> str:
             f"{n} (nothing here is real; nothing was read or kept).",
             f"Simulated with p ~ Beta{true[:2]}, θ ~ Beta{true[2:]}; the fit found "
             f"({', '.join(f'{v:.2f}' for v in got)}).", ""]
-    return "\n".join(head + _body(ms, today, today - _dt.timedelta(days=110), 28, model, None))
+    return "\n".join(head + _body(ms, today, today - _dt.timedelta(days=110), 28, model, conn))
 
 
 def main(argv=None) -> int:

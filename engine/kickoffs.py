@@ -217,9 +217,11 @@ def today_pass(conn, data_dir: Path | None = None, now: float | None = None) -> 
         for x in brief_extras(theirs, mine, Path(data_dir) if data_dir else PM.WEB / "data"):
             if len(body) + 1 + len(x) <= BRIEF_CHARS:               # whole sentences only, on a lock screen
                 body = f"{body} {x}".strip()
+        # One game: the tap opens it, where its injuries and its line are.
+        url = f"/#pbp/{theirs[0][0]}/{theirs[0][1]}" if len(theirs) == 1 else "/#live"
         told += PM.tell(conn, uid, f"today:{local.date().isoformat()}", TODAY_TOPIC,
                         f"Today: {line}"[:120] + (" ET" if len(theirs) <= 3 else " ET and more"),
-                        body or "Your teams’ games — the slate, the chats and Call it.", "/#live", now=t)
+                        body or "Your teams’ games — the slate, the chats and Call it.", url, now=t)
     return told
 
 

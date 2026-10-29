@@ -83,6 +83,39 @@ def test_the_report_reads_the_log():
     assert e["peak"] is None and e["timed"] == 2, "two timed bets is not enough to say when you bet"
 
 
+def test_the_week_s_best_priced_bet_and_the_weeks_beat():
+    """The first paper's weekly "your best-graded bet" and its process mark,
+    "Beat the close": graded on the price, win or lose, never on a streak of
+    wins. Weeks run Monday to Sunday by the bet's date."""
+    node = shutil.which("node")
+    if not node:
+        print("      (skipped: no node)")
+        return
+    app, acct = READ("web", "js", "app.js"), READ("web", "js", "account.js")
+    words = app[app.index("const MB_PROP_WORDS = ["):app.index("];", app.index("const MB_PROP_WORDS = [")) + 2]
+    js = "\n".join([words, _fn(app, "mbDecimal"), _fn(app, "mbProfit"), _fn(app, "mbMarket"), _fn(acct, "mbEdge")])
+    bets = [{"id": "b1", "date": "2026-10-27", "odds": -110, "stake": 10, "result": "loss", "desc": "Mahomes over 1.5 TD"},
+            {"id": "b2", "date": "2026-10-28", "odds": -110, "stake": 10, "result": "win", "desc": "Lakers ML"},
+            {"id": "b3", "date": "2026-10-20", "odds": 120, "stake": 10, "result": "loss", "desc": "Celtics -4.5"},
+            {"id": "b4", "date": "2026-10-13", "odds": -105, "stake": 10, "result": "win", "desc": "Under 47.5"},
+            {"id": "b5", "date": "2026-08-01", "odds": 200, "stake": 10, "result": "win", "desc": "An old one"}]
+    clv = {"b1": 0.05, "b2": -0.02, "b3": 0.10, "b4": -0.03, "b5": 0.2}
+    js += (f"\nconst B = {json.dumps(bets)}, S = {json.dumps(clv)};"
+           "\nconsole.log(JSON.stringify([mbEdge(B, S, '2026-10-29'), mbEdge(B, S, '2026-11-02'),"
+           " mbEdge(B.slice(1), S, '2026-10-29')]));")
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=30)
+    thu, mon, lost = json.loads(out.stdout)
+    assert thu["week"]["b"]["id"] == "b1" and thu["week"]["when"] == "this week", thu["week"]
+    assert thu["week"]["b"]["result"] == "loss", "the best price, whatever the result"
+    assert thu["weeks"] == {"n": 3, "beat": 2}, thu["weeks"]
+    assert mon["week"]["b"]["id"] == "b1" and mon["week"]["when"] == "last week", "a Monday reads last week's"
+    assert lost["week"]["b"]["id"] == "b3" and lost["week"]["when"] == "last week", \
+        "a week whose only priced bet lost to the close falls back to last week's"
+    card = _fn(acct, "mbEdgeHTML")
+    assert "Best-priced bet ${e.week.when}" in card and "against the close, win or lose" in card
+    assert "Weeks you beat the close" in card and "e.weeks.n >= 3" in card
+
+
 def test_my_bets_draws_it_and_the_box_fills_the_closes():
     acct = READ("web", "js", "account.js")
     assert "${mbEdgeHTML(bets)}" in acct and "  mbEdgeFill();\n}" in acct

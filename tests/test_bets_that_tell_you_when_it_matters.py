@@ -172,6 +172,7 @@ def test_a_followed_team_s_close_finish_and_the_morning_slate():
     assert KO.today_pass(d, Path(tmp), now=nine) == 0
     assert KO.today_pass(d, Path(tmp), now=ten) == 1 and KO.today_pass(d, Path(tmp), now=ten + 900) == 0
     assert _told(d)[-1]["title"] == "Today: BOS @ LAL 8:00 PM ET", _told(d)[-1]
+    assert _told(d)[-1]["url"] == "/#pbp/nba/403", "one game: the tap opens its page"
     west = _conn(teams=("nba:LAL",), tz="America/Los_Angeles")
     assert KO.today_pass(west, Path(tmp), now=ten) == 0, "seven in the morning in Los Angeles"
     none = _conn(teams=("nfl:KC",))

@@ -340,14 +340,37 @@ function mbMonthHTML(bets, today) {
    worst result, and when you bet (off the moment each bet was logged).
    Never a pick, and nothing here leaves the page. */
 let _mbEdgeClv = null;
-function mbEdge(bets, server) {
-  const clvs = [];
+function mbEdge(bets, server, today) {
+  const clvs = [], priced = [];
   for (const b of bets) {
     const s = server && server[String(b.id)];
     const mine = mbDecimal(b.odds), close = b.close == null || b.close === "" ? null : mbDecimal(b.close);
-    if (s != null) clvs.push(s);
-    else if (mine && close) clvs.push(mine / close - 1);
+    const c = s != null ? s : mine && close ? mine / close - 1 : null;
+    if (c != null) { clvs.push(c); priced.push({ b, c }); }
   }
+  /* THE WEEK'S BEST-PRICED BET AND THE WEEKS BEAT (the first paper's "a
+     weekly 'your best-graded bet' card" and its process marks: "Beat the
+     close", never a win streak). Weeks run Monday to Sunday, Eastern, as
+     the limit's and Monday's recap do; a bet counts in the week of its date. */
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const mon = (v) => {
+    const d = new Date(`${String(v || "").slice(0, 10)}T12:00:00`);
+    if (isNaN(d)) return "";
+    d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+    return iso(d);
+  };
+  const thisWk = mon(today || iso(new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }))));
+  const back = (k, n) => { const d = new Date(`${k}T12:00:00`); d.setDate(d.getDate() - 7 * n); return iso(d); };
+  const byWk = {};
+  for (const x of priced) {
+    const k = mon(x.b.date);
+    if (k && k <= thisWk && k >= back(thisWk, 7)) (byWk[k] = byWk[k] || []).push(x);
+  }
+  const top = (k) => (byWk[k] || []).reduce((a, x) => (x.c > 0 && (!a || x.c > a.c) ? x : a), null);
+  const best = top(thisWk) || top(back(thisWk, 1));
+  const week = best ? { b: best.b, c: best.c, when: best === top(thisWk) ? "this week" : "last week" } : null;
+  const wks = Object.values(byWk);
+  const weeks = { n: wks.length, beat: wks.filter((xs) => xs.reduce((a, x) => a + x.c, 0) > 0).length };
   const settled = bets.filter((b) => ["win", "loss", "push"].includes(b.result));
   const mk = {};
   for (const b of settled) {
@@ -377,7 +400,7 @@ function mbEdge(bets, server) {
   return { clv: clvs.length ? { n: clvs.length, beat: clvs.filter((c) => c > 0).length,
                                  avg: clvs.reduce((a, v) => a + v, 0) / clvs.length } : null,
            markets, best: ranked.length >= 2 ? ranked[0] : null, worst: ranked.length >= 2 ? ranked[ranked.length - 1] : null,
-           peak, timed };
+           peak, timed, week, weeks };
 }
 function mbEdgeHTML(bets) {
   if (!bets.length) return "";
@@ -389,6 +412,15 @@ function mbEdgeHTML(bets) {
     rows.push(`<div class="edge-row"><span class="edge-k">Your price against the close</span>
       <b class="${e.clv.avg >= 0 ? "good" : "warn"}">${pctS(e.clv.avg)}</b>
       <span class="mini">a bet on average · beat it on ${e.clv.beat} of ${plural(e.clv.n, "bet")}</span></div>`);
+  }
+  if (e.week) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Best-priced bet ${e.week.when}</span><b class="good">${pctS(e.week.c)}</b>
+      <span class="mini">${escapeHtml(String(e.week.b.desc || "").slice(0, 60))} · against the close, win or lose</span></div>`);
+  }
+  if (e.weeks.n >= 3) {
+    rows.push(`<div class="edge-row"><span class="edge-k">Weeks you beat the close</span><b class="${
+      e.weeks.beat * 2 >= e.weeks.n ? "good" : "warn"}">${e.weeks.beat} of ${e.weeks.n}</b>
+      <span class="mini">your bets’ price against the close, week by week, the last eight</span></div>`);
   }
   const top = e.markets[0], low = e.markets.length > 1 ? e.markets[e.markets.length - 1] : null;
   if (top) {
