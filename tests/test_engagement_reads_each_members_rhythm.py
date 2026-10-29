@@ -241,7 +241,12 @@ def test_the_report_says_what_it_is():
                  "new members by signup week", "visit model: not fitted yet", "paying members: 20",
                  "lifetime value", "(1 have not said yes to keeping their activity, or said no, and are not counted)"):
         assert line in rep, (line, rep)
-    assert "Activity: OFF" in E.report(conn, now=NOW), "the switch's state is the first line"
+    from engine import sitesays as SS
+    keep, SS.ask = SS.ask, (lambda key, **kw: False)
+    try:
+        assert "Activity: OFF" in E.report(conn, now=NOW), "the switch's state is the first line"
+    finally:
+        SS.ask = keep
     demo = E.demo(n=150)
     assert "DEMO" in demo and "the fit found" in demo and "members by stage" in demo
 

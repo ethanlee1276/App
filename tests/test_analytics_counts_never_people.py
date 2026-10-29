@@ -299,7 +299,14 @@ def test_the_report_says_what_it_counts():
     assert "where visits came from" in text and "search" in text
     assert "the page a checkout click came from:" in text and "record" in text
     assert "came back after day 1" in text and "came back after day 7" in text
-    assert "Switched OFF: nothing is being counted" in AN.report(7, accounts_path=A.DB_PATH)
+    # Off in this shell's settings, and the running site says so too
+    # (engine/sitesays; tests/test_the_reports_ask_the_running_site.py).
+    from engine import sitesays as SS
+    keep, SS.ask = SS.ask, (lambda key, **kw: False)
+    try:
+        assert "Switched OFF: nothing is being counted" in AN.report(7, accounts_path=A.DB_PATH)
+    finally:
+        SS.ask = keep
 
 
 if __name__ == "__main__":

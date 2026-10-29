@@ -624,10 +624,25 @@ def rfm_lines(ms: dict, fs: dict) -> list:
     return out
 
 
+def switch_line() -> str:
+    """"Activity: ..." by this shell's settings when it has them, else by
+    the running site's own word (engine/sitesays: a report's shell cannot
+    read the service's settings, and said OFF while the site was keeping)."""
+    from engine import sitesays as SS
+    on, whose = SS.switch(ACT.ENV, ACT.enabled, "activity_switch")
+    if on is None:
+        return (f"Activity: can't tell from here. This shell has no {ACT.ENV} (only root reads the "
+                "service's settings) and the running site did not answer.")
+    if whose == SS.SHELL:
+        return "Activity: ON." if on else f"Activity: OFF — {ACT.why_off()}."
+    if on:
+        return f"Activity: ON ({whose} says so)."
+    return (f"Activity: OFF ({whose} says so) — " + (ACT.why_off() if not ACT.policy_ready()
+                                                       else f"its {ACT.ENV} is not 1") + ".")
+
+
 def report(conn, days: int = 28, now: float | None = None, model_path: Path | None = None) -> str:
-    on = ACT.enabled()
-    head = [f"Qellys engagement, the last {days} days (Eastern days). Activity: "
-            + ("ON." if on else f"OFF — {ACT.why_off()}.")]
+    head = [f"Qellys engagement, the last {days} days (Eastern days). {switch_line()}"]
     groups = groups_lines(conn, now)
     if groups:
         head += [""] + groups
@@ -1012,8 +1027,7 @@ def main(argv=None) -> int:
         conn = sqlite3.connect(f"file:{accounts.DB_PATH}?mode=ro", uri=True)
         try:
             if not _table(conn, "activity_days"):
-                print(f"Qellys engagement: activity {'ON' if ACT.enabled() else 'OFF — ' + ACT.why_off()}; "
-                      "nothing has been kept yet.")
+                print(f"Qellys engagement. {switch_line()} Nothing has been kept yet.")
                 return 0
             print(report(conn, a.days))
         finally:

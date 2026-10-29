@@ -214,10 +214,22 @@ def accounts_summary(accounts_path=None, days: int = 7, now: float | None = None
     return out
 
 
+def switch_line() -> str:
+    """Whether it is counting, by this shell's settings when it has them,
+    else by the running site's own word (engine/sitesays: a report's shell
+    cannot read the service's settings, and said OFF while it counted)."""
+    from engine import sitesays as SS
+    on, whose = SS.switch(ENV, enabled, "analytics")
+    if on is None:
+        return (f"Switched on or off: can't tell from here. This shell has no {ENV} (only root reads the "
+                "service's settings) and the running site did not answer.")
+    said = "" if whose == SS.SHELL else f"{whose} says so; "
+    return f"Switched {'ON' if on else 'OFF: nothing is being counted'} ({said}{ENV})."
+
+
 def report(days: int = 7, path=None, accounts_path=None) -> str:
     rows = _rows(days, path)
-    head = [f"Qellys analytics, last {days} days (UTC days). Switched "
-            f"{'ON' if enabled() else 'OFF: nothing is being counted'} ({ENV})."]
+    head = [f"Qellys analytics, last {days} days (UTC days). {switch_line()}"]
     by_day: dict = {}
     pages: dict = {}
     src: dict = {}
