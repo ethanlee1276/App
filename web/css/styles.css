@@ -10640,6 +10640,38 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   .rt-dot { animation: rt-breathe 1.6s ease-in-out infinite; }
 }
 @keyframes rt-breathe { 50% { opacity: .35; transform: scale(.8); } }
+/* THE IPHONE DUO'S SIDE STRIP (Ethan, 2026-10-29: "move this bar ... to the
+   right side ... only for the iPhone Duo"). boot.js sets html.side-rail when
+   the screen gives the page a strip on one side only, its width in
+   --strip-w. The bar stands in that strip on end, under the clock and the
+   camera, the way the system's own bars do there; the page keeps clear of
+   the strip; and everything that rode above the bar's foot comes down by
+   the bar's height (--tb-drop), there being no bar there now. */
+@media (max-width: 760px) {
+  html.side-rail, html.side-rail.store-ios, html.side-rail.ios-home { --tb-drop: 70px; }
+  html.side-rail .tabbar, html.side-rail.store-ios .tabbar, html.side-rail.ios-home .tabbar {
+    display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 10px;
+    left: auto; right: 0; top: 0; bottom: 0; width: var(--strip-w, 84px);
+    padding: 168px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+    border: 0; border-radius: 0; background: none; box-shadow: none; }
+  html.side-rail-left .tabbar, html.side-rail-left.store-ios .tabbar, html.side-rail-left.ios-home .tabbar {
+    right: auto; left: 0; }
+  html.side-rail .tb-item { padding: 6px 0; }
+  html.side-rail .tb-center-disc { width: 44px; height: 44px; margin-top: 0; }
+  html.side-rail .tb-item::after { bottom: auto; top: 50%; left: auto; right: 2px; margin: -2px 0 0; }
+  html.side-rail-left .tb-item::after { right: auto; left: 2px; }
+  html.side-rail body, html.side-rail.store-ios body, html.side-rail.ios-home body {
+    padding-right: var(--strip-w, 84px); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail body.has-tray, html.side-rail.store-ios body.has-tray, html.side-rail.ios-home body.has-tray {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail-left body, html.side-rail-left.store-ios body, html.side-rail-left.ios-home body {
+    padding-right: 0; padding-left: var(--strip-w, 84px); }
+  html.side-rail body.menu-open .topbar { right: var(--strip-w, 84px); }
+  html.side-rail-left body.menu-open .topbar { right: 0; left: var(--strip-w, 84px); }
+  html.side-rail-left .more-sheet { left: var(--strip-w, 84px); }
+  html.side-rail #qb-slip { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
    his phone's top bar and league row circled again: "the colors up here
    could be blended better too. Still have sharp lines"). The colour spilled

@@ -99,6 +99,50 @@ try {
   })();
 } catch (e) {}
 
+/* THE IPHONE DUO'S SIDE STRIP (Ethan, 2026-10-29, his closed iPhone Duo
+   with the tab bar circled and an arrow to the black strip beside the
+   clock: "move this bar ... to the right side ... only for the iPhone
+   Duo"). An app built with the iOS 27.1 SDK reaches the screen's edge, and
+   the strip beside the clock and camera comes to the page as a safe-area
+   inset on that side alone (84pt, by developers' reports), where the
+   system stands its own bars on end under the clock. When one side's inset
+   is a strip that wide and the other side has none, the bar moves into it:
+   html.side-rail (and side-rail-left when the strip is on the left, as in
+   Split View), its width in --strip-w (styles.css). An iPhone on its side
+   insets both sides alike and keeps its bar at the foot; an app built with
+   an older SDK is never given the strip, so nothing moves there. Measured
+   again whenever the window changes: the Duo opens and closes. */
+try {
+  (function () {
+    var root = document.documentElement, probe = null, last = "";
+    function rail() {
+      if (!document.body) return;
+      if (!probe) {
+        probe = document.createElement("div");
+        probe.setAttribute("aria-hidden", "true");
+        probe.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;"
+          + "padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)";
+        document.body.appendChild(probe);
+      }
+      var cs = getComputedStyle(probe);
+      var l = parseFloat(cs.paddingLeft) || 0, r = parseFloat(cs.paddingRight) || 0;
+      var side = r >= 60 && l <= 16 ? "right" : l >= 60 && r <= 16 ? "left" : "";
+      var key = side + (side ? Math.round(side === "right" ? r : l) : "");
+      if (key === last) return;
+      last = key;
+      root.classList.toggle("side-rail", !!side);
+      root.classList.toggle("side-rail-left", side === "left");
+      if (side) root.style.setProperty("--strip-w", Math.round(side === "right" ? r : l) + "px");
+      else root.style.removeProperty("--strip-w");
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", rail);
+    else rail();
+    addEventListener("resize", rail);
+    addEventListener("orientationchange", rail);
+    addEventListener("pageshow", rail);
+  })();
+} catch (e) {}
+
 /* The net under the art rule. visuals.js asks for no league logo or player
    photo in the app, but a picture can arrive by a road it does not cover
    (a board's own image field, a chart's photo). Any <img> from another
