@@ -104,7 +104,7 @@ def test_in_a_browser_it_shows_goes_away_and_stays_away():
     finally:
         srv.shutdown()
     assert not errs, errs
-    assert "What's new" in got["shown"] and "Pick'em pushes" in got["shown"], got
+    assert "What's new" in got["shown"] and "Your month" in got["shown"], got
     assert got["gone"] and got["strip"] and got["still_gone"], got
 
 

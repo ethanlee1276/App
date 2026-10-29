@@ -485,6 +485,9 @@
      the home indicator's strip ("the capsule's foot" below). 0 anywhere
      else; whatever rides above the bar comes down by it too. */
   --tb-drop: 0px;
+  /* The width of the iPhone Duo's side strip when the tab bar stands in it
+     (boot.js writes the measured width; "THE IPHONE DUO'S SIDE STRIP"). */
+  --strip-w: 84px;
 
   /* ---- FIXED COLOURS (audit #50): the same in both themes, which is why
      they are declared here only and never in the light block. Ink that
@@ -3853,6 +3856,10 @@ body.pk-open { overflow: hidden; }
 #ffd-overlay, #pk-overlay, #tour-overlay { bottom: calc(-1 * var(--vgap)); }
 @media (max-width: 720px) {
   #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop) - var(--vgap)); }
+  /* The bar in the Duo's side strip ("THE IPHONE DUO'S SIDE STRIP"): the
+     slip comes down to the foot, and keeps out of the strip. */
+  html.side-rail #qb-slip { right: var(--strip-w); bottom: calc(8px + env(safe-area-inset-bottom) - var(--vgap)); }
+  html.side-rail-left #qb-slip { right: 0; left: var(--strip-w); }
 }
 .tour-card { position: relative; width: 100%; max-width: 440px; background: var(--panel);
   border: var(--hairline) solid transparent; border-radius: var(--radius-lg); padding: 22px 20px 18px; }
@@ -10645,13 +10652,12 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    the screen gives the page a strip on one side only, its width in
    --strip-w. The bar stands in that strip on end, under the clock and the
    camera, the way the system's own bars do there; the page keeps clear of
-   the strip; and everything that rode above the bar's foot comes down by
-   the bar's height (--tb-drop), there being no bar there now. */
+   the strip; and what floated above the bar's old place comes down to the
+   foot and keeps out of the strip too (the slip's rule is with the slip's). */
 @media (max-width: 760px) {
-  html.side-rail, html.side-rail.store-ios, html.side-rail.ios-home { --tb-drop: 70px; }
   html.side-rail .tabbar, html.side-rail.store-ios .tabbar, html.side-rail.ios-home .tabbar {
     display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 10px;
-    left: auto; right: 0; top: 0; bottom: 0; width: var(--strip-w, 84px);
+    left: auto; right: 0; top: 0; bottom: 0; width: var(--strip-w);
     padding: 168px 0 calc(12px + env(safe-area-inset-bottom, 0px));
     border: 0; border-radius: 0; background: none; box-shadow: none; }
   html.side-rail-left .tabbar, html.side-rail-left.store-ios .tabbar, html.side-rail-left.ios-home .tabbar {
@@ -10661,15 +10667,35 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   html.side-rail .tb-item::after { bottom: auto; top: 50%; left: auto; right: 2px; margin: -2px 0 0; }
   html.side-rail-left .tb-item::after { right: auto; left: 2px; }
   html.side-rail body, html.side-rail.store-ios body, html.side-rail.ios-home body {
-    padding-right: var(--strip-w, 84px); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+    padding-right: var(--strip-w); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
   html.side-rail body.has-tray, html.side-rail.store-ios body.has-tray, html.side-rail.ios-home body.has-tray {
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
   html.side-rail-left body, html.side-rail-left.store-ios body, html.side-rail-left.ios-home body {
-    padding-right: 0; padding-left: var(--strip-w, 84px); }
-  html.side-rail body.menu-open .topbar { right: var(--strip-w, 84px); }
-  html.side-rail-left body.menu-open .topbar { right: 0; left: var(--strip-w, 84px); }
-  html.side-rail-left .more-sheet { left: var(--strip-w, 84px); }
-  html.side-rail #qb-slip { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+    padding-right: 0; padding-left: var(--strip-w); }
+  html.side-rail body.menu-open .topbar { right: var(--strip-w); }
+  html.side-rail-left body.menu-open .topbar { right: 0; left: var(--strip-w); }
+  html.side-rail-left .more-sheet { left: var(--strip-w); }
+  /* The riders: the live tray, the game chat's button, karma's notes, the
+     plans' button and the toasts. */
+  html.side-rail .riding-tray, html.side-rail.store-ios .riding-tray, html.side-rail.ios-home .riding-tray {
+    right: calc(var(--strip-w) + 16px); bottom: calc(12px + env(safe-area-inset-bottom, 0px) - var(--vgap)); }
+  html.side-rail-left .riding-tray, html.side-rail-left.store-ios .riding-tray, html.side-rail-left.ios-home .riding-tray {
+    right: 16px; left: calc(var(--strip-w) + 16px); }
+  html.side-rail .gch-fab { right: calc(var(--strip-w) + 10px); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail body.has-tray .gch-fab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail-left .gch-fab { right: 10px; left: calc(var(--strip-w) + 10px); }
+  html.side-rail .kr-notes { right: calc(var(--strip-w) + 16px); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail-left .kr-notes { right: 16px; }
+  html.side-rail .pw-dock { right: calc(var(--strip-w) + 12px); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail-left .pw-dock { right: 12px; left: calc(var(--strip-w) + 12px); }
+  html.side-rail .tf-toast, html.side-rail.store-ios .tf-toast, html.side-rail.ios-home .tf-toast {
+    left: calc(50% - var(--strip-w) / 2); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail-left .tf-toast, html.side-rail-left.store-ios .tf-toast, html.side-rail-left.ios-home .tf-toast {
+    left: calc(50% + var(--strip-w) / 2); }
+  html.side-rail .crash-note, html.side-rail.store-ios .crash-note, html.side-rail.ios-home .crash-note {
+    right: calc(var(--strip-w) + 12px); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  html.side-rail-left .crash-note, html.side-rail-left.store-ios .crash-note, html.side-rail-left.ios-home .crash-note {
+    right: 12px; left: calc(var(--strip-w) + 12px); }
 }
 
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
