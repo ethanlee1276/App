@@ -661,6 +661,13 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IB "The review's fixes, and the Privacy Policy and Terms brought up to date" 60 <<'SH'
+curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 29 October 2026'
+curl -s https://qellysbook.com/terms.html | grep -c 'We remind you before a longer plan renews'
+curl -s https://qellysbook.com/privacy.html | grep -c '<code>slip_chance</code>'
+curl -s https://qellysbook.com/js/social.js | grep -c 'peek.status === 404'
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import lifecycle as LC; print(LC.RENEW_DAYS)"
+SH
 run IA "Pick'em groups" 30 <<'SH'
 curl -s https://qellysbook.com/js/social.js | grep -c 'function pickemGroupHTML(P)'
 SH

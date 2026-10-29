@@ -8162,8 +8162,10 @@ Habit"). What it built:
   Discord invite) are counted as daily totals in HV's report, and the
   Alerts page now loads only when it is opened (5 KB off every first paint).
 
-Nothing to set: the push loop runs it, and `deploy.sh` installs the
-Caddyfile line for the `/live/` address itself (it validates first).
+Nothing to set but one thing: the push loop runs the rest, and the
+`/live/` address needs the new Caddyfile installed once. `deploy.sh` does
+that (it validates first), but the five-minute updater does not run it, so
+on 2026-10-29 the address still opened the plain app (IB has the command).
 Read-only, any time; each prints `1` once this version is live:
 
 ```
@@ -8212,8 +8214,8 @@ more"). The research write-up and what was not built are docs/RETENTION.md
   kickoff).
 - **Phone first:** every notice about a member's own membership goes to
   every phone they are signed in on: the trial's charge warning (the email
-  still goes too) and a six-month or yearly plan renewing in about two
-  weeks. "When I've been away" is now offered to every signed-in member: a
+  still goes too) and a six-month or yearly plan renewing in about three
+  weeks (two until IB moved it inside what state renewal laws ask). "When I've been away" is now offered to every signed-in member: a
   payer gone five days gets their week and the board's, losses included; a
   plan that ended gets what the board did on days 3, 14 and 30, then
   nothing; when every league they follow has just finished, which leagues
@@ -8343,6 +8345,79 @@ The check in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IA 2>&1 | tee /tmp/ia.txt
+```
+
+**IB. The review's fixes, and the Privacy Policy and Terms brought up to
+date** (step 288; you: "go through all the work, make sure everything is
+good, bug-free ... update it with all this added stuff ... updated to the
+latest date"). What it did:
+
+- **The review's fixes**, live since the last push: deleting an account
+  stays one transaction while it leaves its pick'em groups; a new invite
+  link that cannot be made says so instead of keeping the old one quietly;
+  an invite link to a group that is gone stops waiting; a trial or renewal
+  email that fails is tried again on the next pass; two close-game alerts a
+  day apart no longer share an id; a phone that took a break keeps it when
+  its settings are saved again; and a made-up live game's address gets no
+  invented title.
+- **The Privacy Policy** (29 October 2026) now describes everything shipped
+  this month: the Edge Report, the bet replay, the "Make it yours" answers
+  and the weekly limit, the Monday week of bets and the richer morning
+  alert, quiet hours, the renewal notice's once, the purposes behind the
+  phone notices, the alerts, the consent record and your own report's
+  counts, standings and group tables, and Settings → Your data → What we
+  keep about you. Under 21, not 18, now matches the door.
+- **The Terms** (now 29 October 2026) add: the free games are games, not
+  contests (no stake, no prize, no cash value); the Edge Report and CLV are
+  measures, not forecasts; the limit and the break; the reminder before a
+  six-month or yearly plan renews; the trial notice on the phone; deletion
+  with a live plan, as the account page does it; what may not be posted, how
+  posts are licensed and moderated; pick'em groups and their owners; alerts
+  are a convenience, not a guarantee; and the free features' licence.
+- **Two things the read found, both fixed.** Deleting an account left its
+  bet-replay rows to the 30-day prune, and Download my data never had them;
+  now both do. And a six-month or yearly plan heard about its renewal up to
+  15 days ahead, a hair short of the 15 to 45 days state renewal laws ask of
+  a yearly plan: now 21.
+- **One thing to run: the live page's own address (HX) is not on yet.**
+  The five-minute updater pulls code and restarts the app but never
+  installs the Caddyfile, so `/live/{league}/{game}` still opens the plain
+  app: no game in the title of a shared link, and no 404 for a made-up
+  game. The command below installs it (it validates first and leaves the
+  running one alone if it does not).
+- **Still waiting on you:** the two locked sections, your activity (HW) and
+  the members' split (HY). Their wording is in docs/RETENTION.md §6 and §7,
+  numbered to follow the policy's §2.9. Say "approved" (or what to change).
+
+One that writes (installs the new Caddyfile; it validates first and leaves
+the running one alone if it does not):
+
+```
+cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+Then this prints `1` (it printed `0` before), and a real game's address
+carries its teams in the title:
+
+```
+sudo grep -cF '/pick/* /live/*' /etc/caddy/Caddyfile
+```
+
+Read-only, any time; each of the first four prints `1` once this version
+is live, the last prints `21`:
+
+```
+curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 29 October 2026'
+curl -s https://qellysbook.com/terms.html | grep -c 'We remind you before a longer plan renews'
+curl -s https://qellysbook.com/privacy.html | grep -c '<code>slip_chance</code>'
+curl -s https://qellysbook.com/js/social.js | grep -c 'peek.status === 404'
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import lifecycle as LC; print(LC.RENEW_DAYS)"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IB 2>&1 | tee /tmp/ib.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
