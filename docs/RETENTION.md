@@ -341,3 +341,32 @@ The wording to approve (a new subsection of §2 in `web/privacy.html`; the
   it: it reads what My Bets already syncs and the closing prices in §2.7,
   and turning it off takes you out of the next count.</p>
 ```
+
+## 8. Phone first (2026-10-29, Ethan)
+
+> "a lot of our users are between the ages of 21 and 35 ... maybe a lot of
+> those types of people don't check emails and they'll just check their
+> actual phone notifications more. So the app should be sending these type
+> of email notifications as well."
+
+The rule now: **every message about a member's own membership or their
+week goes to their phone**; email carries only what has to be in writing
+too (a password reset, the trial's charge warning, a renewal notice), and
+never instead of the phone.
+
+| Message | Phone | Email | Silenced by a limit or a pause |
+| --- | --- | --- | --- |
+| Free trial turns into a charge tomorrow | every signed-in phone (`account`) | yes, as before | pause only (it is about money) |
+| A six-month or yearly plan renews in ~15 days | every signed-in phone (`account`) | yes, unless `QB_RENEW_EMAIL=0` (when Stripe's own renewal emails are on) | pause only |
+| A paying member not here in 5 days: their week and the board's, losses included | "When I've been away" (`away`) | no | yes |
+| A plan that ended: what the board did since, days 3, 14 and 30, then never | "When I've been away" (`away`) | no | yes |
+| Password reset | — | yes (security) | — |
+
+`account` is not a switch anybody sees: every phone signed in to the account
+wants it, the way a receipt reaches you, and nothing is added to the
+phone's own list. "When I've been away" is now offered to every signed-in
+member (the Alerts page and the sheet after sign-in), whatever the activity
+log's lock, because these recaps read only the account's own last-seen
+day. The recaps go out between 11:00 and 19:00 Eastern and share the away
+alert's one a week. Never "bet now", never a discount, never "we miss you".
+(engine/lifecycle, engine/trialnote)

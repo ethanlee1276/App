@@ -363,7 +363,7 @@ def test_wired_into_the_alerts():
     assert "_en.away_pass(conn, Path(web) / \"data\", now=t)" in src
     acct = READ("web", "js", "account.js")
     assert 'pushRemember(await pushOn(PUSH_ASK_TOPICS.concat(away), pushAskLeagues()));' in acct
-    assert 'const away = _pwStatus && _pwStatus.activity_switch ? ["away"] : [];' in acct
+    assert 'const away = _acctUser && _acctUser.signed_in ? ["away"] : [];' in acct
     for src in (READ("web", "js", "app.js"), acct):
         assert 't === "finals" || t === "lineup" || t === "away"' in src, "a member's own topic"
     log = json.loads(READ("web", "changelog.json"))

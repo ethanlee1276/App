@@ -55,6 +55,12 @@ PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions"
             # the morning's slate of their teams (engine/slipwatch.moments,
             # engine/kickoffs).
             "lines", "closegame", "news", "today")
+#: Notices about the member's own membership (engine/lifecycle): a trial's
+#: charge tomorrow, a longer plan renewing. Not a choice in anybody's list:
+#: every phone signed in to the account wants it, the way a receipt reaches
+#: you (Ethan, 2026-10-29: this audience reads its notifications, not its
+#: email). Never promotional, so a weekly limit leaves it alone.
+ACCOUNT = "account"
 #: The boards, as the site names them, plus hockey (digest predates it).
 LEAGUES = tuple((s, f, label) for s, f, label in digest.BOARDS) + (("nhl", "nhl.json", "NHL"),)
 SCAN_EVERY_S = 300
@@ -294,6 +300,10 @@ def subscription(conn, endpoint: str) -> dict | None:
 
 
 def wants(sub_topics: str, sub_leagues: str, msg: dict) -> bool:
+    # A membership notice is only ever queued for the member's own phones
+    # (engine/pushmine.flush picks them by account), and every one wants it.
+    if msg.get("kind") == ACCOUNT:
+        return True
     if msg.get("kind") not in str(sub_topics).split(","):
         return False
     lg = [x for x in str(sub_leagues or "").split(",") if x]

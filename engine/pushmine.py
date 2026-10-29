@@ -65,7 +65,7 @@ from engine import webpush
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
-TOPICS = PA.PERSONAL
+TOPICS = PA.PERSONAL + (PA.ACCOUNT,)
 #: The watches look at most this often (the feed changes on a build, minutes apart).
 WATCH_EVERY_S = 120
 #: The lineup alert's pass (engine/lineupalerts) looks at most this often.
@@ -93,14 +93,17 @@ TTL_S = {"watches": 12 * 3600, "on": 30 * 60, "last": 3 * 3600, "settled": 12 * 
          # The research's bet-linked alerts (engine/slipwatch.moments): close
          # to hitting while it still is, a line move until the game starts,
          # a close finish for its last minutes.
-         "close": 20 * 60, "lines": 3 * 3600, "closegame": 15 * 60, "news": 6 * 3600, "today": 8 * 3600}
+         "close": 20 * 60, "lines": 3 * 3600, "closegame": 15 * 60, "news": 6 * 3600, "today": 8 * 3600,
+         # A notice about the member's own membership (engine/lifecycle):
+         # held overnight, still worth it the next morning.
+         "account": 20 * 3600}
 #: Held through quiet hours where the member is; the rest go at any hour
 #: (their own bet, a game they asked to be told about, a final).
-HELD = ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away', 'lines', 'closegame', 'news')
+HELD = ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away', 'lines', 'closegame', 'news', 'account')
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0, "away": 0.0, "news": 0.0,
-           "today": 0.0}
+           "today": 0.0, "lifecycle": 0.0}
 #: Injury news (engine/newsalerts) looks this often; the boards change every half hour.
 NEWS_EVERY_S = 5 * 60
 #: Karma alerts' pass looks at most this often.
@@ -134,10 +137,11 @@ def ensure_tables(conn) -> None:
 
 
 def asked(conn, user_id, topic: str) -> bool:
-    """Does any phone signed in as this member want this topic?"""
+    """Does any phone signed in as this member want this topic? Every one
+    of them wants a notice about their own membership (pushalerts.ACCOUNT)."""
     ensure_tables(conn)
     for (topics,) in conn.execute("SELECT topics FROM push_subs WHERE user_id = ?", (int(user_id),)):
-        if topic in str(topics).split(","):
+        if topic == PA.ACCOUNT or topic in str(topics).split(","):
             return True
     return False
 
@@ -870,6 +874,12 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 _pk.note_closes(conn, now=t, data_dir=Path(web) / "data")
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  pick'em closes: {type(exc).__name__}: {exc}")
+        # Phone first (engine/lifecycle): renewals of the longer plans, and
+        # the recaps for a paying member gone a while or a plan that ended.
+        if t - _looked["lifecycle"] >= KARMA_EVERY_S:
+            _looked["lifecycle"] = t
+            from engine import lifecycle as _lc
+            told += _lc.run(conn, now=t, web=Path(web), log=log)
         # Remind me (engine/gamechat): games starting in ten minutes.
         from engine import gamechat as _gc
         try:

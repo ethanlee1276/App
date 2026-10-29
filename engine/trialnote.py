@@ -20,9 +20,15 @@ Stripe moves gets its own. A phone account (engine/smsverify) has no
 address: it is marked and skipped, and the Live tab's line (js/chat.js
 lvmTrialHTML) still tells them.
 
-Without a mail relay nothing is sent AND nothing is marked, so the reminder
-still goes if one is set before the trial ends. A send that fails is not
-marked either; the next sweep tries again.
+AND ON THE PHONE (Ethan, 2026-10-29: members 21 to 35 read their
+notifications, not their email): the same warning goes to every phone the
+member is signed in on (engine/lifecycle.trial_push, the account topic),
+once, mail relay or not.
+
+Marked once it reached them by either: without a mail relay and with no
+phone signed in, nothing is marked, so the reminder still goes if a relay
+is set before the trial ends. An email that fails, with no push either, is
+not marked; the next sweep tries again.
 
 Standard library only. The address is never printed or logged.
 """
@@ -119,28 +125,37 @@ def run(conn, send=None, now: float | None = None, site: str | None = None, log=
     text, html)`` defaults to engine.mailer.send, and to nothing at all when
     no relay is configured."""
     from . import billing as BI
+    from . import lifecycle as LC
     from . import smsverify as SV
     BI.init(conn)
     if send is None:
         from . import mailer
-        if not mailer.configured():
-            return 0
-        send = mailer.send
+        send = mailer.send if mailer.configured() else None
     if site is None:
         from . import accounts as A
         site = A.site_url()
     sent = 0
     for r in due(conn, now):
+        # PHONE FIRST (Ethan, 2026-10-29: "they'll just check their actual
+        # phone notifications more"): the same warning on every phone they
+        # are signed in on (engine/lifecycle), mail relay or not.
+        pushed = LC.trial_push(conn, r["user_id"], r["period_end"], r.get("plan"), now=now)
         to = str(r.get("email") or "").strip()
-        if to and not SV.is_placeholder(to):
+        mailed = False
+        if send and to and not SV.is_placeholder(to):
             subject, text, html = message(r["period_end"], r.get("plan"), site, now)
             try:
                 send(to, subject, text, html)
+                mailed = True
             except Exception as e:                    # noqa: BLE001 — the next sweep tries again
                 log(f"trial reminder: one send failed ({type(e).__name__}); trying again next sweep")
-                continue
-            sent += 1
-        mark(conn, r["user_id"], r["period_end"])
+                if not pushed:
+                    continue
+        # Marked once it reached them either way; a phone account's that
+        # reached neither still has the Live tab's line.
+        if pushed or mailed or (send and (not to or SV.is_placeholder(to))):
+            sent += int(pushed or mailed)
+            mark(conn, r["user_id"], r["period_end"])
     return sent
 
 

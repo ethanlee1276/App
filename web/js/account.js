@@ -5007,8 +5007,9 @@ async function pushAskSheet(ctx) {
       : followed
         ? "Your teams’ games ten minutes before they start, their big moments and final scores, your bets down to the last leg, and the picks as they go up."
         : "The picks as they go up, last night’s record, your bets down to the last leg — and the games of any team you follow.";
-  // While you were away (engine/engagement), only while the site keeps activity.
-  const away = _pwStatus && _pwStatus.activity_switch ? ["away"] : [];
+  // When you've been away (engine/engagement, engine/lifecycle): asked of a
+  // signed-in member, whatever the activity log's switch.
+  const away = _acctUser && _acctUser.signed_in ? ["away"] : [];
   const host = document.createElement("div");
   host.id = "pushask";
   host.className = "a2hs";

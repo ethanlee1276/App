@@ -4,6 +4,21 @@
     {
       "date": "2026-10-29",
       "kind": "ship",
+      "title": "Your membership, on your phone",
+      "body": "The note before a free trial turns into a charge now reaches every phone you are signed in on as well as your inbox, and a six-month or yearly plan says when it renews and what it costs about two weeks ahead. Turn on When I've been away and a week off brings one line: your week and ours, losses included.",
+      "url": "/#alerts"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
+      "title": "Beat the close in the pick'em",
+      "body": "Every pick'em pick now keeps the market's chance for your team when you picked it and the last one before kickoff, and the standings can be ranked by how far the market moved your way: the measure of a read before the result.",
+      "alert": "The pick'em has a new table: who beat the closing line.",
+      "url": "/#feed/pickem/nfl"
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "ship",
       "title": "Your games first, and a second screen",
       "body": "Games your open bets ride on lead the home strip and get their own shelf at the top of the Live tab, over the full slate. And a live game's TV row has Second screen: the score as big as your phone allows, the clock, the last play and your own legs, kept awake and lit up when the score changes.",
       "alert": "Second screen: a live game, big, for the phone beside your TV.",

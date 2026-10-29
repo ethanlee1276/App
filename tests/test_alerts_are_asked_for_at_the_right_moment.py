@@ -78,7 +78,7 @@ def test_yes_turns_on_what_a_new_member_wants_first():
     sheet = ACCT[ACCT.index("async function pushAskSheet("):]
     assert "pushRemember(await pushOn(PUSH_ASK_TOPICS.concat(away), pushAskLeagues()));" in sheet
     # "While you were away" joins them only while the site keeps activity (engine/activity).
-    assert 'const away = _pwStatus && _pwStatus.activity_switch ? ["away"] : [];' in sheet
+    assert 'const away = _acctUser && _acctUser.signed_in ? ["away"] : [];' in sheet
     assert "Never a “bet now”" in sheet and "each kind is a switch in Alerts" in sheet
     on = _fn(APP, "async function pushOn(")
     assert on.count("...lg") == 4, "the leagues travel to the box on both paths"

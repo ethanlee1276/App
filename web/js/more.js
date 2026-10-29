@@ -4761,9 +4761,10 @@ function renderPushZone(note) {
         box("today", "This morning: my teams’ games today, with the times", !signedIn),
         box("lines", "A line moves 2% or a point from my bet, before it starts", !signedIn),
         box("lineup", "My fantasy lineup: a starter out or on a bye", !signedIn),
-        // While you were away (engine/engagement): only while the site keeps activity.
-        ...(_pwStatus && _pwStatus.activity_switch
-          ? [box("away", "When I’ve been away: my team’s next game or what’s new, once a week at most", !signedIn)] : []),
+        // When you've been away (engine/engagement, engine/lifecycle): your
+        // team's next game or what's new, your week and the board's, once a
+        // week at most — whatever the activity log's switch.
+        box("away", "When I’ve been away: my team’s next game, what’s new or my week, once a week at most", !signedIn),
       ], signedIn ? "Your own watches, saved parlays and fantasy lineup (the Sleeper league your league desk last opened). Only your words and your ticket, only on phones you are signed in on."
         : "Sign in for alerts on your own watches and saved parlays.")
       // TAKE A BREAK (engine/pushalerts.pause; the research's one-tap pause):
