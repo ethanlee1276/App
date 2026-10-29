@@ -2548,6 +2548,11 @@ class Handler(BaseHTTPRequestHandler):
                     code, out = PM.activity_add(conn, who["id"], str(body.get("bet_id") or ""),
                                                 str(body.get("token") or ""))
                 return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "latest":
+                from engine import pushmine as PM
+                sub = PA.subscription(conn, endpoint) if endpoint else None
+                out = PA.latest_for(sub, mine=PM.mine(conn, (sub or {}).get("user_id")))
+                return self._send(200, json.dumps(out).encode(), ".json")
             if path == "game-activity":
                 # A live game on the iOS app's lock screen (engine/gameactivity):
                 # the activity's own push token, for this member's phone.
@@ -2559,11 +2564,6 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = (GA.remove(conn, who["id"], lg, ev) if body.get("end")
                              else GA.add(conn, who["id"], lg, ev, str(body.get("token") or "")))
                 return self._send(code, json.dumps(out).encode(), ".json")
-            if path == "latest":
-                from engine import pushmine as PM
-                sub = PA.subscription(conn, endpoint) if endpoint else None
-                out = PA.latest_for(sub, mine=PM.mine(conn, (sub or {}).get("user_id")))
-                return self._send(200, json.dumps(out).encode(), ".json")
             if path == "unsubscribe":
                 code, out = PA.unsubscribe(conn, endpoint)
             else:
