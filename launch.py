@@ -5219,6 +5219,20 @@ def _slip_watcher() -> None:
             print(f"  ⚠️  house posts: {type(exc).__name__}: {exc}")
 
 
+def _game_activity_watcher() -> None:
+    """A live game on members' lock screens (engine/gameactivity): every
+    GAME_EVERY_S, each kept game's new score and clock off its league's
+    fast scoreboard, and its end once final. One query when nobody has a
+    game there; never stops the site."""
+    from engine import gameactivity as _ga
+    while True:
+        time.sleep(_ga.GAME_EVERY_S)
+        try:
+            _ga.run_once()
+        except Exception as exc:      # noqa: BLE001 — never let this stop the site
+            print(f"  ⚠️  lock screens: {type(exc).__name__}: {exc}")
+
+
 def _live_ufc_refresher() -> None:
     """Poll the live fight feed fast while a bout is on, slowly otherwise."""
     import json as _json
@@ -11386,6 +11400,10 @@ def main() -> None:
         threading.Thread(target=_slip_watcher, daemon=True, name="slipwatch").start()
         print(f"  Saved slips: every {SLIP_WATCH_S}s, a slip down to its last leg "
               f"noted and emailed where a member asked.")
+        # Games members put on their iPhone's lock screen.
+        threading.Thread(target=_game_activity_watcher, daemon=True, name="gameactivity").start()
+        print("  Lock-screen games: every 20s, the score and clock of each game a "
+              "member put on their iPhone's lock screen, and its end once final.")
         # And the meme board's clock — coins move in and out in minutes.
         threading.Thread(target=_live_memes_refresher, daemon=True).start()
         print(f"  Meme coins: every {MEMES_LIVE_S}s (discovery ~25s — the "

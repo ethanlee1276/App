@@ -67,6 +67,23 @@ or two the first time. After the steps above:
    pick). The lock screen: open the Live tab with a saved parlay and tap
    **On my lock screen**.
 
+## A live game on the lock screen (2026-10-29)
+
+A game can sit on the lock screen and in the Dynamic Island too, its score
+and clock kept current by the box (engine/gameactivity, every 20 seconds
+while it runs) and ended at the final: **On my lock screen** on a game's
+page or its play-by-play, signed in, from an hour and a half before the
+start. Same steps as the parlay above, three more files:
+
+1. Drag `native/Shared/GameAttributes.swift` into the project with **both**
+   targets ticked (App and QellysWidgets).
+2. Drag `native/App/GameActivityPlugin.swift` into the App target, and
+   `native/Widget/GameLiveActivity.swift` into the widget target.
+   (`MainViewController.swift` and `QellysWidgets.swift` already list them.)
+3. Build to a phone, sign in, open a live game and tap **On my lock
+   screen**. It needs the same Apple key the alerts use (docs/APP_STORES.md);
+   without it the card shows the score it started with and nothing moves.
+
 ## Your players on the widget (2026-10-25)
 
 A second widget, **Your players**, shows the players the account follows

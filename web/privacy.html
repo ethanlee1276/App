@@ -208,7 +208,9 @@
       those for at most a day, and only that phone can read them. Signing
       out on a phone stops them there. If you put a saved parlay on your
       iPhone’s lock screen, we keep that lock-screen card’s token until the
-      parlay settles (twelve hours at most), to update it. The push itself carries no words in
+      parlay settles (twelve hours at most), to update it; a game you put
+      there, the same, until it is final (twelve hours at most), with the
+      last score we sent it. The push itself carries no words in
       a browser; your phone asks our site what to show (in our iPhone app,
       Apple carries the words). Turning alerts off, or a push service
       telling us the address is gone, deletes the row. Google, Apple,
@@ -353,7 +355,8 @@
     <p>The phone alerts in §2.7 keep their rows in
       <code>push_subs</code> (the phone), and, for your own alerts,
       <code>push_mine</code>, <code>push_watch_seen</code>,
-      <code>push_activities</code> and <code>push_lineup_leagues</code> (the
+      <code>push_activities</code>, <code>push_game_activities</code> (a
+      game on your lock screen) and <code>push_lineup_leagues</code> (the
       lineup alert's league). Which plays of a game were already told
       is kept in <code>push_clutch_seen</code>, two days at most, and which
       games' final scores were told in <code>push_final_seen</code>, three

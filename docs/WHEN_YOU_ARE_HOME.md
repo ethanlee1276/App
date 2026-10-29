@@ -7984,13 +7984,41 @@ Nothing to set. Read-only, any time. It prints `1` once this version is
 live:
 
 ```
-curl -s https://qellysbook.com/js/account.js | grep -c 'window.pushAskSheet = async function'
+curl -s https://qellysbook.com/js/account.js | grep -c 'async function pushAskSheet('
 ```
 
 The check in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh HT 2>&1 | tee /tmp/ht.txt
+```
+
+**HU. A live game on your iPhone's lock screen and Dynamic Island** (step
+281; "feel like they need to use our app when there's live games going
+on"). The apps people keep open during a game own it on the lock screen:
+ESPN, theScore and the NBA's app all put the score there. Now ours does
+too: on a game's page or its play-by-play, in the iPhone app and signed
+in, **On my lock screen** puts the game there and in the Dynamic Island,
+with both teams' colours, the score, the clock and the situation ("2nd &
+7 at DEN 45"). The box sends it the new score every 20 seconds while the
+game runs and ends it at the final. It is offered from an hour and a half
+before the start (Apple ends one after eight hours). Never a pick on it.
+
+The box side is live with the update (nothing to set). The phone side is
+new Swift, so the iPhone app needs a rebuild on your Mac, the same way
+the parlay lock screen went in: deploy/ios/README.md, "A live game on the
+lock screen" (drag three files into Xcode, build to your phone). It uses
+the same Apple key as the alerts. Read-only, any time; it prints `1` once
+the page side is live:
+
+```
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function lockGameHTML('
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh HU 2>&1 | tee /tmp/hu.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

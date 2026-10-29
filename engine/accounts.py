@@ -910,6 +910,8 @@ def delete_user(conn, user_id: int) -> None:
                   "chat_reports",
                   "chat_party_members",
                   "push_mine", "push_watch_seen", "push_activities", "push_lineup_leagues", "referral_codes",
+                  # A live game on the lock screen (engine/gameactivity).
+                  "push_game_activities",
                   # The Alerts page's watches (engine/alerts), which had
                   # leaned on ON DELETE CASCADE alone — the very thing this
                   # function's docstring says not to trust.

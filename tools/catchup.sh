@@ -661,8 +661,11 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run HU "A live game on your iPhone's lock screen and Dynamic Island" 30 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -c 'function lockGameHTML('
+SH
 run HT "Alerts, asked for after you sign in" 30 <<'SH'
-curl -s https://qellysbook.com/js/account.js | grep -c 'window.pushAskSheet = async function'
+curl -s https://qellysbook.com/js/account.js | grep -c 'async function pushAskSheet('
 SH
 run HS "A book paying more than Pinnacle's fair price, listed" 30 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'pays more than the sharp book’s fair'

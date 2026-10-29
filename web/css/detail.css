@@ -323,6 +323,11 @@
    basketball and hockey pages (2026-10-20): in the middle column they set
    its width, and on a phone they stacked beside the live state. */
 .pbp-hero > .pbp-watch { grid-column: 1 / -1; margin-top: 0; }
+/* On my lock screen (lockGameHTML): under Watch, the same quiet width;
+   lit once the game is there. */
+.gp-lock { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; }
+.pbp-hero > .gp-lock { grid-column: 1 / -1; justify-self: center; margin-top: 0; }
+.gp-lock.on { color: var(--good); }
 .pbp-inj-new { grid-column: 1 / -1; margin: 0; text-align: center; font-size: var(--fs-sm); color: var(--text-dim); }
 .pbp-inj-new b { color: var(--text); }
 .pbp-inj-tag { padding: 1px 7px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .06em;

@@ -2516,7 +2516,7 @@ class Handler(BaseHTTPRequestHandler):
         phone, by the push service's address it alone was given. A phone
         that subscribes signed out is detached from any account. Nothing
         else about the caller is kept."""
-        if path not in ("subscribe", "unsubscribe", "latest", "activity"):
+        if path not in ("subscribe", "unsubscribe", "latest", "activity", "game-activity"):
             return self._send(404, b'{"error":"unknown push endpoint"}', ".json")
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -2547,6 +2547,17 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     code, out = PM.activity_add(conn, who["id"], str(body.get("bet_id") or ""),
                                                 str(body.get("token") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "game-activity":
+                # A live game on the iOS app's lock screen (engine/gameactivity):
+                # the activity's own push token, for this member's phone.
+                from engine import gameactivity as GA
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                lg, ev = str(body.get("league") or ""), str(body.get("event") or "")
+                code, out = (GA.remove(conn, who["id"], lg, ev) if body.get("end")
+                             else GA.add(conn, who["id"], lg, ev, str(body.get("token") or "")))
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "latest":
                 from engine import pushmine as PM

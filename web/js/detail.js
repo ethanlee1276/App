@@ -1997,7 +1997,8 @@ function renderGamePage() {
         chatMount(state.sport, row.event_id || row.game_pk, row);
       if (isFinal) return;
       if (slot && row && state.view === "game") {
-        slot.innerHTML = (row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : "";
+        slot.innerHTML = ((row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : "")
+          + lockGameHTML(state.sport, row);
       }
     }).catch(() => {});
   }
@@ -4413,6 +4414,70 @@ function pbpCfbTeamsWarm() {
     })
     .catch(() => {});
 }
+/* ON MY LOCK SCREEN, A GAME (engine/gameactivity, deploy/ios/native
+   GameActivity; docs/RETENTION.md). The apps people open during a game own
+   it on the lock screen (ESPN's, theScore's, the NBA's): in the iOS app, a
+   game that has not ended can sit there and in the Dynamic Island as a Live
+   Activity, its score and clock sent by the box as it runs and ended at the
+   final. Only where the app's plugin is, signed in (the box keeps the token
+   for the member), and from an hour and a half before the start: Apple ends
+   an activity after eight hours. The score, the clock, the situation —
+   never a pick. */
+const LOCK_GAMES = "qb.lockgames";
+const _lockRows = {};
+function gameLockPlugin() {
+  const C = window.Capacitor;
+  return C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.GameActivity;
+}
+function gameLocked(key) {
+  try { return Date.now() - ((JSON.parse(localStorage.getItem(LOCK_GAMES) || "{}") || {})[key] || 0) < 12 * 36e5; }
+  catch (e) { return false; }
+}
+function gameLockState(lv) {
+  const st = String(lv.state || "pre"), live = st === "live" || st === "in";
+  return { away: Number(lv.away_score) || 0, home: Number(lv.home_score) || 0, status: live ? "live" : "pre",
+           clock: (live ? [lv.period, lv.clock].filter(Boolean).join(" ") : String(lv.detail || "")).slice(0, 40) || "Not started",
+           last: live ? String(lv.detail || "").slice(0, 90) : "", poss: live ? String(lv.possession || "").toUpperCase().slice(0, 6) : "" };
+}
+function lockGameHTML(league, row) {
+  const lv = (row && row.live) || {}, ev = row && (row.event_id || row.game_pk);
+  if (!gameLockPlugin() || !ev || !(_acctUser && _acctUser.signed_in)) return "";
+  const st = String(lv.state || "pre"), start = Date.parse(lv.start_time || "");
+  if (st === "final" || st === "post" || (st === "pre" && !(start - Date.now() < 90 * 6e4))) return "";
+  const key = `${league}:${ev}`, on = gameLocked(key);
+  _lockRows[key] = row;
+  return `<button type="button" class="btn ghost gp-lock${on ? " on" : ""}" data-lock-game="${escapeAttr(key)}"${
+    on ? " disabled" : ""}>${icon("bell", 14)} ${on ? "On your lock screen" : "On my lock screen"}</button>`;
+}
+if (typeof document !== "undefined" && !window._lockGameBound) {
+  window._lockGameBound = true;
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest && e.target.closest("[data-lock-game]");
+    if (!btn || btn.disabled) return;
+    const P = gameLockPlugin(), key = btn.dataset.lockGame, row = _lockRows[key];
+    if (!P || !row) return;
+    const [league, event] = key.split(":");
+    btn.disabled = true;
+    try {
+      const got = await P.start({ league, event, away: String(row.away || ""), home: String(row.home || ""),
+        awayColor: teamVivid(row.away), homeColor: teamVivid(row.home), state: gameLockState(row.live || {}) });
+      const res = await fetch("/api/push/game-activity", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ league, event, token: got.token }) });
+      if (!res.ok) throw new Error("not kept");
+      try {
+        const m = JSON.parse(localStorage.getItem(LOCK_GAMES) || "{}") || {};
+        m[key] = Date.now();
+        localStorage.setItem(LOCK_GAMES, JSON.stringify(m));
+      } catch (err) {}
+      btn.classList.add("on");
+      btn.innerHTML = `${icon("bell", 14)} On your lock screen`;
+      buzz("tap");
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "Couldn’t start it — try again";
+    }
+  });
+}
 function pbpBoardHTML(d, league, lv) {
   const table = teamsIn(league) || {};
   const col = pbpSideColours(league, d);
@@ -4440,6 +4505,7 @@ function pbpBoardHTML(d, league, lv) {
       <div class="pbp-sb-mid">${pbpBoardMidHTML(d, league, lv)}${carrier}${ago ? `<span class="pbp-sb-ago">${escapeHtml(ago)}</span>` : ""}</div>
       ${side("home")}
       ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}
+      ${lockGameHTML(league, { event_id: (state.pbp || {}).event, home: d.home, away: d.away, live: lv })}
       ${pbpNewInjuriesHTML(d)}${pbpBirthdaysHTML(d)}
     </div>`;
 }
