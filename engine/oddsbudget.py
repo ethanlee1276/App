@@ -1068,6 +1068,56 @@ def _hour_label(now: float) -> str:
     return f"{(h % 12) or 12}{'am' if h < 12 else 'pm'}"
 
 
+#: A LEAGUE BUYS PRICES ONLY ON A NIGHT IT PLAYS. Ethan, 2026-10-30, with
+#: October's credits all but gone: "tonight's games come first. We need to
+#: make up a system of just recognizing what sport has what games live that
+#: night and pulling credits just for those sports ... if just NFL has a
+#: game that night, we just need to pull NFL and so forth." The NFL had
+#: spent 661 credits on a Friday pricing a game two days away while the
+#: NBA, playing that night, had nothing to rank.
+#:
+#: TONIGHT IS THE SLATE BEING PLAYED: the baseball day (engine/slateday),
+#: which rolls at 5 AM Eastern, as the daily boards do — a west-coast game
+#: past midnight is still tonight's, and a 7am pull is for the evening
+#: ahead.
+def slate_day(ts: float) -> str:
+    """The slate (ISO date) that a moment belongs to — `ts` in Eastern,
+    rolled at 5 AM."""
+    from .slateday import baseball_day
+    return baseball_day(_local(ts))
+
+
+def tonight_games(kickoffs, now: float | None = None) -> int | None:
+    """How many of ``kickoffs`` (epochs) are on tonight's slate.
+
+    None when not one kickoff time is known: a board whose times cannot be
+    read is not a night off, and the caller then paces as it did before
+    (the free UFC events list's "unknown reads as yes", for the same
+    reason). Zero is a fact — the board has its games, and none tonight.
+    """
+    known = [k for k in (kickoffs or [])
+             if isinstance(k, (int, float)) and not isinstance(k, bool)]
+    if not known:
+        return None
+    day = slate_day(time.time() if now is None else now)
+    return sum(1 for k in known if slate_day(k) == day)
+
+
+def tonight_ends(now: float | None = None) -> float:
+    """The epoch tonight's slate hands over to the next one (5 AM Eastern):
+    a game kicking off before it is tonight's. A paid pull on a board that
+    holds the week prices the games before this and reads the rest from
+    the cache (`launch._tonight_args`)."""
+    from .slateday import ROLL_HOUR
+    t = _local(time.time() if now is None else now)
+    roll = t.replace(hour=ROLL_HOUR, minute=0, second=0, microsecond=0)
+    if t >= roll:
+        # Wall-clock arithmetic on an aware time: 5 AM tomorrow, across a
+        # clock change too.
+        roll = roll + _dt.timedelta(days=1)
+    return roll.timestamp()
+
+
 def touchpoint_due(state: "BudgetState", sport: str | None, now: float):
     """The touchpoint this sport still owes, or None.
 

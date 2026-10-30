@@ -65,12 +65,39 @@ def test_no_card_on_the_free_list_means_no_paid_pull():
     before the budgeter is asked; that is not the circular games>0 gate,
     which reads the priced output."""
     fn = _fn("refresh_ufc")
-    assert "_ufc_card_pending(quiet) and _odds_affordable(" in fn
-    gate = _fn("_ufc_card_pending")
+    assert "card = _ufc_card()" in fn
+    assert "(_ufc_card_pending(quiet, card)\n             and _odds_affordable(" in fn
+    gate = _fn("_ufc_card_pending") + _fn("_ufc_card")
     assert "list_events(" in gate and 'sport="ufc"' in gate
     assert "select_card(" in gate
-    assert "return True" in gate, "an unknown card must not silence the pull"
+    assert "return True" in _fn("_ufc_card_pending"), "an unknown card must not silence the pull"
     assert "_slate_games" not in gate and "UFC_OUT" not in gate
+
+
+def test_the_card_is_bought_on_fight_night_only():
+    """Ethan, 2026-10-30: "pulling credits just for those sports" that play
+    that night. UFC's board has no games for the pacer to count, so the
+    card's bouts are its games (`_ufc_tonight`), handed to the pacer's
+    tonight rule; an unknown card or unreadable times say nothing."""
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    import launch
+    fn = _fn("refresh_ufc")
+    assert "tonight=_ufc_tonight(card)" in fn
+    et = ZoneInfo("America/New_York")
+
+    def at(*when):
+        return dt.datetime(*when, tzinfo=et)
+
+    card = [{"commence_time": at(2026, 11, 7, 19 + i % 4).astimezone(dt.timezone.utc)
+             .isoformat().replace("+00:00", "Z")} for i in range(12)]
+    wed, sat, sun_1am = (at(2026, 11, 4, 12).timestamp(), at(2026, 11, 7, 12).timestamp(),
+                         at(2026, 11, 8, 1).timestamp())
+    assert launch._ufc_tonight(card, wed) == 0, "fight week: nothing to buy yet"
+    assert launch._ufc_tonight(card, sat) == 12
+    assert launch._ufc_tonight(card, sun_1am) == 12, "the main card past midnight is still tonight's"
+    assert launch._ufc_tonight(None, sat) is None
+    assert launch._ufc_tonight([{"commence_time": "soon"}], sat) is None
 
 
 def test_it_matches_the_nba_rotation_it_was_modelled_on():

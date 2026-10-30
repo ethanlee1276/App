@@ -9171,6 +9171,64 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IO 2>&1 | tee /tmp/io.txt
 ```
 
+**IP. Credits go to the leagues playing tonight, and to tonight's games**
+(step 302; you, 2026-10-30: "tonight's games come first. We need to make up
+a system of just recognizing what sport has what games live that night and
+pulling credits just for those sports").
+
+- Every cycle the box counts each league's games on tonight's slate (the
+  boards' own day, which turns at 5 AM Eastern, so a game past midnight is
+  still tonight's). A league with no game tonight buys no odds at all:
+  props, game lines and live lines. Its decline is written down as "no NFL
+  game tonight — credits go to the leagues playing tonight".
+- The NFL's and college's boards hold the whole week. A paid pull now buys
+  tonight's games and reads the rest from the cache. A Thursday NFL pull
+  used to buy all ~15 of the week's games at 25 credits each (about 400 a
+  pull), and the Sunday prices it bought were past the 6-hour age limit
+  before Sunday came. Now it buys the one game (about 50).
+- The month's plan funds tonight's games first (NFL first among them, then
+  every league's half, then your order), then the NFL's month, then
+  everyone else's. The plan's report has a new line, for example:
+  `tonight: CFB 3 · NBA 9 · NHL 5 — funded first; no game: NFL, UFC (they buy nothing today)`.
+- What readers will see: on a day a league doesn't play, its board shows
+  its next games without prices once the last ones are 6 hours old.
+  Saturday's NFL board shows Sunday's games unpriced until the 7am Sunday
+  pull. The UFC card is priced on fight day. Scores, schedules, live games
+  and everything free keep updating as before.
+- At 100k a month every sport's normal cadence now fits, with room on top.
+  This month's last two days are still short; that's the balance, not the
+  plan.
+
+The box restarts into it on its own once it pulls this push (up to 45
+minutes if a board sweep is running); to start it now:
+
+```
+cd /srv/qellys && sudo systemctl restart qellys
+```
+
+Read-only, after the restart: the plan with tonight's line, then which
+leagues the pacer held for having no game tonight and which it let buy,
+over the last 18 hours:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan | head -12
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from collections import Counter
+from engine import oddsbudget as ob
+rows = ob.decisions(since=time.time() - 18 * 3600)
+held = Counter(r.get('lane') for r in rows if 'game tonight' in str(r.get('reason', '')))
+print('held, no game tonight (last 18h):', dict(held) or 'none yet')
+print('allowed to buy (last 18h):', dict(Counter(r.get('lane') for r in rows if r.get('ok'))) or 'none')
+"
+```
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IP 2>&1 | tee /tmp/ip.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

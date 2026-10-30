@@ -34,7 +34,18 @@ plan's RENEWAL — the day the API's month turns over, which need not be the
 1. HELD BACK: `oddsbudget.RESERVE`; the closing-line harvest's day cap
    (`maintenance.HARVEST_DAY_BUDGET`) for every day left, because it
    spends on its own meter; and `BUFFER_SHARE` of the pool, never planned.
-2. TARGETS, IN ETHAN'S ORDER (`TIERS`). Every league in season is owed what
+2. TONIGHT FIRST. Ethan, 2026-10-30, with October's credits nearly gone:
+   *"tonight's games come first. We need to make up a system of just
+   recognizing what sport has what games live that night and pulling
+   credits just for those sports"*. Every league playing tonight is owed
+   what tonight's slate costs at its cadence (`day_need` on the real
+   count, `games_today`), and that is funded before any day to come, in
+   the order below: the NFL's tonight in full, then every other league's
+   `FLOOR_SHARE` of its tonight together, then the rest tier by tier. A
+   league with no game tonight is owed nothing today — the pacer lets it
+   buy nothing (`launch._odds_affordable`) — and its next game night is
+   funded with the month. The report's "tonight" line says who plays.
+3. TARGETS, IN ETHAN'S ORDER (`TIERS`). Every league in season is owed what
    its target cadence costs for the rest of the month (`day_need`); a
    league out of season, or whose own board says its season is over
    (`over`: baseball the morning after the World Series), is owed nothing
@@ -45,11 +56,11 @@ plan's RENEWAL — the day the API's month turns over, which need not be the
    October did to basketball and hockey. Then the rest of each target,
    tier by tier: college, the NBA, baseball, then hockey, UFC and the WNBA
    at one fill (proportional within a tier).
-3. HEADROOM, IN THE SAME ORDER: the NFL up to `NFL_HEADROOM` more, then
+4. HEADROOM, IN THE SAME ORDER: the NFL up to `NFL_HEADROOM` more, then
    each later tier up to `HEADROOM` more — extra pulls on a busy news day
    rather than credits that expire at the reset. A tier whose target was
    cut gets none.
-4. Whatever is left is UNPLANNED, and the report says how much.
+5. Whatever is left is UNPLANNED, and the report says how much.
 
 EACH SPORT'S BUDGET FOR THE MONTH is what it has spent since the renewal
 plus what the plan holds for it from today: the report prints it that way
@@ -57,7 +68,8 @@ plus what the plan holds for it from today: the report prints it that way
 that pace would empty it.
 
 HOW A DAY IS METERED. A league's ceiling today is its need today times the
-share of its month the plan could fund (its FILL): `envelope`. The launcher
+share of its month the plan could fund (its FILL), and never less than what
+step 2 funded for tonight: `envelope`. The launcher
 hands that to the pacer as the league's share of the day
 (`launch._budget_share`), so the cadence, the day's ceiling, the
 starvation rule and the wide-or-narrow pull all read the plan's number.
@@ -160,41 +172,42 @@ LIVE_PULLS_PER_HOUR = 3
 
 #: THE NFL'S DAY, in credits, Monday to Sunday — what its machinery spends
 #: at full strength on a normal week (one Thursday game, ~13 Sunday, one or
-#: two Monday), in the PACER'S days: the box's date, which is UTC, so a day
-#: turns at 8pm Eastern and "Thursday" runs from Wednesday 8pm to Thursday
-#: 8pm ET. A full pull prices every game still to play on the week's board
-#: at 25 credits (`oddsbudget.EVENT_CREDITS`); a narrow one only the games
-#: inside six hours (`oddsbudget.wide_pull_affordable`).
+#: two Monday), in the pacer's days (the service's date, Eastern). It buys
+#: on game nights only (`oddsbudget.tonight_games`), and only tonight's
+#: games (`launch._tonight_args`: the rest of the week's board is read from
+#: the cache), at 25 credits a game (`oddsbudget.EVENT_CREDITS`).
 #:
 #:   Sunday   the ceiling the day runs up to: the four windows (7am, 12, 3pm,
 #:            6pm ET), a readiness and an inactives pull for each wave (1pm,
 #:            4pm, the night game), the slate shrinking through the day, and
 #:            the game-lines lane every fifteen minutes in the window (~210).
 #:   Thursday the priority floor (`oddsbudget.PRIORITY_PULLS`: six pulls on a
-#:            day with a kickoff inside 24h) — the week's board until the
-#:            Thursday game is six hours out, then narrow pulls of that game;
-#:            lines every fifteen minutes in its window.
-#:   Saturday the floor from 1pm, when Sunday's first kickoff is inside 24h:
-#:            the windows on the week's board.
-#:   Monday   the floor on the Monday game(s), narrow; lines in its window.
-#:   other    one pull of the week's board (props move all week with the
-#:            injury reports) and the hourly lines lane.
-NFL_REGULAR = (600, 500, 500, 2000, 600, 1780, 3500)
-#: The playoffs: three games a day on wild-card weekend, two in the next two
-#: rounds, one on Super Bowl Sunday; a maintenance pull between.
-NFL_PLAYOFFS = (400, 200, 200, 200, 200, 1600, 1600)
+#:            day with a kickoff inside 24h) of the one game, and its lines.
+#:            Until 2026-10-30 every pull priced the week's board — 2,000.
+#:   Monday   the floor on the Monday game(s); lines in its window.
+#:   other    nothing — no game tonight. A game night the table does not
+#:            hold (Thanksgiving's Friday, December's Saturdays, Christmas)
+#:            is priced by the game (`NFL_FLOOR_PULLS`).
+NFL_REGULAR = (600, 0, 0, 400, 0, 0, 3500)
+#: The playoffs: wild-card weekend's Saturday, Sunday and Monday, two games
+#: each weekend day of the next two rounds, one on Super Bowl Sunday.
+NFL_PLAYOFFS = (400, 0, 0, 0, 0, 1600, 1600)
+#: A game night by the game, when the table holds less: the priority floor's
+#: six pulls of tonight's games and the lines lane's ~30 three-credit pulls.
+NFL_FLOOR_PULLS = 6
+NFL_LINES_PULLS = 30
 
-#: Average games a day, Monday to Sunday, in a regular season. College
-#: counts the games inside its 36-hour player window (`cfb_build.
-#: PLAYER_WINDOW_HOURS`), so Friday's pulls price Saturday's games; UFC
-#: counts the week's card, priced through the week.
+#: Average games a day, Monday to Sunday, in a regular season — the games
+#: a pull buys that day, which under the tonight rule are that night's
+#: games: college's weeknight games and Saturday's (a pull prices twelve at
+#: most, `PULL_CAP`), and UFC's card on fight night.
 GAMES_BY_WEEKDAY = {
     "nba": (7, 6, 10, 4, 9, 7, 7),
     "nhl": (4, 10, 5, 11, 5, 13, 4),
     "mlb": (15, 15, 15, 15, 15, 15, 15),
     "wnba": (4, 4, 4, 4, 4, 4, 4),
-    "cfb": (2, 3, 3, 6, 12, 12, 0),
-    "ufc": (13, 13, 13, 13, 13, 13, 0),
+    "cfb": (0, 1, 1, 2, 3, 12, 0),
+    "ufc": (0, 0, 0, 0, 0, 13, 0),
 }
 #: Average games a day outside the regular season (playoffs, bowls; one
 #: World Series game every day or two).
@@ -218,16 +231,15 @@ PULL_CAP = {"cfb": 12}
 #:
 #: Pre-game lines pulls a day. Basketball's lane (`launch.NBA_BOARD_CLOCK`)
 #: runs on a game day until the last tip: hourly to the window, then every
-#: fifteen minutes (~43). College's (`launch.CFB_LINES_CLOCK`) runs every
-#: day of the season — the board holds the week — and through the games, so
-#: it is college's live line too: hourly on a day with no game near, ~58 on
-#: a weeknight with one, ~78 across Saturday's eighteen-hour window. The
-#: NFL's lane is inside its day table above. Hockey and baseball have no
-#: pre-game tier: their prop pull carries the game lines.
+#: fifteen minutes (~43). College's (`launch.CFB_LINES_CLOCK`) runs on its
+#: game nights — it ran every day of the season until the tonight rule —
+#: and through the games, so it is college's live line too: ~40 on a
+#: weeknight with one, ~58 on Thursday and Friday, ~78 across Saturday's
+#: eighteen-hour window. The NFL's lane is inside its day table above.
+#: Hockey and baseball have no pre-game tier: their prop pull carries the
+#: game lines.
 LINES_BY_WEEKDAY = {"nba": (43,) * 7, "wnba": (43,) * 7,
                     "cfb": (24, 40, 40, 58, 58, 78, 24)}
-#: Leagues whose lines lane runs every day of the season, games or none.
-LINES_EVERY_DAY = ("cfb",)
 #: Hours a game day has a game in progress, for the live-line lane
 #: (`launch.MLB_LINES_CLOCK` and its kin). The football leagues' live line
 #: is their lines lane, counted above.
@@ -290,28 +302,27 @@ def expected_games(league: str, day: _dt.date) -> float:
 def day_need(league: str, day: _dt.date, games: float | None = None) -> int:
     """Credits this league's target cadence costs on this day.
 
-    ``games`` is today's real slate (from the built board) and replaces the
-    table: a 12-game NBA night is priced as twelve games, an empty one as
-    nothing. The NFL reads its weekday table whatever its board says while
-    it is in season — a board that failed to build must not zero the
-    league that is funded first.
+    ``games`` is tonight's real slate (`launch._games_today`) and replaces
+    the table: a 12-game NBA night is priced as twelve games, a night with
+    none as nothing — the NFL's too, which buys nothing on a night it does
+    not play (`oddsbudget.tonight_games`). None (a board whose times could
+    not be read) leaves the table to answer.
     """
     wd = day.weekday()
     if league == "nfl":
+        if games is not None and games <= 0:
+            return 0
         phase = season_phase("nfl", day)
-        if phase == "playoffs":
-            return NFL_PLAYOFFS[wd]
-        if phase == "regular" or (games or 0) > 0:
-            return NFL_REGULAR[wd]
-        return 0
+        table = (NFL_PLAYOFFS if phase == "playoffs" else
+                 NFL_REGULAR if phase == "regular" else (0,) * 7)[wd]
+        if games is None:
+            return table
+        return max(table, NFL_FLOOR_PULLS * (int(games) + 1) * price("nfl")
+                   + NFL_LINES_PULLS * LINES_CREDITS)
     g = expected_games(league, day) if games is None else float(games)
-    lines_daily = (league in LINES_EVERY_DAY
-                   and (season_phase(league, day) is not None or g > 0))
-    if (g <= 0 and not lines_daily) or league not in PULLS:
+    if g <= 0 or league not in PULLS:
         return 0
     lines = LINES_BY_WEEKDAY.get(league, (0,) * 7)[wd] * LINES_CREDITS
-    if g <= 0:
-        return lines
     priced = min(g, PULL_CAP.get(league, g))
     pulls = PULLS_ON.get((league, wd), PULLS[league])
     props = pulls * (priced + 1) * price(league)
@@ -438,8 +449,10 @@ class LeaguePlan:
     target: int = 0           # the part of the need the month could fund
     extra: int = 0            # headroom on top
     today_need: int = 0
-    envelope: int = 0         # today's ceiling: today_need × fill
+    envelope: int = 0         # today's ceiling: today_need × fill, at least `first`
     over: bool = False        # its own board says its season is over (`build`)
+    tonight: float | None = None   # games tonight (None: not counted)
+    first: int = 0            # what step 2 funded for tonight's games
 
     @property
     def alloc(self) -> int:
@@ -510,7 +523,8 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
             today = 0 if done else day_need(lg, day, games_today.get(lg))
             rest = 0 if done else sum(day_need(lg, d) for d in days[1:])
             plan.leagues[lg] = LeaguePlan(league=lg, priority=i, over=done,
-                                          need=today + rest, today_need=today)
+                                          need=today + rest, today_need=today,
+                                          tonight=games_today.get(lg))
 
     def share_out(tier, owed, money):
         """Hand ``money`` across ``tier`` in proportion to what each is
@@ -530,17 +544,28 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
             plan.leagues[lg].target += n
             left -= n
 
+    def rest_of(lg, owed):
+        return max(0, owed - plan.leagues[lg].target)
+
     left = spendable
     first, later = order[0], [lg for tier in order[1:] for lg in tier]
-    fund(first, {lg: plan.leagues[lg].need for lg in first})   # 2. the NFL's target,
-    fund(later, {lg: int(plan.leagues[lg].need * FLOOR_SHARE)  # every floor after it,
+    # 2. TONIGHT FIRST, in the month's order: the NFL's, every floor after
+    # it, then the rest of tonight tier by tier.
+    fund(first, {lg: plan.leagues[lg].today_need for lg in first})
+    fund(later, {lg: int(plan.leagues[lg].today_need * FLOOR_SHARE) for lg in later})
+    for tier in order[1:]:
+        fund(tier, {lg: rest_of(lg, plan.leagues[lg].today_need) for lg in tier})
+    for lp in plan.leagues.values():
+        lp.first = lp.target
+    # 3. The month: the NFL's target, every floor after it, then the rest.
+    fund(first, {lg: rest_of(lg, plan.leagues[lg].need) for lg in first})
+    fund(later, {lg: rest_of(lg, int(plan.leagues[lg].need * FLOOR_SHARE))
                  for lg in later})
-    for tier in order[1:]:                                      # then the rest, in order
-        fund(tier, {lg: plan.leagues[lg].need - plan.leagues[lg].target
-                    for lg in tier})
+    for tier in order[1:]:
+        fund(tier, {lg: rest_of(lg, plan.leagues[lg].need) for lg in tier})
     short = (not headroom
              or any(lp.target < lp.need for lp in plan.leagues.values()))
-    for i, tier in enumerate(order):                     # 3. headroom, same order
+    for i, tier in enumerate(order):                     # 4. headroom, same order
         if short:
             break                    # nobody's extra before everybody's target
         rate = NFL_HEADROOM if i == 0 else HEADROOM
@@ -551,7 +576,7 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
             left -= n
     plan.unplanned = left
     for lp in plan.leagues.values():
-        lp.envelope = int(lp.today_need * lp.fill)
+        lp.envelope = max(lp.first, int(lp.today_need * lp.fill))
     return plan
 
 
@@ -678,16 +703,22 @@ def report(plan: Plan, spent_month: dict | None = None,
              f"({int(BUFFER_SHARE * 100)}%)",
              f"  planned for the sports: {plan.spendable - plan.unplanned:,}"
              f" · unplanned {plan.unplanned:,}",
-             "  order: " + " > ".join(" · ".join(LABEL[lg] for lg in t) for t in order),
-             f"  after the NFL, every sport playing is held {int(FLOOR_SHARE * 100)}% "
-             f"of its need before any gets more",
-             "",
+             "  order: " + " > ".join(" · ".join(LABEL[lg] for lg in t) for t in order)]
+    tonight = tonight_line(plan)
+    if tonight:
+        lines.append(tonight)
+    lines += [f"  tonight's games are funded first, in that order; then the month: "
+              f"the NFL, then every sport playing held {int(FLOOR_SHARE * 100)}% "
+              f"of its need before any gets more",
+              "",
              "  each sport's month: budget = spent + left (fill) | today: need -> ceiling, spent"]
     for lg in (lg for t in order for lg in t):
         lp = plan.leagues[lg]
         spent = int(spent_month.get(lg, 0))
         if lp.need <= 0:
-            word = "season over — out of the pool" if lp.over else "out of season"
+            word = ("season over — out of the pool" if lp.over else
+                    "no game before the renewal — buys nothing"
+                    if season_phase(lg, d) is not None else "out of season")
             lines.append(f"  {LABEL[lg]:<5} {word}"
                          + (f" (spent {spent:,} this month)" if spent else ""))
             continue
@@ -695,7 +726,8 @@ def report(plan: Plan, spent_month: dict | None = None,
         left = max(0, lp.alloc - today)
         lines.append(f"  {LABEL[lg]:<5} {spent + left:>7,} = {spent:>6,} + {left:>6,} "
                      f"({lp.fill * 100:>3.0f}%) | {lp.today_need:>5,} -> "
-                     f"{lp.envelope:>5,}, {today:,}")
+                     f"{lp.envelope:>5,}, {today:,}"
+                     + (" · no game tonight" if lp.tonight == 0 else ""))
     month = [f"{LABEL.get(k, k)} {v:,}" for k, v in
              sorted(spent_month.items(), key=lambda t: -t[1])]
     if month:
@@ -709,6 +741,38 @@ def report(plan: Plan, spent_month: dict | None = None,
     if pace:
         lines.append(pace)
     return "\n".join(lines)
+
+
+def tonight_line(plan: Plan) -> str:
+    """Who plays tonight — the leagues the pacer lets buy, funded first —
+    and who is in season with no game ("" when tonight was not counted)."""
+    order = [lg for t in tiers(plan.day) for lg in t]
+    counted = [lg for lg in order if plan.leagues[lg].tonight is not None]
+    if not counted:
+        return ""
+    playing = [f"{LABEL[lg]} {int(plan.leagues[lg].tonight)}" for lg in counted
+               if plan.leagues[lg].tonight > 0]
+    idle = [LABEL[lg] for lg in counted
+            if plan.leagues[lg].tonight <= 0 and not plan.leagues[lg].over
+            and (plan.leagues[lg].need > 0 or season_phase(lg, plan.day) is not None)]
+    head = ("  tonight: " + " · ".join(playing) + " — funded first" if playing
+            else "  tonight: no games — nothing is bought today")
+    return head + (f"; no game: {', '.join(idle)} (they buy nothing today)"
+                   if idle else "")
+
+
+def shell_note(plan: Plan, env=None) -> str:
+    """A line for the report run by hand. `sudo -u qellys` gives this shell
+    none of the service's settings, so a renewal day set in /etc/qellys/env
+    is the service's and not this report's: Ethan, 2026-10-30, set it,
+    and the report's line still read ASSUMED. "" when the shell was told."""
+    import os
+    env = os.environ if env is None else env
+    if plan.reset == "set" or RESET_DAY_ENV in env:
+        return ""
+    return (f"  (run by hand, this shell can't see the service's settings; a "
+            f"{RESET_DAY_ENV} set there shows with: sudo grep {RESET_DAY_ENV} "
+            f"/etc/qellys/env)")
 
 
 def pace_line(plan: Plan, recent: dict | None, pool_now: int | None = None) -> str:
@@ -757,10 +821,16 @@ def main() -> int:
     # The pace is this billing month's: the last days of the one before
     # it were spent to another month's plan.
     n = min(7, (plan.day - start).days)
-    print(report(plan, month_spend(rows, start), month_spend(rows, plan.day),
-                 pool_now=int(ob.load().remaining),
-                 recent=recent_daily(rows, plan.day, n) if n else None,
-                 recent_days=n or 7))
+    text = report(plan, month_spend(rows, start), month_spend(rows, plan.day),
+                  pool_now=int(ob.load().remaining),
+                  recent=recent_daily(rows, plan.day, n) if n else None,
+                  recent_days=n or 7)
+    note = shell_note(plan)
+    if note:                              # under the renewal day's line
+        lines = text.splitlines()
+        lines.insert(2, note)
+        text = "\n".join(lines)
+    print(text)
     return 0
 
 

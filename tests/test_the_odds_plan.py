@@ -108,13 +108,45 @@ class _Swap:
 
 
 # --- the order things are funded in --------------------------------------------
-def test_the_nfl_is_funded_first_when_the_month_is_short():
+def test_after_tonights_games_the_nfl_is_funded_first_when_the_month_is_short():
+    """Ethan, 2026-10-30: "tonight's games come first". On a Tuesday the NFL
+    plays nobody; the leagues that play tonight are funded for tonight, and
+    every credit after that goes to the NFL's month before anyone's next."""
     plan = P.build(TUE, 20_000)
     nfl = plan.get("nfl")
-    assert plan.spendable < nfl.need, "the fixture is meant to be short of the NFL alone"
-    assert nfl.target == plan.spendable, (nfl.target, plan.spendable)
+    tonight = sum(lp.first for lp in plan.leagues.values())
+    assert nfl.today_need == nfl.first == 0, "no NFL game on a Tuesday"
+    assert 0 < tonight < plan.spendable < tonight + nfl.need, \
+        "the fixture is meant to be short of the NFL alone, after tonight"
+    assert nfl.target == plan.spendable - tonight, (nfl.target, plan.spendable, tonight)
     for lg in P.PRIORITY[1:]:
-        assert plan.get(lg).alloc == 0, f"{lg} was funded before the NFL's target"
+        lp = plan.get(lg)
+        assert lp.alloc == lp.first == lp.today_need, f"{lg} got past tonight before the NFL's target"
+
+
+def test_tonights_games_come_before_any_day_to_come():
+    """However short the month, a league that plays tonight is funded for
+    tonight before the NFL's Sunday or anybody's next game night — and its
+    ceiling today is never cut below what tonight was funded."""
+    thursday = dt.date(2026, 11, 12)
+    for pool in range(600, 30_000, 400):
+        plan = P.build(thursday, pool, {"nfl": 1, "nba": 9, "nhl": 6, "cfb": 2, "ufc": 0})
+        tonight = sum(lp.today_need for lp in plan.leagues.values())
+        if plan.spendable >= tonight:
+            for lp in plan.leagues.values():
+                assert lp.first == lp.today_need, (pool, lp.league)
+        else:
+            assert all(lp.target == lp.first for lp in plan.leagues.values()), \
+                (pool, "a day to come was funded before tonight")
+        for lp in plan.leagues.values():
+            assert lp.envelope >= lp.first, (pool, lp.league)
+    # The NFL's one Thursday game first, then every floor, then the tiers.
+    thin = P.build(thursday, 9_500, {"nfl": 1, "nba": 9, "nhl": 6, "cfb": 2, "ufc": 0})
+    nfl, later = thin.get("nfl"), [thin.get(lg) for lg in ("cfb", "nba", "nhl")]
+    assert nfl.today_need < thin.spendable < sum(lp.today_need for lp in thin.leagues.values())
+    assert nfl.first == nfl.today_need > 0
+    assert all(0 < lp.first <= lp.today_need * P.FLOOR_SHARE + 1 for lp in later), \
+        [(lp.league, lp.first, lp.today_need) for lp in later]
 
 
 def _floor(lp) -> int:
@@ -137,21 +169,25 @@ def _pools(day, lo=1_000, hi=200_000, step=250, **kw):
 
 def test_every_sport_playing_gets_its_floor_before_any_but_the_nfl_gets_more():
     """THE OCTOBER BUG: the NFL and college funded in full and basketball
-    and hockey left nothing (DK: 0 NBA props priced). Past the NFL's
-    target, while anyone is short of half their target, nobody is past
-    half theirs — the floors fill together, at one fill."""
+    and hockey left nothing (DK: 0 NBA props priced). Past tonight's games
+    and the NFL's target, while anyone is short of half their target,
+    nobody is past half theirs (or tonight's, where tonight costs more) —
+    the floors fill together, at one fill."""
     for day in (NOV1, TUE, dt.date(2026, 10, 28)):
         thin = 0
         for pool, plan in _pools(day):
             later = [plan.get(lg) for t in P.tiers(day)[1:] for lg in t if plan.get(lg).need > 0]
-            if any(lp.target < _floor(lp) - 1 for lp in later):
+            if any(lp.target < max(_floor(lp), lp.first) - 1 for lp in later):
                 thin += 1
-                assert all(lp.target <= _floor(lp) + 1 for lp in later), \
-                    (day, pool, {lp.league: (lp.target, _floor(lp)) for lp in later})
-                fills = [lp.target / _floor(lp) for lp in later if _floor(lp) > 50]
-                assert max(fills) - min(fills) < 0.02, (day, pool, fills)
+                assert all(lp.target <= max(_floor(lp), lp.first) + 1 for lp in later), \
+                    (day, pool, {lp.league: (lp.target, _floor(lp), lp.first) for lp in later})
+                fills = [(lp.target - lp.first) / (_floor(lp) - lp.first) for lp in later
+                         if _floor(lp) - lp.first > 50]
+                if fills:
+                    assert max(fills) - min(fills) < 0.02, (day, pool, fills)
                 if plan.get("nfl").fill < 1:
-                    assert all(lp.target == 0 for lp in later), "the NFL's target comes before every floor"
+                    assert all(lp.target == lp.first for lp in later), \
+                        "after tonight, the NFL's target comes before every floor"
         assert thin, f"{day}: no pool short of the floors"
 
 
@@ -182,13 +218,20 @@ def test_the_last_tier_shares_one_fill():
     raise AssertionError("no pool funds the last tier in part")
 
 
-def test_november_at_100k_funds_football_the_nba_and_baseball_and_holds_hockey_its_floor():
-    """The page's numbers (docs/ODDS_PLAN.md): the whole plan on the 1st."""
+def test_november_at_100k_funds_every_sport_and_most_of_the_headroom():
+    """The page's numbers (docs/ODDS_PLAN.md): the whole plan on the 1st.
+    With every league buying on its game nights only — tonight's games, not
+    the week's — every target is met with room left: the NFL's half again,
+    a quarter for college, the NBA and baseball, and hockey and UFC share
+    the rest at one fill."""
     plan = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
-    for lg in ("nfl", "cfb", "nba", "mlb"):
-        assert plan.get(lg).fill == 1.0, (lg, plan.get(lg).fill)
-    for lg in ("nhl", "ufc"):
-        assert 0.5 <= plan.get(lg).fill < 1.0, (lg, plan.get(lg).fill)
+    assert all(lp.target == lp.need for lp in plan.leagues.values())
+    nfl = plan.get("nfl")
+    assert nfl.extra == int(nfl.need * P.NFL_HEADROOM), "the NFL's headroom first"
+    for lg in ("cfb", "nba", "mlb"):
+        assert plan.get(lg).extra == int(plan.get(lg).need * P.HEADROOM), lg
+    nhl, ufc = plan.get("nhl"), plan.get("ufc")
+    assert 1.0 < nhl.fill < 1.0 + P.HEADROOM and abs(nhl.fill - ufc.fill) < 0.01, (nhl.fill, ufc.fill)
     assert plan.get("wnba").need == 0 and plan.unplanned <= 2
     gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1,
                    over={"mlb"})
@@ -219,9 +262,10 @@ def test_until_the_renewal_the_nba_is_funded_right_after_the_nfl():
         nfl, nba, cfb = plan.get("nfl"), plan.get("nba"), plan.get("cfb")
         assert nba.priority == 2 and cfb.priority == 3
         # A share is cut to whole credits, so one can trickle past a tier.
-        if nba.target > 1:
-            assert nfl.need - nfl.target <= 1, "the NFL's target still comes first"
-        if cfb.target > _floor(cfb) + 1:
+        # Tonight's games come before everything (`first`).
+        if nba.target > nba.first + 1:
+            assert nfl.need - nfl.target <= 1, "after tonight, the NFL's target still comes first"
+        if cfb.target > max(_floor(cfb), cfb.first) + 1:
             assert nba.need - nba.target <= 1, f"college past its floor at {pool} before the NBA's target was met"
             seen += 1
     assert seen, "some pool funds both"
@@ -266,22 +310,30 @@ def test_the_plan_never_plans_more_than_the_pool_holds():
             assert plan.unplanned >= 0 and all(lp.alloc >= 0 for lp in plan.leagues.values())
             assert plan.spendable <= max(0, pool - plan.reserve - plan.harvest - plan.buffer)
             for lp in plan.leagues.values():
-                assert lp.envelope == int(lp.today_need * lp.fill), (day, pool, lp.league)
+                assert lp.envelope == max(lp.first, int(lp.today_need * lp.fill)), \
+                    (day, pool, lp.league)
 
 
 def test_a_month_spent_at_every_ceiling_never_overspends():
     """Every league spending its whole ceiling every day, and the harvest
     its whole cap: the month still ends above the reserve, the NFL is
-    funded in full every day, and little is left to expire at the reset."""
+    funded in full every day it is owed anything, and little is left to
+    expire at the reset past what the plan itself left unplanned — with
+    every league buying on its game nights only, the tables and their
+    headroom no longer take the whole month (`unplanned`, said in the
+    report)."""
     for first in (dt.date(2026, 10, 1), NOV1, dt.date(2026, 12, 1)):
         pool, day, end = 100_000, first, P.period(first)[1]
+        unplanned = P.build(day, pool).unplanned
         while day < end:
             plan = P.build(day, pool)
-            assert plan.get("nfl").fill >= 1.0, f"{day}: the NFL is short ({plan.get('nfl').fill:.2f})"
+            nfl = plan.get("nfl")
+            assert nfl.need == 0 or nfl.fill >= 1.0, f"{day}: the NFL is short ({nfl.fill:.2f})"
             pool -= sum(lp.envelope for lp in plan.leagues.values()) + P.HARVEST_DAY
             day += dt.timedelta(days=1)
         assert pool >= ob.RESERVE, f"{first:%B}: the month overspent — {pool} left"
-        assert pool < 100_000 * 0.05, f"{first:%B}: {pool} credits left to expire"
+        assert pool < unplanned + 100_000 * 0.06, \
+            f"{first:%B}: {pool} credits left to expire ({unplanned} unplanned on the 1st)"
 
 
 # --- what a league is owed -----------------------------------------------------
@@ -301,15 +353,40 @@ def test_todays_slate_replaces_the_table_for_today():
         "today's slate moved the rest of the month too"
 
 
-def test_the_nfl_keeps_its_day_whatever_its_board_says():
-    """The league funded first is not zeroed by a board that failed to build."""
-    assert P.day_need("nfl", TUE, 0) == P.NFL_REGULAR[TUE.weekday()] > 0
-    assert P.day_need("nfl", NOV1, None) == P.NFL_REGULAR[6]
+def test_the_nfl_is_owed_nothing_on_a_night_it_does_not_play():
+    """Ethan, 2026-10-30: "if just NFL has a game that night, we just need to
+    pull NFL and so forth" — and the other way round. Its Sunday, Monday and
+    Thursday come off the table; a game night the table does not hold
+    (Thanksgiving's Friday, December's Saturdays) is priced by the game; a
+    board whose times could not be read (None) leaves the table to answer."""
+    sun, mon, thu = NOV1, dt.date(2026, 11, 2), dt.date(2026, 11, 5)
+    sat, fri = dt.date(2026, 12, 19), dt.date(2026, 11, 27)
+    for day in (TUE, fri, sat):
+        assert P.day_need("nfl", day, 0) == 0, day
+        assert P.NFL_REGULAR[day.weekday()] == 0, day
+    assert P.day_need("nfl", sun, 13) == P.NFL_REGULAR[6] > 0
+    assert P.day_need("nfl", sun, None) == P.NFL_REGULAR[6]
+    assert P.day_need("nfl", thu, 1) == P.NFL_REGULAR[3] > 0
+    assert P.day_need("nfl", mon, 0) == 0, "a Monday with no Monday game"
+    game = P.NFL_FLOOR_PULLS * 3 * P.price("nfl") + P.NFL_LINES_PULLS * P.LINES_CREDITS
+    assert P.day_need("nfl", sat, 2) == game, "a December Saturday's two games, by the game"
+    assert P.day_need("nfl", fri, 1) > 0, "Black Friday's game"
+    assert P.day_need("nfl", dt.date(2027, 3, 10), 0) == 0
 
 
-def test_college_buys_its_lines_every_day_of_its_season():
-    sunday = dt.date(2026, 11, 8)
-    assert P.day_need("cfb", sunday, 0) == P.LINES_BY_WEEKDAY["cfb"][6] * P.LINES_CREDITS > 0
+def test_college_buys_on_its_game_nights_only():
+    """Its lines lane ran every day of the season — the board holds the week
+    — until the tonight rule: a Sunday with no college game buys nothing,
+    and the week's table counts each night's own games (twelve a pull at
+    most on Saturday), not the ones inside the 36-hour player window."""
+    sunday, saturday = dt.date(2026, 11, 8), dt.date(2026, 11, 7)
+    assert P.day_need("cfb", sunday, 0) == 0
+    assert P.day_need("cfb", sunday) == 0, "the table's Sunday has no game"
+    assert P.GAMES_BY_WEEKDAY["cfb"][6] == P.GAMES_BY_WEEKDAY["cfb"][0] == 0
+    assert P.day_need("cfb", saturday, 50) == P.day_need("cfb", saturday, 12), "a pull prices twelve"
+    assert P.day_need("cfb", saturday, 12) > P.LINES_BY_WEEKDAY["cfb"][5] * P.LINES_CREDITS
+    assert P.GAMES_BY_WEEKDAY["ufc"] == (0, 0, 0, 0, 0, 13, 0), "UFC buys on fight night"
+    assert not hasattr(P, "LINES_EVERY_DAY")
     assert P.day_need("cfb", dt.date(2027, 3, 7), 0) == 0
 
 
@@ -398,9 +475,17 @@ def test_the_launcher_falls_back_to_the_weights_without_a_plan():
 
 
 def test_todays_games_come_off_the_built_boards():
+    """Tonight's games, league by league (Ethan, 2026-10-30: "recognizing
+    what sport has what games live that night"). The daily boards hold
+    tonight's slate; the NFL's and college's hold the week and count only
+    tonight's — a game past midnight is still tonight's, the boards' own
+    5 AM roll — and UFC counts the card's bouts on fight night. An empty
+    board is 0; a weekly board whose times cannot be read says nothing,
+    and the plan's table answers for it."""
     import launch
     d = tempfile.mkdtemp()
-    now = time.time()
+    thu = dt.datetime(2026, 11, 5, 10, tzinfo=ET).timestamp()        # a Thursday morning
+    sat = dt.datetime(2026, 11, 7, 9, tzinfo=ET).timestamp()
 
     def board(name, games):
         path = os.path.join(d, name)
@@ -408,23 +493,33 @@ def test_todays_games_come_off_the_built_boards():
             json.dump({"games": games}, fh)
         return path
 
-    iso = lambda ts: dt.datetime.fromtimestamp(ts, dt.timezone.utc).isoformat()
+    def iso(*when):
+        return dt.datetime(*when, tzinfo=ET).astimezone(dt.timezone.utc).isoformat()
+
     saved = {k: getattr(launch, k) for k in
-             ("MLB_OUT", "NBA_OUT", "WNBA_OUT", "NHL_OUT", "NFL_OUT", "UFC_OUT", "CFB_OUT")}
-    launch.NBA_OUT = board("nba.json", [{}] * 7)
-    launch.NHL_OUT = board("nhl.json", [{}] * 4)
+             ("MLB_OUT", "NBA_OUT", "WNBA_OUT", "NHL_OUT", "NFL_OUT", "UFC_OUT", "CFB_OUT",
+              "_ufc_card")}
+    launch.NBA_OUT = board("nba.json", [{}] * 7)            # no times: a daily board is tonight's
+    launch.NHL_OUT = board("nhl.json", [{"kickoff": iso(2026, 11, 5, 19)}] * 4)
     launch.MLB_OUT = board("mlb.json", [])
     launch.WNBA_OUT = os.path.join(d, "missing.json")
-    launch.NFL_OUT = board("nfl.json", [{}] * 14)
-    launch.UFC_OUT = board("ufc.json", [{}] * 12)
+    launch.NFL_OUT = board("nfl.json", [{"date": "2026-11-05", "kickoff": "20:15"}]
+                           + [{"date": "2026-11-08", "kickoff": "13:00"}] * 13)
     launch.CFB_OUT = board("cfb.json", [
-        {"kickoff": iso(now + 3 * 3600)}, {"kickoff": iso(now + 30 * 3600)},
-        {"kickoff": iso(now + 60 * 3600)}, {"kickoff": iso(now - 3600)}])
+        {"kickoff": iso(2026, 11, 5, 19, 30)}, {"kickoff": iso(2026, 11, 6, 0, 30)},
+        {"kickoff": iso(2026, 11, 6, 19)}, {"kickoff": iso(2026, 11, 7, 12)}])
+    card = [{"commence_time": iso(2026, 11, 7, 18)}] * 12
+    launch._ufc_card = lambda cache_only=False: card
     launch._GAMES_TODAY[:] = [0.0, {}]
     try:
-        got = launch._games_today()
-        assert got == {"mlb": 0, "nba": 7, "wnba": 0, "nhl": 4, "nfl": 14, "ufc": 12,
-                       "cfb": 2}, got
+        got = launch._games_tonight(thu)
+        assert got == {"mlb": 0, "nba": 7, "wnba": 0, "nhl": 4, "nfl": 1, "cfb": 2,
+                       "ufc": 0}, got
+        got = launch._games_tonight(sat)
+        assert (got["nfl"], got["cfb"], got["ufc"]) == (0, 1, 12), got
+        launch.NFL_OUT = board("nfl_x.json", [{"date": "2026-W10", "kickoff": "TBD"}] * 14)
+        assert "nfl" not in launch._games_tonight(thu), "times unread: the table answers"
+        assert launch._games_today()["nba"] == 7
         launch.NBA_OUT = board("nba2.json", [{}] * 9)
         assert launch._games_today()["nba"] == 7, "read again inside the minute"
         launch._GAMES_TODAY[0] -= launch.GAMES_TODAY_TTL_S + 1
@@ -575,13 +670,33 @@ def test_the_report_gives_each_sport_its_month():
     text = P.report(plan, {"nfl": 30_000, "nba": 6_200, "harvest": 3_600}, {"nba": 400},
                     pool_now=69_000)
     assert "order: NFL > CFB > NBA > MLB > NHL · UFC · WNBA" in text
-    assert "after the NFL, every sport playing is held 50% of its need before any gets more" in text
+    assert ("tonight's games are funded first, in that order; then the month: the NFL, "
+            "then every sport playing held 50% of its need before any gets more") in text
+    assert "  tonight: NBA 9 · NHL 6 — funded first" in text, text
     assert "each sport's month: budget = spent + left (fill)" in text
     left = nba.alloc - 400
     assert f"NBA   {6_200 + left:>7,} = {6_200:>6,} + {left:>6,} ({nba.fill * 100:>3.0f}%)" in text, text
     assert "MLB   out of season" in text, "baseball's table ends November 4"
     early = P.report(P.build(dt.date(2026, 10, 28), 9_000), {})
     assert "order: NFL > NBA > CFB > MLB > NHL · UFC · WNBA" in early, "Ethan's October call, said"
+
+
+def test_the_report_run_by_hand_says_it_cannot_see_the_services_renewal_day():
+    """Ethan, 2026-10-30: he set QB_ODDS_RESET_DAY with setenv, restarted,
+    ran the plan by hand — and its line still read ASSUMED. The service
+    reads /etc/qellys/env; `sudo -u qellys python3 -m engine.oddsplan` does
+    not, and the report now says so under that line, with the command that
+    shows the service's value."""
+    import inspect
+    plan = P.build(NOV1, 100_000)
+    note = P.shell_note(plan, env={})
+    assert note.startswith("  (run by hand, this shell can't see the service's settings")
+    assert "sudo grep QB_ODDS_RESET_DAY /etc/qellys/env" in note
+    assert P.shell_note(plan, env={P.RESET_DAY_ENV: "1"}) == "", "a shell that was told"
+    told = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="set", start=NOV1)
+    assert P.shell_note(told, env={}) == ""
+    src = inspect.getsource(P.main)
+    assert "lines.insert(2, note)" in src and "shell_note(plan)" in src
 
 
 def test_the_pace_line_says_whether_the_pool_lasts():

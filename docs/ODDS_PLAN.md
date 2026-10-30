@@ -13,18 +13,55 @@ over, we can take baseball out of the credit pool, and whatever other sport
 is not being played needs to be taken out of the credit pool ... and make
 sure we're not running through credits like crazy."*
 
+Ethan, 2026-10-30, with October's credits nearly gone and the NBA's board
+empty: *"tonight's games come first. We need to make up a system of just
+recognizing what sport has what games live that night and pulling credits
+just for those sports. So obviously if NFL and NBA and MLB and all of them
+have a game on that night, then we need to pull all of them. But if just
+NFL has a game that night, we just need to pull NFL and so forth."*
+
 The code is `engine/oddsplan.py`. The launcher reads it for every paid odds
 pull (`launch._budget_share`). On the box, this prints today's plan: each
 sport's month, today's ceilings, and the pace:
 
     cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan
 
+## Tonight's games only
+
+Every cycle the box counts each league's games **on tonight's slate**: the
+boards' own day, which turns at 5 AM Eastern, so a game past midnight is
+still tonight's (`oddsbudget.tonight_games`). Then:
+
+* **A league with no game tonight buys nothing**: no props, no game lines,
+  no live line (`launch._odds_affordable`). The decline goes in the
+  decisions log as "no NFL game tonight — credits go to the leagues playing
+  tonight". A board whose times can't be read isn't treated as a night off;
+  the pacer decides as before.
+* **A league playing tonight is metered at tonight's games.**
+* **A board that holds the week buys tonight's games only.** The NFL's and
+  college's paid pulls buy the games before tonight's slate ends and read
+  the rest from the cache (`--price-until`). A Thursday NFL pull used to buy
+  all ~15 games of the week at 25 credits each, about 400 a pull, and a
+  Sunday price bought on Thursday is past the 6-hour age limit long before
+  kickoff. Now it buys the one game, about 50.
+* **UFC's games are its card's bouts**, so the card is bought on fight day.
+
+What readers see: on a day a league doesn't play, its board shows its next
+games without prices once the last ones are 6 hours old. Saturday's NFL
+board shows Sunday's games unpriced until the 7am Sunday pull. Scores,
+schedules and live games keep updating.
+
 ## The rule
 
 1. **Held back first.** The reserve (500), the closing-line harvest's daily
    cap (400 a day for every day left) and a 5% buffer. The plan never
    spends these.
-2. **Only sports being played are in the pool.** Every sport in season is
+2. **Tonight's games first.** Every league playing tonight is owed what
+   tonight's slate costs at its cadence, and that's funded before any day
+   to come, in the order below: the NFL's tonight, then every other
+   league's half of its tonight together, then the rest of tonight tier by
+   tier. A league with no game tonight is owed nothing today.
+3. **Only sports being played are in the pool.** Every sport in season is
    owed what its normal cadence costs for the rest of the month. A sport out
    of season is owed nothing (the WNBA now). So is **a sport whose season
    just ended**: baseball leaves the pool the morning after the World
@@ -32,21 +69,22 @@ sport's month, today's ceilings, and the pace:
    five days. A basketball or college board that says "offseason" in its
    postseason does the same. What the table held for them goes to the
    sports still playing.
-3. **The NFL's share first, in full.**
-4. **Then every other sport playing gets half its share** (`FLOOR_SHARE`),
+4. **Then the NFL's month, in full.**
+5. **Then every other sport playing gets half its share** (`FLOOR_SHARE`),
    all together. That half is its own budget: no sport but the NFL comes
    before it. A short month thins a sport; it never switches it off, which
    is what October did to the NBA and the NHL.
-5. **Then the rest, in Ethan's order:** college, then the NBA, then
+6. **Then the rest, in Ethan's order:** college, then the NBA, then
    baseball, then hockey, UFC and the WNBA together (they split what's
    left by need, so they all get the same percentage).
-6. **Headroom only once every sport is fully funded.** The NFL gets up to
+7. **Headroom only once every sport is fully funded.** The NFL gets up to
    50% extra first. Then the others get up to 25% each, in the same order,
    for extra pulls on a big news day.
-7. **Today's ceiling** for each sport is today's need times the share of
-   its month the plan could fund. The pacer can't spend more than that on
-   a sport's ordinary pulls, but closing-line, readiness and inactives
-   pulls still go through when needed.
+8. **Today's ceiling** for each sport is today's need times the share of
+   its month the plan could fund, and never less than what step 2 funded
+   for tonight. The pacer can't spend more than that on a sport's ordinary
+   pulls, but closing-line, readiness and inactives pulls still go through
+   when needed.
 
 Until November 1 the NBA comes right after the NFL, ahead of college. That
 was Ethan's call on October 28 to get NBA picks back for the month's last
@@ -63,22 +101,23 @@ room for the days after.
 
 | | need (the month) | planned | fill |
 |---|---:|---:|---:|
-| NFL | 42,020 | 42,020 | 100% |
-| College | 13,940 | 13,940 | 100% |
-| NBA | 19,398 | 19,398 | 100% |
-| MLB (World Series, to Nov 4 at most) | 496 | 496 | 100% |
-| NHL | 10,476 | 6,332 | 60% |
-| UFC | 518 | 313 | 60% |
+| NFL | 22,100 | 33,150 | 150% |
+| College | 10,256 | 12,820 | 125% |
+| NBA | 19,398 | 24,247 | 125% |
+| MLB (World Series, to Nov 4 at most) | 496 | 620 | 125% |
+| NHL | 10,476 | 11,418 | 109% |
+| UFC | 224 | 244 | 109% |
 | WNBA | off-season | 0 | |
 | Held back: closing lines 12,000 · buffer 5,000 · reserve 500 | | | |
 
-All target cadences together come to about 87k for November, a bit more
-than the 82,500 a 100k plan leaves after what's held back. So football,
-the NBA and baseball are funded in full, and hockey and UFC run at 60%,
-above their 50% floor. Once baseball is out, they go to 65%. As the month
-goes on and the buffer and unspent credits come back, that rises. December
-looks the same, with hockey at 73%. In January, after college's regular
-season, every sport is funded in full with headroom on top.
+With every league buying on its game nights only, all target cadences
+together come to about 63k for November, well inside the 82,500 a 100k
+plan leaves after what's held back (before the tonight rule they came to
+about 87k, and hockey and UFC ran at 60%). So every sport is funded in full
+with headroom on top: the NFL half again, college, the NBA and baseball a
+quarter, and hockey and UFC share the rest. Once baseball is out, they go
+to 115%. December and January fund everyone with full headroom and leave
+some credits unplanned.
 
 A month where every sport spends its full ceiling every day still ends
 above the reserve; that's tested in `tests/test_the_odds_plan.py`.
@@ -90,11 +129,12 @@ spent since the renewal plus what the plan holds for it from today, the
 share of its need that covers, and today's need, ceiling and spend:
 
     order: NFL > CFB > NBA > MLB > NHL · UFC · WNBA
-    after the NFL, every sport playing is held 50% of its need before any gets more
+    tonight: CFB 3 · NBA 9 · NHL 5 — funded first; no game: NFL, UFC (they buy nothing today)
+    tonight's games are funded first, in that order; then the month: the NFL, then every sport playing held 50% of its need before any gets more
 
     each sport's month: budget = spent + left (fill) | today: need -> ceiling, spent
-    NFL    43,860 = 15,800 + 28,060 (100%) |   500 ->   500, 380
-    NBA    15,445 =  6,100 +  9,345 ( 70%) |   753 ->   523, 230
+    NFL    36,450 = 15,800 + 20,650 (150%) |     0 ->     0, 0 · no game tonight
+    NBA    15,445 =  6,100 +  9,345 ( 70%) |   753 ->   753, 230
     MLB   season over — out of the pool (spent 140 this month)
     WNBA  out of season
 
@@ -114,33 +154,37 @@ share of its need that covers, and today's need, ceiling and spend:
 
 ## What a league's day buys (the targets)
 
-Credits by day, Monday to Sunday, on a typical November week. These are the
-box's days, which run on UTC, so each day starts at 8pm Eastern.
+Credits by day, Monday to Sunday, on a typical November week, on the
+box's days (the service runs on Eastern time). Today's real slate replaces
+the table for today.
 
 | | Mon | Tue | Wed | Thu | Fri | Sat | Sun | week |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| NFL | 600 | 500 | 500 | 2,000 | 600 | 1,780 | 3,500 | 9,480 |
-| College | 228 | 328 | 328 | 356 | 512 | 1,586 | 72 | 3,410 |
+| NFL | 600 | 0 | 0 | 400 | 0 | 0 | 3,500 | 4,500 |
+| College | 0 | 224 | 224 | 252 | 278 | 1,586 | 0 | 2,564 |
 | NBA | 639 | 582 | 810 | 468 | 753 | 639 | 639 | 4,530 |
 | NHL | 234 | 450 | 270 | 486 | 270 | 558 | 234 | 2,502 |
-| UFC | 14 | 14 | 14 | 14 | 14 | 56 | 0 | 126 |
+| UFC | 0 | 0 | 0 | 0 | 0 | 56 | 0 | 56 |
 
 * **NFL.** Sunday: the four windows (7am, noon, 3pm, 6pm ET), plus a
   readiness pull and an inactives pull before each wave, and game lines
   every 15 minutes through the games. Thursday and Monday: the priority
-  floor (six pulls on a day with a kickoff inside 24 hours), narrowing to
-  that night's game once it's six hours out. Other days: one pull of the
-  week's board, with hourly game lines.
+  floor (six pulls on a day with a kickoff inside 24 hours) of that night's
+  game. Other days: nothing, since there's no game. A game night the table
+  doesn't hold (Thanksgiving's three games, Black Friday, December's
+  Saturdays, Christmas) is priced by the game: about 390 for one, 690 for
+  three.
 * **College.** Eight prop pulls on Saturday, two on Thursday and Friday,
-  four on weekday nights, at 13 credits a game for up to 12 games a pull.
-  Game lines run every day of the season, hourly when no game is close and
-  every 15 minutes in the pre-game window and through the games.
+  four on weekday nights, at 13 credits a game for up to 12 of that night's
+  games a pull. Game lines run on game nights only, every 15 minutes in the
+  pre-game window and through the games.
 * **NBA and NHL.** Three prop pulls on a game day: noon, the pre-game run
   and 6pm ET. The NBA adds its three-credit game-lines lane until the last
   tip. Both add the live line while games are on. An 11-game NBA night is
   about 870 credits; a 9-game NHL night is about 410.
 * **MLB.** Four pulls on a World Series game day, about 124 credits.
-* **UFC.** One credit a fight. One pull a day, four on fight day.
+* **UFC.** One credit a fight, four pulls on fight day, nothing on the
+  days before.
 
 ## The renewal day: check this one
 
@@ -191,7 +235,9 @@ set the right day of the month:
 | `NBA_FIRST_UNTIL` | the NBA before college until Nov 1, 2026 (Ethan's October call) |
 | `NFL_HEADROOM`, `HEADROOM` | 50% and 25% extra, only after every target is funded |
 | `BUFFER_SHARE` | 5% of the pool, never planned |
-| `NFL_REGULAR`, `NFL_PLAYOFFS` | the NFL's day, Monday to Sunday |
+| `NFL_REGULAR`, `NFL_PLAYOFFS` | the NFL's day, Monday to Sunday (0 on a day with no game) |
+| `NFL_FLOOR_PULLS`, `NFL_LINES_PULLS` | an NFL game night the table doesn't hold, priced by the game |
+| `oddsbudget.tonight_games` | the count the tonight rule reads: each league's games on tonight's slate |
 | `PULLS`, `PULLS_ON` | prop pulls per game day, per league |
 | `LINES_BY_WEEKDAY`, `LIVE_HOURS` | the three-credit lanes |
 | `SEASONS` | when each league plays. Today's real slate always overrides it, and a board that says its season is over (`launch._seasons_over`) ends it early |
@@ -207,14 +253,19 @@ set the right day of the month:
   inactives and closing pulls still apply. That's on purpose, since the
   NFL comes first. The real balance absorbs it, and the next plan trims
   the last tier.
-* **A sport the plan can't fund at all** (only when the NFL's own need
-  takes the whole pool, as at the very end of October) still gets the
+* **A sport the plan can't fund at all** (only when tonight's games and
+  the NFL's own need take the whole pool, as at the very end of October)
+  still gets the
   pacer's old safety net: one sparse pull every 12 hours, if the month can
   afford it.
 * **A season ending is read off its board**: baseball's the morning after
   its last game; the NBA, WNBA and college once their board says
   "offseason", which waits for a look back with no games (up to 10 days);
   hockey and the NFL by the season table.
+* **A league buys nothing on a night it doesn't play.** That's Ethan's
+  rule (2026-10-30), and its cost is a board with no prices between game
+  nights: Saturday's NFL board shows Sunday's games unpriced until Sunday
+  morning, and a UFC card isn't priced until fight day.
 * **Leftover credits in quiet months** (March, with no football) show up
   as "unplanned" in the report. They're Ethan's to spend: more NBA pulls,
   a wider college cap, or nothing.

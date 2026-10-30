@@ -145,16 +145,27 @@ def test_a_full_college_pull_is_only_offered_inside_the_player_window():
     # The rule itself, run: a Saturday slate seen on Tuesday is outside
     # the window; the same slate on Friday afternoon is inside; a game
     # already kicked off does not count; garbage kickoffs do not crash it.
+    assert "_tonight_until(now)" in gate, "and only tonight's games (the tonight rule)"
     ns: dict = {}
-    exec("import time\n" + gate, ns)                    # noqa: S102
+    exec("import time\n" + _fn(LAUNCH, "_tonight_until") + gate, ns)   # noqa: S102
     fn = ns["_cfb_player_pull_possible"]
     now = 1_800_000_000.0
     sat = now + 4 * 86400
     assert fn([sat], now=now) is False
-    assert fn([sat], now=sat - 20 * 3600) is True
+    assert fn([sat], now=sat - 20 * 3600) is True        # 3am kickoff: tonight's, the 5 AM roll
     assert fn([sat], now=sat + 60) is False
     assert fn([None, "x", sat], now=sat - 3600) is True
     assert fn([], now=now) is False
+    # Ethan, 2026-10-30: "pulling credits just for those sports" — inside
+    # the 36-hour window but on tomorrow's slate is not tonight's game.
+    import datetime as _d
+    from zoneinfo import ZoneInfo
+    et = ZoneInfo("America/New_York")
+    fri_3pm = _d.datetime(2026, 11, 6, 15, tzinfo=et).timestamp()
+    fri_7pm = _d.datetime(2026, 11, 6, 19, tzinfo=et).timestamp()
+    sat_noon = _d.datetime(2026, 11, 7, 12, tzinfo=et).timestamp()
+    assert fn([sat_noon], now=fri_3pm) is False, "Saturday's game is bought on Saturday"
+    assert fn([fri_7pm, sat_noon], now=fri_3pm) is True
 
 
 def test_a_full_college_pull_is_only_offered_when_the_build_would_buy_a_game():

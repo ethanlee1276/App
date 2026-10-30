@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-30",
+      "kind": "ship",
+      "title": "Prices follow tonight’s games",
+      "body": "Sportsbook prices are now bought for the games being played tonight, league by league. A league’s next games get their prices on the day they’re played: Sunday’s NFL games on Sunday morning, a college Saturday on Saturday, a UFC card on fight day. Scores, schedules and live games update as always."
+    },
+    {
+      "date": "2026-10-30",
       "kind": "fix",
       "title": "A finished game reads like ESPN’s page",
       "body": "A game that’s over no longer shows the live field or its last play. Its page opens on the final, the recap, the leaders and every scoring play, with the box score, every play and the team stats on the tabs. Basketball and hockey open a final on the shot chart. On the open Duo, the game chat’s bar sits at the bottom of the screen, beside the menu."

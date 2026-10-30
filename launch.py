@@ -572,32 +572,49 @@ _GAMES_TODAY: list = [0.0, {}]
 
 
 def _games_today() -> dict:
-    """Games each league has on the pacer's day, off the built boards —
-    today's real slate for the month's plan (engine/oddsplan); its tables
-    cover the rest of the month.
+    """Games each league plays tonight, off the built boards — today's
+    real slate for the month's plan (engine/oddsplan), which funds them
+    first; its tables cover the rest of the month.
 
     The daily boards (baseball, the two basketball leagues, hockey) hold
-    exactly today's slate, and UFC's the next card's fights. The NFL's
-    holds the week, and the plan reads it only as "in season". College
-    counts the games inside its player window
-    (`cfb_build.PLAYER_WINDOW_HOURS`) — the ones a pull would price. Read
-    once a minute: the NFL board is megabytes and every league asks several
-    times a cycle.
+    exactly tonight's slate. The NFL's and college's hold the week, and
+    count only the games on tonight's slate (`_games_tonight`) — the ones a
+    pull buys; UFC counts the card's bouts on fight night. Read once a
+    minute: the NFL board is megabytes and every league asks several times
+    a cycle.
     """
     now = time.time()
     if _GAMES_TODAY[1] and now - _GAMES_TODAY[0] < GAMES_TODAY_TTL_S:
         return dict(_GAMES_TODAY[1])
-    out = {name: _slate_games(path) for name, path in
-           (("mlb", MLB_OUT), ("nba", NBA_OUT), ("wnba", WNBA_OUT),
-            ("nhl", NHL_OUT), ("nfl", NFL_OUT), ("ufc", UFC_OUT))}
-    try:
-        from cfb_build import PLAYER_WINDOW_HOURS as hours
-    except Exception:                                        # noqa: BLE001
-        hours = 36
-    out["cfb"] = sum(1 for k in _slate_kickoffs(CFB_OUT)
-                     if isinstance(k, (int, float)) and now < k <= now + hours * 3600)
+    out = _games_tonight(now)
     _GAMES_TODAY[0], _GAMES_TODAY[1] = now, out
     return dict(out)
+
+
+def _games_tonight(now: float) -> dict:
+    """Games each league plays TONIGHT (`oddsbudget.tonight_games`) — the
+    leagues the pacer lets buy (`_odds_affordable`), and the counts the
+    month's plan funds first.
+
+    An empty board is 0. A board whose times cannot be read is left out
+    (the plan's table answers for it) unless it is a daily board, which
+    holds tonight's slate and nothing else. UFC counts the card's bouts,
+    off the free events list's cache.
+    """
+    from engine.oddsbudget import tonight_games
+    out: dict = {}
+    for name, path in (("mlb", MLB_OUT), ("nba", NBA_OUT), ("wnba", WNBA_OUT),
+                       ("nhl", NHL_OUT), ("nfl", NFL_OUT), ("cfb", CFB_OUT)):
+        games = _slate_games(path)
+        n = tonight_games(_slate_kickoffs(path), now) if games else 0
+        if n is None and name not in ("nfl", "cfb"):
+            n = games
+        if n is not None:
+            out[name] = n
+    ufc = _ufc_tonight(_ufc_card(cache_only=True), now)
+    if ufc is not None:
+        out["ufc"] = ufc
+    return out
 
 
 _SEASONS_OVER: list = [0.0, frozenset()]
@@ -710,7 +727,9 @@ def _cfb_player_pull_possible(kickoffs: list, now: float | None = None) -> bool:
         from cfb_build import PLAYER_WINDOW_HOURS as hours
     except Exception:                                    # noqa: BLE001
         hours = 36
-    return any(isinstance(k, (int, float)) and now < k <= now + hours * 3600
+    # …and before tonight's slate ends: a later game is read, not bought.
+    until = min(now + hours * 3600, _tonight_until(now) or float("inf"))
+    return any(isinstance(k, (int, float)) and now < k <= until
                for k in kickoffs or [])
 
 
@@ -724,9 +743,28 @@ def _cfb_player_events_affordable(kickoffs: list, now: float | None = None) -> b
         from cfb_build import PLAYER_WINDOW_HOURS as hours, player_event_cap
     except Exception:                                    # noqa: BLE001
         return True
+    until = min(now + hours * 3600, _tonight_until(now) or float("inf"))
     kicks = [k for k in kickoffs or []
-             if isinstance(k, (int, float)) and now < k <= now + hours * 3600]
+             if isinstance(k, (int, float)) and now < k <= until]
     return player_event_cap(kicks, now) >= 1
+
+
+def _tonight_until(now: float | None = None) -> float | None:
+    """The end of tonight's slate (`oddsbudget.tonight_ends`); None when
+    the clock cannot say."""
+    try:
+        from engine.oddsbudget import tonight_ends
+        return tonight_ends(now)
+    except Exception:                                        # noqa: BLE001
+        return None
+
+
+def _tonight_args() -> list:
+    """``--price-until`` for a build whose board holds the week (the NFL's,
+    college's): a paid pull buys tonight's games and reads the rest from
+    the cache (`_odds_affordable`'s tonight rule)."""
+    until = _tonight_until()
+    return ["--price-until", str(int(until))] if until else []
 
 
 def _slate_kickoffs(path: str) -> list:
@@ -781,15 +819,28 @@ def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
         return True
 
 
+#: `_odds_affordable`'s "count tonight's games off the board" (UFC's board
+#: has no games; its caller counts the card's bouts instead).
+_FROM_BOARD = object()
+
+
 def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
                      cost: int | None = None,
                      credits: int | None = None,
-                     prices_stale: bool = False) -> bool:
+                     prices_stale: bool = False,
+                     tonight=_FROM_BOARD) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
 
     Scores are free and always refresh; odds are metered, so they only ride
     along when the budget allows. This is what keeps live tracking from
     silently burning a month's quota in an evening.
+
+    FIRST, WHETHER THE LEAGUE PLAYS TONIGHT (`oddsbudget.tonight_games`;
+    Ethan, 2026-10-30: "pulling credits just for those sports"). A league
+    with games on its board and none on tonight's slate buys nothing, on
+    every lane — props, game lines, live lines — and the decline is written
+    down like any other. ``tonight`` is the caller's own count when the
+    board cannot give one.
     """
     if not _with_odds():
         return False
@@ -816,15 +867,38 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
     # know their real credit price say it directly (oddsbudget.
     # refresh_credits).
     kicks = _slate_kickoffs(out_path)
+    try:
+        from engine.oddsbudget import tonight_games
+        tonight = tonight_games(kicks) if tonight is _FROM_BOARD else tonight
+    except Exception:                                        # noqa: BLE001
+        tonight = None
+    # What a per-game pull buys: tonight's games (a board that holds the
+    # week buys tonight's and reads the rest, `_tonight_args`), or every
+    # game on the board when tonight cannot be counted.
+    priced = tonight if tonight else _games_on_slate(out_path)
     # THE PRICE IS STATED IN CREDITS FOR EVERY LEAGUE NOW. The pacer's
     # generic per-event price is eight; the NFL's twelve-market call is
     # not (engine/oddsbudget.credits_per_event), and a caller that lets
     # the pacer multiply for it is metered at the wrong price.
     if credits is None and cost is None:
         from engine.oddsbudget import credits_per_event
-        credits = (_games_on_slate(out_path) + 1) * credits_per_event(sport)
-    ok, reason = should_refresh(cost if cost is not None
-                                else _games_on_slate(out_path) + 1,
+        credits = (priced + 1) * credits_per_event(sport)
+    if tonight == 0:
+        from engine.oddsbudget import budget_sport
+        league = (budget_sport(sport) or "this league").upper()
+        reason = (f"no {league} game tonight — credits go to the leagues "
+                  f"playing tonight")
+        if not quiet:
+            print(f"       {reason}")
+        try:
+            from engine.oddsbudget import log_decision
+            log_decision(sport, False, reason, credits=credits, cost_events=cost,
+                         games=_games_on_slate(out_path), kickoffs=len(kicks),
+                         tonight=0)
+        except Exception:                                    # noqa: BLE001
+            pass
+        return False
+    ok, reason = should_refresh(cost if cost is not None else priced + 1,
                                 kickoffs=kicks,
                                 sport=sport, share=_budget_share(sport),
                                 credits=credits, prices_stale=prices_stale)
@@ -837,7 +911,8 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
         log_decision(sport, ok, reason,
                      credits=credits if credits is not None else None,
                      cost_events=cost, games=_games_on_slate(out_path),
-                     kickoffs=len(kicks), share=round(_budget_share(sport), 3))
+                     kickoffs=len(kicks), share=round(_budget_share(sport), 3),
+                     tonight=tonight)
     except Exception:                                        # noqa: BLE001
         pass
     # NOTE: the refresh clock is NOT stamped here. Authorization is not a
@@ -1154,6 +1229,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
     lines_before = ""
     if spend:
         args.append("--odds")
+        args += _tonight_args()        # tonight's games bought, the week's read
         if quiet and _narrow_pull(out, "nfl"):
             args.append("--active-odds")
     elif _with_odds():
@@ -1502,7 +1578,9 @@ def refresh_cfb(quiet: bool = False) -> bool:
     Saturday costs the same three credits as a four-game Tuesday. That is
     why this passes an explicit cost instead of the games-on-slate default.
     """
-    args = ["cfb_build.py", _slate_date(), "--out", CFB_OUT]
+    # Tonight's games first on every build, so a cached one reads the
+    # games the paid one bought (`_tonight_args`).
+    args = ["cfb_build.py", _slate_date(), "--out", CFB_OUT] + _tonight_args()
     # IN CREDITS, NOT IN EVENTS. `should_refresh`'s first parameter is an
     # event count it multiplies by CREDITS_PER_EVENT, so passing 63 through
     # it authorised college against 504 — eight times its real price, on a
@@ -1677,17 +1755,46 @@ def _auto_weighins(quiet: bool = False) -> None:
             print(f"  UFC  weigh-ins: auto-pull unavailable ({exc})")
 
 
-def _ufc_card_pending(quiet: bool = False) -> bool:
-    """Is there a card inside `select_card`'s window on the FREE events
-    list? Unknown (no key, feed down) reads as yes, so the paid pull is
-    still offered and the budgeter's own rules decide."""
+def _ufc_card(cache_only: bool = False) -> list | None:
+    """The next card's bouts off the FREE events list (`select_card`), or
+    None when the list cannot be read (no key, feed down)."""
     try:
         from engine.sources import oddsapi
         from ufc_build import select_card
-        events = oddsapi.list_events(oddsapi.get_api_key(), sport="ufc")
+        events = oddsapi.list_events(None if cache_only else oddsapi.get_api_key(),
+                                     sport="ufc", cache_only=cache_only)
     except Exception:                                    # noqa: BLE001
+        return None
+    return select_card(events)[1]
+
+
+def _ufc_tonight(card: list | None, now: float | None = None) -> int | None:
+    """Bouts on tonight's slate (`oddsbudget.tonight_games`) — UFC's board
+    has no games for the pacer to count, so the card says. None when the
+    card is unknown or carries no times."""
+    if card is None:
+        return None
+    kicks = []
+    for ev in card:
+        try:
+            kicks.append(_dt.datetime.fromisoformat(
+                str(ev.get("commence_time") or "").replace("Z", "+00:00")).timestamp())
+        except (ValueError, AttributeError):
+            continue
+    try:
+        from engine.oddsbudget import tonight_games
+        return tonight_games(kicks, now)
+    except Exception:                                    # noqa: BLE001
+        return None
+
+
+def _ufc_card_pending(quiet: bool = False, card=_FROM_BOARD) -> bool:
+    """Is there a card inside `select_card`'s window on the FREE events
+    list? Unknown (no key, feed down) reads as yes, so the paid pull is
+    still offered and the budgeter's own rules decide."""
+    card = _ufc_card() if card is _FROM_BOARD else card
+    if card is None:
         return True
-    _label, card = select_card(events)
     if not card and not quiet:
         print("  UFC  no card inside the window — nothing to price, no paid pull")
     return bool(card)
@@ -1743,7 +1850,11 @@ def refresh_ufc(quiet: bool = False) -> bool:
     # cooldown every cycle (droplet, 2026-09-14). This is not the circular
     # games>0 gate the docstring warns about: the card is read off the
     # free feed, not off the priced output.
-    spend = _ufc_card_pending(quiet) and _odds_affordable(UFC_OUT, quiet, sport="ufc")
+    # …AND NOTHING TO BUY UNTIL FIGHT NIGHT (`_odds_affordable`'s tonight
+    # rule): the card's bouts are its games.
+    card = _ufc_card()
+    spend = (_ufc_card_pending(quiet, card)
+             and _odds_affordable(UFC_OUT, quiet, sport="ufc", tonight=_ufc_tonight(card)))
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")

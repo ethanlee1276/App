@@ -341,6 +341,10 @@ def main() -> None:
                     help="Refine injury knock-on roles from nflverse depth charts.")
     ap.add_argument("--active-odds", action="store_true",
                     help="Only re-price live / soon-starting games (saves API quota).")
+    ap.add_argument("--price-until", type=float, default=None, metavar="EPOCH",
+                    help="A paid pull buys only the games starting before this "
+                         "epoch (the end of tonight's slate) and reads the rest "
+                         "from the cache — the launcher's tonight rule.")
     ap.add_argument("--odds", action="store_true",
                     help="Attach real sportsbook lines via The Odds API (needs ODDS_API_KEY).")
     ap.add_argument("--cached-odds", action="store_true",
@@ -717,7 +721,8 @@ def main() -> None:
             res = oddsapi.apply_odds_to_slate(
                 slate, books=books,
                 only_active=args.active_odds and not args.cached_odds,
-                cache_only=args.cached_odds and not args.odds)
+                cache_only=args.cached_odds and not args.odds,
+                until=args.price_until)
             real_odds = res.matched > 0 or res.events_used > 0
             odds_status.update(matched=res.matched, events=res.events_used,
                                moneylines=res.moneylines,
@@ -735,9 +740,13 @@ def main() -> None:
                                event_shown_stale_age_s=round(
                                    res.shown_stale_price_age_s or 0.0),
                                event_stale_prop_events=res.stale_prop_events,
-                               event_stale_prop_age_s=round(res.stale_prop_age_s or 0.0))
+                               event_stale_prop_age_s=round(res.stale_prop_age_s or 0.0),
+                               read_not_bought=res.read_not_bought)
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
+            if res.read_not_bought:
+                print(f"  Tonight's games bought; {res.read_not_bought} later game(s) "
+                      f"read from the cache (--price-until).")
             # WHAT EVERY BOOK CHARGED, off the same payload — free, and
             # the only thing that can tell a book key that does not
             # resolve on the live API from one that resolved and lost

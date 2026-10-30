@@ -2095,6 +2095,23 @@ class OddsAttachResult:
     # request changed in some other way (a market joined it). See
     # `newest_event_cache`.
     name_fallback: int = 0
+    # Events a PAID pull read from the cache rather than bought, because
+    # they start after tonight's slate (`apply_odds_to_slate`'s ``until``).
+    read_not_bought: int = 0
+
+
+def starts_after(ev: dict, until: float | None) -> bool:
+    """Does this event start after ``until`` (an epoch)? False when either
+    is unknown: an event that cannot be dated is priced as it always was."""
+    if until is None:
+        return False
+    import datetime as _dt
+    try:
+        t = _dt.datetime.fromisoformat(
+            str(ev.get("commence_time") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return t.tzinfo is not None and t.timestamp() > until
 
 
 def _team_key(name: str) -> str:
@@ -2681,7 +2698,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                         ttl: int = 300, sport: str = "nfl",
                         only_active: bool = False,
                         active_window_hours: float = 6.0,
-                        cache_only: bool = False) -> OddsAttachResult:
+                        cache_only: bool = False,
+                        until: float | None = None) -> OddsAttachResult:
     """Replace each prop's proxy line with real book lines where available.
 
     Matches Odds API events to slate games by team abbreviation, then props by
@@ -2689,6 +2707,15 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     a live game the event-odds endpoint returns current (in-play) prices, so the
     same call yields live lines. Props with no market found keep their proxy
     line and are reported in ``unmatched``. ``ttl`` is short (30s) for live use.
+
+    ``until`` (an epoch: the end of tonight's slate, `oddsbudget.
+    tonight_ends`) makes a paid pull buy only the games that start before
+    it; a later game is read from the cache like a declined cycle reads
+    it, for nothing. The tonight rule for a board that holds the week
+    (Ethan, 2026-10-30: "pulling credits just for those sports"): the
+    NFL's Thursday pulls priced every game of the week at 25 credits each,
+    and a Sunday price bought on Thursday is past the age ceiling
+    (MAX_PROP_PRICE_AGE) long before anyone can bet it.
     """
     key = _key_for(api_key, cache_only)
     cfg = SPORT_CONFIG[sport]
@@ -2866,12 +2893,14 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # any-age hole opened back up in one corner.
         _age_markets = markets
         _age_path = None
+        # TONIGHT'S GAMES ARE BOUGHT; A LATER ONE IS READ (``until``).
+        ev_cache = cache_only or starts_after(ev, until)
         try:
             payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
                                               books=books, ttl=ttl, sport=sport,
-                                              cache_only=cache_only)
+                                              cache_only=ev_cache)
         except OddsAPIError:
-            if not cache_only:
+            if not ev_cache:
                 raise
             # THE DEPLOY-DAY MISS. The cache file is named by the market
             # list, so the first cached rebuild after the ladders ship
@@ -2906,7 +2935,10 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 # events match and then disappear on this line.
                 result.cache_misses += 1
                 continue
-        result.quota = quota
+        if cache_only or not ev_cache:
+            result.quota = quota          # a later game's cached quota is not this pull's
+        else:
+            result.read_not_bought += 1
         result.events_used += 1
         pair = frozenset((home, away))
         game = _leg_for_event(pair, ev.get("commence_time") or "")

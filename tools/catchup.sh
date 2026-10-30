@@ -661,6 +661,18 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IP "Credits go to tonight's leagues and tonight's games" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan | head -12
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from collections import Counter
+from engine import oddsbudget as ob
+rows = ob.decisions(since=time.time() - 18 * 3600)
+held = Counter(r.get('lane') for r in rows if 'game tonight' in str(r.get('reason', '')))
+print('held, no game tonight (last 18h):', dict(held) or 'none yet')
+print('allowed to buy (last 18h):', dict(Counter(r.get('lane') for r in rows if r.get('ok'))) or 'none')
+"
+SH
 run IO "A finished game is ESPN's page; the chat bar at the foot" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
 curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'

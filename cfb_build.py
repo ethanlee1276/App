@@ -352,9 +352,17 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                          now=None, cap: int | None = None,
                          sharp: dict | None = None,
                          alt: dict | None = None,
-                         alt_sharp: dict | None = None
+                         alt_sharp: dict | None = None,
+                         until: float | None = None
                          ) -> tuple[dict, dict, str]:
     """Player quotes for the board's best games — one call per game.
+
+    ``until`` (an epoch: the end of tonight's slate, `oddsbudget.
+    tonight_ends`) puts tonight's games first in the queue and buys only
+    those; a game after it is read from the cache, for nothing — the
+    launcher's tonight rule (Ethan, 2026-10-30: "pulling credits just for
+    those sports"). Friday's pulls bought Saturday's marquee games a day
+    early, past the age ceiling before a ball was snapped.
 
     ``sharp`` is an out-parameter (the `census` idiom): when a dict is
     passed it is filled with the sharp book's own prop pairs, in
@@ -408,7 +416,10 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         priceable = "spread" in entry and "total" in entry
         cands.append((_TIER_ORDER.get(attention_tier(g), 9),
                       0 if priceable else 1, ko, i, entry["event_id"]))
-    cands.sort(key=lambda c: (c[0], c[1], c[2]))
+    # Tonight's games first (``until``), so a capped pull spends its cap on
+    # them and a cached build reads the same games the paid one bought.
+    cands.sort(key=lambda c: (until is not None and c[2].timestamp() > until,
+                              c[0], c[1], c[2]))
     from engine.pricedplayers import Tracker as _PricedTracker
     _priced = _PricedTracker()
 
@@ -425,16 +436,19 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     stale_oldest = 0.0
     shown_stale = 0                    # payloads kept but past the FRESH bar
     shown_stale_oldest = 0.0
+    read_later = 0                     # after tonight's slate: read, not bought
     for _tier, _pri, _ko, i, event_id in cands[:cap]:
         # BEFORE THE CALL, because a paid pull rewrites the file and the
         # age we want is the age of what this build is about to READ.
         age = oddsapi.event_cache_age(event_id, PLAYER_MARKETS, sport="cfb")
+        this_cache = cache_only or (until is not None and _ko.timestamp() > until)
+        read_later += int(this_cache and not cache_only)
         try:
             payload, _quota = oddsapi.fetch_event_odds(
                 event_id, api_key, markets=PLAYER_MARKETS,
-                sport="cfb", ttl=1800, cache_only=cache_only)
+                sport="cfb", ttl=1800, cache_only=this_cache)
         except oddsapi.OddsAPIError:
-            if not cache_only:
+            if not this_cache:
                 break                  # a live failure ends the spend, not the build
             # THE DEPLOY-DAY MISS: no payload under today's name yet,
             # but the last paid pull's payload is on disk under the name
@@ -455,7 +469,7 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         # A LIVE PULL IS ZERO SECONDS OLD whatever was on disk before it.
         # `_request` only serves the cache under `cache_only` or inside
         # the 30-minute TTL, and both of those are what `age` measures.
-        if not cache_only and (age is None or age >= 1800):
+        if not this_cache and (age is None or age >= 1800):
             age = 0.0
         # THE CEILING (oddsapi.MAX_PROP_PRICE_AGE). This loop reported a
         # stale payload's age and used it anyway; a scorer quote from
@@ -515,7 +529,9 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     _priced.save()
     note = (f"player quotes: {pulled} of {len(cands)} eligible game(s) "
             f"pulled at {CREDITS_PER_EVENT} credit(s) each"
-            + (" (cached)" if cache_only else ""))
+            + (" (cached)" if cache_only else "")
+            + (f" · {read_later} after tonight's slate left to the cache, "
+               f"not bought" if read_later else ""))
     # HOW OLD THE PRICES ARE, not merely that they came from the cache.
     # `oddsapi._request` under `cache_only` "serves the cached copy at ANY
     # age", which is the right trade — the last paid pull's real prices
@@ -1273,6 +1289,10 @@ def main() -> None:
                          "quotes from cache. The middle tier between a full "
                          "pull nobody can afford and no pull at all.")
     ap.add_argument("--out", default="web/data/cfb.json")
+    ap.add_argument("--price-until", type=float, default=None, metavar="EPOCH",
+                    help="tonight's games first, and a paid pull buys only "
+                         "the games starting before this epoch (the end of "
+                         "tonight's slate) — the launcher's tonight rule")
     ap.add_argument("--backfill", metavar="START:END",
                     help="ingest completed games across a date span, then exit")
     args = ap.parse_args()
@@ -2032,7 +2052,8 @@ def main() -> None:
                 attach_player_quotes(games, priced, cache_only=not args.odds,
                                      sharp=sharp_prop_lines,
                                      alt=alt_prop_lines,
-                                     alt_sharp=alt_sharp_prop_lines)
+                                     alt_sharp=alt_sharp_prop_lines,
+                                     until=args.price_until)
             print(f"  {quotes_note}")
             # Who the books pulled rides on the board's own game rows, where
             # the scan and the matchup picks read it.
