@@ -345,6 +345,14 @@ NHL_TEAM_ABBR = {
 #: note at `BOOK_TITLES` below), so a key that turns out not to exist
 #: costs a missing book and nothing else — check the real list with the
 #: PIN-3 block in docs/WHEN_YOU_ARE_HOME.md.
+#:
+#: "FREE" IS IN QUESTION (2026-10-30). The API reported ~99,400 credits
+#: used in October against ~55,000 in the spend ledger, and client
+#: libraries' copies of The Odds API's guide say every ten bookmakers named
+#: count as one region — seventeen books, two regions, every call double.
+#: The ledger now books each call at the API's own figure
+#: (`x-requests-last`, `_request`) beside this module's estimate, so the
+#: plan's report says which it is (`oddsbudget.bill_line`).
 DEFAULT_BOOKS = [
     "draftkings", "fanduel", "betmgm", "williamhill_us",  # Caesars = William Hill US
     "espnbet", "thescorebet", "thescore",
@@ -740,6 +748,15 @@ def _classify(url: str, cache_name: str) -> tuple[str, str, int, str]:
     return kind, sport, cost, cache_name
 
 
+def _count(value) -> int | None:
+    """A quota header as a whole number of credits, or None ("?", absent)."""
+    try:
+        n = int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 0 else None
+
+
 def _url_key(url: str) -> str:
     """The apiKey this URL is carrying, so a result can be attributed to the
     key that paid for it."""
@@ -938,6 +955,8 @@ def normalize_name(name: str) -> str:
 class Quota:
     remaining: str = "?"
     used: str = "?"
+    #: What THIS call cost by the API's own meter (`x-requests-last`).
+    last: str = "?"
 
 
 def _read_cached_json(path):
@@ -980,6 +999,7 @@ def _request(url: str, cache_name: str, ttl: int = 300,
             quota = Quota(
                 remaining=resp.headers.get("x-requests-remaining", "?"),
                 used=resp.headers.get("x-requests-used", "?"),
+                last=resp.headers.get("x-requests-last", "?"),
             )
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
@@ -1024,10 +1044,20 @@ def _request(url: str, cache_name: str, ttl: int = 300,
     path.write_text(body)
     # Record what the API says is left so the budgeter schedules against the
     # real account rather than an assumption.
+    #
+    # …AND WHAT IT CHARGED FOR THIS CALL. The ledger priced every call with
+    # `_classify`'s formula, and on 2026-10-30 the month did not add up: the
+    # API reported ~99,400 credits used since the 1st against ~55,000 in
+    # the ledger. The API states each call's cost in `x-requests-last`; the
+    # ledger now books that, and keeps the formula's figure beside it
+    # (`est`) so the gap can be read (`oddsbudget.billing_check`).
     try:
         from ..oddsbudget import record_quota, log_spend
         record_quota(quota.remaining, quota.used, key=_url_key(url))
-        log_spend(*_classify(url, cache_name))
+        kind, sport, est, detail = _classify(url, cache_name)
+        billed = _count(quota.last)
+        log_spend(kind, sport, est if billed is None else billed, detail,
+                  est=est, billed=billed is not None, used=_count(quota.used))
     except Exception:      # budgeting must never break a fetch
         pass
     return json.loads(body), quota

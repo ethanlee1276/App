@@ -298,9 +298,10 @@ SLIP_KINDS = frozenset({"slip_event"})
 
 
 def log_spend(kind: str, sport: str = "", credits: int | None = None,
-              detail: str = "", path: Path | str | None = None) -> None:
+              detail: str = "", path: Path | str | None = None, **extra) -> None:
     """Append one paid call to the ledger. Never raises — accounting must not
-    be able to break a fetch."""
+    be able to break a fetch. ``extra`` rides on the row (the request path
+    adds `est`, `billed` and `used`: see `billing_check`)."""
     try:
         f = Path(path or SPEND_LOG)
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -310,10 +311,50 @@ def log_spend(kind: str, sport: str = "", credits: int | None = None,
                "credits": int(credits if credits is not None
                               else CREDIT_COST.get(kind, 1)),
                "detail": detail[:120]}
+        row.update({k: v for k, v in extra.items() if v is not None})
         with f.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(row) + "\n")
     except Exception:
         pass
+
+
+def billing_check(rows: list | None = None, since: float | None = None) -> dict:
+    """What the API billed beside what this module priced the same calls
+    at — the ledger rows that carry both (every live call from 2026-10-30,
+    when the request path began booking `x-requests-last`).
+
+    ``{"calls", "billed", "est", "by_kind": {kind: [calls, billed, est]}}``.
+    Billed over est is how far every price here (`EVENT_CREDITS`, the
+    plan's tables, the harvest's cap) is from the API's: 1.0 when they
+    agree. The month's numbers said ~1.8 (99,400 used, ~55,000 booked).
+    """
+    rows = read_spend() if rows is None else rows
+    out = {"calls": 0, "billed": 0, "est": 0, "by_kind": {}}
+    for r in rows:
+        if not r.get("billed") or "est" not in r:
+            continue
+        if since is not None and float(r.get("ts", 0) or 0) < since:
+            continue
+        try:
+            billed, est = int(r.get("credits", 0) or 0), int(r.get("est", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        out["calls"] += 1
+        out["billed"] += billed
+        out["est"] += est
+        k = out["by_kind"].setdefault(str(r.get("kind", "") or "?"), [0, 0, 0])
+        k[0], k[1], k[2] = k[0] + 1, k[1] + billed, k[2] + est
+    return out
+
+
+def bill_line(check: dict, span: str = "last 24h") -> str:
+    """The check in one line for the plan's report ("" with nothing billed)."""
+    if not check.get("calls"):
+        return ""
+    est, billed = int(check.get("est", 0)), int(check.get("billed", 0))
+    ratio = f" ({billed / est:.1f}×)" if est > 0 else ""
+    return (f"  the API's own bill, {span}: {billed:,} credits for {check['calls']} "
+            f"call(s) we priced at {est:,}{ratio}")
 
 
 def read_spend(path: Path | str | None = None) -> list[dict]:

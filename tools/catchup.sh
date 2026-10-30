@@ -661,6 +661,18 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IR "Karma and badges for your two accounts" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.karma
+SH
+run IQ "What the Odds API really bills" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from engine import oddsbudget as ob
+c = ob.billing_check(since=time.time() - 86400)
+print(ob.bill_line(c) or 'no billed calls in the last 24h yet')
+for k, (n, billed, est) in sorted(c['by_kind'].items()): print(f'  {k:<12} {n:>4} calls  billed {billed:>7,}  estimated {est:>7,}')
+"
+SH
 run IP "Credits go to tonight's leagues and tonight's games" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan | head -12
 cd /srv/qellys && sudo -u qellys python3 -c "

@@ -9229,6 +9229,82 @@ The checks in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IP 2>&1 | tee /tmp/ip.txt
 ```
 
+**IQ. What the Odds API really bills** (step 303; your paste, 2026-10-30:
+the API said about 99,400 credits used this month, while our own ledger had
+counted about 55,000).
+
+- Every paid call now records what the API charged for it (its own
+  `x-requests-last` number) beside our estimate, and the ledger counts the
+  API's number. The daily ceilings and the plan's "spent" figures are real
+  credits from now on.
+- The plan's printout gets a line under it:
+  `the API's own bill, last 24h: N credits for M call(s) we priced at K (R×)`.
+- The likely cause is our 17 books. Client libraries that copy the Odds
+  API's guide say every 10 books count as one region, so 17 books would bill
+  as two: every call double. If the line reads about 2.0×, that's it, and
+  the choice is fewer books or fewer pulls.
+
+Nothing to run; it starts with the restart in IR. Read-only, once some paid
+pulls have happened (from Nov 1 there will be plenty):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from engine import oddsbudget as ob
+c = ob.billing_check(since=time.time() - 86400)
+print(ob.bill_line(c) or 'no billed calls in the last 24h yet')
+for k, (n, billed, est) in sorted(c['by_kind'].items()): print(f'  {k:<12} {n:>4} calls  billed {billed:>7,}  estimated {est:>7,}')
+"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IQ 2>&1 | tee /tmp/iq.txt
+```
+
+**IR. Karma and badges for your two accounts** (step 304; you, 2026-10-30:
+"we need to give both of my accounts high karma and alot of badges", the
+founder's account and @qellysbook).
+
+- `python3 -m engine.karma grant` tops each account up to 100,000 karma
+  (level 62, Legend) and gives every badge at its top tier: all 17 badge
+  families and both one-offs, 19 of 19.
+- The karma shows in the account's history as "From Qellys". It counts in
+  the level, the flair and the badges, but on no leaderboard and in no
+  week's trophies, so nobody who earned a place is pushed down.
+- @qellysbook, the site's own account, has never shown a level. Once it's
+  given karma it wears its level in the chats like anyone.
+- Running it again tops up to the same mark rather than adding twice.
+  `--undo` takes it all back.
+
+The box needs this push first: restart (it also does this on its own within
+45 minutes), then give. The emails are your two sign-in emails, typed on the
+box; they are never kept in the code:
+
+```
+cd /srv/qellys && sudo systemctl restart qellys
+cd /srv/qellys && sudo -u qellys python3 -m engine.karma grant --to you@example.com --to other@example.com
+```
+
+To take it back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.karma grant --undo --to you@example.com --to other@example.com
+```
+
+Read-only, after: the karma report, with a "given by hand" line:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.karma
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

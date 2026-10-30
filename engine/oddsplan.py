@@ -831,6 +831,10 @@ def main() -> int:
         lines.insert(2, note)
         text = "\n".join(lines)
     print(text)
+    # What the API billed beside what we priced it at (`oddsbudget.billing_check`).
+    bill = ob.bill_line(ob.billing_check(rows, since=time.time() - 86400))
+    if bill:
+        print(bill)
     return 0
 
 

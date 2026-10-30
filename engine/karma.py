@@ -81,6 +81,13 @@ by reports or by the founder takes back what it earned and what its
 reactions earned. The site's own account earns nothing and stands on no
 ladder.
 
+GIVEN BY HAND (2026-10-30, Ethan: "we need to give both of my accounts high
+karma and alot of badges" — the founder's and @qellysbook). `python3 -m
+engine.karma grant --to EMAIL` tops an account up to a mark and gives every
+badge at its top tier (`grant`). Given karma counts in the level, the flair
+and the badges, and on no ladder and in no week's trophies (UNRANKED); the
+site's own account, given some, wears its level in the chats too.
+
 THE LADDER AND YOUR NAME. The week's and the all-time ladders show
 usernames, the way Call it's ladders do; "Show me on the karma ladders"
 (Settings, the Karma tab) takes a name off them. Levels and badges show on
@@ -141,7 +148,11 @@ RULES = {
     "camp_done": (50, None, "Getting started: all six"),
     "trophy": (0, None, "Top ten for the week"),
     "night": (0, None, "Watching after 1 a.m."),
+    "grant": (0, None, "From Qellys"),
 }
+#: Karma that was GIVEN, not earned (`grant`): it counts in an account's
+#: level and badges and on no ladder, and never in a week's trophies.
+UNRANKED = ("grant",)
 #: A game pays for at most this much watching (ten five-minute stretches).
 WATCH_PER_GAME = 20
 #: One watching credit at a time, whatever is open: a credit every
@@ -307,8 +318,10 @@ def ensure_tables(conn) -> None:
     have = {r[1] for r in conn.execute("PRAGMA table_info(karma_prefs)")}
     # And (the same day) whether friends may see the live game it is on.
     # And the badges pinned to show first on the profile (comma-separated).
+    # And the badge tiers given by hand (`grant`), as JSON {badge: tier}.
     for col, decl in (("remind", "INTEGER NOT NULL DEFAULT 0"), ("told_level", "INTEGER NOT NULL DEFAULT 0"),
-                      ("share", "INTEGER NOT NULL DEFAULT 1"), ("pins", "TEXT NOT NULL DEFAULT ''")):
+                      ("share", "INTEGER NOT NULL DEFAULT 1"), ("pins", "TEXT NOT NULL DEFAULT ''"),
+                      ("given", "TEXT NOT NULL DEFAULT ''")):
         if col not in have:
             from .db import column_exists_or_raise
             try:
@@ -897,10 +910,14 @@ def badges(conn, user_id, points: int | None = None, best_days: int | None = Non
     """Every badge, earned or not: its tier (0 for none yet), the next
     tier's mark and the count so far."""
     counts = badge_counts(conn, user_id, points, best_days)
+    given = _given(conn, user_id)
     out = []
     for key, name, what, marks in FAMILIES:
         n = counts.get(key, 0)
         tier = sum(1 for m in marks if n >= m)
+        if min(int(given.get(key, 0) or 0), len(marks)) > tier:      # given by hand (`grant`)
+            tier = min(int(given[key]), len(marks))
+            n = max(n, marks[tier - 1])
         out.append({"key": key, "name": name, "what": what, "n": n, "tier": tier,
                     "tier_name": TIER_NAMES[tier - 1] if tier else "", "of": len(marks),
                     "next": marks[tier] if tier < len(marks) else None})
@@ -908,7 +925,7 @@ def badges(conn, user_id, points: int | None = None, best_days: int | None = Non
     founding = bool(u) and float(u[0] or 0) < FOUNDING_BEFORE
     night = _count(conn, user_id, "night") > 0
     for key, name, how in ONE_OFF:
-        got = founding if key == "founding" else night
+        got = (founding if key == "founding" else night) or bool(given.get(key))
         out.append({"key": key, "name": name, "what": how, "n": int(got), "tier": int(got),
                     "tier_name": "", "of": 1, "next": None if got else 1, "one": True})
     return out
@@ -961,7 +978,7 @@ def friends_ladder(conn, viewer, now: float | None = None) -> dict:
     q = ",".join("?" * len(ids))
     rows = conn.execute(
         f"SELECT p.user_id, p.handle, COALESCE((SELECT SUM(e.pts) FROM karma_events e WHERE e.user_id=p.user_id "
-        f"AND e.at>=? AND e.kind<>'trophy'), 0) AS s FROM feed_profiles p WHERE p.user_id IN ({q}) "
+        f"AND e.at>=? AND e.kind NOT IN ('trophy', 'grant')), 0) AS s FROM feed_profiles p WHERE p.user_id IN ({q}) "
         "ORDER BY s DESC, p.handle", (since, *ids)).fetchall() if _has(conn, "feed_profiles") else []
     out = {"scope": "friends", "since": since, "friends": len(pals),
            "rows": [{"rank": i + 1, "handle": h, "points": int(sm), "level": level_of(total(conn, u)),
@@ -980,8 +997,9 @@ def ladder(conn, scope: str = "week", viewer=None, now: float | None = None, n: 
         return friends_ladder(conn, viewer, t) if viewer else {"scope": "friends", "rows": [], "mine": {}}
     since = day_start(week_of(t)) if scope == "week" else 0.0
     # A week's trophies pay on the Monday after: they count all time,
-    # never towards the next week's ladder.
-    wk = " AND e.kind<>'trophy'" if scope == "week" else ""
+    # never towards the next week's ladder. Karma given by hand (UNRANKED)
+    # counts on neither.
+    wk = " AND e.kind NOT IN ('trophy', 'grant')" if scope == "week" else " AND e.kind<>'grant'"
     key = ("ladder", scope, since, n)
     hit = _cache.get(key)
     if hit and t - hit[0] < CACHE_S:
@@ -1033,7 +1051,8 @@ def _week_results(conn, week: str) -> list:
         if join_ok(conn):
             rows = conn.execute(
                 "SELECT e.user_id, SUM(e.pts) AS s FROM karma_events e JOIN feed_profiles p ON p.user_id=e.user_id "
-                "LEFT JOIN karma_prefs k ON k.user_id=e.user_id WHERE e.at>=? AND e.at<? AND e.kind<>'trophy' "
+                "LEFT JOIN karma_prefs k ON k.user_id=e.user_id WHERE e.at>=? AND e.at<? "
+                "AND e.kind NOT IN ('trophy', 'grant') "
                 "AND COALESCE(k.ladder, 1)=1 AND e.user_id<>? GROUP BY e.user_id HAVING s>0 "
                 "ORDER BY s DESC, MIN(e.at) ASC LIMIT 10", (lo, hi, _house(conn) or -1)).fetchall()
         for i, (uid, s) in enumerate(rows):
@@ -1314,14 +1333,16 @@ def set_prefs(conn, user_id, flair=None, ladder=None, remind=None, share=None, p
 
 def cards(conn, user_ids, now: float | None = None) -> dict:
     """``{user_id: {"lv", "cls", "flair"}}`` for the names in a chat, each
-    read at most once a minute. The site's own account has none."""
+    read at most once a minute. The site's own account has none — unless
+    it was given karma by hand (`grant`; Ethan, 2026-10-30, for @qellysbook),
+    and then it wears that level like anybody's."""
     t = time.time() if now is None else float(now)
     out = {}
     try:
         _prepare(conn)
         house = _house(conn)
         for uid in {int(u) for u in user_ids or []}:
-            if uid == house:
+            if uid == house and not _granted(conn, uid):
                 continue
             hit = _cache.get(("card", uid))
             if hit and t - hit[0] < CACHE_S:
@@ -1458,15 +1479,123 @@ def report(conn) -> list:
         out.append(f"   {kind:<13} {c:>7} rows {int(s or 0):>9} karma")
     if _has(conn, "feed_profiles"):
         top = conn.execute("SELECT p.handle, SUM(e.pts) AS s FROM karma_events e JOIN feed_profiles p ON p.user_id=e.user_id "
-                           "GROUP BY e.user_id ORDER BY s DESC LIMIT 5").fetchall()
+                           "WHERE e.kind<>'grant' GROUP BY e.user_id ORDER BY s DESC LIMIT 5").fetchall()
         if top:
-            out.append("   most karma: " + ", ".join(f"@{h} {int(s):,} (level {level_of(s)})" for h, s in top))
+            out.append("   most karma earned: " + ", ".join(f"@{h} {int(s):,} (level {level_of(s)})" for h, s in top))
+        given = conn.execute("SELECT COUNT(*), COALESCE(SUM(pts), 0) FROM karma_events WHERE kind='grant'").fetchone()
+        if given and given[0]:
+            out.append(f"   given by hand: {int(given[1]):,} karma to {int(given[0])} account(s) "
+                       f"(on no ladder; `grant`)")
     return out
+
+
+# ─── given by hand ──────────────────────────────────────────────────────────
+
+#: What `grant` gives when not told otherwise: the Karma badge's top mark
+#: (level 62, Legend), and every badge at its top tier.
+GRANT_KARMA = 100_000
+
+
+def _granted(conn, user_id) -> bool:
+    """Was this account given karma by hand (`grant`)?"""
+    return conn.execute("SELECT 1 FROM karma_events WHERE user_id=? AND kind='grant' LIMIT 1",
+                        (int(user_id),)).fetchone() is not None
+
+
+def _given(conn, user_id) -> dict:
+    """The badge tiers given to this account by hand, {badge: tier}."""
+    if not _has(conn, "karma_prefs"):
+        return {}
+    try:
+        row = conn.execute("SELECT given FROM karma_prefs WHERE user_id=?", (int(user_id),)).fetchone()
+    except sqlite3.OperationalError:
+        return {}
+    try:
+        got = json.loads(row[0]) if row and row[0] else {}
+    except ValueError:
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def grant(conn, user_id, karma: int = GRANT_KARMA, with_badges: bool = True,
+          undo: bool = False, now: float | None = None) -> dict:
+    """Give an account karma and badges by hand — Ethan, 2026-10-30: "we
+    need to give both of my accounts high karma and alot of badges".
+
+    The karma is one row of its own kind (`grant`, "From Qellys") that tops
+    the account up to ``karma`` in all: it counts in the account's level,
+    its chat flair and its Karma badge, and on no ladder and in no week's
+    trophies (UNRANKED), so nobody who earned a place is moved down. The
+    badges are every family at its top tier and both one-offs, kept on the
+    account's prefs (`given`) and shown as earned. Run again, it tops up to
+    the same marks rather than adding twice; ``undo`` takes both away.
+    """
+    _prepare(conn)
+    uid, t = int(user_id), time.time() if now is None else float(now)
+    before = total(conn, uid)
+    conn.execute("DELETE FROM karma_events WHERE user_id=? AND kind='grant'", (uid,))
+    conn.execute("INSERT OR IGNORE INTO karma_prefs (user_id) VALUES (?)", (uid,))
+    if undo:
+        conn.execute("UPDATE karma_prefs SET given='' WHERE user_id=?", (uid,))
+    else:
+        top_up = max(0, int(karma) - total(conn, uid))
+        if top_up:
+            conn.execute("INSERT INTO karma_events (user_id, kind, ref, pts, at, day) VALUES (?,?,?,?,?,?)",
+                         (uid, "grant", "owner", top_up, t, day_of(t)))
+        if with_badges:
+            given = {key: len(marks) for key, _n, _w, marks in FAMILIES}
+            given.update({key: 1 for key, _n, _h in ONE_OFF})
+            conn.execute("UPDATE karma_prefs SET given=? WHERE user_id=?",
+                         (json.dumps(given, sort_keys=True), uid))
+    conn.commit()
+    _cache.clear()
+    after = total(conn, uid)
+    rows = badges(conn, uid)
+    return {"user_id": uid, "before": before, "after": after, "level": level_of(after),
+            "tier": tier_of(level_of(after))[0],
+            "badges": sum(1 for b in rows if b["tier"]), "of": len(rows)}
+
+
+def _grant_main(args) -> int:
+    """``python3 -m engine.karma grant --to EMAIL [--to EMAIL …] [--karma N]
+    [--undo]``: `grant` for each account, found by its sign-in email. The
+    emails are typed on the box, never kept in the code."""
+    import argparse
+    from . import accounts as A
+    ap = argparse.ArgumentParser(prog="python3 -m engine.karma grant")
+    ap.add_argument("--to", action="append", required=True, metavar="EMAIL",
+                    help="an account's sign-in email (repeat for more than one)")
+    ap.add_argument("--karma", type=int, default=GRANT_KARMA,
+                    help=f"the account's karma in all afterwards (default {GRANT_KARMA:,})")
+    ap.add_argument("--undo", action="store_true", help="take the given karma and badges away")
+    opts = ap.parse_args(args)
+    conn = A.connect()
+    try:
+        bad = 0
+        for email in opts.to:
+            row = conn.execute("SELECT id FROM users WHERE email=?",
+                               (A.normalize_email(email),)).fetchone()
+            if not row:
+                print(f"  {email}: no account signs in with that email — nothing given")
+                bad += 1
+                continue
+            got = grant(conn, row[0], karma=opts.karma, undo=opts.undo)
+            word = "taken back" if opts.undo else "given"
+            print(f"  {email}: karma {got['before']:,} -> {got['after']:,} (level {got['level']}, "
+                  f"{got['tier']}), {got['badges']} of {got['of']} badges — {word}")
+        return 1 if bad else 0
+    finally:
+        conn.close()
 
 
 def main(argv=None) -> int:
     """``python3 -m engine.karma``: the report above, off the accounts
-    database opened read-only."""
+    database opened read-only. ``python3 -m engine.karma grant …`` gives
+    karma and badges by hand (`grant`)."""
+    import sys
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args[:1] == ["grant"]:
+        return _grant_main(args[1:])
     from . import accounts as A
     conn = sqlite3.connect(f"file:{A.DB_PATH}?mode=ro", uri=True)
     try:

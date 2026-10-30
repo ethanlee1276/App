@@ -151,6 +151,12 @@ share of its need that covers, and today's need, ceiling and spend:
   the last tier first. The "last 7 days, a day" line shows which sport.
 * **A season that's over spends nothing**, and its share goes to the
   sports still playing.
+* **Every call is booked at what the API billed** (its own
+  `x-requests-last`), with our estimate beside it. The plan's printout
+  says how far apart they are: `the API's own bill, last 24h: … (R×)`. In
+  October the API counted ~99,400 credits used against ~55,000 booked; the
+  17 books (billed as two regions if every ten count as one) are the likely
+  reason.
 
 ## What a league's day buys (the targets)
 
