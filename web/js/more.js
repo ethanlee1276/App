@@ -118,7 +118,7 @@ const FEATURES = [
     ["Next man up, on the card", "When a teammate at the same position is ruled out, the beneficiary’s card says what the weekly stats measured the last times that teammate sat — “Pacheco out — over his 4 missed games, Hunt absorbed +11% of the carries” — or says the sample is too thin to say. The projection moves by what four seasons measured for the same spot (a back whose starter was just ruled out ran for 65% more than his own form); the card shows his own history beside it.", null],
     ["A quarterback’s passing touchdowns", "Every NFL quarterback carries a projected touchdown count beside his passing yards, with the game-by-game history behind it. College quarterbacks deliberately do not: measured on our own college seasons, the same projection sorts a passer barely better than a coin toss, which is under the bar we publish anything at.", null],
     ["Sim lab", "Run tonight two thousand times on any prop and watch the distribution draw itself — on the prop’s own page and on a searched player’s card. Every draw comes from the model’s curve for that pick, so it shows the number’s uncertainty rather than new information.", null],
-    ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position.", "team"],
+    ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position. Every game it has played opens its own page: the leaders, every scoring play with its drive, the box score and every play.", "team"],
     ["Rosters", "Every team’s roster in every league, each row opening the player.", "rosters"],
     ["Standings & rankings", "Records, the bracket, and — for football — a ranking of every team’s offence and defence.", "standings"],
     ["The races", "College football’s playoff race — the bracket if it started today, every contender’s chances, the games that swing it — and the NBA Cup’s groups, tiebreakers and odds.", "race"],
@@ -2572,7 +2572,8 @@ function teamH2HHTML(h, sport) {
       <th>Season</th><th></th><th class="rank-name">Result</th>
       <th>Score</th><th>Line</th><th>ATS</th><th>Total</th>
       </tr></thead><tbody>
-      ${h.games.map((g) => `<tr>
+      ${h.games.map((g) => `<tr${PAST_GAME_LEAGUES.has(sport)
+          ? ` class="tst-row" tabindex="0" role="link"${teamPastGameAttrs({ sport }, g)}` : ""}>
         <td>${g.season}${g.period ? ` · ${escapeHtml(_teamWeek(sport, g.period))}` : ""}</td>
         <td>${g.at_home ? "vs" : "at"}</td>
         <td class="rank-name"><b class="${g.result === "W" ? "tm-w"
@@ -2590,7 +2591,8 @@ function teamH2HHTML(h, sport) {
     </tbody></table></div>
     <p class="rank-help">The line is HIS number, not the home team’s — a
       minus means he was laying it. A game we hold no line for still counts
-      in the record above and is left blank here rather than graded.</p>`;
+      in the record above and is left blank here rather than graded. Tap a
+      meeting for its game page.</p>`;
 }
 
 /* A period is "021" — the week within the season. NFL weeks past 18 are
@@ -2797,16 +2799,58 @@ function teamOnBoard(d, p) {
    the schedule strip circled: "we should be able to click on these games,
    and then it'll take you to, like, the live game page for this game where
    it shows all the data." The game on tonight's board opens its game page
-   — the same door as the "On tonight's board" card. A game not on the
-   board (a final from an earlier week, a week still to come) has no game
-   page yet, so it opens the opponent, as before. */
+   — the same door as the "On tonight's board" card. A game played opens
+   its own page (teamPastGameAttrs, below); a game still to come opens the
+   opponent. */
 function teamGameDoor(d, p, g) {
   const b = teamOnBoard(d, p);
   const other = b ? (b.home === p.team ? b.away : b.home) : null;
   const same = b && !g.final && g.opponent === other
     && (!g.date || !b.date || String(g.date).slice(0, 10) === String(b.date).slice(0, 10));
-  return same ? ` data-team-game="${escapeAttr(gameId(b))}" title="Game page"`
-    : ` data-team-sport="${escapeAttr(d.sport)}" data-team-open="${escapeAttr(g.opponent)}" title="${escapeAttr(teamNameIn(d.sport, g.opponent))}"`;
+  if (same) return ` data-team-game="${escapeAttr(gameId(b))}" title="Game page"`;
+  if (g.final && PAST_GAME_LEAGUES.has(d.sport)) return teamPastGameAttrs(d, g);
+  return ` data-team-sport="${escapeAttr(d.sport)}" data-team-open="${escapeAttr(g.opponent)}" title="${escapeAttr(teamNameIn(d.sport, g.opponent))}"`;
+}
+
+/* EVERY GAME PLAYED OPENS ITS OWN PAGE (Ethan, 2026-10-30, ESPN's
+   Panthers–Packers final beside ours: "We should be able to go to each
+   specific game and see all this type of data that espn offers ... add
+   these pages for every sport for each team"). The game page the Live tab
+   opens — the leaders, the scoring plays, the box score, every play, the
+   team stats — built by the server for any game, this season or one on
+   the season chips, from the same feed the live page reads
+   (engine/gamearchive). The schedule knows a game by its day and its two
+   sides; the server finds the feed's own game from those, and the game's
+   own id ("NYY@BOS-G2") says which leg of a doubleheader it was. */
+const PAST_GAME_LEAGUES = new Set(["nfl", "cfb", "nba", "wnba", "nhl", "mlb"]);
+function teamPastGameAttrs(d, g) {
+  return ` data-past-game="${escapeAttr(d.sport)}" data-pg-date="${escapeAttr(String(g.date || g.period || "").slice(0, 10))}"`
+    + ` data-pg-home="${escapeAttr(g.home || "")}" data-pg-away="${escapeAttr(g.away || "")}"`
+    + ` data-pg-id="${escapeAttr(g.game_id || "")}" title="Game page"`;
+}
+async function openPastGame(el) {
+  if (!el || el.getAttribute("aria-busy") === "true") return;
+  const league = el.dataset.pastGame;
+  const q = new URLSearchParams({ league, date: el.dataset.pgDate || "", home: el.dataset.pgHome || "",
+                                  away: el.dataset.pgAway || "", game_id: el.dataset.pgId || "" });
+  el.setAttribute("aria-busy", "true");
+  let doc = null, why = "";
+  try {
+    const r = await fetch(`/api/game?${q}`, { credentials: "same-origin" });
+    doc = await r.json().catch(() => null);
+    if (!r.ok) {
+      why = r.status === 404 ? "That game isn’t on the league’s feed." : (doc && doc.error) || "";
+      doc = null;
+    }
+  } catch (e) { doc = null; }
+  el.removeAttribute("aria-busy");
+  if (!doc || !doc.event_id) {
+    tfToast(why || "The game’s feed didn’t answer — try it again in a minute.");
+    return;
+  }
+  // Handed to the page, so it draws without asking twice (detail.js pbpArchived).
+  (window.QB_PAST_GAMES = window.QB_PAST_GAMES || {})[`${league}_${doc.event_id}`] = doc;
+  openPbp(league, doc.event_id, "team");
 }
 
 function teamHomeHTML(d, p) {
@@ -2866,6 +2910,7 @@ function teamScheduleRowHTML(d, g, p) {
        g.ou ? `${g.ou} ${g.total}` : ""]
     : [line ? `line ${line}` : "", g.total != null ? `total ${g.total}` : ""];
   const door = p ? teamGameDoor(d, p, g)
+    : g.final && PAST_GAME_LEAGUES.has(d.sport) ? teamPastGameAttrs(d, g)
     : ` data-team-sport="${escapeAttr(d.sport)}" data-team-open="${escapeAttr(g.opponent)}"`;
   return `<button type="button" class="tm-row"${door}>
     <span class="tm-row-w">${escapeHtml(teamGameWhen(d, g))}<small>${escapeHtml(teamGameDate(g))}</small></span>
@@ -2916,7 +2961,8 @@ function teamScheduleHTML(d, p) {
   return `${chips}<div class="section-title">${escapeHtml(String(sch.season || ""))} Schedule
       <span class="sub">— ${w}-${l}${done.length - w - l ? `-${done.length - w - l}` : ""} in the games ${past ? "played that season" : "played"};
       the line is ${escapeHtml(teamNameIn(d.sport, p.team))}${/s$/i.test(teamNameIn(d.sport, p.team)) ? "’" : "’s"} own;
-      ${past ? "each row opens the opponent." : "the game on tonight’s board opens its game page, every other row opens the opponent."}</span></div>
+      every game played opens its own page — the leaders, the scoring, the box score, every play${
+        past ? "" : "; tonight’s game opens its board, and a game still to come opens the opponent"}.</span></div>
     <div class="card tm-list">${games.map((g) => teamScheduleRowHTML(d, g, p)).join("")}</div>`;
 }
 

@@ -121,8 +121,11 @@ def test_it_refreshes_while_live_and_stops_when_the_reader_leaves():
 
 def test_a_missing_file_says_why_and_offers_the_way_back():
     body = _fn("renderPbpPage")
-    assert "No play-by-play on file for this game" in body
-    assert "up to eight games" in body
+    # A game past its live file asks the server's archive first
+    # (engine/gamearchive, tests/test_every_game_has_a_page.py); only a game
+    # the feed has nothing for reaches the empty state.
+    assert "const got = await pbpArchived(league, event);" in body
+    assert "No play-by-play for this game yet" in body
     # The way back is wherever the reader came from (pinned in
     # tests/test_pbp_doors.py); here, only that the page offers one.
     assert "const way = pbpBack();" in body and "switchView(way.view)" in body

@@ -354,7 +354,8 @@
       const tip = typeof pbpTime === "function" ? pbpTime(lv.start_time) : "";
       mid = `<span class="hc-per">Tip-off</span><b class="hc-clock">${esc(tip || "—")}</b>`;
     }
-    const ago = typeof pbpAgo === "function" ? pbpAgo(d.generated_at) : "";
+    const ago = d.archive && typeof pbpPlayedOn === "function" ? pbpPlayedOn(d)
+      : typeof pbpAgo === "function" ? pbpAgo(d.generated_at) : "";
     // The watch buttons are the card's last row, under the clock and both
     // sides. Inside the clock's column they set that column's width, and on
     // a phone that left each side 32px for a 56px crest and the score
@@ -861,7 +862,7 @@
   function pageHTML(d, league, ctx) {
     const k = facts(d, league, ctx);
     return `<div class="hc" data-league="${escapeAttr(league)}">
-      ${scoreboardHTML(d, league, k)}<div class="gch-entry-slot"></div>${stageHTML(d, league, k)}${(ctx && ctx.callit) || ""}
+      ${scoreboardHTML(d, league, k)}${d.archive ? "" : `<div class="gch-entry-slot"></div>`}${stageHTML(d, league, k)}${(ctx && ctx.callit) || ""}
       <div class="hc-row">${playsCardHTML(d, league, k)}${statsCardHTML(d, league, k)}${oddsCardHTML(d, league, k)}</div></div>`;
   }
   function wire(host) {

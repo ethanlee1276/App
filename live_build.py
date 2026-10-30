@@ -287,17 +287,29 @@ def _utc() -> str:
 
 def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path,
               chances: dict | None = None) -> Path:
-    """One MLB game's whole play-by-play, atomically, as the page reads it.
+    """One MLB game's whole play-by-play, atomically, as the page reads it
+    (`mlb_doc`)."""
+    pbp_dir = Path(pbp_dir)
+    pbp_dir.mkdir(parents=True, exist_ok=True)
+    out = pbp_dir / f"mlb_{g['game_pk']}.json"
+    doc = mlb_doc(g, payload, plays, chances=chances)
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc))
+    os.replace(tmp, out)
+    return out
+
+
+def mlb_doc(g: dict, payload: dict, plays: list[dict],
+            chances: dict | None = None) -> dict:
+    """One MLB game's whole play-by-play as the page reads it.
 
     The header rides along from the fast row — sides, live state — so
     the page needs no second lookup. Composed from `recent_plays`' rows
     and never from a play's `description`, the same posture the card's
-    strip takes.
+    strip takes. A document of its own (2026-10-30) so a game long over
+    gets the same page from the same builder (engine/gamearchive).
     """
     from engine.mlb.sources.pbp import current_at_bat, game_events
-    pbp_dir = Path(pbp_dir)
-    pbp_dir.mkdir(parents=True, exist_ok=True)
-    out = pbp_dir / f"mlb_{g['game_pk']}.json"
     doc = {
         "league": "mlb",
         "event_id": str(g["game_pk"]),
@@ -343,10 +355,7 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path,
                           else _box_players(g))
     except Exception:                                        # noqa: BLE001
         pass
-    tmp = out.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(doc))
-    os.replace(tmp, out)
-    return out
+    return doc
 
 
 def main() -> None:

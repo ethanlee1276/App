@@ -1239,7 +1239,7 @@
           (g.labels || []).map((_l, i) => `<td>${esc((r.stats || [])[i] == null ? "—" : (r.stats || [])[i])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
     }).join("");
     return `${toggle}${tables || `<p class="rail-quiet">Nothing logged for this club yet.</p>`}
-      <p class="mini" style="opacity:.6">Box score ${esc(pbpAgo(d.generated_at))}.</p>`;
+      ${d.archive ? "" : `<p class="mini" style="opacity:.6">Box score ${esc(pbpAgo(d.generated_at))}.</p>`}`;
   }
 
   /* ---------------- team stats ----------------
@@ -1334,6 +1334,73 @@
     return `${track}${picks}${door}`;
   }
 
+  /* ---------------- the scoring plays ----------------
+     ESPN'S SCORING PLAYS (Ethan, 2026-10-30, the third of his screenshots
+     of the Panthers–Packers final): every score a quarter at a time — who
+     scored and when, the play that did it, the drive behind it ("12 plays,
+     70 yards, 5:03") and the score it left. Football reads the drives: one
+     card per drive that scored, headed by the drive's own result, the play
+     its first score (the touchdown, not the kick after it) and the score
+     after its last. Hockey reads its goals off the plays. The side that
+     scored is read off the score, never the drive — an interception run
+     back is the defence's touchdown on the offence's drive. Composed from
+     the fields the drive cards draw; never a written account. */
+  const ORD = ["", "1st", "2nd", "3rd", "4th"];
+  function periodWord(league, n) {
+    const k = Number(n) || 0;
+    if (league === "nhl") return k >= 1 && k <= 3 ? `${ORD[k]} period` : k > 3 ? "Overtime" : "";
+    return k >= 1 && k <= 4 ? `${ORD[k]} quarter` : k === 5 ? "Overtime" : k > 5 ? `${k - 4}OT` : "";
+  }
+  const scored = (p) => p && p.away_score != null && p.home_score != null;
+  function scoringItems(d, league) {
+    const items = [];
+    let a0 = 0, h0 = 0;
+    const take = (p, last, extra) => {
+      const a = Number(last.away_score), h = Number(last.home_score);
+      if (a === a0 && h === h0) return;
+      items.push({ p, a, h, side: h - h0 > a - a0 ? d.home : d.away, ...extra });
+    };
+    if (FOOTBALL.has(league)) {
+      (d.drives || []).forEach((dr) => {
+        const plays = (dr.plays || []).filter(Boolean);
+        const scores = plays.filter((p) => p.scoring && scored(p));
+        if (scores.length) take(scores[0], scores[scores.length - 1], { dr });
+        plays.filter(scored).slice(-1).forEach((p) => { a0 = Number(p.away_score); h0 = Number(p.home_score); });
+      });
+    } else if (league === "nhl") {
+      (d.plays || []).filter(scored).forEach((p) => {
+        if (p.scoring) take(p, p, {});
+        a0 = Number(p.away_score); h0 = Number(p.home_score);
+      });
+    }
+    return items;
+  }
+  function scoringHTML(d, league) {
+    const items = scoringItems(d, league);
+    if (!items.length) return "";
+    let at = null;
+    const cards = items.map((it) => {
+      const per = Number(it.p.period) || Number((it.dr || {}).period) || 0;
+      const head = per !== at ? `<div class="gc-sc-q">${esc(periodWord(league, per))}</div>` : "";
+      at = per;
+      const w = FOOTBALL.has(league) && typeof footballWords === "function" ? footballWords(it.p, d) : null;
+      const what = (it.dr && typeof driveResultWord === "function" && driveResultWord(it.dr))
+        || (league === "nhl" ? "Goal" : (w && w.tag === "FG") ? "Field goal" : "Touchdown");
+      const line = [w ? w.title : "", (it.p.players || []).join(", ")].filter(Boolean).join(" — ");
+      const dr = it.dr;
+      const n = dr ? (dr.offensive_plays || (dr.plays || []).length) : 0;
+      const drive = dr && n ? `${n} play${n === 1 ? "" : "s"}, ${dr.yards || 0} yard${dr.yards === 1 ? "" : "s"}${
+        dr.elapsed ? `, ${esc(dr.elapsed)}` : ""}` : "";
+      return `${head}<div class="gc-sc">
+        ${teamMarkIn(league, it.side, 26)}
+        <div class="gc-sc-t"><b>${esc(what)}</b><span class="mini">${esc(it.p.clock || "")}${it.p.clock ? " · " : ""}${esc(periodWord(league, per))}</span>
+          ${line ? `<span class="gc-sc-line">${esc(line)}</span>` : ""}${drive ? `<span class="mini">${drive}</span>` : ""}</div>
+        <div class="gc-sc-score"><span><b>${it.a}</b><i>${esc(d.away)}</i></span><span><b>${it.h}</b><i>${esc(d.home)}</i></span></div>
+      </div>`;
+    }).join("");
+    return `<div class="card gc-scoring"><div class="gc-head">Scoring plays</div>${cards}</div>`;
+  }
+
   /* ---------------- the Gamecast tab ----------------
      ESPN's first tab, top to bottom: the drive in progress, the field
      (app.js draws it above the tabs, on the park card, so it is on every
@@ -1344,8 +1411,8 @@
     const last = newestPlay(d, league);
     const lv = d.live || {};
     const quiet = lv.state === "live" ? "" : lv.state === "final"
-      ? `<p class="rail-quiet">Final. The leaders, the box score and every drive are below.</p>` : "";
-    return `${currentDriveHTML(d, league, last)}${lastPlayHTML(d, league, faces)}${leadersHTML(d, league, faces)}${quiet}`;
+      ? `<p class="rail-quiet">Final. The leaders and the scoring are above; the box score, every play and the team stats are on the tabs.</p>` : "";
+    return `${currentDriveHTML(d, league, last)}${lastPlayHTML(d, league, faces)}${leadersHTML(d, league, faces)}${scoringHTML(d, league)}${quiet}`;
   }
 
   function panel(tab, ctx) {

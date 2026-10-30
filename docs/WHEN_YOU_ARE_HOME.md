@@ -9002,6 +9002,84 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IL 2>&1 | tee /tmp/il.txt
 ```
 
+**IM. Every game a team has played opens its own page** (step 299; you,
+2026-10-30, three ESPN screenshots of Panthers @ Packers: "We should be able
+to go to each specific game and see all this type of data that espn
+offers. So add these pages for every sport for each team").
+
+- A team's Schedule tab: every game it has played opens a full game page —
+  the final with both records, the game leaders, the scoring plays by
+  quarter with each drive ("7 plays, 66 yards, 3:23") and the score after
+  it, and the Box score, Play-by-play and Team stats tabs. The Versus tab's
+  past meetings open the same way. Tonight's game still opens its board, a
+  game still to come still opens the opponent.
+- The NFL, college football, the NBA, the WNBA and the NHL come from ESPN's
+  game summary, MLB from MLB's own feed — the same documents the live game
+  page draws while a game is on. UFC has fighters, not teams, so it has no
+  team pages to start from.
+- The server finds the game on the league's scoreboard for its day by its
+  two teams (MLB by its schedule, a doubleheader's legs by game number),
+  builds the page, and keeps every final, gzipped, in
+  `data/cache/gamearchive/` — 4,000 at most (tens of megabytes), the
+  longest unread go first. A game still being played is never kept. The door is free (a final score is a public fact) and has its own
+  ceiling: 30 a minute from one reader, 300 a minute from everybody.
+- An old game says the day it was played where a live one says "updated 5s
+  ago", has no game chat, and is drawn once instead of polled.
+- Also fixed: every game page, live ones too, drew three blank cards under
+  the recap (the places kept for your bets, the prop pace and the members'
+  split). A hidden card stays hidden now.
+
+The updater picks it up within five minutes; nothing to run. Read-only,
+each prints `1` once it is live:
+
+```
+curl -s https://qellysbook.com/js/more.js | grep -c 'function openPastGame(el)'
+curl -s https://qellysbook.com/js/gamecast.js | grep -c 'function scoringHTML(d, league)'
+curl -s https://qellysbook.com/css/styles.css | grep -cF '.card[hidden] { display: none; }'
+```
+
+Then one real game per league, through the box's own door: each line
+prints the league, the teams, the date, `200`, the feed's game id, `final`,
+the score and how much of the game came back (an MLB line has no drives).
+A `404` means the feed doesn't know that game; "no finals on the box"
+means that league's history isn't on the box yet. Paste back anything
+else:
+
+```
+python3 - <<'PY'
+import json, urllib.error, urllib.parse, urllib.request
+def get(path, **q):
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:8000{path}?{urllib.parse.urlencode(q)}", timeout=90) as r:
+            return r.status, json.load(r)
+    except urllib.error.HTTPError as e:
+        return e.code, {}
+for sport, team in (("nfl", "GB"), ("cfb", "Alabama"), ("nba", "BOS"), ("wnba", "NY"), ("nhl", "BOS"), ("mlb", "LAD")):
+    st, d = get("/api/team", sport=sport, team=team, only="schedule")
+    if d.get("resolved"):
+        st, d = get("/api/team", sport=sport, team=d["resolved"][0]["team"], only="schedule")
+    played = [g for g in ((d.get("schedule") or {}).get("games") or []) if g.get("final")]
+    if not played:
+        print(sport, team, "- no finals on the box for this team"); continue
+    g = played[-1]
+    st, doc = get("/api/game", league=sport, date=str(g.get("date") or g.get("period") or "")[:10], home=g["home"], away=g["away"], game_id=g.get("game_id") or "")
+    lv = doc.get("live") or {}
+    print(sport, g["away"], "@", g["home"], g.get("date"), "->", st, doc.get("event_id"), lv.get("state"), lv.get("away_score"), "-", lv.get("home_score"), "| plays", len(doc.get("plays") or []), "| drives", len(doc.get("drives") or []), "| box", bool(doc.get("box")))
+PY
+```
+
+How many finals the box keeps (it grows as games are opened):
+
+```
+ls /srv/qellys/data/cache/gamearchive | wc -l
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IM 2>&1 | tee /tmp/im.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

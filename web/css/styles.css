@@ -1060,6 +1060,11 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .card:hover { border-color: transparent; transform: translateY(-1px); }
 .card.faded { opacity: .6; }
+/* A card the page has hidden stays hidden (2026-10-30): the `display: flex`
+   above outranks the browser's own [hidden] rule, so every game page drew
+   its three waiting slots (your bets, the prop pace, the members' split) as
+   blank cards under the recap before any of them had a word to say. */
+.card[hidden] { display: none; }
 /* THE STRIPE IS A GRADE, SO ONLY A GRADED CARD WEARS ONE (2026-10-27, the
    visual pass). Every card drew it, in the faintest token when it had no
    grade, so a list, a form or a note opened on a pale bar down its left:

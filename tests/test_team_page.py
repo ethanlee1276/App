@@ -233,8 +233,11 @@ def test_the_line_shown_is_the_teams_own_and_an_ungraded_game_is_blank():
          ]}
     out = _run("console.log(JSON.stringify(teamH2HHTML("
                + json.dumps(h) + ', "nfl")));',
-               ["teamRecordLine", "_teamWeek", "teamH2HHTML"])
+               ["teamRecordLine", "_teamWeek", "teamPastGameAttrs", "teamH2HHTML"],
+               consts=("PAST_GAME_LEAGUES",))
     assert "+2.5" in out, out
+    # Every meeting opens its own game page (engine/gamearchive).
+    assert out.count('data-past-game="nfl"') == 2, out
     assert "Conf. Champ" in out, "a week-21 NFL game read as Week 21"
     # Losing by four as a 2.5-point dog is NOT a cover, and the row says
     # so rather than leaving the column blank.
@@ -250,7 +253,8 @@ def test_the_line_shown_is_the_teams_own_and_an_ungraded_game_is_blank():
 def test_a_matchup_with_no_meetings_says_so_rather_than_drawing_an_empty_table():
     out = _run("console.log(JSON.stringify(teamH2HHTML({name:'A',"
                "opponent_name:'B',games:[],summary:{}}, 'nfl')));",
-               ["teamRecordLine", "_teamWeek", "teamH2HHTML"])
+               ["teamRecordLine", "_teamWeek", "teamPastGameAttrs", "teamH2HHTML"],
+               consts=("PAST_GAME_LEAGUES",))
     assert "No finals between" in out and "<table" not in out
 
 

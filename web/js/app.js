@@ -21835,6 +21835,9 @@ async function teamLoadSeason(season) {
 
 /* Delegated, because the page redraws itself on every chip. */
 document.addEventListener("click", (e) => {
+  // A game played: its own page (js/more.js openPastGame).
+  const past = e.target.closest && e.target.closest("[data-past-game]");
+  if (past) return openPastGame(past);
   const gameBtn = e.target.closest && e.target.closest("[data-team-game]");
   if (gameBtn) return openGame(gameBtn.dataset.teamGame);
   const tabBtn = e.target.closest && e.target.closest("[data-team-tab]");
@@ -23156,7 +23159,7 @@ function wrapTables(root) {
    Space go through .click() — one behaviour, the mouse's. */
 const DOOR_SELECTORS = "[data-open],[data-gid],[data-player-page],[data-team-open],[data-team-game],"
   + "[data-team-vs],[data-team-more],[data-parlay-card],[data-ufc-jump],[data-msg-open],[data-prop],"
-  + "[data-peek],[data-watch-toggle],[data-gs-toggle]";
+  + "[data-peek],[data-watch-toggle],[data-gs-toggle],[data-past-game]";
 /* Keyboard already handled by their own listeners: the net only adds
    the stop to these, never a second Enter. */
 const DOOR_OWN_KEYS = "[data-prop],[data-peek],[data-watch-toggle],[data-gs-toggle],[data-dossier],[data-calday],[data-calpick]";

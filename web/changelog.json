@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-10-30",
+      "kind": "ship",
+      "title": "Every game a team has played has its own page",
+      "body": "Open a team and its Schedule tab: every game it has played opens a full game page, the kind ESPN draws — the final with both records, the game leaders, every scoring play with its drive (“7 plays, 66 yards, 3:23”) and the score after it, and tabs for the box score, every play and the team stats. The past meetings on the Versus tab open the same way, and tonight’s game still opens its board. The NFL, college football, the NBA, the WNBA, the NHL and MLB; UFC has fighters, not teams."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "fix",
+      "title": "No more blank cards on a game page",
+      "body": "Every game page drew three empty cards under the recap: the places kept for your bets on the game, the prop pace and the members’ split, each waiting until it had something to show. They stay out of sight until then now."
+    },
+    {
+      "date": "2026-10-30",
       "kind": "fix",
       "title": "The menu stays with you all the way down the page",
       "body": "On an iPad, a computer or the open Duo, the menu beside the page now stays on screen however far you scroll. It used to ride up and off on the last screen of every page, where the footer pushed it. Slid away, its three dots stay with you too, and the page takes the room back."

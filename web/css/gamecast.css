@@ -98,6 +98,22 @@
 .gc-dr-head > .gc-tag { grid-column: 3; justify-self: end; margin-left: 0; }
 .gc-dr-score { grid-column: 3; justify-self: end; font-family: var(--font-mono); color: var(--text-mute); font-size: var(--fs-sm); }
 
+/* The scoring plays (gamecast.js scoringHTML): a quarter's head, then one
+   row per score — the side's mark, what and when, the play and the drive,
+   and the score it left under each side's code. */
+.gc-sc-q { margin: 12px 0 6px; font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase;
+  font-weight: 700; color: var(--text-mute); }
+.gc-sc { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius); background: color-mix(in srgb, var(--text) 4%, transparent);
+  margin-bottom: 8px; }
+.gc-sc-t { display: grid; gap: 3px; min-width: 0; }
+.gc-sc-t b { font-size: var(--fs-md); }
+.gc-sc-line { color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.gc-sc-score { display: flex; gap: 14px; text-align: center; font-variant-numeric: tabular-nums; }
+.gc-sc-score span { display: grid; gap: 2px; }
+.gc-sc-score b { font-size: var(--fs-lg); }
+.gc-sc-score i { font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
+
 @media (max-width: 700px) {
   .gc-lead-row { grid-template-columns: 1fr auto 1fr; gap: 6px; }
   .gc-lead { gap: 6px; }

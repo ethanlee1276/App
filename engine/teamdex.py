@@ -84,7 +84,7 @@ def _finals(conn, sport: str, where: str = "", args=()) -> list[dict]:
     to cover the rest.
     """
     q = ("SELECT season, period, date, home, away, home_score, away_score, "
-         "spread, total FROM games WHERE sport=?"
+         "spread, total, game_id FROM games WHERE sport=?"
          + (" AND " + where if where else "")
          + " ORDER BY season DESC, period DESC")
     try:
@@ -337,6 +337,9 @@ def _game_row(g: dict, team: str) -> dict:
     return {
         "season": g["season"], "period": g["period"], "date": g["date"],
         "home": g["home"], "away": g["away"],
+        # The game's own id: which leg of a doubleheader it was, when the
+        # page asks the feed for this game (engine/gamearchive).
+        "game_id": g.get("game_id"),
         "home_score": h, "away_score": a,
         "at_home": at_home, "points_for": mine, "points_against": theirs,
         "margin": round(mine - theirs, 1),
@@ -416,7 +419,7 @@ def season_schedule(conn, sport: str, team: str, season: int | None = None) -> d
             return {"season": None, "seasons": seasons, "games": []}
         rows = conn.execute(
             "SELECT season, period, date, home, away, home_score, away_score, "
-            "spread, total FROM games WHERE sport=? AND season=? AND (home=? OR away=?)",
+            "spread, total, game_id FROM games WHERE sport=? AND season=? AND (home=? OR away=?)",
             (sport, season, team, team)).fetchall()
     except Exception:                                         # noqa: BLE001
         return {"season": season, "seasons": seasons, "games": []}
@@ -437,6 +440,7 @@ def season_schedule(conn, sport: str, team: str, season: int | None = None) -> d
             if spread == 0:
                 spread = None
             row = {"season": g["season"], "period": g["period"], "date": g["date"],
+                   "game_id": g.get("game_id"),
                    "home": g["home"], "away": g["away"], "at_home": at_home,
                    "opponent": opp, "final": False,
                    "line": None if spread is None else (spread if at_home else -spread),

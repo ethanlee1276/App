@@ -3564,6 +3564,10 @@ function pbpBack() {
   const from = state.pbpFrom;
   if (from === "recommended") return { view: "recommended", label: "← Back to the board" };
   if (from === "game" && state.gameId) return { view: "game", label: "← Back to the game" };
+  // A game opened off a team's schedule goes back to that team's page.
+  if (from === "team" && _teamState && _teamState.team) {
+    return { view: "team", label: `← Back to the ${teamNameIn(_teamState.sport, _teamState.team)}` };
+  }
   return { view: "live", label: "← Back to Live" };
 }
 
@@ -4736,7 +4740,7 @@ function pbpBoardHTML(d, league, lv) {
   };
   // Live, the Watch button names the carrier; the pill is for before and after.
   const carrier = (d.tv || [])[0] && lv.state !== "live" ? `<span class="pbp-sb-tv">${escapeHtml((d.tv || [])[0])}</span>` : "";
-  const ago = pbpAgo(d.generated_at);
+  const ago = d.archive ? pbpPlayedOn(d) : pbpAgo(d.generated_at);
   return `<div class="card pbp-hero" style="--ca:${col.away};--ch:${col.home}">
       ${side("away")}
       <div class="pbp-sb-mid">${pbpBoardMidHTML(d, league, lv)}${carrier}${ago ? `<span class="pbp-sb-ago">${escapeHtml(ago)}</span>` : ""}</div>
@@ -4745,6 +4749,33 @@ function pbpBoardHTML(d, league, lv) {
       ${lockGameHTML(league, { event_id: (state.pbp || {}).event, home: d.home, away: d.away, live: lv })}
       ${pbpNewInjuriesHTML(d)}${pbpBirthdaysHTML(d)}
     </div>`;
+}
+
+/* A game's document from the server's archive (engine/gamearchive, the
+   /api/game route), read once per game per visit: a final does not change,
+   and one still being played is the live loop's file, not this. */
+const PBP_ARCHIVE = new Map();
+/* An old game says the day it was played where a live one says how fresh
+   its file is ("updated 5s ago" on last month's game reads as nonsense),
+   and the year once it is not this one (a team's past meetings). */
+function pbpPlayedOn(d) {
+  const day = formatGameDate(d.date || ""), y = String(d.date || "").slice(0, 4);
+  return day && y !== String(new Date().getFullYear()) ? `${day}, ${y}` : day;
+}
+async function pbpArchived(league, event) {
+  const key = `${league}_${event}`;
+  // A team's schedule already asked for it (js/more.js openPastGame).
+  const handed = (window.QB_PAST_GAMES || {})[key];
+  if (handed && handed.event_id) PBP_ARCHIVE.set(key, handed);
+  if (PBP_ARCHIVE.has(key)) return PBP_ARCHIVE.get(key);
+  let doc = null;
+  try {
+    const r = await fetch(`/api/game?league=${encodeURIComponent(league)}&event=${encodeURIComponent(event)}`,
+                          { credentials: "same-origin" });
+    doc = r.ok ? await r.json() : null;
+  } catch (e) { doc = null; }
+  if (doc && doc.event_id) PBP_ARCHIVE.set(key, doc);
+  return doc && doc.event_id ? doc : null;
 }
 
 async function renderPbpPage(tick) {
@@ -4812,6 +4843,17 @@ async function renderPbpPage(tick) {
     strip = games;
     if (res.ok) { raw = await res.text(); d = JSON.parse(raw); }
   } catch (e) { d = null; }
+  // A GAME PAST ITS LIVE FILE (Ethan, 2026-10-30: "We should be able to go
+  // to each specific game and see all this type of data that espn offers").
+  // The live loops write this file while a game is on and prune it a day
+  // and a half later, so every older game — a team's schedule, a link from
+  // last week's chat — had nothing here. The server builds the same
+  // document for any game from the same feed (engine/gamearchive), and a
+  // final is kept there for good.
+  if (!d && league && event) {
+    const got = await pbpArchived(league, event);
+    if (got) { d = got; raw = JSON.stringify(got); }
+  }
   if (state.view !== "pbp") return;                // moved on while fetching
   // Watching on TV: the copy from the reader's delay ago, and this game's
   // chip on the strip with it (tvPick).
@@ -4835,14 +4877,21 @@ async function renderPbpPage(tick) {
   // The second screen shows this copy: held for the TV, never a veiled game's.
   PBP_BIG.d = d;
   // The game's chat: its button on every game page, whichever layout draws
-  // below (js/chat.js keeps the conversation across redraws).
-  chatMount(league, event, d);
+  // below (js/chat.js keeps the conversation across redraws). Not on an old
+  // game's page (engine/gamearchive): last month's game is read, not
+  // watched, so it has no room, no card and no bar.
+  if (d && d.archive) { if (typeof chatReset === "function") { chatReset(); chatFab(); } }
+  else chatMount(league, event, d);
   // ONE CLOCK. Two draws in flight at once (the slate's own reload lands
   // while a poll is fetching) each armed a timer of their own, and from
   // then on the page polled twice as often as it said; the newest arming
   // replaces any other.
   const again = () => {
     if (_pbpTimer) clearTimeout(_pbpTimer);
+    // An old game's final (engine/gamearchive) is drawn once: nothing on it
+    // will change, and a poll every five seconds would ask for a file the
+    // live loop pruned days ago.
+    if (d && d.archive && (d.live || {}).state === "final") return;
     _pbpTimer = setTimeout(() => {
       _pbpTimer = null;
       if (state.view === "pbp") renderPbpPage(true);
@@ -4866,11 +4915,10 @@ async function renderPbpPage(tick) {
   // way the page goes on to draw itself (each draws it synchronously).
   if (stripHTML.includes("data-pbp-count")) pbpCountStart();
   if (!d) {
-    host.innerHTML = `${stripHTML}${emptySlate("stadium", "No play-by-play on file for this game",
-      "The file is written while a game is in progress — up to eight games at a "
-      + "time — and kept for about a day and a half. A game past that cap keeps its "
-      + "score and has no play list; one that has just kicked off gets its file on "
-      + "the next pass.")}${back}`;
+    host.innerHTML = `${stripHTML}${emptySlate("stadium", "No play-by-play for this game yet",
+      "The game's feed has nothing for it right now. A game in progress gets its plays "
+      + "on the next pass; one that has not started has none yet; and if the feed was "
+      + "unreachable, opening the game again in a minute asks it again.")}${back}`;
     wire();
     again();                                       // it may appear on the next pass
     return;
@@ -4971,7 +5019,7 @@ async function renderPbpPage(tick) {
       <div class="pbp-main">
         ${pbpBoardHTML(d, league, lv)}
         ${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
-        <div class="gch-entry-slot"></div>
+        ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}
         ${pbpMineSlotsHTML()}
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}

@@ -243,6 +243,13 @@ RATE_TRACK_PER_MIN = 6
 #: reload or a league switch a few more. Its own bucket, so a stranger
 #: walking league ids cannot turn the read limit into Sleeper's problem.
 RATE_SEASON_PER_MIN = 6
+#: A past game's page (/api/game, engine/gamearchive): every game not yet
+#: kept is a read of the league's feed, so the door has a ceiling per
+#: reader — a team's schedule tapped through at a reader's pace — and one
+#: for everybody, so a script walking ids cannot cost the live pages the
+#: feed they poll. A final already kept costs a file read either way.
+RATE_GAME_PER_MIN = 30
+RATE_GAME_ALL_PER_MIN = 300
 #: Auth is different: nobody legitimately signs in twenty times a minute.
 #: This sits ON TOP of the per-email throttle in `engine.accounts` — that
 #: one stops guessing at one account, this one stops spraying across many.
@@ -1333,6 +1340,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._record_lab()
         if parsed.path in ("/api/team", "/api/team/"):
             return self._team(parse_qs(parsed.query))
+        if parsed.path in ("/api/game", "/api/game/"):
+            return self._game(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
             return self._explain(parse_qs(parsed.query))
         if parsed.path.startswith("/unsubscribe/") and len(parsed.path) > 13:
@@ -5979,6 +5988,37 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         except Exception:                                    # noqa: BLE001
             return self._send(503, b'{"error":"team history unavailable"}',
                               ".json")
+
+    def _game(self, q):
+        """Any game's page — every game on every team's schedule
+        (engine/gamearchive). Ethan, 2026-10-30, ESPN's final beside ours:
+        "We should be able to go to each specific game and see all this
+        type of data that espn offers ... for every sport for each team."
+
+        The same document the live page reads from web/data/pbp/, built
+        for a game whose file is gone (or never was): by the feed's own id
+        (`event`), or by the game's day and its two sides as the schedule
+        holds them (`date`, `home`, `away`, and `game_id` to tell a
+        doubleheader's legs apart). NOT GATED, for the reason the play-by-
+        play files are free (engine/gate.FREE_DIRS): a final score and the
+        plays that made it are public facts, and nothing priced is in it.
+        """
+        from engine import gamearchive
+        if self._rate_limited(RATE_GAME_PER_MIN, "game"):
+            return
+        if not rate_ok("game:everyone", RATE_GAME_ALL_PER_MIN):
+            return self._send(429, _RATE_LIMITED.encode(), ".json")
+        arg = lambda k, n: (q.get(k) or [""])[0][:n]          # noqa: E731
+        try:
+            doc = gamearchive.game(arg("league", 5), event=arg("event", 16), date=arg("date", 10),
+                                   home=arg("home", 48), away=arg("away", 48), game_id=arg("game_id", 64))
+        except gamearchive.BadRequest as exc:
+            return self._send(400, json.dumps({"error": str(exc)}).encode(), ".json")
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"the game\'s feed did not answer"}', ".json")
+        if not doc:
+            return self._send(404, b'{"error":"no such game on the feed"}', ".json")
+        return self._send(200, json.dumps(doc).encode(), ".json")
 
     def _record_day(self, q):
         """One slate day's settled picks — the profit calendar's tap.

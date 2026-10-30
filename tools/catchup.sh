@@ -661,6 +661,32 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IM "Every game a team has played opens its own page" 240 <<'SH'
+curl -s https://qellysbook.com/js/more.js | grep -c 'function openPastGame(el)'
+curl -s https://qellysbook.com/js/gamecast.js | grep -c 'function scoringHTML(d, league)'
+curl -s https://qellysbook.com/css/styles.css | grep -cF '.card[hidden] { display: none; }'
+python3 - <<'PY'
+import json, urllib.error, urllib.parse, urllib.request
+def get(path, **q):
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:8000{path}?{urllib.parse.urlencode(q)}", timeout=90) as r:
+            return r.status, json.load(r)
+    except urllib.error.HTTPError as e:
+        return e.code, {}
+for sport, team in (("nfl", "GB"), ("cfb", "Alabama"), ("nba", "BOS"), ("wnba", "NY"), ("nhl", "BOS"), ("mlb", "LAD")):
+    st, d = get("/api/team", sport=sport, team=team, only="schedule")
+    if d.get("resolved"):
+        st, d = get("/api/team", sport=sport, team=d["resolved"][0]["team"], only="schedule")
+    played = [g for g in ((d.get("schedule") or {}).get("games") or []) if g.get("final")]
+    if not played:
+        print(sport, team, "- no finals on the box for this team"); continue
+    g = played[-1]
+    st, doc = get("/api/game", league=sport, date=str(g.get("date") or g.get("period") or "")[:10], home=g["home"], away=g["away"], game_id=g.get("game_id") or "")
+    lv = doc.get("live") or {}
+    print(sport, g["away"], "@", g["home"], g.get("date"), "->", st, doc.get("event_id"), lv.get("state"), lv.get("away_score"), "-", lv.get("home_score"), "| plays", len(doc.get("plays") or []), "| drives", len(doc.get("drives") or []), "| box", bool(doc.get("box")))
+PY
+ls /srv/qellys/data/cache/gamearchive | wc -l
+SH
 run IL "The menu comes down the page with you" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -cF '.shell > main { grid-column: 2; }'
 SH
