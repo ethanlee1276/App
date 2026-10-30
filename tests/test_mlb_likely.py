@@ -302,14 +302,14 @@ def test_the_empty_state_reads_the_census_not_a_guess():
     with open(os.path.join(ROOT, "web", "js", "app.js"),
               encoding="utf-8") as f:
         js = f.read()
-    assert "function likelyEmptyWhy(census)" in js
+    assert "function likelyEmptyWhy(census, d)" in js
     assert "no market measured to rank yet" in js
     at = js.index("function renderLikely()")
     body = js[at:js.index("\nfunction ", at + 10)]
-    assert "likelyEmptyWhy(state.data.likely_census)" in body
+    assert "likelyEmptyWhy(state.data.likely_census, state.data)" in body
     top = js[js.index("function renderLikelyTop()"):]
     top = top[:top.index("\nfunction ", 10)]
-    assert "likelyEmptyWhy(state.data.likely_census)" in top
+    assert "likelyEmptyWhy(state.data.likely_census, state.data)" in top
     # And the home section only vanishes for sports with no board at
     # all — census presence, not board_shelves, is the tell, because
     # engine/boards drops rowless shelves from the payload.

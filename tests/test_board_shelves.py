@@ -396,7 +396,7 @@ def test_an_empty_board_explains_itself_or_draws_nothing():
     body = src[at:src.index("function renderLikely()", at)]
     assert "state.data.likely_census === undefined" in body
     assert 'host.innerHTML = "";' in body, "the no-pipeline arm must survive"
-    assert "likelyEmptyWhy(state.data.likely_census)" in body
+    assert "likelyEmptyWhy(state.data.likely_census, state.data)" in body
 
 
 # --- the preview is rows, the depth is one tap away ------------------------

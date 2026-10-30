@@ -10061,7 +10061,7 @@ function capWipeoutNote() {
     .find((n) => String(n || "").startsWith("NO BETS FUNDED")) || "";
 }
 
-function likelyEmptyWhy(census) {
+function likelyEmptyWhy(census, d) {
   const c = census || {};
   if (c["no market measured to rank yet"]) {
     return `This sport’s markets haven’t yet passed the ranking test —
@@ -10081,6 +10081,14 @@ function likelyEmptyWhy(census) {
     return `Tonight’s slate was checked and no row could be priced from a
       current, credible book number — ${parts.join(" · ")}. Rows below the
       usual bar are shown when there are any; there were none.`;
+  }
+  // BUILT, NOT PRICED (2026-10-30, Ethan's NBA board: 4,358 props, none with
+  // a price): the books had posted; tonight's prices were not bought yet.
+  const built = +(((d || {}).counts || {}).props_built) || 0;
+  if (built && +(((d || {}).gate_census || {}).no_real_price) >= built) {
+    return `Tonight’s ${built.toLocaleString()} player props are built, but their sportsbook
+      prices haven’t been pulled yet, so there’s nothing to rank. The board fills in
+      after the next price pull.`;
   }
   return `This board needs priced player props on the slate. It fills
     in as the books post their menus.`;
@@ -10240,7 +10248,7 @@ function renderLikelyTop() {
       <div class="section-title">Qellys’ top picks
         <span class="sub">— who’s most likely to hit</span>
       </div>
-      <div class="ls-note">${likelyEmptyWhy(state.data.likely_census)}</div>`;
+      <div class="ls-note">${likelyEmptyWhy(state.data.likely_census, state.data)}</div>`;
     revealChildren(host);
     return;
   }
@@ -10311,7 +10319,7 @@ function renderLikely() {
     host.innerHTML = "";
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">Nothing to rank yet</div>
-      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census)}</div>${boardEmptyFacts()}${boardEmptyDoors("likely")}</div>`;
+      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census, state.data)}</div>${boardEmptyFacts()}${boardEmptyDoors("likely")}</div>`;
     bindEmptyDoors(note);
     return;
   }

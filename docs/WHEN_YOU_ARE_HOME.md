@@ -9080,6 +9080,65 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IM 2>&1 | tee /tmp/im.txt
 ```
 
+**IN. NBA Most Likely is empty tonight** (step 300; you, 2026-10-30, your
+open Duo on the NBA's Most Likely: "nba still isn't showing most likely bets
+but is giving picks of the day").
+
+- What the live board says: tonight's 10 games built 4,358 player props and
+  bought a price for none of them ("matched 0 props across 0 events
+  (cached); 10 matched event(s) have no cached prices"). The game lines were
+  bought — the Pick of the Day is Magic @ Raptors over 227.5 at Novig +104,
+  decided at 11:43am — so the Pick of the Day is up while Most Likely and
+  Edge, which rank player props, are empty. Most Likely posted every night
+  through yesterday (67 picks on the 29th). Hockey's props were bought today.
+- Why, most likely: October's odds credits. The NBA's prop pull costs about
+  176 credits (16 markets on 11 events). The pacer never spends into the
+  500-credit reserve, and in the month's last days the plan funds the NFL's
+  Friday and Saturday pulls first (GU: under about 7,500 credits the NFL
+  takes it all and the NBA gets nothing until the 1st). The first command
+  prints the plan with each sport's ceiling today; the second prints the
+  balance and every decision the pacer made on the NBA's prop pull since
+  this morning, with its reason.
+- What fixes it: credits. Credits added on The Odds API account fund the
+  next NBA pull on the next cycle; the pacer reads the balance off every
+  answer, so nothing needs a restart. Otherwise the plan renews on Nov 1
+  and funds the NBA again from that slate.
+- Also: the empty board now says what happened ("Tonight's 4,358 player
+  props are built, but their sportsbook prices haven't been pulled yet…")
+  instead of "It fills in as the books post their menus".
+
+Read-only, any time:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from engine import oddsbudget as ob
+s = ob.load()
+print('credits left this month:', s.remaining, '· reserve', ob.RESERVE, '· last read', s.last_seen_iso or 'never')
+rows = ob.decisions(lane='nba', since=time.time() - 18 * 3600)
+print(len(rows), 'decisions on the NBA prop pull in the last 18 hours; the last ten:')
+for r in rows[-10:]: print(' ', r.get('iso', '')[5:16], 'PULLED' if r.get('ok') else 'held', '-', str(r.get('reason', ''))[:220])
+"
+```
+
+After the next NBA pull, the board's own line (Most Likely rows above 0
+means it's fixed):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/nba.json'))
+print(d.get('generated_at'), '·', (d.get('meta') or {}).get('odds'), '·', len(d.get('most_likely') or []), 'Most Likely rows')
+"
+```
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IN 2>&1 | tee /tmp/in.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

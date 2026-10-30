@@ -562,8 +562,8 @@ def test_a_short_board_says_how_many_it_turned_down():
     full = js[at:js.index("\nfunction ", at + 10)]
     assert "likelyRefusedNote(state.data.likely_census, rows.length)" in full
     # …and the empty state keeps its own, different sentence.
-    assert "function likelyEmptyWhy(census)" in js
-    assert "likelyEmptyWhy(state.data.likely_census)" in full
+    assert "function likelyEmptyWhy(census, d)" in js
+    assert "likelyEmptyWhy(state.data.likely_census, state.data)" in full
 
 
 def test_the_page_never_labels_a_shrink_artefact_as_the_model():

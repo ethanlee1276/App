@@ -523,6 +523,27 @@ def test_the_page_no_longer_claims_it_would_rather_sit_empty():
     assert "books post their menus" in got["none"], got["none"]
 
 
+def test_props_built_and_none_priced_says_the_prices_are_not_in():
+    """Ethan, 2026-10-30, the NBA's Most Likely on his Duo: "Nothing to rank
+    yet ... It fills in as the books post their menus" over a board that had
+    built 4,358 props and bought no price for any of them. The books had
+    posted; the prices had not been pulled. The page says which."""
+    got = _node("""
+      const board = { counts: { props_built: 4358 }, gate_census: { no_real_price: 4358 } };
+      return { unpriced: likelyEmptyWhy({}, board),
+               some: likelyEmptyWhy({}, { counts: { props_built: 40 }, gate_census: { no_real_price: 12 } }),
+               nothing: likelyEmptyWhy({}, { counts: { props_built: 0 } }),
+               census: likelyEmptyWhy({ "under the likelihood floor": 3 }, board) };
+    """, "likelyEmptyWhy")
+    if got is None:
+        return
+    assert "4,358 player props are built" in got["unpriced"] and "pulled yet" in got["unpriced"], got["unpriced"]
+    assert "books post their menus" not in got["unpriced"], "the books had posted"
+    # Some priced: not this sentence. None built: the old one. A census: its own.
+    assert "books post their menus" in got["some"] and "books post their menus" in got["nothing"]
+    assert "no row could be priced" in got["census"], got["census"]
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

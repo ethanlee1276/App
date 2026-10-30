@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-30",
+      "kind": "fix",
+      "title": "An empty Most Likely board says why",
+      "body": "When a board has built tonight’s player props but their sportsbook prices haven’t been pulled yet, the Most Likely page now says so. It used to say the board fills in as the books post their menus, which read as though the sportsbooks hadn’t posted when they had."
+    },
+    {
+      "date": "2026-10-30",
       "kind": "ship",
       "title": "Every game a team has played has its own page",
       "body": "Open a team and its Schedule tab: every game it has played opens a full game page, the kind ESPN draws — the final with both records, the game leaders, every scoring play with its drive (“7 plays, 66 yards, 3:23”) and the score after it, and tabs for the box score, every play and the team stats. The past meetings on the Versus tab open the same way, and tonight’s game still opens its board. The NFL, college football, the NBA, the WNBA, the NHL and MLB; UFC has fighters, not teams."

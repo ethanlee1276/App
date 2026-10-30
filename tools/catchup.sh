@@ -661,6 +661,23 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IN "NBA Most Likely: tonight's prop prices and the month's credits" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from engine import oddsbudget as ob
+s = ob.load()
+print('credits left this month:', s.remaining, '· reserve', ob.RESERVE, '· last read', s.last_seen_iso or 'never')
+rows = ob.decisions(lane='nba', since=time.time() - 18 * 3600)
+print(len(rows), 'decisions on the NBA prop pull in the last 18 hours; the last ten:')
+for r in rows[-10:]: print(' ', r.get('iso', '')[5:16], 'PULLED' if r.get('ok') else 'held', '-', str(r.get('reason', ''))[:220])
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/nba.json'))
+print(d.get('generated_at'), '·', (d.get('meta') or {}).get('odds'), '·', len(d.get('most_likely') or []), 'Most Likely rows')
+"
+SH
 run IM "Every game a team has played opens its own page" 240 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'function openPastGame(el)'
 curl -s https://qellysbook.com/js/gamecast.js | grep -c 'function scoringHTML(d, league)'
