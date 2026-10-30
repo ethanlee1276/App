@@ -117,6 +117,57 @@ def test_the_game_is_found_on_its_day_by_its_two_sides():
     assert row and row["event_id"] == "401"
 
 
+def test_the_schedules_spelling_and_the_boards_are_the_same_club():
+    """The live site, 2026-10-30: the Liberty's last final (ATL @ NY, Oct 9)
+    answered "no such game". The schedule spells the club as ESPN does (NY);
+    the scoreboard's rows are in the board's own words (NYL), and a straight
+    comparison missed every game of the clubs the two spell differently."""
+    liberty = _team("NY", "9", "New York Liberty")
+    dream = _team("ATL", "3", "Atlanta Dream")
+    fetch, _ = _boards({"20261009": [_event("401918299", liberty, dream, "83", "85")]})
+    row = _with(fetch, lambda: GA.find("wnba", dt.date(2026, 10, 9), "NY", "ATL"))
+    assert row and row["event_id"] == "401918299" and row["home"] == "NYL", row
+    # The Knicks (NBA: NY -> NYK) and the Kings (NHL: LA -> LAK) the same way.
+    knicks, celtics = _team("NY", "18", "New York Knicks"), _team("BOS", "2", "Boston Celtics")
+    fetch, _ = _boards({"20261027": [_event("401909900", knicks, celtics)]})
+    row = _with(fetch, lambda: GA.find("nba", dt.date(2026, 10, 27), "NY", "BOS"))
+    assert row and row["event_id"] == "401909900" and row["home"] == "NYK", row
+    kings, sharks = _team("LA", "8", "Los Angeles Kings"), _team("SJ", "18", "San Jose Sharks")
+    fetch, _ = _boards({"20261028": [_event("401892700", kings, sharks)]})
+    row = _with(fetch, lambda: GA.find("nhl", dt.date(2026, 10, 28), "LAK", "SJS"))
+    assert row and row["event_id"] == "401892700", row
+
+
+def test_the_schedules_own_feed_id_is_the_game_itself():
+    """College, the NBA and the WNBA store ESPN's event number as the game's
+    id: the page is built from it with no day to search — and only when it
+    is these two sides."""
+    s = _final_summary()
+    real, real_dir, asked = E.fetch_summary, GA.ARCHIVE_DIR, []
+    with tempfile.TemporaryDirectory() as tmp:
+        GA.ARCHIVE_DIR = Path(tmp) / "gamearchive"
+        E.fetch_summary = lambda lg, ev, ttl=4: asked.append(ev) or s
+        try:
+            fetch, days = _boards({})
+            doc = _with(fetch, lambda: GA.game("nba", date="2026-10-26", home="DAL", away="TB", game_id="401"))
+            assert doc and doc["event_id"] == "401" and not days, "no scoreboard was asked"
+            # Another game's number: the day is searched instead (and here, does not answer).
+            try:
+                _with(fetch, lambda: GA.game("nba", date="2026-10-26", home="BOS", away="NY", game_id="401"))
+                raise AssertionError("another game's page was handed out")
+            except DataUnavailable:
+                pass
+            assert [d for d, _ in days] == ["20261026"]
+            # An id that is not the feed's (football's AWAY@HOME) is never asked for.
+            asked.clear()
+            fetch, days = _boards({"20261026": [_event("401", _team("DAL", "6", "Dallas Cowboys"),
+                                                       _team("TB", "27", "Tampa Bay Buccaneers"))]})
+            doc = _with(fetch, lambda: GA.game("nfl", date="2026-10-26", home="DAL", away="TB", game_id="TB@DAL"))
+            assert doc and doc["event_id"] == "401" and [d for d, _ in days] == ["20261026"]
+        finally:
+            E.fetch_summary, GA.ARCHIVE_DIR = real, real_dir
+
+
 def test_a_neighbouring_day_only_when_the_day_answered_without_it():
     fetch, asked = _boards({"20261026": [_event("402", PHI, NYG)], "20261025": [],
                             "20261027": [_event("401", GB, CAR)]})

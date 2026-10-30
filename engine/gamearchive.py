@@ -106,6 +106,15 @@ def _et_day(stamp) -> str:
         return s[:10] if _DATE.fullmatch(s[:10]) else ""
 
 
+def _side(league: str, team) -> str:
+    """One club's code in the league's own spelling (engine.divisions): the
+    schedules hold ESPN's ("NY" for the Liberty and the Knicks, "LA" for the
+    Kings) where the scoreboard's rows hold the board's (NYL, NYK, LAK), and
+    a straight comparison missed every game of those clubs."""
+    from .divisions import canonical
+    return canonical(league, str(team or ""))
+
+
 def _game_number(game_id: str) -> int:
     """A doubleheader's leg from our own id ("NYY@BOS-G2" is the second)."""
     m = re.search(r"-G(\d+)$", str(game_id or ""))
@@ -182,6 +191,7 @@ def find(league: str, day: _dt.date, home: str, away: str, game_id: str = "") ->
     list the two the other way round; that is matched on the day itself.
     """
     want = _game_number(game_id)
+    home, away = _side(league, home), _side(league, away)
     one_day = _dt.timedelta(days=1)
     for i, d in enumerate((day, day - one_day, day + one_day)):
         try:
@@ -190,9 +200,9 @@ def find(league: str, day: _dt.date, home: str, away: str, game_id: str = "") ->
             if i == 0:
                 raise
             continue
-        hits = [r for r in rows if r.get("home") == home and r.get("away") == away]
+        hits = [r for r in rows if _side(league, r.get("home")) == home and _side(league, r.get("away")) == away]
         if not hits and i == 0:
-            hits = [r for r in rows if r.get("home") == away and r.get("away") == home]
+            hits = [r for r in rows if _side(league, r.get("home")) == away and _side(league, r.get("away")) == home]
         if hits:
             if len(hits) > 1:
                 hits.sort(key=lambda r: r.get("game_number") or 1)
@@ -320,6 +330,20 @@ def game(league: str, event: str = "", date: str = "", home: str = "",
         day = _dt.date.fromisoformat(date)
     except ValueError:
         raise BadRequest("a game is asked for by its day") from None
+    # THE SCHEDULE'S OWN ID WHEN IT IS THE FEED'S (college, the NBA and the
+    # WNBA store ESPN's event number): the game itself, no day to search.
+    # Taken only when the page it gives is these two sides; anything else
+    # — a feed that does not know the number, another game — and the day
+    # is searched as for every other league.
+    game_id = str(game_id or "").strip()
+    if league in ESPN_LEAGUES and _EVENT.fullmatch(game_id):
+        try:
+            doc = event_doc(league, game_id)
+        except Exception:                                    # noqa: BLE001
+            doc = None
+        if doc and {_side(league, doc.get("home")), _side(league, doc.get("away"))} \
+                == {_side(league, home), _side(league, away)}:
+            return doc
     row = find(league, day, home, away, game_id)
     if not row:
         return None
