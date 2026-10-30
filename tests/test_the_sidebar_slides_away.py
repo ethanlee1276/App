@@ -90,7 +90,8 @@ def test_a_tap_or_a_drag_slides_it():
     assert 'classList.toggle("sb-hidden", hide)' in slide and 'grip.setAttribute("aria-expanded", String(!hide))' in slide
     assert 'localStorage.setItem(SB_HIDDEN_KEY, "1")' in slide and "localStorage.removeItem(SB_HIDDEN_KEY)" in slide
     grip = _fn("initSidebarGrip")
-    for want in ('grip.addEventListener("pointerdown", down);', 'sb.addEventListener("pointerdown", down);',
+    for want in ('getComputedStyle(grip).display === "none"',
+                 'grip.addEventListener("pointerdown", down);', 'sb.addEventListener("pointerdown", down);',
                  '(e.pointerType === "mouse" && e.currentTarget === sb)', "Math.abs(drag.dx) > drag.w / 4",
                  "(drag.dx < 0) !== drag.hidden", 'addEventListener("pointercancel", () => end(false));',
                  "performance.now() < quietUntil", 'grip.addEventListener("click", () => sidebarSlide());'):

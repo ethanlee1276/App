@@ -26484,8 +26484,11 @@ function initSidebarGrip() {
   sidebarSlide(root.classList.contains("sb-hidden"));     // the dots' aria-expanded, as boot.js left the bar
   let drag = null, quietUntil = 0;
   const down = (e) => {
-    // Only where the bar stands beside the page; a mouse drags the dots, not the bar.
-    if (e.button || getComputedStyle(sb).position !== "sticky" || (e.pointerType === "mouse" && e.currentTarget === sb)) return;
+    // Only where the bar stands beside the page — where the dots are: it is
+    // fixed there now, like the drawer, so its position no longer tells
+    // (styles.css "THE SIDEBAR COMES DOWN THE PAGE WITH YOU"). A mouse drags
+    // the dots, not the bar.
+    if (e.button || getComputedStyle(grip).display === "none" || (e.pointerType === "mouse" && e.currentTarget === sb)) return;
     drag = { x: e.clientX, y: e.clientY, dx: 0, on: false, hidden: root.classList.contains("sb-hidden"), w: sb.offsetWidth };
   };
   const end = (commit) => {

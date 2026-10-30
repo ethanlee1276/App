@@ -119,7 +119,8 @@ def test_on_the_open_duo_the_pane_holds_and_the_page_still_refreshes():
     finally:
         srv.shutdown()
     assert not errs, errs
-    assert got["style"] == ["sticky", "hidden", "auto", "none", "pan-y pinch-zoom"], got["style"]
+    # Fixed, not sticky, since it comes down the page with you (tests/test_the_sidebar_follows_the_page.py).
+    assert got["style"] == ["fixed", "hidden", "auto", "none", "pan-y pinch-zoom"], got["style"]
     assert got["sideways"] == 0, "nothing to scroll sideways"
     assert got["pull_in_pane"]["inSidebar"] and got["pull_in_pane"]["mid"] == "", ("the pane's own pull", got)
     assert got["swipe_in_pane"]["inSidebar"] and got["sport1"] == got["sport0"], ("no league jump from the pane", got)
