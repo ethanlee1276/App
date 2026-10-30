@@ -32,7 +32,9 @@ def test_every_game_page_leaves_the_card_a_slot_under_the_scoreboard():
     det = JS("detail.js")
     hero = det[det.index("${pbpBoardHTML(d, league, lv)}"):]
     assert '<div class="gch-entry-slot"></div>' in hero[:hero.index('<div class="card pbp-parkcard">')]
-    assert '${scoreboardHTML(d, league, k)}<div class="gch-entry-slot"></div>' in JS("hoopscast.js")
+    # Every game being watched; an old game's page has no room and no slot
+    # (2026-10-30, engine/gamearchive; tests/test_every_game_has_a_page.py).
+    assert '${scoreboardHTML(d, league, k)}${d.archive ? "" : `<div class="gch-entry-slot"></div>`}' in JS("hoopscast.js")
     assert '${scoreboardHTML(d, k)}<div class="gch-entry-slot"></div>' in JS("rinkcast.js")
     wire = det[det.index("  const wire = () => {"):]
     assert 'if (typeof chatEntryPaint === "function") chatEntryPaint();' in wire[:400], \

@@ -3710,8 +3710,10 @@ function pbpBaseballGroups(d) {
   groups.forEach((g) => g.rows.reverse());
   return groups.reverse();
 }
-/* The game's chat room: the deep file's own key (js/chat.js). */
+/* The game's chat room: the deep file's own key (js/chat.js). An old game
+   (engine/gamearchive) has none, so its plays carry no thread bubble. */
 const pbpRoom = (d, league) => {
+  if (d && d.archive) return "";
   const id = (d && (d.event_id || d.game_pk)) || (state.pbp || {}).event;
   return id ? `${league}_${id}` : "";
 };

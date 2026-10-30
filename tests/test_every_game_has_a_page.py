@@ -42,7 +42,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-import test_gamecast as GCT                                    # noqa: E402
 from engine import gamearchive as GA                           # noqa: E402
 from engine.sources import espnplays as E                      # noqa: E402
 from engine.sources.fetch import DataUnavailable               # noqa: E402
@@ -50,6 +49,20 @@ from engine.sources.fetch import DataUnavailable               # noqa: E402
 READ = lambda *p: ROOT.joinpath(*p).read_text(encoding="utf-8")   # noqa: E731
 APP, MORE, DETAIL, SERVER = (READ("web", "js", "app.js"), READ("web", "js", "more.js"),
                              READ("web", "js", "detail.js"), READ("server.py"))
+
+
+def _gct():
+    """tests/test_gamecast.py, whose ESPN summary and node harness these
+    tests build on. Imported where it is used: a test file is not a helper,
+    and tests/test_doctor.py keeps module-scope imports to the standard
+    library and first-party modules."""
+    import test_gamecast
+    return test_gamecast
+
+
+def _team(abbr, tid, name):
+    """An ESPN competitor's team, as tests/test_gamecast.py builds one."""
+    return {"id": tid, "abbreviation": abbr, "displayName": name}
 
 
 def _fn(src, name):
@@ -65,10 +78,10 @@ def _event(eid, home, away, hs="27", as_="19", state="post"):
                 {"homeAway": "away", "team": away, "score": as_}]}]}
 
 
-GB = GCT._team("GB", "9", "Green Bay Packers")
-CAR = GCT._team("CAR", "29", "Carolina Panthers")
-NYG = GCT._team("NYG", "19", "New York Giants")
-PHI = GCT._team("PHI", "21", "Philadelphia Eagles")
+GB = _team("GB", "9", "Green Bay Packers")
+CAR = _team("CAR", "29", "Carolina Panthers")
+NYG = _team("NYG", "19", "New York Giants")
+PHI = _team("PHI", "21", "Philadelphia Eagles")
 
 
 def _boards(days):
@@ -150,7 +163,7 @@ def test_a_malformed_question_is_refused():
 
 # --- the page's document ----------------------------------------------------------
 def _final_summary():
-    s = GCT._summary()
+    s = _gct()._summary()
     hdr = s["header"]
     hdr["id"] = "401"
     comp = hdr["competitions"][0]
@@ -179,7 +192,7 @@ def test_a_past_games_page_is_the_live_pages_own_document_and_a_final_is_kept():
     assert doc["archive"] is True and doc["date"] == "2026-10-26"
     assert [d.get("result") for d in doc["drives"]] == ["Punt", "Touchdown"]
     assert doc["box"] and doc["team_stats"] and doc["records"]["DAL"] == "2-2"
-    assert GCT.TEXT not in json.dumps(doc), "the builder's rule holds: never a written account"
+    assert _gct().TEXT not in json.dumps(doc), "the builder's rule holds: never a written account"
     assert calls == [("nfl", "401", GA.FEED_TTL)], "a final is kept: the second reader costs nothing"
     assert again == doc and [p.name for p in kept] == ["nfl_401.json.gz"], "kept gzipped, nothing left half-written"
     assert size < len(json.dumps(doc)), "smaller on the shelf than on the wire"
@@ -304,7 +317,7 @@ def test_the_gamecast_carries_espns_scoring_plays():
                             _p("Extra Point Good", 3, 13, period=2, clock="14:57")],
                     "Interception Touchdown", n=2, yards=4, elapsed="0:40", period=2),
              _drive("GB", [_p("Punt", 3, 13, period=2, scoring=False)], "Punt", period=2)]}
-    got = GCT._node(f"""
+    got = _gct()._node(f"""
       const d = {json.dumps(d)};
       const html = QBGamecast.panel("gamecast", {{ d, league: "nfl" }});
       const i = html.indexOf("Scoring plays");
@@ -336,7 +349,7 @@ def test_hockey_lists_its_goals():
                     "scoring": True, "team": "NYR"},
                    {"kind": "hockey", "event": "Goal", "away_score": 1, "home_score": 2, "period": 4, "clock": "1:05",
                     "scoring": True, "team": "BOS"}]}
-    got = GCT._node(f"""
+    got = _gct()._node(f"""
       const html = QBGamecast.panel("gamecast", {{ d: {json.dumps(d)}, league: "nhl" }});
       return html.slice(html.indexOf("Scoring plays"));""")
     if got is None:
@@ -382,7 +395,11 @@ def test_an_old_game_says_its_day_and_has_no_chat():
     assert slot in detail
     hoops = READ("web", "js", "hoopscast.js")
     assert slot in hoops and 'd.archive && typeof pbpPlayedOn === "function" ? pbpPlayedOn(d)' in hoops
+    # No play's thread bubble either: the rail (pbpRoom), the gamecast's Play-by-play tab, the hoops page.
+    assert 'const pbpRoom = (d, league) => {\n  if (d && d.archive) return "";' in detail
+    assert 'd.event_id && !d.archive ? chatPlayBadge(`${league}_${d.event_id}`, p)' in hoops
     gc = READ("web", "js", "gamecast.js")
+    assert gc.count("room: d.event_id && !d.archive ? `${league}_${d.event_id}` : \"\"") == 2
     assert '${d.archive ? "" : `<p class="mini" style="opacity:.6">Box score ${esc(pbpAgo(d.generated_at))}.</p>`}' in gc
 
 
@@ -448,7 +465,8 @@ def _run_browser():
                 # An old game: the day it was played, no chat, and no blank slots.
                 got["old"] = page.evaluate("""() => ({
                     stamp: [...document.querySelectorAll('#pbp-body .pbp-sb-ago')].map((e) => e.textContent),
-                    chat: document.querySelectorAll('#pbp-body .gch-entry-slot, #pbp-body .gch-entry').length + (document.getElementById('gch-fab') ? 1 : 0),
+                    chat: document.querySelectorAll('#pbp-body .gch-entry-slot, #pbp-body .gch-entry, #pbp-body .pr-chat').length + (document.getElementById('gch-fab') ? 1 : 0),
+                    plays: document.querySelectorAll('#pbp-body .lb-play').length,
                     slots: ['pbp-action', 'pbp-pace', 'pbp-split'].map((id) => { const e = document.getElementById(id);
                         return e ? [e.hidden, getComputedStyle(e).display, e.getBoundingClientRect().height] : null; })})""")
                 got["back"] = page.evaluate("(document.getElementById('pbp-back') || {}).textContent || ''")
@@ -487,7 +505,7 @@ def test_in_a_browser_a_game_on_the_schedule_opens_its_page_and_comes_back():
     old = got["old"]
     assert len(old["stamp"]) == 1 and "Oct 26" in old["stamp"][0] and "updated" not in old["stamp"][0], \
         ("an old game says the day it was played, not how fresh its file is", old["stamp"])
-    assert old["chat"] == 0, ("no room, no card and no bar on an old game", old)
+    assert old["plays"] > 0 and old["chat"] == 0, ("no room, no card, no bar and no play's bubble on an old game", old)
     for slot in old["slots"]:
         assert slot and slot[0] and slot[1] == "none" and slot[2] == 0, ("a waiting slot takes no room", old["slots"])
 

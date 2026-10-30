@@ -81,7 +81,9 @@ def test_every_play_row_carries_its_thread():
     assert "room: pbpRoom(d, league)" in DETAIL and "chatPlayBadge(room, r)" in DETAIL
     assert "chatPlayBadge(`${league}_${d.event_id}`, p)" in HOOPS
     assert "chatPlayBadge(`nhl_${d.event_id}`, e)" in RINK
-    assert GC.count("room: d.event_id ? `${league}_${d.event_id}` : \"\"") == 2
+    # Every game being watched: an old game's page has no room, so no bubble
+    # (2026-10-30, engine/gamearchive; tests/test_every_game_has_a_page.py).
+    assert GC.count("room: d.event_id && !d.archive ? `${league}_${d.event_id}` : \"\"") == 2
     # One key everywhere: the chat files threads under it, the rows read it.
     assert 'const chatPlayKey = (p) => String((p && (p.kind === "atbat" ? (p.at_bat != null ? `ab${p.at_bat}` : "") : p.id)) || "");' in APP
     assert "chatPlayKey(p) === key" in CHAT
