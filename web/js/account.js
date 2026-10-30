@@ -1981,6 +1981,8 @@ function dcFeedHTML(feed) {
     </ul>
     <h2 class="dc-h2 dc-h2-mid">Latest in #record</h2>
     <div class="dc-feed">${posts.length ? posts.map(dcPostHTML).join("")
+      : feed && !ch.record ? `<p class="dc-feed-empty">The site’s own posts are not switched on yet.
+           Every result is on the <a href="#record">Record</a> page.</p>`
       : `<p class="dc-feed-empty">The first post goes up the morning after the next night that grades.
            Until then, every result is on the <a href="#record">Record</a> page.</p>`}</div>`;
 }

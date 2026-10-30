@@ -1767,8 +1767,12 @@ async function loadNews() {
   return _newsCache;
 }
 
+// A headline older than this is history, not news: a league whose feeds
+// went quiet keeps its last headlines in the file, never on the page.
+const NEWS_MAX_AGE_S = 4 * 86400;
 function newsSectionHTML(sport, news) {
-  const rows = (((news || {}).sports) || {})[sport] || [];
+  const now = Date.now() / 1000;
+  const rows = ((((news || {}).sports) || {})[sport] || []).filter((r) => !r.epoch || now - r.epoch < NEWS_MAX_AGE_S);
   if (!rows.length) return "";
   const agoWord = (epoch) => {
     if (!epoch) return "";

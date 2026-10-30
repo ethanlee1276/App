@@ -7,6 +7,7 @@ automatically post that day's record to the Discord."
 
 Run directly: `python3 tests/test_the_site_talks_to_its_discord.py`
 """
+import json
 import datetime as dt
 import os
 import sys
@@ -146,6 +147,19 @@ def test_the_board_and_the_pick_of_the_day_post_once_a_day_with_the_detail_the_c
     out = D.run(conn, NOW, env=ENV, boards={"nfl": _board(today="2026-10-19")}, post_fn=posts3,
                 state_path=d / "s3.json")
     assert not any(k.startswith(("board", "potd")) for k in out["posted"])
+
+
+def test_with_no_webhook_the_page_is_told_the_feed_is_off():
+    """No webhook, no posts — and until 2026-10-30 no community.json either,
+    so the Discord page promised a first post that would never come."""
+    conn, d = _ledger()
+    path = d / "community.json"
+    out = D.run(conn, NOW, env={}, boards={}, post_fn=Posts(), state_path=d / "s.json", community_path=path)
+    assert out["note"] == "no Discord webhook set"
+    got = json.loads(path.read_text())
+    assert got["channels"]["record"] is False and got["channels"]["picks"] is False and not got.get("posts")
+    acct = (Path(D.__file__).resolve().parents[1] / "web" / "js" / "account.js").read_text()
+    assert "The site’s own posts are not switched on yet." in acct
 
 
 def test_a_declined_lean_is_never_posted_as_the_pick():

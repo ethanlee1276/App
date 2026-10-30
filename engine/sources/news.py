@@ -35,18 +35,23 @@ from __future__ import annotations
 import email.utils as _eut
 import xml.etree.ElementTree as _ET
 
-from .fetch import fetch_text
+from .fetch import DEFAULT_AGENT, fetch_text
 
 #: Publisher-offered RSS feeds, per site sport key. ESPN publishes one
-#: per league at a stable path. More sources append as (name, url)
-#: tuples — the parser is plain RSS 2.0.
+#: per league at a stable path, and CBS Sports one per league beside it —
+#: a second publisher, so one feed going quiet costs that league nothing.
+#: More sources append as (name, url) tuples; the parser is plain RSS 2.0.
+#: Hockey joined 2026-10-30: the NHL has had a board since October and its
+#: page had no headlines to show.
+_CBS = "https://www.cbssports.com/rss/headlines/{}/"
 FEEDS: dict[str, list[tuple[str, str]]] = {
-    "nfl": [("ESPN", "https://www.espn.com/espn/rss/nfl/news")],
-    "cfb": [("ESPN", "https://www.espn.com/espn/rss/ncf/news")],
-    "mlb": [("ESPN", "https://www.espn.com/espn/rss/mlb/news")],
-    "nba": [("ESPN", "https://www.espn.com/espn/rss/nba/news")],
-    "wnba": [("ESPN", "https://www.espn.com/espn/rss/wnba/news")],
-    "ufc": [("ESPN", "https://www.espn.com/espn/rss/mma/news")],
+    "nfl": [("ESPN", "https://www.espn.com/espn/rss/nfl/news"), ("CBS Sports", _CBS.format("nfl"))],
+    "cfb": [("ESPN", "https://www.espn.com/espn/rss/ncf/news"), ("CBS Sports", _CBS.format("college-football"))],
+    "mlb": [("ESPN", "https://www.espn.com/espn/rss/mlb/news"), ("CBS Sports", _CBS.format("mlb"))],
+    "nba": [("ESPN", "https://www.espn.com/espn/rss/nba/news"), ("CBS Sports", _CBS.format("nba"))],
+    "wnba": [("ESPN", "https://www.espn.com/espn/rss/wnba/news"), ("CBS Sports", _CBS.format("wnba"))],
+    "nhl": [("ESPN", "https://www.espn.com/espn/rss/nhl/news"), ("CBS Sports", _CBS.format("nhl"))],
+    "ufc": [("ESPN", "https://www.espn.com/espn/rss/mma/news"), ("CBS Sports", _CBS.format("mma"))],
 }
 
 TTL = 1800
@@ -83,16 +88,29 @@ def parse_rss(text: str, source: str) -> list[dict]:
     return out
 
 
-def fetch_sport(sport: str) -> list[dict]:
-    """One sport's headlines, newest first, capped at PER_SPORT."""
+def fetch_sport(sport: str, errors: dict | None = None) -> list[dict]:
+    """One sport's headlines, newest first, capped at PER_SPORT. A feed
+    that fails says why in ``errors`` ({sport: {source: reason}}).
+
+    URLLIB'S OWN AGENT (fetch.DEFAULT_AGENT), as every other ESPN read here
+    sends. This sent the site's custom one, which ESPN answers 403 — the
+    fetch layer's own note records it — so from the first run on
+    2026-09-01 every feed failed, the file kept no headlines, and the page
+    quietly drew no news section for two months (the 2026-10-30 audit)."""
     rows: list[dict] = []
     for source, url in FEEDS.get(sport, ()):
+        key = f"news_{sport}_{source.lower().replace(' ', '_')}"
         try:
-            text = fetch_text(url, f"news_{sport}_{source.lower()}", ttl=TTL)
-        except Exception:                                   # noqa: BLE001
+            text = fetch_text(url, key, ttl=TTL, user_agent=DEFAULT_AGENT)
+        except Exception as exc:                            # noqa: BLE001
+            if errors is not None:
+                why = getattr(exc, "status", None) or exc
+                errors.setdefault(sport, {})[source] = f"{type(exc).__name__}: {why}"[:160]
             continue
-        if text:
-            rows.extend(parse_rss(text, source))
+        got = parse_rss(text, source) if text else []
+        if not got and errors is not None:
+            errors.setdefault(sport, {})[source] = "the feed answered with no headlines"
+        rows.extend(got)
     rows.sort(key=lambda r: -r["epoch"])
     return rows[:PER_SPORT]
 
@@ -105,9 +123,9 @@ def build_all() -> dict:
            # rather than hard-coding a claim the engine enforces.
            "policy": ("headlines and links only, from publisher-offered "
                       "feeds — the reporting itself lives at the source"),
-           "sports": {}}
+           "sports": {}, "errors": {}}
     for sport in FEEDS:
-        got = fetch_sport(sport)
+        got = fetch_sport(sport, out["errors"])
         if got:
             out["sports"][sport] = got
     return out

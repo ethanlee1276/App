@@ -19,12 +19,24 @@ def main() -> None:
     built = news.build_all()
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    # Keep yesterday's headlines over a blank page: every feed failing
-    # (offline dev box, ESPN hiccup) publishes nothing rather than
-    # overwriting a good file with an empty one.
-    if not built["sports"] and out.exists():
-        print("news: every feed unavailable — kept the existing file")
-        return
+    # Keep yesterday's headlines over a blank page: a league whose every
+    # feed failed this time (offline dev box, a publisher's hiccup) keeps
+    # the headlines it had — and the file is written anyway, with why each
+    # feed failed, so `curl …/data/news.json` answers what went wrong. It
+    # used to return without writing, which left a file from 2026-09-01
+    # with no headlines and no reason for two months (the page hides any
+    # headline older than four days, so old ones never pass for news).
+    if out.exists():
+        try:
+            old = json.loads(out.read_text())
+        except (OSError, ValueError):
+            old = {}
+        for sport, rows in ((old or {}).get("sports") or {}).items():
+            if sport not in built["sports"] and rows:
+                built["sports"][sport] = rows
+    if built.get("errors"):
+        print("news: " + "; ".join(f"{s} {src}: {why}" for s, d in built["errors"].items()
+                                   for src, why in d.items())[:600])
     tmp = out.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(built, indent=1))
     os.replace(tmp, out)

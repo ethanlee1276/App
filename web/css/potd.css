@@ -1,7 +1,7 @@
 /* The Pick of the Day, every league (js/potd.js), loaded with it. One card
    a league in a grid that folds to one column on a phone; the day's top
    pick leads and wears the brand's edge, a card that sat out reads quieter. */
-.pd-lede { margin: 0 0 12px; color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-snug); max-width: 72ch; }
+.pd-lede { margin: 0 0 12px; color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-snug); max-width: var(--measure-wide); }
 .pd-lede b { color: var(--text); }
 .pd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; align-items: start; }
 .pd-card { --tone: var(--border-soft); margin: 0; min-width: 0; display: grid; gap: 8px; }

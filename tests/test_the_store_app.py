@@ -92,9 +92,10 @@ def test_the_store_app_draws_no_league_logo_and_no_photo():
 
 def test_the_store_app_skips_the_money_pages_and_the_play_build_sells_nothing():
     assert 'const STORE_APP_SKIPS = new Set(["memes", "intel"]);' in APP
-    at = APP.index("function switchView(name, push = false) {")
-    # (A free account's Home is sent to the free pick first, one line above.)
-    assert "STORE_APP_SKIPS.has(name)" in APP[at:at + 320]
+    # The whole function, not a window: a free account's Home is sent to the
+    # free pick first (2026-10-30), which moved the skip a line down.
+    from _windows import function as _function
+    assert "STORE_APP_SKIPS.has(name)" in _function(APP, "function switchView(name, push = false) {")
     at = APP.index("function _switchViewNow(name, push, dir) {")
     assert 'name === "checkout" && !storeSells()' in APP[at:at + 300]
     assert "var QB_STORE_CHECKOUT = { ios: true, play: false };" in BOOT

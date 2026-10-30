@@ -218,6 +218,7 @@ def _render(top, rec, walled):
     const LEAGUE_LABEL = {{}};
     const betItHTML = (p) => `<span class="betit-box">Bet it</span>`;
     const memberLockHTML = (t, b) => `<div class="card member-lock"><b>${{t}}</b><p>${{b}}</p></div>`;
+    const tzTime = (d) => "3:00 PM";
     {_fn("potdCallStrip")}
     {_fn("potdBetText")}
     {PAGE}

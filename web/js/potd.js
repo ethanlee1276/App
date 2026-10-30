@@ -45,11 +45,12 @@ async function renderPotdPage() {
   _pdTimer = setTimeout(() => { if (state.view === "potd") renderPotdPage(); }, PD_REFRESH_MS);
 }
 
-// When the file was written, on the reader's clock.
+// When the file was written, on the site's one clock (tzTime: the reader's
+// chosen zone, as every kickoff on the site).
 function pdWhen(iso) {
   const t = new Date(String(iso || ""));
   if (isNaN(t)) return "";
-  return `<p class="pd-when">Updated ${escapeHtml(t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</p>`;
+  return `<p class="pd-when">Updated ${escapeHtml(tzTime(t))}</p>`;
 }
 
 function pdName(s) { return (SPORT_META[s] || {}).name || LEAGUE_LABEL[s] || String(s).toUpperCase(); }

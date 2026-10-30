@@ -312,10 +312,20 @@ def run(conn, now: _dt.datetime | None = None, env: dict | None = None, boards: 
     from .recap import recap
     cfg = config(env)
     out = {"posted": [], "failed": []}
+    now = now or _dt.datetime.now(_dt.timezone.utc)
     if not cfg["record"] and not cfg["picks"]:
         out["note"] = "no Discord webhook set"
+        # THE PAGE SAYS SO. With no webhook nothing ever wrote this file, and
+        # the Discord page — reading none — promised "the first post goes up
+        # the morning after the next night that grades" to a feed that was
+        # never switched on (the 2026-10-30 audit). Written once, channels
+        # off, so it says "not switched on yet" instead.
+        if community_path and not Path(community_path).exists():
+            try:
+                export_community({}, cfg, env, now, community_path)
+            except OSError:
+                pass
         return out
-    now = now or _dt.datetime.now(_dt.timezone.utc)
     et = _et(now)
     today = et.date()
     state = load_state(state_path)
