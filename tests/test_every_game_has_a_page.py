@@ -254,6 +254,37 @@ def test_the_route_is_free_and_says_what_went_wrong():
     assert "RATE_GAME_PER_MIN = 30\nRATE_GAME_ALL_PER_MIN = 300\n" in SERVER
 
 
+
+def test_the_real_door_answers_and_holds_its_ceiling():
+    """server.Handler itself, routed by do_GET: the browser test fakes this door."""
+    import server
+    sent = []
+    h = object.__new__(server.Handler)
+    h._send = lambda code, body, ext=".json": sent.append((code, json.loads(body)))
+    h._client_ip = lambda: "203.0.113.9"
+    real, real_dir = E.fetch_summary, GA.ARCHIVE_DIR
+    with tempfile.TemporaryDirectory() as tmp:
+        GA.ARCHIVE_DIR = Path(tmp) / "gamearchive"
+        E.fetch_summary = lambda lg, ev, ttl=4: _final_summary()
+        try:
+            for path in ("/api/game?league=nfl", "/api/game?league=xfl&event=1", "/api/game/?league=nfl&event=401"):
+                h.path = path
+                h.do_GET()
+        finally:
+            E.fetch_summary, GA.ARCHIVE_DIR = real, real_dir
+    assert [c for c, _b in sent] == [400, 400, 200], sent
+    assert sent[0][1] == {"error": "a game is asked for by its day"}
+    assert sent[2][1]["event_id"] == "401" and sent[2][1]["archive"] is True
+    # Thirty a minute from one reader, then a 429 before anything is asked of a feed.
+    codes = []
+    h._send = lambda code, body, ext=".json": codes.append(code)
+    h._client_ip = lambda: "203.0.113.77"
+    h.path = "/api/game?league=nfl"
+    for _ in range(server.RATE_GAME_PER_MIN + 1):
+        h._game({"league": ["nfl"]})
+    assert codes == [400] * server.RATE_GAME_PER_MIN + [429], codes
+
+
 # --- the doors ----------------------------------------------------------------------
 def test_every_game_played_opens_its_page_and_comes_back_to_the_team():
     door = _fn(MORE, "teamGameDoor")
