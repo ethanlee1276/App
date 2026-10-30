@@ -1412,7 +1412,8 @@
     const lv = d.live || {};
     const quiet = lv.state === "live" ? "" : lv.state === "final"
       ? `<p class="rail-quiet">Final. The leaders and the scoring are above; the box score, every play and the team stats are on the tabs.</p>` : "";
-    return `${currentDriveHTML(d, league, last)}${lastPlayHTML(d, league, faces)}${leadersHTML(d, league, faces)}${scoringHTML(d, league)}${quiet}`;
+    // A final's last play is not news: its tab opens on the leaders and the scoring, as ESPN's.
+    return `${currentDriveHTML(d, league, last)}${lv.state === "final" ? "" : lastPlayHTML(d, league, faces)}${leadersHTML(d, league, faces)}${scoringHTML(d, league)}${quiet}`;
   }
 
   function panel(tab, ctx) {

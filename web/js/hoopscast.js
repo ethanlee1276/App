@@ -559,8 +559,12 @@
         <span>${teamMarkIn(league, d.away, 16)} largest lead <b>${big("away")}</b></span>
         <span>${teamMarkIn(league, d.home, 16)} largest lead <b>${big("home")}</b></span></div>`;
   }
+  /* A FINISHED GAME HAS NO LIVE PICTURE (Ethan, 2026-10-30: a past game's
+     page is "just supposed to be the espn page with the past game data"):
+     its arena opens on the shot chart, as ESPN's does, and Live is not offered. */
+  const viewFor = (d) => (S.view === "live" && (d.live || {}).state === "final" ? "shots" : S.view);
   function stageHTML(d, league, k) {
-    const view = S.view;
+    const view = viewFor(d);
     const last = k.shots.filter((s) => courtSpot(s)).slice(-1)[0];
     // A phone crops the live view to the basket the ball's run stays at,
     // and shows the whole court when the run goes end to end.
@@ -573,7 +577,8 @@
     const legend = view === "shots" ? shotLegendHTML(d, league, k) : "";
     // A phone reads the short word, so the four fit across it.
     const tabs = [["live", "Live", "Live", "basketball"], ["shots", "Shot Chart", "Shots", "target"],
-                  ["tracker", "Player Tracker", "Players", "people"], ["flow", "Game Flow", "Flow", "chart"]].map(([key, label, short, ic]) =>
+                  ["tracker", "Player Tracker", "Players", "people"], ["flow", "Game Flow", "Flow", "chart"]]
+      .filter(([key]) => key !== "live" || (d.live || {}).state !== "final").map(([key, label, short, ic]) =>
       `<button type="button" class="hc-view${view === key ? " on" : ""}" data-hc-view="${key}" aria-pressed="${view === key}" aria-label="${label}">${icon(ic, 13)}<span class="hc-vl">${label}</span><span class="hc-vs">${short}</span></button>`).join("");
     // The picture box holds the picture and what is pinned to it (the
     // building, the run); the caption, the legend, a pane and the views sit

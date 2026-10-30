@@ -4,6 +4,12 @@
     {
       "date": "2026-10-30",
       "kind": "fix",
+      "title": "A finished game reads like ESPN’s page",
+      "body": "A game that’s over no longer shows the live field or its last play. Its page opens on the final, the recap, the leaders and every scoring play, with the box score, every play and the team stats on the tabs. Basketball and hockey open a final on the shot chart. On the open Duo, the game chat’s bar sits at the bottom of the screen, beside the menu."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "fix",
       "title": "An empty Most Likely board says why",
       "body": "When a board has built tonight’s player props but their sportsbook prices haven’t been pulled yet, the Most Likely page now says so. It used to say the board fills in as the books post their menus, which read as though the sportsbooks hadn’t posted when they had."
     },

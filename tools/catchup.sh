@@ -661,6 +661,11 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IO "A finished game is ESPN's page; the chat bar at the foot" 30 <<'SH'
+curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
+curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'
+curl -s https://qellysbook.com/css/styles.css | grep -cF 'html .gch-fab { left: calc(var(--sidebar-w) + 10px); right: 10px;'
+SH
 run IN "NBA Most Likely: tonight's prop prices and the month's credits" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan
 cd /srv/qellys && sudo -u qellys python3 -c "

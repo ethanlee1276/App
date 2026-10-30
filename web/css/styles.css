@@ -6771,6 +6771,14 @@ body.has-deck #rail-live { display: none; }
   #nav-search, #nav-bell, #theme-toggle { display: grid; }
   .crash-note { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   #home-deck .hd-sec[data-sec="riding"]:not([hidden]) { display: block; }
+  /* The game chat's bar comes down to the foot (Ethan, 2026-10-30, his open
+     Duo: "move the chat bar down more"): chat.css keeps 84px under it for a
+     tab bar this layout does not draw, and ran it across the menu. Here it
+     starts where the docked menu ends, or at the edge with the menu away. */
+  html .gch-fab { left: calc(var(--sidebar-w) + 10px); right: 10px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  html body.has-tray .gch-fab { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  html.sb-hidden .gch-fab { left: 10px; }
 }
 /* At 951 wide (the open Duo on its side) the header ran 29px off the
    right edge: the date range is the widest thing in it, and under 901

@@ -693,15 +693,20 @@
       <div class="rc-flow-stats"><span class="rc-key away">${esc(d.away)}</span><span class="rc-key home">${esc(d.home)}</span>
         <span>Attempts <b>${T.away.att}</b> – <b>${T.home.att}</b></span><span>Shots on goal <b>${T.away.sog}</b> – <b>${T.home.sog}</b></span>${xg}</div>`;
   }
+  /* A FINISHED GAME HAS NO LIVE PICTURE (Ethan, 2026-10-30: a past game's
+     page is "just supposed to be the espn page with the past game data"):
+     its rink opens on the shot chart, and Live is not offered. */
+  const viewFor = (d) => (S.view === "live" && (d.live || {}).state === "final" ? "shots" : S.view);
   function chipsHTML(d, k) {
-    if (S.view === "shots") {
+    const view = viewFor(d);
+    if (view === "shots") {
       const T = k.stats;
       const chip = (key, label) => `<button type="button" class="rc-chip${S.shots === key ? " on" : ""}" data-rc-shots="${key}">${label}</button>`;
       const xg = (d.rink || {}).xg ? `<span class="rc-key-note">xG ${T.away.xg.toFixed(2)} – ${T.home.xg.toFixed(2)} · our model</span>` : "";
       return `<div class="rc-legend">${chip("both", "Both")}${chip("away", `${esc(d.away)} ${T.away.goals}/${T.away.sog}`)}${chip("home", `${esc(d.home)} ${T.home.goals}/${T.home.sog}`)}
         <span class="rc-key-note"><i class="goal"></i>Goal <i class="sog"></i>On goal <i class="miss"></i>Missed <i class="block"></i>Blocked</span>${xg}</div>`;
     }
-    if (S.view === "ice") {
+    if (view === "ice") {
       const count = (kind) => events(d).filter((e) => e.kind === kind && e.x != null).length;
       return `<div class="rc-legend">${ICE_KINDS.map(([key, label]) =>
         `<button type="button" class="rc-chip${S.ice === key ? " on" : ""}" data-rc-ice="${key}">${label}${key === "all" ? "" : ` ${count(key)}`}</button>`).join("")}</div>`;
@@ -709,7 +714,7 @@
     return "";
   }
   function stageHTML(d, k) {
-    const view = S.view;
+    const view = viewFor(d);
     const lastSpot = events(d).filter((e) => e.x != null).slice(-1)[0];
     // A phone crops the live view to the half the puck's run stays in, and
     // shows the whole rink when the run crosses centre ice.
@@ -723,7 +728,8 @@
     const pp = k.pp && (d.live || {}).state === "live" && view === "live"
       ? `<div class="rc-ppbadge" style="--pc:${k.pp.side === "home" ? "var(--ch)" : "var(--ca)"}">${esc(d[k.pp.side])} power play${k.pp.left != null && k.pp.left > 0 ? ` · ${mmss(k.pp.left)}` : ""}</div>` : "";
     const tabs = [["live", "Live", "Live", "hockey"], ["shots", "Shot Chart", "Shots", "target"], ["ice", "Ice Tracker", "Ice", "stadium"],
-                  ["tracker", "Player Tracker", "Players", "people"], ["flow", "Game Flow", "Flow", "chart"]].map(([key, label, short, ic]) =>
+                  ["tracker", "Player Tracker", "Players", "people"], ["flow", "Game Flow", "Flow", "chart"]]
+      .filter(([key]) => key !== "live" || (d.live || {}).state !== "final").map(([key, label, short, ic]) =>
       `<button type="button" class="rc-view${view === key ? " on" : ""}" data-rc-view="${key}" aria-pressed="${view === key}" aria-label="${label}">${icon(ic, 13)}<span class="rc-vl">${label}</span><span class="rc-vs">${short}</span></button>`).join("");
     // The scene is the art and what sits over it; the views are a bar under
     // it, as in Ethan's render.

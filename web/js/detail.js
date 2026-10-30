@@ -5015,6 +5015,12 @@ async function renderPbpPage(tick) {
     : `<p class="rail-quiet">Loading the gamecast…</p>`;
   const infoHTML = `${pbpTabsHTML(tab, boardGame, tabs)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
   const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
+  /* A FINISHED GAME IS ITS RECORD, NOT ITS PICTURE (Ethan, 2026-10-30, the
+     field circled on yesterday's Panthers @ Packers: "why do we have the
+     game cast on this screen. It's just supposed to be the espn page with the
+     past game data"). The field or the ballpark draws the play in progress;
+     a final has none, so its page is ESPN's: the score, the recap, the
+     leaders, the scoring and the tabs. */
   host.innerHTML = `
     ${stripHTML}
     <div class="pbp-layout${league === "mlb" ? "" : " pbp-has-tabs"}">
@@ -5023,11 +5029,11 @@ async function renderPbpPage(tick) {
         ${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
         ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}
         ${pbpMineSlotsHTML()}
-        <div class="card pbp-parkcard">
+        ${lv.state === "final" ? "" : `<div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
           ${pbpParkHTML(d, league, boardGame, lastPlay)}
           ${pbpSituationHTML(d, league, faces)}${league === "mlb" && window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}
-        </div>
+        </div>`}
         ${pbpCallItHTML(d, league)}
         ${infoHTML}
         ${back}

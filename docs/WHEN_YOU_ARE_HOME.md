@@ -9139,6 +9139,38 @@ The checks in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IN 2>&1 | tee /tmp/in.txt
 ```
 
+**IO. A finished game is ESPN's page; the chat bar sits at the foot** (step
+301; you, 2026-10-30, two screenshots of yesterday's Panthers @ Packers on
+your open Duo: "why do we have the game cast on this screen. It's just
+supposed to be the espn page with the past game data" and "move the chat bar
+down more").
+
+- A finished game's page no longer draws the field or the ballpark. It is
+  the final, the recap, the leaders, the scoring plays and the tabs (box
+  score, every play, team stats). The Gamecast tab drops "Last play" on a
+  final. Basketball and hockey open a final on the shot chart, and their
+  Live view is not offered once the game is over. A game being played keeps
+  all of it.
+- On the open Duo the game chat's bar sits at the bottom of the screen,
+  beside the menu. It sat 84px up and across the menu, keeping room for the
+  phone's tab bar, which the open Duo doesn't show. With the menu slid away
+  it takes the width. Phones and computers are unchanged.
+
+The updater picks it up within five minutes; nothing to run. Read-only, each
+prints `1` once it is live:
+
+```
+curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
+curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'
+curl -s https://qellysbook.com/css/styles.css | grep -cF 'html .gch-fab { left: calc(var(--sidebar-w) + 10px); right: 10px;'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IO 2>&1 | tee /tmp/io.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 
