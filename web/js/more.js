@@ -3951,7 +3951,10 @@ function loopRowsHTML(hb, now) {
       out += rowOf(label, `stopped at its time limit — runs again in ${ageText(c.resting_until_epoch - now)}`,
         "st-bad", "its stack is in the log; the boards keep rebuilding meanwhile");
     } else if (c.step) {
-      out += rowOf(label, `running ${c.step} (${ageText(c.running_s || 0)})`, "st-good", "");
+      // "starting" is a state, not a step: "running starting (0 min)" read as
+      // a typo on the page (the 2026-10-30 audit).
+      out += rowOf(label, c.step === "starting" ? "starting"
+        : `running ${c.step} (${ageText(c.running_s || 0)})`, "st-good", "");
     } else if (c.done_epoch) {
       out += rowOf(label, `idle · last finished ${ageText(now - c.done_epoch)} ago`, "st-good", "");
     }
@@ -4859,7 +4862,8 @@ async function renderBookReport() {
       </div>
       ${bookVsListHTML(d.vs_list)}
       <p style="opacity:.55;font-size:.85em;margin-top:8px">Cut ${escapeHtml(String(d.generated_at || "").slice(0, 10))}
-        from ${d.min_series}+ tracked series per book. Books below the sample bar are unranked, not absent.</p>
+        from the last ${Number(d.window_days) || 28} days of our line history; a book needs ${d.min_series}+
+        series to be ranked. Books below the bar are unranked, not absent.</p>
     </div>`);
 }
 

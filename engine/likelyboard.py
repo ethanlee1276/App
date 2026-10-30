@@ -436,7 +436,22 @@ def give_back(r: dict) -> bool:
     r["trust_note"] = (f"we said {ours:.0%}; {r.get('market_books') or 3} books' de-vigged price says "
                        f"{market:.0%}, and on this board the price has been closer whenever we ran above it, "
                        f"so we show the price's number")
+    restate_lock(r)
     return True
+
+
+def restate_lock(r: dict) -> None:
+    """A posted pick's note gives its chance today ("now 53%",
+    likely.lock_note), written when the pick was carried forward. The price
+    rule moves that chance afterwards, here and in `harmonize`, and the
+    note kept the number from before: the board's own self-check
+    (engine/boardtruth, LOCK NOTE) found a tile at the price's number beside
+    a note still giving ours (the 2026-10-30 audit). Written again from the
+    chance the tile shows, the reason unchanged."""
+    if r.get("locked") and r.get("lock_note") is not None:
+        from .likely import lock_note
+        r["lock_note"] = lock_note(r.get("lock_why"), now=r.get("model_prob"),
+                                   then=r.get("first_prob"))
 
 
 def trust_bigger(r: dict, rule, quotes: dict) -> int:
@@ -983,6 +998,7 @@ def harmonize(result: dict) -> int:
                 src.setdefault("listed_prob", q)
                 src["model_prob"] = b["model_prob"]
                 src["trust_note"] = b["trust_note"]
+                restate_lock(src)
             w = matchup_warning(b)
             if w:
                 src["matchup_warning"] = w

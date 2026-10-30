@@ -4,6 +4,18 @@
     {
       "date": "2026-10-30",
       "kind": "fix",
+      "title": "The book report card ranks the books",
+      "body": "The card on Line Shopping that measures which book prices sharpest had said “Not ranked yet” since it shipped in August: it read a price our line history has never written, so it measured nothing. It reads the history as written now — each book’s early prices against the closing consensus, one line and one game at a time, nothing after the start — over the last four weeks, and the card fills after the next daily run."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "fix",
+      "title": "A posted pick says the chance its tile shows",
+      "body": "When a posted pick’s chance drops under the bar, its note gives the new number. The books’ price could then lower that chance again, and the note kept the number from before — the board’s own self-check caught one pick saying one percentage in its note and another on its tile. The note now follows the tile."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "fix",
       "title": "The Features page lists everything that shipped",
       "body": "A month of features had never been written up there: weekly pick'em and private groups, karma and levels, the closing-line leaderboards, Call it, today's question and trivia, the player-of-the-game vote, watch parties and crew watch, Remind me, the Edge Report, Your data and the weekly limit. They are on it now, under a new Play along section and in Your account."
     },

@@ -5672,7 +5672,9 @@ function renderLivePicks() {
   const host = document.getElementById("live-picks");
   if (host && isWalled()) {
     host.innerHTML = memberLockHTML("Our picks on these games, live",
-      "Members see every Edge pick, Most Likely pick and the Pick of the Day on the games above, tracked play by play to the final, with the live chance each one cashes.");
+      // The Pick of the Day itself is free (2026-10-30); what this locks is
+      // the tracking — its live chance among the rest.
+      "Members see every Edge and Most Likely pick on the games above, tracked play by play to the final with the live chance each one cashes — the Pick of the Day’s too. The Pick of the Day itself is free, on Home.");
     return;
   }
   buzzOnSettle([...(((state.data || {}).live_picks) || []),

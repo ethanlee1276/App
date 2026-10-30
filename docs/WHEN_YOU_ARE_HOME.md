@@ -8900,6 +8900,82 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IJ 2>&1 | tee /tmp/ij.txt
 ```
 
+**IK. The audit** (step 297; you, 2026-10-30: "a full, long, complete
+audit ... make sure ... everything that is added is complete and done and
+ready for the public use"). The write-up is `docs/AUDIT_2026-10-30.md`:
+what was checked, what was fixed, what needs you, every page, and what to
+build next. These are its commands.
+
+- **The book report card on Line Shopping has never ranked a book.** It
+  read a price field the line history has never written, so every
+  snapshot read as no price, nothing was measured and the file was never
+  published — the card has said "Not ranked yet" since it shipped on 25
+  August. It reads the real rows now (both sides, one line at a time, one
+  game at a time, nothing after the start), over the last four weeks, and
+  holds only the games not yet played in memory (about 150 MB on a
+  synthetic month bigger than the box's). The file appears after the next
+  daily chores.
+- **The Status page** said "running starting (0 min)" for a chore that had
+  just started. It says "starting".
+
+Read-only, any time; the first two print `1` once this version is live,
+the rest after tomorrow's chores (the journal line names how many books
+were ranked):
+
+```
+curl -s https://qellysbook.com/js/more.js | grep -c 'days of our line history'
+curl -s https://qellysbook.com/js/more.js | grep -c 'c.step === "starting" ? "starting"'
+sudo journalctl -u qellys --since "26 hours ago" --no-pager | grep -E "book report" | tail -3
+curl -s https://qellysbook.com/data/bookreport.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('generated_at'), d.get('window_days'), 'days'); [print(b['book'], b['mae_pts'], b['n'], 'ranked' if b['ranked'] else 'unranked') for b in d.get('books') or []]"
+```
+
+The same measure on the box, now, without waiting for the chores
+(read-only — it computes and prints, it publishes nothing; about a minute,
+niced):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import booksharp; d=booksharp.payload(); print(len(d['books']), 'books'); [print(b['book'], b['mae_pts'], b['n'], b['ranked']) for b in d['books'][:10]]"
+```
+
+**The Lab's backtest is a month old.** The public copy was stamped 29
+September and the Lab is meant to replay weekly. These read why — the date
+of the private copy, the Lab's own log from its last attempt, and what the
+chores said when they started it. Read-only; paste them back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/backtest.json')); print(d.get('generated_at'))"
+cd /srv/qellys && ls -la data/cache/weekly_lab.log && tail -8 data/cache/weekly_lab.log
+sudo journalctl -u qellys --since "8 days ago" --no-pager | grep -E "lab:|engine.lab" | tail -8
+```
+
+**Discord, if you want the site's own posts on** (the audit's first "needs
+you"). Nothing has ever posted: no webhook is set. In Discord, Server
+Settings → Integrations → Webhooks → New Webhook, one on a public
+`#record` channel and one on a members-only `#picks` channel; copy each
+URL. Each command below asks for its URL and reads it silently (writes):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_DISCORD_RECORD_WEBHOOK
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_DISCORD_PICKS_WEBHOOK
+sudo systemctl restart qellys
+```
+
+If `#picks` is not members-only, add `cd /srv/qellys && sudo ./deploy/setenv.sh
+QB_DISCORD_PICKS_DETAIL 0` before the restart: that channel then gets
+counts and never a pick (the Pick of the Day is free either way). After
+the next cycle, read-only — `record` and `picks` read `True` and the
+Discord page stops saying the posts are off:
+
+```
+curl -s https://qellysbook.com/data/community.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('generated_at'), d.get('channels'))"
+```
+
+The check in one go (everything above except the Discord lines that write):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IK 2>&1 | tee /tmp/ik.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

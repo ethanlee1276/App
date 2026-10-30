@@ -85,9 +85,10 @@ def test_the_intel_page_renders_the_divergence_strip():
 # --- the book report card ----------------------------------------------------
 
 def _history():
-    """Ten series, two books: SharpBook opens at what becomes the close,
-    SlowBook opens well off it and drifts in — the exact shape the card
-    exists to expose."""
+    """Twelve series, two books, written the way the journal writes them (a
+    row per book, one time per snapshot): SharpBook opens at what becomes
+    the close, SlowBook opens well off it and drifts in — the exact shape
+    the card exists to expose."""
     rows = []
     for i in range(12):
         player = f"P{i}"
@@ -95,9 +96,9 @@ def _history():
                                            (-110, -110)]):
             base = 1_000 + i * 100 + t * 10
             rows.append({"ts": base, "player": player, "market": "hits",
-                         "book": "SharpBook", "line": 1.5, "odds": sharp})
-            rows.append({"ts": base + 1, "player": player, "market": "hits",
-                         "book": "SlowBook", "line": 1.5, "odds": slow})
+                         "book": "SharpBook", "line": 1.5, "over_odds": sharp})
+            rows.append({"ts": base, "player": player, "market": "hits",
+                         "book": "SlowBook", "line": 1.5, "over_odds": slow})
     return rows
 
 

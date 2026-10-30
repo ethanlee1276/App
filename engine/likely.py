@@ -503,8 +503,11 @@ def _locked(h: dict, why: str, stamp: str, now_prob=None) -> dict:
     r.pop("out_why", None)
     then = h.get("first_prob", h.get("model_prob"))
     if now_prob is not None:
+        # Rounded once, before the note reads it: a note written from
+        # 0.53499 said 53% beside a tile showing 0.535 as 54%.
+        now_prob = round(float(now_prob), 4)
         r["first_prob"] = then
-        r["model_prob"] = round(float(now_prob), 4)
+        r["model_prob"] = now_prob
     r["locked"] = True
     r["lock_why"] = why
     r["lock_note"] = lock_note(why, now=now_prob, then=then if now_prob is not None else None)

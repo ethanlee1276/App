@@ -222,17 +222,17 @@ def test_the_book_report_streams_because_the_daily_chores_run_it():
     """engine/booksharp sat in the list above as "a one-off report", but
     `payload()` runs in the DAILY CHORES (engine/maintenance, the book
     report card) — and its `load_history()` was the ~1.15 GB the kernel
-    killed ten times on the box, 2026-10-07. It streams now, and its
-    series keep only each snapshot's time and prices."""
+    killed ten times on the box, 2026-10-07. It streams now (four weeks of
+    it, from `stream_since`), and its series keep only each snapshot's time
+    and prices — one snapshot's books merged, the rest of the row dropped."""
     import inspect
     from engine import booksharp
     src = inspect.getsource(booksharp.payload)
-    assert "stream_history()" in src and "load_history()" not in src
-    rows = iter([{"ts": 1, "player": "P", "market": "m", "side": "over",
-                  "books": {"a": {"odds": -110}, "b": {"odds": -120}}, "big": "x" * 1000}])
-    got = booksharp._series(rows)
-    (key, items), = got.items()
-    assert key == ("P", "m", "over") and items == [(1.0, {"a": -110, "b": -120})], items
+    assert "stream_since(" in src and "load_history()" not in src
+    rows = iter([{"ts": 1, "player": "P", "market": "m", "book": b, "line": 1.5,
+                  "over_odds": o, "big": "x" * 1000} for b, o in (("a", -110), ("b", -120))])
+    got = list(booksharp._closed_series(rows))
+    assert got == [[(1.0, {"a": -110, "b": -120})]], got
 
 
 def test_the_settle_path_streams_even_though_it_keeps_everything():

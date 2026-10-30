@@ -111,6 +111,55 @@ def test_the_handoff_keeps_the_price_on_a_posted_pick_and_the_list_shows_it():
     assert board["price_trust"]["moved"] == 1 and board["price_trust"]["posted"] == 1
 
 
+LOW = [{"book": b, "line": 6.5, "over_odds": o, "under_odds": u}
+       for b, o, u in (("draftkings", 120, -150), ("fanduel", 115, -145), ("betmgm", 125, -155))]
+
+
+def _posted_under_the_bar(now=0.52):
+    """A pick posted at 70% whose chance today is under the bar: its note
+    says the number (likely.lock_note, "now 52%")."""
+    from engine import likely
+    return likely._locked(_row(prob=0.70), "eased under the floor", "2026-10-29T12:00:00", now_prob=now)
+
+
+def test_a_posted_picks_note_says_the_chance_its_tile_shows():
+    """THE NFL SELF-CHECK'S ONE FLAG (heartbeat, 2026-10-29: LOCK NOTE 1).
+    The note was written when the pick was carried forward; the price rule
+    then moved the chance, and the tile showed the price's number beside a
+    note still giving ours."""
+    from engine import boardtruth
+    r = _posted_under_the_bar()
+    assert "now 52%" in r["lock_note"]
+    assert LB.trust_price([r], _result([], LOW), "nfl") == 1
+    shown = round(r["model_prob"] * 100)
+    assert shown < 52 and f"now {shown}%" in r["lock_note"], r["lock_note"]
+    assert "down from 70%" in r["lock_note"], "the reason and the posted number stay"
+    assert boardtruth.check({"most_likely": [r]})["by_check"].get("LOCK NOTE") is None
+
+
+def test_the_handoff_restates_the_note_on_the_list_row_too():
+    """`harmonize` hands the board's price-judged number to the list row;
+    the list row's note follows it."""
+    from engine import boardtruth
+    listed = _posted_under_the_bar()
+    res = _result([listed], LOW)
+    board = LB.build(res, sport="nfl", calibration={}, band_verdict=None)
+    res["likely_board"] = board
+    LB.harmonize(res)
+    assert listed["model_prob"] < 0.52
+    assert f"now {round(listed['model_prob'] * 100)}%" in listed["lock_note"], listed["lock_note"]
+    assert boardtruth.check({"most_likely": [listed]})["by_check"].get("LOCK NOTE") is None
+
+
+def test_the_note_and_the_tile_round_the_same_number():
+    """Written from 0.53499 the note said 53%; the tile shows the row's
+    0.535 as 54%. One rounding, before either reads it."""
+    from engine import boardtruth
+    r = _posted_under_the_bar(now=0.53499)
+    assert f"now {round(r['model_prob'] * 100)}%" in r["lock_note"], (r["model_prob"], r["lock_note"])
+    assert boardtruth.check({"most_likely": [r]})["by_check"].get("LOCK NOTE") is None
+
+
 def test_the_counts_say_where_a_pick_without_a_field_fell():
     stats = {}
     rows = [_row(prob=0.80), dict(_row(prob=0.80), line=9.5), dict(_row(prob=0.80), player="Nobody Quoted")]

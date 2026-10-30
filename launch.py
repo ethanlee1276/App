@@ -8833,10 +8833,11 @@ def show_booksharp() -> None:
 
     Today the hierarchy is a hand-written LIST (`oddsapi.SHARP_BOOKS`).
     This measures it: per book, how far its early price sat from the
-    closing consensus, and how often it moved first. Reports only.
+    closing consensus, and how often it moved first. Reports only. The
+    whole journal, one snapshot at a time (the card reads four weeks).
     """
     from engine import booksharp, linemoves
-    print(booksharp.report(linemoves.load_history()))
+    print(booksharp.report(linemoves.stream_history()))
 
 
 def show_redistribution(team=None, player=None, kind="targets",

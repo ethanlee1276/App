@@ -313,7 +313,7 @@ def stream_history(path: str | Path | None = None):
     `read_text()` — one string — then `.splitlines()` for a second full
     copy, then parses every line into a dict and keeps all of them. That is
     the right shape for the callers that genuinely need the whole list
-    (`closing_lines_by_date`, `booksharp.report`), and it is a catastrophe
+    (`closing_lines_by_date`; `booksharp` streams), and it is a catastrophe
     for the ones that immediately throw almost all of it away.
 
     `nfl_build` was the worst case: `todays_rows(load_history())` twice per

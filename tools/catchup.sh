@@ -661,6 +661,17 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IK "The audit: the book report card, the Lab's date, Discord" 240 <<'SH'
+curl -s https://qellysbook.com/js/more.js | grep -c 'days of our line history'
+curl -s https://qellysbook.com/js/more.js | grep -c 'c.step === "starting" ? "starting"'
+sudo journalctl -u qellys --since "26 hours ago" --no-pager | grep -E "book report" | tail -3
+curl -s https://qellysbook.com/data/bookreport.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('generated_at'), d.get('window_days'), 'days'); [print(b['book'], b['mae_pts'], b['n'], 'ranked' if b['ranked'] else 'unranked') for b in d.get('books') or []]"
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import booksharp; d=booksharp.payload(); print(len(d['books']), 'books'); [print(b['book'], b['mae_pts'], b['n'], b['ranked']) for b in d['books'][:10]]"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/backtest.json')); print(d.get('generated_at'))"
+cd /srv/qellys && ls -la data/cache/weekly_lab.log && tail -8 data/cache/weekly_lab.log
+sudo journalctl -u qellys --since "8 days ago" --no-pager | grep -E "lab:|engine.lab" | tail -8
+curl -s https://qellysbook.com/data/community.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('generated_at'), d.get('channels'))"
+SH
 run IJ "The Pick of the Day is free" 60 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function renderPotdPage(...a)'
 curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdPageHTML(top, rec, walled)'
