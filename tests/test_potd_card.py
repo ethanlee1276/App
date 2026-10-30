@@ -37,7 +37,9 @@ def _fn(name):
 
 
 def _card():
-    return _fn("renderPickOfTheDay")
+    # The card and the words it names its bet in (potdBetText, shared with
+    # the Pick of the Day page since 2026-10-30).
+    return _fn("renderPickOfTheDay") + _fn("potdBetText")
 
 
 def _run_section(rep, scope, recent=None):

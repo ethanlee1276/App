@@ -6294,6 +6294,7 @@ body.has-deck #rail-live { display: none; }
    the markup and every field are the ones test_potd_card pins. */
 .potd-hero .player { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--brand-2); }
+.potd-hero .player a { color: inherit; }
 .potd-hero .potd-call.is-bet, .potd-hero .potd-call.is-pass { display: inline-flex; align-self: flex-start;
   margin-top: 6px; padding: 5px 11px; border-radius: 999px; }
 .potd-hero .potd-bet { font-family: var(--font-headline); font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 700; }

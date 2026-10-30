@@ -34,7 +34,7 @@ const GLOSSARY = [
   ["Edge", "Our chance minus the chance the price implies, in percentage points. +4 means we think it hits four points more often than the price says."],
   ["EV", "Expected value: what one unit returns on average at this price if our chance is right. +5% means five cents per dollar staked, over many bets."],
   ["Worth a look", "Close to the bar but not over it. Shown so you can see what nearly made it; never staked."],
-  ["Pick of the Day", "The single strongest pick across every league, chosen once a day and graded in its own book."],
+  ["Pick of the Day", "One bet a day in each league, priced against a sharp book’s fair — never our model alone — and graded in its own book. Free for everyone; the strongest of them is the day’s Top Pick."],
   ["Riding", "A bet already placed on an earlier pull. It rides at the price it was taken at, even if today’s price no longer clears the bar."],
   ["Journaled", "Written to the record at the moment it is published, at the price shown, with a timestamp that cannot be changed afterwards."],
   ["u (unit)", "One standard stake. Results are in units so they read the same whatever your bankroll."],

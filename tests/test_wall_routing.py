@@ -153,7 +153,14 @@ def test_the_pages_that_stay_open_are_named_once():
                           # set: the tab bar there with Live, not a wall
                           # screen (tests/test_the_free_side_opens_its_
                           # reference_pages.py). The Lab stays walled.
-                          "why", "about", "features", "methodology", "status", "alerts"}, open_
+                          "why", "about", "features", "methodology", "status", "alerts",
+                          # The Pick of the Day, every league (2026-10-30,
+                          # Ethan: "make the picks of the day free. just the
+                          # pick of the day"): the public file carries the
+                          # pick and no members' half (gate.free_potd); a free
+                          # account's Home lands on it, tab bar and all, in a
+                          # browser (tests/test_the_pick_of_the_day_is_free).
+                          "potd"}, open_
 
 
 def test_every_open_page_is_a_real_view():

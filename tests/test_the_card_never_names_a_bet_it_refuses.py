@@ -98,6 +98,9 @@ def render(payload, sport="mlb", top=None):
       _els[id] = {{ innerHTML: "", textContent: "", querySelector: () => null }};
     }}
     {_fn("renderDayTopPick")}
+    const teamNameIn = (sp, t) => teamName(t);
+    {_fn("potdBetText")}
+    {APP[APP.index("const POTD_ALL = "):APP.index(chr(10), APP.index("const POTD_ALL = "))]}
     {_fn("renderPickOfTheDay")}
     renderPickOfTheDay().then(() => console.log(JSON.stringify(
       [_els["potd-zone"].innerHTML, _els["potd-top-pick"].innerHTML])));

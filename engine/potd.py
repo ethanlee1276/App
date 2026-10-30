@@ -2040,7 +2040,11 @@ def attach(result: dict, sport: str, now=None, cut=None,
 #: order so that two picks identical on every measured quantity resolve
 #: the same way on every run, instead of the answer depending on which
 #: board finished writing first.
-TOP_PICK_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba")
+TOP_PICK_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+# HOCKEY AND THE FIGHT CARD JOINED ON 2026-10-30. Both have named a Pick of
+# the Day since October (`nhl_build`, `ufc_build` call `attach`), and the
+# day's top pick — "across every league" — had never looked at either: the
+# list was written on 2026-09-15, before either board existed.
 
 
 def _pick_is_today(pick_of_the_day: dict, today: str) -> bool:
@@ -2054,8 +2058,24 @@ def _pick_is_today(pick_of_the_day: dict, today: str) -> bool:
     present it as today's, and nothing about the card would look wrong. This is the same shape as the stale price ceiling
     (`oddsapi.price_is_showable`) one layer up.
     """
-    got = str((pick_of_the_day or {}).get("date") or "").strip()
+    got = card_day(pick_of_the_day)
     return bool(got) and got == str(today or "").strip()
+
+
+def card_day(card: dict) -> str:
+    """The calendar day a card is for.
+
+    Its `date` when that IS a day — and the day it was judged on when the
+    board is dated by WEEK. The NFL's board carries "2026-W08", so the
+    plain comparison above refused every NFL card: from 2026-09-15 to
+    2026-10-30 the day's top pick, "across every league", could not come
+    from the NFL on any day (found in the 2026-10-30 audit). `decided_at`
+    is the reading `carry` keeps, stamped when it was taken."""
+    card = card or {}
+    got = str(card.get("date") or "").strip()
+    if len(got) == 10 and got[4] == "-" and got[7] == "-":
+        return got
+    return _stamp_day(card.get("decided_at") or card.get("generated_at"))
 
 
 def day_top_pick(boards: dict, today: str, now=None, locked=None) -> dict:
@@ -2190,6 +2210,15 @@ def day_top_pick(boards: dict, today: str, now=None, locked=None) -> dict:
         "band": [MIN_ODDS, effective_max_odds()],
         "min_ev": MIN_EV,
     }
+    # EVERY LEAGUE'S OWN CARD, BESIDE THE ONE THAT WON (2026-10-30, the
+    # day the pick went free): the Pick of the Day page draws them all from
+    # this one small file rather than fetching seven boards. A card is in
+    # when it is for today or a day to come — the fight card's is dated for
+    # its event — and a league out of season, whose card is from whenever
+    # it last ran, is left out rather than shown as today's.
+    out["leagues"] = {s: b["pick_of_the_day"] for s, b in seen
+                      if isinstance(b, dict) and isinstance(b.get("pick_of_the_day"), dict)
+                      and b["pick_of_the_day"] and card_day(b["pick_of_the_day"]) >= str(today or "")}
     winner = clear[0] if clear else (below[0] if below else None)
     if winner is None:
         out["pick"] = None

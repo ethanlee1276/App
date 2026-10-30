@@ -2267,7 +2267,7 @@ function pwDoorsHTML(status, trialDays) {
   const best = PLANS.find((p) => p.id === bestValuePlanId(PLANS));
   const li = (t) => `<li>${iconMark("check", 13)}<span>${escapeHtml(t)}</span></li>`;
   return `<div class="pw-doors" role="region" aria-labelledby="pw-doors-h">
-    <h1 class="pw-doors-h" id="pw-doors-h">Free to watch. <em>Members get the picks.</em></h1>
+    <h1 class="pw-doors-h" id="pw-doors-h">Free to watch, with a pick a day. <em>Members get every pick.</em></h1>
     <div class="pw-doors-row">
       <article class="pw-door free">
         <div class="pw-door-top"><b>Free account</b>${signed ? `<span class="pw-door-you">You have this</span>` : ""}</div>
@@ -2426,7 +2426,7 @@ function pwWhyHTML() {
   const v = typeof _wallFrom === "string" ? _wallFrom : "";
   if (!v) return "";
   const [h, p] = PW_WHY[v] || ["That page is for members",
-    "Members get the picks, every board and the tools. Your free account keeps every game live."];
+    "Members get every pick, every board and the tools. Your free account keeps every game live and the Pick of the Day."];
   return `<div class="pw-why" role="status">${iconMark("lock", 16)}<div><b>${escapeHtml(h)}</b>
     <p>${escapeHtml(p)}</p></div></div>`;
 }
@@ -2963,13 +2963,16 @@ function flTonightHTML(fl) {
 /* Free beside Member. Each free line is a page WALL_OPEN opens and each
    member line is one PLAN_FEATURES sells; nothing here is new. */
 const FL_ROWS = [
+  // Free since 2026-10-30 (Ethan: "make the picks of the day free. just the
+  // pick of the day"): the one pick, in every league — js/potd.js.
+  ["The Pick of the Day, every league, with its record", 1],
   ["Every game live — scores, play-by-play and stats", 1],
   ["A chat for every game, a thread on every play", 1],
   ["Call it, and your players’ lines live", 1],
   ["Fantasy lineups and start/sit help, your bet tracker", 1],
   ["Alerts for your teams: kickoff, big moments, final scores", 1],
   ["The Record — every pick we post, graded", 1],
-  ["Tonight’s picks, props and parlays, before the game", 0],
+  ["Every other pick tonight — props, parlays, the whole board", 0],
   ["Most Likely — every pick, tiered by its chance", 0],
   ["Ask Qellys, the AI, on any team or player", 0],
   ["Zeno’s bets as he places them, verified on Pikkit", 0],
@@ -3099,7 +3102,7 @@ function signupHTML() {
   ${why ? `<p class="fsu-why" role="status">${iconMark("lock", 14)}<span>${escapeHtml(why)}</span></p>` : ""}
   <div class="welcome-hero">
     <h1 class="welcome-h">Every game, live. Every pick, graded.</h1>
-    <p class="fsu-sub">Your free account opens every game, its chat and Call it. Members get the picks.</p>
+    <p class="fsu-sub">Your free account opens every game, its chat, Call it and the Pick of the Day. Members get every pick.</p>
     <div class="fl-proof-host">${flProofHTML(_fl)}</div>
   </div>
   <div class="fl-host">${flTonightHTML(_fl)}</div>

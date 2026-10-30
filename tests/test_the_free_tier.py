@@ -77,9 +77,14 @@ def test_no_page_that_lists_picks_is_open():
 def test_the_paid_boards_are_still_paid():
     """The free tier changed the pages, not the gate: every key a pick
     lives under is still stripped from the public copy."""
-    for key in ("recommendations", "most_likely", "likely_board", "pick_of_the_day",
+    for key in ("recommendations", "most_likely", "likely_board", "live_potd",
                 "game_bets", "long_shots", "matchup_picks", "market_scan"):
         assert key in gate.PAID_KEYS, f"{key} came off the paid list"
+    # The one exception, by Ethan's word (2026-10-30: "make the picks of the
+    # day free. just the pick of the day"): the card is free, its members'
+    # half is not (gate.free_potd, tests/test_the_pick_of_the_day_is_free).
+    assert "pick_of_the_day" not in gate.PAID_KEYS
+    assert gate.POTD_MEMBERS_ONLY == ("board_best", "board_staked")
     assert "zeno.json" in gate.PAID_FILES
     assert gate.PAID_KEYS_BY_FILE["fantasy.json"] == ("scripts",), \
         "only the fantasy room's opinions opened; the game scripts are sold by name"
@@ -97,7 +102,8 @@ def test_the_apps_chrome_hides_only_on_the_walls_own_screens():
 
 def test_every_paid_tab_is_marked_locked_and_none_of_the_free_ones():
     body = _fn(APP, "markLockedNav")
-    assert '"nav-locked", walled && !WALL_OPEN.includes(b.dataset.view || b.dataset.sport || "recommended")' in body
+    assert '"nav-locked", walled && b.dataset.view !== "recommended"' in body, "Home is the free pick's door"
+    assert '&& !WALL_OPEN.includes(b.dataset.view || b.dataset.sport || "recommended")' in body
     assert ".nav-locked::after" in CSS and "--ic-lock" in CSS
     i = APP.index('document.body.classList.add("walled");')
     assert "markLockedNav();" in APP[i:i + 80], "the wall goes up and the tabs are not marked"

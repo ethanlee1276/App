@@ -2,6 +2,24 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-10-30",
+      "kind": "ship",
+      "title": "The Pick of the Day is free",
+      "body": "One bet a day in every league is now free for everyone: a free account's Home opens the Pick of the Day page, every league's card side by side with the day's top pick first — the call, the bet, the price and the book, the sharp fair it was priced against, and each league's record. The rest of the board stays with membership, and so do the board's best bet on a day the pick sits out and the pick tracked live with its chance to cash."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "fix",
+      "title": "The day's top pick looks at every league",
+      "body": "Today's Top Pick is meant to be the strongest Pick of the Day across every league, and it never considered three of them. The NFL's board is dated by week, so its card never read as today's; hockey and the fight card, which have named picks since October, were not on its list. All seven leagues are ranked now."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "fix",
+      "title": "The Discord feed posts only a pick we would bet",
+      "body": "The picks channel checked a field the Pick of the Day never carried, so on a day the card said NO BET it could post the declined lean as the day's pick. It now posts only a card that says BET, and links to the free Pick of the Day page."
+    },
+    {
       "date": "2026-10-29",
       "kind": "ship",
       "title": "The NBA Cup, group by group",

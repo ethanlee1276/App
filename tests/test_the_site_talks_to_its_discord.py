@@ -110,7 +110,10 @@ def _board(today="2026-10-13"):
                                       dict(pick, player="K. Shakir", market="receptions", line=3.5, tier="look")]},
             "recommendations": [dict(pick, recommended=True), dict(pick, recommended=False)],
             "game_bets": [{"kind": "game", "pick_label": "BUF −6.5", "market": "spread", "odds": -110, "recommended": True}],
-            "pick_of_the_day": {"date": today, "pick": pick, "verdict": {"bet": True, "say": "Allen at home, soft pass defence."}}}
+            # The card in the engine's own shape (potd.build / verdict).
+            "pick_of_the_day": {"date": today, "pick": dict(pick, fair_prob=0.56, evidence="sharp",
+                                                            price_implied=0.524, below_bar=""),
+                                "verdict": {"call": "bet", "stake": 1.0, "why": ""}}}
 
 
 def test_the_board_and_the_pick_of_the_day_post_once_a_day_with_the_detail_the_channel_allows():
@@ -123,8 +126,9 @@ def test_the_board_and_the_pick_of_the_day_post_once_a_day_with_the_detail_the_c
     assert "1 game today: 3 Most Likely picks (1 Top, 1 Strong, 1 Worth a look) · 2 Edge picks." in board
     assert "Top: Josh Allen over 249.5 passing yards (−110)" in board
     potd = next(t for u, t in posts if t.startswith("**Pick of the Day"))
-    assert "Josh Allen over 249.5 passing yards (−110) at DraftKings — we say 61%" in potd
-    assert "Allen at home, soft pass defence." in potd
+    assert "Josh Allen over 249.5 passing yards (−110) at DraftKings" in potd
+    assert "56% — the sharp book’s fair; this price implies 52%" in potd
+    assert "Free for everyone, with its record: https://qellysbook.com/#potd" in potd
     again = D.run(conn, NOW + dt.timedelta(minutes=15), env=ENV, boards={"nfl": _board()}, post_fn=posts,
                   state_path=d / "s.json")
     assert again["posted"] == []
@@ -132,13 +136,30 @@ def test_the_board_and_the_pick_of_the_day_post_once_a_day_with_the_detail_the_c
     posts2 = Posts()
     D.run(conn, NOW, env=dict(ENV, QB_DISCORD_PICKS_DETAIL="0"), boards={"nfl": _board()}, post_fn=posts2,
           state_path=d / "s2.json")
-    texts = "\n".join(t for u, t in posts2)
-    assert "Josh Allen" not in texts and "is locked — members see it" in texts and "3 Most Likely picks" in texts
+    texts = "\n".join(t for u, t in posts2 if not t.startswith("**Pick of the Day"))
+    assert "Josh Allen" not in texts and "3 Most Likely picks" in texts
+    # …but the Pick of the Day, which is free since 2026-10-30, is named.
+    free = next(t for u, t in posts2 if t.startswith("**Pick of the Day"))
+    assert "Josh Allen over 249.5" in free and "%" not in free.split("\n")[0]
     # No games today: no board post, and a Pick of the Day dated another day stays quiet.
     posts3 = Posts()
     out = D.run(conn, NOW, env=ENV, boards={"nfl": _board(today="2026-10-19")}, post_fn=posts3,
                 state_path=d / "s3.json")
     assert not any(k.startswith(("board", "potd")) for k in out["posted"])
+
+
+def test_a_declined_lean_is_never_posted_as_the_pick():
+    """The engine shows its nearest miss on a day nothing cleared, under
+    `below_bar`, with the call NO BET; the feed read a `verdict.bet` that
+    never existed and posted it as the day's pick."""
+    conn, d = _ledger()
+    posts = Posts()
+    b = _board()
+    b["pick_of_the_day"]["pick"]["below_bar"] = "the gap is too big to trust"
+    b["pick_of_the_day"]["verdict"] = {"call": "no bet", "stake": 0.0, "why": "the gap is too big to trust"}
+    out = D.run(conn, NOW, env=ENV, boards={"nfl": b}, post_fn=posts, state_path=d / "s.json")
+    assert not any(k.startswith("potd") for k in out["posted"])
+    assert not any(t.startswith("**Pick of the Day") for u, t in posts)
 
 
 def test_a_long_shot_that_cashed_posts_once():

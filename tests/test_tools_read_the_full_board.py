@@ -420,15 +420,23 @@ def _paywalled_likely(sport="nfl", rows=None, day=None, below_bar=""):
 
 def test_the_public_copy_loses_the_likelihood_board_too():
     """The premise, stated the same way as the one at the top of this
-    file: if `most_likely` or `pick_of_the_day` ever stops being paid,
-    this says so rather than letting the rest pass for a wrong reason."""
+    file: if `most_likely` ever stops being paid, or a lean in the Pick of
+    the Day's place reaches the public copy, this says so rather than
+    letting the rest pass for a wrong reason. (The pick itself went free on
+    2026-10-30 — Ethan: "make the picks of the day free" — so a BET is on
+    both copies; the declined lean these tests read is on the full one.)"""
     tmp = _paywalled_likely()
     pub = json.loads((tmp / "web" / "data" / "recommendations.json").read_text())
     full = json.loads((tmp / "data" / "built" / "recommendations.json").read_text())
     assert pub.get("most_likely") == [], pub.get("most_likely")
-    assert not (pub.get("pick_of_the_day") or {}).get("pick"), pub
+    assert (pub.get("pick_of_the_day") or {}).get("pick"), "the free pick was stripped"
     assert len(full["most_likely"]) == 1
     assert full["pick_of_the_day"]["pick"]
+    lean = _paywalled_likely(below_bar="the price drifted past the band")
+    pub = json.loads((lean / "web" / "data" / "recommendations.json").read_text())
+    full = json.loads((lean / "data" / "built" / "recommendations.json").read_text())
+    assert not (pub.get("pick_of_the_day") or {}).get("pick"), pub
+    assert full["pick_of_the_day"]["pick"]["below_bar"]
 
 
 def test_the_potd_report_does_not_call_a_full_board_empty():
@@ -498,7 +506,7 @@ def test_both_potd_readers_resolve_through_board_source():
     the resolution with it."""
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     fn = src.split("def _write_day_top_pick", 1)[1].split("\ndef ", 1)[0]
-    assert "board_source(ROOT / BOARD_FILES[sport])" in fn, fn[:400]
+    assert "board_source(ROOT / POTD_BOARD_FILES[sport])" in fn, fn[:400]
     rep = open(os.path.join(ROOT, "potd_report.py"), encoding="utf-8").read()
     paths = rep.split("def board_paths", 1)[1].split("\ndef ", 1)[0]
     assert "gate.board_source" in paths, paths[:400]

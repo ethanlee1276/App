@@ -56,7 +56,8 @@ def test_the_page_opens_on_two_doors_ahead_of_the_pitch():
     out = _doors({"signed_in": False}, 3)
     assert out.index('<article class="pw-door free">') < out.index('<article class="pw-door mem">'), "the free side first"
     assert 'data-act="acctGoSignup">Create a free account</button>' in out
-    assert "Every game live" in out and "Tonight’s picks" in out
+    assert "Every game live" in out and "The Pick of the Day, every league" in out
+    assert "Every other pick tonight" in out, "the members' side names the rest of the board"
     assert 'data-act="pwToPlans">Start 3 days free</button>' in out, "to the plan card's fine print, not checkout"
     assert "$25 a month · 3 days free · or $18.75 a month yearly" in out
 

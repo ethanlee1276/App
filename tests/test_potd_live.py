@@ -124,16 +124,16 @@ def test_a_tracked_pick_is_named_in_the_build_log():
 
 # --- the paywall --------------------------------------------------------------
 def test_the_live_pick_is_behind_the_wall():
-    """`live_potd` is `pick_of_the_day` with a score beside it. Both are
-    the product."""
+    """`live_potd` is `pick_of_the_day` with a score and our live chance
+    beside it. The pick went free on 2026-10-30; following it live did not."""
     assert "live_potd" in gate.PAID_KEYS
-    assert "pick_of_the_day" in gate.PAID_KEYS
+    assert "pick_of_the_day" not in gate.PAID_KEYS
     board = {"date": "2026-09-16", "live_potd": [{"player": "TOR ML"}],
              "pick_of_the_day": {"pick": {"player": "TOR ML"}},
              "games": [{"home": "SEA"}]}
     out = gate.redact(board, "mlb_picks.json")
     assert not out.get("live_potd"), "the running pick is published free"
-    assert not out.get("pick_of_the_day")
+    assert out["pick_of_the_day"]["pick"] == {"player": "TOR ML"}, "the free pick was stripped"
     # AND THE FREE FACTS STAY FREE. A guard that strips the board is not
     # a paywall, it is an outage.
     assert out.get("games") == [{"home": "SEA"}]

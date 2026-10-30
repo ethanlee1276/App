@@ -228,7 +228,9 @@ def test_the_sample_says_won_or_lost_as_it_happened():
 
 def test_the_free_lines_are_free_pages_and_the_member_lines_are_sold():
     rows = ACCOUNT[ACCOUNT.index("const FL_ROWS = ["):ACCOUNT.index("];", ACCOUNT.index("const FL_ROWS = ["))]
-    assert rows.count(", 1],") == 6 and rows.count(", 0],") == 6
+    # Seven free since 2026-10-30: the Pick of the Day joined them.
+    assert rows.count(", 1],") == 7 and rows.count(", 0],") == 6
+    assert '["The Pick of the Day, every league, with its record", 1]' in rows
     assert "Ask Qellys" in rows and "Zeno’s bets" in rows and "The members’ Discord" in rows
 
 

@@ -224,7 +224,11 @@ def test_the_paywall_strips_the_link_with_the_pick():
             os.environ.pop(gate.ENV_ENABLED, None)
         else:
             os.environ[gate.ENV_ENABLED] = keep
+    # Every paid row loses its link with the row; the Pick of the Day, which
+    # is free since 2026-10-30, keeps its own — it is what its Bet it opens.
+    free = public.pop("pick_of_the_day")
     assert "bet_link" not in json.dumps(public) and public.get("games")
+    assert free["pick"]["player"] == "Josh Allen" and free["pick"].get("bet_links")
 
 
 def test_the_odds_request_asks_for_links_and_banks_them():

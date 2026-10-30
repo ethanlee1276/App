@@ -129,11 +129,14 @@ PAID_KEYS = (
     # below already names it: key-stripping only protects boards whose
     # keys were anticipated. A new view of a paid board is a new key.
     "board_shelves",
-    # THE PICK OF THE DAY. One pick, at the top of the page, which is
-    # the single most valuable row the site publishes on a given day —
-    # the thing somebody would subscribe for on its own. A free copy of
-    # it is the whole product given away in one key.
-    "pick_of_the_day",
+    # THE PICK OF THE DAY IS NOT HERE ANY MORE (Ethan, 2026-10-30: "make
+    # the picks of the day free. just the pick of the day. not the best bet
+    # or anything like that"). It was, as "the single most valuable row the
+    # site publishes on a given day"; it is now the one pick a reader
+    # without a plan is given, and `free_potd` below is its public copy —
+    # the pick on a day it names one, and never the card's members' half:
+    # the board's best bet on a day it sits out (`board_best`), the lean
+    # it declined, or the live tracker (`live_potd`, still listed).
     "market_scan",
     "correlation",
     "parlays",
@@ -213,8 +216,9 @@ PAID_KEYS = (
     # THE PICK OF THE DAY WHILE ITS GAME RUNS, shipped 2026-09-16 under a
     # key of its own (`livepicks.POTD_TRACKER_CATEGORIES` says why it is
     # not folded into `live_picks`). It carries the player, market, side,
-    # line and the price we took — which is `pick_of_the_day`, forty
-    # lines up and paid, with a score beside it.
+    # line and the price we took — `pick_of_the_day` with a score and our
+    # live chance beside it. The pick went free on 2026-10-30; following it
+    # play by play with that chance stayed a member's.
     #
     # THE FIFTH TIME THIS FILE HAS BEEN TAUGHT THE SAME LESSON —
     # predmarkets, UFC's picks/pass_list, board_shelves, likely_parlays,
@@ -292,15 +296,9 @@ def paid_keys_for(name: str = "") -> tuple:
 PAID_FILES = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json",
-    # THE DAY'S ONE PICK, and not a close call: `pick_of_the_day` is
-    # already in PAID_KEYS above, so the per-league card is paid. This
-    # file is the SAME OBJECT promoted to the top level — the single
-    # highest-ranked pick on the site, with nothing else in the file to
-    # strip. Registering it free would have handed over the headline
-    # product to everyone, and it would have looked like an ordinary new
-    # board while doing it. The gate asks the question by name for
-    # exactly this reason.
-    "day_top_pick.json",
+    # `day_top_pick.json` was here, paid whole, while the per-league card
+    # was paid. It is the same object promoted to the top level, so it went
+    # free with the card on 2026-10-30 — see MIXED_FILES and `free_top_pick`.
     # The live feed: every entry names a pick — an edge appearing IS a
     # recommendation — so the whole file is the model's output.
     "feed.json",
@@ -483,10 +481,9 @@ KNOWN_BOARDS = (
     "rosters_nhl.json", "nhl_lines.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json", "standings_nhl.json",
-    # The day's one pick across every league, written by the refresh
-    # cycle rather than by a build (launch._write_day_top_pick). PAID —
-    # see PAID_FILES below, and the note there about why this one is not
-    # a close call.
+    # The day's one pick across every league, and since 2026-10-30 every
+    # league's card beside it, written by the refresh cycle rather than by
+    # a build (launch._write_day_top_pick). Mixed: see MIXED_FILES.
     "day_top_pick.json",
 )
 
@@ -504,6 +501,9 @@ MIXED_FILES = (
     # The College Football Playoff race and the NBA Cup: free standings, a
     # paid model half (PAID_KEYS_BY_FILE).
     "cfp_race.json", "nba_cup.json",
+    # The day's top pick and every league's Pick of the Day: free picks,
+    # members' leans and best bets (`free_top_pick`).
+    "day_top_pick.json",
     # Each row's points are free and its workings paid, per row rather than
     # per key: ROW_PAID_KEYS_BY_FILE.
     "fantasy_week.json", "fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json",
@@ -605,6 +605,70 @@ def _size(value) -> int:
     return 1 if value not in (None, "", 0, False) else 0
 
 
+#: THE PICK OF THE DAY'S MEMBERS' HALF. Ethan, 2026-10-30: "make the picks
+#: of the day free. just the pick of the day. not the best bet or anything
+#: like that." So a card's public copy keeps the call, the pick on a day it
+#: names one, its numbers and its reasons — and loses the board's best bet
+#: on a day the pick sits out (`potd.board_best`, with its count), which is
+#: the board, not the pick.
+POTD_MEMBERS_ONLY = ("board_best", "board_staked")
+
+#: What a reader without a plan is told on a day the card declined a lean.
+#: The lean's own reason can name it — a fight card's veto names the
+#: fighter the card's model picks — so the public copy says the fact alone.
+LEAN_WHY = "nothing on the board cleared the bar today"
+
+
+def _is_lean(pick) -> bool:
+    return isinstance(pick, dict) and bool(str(pick.get("below_bar") or "").strip())
+
+
+def free_potd(card, locked: dict | None = None, where: str = "pick_of_the_day") -> dict:
+    """A Pick of the Day card as everyone may see it.
+
+    THE PICK, ON A DAY IT IS ONE. A card that says BET keeps its pick and
+    every number the card prints about it. A card that declined keeps the
+    call and why — but never the lean it declined (`below_bar`): the page
+    refuses to draw a lean for anyone (`renderPickOfTheDay`), and a lean in
+    the public file would be a row of the board under the pick's name.
+
+    The board's best bet goes on every card, and is counted in `locked` the
+    way every stripped board is, so the page can say members have one."""
+    if not isinstance(card, dict):
+        return {}
+    out = dict(card)
+    if out.get("board_best") and locked is not None:
+        locked[f"{where}.board_best"] = max(1, int(out.get("board_staked") or 1))
+    for k in POTD_MEMBERS_ONLY:
+        out.pop(k, None)
+    if _is_lean(out.get("pick")):
+        out["pick"] = None
+        out["verdict"] = {**(out.get("verdict") if isinstance(out.get("verdict"), dict) else {}),
+                          "call": "no bet", "stake": 0.0, "why": LEAN_WHY}
+    return out
+
+
+def free_top_pick(top: dict, locked: dict | None = None) -> dict:
+    """`day_top_pick.json` as everyone may see it: the day's top pick when
+    it is a bet, the leagues' picks it beat, and every league's card
+    (`leagues`) through `free_potd`. A lean that won the comparison on a day
+    no league cleared goes, as it does from each league's card."""
+    if not isinstance(top, dict):
+        return {}
+    out = dict(top)
+    if _is_lean(out.get("pick")):
+        out["pick"] = None
+        out["sport"] = ""
+        out["verdict"] = {"call": "no bet", "stake": 0.0, "why": LEAN_WHY}
+        out["note"] = "No top pick today: nothing cleared the bar in any league"
+    out["runners_up"] = [p for p in (out.get("runners_up") or [])
+                         if isinstance(p, dict) and not _is_lean(p)]
+    if isinstance(out.get("leagues"), dict):
+        out["leagues"] = {s: free_potd(c, locked, f"leagues.{s}")
+                          for s, c in out["leagues"].items()}
+    return out
+
+
 def redact(payload: dict, name: str = "") -> dict:
     """The public copy of a board: same shape, picks removed, honest about it.
 
@@ -628,6 +692,8 @@ def redact(payload: dict, name: str = "") -> dict:
 
     locked: dict = {}
     out = _strip(payload, paid_keys_for(name), locked)
+    if Path(str(name or "")).name == "day_top_pick.json":
+        out = free_top_pick(out, locked)
     rows = ROW_PAID_KEYS_BY_FILE.get(Path(str(name or "")).name)
     if rows and isinstance(out.get(rows[0]), list):
         cut = [{k: v for k, v in r.items() if k not in rows[1]} if isinstance(r, dict) else r
@@ -690,6 +756,9 @@ def _strip(node: dict, paid, locked: dict, path: str = "") -> dict:
             # An empty list stays an empty list rather than becoming
             # locked: "0 picks tonight" is true and is not a paywall.
             out[key] = [] if isinstance(value, (list, tuple)) else {}
+        elif key == "pick_of_the_day" and isinstance(value, dict):
+            # Free, minus its members' half — at any depth, like the rest.
+            out[key] = _strip(free_potd(value, locked, where), paid, locked, where)
         elif isinstance(value, dict) and not _is_disclosure(key, path):
             out[key] = _strip(value, paid, locked, where)
         else:
@@ -937,9 +1006,25 @@ def _count_paid(node: dict, paid, path: str = "") -> int:
     for key, value in node.items():
         if key in paid:
             n += _rows(value)
+        elif key == "pick_of_the_day" and isinstance(value, dict):
+            # The card is free; its members' half is what `free_potd` takes.
+            n += _potd_members_half(value)
+            n += _count_paid(value, paid, f"{path}.{key}" if path else key)
         elif isinstance(value, dict) and not _is_disclosure(key, path):
             n += _count_paid(value, paid, f"{path}.{key}" if path else key)
+    if not path and "runners_up" in node and isinstance(node.get("leagues"), dict):
+        # `day_top_pick.json`'s shape: its own pick, the picks it beat, and
+        # every league's card — the same three things `free_top_pick` cuts.
+        n += int(_is_lean(node.get("pick")))
+        n += sum(1 for p in node.get("runners_up") or [] if _is_lean(p))
+        n += sum(_potd_members_half(c) for c in node["leagues"].values() if isinstance(c, dict))
     return n
+
+
+def _potd_members_half(card: dict) -> int:
+    """Rows of a Pick of the Day card a reader without a plan must not get:
+    the board's best bet, and a lean in the pick's place."""
+    return int(bool(card.get("board_best"))) + int(_is_lean(card.get("pick")))
 
 
 def _rows(value) -> int:
@@ -1099,8 +1184,16 @@ def leaks(payload: dict, name: str) -> list:
     if not isinstance(payload, dict) or is_free(name) or is_wholly_paid(name):
         return []
     paid = paid_keys_for(name)
+    free = FREE_ROWS_BY_FILE.get(Path(str(name or "")).name, ())
     return sorted(k for k, v in payload.items()
-                  if k not in paid and _looks_staked(v))
+                  if k not in paid and k not in free and _looks_staked(v))
+
+
+#: Lists of picks a board publishes free ON PURPOSE, so `leaks` does not
+#: read them as the next UFC: the leagues' Picks of the Day the day's top
+#: pick beat (Ethan, 2026-10-30 — the pick is free; `free_top_pick` keeps
+#: only the ones that are bets).
+FREE_ROWS_BY_FILE = {"day_top_pick.json": ("runners_up",)}
 
 
 def full_board_file(name: str) -> "Path | None":

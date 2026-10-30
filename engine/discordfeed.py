@@ -192,24 +192,36 @@ def weekly_text(rec: dict) -> str | None:
     return "\n".join(lines)
 
 
+#: Whose number a card's fair is, in the card's own words (app.js WITNESS).
+WITNESS = {"exchange": "the exchange’s price", "sharp": "the sharp book’s fair",
+           "market": "the market’s fair", "model": "our number"}
+
+
 def potd_text(card: dict, sport: str, detail: bool = True) -> str | None:
+    """The day's pick, named — on every channel since 2026-10-30, when the
+    Pick of the Day went free (Ethan: "make the picks of the day free. just
+    the pick of the day"). `detail` still keeps the rest of the board to
+    counts (`board_text`); the pick is the one row a stranger may read.
+
+    A BET ONLY. This read `verdict.bet`, a field the engine never wrote
+    (its verdict says `call`), so every card passed — a declined lean
+    included — and `verdict.say`, which never existed either."""
+    from .potd import has_pick
     pick = card.get("pick") or {}
-    if not pick:
+    if not has_pick(card) or str((card.get("verdict") or {}).get("call") or "bet") != "bet":
         return None
     label = SPORT_LABEL.get(sport, sport.upper())
-    if not detail:
-        return f"**Pick of the Day ({label})** is locked — members see it at {SITE}/#recommended"
-    p = pick.get("hit_prob") or pick.get("model_prob")
-    try:
-        chance = f" — we say {float(p):.0%}" if p is not None else ""
-    except (TypeError, ValueError):
-        chance = ""
     book = f" at {pick['book']}" if pick.get("book") else ""
-    say = str((card.get("verdict") or {}).get("say") or "").strip()
-    out = f"**Pick of the Day ({label})**: {pick_text(pick)}{book}{chance}"
-    if say:
-        out += f"\n{say[:400]}"
-    return out + f"\n{SITE}/#recommended"
+    out = f"**Pick of the Day ({label})**: {pick_text(pick)}{book}"
+    fair = pick.get("fair_prob")
+    try:
+        if detail and fair is not None:
+            out += f"\n{float(fair):.0%} — {WITNESS.get(pick.get('evidence'), 'our number')}"
+            if pick.get("price_implied") is not None:
+                out += f"; this price implies {float(pick['price_implied']):.0%}"
+    except (TypeError, ValueError):
+        pass
+    return out + f"\nFree for everyone, with its record: {SITE}/#potd"
 
 
 def board_text(board: dict, sport: str, today: str, detail: bool = True) -> str | None:
@@ -349,8 +361,8 @@ def run(conn, now: _dt.datetime | None = None, env: dict | None = None, boards: 
                 continue
             send(f"board:{sport}:{t}", cfg["picks"], board_text(board, sport, t, cfg["detail"]))
             card = board.get("pick_of_the_day") or {}
-            if card.get("pick") and (card.get("verdict") or {}).get("bet") is not False \
-                    and str(card.get("date") or t)[:10] == t:
+            from .potd import card_day
+            if card.get("pick") and (card_day(card) or t) == t:
                 send(f"potd:{sport}:{t}", cfg["picks"], potd_text(card, sport, cfg["detail"]))
         since = (today - _dt.timedelta(days=2)).isoformat()
         for row in recent_longshots(conn, since):

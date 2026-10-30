@@ -55,6 +55,8 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/record.js", "js/detail.js", "js/account.js", "js/more.js",
          # The races (2026-10-29): the playoff race and the NBA Cup.
          "js/race.js", "css/race.css",
+         # Every league's Pick of the Day, free (2026-10-30).
+         "js/potd.js", "css/potd.css",
          "css/record.css", "css/detail.css", "css/account.css", "css/more.css",
          # The game chat (2026-10-25), a room like the others.
          "js/chat.js", "css/chat.css",

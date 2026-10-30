@@ -280,8 +280,10 @@ def test_every_league_it_ranks_has_a_registered_board_file():
     were swallowed as "a league this box does not publish"."""
     import launch
     for sport in potd.TOP_PICK_LEAGUES:
-        assert sport in launch.BOARD_FILES, \
+        assert sport in launch.POTD_BOARD_FILES, \
             f"{sport} is ranked for the day’s top pick and has no board file"
+    # The registry, plus the fight card — never a second list of the six.
+    assert launch.POTD_BOARD_FILES == {**launch.BOARD_FILES, "ufc": launch.UFC_OUT}
 
 
 def test_the_writer_reads_the_registry_rather_than_naming_files_itself():
@@ -378,7 +380,10 @@ def test_with_the_paywall_on_the_public_copy_carries_no_paid_rows():
         else:
             os.environ["QB_PAYWALL"] = old
     assert "⚠️" not in printed, printed
-    assert public is not None and "KC ML" not in json.dumps(public), public
+    # A BET IS FREE since 2026-10-30 (Ethan: "make the picks of the day
+    # free"), so the public copy names it too; what it may never carry is a
+    # lean or a board's best bet (tests/test_the_pick_of_the_day_is_free).
+    assert public is not None and public["pick"]["player"] == "KC ML", public
     assert private is not None and private["pick"]["player"] == "KC ML", "the subscribers' copy keeps it"
 
 
@@ -510,7 +515,7 @@ def test_the_payload_says_how_many_leagues_there_were_supposed_to_be():
     of five and the page spoke for all five."""
     out = potd.day_top_pick({"cfb": {}, "nba": {}, "wnba": {}}, "2026-09-16")
     assert out["leagues_seen"] == 3
-    assert out["leagues_expected"] == len(potd.TOP_PICK_LEAGUES) == 5
+    assert out["leagues_expected"] == len(potd.TOP_PICK_LEAGUES) == 7
 
 
 def test_a_league_handed_in_as_none_is_censused_rather_than_vanishing():

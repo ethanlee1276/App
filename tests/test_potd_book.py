@@ -179,10 +179,15 @@ def test_the_record_file_carries_the_book_pooled_and_per_sport():
     assert "nfl" in blob["potd_by_sport"], blob["potd_by_sport"]
 
 
-def test_the_pick_is_behind_the_paywall():
-    """One pick at the top of the page is the single most valuable row
-    the site publishes that day. A free copy is the product given away."""
-    assert "pick_of_the_day" in gate.PAID_KEYS
+def test_the_pick_is_free_and_the_boards_best_bet_is_not():
+    """It was "the single most valuable row the site publishes that day"
+    and paid; Ethan, 2026-10-30: "make the picks of the day free. just the
+    pick of the day. not the best bet or anything like that"."""
+    assert "pick_of_the_day" not in gate.PAID_KEYS
+    out = gate.redact({"pick_of_the_day": {"pick": {"player": "TOR ML"},
+                                           "board_best": {"label": "x"}}}, "mlb_recommendations.json")
+    assert out["pick_of_the_day"]["pick"] == {"player": "TOR ML"}
+    assert "board_best" not in out["pick_of_the_day"]
 
 
 def test_the_book_never_bleeds_into_the_headline_record():

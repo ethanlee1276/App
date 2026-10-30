@@ -169,7 +169,8 @@ def test_a_pick_shown_from_its_lock_names_the_team_and_the_line_once():
     from its morning lock carries the journal's player ("CAR -2.5") and an
     empty side; the number in the name is the side, the team is named."""
     import json, subprocess
-    potd = _fn("renderPickOfTheDay")
+    potd = _fn("potdBetText")          # the card's words (shared with js/potd.js)
+    assert "potdBetText(pick, state.sport)" in _fn("renderPickOfTheDay")
     i = potd.index("const named = ")
     rx = potd[i + len("const named = "):potd.index(".exec(", i)]
     js = f"""

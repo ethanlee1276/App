@@ -8824,6 +8824,70 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh II 2>&1 | tee /tmp/ii.txt
 ```
 
+**IJ. The Pick of the Day is free** (step 296; you, 2026-10-30: "make the
+picks of the day free. just the pick of the day. not the best bet or
+anything like that").
+
+- **Free: the pick, in every league.** A free account's Home tab now opens
+  a Pick of the Day page: every league's card side by side, the day's top
+  pick first, each with its call, the bet, the price and the book, the
+  sharp fair it was priced against, Bet it, and its record. Members get the
+  same page (the home card links to it: "every league").
+- **Still members-only:** the board's best bet on a day the pick sits out
+  (a free reader sees "Members see the board's best bet tonight — one of
+  3 staked"), the lean a card turned down (never public, its reason can
+  name it), and the pick tracked live with its chance to cash. Everything
+  else on the boards is unchanged.
+- **How:** the paywall now publishes the card instead of stripping it
+  (`engine/gate.free_potd`), and `day_top_pick.json` carries every league's
+  card beside the top pick, so the page reads one small file.
+- **Two holes found and fixed on the way.** The day's top pick, "across
+  every league", could never come from the NFL: the NFL board is dated by
+  week ("2026-W08"), so its card never matched today. And it never looked at
+  hockey or the fight card, which have named picks since October. Both are
+  in now.
+- **The Discord feed** posted a declined lean as the day's pick: it read a
+  field the engine never wrote. It now posts only a pick it would bet, on
+  every channel (the pick is free), with a link to the page.
+- The plans page's Free column lists the pick; its line about the sports
+  now names the NHL, which it never did.
+
+The updater picks it up within five minutes. One command writes, the same
+as II's: it reinstalls the web server config so the new page's two files
+are served trimmed (until then they are served whole, which works). It
+validates first and leaves the old config in place if anything is wrong:
+
+```
+cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+Read-only, any time; each prints `1` once this version is live (the last
+once the config above is installed):
+
+```
+curl -s https://qellysbook.com/js/app.js | grep -c 'function renderPotdPage(...a)'
+curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdPageHTML(top, rec, walled)'
+sudo grep -cF '/js/potd.js /css/potd.css' /etc/caddy/Caddyfile
+```
+
+After the next cycle (a few minutes), all read-only. These show every
+league's card in the public file and the top pick, that no public copy
+carries a board's best bet (prints `0`), the NBA card as a free reader gets
+it, and that nothing on the public path is unsealed (`unsealed: []`):
+
+```
+curl -s https://qellysbook.com/data/day_top_pick.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('sport'), (d.get('pick') or {}).get('player')); [print(s, (c.get('verdict') or {}).get('call'), (c.get('pick') or {}).get('player')) for s, c in (d.get('leagues') or {}).items()]"
+curl -s https://qellysbook.com/data/day_top_pick.json | grep -c board_best
+curl -s https://qellysbook.com/data/nba.json | python3 -c "import json,sys; c=json.load(sys.stdin).get('pick_of_the_day') or {}; print((c.get('verdict') or {}).get('call'), (c.get('pick') or {}).get('player'), 'board_best' in c)"
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 -c "from engine import gate; print('paywall on' if gate.enabled() else 'paywall off'); print('unsealed:', gate.unsealed())"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IJ 2>&1 | tee /tmp/ij.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

@@ -91,7 +91,8 @@ def test_the_view_is_registered_everywhere_a_view_has_to_be():
 def test_the_prop_page_borrows_the_board_s_tab_like_the_game_page_does():
     """Neither detail page has a tab of its own. Leaving the nav unlit
     reads as "you have navigated out of the app"."""
-    assert '(name === "game" || name === "prop") ? "recommended"' in APP
+    # The free Pick of the Day page lights Home too (2026-10-30).
+    assert '(name === "game" || name === "prop" || name === "potd") ? "recommended"' in APP
 
 
 def test_an_inner_control_wins_over_the_card_wide_click():

@@ -1,0 +1,27 @@
+/* The Pick of the Day, every league (js/potd.js), loaded with it. One card
+   a league in a grid that folds to one column on a phone; the day's top
+   pick leads and wears the brand's edge, a card that sat out reads quieter. */
+.pd-lede { margin: 0 0 12px; color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-snug); max-width: 72ch; }
+.pd-lede b { color: var(--text); }
+.pd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; align-items: start; }
+.pd-card { --tone: var(--border-soft); margin: 0; min-width: 0; display: grid; gap: 8px; }
+.pd-card.is-bet { --tone: var(--brand); }
+.pd-lead { box-shadow: var(--glow-gold); }
+.pd-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-md); }
+.pd-logo { display: inline-flex; width: 22px; height: 22px; flex: none; }
+.pd-logo svg, .pd-logo img { width: 100%; height: 100%; }
+.pd-tag { margin-left: auto; padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--brand); background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.pd-bet { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.pd-bet-t { flex: 1; min-width: 0; }
+.pd-bet-t b { display: block; color: var(--text); font-size: var(--fs-lg); line-height: var(--lh-snug); overflow-wrap: anywhere; }
+.pd-bet-t small { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-sm); }
+.pd-fair, .pd-why, .pd-best, .pd-rec { margin: 0; font-size: var(--fs-sm); color: var(--text-mute); line-height: var(--lh-snug); }
+.pd-fair b, .pd-best b { color: var(--text); }
+.pd-locked { color: var(--text-dim); }
+.pd-rec { font-size: var(--fs-xs); }
+.pd-door { justify-self: start; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); text-decoration: none; }
+.pd-door:hover { text-decoration: underline; }
+.pd-card .potd-betit { justify-self: start; }
+.pd-empty { color: var(--text-mute); font-size: var(--fs-md); }
+.pd-when { margin: 10px 0 12px; color: var(--text-mute); font-size: var(--fs-xs); }

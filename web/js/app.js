@@ -2729,6 +2729,7 @@ function picksWithheld() {
 const FEATURES = [
   ["The boards", "What we publish every day, in every league",
    [["Tonight’s board", "Every game on the slate with its venue, the lines, and every prop that cleared the bar — the page the site opens on.", "recommended"],
+    ["Pick of the Day", "One bet a day in every league, priced against a sharp book’s fair and graded on the Record — free for everyone, every league side by side.", "potd"],
     ["Ask Qellys", "Ask about any team, player or game in any sport we cover — tonight’s boards, or every past game we have stored, like how two teams have done against each other — and get an answer written from our own numbers. It says so when they have nothing on it, and never tells you to bet.", "ask"],
     ["Most Likely", "The Most Likely board: ranked by how likely a bet is to hit, not by what it pays. Props, moneylines, spreads, totals, team totals and anytime-touchdown rows, each labelled with the figure it was ranked on.", "likely"],
     ["Long Shots", "Plus-money darts sized like lottery tickets — with the +455 to +800 band tracked separately, because that is where the market charges double.", "longshots"],
@@ -3707,6 +3708,47 @@ function potdVenueArt(src) {
     decoding="async" src="${escapeHtml(src)}"></div>`;
 }
 
+/* THE DAY'S BET IN WORDS — the home card's and every league's card on the
+   Pick of the Day page (js/potd.js), so one bet is never worded two ways.
+   `teamName` is the card's league's: the page draws seven leagues at once. */
+function potdBetText(pick, sport) {
+  const teamName = (a) => teamNameIn(sport, a);
+  /* The bet in words. A team market's `player` holds an ABBREVIATION and
+     a game total's holds the journal key, so neither is a name to print
+     — the same rule the Live tab's rows follow. */
+  const isTeam = ["moneyline", "spread", "team_total", "total"].includes(pick.market);
+  const label = pick.market_label || pick.market || "";
+  let text;
+  if (pick.market === "moneyline") text = `${teamName(pick.player || pick.team)} Moneyline`;
+  else if (pick.market === "total") text = `${escapeHtml(label)} ${escapeHtml(pick.side || "")} ${pick.line}`;
+  else if (isTeam) {
+    /* THE LINE, ONCE. A game spread row carries the SIGNED NUMBER as its
+       side ("+1.5") and the same number again as `line`, so the naive
+       join read "LAA +1.5 1.5 Spread" on the MLB card (Ethan, 2026-09-15).
+       A team total's side is over/under and still needs its line, so the
+       test is whether the side already IS the number rather than which
+       market it is. */
+    const sd = String(pick.side || "").trim();
+    const dup = pick.line != null && Math.abs(parseFloat(sd)) === Math.abs(Number(pick.line));
+    /* …AND THE JOURNAL'S NAME FOR A SPREAD IS "CAR -2.5". A pick shown
+       from its morning lock carries the journal's `player`, which already
+       holds the team AND the number, with an empty side — so the card
+       read "CAR -2.5 -2.5 Spread" and never said "Panthers" (Ethan's
+       screenshot, 2026-09-27). The number in the name counts as the side. */
+    const named = /^(.*\S)\s+([+\-\u2212]?\d+(?:\.\d+)?)$/.exec(String(pick.player || "").trim());
+    const lineIn = named && !sd ? named[2] : "";
+    const who = pick.team || (named ? named[1] : pick.player);
+    text = lineIn
+      ? `${teamName(who)} ${escapeHtml(lineIn)} ${escapeHtml(label)}`
+      : `${teamName(named ? who : (pick.player || pick.team))} ${escapeHtml(sd)}${
+      dup ? "" : ` ${pick.line}`} ${escapeHtml(label)}`;
+  }
+  else text = `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${pick.line} ${escapeHtml(label)}`;
+  return text;
+}
+
+// Every league's card, side by side (js/potd.js) — one tap from this one.
+const POTD_ALL = ` · <a href="#potd">every league</a>`;
 async function renderPickOfTheDay() {
   const host = document.getElementById("potd-zone");
   if (!host) return;
@@ -3857,7 +3899,7 @@ async function renderPickOfTheDay() {
       got.board_staked > 1 ? ` · one of ${got.board_staked} staked` : ""}</div>` : "";
     const art = potdBallArt();
     host.innerHTML = `<div class="card${art ? " potd-hero" : ""}"${art ? ' data-art="ball"' : ""} style="--tone:var(--brand);margin-bottom:12px">
-      ${art}<div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
+      ${art}<div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}${POTD_ALL}</div>
       ${potdCallStrip(got)}
       ${why ? `<div class="potd-why" style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">${why}</div>` : ""}
       ${bestLine}
@@ -3868,37 +3910,8 @@ async function renderPickOfTheDay() {
     return;
   }
   const band = got.band || [-125, 100];
-  /* The bet in words. A team market's `player` holds an ABBREVIATION and
-     a game total's holds the journal key, so neither is a name to print
-     — the same rule the Live tab's rows follow. */
   const isTeam = ["moneyline", "spread", "team_total", "total"].includes(pick.market);
-  const label = pick.market_label || pick.market || "";
-  let text;
-  if (pick.market === "moneyline") text = `${teamName(pick.player || pick.team)} Moneyline`;
-  else if (pick.market === "total") text = `${escapeHtml(label)} ${escapeHtml(pick.side || "")} ${pick.line}`;
-  else if (isTeam) {
-    /* THE LINE, ONCE. A game spread row carries the SIGNED NUMBER as its
-       side ("+1.5") and the same number again as `line`, so the naive
-       join read "LAA +1.5 1.5 Spread" on the MLB card (Ethan, 2026-09-15).
-       A team total's side is over/under and still needs its line, so the
-       test is whether the side already IS the number rather than which
-       market it is. */
-    const sd = String(pick.side || "").trim();
-    const dup = pick.line != null && Math.abs(parseFloat(sd)) === Math.abs(Number(pick.line));
-    /* …AND THE JOURNAL'S NAME FOR A SPREAD IS "CAR -2.5". A pick shown
-       from its morning lock carries the journal's `player`, which already
-       holds the team AND the number, with an empty side — so the card
-       read "CAR -2.5 -2.5 Spread" and never said "Panthers" (Ethan's
-       screenshot, 2026-09-27). The number in the name counts as the side. */
-    const named = /^(.*\S)\s+([+\-\u2212]?\d+(?:\.\d+)?)$/.exec(String(pick.player || "").trim());
-    const lineIn = named && !sd ? named[2] : "";
-    const who = pick.team || (named ? named[1] : pick.player);
-    text = lineIn
-      ? `${teamName(who)} ${escapeHtml(lineIn)} ${escapeHtml(label)}`
-      : `${teamName(named ? who : (pick.player || pick.team))} ${escapeHtml(sd)}${
-      dup ? "" : ` ${pick.line}`} ${escapeHtml(label)}`;
-  }
-  else text = `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${pick.line} ${escapeHtml(label)}`;
+  const text = potdBetText(pick, state.sport);
   /* WHOSE NUMBER LEADS. The fair this pick was priced against, and the
      witness it came from, because "56%" means a different thing when it
      is Pinnacle's de-vigged close than when it is ours. engine/potd
@@ -3976,7 +3989,7 @@ async function renderPickOfTheDay() {
         : (pick.locked ? "locked earlier today — the board still agrees" : ""));
   host.innerHTML = `
     <div class="card potd-hero"${heroArt ? ' data-art="ball"' : ""}${potdArt ? ' data-venue="1"' : ""} style="${potdStyle}">
-      ${heroArt}<div class="player">${iconMark("target")}${head}</div>
+      ${heroArt}<div class="player">${iconMark("target")}${head}${POTD_ALL}</div>
       ${potdCallStrip(got)}
       ${relockNote ? `<div style="margin-top:4px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${iconMark("lock")}${escapeHtml(relockNote)}</div>` : ""}
@@ -19131,7 +19144,7 @@ const PLANS = [
    Length of commitment is the only axis, and the discount is the whole
    difference. */
 const PLAN_FEATURES = [
-  "Every sport: NFL, MLB, NBA, WNBA, CFB and UFC",
+  "Every sport: NFL, CFB, NBA, NHL, MLB, WNBA and UFC",
   // Second, so the longer plans' four-line summary carries it too.
   "Ask Qellys, the AI assistant — any team, player or game",
   // ZENO'S BETS (Ethan, 2026-09-26: the paywall should say it "gets access
@@ -23008,6 +23021,8 @@ function whyCalcParlay() {
 
 // renderRace is in js/race.js, loaded the first time its page opens (loadRoom).
 function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.js", "css/race.css", a); }
+// …and every league's Pick of the Day, free (js/potd.js; Ethan, 2026-10-30).
+function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage", "js/potd.js", "css/potd.css", a); }
 
 // renderMethodology, renderChangelog and renderVerify are in js/more.js, loaded the
 // first time their page opens (loadRoom; 2026-10-29, to pay for the Pick of the
@@ -23538,7 +23553,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "race", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -23620,7 +23635,11 @@ const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    // moments, final scores) and watches; the server gives it no
                    // pick there (server._alerts_feed is empty without a plan).
                    // The Lab stays a member's: it reads the paid backtest.
-                   "why", "about", "features", "methodology", "status", "alerts"];
+                   "why", "about", "features", "methodology", "status", "alerts",
+                   // THE PICK OF THE DAY (Ethan, 2026-10-30: "make the picks
+                   // of the day free. just the pick of the day"): every
+                   // league's card, and a free account's Home (_switchViewNow).
+                   "potd"];
 
 /* The screens that ARE the wall — the plans, checkout, sign-up, a reset —
    are standalone pages with their own masthead, so the app's own chrome
@@ -23656,7 +23675,8 @@ function markLockedNav() {
   const up = document.getElementById("nav-up");
   if (up) up.hidden = !walled || !storeSells();
   document.querySelectorAll('.nav-btn[data-view],.sport-btn[data-kind="tool"],.sb-subtab').forEach((b) => {
-    b.classList.toggle("nav-locked", walled && !WALL_OPEN.includes(b.dataset.view || b.dataset.sport || "recommended"));
+    b.classList.toggle("nav-locked", walled && b.dataset.view !== "recommended"
+      && !WALL_OPEN.includes(b.dataset.view || b.dataset.sport || "recommended"));
   });
 }
 
@@ -23795,6 +23815,7 @@ function _landScroll(name, leaving) {
 }
 
 function switchView(name, push = false) {
+  if (name === "recommended" && isWalled()) name = "potd";   // a free Home (_switchViewNow)
   _wallFrom = wallBlocked(name) ? name : "";
   if (_wallFrom) name = "paywall";
   if (storeApp() && STORE_APP_SKIPS.has(name)) name = "recommended";
@@ -23852,6 +23873,8 @@ function _switchViewNow(name, push, dir) {
   }
   // No account, no page but the open ones (ACCOUNT_OPEN): the sign-up.
   if (acctWallTurns(name)) { name = "signup"; dir = 0; }
+  // A free account's Home is the free pick (WALL_OPEN "potd"), not the plans.
+  if (name === "recommended" && isWalled()) { name = "potd"; dir = 0; }
   // The wall's own screens draw their own masthead (WALL_SCREENS).
   document.body.classList.toggle("on-wall", WALL_SCREENS.includes(name));
   // Late, because a deferred view transition queued before the wall went
@@ -23913,7 +23936,7 @@ function _switchViewNow(name, push, dir) {
   // from, so Recommended stays lit while you're inside a game.
   // Neither the game page nor the prop page has a tab. Both belong to the
   // board they were opened from, so Recommended stays lit inside them.
-  const lit = (name === "game" || name === "prop") ? "recommended"
+  const lit = (name === "game" || name === "prop" || name === "potd") ? "recommended"
     : name === "pbp" ? "live" : name;
   document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
   syncNavHint(lit);
@@ -23990,6 +24013,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "bankroll") renderBankrollExtras();
   if (name === "weather") renderWeather();
   if (name === "race") renderRace();
+  if (name === "potd") renderPotdPage();
   if (name === "alerts") renderAlerts();
   if (name === "messages") renderMessages();
   if (name === "streak") renderStreak();

@@ -115,11 +115,17 @@ def test_a_card_relocked_on_todays_pick_drops_the_boards_bet():
     assert "board_best" not in out and "board_staked" not in out
 
 
-def test_the_boards_bet_is_paid_with_the_card():
+def test_the_boards_bet_stays_a_members_when_the_card_goes_free():
+    """The card went free on 2026-10-30 ("just the pick of the day. not the
+    best bet or anything like that"): its call stays, the board's bet goes
+    and is counted as locked."""
     res = _board_for_attach()
     potd.attach(res, "nba", prev={})
+    assert res["pick_of_the_day"].get("board_best"), "the fixture names a board bet"
     public = gate.redact(res, "nba.json")
-    assert public["pick_of_the_day"] == {}
+    card = public["pick_of_the_day"]
+    assert card["verdict"]["call"] == "no bet" and "board_best" not in card and "board_staked" not in card
+    assert public["locked"]["pick_of_the_day.board_best"] >= 1
     assert "Jalen Brunson" not in json.dumps(public), "the public copy names the bet"
 
 
@@ -244,6 +250,9 @@ def render(card, record=None):
       _els[id] = {{ innerHTML: "", textContent: "", querySelector: () => null }};
     }}
     {_fn("renderDayTopPick")}
+    const teamNameIn = (sp, t) => teamName(t);
+    {_fn("potdBetText")}
+    {APP[APP.index("const POTD_ALL = "):APP.index(chr(10), APP.index("const POTD_ALL = "))]}
     {_fn("renderPickOfTheDay")}
     renderPickOfTheDay().then(() => new Promise((r) => setTimeout(r, 5))).then(() => console.log(JSON.stringify(
       [_els["potd-zone"].innerHTML, _els["potd-record"].innerHTML || _els["potd-record"].textContent])));

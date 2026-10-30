@@ -803,7 +803,10 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
                       "signup", "streak", "messages", "zeno", "feed", "reset",
                       "tools", "live", "game", "pbp", "fantasy", "mybets",
-                      "why", "about", "features", "methodology", "status", "alerts"}, (
+                      "why", "about", "features", "methodology", "status", "alerts",
+                      # 2026-10-30: the Pick of the Day, free; a free Home
+                      # lands on it with the tab bar (test_the_pick_of_the_day_is_free).
+                      "potd"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

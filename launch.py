@@ -1817,6 +1817,11 @@ SPORT_PRIORITY = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
 BOARD_FILES = {"nfl": NFL_OUT, "cfb": CFB_OUT, "mlb": MLB_OUT,
                "nba": NBA_OUT, "wnba": WNBA_OUT, "nhl": NHL_OUT}
 
+#: Every board that names a Pick of the Day: the six above and the fight
+#: card, which is not in BOARD_FILES because it does not rebuild every cycle
+#: and the stale-board warnings read that registry (2026-10-30).
+POTD_BOARD_FILES = {**BOARD_FILES, "ufc": UFC_OUT}
+
 #: How long a board may go without being rewritten before that is worth
 #: saying out loud. The loop rebuilds every board every cycle, so the
 #: only way to exceed this is a build that keeps returning without
@@ -4807,7 +4812,7 @@ def _write_day_top_pick() -> None:
             # the key emptied. `board_source` falls back to the public
             # path where there is no private copy, so a box with the
             # paywall off behaves exactly as before.
-            f = _gate.board_source(ROOT / BOARD_FILES[sport])
+            f = _gate.board_source(ROOT / POTD_BOARD_FILES[sport])
             try:
                 with open(f, encoding="utf-8") as fh:
                     boards[sport] = json.load(fh)

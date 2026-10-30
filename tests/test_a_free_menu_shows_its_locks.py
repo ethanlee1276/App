@@ -54,10 +54,18 @@ def _view(ref: str) -> str:
     return "recommended" if kind == "subtab" else name
 
 
+def _free_opens(ref: str, open_: set) -> bool:
+    """A free account's Home is the free Pick of the Day since 2026-10-30
+    (Ethan: "make the picks of the day free"), so the board's own page row
+    opens; the board's tabs (Game Lines) still lead to the plans."""
+    return ref == "view:recommended" or _view(ref) in open_
+
+
 def test_every_sidebar_entry_is_marked_by_the_page_it_opens():
     body = _fn("markLockedNav")
     assert """document.querySelectorAll('.nav-btn[data-view],.sport-btn[data-kind="tool"],.sb-subtab')""" in body
     assert '!WALL_OPEN.includes(b.dataset.view || b.dataset.sport || "recommended")' in body
+    assert 'walled && b.dataset.view !== "recommended"' in body, "Home is the free pick's door, unlocked"
 
 
 def test_the_sheet_copies_the_lock_at_the_icons_shoulder():
@@ -130,7 +138,7 @@ def test_in_a_browser_a_free_sheet_locks_what_the_free_tier_does_not_open_and_a_
     rows, errs = _sheet(entitled=False)
     assert not errs, errs
     assert len(rows) >= 20, rows
-    wrong = [(ref, locked) for ref, locked in rows if locked != (_view(ref) not in open_)]
+    wrong = [(ref, locked) for ref, locked in rows if locked != (not _free_opens(ref, open_))]
     assert not wrong, wrong
     assert dict(rows)["sport:fantasy"] is False and dict(rows)["view:likely"] is True
     rows, errs = _sheet(entitled=True)

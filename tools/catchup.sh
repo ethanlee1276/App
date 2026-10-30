@@ -661,6 +661,15 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IJ "The Pick of the Day is free" 60 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function renderPotdPage(...a)'
+curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdPageHTML(top, rec, walled)'
+sudo grep -cF '/js/potd.js /css/potd.css' /etc/caddy/Caddyfile
+curl -s https://qellysbook.com/data/day_top_pick.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('sport'), (d.get('pick') or {}).get('player')); [print(s, (c.get('verdict') or {}).get('call'), (c.get('pick') or {}).get('player')) for s, c in (d.get('leagues') or {}).items()]"
+curl -s https://qellysbook.com/data/day_top_pick.json | grep -c board_best
+curl -s https://qellysbook.com/data/nba.json | python3 -c "import json,sys; c=json.load(sys.stdin).get('pick_of_the_day') or {}; print((c.get('verdict') or {}).get('call'), (c.get('pick') or {}).get('player'), 'board_best' in c)"
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_PAYWALL=' /etc/qellys/env | xargs) python3 -c "from engine import gate; print('paywall on' if gate.enabled() else 'paywall off'); print('unsealed:', gate.unsealed())"
+SH
 run II "A day without a Pick of the Day, the playoff race and the NBA Cup" 120 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function renderRace(...a)'
 curl -s https://qellysbook.com/js/race.js | grep -c 'function cfpHTML(d)'

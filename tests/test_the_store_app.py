@@ -93,7 +93,8 @@ def test_the_store_app_draws_no_league_logo_and_no_photo():
 def test_the_store_app_skips_the_money_pages_and_the_play_build_sells_nothing():
     assert 'const STORE_APP_SKIPS = new Set(["memes", "intel"]);' in APP
     at = APP.index("function switchView(name, push = false) {")
-    assert "STORE_APP_SKIPS.has(name)" in APP[at:at + 200]
+    # (A free account's Home is sent to the free pick first, one line above.)
+    assert "STORE_APP_SKIPS.has(name)" in APP[at:at + 320]
     at = APP.index("function _switchViewNow(name, push, dir) {")
     assert 'name === "checkout" && !storeSells()' in APP[at:at + 300]
     assert "var QB_STORE_CHECKOUT = { ios: true, play: false };" in BOOT
