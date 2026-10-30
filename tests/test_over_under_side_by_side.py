@@ -145,7 +145,8 @@ def test_cards_or_a_list_remembered_and_the_page_is_a_real_destination():
     assert 'data-view="props"' in HTML and 'id="view-props"' in HTML and 'id="props-body"' in HTML
     sb = HTML[HTML.index('data-view="props"'):]
     assert sb[:sb.index("</button>")].rstrip().endswith("Over / Under"), 'not "Player Props"'
-    assert '"Over / Under", "Every prop we price tonight' in APP, "on the features page"
+    more = (Path(__file__).resolve().parents[1] / "web" / "js" / "more.js").read_text()
+    assert '"Over / Under", "Every prop we price tonight' in more, "on the features page (its list is in js/more.js)"
     for card in (_fn("ouCardHTML"), _fn("ouRowHTML")):
         assert "${propAttrs(r)}" in card, "every prop is a door to its page"
     # Our side is lit in gold (a tint), not ringed, since 2026-10-27 (tests/test_no_hard_lines).
