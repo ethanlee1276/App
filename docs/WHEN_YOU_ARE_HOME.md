@@ -8976,6 +8976,32 @@ The check in one go (everything above except the Discord lines that write):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IK 2>&1 | tee /tmp/ik.txt
 ```
 
+**IL. The menu comes down the page with you** (step 298; you, 2026-10-30,
+your open Duo with the sidebar circled: "this menu no matter swiped open or
+close, should follow you all the way down when you scroll down").
+
+- It held still while you scrolled — until the last screen of a page, where
+  the footer pushed it up and off (up to 237px of it gone, measured on the
+  Duo either way up, an iPad and a laptop). It is pinned under the top bar
+  now, all the way to the bottom of every page. The page and the footer
+  start where its column ends, so nothing slides under it.
+- Slid away, the three dots stay at the left edge as they did, and the page
+  and the footer take the room back.
+- On the open Duo the floating glass pane keeps its inset from the edges.
+
+The updater picks it up within five minutes; nothing to run. Read-only,
+prints `1` once it is live:
+
+```
+curl -s https://qellysbook.com/css/styles.css | grep -cF '.shell > main { grid-column: 2; }'
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IL 2>&1 | tee /tmp/il.txt
+```
+
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
 

@@ -6819,6 +6819,31 @@ body.has-deck #rail-live { display: none; }
   html.sb-drag .sidebar { transform: translateX(var(--sb-drag)); opacity: 1; visibility: visible; }
   html.sb-drag .sb-grip { transform: translateX(max(var(--sb-drag), calc(14px - var(--sidebar-w)))); }
 }
+/* THE SIDEBAR COMES DOWN THE PAGE WITH YOU (Ethan, 2026-10-30, his open
+   Duo with the sidebar circled: "this menu no matter swiped open or close,
+   should follow you all the way down when you scroll down"). It was sticky,
+   and a sticky box only holds inside its own grid cell: the shell ends where
+   the footer starts (and, under 1280, where Home's rail folds under the
+   page), so the last screen of every page pushed it up and off — 148 to
+   237px of it gone at the foot of the dashboard, measured on the Duo either
+   way up, an iPad and a laptop. Fixed, it holds under the top bar whatever
+   scrolls, and the dots with it (they always were). Its column stays as the
+   room it takes: main is put in the second column by name, because a fixed
+   sidebar no longer fills the first and main would slide into it; the stale
+   bar spans from main's column; the footer starts where the column ends. */
+@media (min-width: 901px),
+       (min-width: 700px) and (max-width: 900px) and (min-height: 480px) and (min-aspect-ratio: 5/4),
+       (pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px),
+       (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
+  .sidebar { position: fixed; top: var(--topbar-h); bottom: auto; left: max(0px, (100% - 1760px) / 2);
+    width: var(--sidebar-w); }
+  .shell > main { grid-column: 2; }
+  .shell > #stalebar { grid-column: 2 / -1; }
+  .footer { margin-left: calc(max(0px, (100% - 1760px) / 2) + var(--sidebar-w)); }
+  html.sb-hidden .footer, body.two-pane .footer { margin-left: auto; }
+  /* The wall has one column and no sidebar. */
+  body.walled.on-wall .shell > main, body.walled.on-wall .shell > #stalebar { grid-column: 1 / -1; }
+}
 
 .mc-pick.active { background: var(--grad-chip); box-shadow: inset 2px 0 0 var(--brand); }
 
@@ -10587,9 +10612,13 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
        (pointer: coarse) and (min-width: 721px) and (max-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 4/5) {
   .topbar { background: var(--glass-sheen), var(--glass-tint-strong); box-shadow: var(--glass-rim);
     border-bottom-color: transparent; }
-  /* The sidebar floats: a pane inset from the edges with the rim lit. */
-  .sidebar { margin: 10px 0 10px 10px; border-radius: var(--radius-lg); border-right: 0;
-    top: calc(var(--topbar-h) + 10px);
+  /* The sidebar floats: a pane inset from the edges with the rim lit. It is
+     fixed ("THE SIDEBAR COMES DOWN THE PAGE WITH YOU"), so the inset is its
+     own place and width — a margin would be added on top of them, and the
+     pane ran 10px into the page. Its right edge stays on the column's. */
+  .sidebar { margin: 0; border-radius: var(--radius-lg); border-right: 0;
+    top: calc(var(--topbar-h) + 10px); left: calc(max(0px, (100% - 1760px) / 2) + 10px);
+    width: calc(var(--sidebar-w) - 10px);
     height: calc(100vh - var(--topbar-h) - 20px); height: calc(100dvh - var(--topbar-h) - 20px);
     background: var(--glass-sheen), var(--glass-tint); box-shadow: var(--glass-rim), var(--glass-depth); }
   .sb-item { border-radius: 999px; }

@@ -36,9 +36,11 @@ HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
 
 def _rule(sel):
     """The declarations of the first rule whose selector list starts with
-    `sel`, comments stripped."""
+    `sel`, comments stripped — at the start of a line, so the element's own
+    rule and not a scoped override (the docked shell's `.shell > #stalebar`,
+    styles.css "THE SIDEBAR COMES DOWN THE PAGE WITH YOU")."""
     body = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
-    m = re.search(re.escape(sel) + r"\s*\{([^}]*)\}", body)
+    m = re.search(r"(?m)^" + re.escape(sel) + r"\s*\{([^}]*)\}", body)
     assert m, f"no rule for {sel}"
     return m.group(1)
 

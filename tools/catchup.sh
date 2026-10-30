@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IL "The menu comes down the page with you" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -cF '.shell > main { grid-column: 2; }'
+SH
 run IK "The audit: the book report card, the Lab's date, Discord" 240 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'days of our line history'
 curl -s https://qellysbook.com/js/more.js | grep -c 'c.step === "starting" ? "starting"'
