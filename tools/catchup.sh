@@ -666,6 +666,7 @@ curl -s https://qellysbook.com/js/app.js | grep -c 'function renderRace(...a)'
 curl -s https://qellysbook.com/js/race.js | grep -c 'function cfpHTML(d)'
 curl -s https://qellysbook.com/js/app.js | grep -c 'NO PICK TODAY'
 sudo grep -cF '/js/race.js /css/race.css' /etc/caddy/Caddyfile
+sudo journalctl -u qellys --since "2 hours ago" --no-pager | grep -E "playoff race|NBA Cup" | tail -6
 cd /srv/qellys && sudo -u qellys python3 potd_report.py --sitout
 cd /srv/qellys && ls -la web/data/cfp_race.json web/data/nba_cup.json data/built/cfp_race.json data/built/nba_cup.json
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/cfp_race.json')); print(d['poll'].get('name'), d['games_left'], 'games left'); [print(r['team'], r['record'], d['chances'][r['team']]['playoff']) for r in d['teams'][:12]]"

@@ -8800,6 +8800,8 @@ sudo grep -cF '/js/race.js /css/race.css' /etc/caddy/Caddyfile
 After the next college and NBA builds (the cycle runs them; within the
 hour), all read-only. These show:
 
+- each build's own line for the race (`playoff race: … contenders …` and
+  `NBA Cup: … played …`), or the reason it skipped;
 - how often the pick named one, per league;
 - the two race files, public and members' copies;
 - the top of the race and the Cup's tables as members see them;
@@ -8807,6 +8809,7 @@ hour), all read-only. These show:
 - the record's new count.
 
 ```
+sudo journalctl -u qellys --since "2 hours ago" --no-pager | grep -E "playoff race|NBA Cup" | tail -6
 cd /srv/qellys && sudo -u qellys python3 potd_report.py --sitout
 cd /srv/qellys && ls -la web/data/cfp_race.json web/data/nba_cup.json data/built/cfp_race.json data/built/nba_cup.json
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/cfp_race.json')); print(d['poll'].get('name'), d['games_left'], 'games left'); [print(r['team'], r['record'], d['chances'][r['team']]['playoff']) for r in d['teams'][:12]]"
