@@ -182,7 +182,8 @@ def test_the_page_is_wired_where_every_page_is():
     from engine import shrink
     assert "js/potd.js" in shrink.FILES and "css/potd.css" in shrink.FILES
     assert "/js/potd.js /css/potd.css" in (ROOT / "deploy" / "Caddyfile").read_text()
-    assert '"potd"],' in APP[APP.index("const FEATURES = ["):], "a Features row"
+    more = (WEB / "js" / "more.js").read_text()          # the list lives with its page
+    assert '"potd"],' in more[more.index("const FEATURES = ["):], "a Features row"
     assert '["The Pick of the Day, every league, with its record", 1]' in (WEB / "js" / "account.js").read_text()
 
 

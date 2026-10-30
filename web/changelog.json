@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-10-30",
+      "kind": "fix",
+      "title": "The Features page lists everything that shipped",
+      "body": "A month of features had never been written up there: weekly pick'em and private groups, karma and levels, the closing-line leaderboards, Call it, today's question and trivia, the player-of-the-game vote, watch parties and crew watch, Remind me, the Edge Report, Your data and the weekly limit. They are on it now, under a new Play along section and in Your account."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "fix",
+      "title": "No NBA Cup group has a leader before it plays",
+      "body": "The night before group play the Cup page tagged a leader in every group and a wild-card holder in each conference — at 0-0, on our ratings alone. The tags now wait for the first group game."
+    },
+    {
+      "date": "2026-10-30",
       "kind": "ship",
       "title": "The Pick of the Day is free",
       "body": "One bet a day in every league is now free for everyone: a free account's Home opens the Pick of the Day page, every league's card side by side with the day's top pick first — the call, the bet, the price and the book, the sharp fair it was priced against, and each league's record. The rest of the board stays with membership, and so do the board's best bet on a day the pick sits out and the pick tracked live with its chance to cash."

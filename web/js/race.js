@@ -206,8 +206,12 @@ function cfpHTML(d) {
 function cupGroupHTML(name, rows, d, locked) {
   const ch = d.chances || {}, rem = d.remaining || {};
   const today = d.today || {};
-  const leader = (today.winners || {})[name];
-  const wild = Object.values(today.wildcards || {});
+  // NO ONE LEADS BEFORE A GAME IS PLAYED: at 0-0 the order is our rating's,
+  // and a tag would put a claim on it (the 2026-10-30 audit, the night
+  // before group play).
+  const started = (d.played || 0) > 0;
+  const leader = started ? (today.winners || {})[name] : "";
+  const wild = started ? Object.values(today.wildcards || {}) : [];
   const left = [];
   rows.forEach((r) => (rem[r.team] || []).forEach((g) => { if (g.home) left.push({ ...g, team: r.team }); }));
   return `<div class="rc-card rc-flush">
@@ -243,7 +247,7 @@ function cupWildHTML(d) {
       .sort((a, b) => (b.w - b.l) - (a.w - a.l) || b.w - a.w || b.pd - a.pd || b.pf - a.pf).slice(0, 4);
     return `<div class="rc-card rc-flush"><div class="rc-conf-h">${conf} wild card</div>
       ${rest.map((r) => `<div class="rc-row rc-crow"><span class="rc-who">${teamMarkIn("nba", r.team, 18)}
-        <span>${escapeHtml(teamNameIn("nba", r.team))}${(today.wildcards || {})[conf] === r.team ? `<small class="pos">holds it today</small>` : ""}</span></span>
+        <span>${escapeHtml(teamNameIn("nba", r.team))}${(d.played || 0) > 0 && (today.wildcards || {})[conf] === r.team ? `<small class="pos">holds it today</small>` : ""}</span></span>
         <span class="rc-p">${r.w}-${r.l}</span><span class="rc-p rc-pd ${r.pd > 0 ? "pos" : r.pd < 0 ? "neg" : ""}">${r.pd > 0 ? "+" : ""}${r.pd}</span></div>`).join("")}
     </div>`;
   }).join("");

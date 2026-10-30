@@ -8868,6 +8868,18 @@ once the config above is installed):
 curl -s https://qellysbook.com/js/app.js | grep -c 'function renderPotdPage(...a)'
 curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdPageHTML(top, rec, walled)'
 sudo grep -cF '/js/potd.js /css/potd.css' /etc/caddy/Caddyfile
+curl -s https://qellysbook.com/js/more.js | grep -c 'const FEATURES = \['
+curl -s https://qellysbook.com/robots.txt | grep -c 'Sitemap: https://qellysbook.com/sitemap.xml'
+curl -s https://qellysbook.com/sitemap.xml | grep -c '<loc>https://qellysbook.com/</loc>'
+```
+
+The news headlines (found in the audit: the section has drawn nothing since
+it shipped). After the next cycle this prints each league's count of
+headlines and, for any feed that failed, why — so if ESPN still refuses the
+box, the reason is in the file instead of nowhere:
+
+```
+curl -s https://qellysbook.com/data/news.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('generated_at')); print({s: len(r) for s, r in (d.get('sports') or {}).items()}); print(d.get('errors'))"
 ```
 
 After the next cycle (a few minutes), all read-only. These show every

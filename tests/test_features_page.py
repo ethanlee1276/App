@@ -142,6 +142,19 @@ def test_the_page_keeps_up_with_what_shipped():
             ("the sim lab", "two thousand times"),
             ("a quarterback's passing touchdowns", "passing touchdowns"),
             ("the team page's opponent picker", "pick an opponent"),
+            # The 2026-10-30 audit: a month of shipping that never reached it.
+            ("the weekly pick'em", "pick’em"),
+            ("karma and levels", "karma"),
+            ("the closing-line leaderboards", "closing-line value ranks you"),
+            ("the Edge Report", "edge report"),
+            ("your data page", "a download and a delete"),
+            ("the weekly limit", "weekly bet limit"),
+            ("Call it", "call what happens next"),
+            ("today's question", "one question a day"),
+            ("the player-of-the-game vote", "votes on who won it"),
+            ("watch parties", "watch parties"),
+            ("the Pick of the Day, free", "free for everyone"),
+            ("the races", "nba cup"),
     ):
         assert needle in blob, f"{what} is not on the features page"
 

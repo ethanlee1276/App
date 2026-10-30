@@ -123,6 +123,21 @@ def test_a_reader_without_a_plan_sees_the_facts_and_the_lock():
     assert "Group games left, at our price" not in html
 
 
+def test_before_group_play_no_one_leads_the_cup():
+    """At 0-0 the order is our rating's; the night before group play the
+    page tagged a leader in every group and a wild-card holder anyway."""
+    _, cup = _fixtures()
+    for rows in cup["groups"].values():
+        for r in rows:
+            r.update(w=0, l=0, pd=0, pf=0)
+    cup["played"] = 0
+    html = _render("cupHTML", cup)
+    assert "Group play has not started" in html
+    assert "leads the group" not in html and "holds the wild card" not in html and "holds it today" not in html
+    _, cup = _fixtures()
+    assert "leads the group" in _render("cupHTML", cup), "once played, the leader is tagged"
+
+
 # --- in a browser --------------------------------------------------------------------
 def _browser():
     from playwright.sync_api import sync_playwright

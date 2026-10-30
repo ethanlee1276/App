@@ -58,6 +58,143 @@ function glossaryHTML() {
   </section>`;
 }
 
+/* ---------------- Everything the site does ----------------
+
+   Ethan, 2026-09-10: "add a features page so new users can go and look
+   at every single feature the site offers. i want you to go in depth
+   and tell EVERY feature we offer. down to the draft simulator and
+   being able too look up past player or team stats vs specific teams
+   and litterally everything."
+
+   A ROW IS A DOOR, NOT A CLAIM. Every entry that names a `view` is a
+   real destination in `VIEW_ORDER`, and the row opens it — so this page
+   cannot drift into advertising something that is not there. A brochure
+   nobody can click is exactly how a features list starts lying.
+   `tests/test_features_page.py` walks it BOTH ways: every view named
+   here exists, and every destination the sidebar offers is described
+   here, so a page shipped later cannot quietly go undocumented.
+
+   Rows with no view are things that live INSIDE another screen — the
+   draft simulator is a room on Fantasy, the versus block is on a
+   player's prop page — and they name their host in the sentence rather
+   than pretending to a door of their own.
+
+   FREE, AND NOT BY OVERSIGHT. It joins Why Us, About and Method in
+   REFERENCE_VIEWS: somebody deciding whether to pay has to be able to
+   read what they would be paying for.
+
+   HERE, WITH ITS PAGE, since 2026-10-30: it sat in app.js, in the first
+   visit, for a page most visits never open. */
+const FEATURES = [
+  ["The boards", "What we publish every day, in every league",
+   [["Tonight’s board", "Every game on the slate with its venue, the lines, and every prop that cleared the bar — the page the site opens on.", "recommended"],
+    ["Pick of the Day", "One bet a day in every league, priced against a sharp book’s fair and graded on the Record — free for everyone, every league side by side.", "potd"],
+    ["Ask Qellys", "Ask about any team, player or game in any sport we cover — tonight’s boards, or every past game we have stored, like how two teams have done against each other — and get an answer written from our own numbers. It says so when they have nothing on it, and never tells you to bet.", "ask"],
+    ["Most Likely", "The Most Likely board: ranked by how likely a bet is to hit, not by what it pays. Props, moneylines, spreads, totals, team totals and anytime-touchdown rows, each labelled with the figure it was ranked on.", "likely"],
+    ["Long Shots", "Plus-money darts sized like lottery tickets — with the +455 to +800 band tracked separately, because that is where the market charges double.", "longshots"],
+    ["Tonight", "Every bet on tonight’s slate across every league at once, with the charts — one page instead of six tabs.", "tonight"],
+    ["Over / Under", "Every prop we price tonight with both sides side by side — the book’s price and our chance for the over and the under, as cards or a list.", "props"],
+    ["Edge Picks", "Where our number beats the price: the picks we stake, their cards, and the wider edge board under them. The only board we stake money on, and the only one whose ROI is quoted in money.", "edge"],
+    ["Game Lines", "Moneylines, spreads and totals with the model’s number beside the book’s — and the book actually posting each side named on the card.", "futures"],
+    ["Best price per book", "Odds shopping on every card: the best number available for the side taken, book by book, so you never bet a worse price than exists.", null],
+    ["Reserve tier", "A thin shelf fills from a labelled reserve rather than publishing empty. The tier says it is a reserve; it is never dressed up as a recommendation.", null],
+    ["Parlay slip", "A docked slip that prices a ticket with the correlation tax applied, caps it at three legs, and refuses two legs that contradict each other.", null],
+    ["High Confidence mode", "A real filter, not a marketing toggle: A-grade only, on the same bands the journal grades by.", null]]],
+
+  ["Live", "While the games are actually on",
+   [["Live Now", "Every game in progress across every league we model, with the score, the clock, and your open bets on each one.", "live"],
+    ["Play-by-play", "A page per live game: the field with the ball on it, drive-by-drive plays, the box score, team totals, your live props and both injury reports. Composed from the feed’s own fields, never from anybody else’s prose.", "pbp"],
+    ["Game centre", "The matchup page — park, weather, faces, the lines, and the live win-probability track.", "game"],
+    ["The sweat", "Your open bets on a live game tracked pick by pick: cleared, busted, or how many chances are left.", null],
+    ["Under pressure", "Read live on the play-by-play page: how each club performs once the game tightens.", null],
+    ["Fast scoreboards", "Scores and plays ride a twelve-second loop of their own rather than the model’s build cycle. A score minutes old is not a score.", null],
+    ["Remind me", "A bell on any game that has not started: one alert when it does, and nothing after.", "live"],
+    ["Watch parties and crew watch", "Open a game’s room with your friends for the night, and see which of your crew is watching which game right now.", "live"]]],
+
+  ["Research", "Look anything up",
+   [["Player search", "Search any player across every league we cover — typos forgiven, recent searches remembered — and click him to open everything below on the card itself.", "players"],
+    ["Player page", "Per prop: the bar graph, the game logs, current form, the game script, the line’s movement since it opened, every book’s price and what the pick had to survive. A searched player’s card and the prop page are the same page, not two.", "prop"],
+    ["Past stats against a specific team", "The versus block on a player’s prop page: what this player has actually done against tonight’s opponent, game by game, from the logs on disk — laid out a game to a block, with a stat pill for each phase he played in.", null],
+    ["Next man up, on the card", "When a teammate at the same position is ruled out, the beneficiary’s card says what the weekly stats measured the last times that teammate sat — “Pacheco out — over his 4 missed games, Hunt absorbed +11% of the carries” — or says the sample is too thin to say. The projection moves by what four seasons measured for the same spot (a back whose starter was just ruled out ran for 65% more than his own form); the card shows his own history beside it.", null],
+    ["A quarterback’s passing touchdowns", "Every NFL quarterback carries a projected touchdown count beside his passing yards, with the game-by-game history behind it. College quarterbacks deliberately do not: measured on our own college seasons, the same projection sorts a passer barely better than a coin toss, which is under the bar we publish anything at.", null],
+    ["Sim lab", "Run tonight two thousand times on any prop and watch the distribution draw itself — on the prop’s own page and on a searched player’s card. Every draw comes from the model’s curve for that pick, so it shows the number’s uncertainty rather than new information.", null],
+    ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position.", "team"],
+    ["Rosters", "Every team’s roster in every league, each row opening the player.", "rosters"],
+    ["Standings & rankings", "Records, the bracket, and — for football — a ranking of every team’s offence and defence.", "standings"],
+    ["The races", "College football’s playoff race — the bracket if it started today, every contender’s chances, the games that swing it — and the NBA Cup’s groups, tiebreakers and odds.", "race"],
+    ["Trending", "Form movers: who is climbing and who is falling, measured rather than asserted.", "trending"],
+    ["Injuries & news", "Designations league-wide, who replaces the man who is out, and a rights-clean news section.", "injuries"],
+    ["Weather", "Tonight’s conditions park by park, with the roof and the surface.", "weather"],
+    ["Game scripts", "What the market expects a game to look like — one script shared by the props, the Most Likely board and the fantasy pages, so the three cannot contradict each other.", null],
+    ["Plain-English explainer", "Every pick can say why, in a sentence, behind a tap.", null]]],
+
+  ["Fantasy football", "A season’s worth of tools",
+   [["Draft kit", "A VORP board with tiers, and live Sleeper draft sync while you are actually drafting.", "fantasy"],
+    ["Mock draft simulator", "A snake draft against the room, off the same board the kit publishes — set the league size, the scoring and your slot, and draft it out.", null],
+    ["Auction values", "The same board priced for an auction instead of a snake, toggled in place.", null],
+    ["Usage", "Who is getting the ball and whose share is moving: targets, carries, air yards, red-zone work.", null],
+    ["Waivers & starts", "Whose job just changed, who to stream this week, and the same question asked of Sleeper’s own trending list beside our signal.", null],
+    ["Trade targets", "Buy low and sell high — where production and opportunity disagree.", null],
+    ["Rankings", "Every source we can read without a password, and where they argue with each other.", null],
+    ["Start calendar", "On Fantasy’s Calendar tab: the best play for every game day, and under it a second calendar built from the players you actually roster in your own league.", null],
+    ["Start or bench", "A dossier that answers the lineup call from your own league’s settings — on Sleeper and on ESPN.", null],
+    ["Around the league", "Camp, the offseason, the waiver wire and the draft kit in one room.", null]]],
+
+  ["Beyond sport", "Two markets that are not games",
+   [["Prediction market", "Every live market on Kalshi and Polymarket in one table, plus the desk’s own picks.", "intel"],
+    ["Informed flow", "Polymarket’s public tape — who is betting, scored for anomalies, with receipts on every chip. Kalshi does not publish this.", null],
+    ["Top traders", "Who is actually winning on that tape, by realised profit.", null],
+    ["Rocket Radar", "Solana meme-coin momentum and danger, on its own fast clock.", "memes"],
+    ["UFC", "The fight model — the card, the styles, and the live bout feed.", "ufc"]]],
+
+  ["Finding the wrong price", "Where the market disagrees with itself",
+   [["Line shopping", "Every book’s number on one row, per market, per side.", "scanner"],
+    ["Stale & arb scanner", "Lines that have not moved when they should have, and prices that contradict each other across books.", null],
+    ["Line movement", "How a number has travelled since it opened, on the prop page and the game card.", null],
+    ["Book report card", "Which books are early, which are late, and which move first — facts about books, with no pick attached.", null]]],
+
+  ["Your account", "Your money, your picks, your people",
+   [["My Bets", "Log your own tickets and track them to settlement, graded by the same rules the house journal uses — with a report card: your hit rate against what your prices needed, and your closing-line value.", "mybets"],
+    ["Toolbox", "Odds, no-vig, parlay, Kelly and break-even; a middle finder, a bankroll simulator and a slate sizer; and each sport’s own tools.", "tools"],
+    ["Bankroll", "Size your units, set your limits, and see what is at risk.", "bankroll"],
+    ["Alerts", "Line moves, injuries and the desk — conditions you set, fired when they happen.", "alerts"],
+    ["Social", "Parlays, takes and polls under one profile for the whole site. Follow, like, comment, and tap the whale to tail a parlay at your book.", "feed"],
+    ["Messages & friends", "Send picks to friends as chart-linked cards, chat in real threads, nickname whoever you like.", "messages"],
+    ["The Discord", "Where the site posts last night’s record, the Pick of the Day and the board by itself, and where members talk it over.", "discord"],
+    ["The Streak", "Pick three, keep the streak alive. Free, and free by design — it publishes no model output at all.", "streak"],
+    ["Share cards", "Any pick as an image, and a proper preview on every page you share.", null],
+    ["Email digests", "A morning card and a nightly recap, if you want them.", null],
+    ["Install it", "Add it to your phone’s home screen. It works offline enough to read, and says so when it cannot reach us.", null],
+    ["Edge Report", "Your own tracked bets read back to you — your closing-line value, your ROI by market, your best and worst bets and the hours you bet. Information, never advice.", "account"],
+    ["Your data", "Everything the site keeps about you, on one page, with a download and a delete.", "account"],
+    ["Weekly limit", "Set a weekly bet limit in Settings: My Bets warns you when you reach it, and a limit or a pause stops every promotional alert.", "account"]]],
+
+  // PLAY ALONG (the 2026-10-30 audit): everything that shipped from the
+  // karma week on — pick'em, Call it, the trivia, the vote, the ladders —
+  // had never been written up here.
+  ["Play along", "Free games — no stake, no prize",
+   [["Weekly pick’em", "Every NFL and college game against the spread, every week: standings for everyone and for your friends, private groups with an invite link, a push before picks lock, Tuesday’s recap and a season record on your profile. On The Feed’s Pick’em tab.", "feed"],
+    ["Call it", "In any game’s room, call what happens next and see the room’s calls beside yours.", "live"],
+    ["Today’s question and trivia", "One question a day for everybody, and quick trivia in a live game’s stoppages.", "live"],
+    ["Player of the game", "When a game goes final its room votes on who won it.", "live"],
+    ["Karma and levels", "Karma for showing up, calling it right and winning pick’em — levels, badges, flair and trophies on your profile, with a share card for each level. No cash value, and never paid for a bet.", "account"],
+    ["Closing-line leaderboards", "Opt in and your tracked bets’ closing-line value ranks you against everyone and against your friends, this week and over 90 days — verified prices and closed legs only. On The Feed.", "feed"]]],
+
+  ["The receipts", "How you check whether any of it works",
+   [["Record", "Every settled pick at the price we found it, graded in public, with a profit calendar and the verdict in units.", "record"],
+    ["Zeno’s Picks", "Zeno’s own tickets at FanDuel, DraftKings and theScore Bet — the record as the books settled it, and what he has riding now to tail.", "zeno"],
+    ["By product", "Edge bets and Most Likely kept in separate books, so a good month on one cannot flatter the other.", null],
+    ["Calibration", "When we say 60%, does it land 60% of the time — plotted, not claimed.", null],
+    ["What it learned", "What the model changed its mind about, and on what evidence.", null],
+    ["Model vs market", "Closing-line value: whether our number beat the one the market settled on.", null],
+    ["The lab", "The measurements behind the boards — backtests, bake-offs, and the fits that were declined.", "lab"],
+    ["Method", "How the numbers are made, in detail.", "methodology"],
+    ["Status", "When each board last rebuilt, and what every feed is doing.", "status"],
+    ["Verify", "Proof that every pick was written down before its game: the chain head, stamped on Bitcoin.", "verify"],
+    ["Why us", "Why this beats a picks service, with the open math toolbox.", "why"],
+    ["What this is", "What the site does, what it deliberately does not do, and the responsible-gambling terms.", "about"]]],
+];
+
 function renderFeatures() {
   const host = document.getElementById("features-body");
   if (!host) return;

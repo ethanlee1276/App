@@ -251,7 +251,11 @@ APP_JS_BUDGET_KB = 290
 #: race page's menu row, section, stub and Features line (+0.34 KB) — the races themselves
 #: load on first use (js/race.js, css/race.css). 397,297 -> 393,892 B, and
 #: the budget keeps the rest of the saving.
-BOOT_BUDGET_KB = 386
+#: 386 -> 381 on 2026-10-30, DOWN, in the audit: the Features page's list
+#: (FEATURES, 13.6 KB of text) moved to js/more.js with the page that draws
+#: it, which paid for the free Pick of the Day's page wiring and left the
+#: first visit 394,149 -> 389,157 B; the budget keeps the saving.
+BOOT_BUDGET_KB = 381
 
 
 def _gz_trimmed(rel: str) -> int:

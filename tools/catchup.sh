@@ -665,6 +665,10 @@ run IJ "The Pick of the Day is free" 60 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function renderPotdPage(...a)'
 curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdPageHTML(top, rec, walled)'
 sudo grep -cF '/js/potd.js /css/potd.css' /etc/caddy/Caddyfile
+curl -s https://qellysbook.com/js/more.js | grep -c 'const FEATURES = \['
+curl -s https://qellysbook.com/robots.txt | grep -c 'Sitemap: https://qellysbook.com/sitemap.xml'
+curl -s https://qellysbook.com/sitemap.xml | grep -c '<loc>https://qellysbook.com/</loc>'
+curl -s https://qellysbook.com/data/news.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('generated_at')); print({s: len(r) for s, r in (d.get('sports') or {}).items()}); print(d.get('errors'))"
 curl -s https://qellysbook.com/data/day_top_pick.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('sport'), (d.get('pick') or {}).get('player')); [print(s, (c.get('verdict') or {}).get('call'), (c.get('pick') or {}).get('player')) for s, c in (d.get('leagues') or {}).items()]"
 curl -s https://qellysbook.com/data/day_top_pick.json | grep -c board_best
 curl -s https://qellysbook.com/data/nba.json | python3 -c "import json,sys; c=json.load(sys.stdin).get('pick_of_the_day') or {}; print((c.get('verdict') or {}).get('call'), (c.get('pick') or {}).get('player'), 'board_best' in c)"
