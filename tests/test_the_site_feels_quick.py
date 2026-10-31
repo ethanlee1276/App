@@ -121,7 +121,9 @@ def test_the_table_fade_reads_widths_after_layout():
 def test_the_rail_fade_measures_once_a_frame():
     i = APP.index('sb.classList.toggle("sb-more"')
     block = APP[i - 700:i + 200]
-    assert "if (queued) return;" in block and "requestAnimationFrame(() => {" in block
+    # Once a frame, and only while the rail shows (2026-10-31: the closed
+    # drawer on a phone laid the page out at boot for nothing).
+    assert "if (queued || !shown) return;" in block and "requestAnimationFrame(() => {" in block
 
 
 def test_the_marks_and_sorting_still_reach_every_render():

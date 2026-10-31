@@ -69,7 +69,9 @@ def test_the_button_stays_on_game_pages_and_the_sheet_may_open_from_live():
     assert 'const chatOnGame = () => state.view === "pbp" || state.view === "game";' in CHAT
     assert 'return !(chatOnGame() || state.view === "live");' in CHAT
     fab = _fn(CHAT, "chatFab")
-    assert "if (!chatOnGame() || !CH.room) { if (f) f.remove(); return; }" in fab
+    # …and its class goes with it (chatFabMark, for chat.css's room at the
+    # foot of the game page — 2026-10-31, no :has() on the body).
+    assert "if (!chatOnGame() || !CH.room) { if (f) f.remove(); chatFabMark(); return; }" in fab
 
 
 def test_every_play_row_carries_its_thread():
