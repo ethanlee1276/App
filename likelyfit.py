@@ -39,6 +39,9 @@ from; the earlier days choose, keeping at least 30 picks and 30% of them):
                  (vig in) at least E               E in -.02 0 .02 .04 .06
     fair_floor   our chance minus the de-vigged
                  market consensus at least E       E in -.02 0 .02 .04 .06
+    price_value  the price we took beats the market's own chance
+                 by V or more (its break-even at least V under the
+                 de-vigged consensus)              V in -.02 -.01 0 .01 .02
     shelf_cut    drop any sport-market-side that lost more than 5% on
                  30+ earlier picks
     side         overs only, or unders only
@@ -52,6 +55,21 @@ from; the earlier days choose, keeping at least 30 picks and 30% of them):
     maker        the Most Likely list's own picks only, without the
                  board's matchup, scenario and bold picks (2026-10-31:
                  the board took a Sunday from about 70 picks to 300)
+
+THE MARKET'S CHANCE (fair_floor and price_value, 2026-10-31). Ethan's paste
+of this run that day: the chance we show had come honest (the one board
+said 58% and hit 58% in week 7) and the books still won, because a pick
+that hits what it claims at a price needing three points more loses about
+5%. A filter on our chance cannot fix that; a price better than the
+market's chance can — so price_value asks it on days it never saw. The
+market's chance is pricetrust's, for the pick's own side: the field's
+de-vigged median at its line, three books or more, journaled with the row
+or rebuilt from our own snapshots in the six hours before the pick
+(pricetrust.attach_market), never the close. Until that day fair_floor
+read the journaled `fair_consensus` straight — the OVER's chance — so an
+under was set against the wrong side; it reads the same side's chance now.
+`--no-market` skips the snapshot read (both rules then judge only rows
+journaled with a field).
 
 A row a rule cannot judge (no edge, no consensus, no time to start) is
 kept, and the coverage is printed beside the rule.
@@ -67,7 +85,7 @@ THE BAR, WRITTEN BEFORE ANY RUN — the contract:
 
 Even at 99%, eight rules tried means one can pass by luck about one run
 in twenty-five (ten since day_cut and maker joined, 2026-10-31: about one
-in twenty). A rule is therefore applied to the board only after it PASSES on two runs
+in twenty; eleven with price_value, the same day: about one in eighteen). A rule is therefore applied to the board only after it PASSES on two runs
 at least two weeks apart, the second scored on days the first never saw.
 Changing these constants after seeing a run is fitting the bar.
 
@@ -111,6 +129,7 @@ GRIDS = {
     "prob_floor": (0.50, 0.55, 0.60, 0.65, 0.70),
     "edge_floor": (-0.02, 0.0, 0.02, 0.04, 0.06),
     "fair_floor": (-0.02, 0.0, 0.02, 0.04, 0.06),
+    "price_value": (-0.02, -0.01, 0.0, 0.01, 0.02),
     "side": ("OVER", "UNDER"),
     "late_only": (120, 360, 1440),
     "tier": (("Top pick",), ("Top pick", "Strong")),
@@ -120,6 +139,7 @@ WORDS = {
     "prob_floor": "our chance at least {:.0%}",
     "edge_floor": "our chance beats the book's by {:+.0%} or more",
     "fair_floor": "our chance beats the market consensus by {:+.0%} or more",
+    "price_value": "the price beats the market's chance by {:+.0%} or more",
     "shelf_cut": "drop {}",
     "side": "{} only",
     "late_only": "taken within {} minutes of the start",
@@ -149,8 +169,8 @@ def load(conn, sport: str | None = None, book: str = "likely") -> list[dict]:
         sql, args = "category=?", [L.BOARD_CATEGORY]
     else:
         sql, args = L.books_sql(L.LIKELY_BOOKS + (L.BOARD_CATEGORY,))
-    q = (f"SELECT sport, market, UPPER(COALESCE(side,'')) side, odds, hit_prob, edge, fair_consensus, "
-         f"status, grade, lead_min, game_day, date, ts, category FROM bets WHERE {sql} "
+    q = (f"SELECT id, sport, player, market, line, UPPER(COALESCE(side,'')) side, odds, hit_prob, edge, "
+         f"fair_consensus, status, grade, lead_min, game_day, date, ts, category FROM bets WHERE {sql} "
          "AND status IN ('won','lost') AND stake_units > 0 AND odds IS NOT NULL")
     if sport:
         q += " AND LOWER(sport)=?"
@@ -173,6 +193,34 @@ def load(conn, sport: str | None = None, book: str = "likely") -> list[dict]:
         d["weekday"] = _dt.date.fromisoformat(day).strftime("%A")
         out.append(d)
     return out
+
+
+def attach_market(rows: list[dict], snapshots=None, look=True) -> dict:
+    """Each row's market chance for its own side (THE MARKET'S CHANCE), in
+    ``market_p``; returns the count by where it came from. ``look=False``
+    reads only a field journaled with the row."""
+    import pricetrust
+    if look:
+        return pricetrust.attach_market(rows, snapshots)
+    for r in rows:
+        fc = r.get("fair_consensus")
+        try:
+            fc = float(fc) if fc is not None else None
+        except (TypeError, ValueError):
+            fc = None
+        ok = fc is not None and 0.0 < fc < 1.0
+        r["market_p"] = (1.0 - fc if pricetrust.under(r.get("side")) else fc) if ok else None
+        r["market_src"] = "journaled" if ok else "none"
+    out: dict = {}
+    for r in rows:
+        out[r["market_src"]] = out.get(r["market_src"], 0) + 1
+    return out
+
+
+def _need(odds) -> float:
+    """What the American price needs to break even."""
+    o = float(odds)
+    return -o / (-o + 100.0) if o < 0 else 100.0 / (o + 100.0)
 
 
 def split(rows: list[dict]) -> tuple[list, list]:
@@ -198,8 +246,11 @@ def _rule(name, param, banned=None):
         return (lambda r: r["edge"] is None or float(r["edge"]) >= param,
                 lambda r: r["edge"] is not None)
     if name == "fair_floor":
-        ok = lambda r: r["fair_consensus"] is not None and r["hit_prob"] is not None  # noqa: E731
-        return (lambda r: not ok(r) or float(r["hit_prob"]) - float(r["fair_consensus"]) >= param, ok)
+        ok = lambda r: r.get("market_p") is not None and r["hit_prob"] is not None  # noqa: E731
+        return (lambda r: not ok(r) or float(r["hit_prob"]) - float(r["market_p"]) >= param - 1e-9, ok)
+    if name == "price_value":
+        ok = lambda r: r.get("market_p") is not None  # noqa: E731
+        return (lambda r: not ok(r) or float(r["market_p"]) - _need(r["odds"]) >= param - 1e-9, ok)
     if name == "side":
         return lambda r: r["side"] == param, lambda r: True
     if name == "late_only":
@@ -277,8 +328,8 @@ def study(rows: list[dict]) -> dict:
     if len(test) < MIN_TEST:
         out["note"] = f"{len(test)} picks on the later days; {MIN_TEST} needed before a rule can be judged"
         return out
-    names = ["price_cap", "prob_floor", "edge_floor", "fair_floor", "shelf_cut", "side", "late_only",
-             "day_cut", "maker"]
+    names = ["price_cap", "prob_floor", "edge_floor", "fair_floor", "price_value", "shelf_cut", "side",
+             "late_only", "day_cut", "maker"]
     if any(r["grade"] for r in rows) and all(r["grade"] in ("Top pick", "Strong", "Worth a look", None, "")
                                              for r in rows):
         names.append("tier")
@@ -348,14 +399,23 @@ def main(argv=None) -> int:
     ap.add_argument("--book", default="likely", choices=("likely", "board"))
     ap.add_argument("--db", default=str(ROOT / "data" / "ledger.db"))
     ap.add_argument("--json", default="")
+    ap.add_argument("--snapshots", default=None, help="the odds snapshots (default data/cache/line_history.jsonl)")
+    ap.add_argument("--no-market", action="store_true",
+                    help="skip the snapshot read: the market's chance only where journaled with the pick")
     a = ap.parse_args(argv)
     conn = _ro(a.db)
     print("MOST LIKELY — WHICH PICKS TO STOP TAKING, judged on days the choice never saw (read-only)")
     print("A rule is applied only after it PASSES on two runs two weeks apart. See the top of likelyfit.py.")
     results = {}
+    every = load(conn, a.sport.lower() or None, a.book)
+    found = attach_market(every, a.snapshots, look=not a.no_market) if every else {}
+    if found:
+        print("The market's chance at pick time: " + ", ".join(
+            f"{n} {({'journaled': 'journaled with the pick', 'snapshots': 'from our snapshots', 'none': 'none to find'}).get(k, k)}"
+            for k, n in sorted(found.items(), key=lambda kv: -kv[1])))
     sports = [a.sport.lower()] if a.sport else ["all"] + [s for s in L.TRACKED_SPORTS]
     for sp in sports:
-        rows = load(conn, None if sp == "all" else sp, a.book)
+        rows = every if sp == "all" or a.sport else [r for r in every if str(r["sport"] or "").lower() == sp]
         if sp != "all" and not rows:
             continue
         results[sp] = study(rows)

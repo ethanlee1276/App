@@ -9305,6 +9305,59 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**IW. Your audit read: tight-end unders come off, and the price question**
+(step 309; your paste of IT's three files, 2026-10-31).
+
+What the three files said, in short:
+
+- The five under cautions from this morning hold up. Four are short in
+  both halves of the season; the fifth (a new head coach) is z −2.4 on the
+  one read it has.
+- One more holds the same way: a tight end's under hit 48% where we said
+  60% (100 picks, short in both halves). It now comes off the NFL board,
+  and so off the list. A tight end's over stays.
+- The chances have come honest. Since week 4 the board said 57–59% a week
+  and hit 56–58%. What loses now is the price: the staked list hit 61% at
+  prices that needed 63%. No bar on our chance can fix that; only a better
+  price can.
+- The rule tester judged the 60% bar on the later weeks: on the list 0.9
+  points worse, on the board 2.3 points better, neither proven. It stays,
+  with its off switch, and is judged again next run.
+- Picks priced at Novig lost in all three books (−16%, −17%, −14%). The
+  loss audit's new cuts below say whether those were lines no three books
+  priced; nothing changes on that until they do.
+
+What's new, read-only:
+
+1. The loss audit asks the price question: did we take a price better than
+   the market's own chance (the median of three books or more at the pick's
+   line, from before the pick)? It also counts the picks with no such
+   field, which the price check can't reach, and says who made each board
+   pick. The rule tester tries the same thing as a rule on weeks it never
+   saw ("price_value"). Both read our odds snapshots, so they take a few
+   minutes. Paste back `/tmp/iw_loss.txt` and `/tmp/iw_fit.txt`.
+2. The thin-picks test from 10-19 (EXP-R06): on 10-17, 133 of 230 NFL picks
+   had no three-book field, so the price check left them alone. This tries
+   pricing them from the books' main lines on the weeks since. Paste back
+   `/tmp/iw_thin.txt`; a pass comes to you before anything changes.
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 lossaudit.py --sport nfl 2>&1 | tee /tmp/iw_loss.txt; sudo -u qellys nice -n 19 python3 likelyfit.py --sport nfl 2>&1 | tee /tmp/iw_fit.txt; sudo -u qellys nice -n 19 python3 likelyfit.py --sport nfl --book board 2>&1 | tee -a /tmp/iw_fit.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/thinmarket_box.py 2>&1 | tee /tmp/iw_thin.txt
+```
+
+That the box has it (each count should be 1 or more):
+
+```
+cd /srv/qellys && git log --oneline -1 && grep -c "NFL_UNDER_POSITIONS" engine/likelyboard.py && grep -c "def price_vs_market" lossaudit.py && grep -c "price_value" likelyfit.py
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IW 2>&1 | tee /tmp/iw.txt
+```
+
 **IV. The NBA first-basket study** (step 308; you, 2026-10-31: "first
 basket score for NBA"). Read-only: it reads the box's stored NBA shots and
 changes nothing. It answers how often the team with the first shot (the
@@ -9403,7 +9456,7 @@ d = json.load(open('data/built/recommendations.json'))
 b = d.get('likely_board') or {}
 held = [r for r in b.get('held') or [] if r.get('tight_hold')]
 print(len(b.get('rows') or []), 'board picks;', len(held), 'held by the tightening;', b.get('tightened_off_list', 0), 'taken off the list')
-print(Counter('the 60% bar' if 'asks 60%' in str(r.get('held_note')) else 'a scout caution' for r in held))
+print(Counter('the 60% bar' if 'asks 60%' in str(r.get('held_note')) else 'tight-end under' if 'tight end' in str(r.get('held_note')) else 'a scout caution' for r in held))
 [print(' ', r.get('player'), r.get('market'), r.get('side'), r.get('line'), round(float(r.get('model_prob') or 0), 3), '-', r.get('held_note')) for r in held[:8]]
 "
 ```

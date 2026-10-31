@@ -1244,8 +1244,9 @@ def main() -> None:
         # said every build so a switched-off or idle rule is visible.
         _tight = [r for r in result["likely_board"].get("held") or [] if r.get("tight_hold")]
         _bar = sum(1 for r in _tight if "asks 60%" in str(r.get("held_note")))
+        _te = sum(1 for r in _tight if "tight end's under" in str(r.get("held_note")))
         print(f"  NFL tightening {'on' if _lb_tightened() else 'OFF'}: {_bar} held under the 60% bar, "
-              f"{len(_tight) - _bar} under(s) the scout cautions against, "
+              f"{len(_tight) - _bar - _te} under(s) the scout cautions against, {_te} tight-end under(s), "
               f"{result['likely_board'].get('tightened_off_list', 0)} taken off the list")
         # THE PRICE ON THE BOARD (likelyboard.trust_price), said every build so
         # a rule that moves nothing can never pass for one that is working.

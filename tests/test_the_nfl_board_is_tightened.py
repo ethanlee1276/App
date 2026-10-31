@@ -148,6 +148,36 @@ def test_an_under_the_scout_cautions_against_comes_off():
     assert all(c in scout.FLAGS for c in B.NFL_UNDER_CAUTIONS), "every one a flag the scout raises"
 
 
+def test_a_tight_ends_under_comes_off():
+    """nflaudit on the box (Ethan's paste, 2026-10-31): tight-end unders hit
+    48% where we said 60% over 100 picks, short in both halves — the one
+    position and side marked HOLDS. Overs, other positions, touchdowns,
+    posted picks and college are untouched."""
+    te = _prop("G Tight End", 0.66, side="UNDER", position="TE", market="receptions")
+    assert B.tightened_reason(te, "nfl").startswith("held back: a tight end's under")
+    assert "48% where we said 60%" in B.tightened_reason(te, "nfl")
+    assert B.tightened_reason(dict(te, position="te"), "nfl"), "any case"
+    assert B.tightened_reason(dict(te, side="OVER"), "nfl") is None, "a tight end's over stays"
+    assert B.tightened_reason(dict(te, position="WR"), "nfl") is None, "a receiver's under stays"
+    assert B.tightened_reason(dict(te, locked=True), "nfl") is None, "a posted pick keeps its seat"
+    assert B.tightened_reason(te, "cfb") is None, "college is not tightened"
+    with _Env("off"):
+        assert B.tightened_reason(te, "nfl") is None, "QB_NFL_TIGHT=off puts it back"
+    assert set(B.NFL_UNDER_POSITIONS) == {"TE"}
+
+
+def test_the_board_finds_a_tight_end_from_the_props_when_the_row_has_no_position():
+    # On the favourite, so no scout caution reaches it first.
+    row = _prop("H Kincaid", 0.64, side="UNDER", market="rec_yds", team="DET", opponent="NYJ")
+    result = _result([row])
+    result["recommendations"] = [{"player": "H Kincaid", "position": "TE", "market": "rec_yds"}]
+    with _Env(None):
+        b = B.build(result, record={}, sport="nfl", tiers_seen={})
+    held = {r["player"]: r for r in b["held"]}
+    assert "H Kincaid" in held and held["H Kincaid"]["tight_hold"], [r["player"] for r in b["rows"]]
+    assert "tight end's under" in held["H Kincaid"]["held_note"]
+
+
 def test_the_matchup_read_no_longer_rescues_an_nfl_prop_under_sixty():
     """The 10-07 rule kept a pick the record pulled under 50% when the
     matchup read backed it. On the tightened NFL board the bar is 60% and

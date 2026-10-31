@@ -57,6 +57,29 @@ Strong / 1u Worth a look against 1u flat, as units won per 100 picks.
 Sizing multiplies a result; it cannot change its sign. This shows by how
 much, on the record itself.
 
+THE PRICE AGAINST THE MARKET. Ethan's paste of this audit, 2026-10-31:
+the record's chances had come honest week by week (the one board said 58%
+and hit 58% in week 7) and the books still won, because a calibrated pick
+at a price that needs three points more than it hits loses about 5% — no
+filter on our chance can fix that. What can is the price: did we take one
+better than the MARKET'S own chance? That chance is pricetrust's — the
+field's de-vigged median at the bet's own line, three books or more,
+journaled with the row or rebuilt from our own snapshots in the six hours
+before the pick (pricetrust.attach_market), never the close. Every book
+is cut by where its price's break-even sat against it ("better than the
+market's chance" is a price we would take every time), and by whether the
+line had such a field at all: a pick with none is one the board's price
+check (likelyboard.trust_price) cannot reach. `--no-market` skips the
+snapshot read.
+
+WHO PUT IT UP. The one board pools four makers — the Most Likely list,
+the matchup picks, the touchdown scenarios and the bolder-than-the-books
+rows — and the board's own journal does not say which. Each board pick is
+credited to the first of bold, the list, the matchup picks and the
+scenarios whose own book holds the same pick (engine/likelycal's order),
+on the chance the board showed — nflaudit.py reads the same makers on the
+raw claim, before the corrections.
+
 THE LEAKS. At the end, every slice with at least MIN_N settled bets that
 lost units and is two standard errors from its price or its claim, the
 biggest loss first. That list is the work.
@@ -99,7 +122,17 @@ CLAIM_BANDS = ((0.80, 1.01, "80%+"), (0.70, 0.80, "70-80%"), (0.60, 0.70, "60-70
 TIER_UNITS = {"Top pick": 3.0, "Strong": 2.0, "Worth a look": 1.0}
 COLUMNS = ("id", "sport", "date", "player", "market", "side", "line", "book", "odds", "projection",
            "hit_prob", "edge", "grade", "stake_units", "status", "actual", "pnl_units",
-           "closing_line", "closing_odds", "category", "loss_cause", "game_day", "lead_min")
+           "closing_line", "closing_odds", "category", "loss_cause", "game_day", "lead_min",
+           "ts", "fair_consensus")
+#: Where a price's break-even sat against the market's chance (THE PRICE
+#: AGAINST THE MARKET), in probability points: at or under it, then worse.
+VALUE_BANDS = ((0.0, "better than the market's chance"), (0.02, "up to 2 points worse"),
+               (0.04, "2 to 4 points worse"), (9.0, "4+ points worse"))
+#: The books a board pick can also sit in, in the order it is credited
+#: (WHO PUT IT UP; engine/likelycal.SOURCE_BOOKS and source_of_row).
+MAKER_BOOKS = (("bold", "bolder than the books"), ("likely", "the Most Likely list"),
+               ("matchup_td", "the matchup picks"), ("matchup_prop", "the matchup picks"),
+               ("td_scenario", "the touchdown scenarios"))
 
 
 def open_ledger(path) -> sqlite3.Connection:
@@ -244,6 +277,67 @@ def covered(b) -> str:
     return "our chance covered the price" if claim >= need else "the price needed more than our chance"
 
 
+def price_vs_market(b) -> str:
+    """Where the price's break-even sat against the market's chance at pick
+    time (`attach_market`), or that there was none on file."""
+    need, market = _implied(b["odds"]), b.get("market_p")
+    if need is None or market is None:
+        return "no market chance on file"
+    gap = need - float(market)
+    for edge, label in VALUE_BANDS:
+        if gap <= edge + 1e-9:
+            return label
+    return VALUE_BANDS[-1][1]
+
+
+def field_at_line(b) -> str:
+    """Did three books or more price both sides of the bet's own line?"""
+    src = b.get("market_src")
+    if src in ("journaled", "snapshots"):
+        return "3+ books priced our line"
+    if src == "none":
+        return "under 3 books at our line"
+    return "(not looked up)"
+
+
+def attach_market(bets, snapshots=None) -> dict:
+    """Each bet's market chance for its side (pricetrust's, see THE PRICE
+    AGAINST THE MARKET); returns the count by where it came from."""
+    import pricetrust
+    return pricetrust.attach_market(bets, snapshots)
+
+
+def _day(d) -> str:
+    return str(d.get("game_day") or d.get("date") or "")[:10]
+
+
+def attach_makers(conn, bets, sport=None) -> None:
+    """Credit each board pick to its maker (WHO PUT IT UP): ``maker`` on
+    every board row, "the board alone" where no maker's book holds it."""
+    board = [b for b in bets if b["category"] == "board"]
+    if not board:
+        return
+    order = {cat: i for i, (cat, _w) in enumerate(MAKER_BOOKS)}
+    words = dict(MAKER_BOOKS)
+    have = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
+    day_cols = [c for c in ("game_day", "date") if c in have]
+    sql = (f"SELECT category, player, market, side, {', '.join(day_cols)} FROM bets "
+           f"WHERE category IN ({','.join('?' * len(order))})")
+    args: list = list(order)
+    if sport:
+        sql += " AND LOWER(sport) = ?"
+        args.append(sport.lower())
+    best: dict = {}
+    for r in conn.execute(sql, args):
+        d = dict(r)
+        k = (_day(d), d["player"], d["market"], str(d["side"] or "").upper())
+        if k not in best or order[d["category"]] < order[best[k]]:
+            best[k] = d["category"]
+    for b in board:
+        cat = best.get((_day(b), b["player"], b["market"], str(b["side"] or "").upper()))
+        b["maker"] = words[cat] if cat else "the board alone"
+
+
 def sizing(bets: list) -> dict | None:
     """Units won per 100 picks at 1u flat, and at TIER_UNITS by tier, on
     the same settled picks — None for a book with no tiers."""
@@ -272,6 +366,8 @@ def slices(bets: list) -> dict:
         "price": lambda b: _band(_implied(b["odds"]), PRICE_BANDS),
         "claimed": lambda b: _band(float(b["hit_prob"]) if b["hit_prob"] is not None else None, CLAIM_BANDS),
         "our chance against the price": covered,
+        "the price against the market's chance": price_vs_market,
+        "the market's field": field_at_line,
         "the close": close_verdict,
         "sportsbook": lambda b: (b["book"] or "").lower() or "(none)",
         "week": _week,
@@ -280,6 +376,7 @@ def slices(bets: list) -> dict:
     }
     if any(b["category"] == "board" for b in bets):
         keys["tier"] = lambda b: b["grade"] or "(none)"
+        keys["who put it up"] = lambda b: b.get("maker") or "the board alone"
     out = {}
     for name, fn in keys.items():
         groups: dict = defaultdict(list)
@@ -364,8 +461,10 @@ def overclaimed(report: dict, min_n: int = MIN_N, z: float = LEAK_Z) -> list:
     return sorted(out, key=lambda r: r["z"])
 
 
-def audit(conn, since=None, sport=None) -> dict:
+def audit(conn, since=None, sport=None, snapshots=None, market=True) -> dict:
     rows = load(conn, since, sport)
+    found = attach_market(rows, snapshots) if market and rows else {}
+    attach_makers(conn, rows, sport)
     books = {}
     for label, cats in BOOKS:
         mine = [b for b in rows if b["category"] in cats]
@@ -374,7 +473,7 @@ def audit(conn, since=None, sport=None) -> dict:
         books[label] = {"total": score(mine), "slices": slices(mine), "causes": causes(mine),
                         "projection": projection_bias(mine), "sizing": sizing(mine),
                         "first": mine[0]["date"], "last": mine[-1]["date"]}
-    report = {"since": since, "sport": sport, "books": books}
+    report = {"since": since, "sport": sport, "books": books, "market_found": found}
     report["leaks"] = leaks(report)
     report["overclaimed"] = overclaimed(report)
     return report
@@ -398,7 +497,13 @@ def render(report: dict, top: int = 12) -> str:
     scope = ", ".join(x for x in (report.get("sport") and report["sport"].upper(),
                                   report.get("since") and f"since {report['since']}") if x)
     out.append(f"LOSS AUDIT — every settled bet{f' ({scope})' if scope else ''}, each book on its own")
-    out.append("  z = wins against the price / against our claim; between -2 and +2 is 'not enough to say'.\n")
+    out.append("  z = wins against the price / against our claim; between -2 and +2 is 'not enough to say'.")
+    mf = report.get("market_found")
+    if mf:
+        out.append("  the market's chance at pick time: " + ", ".join(
+            f"{n} {({'journaled': 'journaled with the pick', 'snapshots': 'from our snapshots', 'none': 'none to find'}).get(k, k)}"
+            for k, n in sorted(mf.items(), key=lambda kv: -kv[1])))
+    out.append("")
     if not report["books"]:
         out.append("  No settled bets in the published books.")
         return "\n".join(out)
@@ -407,7 +512,9 @@ def render(report: dict, top: int = 12) -> str:
         out.append(_line("ALL", rep["total"]))
         for name, groups in rep["slices"].items():
             shown = [(k, s) for k, s in groups.items() if s["n"] >= 5][:top]
-            if len(shown) < 2 and name not in ("tier", "the close", "our chance against the price"):
+            if len(shown) < 2 and name not in ("tier", "the close", "our chance against the price",
+                                               "the price against the market's chance", "the market's field",
+                                               "who put it up"):
                 continue
             out.append(f"  -- by {name}")
             out += [_line(str(k), s) for k, s in shown]
@@ -450,11 +557,14 @@ def main(argv=None) -> int:
     ap.add_argument("--sport", help="one league: nfl, cfb, mlb, nba, wnba")
     ap.add_argument("--db", default=str(LEDGER), help="the ledger (default data/ledger.db)")
     ap.add_argument("--json", help="also write the full report here")
+    ap.add_argument("--snapshots", help="the odds snapshots (default data/cache/line_history.jsonl)")
+    ap.add_argument("--no-market", action="store_true",
+                    help="skip the market's chance (the snapshot read) and its two cuts")
     a = ap.parse_args(argv)
     if not Path(a.db).exists():
         print(f"No ledger at {a.db}.")
         return 1
-    report = audit(open_ledger(a.db), a.since, a.sport)
+    report = audit(open_ledger(a.db), a.since, a.sport, snapshots=a.snapshots, market=not a.no_market)
     print(render(report))
     if a.json:
         with open(a.json, "w", encoding="utf-8") as fh:

@@ -82,6 +82,51 @@ def test_a_thin_book_refuses_to_judge():
     assert res["rules"] == [] and "needed before a rule can be judged" in res["note"]
 
 
+def _priced_rows(seed=7, days=60, per_day=20):
+    """Every pick at -150 (needs 60%), the market's chance 70% on half of
+    them and 50% on the other half, each hitting at the market's chance —
+    one price, so only the price against the MARKET can tell them apart."""
+    rng = random.Random(seed)
+    start = dt.date(2026, 9, 1)
+    rows = []
+    for d in range(days):
+        day = start + dt.timedelta(days=d)
+        for i in range(per_day):
+            m = 0.70 if i % 2 == 0 else 0.50
+            won = rng.random() < m
+            rows.append({"ret": (100 / 150) if won else -1.0, "day": day.isoformat(),
+                         "weekday": day.strftime("%A"), "odds": -150, "hit_prob": 0.62, "edge": 0.0,
+                         "fair_consensus": None, "market_p": m, "side": "OVER", "lead_min": None,
+                         "grade": "", "sport": "nfl", "market": "rec_yds", "category": "likely"})
+    return rows
+
+
+def test_price_value_finds_a_price_better_than_the_markets_chance():
+    """2026-10-31: the chance had come honest and the books still won, so
+    the rule that can matter is the price against the market's chance."""
+    res = LF.study(_priced_rows())
+    pv = next(r for r in res["rules"] if r["rule"] == "price_value")
+    assert pv["verdict"] == "PASSES", pv
+    assert pv["test_roi"] > pv["test_all_roi"] and pv["diff"] > 0.05, pv
+    cap = next(r for r in res["rules"] if r["rule"] == "price_cap")
+    assert cap.get("verdict") != "PASSES", "one price: the cap cannot see it"
+    assert LF.WORDS["price_value"].format(0.02) == "the price beats the market's chance by +2% or more"
+
+
+def test_the_market_chance_is_the_picks_own_side():
+    """fair_consensus is the OVER's de-vigged chance; until 2026-10-31
+    fair_floor set an under's chance against it."""
+    rows = [{"side": "UNDER", "fair_consensus": 0.40}, {"side": "OVER", "fair_consensus": 0.40},
+            {"side": "UNDER", "fair_consensus": None}]
+    got = LF.attach_market(rows, look=False)
+    assert abs(rows[0]["market_p"] - 0.60) < 1e-9 and abs(rows[1]["market_p"] - 0.40) < 1e-9
+    assert rows[2]["market_p"] is None and got == {"journaled": 2, "none": 1}
+    keep, judged = LF._rule("fair_floor", 0.0)
+    under = dict(rows[0], hit_prob=0.62)
+    assert judged(under) and keep(under), "62% against the under's own 60%"
+    assert not keep(dict(rows[1], hit_prob=0.38)), "38% against the over's 40%"
+
+
 def test_the_ledger_is_never_written():
     _, p = _run(planted=True)
     before = p.read_bytes()

@@ -229,11 +229,26 @@ TIER_LABEL = dict(TIERS)
 #:     pick taken off for losing, but one the football read says the
 #:     game will go against.
 #:
+#:   * A TIGHT END'S UNDER (nflaudit.py on the box, Ethan's paste,
+#:     2026-10-31, the same 1,925 picks): tight-end unders hit 48% where we
+#:     said 60% over 100 picks, z −2.4, and over-claimed in both halves of
+#:     the season (46% against 64% to 2026-10-08, 49% against 57% after) —
+#:     the one position and side the audit marks HOLDS. The other way it
+#:     holds up better (tight-end overs 55% against 61%, WATCH, no hold).
+#:     A tight end's line is low and his targets come in bunches, so one
+#:     busy afternoon beats the under; and the audit's projection check
+#:     has receptions landing 9–12% above our projection all season.
+#:
 #: A posted pick (`locked`) keeps its seat, as every posted pick does, and
 #: a reserve row (labelled, never staked) is the reserve's to show.
 NFL_TIGHT_BAR = 0.60
 NFL_UNDER_CAUTIONS = ("dog_pass_under", "long_trip_under", "body_clock_under",
                       "new_coach_under", "shootout_under")
+#: Positions whose unders the board holds, and the reason each pick says.
+NFL_UNDER_POSITIONS = {
+    "TE": "a tight end's under — on our graded board, tight-end unders have hit 48% where we said 60% "
+          "(100 picks, short in both halves of the season)",
+}
 
 
 def tightened_reason(r: dict, sport: str) -> str | None:
@@ -251,6 +266,9 @@ def tightened_reason(r: dict, sport: str) -> str | None:
             from . import scout as _sc
             return (f"held back: {_sc.note(hit[0], sport)} — on our graded board, unders like "
                     "this have hit far less often than we said")
+        pos = str(r.get("position") or "").strip().upper()
+        if lane_of(r) == "prop" and pos in NFL_UNDER_POSITIONS:
+            return f"held back: {NFL_UNDER_POSITIONS[pos]}"
     return None
 
 
@@ -875,6 +893,9 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
         why_held = held_reason(r, checks)
         if not why_held:
+            # A scorer row carries no position; the props and the reads do.
+            if not r.get("position") and positions.get(r.get("player")):
+                r["position"] = str(positions[r["player"]]).upper()
             why_held = tightened_reason(r, sport)
             if why_held:
                 r["tight_hold"] = True

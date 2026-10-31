@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IW "Tight-end unders off; the price question" 60 <<'SH'
+cd /srv/qellys && git log --oneline -1 && grep -c "NFL_UNDER_POSITIONS" engine/likelyboard.py && grep -c "def price_vs_market" lossaudit.py && grep -c "price_value" likelyfit.py
+SH
 run IU "First touchdown is the NFL's Long Shots" 60 <<'SH'
 cd /srv/qellys && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "
 import json
@@ -679,7 +682,7 @@ d = json.load(open('data/built/recommendations.json'))
 b = d.get('likely_board') or {}
 held = [r for r in b.get('held') or [] if r.get('tight_hold')]
 print(len(b.get('rows') or []), 'board picks;', len(held), 'held by the tightening;', b.get('tightened_off_list', 0), 'taken off the list')
-print(Counter('the 60% bar' if 'asks 60%' in str(r.get('held_note')) else 'a scout caution' for r in held))
+print(Counter('the 60% bar' if 'asks 60%' in str(r.get('held_note')) else 'tight-end under' if 'tight end' in str(r.get('held_note')) else 'a scout caution' for r in held))
 [print(' ', r.get('player'), r.get('market'), r.get('side'), r.get('line'), round(float(r.get('model_prob') or 0), 3), '-', r.get('held_note')) for r in held[:8]]
 "
 SH
