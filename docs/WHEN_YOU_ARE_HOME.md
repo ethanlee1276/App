@@ -9305,6 +9305,18 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**IV. The NBA first-basket study** (step 308; you, 2026-10-31: "first
+basket score for NBA"). Read-only: it reads the box's stored NBA shots and
+changes nothing. It answers how often the team with the first shot (the
+opening tip) makes the first basket, whether a team's tip history carries
+from game to game, and which player share picks the scorer on games it
+never saw. Paste the output back. The NBA first-basket board is built from
+whatever it finds:
+
+```
+cd /srv/qellys && sudo -u qellys python3 tools/first_basket_study.py 2>&1 | tee /tmp/iv.txt
+```
+
 **IU. First touchdown is the NFL's Long Shots** (step 307; you,
 2026-10-31: "I only want our long shot picks to be stuff like first basket
 score for NBA or first touchdown score for NFL ... not just off of book
