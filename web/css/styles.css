@@ -6341,9 +6341,8 @@ body.has-deck #rail-live { display: none; }
 .ld-slot { flex: 0 0 52px; font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: 700;
   letter-spacing: .06em; color: var(--text-mute); }
 /* This week (engine/fantasyweek): the reason under a player reads as a
-   sentence, not a stat line, and a gap in his line is said quietly. */
+   sentence, not a stat line. */
 .hd-what .ffw-why { font-family: var(--font-sans); color: var(--text-dim); line-height: var(--lh-tight); }
-.hd-what .ffw-miss { font-family: var(--font-sans); color: var(--text-mute); font-style: italic; }
 .ffw-row .hd-what b { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ffw-row .hd-what b .hd-chip { margin: 0; }
 .ffw-pos { margin: 4px 0 10px; }
