@@ -1,0 +1,7007 @@
+#!/usr/bin/env python3
+"""Zero-dependency web server for the betting engine.
+
+Serves the static dashboard in ``web/`` and exposes a live JSON API at
+``/api/recommendations`` that re-runs the engine on every request — so the
+threshold controls in the UI recalculate against the real model, not a cached
+file. Uses only the Python standard library.
+
+    python3 server.py           # http://localhost:8000, sample data
+    python3 server.py 9000      # custom port
+    python3 server.py --live    # serve pre-built live data (see LAUNCH.md)
+"""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import io
+import ipaddress
+import json
+import os
+import re
+import sys
+import threading
+import time
+from email.utils import formatdate
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+
+from engine.pipeline import run_slate
+from engine.mlb.pipeline import run_mlb_slate
+from engine.rules import RuleConfig
+from engine import routes
+
+ROOT = Path(__file__).parent
+#: The served tree. QB_WEB_DIR overrides it, for the same reason
+#: QB_ACCOUNTS_DB overrides the database: a test that has to prove the
+#: paywall seals the public path must not do that to the working copy,
+#: and a test that redacts your real boards as a side effect is worse
+#: than no test. Also useful for a staging tree on the same box.
+WEB = Path(os.environ.get("QB_WEB_DIR", "").strip() or (ROOT / "web"))
+SLATE = ROOT / "data" / "sample_slate.json"
+MLB_SLATE = ROOT / "data" / "mlb_sample_slate.json"
+
+# In --live mode the API serves these freshly-built files (written by
+# mlb_build.py / nfl_build.py --out ...) instead of re-running the sample slate.
+LIVE_FILES = {
+    "nfl": WEB / "data" / "recommendations.json",
+    "mlb": WEB / "data" / "mlb_recommendations.json",
+    "nba": WEB / "data" / "nba.json",
+    "wnba": WEB / "data" / "wnba.json",
+    "cfb": WEB / "data" / "cfb.json",
+    "nhl": WEB / "data" / "nhl.json",
+}
+
+# Sleeper league-sync proxy: the browser can't always call api.sleeper.app
+# directly (CORS), so the site talks to us and we forward READ-ONLY requests.
+# Allowlisted paths only — this must never become an open proxy.
+SLEEPER_BASE = "https://api.sleeper.app/v1/"
+_SLEEPER_OK = re.compile(
+    r"^(user/[A-Za-z0-9_]{1,40}"
+    r"|user/\d{1,25}/leagues/nfl/\d{4}"
+    r"|league/\d{1,25}(/rosters|/users|/drafts)?"
+    # The week's board: one row per roster, sharing a matchup_id. This is
+    # the only way to know WHO you are playing, which is the whole of
+    # IDEAS #7 — the desk answered every question against the field
+    # before it, and you do not play the field.
+    r"|league/\d{1,25}/matchups/\d{1,2}"
+    # Which week it is, from the league's own scorekeeper rather than
+    # from a calendar this server would have to guess with.
+    r"|state/nfl"
+    r"|draft/\d{1,25}(/picks)?"
+    r"|players/nfl)$")
+
+
+def sleeper_path_ok(path: str) -> bool:
+    return bool(_SLEEPER_OK.match(path))
+
+
+# ---------------------------------------------------------------------------
+# Accounts — one name, every device.
+#
+# WHY: the site's personal data (My Bets, the Sleeper league link, the
+# bankroll) lived in localStorage, which is scoped to ONE browser at ONE
+# address. The laptop at localhost, the phone at the LAN address and a
+# tailscale name are three different origins — three separate empty
+# copies — and iOS evicts a site's storage after a week away. So the
+# info had to be re-typed per device (Ethan, 2026-08-10: "make an
+# account so you don't have to put in that info every time").
+#
+# WHAT AN ACCOUNT IS HERE: a JSON file under data/profiles/ on the
+# machine already running this server. No cloud, no email, no third
+# party — the data moves between devices through the same laptop that
+# serves the site, and never further. The optional PIN keeps housemates
+# on the same Wi-Fi out of your book; it is stored salted + hashed
+# (PBKDF2) and checked on every request. Honesty about its strength:
+# the site speaks plain HTTP on a LAN, so the PIN is a lock on the
+# door, not encryption in transit — the threat model is "someone else
+# on the couch", not a hostile network. Sportsbook credentials remain
+# un-asked-for, same as always.
+#
+# SYNC CONTRACT (the client POSTs its sections, gets the merged truth
+# back — one round trip is both push and pull):
+#   - fantasy / bankroll: last-writer-wins by the section's `ts` stamp.
+#   - mybets: UNION by bet signature, because a logged bet is the one
+#     thing that must never be lost to a timestamp race between two
+#     open devices. Deletions travel as signature tombstones so a
+#     deleted bet stays deleted; on a signature collision the settled
+#     copy beats the pending one (the common edit is marking a result).
+PROFILE_DIR = ROOT / "data" / "profiles"
+#: `search` joins the list with real accounts, 2026-08-15 — Ethan asked
+#: for search history stored alongside bets and fantasy. The merge rule
+#: for it is the same last-writer-wins every non-bets section uses.
+#:
+#: `settings` joins it 2026-08-25 (odds format, stake display, time zone,
+#: favourite teams, which leagues show in the nav) under the same rule.
+#: MUST STAY IN STEP WITH engine/accounts.SECTIONS: this tuple is the
+#: merge contract and that one is what the database will store, so a
+#: section named in only one of them syncs in one direction and looks
+#: like a device that will not remember you.
+PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll", "search", "settings")
+#: The signed-in session cookie. HttpOnly so page scripts cannot read it
+#: — an XSS bug should not also be a session theft — and SameSite=Lax so
+#: another site cannot ride it.
+SESSION_COOKIE = "qb_session"
+
+#: Sent on every response. Cheap, and the kind of thing that is obvious in
+#: hindsight after it matters — measured 2026-08-15, the server was
+#: sending none of them.
+#:
+#: `connect-src 'self'` is a REAL restriction here rather than decoration:
+#: the page makes no browser-side request to any external host — Sleeper,
+#: ESPN, Yahoo and Paddle are all reached by the SERVER — so an injected
+#: script has nowhere to send what it steals.
+#:
+#: `script-src 'self'` AND NOTHING ELSE, since the site audit (2026-09-24,
+#: M-4). It needed `'unsafe-inline'` while the page carried inline
+#: `onclick=` handlers — 33 when this was first written, 93 by the audit —
+#: and while it did, an injected `<img onerror=…>` would have run as well.
+#: Every control now names an action in `data-act` (app.js `ACTS`), images
+#: say what to do on load or error in `data-onload` / `data-onerr`
+#: (visuals.js), and the pre-paint flag is `js/boot.js`; so no script runs
+#: that is not a file this server sent. `style-src` keeps `'unsafe-inline'`:
+#: the markup carries inline styles, and a style cannot run code.
+SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "strict-origin-when-cross-origin"),
+    ("X-Frame-Options", "DENY"),
+    # Nothing on this site uses a camera, microphone, location, payment
+    # request or USB, so no page — or anything injected into one — may ask
+    # (audit E-15). Mirrored in deploy/Caddyfile, compared by a test.
+    ("Permissions-Policy",
+     "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"),
+    ("Content-Security-Policy",
+     "default-src 'self'; "
+     # Headshots and team art come from ESPN/MLB CDNs at render time.
+     "img-src 'self' https: data:; "
+     "script-src 'self'; "
+     "style-src 'self' 'unsafe-inline'; "
+     "font-src 'self'; "
+     "connect-src 'self'; "
+     # Rocket Radar embeds the live pool chart for the selected coin from
+     # whichever of the two indexers has that pool. WITHOUT THIS LINE
+     # `default-src 'self'` applies to frames and both are refused — the
+     # chart panel that is the whole point of the page comes up empty,
+     # silently, with the refusal only in the browser console. It was
+     # broken from the moment the security headers shipped until a
+     # headless sweep read the console and said so; nothing in 4,400
+     # tests could see it, because the page renders perfectly and it is
+     # the BROWSER that declines to load the frame.
+     #
+     # Named hosts, not a wildcard: these are the only things this site
+     # frames, and `frame-src https:` would let any injected iframe
+     # anywhere load — which is most of what framing protection is for.
+     #
+     # BOTH apex and www for each, because CSP re-checks every redirect
+     # hop: if dexscreener.com answers with a 301 to www (or geckoterminal
+     # the other way), the frame is refused at the second hop and the
+     # chart is blank again for a reason that looks nothing like this
+     # line. Whether they actually redirect could not be measured from
+     # here — the dev container's egress policy blocks both hosts — so
+     # this covers the case instead of guessing at it. Four named hosts
+     # is still a closed list.
+     "frame-src https://dexscreener.com https://www.dexscreener.com "
+     "https://geckoterminal.com https://www.geckoterminal.com; "
+     "frame-ancestors 'none'; "
+     "base-uri 'self'; "
+     "form-action 'self'"),
+)
+
+#: The legacy name+PIN store is Ethan's own, from before real accounts.
+#: POSTing a name that does not exist CREATES it, with no credential — on
+#: a LAN that was the feature, and on a public server it is free disk for
+#: anyone who finds the path. Verified 2026-08-15: three profiles created
+#: from curl with no auth. New accounts go through email and password now;
+#: this store keeps working for whoever already has one.
+#: Per-IP request ceilings, sliding one-minute window. IN THE APP rather
+#: than the proxy on purpose: Caddy has no built-in rate limiting (it
+#: needs a third-party plugin), and a protection that depends on someone
+#: remembering to install a plugin is one that will be missing on the day
+#: it is needed.
+#:
+#: The read limit is deliberately generous — the board polls every 30s and
+#: the meme page every 15s, so a real user in two tabs is already dozens of
+#: requests a minute, and a limit that trips on normal use gets raised to
+#: infinity by the first person it annoys.
+RATE_READ_PER_MIN = 300
+#: The explainer costs real money per uncached call, so its own bucket
+#: is tighter than the read ceiling: a page's worth of taps a minute.
+RATE_EXPLAIN_PER_MIN = 20
+#: Ask Qellys (engine/askbot.py): only an opening question is cached (a
+#: follow-up carries its conversation), so it is tighter still — a
+#: conversation's pace, not a scraper's.
+RATE_ASK_PER_MIN = 8
+#: Analytics counts (engine/analytics.py, off unless QB_ANALYTICS=1): a page
+#: sends a handful a minute; this bounds what a script could add to a count.
+RATE_EVENT_PER_MIN = 60
+#: Crash reports a minute from one caller (app.js sends at most 5 a page).
+RATE_CLIENTERR_PER_MIN = 10
+#: Push alert calls a minute from one caller: a subscribe, a change, and
+#: each knocked phone's one look for its words (engine/pushalerts).
+RATE_PUSH_PER_MIN = 20
+#: Calendar fetches a minute from one caller: a calendar app polls hourly at
+#: most, and a member making a new link asks once (engine/calfeed).
+RATE_CALENDAR_PER_MIN = 12
+#: A question, a pick id and a few trimmed turns; anything larger is junk.
+MAX_ASK_BYTES = 32_000
+#: A parlay screenshot for Ask to grade (engine/slipgrade): the picture,
+#: base64, in a small JSON body. Caddy refuses anything over 1MB before it
+#: reaches here; this is the same ceiling for `python3 server.py`.
+MAX_SLIP_BYTES = 1_000_000
+#: The Live tab's saved slips (`_ask_track`): the legs My Bets kept for a
+#: graded slip, no picture — ten slips of twelve legs fit many times over.
+MAX_TRACK_BYTES = 64_000
+#: How many saved slips one call reads: the ones still pending in My Bets.
+MAX_TRACK_SLIPS = 10
+#: The Live tab asks once a minute while it is open; a reload or a second
+#: tab is a few more. Its own bucket, so it never spends a question's.
+RATE_TRACK_PER_MIN = 6
+#: A league's season (/api/leagueseason) reads every week of its Sleeper
+#: matchups, fourteen reads on a cold cache: a desk opens it once, a
+#: reload or a league switch a few more. Its own bucket, so a stranger
+#: walking league ids cannot turn the read limit into Sleeper's problem.
+RATE_SEASON_PER_MIN = 6
+#: A past game's page (/api/game, engine/gamearchive): every game not yet
+#: kept is a read of the league's feed, so the door has a ceiling per
+#: reader — a team's schedule tapped through at a reader's pace — and one
+#: for everybody, so a script walking ids cannot cost the live pages the
+#: feed they poll. A final already kept costs a file read either way.
+RATE_GAME_PER_MIN = 30
+RATE_GAME_ALL_PER_MIN = 300
+#: Auth is different: nobody legitimately signs in twenty times a minute.
+#: This sits ON TOP of the per-email throttle in `engine.accounts` — that
+#: one stops guessing at one account, this one stops spraying across many.
+RATE_AUTH_PER_MIN = 20
+_RATE: dict = {}
+_RATE_LOCK = threading.Lock()
+
+#: The window every counter is measured over.
+_RATE_WINDOW = 60.0
+#: How often the sweep may run. Once per this many seconds, NOT once per
+#: request — see `_rate_sweep` for what that cost me.
+_RATE_SWEEP_EVERY = 30.0
+#: Hard ceiling on tracked callers, so memory cannot follow traffic
+#: upward without limit on a 1 GB box.
+_RATE_MAX_KEYS = 50_000
+_RATE_SWEPT_AT = 0.0
+
+
+def _rate_sweep(now: float) -> None:
+    """Drop expired counters. CALLER HOLDS `_RATE_LOCK`.
+
+    THIS USED TO RUN ON EVERY REQUEST once the table passed 8192 keys,
+    and it built `list(_RATE.items())` — a full copy of the table — to do
+    it. Under the global lock. Measured 2026-08-22:
+
+           1,000 keys   0.002 ms per request
+           8,000 keys   0.068 ms
+          16,000 keys   3.587 ms
+          64,000 keys  21.982 ms
+
+    Every API request takes this lock, so past ~8k distinct callers the
+    whole site serialises behind one O(n) scan: at 64k tracked addresses
+    that is ~45 requests per second TOTAL, on any hardware. And it is a
+    spiral, not a plateau — the slower it gets the more requests are in
+    flight, the more addresses arrive, the slower it gets.
+
+    That is precisely the shape of the traffic this site was being made
+    ready for: an Instagram post, tens of thousands of phones, most of
+    them new addresses. It would not have crashed. It would have gone
+    treacle-slow at exactly the moment it mattered and recovered by
+    itself afterwards, which is the hardest kind of outage to explain.
+
+    Now: at most once every `_RATE_SWEEP_EVERY` seconds, so the O(n) cost
+    is amortised over thirty seconds of traffic rather than paid per
+    request. Entries older than the window are dead weight by definition
+    — nothing reads them — so the sweep can take all of them at once
+    instead of 2048 at a time.
+    """
+    global _RATE_SWEPT_AT
+    _RATE_SWEPT_AT = now
+    for k in [k for k, v in _RATE.items()
+              if not v or now - v[-1] >= _RATE_WINDOW]:
+        _RATE.pop(k, None)
+    if len(_RATE) <= _RATE_MAX_KEYS:
+        return
+    # Still over after dropping the dead: trim the oldest last-seen first,
+    # since those are the closest to expiring anyway. Down to 90% of the
+    # cap rather than exactly to it, so the next arrival does not trigger
+    # another sweep immediately — which would put the per-request O(n)
+    # straight back.
+    keep = _RATE_MAX_KEYS * 9 // 10
+    for k in sorted(_RATE, key=lambda k: _RATE[k][-1])[:len(_RATE) - keep]:
+        _RATE.pop(k, None)
+
+
+def rate_ok(key: str, limit: int, now: float | None = None) -> bool:
+    """Sliding-window counter. False when this caller is over the limit."""
+    import time as _t
+    now = _t.time() if now is None else now
+    with _RATE_LOCK:
+        hits = [t for t in _RATE.get(key, []) if now - t < _RATE_WINDOW]
+        over = len(hits) >= limit
+        if not over:
+            hits.append(now)
+        _RATE[key] = hits
+        if (now - _RATE_SWEPT_AT >= _RATE_SWEEP_EVERY
+                or len(_RATE) > _RATE_MAX_KEYS):
+            _rate_sweep(now)
+        return not over
+
+
+#: The game chat's "here now" count keys an anonymous reader by a hash of
+#: their address, salted per process so the hash means nothing outside it
+#: and nothing survives a restart (engine/gamechat.touch keeps it 45s).
+_HERE_SALT = __import__("secrets").token_hex(16)
+
+_RATE_LIMITED = ('{"error":"Too many requests — slow down and try again '
+                 'in a minute."}')
+
+_PROFILE_LOCAL_ONLY = (
+    "New profiles cannot be created from another machine. This is the old "
+    "PIN-based store, kept working for existing local use — make an "
+    "account with an email and password instead.")
+#: Shown when a password would have to cross a network in the clear.
+#: Names the fix rather than just refusing — "insecure connection" on its
+#: own leaves someone with no idea what to do next.
+_INSECURE_LOGIN = (
+    "This page is being served over plain HTTP from another machine, so a "
+    "password typed here would cross the network readable by anyone on it "
+    "— and it is usually a password used somewhere else too. Sign in from "
+    "the computer running the server, or put HTTPS in front of it: "
+    "`tailscale serve --bg 8000` prints an https:// link that works from "
+    "anywhere. (If this really is a network you trust, set "
+    "QB_ALLOW_INSECURE_LOGIN=1 before starting the server.)")
+MAX_PROFILE_BYTES = 1_000_000        # thousands of bets fit; junk bounces
+#: Connecting or disconnecting Yahoo is the one action on this server that
+#: changes what a third party may see, so it is restricted to the machine
+#: running it. Reading stays LAN-wide like the rest of the site.
+_YAHOO_LOCAL = ("Connect Yahoo from the computer running this server. "
+                "Reading works from anywhere on your network, but granting "
+                "or revoking access to a Yahoo account should not be "
+                "possible from another device on the same wifi.")
+MAX_TOMBSTONES = 500
+_PROFILE_NAME = re.compile(r"^[A-Za-z0-9_-]{2,24}$")
+_PROFILE_PIN = re.compile(r"^\d{4,12}$")
+_PROFILE_LOCK = threading.Lock()
+
+
+def _int(v) -> int:
+    """A body's id field as an int, 0 when it is not one."""
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _karma_note(fn):
+    """Run one karma step (engine/karma) beside an action: what it paid,
+    for the page's toast, or None. Karma never fails the action it rides
+    on — a message is posted, a vote counted, whatever this says."""
+    try:
+        from engine import karma as K
+        out = fn(K)
+        return out if isinstance(out, dict) else None
+    except Exception:                                    # noqa: BLE001
+        return None
+
+
+def _acct():
+    """`engine.accounts`, imported on first use.
+
+    Deferred because importing it builds the dummy scrypt verifier that
+    equalizes login timing — 40ms of work that a launcher which never
+    serves an account request should not pay at startup.
+    """
+    from engine import accounts as _a
+    return _a
+
+
+def _streak():
+    """`engine.streak`, imported on first use — same posture as _acct()."""
+    from engine import streak as _s
+    return _s
+
+
+#: The streak slate, cached on mtime. The file is rewritten by the
+#: refresh sweep a few times an hour and read on every game request;
+#: re-parsing it per request would be work the mtime already answers.
+_STREAK_SLATE = {"mtime": 0.0, "doc": None}
+_STREAK_LOCK = threading.Lock()
+
+
+def streak_slate() -> dict:
+    """The published slate — the FREE public copy, which for a free file
+    IS the full copy (see engine/gate.py FREE_FILES)."""
+    path = WEB / "data" / "streak.json"
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return {}
+    with _STREAK_LOCK:
+        if _STREAK_SLATE["doc"] is None or mtime != _STREAK_SLATE["mtime"]:
+            try:
+                doc = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return {}
+            if not isinstance(doc, dict):
+                return {}
+            _STREAK_SLATE["doc"] = doc
+            _STREAK_SLATE["mtime"] = mtime
+        return _STREAK_SLATE["doc"] or {}
+
+
+def profile_name_ok(name) -> bool:
+    return isinstance(name, str) and bool(_PROFILE_NAME.match(name))
+
+
+def profile_pin_ok(pin) -> bool:
+    return isinstance(pin, str) and bool(_PROFILE_PIN.match(pin))
+
+
+def _pin_hash(pin: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac("sha256", pin.encode(), bytes.fromhex(salt),
+                               60_000).hex()
+
+
+def _pin_matches(profile: dict, pin) -> bool:
+    stored = profile.get("pin")
+    if not stored:
+        return True                  # no PIN on the account → open door
+    if not isinstance(pin, str) or not pin:
+        return False
+    return _pin_hash(pin, stored["salt"]) == stored["hash"]
+
+
+def _profile_path(name: str) -> Path:
+    return PROFILE_DIR / (name.lower() + ".json")
+
+
+def _load_profile(name: str) -> dict | None:
+    try:
+        return json.loads(_profile_path(name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _save_profile(profile: dict) -> None:
+    """Atomic: the 20s-poll lesson from the meme board applies to any
+    file two requests can touch — write beside, then replace."""
+    path = _profile_path(profile["name"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(profile), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _num_str(v) -> str:
+    """Match how the browser prints a number into the bet signature:
+    String(25.0) is "25", String(25.5) is "25.5". Signatures computed
+    here must equal the ones the client computes, or the client's
+    tombstones would never match anything."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    return str(int(f)) if f.is_integer() else repr(f)
+
+
+def bet_sig(b: dict) -> str:
+    return "|".join([str(b.get("date", "")), str(b.get("book", "")),
+                     str(b.get("desc", "")).lower().strip(),
+                     _num_str(b.get("stake")), _num_str(b.get("odds"))])
+
+
+def _clean_section(sec) -> dict | None:
+    if not isinstance(sec, dict):
+        return None
+    try:
+        ts = int(sec.get("ts") or 0)
+    except (TypeError, ValueError):
+        ts = 0
+    return {"ts": max(0, ts), "data": sec.get("data")}
+
+
+def _merge_mybets(stored: dict | None, incoming: dict | None) -> dict:
+    """Union by signature minus tombstones — never lose a bet to a race."""
+    def rows_of(sec):
+        d = (sec or {}).get("data") or {}
+        rows = d.get("rows") if isinstance(d, dict) else None
+        return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+    def dels_of(sec):
+        d = (sec or {}).get("data") or {}
+        dels = d.get("deleted") if isinstance(d, dict) else None
+        return [s for s in dels if isinstance(s, str)] if isinstance(dels, list) else []
+
+    deleted = list(dict.fromkeys(dels_of(stored) + dels_of(incoming)))[-MAX_TOMBSTONES:]
+    dead = set(deleted)
+    merged: dict[str, dict] = {}
+    for r in rows_of(stored) + rows_of(incoming):     # incoming later → wins ties
+        sig = bet_sig(r)
+        if sig in dead:
+            continue
+        prev = merged.get(sig)
+        # The common edit is pending → win/loss; never let a stale
+        # pending copy from the other device un-settle a graded bet.
+        if prev and str(prev.get("result", "pending")) != "pending" \
+                and str(r.get("result", "pending")) == "pending":
+            continue
+        merged[sig] = r
+    s_ts = (stored or {}).get("ts", 0)
+    i_ts = (incoming or {}).get("ts", 0)
+    out = {"ts": max(s_ts, i_ts), "data": {"rows": list(merged.values()),
+                                           "deleted": deleted}}
+    # If the union differs from what the client just sent, bump the stamp
+    # past the client's own so it adopts the merged book on this reply.
+    sent = {bet_sig(r): str(r.get("result", "pending")) for r in rows_of(incoming)}
+    got = {k: str(v.get("result", "pending")) for k, v in merged.items()}
+    if got != sent or set(dels_of(incoming)) != dead:
+        out["ts"] = max(out["ts"], int(time.time() * 1000)) + 1
+    return out
+
+
+def merge_sections(stored: dict, incoming: dict) -> dict:
+    out = dict(stored)
+    for key in PROFILE_SECTIONS:
+        inc = _clean_section(incoming.get(key))
+        if key == "mybets":
+            if inc is not None or key in out:
+                out[key] = _merge_mybets(out.get(key), inc)
+            continue
+        if inc is None:
+            continue
+        cur = out.get(key)
+        # STRICT newer-than: an equal stamp means "nothing changed here
+        # since my last sync", and adopting it anyway would let a client
+        # whose localStorage was error-cleared (the Sleeper catch path
+        # removes ff_user without re-stamping) erase the stored copy.
+        if cur is None or inc["ts"] > cur.get("ts", 0):
+            out[key] = inc
+    return out
+
+
+def _public(profile: dict) -> dict:
+    return {"name": profile["name"], "has_pin": bool(profile.get("pin")),
+            "sections": profile.get("sections", {})}
+
+
+#: ONE ANSWER FOR "NO SUCH NAME" AND "WRONG PIN" (audit 2026-09-30, E-4).
+#: 404 against 403 told anyone probing the store which names exist.
+_PROFILE_REFUSED = "No profile with that name and PIN."
+
+
+def legacy_profiles_on() -> bool:
+    """`QB_LEGACY_PROFILES=off` retires the name+PIN store on a public box
+    (audit E-4); anything else keeps it answering for existing phones."""
+    return os.environ.get("QB_LEGACY_PROFILES", "on").strip().lower() not in ("off", "0", "no")
+
+
+def _net_of(ip) -> str | None:
+    try:
+        from engine.seclog import mask_ip
+        return mask_ip(ip)
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
+def _profile_throttled(name: str, where) -> int:
+    """The accounts lockout, reused: 4-digit PINs are ten thousand guesses,
+    so eight wrong ones from a network lock that network out of that name
+    for fifteen minutes. A correct PIN from elsewhere is never refused."""
+    from engine import accounts as A
+    return A._throttled(f"profile:{name}|{where}")
+
+
+def _profile_fail(name: str, where) -> None:
+    from engine import accounts as A
+    A._note_fail(f"profile:{name}|{where}")
+
+
+def profile_get(name, pin, where=None) -> tuple[int, dict]:
+    if not profile_name_ok(name):
+        return 400, {"error": "account names are 2–24 letters, digits, - or _"}
+    if _profile_throttled(name, where):
+        return 429, {"error": "Too many attempts. Try again later."}
+    with _PROFILE_LOCK:
+        profile = _load_profile(name)
+    if profile is None or not _pin_matches(profile, pin):
+        _profile_fail(name, where)
+        return 403, {"error": _PROFILE_REFUSED}
+    return 200, _public(profile)
+
+
+def profile_sync(name, pin, sections, where=None) -> tuple[int, dict]:
+    """Create-or-merge. POSTing to a fresh name IS account creation (the
+    PIN sent then becomes the account's PIN); POSTing to an existing one
+    verifies the PIN, merges per the contract, and returns the result."""
+    if not profile_name_ok(name):
+        return 400, {"error": "account names are 2–24 letters, digits, - or _"}
+    if pin and not profile_pin_ok(pin):
+        return 400, {"error": "PIN must be 4–12 digits"}
+    if sections is None:
+        sections = {}
+    if not isinstance(sections, dict):
+        return 400, {"error": "sections must be an object"}
+    if _profile_throttled(name, where):
+        return 429, {"error": "Too many attempts. Try again later."}
+    with _PROFILE_LOCK:
+        profile = _load_profile(name)
+        if profile is None:
+            profile = {"name": name, "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                       "sections": {}}
+            if pin:
+                salt = os.urandom(16).hex()
+                profile["pin"] = {"salt": salt, "hash": _pin_hash(pin, salt)}
+        elif not _pin_matches(profile, pin):
+            _profile_fail(name, where)
+            return 403, {"error": _PROFILE_REFUSED}
+        profile["sections"] = merge_sections(profile.get("sections", {}), sections)
+        _save_profile(profile)
+    return 200, _public(profile)
+
+
+CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".jpg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".webmanifest": "application/manifest+json",
+    # The receipts download. `text/csv` rather than a generic stream so a
+    # phone offers "open in Numbers" instead of asking what to do with it.
+    ".csv": "text/csv; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+    # A member's games for their calendar (engine/calfeed).
+    ".ics": "text/calendar; charset=utf-8",
+}
+
+
+_TLS_HINTED = False
+
+
+#: The service worker's cache name, stamped with what it actually caches.
+#:
+#: THE RULE THE FILE STATES ABOUT ITSELF WAS BROKEN TWICE. sw.js says
+#: "bump VERSION on any shell change" and records that v1 shipped two
+#: shell deploys late. It then sat on "qb-v3" through 2,149 more lines of
+#: index.html, styles.css, app.js and visuals.js — including the
+#: 2026-08-19 phone-drawer fix. The worker is network-first, so a healthy
+#: phone still gets fresh files; but the cache is the fallback for EVERY
+#: request the network loses, and one lost styles.css on cellular hands
+#: back a pre-fix stylesheet inside an installed PWA with no address bar
+#: to reveal it. A rule that depends on remembering is not a rule, so the
+#: version is now derived rather than typed: the hash covers exactly the
+#: files SHELL lists, read from sw.js so the two can never drift. Change
+#: any of them and the name changes; `activate` deletes every other cache
+#: on the next launch, and no pre-fix bundle can outlive a deploy.
+_SW_CACHE: dict = {}
+_SW_LOCK = threading.Lock()
+
+#: The serialized subscriber boards, reused until the file on disk moves.
+#:
+#: WHY THIS EXISTS. `/api/board/<name>` is the hot path — every signed-in
+#: page polls it every 30 seconds — and it was reading the board off
+#: disk, parsing it to a dict, and re-serializing that dict back to bytes
+#: ON EVERY REQUEST, only ever to send exactly what the file already
+#: contained. Measured 2026-08-22 against a board shaped like the real
+#: one (293 recommendations, 884 on the edge board, ~1.7 MB):
+#:
+#:     read + parse    29.4 ms
+#:     re-serialize    32.3 ms
+#:     per request     61.7 ms of pure CPU
+#:
+#: On one vCPU that is 21% of the core at a hundred subscribers and the
+#: WHOLE core at five hundred, for work whose answer is identical every
+#: time until the next rebuild sixty seconds later.
+#:
+#: Keyed by board name, so the table holds at most one entry per board
+#: that exists — six or seven — rather than growing with traffic. The
+#: stamp is the file's mtime and size, the same shape `sw_body` uses:
+#: a rebuild changes it, and nothing else has to remember to invalidate.
+#:
+#: THIS CACHES BYTES, NOT PERMISSION. The entitlement check still runs on
+#: every request, after this, exactly as before.
+_BOARD_CACHE: dict = {}
+_BOARD_LOCK = threading.Lock()
+_PARSE_LOCK = threading.Lock()
+
+
+def file_bytes(path, key: str = ""):
+    """``(body, mtime, etag)`` for a JSON file on disk, cached by stamp.
+
+    The same cache serves the SUBSCRIBER copy in data/built and the
+    redacted public copy in web/data, because both are polled on the same
+    30-second clock by the same page and re-reading either per request
+    costs the same.
+    """
+    key = key or str(path)
+    try:
+        st = path.stat()
+    except OSError:
+        return None, None, None
+    stamp = (st.st_mtime_ns, st.st_size)
+    with _BOARD_LOCK:
+        hit = _BOARD_CACHE.get(key)
+        if hit is not None and hit[0] == stamp:
+            return hit[1], st.st_mtime, hit[2]
+    try:
+        body = path.read_bytes()
+    except OSError:
+        return None, None, None
+    etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
+    with _BOARD_LOCK:
+        _BOARD_CACHE[key] = (stamp, body, etag)
+    return body, st.st_mtime, etag
+
+
+def stale_headers(name: str, mtime) -> list:
+    """`X-Board-Stale-Hours` on a board older than its limit in
+    engine/freshness.MAX_AGE_H (audit 2026-09-30, F-13). The page reads
+    Last-Modified and ages the board itself; this says the verdict for
+    any other reader of /api/board, in the response, not in a doc."""
+    if mtime is None:
+        return []
+    from engine import freshness
+    v = freshness.verdict(name, time.time() - float(mtime))
+    return [("X-Board-Stale-Hours", f"{v['age_h']:.1f}")] if v["stale"] else []
+
+
+def _seclog(kind, outcome, ip=None, **kw):
+    """engine.seclog.event, imported on use; never raises (audit E-5)."""
+    try:
+        from engine import seclog
+        seclog.event(kind, outcome, ip, **kw)
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+#: The site's inbox (Ethan, 2026-10-11: "i have an email for the site. its
+#: qellysbook@gmail.com"). Where a locked-out reader is sent when the site
+#: cannot email them, and the address every page publishes.
+SUPPORT_EMAIL = "qellysbook@gmail.com"
+
+#: At most this many reset emails a day, all addresses together. The site
+#: sends through Resend's free plan (100 a day) or its own Gmail (a few
+#: hundred); a script asking for links to every address it knows must not
+#: spend that — the owner's crash alerts share it — or get the account
+#: suspended. Past the cap the page answers exactly as before and nothing
+#: is sent; the security log says why.
+RESET_MAIL_PER_DAY = 90
+_RESET_SENT: list = []
+_RESET_LOCK = threading.Lock()
+
+
+def _reset_budget_ok() -> bool:
+    """Take one send from today's allowance, or say there is none left."""
+    now = time.time()
+    with _RESET_LOCK:
+        _RESET_SENT[:] = [t for t in _RESET_SENT if now - t < 86400]
+        if len(_RESET_SENT) >= RESET_MAIL_PER_DAY:
+            return False
+        _RESET_SENT.append(now)
+        return True
+
+
+def _mail_on() -> bool:
+    """Whether the mail relay is configured (engine.mailer), reading
+    secrets.local first — that is where the SMTP settings are written."""
+    try:
+        from engine import mailer, secrets as _local
+        _local.load_local_secrets()
+        return mailer.configured()
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
+def _send_reset(email: str) -> None:
+    """Mint a reset link for ``email`` and mail it, off the request thread.
+
+    Nothing happens for an address with no account, or one past its hourly
+    limit — engine.accounts.start_reset returns None for both. A failed
+    send is logged by kind only: the token and the link never reach a log.
+    """
+    A = _acct()
+    try:
+        conn = A.connect()
+        try:
+            token = A.start_reset(conn, email)
+        finally:
+            conn.close()
+        if not token:
+            return
+        if not _reset_budget_ok():
+            _seclog("password_reset_mail", "daily_cap", email=email)
+            return
+        from engine import mailer
+        subject, text, html = A.reset_message(A.reset_link(token))
+        mailer.send(email, subject, text, html)
+        _seclog("password_reset_mail", "sent", email=email)
+    except Exception as exc:                                  # noqa: BLE001
+        _seclog("password_reset_mail", "failed", email=email,
+                error=type(exc).__name__)
+
+
+def _calendar_link(conn, user_id) -> dict:
+    """The member's calendar address, https and webcal (engine/calfeed)."""
+    from engine import accounts as A, calfeed as CF
+    url = f"{A.site_url().rstrip('/')}/api/calendar/{CF.token_for(conn, user_id)}.ics"
+    return {"url": url, "webcal": "webcal://" + url.split("://", 1)[-1]}
+
+
+def account_entitled(conn, who) -> bool:
+    """`Handler._entitled` for a caller with no request in hand: the box's
+    own sweeps (engine/slipwatch), which must apply the same gate before a
+    member's live numbers leave the building in an email. The method reads
+    nothing off the handler, so it runs unbound."""
+    return Handler._entitled(None, conn, who)
+
+
+def board_bytes(name: str):
+    """``(body, mtime, etag)`` for a board, or ``(None, None, None)``.
+
+    A FREE file is served from its public copy — the only copy anything
+    writes (`gate.full_board_file` says why). The same byte cache, keyed
+    apart from the private boards so a name can never hit the other's
+    entry."""
+    from engine import gate
+    label = str(name or "")
+    if (label.endswith(".json") and Path(label).name == label
+            and not label.startswith(".") and gate.is_free(label)):
+        return file_bytes(WEB / "data" / label, key=f"free:{label}")
+    path = gate.full_board_file(name)
+    if path is None:
+        return None, None, None
+    try:
+        st = path.stat()
+    except OSError:
+        return None, None, None
+    stamp = (st.st_mtime_ns, st.st_size)
+    with _BOARD_LOCK:
+        hit = _BOARD_CACHE.get(name)
+        if hit is not None and hit[0] == stamp:
+            return hit[1], st.st_mtime, hit[2]
+    # THE BUILD'S OWN SERVED COPY FIRST (the 2026-09-26 outage: this
+    # function parsing 18MB boards is what the kernel kept killing the
+    # server for). `gate.publish` writes it beside the full copy, after
+    # it; it is used only when at least as new, so a board rewritten by
+    # anything else still falls through to the parse below.
+    side = gate.served_sidecar(path)
+    try:
+        if side.stat().st_mtime_ns >= st.st_mtime_ns:
+            body = side.read_bytes()
+            etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
+            with _BOARD_LOCK:
+                _BOARD_CACHE[name] = (stamp, body, etag)
+            return body, st.st_mtime, etag
+    except OSError:
+        pass
+    # ONE PARSE AT A TIME. It used to run outside any lock so a cold read
+    # would not queue other boards — right for the megabyte-and-a-half
+    # boards it was written for, and ruinous at 18MB, where five cold
+    # boards at once is five parse trees and five trimmed copies.
+    from engine.served import served, release_memory
+    with _PARSE_LOCK:
+        with _BOARD_LOCK:
+            hit = _BOARD_CACHE.get(name)
+            if hit is not None and hit[0] == stamp:
+                return hit[1], st.st_mtime, hit[2]
+        payload = gate.full_board(name)
+        if payload is None:
+            return None, None, None
+        # The subscriber's copy is served the way the public one is
+        # written (engine/served.py, the site audit's M-3): no ladders,
+        # shelves by reference, no whitespace.
+        body = json.dumps(served(payload), separators=(",", ":")).encode()
+        del payload
+        release_memory()
+    # Hashed once per rebuild, not once per request — it rides in the same
+    # cache entry as the bytes it describes, so the two cannot disagree.
+    etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
+    with _BOARD_LOCK:
+        _BOARD_CACHE[name] = (stamp, body, etag)
+    return body, st.st_mtime, etag
+
+
+def _sw_shell(body: str, web: Path = WEB) -> list[Path]:
+    """The files sw.js precaches, as paths on disk.
+
+    Read out of sw.js rather than listed here, so the hash can only ever
+    cover what the worker actually caches. A second copy of the list is a
+    second thing to forget, which is the failure this replaces.
+    """
+    m = re.search(r"const SHELL = \[(.*?)\];", body, re.S)
+    if not m:
+        return []
+    # The pages' files too (LAZY, 2026-10-24): the installed app serves them
+    # from this version's copy, so a change to one must rename the version.
+    lazy = re.search(r"const LAZY = \[(.*?)\];", body, re.S)
+    urls = re.findall(r'"([^"]+)"', m.group(1)) + (re.findall(r'"([^"]+)"', lazy.group(1)) if lazy else [])
+    out = []
+    for url in urls:
+        rel = "index.html" if url == "/" else url.lstrip("/")
+        f = (web / rel).resolve()
+        if f.is_relative_to(web.resolve()) and f.is_file():
+            out.append(f)
+    return out
+
+
+def sw_body(web: Path = WEB) -> bytes:
+    """sw.js with VERSION replaced by a hash of the shell it caches.
+
+    Recomputed only when a shell file's size or mtime moves, so the
+    common case is a dict lookup rather than re-reading the bundle on
+    every page load.
+    """
+    src = web / "sw.js"
+    body = src.read_text()
+    files = [src] + _sw_shell(body, web)
+    stamp = tuple((str(f), f.stat().st_mtime_ns, f.stat().st_size) for f in files)
+    with _SW_LOCK:
+        hit = _SW_CACHE.get(stamp)
+        if hit is not None:
+            return hit
+        h = hashlib.sha256()
+        for f in files:
+            h.update(f.read_bytes())
+        out = re.sub(r'const VERSION = "[^"]*";',
+                     'const VERSION = "qb-%s";' % h.hexdigest()[:12],
+                     body, count=1).encode()
+        _SW_CACHE.clear()                      # one entry: the current shell
+        _SW_CACHE[stamp] = out
+    return out
+
+
+def _squad_or_empty(teamdex, conn, sport, team):
+    """`teamdex.squad`, or an empty one that says why.
+
+    The page draws nothing for an empty `positions`, so a failure here
+    costs the squad section and nothing else — the record, the ranks and
+    the head-to-heads above it come from a different query against a
+    different table, and they have been right since 2026-09-09.
+
+    A MODULE FUNCTION, NOT A METHOD, and the reason is worth writing
+    down because the first cut got it wrong in a way that reads as
+    correct. Inside `_team` a bare `_squad_or_empty(...)` is a GLOBAL
+    lookup, not an attribute one; as a `@staticmethod` it raised
+    NameError, the handler's own `except Exception` turned that into a
+    503, and the whole team page went blank. `tests/test_team_endpoint`
+    caught it because it calls the handler with a stand-in for `self` —
+    which is also why `self._squad_or_empty` would not have worked
+    either.
+    """
+    try:
+        return teamdex.squad(conn, sport, team)
+    except Exception:                                        # noqa: BLE001
+        return {"season": None, "positions": [], "players": 0,
+                "error": "player logs unavailable"}
+
+
+def _schedule_or_empty(teamdex, conn, sport, team, season=None):
+    """`teamdex.season_schedule`, or an empty season — the same guard as
+    `_squad_or_empty`, and a module function for the same reason.
+    ``season`` picks one of the seasons on file (the page's chips)."""
+    try:
+        return teamdex.season_schedule(conn, sport, team, season)
+    except Exception:                                        # noqa: BLE001
+        return {"season": season, "seasons": [], "games": []}
+
+
+def _live_roster(sport, team):
+    """This club's entry on the league's roster board (web/data/
+    rosters_<sport>.json — the live feed where the league has one), or
+    None. The Roster tab draws it; the depth chart orders it."""
+    try:
+        with open(ROOT / "web" / "data" / f"rosters_{sport}.json", encoding="utf-8") as fh:
+            blob = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    entry = (blob.get("teams") or {}).get(team) or {}
+    players = entry.get("players") or []
+    if not players:
+        return None
+    return {"players": players, "source": blob.get("source") or "",
+            "generated_at": blob.get("generated_at") or "", "season": blob.get("season")}
+
+
+def _depth_chart(sport, team, conn=None, roster=None):
+    """The team's published depth chart (NFL; nfl_build writes the file);
+    for hockey and basketball, the club's live roster ordered by ice time
+    or minutes (`teamdex.usage_depth`); or None — the page then shows the
+    order measured from the logs."""
+    if sport != "nfl":
+        if conn is None or not roster:
+            return None
+        try:
+            from engine import teamdex
+            depth = teamdex.usage_depth(conn, sport, roster.get("players") or [])
+        except Exception:                                    # noqa: BLE001
+            return None
+        if depth is not None and sport == "nhl":
+            # LINE COMBINATIONS (engine/nhl/lines, kept by nhl_build): who
+            # plays with whom, off the club's newest shift charts.
+            try:
+                with open(ROOT / "web" / "data" / "nhl_lines.json", encoding="utf-8") as fh:
+                    got = (json.load(fh).get("teams") or {}).get(team)
+                if got:
+                    depth["lines"] = got
+            except (OSError, ValueError, AttributeError):
+                pass
+        return depth
+    try:
+        from engine.sources.depthcharts import CHART_FILE
+        with open(ROOT / CHART_FILE, encoding="utf-8") as fh:
+            charts = json.load(fh)
+        positions = (charts.get("teams") or {}).get(team)
+        return {"as_of": charts.get("as_of"), "positions": positions} if positions else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+#: Reading order for a roster: starters first, then by position the way
+#: a lineup card reads.
+#:
+#: A MODULE CONSTANT, NOT A CLASS ATTRIBUTE, and the distinction has
+#: already cost this file a whole page once: `_squad_or_empty` shipped as
+#: a `@staticmethod` called by bare name inside the handler, which is a
+#: GLOBAL lookup — NameError, swallowed by the handler's `except
+#: Exception`, 503, blank team page. Anything a handler method calls by
+#: its bare name lives out here.
+_FF_POS_AT = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "K": 4, "DEF": 5}
+
+
+def _ff_team_rows(rivals: dict, mine: list, my_label: str) -> list:
+    """``[{team, players, mine?}]`` — every roster in a fantasy league.
+
+    Ethan, 2026-09-10: "I wanna be able too link accounts and leagues and
+    see all the leagues and players and other peoples rosters on the
+    site." Both platform handlers already fetch every roster to build the
+    other side of the trade generator, and both then dropped them — so
+    this publishes a value the server had computed and thrown away, with
+    no extra call to Sleeper or ESPN.
+
+    Shared, because two league desks formatting one list two ways is how
+    the ESPN reader ends up with a subtly different page.
+    """
+    def order(rows):
+        return sorted(rows or (), key=lambda r: (
+            not r.get("starting"), _FF_POS_AT.get(r.get("position"), 9),
+            r.get("player", "")))
+    out = [{"team": name, "players": order(rows)}
+           for name, rows in sorted((rivals or {}).items())]
+    if mine:
+        out.insert(0, {"team": my_label or "My team", "mine": True,
+                       "players": order(mine)})
+    return out
+
+
+def _stats_or_empty(teamdex, conn, sport, team):
+    """`teamdex.stat_tables`, guarded the same way and for the same
+    reason — see `_squad_or_empty` above. A second section that draws
+    nothing is a second section that draws nothing; it must not be a
+    third way to take the whole page down."""
+    try:
+        return teamdex.stat_tables(conn, sport, team)
+    except Exception:                                        # noqa: BLE001
+        return {"season": None, "sections": [], "leaders": [],
+                "error": "player logs unavailable"}
+
+
+#: When the streak fold last ran from the public leaders read (epoch s).
+_STREAK_FOLDED = [0.0]
+
+
+#: Per-league and per-draft Sleeper files kept in data/cache before the
+#: oldest are pruned (audit E-18). Every league id anybody types into the
+#: public desk wrote a file that was never removed.
+SLEEPER_CACHE_CAP = 400
+
+
+def sleeper_cache_name(path: str, cache_dir=None, cap: int = SLEEPER_CACHE_CAP) -> str:
+    """The cache file for a Sleeper path, making room first if it is new."""
+    name = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+    try:
+        from engine.sources.fetch import CACHE_DIR
+        d = Path(cache_dir) if cache_dir else CACHE_DIR
+        if not (d / name).exists() and d.is_dir():
+            files = [f for f in d.glob("sleeper_*.json")
+                     if f.name.startswith(("sleeper_league_", "sleeper_draft_", "sleeper_user_"))]
+            if len(files) >= cap:
+                files.sort(key=lambda f: f.stat().st_mtime)
+                for f in files[:len(files) - cap + 1]:
+                    f.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return name
+
+
+#: An unsubscribe bearer token in a logged request line (audit E-12).
+_UNSUB_IN_LOG = re.compile(r"(/unsubscribe/|/unsubscribe/?\?t=)[^\s\"&]+")
+
+
+#: The strategy lab's answer, kept until the journal changes (Handler._record_lab).
+_LAB_CACHE: dict = {}
+#: The first screen's members' side (engine/firstlook), kept a minute: every
+#: stranger's first page asks for it, and it reads every league's board.
+_FIRSTLOOK: dict = {}
+FIRSTLOOK_TTL_S = 60
+
+class Handler(BaseHTTPRequestHandler):
+    #: Seconds a socket may sit idle mid-request before the thread gives up
+    #: (audit 2026-09-30, E-2). Without it a slow client held a worker for
+    #: ever; the bounded pool below turns a handful of those into a down
+    #: site. Caddy's own read timeouts sit in front of this.
+    timeout = 30
+
+    def log_message(self, fmt, *args):  # quieter logging
+        # An unsubscribe link is a bearer token (audit E-12): it never
+        # reaches the journal, in either its path or its old query form.
+        line = _UNSUB_IN_LOG.sub(r"\1…", fmt % args)
+        sys.stderr.write("  %s\n" % line)
+
+    def _fail(self, status: int, sentence: str, exc: BaseException, where: str):
+        """A FIXED SENTENCE TO THE CLIENT, THE DETAIL TO THE LOG (audit
+        E-14). An exception's text is written for whoever reads the log —
+        upstream URLs, SDK request ids, file paths — and it reached the
+        page verbatim on a dozen error paths."""
+        sys.stderr.write(f"  {where}: {type(exc).__name__}: {exc}\n")
+        return self._send(status, json.dumps({"error": sentence}).encode(), ".json")
+
+    def handle_one_request(self):
+        # A TLS ClientHello (first byte 0x16) on this plain-HTTP port means
+        # a phone typed — or Safari silently upgraded to — https://. Without
+        # this check the log sprays cipher-suite bytes as "Bad request
+        # version" garbage; name the actual problem once instead.
+        try:
+            peek = self.rfile.peek(1)[:1]
+        except Exception:
+            peek = b""
+        if peek == b"\x16":
+            global _TLS_HINTED
+            if not _TLS_HINTED:
+                _TLS_HINTED = True
+                sys.stderr.write(
+                    "  ↳ A device tried HTTPS against this HTTP-only server.\n"
+                    "    On the phone, spell out http:// in the address —\n"
+                    "    Safari silently upgrades bare addresses to https.\n"
+                    "    Want a real https:// URL? Run:  tailscale serve --bg 8000\n"
+                    "    then use the https://…ts.net link it prints. docs/PHONE.md has details.\n")
+            self.close_connection = True
+            return
+        # A phone that closes the page mid-download resets the socket;
+        # that is the reader leaving, not a fault. It printed a full
+        # Traceback into the journal (19:19, 2026-09-23), and a real one
+        # is found by grepping for exactly that word.
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+
+    def _rate_limited(self, limit: int, bucket: str = "read") -> bool:
+        """True when this caller is over the ceiling.
+
+        SEPARATE BUCKETS PER KIND, which the first cut got wrong: with one
+        counter per IP, the strict auth limit saw every ordinary page poll
+        too, so a couple of minutes of normal browsing would have locked
+        the same person out of signing in. Measured — 19 of 25 signups got
+        through instead of 20, and the missing one was a GET.
+
+        The caller is `_client_ip`, so behind a proxy one busy user cannot
+        spend everybody's budget by all of them looking like 127.0.0.1.
+        """
+        if rate_ok(f"{bucket}:{self._client_ip()}", limit):
+            return False
+        _seclog("rate_limit", "blocked", self._client_ip(), bucket=bucket,
+                path=urlparse(self.path).path)
+        self._send(429, _RATE_LIMITED.encode(), ".json")
+        return True
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/") and self._rate_limited(RATE_READ_PER_MIN):
+            return
+        if parsed.path in ("/api/recommendations", "/api/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="nfl")
+        if parsed.path in ("/api/mlb/recommendations", "/api/mlb/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="mlb")
+        if parsed.path in ("/api/nba/recommendations", "/api/nba/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="nba")
+        if parsed.path in ("/api/wnba/recommendations", "/api/wnba/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="wnba")
+        if parsed.path in ("/api/cfb/recommendations", "/api/cfb/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="cfb")
+        if parsed.path in ("/api/nhl/recommendations", "/api/nhl/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="nhl")
+        if parsed.path in ("/api/draftadvice", "/api/draftadvice/"):
+            return self._draft_advice(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/search", "/api/players/search/"):
+            return self._players_search(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/logs", "/api/players/logs/"):
+            return self._players_logs(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/fantasy", "/api/players/fantasy/"):
+            return self._players_fantasy(parse_qs(parsed.query))
+        if parsed.path in ("/api/hoops/whatif", "/api/hoops/whatif/"):
+            return self._hoops_whatif(parse_qs(parsed.query))
+        if parsed.path in ("/api/lines/books", "/api/lines/books/"):
+            return self._lines_books(parse_qs(parsed.query))
+        if parsed.path in ("/api/ideas", "/api/ideas/"):
+            return self._ideas(parse_qs(parsed.query))
+        if parsed.path in ("/api/mybets/replay", "/api/mybets/replay/"):
+            return self._mybets_replay(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/versus", "/api/players/versus/"):
+            return self._players_versus(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/carries", "/api/players/carries/"):
+            return self._players_carries(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/routes", "/api/players/routes/"):
+            return self._players_routes(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/chart", "/api/players/chart/"):
+            return self._players_chart(parse_qs(parsed.query))
+        if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
+            return self._league_desk(parse_qs(parsed.query))
+        if parsed.path in ("/api/fantasy/compare", "/api/fantasy/compare/"):
+            return self._fantasy_compare(parse_qs(parsed.query))
+        if parsed.path in ("/api/leagueseason", "/api/leagueseason/"):
+            return self._league_season(parse_qs(parsed.query))
+        if parsed.path.startswith("/api/yahoo/"):
+            return self._yahoo(parsed.path[len("/api/yahoo/"):].strip("/"),
+                               parse_qs(parsed.query))
+        if parsed.path.startswith("/api/account/"):
+            return self._account_get(
+                parsed.path[len("/api/account/"):].strip("/"))
+        if parsed.path.startswith("/api/board/"):
+            return self._api_board(parsed.path[len("/api/board/"):].strip("/"))
+        if parsed.path.startswith("/api/streak/"):
+            return self._streak_get(
+                parsed.path[len("/api/streak/"):].strip("/"))
+        if parsed.path.startswith("/api/tailfade/"):
+            return self._tailfade_get(
+                parsed.path[len("/api/tailfade/"):].strip("/"))
+        if parsed.path.startswith("/api/social/"):
+            return self._social_get(
+                parsed.path[len("/api/social/"):].strip("/"))
+        if parsed.path.startswith("/api/feed/"):
+            return self._feed_get(parsed.path[len("/api/feed/"):].strip("/"),
+                                  parse_qs(parsed.query))
+        if parsed.path.startswith("/api/chat/"):
+            return self._chat_get(parsed.path[len("/api/chat/"):].strip("/"),
+                                  parse_qs(parsed.query))
+        if parsed.path.startswith("/api/alerts/"):
+            return self._alerts_get(
+                parsed.path[len("/api/alerts/"):].strip("/"), parse_qs(parsed.query))
+        if parsed.path.startswith("/api/callit/"):
+            return self._callit(parsed.path[len("/api/callit/"):].strip("/"))
+        if parsed.path.startswith("/api/trivia/"):
+            return self._trivia(parsed.path[len("/api/trivia/"):].strip("/"))
+        if parsed.path.startswith("/api/karma/"):
+            return self._karma(parsed.path[len("/api/karma/"):].strip("/"), None, parse_qs(parsed.query))
+        if parsed.path in ("/api/passkey/list", "/api/passkey/list/"):
+            return self._passkey("list", None)
+        if parsed.path.startswith("/api/calendar/"):
+            return self._calendar_get(parsed.path[len("/api/calendar/"):].strip("/"))
+        if parsed.path in ("/api/widget/mine", "/api/widget/mine/"):
+            return self._widget_mine((parse_qs(parsed.query).get("k") or [""])[0])
+        if parsed.path in ("/api/widget", "/api/widget/"):
+            # The iPhone widget's few numbers (engine/widgetfeed): the free
+            # record, last night, and today's pick counts — never a pick.
+            from engine import widgetfeed
+            return self._send(200, json.dumps(widgetfeed.build()).encode(), ".json")
+        if parsed.path in ("/api/firstlook", "/api/firstlook/"):
+            return self._firstlook()
+        if parsed.path in ("/api/live/pace", "/api/live/pace/"):
+            # PROP PACE (engine/livepace): every prop priced on a live game,
+            # where the player stands, his pace and the market's chance —
+            # the market's half of the board only, so open to everybody.
+            from engine import livepace as LP
+            if self._rate_limited(RATE_CALENDAR_PER_MIN, "pace"):
+                return
+            q = parse_qs(parsed.query)
+            out = LP.rows_for((q.get("league") or [""])[0], (q.get("event") or [""])[0], WEB)
+            return self._send(200, json.dumps(out).encode(), ".json")
+        if parsed.path in ("/api/split", "/api/split/"):
+            # THE MEMBERS' SPLIT on one game (engine/consensus): pooled
+            # counts of members' game-line legs, a market only once it has
+            # 50 or more, nothing while its two locks are shut. Never a person.
+            from engine import consensus as CN
+            if self._rate_limited(RATE_CALENDAR_PER_MIN, "split"):
+                return
+            q = parse_qs(parsed.query)
+            arg = lambda k: str((q.get(k) or [""])[0])[:8]                 # noqa: E731
+            A = _acct()
+            conn = A.connect()
+            try:
+                out = {"split": CN.for_game(conn, arg("sport"), arg("away"), arg("home"))}
+            finally:
+                conn.close()
+            return self._send(200, json.dumps(out).encode(), ".json")
+        if parsed.path in ("/api/push/key", "/api/push/key/"):
+            # The server's public VAPID key: what a browser subscribes with.
+            from engine import webpush
+            return self._send(200, json.dumps({"key": webpush.keys()["pub"]}).encode(), ".json")
+        if parsed.path.startswith("/api/billing/"):
+            return self._billing_get(
+                parsed.path[len("/api/billing/"):].strip("/"),
+                parse_qs(parsed.query))
+        if parsed.path.startswith("/api/sleeper/"):
+            return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
+        if parsed.path in ("/api/record/receipts.csv",):
+            return self._receipts_csv()
+        if parsed.path in ("/api/record/day", "/api/record/day/"):
+            return self._record_day(parse_qs(parsed.query))
+        if parsed.path in ("/api/record/bets", "/api/record/bets/"):
+            return self._record_bets(parse_qs(parsed.query))
+        if parsed.path in ("/api/record/lab", "/api/record/lab/"):
+            return self._record_lab()
+        if parsed.path in ("/api/team", "/api/team/"):
+            return self._team(parse_qs(parsed.query))
+        if parsed.path in ("/api/game", "/api/game/"):
+            return self._game(parse_qs(parsed.query))
+        if parsed.path in ("/api/explain", "/api/explain/"):
+            return self._explain(parse_qs(parsed.query))
+        if parsed.path.startswith("/unsubscribe/") and len(parsed.path) > 13:
+            return self._unsubscribe({"t": [parsed.path[13:]]})   # E-12: the path form
+        if parsed.path in ("/unsubscribe", "/unsubscribe/"):
+            return self._unsubscribe(parse_qs(parsed.query))
+        if parsed.path.startswith("/api/profile/"):
+            # The auth bucket, not the 300/min read bucket (audit E-4).
+            if not legacy_profiles_on():
+                return self._send(410, b'{"error":"profiles are retired on this server"}', ".json")
+            if self._rate_limited(RATE_AUTH_PER_MIN, "auth"):
+                return
+            code, body = profile_get(parsed.path[len("/api/profile/"):].strip("/"),
+                                     self.headers.get("X-Profile-Pin") or "",
+                                     where=_net_of(self._client_ip()))
+            if code == 403:
+                _seclog("profile", "refused", self._client_ip())
+            return self._send(code, json.dumps(body).encode(), ".json")
+        if parsed.path in ("/api/zeno", "/api/zeno/"):
+            return self._zeno_get()
+        if parsed.path in ("/api/zeno/tickets", "/api/zeno/tickets/"):
+            return self._zeno_tickets()
+        if parsed.path in ("/api/research", "/api/research/"):
+            return self._research_get(parsed)
+        if self._entity_page(parsed.path):
+            return
+        return self._static(parsed.path)
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        # The billing webhook (/api/billing/webhook — Stripe; Paddle is
+        # retired, audit E-19) is exempt from the rate limiter below: it is
+        # authenticated by signature, and a retry burst during an incident
+        # is exactly when we least want to drop payment events.
+        # One-click unsubscribe (RFC 8058). Before the rate limiter and
+        # before every auth path: a mail client POSTs here on the
+        # reader's behalf with no cookie, and the header on every digest
+        # promises it answers.
+        if parsed.path in ("/unsubscribe", "/unsubscribe/") or parsed.path.startswith("/unsubscribe/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if 0 < length <= MAX_PROFILE_BYTES:
+                self.rfile.read(length)          # read and discard the body
+            if len(parsed.path) > 13:            # E-12: the path form
+                return self.do_POST_unsubscribe({"t": [parsed.path[13:]]})
+            return self.do_POST_unsubscribe(parse_qs(parsed.query))
+        if not parsed.path.startswith("/api/billing/webhook"):
+            # Passkeys (engine/passkeys) sign people in: the auth bucket too.
+            auth = parsed.path.startswith(("/api/account/", "/api/passkey/"))
+            if self._rate_limited(
+                    RATE_AUTH_PER_MIN if auth else RATE_READ_PER_MIN,
+                    "auth" if auth else "read"):
+                return
+        if parsed.path.startswith("/api/yahoo/"):
+            return self._yahoo_post(
+                parsed.path[len("/api/yahoo/"):].strip("/"))
+        if parsed.path.startswith("/api/billing/"):
+            # RAW BYTES, and parsed nowhere before the signature is checked.
+            # Paddle signs the body it sent; JSON that has been parsed and
+            # re-serialized is different bytes — key order, spacing, unicode
+            # escapes — so a re-serialized body fails to verify even when it
+            # is perfectly honest.
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            raw = self.rfile.read(length) if length > 0 else b""
+            return self._billing_post(
+                parsed.path[len("/api/billing/"):].strip("/"), raw)
+        if parsed.path.startswith("/api/account/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True     # body goes unread
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            return self._account_post(
+                parsed.path[len("/api/account/"):].strip("/"), body)
+        if parsed.path.startswith("/api/passkey/"):
+            # PASSKEYS (engine/passkeys), counted in the auth bucket above.
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._passkey(parsed.path[len("/api/passkey/"):].strip("/"), body)
+        if parsed.path.startswith("/api/streak/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                            # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            return self._streak_post(
+                parsed.path[len("/api/streak/"):].strip("/"), body)
+        if parsed.path.startswith("/api/tailfade/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                            # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            return self._tailfade_post(
+                parsed.path[len("/api/tailfade/"):].strip("/"), body)
+        if (parsed.path.startswith("/api/social/")
+                or parsed.path.startswith("/api/feed/")
+                or parsed.path.startswith("/api/chat/")
+                or parsed.path.startswith("/api/alerts/")
+                or parsed.path.startswith("/api/callit/")
+                or parsed.path.startswith("/api/trivia/")
+                or parsed.path.startswith("/api/karma/")
+                or parsed.path in ("/api/widget/key", "/api/widget/key/")
+                or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
+                or parsed.path in ("/api/parlay/build", "/api/parlay/build/")
+                or parsed.path in ("/api/mybets/closes", "/api/mybets/closes/")
+                or parsed.path in ("/api/mybets/risk", "/api/mybets/risk/")
+                or parsed.path in ("/api/draftplan", "/api/draftplan/")):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                            # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            if parsed.path.startswith("/api/alerts/"):
+                return self._alerts_post(
+                    parsed.path[len("/api/alerts/"):].strip("/"), body)
+            if parsed.path.startswith("/api/callit/"):
+                return self._callit(parsed.path[len("/api/callit/"):].strip("/"), body)
+            if parsed.path.startswith("/api/trivia/"):
+                return self._trivia(parsed.path[len("/api/trivia/"):].strip("/"), body)
+            if parsed.path.startswith("/api/karma/"):
+                return self._karma(parsed.path[len("/api/karma/"):].strip("/"), body, {})
+            if parsed.path.startswith("/api/widget/key"):
+                return self._widget_key(body)
+            if parsed.path.startswith("/api/parlay/check"):
+                return self._parlay_check(body)
+            if parsed.path.startswith("/api/parlay/build"):
+                return self._parlay_build(body)
+            if parsed.path.startswith("/api/mybets/closes"):
+                return self._mybets_closes(body)
+            if parsed.path.startswith("/api/mybets/risk"):
+                return self._mybets_risk(body)
+            if parsed.path.startswith("/api/draftplan"):
+                return self._draft_plan(body)
+            if parsed.path.startswith("/api/feed/"):
+                return self._feed_post(
+                    parsed.path[len("/api/feed/"):].strip("/"), body)
+            if parsed.path.startswith("/api/chat/"):
+                return self._chat_post(
+                    parsed.path[len("/api/chat/"):].strip("/"), body)
+            return self._social_post(
+                parsed.path[len("/api/social/"):].strip("/"), body)
+        if parsed.path in ("/api/ask/slip", "/api/ask/slip/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_SLIP_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"that picture is too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length))
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._ask_slip(body)
+        if parsed.path in ("/api/ask/track", "/api/ask/track/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_TRACK_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"too many slips"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length))
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._ask_track(body)
+        if parsed.path in ("/api/ask", "/api/ask/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_ASK_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"question too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length))
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._ask(body)
+        if parsed.path in ("/api/event", "/api/event/"):
+            return self._event()
+        if parsed.path in ("/api/activity", "/api/activity/"):
+            return self._activity()
+        if parsed.path in ("/api/clienterror", "/api/clienterror/"):
+            return self._client_error()
+        if parsed.path.startswith("/api/push/"):
+            return self._push_post(parsed.path[len("/api/push/"):].strip("/"))
+        if parsed.path.startswith("/api/calendar/"):
+            return self._calendar_post(parsed.path[len("/api/calendar/"):].strip("/"))
+        if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
+            return self._zeno_import()
+        if parsed.path in ("/api/research", "/api/research/"):
+            return self._research_post()
+        if not parsed.path.startswith("/api/profile/"):
+            return self._send(404, b'{"error":"unknown endpoint"}', ".json")
+        if not legacy_profiles_on():
+            return self._send(410, b'{"error":"profiles are retired on this server"}', ".json")
+        if self._rate_limited(RATE_AUTH_PER_MIN, "auth"):
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_PROFILE_BYTES:
+            return self._send(413, b'{"error":"profile payload too large"}', ".json")
+        try:
+            body = json.loads(self.rfile.read(length))
+            assert isinstance(body, dict)
+        except Exception:
+            return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+        # CREATING one is local-only; syncing an existing one is not, so a
+        # phone that already has a profile keeps working exactly as before.
+        _name = parsed.path[len("/api/profile/"):].strip("/")
+        if (profile_name_ok(_name) and _load_profile(_name) is None
+                and not (self._local_only() or self._via_tailnet())):
+            return self._send(403, json.dumps({"error": _PROFILE_LOCAL_ONLY}
+                                              ).encode(), ".json")
+        code, out = profile_sync(
+            parsed.path[len("/api/profile/"):].strip("/"),
+            body.get("pin") or self.headers.get("X-Profile-Pin") or "",
+            body.get("sections"), where=_net_of(self._client_ip()))
+        if code == 403:
+            _seclog("profile", "refused", self._client_ip())
+        self._send(code, json.dumps(out).encode(), ".json")
+
+    @staticmethod
+    def _kit_board() -> list:
+        """The draft board off the built payload, or [] if it is not there.
+
+        Handed to `fantasy_lineup.with_board` so that a player with no
+        game logs is valued at his projection instead of at zero. Before
+        this, the optimiser benched a first-round rookie behind a
+        4.0-point receiver and `fantasy_trade` proposed no deal involving
+        him in either direction — measured on a fixture roster
+        2026-08-20. Never fatal: no payload means the old behaviour, not
+        a dead endpoint.
+        """
+        try:
+            blob = json.loads((WEB / "data" / "fantasy.json").read_text())
+        except Exception:                                     # noqa: BLE001
+            return []
+        return (blob.get("draft_kit") or {}).get("board") or []
+
+    def _draft_advice(self, query: dict):
+        """Pick-by-pick advice for a live Sleeper draft.
+
+        WHY THIS IS A SERVER ENDPOINT rather than more JavaScript. The
+        survival model has real arithmetic in it — a reach window fitted
+        from the room's own picks, and a probability derived from it — and
+        arithmetic that decides what to do with a first-round pick belongs
+        somewhere it can be unit-tested. The browser already polls the
+        picks; this reads the SAME cached fetch, so the endpoint costs no
+        extra request to Sleeper.
+
+        Both reads go through the allowlist, exactly as `_sleeper` does.
+        """
+        draft_id = (query.get("draft") or [""])[0].strip()
+        user_id = (query.get("user") or [""])[0].strip()
+        if not re.fullmatch(r"\d{1,25}", draft_id):
+            return self._send(400, b'{"error":"bad draft id"}', ".json")
+        from engine import fantasy_pick, fantasy_ranks
+        from engine.sources.fetch import fetch_text, DataUnavailable
+
+        def grab(path, ttl):
+            if not sleeper_path_ok(path):
+                raise DataUnavailable(f"path not allowlisted: {path}")
+            cache = sleeper_cache_name(path)
+            return json.loads(fetch_text(SLEEPER_BASE + path, cache, ttl=ttl))
+
+        try:
+            # Same TTLs the proxy uses: the draft's shape barely moves,
+            # the picks are polled DURING a live draft and ten seconds is
+            # already the floor. Reusing them means this endpoint rides
+            # the browser's existing poll rather than doubling it.
+            draft = grab(f"draft/{draft_id}", ttl=300)
+            raw = grab(f"draft/{draft_id}/picks", ttl=10)
+        except (DataUnavailable, ValueError) as exc:
+            return self._fail(502, "Sleeper did not answer for that draft. Try again in a minute.",
+                              exc, "sleeper draft")
+
+        picks = []
+        for p in raw or []:
+            meta = (p or {}).get("metadata") or {}
+            name = " ".join(x for x in (meta.get("first_name"),
+                                        meta.get("last_name")) if x)
+            key = fantasy_ranks.normalize(name)
+            if key:
+                picks.append({"key": key, "player": name,
+                              "picked_by": str(p.get("picked_by") or ""),
+                              "pick_no": p.get("pick_no")})
+
+        # The board and the consensus ranks come off the built payload —
+        # the same file the page is already showing.
+        try:
+            blob = json.loads((WEB / "data" / "fantasy.json").read_text())
+        except Exception:                                     # noqa: BLE001
+            blob = {}
+        board = []
+        for i, row in enumerate((blob.get("draft_kit") or {}).get("board") or []):
+            key = fantasy_ranks.normalize(row.get("player"))
+            if key:
+                board.append({**row, "key": key})
+        ranks = {r["key"]: (r.get("consensus") or i + 1)
+                 for i, r in enumerate((blob.get("ranks") or {}).get("rows") or [])
+                 if r.get("key")}
+        if not ranks:                       # no ranks built yet: use the board
+            ranks = {r["key"]: i + 1 for i, r in enumerate(board)}
+
+        # STARTER SLOTS COME FROM THE DRAFT, NOT FROM A GUESS. Sleeper's
+        # settings carry slots_qb / slots_rb / … , so a superflex or a
+        # 3-WR league gets its own needs rather than a 12-team default
+        # that would tell a superflex room to take one quarterback.
+        st = draft.get("settings") or {}
+        slots = {}
+        for pos in ("QB", "RB", "WR", "TE"):
+            n = st.get("slots_" + pos.lower())
+            if isinstance(n, (int, float)) and n > 0:
+                slots[pos] = int(n)
+        if not slots:
+            slots = {"QB": 1, "RB": 2, "WR": 2, "TE": 1}
+        out = fantasy_pick.advice(draft, picks, ranks, board, user_id, slots)
+        out["slots"] = slots
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _kit_and_ranks(self):
+        """The published draft kit, keyed, and the consensus ranks — the
+        two inputs every draft tool reads. One place so the live Sleeper
+        advice and the hand-marked draft cannot disagree about them."""
+        from engine import fantasy_ranks
+        try:
+            blob = json.loads((WEB / "data" / "fantasy.json").read_text())
+        except Exception:                                     # noqa: BLE001
+            blob = {}
+        board = []
+        for row in (blob.get("draft_kit") or {}).get("board") or []:
+            key = fantasy_ranks.normalize(row.get("player"))
+            if key:
+                board.append({**row, "key": key})
+        ranks = {r["key"]: (r.get("consensus") or i + 1)
+                 for i, r in enumerate((blob.get("ranks") or {}).get("rows") or [])
+                 if r.get("key")}
+        if not ranks:                       # no ranks built yet: use the board
+            ranks = {r["key"]: i + 1 for i, r in enumerate(board)}
+        return board, ranks, blob
+
+    def _draft_plan(self, body: dict):
+        """The round-by-round plan, and the advice for a draft marked by hand.
+
+        Ethan, 2026-09-02: "who they should draft in what round ... a tool
+        to help users in their draft while they are doing it." The live
+        Sleeper advice reads a pick feed; ESPN, Yahoo and the table have
+        none, so the page sends the picks a person has marked — who is
+        gone, who is theirs — and this returns the pick on the clock
+        through the same `fantasy_pick.advice` the Sleeper room gets,
+        plus `draftplan.build` for every pick after it. POST because the
+        marked picks are the request; nothing is stored.
+
+        Bounded on every axis a stranger controls: league size, seat and
+        rounds are clamped, names are cut to a few hundred, and the
+        response is the same shape whether the board is paid or free —
+        the kit itself is what the paywall gates, and a caller who cannot
+        read the kit gets a plan over an empty board, which is honest and
+        useless.
+        """
+        from engine import draftplan, fantasy_pick, fantasy_ranks
+        try:
+            teams = max(2, min(20, int(body.get("teams") or 12)))
+            rounds = max(1, min(30, int(body.get("rounds") or 15)))
+            slot = max(1, min(teams, int(body.get("slot") or 1)))
+        except (TypeError, ValueError):
+            return self._send(400, b'{"error":"teams, slot and rounds must be numbers"}',
+                              ".json")
+        kind = "linear" if str(body.get("type") or "").lower() == "linear" else "snake"
+        slots = {}
+        for pos in ("QB", "RB", "WR", "TE", "FLEX"):
+            try:
+                n = int((body.get("slots") or {}).get(pos, draftplan.DEFAULT_SLOTS.get(pos, 0)))
+            except (TypeError, ValueError):
+                n = draftplan.DEFAULT_SLOTS.get(pos, 0)
+            slots[pos] = max(0, min(4, n))
+
+        def keys(names):
+            out = []
+            for n in (names or [])[:400]:
+                k = fantasy_ranks.normalize(str(n)[:60])
+                if k:
+                    out.append(k)
+            return out
+        taken, mine = keys(body.get("taken")), keys(body.get("mine"))
+        board, ranks, _ = self._kit_and_ranks()
+        # A gated reader sees no board: say so rather than plan over nothing.
+        if not board:
+            return self._send(200, json.dumps({
+                "empty": True,
+                "note": "The draft kit is not available to this session, so "
+                        "there is no board to plan from."}).encode(), ".json")
+        # The advice for the pick on the clock, through the live room's code.
+        order = (body.get("order") or [])[:400]
+        picks = []
+        for n in order:
+            if not isinstance(n, dict):
+                continue
+            k = fantasy_ranks.normalize(str(n.get("player") or "")[:60])
+            if k:
+                picks.append({"key": k, "player": str(n.get("player"))[:60],
+                              "picked_by": "me" if n.get("mine") else "them"})
+        if picks:
+            # The order is the record: who is gone and who is yours are
+            # read off it, so the advice and the plan cannot disagree
+            # about the state of the room.
+            taken = [p["key"] for p in picks if p["picked_by"] != "me"]
+            mine = [p["key"] for p in picks if p["picked_by"] == "me"]
+        else:                               # order not given: rebuild it
+            picks = ([{"key": k, "player": k.title(), "picked_by": "them"} for k in taken]
+                     + [{"key": k, "player": k.title(), "picked_by": "me"} for k in mine])
+        draft = draftplan.draft_state(teams=teams, slot=slot, rounds=rounds, kind=kind)
+        starter_slots = {p: n for p, n in slots.items() if p != "FLEX" and n > 0}
+        advice = fantasy_pick.advice(draft, picks, ranks, board, "me", starter_slots)
+        plan = draftplan.build(board, ranks, teams, slot, rounds, kind, slots,
+                               taken=taken, mine=mine, picks=picks)
+        out = {"advice": advice, "plan": plan, "slots": slots,
+               "board_rounds": draftplan.annotate_rounds(board, ranks, teams)[:150]}
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _fantasy_week(self) -> tuple[dict, dict]:
+        """(this week's fantasy file or {}, what the desk says about it).
+
+        THE WEEK IS THE PAID HALF OF THE DESK (engine/fantasyweek; Ethan,
+        2026-10-22, "make sure we wrap that into it how it should be").
+        Season averages are facts out of the box score and the desk has
+        always served them to anyone; this week's projection is the prop
+        board's numbers in fantasy points, which is the product. So a
+        caller who is not a member gets the season-average desk exactly as
+        before, and the page says what the week adds.
+
+        A file whose games are over is not this week's (fantasyweek
+        .current): until the board builds the next week, the desk scores
+        season averages and says why, rather than last week's matchups."""
+        from engine import fantasyweek
+        doc = fantasyweek.load()
+        if not doc or not doc.get("players"):
+            return {}, {"week": None, "state": "none", "locked": False,
+                        "note": "This week's projections are not built yet; season averages shown."}
+        if not fantasyweek.current(doc):
+            return {}, {"week": doc.get("week"), "state": "stale", "locked": False,
+                        "note": (f"Week {doc.get('week')}'s games are over and next week's "
+                                 "projections are not built yet; season averages shown.")}
+        A = _acct()
+        aconn = A.connect()
+        try:
+            ok = self._entitled(aconn, self._account(aconn))
+        except Exception:                                    # noqa: BLE001
+            ok = False
+        finally:
+            aconn.close()
+        if not ok:
+            # THE FREE FANTASY ROOM (2026-10-25): this week's points, his
+            # chance to play, the matchup and his role — not his stat line,
+            # his touchdown chance or the script (fantasyweek.free_view), so
+            # a league's own scoring reads PPR points for a free reader.
+            return fantasyweek.free_view(doc), {
+                "week": doc.get("week"), "season": doc.get("season"),
+                "built_at": doc.get("built_at"), "byes": doc.get("byes") or [],
+                "state": "free", "locked": False, "measured": doc.get("measured"),
+                "note": ("This week in PPR points. Members also get each player's stat line, "
+                         "touchdown chance and game script, and their league's own scoring.")}
+        return doc, {"week": doc.get("week"), "season": doc.get("season"),
+                     "built_at": doc.get("built_at"), "byes": doc.get("byes") or [],
+                     "state": "ok", "locked": False, "measured": doc.get("measured")}
+
+    def _fantasy_compare(self, q: dict):
+        """Start A or B? Two to four of this week's players side by side, and
+        the call (engine/fantasy_compare; Ethan, 2026-10-27: "I don't know how
+        fantasy works … create more features"). Read off this week's file as
+        `_fantasy_week` serves it: a member's whole, a free reader's without
+        the stat line, the touchdown chance and the reasons, so the answer
+        carries only what the reader may see. ``p`` is a player (two to four
+        of them), ``scoring`` ppr, half or standard."""
+        from engine import fantasy_compare
+        names = [n.strip()[:80] for n in (q.get("p") or []) if n.strip()][:fantasy_compare.MAX_PLAYERS]
+        scoring = fantasy_compare.scoring_key((q.get("scoring") or ["ppr"])[0][:16])
+        doc, meta = self._fantasy_week()
+        if not doc:
+            return self._send(200, json.dumps({"state": meta.get("state"), "note": meta.get("note")}).encode(),
+                              ".json")
+        rows, unknown = fantasy_compare.pick(doc, names)
+        out = (fantasy_compare.compare(rows, scoring) if len(rows) >= 2
+               else {"error": "Pick two to four of this week's players."})
+        out.update({"state": meta.get("state"), "week": doc.get("week"), "unknown": unknown})
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _league_season(self, query: dict):
+        """Your league's season: playoff odds, power rankings and last week
+        in review (engine/fantasy_season; Ethan, 2026-10-27: "look at other
+        apps … add more features"). Sleeper leagues: their schedule and
+        their weekly box are public. Its own request, after the desk, so the
+        desk is never slower for it: every week of the league's matchups is
+        read (in parallel; a week that is over is kept a day, the rest an
+        hour) and the season is played SIMS times."""
+        league_id = (query.get("league") or [""])[0].strip()
+        user_id = (query.get("user") or [""])[0].strip()
+        if not re.fullmatch(r"\d{1,25}", league_id):
+            return self._send(400, b'{"error":"bad league id"}', ".json")
+        if self._rate_limited(RATE_SEASON_PER_MIN, "leagueseason"):
+            return
+        from concurrent.futures import ThreadPoolExecutor
+        from engine import byes as _byes, fantasy_lineup, fantasy_season, fantasyweek
+        from engine.db import connect
+        from engine.sources.fetch import fetch_text, DataUnavailable
+
+        def grab(path, ttl):
+            if not sleeper_path_ok(path):
+                raise DataUnavailable(f"path not allowlisted: {path}")
+            return json.loads(fetch_text(SLEEPER_BASE + path, sleeper_cache_name(path), ttl=ttl))
+
+        try:
+            league = grab(f"league/{league_id}", ttl=600)
+            rosters = grab(f"league/{league_id}/rosters", ttl=300)
+            users = grab(f"league/{league_id}/users", ttl=600)
+            players = grab("players/nfl", ttl=86400)
+        except (DataUnavailable, ValueError) as exc:
+            return self._fail(502, "Sleeper did not answer for that league. Try again in a minute.",
+                              exc, "sleeper league season")
+        lset = league.get("settings") or {}
+        week = int(lset.get("leg") or 0)
+        if not 1 <= week <= 18:
+            try:
+                week = int((grab("state/nfl", ttl=1800) or {}).get("week") or 0)
+            except (DataUnavailable, ValueError):
+                week = 0
+        playoff_start = int(lset.get("playoff_week_start") or 15)
+        playoff_teams = int(lset.get("playoff_teams") or 6)
+        last = max(1, playoff_start - 1)
+        owner = {str(u.get("user_id")): (u.get("display_name") or u.get("username") or "?") for u in users or []}
+        names, by_roster, team_of, me = {}, {}, {}, None
+        for r in rosters or []:
+            rid = int(r.get("roster_id") or 0)
+            names[rid] = owner.get(str(r.get("owner_id") or ""), f"Team {rid}")
+            if str(r.get("owner_id") or "") == user_id or user_id in [str(x) for x in r.get("co_owners") or []]:
+                me = rid
+            rows = []
+            for pid in r.get("players") or []:
+                pl = (players or {}).get(str(pid)) or {}
+                name = " ".join(x for x in (pl.get("first_name"), pl.get("last_name")) if x)
+                pos = (pl.get("position") or "").upper()
+                if name and pos:
+                    rows.append({"player": name, "position": pos})
+                    if pl.get("team"):
+                        team_of[name] = str(pl["team"]).upper()
+            by_roster[rid] = rows
+
+        def box(w):
+            try:
+                return w, grab(f"league/{league_id}/matchups/{w}", ttl=86400 if w < week else 3600)
+            except (DataUnavailable, ValueError):
+                return w, []
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            boxes = dict(pool.map(box, range(1, last + 1)))
+
+        conn = connect()
+        try:
+            season = max((int(x[0]) for x in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'").fetchall()), default=0)
+            season_means = fantasy_lineup.per_game(conn, season) if season else {}
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
+            bye_of = _byes.bye_weeks(conn, season) if season else {}
+        finally:
+            conn.close()
+        scoring = league.get("scoring_settings") or {}
+        slots = fantasy_lineup.starting_slots(league.get("roster_positions"))
+        week_doc, _meta = self._fantasy_week()
+        this_week = (fantasyweek.with_week(season_means, week_doc,
+                                           [r["player"] for rows in by_roster.values() for r in rows],
+                                           teams=team_of)
+                     if week_doc and week_doc.get("week") == week else None)
+        left = [w for w in range(max(1, week), last + 1)]
+        strength = {w: fantasy_season.strengths(
+                        by_roster, slots, scoring, this_week if (w == week and this_week) else season_means,
+                        off=None if (w == week and this_week) else {t for t, b in bye_of.items() if int(b) == w},
+                        team_of=team_of)
+                    for w in left}
+        schedule = {w: fantasy_season.schedule_from(boxes.get(w)) for w in left}
+        teams = {}
+        for r in rosters or []:
+            st = r.get("settings") or {}
+            teams[int(r.get("roster_id") or 0)] = {
+                "wins": int(st.get("wins") or 0), "losses": int(st.get("losses") or 0),
+                "ties": int(st.get("ties") or 0),
+                "pf": float(st.get("fpts") or 0) + float(st.get("fpts_decimal") or 0) / 100.0,
+                "pa": float(st.get("fpts_against") or 0) + float(st.get("fpts_against_decimal") or 0) / 100.0}
+        sim = (fantasy_season.simulate(teams, schedule, strength, playoff_teams=playoff_teams,
+                                       median=bool(lset.get("league_average_match")), me=me,
+                                       seed=int(league_id[-9:] or 0) + week)
+               if any(schedule.values()) else None)
+        weekly = {w: {int(m["roster_id"]): float(m.get("points") or 0) for m in boxes.get(w) or []
+                      if m.get("roster_id") is not None}
+                  for w in range(1, min(week, last + 1))}
+        now = fantasy_season.strengths(by_roster, slots, scoring, season_means)
+        power = fantasy_season.power(teams, now, fantasy_season.all_play(weekly))
+        rows = []
+        for p in power:
+            rid = p["roster_id"]
+            t = teams[rid]
+            rows.append({**p, "team": names.get(rid), "me": rid == me, "wins": t["wins"], "losses": t["losses"],
+                         "ties": t["ties"], "pf": round(t["pf"], 1), "pa": round(t["pa"], 1),
+                         "odds": (sim or {}).get("teams", {}).get(rid)})
+
+        def who(pid):
+            # A team defense is in the players file too: id "PHI", first
+            # name Philadelphia, last name Eagles, position DEF.
+            pl = (players or {}).get(str(pid)) or {}
+            return (" ".join(x for x in (pl.get("first_name"), pl.get("last_name")) if x) or None,
+                    (pl.get("position") or "").upper())
+        review = fantasy_season.review(boxes.get(week - 1) or [], who, slots, names, me) if week > 1 else None
+        out = {"league": league.get("name"), "week": week or None, "playoff_start": playoff_start,
+               "playoff_teams": playoff_teams, "last_regular_week": last, "sims": fantasy_season.SIMS if sim else 0,
+               "median": bool(lset.get("league_average_match")), "teams": rows, "me": me,
+               "paths": (sim or {}).get("paths") or [], "games_left": (sim or {}).get("games_left") or 0,
+               "review": review, "review_week": week - 1 if review else None,
+               "this_week_basis": "week" if this_week else "season"}
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _desk_extras(self, out: dict, *, mine: list, slots: list, scoring: dict, means: dict,
+                     season_means: dict, week_doc: dict, league_names: list, statuses=None,
+                     team_of=None, budget_left=None, playoff_start=None, dst_scoring=None,
+                     trades=None) -> None:
+        """The pickups for this roster and the week's to-do list, the same on
+        every platform (engine/fantasy_waivers, engine/fantasy_todo; Ethan,
+        2026-10-27: "make sure … the fantasy room is actually a useful
+        tool"). Written onto ``out``; nothing when he has no roster here."""
+        from engine import fantasy_todo, fantasy_waivers, fantasyweek
+        if not mine:
+            return
+        week = (week_doc or {}).get("week") or out.get("week")
+        try:
+            out["pickups"] = fantasy_waivers.for_roster(
+                mine, slots, scoring, means, week_doc, league_names, season_means=season_means,
+                statuses=statuses, budget_left=budget_left, week=week, playoff_start=playoff_start,
+                dst_scoring=dst_scoring)
+        except Exception as exc:                              # noqa: BLE001 — a desk never dies on an extra
+            sys.stderr.write(f"  desk pickups: {type(exc).__name__}: {exc}\n")
+            out["pickups"] = None
+        # Next week's byes among the starters of the best lineup.
+        next_byes = []
+        try:
+            from engine import byes as _byes
+            from engine.db import connect
+            season = int((week_doc or {}).get("season") or out.get("season") or 0)
+            if season and week:
+                conn = connect()
+                try:
+                    off = {t for t, w in _byes.bye_weeks(conn, season).items() if int(w) == int(week) + 1}
+                finally:
+                    conn.close()
+                idx = fantasyweek.index(week_doc or {})
+                from engine.backtest import _norm
+                for s in ((out.get("lineup") or {}).get("starters") or []):
+                    name = s.get("player")
+                    team = ((team_of or {}).get(name) or (idx.get(_norm(name or "")) or {}).get("team")
+                            or ((season_means or {}).get(name) or {}).get("team"))
+                    if name and team and team in off:
+                        next_byes.append((name, team))
+        except Exception as exc:                              # noqa: BLE001
+            sys.stderr.write(f"  desk byes: {type(exc).__name__}: {exc}\n")
+        out["todo"] = fantasy_todo.build(
+            lineup=out.get("lineup"), h2h=out.get("h2h"), pickups=out.get("pickups"),
+            trades=trades if trades is not None else out.get("trades"), next_byes=next_byes,
+            kickoffs=fantasy_todo.kickoffs_from(week_doc), week=week)
+
+    def _league_desk(self, query: dict):
+        """Your optimal lineup and the trades worth proposing, in one read.
+
+        Both answers need the same three things — the league's SCORING,
+        its ROSTER SLOTS, and every roster in it — so they are fetched
+        once and answered together rather than twice. The scoring and the
+        slots come from the league itself: a half-PPR TE-premium
+        superflex league does not have the same best lineup as the
+        default, and using a default here would quietly answer a
+        different league's question.
+        """
+        league_id = (query.get("league") or [""])[0].strip()
+        user_id = (query.get("user") or [""])[0].strip()
+        platform = (query.get("platform") or ["sleeper"])[0].strip().lower()
+        if platform not in ("sleeper", "espn", "yahoo"):
+            return self._send(400, b'{"error":"unknown platform"}', ".json")
+        # THE ID CHECK IS PER PLATFORM. `\d{1,25}` is right for Sleeper
+        # and ESPN and rejects every Yahoo league key ever issued — they
+        # look like `461.l.1234567`, and a shared regex would have made
+        # the Yahoo path unreachable while looking like a bad league id.
+        if platform == "yahoo":
+            if not re.fullmatch(r"[0-9]{1,6}\.l\.[0-9]{1,12}", league_id):
+                return self._send(
+                    400, b'{"error":"bad yahoo league key"}', ".json")
+            return self._league_desk_yahoo(league_id, query)
+        if not re.fullmatch(r"\d{1,25}", league_id):
+            return self._send(400, b'{"error":"bad league id"}', ".json")
+        from engine import fantasy_lineup, fantasy_ranks, fantasy_trade
+        from engine.db import connect
+        from engine.sources.fetch import fetch_text, DataUnavailable
+
+        if platform == "espn":
+            return self._league_desk_espn(league_id, user_id, query)
+
+        def grab(path, ttl):
+            if not sleeper_path_ok(path):
+                raise DataUnavailable(f"path not allowlisted: {path}")
+            cache = sleeper_cache_name(path)
+            return json.loads(fetch_text(SLEEPER_BASE + path, cache, ttl=ttl))
+
+        # THE LIVE TAB'S CALL (js/chat.js ffLiveLoad; docs/IDEAS.md "Your
+        # fantasy lineup, live"): the matchup as it stands and nothing else,
+        # asked once a minute at most while a game is on. No trades, no
+        # pickups, no to-do list, and the lineup alert's memory untouched.
+        # The device keeps the Sleeper USERNAME (ff_user), so a name is
+        # turned into its id here, off the same cached read the sync makes.
+        live_only = (query.get("live") or [""])[0] == "1"
+        if live_only and user_id and not re.fullmatch(r"\d{1,25}", user_id):
+            if not re.fullmatch(r"[A-Za-z0-9_]{1,40}", user_id):
+                return self._send(400, b'{"error":"bad sleeper user"}', ".json")
+            try:
+                user_id = str((grab(f"user/{user_id}", ttl=86400) or {}).get("user_id") or "")
+            except (DataUnavailable, ValueError) as exc:
+                return self._fail(502, "Sleeper did not answer. Try again in a minute.", exc, "sleeper live user")
+
+        try:
+            league = grab(f"league/{league_id}", ttl=600)
+            rosters = grab(f"league/{league_id}/rosters", ttl=300)
+            users = grab(f"league/{league_id}/users", ttl=600)
+            players = grab("players/nfl", ttl=86400)
+        except (DataUnavailable, ValueError) as exc:
+            return self._fail(502, "Sleeper did not answer for that league. Try again in a minute.",
+                              exc, "sleeper league desk")
+
+        def rows_for(roster):
+            # WHO HE HAS GOT IN, carried through. Sleeper's `starters` is
+            # the lineup he has actually set; without it the desk can
+            # only ever score the best lineup and never say which of his
+            # choices to change, which is the question he opened the page
+            # with. The array can contain "0" for an empty slot, which
+            # matches no player id and quietly drops out.
+            seated = {str(x) for x in ((roster or {}).get("starters") or [])}
+            out = []
+            for pid in (roster or {}).get("players") or []:
+                p = (players or {}).get(str(pid)) or {}
+                name = " ".join(x for x in (p.get("first_name"),
+                                            p.get("last_name")) if x)
+                pos = (p.get("position") or "").upper()
+                if name and pos:
+                    out.append({"player": name, "position": pos,
+                                "starting": str(pid) in seated})
+                    # His NFL team, for the bye, and Sleeper's own injury
+                    # status, for a man on IR the week's practice report
+                    # never lists (engine/fantasyweek.with_week).
+                    if p.get("team"):
+                        team_of[name] = str(p["team"]).upper()
+                    if p.get("injury_status"):
+                        status_of[name] = str(p["injury_status"])
+            return out
+
+        team_of: dict = {}
+        status_of: dict = {}
+        owner = {}
+        for u in users or []:
+            owner[str(u.get("user_id"))] = (u.get("display_name")
+                                            or u.get("username") or "?")
+        mine, rivals = [], {}
+        my_roster_id = None
+        by_roster = {}
+        for r in rosters or []:
+            who = str(r.get("owner_id") or "")
+            rows = rows_for(r)
+            by_roster[int(r.get("roster_id") or 0)] = rows
+            if who == str(user_id):
+                mine = rows
+                my_roster_id = r.get("roster_id")
+            elif rows:
+                rivals[owner.get(who, f"Team {r.get('roster_id')}")] = rows
+
+        conn = connect()
+        try:
+            season = max((int(s[0]) for s in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
+            ).fetchall()), default=0)
+            season_means = fantasy_lineup.per_game(conn, season) if season else {}
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
+        finally:
+            conn.close()
+
+        # THIS WEEK, for the lineup and the head-to-head; THE SEASON, for
+        # the trades. A start is this week's question, and this week's
+        # projection answers it: the matchup, the script, the weather, who
+        # is out around him, a bye (engine/fantasyweek). A trade is the rest
+        # of the season's, and a man on a bye this week is not worth zero
+        # to it.
+        from engine import dstproj, fantasyweek
+        week_doc, week_meta = self._fantasy_week()
+        league_names = [r["player"] for rows in by_roster.values() for r in rows]
+        means = (fantasyweek.with_week(season_means, week_doc, league_names, teams=team_of,
+                                       statuses=status_of,
+                                       dst_scoring=dstproj.scoring_from_sleeper(
+                                           league.get("scoring_settings")))
+                 if week_doc else season_means)
+
+        scoring = league.get("scoring_settings") or {}
+        slots = fantasy_lineup.starting_slots(league.get("roster_positions"))
+        out = {
+            "league": league.get("name"), "season": season,
+            "slots": slots, "has_me": bool(mine),
+            "lineup": fantasy_lineup.lineup(mine, slots, scoring, means)
+                      if mine else None,
+            "projection_week": week_meta,
+            # The best of this week nobody in the league rosters.
+            "free_agents": (fantasyweek.free_agents(week_doc, league_names)
+                            if week_doc else {}),
+        }
+        # The Live tab's ask (live_only) builds no trades.
+        trades = (fantasy_trade.generate(mine, rivals, slots, scoring, season_means)
+                  if mine and rivals else []) if not live_only else []
+        out["trades"] = trades[:12]
+        out["trade_summary"] = fantasy_trade.summary(trades)
+
+        # EVERY ROSTER IN THE LEAGUE, PUBLISHED. Ethan, 2026-09-10: "I
+        # wanna be able too link accounts and leagues and see all the
+        # leagues and players and other peoples rosters on the site."
+        #
+        # They were already here. `rivals` is built above out of the same
+        # fetch, handed to the trade generator, and then dropped on the
+        # floor — so the one thing he asked for was a value this function
+        # computed and did not return. No extra call to Sleeper: the
+        # rosters, the users and the player table are one read each and
+        # they were all made before the first trade was scored.
+        out["teams"] = _ff_team_rows(rivals, mine,
+                                     owner.get(str(user_id), "My team"))
+
+        # THE TEAM YOU ARE ACTUALLY PLAYING (IDEAS #7). Everything above
+        # answers against the field; a head-to-head league is one game
+        # against one roster, and which start is right depends on the
+        # scoreboard rather than on the projection alone. See
+        # engine/fantasy_h2h.py.
+        from engine import fantasy_h2h
+        out["standings"] = fantasy_h2h.standings(rosters, owner)
+        out["me_roster_id"] = (int(my_roster_id)
+                               if my_roster_id is not None else None)
+        try:
+            week = int((query.get("week") or [""])[0])
+        except (TypeError, ValueError):
+            week = 0
+        if not 1 <= week <= 18:
+            # The league's own scorekeeper first — `leg` is the week it
+            # is scoring right now — and Sleeper's NFL state as the
+            # fallback. Neither is a calendar this server has to guess
+            # with, which is the third option and the wrong one.
+            week = int(((league.get("settings") or {}).get("leg") or 0))
+        if not 1 <= week <= 18:
+            try:
+                week = int((grab("state/nfl", ttl=1800) or {}).get("week") or 0)
+            except (DataUnavailable, ValueError):
+                week = 0
+        out["week"] = week if 1 <= week <= 18 else None
+        opp_rows, opp_name = None, None
+        board = []
+        from engine import fantasy_live
+        live_board = fantasy_live.scoreboard()
+        if out["week"] and my_roster_id is not None:
+            try:
+                # A minute old at most while a game is on: the live matchup
+                # reads Sleeper's points off this same board.
+                board = grab(f"league/{league_id}/matchups/{out['week']}",
+                             ttl=60 if any(g["state"] == "live" for g in live_board.values()) else 300)
+            except (DataUnavailable, ValueError):
+                board = []
+            opp_id = fantasy_h2h.opponent_roster_id(board, my_roster_id)
+            if opp_id is not None:
+                opp_rows = by_roster.get(opp_id) or None
+                for r in rosters or []:
+                    if int(r.get("roster_id") or 0) == opp_id:
+                        opp_name = owner.get(str(r.get("owner_id") or ""),
+                                             f"Team {opp_id}")
+                        break
+        if mine:
+            # THIS WEEK'S NUMBERS FOR THIS WEEK'S GAME ONLY. Asked about
+            # another week, the head-to-head is scored on season averages,
+            # as it always was: week 8's matchups say nothing about week 5.
+            same_week = (not week_doc or out["week"] is None
+                         or week_doc.get("week") in (None, out["week"]))
+            h2h = fantasy_h2h.head_to_head(mine, opp_rows,
+                                           league.get("roster_positions"),
+                                           scoring, means if same_week else season_means)
+            h2h["basis"] = "week" if (week_doc and same_week) else "season"
+            h2h["opponent"] = opp_name
+            h2h["swings"] = fantasy_h2h.swings(h2h)
+            out["h2h"] = h2h
+            # YOUR MATCHUP, LIVE (engine/fantasy_live): once a starter on
+            # either side has kicked off, Sleeper's own points so far, the
+            # rest projected, and the win chance from there.
+            if board and same_week:
+                try:
+                    proj, sds = fantasy_live.projections(league_names, means, scoring)
+                    live = fantasy_live.matchup(board, my_roster_id, players, slots, proj, sds,
+                                                fantasy_live.states(week_doc, live_board))
+                    if live:
+                        live["opponent"] = opp_name
+                        out["live"] = live
+                except Exception as exc:                      # noqa: BLE001 — the desk never fails for it
+                    sys.stderr.write(f"  desk live: {type(exc).__name__}: {exc}\n")
+        if live_only:
+            return self._send(200, json.dumps({"league": out["league"], "week": out["week"],
+                                               "has_me": out["has_me"], "live": out.get("live")}).encode(), ".json")
+        # THE PICKUPS FOR THIS ROSTER AND THE WEEK'S TO-DO LIST. A FAAB
+        # league (Sleeper's waiver_type 2) gets a bid range from what is
+        # left of his budget.
+        lset = league.get("settings") or {}
+        budget_left = None
+        if int(lset.get("waiver_type") or 0) == 2 and lset.get("waiver_budget") is not None:
+            used = 0
+            for r in rosters or []:
+                if my_roster_id is not None and r.get("roster_id") == my_roster_id:
+                    used = (r.get("settings") or {}).get("waiver_budget_used") or 0
+            budget_left = float(lset.get("waiver_budget") or 0) - float(used or 0)
+        self._desk_extras(out, mine=mine, slots=slots, scoring=scoring, means=means,
+                          season_means=season_means, week_doc=week_doc, league_names=league_names,
+                          statuses=status_of, team_of=team_of, budget_left=budget_left,
+                          playoff_start=lset.get("playoff_week_start"),
+                          dst_scoring=dstproj.scoring_from_sleeper(scoring), trades=trades)
+        if mine:
+            self._remember_lineup_league(league_id, user_id)
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _remember_lineup_league(self, league_id: str, sleeper_user: str) -> None:
+        """The league this desk just read, kept for the lineup alert
+        (engine/lineupalerts) when the signed-in account has "My fantasy
+        lineup" on, and only then (pushmine.lineup_remember). A desk never
+        fails for it."""
+        try:
+            from engine import pushmine
+            aconn = _acct().connect()
+            try:
+                who = self._account(aconn)
+                if who and who.get("id"):
+                    pushmine.lineup_remember(aconn, who["id"], league_id, sleeper_user)
+            finally:
+                aconn.close()
+        except Exception as exc:                                  # noqa: BLE001
+            sys.stderr.write(f"  lineup league: {type(exc).__name__}: {exc}\n")
+
+    def _league_desk_espn(self, league_id: str, member_id: str, query: dict):
+        """The same desk, reading an ESPN league instead of a Sleeper one.
+
+        Split out rather than branched inline so the two platforms cannot
+        drift into each other's assumptions — the ANSWER is shared
+        (`fantasy_lineup` and `fantasy_trade` never learn where the league
+        came from), the READING is not.
+        """
+        from engine import fantasy_lineup, fantasy_trade
+        from engine.db import connect
+        from engine.sources import espnfantasy
+        from engine.sources.fetch import DataUnavailable
+        import datetime as _dt
+        try:
+            season = int((query.get("season") or [""])[0])
+        except (TypeError, ValueError):
+            season = _dt.date.today().year
+        try:
+            lg = espnfantasy.league(season, league_id)
+        except DataUnavailable as exc:
+            return self._fail(502, "ESPN did not answer for that league. Check the league is public, then try again.",
+                              exc, "espn league")
+
+        conn = connect()
+        try:
+            stat_season = max((int(s[0]) for s in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
+            ).fetchall()), default=0)
+            season_means = (fantasy_lineup.per_game(conn, stat_season)
+                            if stat_season else {})
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
+        finally:
+            conn.close()
+
+        rosters = dict(lg.get("rosters") or {})
+        mine_label = espnfantasy.owner_of(
+            espnfantasy.fetch_league(season, league_id), member_id)
+        mine = rosters.pop(mine_label, []) if mine_label else []
+        slots = fantasy_lineup.starting_slots(lg.get("slots"))
+        scoring = lg.get("scoring") or {}
+        # This week for the lineup, the season for the trades — see the
+        # Sleeper desk above.
+        from engine import fantasyweek
+        week_doc, week_meta = self._fantasy_week()
+        league_names = [r["player"] for r in mine] + [r["player"] for rows in rosters.values()
+                                                      for r in rows]
+        means = (fantasyweek.with_week(season_means, week_doc, league_names)
+                 if week_doc else season_means)
+        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, season_means)
+                  if mine and rosters else [])
+        out = {
+            "platform": "espn", "league": lg.get("name"),
+            "season": stat_season, "slots": slots, "has_me": bool(mine),
+            "lineup": (fantasy_lineup.lineup(mine, slots, scoring, means)
+                       if mine else None),
+            "projection_week": week_meta,
+            "free_agents": (fantasyweek.free_agents(week_doc, league_names)
+                            if week_doc else {}),
+            "trades": trades[:12],
+            "trade_summary": fantasy_trade.summary(trades),
+            # THE SCORING RULES WE COULD NOT READ. Reported to the page,
+            # not swallowed: a rule silently ignored is a lineup silently
+            # wrong, and ESPN describes scoring as numeric ids this
+            # container has never been able to confirm against a live
+            # response.
+            "unmapped_scoring": lg.get("unmapped") or [],
+        }
+        # THE SAME KEY THE SLEEPER DESK PUBLISHES, so the League teams
+        # list is one renderer rather than one per platform. `rosters`
+        # here is every team but his — `mine` was popped out of it above
+        # — which is exactly the shape Sleeper's `rivals` has.
+        out["teams"] = _ff_team_rows(rosters, mine, mine_label)
+        self._desk_extras(out, mine=mine, slots=slots, scoring=scoring, means=means,
+                          season_means=season_means, week_doc=week_doc, league_names=league_names,
+                          trades=trades)
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    # --- accounts: email and password, ours ---------------------------------
+    #
+    # Ethan, 2026-08-15: "make a feature where you can make an account on
+    # our website with email and password so we can store peoples bets and
+    # fantasy leauges and search history".
+    #
+    # The older name+PIN profile store still answers on /api/profile/ so
+    # nobody's existing data disappears; this is the path that replaces it.
+    # The MERGE is shared — `merge_sections` and the bet-signature rules
+    # below are the same code both stores use, because two implementations
+    # of "never lose a logged bet to a device race" is one too many.
+    def _cookie(self, name: str) -> str:
+        raw = self.headers.get("Cookie") or ""
+        for part in raw.split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == name:
+                return v
+        return ""
+
+    def _client_ip(self) -> str:
+        """Who is actually calling, once there is a proxy in front.
+
+        BEHIND CADDY, `self.client_address` IS CADDY. Every request would
+        arrive from 127.0.0.1, `_local_only()` would be true for the whole
+        internet, and both guards built on it — the cleartext-password
+        refusal and local-only profile creation — would be open doors that
+        still looked shut. Found while writing the deploy config, before
+        any of it shipped, which is the only reason it is a note rather
+        than an incident.
+
+        THE LAST ENTRY, NOT THE FIRST. `X-Forwarded-For` is a list a
+        client can start and each hop appends to, so the first entry is
+        whatever the caller felt like claiming. The last is the one OUR
+        proxy wrote, describing the peer it actually saw.
+
+        And it is trusted ONLY when the connection came from loopback —
+        i.e. from the proxy on this machine. A direct caller can set the
+        header to anything, and believing it would let anyone claim to be
+        127.0.0.1.
+
+        AND THEN CLOUDFLARE WENT IN FRONT (2026-08-21), which added a hop
+        the whole scheme above had not accounted for:
+
+            browser → Cloudflare → Caddy → here
+
+        Caddy still reports the peer it saw, and that peer is now a
+        Cloudflare edge server. Every visitor in a city collapsed onto a
+        handful of addresses, so `rate_ok` was counting a whole region
+        into one bucket — 300 API calls and 20 sign-ins a minute for all
+        of them together. Quiet sites never notice. The moment traffic
+        arrives it starts turning real customers away, which is precisely
+        backwards.
+
+        Cloudflare passes the real address in `CF-Connecting-IP`. That
+        header is believed ONLY when the machine that spoke to our proxy
+        was genuinely Cloudflare, checked against their published ranges
+        — see engine/cfips.py for why a header alone will not do, and for
+        what happens when the list is not installed (nothing: this falls
+        through to the last hop, exactly as before).
+        """
+        peer = (self.client_address or ("",))[0]
+        if peer not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return peer
+        raw = self.headers.get("X-Forwarded-For") or ""
+        hops = [p.strip() for p in raw.split(",") if p.strip()]
+        edge = hops[-1] if hops else peer
+        try:
+            from engine import cfips
+            if cfips.is_cloudflare(edge):
+                # `visitor` refuses anything that is not a public address:
+                # Cloudflare never reports a caller as 127.0.0.1, and
+                # `_local_only` below would believe it.
+                real = cfips.visitor(self.headers.get("CF-Connecting-IP"))
+                if real:
+                    return real
+        except Exception:                                    # noqa: BLE001
+            # Identifying the caller must never be the thing that fails a
+            # request. Worst case we are back to the edge address, which
+            # is what we had a moment ago.
+            pass
+        return edge
+
+    def _is_https(self) -> bool:
+        """Whether the browser's leg of this request was encrypted.
+
+        The server itself speaks plain HTTP; a Tailscale serve or any
+        reverse proxy in front terminates TLS and says so in a header.
+        This decides the cookie's `Secure` flag — setting it
+        unconditionally would make sign-in silently impossible over the
+        LAN address, and never setting it would let the cookie ride a
+        plaintext request when there IS a TLS front.
+        """
+        fwd = (self.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip()
+        return fwd.lower() == "https"
+
+    def _session_cookie(self, token: str, clear: bool = False) -> list:
+        bits = [f"{SESSION_COOKIE}={'' if clear else token}", "Path=/",
+                "HttpOnly", "SameSite=Lax",
+                f"Max-Age={0 if clear else _acct().SESSION_TTL}"]
+        if self._is_https():
+            bits.append("Secure")
+        return [("Set-Cookie", "; ".join(bits))]
+
+    def _client_error(self):
+        """A script error on someone's screen (app.js reportCrash), kept for
+        the bug scan (engine/bugscan). 204 whatever happens, and nothing
+        about the caller is kept but the browser's family: no IP address,
+        no account. Rate-limited, and at most 2 KB a report."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 2000 else b""
+        if self._rate_limited(RATE_CLIENTERR_PER_MIN, "clienterror"):
+            return
+        try:
+            from engine import bugscan
+            got = json.loads(body or b"{}")
+            bugscan.record_client(got, ua=self.headers.get("User-Agent") or "",
+                                  commit=bugscan.running_commit())
+        except Exception:                                    # noqa: BLE001
+            pass
+        return self._send(204, b"", ".json")
+
+    def _push_post(self, path: str):
+        """Push alerts (engine/pushalerts): `subscribe` and `unsubscribe` a
+        phone, and `latest` — what a knocked phone's service worker shows.
+        Open to signed-out readers (an alert carries counts and the public
+        record, never a pick); a signed-in one is noted so the account page
+        can show it, and may ask for its own alerts too (engine/pushmine:
+        its watches, its tickets) — which `latest` shows only to that
+        phone, by the push service's address it alone was given. A phone
+        that subscribes signed out is detached from any account. Nothing
+        else about the caller is kept."""
+        if path not in ("subscribe", "unsubscribe", "latest", "activity", "game-activity", "pause"):
+            return self._send(404, b'{"error":"unknown push endpoint"}', ".json")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        raw = self.rfile.read(length) if 0 < length <= 4000 else b""
+        if self._rate_limited(RATE_PUSH_PER_MIN, "push"):
+            return
+        try:
+            body = json.loads(raw or b"{}")
+            assert isinstance(body, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+        from engine import pushalerts as PA
+        A = _acct()
+        conn = A.connect()
+        try:
+            endpoint = str(body.get("endpoint") or "")
+            if path == "activity":
+                # A saved parlay on the iOS app's lock screen (engine/pushmine):
+                # the activity's own push token, for the member's own ticket.
+                from engine import pushmine as PM
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                if body.get("end"):
+                    code, out = PM.activity_remove(conn, who["id"], str(body.get("bet_id") or ""))
+                else:
+                    code, out = PM.activity_add(conn, who["id"], str(body.get("bet_id") or ""),
+                                                str(body.get("token") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "latest":
+                from engine import pushmine as PM
+                from engine import limits as LM
+                sub = PA.subscription(conn, endpoint) if endpoint else None
+                uid = (sub or {}).get("user_id")
+                st = LM.standing(conn, uid) if uid else None
+                out = PA.latest_for(sub, mine=PM.mine(conn, uid),
+                                    skip=LM.PROMO if st and st["staked"] >= st["limit"] else ())
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "game-activity":
+                # A live game on the iOS app's lock screen (engine/gameactivity):
+                # the activity's own push token, for this member's phone.
+                from engine import gameactivity as GA
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                lg, ev = str(body.get("league") or ""), str(body.get("event") or "")
+                code, out = (GA.remove(conn, who["id"], lg, ev) if body.get("end")
+                             else GA.add(conn, who["id"], lg, ev, str(body.get("token") or "")))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            from engine import consent as CS
+            if path == "pause":
+                # Alerts → Pause (engine/pushalerts.pause): nothing to this
+                # phone for a day or a week, or on again. The phone's own
+                # address is the key, as for unsubscribe.
+                code, out = PA.pause(conn, endpoint, body.get("hours"))
+                if code == 200:
+                    sub = PA.subscription(conn, endpoint) or {}
+                    CS.record(conn, sub.get("user_id"), "limits",
+                              f"alerts paused {body.get('hours')} hours" if out.get("paused_until") else "alerts resumed")
+                    conn.commit()
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "unsubscribe":
+                sub = PA.subscription(conn, endpoint) or {}
+                code, out = PA.unsubscribe(conn, endpoint)
+                if CS.record(conn, sub.get("user_id"), "alerts", "off on a phone"):
+                    conn.commit()
+            else:
+                who = self._account(conn)
+                code, out = PA.subscribe(conn, endpoint, kind=str(body.get("kind") or "web"),
+                                         user_id=(who or {}).get("id"),
+                                         topics=body.get("topics") or PA.KINDS, leagues=body.get("leagues") or ())
+                # The kinds a member turned on, in the consent log (engine/consent).
+                if code == 200 and who and CS.record(conn, who["id"], "alerts", "on: " + ",".join(out.get("topics") or [])):
+                    conn.commit()
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _calendar_get(self, path: str):
+        """A member's games for their calendar (engine/calfeed).
+
+        `link` (signed in) answers with the member's calendar address,
+        `link?new` is not a thing: a fresh one is POST /api/calendar/new.
+        `<user>.<mac>.ics` is the feed itself, fetched by a calendar app that
+        cannot sign in — the address is the key, so a wrong one is a plain
+        404, the same as an address that was replaced."""
+        from engine import calfeed as CF
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "calendar"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            if path == "link":
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                return self._send(200, json.dumps(_calendar_link(conn, who["id"])).encode(), ".json")
+            if not path.endswith(".ics"):
+                return self._send(404, b'{"error":"unknown calendar endpoint"}', ".json")
+            body = CF.feed(conn, path[:-4], site=A.site_url())
+            if body is None:
+                return self._send(404, b"Not a calendar address (a new link replaces the old one).\n", ".txt")
+            return self._send(200, body.encode("utf-8"), ".ics",
+                              headers=[("Content-Disposition", 'inline; filename="qellys-games.ics"')])
+        finally:
+            conn.close()
+
+    def _calendar_post(self, path: str):
+        """POST /api/calendar/new: a fresh address; the old one stops."""
+        from engine import calfeed as CF
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if 0 < length <= 4000:
+            self.rfile.read(length)              # nothing in it is read
+        if path != "new":
+            return self._send(404, b'{"error":"unknown calendar endpoint"}', ".json")
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "calendar"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            CF.token_for(conn, who["id"], new=True)
+            return self._send(200, json.dumps(_calendar_link(conn, who["id"])).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _event(self):
+        """One count for the analytics (engine/analytics.py). 204 whatever
+        happens: switched off, an unknown event or a bad body all store
+        nothing, and a page never waits on or reacts to a count.
+
+        Only the page's own events are accepted here; a subscription event
+        is counted where Stripe's word arrives, never on a page's say-so.
+        Nothing about the caller is kept: `who` is read off the request
+        (visitor, member, subscriber) and only the word is counted."""
+        from engine import analytics as AN
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 2000 else b""
+        if not AN.enabled():
+            return self._send(204, b"", ".json")
+        if self._rate_limited(RATE_EVENT_PER_MIN, "event"):
+            return                                      # the limiter has answered 429
+        try:
+            got = json.loads(body or b"{}")
+        except ValueError:
+            got = None
+        if not isinstance(got, dict) or got.get("e") not in AN.CLIENT_EVENTS:
+            return self._send(204, b"", ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            kind = "visitor"
+            if who:
+                from engine import gate
+                kind = "subscriber" if gate.enabled() and self._entitled(conn, who) else "member"
+                if got["e"] == "visit":
+                    AN.seen(conn, who["id"])
+        finally:
+            conn.close()
+        AN.record(got["e"], str(got.get("page") or ""), str(got.get("src") or ""), kind)
+        return self._send(204, b"", ".json")
+
+    def _activity(self):
+        """One beat of a member's own time here (engine/activity). 204
+        whatever happens: either lock shut, signed out, turned off in
+        Settings or a bad body all keep nothing, and a page never waits on
+        or reacts to a beat."""
+        from engine import activity as ACT
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 4000 else b""
+        if not ACT.enabled():
+            return self._send(204, b"", ".json")
+        if self._rate_limited(RATE_EVENT_PER_MIN, "activity"):
+            return                                      # the limiter has answered 429
+        try:
+            got = json.loads(body or b"{}")
+        except ValueError:
+            got = None
+        if isinstance(got, dict):
+            A = _acct()
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if who:
+                    ACT.beat(conn, who["id"], got)
+            finally:
+                conn.close()
+        return self._send(204, b"", ".json")
+
+    def _account(self, conn):
+        """The signed-in account for this request, or None."""
+        return _acct().session_user(conn, self._cookie(SESSION_COOKIE))
+
+    def _account_get(self, path: str):
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if path == "me":
+                # `insecure` lets the page say so BEFORE anybody types a
+                # password, rather than only refusing after they have.
+                out = {"signed_in": bool(who),
+                       "insecure": self._transport_is_cleartext(),
+                       "allowed": self._password_transport_ok(),
+                       # Whether "Forgot password?" can email a link, so
+                       # the page can say how to get back in BEFORE anybody
+                       # types an address into a form that cannot send.
+                       "reset_by_email": _mail_on(),
+                       # Whether the phone option is on (engine/smsverify).
+                       "phone_signup": __import__("engine.smsverify", fromlist=["x"]).configured(),
+                       # Whether the sign-up is the only way in (gate.account_wall).
+                       "account_wall": __import__("engine.gate", fromlist=["x"]).account_wall()}
+                if who:
+                    out["email"] = who["email"]
+                    from engine import smsverify as SV
+                    if SV.is_placeholder(who["email"]):
+                        row = conn.execute("SELECT phone FROM users WHERE id=?", (who["id"],)).fetchone()
+                        out["phone"] = SV.say(row[0]) if row and row[0] else ""
+                    # ONE PROFILE FOR THE WHOLE SITE (Ethan, 2026-10-07):
+                    # the Account page, the top bar's avatar and the feed
+                    # all read this one row.
+                    from engine import socialfeed as SF
+                    out["profile"] = SF.profile_of(conn, who["id"])
+                    if not out["profile"]:
+                        out["suggest_handle"] = SF.suggest_handle(conn, who["id"])
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "data":
+                return self._send(200, json.dumps(
+                    {"email": who["email"],
+                     "sections": A.get_sections(conn, who["id"])}).encode(),
+                    ".json")
+            if path == "referral":
+                # The member's code and how it has done; for anybody else,
+                # the code their account came in on, if any (engine/referrals).
+                from engine import referrals as RF
+                out = RF.summary(conn, who["id"], member=self._entitled(conn, who))
+                if out.get("code"):
+                    out["link"] = f"{self._site_base()}/?ref={out['code']}"
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "export":
+                # Everything we hold, on request. If we are going to keep
+                # people's data we have to be able to hand it back.
+                return self._send(200, json.dumps(
+                    A.export_user(conn, who["id"]), indent=1).encode(), ".json")
+            if path == "yourdata":
+                # What we keep, counted (engine/yourdata), and every yes and
+                # no they gave us (engine/consent): Settings → Your data.
+                from engine import consent as CS, yourdata as YD
+                return self._send(200, json.dumps({"groups": YD.summary(conn, who["id"]),
+                                                   "choices": CS.history(conn, who["id"])[::-1][:60]}).encode(),
+                                  ".json")
+            if path == "edge":
+                # The Edge Report's closing-line value for the member's saved
+                # parlays (engine/betclv): each ticket's, when every leg has
+                # its close. Hand-logged closes are the page's own to read.
+                from engine import betclv as BC
+                rows = ((A.get_sections(conn, who["id"]).get("mybets") or {}).get("data") or {}).get("rows") or []
+                by_bet = {}
+                for b in rows if isinstance(rows, list) else []:
+                    if isinstance(b, dict) and b.get("src") == "slip" and b.get("id") and isinstance(b.get("legs"), list):
+                        clv = BC.ticket(conn, who["id"], str(b["id"]), legs=len(b["legs"]), payout=b.get("odds"))["clv"]
+                        if clv is not None:
+                            by_bet[str(b["id"])[:40]] = round(clv, 4)
+                # And the members' own, pooled (engine/consensus), beside theirs.
+                from engine import consensus as CN
+                return self._send(200, json.dumps({"by_bet": by_bet,
+                                                   "members": CN.against_the_close(conn)}).encode(), ".json")
+            if path == "digest":
+                from engine import digest as DG, mailer
+                out = DG.optin_get(conn, who["id"])
+                # The TOKEN never leaves the server. It is a bearer
+                # credential for one action, and a page that holds it
+                # can leak it into a referrer, a screenshot or a
+                # support ticket. The unsubscribe link is minted into
+                # the email itself, which is the only place it belongs.
+                out.pop("token", None)
+                # …and the page is told whether mail can go out at all,
+                # so it can say "not switched on yet" instead of
+                # offering a subscription to nothing.
+                # bulk_ok, not configured: the site's Gmail carries
+                # resets and alerts, never a mailing list (engine/mailer).
+                out["available"] = mailer.bulk_ok()
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "activity":
+                # Your activity (engine/activity): whether the site keeps
+                # it, whether you said yes (nothing is kept until you do),
+                # and everything it knows about your last four weeks, in words.
+                from engine import activity as ACT
+                out = {"switch": ACT.enabled(), "off": not ACT.consented(conn, who["id"])}
+                if out["switch"] and not out["off"]:
+                    out["summary"] = ACT.summary(conn, who["id"])
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "lastleg":
+                # The last-leg email (engine/slipwatch): on or off for this
+                # account, whether a relay exists at all, and the address it
+                # would go to — the member's own, shown back to them. One-
+                # to-one mail, so configured() is the bar, not bulk_ok().
+                from engine import slipwatch as SW
+                out = SW.optin_get(conn, who["id"])
+                out["available"] = _mail_on()
+                out["email"] = who["email"]
+                return self._send(200, json.dumps(out).encode(), ".json")
+            return self._send(404, b'{"error":"unknown account endpoint"}',
+                              ".json")
+        finally:
+            conn.close()
+
+    #: Endpoints that carry a PASSWORD in the body. These are the ones
+    #: refused over a cleartext connection to another machine — see
+    #: `_password_transport_ok`.
+    PASSWORD_PATHS = ("signup", "login", "password", "delete", "reset")
+
+    def _via_tailnet(self) -> bool:
+        """Whether this request arrived through the Tailscale tunnel.
+
+        `http://` OVER A TAILNET IS NOT CLEARTEXT. Tailscale is WireGuard:
+        the packets are encrypted device-to-device before they touch any
+        network, so the scheme in the address bar describes the last inch
+        rather than the wire. Refusing a password here would be refusing
+        a connection that is genuinely private — and worse in practice
+        than allowing it, because the way round it is
+        QB_ALLOW_INSECURE_LOGIN=1, which disables the check EVERYWHERE
+        including the coffee shop.
+
+        BOTH ENDS ARE CHECKED, and that is the point. `100.64.0.0/10` is
+        RFC 6598 shared space: Tailscale uses it, but so do some ISPs for
+        carrier-grade NAT, so a client address in that range proves
+        nothing on its own. Requiring that OUR OWN socket for this
+        connection is also a tailnet address means the packet arrived on
+        the tailnet interface — which a CGNAT'd public path does not do,
+        because that lands on the LAN or WAN address instead.
+
+        The limit, stated rather than hidden: a network that put both
+        machines inside 100.64.0.0/10 for real would read as a tailnet
+        here. That is a narrow shape — home LANs are 192.168/10.x and
+        CGNAT sits upstream of the router, not on it — and a much smaller
+        hole than the blanket override it replaces.
+        """
+        import ipaddress
+        nets = (ipaddress.ip_network("100.64.0.0/10"),      # Tailscale IPv4
+                ipaddress.ip_network("fd7a:115c:a1e0::/48"))  # …and IPv6
+        try:
+            peer = ipaddress.ip_address(self._client_ip())
+            mine = ipaddress.ip_address(self.connection.getsockname()[0])
+        except (ValueError, IndexError, OSError, AttributeError):
+            return False
+        inside = lambda a: any(a in n for n in nets)        # noqa: E731
+        return inside(peer) and inside(mine)
+
+    def _transport_is_cleartext(self) -> bool:
+        """Whether this connection would carry a password readable.
+
+        A FACT ABOUT THE WIRE, kept separate from whether we allow it.
+        The override removes the refusal; it does not make the connection
+        private, and reporting `insecure: false` because somebody set an
+        environment variable would be the page telling a comfortable lie
+        about the network. A tailnet is a different case entirely: there
+        the encryption is real, it is just not TLS.
+        """
+        return not (self._is_https() or self._local_only()
+                    or self._via_tailnet())
+
+    def _password_transport_ok(self) -> bool:
+        """Whether a password may cross this connection at all.
+
+        THE HASHING ON OUR END DOES NOTHING FOR THIS. scrypt protects the
+        password at rest; a password typed into a plain-HTTP page has
+        already crossed the network in the clear before it ever reaches
+        the hash, and anyone on that Wi-Fi has it — for this site and for
+        wherever else they reused it.
+
+        Three cases, and only the middle one is a refusal:
+
+          * LOOPBACK — the browser is on this machine. Nothing crosses a
+            network, so http://localhost is genuinely fine and blocking it
+            would break the normal way this app is used.
+          * ANOTHER MACHINE, no TLS — refused, with the fix named.
+          * TLS in front (X-Forwarded-Proto: https) — fine.
+
+        `QB_ALLOW_INSECURE_LOGIN=1` overrides it for someone who has read
+        this and decided their network is theirs. Deliberately an
+        environment variable rather than a settings toggle: it should take
+        a decision, not a mis-tap.
+        """
+        if not self._transport_is_cleartext():
+            return True
+        import os as _os
+        return _os.environ.get("QB_ALLOW_INSECURE_LOGIN", "") == "1"
+
+    def _phone_auth(self, A, conn, path: str, body: dict):
+        """Sign up or in with a phone number (engine/smsverify; Ethan,
+        2026-10-25: "you can either make an account with an email or a phone
+        number"). `phone-start` texts a code; `phone-verify` checks it and
+        signs in the account with that number — or, from the sign-up screen
+        (the age-and-terms box ticked), makes it, with the same username
+        check and referral code as an email sign-up. 503 until Twilio's
+        three values are set."""
+        from engine import smsverify as SV
+        if not SV.configured():
+            return self._send(503, json.dumps({"error": "Signing in by phone isn’t switched on yet — "
+                                                        "use your email for now."}).encode(), ".json")
+        phone = SV.normalize(body.get("phone"))
+        if not phone:
+            return self._send(400, json.dumps({"error": "Enter a US or Canadian mobile number.",
+                                               "field": "phone"}).encode(), ".json")
+        if path == "phone-start":
+            if not SV.allow(phone, self._client_ip()):
+                return self._send(429, json.dumps({"error": "That’s a lot of codes — try again in an hour."}).encode(),
+                                  ".json")
+            try:
+                SV.start(phone)
+            except SV.SmsUnavailable:
+                return self._send(502, json.dumps({"error": "We couldn’t send the code. Try again in a moment."}).encode(),
+                                  ".json")
+            _seclog("phone_start", "ok", self._client_ip(), status=200)
+            return self._send(200, json.dumps({"sent": True, "to": SV.say(phone)}).encode(), ".json")
+        if not SV.check(phone, body.get("code")):
+            _seclog("phone_verify", "fail", self._client_ip(), status=400)
+            return self._send(400, json.dumps({"error": "That code isn’t right, or it has expired.",
+                                               "field": "code"}).encode(), ".json")
+        who = A.user_by_phone(conn, phone)
+        made = ""
+        if who is None:
+            if not body.get("confirmed"):
+                return self._send(404, json.dumps({"error": "There’s no account with that number yet — "
+                                                            "create one on the sign-up screen."}).encode(), ".json")
+            from engine import socialfeed as SF
+            handle = str(body.get("handle") or "").strip().lstrip("@")[:20]
+            if handle:
+                hc, why = SF.handle_problem(conn, handle)
+                if hc:
+                    return self._send(hc, json.dumps({"error": why, "field": "handle"}).encode(), ".json")
+            code, out = A.create_phone_user(conn, phone, confirmed=True)
+            if code != 200:
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if handle:
+                SF.profile_set(conn, out["id"], handle, "")
+            if body.get("ref"):
+                try:
+                    from engine import referrals as RF
+                    _ok, made = RF.attach(conn, out["id"], body.get("ref"))
+                except Exception:                            # noqa: BLE001
+                    made = ""
+            who = {"id": out["id"], "email": out["email"]}
+        _seclog("phone_verify", "ok", self._client_ip(), status=200)
+        token = A.start_session(conn, who["id"])
+        return self._send(200, json.dumps(
+            {"signed_in": True, "email": who["email"], "phone": SV.say(phone),
+             **({"ref_note": made} if made and made != "no code" else {})}).encode(),
+            ".json", headers=self._session_cookie(token))
+
+    def _account_post(self, path: str, body: dict):
+        A = _acct()
+        if path not in ("signup", "login", "logout", "data", "password",
+                        "delete", "signout-all", "digest", "forgot", "reset",
+                        "lastleg", "referral", "phone-start", "phone-verify",
+                        "activity"):
+            return self._send(404, b'{"error":"unknown account endpoint"}',
+                              ".json")
+        if path in self.PASSWORD_PATHS and not self._password_transport_ok():
+            return self._send(400, json.dumps({"error": _INSECURE_LOGIN}
+                                              ).encode(), ".json")
+        if path == "forgot":
+            return self._forgot_password(A, body)
+        conn = A.connect()
+        try:
+            if path == "reset":
+                # A reset link (engine.accounts.finish_reset). Success signs
+                # this browser in: they just proved they hold the address,
+                # and making them type the new password again straight away
+                # is a second chance to fumble it for nothing.
+                code, out = A.finish_reset(conn, body.get("token"),
+                                           body.get("password"))
+                _seclog("password_reset", "ok" if code == 200 else "fail",
+                        self._client_ip(),
+                        email=out.get("email") if code == 200 else None,
+                        status=code)
+                if code != 200:
+                    return self._send(code, json.dumps(out).encode(), ".json")
+                token = A.start_session(conn, out["id"])
+                return self._send(200, json.dumps(
+                    {"signed_in": True, "email": out["email"]}).encode(),
+                    ".json", headers=self._session_cookie(token))
+            if path in ("phone-start", "phone-verify"):
+                return self._phone_auth(A, conn, path, body)
+            if path in ("signup", "login"):
+                handle = ""
+                ref_note = ""
+                if path == "signup":
+                    # THE USERNAME COMES WITH THE ACCOUNT (2026-10-25, Real's
+                    # first screen): checked BEFORE the account exists, so a
+                    # taken or refused one makes nothing, and set the moment
+                    # it does — the chat and the feed then know them by it.
+                    from engine import socialfeed as SF
+                    handle = str(body.get("handle") or "").strip().lstrip("@")[:20]
+                    if handle:
+                        hc, why = SF.handle_problem(conn, handle)
+                        if hc:
+                            return self._send(hc, json.dumps({"error": why, "field": "handle"}).encode(), ".json")
+                    code, out = A.create_user(
+                        conn, body.get("email"), body.get("password"),
+                        confirmed=bool(body.get("confirmed")))
+                    if code == 200 and handle:
+                        SF.profile_set(conn, out["id"], handle, "")
+                    # A FRIEND'S REFERRAL CODE (engine/referrals), typed or
+                    # carried in on a ?ref= link. It never costs the account:
+                    # a code that does not take is a sentence on the page.
+                    if code == 200 and body.get("ref"):
+                        try:
+                            from engine import referrals as RF
+                            _ok, ref_note = RF.attach(conn, out["id"], body.get("ref"))
+                        except Exception:                    # noqa: BLE001
+                            ref_note = ""
+                else:
+                    code, out = A.authenticate(
+                        conn, body.get("email"), body.get("password"),
+                        where=_net_of(self._client_ip()))
+                # THE SECURITY LOG (audit E-5): every sign-in and sign-up
+                # outcome, the account as a one-way tag, never the password.
+                _seclog(path, "ok" if code == 200 else "fail", self._client_ip(),
+                        email=body.get("email"), status=code)
+                if code != 200:
+                    return self._send(code, json.dumps(out).encode(), ".json")
+                token = A.start_session(conn, out["id"])
+                # The token goes in the cookie and NOWHERE in the body: a
+                # page script that can read it can also exfiltrate it, and
+                # HttpOnly is only a promise if we keep it.
+                return self._send(200, json.dumps(
+                    {"signed_in": True, "email": out["email"],
+                     **({"ref_note": ref_note} if ref_note and ref_note != "no code" else {})}).encode(),
+                    ".json", headers=self._session_cookie(token))
+            token = self._cookie(SESSION_COOKIE)
+            if path == "logout":
+                A.end_session(conn, token)
+                return self._send(200, b'{"signed_in":false}', ".json",
+                                  headers=self._session_cookie("", clear=True))
+            who = A.session_user(conn, token)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "referral":
+                # A code typed after signing up, before a first membership.
+                from engine import billing as BI, referrals as RF
+                ok, why = RF.attach(conn, who["id"], body.get("code"),
+                                    subscribed_before=BI.has_subscribed_before(conn, who["id"]))
+                return self._send(200 if ok else 400, json.dumps(
+                    {"ok": ok, "note" if ok else "error": why}).encode(), ".json")
+            if path == "signout-all":
+                # THIS session too, so the browser is told to forget
+                # itself as well — anything else leaves a page showing an
+                # account for a session that no longer exists.
+                n = A.end_all_sessions(conn, who["id"])
+                return self._send(
+                    200, json.dumps({"ended": n}).encode(), ".json",
+                    headers=self._session_cookie("", clear=True))
+            if path == "data":
+                sections = body.get("sections")
+                if not isinstance(sections, dict):
+                    return self._send(400, b'{"error":"sections must be an object"}',
+                                      ".json")
+                # One lock for the read and the write it decides: the
+                # box's slip watch writes a settled slip into this same
+                # My Bets row (engine/accounts.one_writer says why).
+                with A.one_writer(conn):
+                    stored = A.get_sections(conn, who["id"])
+                    merged = merge_sections(stored, sections)
+                    A.save_sections(conn, who["id"], merged)
+                # A weekly limit set, changed or cleared (engine/limits) goes
+                # in the consent log with the policy's date.
+                from engine import consensus as CN, consent as CS, limits as LM
+                before, after = (stored.get("settings") or {}).get("data"), (merged.get("settings") or {}).get("data")
+                said = LM.changed(before, after)
+                if said and CS.record(conn, who["id"], "limits", said):
+                    conn.commit()
+                # In or out of the members' split (engine/consensus), likewise.
+                said = CN.changed(before, after)
+                if said and CS.record(conn, who["id"], "split", said):
+                    conn.commit()
+                # On or off the closing-line leaderboard (engine/closeboard).
+                from engine import closeboard as CB
+                said = CB.changed(before, after)
+                if said and CS.record(conn, who["id"], "closeboard", said):
+                    conn.commit()
+                A.touch_session(conn, token)
+                return self._send(200, json.dumps(
+                    {"email": who["email"], "sections": merged}).encode(),
+                    ".json")
+            if path == "digest":
+                # Two booleans and nothing else. The token is minted
+                # server-side and never accepted from a client — a
+                # caller that could choose its own unsubscribe token
+                # could choose somebody else's.
+                from engine import digest as DG
+                out = DG.optin_set(conn, who["id"],
+                                   bool(body.get("morning")),
+                                   bool(body.get("nightly")))
+                out.pop("token", None)
+                A.touch_session(conn, token)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "activity":
+                # Your own yes or no (engine/activity), each in the consent
+                # log: no deletes every row kept and stops the next; yes
+                # starts from today.
+                from engine import activity as ACT
+                # A yes to a policy section that is not there yet means
+                # nothing, so nothing is written until both locks are open.
+                if ACT.enabled():
+                    ACT.set_off(conn, who["id"], bool(body.get("off")))
+                A.touch_session(conn, token)
+                out = {"switch": ACT.enabled(), "off": not ACT.consented(conn, who["id"])}
+                if out["switch"] and not out["off"]:
+                    out["summary"] = ACT.summary(conn, who["id"])
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "lastleg":
+                # One boolean. The unsubscribe token is minted server-side
+                # and never accepted from a client (the digest's rule), and
+                # it never rides in this answer either.
+                from engine import slipwatch as SW
+                out = SW.optin_set(conn, who["id"], bool(body.get("on")))
+                out["available"] = _mail_on()
+                out["email"] = who["email"]
+                A.touch_session(conn, token)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "password":
+                code, out = A.change_password(conn, who["id"],
+                                              body.get("old"), body.get("new"))
+                _seclog("password_change", "ok" if code == 200 else "fail",
+                        self._client_ip(), email=who["email"], status=code)
+                if code != 200:
+                    return self._send(code, json.dumps(out).encode(), ".json")
+                # change_password drops every session, this one included.
+                return self._send(200, json.dumps(out).encode(), ".json",
+                                  headers=self._session_cookie("", clear=True))
+            if path == "delete":
+                # Typing the password again, because this is not undoable
+                # and a mis-tap should not be able to do it.
+                code, _ = A.authenticate(conn, who["email"],
+                                         body.get("password"))
+                if code != 200:
+                    _seclog("account_delete", "wrong_password", self._client_ip(),
+                            email=who["email"])
+                    # Shown to the person verbatim now that the client
+                    # stopped inventing its own text for every failure.
+                    return self._send(403, b'{"error":"Wrong password."}',
+                                      ".json")
+                # A live subscription is the one thing deletion cannot
+                # clean up: Paddle is the system of record for the money,
+                # and dropping our row leaves a card being charged every
+                # month with nothing on this side to match it to. So the
+                # account has to be unsubscribed first — and the way out
+                # is one button away on the same card.
+                stuck = self._live_subscription(conn, who["id"])
+                if stuck:
+                    return self._send(409, json.dumps({"error": stuck}).encode(),
+                                      ".json")
+                A.delete_user(conn, who["id"])
+                return self._send(200, b'{"deleted":true}', ".json",
+                                  headers=self._session_cookie("", clear=True))
+        finally:
+            conn.close()
+
+    def _forgot_password(self, A, body: dict):
+        """"Forgot password?" — email a reset link (engine.accounts).
+
+        THE SAME ANSWER WHETHER OR NOT THE ADDRESS HAS AN ACCOUNT, and in
+        the same time: the lookup, the token and the send all happen on a
+        background thread after the reply has gone. A form that answered
+        "no such account", or answered it faster, would be a way to test
+        which addresses are registered here.
+
+        With no mail relay configured nothing can be sent, and the reply
+        says so with the way back in (write to support), which is the same
+        for every address and so tells a prober nothing either.
+        """
+        email = body.get("email")
+        if not A.email_ok(email):
+            return self._send(400, json.dumps(
+                {"error": "That does not look like an email address."}
+            ).encode(), ".json")
+        if not _mail_on():
+            _seclog("password_reset_request", "no_mail", self._client_ip(),
+                    email=email)
+            return self._send(200, json.dumps(
+                {"sent": False, "by_email": False,
+                 "contact": SUPPORT_EMAIL}).encode(), ".json")
+        _seclog("password_reset_request", "asked", self._client_ip(),
+                email=email)
+        threading.Thread(target=_send_reset, args=(A.normalize_email(email),),
+                         daemon=True, name="password-reset").start()
+        return self._send(200, json.dumps({"sent": True, "by_email": True}
+                                          ).encode(), ".json")
+
+    # --- tail or fade ----------------------------------------------------
+    # Calls are validated against the SERVED board (the full copy, via
+    # board_source) — the browser names a player and a market, the board
+    # decides everything else. Entitlement-gated with the paywall on:
+    # the validation's own 404-vs-409 answers would otherwise let a
+    # signed-out prober map the board one name at a time.
+
+    # --- Zeno's Record: Ethan's own sportsbook tickets --------------------
+    def _zeno_get(self):
+        """The public block, read fresh from the store.
+
+        record.json carries the same block and is what the page draws
+        from; this answers a reader who wants it newer than the last
+        build — an import lands here the moment it is made."""
+        from engine import zeno as Z
+        try:
+            # The FREE half only: his bets are paid (engine/zeno.split).
+            return self._send(200, json.dumps(Z.split(Z.block_or_empty())[0]).encode(),
+                              ".json")
+        except Exception as exc:                             # noqa: BLE001
+            return self._fail(500, "Zeno's record could not be read right now.", exc, "zeno")
+
+    def _zeno_tickets(self):
+        """His bets, live from the store, FOR HIM: the owner token, the same
+        door as the import. Members read the published board
+        (/api/board/zeno.json); this is what lets him grade a bet he
+        posted from his page whether or not his account holds a plan."""
+        from engine import zeno as Z
+        ok = Z.owner_token_ok(self.headers.get("X-Owner-Token")
+                              or self.headers.get("Authorization", "")
+                              .replace("Bearer ", "", 1))
+        if ok is None:
+            return self._send(503, b'{"error":"owner import is not '
+                                   b'configured on this server"}', ".json")
+        if not ok:
+            _seclog("owner_token", "refused", self._client_ip(),
+                    path=urlparse(self.path).path)
+            return self._send(403, b'{"error":"not the owner"}', ".json")
+        return self._send(200, json.dumps(Z.split(Z.block_or_empty())[1]).encode(), ".json")
+
+    def _zeno_import(self):
+        """THE ONE WAY IN, and it is a secret rather than an account.
+
+        Ethan, 2026-09-21: "This would be just for me … no one else
+        should be able to log in and show this data." There is no
+        per-account path to this store at all — not a role, not a flag,
+        nothing that could be misconfigured into letting a second person
+        through. The bearer of `QB_OWNER_TOKEN` writes; nobody else can,
+        because nothing else exists.
+
+        FAILS CLOSED. No token configured on the box means 503 to every
+        caller, never an open door. A wrong token is 403 with no hint
+        which half was wrong. The body is capped like every other POST.
+        """
+        from engine import zeno as Z
+        ok = Z.owner_token_ok(self.headers.get("X-Owner-Token")
+                              or self.headers.get("Authorization", "")
+                              .replace("Bearer ", "", 1))
+        if ok is None:
+            return self._send(503, b'{"error":"owner import is not '
+                                   b'configured on this server"}', ".json")
+        if not ok:
+            _seclog("owner_token", "refused", self._client_ip(),
+                    path=urlparse(self.path).path)
+            return self._send(403, b'{"error":"not the owner"}', ".json")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_PROFILE_BYTES:
+            self.close_connection = length > MAX_PROFILE_BYTES
+            return self._send(413, b'{"error":"import payload too large or '
+                                   b'empty"}', ".json")
+        text = self.rfile.read(length).decode("utf-8", "replace")
+        try:
+            rows, unknown = Z.parse_text(text)
+        except ValueError as exc:
+            return self._send(400, json.dumps(
+                {"error": f"could not parse the export: {exc}"}).encode(),
+                ".json")
+        # A LOOK BEFORE A WRITE: `X-Zeno-Preview: 1` answers with how the
+        # export was read (engine/zeno.preview) and writes nothing — the
+        # first upload of a new export (Pikkit's) is checked this way.
+        if (self.headers.get("X-Zeno-Preview") or "").strip() in ("1", "true", "yes"):
+            return self._send(200, json.dumps(Z.preview(text)).encode(), ".json")
+        source = (self.headers.get("X-Zeno-Source") or "juicereel").strip()[:40]
+        conn = Z.connect()
+        try:
+            got = Z.import_rows(conn, rows, source=source)
+        finally:
+            conn.close()
+        # A BET HE POSTS REACHES MEMBERS NOW, not at the next record
+        # build: the paid board is republished from the store at once.
+        try:
+            Z.publish_tickets(Z.split(Z.block_or_empty())[1])
+            got["published"] = True
+        except Exception as exc:                             # noqa: BLE001
+            got["published"] = False
+            got["publish_error"] = f"{type(exc).__name__}: {exc}"[:200]
+        got["unknown_headers"] = unknown
+        return self._send(200, json.dumps(got).encode(), ".json")
+
+    # --- Research picks, written down before kickoff (owner only) -------------
+    def _owner_refused(self) -> bool:
+        """True after answering, when the caller is not the owner. The same
+        door as Zeno's import: QB_OWNER_TOKEN, failing closed."""
+        from engine import zeno as Z
+        ok = Z.owner_token_ok(self.headers.get("X-Owner-Token")
+                              or self.headers.get("Authorization", "")
+                              .replace("Bearer ", "", 1))
+        if ok is None:
+            self._send(503, b'{"error":"owner access is not configured on this server"}', ".json")
+            return True
+        if not ok:
+            _seclog("owner_token", "refused", self._client_ip(), path=urlparse(self.path).path)
+            self._send(403, b'{"error":"not the owner"}', ".json")
+            return True
+        return False
+
+    def _research_post(self):
+        """Ethan, 2026-10-04: paste a research report's picks before the
+        games; engine.scancard grades them after. Body: JSON {season, week,
+        text}, one pick a line (engine/researchlog)."""
+        if self._owner_refused():
+            return
+        from engine import researchlog as R
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_PROFILE_BYTES:
+            self.close_connection = length > MAX_PROFILE_BYTES
+            return self._send(413, b'{"error":"payload too large or empty"}', ".json")
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8", "replace"))
+            season, week = int(body["season"]), int(body["week"])
+            if not (2020 <= season <= 2100 and 1 <= week <= 23):
+                raise ValueError
+        except (ValueError, KeyError, TypeError):
+            return self._send(400, b'{"error":"send JSON with season, week and text"}', ".json")
+        claims, errors = R.parse(str(body.get("text") or ""))
+        got = R.add(claims, season, week) if claims else {"added": 0, "kept_first": 0,
+                                                           "week_total": len(R.load(season, week))}
+        return self._send(200, json.dumps({**got, "errors": errors}).encode(), ".json")
+
+    def _research_get(self, parsed):
+        if self._owner_refused():
+            return
+        from engine import researchlog as R
+        q = parse_qs(parsed.query)
+        try:
+            season, week = int(q.get("season", ["0"])[0]), int(q.get("week", ["0"])[0])
+        except ValueError:
+            return self._send(400, b'{"error":"season and week must be numbers"}', ".json")
+        return self._send(200, json.dumps({"claims": R.load(season, week)}).encode(), ".json")
+
+    def _tailfade_get(self, path: str):
+        if path != "me":
+            return self._send(404, b'{"error":"unknown tailfade endpoint"}',
+                              ".json")
+        from engine import tailfade as TF
+        from engine import ledger as _led
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            lconn = _led.connect()
+            try:
+                out = TF.me(conn, who["id"], lconn)
+            finally:
+                lconn.close()
+        finally:
+            conn.close()
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _tailfade_post(self, path: str, body: dict):
+        if path != "call":
+            return self._send(404, b'{"error":"unknown tailfade endpoint"}',
+                              ".json")
+        from engine import gate
+        from engine import tailfade as TF
+        A = _acct()
+        sport = str(body.get("sport") or "")
+        if sport not in LIVE_FILES:
+            return self._send(400, b'{"error":"unknown sport"}', ".json")
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if gate.enabled() and not self._entitled(conn, who):
+                return self._send(402, json.dumps(
+                    {"error": "Tail/fade rides on the picks — an active "
+                              "subscription is what makes the argument "
+                              "fair."}).encode(), ".json")
+            # The shared slim copy (askbot.board_at), not a fresh parse
+            # per call — the 2026-09-26 outage.
+            from engine import askbot as AB
+            board = AB.board_at(gate.board_source(LIVE_FILES[sport])) or {}
+            code, out = TF.record_call(
+                conn, who["id"], board, sport,
+                str(body.get("player") or ""), str(body.get("market") or ""),
+                str(body.get("stance") or ""))
+        finally:
+            conn.close()
+        return self._send(code, json.dumps(out).encode(), ".json")
+
+    # --- friends: picks sent between accounts -----------------------------
+    # engine/social.py holds the two rules (a share is a POINTER carrying
+    # only the pick's identity, and friendships form through invite links
+    # rather than lookup); these handlers hold the third: every endpoint
+    # requires a session, because there is nothing anonymous here to
+    # serve. NOT entitlement-gated — no paid content travels (that is the
+    # pointer rule doing its work), so a free account can receive a
+    # friend's pointer and see the locked state behind it, which is
+    # exactly what the same pick's permalink would show them.
+    def _alerts_feed(self, conn, who, paid=None) -> list:
+        """The feed this caller may read, and no more of it.
+
+        feed.json is a PAID file — every entry names a pick — so an
+        alert is only ever a filter over a board the reader was already
+        entitled to. Outside the wall this answers with nothing rather
+        than with the locked stub, and the page says why.
+        """
+        from engine import gate
+        path = WEB / "data" / "feed.json"
+        if gate.enabled():
+            if not (self._entitled(conn, who) if paid is None else paid):
+                return []
+            path = gate.board_source(path)
+        try:
+            return (json.loads(path.read_text(encoding="utf-8"))
+                    or {}).get("events") or []
+        except (OSError, ValueError):
+            return []
+
+    def _alerts_get(self, path: str, query: dict | None = None):
+        from engine import alerts as AL
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "live":
+                # YOUR PLAYERS, LIVE (engine/yourplayers): each followed
+                # player's box-score line in the game he is in now. Public
+                # box scores and the member's own watches — free. And the
+                # starters of a fantasy lineup linked on the device, by name
+                # (`lineup`, js/chat.js ffLiveLoad): looked up, never kept.
+                from engine import yourplayers as YP
+                lines = YP.mine(AL.list_watches(conn, who["id"]),
+                                lineup=YP.lineup_names(((query or {}).get("lineup") or [""])[0]))
+                return self._send(200, json.dumps({"players": lines}).encode(), ".json")
+            if path != "me":
+                return self._send(404, b'{"error":"unknown alerts endpoint"}',
+                                  ".json")
+            from engine import gate
+            from engine import slipwatch as SW
+            watches = AL.list_watches(conn, who["id"])
+            paid = not gate.enabled() or self._entitled(conn, who)
+            events = self._alerts_feed(conn, who, paid=paid)
+            since = AL.seen_ts(conn, who["id"])
+            # THE LAST LEG RINGS THE BELL TOO (Ethan, 2026-10-14, "do
+            # 1-11"): a saved slip the box found down to its last leg
+            # (engine/slipwatch) leads the member's own rows and counts on
+            # the badge until it settles. Behind the same wall as the Live
+            # tab that follows it.
+            slips = SW.bell_rows(conn, who["id"]) if paid else []
+            out = {
+                "watches": watches,
+                "kinds": list(AL.KINDS),
+                "max": AL.MAX_WATCHES,
+                "edge_range": [AL.EDGE_MIN, AL.EDGE_MAX],
+                # Everything of theirs in the window, and how much of it
+                # is new — the page shows the first and badges the second.
+                "fired": slips + AL.fired(events, watches),
+                "unseen": len(AL.fired(events, watches, since=since))
+                + sum(1 for s in slips if s["ts"] > since),
+                "newest": max([AL.newest_ts(events)] + [s["ts"] for s in slips]),
+                "feed_n": len(events),
+            }
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _widget_mine(self, key: str):
+        """The account's own iPhone widget (engine/widgetfeed.mine): the key
+        is the address, as the calendar's is, so a wrong or replaced one is
+        a plain 404."""
+        from engine import widgetfeed as WF
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "widget"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            out = WF.mine(conn, key)
+            if out is None:
+                return self._send(404, b'{"error":"not a widget key (turning it on again makes a new one)"}', ".json")
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _widget_key(self, body: dict):
+        """POST /api/widget/key: the signed-in account's widget key (the app
+        puts it where the widget reads it); ``{"new": true}`` replaces it,
+        ``{"off": true}`` deletes it and the widget stops answering."""
+        from engine import widgetfeed as WF
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "widget"):
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if body.get("off"):
+                WF.key_off(conn, who["id"])
+                return self._send(200, b'{"ok": true, "off": true}', ".json")
+            key = WF.key_for(conn, who["id"], new=bool(body.get("new")))
+            return self._send(200, json.dumps({"key": key}).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _callit(self, path: str, body: dict | None = None):
+        """CALL IT (engine/callit): GET the game's open call, its grades and
+        the room's best; POST a call. ``path`` is ``{league}/{event id}``,
+        read off the deep file the live loop writes — a league it plays
+        and an id of digits, nothing else reaches the disk."""
+        from engine import callit as CI
+        league, _, event = path.partition("/")
+        if league not in CI.LEAGUES or not event.isdigit() or len(event) > 14:
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        try:
+            doc = json.loads((WEB / "data" / "pbp" / f"{league}_{event}.json").read_text())
+            assert isinstance(doc, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if body is None:
+                out = CI.state(conn, who["id"] if who else None, doc)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to play Call it."}', ".json")
+            code, out = CI.call(conn, who["id"], doc, str(body.get("unit") or "")[:40],
+                                str(body.get("call") or "")[:12])
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _passkey_site(self):
+        """(relying party id, origin) for a passkey ceremony, or None.
+
+        The id is the site's own name (QB_PASSKEY_RP_ID, or the host this
+        browser reached us on); the origin is the one the browser itself
+        says it is on (its Origin header), taken only when it is that name
+        or one under it, over https (http for localhost, to test on).
+        The browser's signed record must then name the same origin."""
+        from engine import secrets as _s
+        _s.load_local_secrets()
+        origin = str(self.headers.get("Origin") or "").strip().rstrip("/")
+        u = urlparse(origin)
+        host = (u.hostname or "").lower()
+        base_host = (urlparse(self._site_base()).hostname or "").lower()
+        rp = os.environ.get("QB_PASSKEY_RP_ID", "").strip().lower() or base_host
+        if not rp or not host or not (host == rp or host.endswith("." + rp)):
+            return None
+        try:                      # a browser refuses a number address as a site's id
+            ipaddress.ip_address(rp.strip("[]"))
+            return None
+        except ValueError:
+            pass
+        if u.scheme != "https" and not (u.scheme == "http" and host == "localhost"):
+            return None
+        return rp, origin
+
+    @staticmethod
+    def _passkey_label(conn, user_id: int, email: str) -> str:
+        """The address, or for an account made with a phone (engine/
+        smsverify) its number as a page shows it."""
+        from engine import smsverify as SV
+        if not SV.is_placeholder(email):
+            return str(email or "")
+        row = conn.execute("SELECT phone FROM users WHERE id=?", (int(user_id),)).fetchone()
+        return SV.say(row[0]) if row and row[0] else "Your account"
+
+    def _passkey(self, path: str, body: dict | None):
+        """PASSKEYS (engine/passkeys): add one to a signed-in account, sign
+        in with one, list and remove the account's own."""
+        from engine import passkeys as PK
+        A = _acct()
+        conn = A.connect()
+        try:
+            PK.ensure_tables(conn)
+            who = self._account(conn)
+            if path in ("list", "remove", "register-options", "register") and not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "list":
+                return self._send(200, json.dumps({"passkeys": PK.mine(conn, who["id"])}).encode(), ".json")
+            if path == "remove":
+                if PK.remove(conn, who["id"], str((body or {}).get("id") or "")[:1400]):
+                    _seclog("passkey_remove", "ok", self._client_ip(), email=who["email"])
+                return self._send(200, json.dumps({"passkeys": PK.mine(conn, who["id"])}).encode(), ".json")
+            if path not in ("register-options", "register", "login-options", "login"):
+                return self._send(404, b'{"error":"unknown passkey endpoint"}', ".json")
+            site = self._passkey_site()
+            if not site:
+                return self._send(400, b'{"error":"Passkeys work on the site itself, over https."}', ".json")
+            rp, origin = site
+            try:
+                if path == "register-options":
+                    # What the phone lists the passkey under: the address,
+                    # or the number for an account made with one.
+                    out = PK.register_options(conn, who["id"], self._passkey_label(conn, who["id"], who["email"]), rp)
+                elif path == "register":
+                    out = PK.register(conn, who["id"], body or {}, rp, origin)
+                    # A new way into the account goes in the security log.
+                    _seclog("passkey_add", "ok", self._client_ip(), email=who["email"])
+                    out["passkeys"] = PK.mine(conn, who["id"])
+                elif path == "login-options":
+                    out = PK.login_options(conn, rp)
+                else:
+                    uid = PK.login(conn, body or {}, rp, origin)
+                    row = conn.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+                    _seclog("passkey_login", "ok", self._client_ip(), status=200)
+                    token = A.start_session(conn, uid)
+                    em = row[0] if row else ""
+                    label = self._passkey_label(conn, uid, em)
+                    return self._send(200, json.dumps({"signed_in": True, "email": em,
+                                                       **({"phone": label} if label != em else {})}).encode(),
+                                      ".json", headers=self._session_cookie(token))
+            except PK.PasskeyError as exc:
+                if path == "login":
+                    _seclog("passkey_login", "fail", self._client_ip(), status=400)
+                return self._send(400, json.dumps({"error": str(exc)}).encode(), ".json")
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _karma(self, path: str, body: dict | None, q: dict):
+        """KARMA (engine/karma): GET ``me`` (the Karma tab and the Live
+        tab's strip; opening it is the day's check-in) and ``ladder`` (the
+        week's or all-time, by username — open to read); POST ``watch`` (a
+        live game's page, open and in view, about once a minute) and
+        ``prefs`` (the flair and the ladder choice)."""
+        from engine import karma as K
+        one = lambda k, d="": (q.get(k) or [d])[0]                # noqa: E731
+        if path not in ("me", "ladder", "watch", "prefs"):
+            return self._send(404, b'{"error":"unknown karma endpoint"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            K.ensure_tables(conn)
+            who = self._account(conn)
+            if path == "ladder" and body is None:
+                scope = one("scope") if one("scope") in ("all", "friends") else "week"
+                if scope == "friends" and not who:
+                    return self._send(401, b'{"error":"Sign in to race your friends."}', ".json")
+                out = K.ladder(conn, scope, who["id"] if who else None)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to earn karma."}', ".json")
+            if path == "me" and body is None:
+                return self._send(200, json.dumps(K.me(conn, who["id"])).encode(), ".json")
+            if path == "watch" and body is not None:
+                code, out = K.watch(conn, who["id"], str(body.get("room") or "")[:24])
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "prefs" and body is not None:
+                code, out = K.set_prefs(conn, who["id"],
+                                        flair=body.get("flair") if isinstance(body.get("flair"), str) else None,
+                                        ladder=body.get("ladder") if isinstance(body.get("ladder"), bool) else None,
+                                        remind=body.get("remind") if isinstance(body.get("remind"), bool) else None,
+                                        share=body.get("share") if isinstance(body.get("share"), bool) else None,
+                                        pins=[str(x)[:20] for x in body.get("pins")][:10]
+                                        if isinstance(body.get("pins"), list) else None)
+                return self._send(code, json.dumps(out).encode(), ".json")
+            return self._send(405, b'{"error":"wrong method"}', ".json")
+        finally:
+            conn.close()
+
+    def _trivia(self, path: str, body: dict | None = None):
+        """TRIVIA IN THE STOPPAGES (engine/trivia): GET the game's question
+        for the break it is in (or the last one, answered), POST an answer.
+        ``path`` is ``{league}/{event id}`` off the deep file the live loop
+        writes, exactly as Call it reads it; the questions come from the
+        history database's season logs."""
+        from engine import trivia as TV
+        from engine.db import connect as hist_connect
+        if path == "daily":
+            return self._trivia_daily(body)
+        league, _, event = path.partition("/")
+        if league not in TV.LEAGUES or not event.isdigit() or len(event) > 14:
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        try:
+            doc = json.loads((WEB / "data" / "pbp" / f"{league}_{event}.json").read_text())
+            assert isinstance(doc, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        # The room is the path's: one key whatever the file spells.
+        doc["league"], doc["event_id"] = league, event
+        A = _acct()
+        conn = A.connect()
+        hist = None
+        try:
+            TV.ensure_tables(conn)
+            who = self._account(conn)
+            hist = hist_connect()
+            if body is None:
+                out = TV.state(conn, hist, who["id"] if who else None, doc)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to answer."}', ".json")
+            code, out = TV.answer(conn, hist, who["id"], doc, str(body.get("qkey") or "")[:60], body.get("pick"))
+            if code == 200 and out.get("answer") is not None:
+                # A right answer earns karma (engine/karma).
+                k = _karma_note(lambda K: K.on_trivia(conn, who["id"], TV.room_of(doc), out["qkey"],
+                                                      out.get("mine") == out.get("answer")))
+                if k:
+                    out["karma"] = k
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+            if hist is not None:
+                hist.close()
+
+    def _trivia_daily(self, body: dict | None = None):
+        """TODAY'S QUESTION (engine/trivia daily): one a day for everybody,
+        Eastern, off one of the day's games; GET it, POST an answer (a free
+        account, once a day; right pays karma)."""
+        from engine import karma as K
+        from engine import trivia as TV
+        from engine.db import connect as hist_connect
+        A = _acct()
+        conn = A.connect()
+        hist = None
+        try:
+            TV.ensure_tables(conn)
+            who = self._account(conn)
+            hist = hist_connect()
+            day = K.day_of(time.time())
+            data = WEB / "data"
+            if body is None:
+                out = TV.daily_state(conn, hist, who["id"] if who else None, day, data)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to answer."}', ".json")
+            code, out = TV.daily_answer(conn, hist, who["id"], day, body.get("pick"), data)
+            if code == 200:
+                k = _karma_note(lambda K: K.on_daily(conn, who["id"], day, out.get("mine") == out.get("answer")))
+                if k:
+                    out["karma"] = k
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+            if hist is not None:
+                hist.close()
+
+    def _alerts_post(self, path: str, body: dict):
+        from engine import alerts as AL
+        if path not in ("watch", "unwatch", "seen"):
+            return self._send(404, b'{"error":"unknown alerts endpoint"}',
+                              ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "watch":
+                code, out = AL.add_watch(conn, who["id"], body.get("kind"),
+                                         body.get("value"))
+                # A team or a player followed earns karma (engine/karma).
+                k = _karma_note(lambda K: K.on_follow(conn, who["id"], str(body.get("kind") or ""),
+                                                      str(body.get("value") or "")[:80])) if code == 200 else None
+                if k and isinstance(out, dict):
+                    out["karma"] = k
+            elif path == "unwatch":
+                code, out = AL.remove_watch(conn, who["id"], body.get("id"))
+            else:
+                AL.mark_seen(conn, who["id"], str(body.get("ts") or ""))
+                code, out = 200, {"ok": True}
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    # --- the public feed: parlays people post, and the Tail button -------
+    # engine/socialfeed.py holds the rules. READS ARE OPEN — a stranger can
+    # see the feed, which is the point of it — but every read is answered
+    # under the reader's own entitlement: a leg that is on the paid board
+    # only shows its identity to a reader who has not paid, and that
+    # reader cannot tail it. Every write needs a session. Hiding a post or
+    # comment is the owner's, behind QB_OWNER_TOKEN like Zeno's import.
+    def _feed_get(self, path: str, q: dict):
+        from engine import socialfeed as SF
+        one = lambda k, d="": (q.get(k) or [d])[0]                # noqa: E731
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            uid = who["id"] if who else None
+            entitled = self._entitled(conn, who)
+            strong = one("strong") == "1"
+            if path in ("list", "post", "profile"):
+                # The lazy fold: a parlay whose games are over is graded
+                # the first time anybody reads the feed after them.
+                try:
+                    from engine import ledger as _led
+                    SF.settle_pending(conn, _led.connect)
+                except Exception as exc:                 # noqa: BLE001
+                    _seclog("feed_grade", "failed", self._client_ip(), error=type(exc).__name__)
+            days = {"7": 7, "30": 30, "all": None}.get(one("days", "30"), 30)
+            if path == "list":
+                out = SF.feed(conn, uid, entitled, strong, before=_int(one("before")),
+                              sport=one("sport")[:8], order=one("order", "hot")[:9],
+                              window=one("window", "week")[:5], kind=one("kind")[:6],
+                              offset=_int(one("offset")), tag=one("tag")[:30],
+                              handle=one("handle")[:20])
+                out["me"] = SF.profile_of(conn, uid) if uid else None
+                out["signed_in"] = bool(who)
+                out["unseen"] = SF.unseen(conn, uid)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "me":
+                return self._send(200, json.dumps({"me": SF.profile_of(conn, uid) if uid else None,
+                                                   "signed_in": bool(who),
+                                                   "unseen": SF.unseen(conn, uid)}).encode(), ".json")
+            if path == "rail":
+                # The render's right column in one read: Trending Picks,
+                # Top Bettors, Community Stats, who to follow, #tags.
+                out = {"trending": SF.trending_picks(conn, uid, entitled, 5),
+                       "leaders": SF.leaders(conn, uid, days, one("metric", "win")[:9])["top"][:5],
+                       "stats": SF.community_stats(conn),
+                       "suggest": SF.suggestions(conn, uid),
+                       "tags": SF.trending_tags(conn, uid, 7, 8)}
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "trending":
+                return self._send(200, json.dumps(
+                    {**SF.trending_picks(conn, uid, entitled, 20),
+                     "tags": SF.trending_tags(conn, uid, 7, 20)}).encode(), ".json")
+            if path == "tags":
+                return self._send(200, json.dumps(
+                    {"tags": SF.trending_tags(conn, uid, 30, 60)}).encode(), ".json")
+            if path == "legs":
+                return self._send(200, json.dumps(
+                    SF.leg_search(one("sport", "nfl")[:8], one("q")[:60], entitled)).encode(), ".json")
+            if path == "post":
+                code, out = SF.post_detail(conn, _int(one("id")), uid, entitled, strong)
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "profile":
+                code, out = SF.profile_page(conn, one("handle"), uid, entitled, strong,
+                                            tab=one("tab", "posts")[:8], before=_int(one("before")))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "follows":
+                code, out = SF.follow_list(conn, one("handle"), one("which", "followers"), uid)
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "leaders":
+                return self._send(200, json.dumps(
+                    SF.leaders(conn, uid, days, one("metric", "units")[:9])).encode(), ".json")
+            if path == "pickem":
+                # The weekly pick'em (engine/pickem): free, open to read. A
+                # pick whose game is over is graded here, the first read
+                # after it, from the finals table opened read-only.
+                import sqlite3 as _sq
+                from engine import pickem as PK
+                from engine.db import DEFAULT_DB as _HDB
+                try:
+                    PK.grade(conn, lambda: _sq.connect(f"file:{_HDB}?mode=ro", uri=True))
+                except Exception as exc:                 # noqa: BLE001
+                    _seclog("pickem_grade", "failed", self._client_ip(), error=type(exc).__name__)
+                return self._send(200, json.dumps(PK.view(conn, one("sport", "nfl")[:8].lower(), uid,
+                                                          one("week")[:10] or None,
+                                                          group=_int(one("group")) or None)).encode(), ".json")
+            if path == "closeboard":
+                # The members' closing-line leaderboards (engine/closeboard):
+                # for signed-in readers, and nothing while either lock is shut.
+                from engine import closeboard as CB
+                if not uid:
+                    return self._send(401, b'{"error":"Sign in to see the leaderboard."}', ".json")
+                return self._send(200, json.dumps(CB.board(conn, one("window", "week")[:4], uid,
+                                                           one("scope", "all")[:8])).encode(), ".json")
+            if path == "pickem-group":
+                # An invite link's landing (engine/pickgroups.peek): the
+                # group's name, how many are in it and who started it.
+                from engine import pickgroups as PG
+                if not rate_ok(f"pkgroup:{self._client_ip()}", 30):
+                    return self._send(429, b'{"error":"slow down"}', ".json")
+                got = PG.peek(conn, one("code")[:16])
+                return self._send(200 if got else 404, json.dumps(got or {"error": "That invite link has expired or is not right."}).encode(), ".json")
+            if path == "search":
+                return self._send(200, json.dumps(
+                    SF.search(conn, one("q"), uid, entitled, strong)).encode(), ".json")
+            if path == "people":
+                # Find people (the Search tab, and the game chat's @ names):
+                # a name typed, or who to add before one is.
+                q_ = one("q")[:30]
+                n_ = max(1, min(_int(one("n")) or SF.PEOPLE_PAGE, SF.PEOPLE_PAGE))
+                out = ({"q": q_, "people": SF.people(conn, q_, uid, n_)} if q_.strip().lstrip("@")
+                       else {"q": "", "people": SF.people_suggest(conn, uid, n_), "suggested": True})
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "notifications":
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                return self._send(200, json.dumps(SF.notifications(conn, uid, strong)).encode(), ".json")
+            if path == "reported":
+                if not self._founder_or_owner(conn):
+                    return
+                return self._send(200, json.dumps(
+                    {"items": SF.reported(conn), "pinned": SF.pinned_id(conn)}).encode(), ".json")
+            return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
+        finally:
+            conn.close()
+
+    def _founder_or_owner(self, conn) -> bool:
+        """The feed's moderation door (hide, restore, the verified tick, the
+        reports queue): the owner token as before, or the founder's own
+        signed-in session — the account engine/socialfeed.crown marked from
+        the box. False after answering."""
+        from engine import socialfeed as SF
+        if self.headers.get("X-Owner-Token") or self.headers.get("Authorization"):
+            return not self._owner_refused()
+        who = self._account(conn)
+        if who and SF.is_founder(conn, who["id"]):
+            return True
+        _seclog("founder", "refused", self._client_ip(), path=urlparse(self.path).path)
+        self._send(403, b'{"error":"founder only"}', ".json")
+        return False
+
+    def _feed_post(self, path: str, body: dict):
+        from engine import socialfeed as SF
+        if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
+                        "delete", "report", "profile", "follow", "block", "seen", "friend", "mention-alerts",
+                        "hide", "vote", "verify", "pin", "pickem", "pickem-remind", "pickem-group"):
+            return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
+        txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
+        A = _acct()
+        conn = A.connect()
+        try:
+            if path in ("hide", "verify") and not self._founder_or_owner(conn):
+                return
+            if path == "hide":
+                code, out = SF.set_hidden(conn, str(body.get("kind") or ""),
+                                          _int(body.get("id")), bool(body.get("hidden", True)))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "verify":
+                code, out = SF.set_verified(conn, str(body.get("handle") or "")[:20],
+                                            bool(body.get("on", True)))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            uid = who["id"]
+            if path == "post":
+                # Which rows, never what they say: the leg is rebuilt from
+                # the private board by engine/socialfeed.resolve_legs, so a
+                # price, a link or a URL in a crafted body lands nowhere.
+                legs = [{"gid": str(l.get("gid") or ""),
+                         "player": str(l.get("player") or ""),
+                         "market": str(l.get("market") or ""),
+                         "side": str(l.get("side") or ""),
+                         "line": l.get("line") if isinstance(l.get("line"), (int, float, str)) else None}
+                        for l in (body.get("legs") or []) if isinstance(l, dict)][:6]
+                code, out = SF.create_post(conn, uid, body.get("sport"), body.get("date"),
+                                           legs, body.get("caption"))
+            elif path == "talk":
+                poll = [o for o in body.get("poll") or [] if isinstance(o, str)][:6] \
+                    if isinstance(body.get("poll"), list) else None
+                code, out = SF.create_talk(conn, uid, txt("sport"), txt("title"), txt("body"),
+                                           poll=poll, link=txt("link"))
+            elif path == "vote":
+                code, out = SF.vote(conn, uid, _int(body.get("id")), body.get("option"))
+            elif path == "pickem":
+                # Which game and which team, never a result: engine/pickem
+                # finds the game on the board and locks it at kickoff.
+                from engine import pickem as PK
+                code, out = PK.pick(conn, uid, txt("sport"), str(body.get("gid") or "")[:80],
+                                    str(body.get("team") or "")[:40])
+            elif path == "pin":
+                code, out = SF.pin(conn, uid, _int(body.get("id")), bool(body.get("on", True)))
+            elif path == "edit":
+                code, out = SF.edit_post(conn, uid, _int(body.get("id")), caption=txt("caption"),
+                                         title=txt("title"), body=txt("body"))
+            elif path == "like":
+                code, out = SF.toggle_like(conn, uid, _int(body.get("id")))
+            elif path == "comment-like":
+                code, out = SF.toggle_comment_like(conn, uid, _int(body.get("id")))
+            elif path == "tail":
+                code, out = SF.tail(conn, uid, _int(body.get("id")),
+                                    self._entitled(conn, who))
+            elif path == "comment":
+                code, out = SF.add_comment(conn, uid, _int(body.get("id")), body.get("body"),
+                                           parent_id=_int(body.get("parent")) or None)
+            elif path == "delete":
+                code, out = SF.delete(conn, uid, str(body.get("kind") or ""), _int(body.get("id")))
+            elif path == "report":
+                code, out = SF.report(conn, uid, str(body.get("kind") or ""), _int(body.get("id")),
+                                      str(body.get("reason") or "other")[:12])
+            elif path == "follow":
+                code, out = SF.toggle_follow(conn, uid, str(body.get("handle") or ""))
+            elif path == "block":
+                code, out = SF.toggle_block(conn, uid, str(body.get("handle") or ""))
+            elif path == "friend":
+                code, out = SF.add_friend(conn, uid, str(body.get("handle") or ""))
+            elif path == "seen":
+                SF.mark_seen(conn, uid)
+                code, out = 200, {"ok": True}
+            elif path == "mention-alerts":
+                code, out = SF.set_mention_alerts(conn, uid, body.get("on") is True)
+            elif path == "pickem-remind":
+                # The Pick'em page's switch for the push before picks lock.
+                from engine import pickem as PK
+                code, out = PK.set_remind(conn, uid, body.get("on") is True)
+            elif path == "pickem-group":
+                # Private groups (engine/pickgroups): start, join by code,
+                # leave; the owner renames, removes, makes a new link.
+                from engine import pickgroups as PG
+                code, out = PG.act(conn, uid, {k: body.get(k) for k in ("do", "group", "name", "code", "handle")
+                                               if isinstance(body.get(k), (str, int))})
+            else:
+                code, out = SF.profile_set(conn, uid, txt("handle"), txt("bio"), name=txt("name"),
+                                           color=body.get("color"), team=txt("team"))
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _chat_ticket(self, body: dict):
+        """YOUR TICKETS IN THIS GAME (engine/sliplive.room_tickets): the
+        reader's own saved slips from My Bets, each leg in this room's game
+        with the box's number — the score's facts, free, no account needed
+        (the tickets live on the reader's device). Never the chance."""
+        from engine import sliplive as SL
+        if self._rate_limited(RATE_CALENDAR_PER_MIN, "ticket"):
+            return
+        room = str(body.get("room") or "")
+        m = re.fullmatch(r"(nfl|cfb|nba|wnba|nhl|mlb)_(\d{1,14})", room)
+        if not m:
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        try:
+            doc = json.loads((WEB / "data" / "pbp" / f"{room}.json").read_text())
+            home, away = str(doc.get("home") or ""), str(doc.get("away") or "")
+        except Exception:                                    # noqa: BLE001
+            return self._send(404, b'{"error":"no such game"}', ".json")
+        tickets = body.get("tickets") if isinstance(body.get("tickets"), list) else []
+        out = SL.room_tickets(tickets, m.group(1), home, away)
+        # AND, SIGNED IN, EACH TICKET'S PRICE AGAINST THE CLOSE (engine/betclv:
+        # the research's live CLV, free) — what the box saw for the member's
+        # own saved slips, never anybody else's.
+        if out:
+            A = _acct()
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if who:
+                    from engine import betclv as BC
+                    for t in out:
+                        got = BC.ticket(conn, who["id"], t["id"], legs=t.get("of"))
+                        if got["clv"] is not None:
+                            t["clv"] = round(got["clv"], 4)
+            finally:
+                conn.close()
+        return self._send(200, json.dumps({"tickets": out}).encode(), ".json")
+
+    def _chat_get(self, path: str, q: dict):
+        """The game chat (engine/gamechat). Open to read; the founder's
+        queue of reported messages behind the feed's moderation door."""
+        from engine import gamechat as GC
+        one = lambda k, d="": (q.get(k) or [d])[0]                # noqa: E731
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            uid = who["id"] if who else None
+            if path == "room":
+                # "Here now" counts pages, not people: a signed-in reader by
+                # account, anyone else by a salted hash of the address that
+                # lives in memory only and is gone in under a minute.
+                key = f"u{uid}" if uid else "a" + hashlib.sha256(
+                    (_HERE_SALT + self._client_ip()).encode()).hexdigest()[:16]
+                try:
+                    since = float(one("since") or 0)
+                except ValueError:
+                    since = 0.0
+                code, out = GC.room_view(conn, one("room")[:24], uid, after=_int(one("after")),
+                                         before=_int(one("before")), since=since,
+                                         strong=one("strong") == "1", here_key=key,
+                                         party=_int(one("party")), pafter=_int(one("pafter")))
+                if code == 200 and not (out.get("votes") or {}).get("open", True):
+                    # The game is final: its who-wins vote pays the right side.
+                    _karma_note(lambda K: K.grade_votes(conn, out["room"]))
+                if code == 200:
+                    from engine import socialfeed as SF
+                    out["me"] = {"signed_in": bool(who),
+                                 "handle": ((SF.profile_of(conn, uid) or {}).get("handle") if uid else None),
+                                 "founder": bool(uid and SF.is_founder(conn, uid))}
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "counts":
+                rooms = [r for r in one("rooms").split(",") if r][:GC.MAX_ROOMS]
+                return self._send(200, json.dumps({"rooms": GC.counts(conn, rooms)}).encode(), ".json")
+            if path == "reported":
+                if not self._founder_or_owner(conn):
+                    return
+                return self._send(200, json.dumps({"items": GC.reported(conn)}).encode(), ".json")
+            return self._send(404, b'{"error":"unknown chat endpoint"}', ".json")
+        finally:
+            conn.close()
+
+    def _chat_post(self, path: str, body: dict):
+        from engine import gamechat as GC
+        if path not in ("send", "react", "play", "vote", "potg", "remind", "report", "delete", "hide", "ticket",
+                        "party", "join", "leave"):
+            return self._send(404, b'{"error":"unknown chat endpoint"}', ".json")
+        if path == "ticket":
+            return self._chat_ticket(body)
+        A = _acct()
+        conn = A.connect()
+        try:
+            if path == "hide":
+                if not self._founder_or_owner(conn):
+                    return
+                code, out = GC.set_hidden(conn, _int(body.get("id")), bool(body.get("hidden", True)))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"Make a free account to join the chat."}', ".json")
+            uid = who["id"]
+            room = str(body.get("room") or "")[:24]
+            if path == "react":
+                code, out = GC.react(conn, uid, _int(body.get("id")), str(body.get("kind") or ""))
+            elif path == "play":
+                code, out = GC.react_play(conn, uid, room, str(body.get("play") or "")[:40],
+                                          str(body.get("kind") or ""))
+            elif path == "vote":
+                code, out = GC.vote(conn, uid, room, str(body.get("side") or ""))
+            elif path == "potg":
+                code, out = GC.potg_vote(conn, uid, room, body.get("pick"))
+            elif path == "remind":
+                code, out = GC.remind(conn, uid, room, body.get("on") is True)
+            elif path == "report":
+                code, out = GC.report(conn, uid, _int(body.get("id")), str(body.get("reason") or "other")[:12])
+            elif path == "delete":
+                code, out = GC.delete(conn, uid, _int(body.get("id")))
+            elif path == "party":
+                # WATCH PARTIES (engine/gamechat): start one in this game's
+                # room, join one by its invite, or leave one.
+                code, out = GC.party_create(conn, uid, room, str(body.get("name") or "")[:80])
+            elif path == "join":
+                code, out = GC.party_join(conn, uid, str(body.get("token") or "")[:40])
+            elif path == "leave":
+                code, out = GC.party_leave(conn, uid, _int(body.get("party")))
+            else:
+                # A message: what the writer typed, the play it answers, the
+                # message it replies to, and the bet THEY say they are on —
+                # rebuilt field by field by gamechat.clean_bet; nothing else
+                # in a crafted body lands anywhere.
+                code, out = GC.send(conn, uid, room, body.get("body") if isinstance(body.get("body"), str) else "",
+                                    play=str(body.get("play") or "")[:40],
+                                    bet=body.get("bet") if isinstance(body.get("bet"), dict) else None,
+                                    reply_to=_int(body.get("reply_to")) or None, party=_int(body.get("party")))
+            if code == 200:
+                # What it earned (engine/karma), for the page's toast.
+                earn = {"send": lambda K: K.on_message(conn, uid, out.get("id")),
+                        "react": lambda K: K.on_react(conn, uid, _int(body.get("id")), out.get("mine") or ""),
+                        "play": lambda K: K.on_play_react(conn, uid, out.get("mine") or ""),
+                        "vote": lambda K: K.on_vote(conn, uid, room),
+                        "potg": lambda K: K.on_potg(conn, uid, room),
+                        "join": lambda K: K.on_party_join(conn, uid, out.get("id"))}.get(path)
+                k = _karma_note(earn) if earn else None
+                if k:
+                    out["karma"] = k
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _social_get(self, path: str):
+        from engine import social as SOC
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "me":
+                out = {"friends": SOC.friends_list(conn, who["id"]),
+                       "inbox": SOC.inbox(conn, who["id"]),
+                       "sent": SOC.sent(conn, who["id"]),
+                       "requests": SOC.requests_in(conn, who["id"]),
+                       "threads": SOC.threads(conn, who["id"]),
+                       "invite": SOC.invite_get_or_create(conn, who["id"])}
+                return self._send(200, json.dumps(out).encode(), ".json")
+            return self._send(404, b'{"error":"unknown social endpoint"}',
+                              ".json")
+        finally:
+            conn.close()
+
+    def _social_post(self, path: str, body: dict):
+        from engine import social as SOC
+        if path not in ("accept", "send", "send-parlay", "remove", "seen",
+                        "revoke-invite", "find", "request", "answer-request",
+                        "dm", "thread", "nickname",
+                        "delete-message", "delete-thread"):
+            return self._send(404, b'{"error":"unknown social endpoint"}',
+                              ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "accept":
+                code, out = SOC.invite_accept(conn, who["id"],
+                                              str(body.get("token") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "send":
+                # The identity fields and the note are the ONLY things
+                # read out of the body — a side, line or price sent by a
+                # crafted client lands nowhere, because share_pick has no
+                # parameter to receive it.
+                code, out = SOC.share_pick(
+                    conn, who["id"], int(body.get("to") or 0),
+                    str(body.get("sport") or ""), str(body.get("date") or ""),
+                    str(body.get("player") or ""),
+                    str(body.get("market") or ""),
+                    str(body.get("note") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "send-parlay":
+                # Legs are rebuilt here key by key — player and market,
+                # the identity pair, and nothing else survives the body.
+                # A side, a line or a price in a crafted leg lands
+                # nowhere; share_parlay's signature is the second lock.
+                legs = [{"player": str(l.get("player") or ""),
+                         "market": str(l.get("market") or "")}
+                        for l in (body.get("legs") or [])
+                        if isinstance(l, dict)]
+                code, out = SOC.share_parlay(
+                    conn, who["id"], int(body.get("to") or 0),
+                    str(body.get("sport") or ""), str(body.get("date") or ""),
+                    legs, str(body.get("note") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "find":
+                # Display names only — find_users is where the email
+                # oracle stays closed; the handler adds nothing to ask.
+                out = SOC.find_users(conn, who["id"],
+                                     str(body.get("q") or ""))
+                return self._send(200, json.dumps({"users": out}).encode(),
+                                  ".json")
+            if path == "request":
+                code, out = SOC.request_send(conn, who["id"],
+                                             int(body.get("to") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "answer-request":
+                code, out = SOC.request_answer(
+                    conn, who["id"], int(body.get("id") or 0),
+                    bool(body.get("accept")))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "remove":
+                SOC.friend_remove(conn, who["id"], int(body.get("friend") or 0))
+                return self._send(200, b'{"removed":true}', ".json")
+            if path == "revoke-invite":
+                SOC.invite_revoke(conn, who["id"])
+                out = SOC.invite_get_or_create(conn, who["id"])
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "dm":
+                # Body text only — dm_send has no parameter through
+                # which a pick field could ride along with the words.
+                code, out = SOC.dm_send(conn, who["id"],
+                                        int(body.get("to") or 0),
+                                        str(body.get("body") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "thread":
+                code, out = SOC.thread(conn, who["id"],
+                                       int(body.get("friend") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "delete-message":
+                # Hides ONE item from this viewer's threads. Never the
+                # friend's copy — engine/social's deleting section says
+                # why that would be a reach into somebody else's account.
+                code, out = SOC.delete_item(conn, who["id"],
+                                            str(body.get("kind") or ""),
+                                            int(body.get("id") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "delete-thread":
+                code, out = SOC.delete_thread(conn, who["id"],
+                                              int(body.get("friend") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "nickname":
+                # Your private label for a friend — empty clears it. It
+                # is stored against YOUR id only and never shown to the
+                # friend it names.
+                code, out = SOC.nickname_set(conn, who["id"],
+                                             int(body.get("friend") or 0),
+                                             str(body.get("name") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            # "seen", scoped to one conversation when a friend is named.
+            friend = body.get("friend")
+            SOC.mark_seen(conn, who["id"],
+                          int(friend) if friend else None)
+            return self._send(200, b'{"seen":true}', ".json")
+        finally:
+            conn.close()
+
+    # --- the streak game -------------------------------------------------
+    # The slate itself is a free static file; these endpoints carry only
+    # what is per-account (picks, the fold, names) or cross-account (the
+    # leaderboard). Everything is validated against the published slate,
+    # never against client-supplied questions — the browser names a qid
+    # and a side, and the server decides what those mean.
+
+    def _streak_get(self, path: str):
+        S = _streak()
+        A = _acct()
+        if path == "leaders":
+            slate = streak_slate()
+            conn = A.connect()
+            try:
+                # AN ANONYMOUS READ WROTE ON EVERY REQUEST (audit F-9): the
+                # fold takes the accounts write lock. Once a minute per
+                # process is enough — the fold only moves when a game ends.
+                if time.time() - _STREAK_FOLDED[0] > 60:
+                    _STREAK_FOLDED[0] = time.time()
+                    S.fold_all(conn, slate)
+                board = S.leaders(conn)
+                # A COUNT, not a roster — see playing_today's docstring
+                # for why the board is empty on day one and why this is
+                # the honest thing to show instead.
+                tonight = S.playing_today(conn, str(slate.get("date") or ""))
+            finally:
+                conn.close()
+            return self._send(200, json.dumps(
+                {"leaders": board, "in_tonight": tonight}).encode(), ".json")
+        if path == "me":
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}',
+                                      ".json")
+                out = S.me(conn, who["id"], streak_slate())
+            finally:
+                conn.close()
+            return self._send(200, json.dumps(out).encode(), ".json")
+        return self._send(404, b'{"error":"unknown streak endpoint"}', ".json")
+
+    def _streak_post(self, path: str, body: dict):
+        S = _streak()
+        A = _acct()
+        if path not in ("pick", "name"):
+            return self._send(404, b'{"error":"unknown streak endpoint"}',
+                              ".json")
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "pick":
+                code, out = S.record_pick(
+                    conn, who["id"], streak_slate(),
+                    str(body.get("qid") or ""), str(body.get("side") or ""))
+            else:
+                code, out = S.set_name(conn, who["id"],
+                                       str(body.get("name") or ""))
+        finally:
+            conn.close()
+        return self._send(code, json.dumps(out).encode(), ".json")
+
+    def _live_subscription(self, conn, user_id: int) -> str:
+        """Message to refuse deletion with, or "" to let it through.
+
+        Deletion is the one account action that can cost somebody money
+        after they have stopped using the site. `delete_user` clears our
+        `subscriptions` row, but Stripe never hears about it: the card
+        keeps being charged on schedule, and the row that said whose card
+        it was is gone. The person then has a charge they cannot place and
+        we have a payment we cannot refund to an account.
+
+        So a paying account is asked to cancel first, which is one button
+        away on the same card and happens on Stripe's own portal. Nobody
+        is trapped: cancelling flips the status through the webhook, and
+        `trialing`, `past_due` and `unpaid` are refused too because all
+        three still have a live subscription behind them — `past_due` is
+        walled since 2026-10-12 but Stripe is still retrying its card, so
+        the test is `open` (billing.OPEN), not just `entitled`. A plan
+        cancelled to run out at its period's end is let through: Stripe
+        will not charge it again.
+
+        Returns a string rather than a bool because the whole point is
+        telling the person *why* — the old client turned every non-200
+        from this endpoint into "Wrong password.", which was the least
+        useful sentence available.
+        """
+        try:
+            from engine import billing as BI
+            have = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            if "subscriptions" not in have:
+                return ""              # billing never ran on this install
+            # The columns status_for reads, added by init on a database
+            # from before them (cancel_at_end, 2026-10-12). Without it the
+            # read throws on an old file, and a throw lets the delete
+            # through — the one direction this check must not fail in.
+            BI.init(conn)
+            st = BI.status_for(conn, user_id)
+        except Exception:                                    # noqa: BLE001
+            # A billing lookup that breaks must not block someone from
+            # deleting their account. Erring the other way would mean a
+            # bug in code that is switched off holds their data hostage.
+            return ""
+        if st.get("cancel_at_end") or not (st.get("entitled")
+                                           or st.get("open")):
+            return ""
+        return ("This account still has a subscription. Cancel it first "
+                "under Manage billing — otherwise your card keeps being "
+                "charged and we lose the record of whose card it is. "
+                "Once it is cancelled, delete works normally.")
+
+    # --- billing: Stripe holds the card, we hold a status ------------------
+    def _entitled(self, conn, who) -> bool:
+        """May this caller read a full board?
+
+        THE PAYWALL BEING OFF MEANS EVERYBODY, and that ordering matters:
+        the flag is checked before the account is, so a site running
+        without a processor behaves exactly as it did before any of this
+        was written rather than refusing everyone.
+        """
+        from engine import billing as BI
+        from engine import gate
+        from engine import redeem as RD
+        if not gate.enabled():
+            return True
+        if not who:
+            return False
+        if gate.comped(who.get("email")):
+            return True
+        # A REDEEMED CODE IS AN ENTITLEMENT, checked before the processor
+        # and independent of it. This is what lets the paywall be switched
+        # on before Stripe is live: comp addresses and codes are then the
+        # two ways in, both under Ethan's hand. Its own try, so that a
+        # broken redemption lookup cannot cost a PAYING subscriber their
+        # board — the billing check below still runs.
+        try:
+            _acct().once_per_db(RD.init)(conn)   # once per process (audit F-9)
+            if RD.active(conn, who["id"]):
+                return True
+        except Exception:                                    # noqa: BLE001
+            pass
+        try:
+            BI.init(conn)
+            st = BI.status_for(conn, who["id"])
+        except Exception:                                    # noqa: BLE001
+            # A billing lookup that breaks must not become a lockout. The
+            # failure everybody notices is a paying customer refused; the
+            # failure nobody notices is one free read.
+            return False
+        return bool(st.get("entitled"))
+
+    def _players_search(self, q):
+        """Player search across every league, straight off the game logs.
+
+        Ethan, 2026-08-18: "You should be able too look up any player in
+        the league too that specific sport." The static board only knows
+        tonight's priced players; the history DB knows everyone who has
+        appeared in an ingested game. UNGATED on purpose: game logs are
+        FACTS, on the same free footing as rosters and injuries
+        (engine/statlogs.py's header carries the argument) — the paid
+        thing is picks, and none ride here.
+
+        EVERY LEAGUE BY DEFAULT, AND FIGHTERS TOO. Ethan, 2026-08-23:
+        "even if im selected on nfl, i shoudl still be able to look up
+        mlb or ufc or wnba players." It shipped filtered to whichever tab the visitor was
+        on, which made an empty result ambiguous in the worst way — "we
+        have nothing on him" and "you are on the wrong tab" looked
+        identical, and the second one is not the visitor's mistake to
+        make. ``sport`` is now a preference that leads the ranking;
+        ``scope=sport`` still pins the search to one league for a caller
+        that means it.
+        """
+        from engine import playersearch, statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        term = (q.get("q") or [""])[0][:40]
+        if (q.get("scope") or [""])[0].lower() == "sport":
+            # Ethan, 2026-09-01, reversing the 08-23 all-league decision:
+            # "i wanna be able to search any player only on what sport
+            # tabe we are on. if im on mlb then i should only be able to
+            # search mlb and so forth." The page sends scope=sport now,
+            # so this branch is the search — and the UFC tab's players
+            # live in the fighter store, not the history DB.
+            if sport == "ufc":
+                from engine.ufc import fighters
+                hits = fighters.search(term)
+            elif sport in statlogs.SPORT_MARKETS:
+                hits = statlogs.search(sport, term)
+            else:
+                return self._send(400, b'{"error":"no log-backed search '
+                                       b'for this sport"}', ".json")
+        else:
+            # playersearch, not statlogs: fighters are not in the history
+            # DB and never were, so the league-wide log search could not
+            # find one however many leagues it covered. Ethan, an hour
+            # after the all-league change: "im not able to search ufc
+            # players." Two stores, one answer.
+            hits = playersearch.search(term, prefer=sport)
+        return self._send(200, json.dumps({"players": hits}).encode(),
+                          ".json")
+
+    def _players_logs(self, q):
+        """One player's multi-market logs — the searched-up profile's food.
+
+        Same shape the board's ``player_stats`` section ships, so the page
+        draws a bench bat with the exact card a priced star gets."""
+        from engine import statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        if sport not in statlogs.SPORT_MARKETS:
+            return self._send(400, b'{"error":"no log-backed search for '
+                                   b'this sport"}', ".json")
+        stats = statlogs.for_player(sport, player)
+        return self._send(200, json.dumps(
+            {"player": player, "stats": stats}).encode(), ".json")
+
+    def _parlay_check(self, body: dict):
+        """The engine's parlay rules for a ticket the reader is building.
+
+        Ethan, 2026-09-01: the user slip obeys the model's own rule —
+        three legs, conflicts detected. Ungated and unauthenticated on
+        purpose: it reads nothing but the legs it is sent and returns a
+        verdict; there is no record to protect. Rate-limited with the
+        other reads."""
+        from engine.parlays import check_ticket
+        sport = str(body.get("sport") or "").strip().lower()[:8]
+        legs = body.get("legs")
+        legs = [l for l in (legs if isinstance(legs, list) else [])
+                if isinstance(l, dict)][:12]
+        clean = []
+        for l in legs:
+            clean.append({k: (str(v)[:60] if isinstance(v, str) else v)
+                          for k, v in l.items() if isinstance(k, str)})
+        return self._send(200, json.dumps(check_ticket(sport, clean)).encode(),
+                          ".json")
+
+    def _parlay_build(self, body: dict):
+        """The parlay builder (engine/parlaybuild): the legs the reader chose,
+        priced with the correlation between them, and the board's legs that
+        stack with them. Ungated like the ticket check: it reads nothing but
+        the legs and chances it is sent, which the page already holds."""
+        from engine import parlaybuild as PB
+        sport = str(body.get("sport") or "").strip().lower()[:8]
+        legs = body.get("legs") if isinstance(body.get("legs"), list) else []
+        pool = body.get("pool") if isinstance(body.get("pool"), list) else []
+        try:
+            out = PB.build(sport, legs[:12], pool[:PB.MAX_POOL])
+        except Exception:                                # noqa: BLE001
+            return self._send(400, b'{"ok":false,"reason":"that ticket could not be read"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _mybets_closes(self, body: dict):
+        """Our close on the bets a reader logged, for My Bets' report card
+        (engine/reportcard). Ungated like the Record's settled list: it
+        answers only from settled picks, whose closes the Record already
+        prints. The page sends only when the reader asks it to."""
+        from engine import ledger as L
+        from engine import reportcard
+        try:
+            conn = L.connect()
+            try:
+                out = reportcard.closes(conn, body.get("bets"))
+            finally:
+                conn.close()
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the record could not be read"}', ".json")
+        return self._send(200, json.dumps({"closes": out}).encode(), ".json")
+
+    def _mybets_risk(self, body: dict):
+        """One risk view of the reader's open bets (engine/risk): the night
+        simulated with every open leg once, our chance where a board prices
+        it, the parlay engine's correlation inside a game; the bad night,
+        the chance every ticket loses, where the money rides, and the one
+        hedge that lifts the bad night most. Behind the membership: the
+        chances are the boards'. The page sends the open tickets' stakes,
+        prices and legs; nothing is kept."""
+        from engine import risk as RK
+        from engine import slipwatch as SW
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            ok = bool(who) and self._entitled(conn, who)
+        finally:
+            conn.close()
+        if not ok:
+            locked = {"error": "The risk view comes with a membership.", "signed_in": bool(who), "locked": True}
+            return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+        bets = body.get("bets") if isinstance(body.get("bets"), list) else []
+        try:
+            boards = SW.boards_and_live()[0]
+            out = RK.analyze(bets[:RK.MAX_BETS], boards)
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the risk view could not be worked out just now"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _hoops_whatif(self, q):
+        """What if he sits (engine/nba/whatif): one club's rotation and, with
+        a player named, each teammate's share of the minutes, points,
+        rebounds and assists in the games he missed against the games he
+        played. UNGATED like the other log endpoints: box-score facts, and
+        evidence only — nothing on the board moves for it."""
+        import re as _re
+        from engine.db import connect as _connect
+        from engine.nba import whatif as W
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        league, team, player = arg("league").lower()[:5], arg("team").upper()[:4], arg("player")[:60]
+        if league not in W.LEAGUES or not _re.fullmatch(r"[A-Z]{2,4}", team):
+            return self._send(400, b'{"error":"league and team"}', ".json")
+        try:
+            conn = _connect()
+            try:
+                out = W.whatif(conn, league, team, player)
+            finally:
+                conn.close()
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the logs could not be read"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _mybets_replay(self, q):
+        """One saved slip's live chance as the box kept it (engine/
+        slipreplay): the caller's own slip only, and behind the membership,
+        like the live chance it plays back."""
+        from engine import slipreplay as SR
+        bid = ((q.get("id") or [""])[0] or "")[:40]
+        if not bid:
+            return self._send(400, b'{"error":"which slip"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who or not self._entitled(conn, who):
+                locked = {"error": "The replay comes with a membership.", "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+            pts = SR.history(conn, who["id"], bid)
+        finally:
+            conn.close()
+        return self._send(200, json.dumps({"id": bid, "points": pts}).encode(), ".json")
+
+    def _lines_books(self, q):
+        """Every book's line on one market over time, and the steam marks
+        (engine/linebooks). Behind the membership, like the boards: the
+        books' numbers are the line-shopping half of what a member pays
+        for, and this is them minute by minute."""
+        from engine.db import connect as _connect
+        from engine import linebooks as LB
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        sport, player, market = arg("sport").lower()[:5], arg("player")[:60].strip(), arg("market")[:40].strip()
+        try:
+            hours = max(1, min(168, int(arg("hours") or LB.HOURS)))
+        except ValueError:
+            hours = LB.HOURS
+        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl") or not player or not market:
+            return self._send(400, b'{"error":"sport, player and market"}', ".json")
+        A = _acct()
+        aconn = A.connect()
+        try:
+            who = self._account(aconn)
+            if not self._entitled(aconn, who):
+                locked = {"error": "Every book's line comes with a membership.", "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+        finally:
+            aconn.close()
+        try:
+            conn = _connect()
+            try:
+                out = LB.chart(conn, sport, player, market, hours)
+            finally:
+                conn.close()
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the lines could not be read"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _ideas(self, q):
+        """One pick's, or one game's, slice of the inventions file
+        (engine/ideas): the books' own menus checked, and the rest as they
+        land. Behind the membership: every section is a reading of the
+        priced board, which is what a member pays for."""
+        from engine import ideas as ID
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        sport = arg("sport").lower()[:5]
+        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl"):
+            return self._send(400, b'{"error":"sport"}', ".json")
+        player, market = arg("player")[:60].strip(), arg("market")[:40].strip()
+        home, away = arg("home")[:40].strip(), arg("away")[:40].strip()
+        if not (player and market) and not (home and away):
+            return self._send(400, b'{"error":"player and market, or home and away"}', ".json")
+        A = _acct()
+        aconn = A.connect()
+        try:
+            who = self._account(aconn)
+            if not self._entitled(aconn, who):
+                locked = {"error": "This comes with a membership.", "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402, json.dumps(locked).encode(), ".json")
+        finally:
+            aconn.close()
+        data = ID.read(sport)
+        if not data:
+            return self._send(200, json.dumps({"sport": sport, "sections": {}, "empty": True}).encode(), ".json")
+        try:
+            line = float(arg("line")) if arg("line") else None
+        except ValueError:
+            line = None
+        out = (ID.pick_slice(data, player, market, arg("side")[:8], line) if player and market
+               else ID.game_slice(data, home, away))
+        return self._send(200, json.dumps(out, default=str).encode(), ".json")
+
+    def _players_versus(self, q):
+        """A player's history against one opponent — the head-to-head.
+
+        Ethan, 2026-09-01: "the rams take on the 49ers week one and I
+        wanna see how Devonte Adam's did the last time the 49ers played
+        the rams." Without ``vs`` this returns the opponents he has
+        logged games against (the page's picker options — exact stored
+        keys, so the join back can never misspell); with ``vs`` it
+        returns every stored game against them, one row per game with
+        every ingested market. UNGATED like the other log endpoints:
+        game logs are FACTS on the free footing of rosters and injuries.
+        """
+        from engine import statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        vs = (q.get("vs") or [""])[0][:60]
+        if sport not in statlogs.SPORT_MARKETS:
+            return self._send(400, b'{"error":"no log-backed lookup for '
+                                   b'this sport"}', ".json")
+        out = (statlogs.versus(sport, player, vs) if vs
+               else statlogs.opponents_of(sport, player))
+        return self._send(200, json.dumps(out or {}).encode(), ".json")
+
+    def _players_carries(self, q):
+        """One player's carry chart — every run, by game and by hole.
+
+        Ethan, 2026-10-13, with the league's carry chart for Josh Allen
+        at the Rams: "a carry chart exactly in the screenshot for every
+        player ... a Carry chart for past games and also just a kinda
+        'average' carry chart showing where they run." NFL and college
+        (engine/carries.chart). UNGATED like the other log endpoints:
+        where a back ran and how far is a fact of the game, not a pick.
+        """
+        import os
+        from engine import carries, db as _cdb, statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        season = (q.get("season") or [""])[0][:4]
+        if sport not in ("nfl", "cfb"):
+            return self._send(400, b'{"error":"carry charts are NFL and college football"}',
+                              ".json")
+        out: dict = {}
+        if player and os.path.exists(str(_cdb.DEFAULT_DB)):
+            conn = _cdb.connect(str(_cdb.DEFAULT_DB))
+            try:
+                out = carries.chart(conn, sport, player, int(season) if season.isdigit() else None)
+                if out:
+                    out["face"] = statlogs.face(conn, sport, out["player"])
+                elif not carries.stored(conn, sport):
+                    # No runner in the league has a carry on file yet:
+                    # the charts are being filled (engine/chartfill), and
+                    # the page says so instead of "no carries" for him.
+                    out = {"filling": True}
+            finally:
+                conn.close()
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _players_routes(self, q):
+        """One player's route chart — every pass thrown to him, by game,
+        and where on the field they go over the season.
+
+        Ethan, 2026-10-13, with the league's route chart for Sam LaPorta
+        against the Cardinals: "We can add route charts for wr and shit
+        too." NFL and, since the same evening ("Yes do all of them"),
+        college from 2025 (engine/targets.chart): the college play file
+        names who was thrown at — on most incompletions since 2025 — but
+        has no air yards and no side of the field, so a college target
+        is drawn straight upfield. UNGATED like the carry chart.
+        """
+        import os
+        from engine import carries, db as _rdb, statlogs, targets
+        sport = (q.get("sport") or ["nfl"])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        season = (q.get("season") or [""])[0][:4]
+        if sport not in ("nfl", "cfb"):
+            return self._send(400, b'{"error":"route charts are NFL and college football"}', ".json")
+        out: dict = {}
+        if player and os.path.exists(str(_rdb.DEFAULT_DB)):
+            conn = _rdb.connect(str(_rdb.DEFAULT_DB))
+            try:
+                out = targets.chart(conn, player, int(season) if season.isdigit() else None, sport=sport)
+                if out:
+                    out["face"] = statlogs.face(conn, sport, out["player"])
+                elif not carries.stored(conn, sport, table="targets"):
+                    out = {"filling": True}          # being filled, as the carry chart's
+            finally:
+                conn.close()
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _players_chart(self, q):
+        """Any of a player's charts — every one since the carry and route
+        charts, by kind (engine/charts: the passing chart first).
+
+        Ethan, 2026-10-13: "Yes do all of them ... then make sure they are
+        all routed correctly like nfl." One door, so every chart is asked
+        the same way. UNGATED like the carry and route charts: where a
+        ball was thrown, hit or shot is a fact of the game, not a pick.
+        """
+        import os
+        from engine import charts, db as _hdb
+        kind = (q.get("kind") or [""])[0].lower()[:20]
+        sport = (q.get("sport") or [""])[0].lower()[:8]
+        player = (q.get("player") or [""])[0][:60]
+        season = (q.get("season") or [""])[0][:4]
+        # Tonight's opponent and the chart the page leads with, for the
+        # matchup view (a college opponent is a school's name).
+        opp = (q.get("opp") or [""])[0][:40]
+        fam = (q.get("fam") or [""])[0].lower()[:12]
+        if not charts.known(kind, sport):
+            return self._send(400, b'{"error":"no such chart for that league"}', ".json")
+        body = b"{}"
+        if player and os.path.exists(str(_hdb.DEFAULT_DB)):
+            # Kept fifteen minutes and built once however many ask
+            # (charts.answer_json, 2026-10-14: "the hit tracker won't load
+            # or takes forever too load").
+            body = charts.answer_json(_hdb.DEFAULT_DB, kind, sport, player,
+                                      int(season) if season.isdigit() else None, opp=opp, fam=fam)
+        return self._send(200, body, ".json")
+
+    def _players_fantasy(self, q):
+        """The full fantasy dossier — engine/ffprofile.py's page, served.
+
+        NFL-only and ungated for the same reason the log endpoints are:
+        season stats, snap shares and schedules are FACTS. The picks
+        stay the paid thing."""
+        from engine import ffprofile
+        player = (q.get("player") or [""])[0][:60]
+        return self._send(200, json.dumps(
+            ffprofile.profile(player)).encode(), ".json")
+
+    def _serve_board(self, public):
+        """The board this CALLER is entitled to, cached and revalidated.
+
+        THE BUG THIS FIXES, proved 2026-08-22 with a signed-in comped
+        account: this endpoint served `web/data/<board>.json` to
+        everybody, and with QB_PAYWALL on that file is the REDACTED copy —
+        `recommendations: []`. So a paying subscriber's page fetched the
+        stripped board and drew "No qualifying plays at current numbers",
+        which reads as the model finding nothing rather than as the
+        paywall taking it away. `live_picks` is not a paid key, so their
+        riding bets still showed underneath it, which is exactly what
+        Ethan was looking at.
+
+        gate.py has said since it was written that "subscribers get the
+        full board from /api/board/<name>" — and nothing in web/js/app.js
+        has ever called that endpoint. The page only ever asks here. So
+        this is where the entitlement check belongs.
+
+        UNENTITLED CALLERS ARE UNAFFECTED: they get the same redacted file
+        they got before, from the same path, with the same locked markers
+        the paywall page reads.
+        """
+        from engine import gate
+        body = mtime = etag = None
+        if gate.enabled():
+            conn = _acct().connect()
+            try:
+                if self._entitled(conn, self._account(conn)):
+                    body, mtime, etag = board_bytes(public.name)
+            finally:
+                conn.close()
+        if body is None:
+            body, mtime, etag = file_bytes(public)
+        if body is None:
+            return self._send(404, b'{"error":"no board"}', ".json")
+        if etag and self.headers.get("If-None-Match") == etag:
+            return self._send_not_modified(etag, mtime)
+        return self._send(200, body, ".json", mtime=mtime,
+                          headers=([("ETag", etag)] if etag else [])
+                          + stale_headers(public.name, mtime))
+
+    def _api_board(self, name: str):
+        """The subscriber's copy of a board, read from outside the web root.
+
+        This endpoint exists because `web/data/*.json` is served off disk by
+        Caddy and therefore holds the REDACTED board. Everything paid comes
+        through here, where there is a session to check.
+
+        402 rather than 403 for a signed-in account without a
+        subscription: the distinction is "pay and this works" versus "you
+        may never have this", and the page renders a different thing for
+        each.
+        """
+        # ENTITLEMENT FIRST, THEN THE FILE. This used to read and parse
+        # the whole board before asking who was calling, so an
+        # unauthenticated request cost a megabyte of disk and CPU to
+        # answer with 401. Nothing about that was exploitable — the board
+        # was never sent — but it made the cheapest request on the site
+        # the most expensive one to refuse, which is the wrong way round
+        # for a public endpoint.
+        #
+        # It also means a stranger can no longer learn which boards exist
+        # by watching 404 and 401 differ.
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "This board needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        body, mtime, etag = board_bytes(name)
+        if body is None:
+            return self._send(404, b'{"error":"no such board"}', ".json")
+        # REVALIDATION, WHICH IS BANDWIDTH RATHER THAN CPU. The page polls
+        # this every 30 seconds and the launcher rebuilds every 60, so
+        # roughly half of all polls ask for a board the caller already
+        # has, and used to be handed the whole thing again. On a board of
+        # any size that is the largest recurring cost the site has, and it
+        # is paid per subscriber per poll, all day.
+        #
+        # Done with an ETag the CLIENT sends back rather than by relaxing
+        # `Cache-Control: no-store`: the browser cache would work, but it
+        # would also mean a subscriber's paid board sitting on disk in
+        # their browser, and that is a property this site chose not to
+        # have. app.js keeps the tag in memory and hands it back.
+        if etag and self.headers.get("If-None-Match") == etag:
+            return self._send_not_modified(etag, mtime)
+        return self._send(200, body, ".json", mtime=mtime,
+                          headers=([("ETag", etag)] if etag else [])
+                          + stale_headers(name, mtime))
+
+    def _billing_get(self, path: str, qs: dict | None = None):
+        from engine import billing as BI
+        A = _acct()
+        if path == "gifts":
+            # The gifts this account bought (engine/gifts): each code, and
+            # whether it is spent. The buyer's own, signed in.
+            from engine import gifts as GF
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                return self._send(200, json.dumps({"on": GF.enabled(), "gifts": GF.mine(conn, who["id"])}).encode(),
+                                  ".json")
+            finally:
+                conn.close()
+        if path == "caught":
+            # THE SMART PAYWALL (engine/smartwall): for a signed-in account
+            # without a plan that follows teams, how many picks the board
+            # posted on those teams last week and how the graded ones went.
+            # Counts only, never a pick; nothing for a member or a stranger.
+            from engine import ledger as L, smartwall as SW
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                if self._entitled(conn, who):
+                    return self._send(200, b'{"caught":null}', ".json")
+                teams = SW._teams((A.get_sections(conn, who["id"]).get("settings") or {}).get("data"))
+            finally:
+                conn.close()
+            out = None
+            if teams:
+                try:
+                    lconn = L.connect()
+                    try:
+                        out = SW.caught(lconn, teams)
+                    finally:
+                        lconn.close()
+                except Exception:                            # noqa: BLE001 — the plans page draws without it
+                    out = None
+            return self._send(200, json.dumps({"caught": out}).encode(), ".json")
+        if path != "status":
+            return self._send(404, b'{"error":"unknown billing endpoint"}',
+                              ".json")
+        from engine import gate as GATE_
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            who = self._account(conn)
+            out = {"configured": BI.configured(), "signed_in": bool(who)}
+            # WHICH PLANS CAN ACTUALLY BE SOLD, sent whether or not
+            # anybody is signed in, because the plans page renders before
+            # sign-in. A plan with no price id configured must not draw a
+            # buy button that 502s after the customer has committed.
+            out["plans"] = BI.plan_catalogue()
+            # THE TRIAL, ADVERTISED TO EVERYONE and granted to fewer. The
+            # plans page renders before anybody signs in, so the offer has
+            # to be outside the `if who` block; whether THIS account
+            # actually gets one is decided at checkout, from the database,
+            # and is reported below for the people we can already answer
+            # for.
+            out["trial_days"] = BI.TRIAL_DAYS
+            out["trial_plan"] = BI.TRIAL_PLAN
+            # Whether a month can be bought for a friend (engine/gifts).
+            from engine import gifts as _GF
+            out["gifts"] = _GF.enabled()
+            # WHETHER THE PAGE MAY COUNT ANYTHING. Off unless QB_ANALYTICS=1
+            # (engine/analytics.py), and while off the page sends nothing.
+            from engine import analytics as AN
+            out["analytics"] = AN.enabled()
+            # AND WHETHER IT MAY KEEP THIS MEMBER'S OWN TIME HERE
+            # (engine/activity): both locks open (QB_ACTIVITY=1 and the
+            # Privacy Policy's section on it), signed in, and a yes from the
+            # member (Settings or the "Make it yours" card). `activity_switch` is the site's half alone, for
+            # the Settings row and the Alerts page's "away" switch.
+            from engine import activity as ACT
+            out["activity_switch"] = ACT.enabled()
+            # The members' split (engine/consensus): its Settings switch is
+            # drawn only while the site counts anybody at all.
+            from engine import consensus as CN
+            out["split_switch"] = CN.enabled()
+            # The closing-line leaderboard (engine/closeboard), likewise:
+            # its card and its Settings switch only while both locks are open.
+            from engine import closeboard as CB
+            out["closeboard_switch"] = CB.enabled()
+            out["activity"] = bool(who) and ACT.on_for(conn, who["id"])
+            # NO PROMO CODES HERE. This endpoint is public — it renders
+            # the plans page before anybody signs in — so anything in it
+            # is readable by anyone who opens the network tab. A promo
+            # code Ethan hands to friends is a secret, and this response
+            # was publishing it. Stripe's checkout box is enough: it says
+            # "Add promotion code" and names none of them.
+            if BI.configured():
+                # Test and live are the SAME Stripe account distinguished
+                # by a key prefix — unlike Paddle, where the sandbox is a
+                # separate account entirely. So "are we live" is a
+                # question about the key we are holding.
+                try:
+                    out["live"] = BI.live_mode(BI.keys()[0])
+                except BI.BillingUnavailable:
+                    out["live"] = False
+            if who:
+                # Their OWN address, same-origin, already available from
+                # /api/account/me. The plans page shows it so that a
+                # signed-in reader who has not subscribed is told they are
+                # signed in — landing them on a page headed "Log in" is
+                # how this looked when Ethan reported that signing in
+                # never says it worked.
+                out["email"] = who["email"]
+                # Signed in, so we can say rather than advertise: somebody
+                # who has subscribed before does not get a second trial,
+                # and the plans page should not promise them one.
+                out["trial_eligible"] = not BI.has_subscribed_before(
+                    conn, who["id"])
+                # A LAPSE THE WEBHOOK NEVER DELIVERED is heard about here:
+                # a read of Stripe when this row is due one (BI.refresh —
+                # hourly while entitled, each minute while walled, at once
+                # after a visit to Stripe's billing page). Its own try:
+                # this page answers even when Stripe will not.
+                #
+                # AND ON EVERY OPEN OF THE SITE: the page's boot call, its
+                # call after a sign-in and its call on coming back to the
+                # tab say `fresh=1`, and the read is then due once a minute
+                # has passed (BI.RECHECK_OPEN_S). Ethan, 2026-10-13: "every
+                # time a user opens the site or launches the site it should
+                # check too see if they are still subscribed".
+                fresh = (qs or {}).get("fresh") == ["1"]
+                try:
+                    if fresh:
+                        BI.refresh(conn, who["id"], every=BI.RECHECK_OPEN_S)
+                    else:
+                        BI.refresh(conn, who["id"])
+                except Exception:                            # noqa: BLE001
+                    pass
+                out.update(BI.status_for(conn, who["id"]))
+                # THE YEARLY OFFER (BI.yearly_offer): a monthly member past
+                # their second bill, while QB_YEARLY_OFFER is on.
+                offer = BI.yearly_offer(conn, who["id"])
+                if offer:
+                    out["yearly_offer"] = offer
+                # Codes ride alongside rather than inside the subscription
+                # status: a redeemed code is not a subscription and saying
+                # it is would put a status on the page that no processor
+                # would recognise if support ever had to look it up.
+                from engine import redeem as RD
+                _acct().once_per_db(RD.init)(conn)   # once per process (audit F-9)
+                out["codes"] = RD.describe(conn, who["id"])
+                if out["codes"]["active"]:
+                    out["entitled"] = True
+                # AND THE COMP LIST, which this endpoint did not know
+                # about. `_entitled` — the method that actually decides
+                # whether a full board goes out — checks `gate.comped`
+                # first, so a comped address was already being served
+                # unredacted data while this endpoint kept answering
+                # "entitled: false". The browser believed the endpoint,
+                # kept the wall up, and drew a plans page on top of a
+                # board the reader was entitled to.
+                #
+                # Two answers to one question is the bug; this is the
+                # second place that question gets asked and both places
+                # now agree.
+                if GATE_.comped(who.get("email")):
+                    out["entitled"] = True
+                    out["comped"] = True
+                    # And SAY so. `status_for` reads the subscriptions
+                    # table, which has no row for a comped address, so its
+                    # sentence is "No subscription." — printed in the
+                    # entitled style next to a working site. Whatever the
+                    # reader concluded from that, it was not the truth.
+                    if out.get("status") in (None, "none"):
+                        out["note"] = ("Comped account — full access, no "
+                                       "card on file.")
+                # THE DISCORD INVITE, AND ONLY HERE. Inside the `if who`
+                # block and behind the entitlement it has just computed,
+                # so it is never in an anonymous response — and never in
+                # web/js/app.js, which is a static asset served to
+                # everybody. It lives in the environment, so it is not in
+                # the repository either and rotating it after a leak is a
+                # config line and a restart.
+                if out.get("entitled"):
+                    from engine import secrets as _s
+                    _s.load_local_secrets()
+                    invite = os.environ.get("QB_DISCORD_INVITE", "").strip()
+                    if invite:
+                        out["discord"] = invite
+            # THE INSTAGRAM IS NOT THE INVITE and is not gated like one.
+            # It is a public page anybody can already find; the Discord
+            # welcome cites it because it is where this desk's picks have
+            # been posted, and citing it to somebody who has not
+            # subscribed is the entire point of a sales page. Outside the
+            # `if who` block for that reason.
+            from engine import secrets as _s2
+            _s2.load_local_secrets()
+            gram = os.environ.get("QB_INSTAGRAM", "").strip()
+            if gram:
+                out["instagram"] = gram
+            # Whether the gate is even on. The account page cannot tell
+            # "you need to subscribe" from "everything is free right now"
+            # without it, and it has been guessing.
+            out["paywall"] = GATE_.enabled()
+            # And whether a stranger needs an account to look around
+            # (gate.account_wall) — the page's first question on boot.
+            out["account_wall"] = GATE_.account_wall()
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _billing_confirm(self, raw: bytes):
+        """"I have just come back from Checkout" — go and ask Stripe.
+
+        THE WEBHOOK IS NOT THE ONLY WAY IN ANY MORE, and it should never
+        have been the only one. A webhook is a request from Stripe's
+        servers to ours, which means every box in front of this site gets
+        an opinion on whether a paying customer gets what they paid for:
+        a WAF that decides robots are suspicious, an expired origin
+        certificate, a restart at the wrong second. Cloudflare's Bot Fight
+        Mode went on over the live site on 2026-08-21 and on the free plan
+        it cannot be told to skip a path.
+
+        None of that reaches this endpoint, because this one is a browser
+        asking on its own behalf, and the answer comes from a READ of
+        Stripe rather than from anything being delivered to us.
+
+        IT IS NOT A WAY IN. The session id in the body grants nothing:
+        Stripe must say the session is paid, and the session's
+        `client_reference_id` must be the account making the request. A
+        session id belonging to somebody else entitles nobody.
+        """
+        from engine import billing as BI
+        A = _acct()
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            try:
+                body = json.loads(raw.decode() or "{}")
+            except Exception:                                # noqa: BLE001
+                body = {}
+            try:
+                out = BI.reconcile_session(
+                    conn, who["id"], str(body.get("session") or ""))
+            except BI.BillingUnavailable as exc:
+                # Not an error the customer can act on, and not a reason
+                # to lose their place: the webhook may still land.
+                return self._send(200, json.dumps(
+                    {"entitled": False, "checked": False,
+                     "note": str(exc)}).encode(), ".json")
+            out["checked"] = True
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _billing_redeem(self, raw: bytes):
+        """Apply a discount code. Signed-in accounts only.
+
+        The account requirement is not ceremony: a grant has to attach to
+        somebody, the one-per-account rule needs an account to be per, and
+        the rate limiter needs a subject to count. An anonymous redemption
+        is an unlimited redemption.
+        """
+        from engine import redeem as RD
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401,
+                    b'{"error":"Sign in first, then redeem your code."}', ".json")
+            try:
+                body = json.loads(raw.decode() or "{}")
+            except Exception:                                # noqa: BLE001
+                body = {}
+            code = str(body.get("code") or "")
+            # The site has two code systems. This endpoint owns the one
+            # that grants free months; Stripe owns the one that discounts
+            # a subscription. Handing the promo sentences down means a
+            # checkout code typed in here is told where it goes instead
+            # of being called invalid — and `redeem` still needs no
+            # import from the module that moves money.
+            from engine import billing as _BI
+            from engine import gifts as GF
+            try:
+                # A gift a friend bought (engine/gifts), or a code of ours.
+                got = (GF.redeem(conn, who["id"], code) if GF.looks_like(code) else
+                       RD.redeem(conn, who["id"], code, elsewhere=_BI.promo_misdirect()))
+            except RD.RedeemError as exc:
+                _seclog("redeem", "refused", self._client_ip(),
+                        email=who["email"], reason=str(exc)[:80])
+                # 200 with an error field, not a 4xx: this is an expected
+                # answer to a normal question, and a 400 in the console on
+                # every mistyped promo code trains everyone to ignore the
+                # console.
+                return self._send(200, json.dumps(
+                    {"ok": False, "error": str(exc)}).encode(), ".json")
+            return self._send(200, json.dumps({
+                "ok": True, "code": got["code"], "months": got["months"],
+                "granted_to": got["granted_to"],
+                "note": f"{got['months']} month(s) of full access added.",
+            }).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _billing_post(self, path: str, raw: bytes):
+        from engine import billing as BI
+        A = _acct()
+        if path == "webhook":
+            return self._billing_webhook(raw)
+        if path == "redeem":
+            return self._billing_redeem(raw)
+        if path == "confirm":
+            return self._billing_confirm(raw)
+        if path not in ("checkout", "portal", "yearly", "gift", "gift_confirm"):
+            return self._send(404, b'{"error":"unknown billing endpoint"}',
+                              ".json")
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            base = self._site_base()
+            try:
+                if path == "checkout":
+                    try:
+                        body = json.loads(raw.decode() or "{}")
+                    except Exception:                        # noqa: BLE001
+                        body = {}
+                    # NOT DEFAULTED. `price_for` refuses an unknown plan,
+                    # and that refusal is the point: substituting the
+                    # monthly price for a plan we do not recognise means
+                    # charging $25 to somebody who believes they bought a
+                    # year. An absent plan is the front end's own default,
+                    # which is a different thing from a wrong one.
+                    plan = str(body.get("plan") or BI.DEFAULT_PLAN)
+                    # DECIDED HERE, FROM THE DATABASE. The browser says
+                    # which plan; it does not get a say in whether there
+                    # is a trial or how long it runs. A trial length read
+                    # off a request body is a free subscription for
+                    # anybody who opens the network tab.
+                    # A FAILED CARD IS FIXED, NOT REPLACED. A past-due
+                    # account is walled and sees the plans again, and
+                    # buying one would start a second subscription while
+                    # Stripe keeps retrying the first — billed twice the
+                    # day the retry clears. Stripe's billing page changes
+                    # the card and pays the open invoice, and the account
+                    # opens again when it does.
+                    had = BI.status_for(conn, who["id"])
+                    if had.get("status") in ("past_due", "unpaid") \
+                            and had.get("customer_id"):
+                        return self._send(409, json.dumps({
+                            "error": "Your last payment didn’t go "
+                                     "through, so a new plan would bill you "
+                                     "twice. Go back to the plans and press "
+                                     "Update card — that restarts the plan "
+                                     "you have.",
+                            "portal": True}).encode(), ".json")
+                    fresh = not BI.has_subscribed_before(conn, who["id"])
+                    trial = BI.trial_days_for(plan, fresh)
+                    # A FRIEND'S CODE, $6.25 OFF THE FIRST PAYMENT
+                    # (engine/referrals), decided here like the trial: from
+                    # the database, for an account that has never held a
+                    # membership. A coupon Stripe will not make is a 502,
+                    # not a purchase quietly at full price.
+                    from engine import referrals as RF
+                    coupon = (BI.ensure_referral_coupon()
+                              if RF.discount_for(conn, who["id"], not fresh) else "")
+                    # ONE PROMO PER ACCOUNT, decided here for the same
+                    # reason the trial is: an account that has already
+                    # held a subscription is not offered the promo box at
+                    # all, so cancelling and re-buying at 75% off is not
+                    # a route. Stripe's own first_time_transaction
+                    # restriction says the same thing about the CUSTOMER;
+                    # this says it about the ACCOUNT, and the two catch
+                    # different halves of the same trick.
+                    url = BI.start_checkout(
+                        who["id"], who["email"],
+                        # THE SESSION ID COMES BACK WITH THEM. It grants
+                        # nothing — see BI.reconcile_session — it is the
+                        # handle we use to ASK Stripe whether this
+                        # particular payment happened, so that a webhook
+                        # which never arrives cannot cost a customer the
+                        # thing they just bought.
+                        f"{base}/?paid=1&s={{CHECKOUT_SESSION_ID}}#account",
+                        f"{base}/#paywall", plan, trial_days=trial,
+                        allow_promo=fresh and not coupon, coupon=coupon)
+                elif path in ("gift", "gift_confirm"):
+                    # GIFT A MONTH (engine/gifts): Stripe's Checkout for one
+                    # gift, or, coming back from it, Stripe asked whether it
+                    # was paid; the code is minted only on Stripe's word.
+                    from engine import gifts as GF
+                    if path == "gift":
+                        url = GF.start_checkout(who["id"], who["email"],
+                                                f"{base}/?gift=1&s={{CHECKOUT_SESSION_ID}}#account",
+                                                f"{base}/#account")
+                    else:
+                        try:
+                            body = json.loads(raw.decode() or "{}")
+                        except Exception:                    # noqa: BLE001
+                            body = {}
+                        GF.confirm(conn, who["id"], str(body.get("s") or "")[:200])
+                        return self._send(200, json.dumps({"on": GF.enabled(), "gifts": GF.mine(conn, who["id"])}).encode(),
+                                          ".json")
+                elif path == "yearly":
+                    # Stripe's page confirming the switch, for a member the
+                    # offer is for (BI.open_yearly_switch refuses anyone else).
+                    url = BI.open_yearly_switch(conn, who["id"], f"{base}/#account")
+                else:
+                    cust = BI.status_for(conn, who["id"]).get("customer_id")
+                    if not cust:
+                        return self._send(400, json.dumps(
+                            {"error": "No subscription to manage yet."}
+                        ).encode(), ".json")
+                    url = BI.open_portal(cust, f"{base}/#account")
+                    # Whatever they do there, the page they come back to
+                    # reads Stripe first (BI.recheck_soon).
+                    BI.recheck_soon(conn, who["id"])
+            except BI.BillingUnavailable as exc:
+                return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                                  ".json")
+            return self._send(200, json.dumps({"url": url}).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _site_base(self) -> str:
+        """The address this browser reached us on, for Stripe's return trip.
+
+        Read from the request rather than configured, because this site
+        answers on localhost, a LAN address and a tailscale name, and a
+        hardcoded one would send two of those three somewhere they cannot
+        get back from.
+
+        QB_SITE_URL OVERRIDES IT, and exists for the case the header
+        cannot cover: `Host` is whatever the CUSTOMER typed. Somebody who
+        reaches the site on a bare IP, or on a hostname that has no TLS
+        certificate, gets sent back there after paying — to a browser
+        warning, or to nothing. Setting it pins the return trip to the
+        one address that is known to work.
+        """
+        # secrets.local is where QB_SITE_URL is written alongside the
+        # Stripe keys, and the loader is a no-op after the first call.
+        from engine import secrets as _s
+        _s.load_local_secrets()
+        pinned = os.environ.get("QB_SITE_URL", "").strip().rstrip("/")
+        if pinned:
+            return pinned
+        host = (self.headers.get("X-Forwarded-Host")
+                or self.headers.get("Host") or "127.0.0.1:8000")
+        scheme = "https" if self._is_https() else "http"
+        return f"{scheme}://{host}"
+
+    def _billing_webhook(self, raw: bytes):
+        """Stripe telling us somebody paid. THE ONLY THING THAT GRANTS
+        ACCESS, and a public URL, so it lives or dies on the signature.
+
+        Refuses outright when no notification secret is configured. An
+        unsigned-but-accepted webhook endpoint is a free-subscription
+        button for anybody who finds the path, and "we will add the
+        secret later" is how it ships that way.
+
+        THE RAW BODY, NEVER A RE-SERIALISED ONE. The signature is over
+        bytes; parsing and re-encoding JSON changes key order and spacing
+        and makes an honest payload fail to verify.
+        """
+        from engine import billing as BI
+        A = _acct()
+        try:
+            _sk, whsec, _price = BI.keys()
+        except BI.BillingUnavailable:
+            return self._send(503, b'{"error":"billing not configured"}',
+                              ".json")
+        if not whsec:
+            return self._send(503, json.dumps(
+                {"error": f"No {BI.ENV_WEBHOOK_SECRET} set, so this endpoint "
+                          "cannot tell a real Stripe event from a forged "
+                          "one. Refusing rather than trusting it."}).encode(),
+                ".json")
+        sig = self.headers.get("Stripe-Signature") or ""
+        if not BI.verify_signature(raw, sig, whsec):
+            _seclog("webhook", "bad_signature", self._client_ip(), provider="stripe")
+            return self._send(400, b'{"error":"bad signature"}', ".json")
+        try:
+            payload = json.loads(raw or b"{}")
+            assert isinstance(payload, dict)
+        except Exception:                                    # noqa: BLE001
+            return self._send(400, b'{"error":"not JSON"}', ".json")
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            # A retry is not a second grant.
+            #
+            # Stripe names the event `id`; Paddle named it `event_id`,
+            # and this reads both because getting it wrong is silent in
+            # the worst direction: already_handled() treats an empty id
+            # as "not seen before" and returns False every time, so the
+            # replay guard would be switched off while still looking
+            # present. A retried subscription.created is then a second
+            # grant.
+            if BI.already_handled(conn, payload.get("id")
+                                  or payload.get("event_id")):
+                return self._send(200, b'{"received":true,"duplicate":true}',
+                                  ".json")
+            # A GIFT (engine/gifts) is not a subscription: its paid Checkout
+            # mints a code and touches nobody's plan, so it is answered here,
+            # before read_event could take it for a subscription's Checkout.
+            from engine import gifts as GF
+            if GF.is_gift(payload):
+                made = GF.from_webhook(conn, payload)
+                return self._send(200, json.dumps({"received": True, "gift": bool(made)}).encode(), ".json")
+            event = BI.read_event(payload)
+            applied = BI.apply_event(conn, event) if event else False
+            # 200 EVEN WHEN WE DID NOTHING. Stripe retries anything that is
+            # not 2xx, so an event we do not act on must still be
+            # acknowledged or it comes back forever.
+            return self._send(200, json.dumps(
+                {"received": True, "applied": bool(applied)}).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _league_desk_yahoo(self, league_key: str, query: dict):
+        """The same desk again, reading a Yahoo league through OAuth2.
+
+        The only platform here that needs anything of yours, and the only
+        one whose access can be handed back: you approve it on Yahoo's own
+        screen, this app never sees a password, and revoking it from a
+        Yahoo account page kills the token dead. That is why Yahoo is
+        built and a private ESPN league is not.
+
+        WHO IS "ME" IS NOT TYPED. Yahoo flags your own team in the
+        payload, so there is no id to look up and no way to select
+        somebody else's roster by accident.
+        """
+        from engine import fantasy_lineup, fantasy_trade
+        from engine.db import connect
+        from engine.sources import yahoofantasy
+        from engine.sources.fetch import DataUnavailable
+        try:
+            lg = yahoofantasy.league(league_key)
+        except DataUnavailable as exc:
+            return self._fail(502, "Yahoo did not answer for that league. Try again in a minute.",
+                              exc, "yahoo league")
+
+        conn = connect()
+        try:
+            stat_season = max((int(s[0]) for s in conn.execute(
+                "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
+            ).fetchall()), default=0)
+            season_means = (fantasy_lineup.per_game(conn, stat_season)
+                            if stat_season else {})
+            season_means = fantasy_lineup.with_board(season_means, self._kit_board())
+        finally:
+            conn.close()
+
+        rosters = dict(lg.get("rosters") or {})
+        mine = rosters.pop(lg.get("mine"), []) if lg.get("mine") else []
+        slots = fantasy_lineup.starting_slots(lg.get("slots"))
+        scoring = lg.get("scoring") or {}
+        # This week for the lineup, the season for the trades — see the
+        # Sleeper desk.
+        from engine import fantasyweek
+        week_doc, week_meta = self._fantasy_week()
+        league_names = [r["player"] for r in mine] + [r["player"] for rows in rosters.values()
+                                                      for r in rows]
+        means = (fantasyweek.with_week(season_means, week_doc, league_names)
+                 if week_doc else season_means)
+        trades = (fantasy_trade.generate(mine, rosters, slots, scoring, season_means)
+                  if mine and rosters else [])
+        out = {
+            "platform": "yahoo", "league": lg.get("name"),
+            "season": stat_season, "slots": slots, "has_me": bool(mine),
+            "my_team": lg.get("mine"),
+            "lineup": (fantasy_lineup.lineup(mine, slots, scoring, means)
+                       if mine else None),
+            "projection_week": week_meta,
+            "free_agents": (fantasyweek.free_agents(week_doc, league_names)
+                            if week_doc else {}),
+            "trades": trades[:12],
+            "trade_summary": fantasy_trade.summary(trades),
+            # THE RULES WE DID NOT APPLY, split in two because they mean
+            # different things: `unmapped_scoring` is a gap in our map and
+            # a bug to fix, `not_modelled_scoring` is the kicker and
+            # defense scoring this app has never projected. Reporting them
+            # as one number would hide the first inside the second.
+            "unmapped_scoring": lg.get("unmapped") or [],
+            "not_modelled_scoring": lg.get("not_modelled") or [],
+        }
+        self._desk_extras(out, mine=mine, slots=slots, scoring=scoring, means=means,
+                          season_means=season_means, week_doc=week_doc, league_names=league_names,
+                          trades=trades)
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    # --- Yahoo's connection, which is the only credential this app holds ----
+    def _local_only(self) -> bool:
+        """True when the request came from this machine.
+
+        READING the site is LAN-wide, as everything here always has been.
+        GRANTING or REVOKING Yahoo access is not: it is the one action on
+        this server that changes what a third party may see, and a phone
+        on the same coffee-shop wifi should not be able to take it.
+        """
+        # Through `_client_ip`, NOT the raw peer: behind a reverse proxy
+        # the peer is always the proxy, and reading it directly would make
+        # this true for the entire internet.
+        host = self._client_ip()
+        return host in ("127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost")
+
+    def _yahoo(self, path: str, query: dict):
+        from engine.sources import yahoofantasy as yf
+        from engine.sources.fetch import DataUnavailable
+        if path == "status":
+            # Deliberately says whether a token EXISTS, never what it is.
+            try:
+                cid, _ = yf.credentials()
+                app = True
+            except DataUnavailable:
+                app = False
+            return self._send(200, json.dumps(
+                {"connected": yf.connected(), "app_registered": app}).encode(),
+                ".json")
+        if path == "start":
+            if not self._local_only():
+                return self._send(403, json.dumps({"error": _YAHOO_LOCAL}
+                                                  ).encode(), ".json")
+            try:
+                cid, _ = yf.credentials()
+            except DataUnavailable as exc:
+                return self._send(400, json.dumps({"error": str(exc)}).encode(),
+                                  ".json")
+            return self._send(200, json.dumps(
+                {"url": yf.authorize_url(cid)}).encode(), ".json")
+        if path == "leagues":
+            try:
+                return self._send(200, json.dumps(
+                    {"leagues": yf.my_leagues()}).encode(), ".json")
+            except DataUnavailable as exc:
+                return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                                  ".json")
+        return self._send(404, b'{"error":"unknown yahoo endpoint"}', ".json")
+
+    def _yahoo_post(self, path: str):
+        from engine.sources import yahoofantasy as yf
+        from engine.sources.fetch import DataUnavailable
+        if path not in ("connect", "disconnect"):
+            return self._send(404, b'{"error":"unknown yahoo endpoint"}',
+                              ".json")
+        if not self._local_only():
+            return self._send(403, json.dumps({"error": _YAHOO_LOCAL}).encode(),
+                              ".json")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = {}
+        if 0 < length <= 4096:
+            try:
+                body = json.loads(self.rfile.read(length)) or {}
+            except Exception:                                # noqa: BLE001
+                body = {}
+        elif length > 4096:
+            # An approval code is a few dozen characters. Anything larger
+            # is not one — and the body goes UNREAD, so the connection has
+            # to close rather than let keep-alive parse those bytes as the
+            # next request.
+            self.close_connection = True
+            return self._send(413, b'{"error":"body too large"}', ".json")
+        if path == "disconnect":
+            try:
+                Path(yf.TOKEN_PATH).unlink(missing_ok=True)
+            except OSError as exc:
+                return self._fail(500, "Could not disconnect Yahoo on the server.", exc, "yahoo disconnect")
+            return self._send(200, b'{"connected":false}', ".json")
+        code = str((body or {}).get("code") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._~-]{4,128}", code):
+            return self._send(400, json.dumps(
+                {"error": "That does not look like a Yahoo approval code. "
+                          "It is the short string Yahoo shows after you "
+                          "approve the app."}).encode(), ".json")
+        try:
+            out = yf.exchange_code(code)
+        except DataUnavailable as exc:
+            return self._send(502, json.dumps({"error": str(exc)}).encode(),
+                              ".json")
+        # `out` carries no token — only that it worked. See exchange_code.
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _sleeper(self, path: str):
+        """Forward an allowlisted read to Sleeper's free public API. The big
+        players file gets a day-long disk cache; everything else 5 minutes."""
+        if not sleeper_path_ok(path):
+            return self._send(404, b'{"error":"unsupported sleeper path"}', ".json")
+        from engine.sources.fetch import fetch_text, DataUnavailable
+        # players/nfl is ~5MB and changes daily; draft picks are polled DURING
+        # a live draft, where five minutes of cache would show a board three
+        # rounds stale. Everything else can sit for five minutes.
+        ttl = (86400 if path == "players/nfl"
+               else 10 if path.endswith("/picks") else 300)
+        cache = sleeper_cache_name(path)
+        try:
+            body = fetch_text(SLEEPER_BASE + path, cache, ttl=ttl)
+        except DataUnavailable as exc:
+            return self._fail(502, "Sleeper did not answer. Try again in a minute.", exc, "sleeper proxy")
+        self._send(200, body.encode(), ".json")
+
+    # --- API ---------------------------------------------------------------
+    def _api(self, query: dict, sport: str = "nfl"):
+        def qf(name, default):
+            try:
+                return float(query.get(name, [default])[0])
+            except (TypeError, ValueError):
+                return default
+
+        # Live mode: serve the pre-built file if one exists. The frontend
+        # re-applies the confidence/edge filters client-side, so the sliders
+        # still work against this data.
+        if getattr(self.server, "live_mode", False):
+            live = LIVE_FILES.get(sport)
+            if live and live.is_file():
+                return self._serve_board(live)
+            # No build yet → fall through to the sample pipeline below so the
+            # page still loads (with a clear note in LAUNCH.md on how to build).
+
+        # The site's slider sends min_edge in PERCENT (0, 0.5, 1, 2, …). The
+        # old ">1 means percent" guess turned a 1% or 0.5% setting into a
+        # 100%/50% edge floor that filtered every prop. No real edge floor
+        # exceeds 20%, so anything above that is percent; below is a fraction.
+        raw_edge = qf("min_edge", 2.0)
+        config = RuleConfig(
+            min_confidence=qf("min_confidence", 6.0),
+            min_edge=raw_edge / 100.0 if raw_edge >= 0.2 else raw_edge,
+            max_juice=int(qf("max_juice", -350)),
+        )
+        # NBA/WNBA/CFB/NHL have no sample pipeline — the built file is the only
+        # source. (The frontend re-applies its filters client-side anyway.)
+        if sport in ("nba", "wnba", "cfb", "nhl"):
+            live = LIVE_FILES[sport]
+            if live.is_file():
+                self._send(200, live.read_bytes(), ".json",
+                           mtime=live.stat().st_mtime)
+            else:
+                # Full shared-schema shape even when nothing is built — a
+                # stub missing keys crashed the frontend renderers once.
+                self._send(200, json.dumps({
+                    "date": "", "status": "not built", "sport": sport,
+                    "games": [], "recommendations": [], "game_bets": [],
+                    "long_shots": [], "longshot_watch": [],
+                    "market_scan": {}, "counts": {"props_analyzed": 0,
+                                                  "recommended": 0},
+                }).encode(), ".json")
+            return
+        try:
+            if sport == "mlb":
+                result = run_mlb_slate(MLB_SLATE, config)
+            else:
+                result = run_slate(SLATE, config)
+            from engine.served import served
+            payload = json.dumps(served(result)).encode()
+        except Exception as exc:  # noqa: BLE001 — the engine's error, as JSON
+            self._fail(500, "The engine could not run that slate.", exc, "run slate")
+            return
+        self._send(200, payload, ".json")
+
+    # --- Static files ------------------------------------------------------
+    def _gated_board(self, path: str):
+        """Redact a board on the way out, or None to serve it normally.
+
+        None is the fast path and the common one: the flag is off, the
+        file is free by design, or it is already redacted. Only a file
+        that genuinely still carries paid rows is parsed and rewritten.
+
+        CACHING IS THE SUBTLE RISK HERE and it is already handled, in two
+        places that have to stay consistent. `_send` marks every response
+        this app writes `no-store`, so anything that leaves through here
+        is never cached by anyone. Caddy separately marks /data/*.json
+        `public, max-age=60` — correct only because the files IT serves
+        do not vary by who is asking, being the redacted copy. If a future
+        change ever makes an on-disk board vary by reader, that Caddy
+        header becomes a way to hand a subscriber's copy to the next
+        anonymous visitor: the paywall defeated by a cache rather than by
+        an attacker.
+        """
+        from engine import gate
+        if not gate.enabled():
+            return None
+        name = path[len("/data/"):]
+        if gate.is_free(name):
+            return None
+        target = (WEB / path.lstrip("/")).resolve()
+        if not target.is_relative_to(WEB.resolve()) or not target.is_file():
+            return None
+        try:
+            payload = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        # Already sealed? Serve the bytes untouched — no rewrite, and the
+        # cache header stays cacheable.
+        try:
+            if not gate._paid_rows(payload, name):
+                return None
+        except Exception:                                    # noqa: BLE001
+            pass
+        A = _acct()
+        conn = A.connect()
+        try:
+            if self._entitled(conn, self._account(conn)):
+                # A paying reader may have the whole thing — but this
+                # response is theirs alone and must never be cached.
+                self._send(200, json.dumps(payload).encode(), ".json")
+                return True
+        finally:
+            conn.close()
+        self._send(200, json.dumps(gate.redact(payload, name)).encode(), ".json")
+        return True
+
+    #: The unsubscribe page. Plain HTML, no app, no script — it has to
+    #: work in whatever browser an email link opens, including the
+    #: stripped-down one inside a mail client, and it has to work when
+    #: the person following it has forgotten they ever had an account.
+    _UNSUB_PAGE = """<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>%s — Qellys Book</title>
+<style>body{background:#0b0906;color:#f5efe6;font:16px/1.5 system-ui,
+-apple-system,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh}
+main{max-width:32rem;padding:2rem}h1{font-size:1.4rem;margin:0 0 .6rem}
+p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
+<h1>%s</h1><p>%s</p><p><a href="/">Qellys Book</a></p></main></body></html>"""
+
+    def _unsubscribe(self, query: dict):
+        """One click, no sign-in, both digests off.
+
+        AN UNSUBSCRIBE THAT ASKS FOR A PASSWORD IS A SPAM REPORT. The
+        token is unguessable, does exactly one thing, and belongs to one
+        account — so there is nothing here worth protecting with a login
+        and a great deal riding on the click working first time.
+
+        Answers 200 either way, including for a token nobody recognises.
+        A page that said "no such subscription" would let anybody probe
+        which tokens are live, and it would read as a failure to somebody
+        who had simply clicked twice.
+        """
+        token = (query.get("t") or [""])[0]
+        # The last-leg email (engine/slipwatch) is its own list with its
+        # own token form; its link turns off that mail and nothing else.
+        slip = str(token or "").startswith("slip-")
+        done = False
+        try:
+            from engine import accounts as A, digest as DG, slipwatch as SW
+            conn = A.connect()
+            try:
+                done = SW.unsubscribe(conn, token) if slip else DG.unsubscribe(conn, token)
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            done = False
+        title = "Unsubscribed"
+        body = (("You will not get an email when a saved slip is down to its "
+                 "last leg any more. Nothing else about your account has "
+                 "changed, and you can turn it back on any time from the "
+                 "Live tab.") if slip else
+                ("You will not get the morning card or the nightly recap any "
+                 "more. Nothing else about your account has changed, and you "
+                 "can turn them back on any time from the Account page."))
+        page = (self._UNSUB_PAGE % (title, title, body)).encode("utf-8")
+        # No-store, and noindex in the markup: this URL carries a bearer
+        # token and has no business in a cache or a search index.
+        self._send(200, page, ".html")
+        return done
+
+    def do_POST_unsubscribe(self, query: dict):
+        """RFC 8058 one-click, which Gmail and Apple Mail POST to.
+
+        The header on every digest promises this endpoint answers a
+        POST. A List-Unsubscribe-Post that 405s is worse than no header
+        at all: the client shows the control, the reader presses it, and
+        nothing happens.
+        """
+        return self._unsubscribe(query)
+
+    def _team(self, q):
+        """A team's record, its ranks, and its history against anybody.
+
+        Ethan, 2026-09-09: "I should be able to search for the Los Angeles
+        Rams, and look at how they've played against any team in the
+        past." `engine.teamdex` is the arithmetic; this is the door.
+
+        NOT GATED, on the same reasoning as the receipts CSV and the
+        profit calendar: every number is a finished scoreline, already
+        public, and a stranger who lands here having searched for two
+        team names is the best advertisement this site has. The picks are
+        the product; who beat whom in 2023 is not.
+
+        Three shapes out of one call, so a page draws in one request:
+        `resolved` when the name is ambiguous and the reader has to
+        choose, `profile` + `opponents` for a team on its own, and
+        `head_to_head` when an opponent is named.
+        """
+        import re as _re
+        sport = (q.get("sport") or [""])[0].lower()[:5]
+        name = (q.get("team") or [""])[0][:80]
+        opp = (q.get("vs") or [""])[0][:80]
+        # ONE SEASON'S SCHEDULE, AND NOTHING ELSE (the Schedule tab's
+        # season chips): the rest of the page is already drawn.
+        season_q = (q.get("season") or [""])[0][:4]
+        season = int(season_q) if _re.fullmatch(r"(19|20)\d\d", season_q or "") else None
+        only = (q.get("only") or [""])[0][:12]
+        if not _re.fullmatch(r"[a-z]{2,5}", sport or ""):
+            return self._send(400, b'{"error":"unknown sport"}', ".json")
+        if not name.strip():
+            return self._send(400, b'{"error":"team is required"}', ".json")
+        try:
+            from engine import teamdex
+            from engine.db import connect
+            conn = connect()
+            try:
+                known = teamdex.teams(conn, sport)
+                if not known:
+                    # A SPORT WITH NO FINALS ON THIS BOX is a real state,
+                    # not an error: baseball's history has not been
+                    # ingested here. Saying so lets the page print the
+                    # reason instead of an empty table.
+                    return self._send(200, json.dumps({
+                        "sport": sport, "resolved": [], "no_finals": True,
+                    }).encode(), ".json")
+                hits = teamdex.resolve(name, sport, known)
+                if not hits:
+                    return self._send(200, json.dumps({
+                        "sport": sport, "query": name, "resolved": [],
+                    }).encode(), ".json")
+                if len(hits) > 1 and teamdex._norm(name) not in {
+                        teamdex._norm(h) for h in hits}:
+                    # AMBIGUOUS, and the page asks rather than guessing.
+                    # "Los Angeles" is two teams; picking one for him is
+                    # how a lookup becomes a lie he cannot see.
+                    return self._send(200, json.dumps({
+                        "sport": sport, "query": name,
+                        "resolved": [{"team": t,
+                                      "name": teamdex.label(t, sport)}
+                                     for t in hits],
+                    }).encode(), ".json")
+                team = hits[0]
+                if only == "schedule":
+                    return self._send(200, json.dumps({
+                        "sport": sport, "team": team,
+                        "schedule": _schedule_or_empty(teamdex, conn, sport, team, season),
+                    }).encode(), ".json")
+                out = {"sport": sport, "team": team,
+                       "name": teamdex.label(team, sport),
+                       "profile": teamdex.profile(conn, sport, team),
+                       "opponents": teamdex.opponents(conn, sport, team),
+                       # WHO PLAYS FOR IT. Ethan, 2026-09-10: "We should
+                       # be showing more info too when you look up a team
+                       # on the search page. We should show a depth chart
+                       # and player stats and all that shit." Its own
+                       # try: a squad is the newest thing on this page
+                       # and the record below it has been right since
+                       # 09-09 — one bad read of `player_game_logs` must
+                       # not take a working page down with it.
+                       "squad": _squad_or_empty(teamdex, conn, sport, team),
+                       # The stat page ESPN's own team tab draws —
+                       # leaders, then Passing/Rushing/Receiving. Same
+                       # guard, same reason (Ethan, 2026-09-10: "ESPN
+                       # uses theirs as an example of how we should make
+                       # ours work and the data we could show").
+                       "stats": _stats_or_empty(teamdex, conn, sport, team),
+                       # The Schedule and Depth Chart tabs (Ethan,
+                       # 2026-09-24, beside ESPN's Packers page). Same
+                       # guard: either failing costs its own tab.
+                       "schedule": _schedule_or_empty(teamdex, conn, sport, team),
+                       # WHO IS ON IT TODAY (Ethan, 2026-10-03: "make sure
+                       # our rosters are good ... every single sport"):
+                       # the league's live roster board where there is one.
+                       "roster": _live_roster(sport, team)}
+                out["depth"] = _depth_chart(sport, team, conn, out["roster"])
+                if opp.strip():
+                    rivals = teamdex.resolve(opp, sport, known)
+                    if rivals:
+                        out["head_to_head"] = teamdex.head_to_head(
+                            conn, sport, team, rivals[0])
+                    else:
+                        out["vs_unknown"] = opp
+                return self._send(200, json.dumps(out).encode(), ".json")
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"team history unavailable"}',
+                              ".json")
+
+    def _game(self, q):
+        """Any game's page — every game on every team's schedule
+        (engine/gamearchive). Ethan, 2026-10-30, ESPN's final beside ours:
+        "We should be able to go to each specific game and see all this
+        type of data that espn offers ... for every sport for each team."
+
+        The same document the live page reads from web/data/pbp/, built
+        for a game whose file is gone (or never was): by the feed's own id
+        (`event`), or by the game's day and its two sides as the schedule
+        holds them (`date`, `home`, `away`, and `game_id` to tell a
+        doubleheader's legs apart). NOT GATED, for the reason the play-by-
+        play files are free (engine/gate.FREE_DIRS): a final score and the
+        plays that made it are public facts, and nothing priced is in it.
+        """
+        from engine import gamearchive
+        if self._rate_limited(RATE_GAME_PER_MIN, "game"):
+            return
+        if not rate_ok("game:everyone", RATE_GAME_ALL_PER_MIN):
+            return self._send(429, _RATE_LIMITED.encode(), ".json")
+        arg = lambda k, n: (q.get(k) or [""])[0][:n]          # noqa: E731
+        try:
+            doc = gamearchive.game(arg("league", 5), event=arg("event", 16), date=arg("date", 10),
+                                   home=arg("home", 48), away=arg("away", 48), game_id=arg("game_id", 64))
+        except gamearchive.BadRequest as exc:
+            return self._send(400, json.dumps({"error": str(exc)}).encode(), ".json")
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"the game\'s feed did not answer"}', ".json")
+        if not doc:
+            return self._send(404, b'{"error":"no such game on the feed"}', ".json")
+        return self._send(200, json.dumps(doc).encode(), ".json")
+
+    def _record_day(self, q):
+        """One slate day's settled picks — the profit calendar's tap.
+
+        Ethan, 2026-09-05: "a profit calendar on record page ... tap a day
+        to see its bets." The calendar's cells come from record.json's
+        curve; the rows behind a cell are asked for here, one day at a
+        time, rather than shipping every settled row in the record file.
+
+        NOT GATED, for the reason `_receipts_csv` gives: every row is
+        settled, public, and the evidence the subscription is sold on.
+        `sport` narrows to the page's scope; empty means every league.
+        `book` is the calendar tapped (2026-10-13, Ethan: "There should be a
+        profit calendar for both edge bets and most likely bets for all
+        sports"): `edge` (or nothing) for the edge picks, `likely` for the
+        Most Likely half, each pick once; anything else is a 400.
+        """
+        import re as _re
+        date = (q.get("date") or [""])[0][:10]
+        sport = (q.get("sport") or [""])[0].lower()[:5]
+        book = (q.get("book") or [""])[0].lower()[:8]
+        if not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            return self._send(400, b'{"error":"date must be YYYY-MM-DD"}', ".json")
+        if sport and not _re.fullmatch(r"[a-z]{2,5}", sport):
+            return self._send(400, b'{"error":"unknown sport"}', ".json")
+        if book not in ("", "edge", "likely"):
+            return self._send(400, b'{"error":"book is edge or likely"}', ".json")
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+            try:
+                rows = L.settled_on(conn, date, sport=sport or None,
+                                    categories=L.LIKELY_HALF if book == "likely" else L.EDGE_BOOKS)
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"record unavailable"}', ".json")
+        net = round(sum((r.get("pnl_units") or 0) for r in rows), 2)
+        out = {"date": date, "sport": sport, "book": book or "edge", "rows": rows, "net_units": net}
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _record_bets(self, q):
+        """A page of the headline record's settled bets — the Record's
+        filterable list (Ethan's product audit, item 17). See
+        ledger.settled_page for which rows and why.
+
+        NOT GATED, for the reason `_receipts_csv` gives: every row is
+        settled, public, and the evidence the subscription is sold on.
+        Every parameter is checked against a closed shape before it
+        reaches SQL; anything else is a 400, never a guess.
+        """
+        import re as _re
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        sport = arg("sport").lower()[:5]
+        kind, result, since = arg("kind"), arg("result"), arg("since")[:10]
+        try:
+            offset = int(arg("offset") or 0)
+        except ValueError:
+            offset = -1
+        if (sport and not _re.fullmatch(r"[a-z]{2,5}", sport)) \
+                or kind not in ("", "props", "lines") \
+                or result not in ("", "won", "lost", "push") \
+                or (since and not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", since)) \
+                or not 0 <= offset <= 100000:
+            return self._send(400, b'{"error":"bad filter"}', ".json")
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+            try:
+                out = L.settled_page(conn, sport=sport or None, kind=kind or None,
+                                     result=result or None, since=since or None,
+                                     offset=offset)
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"record unavailable"}', ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _firstlook(self):
+        """What the sign-up screen and the plans show of the members' side
+        (engine/firstlook): tonight's counts, last night, the record and the
+        newest graded pick. Public — every part of it already is."""
+        now = time.time()
+        if _FIRSTLOOK.get("body") is None or now - _FIRSTLOOK.get("at", 0) > FIRSTLOOK_TTL_S:
+            from engine import firstlook
+            try:
+                _FIRSTLOOK.update(at=now, body=json.dumps(firstlook.build(WEB),
+                                                          separators=(",", ":")).encode())
+            except Exception:                                # noqa: BLE001
+                return self._send(503, b'{"error":"unavailable"}', ".json")
+        return self._send(200, _FIRSTLOOK["body"], ".json")
+
+    def _record_lab(self):
+        """Every settled pick of the headline record, compact — the strategy
+        lab's whole input (ledger.lab_rows; the lab itself runs in the page).
+
+        NOT GATED, for the reason `_record_bets` gives: every row is settled
+        and public. Read once per change to the journal and kept in memory,
+        so a page full of readers trying rules costs one query."""
+        try:
+            from engine import ledger as L
+            stamp = os.path.getmtime(str(L.DEFAULT_DB))
+        except Exception:                                    # noqa: BLE001
+            stamp = None
+        hit = _LAB_CACHE.get("body")
+        if hit is not None and _LAB_CACHE.get("stamp") == stamp and stamp is not None:
+            return self._send(200, hit, ".json")
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+            try:
+                body = json.dumps(L.lab_rows(conn), separators=(",", ":")).encode()
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"record unavailable"}', ".json")
+        _LAB_CACHE.update(stamp=stamp, body=body)
+        return self._send(200, body, ".json")
+
+    def _explain(self, q):
+        """One pick in plain English — engine/explainer, behind a tap.
+
+        Ethan, 2026-09-05: "a plain English explainer per pick." GATED
+        like the board it reads from: the answer restates a paid row's
+        numbers, and an uncached call spends money, so a stranger gets
+        401 and a lapsed account 402 before anything is read or spent.
+        The board is named the way the page names it (the public file's
+        name, resolved through `gate.full_board_file` so an unknown or
+        climbing name is a 400 and never a path); the pick is the page's
+        own id. Not configured — no model name or key in the service's
+        environment, or the SDK not installed — is 503 with
+        `configured: false`, which the page turns into a sentence rather
+        than a spinner. The answer is cached per build (engine/explainer),
+        so only the first reader of a pick waits on the model.
+        """
+        if self._rate_limited(RATE_EXPLAIN_PER_MIN, "explain"):
+            return
+        board = (q.get("board") or [""])[0][:80]
+        pick = (q.get("pick") or [""])[0][:240]
+        from engine import gate as GATE_
+        if not pick or GATE_.full_board_file(board) is None:
+            return self._send(400, b'{"error":"board and pick are required"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "The explainer needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        from engine import explainer as EX
+        if not EX.configured():
+            return self._send(503, b'{"error":"explainer not configured","configured":false}',
+                              ".json")
+        # The shared slim copy Ask keeps (askbot.board_at), not a fresh
+        # parse of an 18MB board per question — the 2026-09-26 outage.
+        from engine import askbot as AB
+        payload = AB.board_at(GATE_.full_board_file(board))
+        if payload is None:
+            return self._send(404, b'{"error":"no such board"}', ".json")
+        try:
+            out = EX.explain(board, payload, pick)
+        except KeyError:
+            return self._send(404, b'{"error":"that pick is not on this board"}', ".json")
+        except EX.NotConfigured:
+            return self._send(503, b'{"error":"explainer not configured","configured":false}',
+                              ".json")
+        except EX.Unavailable as exc:
+            sys.stderr.write(f"  explainer: {type(exc).__name__}: {exc}\n")
+            body = {"error": "explainer unavailable"}       # detail to the log only (E-14)
+            return self._send(503, json.dumps(body).encode(), ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _ask(self, body):
+        """Ask Qellys: any sports question, answered from our data.
+
+        GATED like the explainer, and for the same reasons: the answer
+        restates paid rows, and every call spends money — so a stranger
+        gets 401 and a lapsed account 402 before anything is read or
+        spent. The board is named the way the page names it, resolved
+        through `gate.full_board_file`, so an unknown name is a 400 and
+        never a path. It is the league the reader has OPEN, not a limit:
+        every league's board rides along (askbot.BOARD_FILES, through the
+        same resolver), and the history lookups read the rest. See
+        engine/askbot.py for what the model is shown.
+        """
+        if self._rate_limited(RATE_ASK_PER_MIN, "ask"):
+            return
+        from engine import askbot as AB
+        from engine import explainer as EX
+        from engine import gate as GATE_
+        board = str(body.get("board") or "")[:80]
+        question = str(body.get("question") or "").strip()
+        pick = str(body.get("pick") or "")[:240]
+        history = body.get("history") if isinstance(body.get("history"), list) else []
+        # The reader's own open bets, when they attached them (askbot.clean_bets).
+        mine = AB.clean_bets(body.get("bets")) if body.get("bets") else []
+        # The teams and players they follow, when they attached them (askbot.clean_follows).
+        follows = AB.clean_follows(body.get("follows")) if body.get("follows") else None
+        if (not question or len(question) > AB.MAX_QUESTION
+                or GATE_.full_board_file(board) is None):
+            return self._send(400, b'{"error":"a board and a question are required"}',
+                              ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "Ask needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        if not AB.configured():
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        # THE DAY'S CEILINGS (askbot.over_limit): this account's questions,
+        # and the site's estimated spend. Checked before anything is read.
+        # With the paywall off a reader need not be signed in; their line is
+        # counted against the address they asked from.
+        me = ((who.get("id") or who.get("email")) if isinstance(who, dict) else who) \
+            or f"ip:{self._client_ip()}"
+        limit = AB.over_limit(me)
+        if limit:
+            return self._send(429, json.dumps({"error": "ask daily limit",
+                                               "limit": limit}).encode(), ".json")
+        payload = AB.board_at(GATE_.full_board_file(board))
+        if payload is None:
+            return self._send(404, b'{"error":"no such board"}', ".json")
+        boards = {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            got = payload if name == board else (AB.board_at(path) if path else None)
+            if got:
+                boards[league] = got
+        if mine:
+            mine = self._bets_standing(AB, mine, boards)
+        # STREAMED, WHEN THE PAGE ASKS (2026-10-27, engine/askcards): every
+        # check above has already run, so a stream only ever opens on a
+        # question that will be answered. Its steps go out as they happen.
+        if body.get("stream") is True:
+            return self._ask_stream(AB, EX, payload, question, history, pick, board, boards, me, mine, follows)
+        try:
+            out = AB.ask(payload, question, history, pick, board_name=board,
+                         data_dir=WEB / "data", boards=boards, mine=mine, follows=follows)
+        except EX.NotConfigured:
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        except EX.Unavailable as exc:
+            sys.stderr.write(f"  ask: {type(exc).__name__}: {exc}\n")
+            err = {"error": "ask unavailable"}              # detail to the log only (E-14)
+            return self._send(503, json.dumps(err).encode(), ".json")
+        return self._send(200, json.dumps(self._ask_kept(AB, out, me)).encode(), ".json")
+
+    def _ask_kept(self, AB, out: dict, me) -> dict:
+        """What of an answer goes to the page, signed, and the question counted."""
+        keep = {k: out.get(k) for k in ("text", "refused", "matched", "focused", "sources", "cached")}
+        # Shown as well as said (engine/askcards): its steps, its cards, what next.
+        for k in ("steps", "cards", "follow"):
+            keep[k] = out.get(k) or []
+        # Signed, so the page can carry it back as context (audit C-3).
+        keep["sig"] = AB.sign_turn(out.get("text") or "")
+        if not out.get("cached"):
+            try:
+                AB.count_question(me)
+            except Exception:                                # noqa: BLE001
+                pass                     # a counting failure never costs the answer
+        return keep
+
+    def _bets_standing(self, AB, mine: list, boards: dict) -> list:
+        """Where each attached ticket the box can follow stands now, for Ask:
+        graded `brief` the way the Live tab's tracker grades a saved slip
+        (`_ask_track`: no picture, no model call), off the boards and the
+        live loop's files. A ticket that cannot be read goes as its words."""
+        if not any(b.get("legs") for b in mine):
+            return mine
+        from engine import gate as GATE_
+        from engine import slipgrade as SG
+        from engine import sliplive as SL
+        prices = {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            if path and league in boards:
+                prices[league] = AB.prices_at(path)
+        live = SL.Live(prices)
+        graded = SG.with_fights(dict(boards))
+        out = []
+        for b in mine:
+            if b.get("legs"):
+                try:
+                    slip = SG.clean_slip({"legs": b["legs"], "total_odds": b.get("odds"),
+                                          "stake": b.get("stake"), "is_bet_slip": True})
+                    b = dict(b, card=SG.grade(slip, graded, live=live, brief=True))
+                except Exception as exc:                        # noqa: BLE001
+                    sys.stderr.write(f"  ask bets: {type(exc).__name__}: {exc}\n")
+            out.append(b)
+        return out
+
+    def _ask_stream(self, AB, EX, payload, question, history, pick, board, boards, me, mine=None, follows=None):
+        """The same answer as a text/event-stream: a `step` event as each
+        lookup starts, then `answer` (what `_ask` would have sent) or `fail`
+        (the status `_ask` would have sent). A reader who leaves mid-answer
+        stops the steps, never the answer: it is still counted and cached."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        # no-transform: Caddy's `encode` (and any proxy) leaves it whole and
+        # unbuffered, so each step reaches the page when it is written.
+        self.send_header("Cache-Control", "no-store, no-transform")
+        self.send_header("X-Accel-Buffering", "no")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        if self._is_https():
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        self.end_headers()
+        self.close_connection = True
+
+        def event(kind: str, data: dict) -> None:
+            self.wfile.write(f"event: {kind}\ndata: {json.dumps(data)}\n\n".encode())
+            self.wfile.flush()
+
+        try:
+            out = AB.ask(payload, question, history, pick, board_name=board, data_dir=WEB / "data",
+                         boards=boards, on_step=lambda label: event("step", {"label": label}), mine=mine,
+                         follows=follows)
+            done = ("answer", self._ask_kept(AB, out, me))
+        except EX.NotConfigured:
+            done = ("fail", {"status": 503, "configured": False})
+        except EX.Unavailable as exc:
+            sys.stderr.write(f"  ask: {type(exc).__name__}: {exc}\n")
+            done = ("fail", {"status": 503})                # detail to the log only (E-14)
+        try:
+            event(*done)
+        except OSError:
+            pass                                             # the page left; the answer was kept
+
+    def _ask_slip(self, body):
+        """Ask Qellys grades a parlay from its screenshot (engine/slipgrade).
+
+        Ethan, 2026-10-12: "users can upload a screenshot of there parlay and
+        it will rank it based on all our data and tools and models".
+
+        GATED AND COUNTED EXACTLY AS A QUESTION IS (`_ask`): a stranger gets
+        401, a lapsed account 402, the day's ceilings 429 — all before the
+        picture is read or a token spent. The picture is checked
+        (slipgrade.decode_image: a type the API takes, real base64, under
+        the size, the bytes its type starts with), sent to the API once to
+        be read, and dropped — nothing here writes it anywhere. The legs are
+        graded against every league's board in code, and the card comes
+        back with a signed one-paragraph summary the page can carry as the
+        conversation, like any answer.
+        """
+        if self._rate_limited(RATE_ASK_PER_MIN, "ask"):
+            return
+        from engine import askbot as AB
+        from engine import explainer as EX
+        from engine import gate as GATE_
+        from engine import slipgrade as SG
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "Ask needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        try:
+            image = SG.decode_image(body.get("image"), body.get("media_type"))
+        except ValueError as exc:
+            return self._send(400, json.dumps({"error": str(exc)}).encode(), ".json")
+        if not AB.configured():
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        me = ((who.get("id") or who.get("email")) if isinstance(who, dict) else who) \
+            or f"ip:{self._client_ip()}"
+        limit = AB.over_limit(me)
+        if limit:
+            return self._send(429, json.dumps({"error": "ask daily limit",
+                                               "limit": limit}).encode(), ".json")
+        boards, prices = {}, {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            got = AB.board_at(path) if path else None
+            if got:
+                boards[league] = got
+                prices[league] = AB.prices_at(path)
+        boards = SG.with_fights(boards)
+        try:
+            slip = SG.read_slip(image, str(body.get("media_type") or "").lower().strip())
+        except SG.SlipUnreadable as exc:
+            try:
+                AB.count_question(me)                   # the read was paid for
+            except Exception:                                # noqa: BLE001
+                pass
+            return self._send(422, json.dumps({"error": str(exc)}).encode(), ".json")
+        except EX.NotConfigured:
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        except EX.Unavailable as exc:
+            sys.stderr.write(f"  ask slip: {type(exc).__name__}: {exc}\n")
+            return self._send(503, b'{"error":"ask unavailable"}', ".json")
+        # The live line (engine/sliplive): every book's price at each leg's
+        # number from the latest pull, and the live loop's own score and box
+        # score for a game under way. A leg whose price is over an hour old
+        # gets a fresh one (engine/slipodds, 2026-10-14: Ethan's "do 1-11"),
+        # one call per game for just the slip's markets, inside the day's
+        # cap; past the cap it keeps the latest pull's, and the card says so.
+        from engine import slipodds as SO
+        card = SG.grade(slip, boards, live=SO.FreshLive(prices))
+        text = SG.summary(card)
+        try:
+            AB.count_question(me)
+        except Exception:                                    # noqa: BLE001
+            pass                     # a counting failure never costs the answer
+        out = {"slip": card, "text": text, "sig": AB.sign_turn(text)}
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _ask_track(self, body):
+        """The Live tab's read of the slips a member saved to My Bets from
+        the parlay checker.
+
+        Ethan, 2026-10-13: "the hedge calculator and better number and
+        saving uploaded slips too moneys and live chances for props mid
+        game ... for all sports".
+
+        NO PICTURE AND NO MODEL CALL. The legs were read once, when the
+        slip was graded; the page sends them back as My Bets kept them, and
+        each slip is held to `slipgrade.clean_slip` again — the page is not
+        trusted to send what the reader wrote. Each is graded `brief`
+        against the boards and the live loop's files: where every leg
+        stands, a prop's live chance, the ticket's standing and its hedge.
+        Nothing is spent and nothing counts against the day's questions;
+        it is gated as Ask is (the card is the member's) and limited on its
+        own bucket, before a board is read.
+        """
+        if self._rate_limited(RATE_TRACK_PER_MIN, "track"):
+            return
+        from engine import askbot as AB
+        from engine import gate as GATE_
+        from engine import slipgrade as SG
+        from engine import sliplive as SL
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "Tracking saved slips needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        raw = body.get("slips")
+        if not isinstance(raw, list) or not raw or len(raw) > MAX_TRACK_SLIPS:
+            return self._send(400, json.dumps(
+                {"error": f"send 1 to {MAX_TRACK_SLIPS} slips"}).encode(), ".json")
+        boards, prices = {}, {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            got = AB.board_at(path) if path else None
+            if got:
+                boards[league] = got
+                prices[league] = AB.prices_at(path)
+        boards = SG.with_fights(boards)
+        live = SL.Live(prices)
+        out = []
+        for s in raw:
+            if not isinstance(s, dict):
+                continue
+            sid = str(s.get("id") or "")[:40]
+            slip = SG.clean_slip(dict(s, is_bet_slip=True))
+            if not slip["legs"]:
+                out.append({"id": sid, "error": "no legs to track"})
+                continue
+            try:
+                card = SG.grade(slip, boards, live=live, brief=True)
+            except Exception as exc:                            # noqa: BLE001
+                sys.stderr.write(f"  ask track: {type(exc).__name__}: {exc}\n")
+                out.append({"id": sid, "error": "this slip could not be read"})
+                continue
+            out.append({"id": sid, "slip": card})
+        return self._send(200, json.dumps({"slips": out}).encode(), ".json")
+
+    def _receipts_csv(self):
+        """Every settled pick, as a file somebody can open in a spreadsheet.
+
+        Ethan, 2026-08-25: *"Track record page with receipts … no
+        cherry-picking. This is your whole sales pitch."*
+
+        NOT GATED, and that is the same decision record.json already
+        carries: the record is the evidence the subscription is sold on,
+        and a proof nobody can read persuades nobody. Every row here is
+        SETTLED — a pick whose game has finished and whose result is
+        public. It contains no open position, no line we are currently
+        recommending and no unsettled edge, so it gives away nothing
+        that is still worth money.
+
+        Built in memory rather than streamed: the journal is thousands
+        of rows, not millions, and a half-written download that fails
+        mid-stream is worse than a slow one.
+        """
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b"receipts unavailable", ".txt")
+        try:
+            rows = L.receipts(conn)
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b"receipts unavailable", ".txt")
+        finally:
+            conn.close()
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=list(L.RECEIPT_COLUMNS),
+                           extrasaction="ignore", lineterminator="\n")
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+        body = buf.getvalue().encode("utf-8")
+        # A filename with the date in it, because a person downloading
+        # this twice a month should not end up with receipts(3).csv and
+        # no idea which is which.
+        stamp = time.strftime("%Y-%m-%d")
+        self._send(200, body, ".csv", headers=[
+            ("Content-Disposition",
+             f'attachment; filename="qellys-receipts-{stamp}.csv"')])
+
+    def do_HEAD(self):
+        """Headers only, for anything the static handler would serve.
+
+        THE STATUS PAGE IS THE CALLER. It asks each published board when
+        it was last written, and `Last-Modified` is that answer without
+        downloading a 2MB board to read one field out of it.
+
+        In production Caddy answers /data/*.json off disk and never
+        reaches this code — it speaks HEAD natively. This exists so the
+        page behaves the same under `python3 server.py`, where the
+        default handler answers HEAD with 501 and the status page would
+        be blank on the one machine where it is being developed.
+
+        Static paths only. An API HEAD gets the same 501 it always did,
+        because those handlers write bodies and a half-suppressed
+        response is a framing bug waiting to happen.
+        """
+        path = urlparse(self.path).path
+        if path.startswith("/api/"):
+            self.send_error(501, "Unsupported method ('HEAD')")
+            return
+        if path in ("/", ""):
+            path = "/index.html"
+        target = (WEB / path.lstrip("/")).resolve()
+        if not target.is_relative_to(WEB.resolve()) or not target.is_file():
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        st = target.stat()
+        self.send_response(200)
+        self.send_header("Content-Type",
+                         CONTENT_TYPES.get(target.suffix, "application/octet-stream"))
+        self.send_header("Content-Length", str(st.st_size))
+        self.send_header("Last-Modified", formatdate(st.st_mtime, usegmt=True))
+        self.send_header("Cache-Control", "no-store")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        self.end_headers()
+
+    def _entity_page(self, path: str) -> bool:
+        """A real address — /mlb, /player/juan-soto, /game/ne-sea-0909.
+
+        Answers with the ORDINARY app document, its preview block swapped
+        for this entity's and a `__QB_ROUTE__` hint naming the hash route
+        to open. See engine/routes.py for why this is one document rather
+        than a landing page that redirects.
+
+        Returns False for anything that is not one of our routes, so the
+        static handler still serves the real files and the real 404 —
+        swallowing unknown paths here would turn every typo into a soft
+        landing on the board, which is the thing a 404 page is for.
+
+        A REAL FILE ALWAYS WINS. `/players` is a route and `/privacy.html`
+        is a file; if a page were ever added at a name this table also
+        claims, the file is what should be served, because that is what
+        every link to it already expects.
+        """
+        if "." in path.rsplit("/", 1)[-1]:
+            return False                       # an asset, not a place
+        try:
+            route = routes.resolve(path, WEB)
+        except Exception:                                    # noqa: BLE001
+            # A malformed board must not take the front page down with
+            # it: fall through to the static handler, which serves the
+            # app at / and the 404 page everywhere else.
+            return False
+        if route is None:
+            return False
+        target = (WEB / path.strip("/")).resolve()
+        if target.is_relative_to(WEB.resolve()) and target.is_file():
+            return False
+        # THE TRIMMED DOCUMENT WHEN THERE IS ONE (engine/shrink): the same
+        # page without its ~47 KB of comments, preview markers kept — what
+        # Caddy serves at / — and the original when it has not been built.
+        index = WEB / "min" / "index.html"
+        if not index.is_file():
+            index = WEB / "index.html"
+        if not index.is_file():
+            return False
+        try:
+            body = routes.document(route, index.read_text(encoding="utf-8"))
+        except OSError:
+            return False
+        self._send(200, body.encode("utf-8"), ".html")
+        return True
+
+    def _static(self, path: str):
+        if path in ("/", ""):
+            path = "/index.html"
+        # Browsers probe /favicon.ico on their own, before they have parsed
+        # the <link rel="icon"> that points at our SVG. We only ship the one
+        # icon, so hand it back here too — otherwise every single page load
+        # logs a 404 that means nothing.
+        if path == "/favicon.ico":
+            path = "/favicon.svg"
+        # The worker names its own cache after the bundle it holds. If
+        # the stamp cannot be computed — a shell file removed mid-read, a
+        # permissions problem — the raw file is served instead, because a
+        # /sw.js that 500s leaves the OLD worker installed and in charge,
+        # which is the failure this exists to prevent.
+        if path == "/sw.js" and (WEB / "sw.js").is_file():
+            try:
+                body = sw_body()
+            except OSError:
+                body = None
+            if body is not None:
+                self._send(200, body, ".js",
+                           mtime=(WEB / "sw.js").stat().st_mtime)
+                return
+        # THE BACKSTOP, for anything the startup seal did not catch — a
+        # board written by a build that ran without QB_PAYWALL in its
+        # environment, say, which lands on the public path whole and does
+        # not wait for a restart.
+        #
+        # In production Caddy answers /data/*.json off disk and never
+        # reaches this code, which is exactly why the startup seal above
+        # is the primary defence rather than this. This covers `python3
+        # server.py` with no proxy in front, and it costs a parse only on
+        # a paid board while the paywall is on.
+        if path.startswith("/data/") and path.endswith(".json"):
+            gated = self._gated_board(path)
+            if gated is not None:
+                return gated
+        target = (WEB / path.lstrip("/")).resolve()
+        # Prevent path traversal outside the web root. is_relative_to (not a
+        # string prefix) so a sibling like web2/ could never slip through.
+        if not target.is_relative_to(WEB.resolve()) or not target.is_file():
+            # A mistyped page gets the real 404 page (render 23) when it
+            # is on disk; an asset miss (a stale precached .js, a missing
+            # image) keeps the bare body, because handing a browser a
+            # page of HTML where it asked for a script is how a blank
+            # screen replaces a clear console error.
+            page = WEB / "404.html"
+            wants_page = target.suffix in ("", ".html", ".htm")
+            if wants_page and page.is_file():
+                self._send(404, page.read_bytes(), ".html")
+            else:
+                self._send(404, b"Not found", ".html")
+            return
+        self._send(200, target.read_bytes(), target.suffix,
+                   mtime=target.stat().st_mtime)
+
+    #: What we tell the world we are. The default is
+    #: `BaseHTTP/0.6 Python/3.11.15`, which hands an attacker the exact
+    #: stack and patch level to look up CVEs against — free reconnaissance
+    #: for nothing in return. Caddy strips it too, but that only helps
+    #: when Caddy is in front, and the app should not be volunteering it
+    #: in the first place.
+    server_version = "Qellys"
+    sys_version = ""
+
+    def _send_not_modified(self, etag: str, mtime: float | None = None):
+        """304: the caller's copy is still current.
+
+        NO BODY AND NO CONTENT-LENGTH, which is what 304 means. The
+        handler speaks HTTP/1.0 and closes the connection after every
+        response, so there is no framing to get wrong here.
+        """
+        self.send_response(304)
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", "no-store")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        if mtime is not None:
+            self.send_header("Last-Modified", formatdate(mtime, usegmt=True))
+            self.send_header("Access-Control-Expose-Headers",
+                             "Last-Modified, ETag")
+        self.end_headers()
+
+    def _send(self, code: int, body: bytes, suffix: str, mtime: float | None = None,
+              headers: list | None = None):
+        self.send_response(code)
+        self.send_header("Content-Type", CONTENT_TYPES.get(suffix, "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        # HSTS only over HTTPS. On a plain-HTTP LAN address it does
+        # nothing at best; announced from a name that later needs to serve
+        # HTTP it is a self-inflicted outage browsers remember for months.
+        if self._is_https():
+            self.send_header("Strict-Transport-Security",
+                             "max-age=31536000; includeSubDomains")
+        for name, value in (headers or []):
+            self.send_header(name, value)
+        # When the payload came from a file on disk, say when that file was
+        # last written. The site's freshness chip used to time its own
+        # fetch, which is always a few seconds old — so a phone across town
+        # read "Updated 4s ago" over a board the laptop stopped rebuilding
+        # hours earlier. This is the age of the DATA, and it needs no build
+        # script to cooperate: every payload is a file, and a build that
+        # fails leaves the old one (and its old timestamp) in place.
+        if mtime is not None:
+            self.send_header("Last-Modified", formatdate(mtime, usegmt=True))
+            self.send_header("Access-Control-Expose-Headers", "Last-Modified")
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def _lan_ip():
+    """This machine's LAN address — the URL a phone on the same Wi-Fi can
+    open. The UDP connect never sends a packet; it just makes the OS pick
+    the outbound interface. None when there's no usable network."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return None if ip.startswith("127.") else ip
+    except OSError:
+        return None
+
+
+#: How many requests may be in flight at once. Beyond this the server
+#: says 503 and asks for a retry instead of starting another thread.
+#:
+#: WHY THERE IS A CEILING AT ALL. `ThreadingHTTPServer` starts one thread
+#: per connection and never stops. On a 1GB droplet a burst — the site
+#: posted to Instagram, a crawler, someone holding refresh — walks the box
+#: into swap and then into the OOM killer, and what dies is not "some
+#: requests": it is the process, taking every signed-in session with it,
+#: and often sshd's ability to get you back in to fix it.
+#:
+#: A bounded pool converts that into the failure everybody would choose:
+#: a few callers get a 503 with a Retry-After, and everyone already being
+#: served finishes normally. 64 is generous for this workload — Caddy
+#: serves every static file, so the only things reaching Python are API
+#: calls, and each is a sqlite read measured in milliseconds.
+MAX_INFLIGHT = max(4, int(os.environ.get("QB_MAX_INFLIGHT", "") or 64))
+
+def _busy_response() -> bytes:
+    """The 503, assembled so the length is COUNTED rather than typed.
+
+    The first draft typed 78 where the body was 81, and a Content-Length
+    three short of the body is a client that reads a truncated JSON
+    document and, depending on the client, hangs waiting for the rest.
+    A wrong number here would only ever be met under load — which is the
+    one time nobody is reading logs.
+    """
+    body = (b'{"error":"The site is busy for a moment. Try that again in '
+            b'a couple of seconds."}')
+    head = (b"HTTP/1.1 503 Service Unavailable\r\n"
+            b"Retry-After: 2\r\n"
+            b"Content-Type: application/json\r\n"
+            b"Connection: close\r\n"
+            b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n")
+    return head + body
+
+
+_BUSY = _busy_response()
+
+
+class BoundedHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that refuses rather than falls over.
+
+    The semaphore is taken BEFORE the thread is created, which is the
+    only place it helps — checking inside the handler means the thread
+    already exists and the memory is already spent.
+
+    `daemon_threads` is inherited as True, so a shutdown does not wait on
+    in-flight requests. Combined with the ceiling, a restart during a
+    burst takes a second rather than a minute.
+    """
+
+    #: A listen backlog deep enough that a spike queues in the kernel
+    #: instead of being refused at the TCP level, which browsers surface
+    #: as "cannot connect" rather than as a retryable error.
+    request_queue_size = 128
+
+    #: A SLOT IS A CONNECTION, NOT A REQUEST, and the two are the same
+    #: thing here only because `Handler` speaks HTTP/1.0 — the
+    #: BaseHTTPRequestHandler default — so every connection closes after
+    #: one response.
+    #:
+    #: Setting `protocol_version = "HTTP/1.1"` on the handler would turn
+    #: keep-alive on, and then Caddy's idle upstream connections would sit
+    #: in these slots doing nothing. Enough of them and the site refuses
+    #: everybody while completely idle, which is a failure that would take
+    #: a long evening to understand. tests/test_load_shedding.py fails if
+    #: the two are ever changed apart.
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._slots = threading.Semaphore(MAX_INFLIGHT)
+        self.shed = 0
+
+    def process_request(self, request, client_address):
+        if not self._slots.acquire(blocking=False):
+            self.shed += 1
+            try:
+                request.sendall(_BUSY)
+            except Exception:                                # noqa: BLE001
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:                                    # noqa: BLE001
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
+
+def seal_on_boot() -> None:
+    """Redact every board on the public path, before anything is served.
+
+    CALLED FROM BOTH ENTRYPOINTS, and that is the whole reason it is a
+    function. It lived inline in `server.main()` for a day — which is dev
+    only. Production runs `launch.py`, which builds its own
+    ThreadingHTTPServer around the same Handler and never calls
+    `server.main()`, so the seal never fired on the one machine it
+    existed for. Found by reading the systemd unit rather than the code.
+
+    WHY IT HAS TO HAPPEN AT BOOT. Redaction happens inside `publish()`,
+    so turning QB_PAYWALL on changes what the NEXT build writes and
+    touches nothing already on disk. Every board written before the flag
+    went on stays whole and public, and in production Caddy serves those
+    files straight off disk without the app ever seeing the request —
+    there is no later place to catch it. `launch.py --seal` has always
+    fixed it, and depending on an operator to remember a command is not a
+    paywall. A restart is the one thing that reliably happens on every
+    deploy, including the one that turns the flag on.
+
+    NON-FATAL BY DESIGN. A seal that throws must not stop the site
+    booting: refusing to start turns a redaction problem into an outage.
+    It says so loudly instead, and `--todo` reports the same thing.
+    """
+    try:
+        from engine import gate as _gate
+        if not _gate.enabled():
+            return
+        res = _gate.seal(web_data=WEB / "data", verbose=False)
+        n = len(res.get("sealed") or [])
+        if n:
+            print(f"Paywall ON — sealed {n} board(s) on the public path "
+                  "at startup.")
+        left = _gate.unsealed(web_data=WEB / "data")
+        if left:
+            _fail_closed(left, "paid rows remain after sealing")
+        else:
+            _clear_unsealed_flag()
+    except Exception as exc:                                 # noqa: BLE001
+        try:
+            from engine import gate as _gate
+            left = _gate.unsealed(web_data=WEB / "data")
+        except Exception:                                    # noqa: BLE001
+            left = []
+        _fail_closed(left, f"the seal raised: {type(exc).__name__}: {exc}")
+
+
+#: Where a board that could not be sealed is moved, and the flag that says
+#: so (audit E-13). Outside web/ on purpose: Caddy file-serves web/data,
+#: so a renamed file left beside the boards would still be public.
+UNSEALED_DIR = ROOT / "data" / "unsealed"
+UNSEALED_FLAG = ROOT / "data" / "UNSEALED.json"
+
+
+def _fail_closed(left: list, why: str) -> None:
+    """A board still carrying paid rows is taken OFF the public path.
+
+    THIS USED TO PRINT A WARNING AND SERVE THE BOARD (audit E-13). Caddy
+    serves web/data straight off disk, so a board the seal could not
+    redact was public until somebody read the journal. The site still
+    boots — the docstring above is right that refusing to start turns a
+    redaction problem into an outage — but the leaking boards move out of
+    web/ (the free pages show those boards as unavailable until the next
+    build writes a sealed copy), UNSEALED.json records what and why for
+    `--todo` and the status page, and the journal line says ALERT.
+    """
+    import datetime as _dt
+    moved = []
+    try:
+        UNSEALED_DIR.mkdir(parents=True, exist_ok=True)
+        for r in left or []:
+            src = WEB / "data" / r["board"]
+            if src.exists():
+                os.replace(src, UNSEALED_DIR / r["board"])
+                moved.append(r["board"])
+    except OSError as exc:
+        why += f"; moving the boards failed too: {exc}"
+    try:
+        UNSEALED_FLAG.write_text(json.dumps({
+            "at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+            "why": why, "moved": moved,
+            "rows": sum(int(r.get("rows") or 0) for r in left or [])}, indent=1))
+    except OSError:
+        pass
+    print(f"  ALERT: public boards could not be sealed ({why}). "
+          f"{len(moved)} board(s) taken off the public path into "
+          f"{UNSEALED_DIR}. Run `python3 launch.py --seal`, then restart.",
+          file=sys.stderr)
+
+
+def _clear_unsealed_flag() -> None:
+    try:
+        UNSEALED_FLAG.unlink()
+    except OSError:
+        pass
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    live = "--live" in args
+    # `--bind 127.0.0.1` for a public deployment: the app sits behind a
+    # reverse proxy that terminates TLS, and binding all interfaces would
+    # leave the plain-HTTP port reachable from outside as well — the proxy
+    # in front then protects nothing, because anyone can go around it.
+    bind = "0.0.0.0"
+    if "--bind" in args:
+        i = args.index("--bind")
+        if i + 1 < len(args):
+            bind = args[i + 1]
+            args = args[:i] + args[i + 2:]
+    ports = [a for a in args if not a.startswith("--")]
+    port = int(ports[0]) if ports else 8000
+
+    seal_on_boot()
+
+    server = BoundedHTTPServer((bind, port), Handler)
+    server.live_mode = live  # read by Handler._api
+
+    mode = "LIVE data" if live else "sample data"
+    print(f"Qellys Book running ({mode}) → http://localhost:{port}")
+    if bind != "0.0.0.0":
+        print(f"  Bound to {bind} only — reachable through a proxy, not directly.")
+    lan = _lan_ip() if bind == "0.0.0.0" else None
+    if lan:
+        print(f"  On your phone (same Wi-Fi): http://{lan}:{port}")
+    if live:
+        for sport, path in LIVE_FILES.items():
+            state = "ready" if path.is_file() else "not built yet — see LAUNCH.md"
+            # A served tree outside the checkout (QB_WEB_DIR) is printed whole —
+            # relative_to raised there and took the server down at startup.
+            shown = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+            print(f"  {sport.upper()}: {shown} ({state})")
+    print("Press Ctrl+C to stop.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+
+
+if __name__ == "__main__":
+    main()

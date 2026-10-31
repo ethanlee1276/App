@@ -1,0 +1,142 @@
+{
+  "source": "Pikkit",
+  "note": "Read off Pikkit's shared record cards, which Pikkit marks Verified (synced from the sportsbooks). Profit, ROI and record are Pikkit's; the dollars at risk are profit / ROI.",
+  "as_of": "2026-09-26T14:23:03",
+  "windows": [
+    {
+      "key": "all",
+      "label": "All time",
+      "profit": 8001.64,
+      "roi": 0.2607,
+      "wins": 221,
+      "losses": 1141,
+      "pushes": 27,
+      "updated": "2026-09-26T14:23:03",
+      "receipt": "img/zeno/pikkit-all-time-2026-09-26.png"
+    },
+    {
+      "key": "2026",
+      "label": "2026",
+      "profit": 1236.44,
+      "roi": 0.3225,
+      "wins": 57,
+      "losses": 265,
+      "pushes": 9,
+      "updated": "2026-09-26T14:22:52",
+      "receipt": "img/zeno/pikkit-2026-2026-09-26.png"
+    },
+    {
+      "key": "2026-09-21..2026-09-27",
+      "label": "This week \u00b7 Sep 21\u201327",
+      "profit": 134.22,
+      "roi": 0.6286,
+      "wins": 9,
+      "losses": 19,
+      "pushes": 0,
+      "updated": "2026-09-26T14:22:38",
+      "receipt": "img/zeno/pikkit-week-2026-09-21.png"
+    },
+    {
+      "key": "2026-09",
+      "label": "September 2026",
+      "profit": 571.53,
+      "roi": 0.3494,
+      "wins": 30,
+      "losses": 150,
+      "pushes": 1,
+      "updated": "2026-09-26T14:22:43",
+      "receipt": "img/zeno/pikkit-september-2026-2026-09-26.png",
+      "days": {
+        "2026-09-04": 68.3,
+        "2026-09-05": -20,
+        "2026-09-09": 12.5,
+        "2026-09-10": -184,
+        "2026-09-13": -114,
+        "2026-09-14": -45.2,
+        "2026-09-15": 10.3,
+        "2026-09-16": -20,
+        "2026-09-17": 995,
+        "2026-09-19": -35,
+        "2026-09-20": -230,
+        "2026-09-21": 69.8,
+        "2026-09-24": 64.4
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-september-2026.png"
+    },
+    {
+      "key": "2026-08",
+      "label": "August 2026",
+      "profit": 53.12,
+      "roi": 0.4284,
+      "wins": 2,
+      "losses": 7,
+      "pushes": 1,
+      "updated": "2026-09-26T14:44:01",
+      "receipt": "img/zeno/pikkit-august-2026-2026-09-26.png",
+      "days": {
+        "2026-08-03": -5,
+        "2026-08-07": -4,
+        "2026-08-13": 94.3,
+        "2026-08-14": 37.8,
+        "2026-08-16": -5,
+        "2026-08-20": -25,
+        "2026-08-22": -20,
+        "2026-08-27": -20
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-august-2026.png"
+    },
+    {
+      "key": "2026-07",
+      "label": "July 2026",
+      "profit": 355.6,
+      "roi": 0.6199,
+      "wins": 13,
+      "losses": 41,
+      "pushes": 4,
+      "updated": "2026-09-26T14:44:07",
+      "receipt": "img/zeno/pikkit-july-2026-2026-09-26.png",
+      "days": {
+        "2026-07-06": 247,
+        "2026-07-07": -10,
+        "2026-07-10": 15.8,
+        "2026-07-11": 156,
+        "2026-07-13": -20,
+        "2026-07-18": -20,
+        "2026-07-19": -20,
+        "2026-07-21": -9.64,
+        "2026-07-24": 7.4,
+        "2026-07-25": -8.04,
+        "2026-07-26": 24.6,
+        "2026-07-27": -2.68,
+        "2026-07-29": -5.12
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-july-2026.png"
+    },
+    {
+      "key": "2026-06",
+      "label": "June 2026",
+      "profit": 260.93,
+      "roi": 0.4007,
+      "wins": 5,
+      "losses": 18,
+      "pushes": 1,
+      "updated": "2026-09-26T14:44:13",
+      "receipt": "img/zeno/pikkit-june-2026-2026-09-26.png",
+      "days": {
+        "2026-06-03": -20,
+        "2026-06-05": 28,
+        "2026-06-08": 260,
+        "2026-06-12": 128,
+        "2026-06-13": 92.3,
+        "2026-06-14": -25,
+        "2026-06-20": -100,
+        "2026-06-26": -10.1,
+        "2026-06-28": 37.9,
+        "2026-06-29": -100,
+        "2026-06-30": -30
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-june-2026.png"
+    }
+  ],
+  "days_note": "Pikkit's calendar cards round each day to three figures ($995, $68.3); the month's profit is Pikkit's exact figure. Open bets (Sep 27: $47 riding) are not counted."
+}

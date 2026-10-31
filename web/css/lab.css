@@ -1,0 +1,94 @@
+/* The inventions on the pick and game pages (js/lab.js), loaded with it. */
+.lb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; align-items: start; }
+.lb-card { display: grid; gap: 10px; align-content: start; padding: 14px; border-radius: var(--radius);
+  background: var(--panel); border: var(--hairline) solid transparent; min-width: 0; }
+.lb-card.lb-wide { grid-column: 1 / -1; }
+.lb-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.lb-card h3 { margin: 0; font-size: var(--fs-md); color: var(--text); }
+.lb-card header p { margin: 3px 0 0; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.lb-badge { flex-shrink: 0; padding: 2px 8px; border-radius: 999px; font-style: normal; font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; border: var(--hairline) solid transparent; background: color-mix(in oklab, currentColor 12%, transparent);
+  color: var(--text-mute); }
+.lb-badge.lb-ok { color: var(--good); }
+.lb-badge.lb-no { color: var(--bad); }
+.lb-badge.lb-wait { color: var(--gold); }
+.lb-badge.lb-info { color: var(--brand); }
+.lb-fine { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.lb-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.lb-stat { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2); min-width: 0; }
+.lb-stat span { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.lb-stat b { color: var(--text); font-family: var(--font-mono); font-size: var(--fs-md); overflow-wrap: anywhere; }
+.lb-stat.good b { color: var(--good); }
+.lb-stat.bad b { color: var(--bad); }
+.lb-tbl td.good { color: var(--good); }
+.lb-tbl td.bad { color: var(--bad); }
+
+/* 1. Do the books add up? */
+.lb-menu { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lb-menu li { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2);
+  border-left: 3px solid transparent; min-width: 0;
+  --tone: var(--text-faint);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
+.lb-menu li.flag { --tone: var(--gold); }
+.lb-m-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; color: var(--text-mute); font-size: var(--fs-xs); }
+.lb-book { color: var(--text); font-weight: 700; text-transform: capitalize; }
+.lb-m-b { color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); overflow-wrap: anywhere; }
+.lb-m-b b { color: var(--text); font-family: var(--font-mono); }
+.lb-z { font-family: var(--font-mono); color: var(--text-mute); }
+.lb-m-b .lb-lean { color: var(--gold); font-family: var(--font-sans); }
+.lb-m-legs { color: var(--text-mute); font-size: var(--fs-2xs); line-height: var(--lh-snug); overflow-wrap: anywhere; }
+
+/* 2. The market's whole curve. */
+.lb-curve { width: 100%; height: auto; display: block; }
+.lb-curve .lb-g { stroke: var(--border-soft); stroke-width: 1; }
+.lb-curve .lb-ax { fill: var(--text-mute); font-size: 9px; font-family: var(--font-mono); }
+.lb-curve .lb-mk { fill: none; stroke: var(--text-mute); stroke-width: 2; stroke-dasharray: 4 3; }
+.lb-curve .lb-us { fill: none; stroke: var(--brand); stroke-width: 2; }
+.lb-curve .lb-mk-d { fill: var(--text-mute); }
+.lb-curve .lb-us-d { fill: var(--brand); }
+.lb-key { display: flex; gap: 14px; color: var(--text-mute); font-size: var(--fs-xs); }
+.lb-key span::before { content: ""; display: inline-block; width: 14px; height: 2px; margin-right: 6px; vertical-align: middle; background: var(--brand); }
+.lb-key .mk::before { background: var(--text-mute); }
+.lb-read { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.lb-read b { color: var(--text); }
+.lb-scroll { overflow-x: auto; }
+.lb-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.lb-tbl th { padding: 4px 6px; text-align: right; color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; border-bottom: var(--hairline) solid var(--border); }
+.lb-tbl td { padding: 5px 6px; text-align: right; font-family: var(--font-mono); color: var(--text-dim);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.lb-tbl th:first-child, .lb-tbl td:first-child { text-align: left; font-family: var(--font-sans); color: var(--text); }
+.lb-tbl .pos { color: var(--good); }
+.lb-tbl .neg { color: var(--bad); }
+
+/* 4. Which books copy which. */
+.lb-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.lb-list b { color: var(--text); }
+.lb-more summary { cursor: pointer; color: var(--text-mute); font-size: var(--fs-xs); }
+.lb-more[open] summary { margin-bottom: 6px; }
+
+/* 6. Public attention. */
+.lb-spark { width: 100%; height: 50px; display: block; }
+.lb-spark polyline { fill: none; stroke: var(--brand); stroke-width: 2; }
+
+/* 10. A role change. */
+.lb-role { width: 100%; height: 56px; display: block; }
+.lb-role rect { fill: var(--text-mute); opacity: .55; }
+.lb-role rect.new { fill: var(--brand); opacity: 1; }
+.lb-role line { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* 11. Honest ranges. */
+.lb-range { width: 100%; height: 44px; display: block; }
+.lb-range .r80 { fill: var(--brand); opacity: .22; }
+.lb-range .r50 { fill: var(--brand); opacity: .5; }
+.lb-range .proj { stroke: var(--text); stroke-width: 2; }
+.lb-range .line { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.lb-range text { fill: var(--text-mute); font-size: 9px; font-family: var(--font-mono); }
+
+/* 12. The loss autopsy. */
+.lb-tags { display: flex; gap: 2px; border-radius: var(--radius-sm); overflow: hidden; font-size: var(--fs-2xs); font-weight: 700; }
+.lb-tag { min-width: 0; padding: 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); background: var(--panel-2); }
+.lb-tag.t-volume { background: color-mix(in srgb, var(--brand) 35%, transparent); }
+.lb-tag.t-efficiency { background: color-mix(in srgb, var(--bad) 30%, transparent); }
+.lb-tag.t-script { background: color-mix(in srgb, var(--good) 25%, transparent); }

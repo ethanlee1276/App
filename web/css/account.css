@@ -1,0 +1,983 @@
+/* THE ACCOUNT PAGES' STYLES — loaded with its pages' code the first time an account page (the account, plans, billing, My Bets, messages) opens
+   (app.js loadRoom, 2026-10-24). Every rule here was moved whole out of
+   styles.css, in its order there, because only these pages draw the classes
+   it names; the few that a later rule of styles.css might have outranked
+   stayed behind. Same tokens as the sheet. */
+/* ======================================================================
+   Friends — the invite card, the send picker, the inbox rows.
+   ====================================================================== */
+/* Friends: settings rows (account.js friendsCardHTML), a friend's initials
+   in the tile's place. */
+.qb-friends .msg-ava { width: 30px; height: 30px; font-size: var(--fs-2xs); }
+.qb-friends .fr-x { padding: 5px 12px; font-size: var(--fs-sm); }
+.pw-verify .pk-go { margin-left: 14px; }
+/* A second line under a name — "1 open" beside a book whose bets have
+   not settled. Its own line rather than a sixth column: it applies to
+   almost no rows almost all of the time, and a column that is empty for
+   everybody is a column that makes the table wider for nothing. */
+.agate-sub { display: block; font-weight: 400; font-size: var(--fs-2xs);
+  color: var(--text-mute); margin-top: 1px; }
+/* --- Accounts: email and password ----------------------------------------
+   Wraps rather than scrolls: on a phone the email, the password and the
+   two buttons stack, which is the only arrangement where all four stay
+   tappable at 390px. */
+/* The code box: a settings group (account.js codeBoxHTML), the field and
+   its button one row. On the code's own screen the screen's title says
+   what the group header would. */
+.code-row input { flex: 1 1 auto; min-width: 0; }
+.set-code .code-head { display: none; }
+/* Plan cards (render 21). Two, not three — there is one real plan, and
+   inventing tiers to fill a layout is the same sin as inventing a
+   number. The raised card is the paid one, as in the render. */
+/* ONE CARD NOW, not two. This was `1fr 1fr` for the Free-vs-Paid split;
+   with the free card gone the survivor kept half the width and wore its
+   ribbon off the right edge. `auto-fit` with a floor lets one card take
+   a readable column and would still lay two out side by side if a second
+   ever returns — and `minmax(0, …)` because a grid track's default
+   minimum is its content, which is how a long feature line pushes a card
+   wider than its column. */
+.plan-grid { display: grid; gap: 12px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  margin-bottom: 12px; }
+/* Tucked INSIDE the corner it sits in. At top/right 0 on a card with a
+   1px border and a radius, the band's own square corner sat proud of the
+   rounded one — visible as a notch on the account page once the card
+   stopped being clipped by a narrow column. */
+.plan-band { position: absolute; top: 0; right: 0;
+  border-bottom-left-radius: var(--radius-sm);
+  padding: 3px 10px; background: var(--brand-solid); color: var(--brand-ink);
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; }
+.plan-name { color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.plan-price { font-family: var(--font-display); font-size: var(--fs-2xl);
+  font-weight: 800; margin: 4px 0 12px; }
+.plan-price span { display: block; font-family: var(--font-sans);
+  font-size: var(--fs-2xs); font-weight: 400; color: var(--text-mute);
+  letter-spacing: 0; text-transform: none; }
+/* The trial, on the account page's single plan card. */
+/* The prose is ONE span, deliberately. Bare text beside a <b> inside a
+   flex container becomes three anonymous flex items sitting in three
+   columns — which is what "Start with / 3 days free / on the monthly
+   plan" looked like on the account page before the span went in. */
+.plan-trial { display: flex; gap: 8px; align-items: baseline; margin: 12px 0 0;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--fill-subtle);
+  border: var(--hairline) solid transparent;
+  font-size: var(--fs-sm); color: var(--text-body);
+  line-height: var(--lh-snug); }
+.plan-trial .ic { color: var(--good); flex: none; }
+.plan-trial b { color: var(--text); }
+.plan-list { list-style: none; margin: 0; padding: 0; }
+.plan-list li { display: flex; gap: 8px; align-items: baseline;
+  font-size: var(--fs-sm); color: var(--text-dim); padding: 3px 0; }
+.plan-list li.yes .ic { color: var(--good); flex: none; }
+.plan-list li.no { color: var(--text-mute); }
+.plan-list li.no .ic { color: var(--text-mute); flex: none; }
+.plan-btn { width: 100%; margin-top: 14px; }
+.plan-cur { margin-top: 14px; text-align: center; color: var(--good);
+  font-size: var(--fs-xs); font-weight: 700; }
+@media (max-width: 700px) {
+  .plan-grid { grid-template-columns: 1fr; }
+}
+/* The Yahoo connect row. Wraps rather than scrolls: on a phone the code
+   box and its button end up stacked, which is the only arrangement where
+   both stay tappable. */
+.ld-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 8px; }
+.ld-connect .rank-input { flex: 1 1 220px; min-width: 0; }
+.rank-input { padding: 8px 11px; background: var(--panel-2); color: inherit;
+  font-family: inherit; font-size: var(--fs-sm);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius); }
+/* ---------------- The account screen -------------------------------------
+   Ethan, 2026-08-16: "it needs to look professional."
+
+   A NARROW MEASURE IS THE POINT HERE, and it is the opposite of the rule
+   everywhere else on this site. Every other page is a data table that
+   wants width; a sign-in screen has exactly one thing to do, and stretched
+   to the width of the board its two fields float in a field of nothing —
+   which is precisely what "not professional" looked like. `--measure-tight`
+   is the token already used for reading columns, so this borrows the
+   site's own answer rather than inventing a number. */
+.acct-screen { max-width: var(--measure-tight); margin: 0 auto 28px; }
+/* Signed out, the settings list sits under the sign-in column, centred
+   with it rather than pinned to the page's left edge. */
+.acct-screen ~ .qb-settings { margin-inline: auto; }
+/* Render 1/2's sign-in screen: the wordmark and a tagline over the card,
+   centred, on the same violet wash every card carries. Their tagline
+   promised profit; ours says what the page does. */
+.acct-hero { display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding: 26px 0 22px; text-align: center; }
+.acct-hero-mark { width: 44px; height: 44px; display: grid;
+  place-items: center; }
+.acct-hero-mark .qmark { width: 100%; height: 100%; }
+.acct-hero-words { font-family: var(--font-display); font-size: var(--fs-xl);
+  font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.acct-hero-words span { color: var(--text-mute); font-weight: 600; }
+.acct-hero-tag { color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.acct-hero-sub { margin-top: 6px; }
+.acct-screen-sub { margin: 4px 0 0; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-body); }
+/* The promises under the form. Not decoration: the objection a
+   signed-out visitor actually has is "what are you going to do with my
+   details", and answering it beside the button is worth more than
+   answering it in a policy page nobody opens. One quiet line since
+   2026-10-25 (docs/VISUAL_AUDIT.md S7): a list of ticks under a sign-in
+   form reads as an advert. */
+.acct-assure { margin: 16px 8px 0; color: var(--text-mute); font-size: var(--fs-xs);
+  line-height: var(--lh-snug); text-align: center; }
+/* The form, at a sign-in measure. `.acct-row` is a wrapping flex row built
+   for a card the width of the board; at 30rem it wrapped into a ragged
+   three-row arrangement — email full width, then password sharing a line
+   with a button, then a button alone. Stacked, it reads as one sequence
+   with one obvious action at the end, which is what a sign-in screen is. */
+.acct-screen .acct-row { flex-direction: column; align-items: stretch; gap: 10px; }
+.acct-screen .acct-row input { flex: 1 1 auto; width: 100%; }
+.acct-screen .acct-row .btn { width: 100%; justify-content: center; }
+.acct-screen .card { padding: 20px; }
+.acct-screen .acct-confirm { margin-top: 14px; }
+/* The two explanatory paragraphs stay — they answer real questions — but
+   they are support, not the point, and at full body size they outweighed
+   the form they sit under. */
+.acct-screen .rank-help { font-size: var(--fs-xs); }
+/* The login panel: a welcome, the two labelled fields, one gold action,
+   and the sign-up route underneath rather than beside. Two equally
+   weighted buttons make a returning customer read both before pressing
+   either. The eye that sat over the welcome went (2026-10-25): the
+   wordmark above already says whose door this is. */
+.acct-card-h { margin: 0 0 14px; font-family: var(--font-display); font-size: var(--fs-xl);
+  font-weight: 700; line-height: var(--lh-tight); text-align: center; }
+.acct-screen .acct-alt .btn { width: auto; }
+.acct-signin .acct-fine { margin: 0; text-align: center; }
+.acct-signin::before { content: none; }
+.acct-signin:hover { transform: none; }
+.acct-signin > .acct-note:empty { display: none; }
+.acct-screen .acct-row .btn.primary { min-height: 46px; }
+.pw-hero { text-align: center; padding: 26px 16px 30px; }
+/* Why the wall is up, when it is a lapse (pwLapseHTML). A row, not the
+   card's column, and the card's own accent bar in the warning colour. */
+.pw-lapse { --grade-color: var(--warn); flex-direction: row; flex-wrap: wrap;
+  align-items: center; gap: 10px 16px; margin: 14px 16px 0; padding: 14px 16px 14px 20px; }
+.pw-lapse p { margin: 0; flex: 1 1 260px; line-height: var(--lh-snug); }
+/* What they missed since (pwSinceHTML): the Record's numbers from the day the plan ended. */
+.pw-since { flex-basis: 100%; display: grid; grid-template-columns: auto auto auto 1fr; align-items: baseline; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent; background: var(--panel);
+  color: var(--text-dim); font-size: var(--fs-sm); text-decoration: none; }
+.pw-since b { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
+.pw-since .pos { color: var(--good); font-family: var(--font-mono); font-weight: 800; }
+.pw-since .neg { color: var(--bad); font-family: var(--font-mono); font-weight: 800; }
+.pw-since i { justify-self: end; display: inline-flex; align-items: center; gap: 4px; font-style: normal; color: var(--brand);
+  font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
+@media (max-width: 420px) { .pw-since { grid-template-columns: auto auto 1fr; } .pw-since > span:first-child { grid-column: 1 / -1; } }
+.pw-h1 { font-size: clamp(34px, 6vw, 62px); font-weight: 900;
+  letter-spacing: -.01em; line-height: var(--lh-tight); margin: 0; }
+.pw-h1 em { font-style: normal; color: var(--brand-2); }
+.pw-sub { font-size: var(--fs-xl); font-weight: 700; margin: 12px 0 0; }
+/* The hero's two doors (audit item 7): the trial, then the record. */
+.pw-cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 18px 0 4px; }
+.pw-cta .btn { min-height: 44px; padding: 10px 20px; font-size: var(--fs-md); text-decoration: none; }
+.pw-lede { color: var(--text-mute); max-width: var(--measure-tight); margin: 10px auto 0;
+  line-height: var(--lh-snug); }
+.pw-sports { display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 8px; margin-top: 20px; }
+.pw-sport { padding: 6px 13px; border-radius: 999px; font-size: var(--fs-sm);
+  font-weight: 700; background: var(--panel-2);
+  border: var(--hairline) solid transparent; }
+.pw-h2 { text-align: center; font-size: clamp(22px, 3vw, 30px);
+  font-weight: 800; margin: 38px 0 4px; }
+.pw-h2 em { font-style: normal; color: var(--brand-2); }
+.pw-h2sub { text-align: center; color: var(--text-mute); margin: 0 auto 18px;
+  max-width: var(--measure-tight); }
+/* Ask Qellys on the paywall (pwAskHTML): the Ask page's own bubbles and
+   dots in a preview card, beside what it does. */
+.pw-ask { margin-top: 38px; }
+.pw-ask .pw-h2 { margin-top: 0; }
+       /* the pill above it carries the section's gap */
+.pw-ask-grid { display: grid; gap: 18px; margin-top: 18px; align-items: center;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .pw-ask-grid { grid-template-columns: minmax(0, 1fr); } }
+.pw-ask-demo { display: flex; flex-direction: column; gap: 12px; padding: 14px; pointer-events: none;
+  border: var(--hairline) solid transparent; border-radius: var(--radius-lg); background: var(--panel); }
+.pw-ask-scene { display: block; max-width: 760px; margin: 0 auto 4px; }
+.pw-ask-scene img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg);
+  border: var(--hairline) solid transparent; }
+.pw-ask-bar { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; color: var(--gold);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pw-ask-bar b { color: var(--text); font-size: var(--fs-lg); }
+.pw-ask-bar em { font-style: normal; color: var(--gold); }
+/* A line, not a box: the preview carries no message box, so it cannot be
+   mistaken for a chat the page lets you use. */
+.pw-ask-incl { display: flex; align-items: center; justify-content: center; gap: 6px; padding-top: 10px;
+  border-top: var(--hairline) solid var(--border-soft); color: var(--text-mute); font-size: var(--fs-xs); }
+.pw-ask-incl svg { color: var(--gold); }
+.pw-ask-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.pw-ask-points li { display: flex; align-items: flex-start; gap: 10px; color: var(--text); font-size: var(--fs-md); }
+.pw-ask-points li svg { flex-shrink: 0; margin-top: 3px; color: var(--gold); }
+.pw-feats { display: grid; gap: 12px; margin-top: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.pw-feat { padding: 18px 16px; text-align: center; }
+.pw-feat-ic { color: var(--brand-2); margin-bottom: 8px; }
+.pw-feat h3 { margin: 0 0 6px; font-size: var(--fs-md); font-weight: 800; }
+.pw-feat p { margin: 0; color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); }
+.pw-plan { position: relative; padding: 22px 20px; text-align: center; }
+.pw-plan.pop { border-color: transparent;
+  background: color-mix(in oklab, var(--brand) 7%, var(--panel-2)); }
+/* `.card` is `overflow: hidden` — every card on the site is, so a table
+   or a chart cannot spill past the rounded corner. That clipped the one
+   thing deliberately drawn OUTSIDE the card: the ribbon sat at top:-11px
+   and was sliced in half by its own parent. Room above the grid does not
+   help, because the cut is the card's, not the grid's.
+
+   So the pill sits INSIDE the top edge instead of straddling it. Same
+   read, nothing cropped, and no `overflow: visible` exception that would
+   let some future table escape a card too. */
+.pw-plan.pop { overflow: visible; }
+.pw-tag { position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  padding: 3px 12px; border-radius: 999px; background: var(--brand-solid);
+  color: var(--brand-ink); font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+/* THE TRIAL RIBBON, on the monthly card only. Same geometry as the
+   "Most popular" ribbon it sits beside on a different card — and the
+   same `overflow: visible`, without which the parent .card clips it to
+   a sliver, which is exactly how the popular ribbon was broken once
+   already. Green rather than violet: it is the one thing on the page
+   that costs nothing, and it should not read as another price. */
+.pw-plan.pw-trial { overflow: visible; border-color: transparent; background-color: color-mix(in oklab, var(--good) 8%, var(--panel-2)); }
+.pw-tag-trial { background: var(--good); color: var(--brand-ink); }
+.pw-plan-sub { color: var(--text-mute); font-size: var(--fs-sm); margin-top: 2px; }
+.pw-longer { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pw-longer-h { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; padding: 4px 2px 0; }
+.pw-long { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+  padding: 14px 16px; text-align: left; }
+.pw-long.best { border-color: transparent;
+  background: color-mix(in oklab, var(--brand) 7%, var(--panel-2)); }
+.pw-long-what { flex: 1 1 170px; min-width: 0; }
+.pw-long-what b { font-size: var(--fs-md); font-weight: 800; }
+.pw-long-price { display: block; margin-top: 2px; color: var(--text-mute);
+  font-family: var(--font-mono); font-size: var(--fs-sm); }
+.pw-best { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--brand-solid);
+  color: var(--brand-ink); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; vertical-align: 2px; }
+.pw-buy.pw-buy-sm { width: auto; padding: 9px 18px; font-size: var(--fs-sm); }
+.pw-longer-note { color: var(--text-mute); font-size: var(--fs-xs); margin: 2px 2px 0; }
+.pw-plan-name { font-size: var(--fs-md); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--brand-2); }
+.pw-price { font-size: var(--fs-price); font-weight: 900; line-height: var(--lh-tight);
+  font-variant-numeric: tabular-nums; margin-top: 6px; }
+.pw-price .cur { font-size: var(--fs-2xl); vertical-align: super; font-weight: 800; }
+.pw-price i { font-style: normal; font-size: var(--fs-md); font-weight: 600;
+  color: var(--text-mute); }
+.pw-save { color: var(--good); font-weight: 700; font-size: var(--fs-sm);
+  min-height: 1.3em; }
+.pw-save.flat { visibility: hidden; }
+.pw-cadence { color: var(--text-mute); font-size: var(--fs-sm); margin-top: 2px; }
+.pw-fine { color: var(--text-mute); font-size: var(--fs-2xs); margin-top: 8px; }
+.pw-proof { margin-top: 22px; padding: 18px 20px; border-radius: var(--radius);
+  border: var(--hairline) solid transparent;
+  background: color-mix(in oklab, var(--good) 6%, var(--panel-2)); }
+.pw-proof-head { display: flex; align-items: center; gap: 8px;
+  font-weight: 800; color: var(--good); margin-bottom: 10px; }
+.pw-proof p { margin: 12px 0 0; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pw-stats { display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.pw-stat b { display: block; font-size: var(--fs-2xl); font-weight: 800;
+  font-variant-numeric: tabular-nums; line-height: var(--lh-tight); }
+.pw-stat b.pos { color: var(--good); }
+ .pw-stat b.neg { color: var(--bad); }
+.pw-stat span { display: block; color: var(--text-mute); font-size: var(--fs-2xs); }
+/* THE RESULTS STRIP IN THE HERO, above the price.
+   Its own block rather than `.pw-proof` reused: the proof card is a
+   panel with a heading and a paragraph, and the hero wants four numbers
+   and one line. Bordered top and bottom rather than boxed — a card here
+   would read as another feature tile in a page already full of them,
+   and these are the only figures on the page that are measurements. */
+/* Audit item 4: the four checkable facts under the receipts. */
+.pw-verify { margin: 18px auto 0; max-width: 760px; text-align: center; }
+.pw-verify-h { display: block; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
+.pw-verify-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap;
+  justify-content: center; gap: 6px 18px; color: var(--text-dim); font-size: var(--fs-sm); }
+.pw-verify-list li { display: inline-flex; align-items: center; gap: 6px; }
+.pw-verify-list .ico-mark { color: var(--good); }
+.pw-verify-go { display: inline-flex; align-items: center; min-height: 24px; margin-top: 10px; color: var(--brand-2); font-weight: 700;
+  font-size: var(--fs-sm); text-decoration: none; }
+.pw-results { margin: 22px auto 4px; max-width: 760px;
+  padding: 16px 0 14px;
+  border-top: var(--hairline); border-bottom: var(--hairline); }
+.pw-results .pw-stats { margin: 0; }
+/* v5: the ribbon leads the strip; two tiles beneath it, not four. */
+.pw-results .rec-ribbons { margin: 0 0 12px; text-align: left; }
+.pw-results .pw-stats-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pw-results .pw-stat b { font-size: var(--fs-2xl); }
+.pw-results-note { margin: 12px 0 0; color: var(--text-mute);
+  font-size: var(--fs-2xs); line-height: var(--lh-body); }
+@media (max-width: 620px) {
+  /* Two up, not four: four columns on a phone sets the record as
+     "187–" on one line and "155" on the next, which reads as two
+     numbers rather than one. */
+  .pw-results .pw-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.pw-faq { padding: 4px 18px; }
+.pw-q { border-bottom: var(--hairline) solid var(--border-soft); }
+.pw-q:last-child { border-bottom: 0; }
+.pw-q summary { padding: 14px 0; cursor: pointer; font-weight: 700;
+  list-style: none; }
+.pw-q summary::-webkit-details-marker { display: none; }
+.pw-q summary::after { content: "+"; float: right; color: var(--text-mute); }
+.pw-q[open] summary::after { content: "\2212"; }
+.pw-q p { margin: 0 0 14px; color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); }
+.pw-foot { margin-top: 26px; padding-top: 18px; text-align: center;
+  border-top: var(--hairline) solid var(--border-soft); }
+.pw-foot p { color: var(--text-mute); font-size: var(--fs-sm); margin: 0 0 8px; }
+/* The masthead the wall has to draw for itself. `body.walled` hides the
+   site's real one, and the render (2026-08-20) opens with a logo and a
+   Log In button — which is not decoration: somebody who already pays and
+   is merely signed out lands here, and without that button the wall has
+   no door. */
+.pw-top { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 6px 2px 2px; }
+.pw-brand { display: inline-flex; align-items: center; gap: 9px;
+  color: var(--text); }
+.pw-brand-words { font-weight: 800; letter-spacing: .1em;
+  font-size: var(--fs-md); }
+.pw-brand-words b { color: var(--brand-2); font-weight: 800; }
+.pw-brand.small .pw-brand-words { font-size: var(--fs-sm); }
+.pw-login { flex: none; }
+/* Instagram, on the wall. The top bar is hidden behind `body.walled`, so
+   the bar's copy of this icon is invisible to exactly the visitor most
+   worth showing it to. `margin-right: auto` keeps it beside the wordmark
+   rather than joining the buttons on the right. */
+.pw-ig { display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; margin-right: auto; flex: none;
+  border-radius: 50%; color: var(--text-mute);
+  transition: color var(--dur-fast) var(--ease-out),
+              background-color var(--dur-fast) var(--ease-out); }
+.pw-ig:hover { color: var(--brand-2); background: var(--fill-hover); }
+/* WHO YOU ARE, on the wall itself. A signed-in reader who has not
+   subscribed lands here, and the header used to greet them with "Log in"
+   — which reads as "that did not work" to somebody who just did. The
+   address is the proof; the button beside it goes to the account page.
+   It collapses to the word alone on a phone: an email is as wide as it
+   likes and this row has a brand mark and a button in it already. */
+.pw-who { display: inline-flex; flex-direction: column; align-items: flex-end;
+  gap: 1px; margin-left: auto; min-width: 0; line-height: var(--lh-tight); }
+.pw-who b { font-size: var(--fs-2xs); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-mute); font-weight: 800; }
+.pw-who span { font-size: var(--fs-xs); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 34ch; }
+@media (max-width: 560px) {
+  .pw-who span { display: none; }
+}
+/* Sport chips: icon + name, and no league marks — see PW_SPORTS. */
+.pw-sport { display: inline-flex; align-items: center; gap: 7px; }
+/* THE EMOJI ON A SPORT CHIP. Named rather than left to inherit, for two
+   reasons that both bit the drawn set first:
+
+   The FONT. `--font-sans` is self-hosted and has no emoji glyphs, so the
+   browser falls back per-codepoint to whatever it likes. Naming the
+   system emoji families keeps that choice explicit and stops a future
+   webfont from being asked to render a baseball.
+
+   The BASELINE. An emoji is a text glyph, so it rides the baseline and
+   drifts every time the type ramp moves — which is the exact complaint
+   in tests/test_icons.py's header. `line-height: 1` and the flex row
+   centre it against the label instead.
+
+   It is deliberately one step ABOVE the label. The chip's text is
+   --fs-sm and a baseball at 12.5px is a smudge; --fs-lg is the next
+   value on the ramp and reads at arm's length. Still a token, so it
+   moves with the ramp rather than beside it. */
+.pw-emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji",
+  "Noto Color Emoji", sans-serif;
+  font-size: var(--fs-lg); line-height: 1; flex: none;
+  /* Emoji are already coloured; inheriting --brand-2 does nothing on a
+     colour glyph and would silently do something on a monochrome
+     fallback. Said once here so nobody adds a colour later expecting it
+     to take. */
+  font-variant-emoji: emoji; }
+/* The card version: same glyph, bigger, and it replaced a 20px drawn
+   mark so it takes that size rather than the chip's. */
+.pw-emoji.lg { font-size: var(--fs-2xl); }
+.pw-sport .ico-mark { color: var(--brand-2); }
+/* The price and its saving on ONE line, as a pill, which is where the
+   render puts it. Underneath it read as a footnote and the whole point
+   of the number is that it is the reason to pick the longer plan. */
+.pw-price-row { display: flex; align-items: center; justify-content: center;
+  gap: 10px; flex-wrap: wrap; }
+.pw-save { display: inline-block; padding: 3px 9px; border-radius: 999px;
+  background: color-mix(in oklab, var(--good) 18%, transparent);
+  color: var(--good); font-weight: 700; font-size: var(--fs-xs);
+  white-space: nowrap; }
+.pw-buy[disabled] { opacity: .55; cursor: not-allowed; }
+/* Guarantee beside the record strip. Two claims side by side, and only
+   one of them is a promise we make — the other is arithmetic. */
+.pw-trust { display: grid; gap: 12px; margin-top: 22px;
+  grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  .pw-trust { grid-template-columns: minmax(0, 21rem) minmax(0, 1fr);
+    align-items: stretch; }
+  .pw-trust .pw-proof { margin-top: 0; }
+}
+.pw-guar { display: flex; gap: 13px; align-items: flex-start;
+  padding: 18px 20px; border-radius: var(--radius);
+  border: var(--hairline) solid transparent; background: var(--panel); }
+.pw-guar-ic { color: var(--brand-2); flex: none; }
+/* The "Account created" flag from the render. A status line, not an
+   alert — it reports something that already happened successfully, so it
+   is quiet, and it scrolls away with the page rather than following the
+   reader down it. */
+.dc-toast { display: flex; align-items: center; gap: 11px;
+  /* Clear of the sticky topbar. At margin 0 its top edge landed three
+     pixels under the bar's bottom and the first line was shaved off. */
+  width: fit-content; margin: 14px 0 18px auto; padding: 11px 16px;
+  border-radius: var(--radius-lg); background: var(--panel);
+  border: var(--hairline) solid transparent; }
+.dc-toast-ic { display: inline-flex; color: var(--good); flex: none; }
+.dc-toast b { display: block; font-size: var(--fs-md); }
+.dc-toast span { display: block; font-size: var(--fs-sm);
+  color: var(--text-mute); }
+.dc-hero { text-align: center; padding: 18px 0 30px;
+  background: var(--grad-card); }
+.dc-eyebrow { margin: 0 0 6px; font-size: var(--fs-sm); font-weight: 800;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--brand-2); }
+.dc-h1 { margin: 0; font-family: var(--font-display);
+  font-size: var(--fs-price); letter-spacing: .02em; line-height: var(--lh-tight); }
+.dc-h1 b { color: var(--gold); font-weight: inherit; }
+.dc-lede { margin: 12px auto 0; font-size: var(--fs-xl);
+  color: var(--text); max-width: var(--measure-tight); }
+.dc-h2 { margin: 0 0 12px; font-family: var(--font-display);
+  font-size: var(--fs-2xl); line-height: var(--lh-tight); }
+.dc-h2 em { font-style: normal; color: var(--brand-2); }
+.dc-h2-mid { margin: 34px 0 14px; text-align: center; }
+.dc-body { margin: 0 0 12px; font-size: var(--fs-md); color: var(--text-body);
+  line-height: var(--lh-body); max-width: var(--measure); }
+.dc-body a { color: var(--brand-2); }
+/* Words beside the room list. One column on a phone, and the list goes
+   SECOND there — it is an illustration, and an illustration above the
+   sentence explaining it is decoration. */
+.dc-main { display: grid; gap: 22px; padding: 22px;
+  grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) {
+  .dc-main { grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+    gap: 30px; padding: 28px; }
+}
+.dc-perks { list-style: none; margin: 16px 0 0; padding: 0; display: grid;
+  gap: 9px; }
+.dc-perks li { display: flex; align-items: flex-start; gap: 10px;
+  font-size: var(--fs-md); color: var(--text); line-height: var(--lh-snug); }
+.dc-perks .ico-mark { color: var(--brand-2); flex: none; margin-top: 1px; }
+/* The channel list. An ILLUSTRATION of the room, and it is careful about
+   it: real channel names, no invented messages, no invented members and
+   no reaction counts. A mocked-up feed of picks that nobody posted would
+   be a track record this site did not earn, and there is a Record page
+   precisely because claims here have to be real ones. */
+.dc-mock { border-radius: var(--radius); background: var(--bg-2);
+  border: var(--hairline) solid transparent; padding: 14px;
+  min-width: 0; overflow: hidden; }
+.dc-mock-head { display: flex; align-items: center; gap: 8px;
+  padding-bottom: 10px; margin-bottom: 10px;
+  border-bottom: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); letter-spacing: .06em; }
+.dc-mock-head .ico-mark { color: var(--brand-2); }
+/* --text-mute, not --text-faint. The faint token is on an eight-use
+   budget that tests/test_contrast.py enforces, and it is spent on marks
+   that are not text at all — a grade stripe, two separator glyphs. These
+   are words, small and quiet ones, and the budget is worth more than the
+   two shades. */
+.dc-mock-group { font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--text-mute);
+  margin: 12px 0 5px; }
+.dc-mock-group:first-of-type { margin-top: 0; }
+.dc-mock-list { list-style: none; margin: 0; padding: 0; }
+.dc-mock-list li { display: flex; align-items: center; gap: 6px;
+  padding: 4px 7px; border-radius: var(--radius-sm);
+  font-size: var(--fs-sm); color: var(--text-dim); }
+.dc-hash { color: var(--text-mute); font-weight: 700; }
+/* The band with the one button in it. */
+.dc-cta { display: grid; gap: 16px; align-items: center; padding: 22px;
+  margin-top: 18px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) {
+  .dc-cta { grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; }
+}
+.dc-cta-ic { display: inline-flex; align-items: center; justify-content: center;
+  width: 60px; height: 60px; border-radius: var(--radius-lg);
+  background: var(--grad-chip); color: var(--brand-2); flex: none; }
+.dc-cta-words .dc-body { margin: 0; }
+.dc-cta-go { display: flex; flex-direction: column; align-items: flex-start;
+  gap: 8px; }
+@media (min-width: 760px) {
+  .dc-cta-go { align-items: flex-end; text-align: right; }
+}
+.dc-go:hover { background: var(--brand-solid); color: var(--brand-ink); }
+.dc-go .ico-mark { color: currentColor; }
+.dc-fine { display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+.dc-fine .ic { color: var(--good); }
+.dc-grid { display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.dc-card { padding: 20px; text-align: center; }
+.dc-card-ic { display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%; margin-bottom: 10px;
+  background: var(--grad-chip); color: var(--brand-2); }
+.dc-card h3 { margin: 0 0 6px; font-size: var(--fs-lg); }
+.dc-card p { margin: 0; font-size: var(--fs-sm); color: var(--text-mute);
+  line-height: var(--lh-snug); }
+.dc-foot { display: grid; gap: 18px; margin-top: 34px; padding-top: 20px;
+  border-top: var(--hairline) solid var(--border-soft);
+  grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) {
+  .dc-foot { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; }
+}
+.dc-foot b { display: flex; align-items: center; gap: 7px;
+  font-size: var(--fs-md); margin-bottom: 5px; }
+.dc-foot b .ic { color: var(--brand-2); }
+.dc-foot p { margin: 0; font-size: var(--fs-sm); color: var(--text-mute);
+  line-height: var(--lh-snug); }
+.dc-foot a { color: var(--brand-2); }
+.dc-foot .pw-brand { margin-bottom: 6px; }
+/* The nav row that leaves the site. Marked, because it is the only one
+   that does — and because the welcome screen carrying the invite is seen
+   once, so this row is how it gets found again. */
+.pw-guar b { display: block; font-size: var(--fs-md); }
+.pw-guar p { margin: 6px 0 0; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+/* FAQ, with the render's left-hand panel. */
+.pw-faqgrid { display: grid; gap: 12px; align-items: start;
+  grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  .pw-faqgrid { grid-template-columns: minmax(0, 20rem) minmax(0, 1fr); }
+}
+.pw-unlock { padding: 22px 20px; }
+.pw-unlock-ic { color: var(--brand-2); }
+.pw-unlock h3 { margin: 10px 0 6px; font-size: var(--fs-lg); font-weight: 800; }
+.pw-unlock p { margin: 0 0 14px; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pw-unlock-go { width: 100%; padding: 11px; font-weight: 700;
+  background: var(--brand-solid); color: var(--brand-ink); border-color: transparent; }
+.pw-unlock-go:hover { background: var(--brand-2); }
+/* Footer. The card names are NAMES (see PW_CARDS) — a row of brand logos
+   on a checkout page is the oldest tell in the fake-storefront book, and
+   we do not need it to say the true thing. */
+.pw-foot-top { display: flex; flex-wrap: wrap; gap: 16px 24px;
+  align-items: flex-start; justify-content: space-between; text-align: left;
+  padding-bottom: 16px; margin-bottom: 14px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pw-secure { max-width: var(--measure-tight); }
+.pw-secure-head { display: flex; align-items: center; gap: 7px;
+  font-weight: 700; font-size: var(--fs-sm); }
+.pw-secure-head .ico-mark { color: var(--good); }
+.pw-secure p { margin: 5px 0 9px !important; font-size: var(--fs-xs) !important; }
+.pw-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.pw-card { padding: 3px 9px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid transparent; background: var(--panel-2);
+  color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .04em; }
+.pw-copy { font-size: var(--fs-xs) !important; }
+.pw-copy a { color: var(--text-mute); }
+@media (max-width: 560px) {
+  .pw-hero { padding: 16px 4px 22px; }
+  /* The footer's two blocks stack rather than squeezing to one word each. */
+  .pw-foot-top { flex-direction: column; align-items: center;
+    text-align: center; }
+  .pw-secure-head, .pw-cards { justify-content: center; }
+  .pw-guar { padding: 15px 15px; }
+}
+.dc-feed { display: grid; gap: 10px; margin: 0 0 18px; }
+.dc-feed-post { display: block; padding: 14px 16px; white-space: pre-line; overflow-wrap: anywhere; font-size: var(--fs-sm); }
+.dc-feed-post b { display: inline; font-weight: 700; }
+.dc-feed-post time { display: block; color: var(--text-mute); font-size: var(--fs-2xs); margin-bottom: 6px; }
+.dc-feed-empty { color: var(--text-mute); }
+.dc-live { display: grid; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+.dc-live li { display: flex; gap: 10px; align-items: baseline; }
+.dc-live .dc-hash { color: var(--brand-2); font-weight: 800; }
+.pw-store .pw-hero { text-align: center; padding: 32px 16px 8px; }
+.pw-store .pw-store-go { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+
+/* The plans screen's pinned button on a phone (pwDock): above the tab bar,
+   gone once the plans themselves are on screen. Opacity and transform
+   only, inside the motion budget. */
+.pw-dock { display: none; }
+@media (max-width: 720px) {
+  .pw-dock { position: fixed; left: 12px; right: 12px; z-index: 55;
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px) - var(--tb-drop));
+    display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+    padding: 10px 12px; border: var(--hairline) solid transparent; border-radius: var(--radius-lg);
+    background: var(--panel); box-shadow: var(--glow-soft);
+    transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+  .pw-dock .pw-dock-go { width: 100%; }
+  .pw-dock .pw-dock-fine { text-align: center; font-size: var(--fs-xs); color: var(--text-mute); }
+  .pw-dock.away { opacity: 0; transform: translateY(10px); pointer-events: none; }
+  body.walled.on-wall .pw-dock { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* THE FIRST SCREEN (2026-10-25, Real's: a username or a log-in before
+   anything else): what the free account is for, over the form. */
+.welcome-hero { display: grid; justify-items: center; gap: 12px; text-align: center; margin: 6px auto 16px; max-width: 520px; }
+.welcome-mark { width: 64px; height: 64px; }
+.welcome-h { margin: 0; font-family: var(--font-headline); font-size: var(--fs-3xl); line-height: var(--lh-tight); color: var(--text); }
+.welcome-skip { margin-left: auto; color: var(--brand-2); }
+
+/* Real's first screens, ours (introHTML). */
+.wiz { display: grid; gap: 14px; max-width: 460px; margin: 0 auto; min-height: calc(100dvh - 48px); grid-template-rows: auto 1fr auto auto auto; }
+.wi-head { display: grid; grid-template-columns: 40px 1fr 56px; align-items: center; gap: 10px; padding-bottom: 12px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.wi-head .welcome-mark { width: 40px; height: 40px; }
+.wi-h { margin: 0; text-align: center; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
+.wi-skip { justify-self: end; border: 0; background: transparent; color: var(--text-mute); font: inherit; font-size: var(--fs-sm);
+  font-weight: 700; cursor: pointer; }
+.wi-stage { display: grid; align-content: start; justify-items: center; gap: 10px; text-align: center; padding-top: 10px; }
+.wi-lead { margin: 0; font-size: var(--fs-xl); color: var(--text); }
+.wi-arrow { color: var(--text-mute); font-size: var(--fs-xl); line-height: var(--lh-tight); }
+.wi-say { margin: 4px 0 0; max-width: var(--measure-tight); font-size: var(--fs-lg); line-height: var(--lh-snug); color: var(--text); }
+.wi-ex { margin: -4px 0 0; min-height: 1em; font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+.wi-card, .wi-thread, .wi-room { width: 100%; display: grid; gap: 4px; padding: 12px 14px; text-align: left; border-radius: var(--radius);
+  border: var(--hairline) solid transparent; background: var(--panel); }
+.wi-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-mute); }
+.wi-top b { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text); }
+.wi-rate { margin-left: auto; padding: 1px 7px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-weight: 800;
+  color: var(--text); background: color-mix(in oklab, var(--brand-2) 18%, var(--panel)); }
+.wi-chip { justify-self: start; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--brand-ink); background: var(--brand-2); }
+.wi-title { margin: 0; color: var(--brand-2); font-size: var(--fs-md); font-weight: 800; line-height: var(--lh-snug); }
+.wi-line { font-size: var(--fs-sm); color: var(--text-dim); }
+.wi-line b { color: var(--text); }
+.wi-win { font-size: var(--fs-xs); font-weight: 700; color: var(--text); }
+.wi-acts { display: flex; gap: 12px; margin-top: 4px; font-size: var(--fs-sm); color: var(--text-dim); }
+.wi-n { margin-left: auto; }
+.wi-msg { padding: 7px 10px; border-radius: var(--radius-sm); background: var(--bg); font-size: var(--fs-sm); color: var(--text); }
+.wi-msg b { color: var(--brand-2); margin-right: 4px; }
+.wi-vote { display: grid; grid-template-columns: auto 1fr 1fr; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-mute); }
+.wi-vote i { position: relative; overflow: hidden; isolation: isolate; font-style: normal; padding: 6px 8px; border-radius: 999px;
+  border: var(--hairline) solid transparent; color: var(--text); }
+.wi-vote i::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); z-index: -1;
+  background: color-mix(in oklab, var(--brand-2) 26%, transparent); }
+.wi-record { display: grid; justify-items: center; gap: 4px; padding: 18px 14px; width: 100%; border-radius: var(--radius);
+  border: var(--hairline) solid transparent; background: var(--panel); }
+.wi-record b { font-family: var(--font-mono); font-size: var(--fs-3xl); color: var(--text); }
+.wi-record span { font-size: var(--fs-sm); color: var(--text-mute); }
+.wi-bars { display: grid; grid-auto-flow: column; justify-content: center; gap: 8px; }
+.wi-bar { width: 44px; height: 4px; padding: 0; border: 0; border-radius: 999px; background: var(--border); cursor: pointer; }
+.wi-bar.on { background: var(--brand-2); }
+.wi-go { width: 100%; min-height: 50px; border-radius: 999px; font-size: var(--fs-md); }
+.wi-foot { display: flex; justify-content: center; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-mute); }
+
+/* Invite friends (invFill). */
+.inv-screen { display: grid; gap: 12px; }
+.inv-hero { display: grid; gap: 6px; padding: 14px; border-radius: var(--radius); border: var(--hairline) solid transparent;
+  background: var(--panel); }
+.inv-hero b { font-size: var(--fs-lg); color: var(--text); }
+.inv-hero p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.inv-hero .btn { justify-self: start; margin-top: 4px; }
+.inv-code { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 14px; border-radius: var(--radius);
+  border: var(--hairline) solid transparent; background: color-mix(in oklab, var(--brand-2) 10%, transparent); }
+.inv-k { grid-column: 1 / -1; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+.inv-code b { grid-column: 1 / -1; font-family: var(--font-mono); font-size: var(--fs-3xl); letter-spacing: .07em; color: var(--brand-2); }
+.inv-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.inv-add input { min-height: 44px; padding: 8px 12px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
+  background: var(--panel); color: var(--text); font: inherit; letter-spacing: .08em; text-transform: uppercase; }
+
+/* The sign-up screen's two promises (signupHTML, js/account.js): a mark and a sentence a
+   row, set like a settings list's footnotes. */
+.acct-promises { list-style: none; margin: 16px 0 0; padding: 12px 0 0; display: grid; gap: 10px;
+  border-top: var(--hairline) solid var(--border); }
+.acct-promises li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
+  font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); }
+.acct-promises li > :first-child { color: var(--brand); margin-top: 2px; }
+.pw-ref { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid transparent; background: var(--panel);
+  color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pw-ref b { color: var(--brand-2); font-family: var(--font-mono); }
+
+/* Follow your teams and players (followStep). */
+.fol { display: grid; gap: 12px; max-width: 560px; margin: 0 auto; }
+.fol-head { display: grid; gap: 4px; text-align: center; }
+.fol-head p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.fol-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.fol-tab { flex: none; padding: 7px 14px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--panel);
+  color: var(--text-dim); font: inherit; font-size: var(--fs-sm); font-weight: 800; cursor: pointer; }
+.fol-tab.on { color: var(--brand-ink); background: var(--brand-2); border-color: transparent; }
+.fol-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 46vh; overflow-y: auto;
+  padding: 2px; }
+.fol-team { display: grid; justify-items: center; gap: 6px; padding: 10px 6px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid transparent; background: var(--panel); color: var(--text-dim); font: inherit;
+  font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+.fol-team.on { color: var(--text); border-color: transparent; background: color-mix(in oklab, var(--brand-2) 14%, var(--panel)); }
+.fol-find { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.fol-find input { min-height: 42px; padding: 8px 12px; border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
+  background: var(--panel); color: var(--text); font: inherit; }
+.fol-hits { display: grid; gap: 6px; }
+.fol-hit { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 10px; padding: 9px 12px;
+  border-radius: var(--radius-sm); border: var(--hairline) solid transparent; background: var(--panel); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer; }
+.fol-hit span { grid-column: 1; font-size: var(--fs-xs); color: var(--text-mute); }
+.fol-hit i { grid-column: 2; grid-row: 1 / span 2; font-style: normal; font-size: var(--fs-xs); font-weight: 800; color: var(--brand-2); }
+.fol-hit.on i { color: var(--good); }
+.fol-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fol-chip { padding: 5px 10px; border-radius: 999px; border: 0; background: color-mix(in oklab, var(--brand-2) 18%, var(--panel));
+  color: var(--text); font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+.fol-n { margin: 0; text-align: center; font-size: var(--fs-xs); color: var(--text-mute); }
+
+/* THE FIRST SCREEN, DEEPER (Ethan, 2026-10-25: "show our paid features on
+   the sign up site"): the brand and Log in on top, then the form, then the
+   members' side — tonight's locked picks, Free beside Member, the last
+   graded pick, the plans and the trial's days (signupHTML, flMembersHTML). */
+.fsu { max-width: 600px; margin-inline: auto; }
+.fsu-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.fsu-brand { display: inline-flex; align-items: center; gap: 9px; }
+.fsu-words { font-family: var(--font-display); font-weight: 800; font-size: var(--fs-lg); letter-spacing: .02em; color: var(--text); }
+.fsu-words b { color: var(--brand); }
+.fsu-login { min-height: 36px; padding: 6px 16px; border-radius: 999px; }
+.fsu-why { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid transparent; background: var(--panel);
+  color: var(--text); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.fsu-why > :first-child { flex: none; color: var(--brand); }
+.fsu-sub { margin: 0; max-width: var(--measure-tight); color: var(--text-dim); font-size: var(--fs-md); line-height: var(--lh-snug); }
+/* How many are here (flProofHTML): two real counts under the promise. */
+.fl-proof { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin: 0; font-size: var(--fs-xs);
+  color: var(--text-mute); }
+.fl-proof b { color: var(--text); font-family: var(--font-mono); margin-right: 4px; }
+.fl-proof-live { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--good);
+  vertical-align: 1px; }
+.fl-proof-host:empty { display: none; }
+.fsu-plan-note { margin: 0 0 10px; color: var(--brand-2); font-size: var(--fs-sm); font-weight: 700; }
+.fsu-plan-note:empty { display: none; }
+
+/* Tonight for members: a card a league, its rows locked. */
+.fl-tonight { display: grid; gap: 10px; margin: 0 0 16px; padding: 14px; border-radius: var(--radius-lg);
+  border: var(--hairline) solid transparent; background: var(--grad-card), var(--panel); }
+.fl-tonight-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fl-tonight-h b { color: var(--text); font-size: var(--fs-md); }
+.fl-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--grad-brand);
+  color: var(--brand-ink); font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.fl-locks { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(132px, 1fr); gap: 8px; overflow-x: auto;
+  scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 2px; }
+.fl-locks::-webkit-scrollbar { display: none; }
+.fl-lock { display: grid; gap: 7px; align-content: start; min-height: 104px; padding: 10px 11px; border-radius: var(--radius);
+  border: var(--hairline) solid transparent; background: var(--panel-2); scroll-snap-align: start; }
+.fl-lock-top { display: flex; justify-content: space-between; gap: 6px; font-size: var(--fs-xs); color: var(--text-mute); }
+.fl-lock-top b { color: var(--text); font-family: var(--font-mono); white-space: nowrap; }
+.fl-lock i { display: block; height: 9px; border-radius: 4px; background: color-mix(in oklab, var(--text-mute) 30%, transparent);
+  filter: blur(2px); }
+.fl-lock i.s { width: 60%; }
+.fl-lock-ic { display: inline-flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--brand); font-size: var(--fs-2xs);
+  font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.fl-night { margin: 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.fl-night b { font-family: var(--font-mono); color: var(--text); }
+.fl-night a { color: var(--brand); }
+.fl-night .pos, .fl-rec .pos { color: var(--good); font-family: var(--font-mono); font-weight: 800; }
+.fl-night .neg, .fl-rec .neg { color: var(--bad); font-family: var(--font-mono); font-weight: 800; }
+
+/* Free beside Member. */
+.fl-members { display: grid; gap: 14px; margin: 22px 0 0; }
+.fl-h2 { margin: 0; font-family: var(--font-headline); font-size: var(--fs-2xl); line-height: var(--lh-tight); color: var(--text); }
+.fl-h3 { margin: 6px 0 0; font-size: var(--fs-md); font-weight: 800; color: var(--text); }
+.fl-twrap { overflow: visible; max-height: none; margin-top: 0; scrollbar-gutter: auto; }
+.fl-table { width: 100%; border-collapse: separate; border-spacing: 0; border: var(--hairline) solid transparent;
+  border-radius: var(--radius); overflow: hidden; background: var(--panel); font-size: var(--fs-sm); }
+.fl-table th, .fl-table td { padding: 9px 10px; border-top: var(--hairline) solid var(--border-soft); text-align: center;
+  vertical-align: middle; }
+.fl-table thead th { border-top: 0; font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-mute); }
+.fl-table tbody th { text-align: left; font-weight: 600; color: var(--text-dim); line-height: var(--lh-snug); }
+.fl-table tr.paid th { color: var(--text); }
+.fl-table td { width: 64px; }
+.fl-table .fl-mem { width: 72px; background: color-mix(in oklab, var(--brand) 9%, transparent); }
+.fl-table thead .fl-mem { color: var(--brand); }
+.fl-yes { display: inline-flex; color: var(--good); }
+.fl-mem .fl-yes { color: var(--brand); }
+.fl-no { color: var(--text-mute); }
+.fl-table .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The sample: the newest graded pick, as a member saw it. */
+.fl-last { display: grid; gap: 8px; }
+.fl-pick { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--radius); border: var(--hairline) solid transparent;
+  border-left: 3px solid transparent; background: var(--panel);
+  --tone: var(--text-mute);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone); }
+.fl-pick.won { --tone: var(--good); }
+.fl-pick.lost { --tone: var(--bad); }
+.fl-pick-top { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-xs); color: var(--text-mute); }
+.fl-res { font-family: var(--font-mono); color: var(--text); }
+.fl-pick.won .fl-res { color: var(--good); }
+.fl-pick.lost .fl-res { color: var(--bad); }
+.fl-pick-who { font-size: var(--fs-lg); color: var(--text); }
+.fl-pick-bet { font-size: var(--fs-sm); color: var(--text-dim); }
+.fl-pick-p { font-size: var(--fs-xs); font-weight: 700; color: var(--brand-2); }
+.fl-note, .fl-fine { margin: 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
+.fl-rec { display: grid; grid-template-columns: auto auto auto 1fr; align-items: baseline; gap: 10px; padding: 12px 14px;
+  border-radius: var(--radius); border: var(--hairline) solid transparent; background: var(--panel); color: var(--text-dim);
+  font-size: var(--fs-sm); text-decoration: none; }
+.fl-rec b { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
+.fl-rec i { justify-self: end; display: inline-flex; align-items: center; gap: 4px; font-style: normal; color: var(--brand);
+  font-size: var(--fs-xs); font-weight: 700; }
+
+/* The three plans, one row of choices. */
+.fl-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 6px; }
+.fl-plan { position: relative; display: grid; justify-items: center; align-content: start; gap: 3px; padding: 16px 6px 12px;
+  border-radius: var(--radius); border: var(--hairline) solid transparent; background: var(--panel); color: var(--text);
+  font: inherit; text-align: center; cursor: pointer; }
+.fl-plan:disabled { opacity: .55; cursor: default; }
+.fl-plan.best { border-color: transparent; box-shadow: var(--glow); background-color: color-mix(in oklab, var(--brand) 7%, var(--panel-2)); }
+.fl-plan b { font-size: var(--fs-sm); }
+.fl-plan-tag { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 2px 8px;
+  border-radius: 999px; background: var(--grad-brand); color: var(--brand-ink); font-size: var(--fs-2xs); font-weight: 900;
+  letter-spacing: .04em; }
+.fl-plan-tag.trial { background: var(--good); }
+.fl-plan-price { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 800; }
+.fl-plan-price i { display: block; font-style: normal; font-size: var(--fs-2xs); font-weight: 600; color: var(--text-mute); }
+.fl-plan-per { font-size: var(--fs-2xs); color: var(--text-mute); line-height: var(--lh-snug); }
+
+/* The trial's days, a line between three dots. */
+.fl-trial { list-style: none; margin: 0; padding: 0; display: grid; }
+.fl-trial li { position: relative; display: grid; grid-template-columns: 58px 1fr; gap: 10px; padding: 0 0 12px 22px;
+  font-size: var(--fs-sm); }
+.fl-trial li::before { content: ""; position: absolute; left: 3px; top: 5px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--brand); }
+.fl-trial li:not(:last-child)::after { content: ""; position: absolute; left: 7px; top: 16px; bottom: 0; width: 1px;
+  background: var(--border); }
+.fl-trial b { color: var(--text); }
+.fl-trial span { color: var(--text-dim); line-height: var(--lh-snug); }
+
+/* The form's button, along for the ride on a phone once the form is gone. */
+.fsu-dock { display: none; }
+@media (max-width: 720px) {
+  .fsu-dock { position: fixed; left: 12px; right: 12px; z-index: 55; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex; transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+  .fsu-dock .btn { width: 100%; min-height: 50px; border-radius: 999px; box-shadow: var(--glow-soft); }
+  .fsu-dock.away { opacity: 0; transform: translateY(10px); pointer-events: none; }
+}
+
+/* After the account: the offer, once (planStep). */
+.ps-step { display: grid; gap: 14px; justify-items: center; max-width: 460px; margin: 0 auto; padding-top: 10px; text-align: center; }
+.ps-done { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; color: var(--brand-ink);
+  background: var(--good); }
+.ps-h { margin: 0; font-family: var(--font-headline); font-size: var(--fs-3xl); line-height: var(--lh-tight); color: var(--text); }
+.ps-sub { margin: -6px 0 0; color: var(--text-dim); font-size: var(--fs-md); }
+.ps-card { display: grid; gap: 10px; justify-items: start; width: 100%; padding: 18px; text-align: left; border-radius: var(--radius-lg);
+  border: var(--hairline) solid transparent; background: var(--grad-card), var(--panel); box-shadow: var(--glow); }
+.ps-h2 { margin: 0; font-size: var(--fs-2xl); color: var(--text); }
+.ps-tonight { margin: 0; display: flex; align-items: center; gap: 7px; color: var(--text-dim); font-size: var(--fs-sm); }
+.ps-tonight:empty { display: none; }
+.ps-tonight > :first-child { color: var(--brand); }
+.ps-tonight b { color: var(--text); font-family: var(--font-mono); }
+.ps-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ps-list li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; font-size: var(--fs-sm); color: var(--text);
+  line-height: var(--lh-snug); }
+.ps-list li > :first-child { color: var(--brand); margin-top: 2px; }
+.ps-go, .ps-free { width: 100%; min-height: 50px; border-radius: 999px; font-size: var(--fs-md); }
+.ps-fine { margin: 0; font-size: var(--fs-xs); color: var(--text-mute); line-height: var(--lh-snug); }
+
+/* Why the plans opened (pwWhyHTML), and tonight's locked picks in the hero. */
+.pw-why { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; max-width: var(--measure);
+  margin: 0 auto 14px; padding: 12px 14px; border-radius: var(--radius); border: var(--hairline) solid transparent;
+  background: var(--grad-card), var(--panel); text-align: left; }
+.pw-why > :first-child { color: var(--brand); margin-top: 2px; }
+.pw-why b { color: var(--text); font-size: var(--fs-md); }
+.pw-why p { margin: 3px 0 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pw-fl:empty { display: none; }
+.pw-fl { max-width: 560px; margin: 16px auto 0; text-align: left; }
+
+/* Two ways in, at the top of the plans (pwDoorsHTML): the free account and
+   the membership side by side, each with its own button. */
+.pw-doors { max-width: 860px; margin: 6px auto 24px; text-align: center; }
+.pw-doors-h { margin: 0 0 14px; font-family: var(--font-headline); font-size: var(--fs-3xl); line-height: var(--lh-tight);
+  color: var(--text); }
+.pw-doors-h em { font-style: normal; color: var(--brand); }
+/* Not today (pwLaterHTML): the free picks-are-up alert under the two doors. */
+.pw-later { display: grid; justify-items: center; gap: 6px; margin: 16px auto 0; }
+.pw-later .btn { display: inline-flex; align-items: center; gap: 8px; }
+.pw-later-note { margin: 0; font-size: var(--fs-xs); color: var(--text-mute); }
+.pw-later.on { display: flex; justify-content: center; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-dim); }
+.pw-later-off { padding: 0; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 700; cursor: pointer; }
+.pw-doors-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
+@media (max-width: 640px) { .pw-doors-row { grid-template-columns: 1fr; } }
+.pw-door { display: grid; gap: 10px; align-content: start; padding: 16px; border-radius: var(--radius-lg);
+  border: var(--hairline) solid transparent; background: var(--panel); }
+.pw-door.mem { border-color: transparent; background: var(--grad-card), var(--panel); box-shadow: var(--glow); }
+.pw-door-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pw-door-top b { font-size: var(--fs-lg); color: var(--text); }
+.pw-door-you, .pw-door-tag { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 900;
+  letter-spacing: .04em; text-transform: uppercase; }
+.pw-door-you { background: color-mix(in oklab, var(--good) 18%, transparent); color: var(--good); }
+.pw-door-tag { background: var(--grad-brand); color: var(--brand-ink); }
+.pw-door-price { margin: -4px 0 0; color: var(--text-dim); font-size: var(--fs-sm); }
+.pw-door-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.pw-door-list li { display: grid; grid-template-columns: 16px 1fr; gap: 8px; font-size: var(--fs-sm); color: var(--text);
+  line-height: var(--lh-snug); }
+.pw-door-list li > :first-child { margin-top: 2px; color: var(--good); }
+.pw-door.mem .pw-door-list li > :first-child { color: var(--brand); }
+.pw-door-list .pw-door-plus { display: block; color: var(--text-dim); font-weight: 700; }
+.pw-door-go { width: 100%; min-height: 46px; margin-top: 4px; justify-content: center; }
+.pw-join { margin-left: 6px; }
+a.pw-door-go { text-decoration: none; }
+.pw-join, .pw-login { white-space: nowrap; }
+@media (max-width: 420px) {
+  .pw-top:has(.pw-join) .pw-brand-words { display: none; }
+}
+
+/* What brings you here? on the sign-up form (account.js suWhyHTML). */
+.acct-why-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.acct-why-b { padding: 7px 14px; border-radius: 999px; border: 0; background: var(--fill-tone); color: var(--text-dim);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.acct-why-b.on { background: color-mix(in oklab, var(--brand) 18%, transparent); color: var(--text); }
+
+/* Passkeys (Settings › Passkeys): a row's own Remove, a quiet pill. */
+.pk-rm { font: inherit; font-size: var(--fs-sm); color: var(--bad); background: var(--fill-tone-2); border: 0;
+  border-radius: var(--radius-sm); padding: 6px 12px; cursor: pointer; }
+.pk-rm:disabled { opacity: .5; cursor: default; }
+.pk-note:empty { display: none; }
+
+/* New message and Find people side by side (js/account.js renderMessages). */
+.inbox-acts { gap: 8px; }
+
+/* MAKE IT YOURS (mineSheet, 2026-10-29): two quick choices and, only where
+   the site keeps activity, an unticked yes. */
+.yours-card { display: grid; gap: 8px; }
+.yours-q { margin: 4px 0 0; font-size: var(--fs-xs); font-weight: 800; color: var(--text-mute); text-transform: uppercase; letter-spacing: .06em; }
+.yours-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.yours-chip { padding: 6px 12px; border-radius: 999px; border: var(--hairline) solid transparent; background: var(--fill-tone);
+  color: var(--text-body); font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; }
+.yours-chip.on { color: var(--brand-2); background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.yours-ok { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-body); }
+.yours-ok input { margin-top: 2px; }
+
+/* YOUR WEEKLY LIMIT on My Bets (mbLimitHTML; engine/limits): where the week
+   stands against the member's own number, amber once it is reached. */
+.wk-limit { display: grid; gap: 6px; padding: 12px 14px; }
+.wk-limit p { margin: 0; }
+.wk-limit-bar { height: 6px; border-radius: 999px; background: var(--fill-tone); overflow: hidden; }
+.wk-limit-bar i { display: block; height: 100%; border-radius: inherit; background: var(--good); }
+.wk-limit.over .wk-limit-bar i { background: var(--warn); }
+.wk-limit-go { background: none; border: 0; padding: 0; color: var(--brand-2); font: inherit; font-weight: 700; cursor: pointer; }
+
+/* YOUR EDGE REPORT on My Bets (mbEdgeHTML): one line a finding — what it
+   is, the number, and what the number is made of. */
+.edge-card { display: grid; gap: 2px; }
+.edge-row { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; align-items: baseline; padding: 8px 0; }
+.edge-k { font-size: var(--fs-sm); color: var(--text-mute); }
+.edge-row b { font-variant-numeric: tabular-nums; text-align: right; }
+.edge-row b.good { color: var(--good); }
+.edge-row b.warn { color: var(--warn); }
+.edge-row .mini { grid-column: 1 / -1; }
+.edge-foot { margin-top: 6px; }
+/* The closing-line leaderboard (js/account.js mbBoardHTML): the Edge
+   Report's rows, a place and a username in front. */
+.cb-chips { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 4px 0 6px; }
+.cb-rank { display: inline-block; min-width: 1.6em; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.cb-handle { color: var(--text-mute); font-size: var(--fs-xs); }
+.cb-row.me { background: var(--fill-subtle); border-radius: var(--radius-sm); padding-inline: 6px; }
+.cb-me { margin-top: 6px; }
+
+/* THE SMART PAYWALL (pwCaught): last week on the reader's own teams, as
+   counts, between tonight's cards and the plans. */
+.pw-caught { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius); background: var(--fill-tone); }
+.pw-caught p { margin: 0; line-height: var(--lh-snug); }
+.pw-caught .pw-caught-k { margin-bottom: 4px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-mute); }

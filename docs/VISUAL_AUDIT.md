@@ -1,0 +1,262 @@
+# Visual audit — 2026-10-25
+
+Ethan: *"we need to fix the visuals of the app. I need u to audit the whole
+thing. The settings and account area and shit like that is ugly and doesn't
+look like real settings and more shit like that is the same. Check all of
+it."*
+
+How it was checked: every page and screen (41 pages, the game, pick and
+team pages, the More sheet, the account page's four tabs, plans, sign-in,
+sign-up and reset), on an iPhone-size screen and a desktop, signed out and
+signed in as a member, screenshotted top to bottom and looked at one by one.
+Then again after the fixes, in both themes. Every row below is fixed.
+
+## What made the whole app look like a web form
+
+| # | Finding | Where | Fix |
+|---|---|---|---|
+| G1 | The page never told the browser it is dark (`color-scheme` unset), so the browser drew its light controls: a **white checkbox** on sign-up, a **white input** for the bankroll goal, **blue checkboxes** on Alerts, light date pickers and select menus | every form | `color-scheme: dark` on the theme (`light` on the light theme); gold checkboxes |
+| G2 | Every button **shouted**: uppercase with wide letter spacing (TONIGHT'S PICKS, LOG IN, SYNC NOW, COPY LINK, BACK TO THE BOARD) | every page | sentence case, the weight doing the work, pill shape, 40px tall |
+| G3 | A gold, spaced-out **"why?†"** beside nearly every page title, and gold spaced **"more"** links | every page | a quiet "Why?" chip; "More" as a plain link |
+| G4 | Subtitles under titles **start in lower case** ("every game in progress…", "pull up form…") — they were written to follow a dash that is gone | ~230 subtitles | the first letter capitalised |
+| G5 | **Selects** in three sizes and two fonts (the Toolbox's in monospace); no shared field style | Home, Most Likely, Toolbox, My Bets | one field style: dark, hairline, rounded, a drawn chevron |
+| G6 | **Buttons touching** and the next heading jammed under them | Live, Line Shopping | a gap between, room after |
+| G7 | A sentence broken into **columns** ("This / board is · Thu, / Jan 1 · — first one / starts in…") | Home's "next game" note | laid out as a sentence |
+| G8 | Streak's sign-in box with **square corners** and a square button, unlike everything else | The Streak | the shared radius and button |
+| G9 | A player's **name wrapping** to two lines because Copy link and the grade crowd it | Players | the name gets the row |
+
+## The account and settings area
+
+| # | Finding | Fix |
+|---|---|---|
+| S1 | The Settings tab was **a stack of cards**: a billing card holding the whole plans advert (price, nine ticks), two fantasy cards of paragraphs, then a "Settings" card of pill rows | rebuilt as a phone's own settings screen: grouped lists with a small header over each group, rows with an icon tile, the name, the value, a chevron or a switch |
+| S2 | Choices drawn as **rows of pills** (seven time zones), on/off as **two pills** (Team colours: Off / Your team; the two emails) | two or three options: a segmented control in the row; on/off: a switch; longer lists: their own screen with a check beside the one in force |
+| S3 | A **paragraph under every control** | one short footnote under a group where one is needed |
+| S4 | **Sign out and Delete account hidden** in a disclosure inside the billing card | their own rows at the bottom, in red |
+| S5 | The email **said twice** ("Sign-in & plan — you@… only you see this", then "Signed in — you@…") | once, as the Email row |
+| S6 | Desktop: the settings column **narrower than and offset from** the tabs above it | one column, aligned |
+| S7 | Sign-in: **placeholder-only fields**, the main action a **grey ghost button**, a decorative eye in the card head, two paragraphs and a list of ticks | labelled fields, a gold Log in, one line of assurance |
+| S8 | Sign-up: the **white checkbox**, placeholder-only fields, "Already have an account? LOG IN Forgot password?" crowded on one line | labelled fields, a gold checkbox, the links on their own lines |
+| S9 | Alerts on this phone: **blue checkboxes**, an "OFF" pill, TURN ALERTS ON | switches in a grouped list, a gold "Turn alerts on" |
+| S10 | My Bets' form: **square native selects and date box**, uppercase labels | the shared field style, sentence-case labels |
+| S11 | Bankroll: a **white native input** for the goal, and the bankroll and the unit sharing one borderless strip ("$ 1000 1 % / unit") | the shared field style; two labelled fields, what a unit comes to under them |
+| S12 | Membership's own screen: the plan in a box, a status sentence beside a ghost button, "HAVE A CODE?" over a code box that shouted its placeholder in capitals; **"Free"** for somebody with no plan, on a site that has none | rows: the plan, its price, when it renews; Manage billing as a row; the code as a field and a gold Apply; "No membership" |
+| S13 | Friends: a striped card, a section title with a Why? chip, friends as removable pills | a friend a row (their initials in the tile), Remove at the end; the invite link a group of its own |
+| S14 | Signed out, the fantasy link forms were drawn **twice** (on the sign-in screen and on Settings › Fantasy leagues), two elements with one id: the screen the reader opened stayed **empty** | drawn once, on their settings screen |
+| S15 | "Link a league" on the fantasy pages opened the account page at its top; signed in, the forms were three taps away | it opens Settings › Fantasy leagues and lands on it |
+
+## What a row does while it works
+
+Two buttons replaced their own text while they worked: Manage billing
+("Opening secure checkout…") and Copy my invite link ("Copied"). As rows,
+that would have flattened the row to a line of text, and Manage billing's
+error went looking for a card that a settings screen does not have (it
+would have thrown). A row keeps its tile and chevron; only its name says
+what is happening, and a billing error has its own line under the group.
+
+## Where it is held
+
+`tests/test_settings_read_like_a_phones_own.py` (the browser half drives
+the settings list, a screen and back, Membership, the sign-in screen and
+the Alerts switches), with the tests that pinned the old markup moved to
+the new: `test_account_settings`, `test_fantasy_links`, `test_tour`,
+`test_your_games_in_your_calendar`, `test_forgot_password`.
+
+# The Fantasy room — 2026-10-27
+
+Ethan: *"go through the visuals of the fantasy room as well. Like, look at
+how other fantasy apps and fantasy rooms and shit like that looks visually
+... It doesn't feel like a professionally built app."*
+
+How it was checked: every Fantasy tab, top to bottom, at a phone width (390)
+and a desktop width (1280), on the live site's own public files, then again
+after each change. The apps it was held against: ESPN's 2025 rebuild (a
+personal home first, a matchup view with the score pinned, live projections,
+action items), Yahoo's (more on screen at once), Sleeper (position colours,
+the matchup head-to-head), FantasyPros (ranges, tiers, start/sit).
+
+| # | Finding | Fix |
+|---|---|---|
+| F1 | The room opened on **onboarding and navigation, no content**: the Fantasy 101 card open on every visit (the whole first screen on a phone), four tiles of numbers nobody acts on (the season's year, a count of usage rows, of trade flags, of game scripts), and ten described cards before the first player | 101 opens on the first visit only, then as the reader left it, its steps as numbered tiles and its glossary folded; the four tiles became one line: the week, its games, who is on a bye; the rooms became app-style tiles with an icon (all eleven on one phone screen) |
+| F2 | **Your own league was the last room**, under the camp report, the offseason and the draft kit | "My team" is a room of its own, first, and opens first when a league is linked |
+| F3 | **Every card wore a brown wash** top to bottom: the gold glow's height was the card's, so a 4,000px list read muddy | the glow is a fixed 160px at the top of every card, site-wide; long lists are clean below it |
+| F4 | **Player rows were text**: "8 in 10 weeks 8.3–38.2" and "PPR this week" in typewriter type on every row, no position colours | one player row for the room: face, name and chips, a colour badge for the position (QB red, RB green, WR blue, TE orange, K purple, D/ST grey), the team's mark and the kickoff in the reader's time zone, the floor-to-ceiling range as a bar on one scale with his number marked, the number large on the right; a wide screen gives the bar its own column |
+| F5 | **Buy low / Sell high was one huge card a player** (GAP, ACTUAL, xFP boxes and the same sentence on every card): five players a phone screen | a row a player with a bar (scored against expected), the gap on the right, the sentence said once above the list: twelve players a screen (8,033 → 2,724px) |
+| F6 | **Waivers rows broke on a desktop** (the number fell to a line of its own) and repeated their note on every row | the same row, with a share bar from where his share was to where it is |
+| F7 | **The usage table broke on a phone**: the fantasy sheet re-showed the bar the phone rule hid, so every trend chip fell to its own line, and names ran to an ellipsis | the bar hidden again after the rule it must beat; the name over a line with the position badge |
+| F8 | The head-to-head card was **five paragraphs** between the score and the lineup | the odds as a bar under the number; how they are figured under a fold (every word kept) |
+| F9 | The league desk sat **under two long lists** (the roster's usage, the waiver watch) | both folded under their counts, so the live score, the to-do list and the lineup are a screen from the top; the lineup's slots wear their player's position colour |
+| F10 | "How these numbers are built" stood **between the reader and the list** on This week, and the byes were said twice | folded under the list; the byes on the room's first line |
+| F11 | Around the league listed **every rookie, a hundred rows** | twelve, the rest under a fold |
+
+Held by the tests that already pinned these pieces (moved to the new
+markup), plus `test_fantasy_101` (first visit open, then as left) and
+`test_fantasy_tonight` (the night's rows wear the same row and badges).
+
+# The whole app, pass one — 2026-10-27
+
+The same request, then "look at all the other visuals for everything else".
+Every main page (21 of them) at a phone and a desktop width, signed out, on
+the live site's own public files, laid side by side on one sheet so the
+things every page repeats show up as repeats.
+
+| # | Finding | Fix |
+|---|---|---|
+| A1 | **Every subtitle wore the amber rule**: a 2px gold bar and a block of text under every section title on every page, so pages read as documents | a short subtitle is a muted line under its title; the rule stays for an explanation the reader opened behind "why?" |
+| A2 | **Every card wore a stripe** down its left in the faintest colour when it had no grade: lists, forms and notes opened on a quotation bar | only a card with a grade (a pick's tier, a game bet, a long shot) wears one |
+| A3 | **The stadium band was a 44px dark strip on a phone** over the Record, Live, Edge and Most Likely titles, reading as a glitch | gone on a phone; a computer keeps its 64px band |
+| A4 | Row descriptions and fact chips in **typewriter type** ("QB · vs Cowboys", "3 games on the card") | the page's own type; prices and figures keep the mono |
+| A5 | **The Edge page had no name at the top**: it opened on its legend, and the picks' own heading three blocks down took the page title's size | "Edge picks" first, with its line; the picks' heading is a section head again |
+| A6 | The Record's scope buttons **shouted in tracked capitals** across three rows | sentence case, the same weight as every other filter |
+
+Checked after in both themes. Held by the tests that pinned each rule
+(moved to the new values): `test_the_venue_heads_the_proof_pages`,
+`test_an_empty_board_carries_the_card`, `test_controls_look_clickable`.
+
+# The lights on — 2026-10-27
+
+Ethan: "i feel like we can use more colors and shit throughout the site too
+to be more exciting and shit like that. animations and glowing shit." The
+apps people call exciting (PrizePicks' neon More/Less, Underdog's yellow on
+black, Sleeper's multi-hue accents and glowing live dots, DraftKings' and
+Robinhood's green/red glows, Apple Sports' team colours) all do the same
+three things: a colour per thing you can tell apart, light on what is live or
+chosen, and motion when something arrives. Gold stays the brand (his call,
+2026-08-23); around it:
+
+| # | What was flat | Now |
+|---|---|---|
+| L1 | **Every league was gold**: seven identical crests | each league its own colour (football gold, college blaze, baseball sky, basketball violet, the WNBA coral, hockey ice, the UFC red); the open one ringed and glowing in it, on a phone and on the desktop's pills |
+| L2 | **Every page the same black** whatever league was open | the top of every page glows in the league in view, and a section's icon wears it |
+| L3 | **The home's four doors were four gold tiles** | Fantasy violet, Most Likely green, Edge gold, Bankroll sky, each tile washed and its icon lit in its own, glowing under the pointer |
+| L4 | **Most Likely's third tier was grey** | Top green, Strong gold, Worth a look sky; the top two rings glow; the top tier's cards glow green; the night's best pick (#1) wears a moving holographic rim |
+| L5 | **Nothing moved when a page opened** | the page rises in, section by section and card by card, once (never on a redraw, so a live page never flickers) |
+| L6 | Buttons and cards **sat still under the pointer** | gold buttons are a lit gradient that glows; cards lift with a lit rim (mouse only); everything gives a little under a tap |
+| L7 | **The brand and the AI were plain text** | the title is gold with a sweep of light across it; Ask Qellys glows, a sheen crosses it and its sparkle twinkles |
+| L8 | Up and down chips were outlines; the record's rings were flat | tinted chips; rings that glow green up, red down |
+
+Held by `test_the_lights_on` (and `test_design_tells`, whose shadow rule now
+allows the `--glow-*` family: still one system of tokens). Checked in both
+themes on a phone and a desktop. A phone keeps its budget: no blur, no layer
+per card, and reduced motion zeroes every animation.
+
+# The blend — 2026-10-27
+
+Ethan, the same night: "We need the whole site to feel more blended with the
+colors and everything you added. Everything feels so sharp ... Look up
+research on like what people like to see aesthetically and realize what apps
+actually look like ... The colors look weird. The textures look weird ... The
+skins of everything look weird." He was right. Side by side with the before
+shots, the site was a brown haze behind every page, a rainbow of league
+colours, an outline round nearly every box, numbers in a typewriter face,
+neon-cast stadium photographs behind the data, and a spinning rainbow round
+the best pick.
+
+**What the research says people like.**
+
+- A first impression forms in about half a second (Lindgaard et al., 2006),
+  and it is driven mostly by how busy and how colourful a page looks: the
+  moderate middle of both is rated most appealing (Reinecke et al., "Predicting
+  users' first impressions of website aesthetics", CHI 2013; Reinecke & Gajos,
+  CHI 2014, 2.4 million ratings). Every outline and every hue added complexity.
+- People prefer curved contours to sharp angles (Bar & Neta, "Humans prefer
+  curved visual objects", Psychological Science 2006; Silvia & Barona 2009).
+- On dark grounds, saturated colours vibrate, elevation reads by a lighter
+  surface rather than a line or a shadow, and accents should be desaturated
+  (Material's dark theme guidance and the dark-mode practice write-ups).
+- Typical beats novel: an app that looks like its category is liked more.
+  DraftKings, FanDuel, Underdog, PrizePicks and Apple Sports all set one clean
+  sans (numbers included), neutral surfaces with one accent, filled odds
+  buttons, and photos only as player or team imagery.
+
+| # | Was | Now |
+|---|---|---|
+| B1 | **Three faces**: a condensed grotesque, a monospace for numbers, a Didone for names | **Inter** for words and numbers (tabular figures, one 48 KB file, every weight); Bodoni kept only for the brand and the Pick of the Day headline Ethan chose |
+| B2 | **Brown neutrals** (chroma ~0.015) and cards barely a step off the page, so every box needed an outline | **graphite** (chroma ~0.004), cards a clear step above the page; text greys neutral instead of beige; the contrast ladder still holds (tests/test_contrast) |
+| B3 | **Outlines everywhere**: chips, pills, buttons, price boxes, crests, fields, notices with a stripe down the side | **fills**: tonal chips and buttons, the open one tinted; cards on a soft lift; a coloured stripe became light from the card's left edge |
+| B4 | Corners 8 / 12 / 14 | **10 / 14 / 18**, softer everywhere at once |
+| B5 | **A brown blob** of league light in the top-left of every page | a wide, faint wash of the league's colour across the top |
+| B6 | **League colours at full saturation**, each a different brightness | one family: equal lightness and chroma in OKLCH, a darker set for the light theme |
+| B7 | Glows with a hard 1px ring | blurred light only; the best pick wears a still gold edge, not a spinning rainbow; the home's four doors share the gold |
+| B8 | **Neon stadium photographs** behind the data | one grade for every venue photo (less colour, less light), chips on it as dark glass |
+| B9 | Tracked caps at up to .3em | about half that, everywhere (the wordmark keeps its spacing) |
+| B10 | The best pick's card crushed the name to two lines on a phone and a desktop | the price runs under the name on a phone, the four checks under it on a wide screen |
+
+Light theme: warm white page, white cards on a soft shadow, the same fills in
+ink. Held by tests/test_the_site_blends.py (and the contrast, chroma and
+design-tells tests, all re-measured). Before and after: every main page at a
+phone and a desktop width, both themes, and the iPhone app's capsule bar.
+
+# No hard lines — 2026-10-27
+
+Ethan, a screenshot of his phone with the top bar and the league row circled:
+"notice how sharp all the lines are on the whole site for everything ... Make
+everything smoother and more blended and just like feel more professional."
+His shot was the old build, but he was right about the lines: a probe of every
+page (each element's borders, inset rings and thin bars, on the phone, the
+iPhone app with team colours on, and the desktop) found them everywhere —
+under the top bar, round every chip and field, a gold ring round whatever was
+selected, a 2px team stripe on the bar and on every game card, page dividers,
+column rules, stripes down notices.
+
+| # | Was | Now |
+|---|---|---|
+| N1 | **A line under the top bar** (the app's glass rim, and a 2px stripe in your team's colours) | the bar casts a 12px soft fade over what scrolls under it; your team's colour spills from it as light |
+| N2 | **The league row a band** with its own background and an edge | the row is see-through, so the page's light runs up behind it |
+| N3 | **Every outline in every sheet** (298 of them, plus 34 in mixed colours) | a fill where the thing needs a shape, nothing where tone and space already do it |
+| N4 | **Selected = a gold ring** (filters, tabs, ranges, the open league) | selected = a tint and, for the league, its light |
+| N5 | **Fields drawn as boxes** | filled wells, the iOS way; focus is a soft gold edge |
+| N6 | Dividers in the border colours | a whisper: within a few points of lightness of the surfaces they cross |
+| N7 | A 2px team line across every game card | the teams' colours as light from the photo, fading down |
+| N8 | Gold stripes down notices and the opened "why?" | a gold tint and a rounded callout |
+| N9 | Footer, empty states, the venue band, the desktop's column rules | gone: space and tone separate them |
+
+Held by tests/test_no_hard_lines.py, including a browser pass over the home's
+first three screens that fails on any full outline or thin bar.
+
+## The sweep after — 2026-10-28
+
+Ethan: "make sure everything is complete". Every one of the 46 pages, on the
+phone and the desktop, dark and light, shot and probed again, and every
+sheet read for what the first pass's checks could not see: an outline drawn
+in its own colour (currentColor, the good, bad and warn colours), a dash, a
+variant chip whose two-class rule outranked the blend's one-class fix, a
+hover that brought the outline back, and the coloured stripes.
+
+| # | Was | Now |
+|---|---|---|
+| S1 | **Badges as outlined pills**: the grade (STRONG, PLAY, LEAN), statuses, risk, position (RB, WR, QB, TE), verdicts, a final score's W/L | a tint of their own colour |
+| S2 | **Chip variants ringed**: trend up/down, books, conditional, live, Ask's prop chips, line-move tags | a tint; the stake and time chips plain fills |
+| S3 | **The chosen plan ringed in gold** (plans page, sign-up), the method page's model tag, a pinned post, the deck's Pick of the Day | a tint, and the gold glow the best Most Likely pick wears |
+| S4 | **Stripes down cards**: My Bets (open, won, lost), the slip grader's legs, the Record's ledger and edge notes, warnings, verdicts, callouts, plan and pick cards | light from the left edge in the same colour (the --tone wash); the ledger keeps its stripe only where a browser cannot mix colours |
+| S5 | **An open tab underlined** (the team page, the game page's tabs, the chat sheet, the arenas, charts, profiles) | a tinted pill, like the league row's |
+| S6 | Outlines on hover (cards, chips, My Bets' actions, the method's sections) | the fill change alone |
+| S7 | Dashed boxes (an invite code, a checkout panel, "add option", Ask's error turn), a photo frame, a 3px rule under a verdict | fills, tints, or nothing |
+
+| S8 | **Light theme: the gold buttons' text** (See the plans, Log bet, Log in) was white on the dark theme's bright gold, 1.8:1 | the light theme's own bronze under its white ink, 4.7:1 |
+| S9 | Ask's "AI" label, gold on its own tint in the light theme (2.8:1) | the deeper gold, 5.6:1 |
+
+**And the checks the gate never ran.** `run_tests.py` clears every `QB_*`
+name before it starts a test, `QB_BROWSER_TESTS` among them, so the 65 files
+that drive a real Chromium had not run in any gate since the blend. Run on
+their own, six failed on the blend and the lines pass, every one a real fault
+on the site:
+
+| # | Was | Now |
+|---|---|---|
+| B1 | **The desktop's top bar ran off the screen at 1280px**: in Inter the league row, Ask and the freshness pill were 69px wider, and the theme button was clipped (laptops and an open fold too) | the league buttons 3px narrower a side and the search box 132px at 1280-1439: the button sits 20px in, as before |
+| B2 | **The logo squeezed to 10px** by the wider name beside it in its fixed column | the mark keeps its 44px; the name and its line track tighter |
+| B3 | A Most Likely card's name a sliver on a fold's 280px cover | the name takes the card's width there, the ring beside the price |
+| B4 | The basketball board's crest squeezed by a three-figure score and the ball at 390px | the score steps down with the screen, to full size by 470px |
+| B5 | Football and hockey names cut at 1280px ("Buccaneers", "Blue Jackets") | the tablet's size for the names up to 1440px |
+| B6 | The iPhone app's bar: no rim at all failed "what floats wears glass" | lit along its top only, under the status bar; still no line at its foot |
+
+`python3 run_tests.py --browser` now runs them as a second gate (README,
+"Continuous integration"); two more were stale tests, not faults (the chat
+opens from its card now, and says "watching").
+
+What still draws a line is named in tests/test_no_hard_lines.py (GLYPHS,
+EDGES, COLOURED), each a picture (a chart's marks, a ring chart, a puck, an
+avatar's ring, a chevron), a focus, or a border that is its own fill; and a
+second browser pass walks the plans, sign-up, Edge, method, My Bets, memes,
+home and Record pages in both themes and fails on any outline.
