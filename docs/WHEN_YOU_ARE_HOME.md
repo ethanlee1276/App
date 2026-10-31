@@ -9305,6 +9305,45 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**IU. First touchdown is the NFL's Long Shots** (step 307; you,
+2026-10-31: "I only want our long shot picks to be stuff like first basket
+score for NBA or first touchdown score for NFL ... not just off of book
+lines"). Nothing to run. What changed:
+
+- Each NFL odds pull now buys the first-touchdown market too (26 credits an
+  event instead of 25).
+- Our chance for every quoted player: his team's chance of scoring first
+  (from the lines) × his share of the team's carries, targets and
+  touchdowns. On 2025–26 games it never saw, it was honest (said 9.6%,
+  scored 11.3%) and beat touchdown share alone. docs/FIRST_TD_RESEARCH.md
+  has the numbers, and `python3 tools/first_td_study.py` reruns them.
+- A pick needs our chance to beat the price by 10% or more, between +250
+  and +2500, one a game, ranked by how far ours beats the price. Under the
+  picks, every quoted player is ranked by our chance.
+- Picks go on paper (Long Shots, 0.1u) and are graded off the play-by-play's
+  first scorer once the game ends.
+- College and NBA Long Shots are unchanged for now. Their versions come
+  next.
+
+After the next NFL build on game day, the board as built, read-only:
+
+```
+cd /srv/qellys && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/recommendations.json'))
+f = d.get('first_td') or {}
+print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
+[print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
+[print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IU 2>&1 | tee /tmp/iu.txt
+```
+
 **IT. NFL Most Likely, tightened — and the audits that check it** (step
 306; you, 2026-10-31: "our NFL most likely bets are not doing well. So we
 need to tighten that up").

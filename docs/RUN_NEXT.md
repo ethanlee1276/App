@@ -50,7 +50,17 @@ To undo the tightening without a deploy:
 cd /srv/qellys && sudo ./deploy/setenv.sh QB_NFL_TIGHT off && sudo systemctl restart qellys
 ```
 
-## 3. Tomorrow (Nov 1), from mid-morning: the new month, and the real bill (steps IP, IQ)
+## 3. Tomorrow after the morning NFL build: the first-touchdown board (step IU)
+
+First touchdown is now the NFL's Long Shots. Sunday morning's odds pull
+buys the first-touchdown prices; this shows what the board made of them,
+with each pick next to our chance and the price's:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IU 2>&1 | tee /tmp/iu.txt
+```
+
+## 4. Tomorrow (Nov 1), from mid-morning: the new month, and the real bill (steps IP, IQ)
 
 After the reset, the first odds pull reads the new balance and the plan
 re-plans November from it. These show the plan with tonight's line, which
@@ -62,7 +72,7 @@ books double every call):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IP IQ 2>&1 | tee /tmp/nov1.txt
 ```
 
-## 4. Tomorrow evening: the bill again, over a full day (step IQ)
+## 5. Tomorrow evening: the bill again, over a full day (step IQ)
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IQ 2>&1 | tee /tmp/iq.txt

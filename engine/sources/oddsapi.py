@@ -211,7 +211,7 @@ NFL_ALT_ODDS_KEYS = {"player_pass_attempts_alternate": PASS_ATT,
                      "player_pass_completions_alternate": PASS_CMP,
                      "player_rush_reception_yds_alternate": RUSH_REC_YDS}
 NFL_ALT_ODDS_TO_MARKET = {**ALT_ODDS_TO_MARKET, **NFL_ALT_ODDS_KEYS}
-UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(NFL_ALT_ODDS_KEYS)
+UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(NFL_ALT_ODDS_KEYS) | frozenset({"player_1st_td"})
 #: The keys an unnamed refusal is presumed to be about: the newest on the
 #: request (see `fetch_event_odds`).
 NEWEST_ODDS_KEYS = frozenset(NEW_PROP_ODDS_KEYS) | frozenset(NFL_ALT_ODDS_KEYS)
@@ -222,6 +222,16 @@ NEWEST_ODDS_KEYS = frozenset(NEW_PROP_ODDS_KEYS) | frozenset(NFL_ALT_ODDS_KEYS)
 SCORER_ODDS_TO_MARKET = {
     "player_anytime_td": "anytime_td",
 }
+
+#: WHO SCORES FIRST (Ethan, 2026-10-31: "I only want our long shot picks to
+#: be stuff like first basket score for NBA or first touchdown score for
+#: NFL"). A Yes market like the anytime one, parsed by the same parser
+#: under its own name so no anytime reader ever sees it, and published on
+#: its own key (`OddsMatch.first_td`) because no slate prop carries it:
+#: engine/firsttd prices it against our own chance. One more market an
+#: NFL event (oddsbudget.EVENT_CREDITS). College keeps the anytime map.
+FIRST_TD_ODDS_TO_MARKET = {"player_1st_td": "first_td"}
+NFL_SCORER_ODDS_TO_MARKET = {**SCORER_ODDS_TO_MARKET, **FIRST_TD_ODDS_TO_MARKET}
 
 # MLB market keys (engine.mlb.models markets). Kept as strings to avoid an
 # import cycle with the MLB package.
@@ -629,7 +639,7 @@ SPORT_CONFIG = {
     # see the note on that constant.
     "nfl": {"sport_key": "americanfootball_nfl",
             "markets": NFL_ODDS_TO_MARKET, "teams": TEAM_ABBR,
-            "scorers": SCORER_ODDS_TO_MARKET,
+            "scorers": NFL_SCORER_ODDS_TO_MARKET,
             # The shared four ladders and the NFL's own three (see
             # NFL_ALT_ODDS_KEYS); college's entry keeps the four.
             "alternates": NFL_ALT_ODDS_TO_MARKET},
@@ -2021,6 +2031,10 @@ class OddsAttachResult:
     # and listing hundreds of them would bury the yardage diagnostics
     # this list exists for.
     scorers_matched: int = 0
+    #: First-touchdown quotes (FIRST_TD_ODDS_TO_MARKET), every player the
+    #: books quoted: {normalised name: {"player", "home", "away",
+    #: "quotes": [{book, yes_odds, ...}]}} — read by engine/firsttd.
+    first_td: dict = field(default_factory=dict)
     quota: Quota = field(default_factory=Quota)
     events_used: int = 0
     moneylines: int = 0          # games that got real h2h prices attached
@@ -3026,6 +3040,11 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                     # Which game the quote belongs to — the check below
                     # needs it, and a scorer quote carries no teams.
                     scorer_pairs.setdefault(k, (home, away))
+                    if k[1] == "first_td" and quotes:
+                        ft = result.first_td.setdefault(k[0], {
+                            "player": quotes[0].get("player") or k[0], "home": home, "away": away,
+                            "quotes": []})
+                        ft["quotes"].extend(quotes)
             # This payload's whole player menu, stat props and scorers both,
             # into the pull memory; who the books have since dropped, before
             # kickoff, goes on the game.

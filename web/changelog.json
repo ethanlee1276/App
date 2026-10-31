@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-31",
+      "kind": "ship",
+      "title": "NFL Long Shots are first-touchdown picks",
+      "body": "The NFL’s Long Shots now pick first-touchdown scorers from our own numbers: each team’s chance of scoring first from the lines, and each player’s share of his team’s carries, targets and touchdowns. A player is a pick only when our chance beats his price by 10% or more, one per game, ranked by how far ours beats the price, never by the price itself. Under the picks, every priced player is ranked by our chance with the price beside it. College and NBA versions are next."
+    },
+    {
+      "date": "2026-10-31",
       "kind": "model",
       "title": "NFL Most Likely asks more of a pick",
       "body": "On the NFL Most Likely board, player props and game lines now need a 60% chance, up from 55%. Touchdowns keep 55%. Our picks between 55% and 60% won about as often as we said, but at those prices that wasn’t enough to beat the book’s cut. Unders that the game script works against also come off: a passing or receiving under on a team expected to trail, an under in a projected shootout, and three more our graded record caught. Picks already posted stay up and are graded as usual."

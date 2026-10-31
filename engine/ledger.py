@@ -1007,7 +1007,7 @@ def bankroll(conn) -> float:
 # darts loses most nights by design, and mixing that into the main W-L
 # and ROI makes the record describe the dart board instead of the picks
 # the model actually stands behind. ``log_longshots`` journals them.
-LONGSHOT_MARKETS = {"home_runs", "anytime_td"}
+LONGSHOT_MARKETS = {"home_runs", "anytime_td", "first_td"}
 
 
 #: Game markets whose cards are priced through `engine.gamebets.temper`,
@@ -1507,7 +1507,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
 # journaling unsettleable bets would just accumulate rows stuck open
 # forever. anytime_td settles from the weekly-stats TD rows
 # (engine.ingest.nfl_td_rows) that maintenance ingests all season.
-SETTLEABLE_LONGSHOTS = {"home_runs", "anytime_td"}
+SETTLEABLE_LONGSHOTS = {"home_runs", "anytime_td",
+                        # First touchdown (2026-10-31), graded off the
+                        # play-by-play's first scorer — engine/firsttd.settle,
+                        # run from the settle loop beside settle_from_history.
+                        "first_td"}
 
 
 def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:

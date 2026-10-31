@@ -43,7 +43,7 @@ def test_the_book_is_asked_behind_the_guard_and_the_meter_counts_it():
     assert "player_pass_interceptions" in O.UNPROVEN_MARKETS
     cfg = O.SPORT_CONFIG["nfl"]
     # 22 since the five of 2026-10-10; 25 since 2026-10-12 (three more NFL ladders).
-    assert B.EVENT_CREDITS["nfl"] == len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3 == 25
+    assert B.EVENT_CREDITS["nfl"] == len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3 == 26  # first touchdown, 2026-10-31
 
 
 def test_the_slate_builds_the_props_a_quarterback_and_a_back_now_hold():

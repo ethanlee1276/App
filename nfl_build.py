@@ -711,6 +711,7 @@ def main() -> None:
     # marks say which of its parts spends it.
     _mem("qb change + teammates", args.memtrace)
     real_odds = False
+    first_td_quotes: dict = {}
     odds_status = {"checked": bool(args.odds or args.cached_odds
                                    or args.board_odds), "matched": 0,
                    "events": 0, "moneylines": 0, "error": None,
@@ -724,6 +725,7 @@ def main() -> None:
                 cache_only=args.cached_odds and not args.odds,
                 until=args.price_until)
             real_odds = res.matched > 0 or res.events_used > 0
+            first_td_quotes = getattr(res, "first_td", None) or {}
             odds_status.update(matched=res.matched, events=res.events_used,
                                moneylines=res.moneylines,
                                # The same count off the event path, so a
@@ -1132,6 +1134,23 @@ def main() -> None:
                        if args.out else None,
                        before_likely=_scan_first)
     _mem("run_slate", args.memtrace)
+    # FIRST TOUCHDOWN IS THE NFL'S LONG SHOTS (engine/firsttd; Ethan,
+    # 2026-10-31: "I only want our long shot picks to be stuff like ... first
+    # touchdown score for NFL ... going after what the data and tools that we
+    # have all put together says, not just off of book lines"). Every quoted
+    # player's chance by our numbers beside his price, and the picks our
+    # chance puts well above it. The anytime-touchdown menu still feeds Most
+    # Likely's touchdown shelf; it is no longer the Long Shots board.
+    try:
+        from engine import firsttd as _ftd
+        _ft = _ftd.board(first_td_quotes, result.get("games") or [], sport="nfl",
+                         date=result.get("date", ""))
+        result["first_td"] = _ft
+        result["long_shots"] = _ft["picks"]
+        print(_ftd.report(_ft))
+    except Exception as _fexc:                                # noqa: BLE001
+        print(f"  ⚠️  first-touchdown board skipped: {_fexc}")
+        result["long_shots"] = []
     # THE INVENTIONS (engine/ideas, Ethan 2026-10-16 "add everything now.
     # 1-13"), BEFORE THE MOST LIKELY BOARD since 2026-10-17: readings of this
     # slate written to a private file the pick and game pages ask for, and
@@ -1678,7 +1697,7 @@ def main() -> None:
                 lconn, {"sport": "nfl", "date": result.get("date", ""),
                         "long_shots": result.get("long_shots") or []})
             if ls_logged:
-                print(f"Long shots: {ls_logged} TD pick(s) journaled.")
+                print(f"Long shots: {ls_logged} first-touchdown pick(s) journaled.")
             # THE LIKELIHOOD BOARD, to its own bucket. Ethan, 2026-08-30:
             # "which bets do we trust more as now its confusing. also
             # which ones are we recording?" The answer was that we

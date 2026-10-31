@@ -53,7 +53,7 @@ BOARD_FILE = {"nfl": "recommendations.json", "cfb": "cfb.json", "mlb": "mlb_reco
               "nba": "nba.json", "wnba": "wnba.json", "nhl": "nhl.json"}
 SPORT_LABEL = {"nfl": "NFL", "cfb": "College football", "mlb": "MLB", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL"}
 MARKET_WORDS = {"pass_yds": "passing yards", "rush_yds": "rushing yards", "rec_yds": "receiving yards",
-                "receptions": "receptions", "anytime_td": "anytime TD", "pass_td": "passing TDs",
+                "receptions": "receptions", "anytime_td": "anytime TD", "first_td": "first TD", "pass_td": "passing TDs",
                 "pass_att": "pass attempts", "pass_cmp": "completions", "rush_att": "carries",
                 "pass_int": "interceptions", "moneyline": "moneyline", "spread": "spread", "total": "total"}
 LONGSHOT_ODDS = 300

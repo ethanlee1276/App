@@ -171,6 +171,10 @@ PAID_KEYS = (
     # EVERY QUOTED SCORER with our chance (engine/pipeline `td_field`) —
     # the whole touchdown watch list under another name.
     "td_field",
+    # FIRST TOUCHDOWN (engine/firsttd, 2026-10-31): every quoted player's
+    # chance by our numbers and the Long Shots picks taken from it — the
+    # long-shot board under a new name, so a new paid key.
+    "first_td",
     # THE GAME REPORT (engine/gamereport, 2026-10-19): every NFL game
     # written out, its "who's guarding who" verdicts and its players to
     # watch built from the scan's reads — `scan_reads` under an eighth

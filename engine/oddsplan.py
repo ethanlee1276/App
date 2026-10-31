@@ -175,7 +175,9 @@ LIVE_PULLS_PER_HOUR = 3
 #: two Monday), in the pacer's days (the service's date, Eastern). It buys
 #: on game nights only (`oddsbudget.tonight_games`), and only tonight's
 #: games (`launch._tonight_args`: the rest of the week's board is read from
-#: the cache), at 25 credits a game (`oddsbudget.EVENT_CREDITS`).
+#: the cache), at 26 credits a game (`oddsbudget.EVENT_CREDITS`; 25 until
+#: the first-touchdown market joined on 2026-10-31, which took Thursday's
+#: one game past 400 — six pulls of two events at 26 and the lines, 402).
 #:
 #:   Sunday   the ceiling the day runs up to: the four windows (7am, 12, 3pm,
 #:            6pm ET), a readiness and an inactives pull for each wave (1pm,
@@ -188,7 +190,7 @@ LIVE_PULLS_PER_HOUR = 3
 #:   other    nothing — no game tonight. A game night the table does not
 #:            hold (Thanksgiving's Friday, December's Saturdays, Christmas)
 #:            is priced by the game (`NFL_FLOOR_PULLS`).
-NFL_REGULAR = (600, 0, 0, 400, 0, 0, 3500)
+NFL_REGULAR = (600, 0, 0, 410, 0, 0, 3500)
 #: The playoffs: wild-card weekend's Saturday, Sunday and Monday, two games
 #: each weekend day of the next two rounds, one on Super Bowl Sunday.
 NFL_PLAYOFFS = (400, 0, 0, 0, 0, 1600, 1600)

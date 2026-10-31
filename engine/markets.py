@@ -57,6 +57,8 @@ SHARED = {
 #: they are modelled without being priced as their own market.
 EXTRA = {
     "targets": "Targets", "carries": "Carries",
+    # The Long Shots board's football market since 2026-10-31 (engine/firsttd).
+    "first_td": "First Touchdown",
     "first_3_innings": "First 3 Innings",
     "min": "Minutes",
 }

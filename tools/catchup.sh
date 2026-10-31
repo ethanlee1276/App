@@ -661,6 +661,16 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IU "First touchdown is the NFL's Long Shots" 60 <<'SH'
+cd /srv/qellys && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/recommendations.json'))
+f = d.get('first_td') or {}
+print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
+[print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
+[print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+"
+SH
 run IT "NFL Most Likely, tightened" 60 <<'SH'
 cd /srv/qellys && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "
 import json

@@ -1068,6 +1068,16 @@ def settle_open(log=print, state_path: Path | None = None,
             log(f"  ⚠️  long-shot re-file skipped: {exc}")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         settled = ledger.settle_from_history(lconn, hconn)
+        # FIRST TOUCHDOWN (2026-10-31): no stat row says who scored first, so
+        # these grade off the play-by-play's first scorer (engine/firsttd).
+        try:
+            from . import firsttd as _ftd
+            n_ftd = _ftd.settle(lconn)
+            if n_ftd:
+                log(f"  First-touchdown bets graded: {n_ftd}")
+                settled += n_ftd
+        except Exception as exc:                             # noqa: BLE001
+            log(f"  ⚠️  first-touchdown settle skipped: {exc}")
         # Postponed MLB games void themselves (audit O4, roadmap #44). After
         # the grading pass, so a final that landed late grades first; the
         # guards (baseball only, three days old) live with the function.

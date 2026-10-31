@@ -119,7 +119,7 @@ def test_the_keys_are_on_the_nfls_request_behind_the_guard_and_metered():
         assert k not in O.CFB_ODDS_TO_MARKET, "college has no kicking or tackle columns to price them"
     cfg = O.SPORT_CONFIG["nfl"]
     # 22 with the five; 25 since 2026-10-12 (three more NFL ladders).
-    assert B.EVENT_CREDITS["nfl"] == len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3 == 25
+    assert B.EVENT_CREDITS["nfl"] == len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3 == 26  # first touchdown, 2026-10-31
 
 
 def test_an_unnamed_refusal_drops_the_new_keys_before_the_proven_ones():

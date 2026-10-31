@@ -11381,19 +11381,44 @@ function matchupPicksHTML() {
   </section>`;
 }
 
+/* FIRST TOUCHDOWN IS THE NFL'S LONG SHOTS (engine/firsttd; Ethan,
+   2026-10-31: "I only want our long shot picks to be stuff like first
+   basket score for NBA or first touchdown score for NFL ... going after
+   what the data and tools that we have all put together says, not just off
+   of book lines"). The picks are the players our chance puts well above
+   the price; under them, every quoted player ranked by OUR chance — who
+   scores first by our numbers, the price beside it. */
+function firstTdWatch(d) {
+  return (((d || {}).first_td || {}).rows || []).filter((r) => !rowStarted(r)).slice(0, 10);
+}
+
 function renderLongShots() {
   const mlb = state.sport === "mlb";
+  const ftd = state.sport === "nfl" && !!state.data.first_td;
   const picks = (state.data.long_shots || []).filter((r) => !rowStarted(r));
   const host = document.getElementById("longshots-board");
   const note = document.getElementById("longshots-note");
   document.getElementById("longshots-sub").textContent = mlb
     ? "— home runs, priced on contact quality, park & weather"
+    : ftd ? "— first touchdown, our chance against the price"
     : "— anytime touchdowns, priced on opportunity not hype";
 
   // The board is three rows and there is no fourth. It used to list every
   // real-priced home run on the slate below the picks — two hundred names
   // most nights, which buried the three that were actually recommended.
-  const watch = (state.data.longshot_watch || []).filter((r) => !rowStarted(r));
+  const watch = ftd ? firstTdWatch(state.data)
+    : (state.data.longshot_watch || []).filter((r) => !rowStarted(r));
+  if (ftd) {
+    const list = watchlistHTML(watch, false, "first_td");
+    host.innerHTML = picks.map(longShotCard).join("") + list;
+    note.innerHTML = `<div class="ls-note">${picks.length
+      ? "Ranked by how far our chance beats the price, never by the price. The likeliest scorer is rarely the pick."
+      : watch.length ? "No price beats our chance by 10% tonight (+250 to +2500). Below: who scores first by our numbers."
+      : "First-touchdown prices post on game day."} Tracked on paper.</div>`;
+    fillMeters(host);
+    revealChildren(host);
+    return;
+  }
   if (!picks.length) {
     host.innerHTML = watchlistHTML(watch, mlb);
     note.innerHTML = watch.length
@@ -11778,8 +11803,9 @@ function likelySpark(r, opts) {
     w: o.w || 96, h: o.h || 30 });
 }
 
-function watchlistHTML(watch, mlb) {
+function watchlistHTML(watch, mlb, kind) {
   if (!watch || !watch.length) return "";
+  const firstTd = kind === "first_td";
   /* NOT A PICK, SO NOT PAINTED AS ONE (audit 2026-09-30, V-18). The
      paragraph above this list says these are not value picks and are not
      journaled, and the pill beside each read "+12% EV" in the same green a
@@ -11830,7 +11856,8 @@ function watchlistHTML(watch, mlb) {
       </div>${detail}</div>`;
   }).join("");
   return `<div style="grid-column:1/-1;min-width:0">
-    <div class="section-title">Most likely ${mlb ? "to homer" : "to score"} tonight
+    <div class="section-title">${firstTd ? "Who scores first, by our numbers"
+      : `Most likely ${mlb ? "to homer" : "to score"} tonight`}
       <span class="sub">— the model’s chance beside the market’s. Tap a row for the reasoning.
       Not picks and not journaled; the EV line says whether the price would
       be worth taking. Never a guarantee.</span></div>
@@ -11902,7 +11929,8 @@ function longShotCard(r) {
   // CFB's number is measured TOUCHES per game (carries + catches) —
   // college feeds carry no red-zone splits, and a label claiming they
   // do would dress the proxy up as the measurement.
-  const oppLabel = state.sport === "mlb" ? "Expected PAs"
+  const oppLabel = r.market === "first_td" ? "First-TD share"
+    : state.sport === "mlb" ? "Expected PAs"
     : state.sport === "cfb" ? "Touches/gm" : "RZ chances";
   return `
     <article class="card longshot ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}
