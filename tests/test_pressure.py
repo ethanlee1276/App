@@ -5,8 +5,9 @@ and reliability % and comeback % and choke % and see if we can have that
 as live data as well like when games are going."
 
 Counted in engine/pressure.py from the same finished games as the
-standings table, ridden on standings_<sport>.json, and read in three
-places on the page: a ranked section on the standings page, a two-team
+standings table — this season and the two before it, pooled (Ethan,
+2026-10-31: "one season can't define the team") — ridden on
+standings_<sport>.json, and read in three places on the page: a ranked section on the standings page, a two-team
 table on the game page, and a line on the live card that reads the
 scoreboard against the two teams' rates. The situational sentence runs
 for real in node (skipped without it).
@@ -82,16 +83,29 @@ def test_the_four_rates_count_what_they_say_they_count():
     assert a["reliability"] == 50.0 and a["choke"] == 50.0
     assert (a["dog_games"], a["dog_wins"]) == (1, 1) and a["comeback"] == 100.0
     assert got["season_used"] == 2025 and got["one_score"] == 8 and got["lined"] is True
+    assert got["seasons"] == [2025] and got["span"] == "2025", "only 2025 has games"
     assert got["note"] == ""
+    # Every rate carries the games it came from: won, out of.
+    assert a["of"] == {"clutch": [1, 4], "reliability": [2, 4], "comeback": [1, 1], "choke": [2, 4]}
+    assert a["span_record"] == "3-2-1"
     # Ranked high-first, with the count beside every rate; a rate on
-    # fewer than three games of its kind is a fact about the team but
-    # not a rank — A's 100% comeback is on one game.
+    # fewer than MIN_RATE_N games of its kind is a fact about the team
+    # but not a rank. Five across three seasons: nobody here has five
+    # of anything, so the lists are empty until span=1 and a lower bar.
+    assert got["min_rate_n"] == 5 and got["min_games"] == 4
+    assert all(got["ranked"][k] == [] for k in pressure.RATES), got["ranked"]
+    keep = pressure.MIN_RATE_N
+    pressure.MIN_RATE_N = 3
+    try:
+        got = pressure.team_pressure(conn, "nfl", 2025)
+    finally:
+        pressure.MIN_RATE_N = keep
     clutch = got["ranked"]["clutch"]
-    assert [(r["rank"], r["team"], r["value"], r["n"]) for r in clutch] == [
-        (1, "D", 66.7, 3), (2, "C", 50.0, 4), (3, "B", 33.3, 3), (4, "A", 25.0, 4)]
-    assert "A" not in [r["team"] for r in got["ranked"]["comeback"]]
-    assert got["ranked"]["choke"][0] == {"rank": 1, "team": "A", "value": 50.0, "n": 4, "record": "3-2-1"}
-    assert got["min_rate_n"] == 3 and got["min_games"] == 4
+    assert [(r["rank"], r["team"], r["value"], r["won"], r["n"]) for r in clutch] == [
+        (1, "D", 66.7, 2, 3), (2, "C", 50.0, 2, 4), (3, "B", 33.3, 1, 3), (4, "A", 25.0, 1, 4)]
+    assert "A" not in [r["team"] for r in got["ranked"]["comeback"]], "A's 100% comeback is on one game"
+    assert got["ranked"]["choke"][0] == {"rank": 1, "team": "A", "value": 50.0, "won": 2, "n": 4,
+                                         "record": "3-2-1"}
 
 
 def test_the_favourite_is_the_spread_then_the_shorter_moneyline_then_nobody():
@@ -104,15 +118,34 @@ def test_the_favourite_is_the_spread_then_the_shorter_moneyline_then_nobody():
     assert f(None, {"ml": [-200, 170]}) == "home", "a dict works too"
 
 
-def test_a_thin_season_falls_back_to_the_one_before_and_says_so():
+def test_three_seasons_are_counted_together_and_the_record_beside_the_name_is_this_ones():
+    """Ethan, 2026-10-31, a 6-0 Vikings at 100% clutch, reliable and
+    comeback: "one season can't define the team ... judge off maybe two
+    or three seasons". A's perfect 2026 start sits on top of 2024 and
+    2025, and 2023 — four seasons back — is left out."""
     conn = _conn()
+    _insert(conn, "nfl", 2023, [("001", "A", "B", 3, 40, -3.0, None)] * 1)
+    _insert(conn, "nfl", 2024, NFL_2025)
     _insert(conn, "nfl", 2025, NFL_2025)
-    _insert(conn, "nfl", 2026, [("001", "A", "B", 30, 27, -3.0, None)])
+    _insert(conn, "nfl", 2026, [("001", "A", "B", 30, 27, -3.0, None),    # fav, one-score win
+                                ("002", "C", "A", 17, 20, -2.5, None)])   # dog, one-score win
     got = pressure.team_pressure(conn, "nfl", 2026)
-    assert got["season"] == 2026 and got["season_used"] == 2025
-    assert got["teams"]["A"]["games"] == 6, "2026's one game is not mixed into 2025's"
-    assert pressure.team_pressure(conn, "nfl", 2028) is None, "neither 2028 nor 2027 has games"
+    assert got["season"] == 2026 and got["season_used"] == 2026
+    assert got["seasons"] == [2024, 2025, 2026] and got["span"] == "2024–2026"
+    a = got["teams"]["A"]
+    assert a["record"] == "2-0", "this season's, the one beside the name"
+    assert a["span_record"] == "8-4-2" and a["games"] == 14, "2023's blowout is not in it"
+    # 2026 alone would be 100% clutch on two games; the span says 4 of 10.
+    assert a["of"]["clutch"] == [4, 10] and a["clutch"] == 40.0
+    assert a["of"]["reliability"] == [5, 9] and a["of"]["comeback"] == [3, 3]
+    # A season with no games yet is no part of the span, and says so.
+    early = pressure.team_pressure(conn, "nfl", 2027)
+    assert early["seasons"] == [2025, 2026] and early["span"] == "2025–2026"
+    assert early["teams"]["A"]["record"] == "0-0", "no 2027 games yet"
+    assert pressure.team_pressure(conn, "nfl", 2030) is None, "nothing in 2028–2030"
     assert pressure.team_pressure(conn, "ufc", 2025) is None, "no one-score margin defined"
+    one = pressure.team_pressure(conn, "nfl", 2026, span=1)
+    assert one is None, "2026 alone has two games a team: not measurable"
 
 
 def test_a_sport_with_no_closing_lines_keeps_clutch_and_says_why_the_rest_are_missing():
@@ -121,12 +154,13 @@ def test_a_sport_with_no_closing_lines_keeps_clutch_and_says_why_the_rest_are_mi
         ("NYY", "BOS", 3, 2), ("BOS", "NYY", 5, 1), ("NYY", "TOR", 2, 3), ("TOR", "NYY", 4, 3),
         ("BOS", "TOR", 1, 0), ("TOR", "BOS", 6, 2), ("BAL", "NYY", 2, 1), ("BAL", "BOS", 3, 2),
         ("TOR", "BAL", 8, 1), ("BAL", "TOR", 4, 3)])]
-    _insert(conn, "mlb", 2025, rows)
+    for season in (2023, 2024, 2025):     # the same ten games, three seasons running
+        _insert(conn, "mlb", season, [(p.replace("2025", str(season)), *rest) for p, *rest in rows])
     got = pressure.team_pressure(conn, "mlb", 2025)
     assert got["lined"] is False and got["one_score"] == 1
     assert "No closing lines on file for MLB" in got["note"]
     bal = got["teams"]["BAL"]
-    assert bal["clutch"] == 100.0 and bal["one_score_games"] == 3
+    assert bal["clutch"] == 100.0 and bal["one_score_games"] == 9 and bal["of"]["clutch"] == [9, 9]
     assert bal["reliability"] is None and bal["comeback"] is None and bal["choke"] is None
     assert got["ranked"]["clutch"][0]["team"] == "BAL"
     assert got["ranked"]["reliability"] == [] and got["ranked"]["choke"] == []
@@ -158,7 +192,7 @@ def test_the_standings_build_rides_the_table_on_the_same_payload():
     standings_build._live_table = lambda s, se, c: (None, "offline")
     try:
         blob = standings_build.build("nfl", 2025, today="2026-03-01")
-        assert blob["pressure"]["season_used"] == 2025
+        assert blob["pressure"]["season_used"] == 2025 and blob["pressure"]["span"] == "2025"
         assert blob["pressure"]["teams"]["A"]["choke"] == 50.0
         assert blob["games_counted"] == 9, "the table and the rates count the same regular season"
         empty = standings_build.build("nfl", 2030, today="2030-11-01")
@@ -266,7 +300,14 @@ def test_the_three_surfaces_read_the_same_payload():
     assert "${pressurePairHTML(state.sport, g)}" in APP, "the game page"
     ph = _fn("pressureHTML")
     assert 'if (!pr || !pr.ranked) return "";' in ph
-    assert "last season’s, until this one has four games a team" in ph
+    assert "last season’s" not in ph, "no one-season fallback to explain any more"
+    assert "finished games of the ${escapeHtml(pressureSpan(pr))}, together" in ph
+    assert "`${r.won} of ${r.n}`" in ph, "each ranked row says the games its rate came from"
+    sp = _fn("pressureSpan")
+    assert "`${pr.span} seasons`" in sp and "season`" in sp
+    cell = _fn("pressureCell")
+    assert '<small class="pr-of">${of[0]} of ${of[1]}</small>' in cell
+    assert ".pr-table .pr-of {" in CSS
     assert "won as the market’s underdog" in APP, "comeback says which underdog it means"
     pp = _fn("pressurePairHTML")
     assert "if (_standingsCache[sport] === undefined) {" in pp and 'document.getElementById("gp-pressure")' in pp

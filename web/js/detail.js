@@ -2250,14 +2250,14 @@ function pressurePairHTML(sport, g) {
   if (!rows.length) return "";
   return `
     <div class="card gp-pressure" id="gp-pressure"><div class="gp-panel-title">Under pressure</div>
-      <p class="pbp-pr-sub">${escapeHtml(String(pr.season_used))} season · one-score means within ${
+      <p class="pbp-pr-sub">${escapeHtml(pressureSpan(pr))} · one-score means within ${
         escapeHtml(pressureUnit(pr))}</p>
       <div class="pr-table">
         <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
           `<span class="lb-th">${t}</span>`).join("")}
         ${rows.map(([t, r]) => `<span class="lb-tm">${teamMark(t, 20)}<span class="pr-tm">${
-            escapeHtml(t)}<span class="k">${escapeHtml(r.record)}</span></span></span>${
-          PRESSURE_RATES.map(([k]) => `<b>${pressurePct(r[k])}</b>`).join("")}`).join("")}
+            escapeHtml(t)}<span class="k">${escapeHtml(r.span_record || r.record)}</span></span></span>${
+          PRESSURE_RATES.map(([k]) => pressureCell(r, k)).join("")}`).join("")}
       </div>
       ${pr.note ? `<div class="pr-defs">${escapeHtml(pr.note)}</div>` : ""}
       <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
@@ -2593,7 +2593,7 @@ function pbpPressureHTML(d, league, boardGame) {
   return `<div class="card pbp-pressure">
     <div class="pbp-rail-head">Under pressure${
       m.live ? `<span class="lb-live">${icon("dot", 10)} LIVE</span>` : ""}</div>
-    <p class="pbp-pr-sub">${escapeHtml(String(pr.season_used))} season · one-score means within ${
+    <p class="pbp-pr-sub">${escapeHtml(pressureSpan(pr))} · one-score means within ${
       escapeHtml(pressureUnit(pr))}</p>
     <p class="pbp-pr-line">${m.state ? `<b>${escapeHtml(m.state)}</b> · ` : ""}${escapeHtml(m.line)}</p>
     ${m.market ? `<p class="pbp-pr-market">Live market: <b>${escapeHtml(d.home)} ${
@@ -2603,13 +2603,12 @@ function pbpPressureHTML(d, league, boardGame) {
       <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
         `<span class="lb-th">${t}</span>`).join("")}
       ${rows.map(([t, r]) => `<span class="lb-tm">${teamMarkIn(league, t, 20)}<span class="pr-tm">${
-          escapeHtml(t)}<span class="k">${escapeHtml(r.record || "")}</span></span></span>${
-        PRESSURE_RATES.map(([k]) => `<b${asked(t, k) ? ' class="pbp-pr-asked"' : ""}>${
-          pressurePct(r[k])}</b>`).join("")}`).join("")}
+          escapeHtml(t)}<span class="k">${escapeHtml(r.span_record || r.record || "")}</span></span></span>${
+        PRESSURE_RATES.map(([k]) => pressureCell(r, k, asked(t, k) ? "pbp-pr-asked" : "")).join("")}`).join("")}
     </div>
     <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
       `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
-    <p class="pbp-pr-foot">From ${escapeHtml(String(pr.season_used))}’s finished games${
+    <p class="pbp-pr-foot">From the finished games of the ${escapeHtml(pressureSpan(pr))}${
       m.asks.length ? " · gold is what the score is testing" : ""}.</p>
   </div>`;
 }              // { view, y } while inside a detail

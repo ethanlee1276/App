@@ -121,6 +121,9 @@
 .pr-table .pr-tm { display: grid; line-height: var(--lh-tight); }
 .pr-table .pr-tm .k { font-size: var(--fs-2xs); white-space: nowrap; }
 .pr-table b { text-align: right; font-family: var(--font-mono); font-weight: 600; }
+/* The games a rate came from, under it ("15 of 24", three seasons). */
+.pr-table .pr-of { display: block; color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 400; white-space: nowrap; }
 .pr-defs { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
   color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); }
 .pr-defs b { color: var(--text-dim); font-weight: 600; }

@@ -2103,18 +2103,19 @@ function pressureHTML(pr, d) {
           <span class="std-mark">${teamMarkIn(state.sport, r.team, 22)}</span>
           <span class="std-name">${escapeHtml((meta[r.team] || {}).name
             || (meta[r.team] || {}).nick || r.team)}
-            <span class="k" style="opacity:.6">${r.n} game${r.n === 1 ? "" : "s"}</span></span>
+            <span class="k" style="opacity:.6">${r.won != null
+              ? `${r.won} of ${r.n}` : `${r.n} game${r.n === 1 ? "" : "s"}`}</span></span>
           <span class="std-n">${pressurePct(r.value)}</span>
         </div>`).join("")}
     </div>`;
   };
   const most = Math.max(...cols.map(([k]) => pr.ranked[k].length));
-  const lastSeason = pr.season_used !== pr.season;
+  /* Three seasons pooled (2026-10-31: "one season can't define the
+     team"), named as the span, with each row's games beside its rate. */
   return `
     <div class="section-title">Under pressure
       <span class="sub">— clutch, reliability, comeback and choke, from the
-        finished ${escapeHtml(String(pr.season_used))} games${lastSeason
-          ? " — last season’s, until this one has four games a team" : ""}
+        finished games of the ${escapeHtml(pressureSpan(pr))}, together
         · one-score means within ${escapeHtml(pressureUnit(pr))}
         · a team needs ${pr.min_games} games, and ${pr.min_rate_n} of the kind
         counted, to be ranked</span></div>

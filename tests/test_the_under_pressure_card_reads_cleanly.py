@@ -46,10 +46,12 @@ def test_the_head_is_the_title_and_live_and_the_season_sits_under_it():
     card = _fn("pbpPressureHTML")
     head = card[card.index('<div class="pbp-rail-head">'):card.index("</div>", card.index('<div class="pbp-rail-head">'))]
     assert "Under pressure" in head and "LIVE" in head and 'class="mini"' not in head, head
-    assert ('<p class="pbp-pr-sub">${escapeHtml(String(pr.season_used))} season · one-score means within ${') in card
+    # Three seasons since 2026-10-31 ("one season can't define the team"):
+    # the quiet line names the span (app.js pressureSpan).
+    assert ('<p class="pbp-pr-sub">${escapeHtml(pressureSpan(pr))} · one-score means within ${') in card
     pair = _fn("pressurePairHTML")
     assert '<div class="gp-panel-title">Under pressure</div>' in pair, "the game page's card, the same way"
-    assert '<p class="pbp-pr-sub">${escapeHtml(String(pr.season_used))} season · one-score means within ${' in pair
+    assert '<p class="pbp-pr-sub">${escapeHtml(pressureSpan(pr))} · one-score means within ${' in pair
 
 
 def test_the_state_leads_the_sentence_and_no_pill_says_it_again():
@@ -68,7 +70,7 @@ def test_a_club_stands_over_its_record_and_the_footnote_is_small():
     card = _fn("pbpPressureHTML")
     assert "every pass of the fast loop" not in card and 'style="opacity:.6"' not in card, \
         "the footnote in plain words, styled by its class"
-    assert '<p class="pbp-pr-foot">From ${escapeHtml(String(pr.season_used))}’s finished games${' in card
+    assert '<p class="pbp-pr-foot">From the finished games of the ${escapeHtml(pressureSpan(pr))}${' in card
     assert ".pbp-pr-foot { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-xs);" in DETAIL_CSS
 
 
@@ -89,9 +91,13 @@ def test_in_a_browser_the_card_reads_one_thing_to_a_line():
     doc.update({"generated_at": gen, "home": "TB", "away": "MIL", "home_name": "Tampa Bay Rays",
                 "away_name": "Milwaukee Brewers", "plays": [], "live": live})
     strip = {"generated_at": gen, "games": [{"game_pk": 777001, "home": "TB", "away": "MIL", "live": live}]}
-    pressure = {"season": 2026, "season_used": 2026, "one_score": 1, "min_games": 4, "min_rate_n": 3,
-                "teams": {"TB": {"clutch": 57, "reliability": None, "comeback": None, "choke": None, "record": "106-77-1"},
-                          "MIL": {"clutch": 53, "reliability": None, "comeback": None, "choke": None, "record": "113-70"}},
+    of = lambda w, n: {"clutch": [w, n], "reliability": [0, 0], "comeback": [0, 0], "choke": [0, 0]}  # noqa: E731
+    pressure = {"season": 2026, "season_used": 2026, "seasons": [2024, 2025, 2026], "span": "2024–2026",
+                "one_score": 1, "min_games": 4, "min_rate_n": 5,
+                "teams": {"TB": {"clutch": 57.1, "reliability": None, "comeback": None, "choke": None,
+                                 "record": "92-70", "span_record": "262-223-1", "of": of(92, 161)},
+                          "MIL": {"clutch": 53.1, "reliability": None, "comeback": None, "choke": None,
+                                  "record": "97-65", "span_record": "281-205", "of": of(85, 160)}},
                 "ranked": {"clutch": [], "reliability": [], "comeback": [], "choke": []}}
     standings = {"sport": "mlb", "generated_at": gen, "pressure": pressure, "groups": []}
     serve = lambda body: (lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(body)))  # noqa: E731
@@ -124,6 +130,9 @@ def test_in_a_browser_the_card_reads_one_thing_to_a_line():
                            title: px(h, 'fontSize'), sub: px(c.querySelector('.pbp-pr-sub'), 'fontSize'),
                            lead: (c.querySelector('.pbp-pr-line b') || {}).textContent || '',
                            records: [...c.querySelectorAll('.pr-tm .k')].map((k) => [k.textContent, k.getBoundingClientRect().height / lh(k)]),
+                           subText: c.querySelector('.pbp-pr-sub').textContent,
+                           ofs: [...c.querySelectorAll('.pr-of')].map((k) => [k.textContent, k.getBoundingClientRect().height / lh(k)]),
+                           over: (() => { const t = c.querySelector('.pr-table'); return t.scrollWidth - t.clientWidth; })(),
                            foot: px(c.querySelector('.pbp-pr-foot'), 'fontSize'), body: px(document.body, 'fontSize') }; }""")
                 got["errs"] = errs
                 ctx.close()
@@ -136,8 +145,13 @@ def test_in_a_browser_the_card_reads_one_thing_to_a_line():
     assert "Under pressure" in got["headText"] and "LIVE" in got["headText"] and "2026" not in got["headText"], got
     assert got["sub"] < got["title"], ("the season line is quieter than the title", got)
     assert got["lead"] == "One-run game", got
-    assert [r[0] for r in got["records"]] == ["113-70", "106-77-1"], got["records"]
+    # The record beside the club is the span's, the one its rates came from.
+    assert [r[0] for r in got["records"]] == ["281-205", "262-223-1"], got["records"]
     assert all(r[1] < 1.5 for r in got["records"]), ("no record breaks", got["records"])
+    assert got["subText"].startswith("2024–2026 seasons · one-score means within 1 run"), got["subText"]
+    assert [o[0] for o in got["ofs"]] == ["85 of 160", "92 of 161"], got["ofs"]
+    assert all(o[1] < 1.5 for o in got["ofs"]), ("a count stays on one line", got["ofs"])
+    assert got["over"] <= 0, ("the table fits an iPhone's width", got["over"])
     assert got["foot"] < got["body"], ("the footnote is a footnote", got)
 
 

@@ -623,8 +623,9 @@ TOOLS = [
     _tool("standings",
           "The league's current standings from the league's own feed: every team's record by division or "
           "conference, win percentage, points for and against per game, home and away records, streak and "
-          "last 10, the projected playoff seeds, and for one team its record in close games (clutch, "
-          "reliability as favorite, comebacks as underdog, chokes). For standings, who leads the division, "
+          "last 10, the projected playoff seeds, and for one team its record in close games over the last "
+          "three seasons together (clutch, reliability as favorite, comebacks as underdog, chokes). For "
+          "standings, who leads the division, "
           "playoff picture.",
           {"sport": _SPORT_ARG, "team": {"type": "string", "description": "Optional: one team."},
            "group": {"type": "string", "description": "Optional: a division or conference, like NFC North."}}),
@@ -2675,9 +2676,13 @@ def standings(sport: str = "", team: str = "", group: str = "", data_dir=None, p
     for code in codes:
         p = (pressure.get("teams") or {}).get(code)
         if isinstance(p, dict):
+            # The rates pool three seasons (engine/pressure.py SPAN):
+            # "seasons" says which, "span_record" is the record they
+            # came from, "record" this season's.
             out["under_pressure"] = {"season": pressure.get("season_used"),
-                                     **_slim(p, ("record", "clutch", "one_score_games", "reliability", "fav_games",
-                                                 "comeback", "dog_games", "choke"))}
+                                     "seasons": pressure.get("span") or pressure.get("season_used"),
+                                     **_slim(p, ("record", "span_record", "clutch", "one_score_games",
+                                                 "reliability", "fav_games", "comeback", "dog_games", "choke"))}
             break
     if not team and not group:
         seeds = []

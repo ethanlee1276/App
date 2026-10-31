@@ -31,13 +31,20 @@ spread or moneyline:
                the favourite. The favourite had it within reach and let
                it go.
 
-Percentages are 0–100 with one decimal. A team needs MIN_GAMES finished
-games before its rate is ranked, and a season with fewer than four such
-teams (Week 1 through Week 3 in the NFL, every year) falls back to the
-season before — `season_used` says which one the numbers are from, and
-the page prints it. A sport whose rows carry no closing line (baseball
-and basketball as ingested today) keeps its clutch rate and says why the
-other three are missing rather than showing 0% chokers.
+Percentages are 0–100 with one decimal, OVER THREE SEASONS (`SPAN`):
+this one and the two before it, pooled. Ethan, 2026-10-31, the card
+circled on a Lions–Vikings page: "one season can't define the team, you
+know, so we need to be more relaxed on that ... judge off maybe two or
+three seasons". One season had Minnesota at 100% clutch, 100% reliable,
+100% comeback and 0% choke off a 6-0 start — three or four games of each
+kind. Every rate now carries its count beside it (`of`: won, out of), so
+a number on a thin base says so on the page. A team needs MIN_GAMES
+finished games before its rates are ranked, and MIN_RATE_N of the
+rate's own kind. `seasons` says which seasons had games and `span` how
+the page names them ("2024–2026"); each team's `record` is still this
+season's, the one beside its name. A sport whose rows carry no closing
+line (baseball and basketball as ingested today) keeps its clutch rate
+and says why the other three are missing rather than showing 0% chokers.
 
 Regular season only, like the standings: a playoff loss is not the same
 kind of fact as a September one, and the bracket page owns those rows.
@@ -54,19 +61,23 @@ from .playoffs import is_postseason
 #: The margin, inclusive, that makes a game "one-score" for the sport.
 ONE_SCORE = {"nfl": 8, "cfb": 8, "nba": 5, "wnba": 5, "mlb": 1}
 
+#: Seasons pooled: this one and the two before it (see the docstring).
+SPAN = 3
+
 #: Finished games a team needs before its rates are ranked.
 MIN_GAMES = 4
 
-#: Teams that must clear MIN_GAMES for a season to count as measurable;
-#: below this the season before is used instead.
+#: Teams that must clear MIN_GAMES across the span for the table to be
+#: measurable; below this there is nothing to say (None).
 MIN_TEAMS = 4
 
 #: Games of the rate's OWN kind (one-score games for clutch, games as the
 #: favourite for reliability and choke, as the underdog for comeback) a
 #: team needs before that rate is ranked. Without this the comeback
 #: column led with 100% on two games and choke with 100% on one — a
-#: ranking of who happened to be an underdog least often.
-MIN_RATE_N = 3
+#: ranking of who happened to be an underdog least often. Five across
+#: three seasons (it was three across one).
+MIN_RATE_N = 5
 
 #: The rates, in the order the page ranks them, with the direction a
 #: rank runs: high-first for the three virtues, high-first for choke too
@@ -170,14 +181,21 @@ def count(rows, sport: str, season: int, id_to_abbr: dict | None = None
     return teams, lined
 
 
+#: Each rate's (counted, out of) counters.
+PARTS = {"clutch": ("one_score_wins", "one_score_games"),
+         "reliability": ("fav_wins", "fav_games"),
+         "comeback": ("dog_wins", "dog_games"),
+         "choke": ("fav_one_score_losses", "fav_games")}
+
+
 def rates(t: dict) -> dict:
     """The four percentages for one team's counters (None = no basis)."""
-    return {
-        "clutch": _pct(t["one_score_wins"], t["one_score_games"]),
-        "reliability": _pct(t["fav_wins"], t["fav_games"]),
-        "comeback": _pct(t["dog_wins"], t["dog_games"]),
-        "choke": _pct(t["fav_one_score_losses"], t["fav_games"]),
-    }
+    return {rate: _pct(t[num], t[den]) for rate, (num, den) in PARTS.items()}
+
+
+def _add(into: dict, more: dict) -> None:
+    for k, v in more.items():
+        into[k] = into.get(k, 0) + v
 
 
 def _measurable(teams: dict) -> int:
@@ -185,43 +203,54 @@ def _measurable(teams: dict) -> int:
 
 
 def team_pressure(conn, sport: str, season: int,
-                  id_to_abbr: dict | None = None) -> dict | None:
+                  id_to_abbr: dict | None = None, span: int = SPAN) -> dict | None:
     """The under-pressure table for one sport, or None with nothing to say.
 
-    Tries ``season``; when fewer than MIN_TEAMS teams have MIN_GAMES
-    finished games it tries the season before and says so in
-    ``season_used``. ``id_to_abbr`` rewrites college rows still keyed
-    ``espn:<id>`` (see `ingest.remap_cfb_team_keys`); left None it
-    reads the map a previous build persisted.
+    ``season`` and the ``span`` - 1 seasons before it, pooled; None when
+    fewer than MIN_TEAMS teams have MIN_GAMES finished games across them.
+    ``id_to_abbr`` rewrites college rows still keyed ``espn:<id>`` (see
+    `ingest.remap_cfb_team_keys`); left None it reads the map a previous
+    build persisted.
     """
     if sport not in ONE_SCORE:
         return None
     if id_to_abbr is None and sport == "cfb":
         from . import cfbteams
         id_to_abbr = cfbteams.load_ids() or None
-    used, teams, lined = season, {}, False
-    for candidate in (season, season - 1):
-        teams, lined = count(_rows(conn, sport, candidate), sport, candidate,
-                             id_to_abbr)
-        used = candidate
-        if _measurable(teams) >= MIN_TEAMS:
-            break
-    else:
+    teams: dict = {}
+    this: dict = {}
+    lined, used = False, []
+    for s in range(season - max(1, span) + 1, season + 1):
+        counted, has_line = count(_rows(conn, sport, s), sport, s, id_to_abbr)
+        if not counted:
+            continue
+        used.append(s)
+        lined = lined or has_line
+        for name, t in counted.items():
+            _add(teams.setdefault(name, dict(_EMPTY)), t)
+        if s == season:
+            this = counted
+    if not used or _measurable(teams) < MIN_TEAMS:
         return None
 
     out_teams = {}
     for name, t in teams.items():
-        out_teams[name] = {**t, **rates(t), "record": _record(t)}
+        out_teams[name] = {**t, **rates(t),
+                           # The record beside the name is this season's;
+                           # the rates are the span's.
+                           "record": _record(this[name]) if name in this else "0-0",
+                           "span_record": _record(t),
+                           "of": {rate: [t[num], t[den]] for rate, (num, den) in PARTS.items()}}
     ranked = {}
     for rate in RATES:
-        n_key = {"clutch": "one_score_games", "reliability": "fav_games",
-                 "comeback": "dog_games", "choke": "fav_games"}[rate]
+        n_key = PARTS[rate][1]
         pool = [(name, t) for name, t in out_teams.items()
                 if t["games"] >= MIN_GAMES and t[rate] is not None
                 and t[n_key] >= MIN_RATE_N]
         pool.sort(key=lambda nt: (-nt[1][rate], -nt[1][n_key], nt[0]))
         ranked[rate] = [{"rank": i + 1, "team": name, "value": t[rate],
-                         "n": t[n_key], "record": t["record"]}
+                         "won": t[PARTS[rate][0]], "n": t[n_key],
+                         "record": t["record"]}
                         for i, (name, t) in enumerate(pool)]
     note = ""
     if not lined:
@@ -231,7 +260,9 @@ def team_pressure(conn, sport: str, season: int,
     return {
         "sport": sport,
         "season": season,
-        "season_used": used,
+        "season_used": used[-1],
+        "seasons": used,
+        "span": f"{used[0]}–{used[-1]}" if len(used) > 1 else str(used[0]),
         "one_score": ONE_SCORE[sport],
         "min_games": MIN_GAMES,
         "min_rate_n": MIN_RATE_N,

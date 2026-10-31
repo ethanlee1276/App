@@ -2,6 +2,12 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-10-31",
+      "kind": "fix",
+      "title": "Under pressure counts three seasons",
+      "body": "Clutch, reliability, comeback and choke now count this season and the two before it together, so a hot start can’t make a team 100% clutch off four close games. Each percentage shows the games behind it (“18 of 23”), and the record beside the team is the one those games add up to."
+    },
+    {
       "date": "2026-10-30",
       "kind": "ship",
       "title": "Prices follow tonight’s games",

@@ -20265,7 +20265,8 @@ window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings()
 
    The numbers ride the standings build (`pressure` on
    standings_<sport>.json, engine/pressure.py): four rates per team,
-   counted from the same finished games as the table above them —
+   counted from the same finished games as the table above them, and
+   since 2026-10-31 the two seasons before them too —
    clutch (one-score games won), reliability (won as the favourite),
    comeback (won as the underdog — the MARKET'S underdog, and the page
    says so, because we hold no half-time scores yet), choke (one-score
@@ -20276,8 +20277,8 @@ window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings()
    (2026-09-08) a card on the play-by-play page that makes the same
    reading on every poll off the deep file and lights the two
    cells being asked. The live readings are the only things that change
-   during a game; the rates under them are season counts and do not
-   pretend otherwise. */
+   during a game; the rates under them are counts over three seasons
+   (2026-10-31) and do not pretend otherwise. */
 const PRESSURE_RATES = [
   ["clutch", "Clutch", "one-score games won"],
   ["reliability", "Reliability", "won as the favourite"],
@@ -20292,6 +20293,25 @@ function pressurePct(v) { return v == null ? "—" : `${Math.round(v)}%`; }
 
 function pressureUnit(pr) {
   return `${pr.one_score} ${pr.one_score === 1 ? "run" : "points"}`;
+}
+
+/* THREE SEASONS, NOT ONE. Ethan, 2026-10-31, circling a 6-0 Vikings at
+   100% clutch, 100% reliable and 100% comeback: "one season can't define
+   the team, you know, so we need to be more relaxed on that". The rates
+   pool this season and the two before it (engine/pressure.py SPAN); this
+   names the span the way every card prints it ("2024–2026 seasons"), and
+   a file built before the change still reads as its one season. */
+function pressureSpan(pr) {
+  const s = (pr && pr.seasons) || [pr && pr.season_used];
+  return s.length > 1 && pr.span ? `${pr.span} seasons` : `${s[s.length - 1]} season`;
+}
+
+/* One rate's cell: the percentage and, under it, the games it came from
+   ("15 of 24"), so a number on a thin base says so where it stands. */
+function pressureCell(r, k, cls) {
+  const of = ((r && r.of) || {})[k];
+  return `<b${cls ? ` class="${cls}"` : ""}>${pressurePct((r || {})[k])}${
+    of && of[1] ? `<small class="pr-of">${of[0]} of ${of[1]}</small>` : ""}</b>`;
 }
 
 /* Is the game in its last period? The live feed's period is a label —
@@ -20352,9 +20372,10 @@ function pressureLiveHTML(sport, g) {
   const pr = (_standingsCache[sport] || {}).pressure;
   const line = pr ? pressureSituation({ sport, g, pr }) : "";
   if (!line) return "";
+  const seasons = pr.seasons || [pr.season_used];
   return `<div class="lb-pressure"><span class="lb-pk">Under pressure</span>${escapeHtml(line)}${
-    pr.season_used !== pr.season
-      ? ` <span class="k">(${escapeHtml(String(pr.season_used))})</span>` : ""}</div>`;
+    seasons.length > 1 || pr.season_used !== pr.season
+      ? ` <span class="k">(${escapeHtml(pr.span || String(pr.season_used))})</span>` : ""}</div>`;
 }
 
 /* The live board draws its cards synchronously; this makes sure every

@@ -76,7 +76,11 @@ def test_the_card_reads_the_cache_and_lights_the_cells_being_asked():
     assert "(_standingsCache[league] || {}).pressure" in card
     assert 'if (!pr) return "";' in card
     assert "pressureMoment({ sport: league, d, boardGame, pr })" in card
-    assert 'class="pbp-pr-asked"' in card
+    # The lit cell is drawn by the shared cell (percentage over "15 of
+    # 24", three seasons since 2026-10-31) with the gold class passed in.
+    assert 'pressureCell(r, k, asked(t, k) ? "pbp-pr-asked" : "")' in card
+    cell = APP[APP.index("function pressureCell("):]
+    assert '<b${cls ? ` class="${cls}"` : ""}>' in cell[:cell.index("\n}\n")]
     assert "the market’s number, not ours" in card
     # One thing to a line since 2026-10-28 (tests/test_the_under_pressure_card_reads_cleanly.py):
     # the state leads the sentence, the footnote says what the gold marks.
