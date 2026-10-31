@@ -682,6 +682,7 @@ print([tuple(r) for r in c.execute('SELECT status, COUNT(*) FROM bets WHERE mark
 SH
 run IZ "The record leads with the picks we stake" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.stakeplan
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import ledger; ledger.mark_record_dirty()"
 curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; o=(json.load(sys.stdin).get('staked') or {}).get('overall') or {}; print(o.get('settled'), o.get('wins'), o.get('losses'), o.get('net_units'), o.get('roi'), o.get('tracked'))"
 SH
 run IY "The first screen settles faster on a phone" 30 <<'SH'

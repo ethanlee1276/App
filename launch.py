@@ -392,6 +392,11 @@ def _full_copy(path: str) -> str:
     return path
 
 
+def _stakeplan_priced_out(odds) -> bool:
+    from engine.stakeplan import priced_out
+    return priced_out("edge", odds)
+
+
 def _board_counts(path: str) -> dict:
     """What a member finds on a league's two boards after a build:
     {"most_likely": rows on Most Likely, "edge": rows on the Edge board,
@@ -415,7 +420,10 @@ def _board_counts(path: str) -> dict:
         "most_likely": len(b.get("most_likely") or []),
         "edge": sum(1 for r in recs if r.get("has_market") is not False and ev(r))
         + sum(1 for g in games if g.get("grade") != "Pass" and ev(g)),
-        "staked": sum(1 for r in recs + games if r.get("recommended")),
+        # Past the stake rule's price cap (engine/stakeplan EDGE_MAX_ODDS,
+        # +130) a recommended pick is tracked on paper, not bet.
+        "staked": sum(1 for r in recs + games if r.get("recommended")
+                      and not _stakeplan_priced_out(r.get("odds"))),
     }
     # Off-season boards are supposed to sit still (audit F-13): the
     # heartbeat says so and the frozen-board warning stays quiet. Present

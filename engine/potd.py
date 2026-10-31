@@ -1826,7 +1826,11 @@ def board_best(result: dict, now=None) -> tuple:
                 stake, odds = float(r.get("stake_units") or 0), int(r.get("odds") or 0)
             except (TypeError, ValueError):
                 continue
-            if stake > 0 and abs(odds) >= 100 and not _started(r, now):
+            # Past the stake rule's price cap (engine/stakeplan
+            # EDGE_MAX_ODDS, +130) a pick is tracked on paper, not staked.
+            from .stakeplan import priced_out
+            if stake > 0 and abs(odds) >= 100 and not priced_out("edge", odds) \
+                    and not _started(r, now):
                 staked.append(r)
     if not staked:
         return None, 0

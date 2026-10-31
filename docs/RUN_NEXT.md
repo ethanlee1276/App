@@ -23,6 +23,16 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh IZ JA JB 2>&1 | tee /tmp/iz.t
 cd /srv/qellys && python3 tools/stake_study.py 2>&1 | tee /tmp/iz_study.txt
 ```
 
+IZ also asks the settle lane to rewrite the public record on its next pass,
+so the restated record is on the site within 5 minutes instead of after
+tonight's NBA build. Its last line prints what the site serves: about 1,406
+staked, +23u, 7,563 tracked. If that line prints `None`, give it 5 minutes
+and rerun just this:
+
+```
+curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; o=(json.load(sys.stdin).get('staked') or {}).get('overall') or {}; print(o.get('settled'), o.get('wins'), o.get('losses'), o.get('net_units'), o.get('roi'), o.get('tracked'))"
+```
+
 ## 2. Now: college's price test (step JB)
 
 College's "bolder than the books" picks claim 69% and hit 53%, the NFL's

@@ -82,6 +82,14 @@ def test_the_game_bets_count_and_read_in_words():
                             "home": "NYK", "away": "BOS"}) == "Under 221.5 · BOS @ NYK"
 
 
+def test_a_pick_past_the_price_cap_is_not_the_boards_bet():
+    """engine/stakeplan EDGE_MAX_ODDS: past +130 a pick is tracked on paper."""
+    board = {"recommendations": [_row(player="Long", odds=150, stake_units=3.0), _row()]}
+    best, n = potd.board_best(board)
+    assert best["player"] == "Jalen Brunson" and n == 1, (best, n)
+    assert potd.board_best({"recommendations": [_row(odds=131)]}) == (None, 0)
+
+
 def test_a_board_with_nothing_staked_names_nothing():
     assert potd.board_best({"recommendations": [_row(recommended=False)]}) == (None, 0)
     assert potd.board_best({}) == (None, 0)

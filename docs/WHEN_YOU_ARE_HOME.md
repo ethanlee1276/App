@@ -9456,8 +9456,17 @@ sections 5 and 6 are the price bands and the forecast test; paste back
 cd /srv/qellys && python3 tools/stake_study.py 2>&1 | tee /tmp/iz_study.txt
 ```
 
-That the record serves it, after the next settle pass (settled, wins,
-losses, units, ROI, tracked):
+The record is rewritten after any pass that grades a pick or follows a
+build, so it shows tonight on its own. To have it now, this asks the
+settle lane to rewrite it on its next pass (within 5 minutes; harmless,
+it's one export):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import ledger; ledger.mark_record_dirty()"
+```
+
+That the record serves it (settled, wins, losses, units, ROI, tracked;
+about 1,406 staked, +23u, 7,563 tracked at the restatement):
 
 ```
 curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; o=(json.load(sys.stdin).get('staked') or {}).get('overall') or {}; print(o.get('settled'), o.get('wins'), o.get('losses'), o.get('net_units'), o.get('roi'), o.get('tracked'))"
