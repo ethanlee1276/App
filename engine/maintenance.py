@@ -1078,6 +1078,16 @@ def settle_open(log=print, state_path: Path | None = None,
                 settled += n_ftd
         except Exception as exc:                             # noqa: BLE001
             log(f"  ⚠️  first-touchdown settle skipped: {exc}")
+        # FIRST BASKET (2026-10-31), the NBA's: the game's first made shot or
+        # free throw in the box's shots (engine/firstbasket).
+        try:
+            from . import firstbasket as _fb
+            n_fb = _fb.settle(lconn, hconn)
+            if n_fb:
+                log(f"  First-basket bets graded: {n_fb}")
+                settled += n_fb
+        except Exception as exc:                             # noqa: BLE001
+            log(f"  ⚠️  first-basket settle skipped: {exc}")
         # Postponed MLB games void themselves (audit O4, roadmap #44). After
         # the grading pass, so a final that landed late grades first; the
         # guards (baseball only, three days old) live with the function.

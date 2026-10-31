@@ -59,6 +59,8 @@ EXTRA = {
     "targets": "Targets", "carries": "Carries",
     # The Long Shots board's football market since 2026-10-31 (engine/firsttd).
     "first_td": "First Touchdown",
+    # The NBA's Long Shots market since 2026-10-31 (engine/firstbasket).
+    "first_basket": "First Basket",
     "first_3_innings": "First 3 Innings",
     "min": "Minutes",
 }

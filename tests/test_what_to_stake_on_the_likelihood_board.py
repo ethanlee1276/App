@@ -306,8 +306,10 @@ def _seed(conn, sport, n, category="likely", hit=0.75, weekly=False):
 
 
 def test_the_journal_stakes_the_measured_size_not_the_constant():
+    from engine import stakeplan
     conn = _journal()
     _seed(conn, "nfl", 900, hit=0.78)
+    stakeplan.store(conn, stakeplan.promoted("nfl"))     # its book has beaten the price
     got = ledger.likely_stake_for(conn, "nfl", 0.66)
     assert got > ledger.LIKELY_LIVE_STAKE, got
     assert got == size.for_sport(conn, "nfl")["units"], got

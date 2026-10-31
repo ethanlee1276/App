@@ -1007,7 +1007,7 @@ def bankroll(conn) -> float:
 # darts loses most nights by design, and mixing that into the main W-L
 # and ROI makes the record describe the dart board instead of the picks
 # the model actually stands behind. ``log_longshots`` journals them.
-LONGSHOT_MARKETS = {"home_runs", "anytime_td", "first_td"}
+LONGSHOT_MARKETS = {"home_runs", "anytime_td", "first_td", "first_basket"}
 
 
 #: Game markets whose cards are priced through `engine.gamebets.temper`,
@@ -1315,6 +1315,14 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     paper = str(get_cfg(conn, "paper_mode") or "0") == "1"
     benched = is_benched(sport)
     category = book_for(sport, paper)
+    # A LEAGUE THE STAKE RULE HAS STOPPED (engine/stakeplan EDGE_STOP: 100
+    # graded at z ≤ −2.0) journals on paper — no dollars — until its Edge
+    # book climbs back above z −1.0. The staked record reads the rule
+    # itself, so these rows carry no units there either.
+    if category == "main":
+        from . import stakeplan as _stakeplan
+        if not _stakeplan.edge_staked(sport, _plan=stake_plan(conn)):
+            category = "paper"
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     kick = _kickoff_map(result)
     n = 0
@@ -1511,7 +1519,10 @@ SETTLEABLE_LONGSHOTS = {"home_runs", "anytime_td",
                         # First touchdown (2026-10-31), graded off the
                         # play-by-play's first scorer — engine/firsttd.settle,
                         # run from the settle loop beside settle_from_history.
-                        "first_td"}
+                        "first_td",
+                        # First basket, the NBA's (engine/firstbasket.settle),
+                        # graded off the box's shots and free throws.
+                        "first_basket"}
 
 
 def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
@@ -1698,7 +1709,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     # ANOTHER BUCKET, SAME RULES: the touchdown scenarios (engine
     # /tdscenarios) journal through here under their own ``category`` on
     # paper only, so their record never mixes with the Most Likely book.
-    staked = likely_is_staked(sport) if category == "likely" else False
+    staked = likely_is_staked(sport, conn) if category == "likely" else False
     brk = live_verdict(conn, sport) if staked else None
     unit_dollars = (float(get_cfg(conn, "unit_pct")) / 100.0 * bankroll(conn)
                     if staked else 0.0)
@@ -6836,10 +6847,28 @@ def book_for(sport, paper: bool) -> str:
     return "paper" if paper else "main"
 
 
+#: The one shape an ``only_ids`` table name may take: a temp table the
+#: caller filled with the bet ids to keep (engine/stakeplan's staked picks).
+_ONLY_IDS_RE = re.compile(r"^(temp\.)?[a-z_][a-z0-9_]*$")
+
+
+def _only_ids_sql(only_ids: str | None) -> str:
+    """" AND id IN (SELECT id FROM <table>)", or "" with no table."""
+    if not only_ids:
+        return ""
+    if not _ONLY_IDS_RE.match(str(only_ids)):
+        raise ValueError(f"not a table name: {only_ids!r}")
+    return f" AND id IN (SELECT id FROM {only_ids})"
+
+
 def performance(conn, sport: str | None = None,
                 category: str | tuple[str, ...] = BOOK,
                 since: str | None = None,
-                exclude_sports: tuple[str, ...] | None = None) -> dict:
+                exclude_sports: tuple[str, ...] | None = None,
+                only_ids: str | None = None) -> dict:
+    # ``only_ids`` names a table of bet ids to keep — the picks the stake
+    # rule staked (engine/stakeplan) — so the staked record is this same
+    # arithmetic over a subset, every field of it, not a second copy.
     # ``stake_units > 0`` everywhere below: rows staked at zero were never
     # bets (an old grading bug shipped picks the vig had already eaten).
     # Counting them would inflate the W-L column with wagers nobody could
@@ -6887,6 +6916,7 @@ def performance(conn, sport: str | None = None,
     # sort above any ISO date; they do not, and a 2024 test caught it.
     if since:
         q += " AND date >= ?"; args.append(since)
+    q += _only_ids_sql(only_ids)
     bets = conn.execute(q, args).fetchall()
 
     uq = (f"SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
@@ -7196,7 +7226,8 @@ def era_report(conn) -> dict:
 
 def pnl_curve(conn, sport: str | None = None,
               since: str | None = None,
-              category: tuple[str, ...] = BOOK) -> list[dict]:
+              category: tuple[str, ...] = BOOK,
+              only_ids: str | None = None) -> list[dict]:
     """Cumulative settled P&L by slate date — the Record page's equity curve.
 
     One point per date with anything settled: that day's net units, the
@@ -7272,6 +7303,7 @@ def pnl_curve(conn, sport: str | None = None,
     if since:
         q += f" AND {day} >= ?"
         args.append(since)
+    q += _only_ids_sql(only_ids)
     q += f" GROUP BY {day} ORDER BY {day}"
     out, cum = [], 0.0
     for r in conn.execute(q, args):
@@ -7414,7 +7446,8 @@ def recent_settled(conn, limit: int = 30,
                    category: str | tuple[str, ...] = "main",
                    sport: str | None = None,
                    since: str | None = None,
-                   exclude_sports: tuple[str, ...] | None = None) -> list[dict]:
+                   exclude_sports: tuple[str, ...] | None = None,
+                   only_ids: str | None = None) -> list[dict]:
     """The last settled picks, newest first — the site's receipts.
 
     Each row carries its side-aware CLV and process grade so the page can
@@ -7451,6 +7484,7 @@ def recent_settled(conn, limit: int = 30,
     if ex:
         q += f" AND LOWER(sport) NOT IN ({','.join('?' * len(ex))})"
         args += list(ex)
+    q += _only_ids_sql(only_ids)
     rows = conn.execute(q + " ORDER BY date DESC, id DESC LIMIT ?",
                         (*args, limit)).fetchall()
     out = []
@@ -9001,16 +9035,52 @@ def pooled_report(conn, sport: str | None = None,
 WITNESSED_BOOKS = BOOK + (POTD_CATEGORY,) + LIKELY_BOOKS
 
 
-def likely_is_staked(sport) -> bool:
+def stake_plan(conn=None) -> dict:
+    """What the stake rule (engine/stakeplan, v4) says per league, as the
+    last export stored it: {sport: {"edge": {...}, "likely": {...}}}. {}
+    before the first export, and every reader treats {} as the rule's
+    defaults — Edge staked, Most Likely tracked."""
+    own = conn is None
+    try:
+        if own:
+            conn = connect()
+        raw = get_cfg(conn, STAKE_PLAN_KEY)
+        got = json.loads(raw) if raw else {}
+        return got if isinstance(got, dict) else {}
+    except Exception:                                         # noqa: BLE001
+        return {}
+    finally:
+        if own and conn is not None:
+            with _contextlib.suppress(Exception):
+                conn.close()
+
+
+#: Where the export keeps the stake rule's answer (the config table), so
+#: the journal and every board read one stored plan rather than walking the
+#: record again on every pick.
+STAKE_PLAN_KEY = "stake_plan"
+
+
+def likely_is_staked(sport, conn=None) -> bool:
     """Is this league's likelihood board playing for money?
 
     A BENCHED LEAGUE NEVER IS, asked here rather than trusted to the list
     above: two places that have to be edited together are two places one
     of them gets edited alone.
+
+    AND SINCE 2026-10-31 THE RECORD DECIDES (engine/stakeplan, v4; Ethan:
+    "find what bets and what unit bets ... works best for our ROI to be
+    positive and our units to be positive, and then we need to implement
+    that"). A Most Likely book is tracked for its hit rate and staked only
+    once it has beaten the price — 200 graded at z ≥ +2.0 — because across
+    7,542 graded picks the board won 60.8% and lost 1.4% at the juice it
+    pays. LIKELY_LIVE_SPORTS is no longer the switch; it stays as the list
+    of leagues that were staked from 2026-09-19 under the old rule.
     """
     if is_benched(sport):
         return False
-    return str(sport or "").lower() in LIKELY_LIVE_SPORTS
+    from . import stakeplan
+    return stakeplan.likely_staked(sport, _plan=stake_plan(conn))
 
 
 #: THE DEMOTION BAR — the half that was missing when these boards were
@@ -9155,7 +9225,7 @@ def likely_stake_for(conn, sport, model_prob) -> float:
     still journaled, so the record keeps answering whether stopping was
     right.
     """
-    if not likely_is_staked(sport):
+    if not likely_is_staked(sport, conn):
         return 0.0
     v = live_verdict(conn, sport)
     if v["verdict"] == "stop":
@@ -9186,7 +9256,7 @@ def likely_stake_for(conn, sport, model_prob) -> float:
     return base
 
 
-def likely_category(sport) -> str:
+def likely_category(sport, conn=None) -> str:
     """Which book this league's likelihood rows are journaled to.
 
     ONE ANSWER, asked by the journal, the board guide and the tests
@@ -9195,7 +9265,7 @@ def likely_category(sport) -> str:
     twelve places had it typed in — so the split could not be made
     without each of them quietly meaning the wrong book.
     """
-    return LIKELY_LIVE_CATEGORY if likely_is_staked(sport) else "likely"
+    return LIKELY_LIVE_CATEGORY if likely_is_staked(sport, conn) else "likely"
 
 #: The bands the claimed probability is checked in. Wider than the
 #: betting bands on purpose: this board runs from MIN_PROB (0.30) up, and
@@ -9533,7 +9603,7 @@ def likely_report(conn, since: str | None = None,
     # can say so. A page that reports a book's record without saying
     # whether it is staked is describing two different things with one
     # sentence.
-    p["staked"] = likely_is_staked(sport)
+    p["staked"] = likely_is_staked(sport, conn)
     # WHICH LEAGUES, AND AT WHAT SIZE — because the page's copy is
     # written from this and the POOLED report has no sport to ask about.
     # `likely_is_staked(None)` is False, so the pooled section read "no
@@ -9542,8 +9612,8 @@ def likely_report(conn, since: str | None = None,
     # so rather than pick the comfortable half.
     p["staked_sports"] = ([sport] if sport and p["staked"]
                           else [] if sport
-                          else [sp for sp in LIKELY_LIVE_SPORTS
-                                if not is_benched(sp)])
+                          else [sp for sp in TRACKED_SPORTS
+                                if likely_is_staked(sp, conn)])
     p["stake_units"] = LIKELY_LIVE_STAKE
     # WHICH ROWS HAD MONEY ON THEM, AND FROM WHEN. The section's title said
     # "staked" over a book that is paper before 2026-09-19 (Ethan,
@@ -10561,6 +10631,19 @@ def export_json(conn, path) -> None:
     # equal that" — the tile under it read 1236-867-9, +4.3u, while the
     # combined one had added him to the edge book's 588-539, +2.1u.
     _pooled = pooled_report(conn, since=since)
+    # THE RECORD AT OUR STAKES (engine/stakeplan, v4, 2026-10-31): every
+    # graded pick of the headline record at the stake the rule would have
+    # given it on its day — Edge picks on the price ladder, Most Likely
+    # picks tracked until a league's book beats the price. One read and one
+    # walk for every page; the plan it ends on is stored for the journal.
+    try:
+        from . import stakeplan as _stakeplan
+        _staked = _stakeplan.staked_reports(
+            conn, sports=[sp for sp in TRACKED_SPORTS if not is_benched(sp)], since=since)
+        set_cfg(conn, STAKE_PLAN_KEY, json.dumps(_staked.get("plan") or {}, sort_keys=True))
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  staked record skipped — {type(exc).__name__}: {exc}")
+        _staked = {}
     out = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "record_epoch": since,
@@ -10598,6 +10681,10 @@ def export_json(conn, path) -> None:
         },
         "overall": scoped,
         "pooled": _pooled,
+        # The record the site leads with since 2026-10-31 (engine/stakeplan):
+        # its overall, curve and newest rows, and what the rule stakes next.
+        "staked": {k: _staked[k] for k in ("overall", "curve", "recent", "plan")
+                   if k in _staked},
         "mlb": performance(conn, "mlb", since=since),
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),
@@ -10715,7 +10802,10 @@ def export_json(conn, path) -> None:
         # EVERYTHING WE'VE BET: the model's scoped record and Zeno's
         # tickets in one line, the split always beside it (Ethan,
         # 2026-09-26). `overall` above stays the model's alone.
-        "combined": _zeno.combined(_pooled["overall"], _zeno_block),
+        # On the staked record since 2026-10-31: the model's half of "everything
+        # we've bet" is the picks that carry units.
+        "combined": _zeno.combined((_staked.get("overall") if _staked else None)
+                                   or _pooled["overall"], _zeno_block),
         "paper_mode": paper_mode(conn),
         # `paper_recent` — the hundred paper rows themselves — was dropped
         # on 2026-08-20 along with the Record page panel that was its only
@@ -10749,7 +10839,8 @@ def export_json(conn, path) -> None:
         # here is a league a reader can click to — which is the whole of
         # what Ethan asked to stop: "I don't want wnba Past bet or new
         # bet on the record page."
-        "by_sport": {sp: sport_report(conn, sp, since=since)
+        "by_sport": {sp: {**sport_report(conn, sp, since=since),
+                          "staked": ((_staked.get("by_sport") or {}).get(sp) or {})}
                      for sp in TRACKED_SPORTS if not is_benched(sp)},
         "tracked_sports": [sp for sp in TRACKED_SPORTS
                            if not is_benched(sp)],

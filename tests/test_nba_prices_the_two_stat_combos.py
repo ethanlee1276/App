@@ -54,8 +54,9 @@ def test_the_nba_buys_the_three_and_the_wnba_does_not():
          "player_rebounds_assists": "reb_ast"}
     assert set(oa.SPORT_CONFIG["wnba"]["markets"].values()) == {"pts", "reb", "ast", "fg3m", "pra"}
     # 16 -> 19 on 2026-10-14: steals, blocks and turnovers joined the NBA's
-    # request (tests/test_nba_prices_steals_blocks_turnovers.py).
-    assert (oddsbudget.EVENT_CREDITS["nba"], oddsbudget.EVENT_CREDITS["wnba"]) == (19, 13), \
+    # request (tests/test_nba_prices_steals_blocks_turnovers.py); 19 -> 20 on
+    # 2026-10-31, the first-basket market (engine/firstbasket).
+    assert (oddsbudget.EVENT_CREDITS["nba"], oddsbudget.EVENT_CREDITS["wnba"]) == (20, 13), \
         "three more markets is three more credits on every NBA event pulled"
 
 

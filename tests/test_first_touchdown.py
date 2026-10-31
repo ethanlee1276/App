@@ -185,6 +185,34 @@ def test_the_board_joins_quotes_to_our_usage_and_prices_every_player():
         assert p_["grade"] == "First TD" and p_["stake_units"] == 0.1 and p_["edge"] == round(p_["prob"] - p_["implied"], 4)
     assert F.report(b).startswith("  First touchdown: 2 quoted player(s) across 1 game(s)")
     assert F.report({"games": 0}) == "  First touchdown: no first-touchdown prices on this pull"
+    assert all(r["priced"] for r in b["rows"]) and b["ours"] == [], "a priced game shows its prices"
+
+
+def test_a_game_with_no_price_shows_our_first_scorers_and_the_price_that_would_make_a_pick():
+    """Ethan, 2026-10-31: "still not seeing first touchdown bets". A game whose
+    prices are not on file still shows who scores first by our numbers, each
+    with the shortest price that would make him a pick — never a pick itself."""
+    c = _hist()
+    for p_, team, car, tgt, td in (("Jahmyr Gibbs", "DET", 15, 4, 1), ("Amon-Ra St. Brown", "DET", 0, 10, 1),
+                                   ("Justin Jefferson", "MIN", 0, 11, 1), ("Aaron Jones", "MIN", 16, 3, 0)):
+        _log(c, 2026, "007", p_, team, carries=car, targets=tgt, rush_td=td if car else 0, rec_td=0 if car else td)
+    games = [{"home": "DET", "away": "MIN", "spread": -2.5, "date": "2026-11-01", "kickoff": "13:00"}]
+    b = F.board({}, games, sport="nfl", conn=c, why="player quotes: 0 of 1 eligible game(s) pulled · "
+                "1 left unpriced — the pull is capped at 0 game(s) by attention tier (budget pacing)")
+    assert b["rows"] == [] and b["picks"] == [] and b["ours_games"] == 1
+    assert len(b["ours"]) == F.OURS_PER_GAME and all(r["priced"] is False for r in b["ours"])
+    top = b["ours"][0]
+    assert top["need_odds"] is None or F.FIRST_TD_ODDS[0] <= top["need_odds"] <= F.FIRST_TD_ODDS[1]
+    assert top["fair_odds"] > 0 and b["why"] == F.WHY_BUDGET, "the budget held it, said in a reader's words"
+    assert F.why_empty("") == F.WHY_LATER
+    assert "our top first scorers shown unpriced for 1 game(s)" in F.report(b)
+
+
+def test_the_price_that_makes_a_pick_is_ten_percent_over_our_chance():
+    assert F.need_odds(0.10) == 1000, "1.10 / 0.10 = 11.0 decimal = +1000"
+    assert F.need_odds(0.30) == 267 and F.need_odds(0.50) == 250, "never shorter than the window's floor"
+    assert F.need_odds(0.03) is None and F.need_odds(0.042) is None, "nothing in the window makes him one"
+    assert F.fair_odds(0.2) == 400 and F.fair_odds(0) is None
 
 
 def test_the_feed_asks_for_it_on_the_nfl_and_keeps_it_from_every_anytime_reader():
@@ -208,8 +236,11 @@ def test_the_feed_asks_for_it_on_the_nfl_and_keeps_it_from_every_anytime_reader(
 def test_the_page_shows_it_on_the_nfls_long_shots():
     ls = APP[APP.index("function renderLongShots()"):]
     ls = ls[:ls.index("\n}\n")]
-    assert 'const ftd = !!state.data.first_td;' in ls
-    assert "first touchdown, our chance against the price" in ls
+    # One renderer for every first-scorer league since 2026-10-31 (the NBA's
+    # first basket rides it too): firstScorer() says which board and its word.
+    assert "const fs = firstScorer(state.data);" in ls and "const ftd = !!fs;" in ls
+    assert "`— ${fs.what}, our chance against the price`" in ls
+    assert 'what: "first touchdown"' in APP
     assert 'watchlistHTML(watch, false, "first_td")' in ls
     assert "never by the price." in ls and "The likeliest scorer is rarely the pick." in ls
     assert "Who scores first, by our numbers" in APP

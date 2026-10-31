@@ -1503,9 +1503,16 @@ def record_facts(record: dict, sport: str = "") -> dict:
     if not record:
         return {}
     pooled = record.get("pooled") or {}
-    head = pooled.get("overall") or record.get("overall") or {}
+    # The picks we stake lead since 2026-10-31 (engine/stakeplan); the
+    # pooled journal is the record as placed.
+    staked = record.get("staked") or {}
+    head = staked.get("overall") or pooled.get("overall") or record.get("overall") or {}
     out = {"since": record.get("record_epoch"), "all_bets": _wl(head)}
-    curve = pooled.get("curve") or record.get("curve") or []
+    if staked.get("overall") and pooled.get("overall"):
+        out["as_placed"] = _wl(pooled["overall"])
+        out["stake_rule"] = ("Edge picks staked on the price ladder; Most Likely picks tracked for "
+                             "their hit rate and staked only in a league whose book has beaten the price")
+    curve = staked.get("curve") or pooled.get("curve") or record.get("curve") or []
     if curve and all(isinstance(p, dict) and p.get("w") is not None for p in curve):
         start = (_dt.date.today() - _dt.timedelta(days=30)).isoformat()
         last = [p for p in curve if str(p.get("date") or "") >= start]
@@ -1515,7 +1522,8 @@ def record_facts(record: dict, sport: str = "") -> dict:
                                    "net_units": round(net, 2)}
     sp = ((record.get("by_sport") or {}).get(sport) or {}) if sport else {}
     if sp:
-        out[f"{sport}_bets"] = _wl((sp.get("pooled") or {}).get("overall") or sp.get("overall"))
+        out[f"{sport}_bets"] = _wl((sp.get("staked") or {}).get("overall")
+                                   or (sp.get("pooled") or {}).get("overall") or sp.get("overall"))
     lk = record.get("likely") or {}
     if lk:
         out["most_likely_board"] = _wl(lk)

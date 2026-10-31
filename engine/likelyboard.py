@@ -251,10 +251,49 @@ NFL_UNDER_POSITIONS = {
 }
 
 
+#: MARKETS WHOSE UNDERS THE BOARD HOLDS, per league (Ethan, 2026-10-31: "keep
+#: diving deeper into our NFL edge and most likely bets and the college edge
+#: and most likely bets ... to find better picks"). Read off every graded
+#: Most Likely pick in the public receipts (the board, the list, the bold and
+#: held books), split at the middle of each league's season so a rule has to
+#: hold in both halves:
+#:
+#:     league  market · side       first half          second half
+#:     NFL     rec_yds · under     73   48% vs 65%     96   48% vs 53%
+#:     CFB     rec_yds · under     34   50% vs 70%    115   50% vs 62%
+#:
+#: Short of the claim in both halves in both leagues — the same shape as the
+#: NFL's tight-end unders, the position most of these belong to: a low line
+#: and targets that come in bunches, so one busy afternoon beats the under.
+#: Receiving-yards overs hold up (NFL 63-64% against 64-68%, college 64-71%
+#: against 62-69%), so only the under is held. Off with QB_NFL_TIGHT=off for
+#: the NFL and QB_CFB_TIGHT=off for college.
+UNDER_MARKETS_HELD = {
+    "nfl": {"rec_yds": "a receiving-yards under — on our graded board these have hit 48% where we "
+                       "said 58% (169 picks, short in both halves of the season)"},
+    "cfb": {"rec_yds": "a receiving-yards under — on our graded board these have hit 50% where we "
+                       "said 64% (149 picks, short in both halves of the season)"},
+}
+CFB_TIGHT_ENV = "QB_CFB_TIGHT"
+
+
+def _cfb_tight() -> bool:
+    import os
+    return os.environ.get(CFB_TIGHT_ENV, "").strip().lower() not in ("off", "0", "no", "false")
+
+
 def tightened_reason(r: dict, sport: str) -> str | None:
-    """Why the tightened NFL board holds this pick back, or None."""
+    """Why the tightened board holds this pick back, or None. The NFL's whole
+    tightening (QB_NFL_TIGHT); college's held-under markets (QB_CFB_TIGHT)."""
     from .likely import tightened
-    if sport != "nfl" or r.get("locked") or r.get("reserve") or not tightened(sport):
+    if r.get("locked") or r.get("reserve"):
+        return None
+    if sport == "cfb":
+        held = UNDER_MARKETS_HELD["cfb"].get(str(r.get("market") or ""))
+        if held and _cfb_tight() and _side(r) == "under" and lane_of(r) == "prop":
+            return f"held back: {held}"
+        return None
+    if sport != "nfl" or not tightened(sport):
         return None
     prob = r.get("model_prob")
     if lane_of(r) != "td" and prob is not None and float(prob) < NFL_TIGHT_BAR:
@@ -269,6 +308,9 @@ def tightened_reason(r: dict, sport: str) -> str | None:
         pos = str(r.get("position") or "").strip().upper()
         if lane_of(r) == "prop" and pos in NFL_UNDER_POSITIONS:
             return f"held back: {NFL_UNDER_POSITIONS[pos]}"
+        held = UNDER_MARKETS_HELD["nfl"].get(str(r.get("market") or ""))
+        if lane_of(r) == "prop" and held:
+            return f"held back: {held}"
     return None
 
 
@@ -433,13 +475,28 @@ def market_check(r: dict):
     return None, words
 
 
+#: A LEAGUE JOINS ON ONE COMMAND once pricetrust.py passes on its board
+#: (2026-10-31: the college board's "bolder than the books" picks claimed 69%
+#: and hit 53% over 283 unders, z −6.0, and its 75%-plus claims hit 59%): the
+#: runbook runs the test, and on a PASS ``sudo ./deploy/setenv.sh
+#: QB_PRICE_TRUST_ADD cfb`` puts college at the NFL's rule (w = 1, T = 0) —
+#: the yes stays Ethan's, as the doctrine above says. A comma list for more.
+PRICE_TRUST_ADD_ENV = "QB_PRICE_TRUST_ADD"
+PRICE_TRUST_ADD_RULE = (1.0, 0.0)
+
+
 def price_trust_rule(sport: str):
     """``(w, T)`` for this league's board, or None — not a league the test
-    passed on, or switched off (PRICE_TRUST_ENV)."""
+    passed on, or switched off (PRICE_TRUST_ENV). A league named in
+    PRICE_TRUST_ADD_ENV joins at PRICE_TRUST_ADD_RULE."""
     import os
     if os.environ.get(PRICE_TRUST_ENV, "").strip().lower() in ("off", "0", "no", "false"):
         return None
-    return PRICE_TRUST.get(str(sport or "").lower())
+    sp = str(sport or "").lower()
+    added = {x.strip().lower() for x in os.environ.get(PRICE_TRUST_ADD_ENV, "").split(",") if x.strip()}
+    if sp and sp in added and sp not in PRICE_TRUST:
+        return PRICE_TRUST_ADD_RULE
+    return PRICE_TRUST.get(sp)
 
 
 def book_quotes(result: dict, rows=()) -> dict:
@@ -978,8 +1035,10 @@ def attach(result: dict, sport: str, conn=None) -> str:
         result["likely_board"] = board
         harmonize(result)
         t = board["tiers"]
+        held_unders = sum(1 for r in board.get("held") or [] if r.get("tight_hold"))
         return (f"Most Likely board: {len(board['rows'])} pick(s) — {t.get('top', 0)} top, "
-                f"{t.get('strong', 0)} strong, {t.get('look', 0)} worth a look")
+                f"{t.get('strong', 0)} strong, {t.get('look', 0)} worth a look"
+                + (f"; {held_unders} held by the record's under rules" if held_unders else ""))
     except Exception as exc:                                 # noqa: BLE001
         # WHERE, not only what (the box, 2026-10-06: NHL's board was
         # skipped every build with "unhashable type: 'dict'" and nothing

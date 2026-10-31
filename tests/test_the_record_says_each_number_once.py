@@ -55,7 +55,11 @@ def test_same_tally_compares_the_record_and_the_money():
 
 def test_the_combined_lines_draw_only_when_they_add_something():
     ribbons = _fn(APP, "recordRibbonsHTML")
-    assert "if (po && po.settled && !sameTally(po, ov))" in ribbons
+    # Since 2026-10-31 (engine/stakeplan) the record as placed is its own
+    # labelled tile on the Record page; before the stake rule's record exists
+    # it is still the Combined tile, drawn only when it adds something.
+    assert "if (po && po.settled && staked && parts && !sameTally(po, ov))" in ribbons
+    assert "} else if (po && po.settled && !staked && !sameTally(po, ov)) {" in ribbons
     combined = _fn(APP, "combinedLineHTML")
     assert "sameTally(po, o)" in combined
     assert '${opts.combinedShown ? "" : combinedLineHTML(src.pooled_overall, need, o)}' in _fn(APP, "recordVerdictHTML")

@@ -156,7 +156,8 @@ def test_the_headline_reads_the_window_from_the_scopes_own_curve():
     assert "const avail = recRangesFor(src.curve);" in body, "the scope in view's curve, not the pooled one"
     assert "const rk = recRangeKey(avail);" in body and "const from = recRangeFrom(avail, rk);" in body
     assert "const winO = from ? recRangeTotals(src.curve, from) : null;" in body
-    assert "recordRibbonsHTML(dAll, { ...winO, label: `Edge picks · last ${winDays} days` }," in body
+    assert ('recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record" : '
+            '"Edge picks"} · last ${winDays} days` },') in body
     assert '(src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })' in body, \
         "the form dots are the window's own"
     assert ": recordRibbonsHTML(dAll, o, src.recent, { parts: true });" in body, "no window, or an empty one: the whole record"
@@ -166,7 +167,11 @@ def test_the_headline_reads_the_window_from_the_scopes_own_curve():
         "scopes, windows, headline, the note, then the rooms"
     assert "Everything else here is the whole record." in body
     assert "headline is the whole record." in body, "an empty window says the ribbon did not move"
-    assert 'tile(ov.label || "Edge picks · graded in public", wl(ov),' in _fn("recordRibbonsHTML")
+    # The picks we stake lead since 2026-10-31 (engine/stakeplan); a window's
+    # totals carry its own label.
+    rib = _fn("recordRibbonsHTML")
+    assert 'const lead = staked ? "Our record · the picks we stake" : (ov.label || "Edge picks · graded in public");' in rib
+    assert "tile(lead, wl(ov), roiBig(roi), tone(roi)," in rib
 
 
 def test_the_chart_and_the_headline_share_one_window():

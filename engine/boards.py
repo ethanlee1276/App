@@ -156,14 +156,17 @@ def guide(sport: str = "nfl") -> list[dict]:
                 "doing the thing it measurably does well — sorting who "
                 "hits. It is now recorded so the ledger, not a backtest, "
                 "can settle it."
-                + (" MLB is STAKED with real money from 2026-09-19, at "
-                   "Ethan's call and below this board's own bar: its "
-                   "paper ROI was +2.1% over 586 settled, which is z "
-                   "0.75 — not distinguishable from break-even. It runs "
-                   "on its own line in the record and cannot move the "
-                   "Edge book's number."
+                # THE STAKE RULE (engine/stakeplan, v4, 2026-10-31): tracked
+                # for its hit rate until a league's book beats the price.
+                + (" Staked in this league: its Most Likely book has beaten "
+                   "the price on the record (200 graded at z of +2.0 or "
+                   "better), so its picks carry a stake."
                    if _likely_staked(sport) else
-                   " No money is staked on this board.")),
+                   " Tracked for its hit rate, not staked: across 7,542 "
+                   "graded picks this board won 60.8% and lost 1.4%, because "
+                   "it pays −162 on average where 61.8% only breaks even. A "
+                   "league's book is staked once it beats the price — 200 "
+                   "graded at z of +2.0 or better.")),
         },
         {
             "key": "long_shots",

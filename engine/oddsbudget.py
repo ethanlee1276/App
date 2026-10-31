@@ -98,7 +98,9 @@ CREDITS_PER_EVENT = 8
 #: The NFL's is twenty-six since 2026-10-31: the first-touchdown market
 #: (`oddsapi.FIRST_TD_ODDS_TO_MARKET`; Ethan: "I only want our long shot
 #: picks to be stuff like ... first touchdown score for NFL").
-EVENT_CREDITS = {"nfl": 26, "mlb": 11, "nba": 19, "wnba": 13, "nhl": 12, "ufc": 1}
+#: The NBA's is twenty since 2026-10-31: the first-basket market
+#: (`oddsapi.FIRST_BASKET_ODDS_TO_MARKET`; Ethan: "first basket score for NBA").
+EVENT_CREDITS = {"nfl": 26, "mlb": 11, "nba": 20, "wnba": 13, "nhl": 12, "ufc": 1}
 
 
 def credits_per_event(sport: str | None = None) -> int:

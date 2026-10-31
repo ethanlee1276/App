@@ -3464,7 +3464,7 @@ async function renderRecord() {
         pooled_overall: winO ? null : src.pooled_overall,
         likely_overall: winO ? null : src.likely_overall } : d;
   const ribbons = winO
-    ? recordRibbonsHTML(dAll, { ...winO, label: `Edge picks · last ${winDays} days` },
+    ? recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record" : "Edge picks"} · last ${winDays} days` },
         (src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })
     : recordRibbonsHTML(dAll, o, src.recent, { parts: true });
   const winBar = recordWindowHTML(avail, rk, recRangesClosed(src.curve));

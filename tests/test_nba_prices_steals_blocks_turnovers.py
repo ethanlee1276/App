@@ -63,9 +63,12 @@ def test_the_nba_buys_the_three_behind_the_guard_and_the_wnba_does_not():
     assert set(keys) <= oa.UNPROVEN_MARKETS and set(keys) <= oa.NEWEST_ODDS_KEYS, \
         "new keys: a refusal drops them, and an unnamed one drops them first"
     assert not set(keys) & set(oa.SPORT_CONFIG["wnba"]["markets"])
-    for sport, price in (("nba", 19), ("wnba", 13)):
+    # 19 -> 20 on 2026-10-31: the NBA's first-basket market (its Long Shots,
+    # engine/firstbasket) rides every NBA event as a scorer market.
+    for sport, price in (("nba", 20), ("wnba", 13)):
         cfg = oa.SPORT_CONFIG[sport]
-        assert len(cfg["markets"]) + len(cfg["alternates"]) + 3 == oddsbudget.EVENT_CREDITS[sport] == price
+        assert len(cfg["markets"]) + len(cfg.get("scorers") or {}) + len(cfg["alternates"]) + 3 \
+            == oddsbudget.EVENT_CREDITS[sport] == price
     assert not set(keys.values()) & set(oa.HOOPS_ALT_ODDS_TO_MARKET.values()), "main lines only"
 
 

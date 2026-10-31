@@ -126,7 +126,8 @@ def test_the_college_build_makes_first_touchdown_its_long_shots():
     assert "first_td=first_td_quotes" in src
     # The page draws the first-touchdown shelf for any league that ships one.
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    assert "const ftd = !!state.data.first_td;" in app
+    assert "const fs = firstScorer(state.data);" in app and "const ftd = !!fs;" in app
+    assert 'd.first_td ? { key: "first_td", b: d.first_td, what: "first touchdown" }' in app
 
 
 # --- the box score marks the first scorer ------------------------------------------

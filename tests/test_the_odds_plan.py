@@ -225,17 +225,21 @@ def test_november_at_100k_funds_every_sport_and_most_of_the_headroom():
     a quarter for college, the NBA and baseball, and hockey and UFC share
     the rest at one fill."""
     plan = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
-    assert all(lp.target == lp.need for lp in plan.leagues.values())
+    assert all(lp.target == lp.need for lp in plan.leagues.values()), "every league's need is met"
     nfl = plan.get("nfl")
     assert nfl.extra == int(nfl.need * P.NFL_HEADROOM), "the NFL's headroom first"
-    for lg in ("cfb", "nba", "mlb"):
-        assert plan.get(lg).extra == int(plan.get(lg).need * P.HEADROOM), lg
-    nhl, ufc = plan.get("nhl"), plan.get("ufc")
-    assert 1.0 < nhl.fill < 1.0 + P.HEADROOM and abs(nhl.fill - ufc.fill) < 0.01, (nhl.fill, ufc.fill)
+    assert plan.get("cfb").extra == int(plan.get("cfb").need * P.HEADROOM), "college's next"
+    # Since 2026-10-31 the NBA buys its first-basket market too (20 credits an
+    # event, not 19), so the headroom runs out inside the NBA's share: most of
+    # it, and the leagues after it at one fill.
+    nba = plan.get("nba")
+    assert 0.5 * int(nba.need * P.HEADROOM) < nba.extra <= int(nba.need * P.HEADROOM), nba.extra
+    for lg in ("mlb", "nhl", "ufc"):
+        assert plan.get(lg).fill >= 1.0, lg
     assert plan.get("wnba").need == 0 and plan.unplanned <= 2
     gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1,
                    over={"mlb"})
-    assert gone.get("nhl").fill > plan.get("nhl").fill, "baseball's share went to the leagues still playing"
+    assert gone.get("nba").extra > plan.get("nba").extra, "baseball's share went to the leagues still playing"
 
 
 def test_a_season_that_is_over_leaves_the_pool():

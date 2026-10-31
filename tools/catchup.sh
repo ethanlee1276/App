@@ -661,6 +661,29 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JB "Receiving-yards unders held; college's price switch" 30 <<'SH'
+cd /srv/qellys && grep -c "UNDER_MARKETS_HELD" engine/likelyboard.py && grep -c "PRICE_TRUST_ADD_ENV" engine/likelyboard.py
+SH
+run JA "First basket is the NBA's Long Shots" 60 <<'SH'
+cd /srv/qellys && date -u -r data/built/nba.json && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/nba.json'))
+f = d.get('first_basket') or {}
+print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
+[print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
+print(f.get('ours_games', 0), 'game(s) unpriced;', f.get('why') or '')
+[print(' unpriced:', r['player'], r['team'], 'ours', r['prob'], 'a pick at', r['need_odds']) for r in (f.get('ours') or [])[:6]]
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import ledger
+c = ledger.connect()
+print([tuple(r) for r in c.execute('SELECT status, COUNT(*) FROM bets WHERE market=? GROUP BY status', ('first_basket',))])
+"
+SH
+run IZ "The record leads with the picks we stake" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.stakeplan
+curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; o=(json.load(sys.stdin).get('staked') or {}).get('overall') or {}; print(o.get('settled'), o.get('wins'), o.get('losses'), o.get('net_units'), o.get('roi'), o.get('tracked'))"
+SH
 run IY "The first screen settles faster on a phone" 30 <<'SH'
 curl -s https://qellysbook.com/css/styles.css | grep -c 'body.own-league-row .sportbar'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatFabMark('
@@ -673,11 +696,13 @@ f = d.get('first_td') or {}
 print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
 [print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
 [print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+print(f.get('ours_games', 0), 'game(s) unpriced;', f.get('why') or '')
+[print(' unpriced:', r['player'], r['team'], 'ours', r['prob'], 'a pick at', r['need_odds']) for r in (f.get('ours') or [])[:6]]
 "
 cd /srv/qellys && sudo -u qellys python3 -c "
 from engine import db
 c = db.connect()
-print(c.execute('SELECT COUNT(DISTINCT game_id), SUM(value) FROM player_game_logs WHERE sport=? AND market=?', ('cfb', 'first_td')).fetchone())
+print(tuple(c.execute('SELECT COUNT(DISTINCT game_id), SUM(value) FROM player_game_logs WHERE sport=? AND market=?', ('cfb', 'first_td')).fetchone()))
 "
 SH
 run IW "Tight-end unders off; the price question" 60 <<'SH'
@@ -691,6 +716,8 @@ f = d.get('first_td') or {}
 print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
 [print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
 [print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+print(f.get('ours_games', 0), 'game(s) unpriced;', f.get('why') or '')
+[print(' unpriced:', r['player'], r['team'], 'ours', r['prob'], 'a pick at', r['need_odds']) for r in (f.get('ours') or [])[:6]]
 "
 SH
 run IT "NFL Most Likely, tightened" 60 <<'SH'

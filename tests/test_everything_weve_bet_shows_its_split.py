@@ -54,7 +54,11 @@ def test_the_export_ships_both_and_never_folds_zeno_into_overall():
     # The model half is the record the page shows as the model's — the
     # pooled book (edge + Most Likely), which app.js seats as `overall` —
     # so the combined tile adds up with the tile beneath it.
-    assert '"combined": _zeno.combined(_pooled["overall"], _zeno_block),' in LEDGER
+    # Since 2026-10-31 the model's half is the picks we stake (engine/
+    # stakeplan), the record the page leads with — the pooled book when the
+    # staked record could not be built.
+    assert ('"combined": _zeno.combined((_staked.get("overall") if _staked else None)\n'
+            '                                   or _pooled["overall"], _zeno_block),') in LEDGER
     assert '"pooled": _pooled,' in LEDGER
     # Since 2026-09-30 (audit P1-1) the page's headline is the edge board
     # and the pooled book — this combined line's model half — is kept

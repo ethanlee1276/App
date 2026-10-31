@@ -231,6 +231,13 @@ SCORER_ODDS_TO_MARKET = {
 #: engine/firsttd prices it against our own chance. One more market an
 #: NFL event (oddsbudget.EVENT_CREDITS). College keeps the anytime map.
 FIRST_TD_ODDS_TO_MARKET = {"player_1st_td": "first_td"}
+#: FIRST BASKET, the NBA's Long Shots market (engine/firstbasket, 2026-10-31;
+#: Ethan: "I only want our long shot picks to be stuff like first basket score
+#: for NBA"). A Yes/No scorer market like the touchdown's, kept on its own
+#: key (`OddsMatch.first_basket`); one more credit on every NBA event pulled,
+#: and behind the drop-and-retry guard (UNPROVEN_MARKETS) until a pull has
+#: returned it.
+FIRST_BASKET_ODDS_TO_MARKET = {"player_first_basket": "first_basket"}
 NFL_SCORER_ODDS_TO_MARKET = {**SCORER_ODDS_TO_MARKET, **FIRST_TD_ODDS_TO_MARKET}
 
 # MLB market keys (engine.mlb.models markets). Kept as strings to avoid an
@@ -599,6 +606,8 @@ HOOPS_COUNT_ODDS_TO_MARKET = {"player_steals": "stl", "player_blocks": "blk",
 NBA_ODDS_TO_MARKET = {**NBA_ODDS_TO_MARKET, **HOOPS_COUNT_ODDS_TO_MARKET}
 UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(HOOPS_COUNT_ODDS_TO_MARKET)
 NEWEST_ODDS_KEYS = NEWEST_ODDS_KEYS | frozenset(HOOPS_COUNT_ODDS_TO_MARKET)
+UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(FIRST_BASKET_ODDS_TO_MARKET)
+NEWEST_ODDS_KEYS = NEWEST_ODDS_KEYS | frozenset(FIRST_BASKET_ODDS_TO_MARKET)
 NBA_TEAM_ABBR = {
     "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
     "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI",
@@ -649,6 +658,8 @@ SPORT_CONFIG = {
             "alternates": MLB_ALT_ODDS_TO_MARKET},
     "nba": {"sport_key": "basketball_nba",
             "markets": NBA_ODDS_TO_MARKET, "teams": NBA_TEAM_ABBR,
+            # The first-basket market, the NBA's Long Shots (engine/firstbasket).
+            "scorers": FIRST_BASKET_ODDS_TO_MARKET,
             "alternates": HOOPS_ALT_ODDS_TO_MARKET},
     # Same markets and the same book keys; only the league and the team
     # names differ. The WNBA expanded twice in two years, so this map is
@@ -2035,6 +2046,9 @@ class OddsAttachResult:
     #: books quoted: {normalised name: {"player", "home", "away",
     #: "quotes": [{book, yes_odds, ...}]}} — read by engine/firsttd.
     first_td: dict = field(default_factory=dict)
+    #: First-basket quotes (FIRST_BASKET_ODDS_TO_MARKET), the NBA's Long
+    #: Shots, in the same shape as `first_td`.
+    first_basket: dict = field(default_factory=dict)
     quota: Quota = field(default_factory=Quota)
     events_used: int = 0
     moneylines: int = 0          # games that got real h2h prices attached
@@ -3040,8 +3054,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                     # Which game the quote belongs to — the check below
                     # needs it, and a scorer quote carries no teams.
                     scorer_pairs.setdefault(k, (home, away))
-                    if k[1] == "first_td" and quotes:
-                        ft = result.first_td.setdefault(k[0], {
+                    if k[1] in ("first_td", "first_basket") and quotes:
+                        keep = result.first_td if k[1] == "first_td" else result.first_basket
+                        ft = keep.setdefault(k[0], {
                             "player": quotes[0].get("player") or k[0], "home": home, "away": away,
                             "quotes": []})
                         ft["quotes"].extend(quotes)

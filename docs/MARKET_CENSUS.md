@@ -146,6 +146,7 @@ always because it was measured and found flat (the module's own notes say which)
 ## Bought for its own board
 
 - **First touchdown** (NFL and college, since 2026-10-31): the Long Shots board. Priced by its own model — the lines for the team, his share of its carries, targets and touchdowns for the player, each league on its own fit (`engine/firsttd`, docs/FIRST_TD_RESEARCH.md) — and graded off the game's first scorer (the NFL's play-by-play; college's box score, from ESPN's scoring plays), not through the prop chain above.
+- **First basket** (NBA, since 2026-10-31): the NBA's Long Shots board. Priced by its own model — both teams' tip records for who takes the first shot, his share of his team's shots in the first three minutes for the player (`engine/firstbasket`, the box study in docs/FIRST_TD_RESEARCH.md) — and graded off the game's first made shot or free throw in the box's shots.
 
 ## What is not bought, and why
 

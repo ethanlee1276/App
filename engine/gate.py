@@ -175,6 +175,9 @@ PAID_KEYS = (
     # chance by our numbers and the Long Shots picks taken from it — the
     # long-shot board under a new name, so a new paid key.
     "first_td",
+    # FIRST BASKET (engine/firstbasket, 2026-10-31): the NBA's Long Shots
+    # board, in first_td's shape — a paid key for the same reason.
+    "first_basket",
     # THE GAME REPORT (engine/gamereport, 2026-10-19): every NFL game
     # written out, its "who's guarding who" verdicts and its players to
     # watch built from the scan's reads — `scan_reads` under an eighth

@@ -117,8 +117,8 @@ def _bought(t, sport: str) -> dict:
     # First touchdown is bought for the Long Shots board, which prices and
     # grades it on its own (engine/firsttd), not through the prop chain this
     # census audits — listed under its own heading below.
-    out.update({k: v for k, v in (cfg.get("scorers") or {}).items()
-                if k not in getattr(O, "FIRST_TD_ODDS_TO_MARKET", {})})
+    own = {**getattr(O, "FIRST_TD_ODDS_TO_MARKET", {}), **getattr(O, "FIRST_BASKET_ODDS_TO_MARKET", {})}
+    out.update({k: v for k, v in (cfg.get("scorers") or {}).items() if k not in own})
     out.update(cfg.get("alternates") or {})
     if sport == "cfb":
         for k in t["cfb_build"].PLAYER_MARKETS:
@@ -390,7 +390,12 @@ def render() -> str:
             "touchdowns for the player, each league on its own fit (`engine/firsttd`, "
             "docs/FIRST_TD_RESEARCH.md) — and graded off the game's first scorer (the NFL's "
             "play-by-play; college's box score, from ESPN's scoring plays), not through the prop "
-            "chain above.", ""]
+            "chain above.",
+            "- **First basket** (NBA, since 2026-10-31): the NBA's Long Shots board. Priced by its "
+            "own model — both teams' tip records for who takes the first shot, his share of his "
+            "team's shots in the first three minutes for the player (`engine/firstbasket`, the box "
+            "study in docs/FIRST_TD_RESEARCH.md) — and graded off the game's first made shot or free "
+            "throw in the box's shots.", ""]
     out += ["## What is not bought, and why", "",
             "- **Longest completion / rush / reception, last touchdown, touchdowns over:** "
             "no model, no measurement; a book's vig on a longest-play market is the widest on the menu.",

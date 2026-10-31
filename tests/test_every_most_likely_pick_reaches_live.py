@@ -83,7 +83,7 @@ def test_a_paper_pick_is_not_journaled_again_when_staked():
     conn = ledger.connect(":memory:")
     board = {"sport": "nfl", "date": WEEK, "most_likely": [_pick("Emanuel Wilson", "GB", 0.72)]}
     real = ledger.likely_is_staked
-    ledger.likely_is_staked = lambda sport: False
+    ledger.likely_is_staked = lambda sport, conn=None: False
     try:
         assert ledger.log_most_likely(conn, board) == 1
     finally:

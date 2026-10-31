@@ -201,9 +201,14 @@ def test_the_likelihood_board_stops_paying_for_wnba_too():
     """It staked 0.25u of REAL dollars on that board from 2026-09-19.
     Asked through `likely_is_staked` rather than by reading the list, so
     the two cannot be edited apart."""
-    assert not ledger.likely_is_staked("wnba")
+    from engine import stakeplan
+    conn = _ledger()
+    # The stake rule (engine/stakeplan) has promoted both books: the bench
+    # still wins for the benched league, and the other league keeps its stake.
+    stakeplan.store(conn, stakeplan.promoted("nfl", "wnba"))
+    assert not ledger.likely_is_staked("wnba", conn)
     assert "wnba" not in ledger.LIKELY_LIVE_SPORTS
-    assert ledger.likely_is_staked("nfl"), "the other leagues came off too"
+    assert ledger.likely_is_staked("nfl", conn), "the other leagues came off too"
 
 
 def test_re_adding_wnba_to_the_live_list_alone_still_pays_it_nothing():

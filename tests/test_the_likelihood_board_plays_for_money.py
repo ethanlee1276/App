@@ -42,9 +42,19 @@ from engine import ledger                                      # noqa: E402
 _SEQ = [0]
 
 
+#: The leagues this file's staked book is about. Since 2026-10-31 a
+#: league's Most Likely book is staked only once the stake rule promotes it
+#: (engine/stakeplan: 200 graded at z >= +2.0 — tests/test_stakes_follow_
+#: the_record.py); every test here is about what a STAKED book does, so the
+#: fixture journal starts with those books promoted.
+STAKED = ("nfl", "cfb", "nba", "mlb")
+
+
 def _conn():
+    from engine import stakeplan
     conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
     ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    stakeplan.store(conn, stakeplan.promoted(*STAKED))
     return conn
 
 
@@ -144,8 +154,7 @@ def test_the_page_is_told_which_leagues_carry_money_and_how_much():
     comfortable half."""
     conn = _conn()
     pooled = ledger.likely_report(conn)
-    assert pooled["staked_sports"] == [
-        sp for sp in ledger.LIKELY_LIVE_SPORTS if not ledger.is_benched(sp)]
+    assert sorted(pooled["staked_sports"]) == sorted(STAKED), pooled["staked_sports"]
     assert pooled["stake_units"] == ledger.LIKELY_LIVE_STAKE
     assert ledger.likely_report(conn, sport="nfl")["staked_sports"] == ["nfl"]
     assert ledger.likely_report(conn, sport="ufc")["staked_sports"] == []

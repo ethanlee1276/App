@@ -3,6 +3,30 @@
   "entries": [
     {
       "date": "2026-10-31",
+      "kind": "model",
+      "title": "The record leads with the picks we stake",
+      "body": "Edge picks are staked on the price ladder. Most Likely picks are now tracked for their hit rate instead of staked, until a league's Most Likely board proves it beats the price (the NBA's has). Across 7,542 graded picks, Most Likely won 60.8% of its bets and still lost 1.4%, because it pays \u2212162 on average and 61.8% only breaks even. The record on the site now counts every graded pick at the stake that rule gave it on its day: 1,699 staked, +13.5 units, +1.6% ROI. The record as placed stays on the Record page, and every number reruns from the public receipts (docs/STAKES.md)."
+    },
+    {
+      "date": "2026-10-31",
+      "kind": "ship",
+      "title": "NBA Long Shots are first-basket picks",
+      "body": "Long Shots opens for the NBA. Who takes the first shot comes from both teams' tip records this season, and the team with the first shot scores first 71.9% of the time. Each player's chance comes from his share of his team's shots in the first three minutes. A pick needs a 10% edge at the best price, one a game, and is graded off the game's first made shot or free throw."
+    },
+    {
+      "date": "2026-10-31",
+      "kind": "ship",
+      "title": "First scorers before the prices",
+      "body": "Every first-touchdown and first-basket board now shows each game's likeliest first scorers by our numbers before the prices are in, with the price that would make each one a pick, and says why no price is on file yet."
+    },
+    {
+      "date": "2026-10-31",
+      "kind": "model",
+      "title": "Receiving-yards unders come off the NFL and college boards",
+      "body": "On the graded Most Likely record, receiving-yards unders fell short of our chance in both halves of the season in both leagues: NFL 48% against 65%, then 48% against 53%; college 50% against 70%, then 50% against 62%. They're held back now, and the overs, which hold up, stay."
+    },
+    {
+      "date": "2026-10-31",
       "kind": "fix",
       "title": "Pages settle faster on a phone",
       "body": "The first screen does far less work while it loads: on a mid-range phone, the time the page is busy and can\u2019t answer a tap fell by about a third on the Most Likely page. A few style rules were making the browser re-check the whole page every time anything on it changed; they now ask only about what they style."

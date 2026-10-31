@@ -74,6 +74,14 @@ MIN_PROB = 0.04
 #: Picks per game, and on the board.
 PER_GAME = 1
 LIMIT = 8
+#: OUR NUMBERS BEFORE THE PRICES (Ethan, 2026-10-31: "still not seeing first
+#: touchdown bets ... those bets need to show up on the long shot page"). A
+#: game whose first-touchdown prices are not on file yet — the odds budget
+#: did not buy them, or they post later in the day — still shows its likeliest
+#: first scorers by our numbers, each with the price that would make him a
+#: pick (`need_odds`), so the page is never empty while the model has an
+#: opinion. Nothing unpriced is a pick or journaled: a pick needs a price.
+OURS_PER_GAME = 3
 
 #: The stored stats a player's volume and touchdowns come from
 #: (player_game_logs).
@@ -213,6 +221,53 @@ def expected_return(prob: float, odds: int) -> float:
     return prob * _decimal(odds) - 1.0
 
 
+def american(decimal_odds: float) -> int:
+    """The American price for a decimal one (2.0 and up is plus money)."""
+    d = float(decimal_odds)
+    if d >= 2.0:
+        return int(round((d - 1.0) * 100))
+    return -int(round(100.0 / (d - 1.0)))
+
+
+def fair_odds(prob: float) -> int | None:
+    """The price at which ``prob`` breaks even — our chance, as odds."""
+    p = float(prob or 0.0)
+    if not 0.0 < p < 1.0:
+        return None
+    return american(1.0 / p)
+
+
+def need_odds(prob: float) -> int | None:
+    """The SHORTEST price that makes ``prob`` a pick: MIN_EV at that price,
+    never shorter than the window's floor (+250). None when nothing inside
+    FIRST_TD_ODDS would do it, or the chance is under MIN_PROB."""
+    p = float(prob or 0.0)
+    if p < MIN_PROB or p >= 1.0:
+        return None
+    d = (1.0 + MIN_EV) / p
+    am = int(math.ceil((d - 1.0) * 100.0)) if d >= 2.0 else FIRST_TD_ODDS[0]
+    am = max(am, FIRST_TD_ODDS[0])
+    return am if am <= FIRST_TD_ODDS[1] else None
+
+
+#: The reader's line for a board with no first-touchdown price on it, from
+#: the build's own odds note (`why_empty`).
+WHY_BUDGET = ("No first-touchdown prices were bought for these games yet: the odds "
+              "budget held today's player pull. Below, who scores first by our "
+              "numbers and the price that would make each one a pick.")
+WHY_LATER = ("First-touchdown prices are bought the morning of the games. Below, who "
+             "scores first by our numbers and the price that would make each one a pick.")
+
+
+def why_empty(note: str = "") -> str:
+    """Why the board has no price, in a reader's words, from the build's
+    player-pull note: the budget held the pull, or the prices come later."""
+    n = str(note or "").lower()
+    if "budget" in n and ("capped at 0" in n or "pulled 0" in n or " 0 of " in n):
+        return WHY_BUDGET
+    return WHY_LATER
+
+
 def pick(rows: list, per_game: int = PER_GAME, limit: int = LIMIT) -> list:
     """The board: priced candidates our chance puts clearly above the price.
 
@@ -301,13 +356,18 @@ def _team_of(name: str, home: str, away: str, hu: dict, au: dict):
     return None, None
 
 
-def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = "") -> dict:
+def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = "",
+          why: str = "") -> dict:
     """{"rows": every quoted player with our chance and the price,
-    "picks": the value picks (`pick`), "games": n, "quoted": n}.
+    "picks": the value picks (`pick`), "games": n, "quoted": n,
+    "ours": each unpriced game's likeliest first scorers by our numbers with
+    the price that would make each a pick, "ours_games": n, "why": the
+    reader's line when no game is priced}.
 
     ``quotes`` is `OddsMatch.first_td`; ``games`` the board's games (home,
     away, spread, date, kickoff). Usage comes from the history database
-    (`team_usage`), this season and last at half weight."""
+    (`team_usage`), this season and last at half weight. ``why`` is the
+    build's player-pull note (`why_empty` turns it into the reader's line)."""
     from .sources.oddsapi import best_scorer_price
     if conn is None:
         from . import db as _db
@@ -315,16 +375,34 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
     by_pair: dict = {}
     for q in (quotes or {}).values():
         by_pair.setdefault((q.get("home"), q.get("away")), []).append(q)
-    rows, n_games = [], 0
+    rows, n_games, ours, ours_games = [], 0, [], 0
     for g in games or []:
         home, away = g.get("home"), g.get("away")
         qs = by_pair.get((home, away)) or []
-        if not qs:
+        if not home or not away:
             continue
-        n_games += 1
         season = _season_of(g.get("date") or date)
         hu, au = team_usage(conn, sport, season, home), team_usage(conn, sport, season, away)
-        probs = {(r["team"], r["player"]): r for r in game_probs(hu, au, g.get("spread"), home, away, sport)}
+        ranked = game_probs(hu, au, g.get("spread"), home, away, sport)
+        if not qs:
+            # No price on file for this game: our likeliest first scorers,
+            # with the price that would make each a pick. Never a pick.
+            top = [r for r in ranked if r["prob"] > 0][:OURS_PER_GAME]
+            if top:
+                ours_games += 1
+            for r in top:
+                p = float(r["prob"])
+                ours.append({"player": r["player"], "team": r["team"],
+                             "opponent": away if r["team"] == home else home,
+                             "market": "first_td", "market_label": "First Touchdown",
+                             "game": f"{away}@{home}", "matchup": f"{away} @ {home}",
+                             "game_date": g.get("date"), "game_kickoff": g.get("kickoff"),
+                             "prob": round(p, 4), "team_first": r["team_first"],
+                             "share": r["share"], "fair_odds": fair_odds(p),
+                             "need_odds": need_odds(p), "priced": False})
+            continue
+        n_games += 1
+        probs = {(r["team"], r["player"]): r for r in ranked}
         for q in qs:
             team, who = _team_of(q.get("player") or "", home, away, hu, au)
             if team is None:
@@ -366,15 +444,26 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
         r["edge"] = round(r["prob"] - r["implied"], 4)
         r["stake_units"] = 0.1
         r["expected_opportunities"] = f"{r['share']:.0%}"
-    return {"rows": rows, "picks": picks, "games": n_games, "quoted": len(rows)}
+    for r in rows:
+        r["fair_odds"] = fair_odds(r["prob"])
+        r["need_odds"] = need_odds(r["prob"])
+        r["priced"] = True
+    ours.sort(key=lambda r: (str(r.get("game_kickoff") or ""), r["game"], -r["prob"]))
+    out = {"rows": rows, "picks": picks, "games": n_games, "quoted": len(rows),
+           "ours": ours, "ours_games": ours_games}
+    if not rows:
+        out["why"] = why_empty(why)
+    return out
 
 
 def report(b: dict) -> str:
     """The build log's line."""
+    unpriced = (f"; our top first scorers shown unpriced for {b['ours_games']} game(s)"
+                if b.get("ours_games") else "")
     if not b.get("games"):
-        return "  First touchdown: no first-touchdown prices on this pull"
+        return f"  First touchdown: no first-touchdown prices on this pull{unpriced}"
     return (f"  First touchdown: {b['quoted']} quoted player(s) across {b['games']} game(s); "
-            f"{len(b['picks'])} pick(s) our chance puts {MIN_EV:.0%}+ above the price")
+            f"{len(b['picks'])} pick(s) our chance puts {MIN_EV:.0%}+ above the price{unpriced}")
 
 
 # --- grading (maintenance.settle_open) --------------------------------------------

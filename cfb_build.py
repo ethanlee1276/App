@@ -2374,7 +2374,8 @@ def main() -> None:
                                       "date": _g.get("date") or args.date,
                                       "kickoff": _g.get("kickoff", ""),
                                       "spread": _sp[0] if isinstance(_sp, (list, tuple)) and _sp else None})
-                _ft = _ftd.board(first_td_quotes, _ft_games, sport="cfb", date=args.date)
+                _ft = _ftd.board(first_td_quotes, _ft_games, sport="cfb", date=args.date,
+                                 why=quotes_note)
                 out["first_td"] = _ft
                 out["long_shots"] = _ft["picks"]
                 print(_ftd.report(_ft))

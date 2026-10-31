@@ -195,5 +195,45 @@ college player logs, which have their own careful parser.
 
 **NBA first basket** needs its own version: who wins the opening tip, who
 takes the first shots, and how often they go in. The box keeps every NBA
-shot, so `tools/first_basket_study.py` counts it there (runbook IV). The
-board is built from what that study finds.
+shot and free throw, so `tools/first_basket_study.py` counts it there
+(runbook IV). Its numbers, each fitted on the seasons before the last and
+scored on the last (Ethan's paste, 2026-10-31):
+
+- **1,471 games with a basket.** The team with the game's first shot scores
+  first **71.9%** of the time. The home team scores first **53.8%**.
+- **Who shoots first is a lasting team trait.** Each team's history of
+  taking the first shot beats a coin on the held-out games (log loss
+  0.6731 against 0.6931, 79 games).
+- **Which player:** his share of his team's shots in the **first three
+  minutes** picks the scorer best. On 158 held-out team first baskets it
+  scored 1.9874 nats, against 2.1341 for his share of all its shots, 2.1087
+  for made shots, 2.1020 for first-quarter shots, and 2.0542 for a third of
+  each.
+
+**The board** (`engine/firstbasket`, since 2026-10-31):
+
+- P(home takes the first shot) = logistic(logit(0.587) + logit(home's
+  first-shot rate) − logit(away's)). Each rate is this season's, pulled
+  toward even ((first shots + 2) / (games + 4)). The 0.587 is what the two
+  measured rates imply for teams with even tip records: 0.538 = q × 0.719 +
+  (1 − q) × 0.281.
+- P(home scores first) = q × 0.719 + (1 − q) × 0.281.
+- His share = 0.02 + his share of his team's first-three-minute shots (this
+  season, last at half weight), normalised over the team's openers (anyone
+  with a first-three-minute shot in its last five games).
+- P(he scores first) = P(his team) × his share.
+
+A pick needs a 10%+ expected return at the best price, +250 to +2500, one a
+game, the same bar as first touchdown. Picks are graded off the box's shots:
+the game's first made shot or free throw, as the books settle it. The
+study's next run also scores the board's own team chance against a coin,
+the home rate alone and the tip records alone (runbook JA), so the home lean
+gets checked on games it never saw.
+
+## Before the prices
+
+Every first-scorer board shows each unpriced game's top three by our
+numbers, with the shortest price that would make each a pick (10% over our
+chance, never under +250). It also says why no price is on file: the odds
+budget held the pull, or the prices come later. Nothing unpriced is a pick
+or journaled.

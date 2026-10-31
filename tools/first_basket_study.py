@@ -40,6 +40,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 DEFAULT_DB = ROOT / "data" / "history.db"
 
 
@@ -162,6 +163,30 @@ def main(argv=None) -> int:
     ll = lambda p, y: -math.log(max(1e-9, p if y else 1 - p))  # noqa: E731
     print(f"who shoots first (held out, {len(te)} games): coin {sum(ll(.5, y) for _, y in te) / len(te):.4f}"
           f" · each team's history {sum(ll(p, y) for p, y in te) / len(te):.4f}")
+
+    # 2b. THE BOARD'S OWN TEAM CHANCE (engine/firstbasket): who scores first,
+    # from the home lean the two measured rates imply plus both teams' tip
+    # records — against a coin, the home rate alone and the tip records alone.
+    from engine import firstbasket as FB
+    hist2 = defaultdict(lambda: [0, 0])
+    rows2 = []
+    for g in games:
+        h, aw = hist2[(g["season"], g["home"])], hist2[(g["season"], g["away"])]
+        rh, ra = FB.first_shot_rate(h[0], h[1]), FB.first_shot_rate(aw[0], aw[1])
+        tip = rh / (rh + ra)
+        rows2.append((g["season"], tip, FB.home_scores_first(FB.home_shoots_first(rh, ra)),
+                      g["first"][1] == g["home"]))
+        h[1] += 1
+        aw[1] += 1
+        h[0] += g["first_shot"] == g["home"]
+        aw[0] += g["first_shot"] == g["away"]
+    held = [(t, m, y) for s, t, m, y in rows2 if s == test]
+    if held:
+        n2 = len(held)
+        print(f"who scores first (held out, {n2} games): coin {sum(ll(.5, y) for _t, _m, y in held) / n2:.4f}"
+              f" · home rate {sum(ll(FB.HOME_SCORES_FIRST, y) for _t, _m, y in held) / n2:.4f}"
+              f" · tip records {sum(ll(FB.home_scores_first(t), y) for t, _m, y in held) / n2:.4f}"
+              f" · the board's (home lean + tips) {sum(ll(m, y) for _t, m, y in held) / n2:.4f}")
 
     # 3. Which player.
     print("\nwhich player (held out, log loss of the scorer among his team's shooters):")

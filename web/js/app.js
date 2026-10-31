@@ -460,7 +460,9 @@ const HIDDEN_VIEWS = {
   // publishes most_likely now, gated per market by the rank fitter —
   // the tab shows an honest "nothing measured yet" until the box that
   // holds the logs fits one, which beats a page that cannot exist.
-  nba: ["longshots", "weather"],
+  // Long Shots OPENED for the NBA 2026-10-31: the first-basket board
+  // (engine/firstbasket) is its long-shot market.
+  nba: ["weather"],
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
@@ -682,9 +684,7 @@ const HIDDEN_WHY = {
   // The "likely" reasons LEFT both hoops entries 2026-08-31 — the claim
   // "basketball prices neither" went stale when nba_build started
   // publishing most_likely, gated per market by engine.rankfit.
-  nba: { longshots: "no long-shot market exists in basketball — there is "
-                    + "nothing like a home run or an anytime touchdown",
-         weather: "played indoors" },
+  nba: { weather: "played indoors" },
   wnba: { longshots: "no long-shot market exists in basketball",
           futures: "no outrights market is published for the league",
           weather: "played indoors", race: RACE_WHY },
@@ -4679,9 +4679,16 @@ function adoptPooledRecord(rec) {
     s.edge_board = s.pooled.edge || null;   // the edge board alone (EDGE_BOOKS), for the verdict's card
     s.pooled_overall = s.pooled.overall;
     s.likely_overall = s.pooled.likely || null;   // the Most Likely half, each pick once
-    s.overall = s.pooled.edge || s.overall;
-    s.curve = s.pooled.edge_curve || s.curve;
-    s.recent = s.pooled.edge_recent || s.recent;
+    /* THE PICKS WE STAKE LEAD (engine/stakeplan, 2026-10-31; Ethan: "update
+       our current record on the site ... with the respected units and ROI
+       ... we're going to use for our new bets"). Edge picks on the price
+       ladder, Most Likely picks tracked until a league's book beats the
+       price — every graded pick at the stake that rule gave it on its day. */
+    const st = s.staked && s.staked.overall && s.staked.overall.settled ? s.staked : null;
+    s.overall = (st && st.overall) || s.pooled.edge || s.overall;
+    s.curve = (st && st.curve) || s.pooled.edge_curve || s.curve;
+    s.recent = (st && st.recent) || s.pooled.edge_recent || s.recent;
+    s.stake_plan = st ? st.plan || null : null;
     return s;
   };
   if (!rec) return rec;
@@ -11388,19 +11395,55 @@ function matchupPicksHTML() {
    of book lines"). The picks are the players our chance puts well above
    the price; under them, every quoted player ranked by OUR chance — who
    scores first by our numbers, the price beside it. */
+/* FIRST BASKET IS THE NBA'S (engine/firstbasket, 2026-10-31): the same
+   board in the same shape under `first_basket`, so one renderer serves
+   every first-scorer league. */
+function firstScorer(d) {
+  d = d || {};
+  return d.first_basket ? { key: "first_basket", b: d.first_basket, what: "first basket" }
+    : d.first_td ? { key: "first_td", b: d.first_td, what: "first touchdown" } : null;
+}
 function firstTdWatch(d) {
-  return (((d || {}).first_td || {}).rows || []).filter((r) => !rowStarted(r)).slice(0, 10);
+  const fs = firstScorer(d);
+  return ((fs && fs.b.rows) || []).filter((r) => !rowStarted(r)).slice(0, 10);
+}
+/* OUR NUMBERS BEFORE THE PRICES (engine/firsttd.board `ours`; Ethan,
+   2026-10-31: "still not seeing first touchdown bets"). A game with no
+   first-scorer price on file still shows its likeliest first scorers by our
+   numbers, each with the shortest price that would make him a pick. Not a
+   pick and not journaled until a price is on file. */
+function firstOursHTML(rows) {
+  rows = (rows || []).filter((r) => !rowStarted(r));
+  if (!rows.length) return "";
+  const games = [];
+  rows.forEach((r) => {
+    let g = games.find((x) => x.k === r.game);
+    if (!g) games.push(g = { k: r.game, r, rows: [] });
+    g.rows.push(r);
+  });
+  const row = (r) => `<div class="ls-row drow hd-row hd-edge">
+    <span class="pick-id">${playerAvatar(r.player, r.team, { size: 30 })}</span>
+    <span class="hd-what"><b>${escapeHtml(r.player)}</b>
+      <span>${escapeHtml(teamName(r.team))} · ${pct(r.prob)} by our numbers</span></span>
+    <span class="hd-state"><span class="hd-num"><span class="hd-o">${r.need_odds ? `${oddsTxt(r.need_odds)} or longer` : "—"}</span>
+      <span class="hd-p flat">${r.need_odds ? "the price that makes him a pick" : "no price we take makes him one"}</span></span></span></div>`;
+  return `<div style="grid-column:1/-1;min-width:0"><div class="section-title">Not priced yet
+    <span class="sub">— who scores first by our numbers, and the price that would make each a pick.</span></div>
+    ${foldRowsHTML(games.map((g) => `<div class="card" style="padding:0"><div class="mp-head">${escapeHtml(g.r.matchup || g.k)}
+      <span class="mini">${escapeHtml(whenLabel(g.r.game_date, g.r.game_kickoff))}</span></div>${g.rows.map(row).join("")}</div>`),
+      { after: 4, what: "games" })}</div>`;
 }
 
 function renderLongShots() {
   const mlb = state.sport === "mlb";
-  const ftd = !!state.data.first_td;
+  const fs = firstScorer(state.data);
+  const ftd = !!fs;
   const picks = (state.data.long_shots || []).filter((r) => !rowStarted(r));
   const host = document.getElementById("longshots-board");
   const note = document.getElementById("longshots-note");
   document.getElementById("longshots-sub").textContent = mlb
     ? "— home runs, priced on contact quality, park & weather"
-    : ftd ? "— first touchdown, our chance against the price"
+    : ftd ? `— ${fs.what}, our chance against the price`
     : "— anytime touchdowns, priced on opportunity not hype";
 
   // The board is three rows and there is no fourth. It used to list every
@@ -11410,11 +11453,12 @@ function renderLongShots() {
     : (state.data.longshot_watch || []).filter((r) => !rowStarted(r));
   if (ftd) {
     const list = watchlistHTML(watch, false, "first_td");
-    host.innerHTML = picks.map(longShotCard).join("") + list;
+    const ours = firstOursHTML(fs.b.ours);
+    host.innerHTML = picks.map(longShotCard).join("") + list + ours;
     note.innerHTML = `<div class="ls-note">${picks.length
       ? "Ranked by how far our chance beats the price, never by the price. The likeliest scorer is rarely the pick."
       : watch.length ? "No price beats our chance by 10% tonight (+250 to +2500). Below: who scores first by our numbers."
-      : "First-touchdown prices post on game day."} Tracked on paper.</div>`;
+      : escapeHtml(fs.b.why || `${fs.what[0].toUpperCase()}${fs.what.slice(1)} prices post on game day.`)} Tracked on paper.</div>`;
     fillMeters(host);
     revealChildren(host);
     return;
@@ -11930,6 +11974,7 @@ function longShotCard(r) {
   // college feeds carry no red-zone splits, and a label claiming they
   // do would dress the proxy up as the measurement.
   const oppLabel = r.market === "first_td" ? "First-TD share"
+    : r.market === "first_basket" ? "First-basket share"
     : state.sport === "mlb" ? "Expected PAs"
     : state.sport === "cfb" ? "Touches/gm" : "RZ chances";
   return `
@@ -30983,15 +31028,28 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
   const roiBig = (roi) => (roi == null ? "— ROI" : `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`);
   const units = (u) => `${sign(u)}${Math.abs(u).toFixed(1)}u`;
   const tiles = [];
-  /* THE MODEL'S OWN BOOK LEADS (audit P1-1): the edge board, graded in
-     public. Every wider total follows it, labelled for what it adds. */
+  /* THE MODEL'S OWN BOOK LEADS (audit P1-1): since 2026-10-31 the picks
+     we stake (engine/stakeplan) — the Edge picks on the price ladder, and a
+     league's Most Likely picks once its book has beaten the price. Every
+     wider total follows it, labelled for what it adds. */
+  const staked = !!ov.rule;
+  const lead = staked ? "Our record · the picks we stake" : (ov.label || "Edge picks · graded in public");
   if (ov.settled) {
     const f = recFloor(rec, ov);
     const roi = ov.roi == null ? null : Number(ov.roi);
     const u = Number(ov.net_units || 0);
-    tiles.push(f.thin ? thinTile(ov.label || "Edge picks · graded in public", ov, f, dots(recent, "status"))
-      : tile(ov.label || "Edge picks · graded in public", wl(ov), roiBig(roi), tone(roi),
-             `${units(u)} · ${ov.settled} settled`, dots(recent, "status"), rate(ov)));
+    const tracked = staked && ov.tracked ? ` · ${ov.tracked} Most Likely tracked, not staked` : "";
+    tiles.push(f.thin ? thinTile(lead, ov, f, dots(recent, "status"))
+      : tile(lead, wl(ov), roiBig(roi), tone(roi),
+             `${units(u)} · ${ov.settled} settled${tracked}`, dots(recent, "status"), rate(ov)));
+  }
+  /* The Edge board alone, where the record above also carries a league's
+     staked Most Likely picks and so differs from it. */
+  const eb = (rec || {}).edge_board;
+  if (parts && staked && eb && eb.settled && !sameTally(eb, ov)) {
+    const roi = eb.roi == null ? null : Number(eb.roi);
+    tiles.push(tile("Edge picks · on the price ladder", wl(eb), roiBig(roi), tone(roi),
+                    `${units(Number(eb.net_units || 0))} · ${eb.settled} settled`, "", rate(eb)));
   }
   /* THE MOST LIKELY HALF, EACH PICK ONCE (ledger pooled_report.likely):
      the one board's picks and the Most Likely list's own, a pick on both
@@ -31000,7 +31058,16 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
      the combined one beside them — Ethan, 2026-10-02: "it feels like all
      these numbers are not adding up". */
   const lo = (rec || {}).likely_overall;
-  if (parts && lo && lo.settled) {
+  if (parts && lo && lo.settled && staked) {
+    /* TRACKED FOR ITS HIT RATE (engine/stakeplan): the number it is judged
+       on is how often it hits against what its prices need — the reason it
+       wins bets and not money, said on the tile. */
+    const hit = rate(lo), be = lo.breakeven == null ? null : Number(lo.breakeven);
+    const need = be == null ? "" : ` · needs ${Math.round(be * 1000) / 10}% at ${lo.avg_price > 0 ? "+" : ""}${lo.avg_price}`;
+    tiles.push(tile("Most Likely · tracked for its hit rate", wl(lo), `${Math.round(hit * 1000) / 10}% hit`,
+                    "var(--text)", `${lo.settled} graded${need} · ${units(Number(lo.net_units || 0))} at its paper stakes`,
+                    "", hit));
+  } else if (parts && lo && lo.settled) {
     const f = recFloor(rec, lo);
     const roi = lo.roi == null ? null : Number(lo.roi), u = Number(lo.net_units || 0);
     const k = "Most Likely · every pick once";
@@ -31010,7 +31077,13 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
   /* The edge board and the Most Likely board as one — the pooled journal,
      named, with the two halves it adds on the tile. */
   const po = (rec || {}).pooled_overall;
-  if (po && po.settled && !sameTally(po, ov)) {
+  if (po && po.settled && staked && parts && !sameTally(po, ov)) {
+    /* AS PLACED: every pick at the stake it carried before the rule, Most
+       Likely included — the receipts, kept one line from the record. */
+    const roi = po.roi == null ? null : Number(po.roi), u = Number(po.net_units || 0);
+    tiles.push(tile("As placed · before the Oct 31 stake rule", wl(po), roiBig(roi), tone(roi),
+                    `${units(u)} · ${po.settled} settled · every pick at the stake it carried`, "", rate(po)));
+  } else if (po && po.settled && !staked && !sameTally(po, ov)) {
     const f = recFloor(rec, po);
     const roi = po.roi == null ? null : Number(po.roi), u = Number(po.net_units || 0);
     const k = "Combined · edge + Most Likely boards";

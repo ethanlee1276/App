@@ -132,7 +132,9 @@ def test_the_board_holds_a_prop_under_sixty_and_says_why():
 
 
 def test_an_under_the_scout_cautions_against_comes_off():
-    r = _prop("C Under", 0.66, side="UNDER", scout_flags=["dog_pass_under"])
+    # Receptions: a receiving-yards under is held on its own since 2026-10-31
+    # (tests/test_receiving_unders_are_held.py), and this test is the scout's.
+    r = _prop("C Under", 0.66, side="UNDER", market="receptions", scout_flags=["dog_pass_under"])
     assert B.tightened_reason(r, "nfl").startswith("held back: a passing or receiving under on a team "
                                                    "expected to trail")
     assert B.tightened_reason(dict(r, side="OVER"), "nfl") is None, "the caution is about unders"

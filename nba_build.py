@@ -1040,12 +1040,14 @@ def main() -> None:
                   f"--seasons 2021-2026")
 
         odds_note = "no odds requested — engine ran with no bettable prices"
+        first_basket_quotes: dict = {}      # the NBA's Long Shots market, apart
         if args.odds or args.cached_odds:
             from engine.sources import oddsapi
             try:
                 res = oddsapi.apply_odds_to_slate(
                     slate, sport=args.league,
                     cache_only=args.cached_odds and not args.odds)
+                first_basket_quotes = getattr(res, "first_basket", None) or {}
                 odds_note = (f"matched {res.matched} props across "
                              f"{res.events_used} events"
                              + (" (cached)" if res.from_cache else ""))
@@ -1546,6 +1548,24 @@ def main() -> None:
                     _ml_census["no market measured to rank yet"] = 1
             out["likely_census"] = _ml_census
             out["likely_census_by_kind"] = _ml_kinds
+            # FIRST BASKET IS THE NBA'S LONG SHOTS (engine/firstbasket; Ethan,
+            # 2026-10-31: "I only want our long shot picks to be stuff like first
+            # basket score for NBA ... going after what the data and tools that
+            # we have all put together says, not just off of book lines"). Who
+            # takes the first shot by both teams' tip records, each player's
+            # share of his team's first-three-minute shots, and the picks our
+            # chance puts well above the price; unpriced games show our top
+            # first scorers with the price that would make each a pick.
+            if args.league == "nba":
+                try:
+                    from engine import firstbasket as _fbk
+                    _fb = _fbk.board(first_basket_quotes, out.get("games") or [], date=args.date,
+                                     why=odds_note)
+                    out["first_basket"] = _fb
+                    out["long_shots"] = _fb["picks"]
+                    print(_fbk.report(_fb))
+                except Exception as _fbx:                     # noqa: BLE001
+                    print(f"  ⚠️  first-basket board skipped: {_fbx}")
             out["board_guide"] = _hboards.guide(args.league)
             out["board_shelves"] = _hboards.shelves(args.league,
                                                     out["most_likely"])
@@ -1600,6 +1620,15 @@ def main() -> None:
             st = ledger.log_stale_flags(
                 lconn, {"sport": args.league, "date": args.date,
                         "market_scan": out.get("market_scan") or {}})
+            # The first-basket picks (Long Shots), on paper at 0.1u like the
+            # football boards' first-touchdown picks; graded off the box's
+            # shots (engine/firstbasket.settle).
+            if out.get("first_basket"):
+                _ls_n = ledger.log_longshots(lconn, {"sport": args.league, "date": args.date,
+                                                     "games": out.get("games") or [],
+                                                     "long_shots": out.get("long_shots") or []})
+                if _ls_n:
+                    print(f"First basket: {_ls_n} pick(s) journaled on paper.")
             # The likelihood board's paper book — hoops joined the board
             # on 2026-08-31, and its markets settle from the same
             # player_game_logs the ingest already writes.

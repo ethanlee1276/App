@@ -60,7 +60,8 @@ def build(web: Path = WEB, today: _dt.date | None = None) -> dict:
     web = Path(web)
     today = today or _dt.date.today()
     rec = _load(web / "data" / "record_head.json") or _load(web / "data" / "record.json")
-    ov = rec.get("overall") or {}
+    # The picks we stake since 2026-10-31 (engine/stakeplan), as the site leads.
+    ov = (rec.get("staked") or {}).get("overall") or rec.get("overall") or {}
     record = None
     if ov.get("settled"):
         record = {"w": int(ov.get("wins") or 0), "l": int(ov.get("losses") or 0), "p": int(ov.get("pushes") or 0),

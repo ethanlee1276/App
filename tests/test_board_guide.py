@@ -112,12 +112,27 @@ def test_only_the_board_that_stakes_money_says_it_does():
     call. The claim is now per league, which is what it always should
     have been — one flag was telling every reader the same thing about
     five different books."""
+    real = ledger.likely_is_staked
     for sport in ("nfl", "cfb", "mlb"):
         got = {b["key"]: b for b in boards.guide(sport)}
         assert got["recommendations"]["money"] is True, sport
-        # Staked from 2026-09-19 in every league that has this board.
-        assert got["most_likely"]["money"] is True, sport
-        assert got["most_likely"]["journal"] == ledger.LIKELY_LIVE_CATEGORY
+        # SINCE 2026-10-31 THE RECORD DECIDES (engine/stakeplan): a league's
+        # Most Likely book is tracked for its hit rate until it beats the
+        # price, and the guide says so...
+        try:
+            ledger.likely_is_staked = lambda sp, conn=None: False
+            got = {b["key"]: b for b in boards.guide(sport)}
+            assert got["most_likely"]["money"] is False, sport
+            assert got["most_likely"]["journal"] == "likely"
+            assert "Tracked for its hit rate" in got["most_likely"]["trust"]
+            # ...and once it has, it carries money and says that instead.
+            ledger.likely_is_staked = lambda sp, conn=None: True
+            got = {b["key"]: b for b in boards.guide(sport)}
+            assert got["most_likely"]["money"] is True, sport
+            assert got["most_likely"]["journal"] == ledger.LIKELY_LIVE_CATEGORY
+            assert "beaten the price" in got["most_likely"]["trust"]
+        finally:
+            ledger.likely_is_staked = real
         # The long-shot book was NOT part of that call and must not have
         # been swept along with it.
         assert got["long_shots"]["money"] is False, sport

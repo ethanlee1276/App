@@ -9305,6 +9305,161 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JB. Receiving-yards unders held; college's price test** (step 314; you,
+2026-10-31: "keep diving deeper into our NFL edge and most likely bets and
+the college edge and most likely bets"). Nothing to run for the hold:
+
+- Receiving-yards unders come off the NFL and college Most Likely boards.
+  Every graded Most Likely pick in the public receipts, split at the middle
+  of each season, has them short of our claim in both halves in both
+  leagues: NFL 48% against 65%, then 48% against 53% (169 picks); college
+  50% against 70%, then 50% against 62% (149 picks). The overs hold up.
+  The NFL's goes with the rest of its tightening (`QB_NFL_TIGHT`); college's
+  has its own switch.
+- College's board has the over-claim the NFL's had before its price cap:
+  its "bolder than the books" picks claim 69% and hit 53% (283 unders,
+  z −6.0), and its 75%-plus claims hit 59%. The cap joins a league only when
+  the price test passes on its board and you say yes, so it waits on the
+  test below and one switch.
+
+The college price test (read-only, a few minutes; it reads the odds
+snapshots). Paste back `/tmp/jb.txt`:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 pricetrust.py --sport cfb 2>&1 | tee /tmp/jb.txt
+```
+
+If its "The one board" line for college says PASSES, this puts college at
+the NFL's rule (never above the books' fair chance):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_PRICE_TRUST_ADD cfb && sudo systemctl restart qellys
+```
+
+To put college's receiving-yards unders back:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_CFB_TIGHT off && sudo systemctl restart qellys
+```
+
+That the box has it (each should print 1 or more):
+
+```
+cd /srv/qellys && grep -c "UNDER_MARKETS_HELD" engine/likelyboard.py && grep -c "PRICE_TRUST_ADD_ENV" engine/likelyboard.py
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JB 2>&1 | tee /tmp/jbc.txt
+```
+
+**JA. First basket is the NBA's Long Shots** (step 313; you, 2026-10-31:
+"I'm still not seeing first basket scored for NBA yet ... those bets need to
+show up on the long shot page"). Nothing to run for the change itself:
+
+- NBA Long Shots is open, and its picks are first-basket picks
+  (`engine/firstbasket`), built from your IV study: who takes the first shot
+  (both teams' tip records this season, with the home lean the study's two
+  rates imply), the team with the first shot scoring first 71.9% of the
+  time, and each player's share of his team's shots in the first three
+  minutes. A pick needs 10%+ expected return at the best price, +250 to
+  +2500, one a game. Journaled on paper at 0.1u and graded off the box's
+  shots: the game's first made shot or free throw, as the books grade it.
+- The NBA pull buys the first-basket market on every game (20 credits a
+  game, not 19), behind the guard that drops a market the API refuses.
+- Every first-scorer board (NFL, college, NBA) now shows each unpriced
+  game's top three first scorers by our numbers, with the price that would
+  make each a pick, and says why no price is on file. College's was empty
+  on Saturday because October's odds budget was spent ("capped at 0 games
+  by budget pacing"); the November budget buys it again.
+
+After tonight's NBA build, what the board made of it, and how many have
+graded since:
+
+```
+cd /srv/qellys && date -u -r data/built/nba.json && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/nba.json'))
+f = d.get('first_basket') or {}
+print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
+[print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
+print(f.get('ours_games', 0), 'game(s) unpriced;', f.get('why') or '')
+[print(' unpriced:', r['player'], r['team'], 'ours', r['prob'], 'a pick at', r['need_odds']) for r in (f.get('ours') or [])[:6]]
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import ledger
+c = ledger.connect()
+print([tuple(r) for r in c.execute('SELECT status, COUNT(*) FROM bets WHERE market=? GROUP BY status', ('first_basket',))])
+"
+```
+
+The study again, now with the board's own team chance beside a coin, the
+home rate and the tip records alone (read-only; paste back
+`/tmp/ja_study.txt`):
+
+```
+cd /srv/qellys && sudo -u qellys python3 tools/first_basket_study.py 2>&1 | tee /tmp/ja_study.txt
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JA 2>&1 | tee /tmp/ja.txt
+```
+
+**IZ. The record leads with the picks we stake** (step 312; you,
+2026-10-31: "we need to find what bets and what unit bets ... works best for
+our ROI to be positive and our units to be positive, and then we need to
+implement that, and then also update our current record on the site").
+Nothing to run for the change itself. What the study found
+(docs/STAKES.md; every number reruns from the public receipts):
+
+- Most Likely wins bets and loses money: 4,582-2,953 (60.8%), −17.4 units
+  (−1.4%), because it pays −162 on average where 61.8% breaks even. Our
+  chance doesn't beat the price there: the picks we called 5%+ better than
+  the price made −2.6% at flat stakes.
+- Edge makes money on the price ladder: +13.9 units (+1.85%) over 1,414
+  picks; NFL Edge +16.1 (+5.1%), positive in both halves of the season.
+- Every "follow what's winning" rule, walked forward a day at a time, did
+  worse than flat stakes.
+
+The rule from today (`engine/stakeplan`): Edge picks are staked on the
+price ladder (−110 is 1u) unless a league's Edge book is clearly losing
+(100 graded at z −2.0 or worse). Most Likely picks are tracked for their
+hit rate, not staked, until a league's book beats the price (200 graded at
+z +2.0 or better). The NBA's has, so it stays staked. NFL, college and
+hockey Most Likely stop carrying money. The site's record now leads with
+every graded pick at the stake that rule gave it on its day: 1,699 staked,
+867-832, +13.5u, +1.6% ROI. Most Likely shows its hit rate, and the record
+as placed (−3.5u) stays on the Record page.
+
+The rule's answer per league, from the journal (read-only):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.stakeplan
+```
+
+The study, rerun from the live receipts (read-only, no sudo needed; paste
+back `/tmp/iz_study.txt`):
+
+```
+cd /srv/qellys && python3 tools/stake_study.py 2>&1 | tee /tmp/iz_study.txt
+```
+
+That the record serves it, after the next settle pass (settled, wins,
+losses, units, ROI, tracked):
+
+```
+curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; o=(json.load(sys.stdin).get('staked') or {}).get('overall') or {}; print(o.get('settled'), o.get('wins'), o.get('losses'), o.get('net_units'), o.get('roi'), o.get('tracked'))"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IZ 2>&1 | tee /tmp/iz.txt
+```
+
 **IY. The first screen settles faster on a phone** (step 311; you,
 2026-10-30: "Give the first-screen speed test its headroom back"). Nothing to
 run for the change itself. On a mid-range phone's first screen (CPU slowed
@@ -9368,6 +9523,8 @@ f = d.get('first_td') or {}
 print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
 [print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
 [print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+print(f.get('ours_games', 0), 'game(s) unpriced;', f.get('why') or '')
+[print(' unpriced:', r['player'], r['team'], 'ours', r['prob'], 'a pick at', r['need_odds']) for r in (f.get('ours') or [])[:6]]
 "
 ```
 
@@ -9378,7 +9535,7 @@ marked (games, and scorers found):
 cd /srv/qellys && sudo -u qellys python3 -c "
 from engine import db
 c = db.connect()
-print(c.execute('SELECT COUNT(DISTINCT game_id), SUM(value) FROM player_game_logs WHERE sport=? AND market=?', ('cfb', 'first_td')).fetchone())
+print(tuple(c.execute('SELECT COUNT(DISTINCT game_id), SUM(value) FROM player_game_logs WHERE sport=? AND market=?', ('cfb', 'first_td')).fetchone()))
 "
 ```
 
@@ -9483,6 +9640,8 @@ f = d.get('first_td') or {}
 print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
 [print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
 [print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+print(f.get('ours_games', 0), 'game(s) unpriced;', f.get('why') or '')
+[print(' unpriced:', r['player'], r['team'], 'ours', r['prob'], 'a pick at', r['need_odds']) for r in (f.get('ours') or [])[:6]]
 "
 ```
 

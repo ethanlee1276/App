@@ -25,8 +25,12 @@ _SEQ = [0]
 
 
 def _conn():
+    from engine import stakeplan
     conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
     ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    # Both books promoted by the stake rule (engine/stakeplan): this file is
+    # about what a STAKED book does with a pick below its price.
+    stakeplan.store(conn, stakeplan.promoted("cfb", "nfl"))
     return conn
 
 
@@ -44,8 +48,8 @@ def _journal(conn, sport, rows):
 
 
 def test_college_stakes_a_pick_that_covers_its_price_and_papers_one_that_does_not():
-    assert ledger.likely_is_staked("cfb"), "this rule is about college's STAKED book"
     c = _conn()
+    assert ledger.likely_is_staked("cfb", c), "this rule is about college's STAKED book"
     covers = _row(0.72, -200, "CFB")        # -200 needs 66.7%: 72% covers it
     short = _row(0.63, -200, "CFB")         # 63% does not
     got = _journal(c, "cfb", [covers, short])
