@@ -1344,7 +1344,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         # rather than whatever the store holds by the time it settles.
         temp, bias = cal_correction(sport, r["market"])
         # MLB edge overs go on paper (PAPER_PROP_SIDES), still sized.
-        row_book = prop_book(category, sport, r.get("side", "OVER"))
+        row_book = edge_price_book(prop_book(category, sport, r.get("side", "OVER")),
+                                   r.get("odds", -110))
         cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
             "market, side, line, "
@@ -1461,6 +1462,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         stake_units = float(r.get("stake_units", 0) or 0)
         if stake_units <= 0:
             continue                     # not a bet — see above
+        # Past the price cap, or a league the stake rule has stopped: paper.
+        g_book = edge_price_book(category, r.get("odds", -110))
         cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
             "market, side, line, "
@@ -1475,8 +1478,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              r.get("grade"), stake_units,
              # NO DOLLARS ON A BENCHED LEAGUE. The units stay as
              # sized — that is what keeps the bench measurable —
-             # and only the money stops.
-             0.0 if benched else round(stake_units * unit_dollars, 2),
+             # and only the money stops. Nor on a paper row (the
+             # price cap, or a league the stake rule has stopped).
+             0.0 if (benched or g_book == "paper") else round(stake_units * unit_dollars, 2),
              r.get("game_number") if r.get("doubleheader") else None,
              # Fatigue, for the side this bet is about. A short week or a
              # 10am body clock is a spread's business at least as much as a
@@ -1506,7 +1510,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # so a bench applied only at the props loop above would
              # have left every game bet on a benched league going
              # straight to the headline.
-             category,
+             g_book,
              # THE RAW INPUTS, as a prop keeps them (audit 2026-09-30,
              # B8-1): the engine's own number before the market blend,
              # and the shrink in force — enough to re-derive the row.
@@ -6826,6 +6830,20 @@ PAPER_PROP_SIDES = {("mlb", "OVER")}
 #: model nothing has graded yet; it leaves this tuple when its paper
 #: record earns it, and nothing else has to move.
 PAPER_SPORTS = ("nhl",)
+
+
+def edge_price_book(category: str, odds) -> str:
+    """An Edge pick past the stake rule's price cap (engine/stakeplan
+    EDGE_MAX_ODDS, +130) journals on paper: posted, graded and tracked, no
+    dollars. The record's long prices hit 37.6% where the price said 41.1%.
+    The staked record reads the cap itself (stakeplan.replay), so these rows
+    carry no units there either; stake_units stays as sized, like every
+    paper row, so the paper book can say what they would have returned."""
+    if category == "main":
+        from . import stakeplan as _stakeplan
+        if _stakeplan.priced_out("edge", odds):
+            return "paper"
+    return category
 
 
 def prop_book(category: str, sport, side) -> str:

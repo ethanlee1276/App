@@ -4,8 +4,20 @@
     {
       "date": "2026-10-31",
       "kind": "model",
+      "title": "Edge picks longer than +130 carry no stake",
+      "body": "Across every league, our Edge picks at +131 or longer hit 37.6% where the price itself said 41.1% and we said 42.9%, and the longer the price the wider the miss (+201 and up: 17.6% against 23.3%). That is the favourite-longshot bias: long prices pay less than their odds say. Those 293 picks lost 9.6 units; the picks at +100 to +130 made 23.8. Past +130 a pick still posts and is graded, on paper, and its card says Tracked \u00b7 no stake."
+    },
+    {
+      "date": "2026-10-31",
+      "kind": "refuse",
+      "title": "No per-market correction of our chances",
+      "body": "We measured pulling each market's chance toward the price by how that market had done, fitted on the season through Oct 15 and scored after it. It forecast no better than what runs now. In most leagues our Most Likely chances already forecast no better than the price itself; the NFL's Edge chances are the ones that beat it. Re-weighting the same number cannot fix that, so it was not built."
+    },
+    {
+      "date": "2026-10-31",
+      "kind": "model",
       "title": "The record leads with the picks we stake",
-      "body": "Edge picks are staked on the price ladder. Most Likely picks are now tracked for their hit rate instead of staked, until a league's Most Likely board proves it beats the price (the NBA's has). Across 7,542 graded picks, Most Likely won 60.8% of its bets and still lost 1.4%, because it pays \u2212162 on average and 61.8% only breaks even. The record on the site now counts every graded pick at the stake that rule gave it on its day: 1,699 staked, +13.5 units, +1.6% ROI. The record as placed stays on the Record page, and every number reruns from the public receipts (docs/STAKES.md)."
+      "body": "Edge picks are staked on the price ladder. Most Likely picks are now tracked for their hit rate instead of staked, until a league's Most Likely board proves it beats the price (the NBA's has). Across 7,542 graded picks, Most Likely won 60.8% of its bets and still lost 1.4%, because it pays \u2212162 on average and 61.8% only breaks even. The record on the site now counts every graded pick at the stake that rule gave it on its day: 1,406 staked, +23.1 units, +3.2% ROI, with the price cap below. The record as placed stays on the Record page, and every number reruns from the public receipts (docs/STAKES.md)."
     },
     {
       "date": "2026-10-31",

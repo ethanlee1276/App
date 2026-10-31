@@ -9423,16 +9423,24 @@ Nothing to run for the change itself. What the study found
   picks; NFL Edge +16.1 (+5.1%), positive in both halves of the season.
 - Every "follow what's winning" rule, walked forward a day at a time, did
   worse than flat stakes.
+- Edge picks past +130 lose in every league: they hit 37.6% where the
+  price itself said 41.1% (293 picks, −9.6u). It's the favourite-longshot
+  bias. The +100 to +130 picks made +23.8u.
+- As forecasts, our chances beat the price's only on NFL Edge (and tie it
+  on NBA Most Likely). A per-market correction toward the price was
+  measured and scored no better, so it wasn't built.
 
 The rule from today (`engine/stakeplan`): Edge picks are staked on the
-price ladder (−110 is 1u) unless a league's Edge book is clearly losing
-(100 graded at z −2.0 or worse). Most Likely picks are tracked for their
-hit rate, not staked, until a league's book beats the price (200 graded at
-z +2.0 or better). The NBA's has, so it stays staked. NFL, college and
-hockey Most Likely stop carrying money. The site's record now leads with
-every graded pick at the stake that rule gave it on its day: 1,699 staked,
-867-832, +13.5u, +1.6% ROI. Most Likely shows its hit rate, and the record
-as placed (−3.5u) stays on the Record page.
+price ladder (−110 is 1u), never past +130, unless a league's Edge book is
+clearly losing (100 graded at z −2.0 or worse). Past +130 a pick is
+tracked on paper and its card says "Tracked · no stake". Most Likely picks
+are tracked for their hit rate, not staked, until a league's book beats the
+price (200 graded at z +2.0 or better). The NBA's has, so it stays staked.
+NFL, college and hockey Most Likely stop carrying money. The site's record
+now leads with every graded pick at the stake that rule gave it on its
+day: 1,406 staked, 770-636, +23.1u, +3.2% ROI (through Oct 15 +28.2u,
+since −5.1u). Most Likely shows its hit rate, and the record as placed
+(−3.5u) stays on the Record page.
 
 The rule's answer per league, from the journal (read-only):
 
@@ -9440,8 +9448,9 @@ The rule's answer per league, from the journal (read-only):
 cd /srv/qellys && sudo -u qellys python3 -m engine.stakeplan
 ```
 
-The study, rerun from the live receipts (read-only, no sudo needed; paste
-back `/tmp/iz_study.txt`):
+The study, rerun from the live receipts (read-only, no sudo needed; its
+sections 5 and 6 are the price bands and the forecast test; paste back
+`/tmp/iz_study.txt`):
 
 ```
 cd /srv/qellys && python3 tools/stake_study.py 2>&1 | tee /tmp/iz_study.txt

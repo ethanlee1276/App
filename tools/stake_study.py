@@ -20,7 +20,13 @@ names, each pick once, from the record's epoch, benched leagues out):
   3. a set of stake rules WALKED FORWARD one day at a time — each day's
      rule read only from the days before it — through 2026-10-15 and after
      it, so a rule that only fits the past shows up as one;
-  4. the v4 rule engine/stakeplan runs, on the same walk.
+  4. the v4 rule engine/stakeplan runs, on the same walk;
+  5. the Edge picks by price — our chance, the price's and the hit rate —
+     the favourite-longshot bias behind the +130 cap (stakeplan
+     EDGE_MAX_ODDS);
+  6. whether our chance beats the price's own as a forecast, on the picks
+     after the split (log loss; lower is better): where it does not, no
+     stake rule built on our number can win.
 
 Standard library only.
 """
@@ -196,7 +202,7 @@ def report(rows: list) -> None:
         print(line(f"{name} (through)", early))
         print(line(f"{name} (after)", late))
 
-    print("\n4. THE v4 RULE (engine/stakeplan), WALKED FORWARD")
+    print(f"\n4. THE v4 RULE (engine/stakeplan, nothing staked past +{SP.EDGE_MAX_ODDS}), WALKED FORWARD")
     flags, state = SP.replay(H)
     staked = [(r, r["stake_units"] if on else 0.0) for r, on in zip(H, flags)]
     print(line("staked picks, all", staked))
@@ -208,6 +214,54 @@ def report(rows: list) -> None:
         for h in ("edge", "likely"):
             if h in halves:
                 print(f"    {sport.upper():5s} {'Edge' if h == 'edge' else 'Most Likely':12s} {halves[h]['why']}")
+
+    print("\n5. EDGE PICKS BY PRICE (flat 1u): we said / the price said / hit")
+    bands = (("a. -150 or shorter", -100000, -150), ("b. -149 to -121", -149, -121),
+             ("c. -120 to -101", -120, -101), ("d. +100 to +130", 100, 130),
+             ("e. +131 to +160", 131, 160), ("f. +161 to +200", 161, 200), ("g. +201 or longer", 201, 100000))
+    for name, lo, hi in bands:
+        R = [r for r in H if r["half"] == "edge" and lo <= r["odds"] <= hi]
+        if not R:
+            continue
+        said = [r["hit_prob"] for r in R if r["hit_prob"] is not None]
+        price = sum(implied(r["odds"]) for r in R) / len(R)
+        dec = [r for r in R if r["status"] in ("won", "lost")]
+        hit = sum(r["status"] == "won" for r in dec) / len(dec) if dec else 0.0
+        print(line(f"{name[3:]}", [(r, 1.0) for r in R])
+              + f"   said {sum(said) / max(1, len(said)):.1%}, price {price:.1%}, hit {hit:.1%}")
+
+    print(f"\n6. DOES OUR CHANCE BEAT THE PRICE'S? (log loss after {SPLIT}; lower is better)")
+    for (half, sport), R in sorted(_by(H, lambda r: (r["half"], r["sport"])).items()):
+        late = [r for r in R if SP.sort_day(r["day"]) > SPLIT and r["hit_prob"] is not None
+                and r["status"] in ("won", "lost")]
+        if len(late) < 50:
+            continue
+        ours = sum(_ll(r["hit_prob"], r["status"] == "won") for r in late) / len(late)
+        theirs = sum(_ll(implied(r["odds"]) / DEVIG, r["status"] == "won") for r in late) / len(late)
+        print(f"  {sport.upper():5s} {'Edge' if half == 'edge' else 'Most Likely':12s} n {len(late):5d}"
+              f"   ours {ours:.4f}   the price's {theirs:.4f}   "
+              f"{'ours is the better forecast' if ours < theirs else 'the price is as good or better'}")
+
+
+#: The average two-way hold taken out of a price's chance (engine/likelycal).
+DEVIG = 1.045
+
+
+def implied(odds) -> float:
+    o = int(odds)
+    return (-o) / ((-o) + 100.0) if o < 0 else 100.0 / (o + 100.0)
+
+
+def _ll(p: float, won: bool) -> float:
+    p = min(0.999, max(0.001, float(p)))
+    return -math.log(p if won else 1.0 - p)
+
+
+def _by(rows: list, keyf) -> dict:
+    out = collections.defaultdict(list)
+    for r in rows:
+        out[keyf(r)].append(r)
+    return out
 
 
 def main(argv=None) -> int:

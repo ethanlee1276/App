@@ -6641,10 +6641,19 @@ function exchangeFairLine(r) {
     · the book price above is what the pick is taken at</div>`;
 }
 
+/* THE PRICE CAP (engine/stakeplan EDGE_MAX_ODDS, 2026-10-31): an Edge pick
+   longer than +130 is tracked on paper and carries no stake — the record's
+   long prices hit 37.6% where the price itself said 41.1%. The card says so
+   instead of printing a stake nobody places. */
+const EDGE_MAX_ODDS = 130;
+function edgeStakeTxt(r) {
+  return Number(r.odds) > EDGE_MAX_ODDS ? "Tracked · no stake" : `Stake ${stakeText(r.stake_units)}`;
+}
+
 function gameBetCard(r) {
   // stakeText answers the no-bankroll case itself (units, because
   // dollars need one), so the branch that used to live here went with it.
-  const stakeTxt = `Stake ${stakeText(r.stake_units)}`;
+  const stakeTxt = edgeStakeTxt(r);
   const stakeChip = r._ok && r.stake_units > 0
     ? `<span class="chip stake">${stakeTxt}</span>` : "";
   // College football's conditionals: a real number waiting on real news.
@@ -9293,7 +9302,7 @@ function cardHTML(r) {
   const warnings = (r.warnings || []).map((w) => `<div class="warning">${icon('warn')} ${escapeHtml(w)}</div>`).join("");
   // stakeText answers the no-bankroll case itself (units, because
   // dollars need one), so the branch that used to live here went with it.
-  const stakeTxt = `Stake ${stakeText(r.stake_units)}`;
+  const stakeTxt = edgeStakeTxt(r);
   const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
   return `
     <article class="card ${propOpenable(r) ? "openable" : ""} ${r._ok ? "" : "faded"}"${propAttrs(r)}
@@ -11431,7 +11440,7 @@ function firstOursHTML(rows) {
       <span>${escapeHtml(teamName(r.team))} · ${pct(r.prob)} by our numbers</span></span>
     <span class="hd-state"><span class="hd-num"><span class="hd-o">${r.need_odds ? `${oddsTxt(r.need_odds)} or longer` : "—"}</span>
       <span class="hd-p flat">${r.need_odds ? "the price that makes him a pick" : "no price we take makes him one"}</span></span></span></div>`;
-  return `<div style="grid-column:1/-1;min-width:0"><div class="section-title">Not priced yet
+  return `<div class="ls-ours" style="grid-column:1/-1;min-width:0"><div class="section-title">Not priced yet
     <span class="sub">— who scores first by our numbers, and the price that would make each a pick.</span></div>
     ${foldRowsHTML(games.map((g) => `<div class="card" style="padding:0"><div class="mp-head">${escapeHtml(g.r.matchup || g.k)}
       <span class="mini">${escapeHtml(whenLabel(g.r.game_date, g.r.game_kickoff))}</span></div>${g.rows.map(row).join("")}</div>`),
@@ -31033,8 +31042,9 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
   const units = (u) => `${sign(u)}${Math.abs(u).toFixed(1)}u`;
   const tiles = [];
   /* THE MODEL'S OWN BOOK LEADS (audit P1-1): since 2026-10-31 the picks
-     we stake (engine/stakeplan) — the Edge picks on the price ladder, and a
-     league's Most Likely picks once its book has beaten the price. Every
+     we stake (engine/stakeplan) — the Edge picks on the price ladder, none
+     past +130, and a league's Most Likely picks once its book has beaten
+     the price. "Tracked" counts every pick the rule kept on paper. Every
      wider total follows it, labelled for what it adds. */
   const staked = !!ov.rule;
   const lead = staked ? "Our record · the picks we stake" : (ov.label || "Edge picks · graded in public");
@@ -31042,7 +31052,7 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
     const f = recFloor(rec, ov);
     const roi = ov.roi == null ? null : Number(ov.roi);
     const u = Number(ov.net_units || 0);
-    const tracked = staked && ov.tracked ? ` · ${ov.tracked} Most Likely tracked, not staked` : "";
+    const tracked = staked && ov.tracked ? ` · ${ov.tracked} tracked, not staked` : "";
     tiles.push(f.thin ? thinTile(lead, ov, f, dots(recent, "status"))
       : tile(lead, wl(ov), roiBig(roi), tone(roi),
              `${units(u)} · ${ov.settled} settled${tracked}`, dots(recent, "status"), rate(ov)));

@@ -7,7 +7,7 @@ and then also update our current record on the site."
 
 engine/stakeplan (v4): Edge picks are staked on the price ladder unless a
 league's Edge book is clearly losing (100 graded at z <= -2.0, back above
--1.0); Most Likely picks are tracked for their hit rate and staked only once
+-1.0), and never past +130 (the favourite-longshot cap); Most Likely picks are tracked for their hit rate and staked only once
 a league's book beats the price (200 graded at z >= +2.0, off at z <= 0).
 The record the site leads with is every graded pick at the stake that rule
 gave it on its day — decided from the days before it only.
@@ -105,6 +105,25 @@ def test_an_nfl_week_label_sorts_to_its_sunday():
     assert SP.sort_day("2026-10-29") == "2026-10-29"
 
 
+def test_an_edge_pick_past_the_price_cap_is_tracked_and_left_out_of_the_evidence():
+    """The favourite-longshot bias (2026-10-31): the record's Edge picks at
+    +131 or longer hit 37.6% where the price itself said 41.1%."""
+    assert SP.EDGE_MAX_ODDS == 130
+    rows = [_row("2026-09-01", "nfl", "main", "lost", 150),
+            _row("2026-09-01", "nfl", "main", "won", 130),
+            _row("2026-09-01", "nfl", "paper", "won", 210),
+            _row("2026-09-01", "nfl", "main", "won", -110)]
+    flags, state = SP.replay(rows)
+    assert flags == [False, True, False, True], "+130 is the longest price staked; past it, paper"
+    assert state[("edge", "nfl")]["book"].n == 2, "the league's evidence is the picks the rule would stake"
+    assert SP.priced_out("edge", 131) and not SP.priced_out("edge", 130)
+    assert not SP.priced_out("likely", 400), "the cap is the Edge half's"
+    assert not SP.priced_out("edge", None), "an unreadable price is the journal's business, not the rule's"
+    rep = SP.report(rows)
+    assert rep["overall"]["tracked"] == 2 and rep["overall"]["settled"] == 2
+    assert "nothing longer than +130" in rep["plan"]["nfl"]["edge"]["why"]
+
+
 def test_books_outside_the_headline_are_left_alone():
     flags, state = SP.replay([_row("2026-09-01", "mlb", "stale", "won", 300)])
     assert flags == [False] and state == {}
@@ -185,6 +204,43 @@ def test_an_edge_book_the_rule_stopped_journals_on_paper():
     assert ledger.log_recommendations(conn, result) == 1
     row = conn.execute("SELECT category, stake_dollars FROM bets WHERE player='C'").fetchone()
     assert row["category"] == "main" and row["stake_dollars"] > 0, dict(row)
+
+
+def test_a_long_price_edge_pick_journals_on_paper_props_and_game_bets_alike():
+    conn = _journal()
+    rec = {"player": "D", "market": "receptions", "side": "UNDER", "line": 4.5, "odds": 150,
+           "book": "DK", "hit_prob": 0.45, "edge": 0.05, "grade": "A", "stake_units": 0.6,
+           "recommended": True, "has_market": True, "game_date": "2026-11-01"}
+    near = {**rec, "player": "E", "odds": 125}
+    game = {"bet_type": "moneyline", "pick": "NYJ", "odds": 160, "win_prob": 0.42, "edge": 0.04,
+            "grade": "A", "stake_units": 0.55, "recommended": True, "game_date": "2026-11-01"}
+    result = {"sport": "nfl", "date": "2026-W09", "recommendations": [rec, near], "game_bets": [game]}
+    assert ledger.log_recommendations(conn, result) == 3
+    got = {r["player"]: (r["category"], r["stake_units"], r["stake_dollars"])
+           for r in conn.execute("SELECT player, category, stake_units, stake_dollars FROM bets")}
+    assert got["D"][0] == "paper" and got["D"][2] == 0.0 and got["D"][1] == 0.6, got
+    assert got["E"][0] == "main" and got["E"][2] > 0, "+125 is inside the cap: staked"
+    assert got["NYJ"][0] == "paper" and got["NYJ"][2] == 0.0, "the game bets' insert honours the cap too"
+    assert ledger.edge_price_book("likely", 400) == "likely", "only an Edge row moves"
+
+
+def test_open_picks_past_the_cap_are_not_counted_as_staked():
+    conn = _journal()
+    for odds in (-110, 150):
+        conn.execute("INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds,"
+                     " hit_prob, grade, stake_units, stake_dollars, status, category)"
+                     " VALUES ('t','nfl','2026-11-01',?,'receptions','OVER',3.5,'DK',?,0.5,'A',1.0,0,"
+                     "'open','main')", (f"O{odds}", odds))
+    conn.commit()
+    assert SP.staked_reports(conn, sports=["nfl"])["overall"]["open"] == 1
+
+
+def test_the_card_says_tracked_past_the_cap():
+    assert f"const EDGE_MAX_ODDS = {SP.EDGE_MAX_ODDS};" in APP, "the page's cap is the rule's"
+    i = APP.index("function edgeStakeTxt(r)")
+    body = APP[i:APP.index("\n}", i)]
+    assert 'Number(r.odds) > EDGE_MAX_ODDS ? "Tracked · no stake"' in body
+    assert APP.count("const stakeTxt = edgeStakeTxt(r);") == 2, "the Edge prop card and the game-bet card"
 
 
 def test_the_export_ships_the_staked_record_and_stores_the_plan():

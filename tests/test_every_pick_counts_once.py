@@ -230,7 +230,7 @@ def test_the_record_page_draws_the_parts_beside_the_sum():
                t.index("As placed · before the Oct 31 stake rule"))
     assert a < b < c, t
     assert "300-220" in t and "350-262" in t and "50-42" in t, t
-    assert "520 Most Likely tracked, not staked" in t and "needs 62% at -162" in t, t
+    assert "520 tracked, not staked" in t and "needs 62% at -162" in t, t
     assert "Most Likely · tracked" not in _text(home) and "As placed" not in _text(home), \
         "Home keeps the one tile"
 

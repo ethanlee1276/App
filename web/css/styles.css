@@ -9981,9 +9981,11 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 /* Matchup picks (app.js matchupPicksHTML / gpMatchupHTML): one block per
    game, touchdowns then yards and catches, each row with its case. */
 .matchup-picks .mp-game { margin: 0 0 14px; }
-.matchup-picks .mp-head { cursor: pointer; font-weight: 700; font-size: var(--fs-sm);
+.matchup-picks .mp-head, .ls-ours .mp-head { cursor: pointer; font-weight: 700; font-size: var(--fs-sm);
   padding: 6px 0; border-bottom: var(--hairline) solid var(--border-soft); display: flex; gap: 8px; align-items: baseline; }
-.matchup-picks .mp-head .mini { color: var(--text-mute); font-weight: 400; }
+.matchup-picks .mp-head .mini, .ls-ours .mini { color: var(--text-mute); font-weight: 400; }
+/* The unpriced first scorers (app.js firstOursHTML): a card per game. */
+.ls-ours .mp-head { cursor: auto; padding: 10px 14px; flex-wrap: wrap; border: 0; }
 .matchup-picks .mp-sub { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
   text-transform: uppercase; letter-spacing: .04em; margin: 8px 0 2px; }
 .matchup-picks .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;

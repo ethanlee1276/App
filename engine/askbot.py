@@ -1510,8 +1510,9 @@ def record_facts(record: dict, sport: str = "") -> dict:
     out = {"since": record.get("record_epoch"), "all_bets": _wl(head)}
     if staked.get("overall") and pooled.get("overall"):
         out["as_placed"] = _wl(pooled["overall"])
-        out["stake_rule"] = ("Edge picks staked on the price ladder; Most Likely picks tracked for "
-                             "their hit rate and staked only in a league whose book has beaten the price")
+        out["stake_rule"] = ("Edge picks staked on the price ladder, none longer than +130 (long prices "
+                             "lost in every league); Most Likely picks tracked for their hit rate and "
+                             "staked only in a league whose book has beaten the price")
     curve = staked.get("curve") or pooled.get("curve") or record.get("curve") or []
     if curve and all(isinstance(p, dict) and p.get("w") is not None for p in curve):
         start = (_dt.date.today() - _dt.timedelta(days=30)).isoformat()

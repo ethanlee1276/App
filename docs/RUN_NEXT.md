@@ -6,15 +6,17 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-10-31 evening, after your IW, IV and IX paste (all done).
+Last updated 2026-10-31 night, after your IW, IV and IX paste (all done).
 
 ## 1. Now: the new stakes and the record (step IZ)
 
-The record now leads with the picks we stake: Edge on the price ladder, and
-Most Likely tracked for its hit rate until a league beats the price (the
-NBA's has). Nothing to run for the change. These show the rule's answer per
-league and rerun the study from the live receipts (read-only). Paste back
-`/tmp/iz.txt` and `/tmp/iz_study.txt`:
+The record now leads with the picks we stake: Edge on the price ladder and
+never past +130 (long prices lost in every league), and Most Likely tracked
+for its hit rate until a league beats the price (the NBA's has). Restated:
+1,406 staked, +23.1u, +3.2% ROI. Nothing to run for the change. These show
+the rule's answer per league and rerun the study from the live receipts
+(read-only; sections 5 and 6 are new: the price bands, and whether our
+chance beats the price's). Paste back `/tmp/iz.txt` and `/tmp/iz_study.txt`:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IZ JA JB 2>&1 | tee /tmp/iz.txt

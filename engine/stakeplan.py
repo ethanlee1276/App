@@ -37,6 +37,17 @@ THE RULE (v4, from 2026-10-31), per league:
     being staked when it is clearly losing — EDGE_STOP: 100 graded at
     z ≤ −2.0, the bar `ledger.LIVE_STOP_*` already held the staked Most
     Likely board to — and is staked again once it climbs back above z −1.0.
+  * NOTHING LONGER THAN +130 CARRIES A STAKE (EDGE_MAX_ODDS). The record's
+    Edge picks at +131 or longer hit 37.6% where we said 42.9% and the price
+    itself said 41.1% (293 picks: MLB, the NBA and the NFL, every one of
+    them losing; −9.6 units on 105 staked), and the longer the price the
+    wider the miss (+201 and up hit 17.6% against the price's 23.3%). It is
+    the favourite-longshot bias, the oldest finding in betting markets: long
+    prices pay less than their odds say, and a model's long-shot chances run
+    high with them. The picks at +100 to +130 made +23.8 units. A pick past
+    the cap still posts, is graded and is tracked on paper; it carries no
+    units and is left out of its league's evidence, which judges the picks
+    the rule would stake.
   * MOST LIKELY PICKS ARE TRACKED, NOT STAKED: every pick still posts, is
     graded and counts toward the board's hit rate. A league's Most Likely
     book is staked once it proves it beats the price — LIKELY_GO: 200 graded
@@ -74,6 +85,9 @@ EDGE_STOP = {"n": 100, "z": -2.0, "back": -1.0}
 #: A league's Most Likely book is staked once it has `n` graded at `z`, and
 #: goes back to paper at `off`.
 LIKELY_GO = {"n": 200, "z": 2.0, "off": 0.0}
+#: The longest price an Edge pick is staked at (American odds). Longer is
+#: tracked on paper — the module docstring has the record behind it.
+EDGE_MAX_ODDS = 130
 
 #: How many of the record's newest staked picks ride with the report, and
 #: with each league's (the first screen downloads them all).
@@ -89,6 +103,18 @@ def half_of(category) -> str | None:
     if c in LIKELY_CATS:
         return "likely"
     return None
+
+
+def priced_out(half, odds) -> bool:
+    """An Edge pick at a longer price than EDGE_MAX_ODDS: tracked, never
+    staked, and left out of its league's evidence. A price that cannot be
+    read is not priced out (the journal refuses those before they get here)."""
+    if half != "edge":
+        return False
+    try:
+        return int(float(odds)) > EDGE_MAX_ODDS
+    except (TypeError, ValueError):
+        return False
 
 
 def sort_day(day) -> str:
@@ -177,7 +203,7 @@ def why(half: str, staked: bool, book: Book) -> str:
            if book.n else "nothing graded yet")
     if half == "edge":
         if staked:
-            return f"staked on the price ladder — {rec}"
+            return f"staked on the price ladder, nothing longer than +{EDGE_MAX_ODDS} — {rec}"
         return (f"tracked, not staked — clearly losing ({rec}); staked again above "
                 f"z {EDGE_STOP['back']:+.1f}")
     if staked:
@@ -193,9 +219,11 @@ def replay(rows: list) -> tuple[list, dict]:
 
     ``rows`` are dicts with ``day``, ``sport``, ``category``, ``odds`` and
     ``status``, in any order. Returns ``(flags, state)``: ``flags[i]`` is
-    whether rows[i]'s half of its league was staked on its day, decided from
-    the days before it only; ``state`` is {(half, sport): {"staked", "book"}}
-    after the last day — what the rule says for the next pick."""
+    whether rows[i] carried a stake on its day — its half of its league
+    staked, decided from the days before it only, and its price inside
+    EDGE_MAX_ODDS; ``state`` is {(half, sport): {"staked", "book"}} after the
+    last day — what the rule says for the next pick. A pick past the price
+    cap is in neither a league's evidence nor its stakes."""
     order = sorted(range(len(rows)), key=lambda i: (sort_day(rows[i].get("day")),))
     flags = [False] * len(rows)
     staked: dict = {}
@@ -215,11 +243,11 @@ def replay(rows: list) -> tuple[list, dict]:
             key = (h, str(r.get("sport") or "").lower())
             if key not in staked or staked[key] is None:
                 staked[key] = decide(h, None, books.setdefault(key, Book()))
-            flags[k] = bool(staked[key])
+            flags[k] = bool(staked[key]) and not priced_out(h, r.get("odds"))
         for k in day:
             r = rows[k]
             h = half_of(r.get("category"))
-            if h is None:
+            if h is None or priced_out(h, r.get("odds")):
                 continue
             x = flat_return(r.get("odds"), r.get("status"))
             if x is None or str(r.get("status")) == "push":
@@ -375,19 +403,20 @@ IDS_TABLE = "temp.staked_ids"
 
 
 def _open_staked(conn, state: dict, sport: str | None = None) -> int:
-    """Open picks whose half of their league the rule stakes now."""
+    """Open picks the rule stakes now: their half of their league staked,
+    and an Edge pick's price inside EDGE_MAX_ODDS."""
     from . import ledger as L
     books, bargs = L.books_sql(L.POOLED_BOOKS)
-    q = (f"SELECT LOWER(sport) AS sp, category, COUNT(*) AS n FROM bets WHERE status='open' "
-         f"AND stake_units > 0 AND {books}")
-    args: list = list(bargs)
+    q = (f"SELECT LOWER(sport) AS sp, category, CAST(odds AS INTEGER) > ? AS long, COUNT(*) AS n "
+         f"FROM bets WHERE status='open' AND stake_units > 0 AND {books}")
+    args: list = [EDGE_MAX_ODDS] + list(bargs)
     if sport:
         q += " AND LOWER(sport)=?"
         args.append(str(sport).lower())
     n = 0
-    for r in conn.execute(q + " GROUP BY LOWER(sport), category", args):
+    for r in conn.execute(q + " GROUP BY LOWER(sport), category, long", args):
         h = half_of(r["category"])
-        if h is None or L.is_benched(r["sp"]):
+        if h is None or L.is_benched(r["sp"]) or (h == "edge" and r["long"]):
             continue
         v = state.get((h, r["sp"]))
         if (v["staked"] if v else h == "edge"):
