@@ -143,9 +143,13 @@ always because it was measured and found flat (the module's own notes say which)
 - engine/teamcontext names `pass_tds`, which is no market of this board (the pass-rate tilt never reaches it)
 - engine/teamcontext names `rush_tds`, which is no market of this board (the pass-rate tilt never reaches it)
 
+## Bought for its own board
+
+- **First touchdown** (NFL, since 2026-10-31): the Long Shots board. Priced by its own model — the lines for the team, his share of its carries, targets and touchdowns for the player (`engine/firsttd`, docs/FIRST_TD_RESEARCH.md) — and graded off the play-by-play's first scorer, not through the prop chain above.
+
 ## What is not bought, and why
 
-- **Longest completion / rush / reception, first and last touchdown, touchdowns over:** no model, no measurement; a book's vig on a longest-play market is the widest on the menu.
+- **Longest completion / rush / reception, last touchdown, touchdowns over:** no model, no measurement; a book's vig on a longest-play market is the widest on the menu.
 - **Sacks, solo tackles, assists and defensive interceptions:** no harness arm yet. (Rushing + receiving yards, pass + rush + receiving yards, kicking points, field goals and tackles + assists were measured by `marketfit.py` and bought on 2026-10-10, NFL only.)
 - **Rushing / receiving / pass-rush-receiving touchdowns:** the anytime-touchdown model already prices the scorer; the split markets are the same event at worse prices.
 

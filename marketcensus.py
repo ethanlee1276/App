@@ -114,7 +114,11 @@ def _bought(t, sport: str) -> dict:
     O = t["O"]
     cfg = O.SPORT_CONFIG[sport]
     out = dict(cfg.get("markets") or {})
-    out.update(cfg.get("scorers") or {})
+    # First touchdown is bought for the Long Shots board, which prices and
+    # grades it on its own (engine/firsttd), not through the prop chain this
+    # census audits — listed under its own heading below.
+    out.update({k: v for k, v in (cfg.get("scorers") or {}).items()
+                if k not in getattr(O, "FIRST_TD_ODDS_TO_MARKET", {})})
     out.update(cfg.get("alternates") or {})
     if sport == "cfb":
         for k in t["cfb_build"].PLAYER_MARKETS:
@@ -380,8 +384,13 @@ def render() -> str:
     out += ["## Findings", ""]
     got = findings(t)
     out += [f"- {f}" for f in got] or ["- none"]
-    out += ["", "## What is not bought, and why", "",
-            "- **Longest completion / rush / reception, first and last touchdown, touchdowns over:** "
+    out += ["", "## Bought for its own board", "",
+            "- **First touchdown** (NFL, since 2026-10-31): the Long Shots board. Priced by its own "
+            "model — the lines for the team, his share of its carries, targets and touchdowns for "
+            "the player (`engine/firsttd`, docs/FIRST_TD_RESEARCH.md) — and graded off the "
+            "play-by-play's first scorer, not through the prop chain above.", ""]
+    out += ["## What is not bought, and why", "",
+            "- **Longest completion / rush / reception, last touchdown, touchdowns over:** "
             "no model, no measurement; a book's vig on a longest-play market is the widest on the menu.",
             "- **Sacks, solo tackles, assists and defensive interceptions:** no harness arm yet. "
             "(Rushing + receiving yards, pass + rush + receiving yards, kicking points, field goals "
