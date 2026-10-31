@@ -623,10 +623,18 @@ const chatOnGame = () => state.view === "pbp" || state.view === "game";
 function chatGone() {
   return !(chatOnGame() || state.view === "live");
 }
+// `gch-fab-on` on the body while the bar shows, for chat.css's room at the
+// foot of the game page — set here, where the bar is drawn and taken away,
+// because a :has() on the body re-checked the whole page on every change.
+function chatFabMark() {
+  const f = document.getElementById("gch-fab");
+  document.body.classList.toggle("gch-fab-on", !!(f && f.isConnected && !f.hidden));
+}
 function chatTeardown() {
   chatReset();
   const f = document.getElementById("gch-fab");
   if (f) f.remove();
+  chatFabMark();
 }
 // Read off the address, not state.view: on a computer the page switch runs
 // through a view transition and state.view is still the game for a moment,
@@ -635,7 +643,7 @@ window.addEventListener("hashchange", () => setTimeout(() => {
   const v = (location.hash || "").replace(/^#/, "").split("/")[0];
   const game = v === "pbp" || v === "game";
   if (!game && v !== "live") chatTeardown();
-  else if (!game) { const f = document.getElementById("gch-fab"); if (f) f.remove(); }
+  else if (!game) { const f = document.getElementById("gch-fab"); if (f) f.remove(); chatFabMark(); }
 }, 0));
 
 /* ---------------- the poll ---------------- */
@@ -796,7 +804,7 @@ function chatLast() {
 function chatFab() {
   let f = document.getElementById("gch-fab");
   chatEntryPaint();
-  if (!chatOnGame() || !CH.room) { if (f) f.remove(); return; }
+  if (!chatOnGame() || !CH.room) { if (f) f.remove(); chatFabMark(); return; }
   if (!f) {
     f = document.createElement("button");
     f.type = "button";
@@ -806,6 +814,7 @@ function chatFab() {
     document.body.appendChild(f);
   }
   f.hidden = CH.open;
+  chatFabMark();
   const n = CH.unread, last = chatLast();
   f.setAttribute("aria-label", `Open the game chat${n ? `, ${n} new` : ""}${CH.here ? `, ${CH.here} watching` : ""}`);
   const html = `<span class="gch-fab-ico">${chatIcon()}</span><span class="gch-fab-main"><b>Game chat${

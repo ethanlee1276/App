@@ -5920,7 +5920,11 @@ body.has-rail .shell {
      programmatic scroll completed with the body rule in place). The
      touchmove guard in app.js covers engines without :has(). */
   body.menu-open { overflow: hidden; }
-  html:has(body.menu-open) { overflow: hidden; }
+  /* On the root by its own class, which the menu's own toggle sets beside
+     body's (app.js) — not `html:has(body.menu-open)`: a :has() on the root
+     made every class change in the page re-check the whole document
+     (2026-10-31, the first-screen trace). */
+  html.menu-open { overflow: hidden; }
   /* FIXED while open, because the scroll lock above un-sticks
      position:sticky — the bar de-stuck to the DOCUMENT top and opened
      the menu headless from anywhere mid-page (measured: rect.top -600
@@ -8418,7 +8422,12 @@ body.off-league .sportbar { display: none; }
    it steps aside there: one row of leagues on a phone, not two stacked,
    both saying NFL. On a wide screen the strip is chrome in the top bar. */
 @media (max-width: 1279px) {
-  body:has(#view-live.active, #view-tonight.active, #view-record.active) .sportbar { display: none; }
+  /* A body class the view switch sets (app.js _switchViewNow), not a
+     `body:has(#view-live.active, …)`: `.active` toggles all over the page,
+     and each toggle made the browser re-check the body and restyle under
+     it — up to a hundred whole-page recalculations in one task on a phone's
+     first screen (2026-10-31). */
+  body.own-league-row .sportbar { display: none; }
 }
 /* THE SITE MASTHEAD AND FOOTER GO TOO, and missing them was visible in a
    screenshot rather than in the markup: the wall draws its OWN lockup and

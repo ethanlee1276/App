@@ -31,7 +31,7 @@
   body.has-tray .gch-fab { bottom: calc(144px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }
   /* Room at the foot of the game page for the bar, so its last lines are
      never under it. */
-  body:has(#gch-fab:not([hidden])) #view-pbp { padding-bottom: 72px; }
+  body.gch-fab-on #view-pbp { padding-bottom: 72px; }      /* chat.js chatFabMark */
 }
 
 /* ── the card on the game page (chatEntryPaint) ─────────────────────────── */

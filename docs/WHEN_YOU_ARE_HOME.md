@@ -9305,6 +9305,37 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**IY. The first screen settles faster on a phone** (step 311; you,
+2026-10-30: "Give the first-screen speed test its headroom back"). Nothing to
+run for the change itself. On a mid-range phone's first screen (CPU slowed
+4×, slow network), the Most Likely page was blocked 950–1,100 ms, against a
+900 ms bar the test suite holds. Now it's 550–650 ms, and every page tested
+is under 650.
+
+- Four style rules asked a question of the whole page (a `:has()` on the
+  `<html>` or `<body>` element). So every tab, chip or panel that lit up or
+  hid anywhere made the browser restyle the page again, up to a hundred
+  times in one stretch. Classes set by the code that already knows the state
+  replaced them: the menu's scroll lock, the league row stepping aside on
+  Live, Tonight and the Record, the room under the game chat bar, and under
+  the Ask slip.
+- The sidebar's "more below" fade no longer lays the page out while the
+  drawer is closed on a phone.
+- A test now refuses any new style rule that questions the whole page.
+
+That the site serves it (each should print 1):
+
+```
+curl -s https://qellysbook.com/css/styles.css | grep -c 'body.own-league-row .sportbar'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatFabMark('
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IY 2>&1 | tee /tmp/iy.txt
+```
+
 **IX. First touchdown is college's Long Shots too** (step 310; you,
 2026-10-31: "I guess only college football, NFL, and NBA would have that
 right now. But I also want to start implementing that too"). Nothing to run

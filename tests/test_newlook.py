@@ -266,8 +266,13 @@ def test_the_drawer_has_more_than_one_exit():
     assert "menu-open::after" not in CSS, \
         "the scrim is paint again — taps will fall through to the page"
     # Both scroll locks, because the ROOT is the scroller: overflow on
-    # body alone still let the page move under the open drawer.
-    assert "html:has(body.menu-open) { overflow: hidden; }" in CSS
+    # body alone still let the page move under the open drawer. The root's
+    # by its own class, set beside body's — never a :has() on the root,
+    # which re-checked the whole page on every class change (2026-10-31).
+    assert "html.menu-open { overflow: hidden; }" in CSS
+    assert "html:has(" not in CSS.replace("`html:has(body.menu-open)`", "")
+    assert 'document.documentElement.classList.toggle("menu-open", open);' in APP
+    assert 'document.documentElement.classList.remove("menu-open");' in APP
 
 
 def test_props_players_and_record_carry_their_charts_and_chips():

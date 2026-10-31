@@ -76,6 +76,36 @@ def test_nothing_lands_on_top_of_the_page():
     assert body.index("lv-hold") < body.index("await fetchAllLive()"), "the scoreboard holds its place while the feeds answer"
 
 
+def test_no_style_rule_asks_the_whole_page_a_question():
+    """THE HEADROOM, GIVEN BACK (2026-10-31). By then the likely view's first
+    screen blocked 950-1,100 ms on a quiet machine against the 900 bar, and
+    the gate failed it whenever three browser tests ran at once. A trace
+    found most of it was the same work done over and over: four rules
+    anchored :has() on <html> or <body> — the menu's scroll lock, the league
+    row's step-aside, the chat bar's room and the Ask slip's — so every
+    `.active` or `hidden` change anywhere made the browser re-check the
+    root and restyle under it, up to a hundred times in one task. Classes
+    set by the code that knows the state replaced them (`html.menu-open`,
+    `body.own-league-row`, `body.gch-fab-on`, `body.slip-on`), and the
+    rail's more-below fade stopped laying the page out while the drawer was
+    closed: blocked 550-650 ms on the likely view, restyling inside long
+    tasks 470 → 197 ms. A :has() lower down asks about its own subtree and
+    stays."""
+    import re
+    root = os.path.join(ROOT, "web", "css")
+    for name in sorted(os.listdir(root)):
+        if not name.endswith(".css"):
+            continue
+        css = re.sub(r"/\*.*?\*/", "", READ("web", "css", name), flags=re.S)
+        hit = re.search(r"(?:^|[\s,}>~+(])(html|body|:root)(?:[.#][\w-]+|\[[^\]]*\])*:has\(", css)
+        assert not hit, (name, css[max(0, hit.start() - 40):hit.end() + 60] if hit else "")
+    assert 'document.body.classList.toggle("slip-on", !!s.legs.length);' in APP
+    chat = READ("web", "js", "chat.js")
+    assert chat.count("chatFabMark();") >= 4, "the chat bar's class follows the bar"
+    at = APP.index("ONLY WHILE IT IS ON SCREEN")
+    assert "new IntersectionObserver((es) => {" in APP[at:at + 1400], "the rail measures only once it shows"
+
+
 def test_the_toolbox_never_freezes_a_page_it_is_not_on():
     assert '["tools-body", () => renderTools(), true],' in APP
     at = EXTRAS.index("  function tools(host) {")

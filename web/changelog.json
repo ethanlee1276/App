@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-31",
+      "kind": "fix",
+      "title": "Pages settle faster on a phone",
+      "body": "The first screen does far less work while it loads: on a mid-range phone, the time the page is busy and can\u2019t answer a tap fell by about a third on the Most Likely page. A few style rules were making the browser re-check the whole page every time anything on it changed; they now ask only about what they style."
+    },
+    {
+      "date": "2026-10-31",
       "kind": "ship",
       "title": "College Long Shots are first-touchdown picks",
       "body": "College football’s Long Shots now pick first-touchdown scorers the way the NFL’s do, on college’s own numbers: six seasons of college games for each team’s chance of scoring first, and each player’s share of his team’s carries, targets and touchdowns. A player is a pick only when our chance beats his price by 10% or more, one per game. Picks are graded off the box score once the game’s first scorer is known."

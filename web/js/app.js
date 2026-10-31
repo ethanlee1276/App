@@ -23859,6 +23859,9 @@ function _switchViewNow(name, push, dir) {
   document.body.classList.toggle("ask-open", name === "ask");    // the chat room: no footer
   document.body.classList.toggle("footer-quiet", QUIET_FOOTER_VIEWS.has(name));
   document.body.classList.toggle("off-league", OFF_LEAGUE_VIEWS.includes(name));
+  // The pages that draw their own league row: the bar's steps aside under
+  // 1280px (styles.css `body.own-league-row .sportbar`).
+  document.body.classList.toggle("own-league-row", ["live", "tonight", "record"].includes(name));
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   paneSplit(name, leaving);
@@ -25758,6 +25761,8 @@ function slipRender() {
   const host = document.getElementById("qb-slip");
   if (!host) return;
   const s = slipState();
+  // `slip-on` for ask.css, where a :has() on the body used to ask.
+  document.body.classList.toggle("slip-on", !!s.legs.length);
   if (!s.legs.length) { host.hidden = true; host.innerHTML = ""; return; }
   host.hidden = false;
   const combined = slipAmerican();
@@ -26379,6 +26384,7 @@ function menuTrace(what, why) {
 function closeMobileMenu(why) {
   if (document.body.classList.contains("menu-open")) menuTrace("close", why);
   document.body.classList.remove("menu-open");
+  document.documentElement.classList.remove("menu-open");
   // A drawer that had to be forced open must not stay forced.
   releaseDrawer(document.getElementById("sidebar"));
   const btn = document.getElementById("menu-toggle");
@@ -26601,6 +26607,7 @@ function initMobileMenu() {
     // mid-page, close it, and you are at the TOP of a page you never
     // scrolled — "stuck" in the wrong place. Open must not move the page.
     const open = document.body.classList.toggle("menu-open");
+    document.documentElement.classList.toggle("menu-open", open);
     // A retracted auto-hide header must come back before the drawer
     // opens — the drawer hangs below the bar.
     if (open) {
@@ -31555,15 +31562,26 @@ function buzzOnSettle(rows) {
     // every change inside the rail (226 ms of a phone's cold load). The
     // observers still fire on every change; the measurement waits for
     // the frame and happens once.
-    let queued = false;
+    // ONLY WHILE IT IS ON SCREEN (2026-10-31, the first-screen trace). On a
+    // phone the rail is the closed drawer, yet its boot-time fills still
+    // asked for the measurement, and each answer laid out the whole page
+    // mid-boot — 152 ms of one task. An IntersectionObserver says when the
+    // rail is showing without forcing a layout; until then nothing is read,
+    // and the first sight of it measures once.
+    let queued = false, shown = !window.IntersectionObserver;
     const sync = () => {
-      if (queued) return;
+      if (queued || !shown) return;
       queued = true;
       requestAnimationFrame(() => {
         queued = false;
         sb.classList.toggle("sb-more", sb.scrollTop + sb.clientHeight < sb.scrollHeight - 4);
       });
     };
+    if (window.IntersectionObserver)
+      new IntersectionObserver((es) => {
+        shown = es.some((e) => e.isIntersecting);
+        sync();
+      }).observe(sb);
     sb.addEventListener("scroll", sync, { passive: true });
     // The rail's CONTENT changes (league chips, fold state, ROI note)
     // without the box ever resizing, so watch both.

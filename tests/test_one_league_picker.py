@@ -56,7 +56,12 @@ def test_the_strip_steps_aside_where_the_page_has_its_own_row():
     i = CSS.index("/* ONE LEAGUE PICKER")
     block = CSS[i:i + 900]
     assert "@media (max-width: 1279px)" in block
-    assert "body:has(#view-live.active, #view-tonight.active, #view-record.active) .sportbar { display: none; }" in block
+    # A body class the view switch sets, not a :has() on the body: `.active`
+    # toggles all over the page and each toggle restyled under the body
+    # (the first-screen trace, 2026-10-31).
+    i = CSS.index("@media (max-width: 1279px) {", i)
+    assert "body.own-league-row .sportbar { display: none; }" in CSS[i:i + 700]
+    assert 'document.body.classList.toggle("own-league-row", ["live", "tonight", "record"].includes(name));' in APP
 
 
 def test_the_games_strip_has_no_league_select():

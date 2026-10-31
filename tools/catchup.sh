@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IY "The first screen settles faster on a phone" 30 <<'SH'
+curl -s https://qellysbook.com/css/styles.css | grep -c 'body.own-league-row .sportbar'
+curl -s https://qellysbook.com/js/chat.js | grep -c 'function chatFabMark('
+SH
 run IX "First touchdown is college's Long Shots too" 60 <<'SH'
 cd /srv/qellys && date -u -r data/built/cfb.json && sudo -u qellys python3 -c "
 import json

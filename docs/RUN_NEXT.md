@@ -22,10 +22,11 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 lossaudit.py --sport nfl 2>&
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 research/thinmarket_box.py 2>&1 | tee /tmp/iw_thin.txt
 ```
 
-That the box has it first (each count 1 or more):
+That the box has it first (each count 1 or more), with the faster first
+screen (IY):
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh IW 2>&1 | tee /tmp/iw.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IW IY 2>&1 | tee /tmp/iw.txt
 ```
 
 ## 2. Any time today: the NBA first-basket study (step IV)
