@@ -88,7 +88,7 @@ def test_the_nfl_asks_for_the_three_ladders_and_college_does_not():
     # The price the pacer meters is what the call asks for: one credit per
     # market per region per event — 22 until today, 25 now.
     n = len(nfl["markets"]) + len(nfl["scorers"]) + len(nfl["alternates"]) + 3
-    assert n == B.credits_per_event("nfl") == B.EVENT_CREDITS["nfl"] == 25
+    assert n == B.credits_per_event("nfl") == B.EVENT_CREDITS["nfl"] == 26  # first touchdown, 2026-10-31
     asked = {}
 
     def fake_fetch(eid, key, markets=None, books=None, ttl=300, sport="nfl", cache_only=False):
@@ -98,7 +98,7 @@ def test_the_nfl_asks_for_the_three_ladders_and_college_does_not():
     with _Swap(oa, "list_events", lambda key, ttl=300, sport="nfl", cache_only=False: [EVENT]), \
             _Swap(oa, "fetch_event_odds", fake_fetch):
         res = oa.apply_odds_to_slate(slate, api_key="k")
-    assert set(NEW) <= set(asked["markets"]) and len(asked["markets"]) == 25, asked
+    assert set(NEW) <= set(asked["markets"]) and len(asked["markets"]) == 26, asked   # + first touchdown
     prop = slate.props[0]
     assert res.matched == 1 and res.alt_matched == 1
     assert [ln.line for ln in prop.lines] == [34.5], "the shopped field stays the main number"
