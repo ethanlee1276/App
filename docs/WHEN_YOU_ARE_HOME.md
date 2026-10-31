@@ -9305,6 +9305,36 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JF. Same-game parlays are tracked, never staked; the lift rule is off**
+(step 318; your second JD paste, 2026-10-31). Nothing to run for the change
+itself:
+
+- **What the second JD said** (every league's games this time: 1,821, CFB
+  717, MLB 744, NBA 88, NFL 272): with JE's lift rule the board's pairs made
+  +8.99u over 418 tickets (Edge −0.8% over 139, Most Likely +3.6% over 279);
+  without it, +12.80u over 511 (Edge +2.1% over 164, Most Likely +2.7% over
+  347). The rule kept the tightly linked same-game pairs, and they lost 15.9%
+  over 120; it took away the NFL's Edge same-game pairs, which had made 15.7%
+  over 22. Our modelled correlations don't show up in the results strongly
+  enough to pick same-game pairs by.
+- **What held in every run is the kind:** without the rule, same-game pairs
+  lost 9.5% over 213 (MLB −24.4% over 85, its Edge ones 0 for 14; the other
+  leagues +0.4% over 128) and two-game pairs made 11.1% over 298 (+20.3% over
+  140 outside MLB; the Edge two-game pairs +10.9% over 128).
+- **Now:** every same-game pair that makes sense posts again (one pick on
+  each team included), shown, journaled and graded, but money rides only on
+  a two-game parlay whose two legs are both picks we stake, at half a unit. A
+  same-game parlay is always tracked. Two of each kind a day stays (one, two
+  and three a day did about the same). The Record page's backtest refreshes
+  on its next export.
+
+After this is live, the study once more (the same check as JD). Section 1 is
+the board's rule now; section 4 prints JE's lift rule beside it:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JD 2>&1 | tee /tmp/jd.txt
+```
+
 **JE. Same-game parlays have to earn back the book's cut; the study reads every
 league's games** (step 317; your JD paste, 2026-10-31). Nothing to run for the
 change itself:

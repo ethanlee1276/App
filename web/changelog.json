@@ -4,6 +4,12 @@
     {
       "date": "2026-10-31",
       "kind": "model",
+      "title": "Same-game parlays are tracked, never staked; the rule from the first run is off",
+      "body": "The parlay study's second run read every league's games (1,821 of them; the first read only football's). It turned down the rule we added after the first: with it, the board's pairs made 9.0 units over 418 tickets, and without it 12.8 over 511. The same-game pairs it kept, the tightly linked ones, lost 15.9%, and it took away NFL Edge same-game pairs that had made 15.7%. What held in every run is the kind: same-game pairs lost 9.5% over 213 tickets and two-game pairs made 11.1% over 298 (10.9% for the Edge ones). So every same-game pair that makes sense posts again, one pick on each team included, and the Parlays page and the Record page grade it, but money now rides only on a two-game parlay whose two legs are both picks we stake, at half a unit. A same-game parlay is always tracked."
+    },
+    {
+      "date": "2026-10-31",
+      "kind": "model",
       "title": "Same-game parlays have to earn back the book's cut",
       "body": "The first run of the parlay study on our own journal: football's Most Likely same-game pairs lost 11.7% over 86 tickets while its two-game pairs made 29.6% over 85. A book pays a same-game parlay about 9.5% under its two prices multiplied, and two heavy favourites in one game, joined only by the shared pace of the game, lift the chance both hit by 1 to 3%. So a same-game pair now posts only when the link between its legs lifts that chance by at least 10.5%, a quarterback and his own receiver, say. A pick on each team, which never carries more than the pace link, no longer posts. Edge parlays, which made 3.4% over 162 tickets (15.2% since mid-October), are unchanged. The study now also reads the NBA's and MLB's games, which its first run missed."
     },

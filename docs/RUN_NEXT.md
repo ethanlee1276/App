@@ -6,13 +6,17 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-10-31 night, after your JD paste (the parlay study). Done:
+Last updated 2026-10-31 night, after your second JD paste (the parlay
+study with every league's games). Done:
 
-- **JD:** Edge parlays made +3.4% over 162, +15.2% since 10-15. Most Likely
-  parlays lost 2.5%, mostly MLB and same-game pairs; football's same-game
-  Most Likely pairs lost 11.7% while its two-game pairs made 29.6%. Same-game
-  pairs now have to earn back the book's cut (step JE), and the study's NBA
-  and MLB games are fixed, so item 1 runs it again.
+- **JD, second run:** JE's same-game rule made things worse (+8.99u over 418
+  tickets with it, +12.80u over 511 without), so it's off. What held in both
+  runs: same-game pairs lost 9.5% over 213 and two-game pairs made 11.1% over
+  298. Every pair that makes sense posts again, but money now rides only on
+  two-game parlays; same-game ones are always tracked (step JF). Item 1 runs
+  the study once more on the new rule.
+- **JD, first run:** Edge parlays made +3.4% over 162, +15.2% since 10-15.
+  It read only football's games; fixed for the second run.
 - **IZ:** the restated record is on the site. 1,405 staked, 769–636,
   +23.03u, +3.2% ROI, 7,557 tracked.
 - **JB:** college's price test can't run yet. Only 8 of 2,087 college picks
@@ -22,11 +26,11 @@ Last updated 2026-10-31 night, after your JD paste (the parlay study). Done:
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 2 checks it.
 
-## 1. Any time after this push: the parlay study again (steps JE, JD)
+## 1. Any time after this push: the parlay study once more (steps JF, JD)
 
-Read-only, about 3 minutes. The first run with every league's games (the NBA's
-and MLB's were missing) and the new same-game rule; section 4 shows the old
-rule beside it:
+Read-only, about 3 minutes. Section 1 is the board's rule now (every pair
+that makes sense, two of each kind a day); section 4 shows JE's lift rule
+beside it. The header's commit should be this push's or later:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JD 2>&1 | tee /tmp/jd.txt

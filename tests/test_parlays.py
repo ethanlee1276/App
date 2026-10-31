@@ -895,13 +895,13 @@ def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():
 
 def test_the_page_says_staked_or_tracked_on_every_ticket():
     """A two-leg parlay does what its legs do, about twice. So it carries
-    money only when both legs are picks we stake (engine/twoleg.staked), and
-    every card says which it is. A ticket shown without that line is an
+    money only when it is a two-game pair and both legs are picks we stake
+    (engine/twoleg.staked), and every card says which it is. A ticket shown without that line is an
     invitation to bet one the record only tracks."""
     card = _fn_src("tlTicketHTML")
     assert "Staked ${t.stake_units}u" in card and "Tracked · no stake" in card
     page = _fn_src("renderParlayPage")
-    assert "a parlay is staked only when both legs are picks we stake" in page
+    assert "money rides only on a two-game parlay whose legs are both picks we stake" in page
 
 
 def test_the_page_never_prints_a_price_without_saying_how_it_was_made():

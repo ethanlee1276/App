@@ -20,9 +20,10 @@ WHAT IT PRINTS:
      best one or two do better than three, the board should post fewer;
   3. the two halves of the record, either side of 2026-10-15 (the stake
      study's split): a pool that pays in one half only is not yet a finding;
-  4. the same-game rule: every same-game pair that makes sense (the first
-     run's rule) next to the pairs whose link earns back the same-game cut
-     (twoleg.SG_MIN_LIFT, since 2026-10-31);
+  4. the same-game rule: the board builds every same-game pair that makes
+     sense and stakes none of them; beside it, the lift rule the board ran
+     for one evening (the link has to earn back the same-game cut,
+     twoleg.SG_MIN_LIFT), which the second run turned down;
   5. the parlays the board has journaled live, graded so far.
 
 Read-only: it reads the journal and the history database's schedule (to
@@ -120,12 +121,13 @@ def main(argv=None) -> int:
         print(f"  {label}:")
         print("\n".join("  " + line for line in table(half, kinds=("all",))))
 
-    print(f"\n4. The same-game rule: the link has to lift the chance both hit {T.SG_MIN_LIFT - 1:.1%} to pay for")
-    print("   the book's same-game cut. Every same-game pair that makes sense (the first run's rule) beside it:")
-    old = T.backtest(conn, since=args.since, games=games, min_lift=1.0)
-    print("  every pair that makes sense:")
-    print("\n".join("  " + line for line in table(old, kinds=("all", T.SAME_GAME))))
-    print("  the link earns back the cut (what the board posts now): section 1 above.")
+    print("\n4. The same-game rule. The board builds every same-game pair that makes sense and stakes none")
+    print(f"   of them. Beside it, the lift rule: the link has to lift the chance both hit {T.SG_MIN_LIFT - 1:.1%},")
+    print("   what the book's same-game cut takes:")
+    lift = T.backtest(conn, since=args.since, games=games, min_lift=T.SG_MIN_LIFT)
+    print("  the link earns back the cut:")
+    print("\n".join("  " + line for line in table(lift, kinds=("all", T.SAME_GAME))))
+    print("  every pair that makes sense (what the board posts now): section 1 above.")
 
     print("\n5. The parlays the board has journaled live:")
     try:

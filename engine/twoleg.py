@@ -24,9 +24,13 @@ as fast, and a parlay of picks that pay the juice loses about twice as fast.
 That is why a parlay is staked only when BOTH legs are picks the stake rule
 already stakes (engine/stakeplan: an Edge pick in a league whose Edge book
 is staked and no longer than +130, a Most Likely pick in a league whose
-Most Likely book has beaten the price). Every other parlay posts, is
-journaled and graded, and is tracked on paper, so the record says how it
-would have done.
+Most Likely book has beaten the price), and only when it is a TWO-GAME
+pair. A same-game pair is always tracked: on the box's journal (2026-10-31,
+every league's games) same-game pairs lost 9.5% over 213 while two-game
+pairs made 11.1% over 298 and the Edge two-game pairs 10.9% over 128; the
+book's same-game cut costs more than the link between two of our picks has
+paid. Every other parlay posts, is journaled and graded, and is tracked on
+paper, so the record says how it would have done.
 
 WHAT IS BUILT, per pool (Edge picks, Most Likely picks), from tonight's
 board:
@@ -82,20 +86,23 @@ OPPOSITE_MIN_RHO = -0.05
 #: The price cuts (module docstring).
 SGP_CUT = 0.095
 TWO_BOOK_CUT = 0.03
-#: A SAME-GAME PAIR HAS TO EARN BACK THE SAME-GAME CUT. The book pays a
-#: same-game pair SGP_CUT under the product, so the link between the legs
-#: has to lift the chance both hit by at least as much (1 / (1 - 0.095),
-#: a 10.5% lift) or the pair is a worse bet than its price says. The box's
-#: first study run (2026-10-31, the real journal): football's Most Likely
-#: same-game pairs lost 11.7% over 86 while its two-game pairs made 29.6%
-#: over 85. Two heavy favourites on one game, linked only by the shared-pace
-#: floor (+0.10), lift the chance 1-3%; a quarterback and his own receiver
-#: (measured +0.64) lift it about 30%. The second kind stays.
+#: THE LIFT RULE, KEPT FOR THE STUDY ONLY. A same-game pair whose link lifts
+#: the chance both hit by less than the same-game cut takes (1 / (1 - 0.095),
+#: 10.5%) is a worse bet than its price says, so for one evening the board
+#: refused those. The second study run, with every league's games read,
+#: said otherwise: it posted 93 fewer same-game pairs, the tightly linked
+#: ones it kept lost 15.9% over 120, and the board's overall return fell
+#: (+12.8u over 511 without it, +9.0u over 418 with it). Our modelled correlations do not show up in the results
+#: strongly enough to rank same-game pairs by. The board builds every pair
+#: that makes sense again and stakes none of the same-game ones (`staked`);
+#: tools/parlay_study.py prints this rule beside it.
 SG_MIN_LIFT = 1.0 / (1.0 - SGP_CUT)
 #: Bumped whenever the pairing or the backtest changes, so a backtest cached
 #: by the record export (ledger._two_leg_backtest) is never read across it.
 #: 2: the daily sports' games read from `period`, and the same-game lift rule.
-BACKTEST_VERSION = 2
+#: 3: the lift rule off again (every pair that makes sense), same-game pairs
+#: never staked.
+BACKTEST_VERSION = 3
 #: A staked parlay's size, in units.
 STAKE_UNITS = 0.5
 #: The journal's book for each pool (engine/parlayledger `source`).
@@ -229,9 +236,10 @@ def price(a: dict, b: dict, kind: str) -> tuple[float, float, str]:
 
 def pair(sport: str, a: dict, b: dict, min_lift: float | None = None) -> dict | None:
     """One candidate parlay, or None when the two legs do not make sense
-    together (the same player, a fight, a duplicate, a same-team pair that
-    does not rise together, or a same-game pair whose link cannot earn back
-    the same-game cut: `min_lift`, default SG_MIN_LIFT)."""
+    together (the same player, a fight, a duplicate, or a same-team pair
+    that does not rise together). `min_lift` (the study's comparison only,
+    e.g. SG_MIN_LIFT) also refuses a same-game pair whose link lifts the
+    chance both hit by less than that."""
     from . import parlays as P
     if a["player"] == b["player"]:
         return None
@@ -250,8 +258,7 @@ def pair(sport: str, a: dict, b: dict, min_lift: float | None = None) -> dict | 
         if not same_team and rel.rho < OPPOSITE_MIN_RHO:
             return None
         joint = P.joint_two(a["p"], b["p"], max(-0.9, min(0.9, rel.rho)))
-        need = SG_MIN_LIFT if min_lift is None else min_lift
-        if joint < need * a["p"] * b["p"] - 1e-9:
+        if min_lift is not None and joint < min_lift * a["p"] * b["p"] - 1e-9:
             return None
         kind, rho = SAME_GAME, round(rel.rho, 3)
         mech = plain(rel.mechanism)
@@ -311,8 +318,11 @@ def _leg_id(l: dict) -> tuple:
 
 # --- the stake ------------------------------------------------------------------------
 def staked(sport: str, t: dict, plan: dict | None) -> bool:
-    """Both legs are picks the stake rule stakes (module docstring)."""
+    """A two-game pair whose legs are both picks the stake rule stakes; a
+    same-game pair is always tracked (module docstring)."""
     from . import stakeplan
+    if t.get("kind") == SAME_GAME:
+        return False
     p = plan or {}
     for l in t["legs"]:
         if l["pool"] == "edge":

@@ -11560,8 +11560,9 @@ function renderParlayPage() {
   }
   host.innerHTML = `<p class="set-note tl-rule">A two-leg parlay does what its legs do, about twice: where the
       picks beat their price it wins about twice as fast, and where they pay the juice it loses about twice as
-      fast. So a parlay is staked only when both legs are picks we stake; the rest are tracked, and every one
-      is graded on the <a href="#record">Record page</a>.</p>
+      fast. So money rides only on a two-game parlay whose legs are both picks we stake. Same-game pairs are
+      tracked: pairing our past picks, they lost while two-game pairs made money. Every one is graded on the
+      <a href="#record">Record page</a>.</p>
     ${z.drawdown && z.note ? `<p class="set-note tl-rule">${escapeHtml(z.note)}</p>` : ""}
     ${TL_POOLS.map(([pool, title, sub]) => {
       const x = z[pool] || {};

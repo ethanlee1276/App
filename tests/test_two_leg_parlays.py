@@ -63,22 +63,21 @@ def test_two_teammates_that_rise_together_make_a_same_game_parlay():
     assert "rise together" in t["why"]
 
 
-def test_a_same_game_pair_has_to_earn_back_the_same_game_cut():
-    """The book pays a same-game pair 9.5% under the product, so the link
-    between the legs has to lift the chance both hit by 10.5% or more. One
-    pick on each team shares only the pace floor (+0.10): a 5% lift, a worse
-    bet than its price says. The box's first study run had football's Most
-    Likely same-game pairs at -11.7% over 86 against +29.6% for its two-game
-    pairs."""
+def test_one_pick_on_each_team_is_a_same_game_pair_and_the_lift_rule_is_the_studys():
+    """For one evening a same-game pair had to lift the chance both hit by
+    the 10.5% the book's cut takes. The box's second study run (every
+    league's games) said no: the pairs it refused broke about even and the
+    tightly linked ones it kept lost 15.9%. The board builds every pair that
+    makes sense again; the lift rule stays reachable for the study."""
     legs = {l["player"]: l for l in T.edge_legs(_board(), "nfl")}
+    t = T.pair("nfl", legs["Amon-Ra St. Brown"], legs["Justin Jefferson"])
+    assert t and t["kind"] == T.SAME_GAME and "one pick on each team" in t["why"], \
+        "Ethan's one pick on one team, one on the other"
     assert abs(T.SG_MIN_LIFT - 1 / (1 - T.SGP_CUT)) < 1e-12
-    assert T.pair("nfl", legs["Amon-Ra St. Brown"], legs["Justin Jefferson"]) is None, \
-        "the pace floor alone cannot pay for the same-game cut"
-    old = T.pair("nfl", legs["Amon-Ra St. Brown"], legs["Justin Jefferson"], min_lift=1.0)
-    assert old and old["kind"] == T.SAME_GAME and "one pick on each team" in old["why"], \
-        "the old rule stays reachable, for the study's comparison"
-    qb = T.pair("nfl", legs["Jared Goff"], legs["Amon-Ra St. Brown"])
-    assert qb and qb["joint"] >= T.SG_MIN_LIFT * qb["independent"], "a quarterback and his receiver earn it back"
+    assert T.pair("nfl", legs["Amon-Ra St. Brown"], legs["Justin Jefferson"], min_lift=T.SG_MIN_LIFT) is None, \
+        "the pace floor alone does not lift it 10.5%"
+    qb = T.pair("nfl", legs["Jared Goff"], legs["Amon-Ra St. Brown"], min_lift=T.SG_MIN_LIFT)
+    assert qb and qb["joint"] >= T.SG_MIN_LIFT * qb["independent"], "a quarterback and his receiver do"
 
 
 def test_other_games_are_two_game_parlays_at_the_product():
@@ -111,13 +110,26 @@ def test_the_edge_pool_posts_only_a_positive_return():
     assert all(t["ev"] > 0 for t in b["edge"]["tickets"])
 
 
-def test_a_parlay_is_staked_only_when_both_legs_are():
+def test_only_a_two_game_parlay_carries_money():
+    """Same-game pairs lost in every run of the study (-9.5% over 213 on the
+    box's journal, 2026-10-31) while two-game pairs made 11.1% over 298, so a
+    same-game pair is always tracked and a two-game pair is staked when both
+    of its legs are."""
     board = _board()
     b = T.build(board, "nfl", plan={})
-    assert all(t["staked"] for t in b["edge"]["tickets"]), "Edge legs are staked by default"
+    edge = b["edge"]["tickets"]
+    assert {t["kind"] for t in edge} == {T.SAME_GAME, T.TWO_GAME}, edge
+    assert all(t["staked"] == (t["kind"] == T.TWO_GAME) for t in edge), \
+        "Edge legs are staked by default; the same-game pair is tracked"
+    assert all(t["stake_units"] == (T.STAKE_UNITS if t["staked"] else 0) for t in edge)
     assert not any(t["staked"] for t in b["likely"]["tickets"]), "NFL Most Likely is tracked"
-    b = T.build(board, "nfl", plan=stakeplan.promoted("nfl"))
-    assert all(t["staked"] and t["stake_units"] == T.STAKE_UNITS for t in b["likely"]["tickets"])
+    likely = {l["player"]: l for l in T.likely_legs(board, "nfl")}
+    promoted = stakeplan.promoted("nfl")
+    two = T.pair("nfl", likely["Jahmyr Gibbs"], likely["James Cook"])
+    assert two["kind"] == T.TWO_GAME and T.staked("nfl", two, promoted), "a promoted league stakes it"
+    assert not T.staked("nfl", two, {}), "control: NFL Most Likely is tracked"
+    same = T.pair("nfl", likely["Jahmyr Gibbs"], likely["Jordan Addison"])
+    assert same["kind"] == T.SAME_GAME and not T.staked("nfl", same, promoted)
     stopped = {"nfl": {"edge": {"staked": False}, "likely": {"staked": False}}}
     assert not any(t["staked"] for t in T.build(board, "nfl", plan=stopped)["edge"]["tickets"])
 

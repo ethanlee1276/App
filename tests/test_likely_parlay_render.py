@@ -66,7 +66,8 @@ def test_staked_and_tracked_are_said_on_every_ticket():
     card = _fn("tlTicketHTML")
     assert "Staked ${t.stake_units}u" in card and "Tracked · no stake" in card
     page = _fn("renderParlayPage")
-    assert "So a parlay is staked only when both legs are picks we stake" in page
+    assert "So money rides only on a two-game parlay whose legs are both picks we stake" in page
+    assert "Same-game pairs are" in page, "and the page says why the same-game ones are tracked"
 
 
 def test_the_two_records_are_kept_apart():

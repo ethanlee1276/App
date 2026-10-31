@@ -1034,7 +1034,7 @@ function recTwoLegSection(tl) {
   const stakedNet = pools.reduce((s, [p]) => s + ((tl[p] || {}).staked_net || 0), 0);
   const stakedTile = recTile("Staked parlays", stakedU ? tlUnits(stakedNet) : "none yet",
     stakedU ? `on ${stakedU.toFixed(1)}u staked, half a unit a ticket`
-      : "a parlay is staked only when both its legs are");
+      : "two games, both legs picks we stake");
   const table = (pool, name) => {
     const rows = btRows.filter((r) => r.pool === pool)
       .sort((a, b) => (TL_SPORT_ORDER.indexOf(a.sport) - TL_SPORT_ORDER.indexOf(b.sport))
@@ -1082,15 +1082,16 @@ function recTwoLegSection(tl) {
       <span class="sub">— two of our Edge picks, or two of our Most Likely picks. Never mixed
       into the record above.</span></div>
     ${recDisclosure("How these are paired, priced and staked", `Each night the board pairs its
-      own picks: two from one game only when their link wins back what books take off a
-      same-game parlay (a quarterback and his own receiver, say), and two from different
+      own picks: two from one game that make sense together (one pick on each team, or two
+      that rise together, like a quarterback and his own receiver), and two from different
       games. A pick is used once per list. Every parlay is graded off its two picks’ own results, at one unit a
       ticket so the ROI means something. Prices: two games at the books’ two prices
       multiplied, 3% under that when the picks sit at different books; a same-game pair at
       9.5% under the product, the middle of what books take off a same-game parlay. Real
-      money rides only when both legs are picks we stake, at half a unit; the rest are
-      tracked. The table under the tiles is what pairing every graded day of our past
-      picks this way would have done.`)}
+      money rides only on a two-game parlay whose legs are both picks we stake, at half a
+      unit. Same-game pairs are always tracked: pairing our past picks, they lost while
+      two-game pairs made money. The table under the tiles is what pairing every graded
+      day of our past picks this way would have done.`)}
     <div class="stats rec-kpis">${tiles}${stakedTile}</div>
     ${table("edge", "Edge")}${table("likely", "Most Likely")}
     ${rows ? `<div class="card" style="padding:0;margin-top:12px">${rows}</div>` : ""}`;
