@@ -210,10 +210,14 @@ second line says which way it knows:
   league's normal cadence but **no headroom**, so a wrong guess can't spend
   next month's days early.
 
-If the report's "renews" date isn't the date on your Odds API account,
-set the right day of the month:
+Ethan's plan renews on the 1st (2026-10-31), so the day set on the box
+is 1. Setting it, rather than leaving it assumed, lets the plan give
+headroom:
 
-    cd /srv/qellys && sudo ./deploy/setenv.sh QB_ODDS_RESET_DAY 14
+    cd /srv/qellys && sudo ./deploy/setenv.sh QB_ODDS_RESET_DAY 1
+
+(A different plan would set its own renewal day there. This page used to
+show 14 as the example, and that got copied.)
 
 ## What changed in the pacer with it
 

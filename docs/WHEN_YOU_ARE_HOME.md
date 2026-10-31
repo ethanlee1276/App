@@ -2889,12 +2889,12 @@ cd /srv/qellys && git log -1 --format='%h %ci %s' && sudo -u qellys python3 -m e
 
 **Check the "renews" date on the first line.** The plan spends up to the
 day your Odds API month renews, which it works out from the spend ledger.
-The second line says how it knows. If the date isn't the renewal date on
-your Odds API account, set the right day of the month (14 here), then
-restart:
+The second line says how it knows. Your plan renews on the 1st (you,
+2026-10-31), so the day to set is 1 (this block said 14, as an example,
+until then; step IS):
 
 ```
-cd /srv/qellys && sudo ./deploy/setenv.sh QB_ODDS_RESET_DAY 14 && sudo systemctl restart qellys
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_ODDS_RESET_DAY 1 && sudo systemctl restart qellys
 ```
 
 **CW. Fantasy reads the NFL board: this week's projection on every desk**
@@ -9303,6 +9303,38 @@ The check in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
+```
+
+**IS. Your renewal day is the 1st** (step 305; you, 2026-10-31: "It will
+reset on the 1st which is tomorrow").
+
+- With nothing set, the plan assumes the 1st and says ASSUMED. While it's
+  only assumed, it pays every sport's normal cadence but holds back the
+  extra (headroom), so a wrong guess can't spend next month's days early.
+  November's normal cadences come to about 63k of the 82,500 the month
+  leaves after what's held back, so with the day only assumed about 19k
+  would sit unplanned and expire on Dec 1.
+- Setting it to 1 makes it "set": the plan gives the NFL up to half again
+  and the others a quarter, out of that room.
+- The 14 you had set yesterday was the docs' example (fixed in the older
+  step above and in docs/ODDS_PLAN.md).
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_ODDS_RESET_DAY 1 && sudo systemctl restart qellys
+```
+
+Read-only: the plan as the service sees it. Run by hand, the plan can't see
+the service's settings, so this passes the day in; the second line should
+read "renewal day set by QB_ODDS_RESET_DAY":
+
+```
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_ODDS_RESET_DAY=' /etc/qellys/env | xargs) python3 -m engine.oddsplan | head -6
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IS 2>&1 | tee /tmp/is.txt
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;

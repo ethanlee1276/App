@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IS "Your renewal day is the 1st" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_ODDS_RESET_DAY=' /etc/qellys/env | xargs) python3 -m engine.oddsplan | head -6
+SH
 run IR "Karma and badges for your two accounts" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.karma
 SH
