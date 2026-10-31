@@ -5208,6 +5208,17 @@ def _college_absent(hist_conn, b, target):
         f"AND team=? LIMIT 1", (*periods, team)).fetchone()
     if not filed:
         return None, f"{team}'s game is final but its box score is not filed"
+    if b["market"] == "first_td":
+        # FIRST TOUCHDOWN (2026-10-31): the box score writes `first_td` only
+        # when the summary's scoring plays named a scorer it could find
+        # (cfbdata.mark_first_td). With no such row for the game, the
+        # first scorer is unknown, and the bet waits; with them, a man
+        # absent from them was not in the box and voids, as any prop.
+        marked = hist_conn.execute(
+            f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
+            f"AND team=? AND market='first_td' LIMIT 1", (*periods, team)).fetchone()
+        if not marked:
+            return None, f"{team}'s first touchdown has no scorer on file yet"
     if b["market"] in PLAY_FILE_MARKETS and (datetime.date.today() - d0).days < PLAY_FILE_DAYS:
         # The box score is in; the play file, which would show him thrown
         # at, may not be (see PLAY_FILE_MARKETS). Its rows carry no `-box`.

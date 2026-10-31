@@ -82,8 +82,8 @@ def test_both_football_requests_buy_it_behind_the_guard_and_the_meters_count_it(
     assert O.CFB_ODDS_TO_MARKET[O.PASS_INT_ODDS_KEY] == PASS_INT
     assert O.PASS_INT_ODDS_KEY in O.UNPROVEN_MARKETS, "dropped and retried if the API refuses it"
     assert credits_per_event("nfl") == 26      # seventeen with interceptions; twenty-two since 2026-10-10 (the five new markets); twenty-five since 2026-10-12 (three more ladders); twenty-six since 2026-10-31 (first touchdown)
-    assert O.PASS_INT_ODDS_KEY in B.PLAYER_MARKETS and B.CREDITS_PER_EVENT == 13
-    assert launch.CFB_ODDS_COST == 3 + 12 * 13 and launch.CFB_PLAYER_EVENT_COST == 13
+    assert O.PASS_INT_ODDS_KEY in B.PLAYER_MARKETS and B.CREDITS_PER_EVENT == 14
+    assert launch.CFB_ODDS_COST == 3 + 12 * 14 and launch.CFB_PLAYER_EVENT_COST == 14   # first touchdown, 10-31
 
 
 def test_the_defence_tables_rate_the_new_stats_and_carry_the_measured_college_strength():

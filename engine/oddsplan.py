@@ -157,8 +157,9 @@ HARVEST_DAY = 400
 
 #: What one game costs on each league's event call, where the pacer's own
 #: table (`oddsbudget.EVENT_CREDITS`) does not say: college states its price
-#: in its build (`cfb_build.CREDITS_PER_EVENT`, pinned equal by test).
-CFB_PRICE = 13
+#: in its build (`cfb_build.CREDITS_PER_EVENT`, pinned equal by test). Fourteen
+#: since first touchdown joined the college request (2026-10-31).
+CFB_PRICE = 14
 
 #: A three-credit pull — the board endpoint, three markets, the whole slate:
 #: the pre-game lines tier and the live line alike.

@@ -239,7 +239,12 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
 #: Anytime TD feeds the long-shot board (engine/cfb/tds); the other four
 #: are the prop board's, and they are the same Odds API keys the NFL
 #: buys because it is the same sport.
-PLAYER_MARKETS = ["player_anytime_td", "player_pass_yds",
+PLAYER_MARKETS = ["player_anytime_td",
+                  # FIRST TOUCHDOWN (2026-10-31): college's Long Shots, priced
+                  # by engine/firsttd off our own usage — one more credit a
+                  # game, behind the drop-and-retry guard (UNPROVEN_MARKETS).
+                  "player_1st_td",
+                  "player_pass_yds",
                   "player_rush_yds", "player_reception_yds",
                   "player_receptions",
                   # THE VOLUME MARKETS (2026-10-05): a quarterback's
@@ -260,22 +265,26 @@ PLAYER_MARKETS = ["player_anytime_td", "player_pass_yds",
                   "player_pass_yds_alternate", "player_rush_yds_alternate",
                   "player_reception_yds_alternate",
                   "player_receptions_alternate"]
+#: The request as it was until first touchdown joined (2026-10-31). None of
+#: the earlier spellings below had it, so each is built from this one.
+PLAYER_MARKETS_PRIOR_FIRST_TD = [m for m in PLAYER_MARKETS if m != "player_1st_td"]
 #: The request as it was before the ladders — what a cached rebuild can
 #: still find on the day they first ship (see the fallback below).
-PLAYER_MARKETS_BASE = [m for m in PLAYER_MARKETS if not m.endswith("_alternate")]
+PLAYER_MARKETS_BASE = [m for m in PLAYER_MARKETS_PRIOR_FIRST_TD if not m.endswith("_alternate")]
 #: The request as it was before the volume markets (2026-09-07 to
 #: 2026-10-05): the last paid pull on deploy day is cached under THIS
 #: list's name, so a cache-only rebuild that morning reads it rather
 #: than finding "nothing on disk" twice.
-PLAYER_MARKETS_PRIOR = [m for m in PLAYER_MARKETS
+PLAYER_MARKETS_PRIOR = [m for m in PLAYER_MARKETS_PRIOR_FIRST_TD
                         if m not in ("player_pass_attempts", "player_pass_completions",
                                      "player_rush_attempts", "player_pass_interceptions")]
 #: …and the request as it was for the hours between the volume markets
 #: and interceptions (both 2026-10-05), for the same deploy-day read.
-PLAYER_MARKETS_PRIOR_VOLUME = [m for m in PLAYER_MARKETS if m != "player_pass_interceptions"]
+PLAYER_MARKETS_PRIOR_VOLUME = [m for m in PLAYER_MARKETS_PRIOR_FIRST_TD if m != "player_pass_interceptions"]
 #: Every earlier spelling of the request, newest first: what a
 #: cache-only rebuild tries after today's name finds nothing.
-PLAYER_MARKETS_FALLBACKS = [PLAYER_MARKETS_PRIOR_VOLUME, PLAYER_MARKETS_BASE, PLAYER_MARKETS_PRIOR]
+PLAYER_MARKETS_FALLBACKS = [PLAYER_MARKETS_PRIOR_FIRST_TD, PLAYER_MARKETS_PRIOR_VOLUME,
+                            PLAYER_MARKETS_BASE, PLAYER_MARKETS_PRIOR]
 
 #: What one game costs, by the API's own rule — one credit per market per
 #: region, and every request this file makes is one region.
@@ -353,9 +362,16 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                          sharp: dict | None = None,
                          alt: dict | None = None,
                          alt_sharp: dict | None = None,
-                         until: float | None = None
+                         until: float | None = None,
+                         first_td: dict | None = None
                          ) -> tuple[dict, dict, str]:
     """Player quotes for the board's best games — one call per game.
+
+    ``first_td`` is an out-parameter like ``sharp``: when a dict is passed
+    it is filled with the first-touchdown market's quotes, kept apart from
+    the anytime market the scorer board reads, in the shape
+    `engine.firsttd.board` takes — ``{key: {"player", "home", "away",
+    "quotes"}}``.
 
     ``until`` (an epoch: the end of tonight's slate, `oddsbudget.
     tonight_ends`) puts tonight's games first in the queue and buys only
@@ -495,6 +511,16 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
             quotes.setdefault(norm, []).extend(qs)
         if quotes:
             scorers[i] = quotes
+        if first_td is not None:
+            # Keyed by the game too: two "Michael Smith"s on one Saturday
+            # are two players.
+            for (norm, _mkt), qs in oddsapi.parse_event_scorers(
+                    payload, oddsapi.FIRST_TD_ODDS_TO_MARKET).items():
+                if qs:
+                    ft = first_td.setdefault(f"{norm}|{i}", {
+                        "player": qs[0].get("player") or norm,
+                        "home": games[i]["home"], "away": games[i]["away"], "quotes": []})
+                    ft["quotes"].extend(qs)
         # WHO THIS PULL PRICED, and who every book has since taken down
         # before kickoff (engine/pricedplayers) — the NFL's Zay Flowers rule
         # ("i dont see zay flowers on any sports book"), for college: the
@@ -2042,6 +2068,7 @@ def main() -> None:
                    "metered per event, so they arrive on the cycles that "
                    "can afford them rather than every minute")
     quotes_age = None
+    first_td_quotes: dict = {}           # the first-touchdown market, apart
     if args.odds or args.cached_odds or args.lines_odds:
         try:
             # NOT bought by --lines-odds. Player markets are event-scoped
@@ -2053,7 +2080,8 @@ def main() -> None:
                                      sharp=sharp_prop_lines,
                                      alt=alt_prop_lines,
                                      alt_sharp=alt_sharp_prop_lines,
-                                     until=args.price_until)
+                                     until=args.price_until,
+                                     first_td=first_td_quotes)
             print(f"  {quotes_note}")
             # Who the books pulled rides on the board's own game rows, where
             # the scan and the matchup picks read it.
@@ -2327,6 +2355,32 @@ def main() -> None:
             except Exception as _qbx:                         # noqa: BLE001
                 print(f"  ⚠️  college QB check skipped: {_qbx}")
             out["long_shots"] = rows
+            # FIRST TOUCHDOWN IS COLLEGE'S LONG SHOTS (Ethan, 2026-10-31: "I
+            # only want our long shot picks to be stuff like first basket
+            # score for NBA or first touchdown score for NFL ... I guess only
+            # college football, NFL, and NBA would have that right now").
+            # engine/firsttd on college's own fit (tools/cfb_first_td_study.py):
+            # each team's chance from the line, each player's share of his
+            # team's carries, targets and touchdowns — never the book's
+            # shortest price. The anytime scorers above still feed the
+            # likelihood board and the scenarios; the Long Shots shelf, and
+            # what it journals, is first-touchdown picks alone.
+            try:
+                from engine import firsttd as _ftd
+                _ft_games = []
+                for _g in games:
+                    _sp = (priced.get(_g["game_id"]) or {}).get("spread")
+                    _ft_games.append({"home": _g["home"], "away": _g["away"],
+                                      "date": _g.get("date") or args.date,
+                                      "kickoff": _g.get("kickoff", ""),
+                                      "spread": _sp[0] if isinstance(_sp, (list, tuple)) and _sp else None})
+                _ft = _ftd.board(first_td_quotes, _ft_games, sport="cfb", date=args.date)
+                out["first_td"] = _ft
+                out["long_shots"] = _ft["picks"]
+                print(_ftd.report(_ft))
+            except Exception as _ftx:                         # noqa: BLE001
+                out["long_shots"] = []
+                print(f"  ⚠️  first touchdown skipped: {_ftx}")
             # The most-likely-scorers list — shown, never journaled. The
             # page's shelf is the top of the ranked menu; the board below
             # is offered the whole thing and applies its own bar first

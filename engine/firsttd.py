@@ -80,8 +80,39 @@ LIMIT = 8
 TOUCH_MARKETS = ("carries", "targets")
 TD_MARKETS = ("rush_td", "rec_td")
 
+#: COLLEGE (tools/cfb_first_td_study.py, cfbfastR's play-by-play, FBS
+#: against FBS, regular season; docs/FIRST_TD_RESEARCH.md):
+#:
+#:   * WHICH TEAM: logit P(home) = −0.046 + 0.379 x home edge / 7, fitted on
+#:     2021-24 and scored on 2025-26's 1,162 games: 0.6141 against a coin's
+#:     0.6931. College lines say more than the NFL's (the favourite scores
+#:     first 64.9% of the time, against 58.9%) because its spreads run wider.
+#:   * AN OFFENCE scores it 96.0% of the time (4,174 games).
+#:   * WHICH PLAYER: the NFL's blend wins here too — on 2023-24's 2,781 team
+#:     first touchdowns, fitted on 2021-22, 2.178 nats against 2.186 for
+#:     touchdown share and 2.192 for volume. The floor the training seasons
+#:     chose is 0.06. (2025 and 2026 are left out of the player test: from
+#:     2025 ESPN's play text changed and the file's receiver names arrive
+#:     as "#21 J.Theodore caught at 09"; the team half does not need them.)
+#:   * HONEST ON GAMES IT NEVER SAW: said 6.2%, scored 6.4%; said 9.6%,
+#:     10.1%; said 14.2%, 15.7% (31,000 held-out player-games; log loss
+#:     0.1759 against 0.1839 for every player alike).
+#:
+#: Every league's numbers in one place; NFL keeps the module's names above.
+PARAMS = {
+    "nfl": {"team_a": TEAM_A, "team_b": TEAM_B, "off_share": OFF_SHARE, "eps": EPS,
+            "fav_rate": 0.589, "games": "1,467"},
+    "cfb": {"team_a": -0.046, "team_b": 0.379, "off_share": 0.960, "eps": 0.06,
+            "fav_rate": 0.649, "games": "4,174"},
+}
 
-def team_first(spread_home) -> float:
+
+def params(sport: str = "nfl") -> dict:
+    """The fitted numbers for this league (the NFL's for any other)."""
+    return PARAMS.get(str(sport or "nfl").lower(), PARAMS["nfl"])
+
+
+def team_first(spread_home, sport: str = "nfl") -> float:
     """P(the home team scores the game's first touchdown).
 
     ``spread_home`` is the games table's home-relative spread — negative
@@ -92,10 +123,11 @@ def team_first(spread_home) -> float:
         edge = -float(spread_home)
     except (TypeError, ValueError):
         edge = 0.0
-    return 1.0 / (1.0 + math.exp(-(TEAM_A + TEAM_B * edge / 7.0)))
+    p = params(sport)
+    return 1.0 / (1.0 + math.exp(-(p["team_a"] + p["team_b"] * edge / 7.0)))
 
 
-def shares(players: dict) -> dict:
+def shares(players: dict, sport: str = "nfl") -> dict:
     """{player: share of his team's first touchdowns} for one team.
 
     ``players`` is {player: {"touch": carries + targets, "td": touchdowns}},
@@ -103,9 +135,10 @@ def shares(players: dict) -> dict:
     touchdown share, a small floor for everyone, normalised to one."""
     tt = sum(max(0.0, float(v.get("touch") or 0)) for v in players.values())
     td = sum(max(0.0, float(v.get("td") or 0)) for v in players.values())
+    eps = params(sport)["eps"]
     raw = {}
     for name, v in players.items():
-        s = EPS
+        s = eps
         if tt > 0:
             s += BLEND["touch"] * max(0.0, float(v.get("touch") or 0)) / tt
         if td > 0:
@@ -151,14 +184,16 @@ def team_usage(conn, sport: str, season: int, team: str, before_period: str | No
             for p, d in out.items() if p in keep}
 
 
-def game_probs(home_usage: dict, away_usage: dict, spread_home, home: str = "", away: str = "") -> list:
+def game_probs(home_usage: dict, away_usage: dict, spread_home, home: str = "", away: str = "",
+               sport: str = "nfl") -> list:
     """Every candidate's chance of scoring the game's first touchdown:
     P(his team's offence scores it) x his share of his team's first TDs."""
-    ph = team_first(spread_home)
+    ph = team_first(spread_home, sport)
+    off = params(sport)["off_share"]
     rows = []
     for team, usage, pt in ((home, home_usage, ph), (away, away_usage, 1.0 - ph)):
-        for name, s in shares(usage).items():
-            rows.append({"player": name, "team": team, "prob": OFF_SHARE * pt * s,
+        for name, s in shares(usage, sport).items():
+            rows.append({"player": name, "team": team, "prob": off * pt * s,
                          "team_first": round(pt, 4), "share": round(s, 4)})
     rows.sort(key=lambda r: -r["prob"])
     return rows
@@ -289,7 +324,7 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
         n_games += 1
         season = _season_of(g.get("date") or date)
         hu, au = team_usage(conn, sport, season, home), team_usage(conn, sport, season, away)
-        probs = {(r["team"], r["player"]): r for r in game_probs(hu, au, g.get("spread"), home, away)}
+        probs = {(r["team"], r["player"]): r for r in game_probs(hu, au, g.get("spread"), home, away, sport)}
         for q in qs:
             team, who = _team_of(q.get("player") or "", home, away, hu, au)
             if team is None:
@@ -316,7 +351,8 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
                                             f"his share {sh:.0%}"),
                          "reasons": [
                              f"{team} score the game's first touchdown {tf:.0%} of the time by the lines "
-                             f"(the favourite does 59%, measured over 1,467 games).",
+                             f"(the favourite does {params(sport)['fav_rate']:.0%}, measured over "
+                             f"{params(sport)['games']} games).",
                              f"He has {sh:.0%} of {team}'s first-touchdown share: two-thirds his share of "
                              f"their carries and targets, one-third his share of their touchdowns.",
                              f"Our chance {p:.1%} against {imp:.1%} in the price ({ev:+.0%} expected return).",

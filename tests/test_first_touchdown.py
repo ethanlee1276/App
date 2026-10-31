@@ -208,7 +208,7 @@ def test_the_feed_asks_for_it_on_the_nfl_and_keeps_it_from_every_anytime_reader(
 def test_the_page_shows_it_on_the_nfls_long_shots():
     ls = APP[APP.index("function renderLongShots()"):]
     ls = ls[:ls.index("\n}\n")]
-    assert 'const ftd = state.sport === "nfl" && !!state.data.first_td;' in ls
+    assert 'const ftd = !!state.data.first_td;' in ls
     assert "first touchdown, our chance against the price" in ls
     assert 'watchlistHTML(watch, false, "first_td")' in ls
     assert "never by the price." in ls and "The likeliest scorer is rarely the pick." in ls

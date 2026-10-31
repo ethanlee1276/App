@@ -661,6 +661,21 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run IX "First touchdown is college's Long Shots too" 60 <<'SH'
+cd /srv/qellys && date -u -r data/built/cfb.json && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/cfb.json'))
+f = d.get('first_td') or {}
+print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
+[print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
+[print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db
+c = db.connect()
+print(c.execute('SELECT COUNT(DISTINCT game_id), SUM(value) FROM player_game_logs WHERE sport=? AND market=?', ('cfb', 'first_td')).fetchone())
+"
+SH
 run IW "Tight-end unders off; the price question" 60 <<'SH'
 cd /srv/qellys && git log --oneline -1 && grep -c "NFL_UNDER_POSITIONS" engine/likelyboard.py && grep -c "def price_vs_market" lossaudit.py && grep -c "price_value" likelyfit.py
 SH

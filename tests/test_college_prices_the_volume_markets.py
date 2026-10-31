@@ -108,8 +108,8 @@ def test_the_college_request_buys_the_three_keys_behind_the_guard():
     keys = ("player_pass_attempts", "player_pass_completions", "player_rush_attempts")
     assert set(keys) <= set(B.PLAYER_MARKETS) and set(keys) <= O.UNPROVEN_MARKETS
     assert O.SPORT_CONFIG["cfb"]["markets"] is O.CFB_ODDS_TO_MARKET
-    assert B.CREDITS_PER_EVENT == 13       # twelve that morning; thirteen with interceptions
-    assert B.PLAYER_MARKETS_PRIOR == [m for m in B.PLAYER_MARKETS
+    assert B.CREDITS_PER_EVENT == 14       # twelve that morning; thirteen with interceptions; fourteen with first touchdown (10-31)
+    assert B.PLAYER_MARKETS_PRIOR == [m for m in B.PLAYER_MARKETS_PRIOR_FIRST_TD
                                       if m not in keys and m != "player_pass_interceptions"]
     src = open(ROOT / "cfb_build.py", encoding="utf-8").read()
     assert "for _markets in PLAYER_MARKETS_FALLBACKS" in src and "PLAYER_MARKETS_PRIOR]" in src

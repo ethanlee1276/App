@@ -11394,7 +11394,7 @@ function firstTdWatch(d) {
 
 function renderLongShots() {
   const mlb = state.sport === "mlb";
-  const ftd = state.sport === "nfl" && !!state.data.first_td;
+  const ftd = !!state.data.first_td;
   const picks = (state.data.long_shots || []).filter((r) => !rowStarted(r));
   const host = document.getElementById("longshots-board");
   const note = document.getElementById("longshots-note");

@@ -113,13 +113,87 @@ worth taking.
   the play-by-play's first scorer once the game ends. A defence's or
   return's first touchdown loses every player pick, the same as at the book.
 
-## College and the NBA
+## College
 
-- **College football** uses the same idea, but its fit has to come from
-  college games. The app's college play-by-play is ESPN's, and that version
-  of this study comes next. Until then, college Long Shots stay on anytime
-  touchdowns.
-- **NBA first basket** needs its own version: who wins the opening tip, who
-  takes the first shots, and how often they go in. The box keeps every NBA
-  shot with its game clock, so the first made basket of each game can be
-  counted there. That study and its board come next.
+The same questions on college games: sportsdataverse's cfbfastR play-by-play,
+FBS against FBS, regular season, 4,174 games from 2021 through week 9 of
+2026. `python3 tools/cfb_first_td_study.py` reruns every number. It streams
+each season's file once (300–550 MB) and keeps a few megabytes of it in
+data/cache.
+
+| | college | NFL |
+|---|---:|---:|
+| games with a touchdown | 98.7% | 99.3% |
+| first touchdown by an offence | 96.0% | 94.8% |
+| scored by the favourite | 64.9% | 58.9% |
+
+**Which team.** College lines say more than the NFL's because the spreads run
+wider. Fitted on 2021–24 (logit = −0.046 + 0.379 × home edge / 7), the line
+scores 0.6141 on 2025–26's 1,162 games, against 0.6931 for a coin. Per point
+the slope is gentler than the NFL's; a 14-point home favourite scores first
+about 67% of the time.
+
+**Which player.** The NFL's blend wins again, narrowly. Fitted on 2021–22 and
+scored on 2023–24's 2,781 team first touchdowns:
+
+| his share of the team's... | held-out |
+|---|---:|
+| touchdowns | 2.186 |
+| carries + targets | 2.192 |
+| **two-thirds carries + targets, one-third touchdowns** | **2.178** |
+
+Touchdown history counts for more in college than in the NFL. A featured back
+carries a team's goal-line work all season, and quarterbacks run touchdowns
+in. The floor the training seasons chose is 0.06, against the NFL's 0.04.
+
+**The whole model, checked** on every held-out player who played (2023–24,
+31,000 player-games):
+
+| we said | scored first | player-games |
+|---|---:|---:|
+| under 2% | 1.4% | 3,559 |
+| 2–5% | 3.1% | 17,191 |
+| 5–8% | 6.4% | 6,515 |
+| 8–12% | 10.1% | 2,484 |
+| 12–18% | 15.7% | 813 |
+| 18% and up | 27.4% (said 20.9%) | 146 |
+
+Log loss 0.1759, against 0.1839 for treating every player alike. At the top
+we're slightly low: featured backs like Ashton Jeanty scored first more often
+than we said. That costs picks, not money. A pick still needs its price to
+be 10% longer than our chance says it should be.
+
+**Two data problems, found and handled.**
+
+- From 2025, ESPN's play text changed, and the file's receiver names arrive
+  as "#21 J.Theodore caught at 09". In 2026 nearly every receiver row is like
+  that. The player test therefore uses 2021–24 only. The team half needs no
+  names and uses every season.
+- The parser also leaves play text behind, like "pass. Pass incomplete
+  intended", collecting every incompletion it couldn't name. The study drops
+  anything that isn't a name.
+
+None of this touches the live board. Its usage comes from the app's own
+college player logs, which have their own careful parser.
+
+**On the board and graded.**
+
+- Each college odds pull buys the first-touchdown market too (14 credits a
+  game instead of 13).
+- The quotes are kept apart from anytime touchdowns.
+- The board uses college's own fit and the same pick rules as the NFL: our
+  chance must beat the price by 10%, between +250 and +2500, one a game.
+- Picks are graded off the box score. The nightly box-score read marks who
+  scored the game's first touchdown, from ESPN's scoring plays, and only when
+  it can find him in that box score.
+- A defence's first touchdown is marked as a loss for every rusher and
+  catcher.
+- A game whose first scorer can't be found leaves its bets open. They never
+  grade against a guess.
+
+## The NBA
+
+**NBA first basket** needs its own version: who wins the opening tip, who
+takes the first shots, and how often they go in. The box keeps every NBA
+shot, so `tools/first_basket_study.py` counts it there (runbook IV). The
+board is built from what that study finds.

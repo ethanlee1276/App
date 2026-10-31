@@ -124,19 +124,26 @@ def test_one_call_buys_thirteen_markets_and_is_billed_for_thirteen():
     """Five since 2026-09-03; nine since 2026-09-07, when the four
     alternate ladders joined (`oddsapi.ALT_ODDS_TO_MARKET`); twelve since
     2026-10-05, when the three volume markets joined; thirteen the same
-    evening, with interceptions."""
-    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 13
-    assert B.PLAYER_MARKETS[0] == "player_anytime_td"
-    for key in B.PLAYER_MARKETS[1:]:
+    evening, with interceptions; fourteen since 2026-10-31, with the
+    first-touchdown scorer market (`oddsapi.FIRST_TD_ODDS_TO_MARKET`)."""
+    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 14
+    assert B.PLAYER_MARKETS[:2] == ["player_anytime_td", "player_1st_td"]
+    assert "player_1st_td" in O.FIRST_TD_ODDS_TO_MARKET
+    for key in B.PLAYER_MARKETS[2:]:
         assert key in O.CFB_ODDS_TO_MARKET or key in O.ALT_ODDS_TO_MARKET, key
     assert set(O.ALT_ODDS_TO_MARKET) <= set(B.PLAYER_MARKETS)
     assert set(O.VOLUME_ODDS_KEYS) <= set(B.PLAYER_MARKETS)
-    assert B.PLAYER_MARKETS_BASE == B.PLAYER_MARKETS[:9]
     # The pulls this replaced, kept for the cache-only rebuild on deploy day,
-    # newest first: this morning's twelve, the pre-ladder base, the pre-volume nine.
-    assert B.PLAYER_MARKETS_PRIOR == B.PLAYER_MARKETS[:5] + list(O.ALT_ODDS_TO_MARKET)
-    assert B.PLAYER_MARKETS_PRIOR_VOLUME == [m for m in B.PLAYER_MARKETS if m != "player_pass_interceptions"]
-    assert B.PLAYER_MARKETS_FALLBACKS == [B.PLAYER_MARKETS_PRIOR_VOLUME, B.PLAYER_MARKETS_BASE, B.PLAYER_MARKETS_PRIOR]
+    # newest first: the thirteen before first touchdown (2026-10-31), that
+    # morning's twelve, the pre-ladder base, the pre-volume nine. None of
+    # them had first touchdown, so each is built from the thirteen.
+    pre = B.PLAYER_MARKETS_PRIOR_FIRST_TD
+    assert pre == [m for m in B.PLAYER_MARKETS if m != "player_1st_td"] and len(pre) == 13
+    assert B.PLAYER_MARKETS_BASE == pre[:9]
+    assert B.PLAYER_MARKETS_PRIOR == pre[:5] + list(O.ALT_ODDS_TO_MARKET)
+    assert B.PLAYER_MARKETS_PRIOR_VOLUME == [m for m in pre if m != "player_pass_interceptions"]
+    assert B.PLAYER_MARKETS_FALLBACKS == [pre, B.PLAYER_MARKETS_PRIOR_VOLUME, B.PLAYER_MARKETS_BASE,
+                                         B.PLAYER_MARKETS_PRIOR]
 
 
 def test_the_authorization_estimate_matches_the_worst_saturday():

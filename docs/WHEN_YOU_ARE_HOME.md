@@ -9305,6 +9305,58 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**IX. First touchdown is college's Long Shots too** (step 310; you,
+2026-10-31: "I guess only college football, NFL, and NBA would have that
+right now. But I also want to start implementing that too"). Nothing to run
+for the change itself:
+
+- College's own fit, from six seasons of college play-by-play
+  (docs/FIRST_TD_RESEARCH.md, `python3 tools/cfb_first_td_study.py`). The
+  favourite scores first 65% of the time. The line picks the team better
+  than in the NFL, and the same blend of carries, targets and touchdowns
+  picks the player. On 2023–24 games it never saw, it was honest from 1% to
+  18%.
+- Each college odds pull buys the first-touchdown market (14 credits a game
+  instead of 13), kept apart from anytime touchdowns. Anytime touchdowns
+  still feed Most Likely and the scenarios, but they no longer fill the Long
+  Shots shelf.
+- Picks need the same as the NFL's: our chance beats the price by 10%,
+  +250 to +2500, one a game. They're tracked on paper.
+- Grading: the nightly box-score read marks who scored each game's first
+  touchdown, from ESPN's scoring plays. A game whose first scorer it can't
+  find leaves its bets open; they never grade against a guess.
+
+After the next college build that buys player odds (the next college game
+day), the board as built, read-only:
+
+```
+cd /srv/qellys && date -u -r data/built/cfb.json && sudo -u qellys python3 -c "
+import json
+d = json.load(open('data/built/cfb.json'))
+f = d.get('first_td') or {}
+print(f.get('quoted', 0), 'quoted players across', f.get('games', 0), 'games;', len(f.get('picks') or []), 'pick(s)')
+[print(' pick:', r['player'], r['team'], r['odds'], 'ours', r['prob'], 'price', r['implied'], 'ev', r['ev']) for r in f.get('picks') or []]
+[print(' top:', r['player'], r['team'], r['odds'], 'ours', r['prob']) for r in (f.get('rows') or [])[:5]]
+"
+```
+
+The morning after, how many finished college games had their first scorer
+marked (games, and scorers found):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db
+c = db.connect()
+print(c.execute('SELECT COUNT(DISTINCT game_id), SUM(value) FROM player_game_logs WHERE sport=? AND market=?', ('cfb', 'first_td')).fetchone())
+"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IX 2>&1 | tee /tmp/ix.txt
+```
+
 **IW. Your audit read: tight-end unders come off, and the price question**
 (step 309; your paste of IT's three files, 2026-10-31).
 

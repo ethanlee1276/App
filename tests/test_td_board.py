@@ -614,12 +614,13 @@ def test_attach_player_quotes_filters_caps_and_survives_cache_misses():
     # One call per capped game, plus the deploy-day fallback's second
     # ask for the event with no cached payload under the ladder's name.
     assert len({e for e, _m, _s in calls}) == B.PLAYER_EVENT_CAP, calls
-    # The cache miss costs three more reads, never a credit: every
-    # earlier spelling of the request, newest first (this morning's
-    # twelve, the pre-ladder base, the pre-volume nine —
-    # cfb_build.PLAYER_MARKETS_FALLBACKS).
+    # The cache miss costs four more reads, never a credit: every
+    # earlier spelling of the request, newest first (the thirteen before
+    # first touchdown, 2026-10-31; that morning's twelve, the pre-ladder
+    # base, the pre-volume nine — cfb_build.PLAYER_MARKETS_FALLBACKS).
     assert len(calls) == B.PLAYER_EVENT_CAP + len(B.PLAYER_MARKETS_FALLBACKS), calls
-    assert len(B.PLAYER_MARKETS_FALLBACKS) == 3
+    assert len(B.PLAYER_MARKETS_FALLBACKS) == 4
+    assert B.PLAYER_MARKETS_FALLBACKS[0] == [m for m in B.PLAYER_MARKETS if m != "player_1st_td"]
     # The cache miss was skipped, not fatal; everything else parsed —
     # and `pulled` counts what actually answered.
     assert len(out) == B.PLAYER_EVENT_CAP - 1, sorted(out)
@@ -643,8 +644,9 @@ def test_one_call_buys_every_player_market_for_that_game():
         assert "player_rush_yds_alternate" in markets
     # Five since 2026-09-03, nine since 2026-09-07 (the alternate ladders),
     # twelve since 2026-10-05 (the volume markets), thirteen that evening
-    # (interceptions).
-    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 13
+    # (interceptions), fourteen since 2026-10-31 (first touchdown).
+    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 14
+    assert "player_1st_td" in markets
 
 
 def test_the_ranked_games_are_bought_first():

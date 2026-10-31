@@ -122,7 +122,7 @@ def _bought(t, sport: str) -> dict:
     out.update(cfg.get("alternates") or {})
     if sport == "cfb":
         for k in t["cfb_build"].PLAYER_MARKETS:
-            if k not in out:
+            if k not in out and k not in getattr(O, "FIRST_TD_ODDS_TO_MARKET", {}):
                 out[k] = O.SCORER_ODDS_TO_MARKET.get(k) or O.ALT_ODDS_TO_MARKET.get(k) or O.CFB_ODDS_TO_MARKET.get(k)
     return out
 
@@ -385,10 +385,12 @@ def render() -> str:
     got = findings(t)
     out += [f"- {f}" for f in got] or ["- none"]
     out += ["", "## Bought for its own board", "",
-            "- **First touchdown** (NFL, since 2026-10-31): the Long Shots board. Priced by its own "
-            "model — the lines for the team, his share of its carries, targets and touchdowns for "
-            "the player (`engine/firsttd`, docs/FIRST_TD_RESEARCH.md) — and graded off the "
-            "play-by-play's first scorer, not through the prop chain above.", ""]
+            "- **First touchdown** (NFL and college, since 2026-10-31): the Long Shots board. Priced "
+            "by its own model — the lines for the team, his share of its carries, targets and "
+            "touchdowns for the player, each league on its own fit (`engine/firsttd`, "
+            "docs/FIRST_TD_RESEARCH.md) — and graded off the game's first scorer (the NFL's "
+            "play-by-play; college's box score, from ESPN's scoring plays), not through the prop "
+            "chain above.", ""]
     out += ["## What is not bought, and why", "",
             "- **Longest completion / rush / reception, last touchdown, touchdowns over:** "
             "no model, no measurement; a book's vig on a longest-play market is the widest on the menu.",

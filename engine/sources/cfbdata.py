@@ -1094,6 +1094,81 @@ BOX_MARKETS = {
 GROUP_POS = {"passing": "QB", "rushing": "RB", "receiving": "WR"}
 
 
+#: "Jalen Milroe 5 Yd Run (Will Reichard Kick)", "Ryan Williams 75 Yd pass
+#: from Jalen Milroe (…)": ESPN's scoring text names the scorer first.
+_TD_SCORER = re.compile(r"^\s*(.+?)\s+\d+\s*(?:yd|yds|yard|yards)\b", re.I)
+#: The two scoring-play kinds an offence's player scores.
+OFFENSE_TD_TYPES = ("rushing touchdown", "passing touchdown")
+
+
+def first_touchdown(payload: dict) -> dict | None:
+    """The game's first touchdown off the summary's scoring plays, in game
+    order: {"player", "team", "offense"}; None when the summary carries no
+    scoring plays or no touchdown among them (2026-10-31, the college
+    first-touchdown board, engine/firsttd)."""
+    tds = []
+    for i, p in enumerate(payload.get("scoringPlays") or []):
+        if not isinstance(p, dict):
+            continue
+        st = p.get("scoringType") or {}
+        kind = str(st.get("abbreviation") or st.get("name") or "").strip().lower()
+        ttext = str((p.get("type") or {}).get("text") or "").strip().lower()
+        if kind not in ("td", "touchdown") and "touchdown" not in ttext:
+            continue
+        try:
+            per = int((p.get("period") or {}).get("number") or 0)
+        except (TypeError, ValueError):
+            per = 0
+        tds.append((per, i, p, ttext))
+    if not tds:
+        return None
+    tds.sort(key=lambda t: t[:2])
+    _per, _i, p, ttext = tds[0]
+    m = _TD_SCORER.match(str(p.get("text") or ""))
+    return {"player": m.group(1).strip() if m else "",
+            "team": str((p.get("team") or {}).get("abbreviation") or "").strip(),
+            "offense": ttext in OFFENSE_TD_TYPES}
+
+
+def _same_player(a: str, b: str) -> bool:
+    """One man under two spellings: the same name once punctuation, case
+    and suffixes are gone, or the same first initial and surname."""
+    def norm(x):
+        x = unicodedata.normalize("NFKD", x or "").encode("ascii", "ignore").decode().lower()
+        x = _PUNCT.sub(" ", x)
+        parts = [w for w in x.split() if w not in ("jr", "sr", "ii", "iii", "iv", "v")]
+        return parts
+    pa, pb = norm(a), norm(b)
+    if not pa or not pb:
+        return False
+    return pa == pb or (pa[-1] == pb[-1] and pa[0][:1] == pb[0][:1])
+
+
+def mark_first_td(rows: list[dict], payload: dict) -> bool:
+    """Write ``first_td`` into the box score's rows: 1 for the man who scored
+    the game's first touchdown, 0 for every other player with a touchdown
+    column. An OFFENCE'S first touchdown is written only when its scorer is
+    found in this box score — unidentified, nothing is written and its bets
+    wait rather than grade against a guess (ledger._absent_player_verdict).
+    A DEFENCE'S or a return's is written either way: whoever ran it back,
+    no ball carrier or catcher scored first, and the man himself, when the
+    box score lists him, gets his 1. Returns whether it wrote."""
+    ft = first_touchdown(payload)
+    if not ft or (ft["offense"] and not ft["player"]):
+        return False
+    scorer = next((r for r in rows if ft["player"] and r.get("team") == ft["team"]
+                   and _same_player(r.get("player") or "", ft["player"])), None)
+    if scorer is None and ft["offense"]:
+        return False
+    for r in rows:
+        s = r.get("stats") or {}
+        if r is scorer:
+            s["first_td"] = 1.0
+        elif "rush_td" in s or "rec_td" in s:
+            s["first_td"] = 0.0
+    return True
+
+
 def parse_summary(payload: dict) -> list[dict]:
     """A game summary → per-player rows: {player, team, position, stats,
     espn_id, headshot}. Same contract as espnhoops.parse_summary."""
@@ -1157,6 +1232,9 @@ def parse_summary(payload: dict) -> list[dict]:
         if "rush_td" in s or "rec_td" in s:
             s["anytime_td"] = float(s.get("rush_td") or 0) \
                 + float(s.get("rec_td") or 0)
+    # Who scored the game's FIRST touchdown, off the scoring plays — the
+    # market the college Long Shots grade on (engine/firsttd).
+    mark_first_td(out, payload)
     return out
 
 
