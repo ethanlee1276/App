@@ -52,10 +52,11 @@ def test_the_record_page_mounts_its_chart_after_writing_it():
 
 
 def test_high_confidence_mode_repaints_the_board_it_filters():
-    """F-6: the switch called `renderCards`, which no longer exists."""
+    """F-6: the switch called `renderCards`, which no longer exists. (The
+    switch itself left on 2026-10-31, Ethan: "we have most likely picks
+    that are ranked", so nothing calls either now.)"""
     assert "renderCards()" not in APP and "typeof renderCards" not in APP
-    i = APP.index("localStorage.setItem(HCM_KEY")
-    assert "if (state.data) renderAll();" in APP[i:i + 700]
+    assert "HCM_KEY" not in APP
 
 
 def test_no_subtitle_opens_on_a_dangling_dash():

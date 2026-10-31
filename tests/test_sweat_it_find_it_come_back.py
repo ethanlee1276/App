@@ -116,14 +116,10 @@ process.stdout.write(JSON.stringify([
 
 # 3 --------------------------------------------------------------------------------------
 def test_our_parlay_loads_into_your_slip():
-    tk = APP[APP.index("function parlayTicket(t, live) {"):]
-    tk = tk[:tk.index("\n}\n")]
-    assert 'data-parlay-slip="${escapeAttr(String(t.rank))}">Load into my slip</button>' in tk
-    h = APP[APP.index('e.target.closest("[data-parlay-slip]")') - 200:]
-    h = h[:h.index("\n});\n")]
-    assert '_slip = { sport: "", date: "", legs: [] };' in h, "the ticket replaces what the slip held"
-    assert "slipToggle(findSlipRow(l.player ? propId(l) : gameBetId(l)) || l)" in h, "each leg as the board has it"
-    assert "_slipOpen = n > 0;" in h and "slipRender();" in h
+    # The old screen's tickets and "Load into my slip" left with the slip on
+    # 2026-10-31 (Ethan: "get rid of the parlay button and the parlay
+    # feature"); the Parlays page's tickets are graded on the Record page.
+    assert "data-parlay-slip" not in APP and "function parlayTicket(" not in APP
 
 
 # 4 --------------------------------------------------------------------------------------

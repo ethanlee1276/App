@@ -1963,7 +1963,33 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal",
 
 def attach(slate: dict, sport: str, state: str | None = None,
            joints: dict | None = None) -> dict:
-    """Screen a slate and hang the result on it as `parlays`.
+    """Hang tonight's two-leg parlays on the board (engine/twoleg).
+
+    THE SCREEN RETIRED FROM THE BOARDS (Ethan, 2026-10-31: "get rid of the
+    parlay button and the parlay feature ... they will be two-leg parlays
+    and they will be picked from the most likely bet and the edge bets").
+    Every builder still calls this one hook, so the Parlays page's tickets
+    replace the Parlay Zone's on every league at once; `screen` and the
+    taxonomy below stay, and the two-leg builder pairs legs with them
+    (`relate`, `joint_two`). `joints` is kept for the callers.
+
+    §10.2 carries over: the drawdown state is measured here (or passed as
+    `state`), and in a drawdown every two-leg parlay is tracked, none staked.
+    """
+    from . import twoleg
+    if str(sport or "").lower() not in twoleg.SPORTS:
+        return slate
+    st = state if state is not None else bankroll_state(sport)
+    try:
+        return twoleg.attach(slate, sport, drawdown=(st == "drawdown"))
+    except Exception:                                         # pragma: no cover - guard
+        return slate
+
+
+def _screen_attach(slate: dict, sport: str, state: str | None = None,
+                   joints: dict | None = None) -> dict:
+    """Screen a slate and hang the result on it as `parlays` (retired from
+    the builds 2026-10-31; kept for the screen's own tests).
 
     Called from each builder immediately before the JSON is written, so the
     Parlay Zone is computed once at build time from exactly the board the

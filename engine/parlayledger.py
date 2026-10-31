@@ -305,6 +305,100 @@ def log_slate_play(conn, sport: str, date: str, legs: list[dict]) -> int:
     return cur.rowcount
 
 
+# --- two-leg tickets (engine/twoleg, the Parlays page) ---------------------------------
+def log_twoleg(conn, two_leg: dict, sport: str, date: str) -> int:
+    """Journal every two-leg ticket a board posted, both pools. Returns rows
+    newly written; a ticket already journaled for its day is left alone, so
+    a board rebuilt every minute counts each ticket once.
+
+    Every posted ticket is a pick (``qualified``), graded at the price the
+    card shows (``assumed_dec``, with ``price_basis`` saying how it was
+    reached), one unit notional so its ROI reads, and its real stake beside
+    that: the rule's half unit when both legs are staked singles, else 0."""
+    ensure_schema(conn)
+    if not isinstance(two_leg, dict) or not sport or not date:
+        return 0
+    from .twoleg import SOURCES
+    wrote = 0
+    for pool, source in SOURCES.items():
+        for t in ((two_leg.get(pool) or {}).get("tickets") or []):
+            legs = t.get("legs") or []
+            if len(legs) != 2:
+                continue
+            key = legs_key(legs)
+            if conn.execute("SELECT 1 FROM parlays WHERE sport=? AND date=? AND legs_key=?",
+                            (sport, date, key)).fetchone():
+                continue
+            books = {(l.get("book") or "").strip() for l in legs if l.get("book")}
+            cur = conn.execute(
+                "INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified,"
+                " was_play, naive_product_dec, quoted_dec, assumed_dec, price_basis, book, correlation_tax,"
+                " modeled_joint, implied_joint, independent_joint, conditional_reasoning, stake_units,"
+                " notional_units, source, status) VALUES (?,?,?,?,?,2,?,1,0,?,NULL,?,?,?,?,?,?,?,?,?,?,?,'open')",
+                (datetime.datetime.now().isoformat(timespec="seconds"), sport, date, key,
+                 t.get("kind") or "two_game", t.get("kind_label") or "",
+                 t.get("naive_dec"), t.get("price_dec"), t.get("price_basis") or "",
+                 "|".join(sorted(books)) or None,
+                 round(1.0 - float(t["price_dec"]) / float(t["naive_dec"]), 4)
+                 if t.get("price_dec") and t.get("naive_dec") else None,
+                 t.get("joint"), round(1.0 / float(t["price_dec"]), 4) if t.get("price_dec") else None,
+                 t.get("independent"), t.get("why") or "",
+                 float(t.get("stake_units") or 0.0), NOTIONAL_UNITS, source))
+            for i, l in enumerate(legs, start=1):
+                conn.execute(
+                    "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
+                    " p_final, status) VALUES (?,?,?,?,?,?,?,?,?,?,'open')",
+                    (cur.lastrowid, i, l.get("player"), l.get("team"), l.get("market"), l.get("side"),
+                     l.get("line"), l.get("odds"), l.get("book"), l.get("p")))
+            wrote += 1
+    if wrote:
+        conn.commit()
+    return wrote
+
+
+def report_twoleg(conn, recent: int = 12) -> dict:
+    """The Record page's two-leg parlays, each pool apart and never blended
+    with the singles: graded, won, the notional units and ROI (one unit a
+    ticket), the units really staked and what they returned, by kind and by
+    league, and the newest graded tickets with their legs."""
+    ensure_schema(conn)
+    from .twoleg import SOURCES
+    out = {}
+    for pool, source in SOURCES.items():
+        rows = conn.execute("SELECT * FROM parlays WHERE source=? ORDER BY date, id", (source,)).fetchall()
+        graded = [r for r in rows if r["status"] in ("won", "lost")]
+
+        def tally(rs):
+            n = len(rs)
+            net = sum(float(r["pnl_units"] or 0.0) for r in rs)
+            st = sum(float(r["stake_units"] or 0.0) for r in rs)
+            st_net = sum(float(r["pnl_units"] or 0.0) * float(r["stake_units"] or 0.0)
+                         / float(r["notional_units"] or NOTIONAL_UNITS) for r in rs)
+            return {"graded": n, "wins": sum(1 for r in rs if r["status"] == "won"),
+                    "losses": sum(1 for r in rs if r["status"] == "lost"),
+                    "net_units": round(net, 2), "roi": round(net / n, 4) if n else None,
+                    "staked_units": round(st, 2), "staked_net": round(st_net, 2),
+                    "staked_roi": round(st_net / st, 4) if st else None}
+        block = tally(graded)
+        block["open"] = sum(1 for r in rows if r["status"] == "open")
+        block["z"] = _z([float(r["pnl_units"] or 0.0) for r in graded])
+        block["by_kind"] = {k: tally([r for r in graded if r["parlay_type"] == k])
+                            for k in sorted({r["parlay_type"] for r in graded})}
+        block["by_sport"] = {k: tally([r for r in graded if r["sport"] == k])
+                             for k in sorted({r["sport"] for r in graded})}
+        news = []
+        for r in sorted(graded, key=lambda r: (r["date"], r["id"]), reverse=True)[:recent]:
+            legs = conn.execute("SELECT player, market, side, line, odds, status FROM parlay_legs "
+                                "WHERE parlay_id=? ORDER BY leg_no", (r["id"],)).fetchall()
+            news.append({"sport": r["sport"], "date": r["date"], "kind": r["parlay_type"],
+                         "status": r["status"], "price_dec": r["assumed_dec"],
+                         "pnl_units": r["pnl_units"], "staked": float(r["stake_units"] or 0) > 0,
+                         "legs": [dict(x) for x in legs]})
+        block["recent"] = news
+        out[pool] = block
+    return out
+
+
 # --- settling ---------------------------------------------------------------
 def settle(conn) -> dict:
     """Grade every open ticket whose legs have all settled as singles.
@@ -411,17 +505,35 @@ def resettle(conn) -> dict:
     return {"fixed": fixed, "reopened": reopened}
 
 
+#: The singles books a two-leg ticket's legs were taken from (engine/twoleg).
+TWO_LEG_CATS = {"two_edge": ("main", "paper"), "two_likely": ("likely", "likely_live", "board")}
+
+
 def _matching_bet(conn, p, leg):
     """The singles-journal row this leg was taken from.
 
     Matched on the same four fields that identify a bet in the singles
     journal's own unique key, minus the category — a leg is always a 'main'
     pick, since §14 requires it to have earned the board on its own.
+
+    A TWO-LEG TICKET'S LEGS (engine/twoleg, 2026-10-31) come from its own
+    pool's books — an Edge pick or a Most Likely pick — and are matched on
+    the side and line too where they agree, since one player's market can
+    sit on both boards at different numbers.
     """
-    return conn.execute(
-        "SELECT * FROM bets WHERE sport=? AND date=? AND player=? AND market=?"
-        " AND category='main'",
-        (p["sport"], p["date"], leg["player"], leg["market"])).fetchone()
+    cats = TWO_LEG_CATS.get(p["source"] if "source" in p.keys() else "")
+    if not cats:
+        return conn.execute(
+            "SELECT * FROM bets WHERE sport=? AND date=? AND player=? AND market=?"
+            " AND category='main'",
+            (p["sport"], p["date"], leg["player"], leg["market"])).fetchone()
+    marks = ",".join("?" * len(cats))
+    base = (f"SELECT * FROM bets WHERE sport=? AND date=? AND player=? AND market=? "
+            f"AND category IN ({marks})")
+    args = [p["sport"], p["date"], leg["player"], leg["market"], *cats]
+    exact = conn.execute(base + " AND UPPER(COALESCE(side,''))=? AND ABS(COALESCE(line,0)-?)<1e-6 "
+                         "ORDER BY id", args + [str(leg["side"] or "").upper(), float(leg["line"] or 0)]).fetchone()
+    return exact or conn.execute(base + " ORDER BY id", args).fetchone()
 
 
 def _grade_ticket(conn, p, resolved: list) -> dict:
@@ -1059,6 +1171,14 @@ def journal_built_boards(conn, root) -> dict:
                                    date=pz.get("date") or board.get("date") or "")
             except sqlite3.Error as exc:
                 skipped.append(f"{sport}/{key}: {exc}")
+        # THE TWO-LEG PARLAYS (engine/twoleg, the Parlays page, 2026-10-31):
+        # every posted ticket, both pools, journaled the same way.
+        tl = board.get("two_leg")
+        if isinstance(tl, dict):
+            try:
+                wrote += log_twoleg(conn, tl, sport, tl.get("date") or board.get("date") or "")
+            except sqlite3.Error as exc:
+                skipped.append(f"{sport}/two_leg: {exc}")
     return {"journaled": wrote, "skipped": skipped}
 
 

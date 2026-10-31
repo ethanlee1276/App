@@ -845,41 +845,37 @@ APP = open(os.path.join(_ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 HTML = open(os.path.join(_ROOT, "web", "index.html"), encoding="utf-8").read()
 
 
-def _ticket_src():
-    """The parlayTicket template, with its line wrapping collapsed. Copy in
-    a template literal breaks wherever the source line ended, so a
-    substring check against the sentence a reader sees fails for reasons
-    that have nothing to do with the sentence being there."""
-    b = APP[APP.index("function parlayTicket("):]
-    return " ".join(b[:b.index("\n/* The clash ledger")].split())
+def _fn_src(name: str) -> str:
+    """One function of app.js, with its line wrapping collapsed. Copy in a
+    template literal breaks wherever the source line ended, so a substring
+    check against the sentence a reader sees fails for reasons that have
+    nothing to do with the sentence being there."""
+    i = APP.index(f"function {name}(")
+    j = APP.find("\nfunction ", i + 1)
+    return " ".join(APP[i:j if j > 0 else len(APP)].split())
 
 
-def test_the_parlay_zone_is_a_real_page_on_the_sports_that_have_one():
-    """RE-SHAPED 2026-08-11 (Ethan: "ditch the parlay zone screen but
-    keep the same rules"): the PAGE became PARLAY MODE — a sidebar
-    switch under High Confidence that shows the same screened tickets
-    on Home. What must survive: the container, the renderer, the call,
-    the toggle — and an old #parlays bookmark still landing a person on
-    their tickets rather than nowhere."""
-    assert 'data-view="parlays"' not in HTML, "the dead page's nav item is back"
-    assert 'id="view-parlays"' not in HTML
-    assert 'id="parlay-mode"' in HTML and 'id="pz-toggle"' in HTML
-    assert 'id="parlays-body"' in HTML
-    i = HTML.index('id="view-recommended"')
-    assert i < HTML.index('id="parlays-body"') < HTML.index('id="view-live"'), \
-        "the tickets left the Home board"
-    assert "function renderParlays(" in APP
-    assert "renderParlays();" in APP, "the renderer is never called"
-    assert "syncParlayMode" in APP and 'h === "parlays"' in APP
-    # BOTH entry paths must migrate the bookmark: hashchange for a hash
-    # typed into a running page, and initialView for a cold load, which
-    # never fires hashchange (the preservation walk caught the cold path
-    # missing). initialView runs before the new-look module's consts
-    # initialize, so it must use the literal key — PZ_KEY there is a TDZ
-    # ReferenceError that a try/catch turns into a silent no-op.
-    iv = APP[APP.index("function initialView("):]
-    iv = iv[:iv.index("\n}")]
-    assert 'h === "parlays"' in iv and '"qb_pz"' in iv
+def test_the_parlays_page_is_a_real_button_again():
+    """RE-SHAPED TWICE. 2026-08-11 (Ethan: "ditch the parlay zone screen but
+    keep the same rules"): the page became PARLAY MODE, a sidebar switch that
+    showed the screened tickets on Home. 2026-10-31 (Ethan: "get rid of the
+    parlay button and the parlay feature ... make the parlay feature an
+    actual button and correlate it for each sport"): the switch, the card
+    buttons and the do-it-yourself slip are gone, and Parlays is a page of
+    its own again, two-leg tickets from our own picks (engine/twoleg). An
+    old #parlays bookmark lands on the page itself."""
+    assert 'data-view="parlays" id="parlays-tab"' in HTML, "the button"
+    assert 'id="view-parlays"' in HTML and 'id="parlays-body"' in HTML
+    i = HTML.index('id="view-parlays"')
+    assert i < HTML.index('id="parlays-body"'), "the tickets live on their own page"
+    assert 'id="parlay-mode"' not in HTML and 'id="pz-toggle"' not in HTML, "Parlay Mode is back"
+    assert 'id="qb-slip"' not in HTML, "the do-it-yourself slip is back"
+    assert "function renderParlayPage(" in APP
+    assert '["parlays-body", () => renderParlayPage(), true]' in APP, "the renderer is never called"
+    assert "syncParlayMode" not in APP and 'getItem("qb_pz")' not in APP and "PZ_KEY" not in APP, \
+        "Parlay Mode's plumbing outlived it"
+    assert '"parlays"' in APP[APP.index("const VIEW_ORDER = ["):APP.index("];", APP.index("const VIEW_ORDER = ["))], \
+        "#parlays routes to the page"
 
 
 def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():
@@ -897,45 +893,42 @@ def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():
         assert line and '"parlays"' in line[0], sport
 
 
-def test_the_page_shows_no_stake_and_says_why():
-    """§13. The card carries a stake line and it has to read zero, with the
-    counterfactual labelled as a counterfactual — a number shown without
-    that sentence is an invitation to bet it."""
-    block = _ticket_src()
-    assert 'graded · 0.00u' in block
-    assert "not a recommendation to bet it" in block
-    assert "eighth-Kelly" in block
+def test_the_page_says_staked_or_tracked_on_every_ticket():
+    """A two-leg parlay does what its legs do, about twice. So it carries
+    money only when both legs are picks we stake (engine/twoleg.staked), and
+    every card says which it is. A ticket shown without that line is an
+    invitation to bet one the record only tracks."""
+    card = _fn_src("tlTicketHTML")
+    assert "Staked ${t.stake_units}u" in card and "Tracked · no stake" in card
+    page = _fn_src("renderParlayPage")
+    assert "a parlay is staked only when both legs are picks we stake" in page
 
 
-def test_the_page_never_prints_a_book_price_as_though_we_had_one():
-    """The module's central honesty. The card's price row is a number to
-    CHECK, and the words have to say so."""
-    block = _ticket_src()
-    assert "You need at least" in block
-    assert "What a book might pay" in block
-    # A band, not a quote — the card has to show both ends or the harsher
-    # one is invisible and the generous one looks like a fact.
-    assert "likely_case_american" in block
-    # And the ticket's own verdict text, which carries the disclaimer, is
-    # rendered rather than dropped
-    assert "escapeHtml(t.verdict)" in block
+def test_the_page_never_prints_a_price_without_saying_how_it_was_made():
+    """No feed we ingest quotes a parlay, so the price on a card is the one
+    the record grades the ticket at, and the card says how it was made: the
+    two prices multiplied, or a same-game cut under that."""
+    card = _fn_src("tlTicketHTML")
+    assert "pays ${oddsTxt(t.price)}" in card
+    assert "escapeHtml(t.price_basis" in card, "the price shows without its basis"
+    assert "${pct(t.joint)} both hit" in card, "the chance both legs hit is the headline"
 
 
-def test_the_page_shows_the_kill_ledger():
-    """The reason Ethan asked for this page: which props are fighting each
-    other. A verdict with no ledger under it answers nothing."""
-    assert "function parlayLedger(" in APP
-    assert "What was screened out, and why" in APP
-    assert "parlayLedger(z)" in APP
+def test_every_ticket_says_why_its_legs_belong_together():
+    """The reason Ethan asked for parlays that "make sense": two legs that
+    correlate, one pick on each team, or two games. A card with no reason
+    under it answers nothing."""
+    card = _fn_src("tlTicketHTML")
+    assert "escapeHtml(t.why" in card
 
 
-def test_the_page_carries_the_singles_alternative_and_the_tax():
-    """§13's display requirements have to survive on the page, not only in
-    the payload."""
-    block = _ticket_src()
-    assert "bet the singles" in block
-    assert "correlation_tax_best_case" in block
-    assert "singles_alternative_ev" in block
+def test_the_record_page_carries_the_singles_alternative():
+    """A parlay is measured against the same picks bet singly: on the Record
+    page, every backtest row prints both."""
+    rec = open(os.path.join(_ROOT, "web", "js", "record.js"), encoding="utf-8").read()
+    i = rec.index("function recTwoLegSection(")
+    body = rec[i:rec.index("\n}\n", i)]
+    assert "fmtRoi(r.singles_roi)" in body and "As singles" in body
 
 
 
@@ -1040,15 +1033,8 @@ def test_the_structural_reason_is_flagged_for_the_top_of_the_page():
     out = run("mlb", recs, g)
     assert out["structural"] in out["notes"], \
         "the flagged note must still be one OF the notes, not a second copy"
-
-    i = APP.index("function renderParlays(")
-    fn = APP[i:APP.find("\nfunction ", i + 1)]
-    assert "z.structural" in fn, "the page never lifts the structural note"
-    # Above the ticket list…
-    assert fn.index("z.structural") < fn.index("parlayTicket(t"), \
-        "the explanation still renders after the thing it explains"
-    # …and de-duplicated out of the footnotes at the bottom.
-    assert "filter((n) => n !== z.structural)" in fn
+    # (The page that lifted it, the old screen's renderParlays, left with
+    # Parlay Mode on 2026-10-31; the screen still writes the note.)
 
 
 def test_a_slate_with_a_posted_lineup_can_build_a_same_game_ticket():
@@ -1067,69 +1053,6 @@ def test_a_slate_with_a_posted_lineup_can_build_a_same_game_ticket():
     assert not out.get("structural"), "structural note fired with a pair on the board"
     assert any(t["parlay_type"] == "A" for t in out["tickets"]), \
         "a posted lineup produced no same-game construction"
-
-
-def test_a_ticket_demoted_by_the_slate_cap_reads_differently_from_a_miss():
-    """§10.2 caps the whole operation at one parlay per slate across every
-    sport, so a ticket can clear all seven gates and still not be the play.
-
-    The runners-up list rendered that ticket exactly like one that failed on
-    merit — same row, same weight, a bare "clears" sitting next to tickets
-    missing by thirty percent. The arbiter already writes the demoted ticket
-    its own verdict naming the sport that took the slot; nothing displayed
-    it. So the page showed one card and a flat list, and a reader had no way
-    to see that the second row was a ticket the engine would have played on
-    any other night.
-    """
-    assert "const pzDemoted" in APP, "demotion is not distinguished at all"
-    i = APP.index("const pzDemoted")
-    decl = APP[i:APP.index("\n", i)]
-    assert "slate_play === false" in decl
-    # Demotion is about the CAP, never about grade — a short ticket that
-    # somehow carried the flag must not be dressed up as one that cleared.
-    assert 't.grade !== "short"' in decl
-    row = _fn_body("function parlayRunnerRow")
-    assert "cleared — capped" in row
-    up = _fn_body("function parlayRunnersUp")
-    assert "t.verdict" in up, "the arbiter's explanation is still unrendered"
-
-
-def _fn_body(sig: str) -> str:
-    i = APP.index(sig)
-    j = APP.find("\nfunction ", i + 1)
-    return APP[i:j if j > 0 else len(APP)]
-
-
-def test_every_ranked_ticket_is_available_in_full_not_just_the_top_one():
-    """Four tickets are screened and published; one used to be readable.
-
-    Ranks two and below rendered as a line of numbers, which cannot carry
-    the reason a construction is ranked where it is — the correlation, the
-    mechanism sentence, the clash screen, the dominance arithmetic. Stacking
-    four full cards was the other failure: six thousand pixels of
-    near-identical blocks, burying the one that matters.
-
-    So each ranked ticket gets its whole card behind a native <details>,
-    open when it cleared and folded when it did not.
-    """
-    up = _fn_body("function parlayRunnersUp")
-    assert "<details" in up and "<summary>" in up
-    assert "parlayTicket(t, t.qualified)" in up, \
-        "the runners-up still render as summaries only"
-    # Open for a ticket that cleared, folded for one that did not.
-    assert 't.grade !== "short" ? "open" : ""' in up
-    # The summary and the card must come from one place, or the row and the
-    # card it opens can drift apart.
-    assert "parlayRunnerRow(t)" in up
-
-    # Native <details> so it survives with JS broken and is keyboard
-    # operable without hand-written behaviour — but the marker is drawn,
-    # and a drawn affordance needs a visible focus state.
-    css = open(os.path.join(_ROOT, "web", "css", "styles.css"),
-               encoding="utf-8").read()
-    assert ".pz-runner > summary::after" in css, "no expand affordance"
-    assert ".pz-runner > summary:focus-visible" in css, "not keyboard visible"
-    assert "prefers-reduced-motion" in css
 
 
 def test_the_shortlist_is_bounded():

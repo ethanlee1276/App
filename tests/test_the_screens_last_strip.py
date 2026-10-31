@@ -14,8 +14,8 @@ bar, every sheet.
     a resize measures it again, so it is gone once iOS catches up. Nowhere
     else is it ever set.
   * styles.css (and the chat room's, the level-up's and the carry chart's
-    sheets) reach the bottom edge by it; the floating tab bar, the riding
-    pill and the slip are measured from the real edge.
+    sheets) reach the bottom edge by it; the floating tab bar and the riding
+    pill are measured from the real edge.
 
 Run directly: `python3 tests/test_the_screens_last_strip.py`
 """
@@ -70,9 +70,7 @@ def test_the_layers_pinned_to_the_bottom_reach_down_by_it():
     # The ids sit after their own rules and before the sheet's tokens-only
     # tail (tests/test_most_likely_opens_its_own_page.py: no "#" past it).
     tail = CSS.index("A Most Likely pick, explained")
-    for own, reach in (("#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop)); }",
-                        "#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop) - var(--vgap)); }"),
-                       ("#tour-overlay { position: fixed; inset: 0;",
+    for own, reach in (("#tour-overlay { position: fixed; inset: 0;",
                         "#ffd-overlay, #pk-overlay, #tour-overlay { bottom: calc(-1 * var(--vgap)); }"),
                        (".betit-sheet { position: fixed; inset: 0;", ".betit-sheet { bottom: calc(-1 * var(--vgap)); }")):
         assert own in CSS and reach in CSS and CSS.index(own) < CSS.index(reach), reach

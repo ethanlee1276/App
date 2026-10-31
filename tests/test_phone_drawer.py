@@ -221,12 +221,13 @@ def test_the_phone_has_one_menu_and_it_is_the_sheet():
     menu = APP[APP.index("function initMobileMenu("):]
     menu = menu[:menu.index('document.body.classList.toggle("menu-open")')]
     assert "if (isPhone()) {" in menu and "moreSheetOpen(" in menu and "return;" in menu
-    # And the drawer's footer — the two switches and the social links —
-    # rides into the sheet as proxies, so no phone control is lost.
+    # And the drawer's footer — the social links — rides into the sheet as
+    # proxies, so no phone control is lost (its two switches, High
+    # Confidence and Parlay Mode, left on 2026-10-31).
     foot = APP[APP.index("function moreSheetFoot("):]
     foot = foot[:foot.index("\n}")]
-    for needle in ('["hcm-toggle", "pz-toggle"]', "real.click(); moreSheetFoot();",
-                   '["nav-ig", "nav-dc"]', 'a.removeAttribute("id");'):
+    assert "hcm-toggle" not in foot and "pz-toggle" not in foot
+    for needle in ('["nav-ig", "nav-dc"]', 'a.removeAttribute("id");'):
         assert needle in foot, needle
 
 

@@ -6,7 +6,8 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-10-31 night, after your IZ, JA, JB and IX paste. All done:
+Last updated 2026-10-31 night: the Parlays page shipped (step JD, item 1),
+after your IZ, JA, JB and IX paste. Those are done:
 
 - **IZ:** the restated record is on the site. 1,405 staked, 769–636,
   +23.03u, +3.2% ROI, 7,557 tracked.
@@ -15,9 +16,21 @@ Last updated 2026-10-31 night, after your IZ, JA, JB and IX paste. All done:
 - **JA study:** the board's team chance beat a coin, the home rate and the
   tip records alone on games it never saw.
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
-  fixed (step JC), and item 1 checks it.
+  fixed (step JC), and item 2 checks it.
 
-## 1. Tonight, after the next college build: receivers are back (steps JC, IX)
+## 1. Any time: the parlays, and what pairing our past picks would have done (step JD)
+
+Read-only. It checks the Parlays page is live, then pairs every graded day of
+the record the way tonight's board pairs (with the journal's teams, so the
+same-game pairs count too) and prints it by league, section and kind, one, two
+and three a day, the two halves of the record, and the live parlays so far.
+About 20 seconds:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JD 2>&1 | tee /tmp/jd.txt
+```
+
+## 2. Tonight, after the next college build: receivers are back (steps JC, IX)
 
 The college board rebuilds through the evening. After the next build, each
 game's top three should include receivers, and nobody's chance should be
@@ -27,7 +40,7 @@ above 0.30:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IX 2>&1 | tee /tmp/ix.txt
 ```
 
-## 2. Tomorrow after the morning NFL build: first touchdown, and what the tightening held (steps IU, IT)
+## 3. Tomorrow after the morning NFL build: first touchdown, and what the tightening held (steps IU, IT)
 
 Sunday morning's odds pull buys the first-touchdown prices (November's
 budget is fresh). IU shows the board, each pick next to our chance and the
@@ -39,7 +52,7 @@ under, and a receiving-yards under):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IU IT 2>&1 | tee /tmp/sunday.txt
 ```
 
-## 3. Tomorrow evening, after the NBA build: first basket on Long Shots (step JA)
+## 4. Tomorrow evening, after the NBA build: first basket on Long Shots (step JA)
 
 Tonight's NBA board had no prices at all: "matched 0 props across 0
 events", with October's budget spent. November's budget buys them, first
@@ -50,7 +63,7 @@ graded:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JA 2>&1 | tee /tmp/ja.txt
 ```
 
-## 4. Tomorrow (Nov 1), from mid-morning: the new month, and the real bill (steps IP, IQ)
+## 5. Tomorrow (Nov 1), from mid-morning: the new month, and the real bill (steps IP, IQ)
 
 After the reset, the first odds pull reads the new balance and the plan
 re-plans November from it. These show the plan with tonight's line, which
@@ -62,13 +75,13 @@ the 17 books double every call):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IP IQ 2>&1 | tee /tmp/nov1.txt
 ```
 
-## 5. Tomorrow evening: the bill again, over a full day (step IQ)
+## 6. Tomorrow evening: the bill again, over a full day (step IQ)
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IQ 2>&1 | tee /tmp/iq.txt
 ```
 
-## 6. The next college game day (Nov 7), after its build: college's first touchdown, priced (step IX)
+## 7. The next college game day (Nov 7), after its build: college's first touchdown, priced (step IX)
 
 With November's budget the pull buys first-touchdown prices. The same
 check shows the picks against our chance, and the next morning how many

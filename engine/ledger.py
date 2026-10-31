@@ -10156,6 +10156,69 @@ MIN_GRADED_FOR_SIGNAL = 30
 RECENT_LIMIT = 60
 
 
+#: The two-leg backtest's cache (data/cache): rebuilt when the graded record
+#: has moved and the copy is an hour old, so the five-minute settle pass does
+#: not pair the whole season again every time a pick grades.
+TWO_LEG_BACKTEST_TTL_S = 3600
+
+
+def _two_leg_record(conn) -> dict:
+    """The two-leg parlays: each pool's record (parlayledger.report_twoleg)
+    and the backtest (twoleg.backtest). Never breaks the export."""
+    out: dict = {}
+    try:
+        from . import parlayledger
+        out.update(parlayledger.report_twoleg(conn))
+    except Exception as exc:                                  # noqa: BLE001
+        out["error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        out["backtest"] = _two_leg_backtest(conn)
+    except Exception as exc:                                  # noqa: BLE001
+        out["backtest"] = {"rows": [], "error": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
+def _two_leg_backtest(conn) -> dict:
+    """`twoleg.backtest` over the record since its epoch, with the history
+    database's schedule telling one game's two sides from two games, cached
+    (TWO_LEG_BACKTEST_TTL_S)."""
+    import time as _time
+    from . import twoleg
+    key = list(conn.execute("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM bets "
+                            "WHERE status IN ('won','lost','push')").fetchone())
+    # WHOSE JOURNAL: a copy cached off one database is never another's.
+    dbfile = next((str(r[2]) for r in conn.execute("PRAGMA database_list") if r[1] == "main"), "")
+    cache = ROOT_DIR / "data" / "cache" / "two_leg_backtest.json"
+    try:
+        held = json.loads(cache.read_text(encoding="utf-8"))
+        fresh = _time.time() - cache.stat().st_mtime < TWO_LEG_BACKTEST_TTL_S
+        if held.get("db") == dbfile and held.get("result") and (held.get("key") == key or fresh):
+            return held["result"]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    games: dict = {}
+    try:
+        from . import db as _db
+        if _db.DEFAULT_DB.exists():
+            h = _db.connect()
+            try:
+                games = twoleg.schedule(h, RECORD_EPOCH)
+            finally:
+                h.close()
+    except Exception:                                         # noqa: BLE001
+        games = {}
+    result = twoleg.backtest(conn, since=RECORD_EPOCH, games=games)
+    result["schedule"] = bool(games)
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        tmp = cache.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"db": dbfile, "key": key, "result": result}), encoding="utf-8")
+        tmp.replace(cache)
+    except OSError:
+        pass
+    return result
+
+
 def _parlay_report(conn) -> dict:
     """The parlay bucket, or an empty one. Imported here rather than at the
     top so parlayledger stays a leaf module — it reads this file's tables and
@@ -10956,6 +11019,10 @@ def export_json(conn, path) -> None:
         # Its own key, its own tables, its own notional — nothing above this
         # line moves when a ticket settles.
         "parlays": _parlay_report(conn),
+        # THE TWO-LEG PARLAYS (engine/twoleg, the Parlays page, 2026-10-31):
+        # each pool's record apart from the singles, and what pairing the
+        # past picks the same way would have done.
+        "two_leg": _two_leg_record(conn),
     }
     p = _Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)

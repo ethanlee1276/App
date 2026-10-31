@@ -47,7 +47,7 @@ def test_boot_measures_a_strip_on_one_side_only():
                  "html.side-rail .pw-dock", "html.side-rail .tf-toast", "html.side-rail .crash-note",
                  "html.side-rail-left .riding-tray", "html.side-rail-left .gch-fab", "html.side-rail-left .tf-toast"):
         assert want in block, want
-    assert "html.side-rail #qb-slip { right: var(--strip-w);" in css, "the slip's, with the slip's own rules"
+    assert "#qb-slip" not in css, "the parlay slip's dock left with the slip (2026-10-31)"
     assert "--rail-w" not in block, "the desktop layout's --rail-w is another thing"
     assert css.count("--rail-w: 280px;") == 1, "and it stays the desktop's right column"
     assert "--tb-drop:" not in block, "the iPhone capsule's drop is its own (tests/test_the_iphone_tab_bar_sits_low.py)"
@@ -84,16 +84,14 @@ def _shapes():
                     page.wait_for_timeout(1500)
                     out[name] = page.evaluate("""() => { const h = document.documentElement,
                         t = document.getElementById('tabbar').getBoundingClientRect(), b = getComputedStyle(document.body);
-                        // A toast, and the slip as it docks: where they land.
+                        // A toast: where it lands.
                         if (typeof tfToast === 'function') tfToast('Saved');
-                        const slip = document.getElementById('qb-slip');
-                        slip.hidden = false; slip.style.height = '60px';
                         const box = (e) => { if (!e) return null; const r = e.getBoundingClientRect();
                                              return [Math.round(r.left), Math.round(r.right), Math.round(r.bottom)]; };
                         return {rail: h.classList.contains('side-rail'), left: h.classList.contains('side-rail-left'),
                                 bar: [Math.round(t.left), Math.round(t.width), Math.round(t.height)],
                                 pad: [parseFloat(b.paddingLeft), parseFloat(b.paddingRight), parseFloat(b.paddingBottom)],
-                                toast: box(document.querySelector('.tf-toast')), slip: box(slip),
+                                toast: box(document.querySelector('.tf-toast')),
                                 w: innerWidth, h: innerHeight}; }""")
                     ctx.close()
             finally:
@@ -119,10 +117,9 @@ def test_in_a_browser_the_bar_moves_into_the_strip_and_nowhere_else():
     assert duo["bar"] == [duo["w"] - 84, 84, duo["h"]], ("on end, in the strip, top to bottom", duo)
     assert duo["pad"][1] == 84 and duo["pad"][2] < 60, ("the page clear of the strip, no room kept at its foot", duo)
     assert duo["toast"] and duo["toast"][1] <= duo["w"] - 84, ("a toast keeps out of the strip", duo)
-    assert duo["slip"][1] == duo["w"] - 84 and duo["slip"][2] >= duo["h"] - 40, ("the slip at the foot, beside it", duo)
     left = got["duo_left"]
     assert left["rail"] and left["left"] and left["bar"][:2] == [0, 84] and left["pad"][0] == 84, left
-    assert left["toast"] and left["toast"][0] >= 84 and left["slip"][0] == 84, left
+    assert left["toast"] and left["toast"][0] >= 84, left
     side = got["on_its_side"]
     assert not side["rail"], ("both sides inset alike: no strip", side)
     hand = got["in_the_hand"]

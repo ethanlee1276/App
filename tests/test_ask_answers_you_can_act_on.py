@@ -1,5 +1,5 @@
 """An Ask answer you can act on: under the card about tonight's player line,
-Add to slip, Track it and Watch (engine/askcards `_bet`, engine/askbot
+Track it and Watch (engine/askcards `_bet`, engine/askbot
 line_shop, web/js/ask.js askActsHTML; the one-leg ticket's alerts in
 engine/slipwatch and engine/pushmine).
 
@@ -15,10 +15,11 @@ at the best price on our side; line_shop names the bet field by field; a
 market the box cannot follow is logged by hand instead; the tracked entry is
 a leg the checker's own cleaner keeps; a ticket of one leg is a "bet" on the
 phone and never "down to its last leg"; the page draws the buttons on the
-last card about a bet, says what is already done, leaves the slip off for
-another league's player, and styles every class it draws; the slip's dock
-stands above the composer; and in a browser the three buttons do what they
-say.
+last card about a bet, says what is already done, and styles every class it
+draws; and in a browser the two buttons do what they say. Add to slip left
+with the do-it-yourself parlay slip (Ethan, 2026-10-31: "get rid of the
+parlay button and the parlay feature"); the Parlays page builds two-leg
+parlays from our own picks instead (engine/twoleg).
 
 Run directly: `python3 tests/test_ask_answers_you_can_act_on.py`
 (the browser check with QB_BROWSER_TESTS=1 and /usr/bin/python3).
@@ -167,14 +168,14 @@ process.stdout.write(JSON.stringify({{ fresh, entry, hand, done, elsewhere, card
 """)
     fresh = _text(got["fresh"])
     assert "Under 259.5 Passing Yards −110 FanDuel" in fresh, fresh
-    assert "Add to slip" in fresh and "Track it" in fresh and "Watch" in fresh
-    assert 'data-ic="ticket"' in got["fresh"] and 'data-ic="bell"' in got["fresh"]
+    assert "Track it" in fresh and "Watch" in fresh
+    assert "Add to slip" not in fresh and 'data-ask-act="slip"' not in got["fresh"], "the slip is gone"
+    assert 'data-ic="chart"' in got["fresh"] and 'data-ic="bell"' in got["fresh"]
     assert "We follow it on the Live tab and settle it in My Bets off the box score." in fresh
     done = _text(got["done"])
-    assert "In your slip" in done and "In My Bets" in done and "Watching" in done, done
-    assert 'aria-pressed="true"' in got["done"] and got["done"].count(" disabled") == 2
-    assert "Add to slip" not in _text(got["elsewhere"]) and 'data-ask-act="slip"' not in got["elsewhere"], \
-        "the slip holds the open board's league; another league's player is tracked or watched, not slipped"
+    assert "In My Bets" in done and "Watching" in done, done
+    assert got["done"].count(" disabled") == 2
+    assert got["elsewhere"] == got["done"], "another league's player is tracked or watched the same way"
     e = got["entry"]
     assert (e["src"], e["sport"], e["date"], e["desc"], e["stake"], e["odds"], e["result"]) == \
         ("slip", "NFL", "2026-10-27", "Josh Allen Under 259.5 Passing Yards", 25, -110, "pending")
@@ -201,17 +202,15 @@ def test_every_class_the_action_row_draws_is_styled():
     assert drawn <= styled, sorted(drawn - styled)
 
 
-def test_the_slip_dock_stands_above_the_composer():
-    assert ":root { --ask-foot: 142px; }" in ASK_CSS, "the composer's height before it is measured"
-    assert "body.ask-open #qb-slip { bottom: var(--ask-foot); padding-bottom: 0; }" in ASK_CSS
-    assert "body.ask-typing #qb-slip { display: none; }" in ASK_CSS
+def test_the_slip_dock_is_gone_from_the_room():
+    assert "#qb-slip" not in ASK_CSS and "--ask-foot" not in ASK_CSS, "no dock to stand above the composer"
     i = ASK_JS.index("function askRoomSize(")
     size = ASK_JS[i:ASK_JS.index("\n}\n", i)]
-    assert 'document.documentElement.style.setProperty("--ask-foot"' in size
+    assert "--ask-foot" not in size
 
 
 # --- in a browser (opt-in) -------------------------------------------------------------------
-def test_the_three_buttons_in_a_browser():
+def test_the_two_buttons_in_a_browser():
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
         return
@@ -257,23 +256,17 @@ def test_the_three_buttons_in_a_browser():
                 page.route("**/api/ask", ok(answer))
                 page.route("**/api/alerts/**", alerts)
                 page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');sessionStorage.removeItem('qb.ask');"
-                                     "localStorage.removeItem('qb_slip_v1');localStorage.removeItem('qb_mybets_v1');}"
+                                     "localStorage.removeItem('qb_mybets_v1');"
+                                     # the alerts prompt a tracked bet opens is asked out
+                                     # (app.js pushAskDue): this test is the buttons
+                                     "localStorage.setItem('qb.pushask',JSON.stringify({n:3,last:Date.now()}));}"
                                      "catch(e){}")
                 page.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#ask", wait_until="load")
                 page.wait_for_selector("#ask-input", timeout=20000)
                 page.fill("#ask-input", "Is Josh Allen under 259.5 passing yards a good bet?")
                 page.keyboard.press("Enter")
                 page.wait_for_selector(".ask-acts", timeout=15000)
-                page.click('[data-ask-act="slip"]')
-                page.wait_for_selector('[data-ask-act="slip"].on', timeout=5000)
-                slip = page.evaluate("JSON.parse(localStorage.getItem('qb_slip_v1') || '{}')")
-                assert slip.get("sport") == "nfl" and [(l["player"], l["market"], l["side"], l["line"], l["odds"])
-                                                      for l in slip.get("legs", [])] == \
-                    [("Josh Allen", "pass_yds", "UNDER", 259.5, -110)], slip
-                assert page.is_visible("#qb-slip .slip-bar"), "the dock shows"
-                dock = page.evaluate("document.querySelector('#qb-slip .slip-bar').getBoundingClientRect().bottom")
-                composer = page.evaluate("document.querySelector('.ask-dock').getBoundingClientRect().top")
-                assert dock <= composer + 1, f"the dock ({dock}) stands above the composer ({composer})"
+                assert not page.query_selector('[data-ask-act="slip"]'), "no Add to slip"
                 page.click('[data-ask-act="track"]')
                 page.fill("[data-ask-stake]", "")
                 page.click(".ask-track .ask-act.primary")

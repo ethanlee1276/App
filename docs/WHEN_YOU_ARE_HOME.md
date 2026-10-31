@@ -9305,6 +9305,79 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JD. Parlays: two legs from our picks, and what pairing the past would have
+done** (step 316; you, 2026-10-31: "get rid of the parlay button and the
+parlay feature ... make the parlay feature an actual button ... two-leg
+parlays ... picked from the most likely bet and the edge bets ... see what
+would have happened if we did parlay our past picks together and record
+that and put those picks on the data page"; and "remove the high confidence
+button ... because we have most likely picks that are ranked"). Nothing to
+run for the change itself:
+
+- **Gone:** Parlay Mode (the menu switch), the + Parlay button on every
+  card, the do-it-yourself slip and its dock, Add to slip in Ask, and the
+  old parlay screen's tickets. High Confidence (the switch and its filter)
+  is gone too, and the Filters heading with it. A parlay a friend already
+  sent you still reads in Messages.
+- **New: Parlays**, a button in the menu after Long Shots (and in the
+  phone's menu), on the NFL, college, the NBA and MLB. Two sections, Edge
+  parlays and Most Likely parlays. Each night the board pairs its own
+  picks: two from one game when they belong together (teammates who rise
+  together, like a quarterback and his receiver, or one pick on each team),
+  and two from different games. A pick is used once per section, two of
+  each kind at most. Edge parlays rank by what they return at the price
+  (only ones that return more than they cost post); Most Likely parlays
+  rank by the chance both hit.
+- **Prices:** two games at the two prices multiplied (3% under that when
+  the picks sit at different books); a same-game pair at 9.5% under the
+  product, the middle of what books take off a same-game parlay. No odds
+  feed we pull quotes a parlay, so that is the price the record grades at,
+  and every card says how its price was made.
+- **Money:** a parlay rides half a unit only when both its picks are ones
+  the stake rule stakes; the rest are tracked. In a drawdown every parlay
+  is tracked.
+- **Recorded:** every posted parlay is journaled and graded off its two
+  picks' own results, Edge and Most Likely apart, never mixed into the main
+  record. The Record page (All bets, By product) shows both records, the
+  staked units, the newest tickets, and the backtest: every graded day
+  since the record began, paired the way tonight's board pairs, next to the
+  same picks bet singly. The old screen's tickets stay graded under it,
+  marked retired.
+- **What the public receipts say** (no teams in them, so two-game pairs
+  only): the top three a day made Edge +7.2% over 190 parlays (the same
+  picks as singles −0.7%) and Most Likely +4.0% over 297 (singles +1.5%).
+  Two a day did better: Edge +16.1% over 135, Most Likely +10.2% over 200,
+  and more units than three in both, which is why the board posts two of
+  each kind. MLB's Most Likely pairs lost (−6.7%). Before 10-15 it was near
+  even; most of the gain is the last two weeks, so it is a start, not a
+  finding.
+- **The honest math:** a two-leg parlay does what its legs do, about twice.
+  Where the picks beat their price it wins about twice as fast; where they
+  pay the juice it loses about twice as fast. A Most Likely pick at −250
+  has to hit 71% just to break even. That is why only picks we stake carry
+  money as parlays.
+
+Read-only, any day: the backtest on the box, with the journal's teams and
+the schedule, so the same-game pairs count too. It prints the backtest by
+league, section and kind, one, two and three a day, the two halves of the
+record, and the live parlays so far (about 20 seconds):
+
+```
+cd /srv/qellys && sudo -u qellys python3 tools/parlay_study.py
+```
+
+After the box picks this up, the page is live:
+
+```
+curl -s https://qellysbook.com/js/app.js | grep -c 'function renderParlayPage('
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JD 2>&1 | tee /tmp/jd.txt
+```
+
 **JC. College first touchdown counts the receivers again** (step 315; your
 IX paste, 2026-10-31, had Duke's Nate Sheppard at 52% to score the game's
 first touchdown, and every college top three a back or a quarterback).

@@ -20,8 +20,8 @@ What this file guards, in order of how much it matters:
 
 3. THE SYSTEM UNDER THE SKIN. Glow and gradients are legal now, but only
    through the tokens, so every light on the site is the same light.
-   High Confidence Mode is a REAL filter wired into the same gate every
-   card list passes through — never a marketing toggle.
+   (High Confidence Mode, the real filter this once named, left on
+   2026-10-31: the ranked Most Likely list does its job.)
 
 Run directly: `python3 tests/test_newlook.py`
 """
@@ -106,13 +106,14 @@ def test_every_destination_survived_the_redesign():
         assert f'data-sport="{sport}"' in sb, f"{sport} fell out of the drawer"
     for sport in ("record", "lab", "mybets", "why", "about"):
         assert f'data-sport="{sport}"' in sb, f"{sport} fell out of the sidebar"
-    # "parlays" left this list 2026-08-11: the page became Parlay Mode
-    # (the second sidebar toggle) — test_parlays.py owns that contract.
-    for view in ("recommended", "live", "edge", "longshots",
+    # "parlays" left this list 2026-08-11 (the page became Parlay Mode, a
+    # sidebar toggle) and came back 2026-10-31, a page of its own again
+    # (Ethan: "make the parlay feature an actual button").
+    for view in ("recommended", "live", "edge", "longshots", "parlays",
                  "futures", "standings", "trending", "players", "rosters",
                  "injuries", "scanner"):
         assert f'data-view="{view}"' in sb, f"{view} fell out of the sidebar"
-    assert 'id="pz-toggle"' in sb, "the Parlay Mode switch fell out"
+    assert 'id="pz-toggle"' not in sb, "Parlay Mode's switch is back beside the Parlays page"
 
 
 def test_the_drawer_has_one_door_per_page():
@@ -183,11 +184,12 @@ def test_the_library_folds_and_remembers():
     # like that hidden from the user." They lead the drawer as tiles now
     # (.sb-apps), behind nothing.
     # Renamed 2026-09-23 (the product audit): Betting is Odds, Library
-    # is Research — same fold ids — and the two switches fold under a
-    # fifth head, Filters, which carries its own class beside these.
+    # is Research — same fold ids. The two switches folded under a fifth
+    # head, Filters, until both left on 2026-10-31 (Parlay Mode became the
+    # Parlays page; High Confidence gave way to the ranked Most Likely list).
     assert sb.count('class="sb-label sb-fold"') == 4, \
         "the foldable heads changed — Odds, Research, My Book, Proof"
-    assert sb.count('class="sb-label sb-fold sb-filters-head"') == 1
+    assert "sb-filters-head" not in sb, "the Filters fold is back with nothing in it"
     # CHANGED 2026-09-30 (audit V-13 / roadmap #42): Odds (research) and
     # Research (library) ship OPEN — Line Shopping, Game Lines, Players and
     # Weather sat behind closed 10px labels. My Book and Proof still fold.
@@ -427,18 +429,17 @@ def test_the_rail_belongs_to_home_and_the_pick_boards_only():
     assert APP.count("syncRail") >= 3          # def + switchView + boot
 
 
-def test_high_confidence_mode_is_a_real_filter():
-    """The render's toggle, wired to the journal's own grade bands: ON
-    filters the board and the Top Picks strip to quality >= 80 (A/A+) —
-    inside passesFilters, the ONE gate every card list already passes
-    through, so no list can forget to respect it."""
+def test_high_confidence_mode_is_gone():
+    """The render's toggle, wired to the journal's grade bands inside
+    passesFilters, left on 2026-10-31 (Ethan: "remove the high confidence
+    button ... because we have most likely picks that are ranked"). A
+    stored switch must not keep narrowing a reader's board with no switch
+    left to turn it off."""
     fn = APP[APP.index("function passesFilters("):]
     fn = fn[:fn.index("\n}")]
-    assert "hcmOn()" in fn and "80" in fn
-    # The Top Picks strip half of this claim RETIRED 2026-08-31 with the
-    # strip itself — every remaining card list flows through
-    # passesFilters, which is the one gate asserted above.
-    assert 'role="switch"' in HTML                 # a switch, announced as one
+    assert "hcmOn()" not in fn and "quality || 0) < 80" not in fn
+    assert 'id="hcm-toggle"' not in HTML and 'id="sb-hcm"' not in HTML
+    assert "HCM_KEY" not in APP and "function initHcm" not in APP
 
 
 def test_glow_and_gradients_go_through_the_tokens():

@@ -102,9 +102,11 @@ def test_the_dialog_is_a_dialog_that_closes_every_way_and_remembers():
 
 
 def test_it_boots_after_the_slip_and_settings_can_show_it_again():
+    # It booted right after the slip's first draw; the slip left on
+    # 2026-10-31, and it boots after the inbox's poll is armed instead.
     i = APP.index("(function initNewLook() {")
     boot = APP[i:APP.index("\n})();", i)]
-    assert "slipRender();\n  tourMaybe();" in boot
+    assert "}, 120000);\n  tourMaybe();" in boot
     # A row of the settings list since 2026-10-25 (account.js setListHTML).
     sh = _fn("setListHTML")
     assert 'title: "Show me around"' in sh and "attrs: 'data-set-tour=\"1\"'" in sh

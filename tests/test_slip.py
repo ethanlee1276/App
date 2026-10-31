@@ -1,21 +1,21 @@
-"""The parlay slip and the Messages inbox.
+"""The Messages inbox, and what the parlay slip left behind.
 
 Ethan, 2026-08-25: *"there also should be a way for players to select
 props and put them in a parlay so they can parlay props together so they
-can send it to there friends. we will calculate odds for the parlays as
-well … they should show up how it works on sports books … and they show
-up on the bottom"* — and — *"there should be a message button at the top
-with an inbox with the messages from friends."*
+can send it to there friends"* — and — *"there should be a message button
+at the top with an inbox with the messages from friends."*
 
-The structural rules pinned here:
+THE SLIP LEFT on 2026-10-31 (Ethan: "get rid of the parlay button and the
+parlay feature ... make the parlay feature an actual button"): no + Parlay
+on the cards, no dock, no Parlay Mode. The Parlays page builds two-leg
+tickets from our own picks instead (engine/twoleg). What stays pinned here:
 
-  * THE SLIP IS LOCAL, THE SHARE IS A POINTER. The reader's own slip
-    holds sides, lines and prices — read off a board their entitlement
-    served. What leaves for a friend is player+market per leg, nothing
-    else, and the send site proves it by construction.
-  * THE ODDS ARE A BOOK'S ARITHMETIC, SAID PLAINLY. Decimal products,
-    independence assumed, with the assumption stated on the panel —
-    never borrowed authority from the engine's correlation-priced SGPs.
+  * nothing of the slip is left to draw a dead control;
+  * a parlay a friend sent before that still reads in Messages, each leg a
+    door to its page, and its legs travel as identity only;
+  * the game-row helpers the slip used to own still answer for the cards
+    and the game page that ask them;
+  * Messages: the view, the envelope and its honest badge, seen-after-read.
 
 Run directly: `python3 tests/test_slip.py`
 """
@@ -45,87 +45,25 @@ def _fn(marker):
 
 # --- the slip ----------------------------------------------------------------
 
-def test_the_slip_survives_a_reload_and_holds_one_board():
-    assert 'SLIP_KEY = "qb_slip_v1"' in APP
-    body = _fn("function slipToggle(r)")
-    assert "s.sport !== state.sport" in body, \
-        "legs from two different boards would build an unsendable ticket"
-    assert "SLIP_MAX" in body
+def test_nothing_of_the_slip_is_left_to_draw_a_dead_control():
+    assert 'id="qb-slip"' not in HTML, "the dock is back"
+    assert "#qb-slip" not in CSS and ".slip-chip" not in CSS
+    for gone in ("function slipToggle(", "function slipRender(", "function slipChip(",
+                 "SLIP_KEY", "data-slip="):
+        assert gone not in APP, gone
 
 
-def test_the_ceiling_is_three_legs():
-    """Was eight. Ethan, 2026-09-01, closing the QA audit's open question
-    on whether the reader's own slip follows the model's parlay rule:
-    "3 legs". The slip and the share must agree on the number."""
-    assert "const SLIP_MAX = 3;" in APP
-    src = _read("engine", "social.py")
-    assert "MAX_PARLAY_LEGS = 3" in src, \
-        "the slip and the share disagree about how long a ticket can be"
-
-
-def test_the_combined_price_is_a_decimal_product():
-    """What every book does to an uncorrelated ticket — and the panel
-    says so instead of borrowing the SGP engine's authority."""
-    body = _fn("function slipAmerican()")
-    assert "mbDecimal(l.odds)" in body and "dec *=" in body
-    assert "Math.round((dec - 1) * 100)" in body
-    i = APP.index("function slipRender()")
-    panel = APP[i:i + 4000]
-    assert "same-game\n        correlation is not priced here" in panel or \
-           "correlation is not priced here" in panel, \
-        "the independence assumption is no longer stated"
-
-
-def test_what_leaves_the_device_is_identity_only():
-    """The send handler maps each leg to exactly {player, market} before
-    the POST — the sides, lines and prices the local slip holds never
-    enter the request body."""
-    i = APP.index('fetch("/api/social/send-parlay"')
-    body = APP[i - 600:i + 600]
-    assert ("s.legs.map((l) => ({ player: l.player || l.matchup || \"\",\n"
-            "                                     market: l.market }))") in body
-    for word in ("l.side", "l.line", "l.odds", "l.label"):
-        # l.label carries the game leg's line ("JAX Over 24") — the
-        # matchup is the identity that travels, never the label.
-        assert word not in body, f"{word} rides in the parlay share"
-
-
-def test_the_dock_exists_and_sits_above_the_phone_tab_bar():
-    assert '<div id="qb-slip" hidden></div>' in HTML
-    assert HTML.index('id="qb-slip"') < HTML.index('class="tabbar"'), \
-        "the dock markup should precede the tab bar it docks above"
-    assert "#qb-slip { position: fixed" in CSS
-    # Less the iPhone app's lowered capsule (tests/test_the_iphone_tab_bar_sits_low.py).
-    assert "#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop)); }" in CSS, \
-        "on a phone the slip would hide underneath the tab bar"
-
-
-def test_an_empty_slip_shows_no_bar():
-    body = _fn("function slipRender()")
-    assert "host.hidden = true" in body
-
-
-def test_game_bets_parlay_too_and_their_label_never_travels():
-    """Ethan, 2026-08-25: "we need too be able too parlays all props and
-    picks together, not just player props. It won't let me put the game
-    prop in a parlay." A game leg is keyed by gameBetId — the same
-    identity the share-card and door handlers use — and what leaves for
-    a friend is the MATCHUP, never the label, because the label carries
-    the line ("JAX Over 24") and a line is content."""
-    body = _fn("function slipToggle(r)")
-    assert "gameBetId(r)" in body, "game bets cannot enter the slip"
-    assert "gameBetSlipLabel(r)" in body
-    i = APP.index("const slipLegKey")
-    assert "l.gid ||" in APP[i:i + 200], "game legs lost their identity key"
-    assert "function findSlipRow(id)" in APP
-    chip = _fn("function slipChip(r)")
-    assert "gameBetOpenable(r)" in chip, "the chip still refuses game bets"
-    # The control reaches every game-bet surface that remains: the game
-    # page's nav carries its own, and every CARD goes through slipChip
-    # (asserted above). The second bespoke gameBetId site was the Top
-    # Picks strip, retired 2026-08-31 as a duplicate of best-bets.
-    assert APP.count('data-slip="${escapeAttr(gameBetId(') >= 1, \
-        "the game page lost its + Parlay control"
+def test_a_shared_parlay_still_reads_in_messages_and_travels_as_identity():
+    """Tickets friends sent before the slip left still arrive and still
+    read: each leg a door (shareDoorAttrs) to its page. The server keeps
+    taking a shared ticket's legs as player and market only."""
+    i = APP.index("const doors = isParlay")
+    doors = APP[i:i + 400]
+    assert "shareDoorAttrs(sh.sport, l.player" in doors
+    src = _read("server.py")
+    assert '"send-parlay"' in src
+    social = _read("engine", "social.py")
+    assert "MAX_PARLAY_LEGS = 3" in social
 
 
 def test_a_likelihood_game_row_is_read_as_a_game_row_not_a_player():
@@ -137,12 +75,8 @@ def test_a_likelihood_game_row_is_read_as_a_game_row_not_a_player():
     assert "const isGameRow = (r) =>" in APP
     i = APP.index("const isGameRow = (r) =>")
     assert 'r.kind === "game"' in APP[i:i + 200]
-    for marker in ("function slipToggle(r)", "function slipHas(r)",
-                   "function slipChip(r)"):
-        assert "isGameRow(r)" in _fn(marker), marker
-    i = APP.index("const slipRowId =")
-    assert "isGameRow(r)" in APP[i:i + 120]
-    assert "r.player ? slipLegKey(l" not in APP
+    # The cards still ask it (the slip that owned it left, 2026-10-31).
+    assert APP.count("isGameRow(r)") >= 2, "nothing asks the helper: is it dead, or did a branch go back to r.player?"
 
 
 def test_the_slip_finds_a_row_the_edge_board_never_published():
@@ -155,9 +89,8 @@ def test_the_slip_finds_a_row_the_edge_board_never_published():
     body = _fn("function findGameRow(id)")
     assert "d.game_bets" in body and "d.most_likely" in body
     assert 'g.kind === "game"' in body
-    assert "function findSlipRow(id)" in APP
-    assert "findProp(id) || findGameRow(id)" in APP
-    # The other two callers went through the same door.
+    # The share card and the game page go through the same door (the slip,
+    # its third caller, left on 2026-10-31).
     assert "findProp(b.dataset.card) || findGameRow(b.dataset.card)" in APP
     assert "const b = findGameRow(state.propId);" in APP
     assert APP.count("(d.game_bets || []).find((g) => gameBetId(g) === id)") <= 1, \
@@ -174,31 +107,6 @@ def test_the_paper_records_market_column_speaks_english():
     body = APP[i:APP.index("\n}", i)]
     assert "escapeHtml(marketWord(m))" in body
     assert "escapeHtml(m)}</span>" not in body
-
-
-def test_the_card_buttons_are_quiet_controls_not_green_blocks():
-    """Ethan, 2026-08-25, circling + Parlay and + My Bets: "The color of
-    the buttons along with the bulky of them loos bad." The pick is the
-    loud thing on a pick card; its controls wear the ghost-chip look."""
-    # Re-anchored 2026-08-31: .tp-add retired with the Top Picks strip.
-    # The surviving card control is slipChip's `.chip` + the page navs'
-    # `.btn.ghost` — both ghost looks by definition; the pin is that the
-    # slip chip never carries its own loud paint.
-    css = _read("web", "css", "styles.css")
-    i = css.index(".slip-chip.on")
-    rule = css[i:css.index("}", i)]
-    assert "var(--good)" not in rule, "the green came back"
-    assert "background" not in rule, "the chip grew a solid block"
-
-
-def test_the_add_control_reaches_the_places_picks_live():
-    # The prop page's nav, the big board card's chip row, and Top Picks.
-    assert APP.count("data-slip=") >= 3, \
-        "the add-to-slip control lost one of its surfaces"
-    i = APP.index("function slipChip(r)")
-    body = APP[i:APP.index("\n}", i)]
-    assert "r.odds == null" in body, \
-        "a prop with no price cannot be a parlay leg"
 
 
 # --- messages ----------------------------------------------------------------

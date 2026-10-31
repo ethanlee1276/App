@@ -2122,29 +2122,5 @@
   }
 
   // ── posting from the parlay slip ──────────────────────────────────────────
-  function slipPostStart(slot) {
-    slot.innerHTML = `<input class="fr-note fd-caption" maxlength="280"
-        placeholder="Say something about it (optional) — #tags and @handles work" aria-label="Caption">
-      <div class="fr-send-row"><button class="btn" id="slip-feed-go" type="button">Post</button></div>
-      <p class="set-note">It locks at kickoff and is graded on your profile automatically.</p>`;
-    const i = slot.querySelector("input"); if (i) i.focus();
-  }
-
-  async function slipPost(btn) {
-    const s = slipState();
-    const cap = (document.querySelector("#slip-send-slot .fd-caption") || {}).value || "";
-    btn.textContent = "Posting…";
-    const res = await api("post", { sport: s.sport, date: s.date, caption: cap,
-      legs: s.legs.map((l) => (l.gid ? { gid: l.gid }
-        : { player: l.player, market: l.market, side: l.side, line: l.line })) });
-    btn.textContent = "Post";
-    if (res.out.need_handle) { tfToast(res.out.error); switchView("account", true); return; }
-    if (!res.ok) { tfToast(res.out.error || "That did not post."); return; }
-    tfToast(res.out.already ? "Already on the feed." : "Posted to the feed.");
-    F.posts = []; F.rail = null;
-    slipReset();                       // the tray comes down; the post is the record now
-    location.hash = `#feed/post/${res.out.id}`;
-  }
-
-  window.QBSocial = { render, slipPostStart, slipPost, mountAccount, avatar, pickemPageHTML, profileHeaderHTML };
+  window.QBSocial = { render, mountAccount, avatar, pickemPageHTML, profileHeaderHTML };
 })();

@@ -283,11 +283,8 @@ function askNextHTML(t) {
 /* AN ANSWER YOU CAN ACT ON (2026-10-27; Ethan: "look at other apps that use
    AI betting ... and do it better"). FanDuel's AceAI puts a bet on its slip
    and Action Network's Playbook pre-fills one; neither follows it once it
-   is placed. Under a card about tonight's player line, three buttons:
+   is placed. Under a card about tonight's player line, two buttons:
 
-     Add to slip  the leg the board's own slip chip adds (slipToggle), on
-                  the board it is on: the slip holds one board at a time, so
-                  an answer about another league's player leaves it off.
      Track it     a My Bets entry of one leg in the screenshot checker's shape
                   (src "slip", the leg in engine/slipgrade's words), so the
                   Live tab follows it, the box settles it off the box score
@@ -299,13 +296,8 @@ function askNextHTML(t) {
      Watch        the player as an Alerts watch: his line moving, a pick on
                   him posting (engine/alerts; on the phone where asked).
 
-   Each button says what is already done when the answer is drawn again: in
-   the slip, tracked, watched. */
-function askBetRow(b) {
-  return { player: b.player, market: b.market, market_label: b.market_label || b.market, side: b.side,
-           line: b.line, odds: b.odds, team: b.team || "", book: b.book || "", opponent: b.opponent || "",
-           game_date: b.game_date || "" };
-}
+   Each button says what is already done when the answer is drawn again:
+   tracked, watched. (Add to slip left with the parlay slip, 2026-10-31.) */
 function askBetName(b) {
   const side = String(b.side || "").toLowerCase();
   return `${b.player} ${side.charAt(0).toUpperCase()}${side.slice(1)} ${b.line} ${b.market_label || b.market}`;
@@ -373,8 +365,6 @@ function askActsHTML(b, kind = "") {
     alertsFetch().then(() => askActsPaint());
   }
   const tracked = mbLoad().find((x) => x && x.slip_key === askBetKey(b));
-  const slipOk = b.sport === state.sport && typeof slipToggle === "function";
-  const inSlip = slipOk && slipHas(askBetRow(b));
   const watching = askWatching(b.player);
   const priced = kind === "prices";
   const alerted = priced && askAlerted(b);
@@ -388,7 +378,6 @@ function askActsHTML(b, kind = "") {
         escapeHtml(b.market_label || b.market)}</span><span class="ask-acts-px"><b>${escapeHtml(askOdds(b.odds))}</b>${
         b.book ? ` ${escapeHtml(b.book)}` : ""}</span></div>
       <div class="ask-acts-row">
-        ${slipOk ? act("slip", inSlip, "ticket", "Add to slip", "In your slip", ` aria-pressed="${inSlip ? "true" : "false"}"`) : ""}
         ${act("track", !!tracked, "chart", "Track it", "In My Bets", `${tracked ? " disabled" : ""} aria-expanded="false"`)}
         ${priced ? act("alert", alerted, "bell", "Price alert", "Alert set", `${alerted ? " disabled" : ""} aria-expanded="false"`)
           : act("watch", watching, "bell", "Watch", "Watching", `${watching ? " disabled" : ""} aria-label="${
@@ -466,10 +455,7 @@ document.addEventListener("click", (e) => {
   try { b = JSON.parse(box.dataset.askBet || "null"); } catch (x) { b = null; }
   if (!b) return;
   const act = btn.dataset.askAct;
-  if (act === "slip") {
-    // The slip's pill appears now: measured afresh, it sits above the box.
-    if (b.sport === state.sport && slipToggle(askBetRow(b))) { askActsPaint(); askRoomSize(); }
-  } else if (act === "track" || act === "alert") {
+  if (act === "track" || act === "alert") {
     const form = box.querySelector(act === "track" ? ".ask-save" : ".ask-alert");
     form.hidden = !form.hidden;
     btn.setAttribute("aria-expanded", form.hidden ? "false" : "true");
@@ -603,12 +589,6 @@ function askRoomSize() {
   }
   const top = el.getBoundingClientRect().top + window.scrollY;
   el.style.height = `${Math.max(300, Math.floor(bottom - top - 8))}px`;
-  // Where the parlay slip's dock sits while the room is open: just above the composer.
-  const dock = el.querySelector(".ask-dock");
-  if (dock) {
-    document.documentElement.style.setProperty("--ask-foot",
-      `${Math.max(0, Math.round(window.innerHeight - dock.getBoundingClientRect().top))}px`);
-  }
   // A conversation opens on its newest message; the empty room on its title.
   const log = document.getElementById("ask-log");
   if (log) log.scrollTop = el.classList.contains("is-empty") ? 0 : log.scrollHeight;

@@ -104,9 +104,12 @@ def test_the_home_game_cards_drop_the_dial_on_a_phone():
 
 # --- Visual 3: one Share on the pick page -----------------------------------
 def test_the_pick_page_strip_is_four_buttons():
+    # Bet it (betItHTML), Share, Explain and Ask. "+ Parlay", the fourth
+    # written here, left with the slip on 2026-10-31, so three are literal.
     page = _fn("renderPropPage")
     strip = page[page.index('<div class="pp-actions">'):page.index('<div id="fr-send-slot">')]
-    assert strip.count("<button") == 4, strip
+    assert strip.count("<button") == 3 and "betItHTML(" in strip, strip
+    assert "data-slip=" not in strip
     assert ">Share</button>" in strip and "data-card=" not in strip and "shareBtn(" not in strip
     i = APP.index('const open = e.target.closest && e.target.closest("[data-send-pick]");')
     opener = APP[i:i + 1400]

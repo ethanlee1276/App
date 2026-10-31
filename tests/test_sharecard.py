@@ -121,36 +121,23 @@ def test_the_card_is_the_size_every_client_crops_to():
     assert "const CARD_W = 1200, CARD_H = 630;" in APP
 
 
-def test_the_parlay_ticket_draws_too():
-    """"Per pick/parlay" was the ask, and the first pass shipped only the
-    pick half. A ticket is a LIST, so it is its own drawing: the legs
-    stacked with sides and prices, the joint probability the chain
-    models, and the price a book has to beat — the ticket's whole
-    argument, and the number that makes the screenshot worth arguing
-    with."""
-    i = APP.index("async function shareParlayCanvas(t)")
-    body = APP[i:APP.index("\nasync function shareParlay(", i)]
-    assert "t.modeled_joint" in body and "t.required_american" in body
-    assert "t.legs.slice(0, 4)" in body, "a 6-leg ticket would run off the card"
-    assert "…and" in body, "the overflow legs vanish silently"
-    assert "_cardImage" in body and "logo-qb.png" in body
-    assert "cardStage(x)" in body and "cardFooter(x)" in body, \
-        "the ticket left the shared chrome — the two cards will drift"
-    # No faces by design: two headshots at this size are two thumbnails
-    # fighting, and the legs are the point.
-    assert "headshot" not in body
-    assert 'data-parlay-card="${escapeAttr(String(t.rank))}"' in APP, \
-        "no button on the ticket"
+def test_the_old_parlay_tickets_card_left_with_its_button():
+    """"Per pick/parlay" was the ask (2026-08-25), and the old screen's
+    tickets drew their own card. Those tickets left on 2026-10-31 (Ethan:
+    "get rid of the parlay button and the parlay feature"), and a card
+    drawer with no button to open it is dead code, so it left with them.
+    The pick card stays."""
+    assert "data-parlay-card=" not in APP, "a button for a card that no longer draws"
+    assert "function shareParlay" not in APP
 
 
 def test_both_cards_leave_through_one_export_path():
     """The share-sheet/download/revoke rules are where the
-    browser-specific bugs live, and two copies of them drift."""
+    browser-specific bugs live, and two copies of them drift. (The parlay
+    ticket's card, the second caller, left on 2026-10-31.)"""
     assert "function exportCard(canvas, name, done)" in APP
     i = APP.index("async function shareCard(r, btn)")
     assert "exportCard(" in APP[i:APP.index("\n}", i) + 800]
-    j = APP.index("async function shareParlay(t, btn)")
-    assert "exportCard(" in APP[j:APP.index("\n}", j) + 800]
     # …and the rules live only in the one function now.
     assert APP.count("navigator.canShare && navigator.canShare({ files: [file] })") == 1
 

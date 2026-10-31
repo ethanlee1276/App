@@ -139,10 +139,9 @@ def test_the_wiring_is_passive_owned_and_scoped_to_boards():
     assert "#ptr.ready, #ptr.busy" in CSS
 
 
-def test_the_slip_and_the_tracker_buzz_where_they_should():
-    st = _fn("slipToggle")
-    assert st.count('buzz("tap");') == 1
-    assert st.index("s.legs.splice(i, 1);") < st.index('buzz("tap");'), "a removal is silent; the add buzzes"
+def test_the_tracker_buzzes_where_it_should():
+    # (The slip's add buzzed too; the slip left on 2026-10-31.)
+    assert "function slipToggle" not in APP
     # THE TRACKER BUZZES FIRST THING, over every row it is about to draw.
     # Anchored on the CALL rather than on one spelling of its argument:
     # 2026-09-16 added the Pick of the Day's own list to it, and a test

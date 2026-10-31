@@ -97,7 +97,9 @@ def test_the_door_carries_the_bet_and_every_path_passes_it_on():
     assert "state.propBet = JSON.parse(opts.bet)" in _fn("openProp")
     page = _fn("renderPropPage")
     assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in page
-    assert "!(lk && lk.bet)" in page, "no parlay button on a bet already placed"
+    # (The "+ Parlay" button this page hid on a bet already placed left with
+    # the slip on 2026-10-31, so there is no button left to hide.)
+    assert "data-slip=" not in page, "a parlay button is back on the pick page"
     assert 'lk && lk.bet ? "" : shoppedLineNote(v)' in page
 
 

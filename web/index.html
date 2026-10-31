@@ -403,6 +403,12 @@
         <button class="nav-btn sb-item" data-view="longshots" id="longshots-tab" data-hint="plus-money darts, sized like lottery tickets">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l1.8 4.2L18 8l-4.2 1.8L12 14l-1.8-4.2L6 8l4.2-1.8z"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"/></svg>
           Long Shots</button>
+        <!-- PARLAYS, A PAGE AGAIN (Ethan, 2026-10-31: "make the parlay feature
+             an actual button"): two-leg tickets from our Edge and Most Likely
+             picks, same-game and two-game (engine/twoleg). -->
+        <button class="nav-btn sb-item" data-view="parlays" id="parlays-tab" data-hint="two-leg parlays from our picks">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 2v4H4v-4a2 2 0 0 0 0-2z"/><path d="M14 7v10" stroke-dasharray="2 2"/></svg>
+          Parlays</button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="where our number beats the price — the picks we stake">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
           Edge Picks</button>
@@ -594,50 +600,6 @@
           About</button>
       </div>
     </div>
-
-    <!-- FILTERS, FOLDED (2026-09-23, Ethan's product audit, item 10):
-         "Those feel like internal application controls … settings
-         leaking into the landing experience." The two switches were
-         two large cards at the foot of every page's menu. They fold
-         under one heading now, shut by default, and the heading
-         says how many are on (paintFilterCount) — so a filter that
-         is hiding picks can never be out of sight. On phones they
-         stay in the More sheet (moreSheetFoot), unchanged. -->
-    <button class="sb-label sb-fold sb-filters-head" data-head="filters" data-fold="filters"
-            type="button" aria-expanded="false">Filters
-      <span class="sb-filters-n" id="sb-filters-n" hidden></span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-    </button>
-    <div class="sb-group sb-filters" data-group="filters" hidden>
-    <!-- High Confidence Mode — a REAL filter, not a marketing toggle: on,
-         the board and Top Picks show A-grade picks only (quality ≥ 80,
-         the same bands the journal grades by). -->
-    <div class="sb-hcm" id="sb-hcm">
-      <div class="sb-hcm-words">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.2-8 11-4.6-1.8-8-6-8-11V5z"/><path d="M12 8v5M12 16.2v.1"/></svg>
-        <div><b>High Confidence</b><span>A-grade picks only</span></div>
-      </div>
-      <button class="sb-hcm-switch" id="hcm-toggle" role="switch" aria-checked="false">
-        <span class="knob" aria-hidden="true"></span><span class="sb-hcm-state">Off</span>
-      </button>
-    </div>
-
-    <!-- Parlay Mode — the render's second toggle (Ethan, 2026-08-11:
-         "ditch the parlay zone screen but keep the same rules"). The
-         page is gone; the SAME screened tickets — correlation-priced,
-         one per slate, journaled on the Record page — appear on Home
-         while this is on. The rules never moved: renderParlays and the
-         engine's screen are untouched. -->
-    <div class="sb-hcm" id="sb-pz">
-      <div class="sb-hcm-words">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 2v4H4v-4a2 2 0 0 0 0-2z"/><path d="M14 7v10" stroke-dasharray="2 2"/></svg>
-        <div><b>Parlay Mode</b><span>2-leg tickets, screened</span></div>
-      </div>
-      <button class="sb-hcm-switch" id="pz-toggle" role="switch" aria-checked="false">
-        <span class="knob" aria-hidden="true"></span><span class="sb-hcm-state">Off</span>
-      </button>
-    </div>
-    </div><!-- /.sb-filters -->
 
     <!-- The four footer chips (Why Us / Method / Status / About) moved
          up into the Proof group as full rows, 2026-08-25 — six
@@ -869,23 +831,6 @@
           ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg></button>
       </div>
 
-
-      <div id="parlay-mode" hidden>
-        <div class="section-title" id="parlays-title">Parlay tickets
-          <span class="sub" id="parlays-sub">— screened, not built; the old Parlay Zone’s
-          exact rules (correlation-priced, one ticket per slate, journaled on the Record
-          page). Almost always the answer is no.</span>
-        </div>
-        <div id="parlays-body"></div>
-
-        <div class="section-title" id="likely-parlays-title">Most Likely parlay tickets
-          <span class="sub">— the same screen, run over the Most Likely board instead of
-          the edge board. Those legs are ranked leans rather than bets, so a ticket here is
-          PAPER: never staked, and kept in its own column of the Record page so the two
-          never blend.</span>
-        </div>
-        <div id="likely-parlays-body"></div>
-      </div>
 
       <!-- MOST LIKELY, ON THE PAGE PEOPLE ACTUALLY LAND ON.
            Ethan, 2026-08-30: "why are we not showing any of those bets on
@@ -1366,11 +1311,15 @@
       <div class="cards" id="longshots-board"></div>
     </section>
 
-    <!-- Parlay Zone. A screen, not a builder: the doctrine is that "no
-         qualifying parlay" is the normal output, so the page is designed
-         around saying that well rather than around a card that rarely
-         exists. The clash ledger below the ticket is the real content —
-         it is the record of which props were fighting each other. -->
+    <!-- Parlays: two legs from our own picks, an Edge section and a Most
+         Likely section, each same-game then two-game (renderParlayPage). -->
+    <section class="view" id="view-parlays">
+      <div class="section-title" id="parlays-title">Parlays
+        <span class="sub">— two legs, from our picks</span>
+      </div>
+      <div id="parlays-body"></div>
+    </section>
+
     <!-- Futures. The one page here that is about months rather than tonight,
          and it has to say so twice: these numbers come from simulating the
          rest of the season rather than from reading a price, and in the
@@ -1526,10 +1475,6 @@
        untouched: desktop keeps it, and the phone hamburger still opens
        it. The sheet is built from the sidebar's own buttons at load, so
        the two can never disagree about what exists. -->
-  <!-- The parlay slip's dock — the sportsbook pattern: picks collect in
-       a bar pinned to the bottom of the screen and expand into the
-       ticket. Filled and shown by app.js; empty slip, no bar. -->
-  <div id="qb-slip" hidden></div>
   <!-- The riding tray (v3, 2026-09-22): our bet slip. A floating pill
        above the tab bar on phones while journaled bets are in play,
        filled by app.js from the tracker. On the dashboard only, with
@@ -1586,9 +1531,9 @@
          control in a top bar that had five. It proxies #theme-toggle,
          which stays the one place the theme is switched. -->
     <div class="more-foot">
-      <!-- The drawer footer's switches and social links, as proxies
-           (moreSheetFoot): the phone has one menu now. -->
-      <div class="more-pills" id="more-switches"></div>
+      <!-- The drawer footer's social links, as proxies (moreSheetFoot):
+           the phone has one menu now. (Its switches, High Confidence and
+           Parlay Mode, left on 2026-10-31.) -->
       <div class="more-pills" id="more-social"></div>
       <button type="button" class="more-pill" id="more-theme"></button>
       <!-- The tour and the glossary, offered here on phones (audit V-15):

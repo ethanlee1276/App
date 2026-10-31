@@ -517,6 +517,70 @@ You do not build parlays. You **screen** them. A candidate ticket arrives only a
 
 ---
 
+## 15) THE TWO-LEG PARLAYS FROM OUR OWN PICKS (2026-10-31)
+
+Ethan, 2026-10-31: "get rid of the parlay button and the parlay feature ... make the parlay
+feature an actual button ... two-leg parlays ... picked from the most likely bet and the edge
+bets ... a section for the edge bet parlays and most likely bet parlays ... picks that
+correlate with each other or picks that just make sense ... one pick on one team, one pick on
+the other ... two picks from different games ... see what would have happened if we did
+parlay our past picks together and record that."
+
+**What replaced the screen on the boards.** The seven-gate screen (§2) no longer publishes.
+Its relation table (`parlays.relate`) and its joint (`parlays.joint_two`) do the pairing for
+`engine/twoleg`, which every board build calls through `parlays.attach` for the NFL, college,
+the NBA and MLB. The board carries `two_leg`, the Parlays page draws it, and Parlay Mode, the
+card buttons, the do-it-yourself slip and the old screen's tickets are gone.
+
+**The pairs.** Two pools, never mixed: two Edge picks (staked kind only, nothing past +130,
+§0's rule that a leg must be a bet on its own), or two Most Likely picks. Within a pool:
+
+| Kind | When | Chance both hit |
+|---|---|---|
+| Same game, same team | `relate` does not kill or call it a duplicate, and ρ ≥ +0.10 (they rise together) | `joint_two` at ρ |
+| Same game, one pick on each team | not killed or duplicate, ρ ≥ −0.05 | `joint_two` at ρ |
+| Two games | always | the product |
+
+Each pick is used once per pool, two tickets of each kind at most. Edge tickets rank by what
+they return at the price and only a positive return posts; Most Likely tickets rank by the
+chance both hit.
+
+**The price.** No feed we ingest quotes a parlay, so the record grades at a stated price: two
+games at the two prices multiplied, 3% under that when the legs sit at different books; a
+same-game pair at 9.5% under the product, the middle of §1.2's 4–15% same-game tax. The card
+names the basis.
+
+**The money (this changes §13).** A two-leg parlay does what its legs do, about twice: at
+one unit, per-ticket ROI is close to the per-leg ROI times two plus its square. So a ticket is
+staked, at half a unit, only when both legs are picks the stake rule stakes (engine/stakeplan
+v4); every other ticket is tracked at a one-unit notional. §10.2 holds: in a drawdown every
+ticket is tracked.
+
+**The record.** `parlayledger.log_twoleg` journals every posted ticket (sources `two_edge`,
+`two_likely`) and grades it off its legs' own results in the singles journal;
+`report_twoleg` gives each pool's record by kind and league, and the units really staked.
+`twoleg.backtest` pairs every graded day since the record's epoch the same way and grades it
+against the same picks bet singly; the Record page shows both, and `tools/parlay_study.py`
+prints the backtest with one, two and three tickets a day and the record's two halves.
+
+**What the receipts said before it shipped** (2026-10-31, `tools/parlay_study.py` on the
+public receipts, 39,537 rows). The receipts carry no team, so every pair there is a two-game
+pair; the box's run, with the journal's teams and the schedule, adds the same-game pairs. The
+top three a day, by pool: Edge +7.2% over 190 parlays (the same picks as singles −0.7%), Most
+Likely +4.0% over 297 (singles +1.5%). Two a day: Edge +16.1% over 135, Most Likely +10.2% over
+200, and more units than three in both pools, so the board posts two of each kind. By league,
+MLB's Most Likely pairs lost (−6.7% over 149, singles −1.1%). By half: before 10-15, three a
+day were near even (Edge +3.1%, Most Likely −1.8%); from 10-15 they made +16.6% and +13.4%.
+These are hundreds of tickets, not thousands, and most of the gain is the last two weeks.
+
+Pairing only multiplies what the picks already do: a Most Likely pick at −250 must hit 71% to
+break even, and a pair of picks that pay the juice pays it twice. Ranking the pairs is what
+helped here: the first pair of a day did better than the second and the third. That is why the
+stake follows the singles' rule and not the hit rate, and why the record keeps every ticket
+apart until it has enough to say.
+
+---
+
 ## APPENDIX — Calibration backlog
 
 These correlation magnitudes need fitting against your own play-by-play history before they carry real weight. Everything marked ⓢ has a direction stated in your engines; the ρ values are professional estimates, not measured constants.

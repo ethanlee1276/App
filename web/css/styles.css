@@ -1597,188 +1597,16 @@ svg[data-scrub] { touch-action: pan-y; }
 .prof-vs .vs-out td.num { font-weight: 600; white-space: normal; }
 
 
-/* ---------------- Parlay Zone ----------------
-   Night Form: no shadows, no gradients, square corners, rules instead of
-   fills. The page's hierarchy is deliberate and inverted from every other
-   board on the site — the VERDICT is the hero, because on most nights the
-   verdict is the whole page, and a "no" that whispers reads as an error. */
-.pz-doctrine {
-  font-size: var(--fs-md); color: var(--text-dim); line-height: var(--lh-body);
-  max-width: var(--measure-tight); padding: 0 0 14px; margin: 2px 0 0;
-  border-bottom: var(--hairline) solid var(--border-soft);
-}
-.pz-verdict {
-  display: flex; align-items: baseline; gap: 10px;
-  font-size: var(--fs-2xl); font-weight: 700; line-height: var(--lh-tight);
-  padding: 18px 0 16px; margin: 0 0 4px;
-  border-bottom: 3px solid transparent;
-}
-.pz-verdict.pz-no { color: var(--text); }
-.pz-verdict.pz-yes { color: var(--good); }
-.pz-verdict .pz-mark { flex: 0 0 auto; transform: translateY(1px); }
-.pz-probation, .pz-note {
-  display: flex; gap: 9px; align-items: flex-start;
-  font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-body);
-  max-width: var(--measure-wide); padding: 12px 0; border-bottom: var(--hairline) solid var(--border-soft);
-}
-.pz-probation .pz-mark, .pz-risk .pz-mark { flex: 0 0 auto; margin-top: 2px; }
-/* The structural note answers the verdict directly above it, so it reads
-   at full text weight rather than as the dimmed footnotes at the bottom. */
-.pz-note.pz-structural { color: var(--text); }
-.pz-note.pz-structural .pz-mark { flex: 0 0 auto; margin-top: 2px; color: var(--brand-2); }
-.pz-census {
-  font-size: var(--fs-xs); color: var(--text-mute); padding: 14px 0 4px;
-  letter-spacing: .2px;
-}
-
-.pz-ticket { padding: 18px; margin: 16px 0; --grade-color: var(--text-dim); }
-.pz-ticket.pz-miss { --grade-color: var(--text-faint); opacity: .92; }
-.pz-ticket .card-head { margin-bottom: 12px; }
-
-/* The legs read as an agate block: a fixed grid so the numbers line up in
-   columns down the ticket, which is how a bettor scans a slip. */
-.pz-legs { list-style: none; margin: 0 0 6px; padding: 0; }
-.pz-legs li {
-  display: grid; gap: 3px 16px; align-items: baseline;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
-  padding: 10px 0; border-top: var(--hairline) solid var(--border-soft);
-  font-size: var(--fs-sm);
-}
-.pz-legs .pz-leg-name { font-weight: 700; }
-.pz-legs .pz-leg-mkt { color: var(--text-dim); }
-.pz-legs .pz-leg-nums {
-  text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim);
-  white-space: nowrap;
-}
-.pz-legs .pz-leg-nums i { color: var(--text-faint); font-style: normal; padding: 0 2px; }
-
-/* Correlation reads as a two-line block per pair, not a table. The
-   mechanism sentence is the point of the section and a table column
-   squeezed it into a four-word-wide gutter on the phone. */
-.pz-pairs, .pz-ledger { list-style: none; margin: 0; padding: 0; }
-.pz-pairs li, .pz-ledger li {
-  padding: 10px 0; border-top: var(--hairline) solid var(--border-soft);
-}
-.pz-pairs li:first-child, .pz-ledger li:first-child { border-top: 0; padding-top: 4px; }
-.pz-pair-head {
-  display: flex; flex-wrap: wrap; gap: 6px 16px;
-  justify-content: space-between; align-items: baseline;
-  font-size: var(--fs-sm);
-}
-.pz-pair-who { font-weight: 700; }
-.pz-pair-rho { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pz-pair-rho i { color: var(--text-faint); font-style: normal; font-weight: 400; }
-.pz-pair-why, .pz-kill-why {
-  font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-body);
-  max-width: var(--measure-wide); margin-top: 3px;
-}
-.pz-kill-who { font-size: var(--fs-sm); font-weight: 700; }
-
-.pz-sub {
-  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .6px;
-  font-weight: 600; color: var(--text-mute);
-  margin: 18px 0 6px; padding-bottom: 4px;
-  border-bottom: var(--hairline) solid var(--border-soft);
-}
-.pz-fine {
-  font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-body);
-  max-width: var(--measure-wide); margin: 8px 0 2px;
-}
-.pz-clash { font-size: var(--fs-sm); color: var(--text-dim); padding: 2px 0 4px; }
-.pz-clash .ic { color: var(--good); vertical-align: -1px; margin-right: 5px; }
-
-.pz-joint, .pz-price { margin-top: 8px; }
-.pz-short { font-size: var(--fs-2xs); color: var(--text-mute); margin-top: 3px;
-  letter-spacing: .3px; }
-.pz-rank { font-family: var(--font-mono); color: var(--text-mute);
-  font-weight: 400; margin-right: 9px; }
-.pz-rank-title { margin-top: 24px; }
-.chip.pz-g-play { color: var(--good); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
-.chip.pz-g-marginal { color: var(--brand-2); border-color: transparent; background-color: color-mix(in oklab, currentColor 12%, transparent); }
-.chip.pz-g-short { color: var(--text-mute); }
-.pz-ticket:has(.pz-g-play) { --grade-color: var(--good); }
-.pz-ticket:has(.pz-g-marginal) { --grade-color: var(--brand-2); }
-.pz-runners-title { margin-top: 22px; }
-.pz-runners { margin: 0; padding: 0; }
-/* Each ranked ticket is its whole card, folded behind its summary row. The
-   summary keeps the row's exact layout so opening one does not move the
-   numbers a reader was comparing. */
-.pz-runner > summary {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px;
-  padding: 11px 0; border-top: var(--hairline) solid var(--border-soft);
-  font-size: var(--fs-sm); cursor: pointer; list-style: none;
-}
-.pz-runner:first-child > summary { border-top: 0; }
-.pz-runner > summary::-webkit-details-marker { display: none; }
-/* The affordance, drawn rather than relying on the native triangle, which
-   is inconsistent across engines and cannot be coloured. */
-.pz-runner > summary::after {
-  content: ""; flex: 0 0 auto; width: 7px; height: 7px; margin-left: auto;
-  border-right: 1.6px solid var(--text-mute);
-  border-bottom: 1.6px solid var(--text-mute);
-  transform: rotate(45deg) translate(-2px, -2px);
-  transition: transform var(--dur-base) var(--ease-out);
-}
-.pz-runner[open] > summary::after { transform: rotate(-135deg) translate(-3px, -3px); }
-.pz-runner > summary:hover { color: var(--text); }
-/* Square, like every other focus ring here — the design system has no
-   rounded containers and a focus state is not an exception to it. */
-.pz-runner > summary:focus-visible {
-  outline: 2px solid var(--brand); outline-offset: 3px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .pz-runner > summary::after { transition: none; }
-}
-/* A folded card carries the ticket's own margins, so trim the doubling. */
-.pz-runner > .pz-ticket { margin-top: 4px; }
-.pz-run-legs { flex: 1 1 22ch; min-width: 0; font-weight: 700; }
-.pz-run-legs i { color: var(--text-dim); font-style: normal; font-weight: 400; }
-.pz-run-num { color: var(--text-dim); font-variant-numeric: tabular-nums;
-  white-space: nowrap; }
-.pz-run-num.neg { color: var(--bad); }
-/* A ticket that cleared every gate and lost only to the one-per-slate cap.
-   It sits below the play because it is not tonight's play, but it is not a
-   near-miss either — the rail marks it as a ticket that passed, and its
-   reason gets a full line rather than a column. */
-.pz-runner.pz-demoted > summary {
-  border-left: 2px solid transparent; padding-left: 12px;
-  --tone: var(--good);
-  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
-  background-image: var(--grad-tone);
-}
-.pz-run-why {
-  color: var(--text-mute); font-size: var(--fs-xs);
-  line-height: var(--lh-body); max-width: var(--measure-wide); padding: 8px 0 0;
-}
-@media (max-width: 640px) { .pz-runner > summary { gap: 3px 14px; } }
-.pz-edge { font-size: var(--fs-sm); line-height: var(--lh-body); max-width: var(--measure-wide);
-  margin: 10px 0 0; color: var(--text-dim); }
-.pz-edge.pos b { color: var(--text); }
-.pz-edge.neg b { color: var(--bad); }
-.pz-dominance, .pz-verdict-line, .pz-risk, .pz-stake {
-  font-size: var(--fs-sm); line-height: var(--lh-body); max-width: var(--measure-wide); margin: 8px 0 0;
-}
-.pz-verdict-line {
-  font-size: var(--fs-md); font-weight: 600; color: var(--text);
-  border-left: 3px solid transparent; padding: 8px 0 8px 12px;
-  margin: 16px 0 0;
-  --tone: var(--text-dim);
-  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
-  background-image: var(--grad-tone);
-}
-.pz-risk { display: flex; gap: 9px; color: var(--text-dim); }
-.pz-stake { color: var(--text-mute); font-size: var(--fs-xs); }
-.pz-ledger-title { margin-top: 26px; }
-
-/* Phone: the leg grid cannot hold five columns at 390px, so it folds to a
-   name/market row with the numbers beneath it rather than shrinking the
-   type past reading size. */
-@media (max-width: 640px) {
-  .pz-verdict { font-size: var(--fs-xl); }
-  .pz-legs li { grid-template-columns: 1fr; }
-  .pz-legs .pz-leg-nums { text-align: left; white-space: normal; }
-  .pz-pair-head { flex-direction: column; gap: 2px; }
-}
+/* ---------------- Parlays (app.js renderParlayPage) ----------------
+   Two legs from our own picks: the kind and staked-or-tracked over the
+   legs, the chance both hit and the price under them, then why. */
+.tl-card { padding: 12px 14px; margin: 0 0 12px; }
+.tl-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.tl-leg { display: flex; gap: 10px; align-items: center; padding: 6px 0; }
+.tl-what { display: flex; flex-direction: column; min-width: 0; }
+.tl-what span { color: var(--text-mute); font-size: var(--fs-sm); }
+.tl-foot { margin-top: 6px; }
+.tl-why, .tl-rec { margin: 4px 0 10px; color: var(--text-mute); }
 
 .empty { color: var(--text-dim); text-align: center; padding: 50px; grid-column: 1 / -1; }
 
@@ -3577,51 +3405,6 @@ body.msg-thread-open .footer { display: none; }
   text-align: center; pointer-events: none; }
 #nav-msg { position: relative; }
 
-/* --- the parlay slip: the sportsbook dock ------------------------- */
-#qb-slip { position: fixed; left: 0; right: 0; bottom: 0; z-index: 55;
-  display: flex; justify-content: center; padding: 0 10px
-  env(safe-area-inset-bottom); pointer-events: none; }
-#qb-slip > * { pointer-events: auto; }
-.slip-bar { display: inline-flex; align-items: center; gap: 10px;
-  margin-bottom: 10px; padding: 10px 18px; border-radius: 999px;
-  border: var(--hairline) solid transparent; background: color-mix(in oklab, var(--brand) 12%, var(--panel));
-  color: var(--text); font: inherit; font-size: var(--fs-sm);
-  font-weight: 700; cursor: pointer;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
-.slip-n { display: grid; place-items: center; min-width: 22px; height: 22px;
-  border-radius: 999px; background: var(--brand); color: var(--ink-warm);
-  font-size: var(--fs-xs); font-weight: 800; }
-.slip-price { color: var(--brand); font-variant-numeric: tabular-nums; }
-.slip-open-hint { color: var(--text-mute); display: grid; }
-.slip-panel { width: min(560px, 100%); margin-bottom: 10px;
-  border: var(--hairline) solid transparent; border-radius: var(--radius-lg);
-  background: var(--panel); box-shadow: 0 10px 34px rgba(0, 0, 0, .5);
-  padding: 12px 14px; max-height: 70vh; overflow-y: auto; }
-.slip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.slip-head b { flex: 1; font-size: var(--fs-sm); }
-.slip-min { padding: 4px 10px; font-size: var(--fs-2xs); }
-.slip-leg { display: flex; align-items: center; gap: 10px; padding: 8px 0;
-  border-top: var(--hairline) solid var(--border-soft); }
-.slip-leg-mark { flex-shrink: 0; display: grid; }
-.slip-leg-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.slip-leg-who b { font-size: var(--fs-sm); }
-.slip-leg-who span { color: var(--text-dim); font-size: var(--fs-xs);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.slip-leg-odds { font-weight: 700; font-variant-numeric: tabular-nums;
-  font-size: var(--fs-sm); }
-.slip-x { display: grid; place-items: center; width: 26px; height: 26px;
-  border: 0; border-radius: 999px; background: none; color: var(--text-mute);
-  cursor: pointer; }
-.slip-x:hover { color: var(--bad); background: var(--panel-3); }
-.slip-total { display: flex; flex-direction: column; gap: 2px; padding: 10px 0 8px;
-  border-top: var(--hairline) solid var(--border); font-size: var(--fs-sm); }
-.slip-total b { color: var(--brand); font-variant-numeric: tabular-nums; }
-.slip-send { display: flex; flex-direction: column; gap: 8px; }
-.slip-chip.on { border-color: transparent; color: var(--brand); }
-@media (max-width: 720px) {
-  /* Above the tab bar, not under it — the dock is the point. */
-  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop)); }
-}
 
 /* The game page's cards follow `.cards` (left-aligned, filling the row);
    the centred lone card this rule used to make sat off its heading. */
@@ -3860,11 +3643,8 @@ body.pk-open { overflow: hidden; }
    is measured from the real edge. */
 #ffd-overlay, #pk-overlay, #tour-overlay { bottom: calc(-1 * var(--vgap)); }
 @media (max-width: 720px) {
-  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop) - var(--vgap)); }
   /* The bar in the Duo's side strip ("THE IPHONE DUO'S SIDE STRIP"): the
      slip comes down to the foot, and keeps out of the strip. */
-  html.side-rail #qb-slip { right: var(--strip-w); bottom: calc(8px + env(safe-area-inset-bottom) - var(--vgap)); }
-  html.side-rail-left #qb-slip { right: 0; left: var(--strip-w); }
 }
 .tour-card { position: relative; width: 100%; max-width: 440px; background: var(--panel);
   border: var(--hairline) solid transparent; border-radius: var(--radius-lg); padding: 22px 20px 18px; }
@@ -5542,42 +5322,9 @@ body.has-rail .shell {
   background: var(--bad); color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
 .sb-badge[hidden] { display: none; }
 
-/* High Confidence — the render's toggle card, wired to a real filter. */
-.sb-hcm { margin-top: auto; display: flex; flex-direction: column; gap: 10px;
-  padding: 13px 13px 12px; border-radius: var(--radius);
-  border: var(--hairline) solid transparent;
-  background: var(--panel) }
-.sb-hcm { background-image: var(--grad-card); }
-.sb-hcm-words { display: flex; gap: 10px; align-items: flex-start; }
-.sb-hcm-words svg { width: 20px; height: 20px; color: var(--brand-2); flex: 0 0 auto; }
-.sb-hcm-words b { display: block; font-size: var(--fs-md); }
-.sb-hcm-words span { display: block; color: var(--text-mute); font-size: var(--fs-xs);
-  margin-top: 2px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; }
-.sb-hcm-switch { display: flex; align-items: center; gap: 9px; border: 0;
-  background: transparent; cursor: pointer; color: var(--text-mute);
-  font: inherit; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
-  text-transform: uppercase; padding: 0; }
-.sb-hcm-switch .knob { position: relative; width: 40px; height: 22px;
-  border-radius: 999px; background: var(--panel-3); border: var(--hairline) solid transparent;
-  transition: background var(--dur-base) var(--ease-out); }
-.sb-hcm-switch .knob::after { content: ""; position: absolute; top: 2px; left: 2px;
-  width: 16px; height: 16px; border-radius: 50%; background: var(--text-mute);
-  transition: transform var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out); }
-.sb-hcm-switch.on .knob { background: var(--grad-brand); border-color: transparent; }
-.sb-hcm-switch.on .knob::after { transform: translateX(18px); background: #fff; }
-.sb-hcm-switch.on { color: var(--text); }
-
-/* The Filters fold (audit item 10): the heading takes the cards' old
-   foot-of-the-column margin, and the cards inside sit flush. The
-   count is the one thing on the heading that must be seen. */
-.sb-filters-head { margin-top: auto; }
-.sb-filters { gap: 10px; }
-.sb-filters .sb-hcm { margin-top: 0; }
-.sb-filters-n { margin-left: 8px; padding: 1px 7px; border-radius: 999px;
-  background: var(--brand); color: var(--brand-ink); font-size: var(--fs-2xs);
-  letter-spacing: .04em; }
-.sb-filters-n[hidden] { display: none; }
-.sb-foot { display: flex; flex-direction: column; gap: 10px; padding: 2px 6px 0; }
+/* The footer takes the foot of the column (the High Confidence card and
+   then the Filters fold held that margin until both left, 2026-10-31). */
+.sb-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px 6px 0; }
 .standing { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
   color: var(--text-mute); font-size: var(--fs-2xs); font-family: var(--font-mono);
   text-decoration: none; line-height: var(--lh-snug); }
@@ -5852,11 +5599,9 @@ body.has-rail .shell {
      The folds buy their height with padding and give most of it back
      with a negative margin, so the hit box roughly triples while the
      drawer grows about 8px per group: the rail's vertical rhythm is
-     deliberate and this is a touch fix, not a redesign. The switches
-     take the full 44px because they are the only real controls in here
-     and their knob already carries 22 of it. */
+     deliberate and this is a touch fix, not a redesign. (The two
+     switches that took the full 44px left on 2026-10-31.) */
   .sb-fold { padding: 15px 0; margin: -11px 0; }
-  .sb-hcm-switch { min-height: 44px; padding: 11px 0; }
 
   /* The league chips are the most-tapped control on the site — three to a
      row in the drawer, and how you change sport at all. They were 27px.
@@ -6655,10 +6400,6 @@ body.has-deck #rail-live { display: none; }
   .more-foot { margin-top: 18px; padding-top: 14px; border-top: var(--hairline) solid var(--border-soft);
     display: grid; gap: 8px; }
   .more-foot .more-pills:empty { display: none; }
-  .more-switch i { margin-left: auto; font-style: normal; font-family: var(--font-mono);
-    font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
-  .more-switch[aria-checked="true"] i { color: var(--good); }
-  .more-switch[aria-checked="true"] svg { color: var(--good); }
   /* The theme switch moves into the sheet on phones — one fewer control
      in a top bar that had five (2026-09-22). */
   #theme-toggle { display: none; }
@@ -6862,11 +6603,6 @@ body.has-deck #rail-live { display: none; }
 }
 
 .mc-pick.active { background: var(--grad-chip); box-shadow: inset 2px 0 0 var(--brand); }
-
-/* Parlay Mode rides directly under High Confidence — the first card
-   carries the margin-top:auto that pins the pair to the sidebar's
-   bottom; the second must not repeat it or they drift apart. */
-#sb-pz { margin-top: 0; }
 
 /* The venue photo covers the drawn scene when present; every chip and
    badge rides above it. Missing files remove themselves (onerror). */
@@ -8353,7 +8089,7 @@ button.rc-day b { font-size: var(--fs-sm); }
    page until the next build lands; the stale bar says why. */
 body.picks-withheld :is(#potd-zone, #best-bets, #top-picks, #cards, #likely-top,
   #tonight-body, #edge-board, #props-body, #longshots-board, #likely-board, #scanner-body,
-  #gamebets, #parlays-body, #likely-parlays-body, #gp-sec-likely) { display: none; }
+  #gamebets, #parlays-body, #gp-sec-likely) { display: none; }
 
 /* ── Links the design system never claimed ─────────────────────────────
    Found 2026-08-19 by looking at rendercheck's own screenshots: 28 links
@@ -9851,13 +9587,6 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .gs-game-n { margin-left: auto; font-size: var(--fs-sm); color: var(--text-mute); }
 .gs-bad { color: var(--warn); }
 .gs-game[open] .gs-card { margin-bottom: 12px; }
-.slip-clash { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; padding: 10px;
-  border-radius: var(--radius); border: var(--hairline) solid transparent;
-  font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-snug);
-  background: var(--fill-subtle);
-}
-.slip-clash svg { flex: none; color: var(--warn); margin-top: 2px; }
-.slip-clash b { color: var(--text); }
 
 /* ---- Most Likely: picks pulled since they went up (2026-09-24) --------
    Listed until kickoff with why they came off; a fold, not a second
@@ -11309,16 +11038,16 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
    is the layer that floats over the page — bars, sheets, dialogs, toasts —
    and never the page itself. The cards, tables and words stay as solid as
    ever, so nothing anybody reads changes. What floats, and now wears it: the
-   toasts and the crash note, the slip's pill and its sheet, the
-   pull-to-refresh pill, a chart's tooltip, the dialogs (a player, a fantasy
+   toasts and the crash note (the slip's pill and sheet wore it too, until
+   the slip left on 2026-10-31), the pull-to-refresh pill, a chart's tooltip, the dialogs (a player, a fantasy
    dossier, the tour, the install prompt; the chart card in css/carrychart.css), the
    feed's ⋯ menus (css/social.css); the iPhone app's top bar is ruled here too, solid since 2026-10-28. The Duo's tokens, both themes,
    no blur; solid for anyone asking for less transparency or more contrast.
    ========================================================================== */
-.tf-toast, .crash-note, .slip-bar, [id="ptr"] {
+.tf-toast, .crash-note, [id="ptr"] {
   background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
 .tf-toast { border-radius: 999px; }   /* a capsule, like the pill and the bar it floats over */
-.slip-panel, .pk-card, .ffd-card, .tour-card, .a2hs-card {
+.pk-card, .ffd-card, .tour-card, .a2hs-card {
   background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim), var(--glass-depth); }
 .graph-tip { background-image: var(--glass-sheen-soft); box-shadow: var(--glass-rim-soft), var(--glass-depth); }
 @media (max-width: 760px) {
@@ -11346,6 +11075,6 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
     bottom: calc(100px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .tf-toast, .crash-note, .slip-bar, [id="ptr"], .slip-panel, .pk-card, .ffd-card, .tour-card, .a2hs-card,
+  .tf-toast, .crash-note, [id="ptr"], .pk-card, .ffd-card, .tour-card, .a2hs-card,
   .graph-tip { background-image: none; }
 }

@@ -204,10 +204,12 @@ def test_the_split_defaulted_to_readable():
 def test_the_disclosure_chevron_stayed_readable():
     """It is a control affordance, not decoration, and Lc 45 is its
     target. Demoting it would make the thing that says a section opens
-    fainter than the section."""
-    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+    fainter than the section. (The old parlay screen's chevron, which this
+    first pinned, left with its tickets on 2026-10-31; the injury report's
+    team folds carry the same mark.)"""
+    css = open(os.path.join(ROOT, "web", "css", "more.css"),
                encoding="utf-8").read()
-    i = css.index(".pz-runner > summary::after")
+    i = css.index(".inj-team > summary::after")
     block = css[i:css.index("}", i)]
     assert "var(--text-mute)" in block
     assert "var(--text-faint)" not in block

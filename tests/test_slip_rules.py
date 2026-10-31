@@ -1,4 +1,8 @@
-"""The reader's own slip obeys the engine's parlay rules.
+"""The engine's parlay rules, which the reader's own slip obeyed.
+
+THE SLIP LEFT on 2026-10-31 (Ethan: "get rid of the parlay button and the
+parlay feature"); the rules below stay, because Ask's parlay checker and the
+Parlays page's pairing (engine/twoleg, through `relate`) still run on them.
 
 Ethan, 2026-09-01, closing the QA audit's open question ("the engine
 enforces 3 legs + conflict detection, the user slip allows 8 and prices
@@ -67,25 +71,18 @@ def test_the_server_route_and_the_client_call_exist():
     assert '"/api/parlay/check"' in src and "def _parlay_check(" in src
     i = src.index("def _parlay_check(")
     assert "check_ticket(sport, clean)" in src[i:i + 1500]
+    # The slip's client call left with the slip (2026-10-31).
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    assert "const SLIP_MAX = 3;" in js
-    j = js.index("async function slipCheck(")
-    body = js[j:j + 2000]
-    assert 'fetch("/api/parlay/check"' in body and 'method: "POST"' in body
-    assert "cur.legs.splice(i, 1)" in body, "a killed pair must come back off"
-    assert "got.warnings" in body, "a correlated pair must be named"
-    k = js.index("function slipToggle(r)")
-    tog = js[k:k + 3000]
-    assert 'opponent: r.opponent || ""' in tog and 'game_date: r.game_date || r.date || ""' in tog, \
-        "legs must carry what engine/parlays.game_key keys on"
-    assert "slipCheck(key)" in tog
+    assert "async function slipCheck(" not in js and "function slipToggle(" not in js
 
 
 def test_even_money_is_spelled_minus_100_on_both_sides():
     assert P.decimal_to_american(2.0) == -100
-    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    i = js.index("function slipAmerican()")
-    assert "dec > 2 ? Math.round((dec - 1) * 100)" in js[i:i + 900]
+    # The Record page's two-leg rows spell a ticket's price the same way
+    # (the slip, which did too, left on 2026-10-31).
+    rec = open(os.path.join(ROOT, "web", "js", "record.js"), encoding="utf-8").read()
+    i = rec.index("const tlAmerican = ")
+    assert "dec > 2 ? Math.round((dec - 1) * 100)" in rec[i:i + 200]
 
 
 def _hr(player, team="PHI", opp="CHC", date="2026-09-02", **kw):

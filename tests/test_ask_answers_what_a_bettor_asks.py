@@ -99,11 +99,15 @@ NFL = {
     "long_shots": [{"player": "Sam LaPorta", "team": "DET", "market": "anytime_td", "odds": 320, "edge": 0.03}],
     "game_bets": [{"matchup": "DET @ NYJ", "pick_label": "Lions -6.5", "market": "spread", "odds": -110,
                    "win_prob": 0.58, "home": "NYJ", "away": "DET", "team": "DET"}],
-    "parlays": {"tickets": [{"grade": "play", "likely_case_american": 264, "modeled_joint": 0.29,
-                             "legs": [{"player": "Jahmyr Gibbs", "side": "OVER", "line": 80.5,
-                                       "market_label": "Rushing Yards", "odds": -112},
-                                      {"player": "Amon-Ra St. Brown", "side": "OVER", "line": 4.5,
-                                       "market_label": "Receptions", "odds": -190}]}]},
+    # The Parlays page's tickets (engine/twoleg), which replaced the old
+    # screen's `parlays` on 2026-10-31.
+    "two_leg": {"edge": {"tickets": [{"kind": "same_game", "kind_label": "Same game", "price": 264, "joint": 0.29,
+                                      "why": "Same game, same team — they rise together", "staked": True,
+                                      "legs": [{"player": "Jahmyr Gibbs", "side": "OVER", "line": 80.5,
+                                                "market_label": "Rushing Yards", "odds": -112},
+                                               {"player": "Amon-Ra St. Brown", "side": "OVER", "line": 4.5,
+                                                "market_label": "Receptions", "odds": -190}]}]},
+                "likely": {"tickets": []}},
     "pick_of_the_day": {"player": "Jahmyr Gibbs", "market": "rush_yds", "side": "OVER", "line": 80.5,
                         "odds": -112, "hit_prob": 0.57},
 }
@@ -187,7 +191,8 @@ def test_our_picks_by_kind_on_one_board_or_all():
     assert _run("our_picks", kind="long_shots")["rows"][0]["player"] == "Sam LaPorta"
     assert _run("our_picks", kind="game_lines")["rows"][0]["pick_label"] == "Lions -6.5"
     ticket = _run("our_picks", kind="parlays")["rows"][0]
-    assert ticket == {"league": "nfl", "pool": "edge", "grade": "play", "price": 264, "model_chance": 0.29,
+    assert ticket == {"league": "nfl", "pool": "edge", "kind": "Same game", "price": 264, "model_chance": 0.29,
+                      "why": "Same game, same team — they rise together", "staked": True,
                       "legs": ["Jahmyr Gibbs OVER 80.5 Rushing Yards (-112)",
                                "Amon-Ra St. Brown OVER 4.5 Receptions (-190)"]}
     assert _run("our_picks", kind="pick_of_the_day")["rows"][0]["player"] == "Jahmyr Gibbs"

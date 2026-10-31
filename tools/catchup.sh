@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JD "Parlays: two legs from our picks, and the past paired" 300 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function renderParlayPage('
+cd /srv/qellys && sudo -u qellys python3 tools/parlay_study.py
+SH
 run JB "Receiving-yards unders held; college's price switch" 30 <<'SH'
 cd /srv/qellys && grep -c "UNDER_MARKETS_HELD" engine/likelyboard.py && grep -c "PRICE_TRUST_ADD_ENV" engine/likelyboard.py
 SH

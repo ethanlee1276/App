@@ -466,7 +466,7 @@ const HIDDEN_VIEWS = {
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
-  wnba: ["longshots", "futures", "weather", "race"],
+  wnba: ["longshots", "futures", "weather", "race", "parlays"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
   // We price fight winners and nothing else, so there is no pair to screen
@@ -497,7 +497,7 @@ const HIDDEN_VIEWS = {
   // difference for it to branch on.
   // Hockey has no long-shot board (the anytime scorer rides the props and
   // Most Likely) and no futures pull yet; every rink is indoors.
-  nhl: ["longshots", "futures", "weather", "race"],
+  nhl: ["longshots", "futures", "weather", "race", "parlays"],
   cfb: [],
   // The race page is college football's playoff and the NBA Cup (js/race.js).
   nfl: ["race"], mlb: ["race"],
@@ -3086,7 +3086,7 @@ addEventListener("online", refreshStaleBar);
    THAT DRAW THE BOARD: the plans page, the Record, My Bets and the
    reference pages show none of its games, and a demo warning over
    the plans page was noise (seen in the first render). */
-const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "live",
+const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "parlays", "live",
   "scanner", "game", "prop", "pbp", "trending", "players", "futures"];
 function boardViewNow() { return BOARD_VIEWS.includes(state.view); }
 function slateNotice(d) {
@@ -3388,9 +3388,9 @@ function heldForLongShots(r) {
 }
 
 function passesFilters(r) {
-  // High Confidence Mode: the sidebar switch narrows the whole board to
-  // A-grades (quality >= 80 — the same band the journal grades under).
-  if (typeof hcmOn === "function" && hcmOn() && (r.quality || 0) < 80) return false;
+  // (High Confidence Mode's A-grade narrowing left on 2026-10-31, Ethan:
+  // "we have most likely picks that are ranked ... so we don't need that
+  // anymore." A stored "qb_hcm" is read by nothing now.)
   return r.recommended && r.confidence >= state.minConf && r.edge * 100 >= state.minEdge
     && r.odds >= state.maxJuice && r.grade !== "Pass";
 }
@@ -4206,6 +4206,7 @@ const OFFSCREEN_PAGES = [
   // opened, never in the background, so no visit fetches the room unasked.
   ["scanner-body", () => renderScanner(), true],
   ["longshots", () => renderLongShots()],
+  ["parlays-body", () => renderParlayPage(), true],
   ["likely", () => renderLikely(), true],
   ["trending", () => renderTrending()],
   ["players", () => renderPlayers()],
@@ -4318,13 +4319,6 @@ function renderAll() {
   // other board pages draw now only if they are on screen; the rest are
   // drawn when opened or in the next idle moment (OFFSCREEN_PAGES).
   OFFSCREEN_PAGES.forEach(([host, draw, onVisit]) => drawOrDefer(host, draw, onVisit));
-  renderParlays();
-  /* THE SECOND POOL. Paper measuring paper — the legs are ranked leans
-     rather than bets — so it is drawn under its own heading and never
-     mixed into the block above it. A reader who cannot tell the two
-     records apart on the page has the same problem the journal would
-     have had without its `source` column. */
-  renderParlays("likely_parlays", "likely-parlays-body");
   idleStale();
   // A deep link into a game lands before the slate has loaded, and the
   // 60s refresh replaces the data under an open game page — both need the
@@ -6733,7 +6727,7 @@ function gameBetCard(r) {
       ${confMeter(r)}
       ${edgeHunterHTML(r)}
       ${gameBetChart(r)}
-      <div class="chips">${stakeChip}${condChip}${probChip}${tierChip}${slipChip(r)}</div>
+      <div class="chips">${stakeChip}${condChip}${probChip}${tierChip}</div>
       ${exchangeFairLine(r)}
       ${(r.qb_cards || []).map(qbCardHTML).join("")}
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
@@ -9329,7 +9323,7 @@ function cardHTML(r) {
       ${confMeter(r)}
       ${edgeHunterHTML(r)}
       ${propAnalysis(r)}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${rippleChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${rippleChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}</div>
       ${booksStripHTML(r)}
       ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${qbCardHTML(r.qb_card)}${mateCardHTML(r.mate_card)}${matchupCardHTML(r)}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
@@ -11509,311 +11503,79 @@ function renderLongShots() {
 }
 
 /* ============================================================
-   Parlay Zone — a screen, not a builder (docs/PARLAY_MODEL.md)
+   THE PARLAYS PAGE — two legs, from our own picks (engine/twoleg)
    ============================================================
-   The page is designed around the sentence it prints most often. §12 of the
-   parlay model is explicit: "No qualifying parlay at current numbers" should
-   be the most common output by a wide margin, and on a 12-game slate
-   publishing that sentence IS the system working. So the verdict leads, the
-   ticket is secondary, and the clash ledger below it carries the weight —
-   that ledger is the answer to "which of tonight's props are fighting each
-   other", which is the question this page exists to answer.
+   Ethan, 2026-10-31: "make the parlay feature an actual button ... two-leg
+   parlays ... picked from the most likely bet and the edge bets ... a
+   section for the edge bet parlays and most likely bet parlays ... one pick
+   on one team, one pick on the other ... two picks from different games ...
+   record that data." Each pool draws its same-game tickets, then its
+   two-game ones: the two legs, the chance both hit, the price the record
+   grades it at, why the legs belong together, staked or tracked. Over each
+   pool, its record and what pairing our past picks this way would have
+   done (record.json `two_leg`, in the slim copy Home already loads). */
+const TL_POOLS = [["edge", "Edge parlays", "two of tonight’s Edge picks, ranked by what they return at the price"],
+  ["likely", "Most Likely parlays", "two of tonight’s likeliest picks, ranked by the chance both hit"]];
 
-   Two things this page must never do. It must never show a parlay price as
-   though we know one: no feed we ingest carries same-game-parlay quotes, so
-   every ticket publishes the price it must BEAT and says that is what it is
-   doing. And it must never show a stake: §13 puts parlays on the same
-   probation as CFB and WNBA — graded, never staked, until 100 tickets clear
-   ROI, CLV and z, and until the singles board clears its own bar first. */
-function renderParlays(key = "parlays", hostId = "parlays-body") {
-  /* PARAMETERISED RATHER THAN COPIED, because the screen learned to run
-     over a second board on 2026-09-06 and the alternative was two
-     renderers drifting apart. Everything below is identical for both
-     pools — the doctrine, the verdict, the probation note, the cards —
-     because the SCREEN is identical; only the legs it was handed differ,
-     and the payload says which. */
-  const host = document.getElementById(hostId);
+function tlLegHTML(l) {
+  const bet = [l.side, l.line, l.market_label || marketWord(l.market)].filter((x) => x != null && x !== "").join(" ");
+  return `<div class="tl-leg">${playerAvatar(l.player, l.team, { size: 28 })}
+    <span class="tl-what"><b>${escapeHtml(l.player)}</b>
+      <span>${escapeHtml(bet)} · ${oddsTxt(l.odds)} · ${pct(l.p)} by our numbers</span></span></div>`;
+}
+
+function tlTicketHTML(t) {
+  return `<div class="card tl-card">
+    <div class="tl-head"><span class="chip">${escapeHtml(t.kind_label || "")}</span>
+      <span class="mini">${escapeHtml(whenLabel(t.game_date, t.kickoff))}</span>
+      <span class="chip stake">${t.staked ? `Staked ${t.stake_units}u` : "Tracked · no stake"}</span></div>
+    ${(t.legs || []).map(tlLegHTML).join("")}
+    <div class="tl-foot"><b>${pct(t.joint)} both hit</b> · pays ${oddsTxt(t.price)}
+      <span class="mini">(${escapeHtml(t.price_basis || "")})</span></div>
+    <div class="mini tl-why">${escapeHtml(t.why || "")}</div></div>`;
+}
+
+function tlRecordLine(rec, pool) {
+  const tl = (rec || {}).two_leg || {};
+  const r = tl[pool] || {};
+  const bt = ((tl.backtest || {}).rows || []).find((x) => x.sport === state.sport && x.pool === pool && x.kind === "all");
+  const graded = r.graded
+    ? `Graded ${r.wins}–${r.losses}, ${r.net_units >= 0 ? "+" : ""}${r.net_units}u at one unit a ticket`
+    : "None graded yet";
+  return graded + (bt ? ` · our past picks paired this way: ${bt.parlays} parlays, ${pct(bt.win_rate)} hit, `
+    + `${signedPct(bt.roi)} (the same picks as singles ${signedPct(bt.singles_roi)})` : "") + ".";
+}
+
+function renderParlayPage() {
+  const host = document.getElementById("parlays-body");
   if (!host) return;
-  const z = state.data[key];
-
-  /* A slate built before this module existed, or by a builder that has no
-     screen wired in, has no `parlays` key at all. Saying so beats rendering
-     an empty page that looks like a clean night.
-
-     THE SHAPE IS PART OF THE QUESTION, and the truthiness of an empty
-     array is what made that matter. `nfl_build.py --games-only` shipped
-     `"parlays": []` — a list where every other board carries the
-     screen's report as an object — and `[]` is truthy, so this guard
-     waved it through and the panel rendered its whole self out of
-     nothing: "Screened undefined candidate tickets built from undefined
-     eligible legs on tonight's board", live, on the board the site
-     publishes every day before Week 1. The producer was fixed too; this
-     is the half that cannot be fixed anywhere else, because a renderer
-     that trusts a payload's shape will meet a payload that lies about
-     it again. */
-  if (!z || typeof z !== "object" || Array.isArray(z)) {
-    host.innerHTML = `<div class="empty-slate">
-      <div class="es-icon">${icon("dash", 30)}</div>
-      <div class="es-title">No parlay screen on this board</div>
-      <div class="es-sub">This slate was built before the parlay screen ran.
-        It will appear on the next refresh — nothing is wrong with the picks
-        above it.</div></div>`;
+  const d = state.data || {};
+  const z = d.two_leg;
+  if (!z || typeof z !== "object" || !z.edge) {
+    host.innerHTML = d.locked && d.locked.two_leg
+      ? memberLockHTML("Two-leg parlays from our picks",
+          "Tonight’s same-game and two-game parlays, built from the Edge picks and the Most Likely list, each graded on the Record page.")
+      : `<div class="card"><p class="set-note">No parlays on this board yet: they build with the board, two legs from our picks.</p></div>`;
     return;
   }
-
-  const tickets = z.tickets || [];
-  const qualified = tickets.filter((t) => t.qualified);
-
-  host.innerHTML = `
-    <div class="pz-doctrine">${escapeHtml(z.doctrine || "")}</div>
-    <div class="pz-verdict ${qualified.length ? "pz-yes" : "pz-no"}">
-      <span class="pz-mark">${icon(qualified.length ? "check" : "cross", 15)}</span>
-      ${escapeHtml(z.verdict || "")}
-    </div>
-    ${/* The answer to "why is there nothing here", directly under the
-          verdict that raises the question. This used to render only in the
-          notes list at the very BOTTOM of the page — below every ticket
-          card, the runners-up and the ledger — so the explanation sat
-          underneath the thing it explains. Scrolling from the top you hit
-          "#1 does not clear", read a card about a ticket that was never
-          going to qualify, and never reached the sentence saying why the
-          board had nothing better to offer. */ ""}
-    ${z.structural ? `<div class="pz-note pz-structural">
-      <span class="pz-mark">${icon("search", 13)}</span>
-      ${escapeHtml(z.structural)}
-    </div>` : ""}
-    <div class="pz-probation">
-      <span class="pz-mark">${icon("warn", 13)}</span>
-      ${escapeHtml(z.probation_note || "")}
-    </div>
-    ${tickets.length ? `<div class="pz-sub pz-rank-title">
-      ${qualified.length
-        ? "Tonight’s board, ranked — the first is the play"
-        : "Tonight’s board, ranked — best constructions available"}
-      </div>` : ""}
-    ${tickets.slice(0, 1).map((t) => parlayTicket(t, t.qualified)).join("")}
-    ${parlayRunnersUp(tickets.slice(1))}
-    ${parlayLedger(z)}
-    ${(z.notes || []).filter((n) => n !== z.structural).map((n) =>
-        `<div class="pz-note">${escapeHtml(n)}</div>`).join("")}
-    ${/* Belt to the guard's brace: a screen that ran but banked no
-          counts prints nothing here rather than a sentence with a hole
-          in it. The counts are the LAST thing on this panel; losing them
-          costs a footnote, and printing "undefined" costs the reader's
-          belief in every number above it. */ ""}
-    ${z.considered == null && z.eligible_legs == null ? "" : `
-    <div class="pz-census">
-      Screened ${z.considered ?? 0} candidate ${z.considered === 1 ? "ticket" : "tickets"}
-      built from ${z.eligible_legs ?? 0} eligible ${z.eligible_legs === 1 ? "leg" : "legs"}
-      on tonight’s board.
-      ${z.killed && z.killed.length
-        ? `${z.killed.length} ${z.killed.length === 1 ? "was" : "were"} killed
-           for the reasons above.` : ""}
-    </div>`}`;
+  host.innerHTML = `<p class="set-note tl-rule">A two-leg parlay does what its legs do, about twice: where the
+      picks beat their price it wins about twice as fast, and where they pay the juice it loses about twice as
+      fast. So a parlay is staked only when both legs are picks we stake; the rest are tracked, and every one
+      is graded on the <a href="#record">Record page</a>.</p>
+    ${z.drawdown && z.note ? `<p class="set-note tl-rule">${escapeHtml(z.note)}</p>` : ""}
+    ${TL_POOLS.map(([pool, title, sub]) => {
+      const x = z[pool] || {};
+      const ts = x.tickets || [];
+      return `<div class="section-title">${title} <span class="sub">— ${sub}</span></div>
+        <div class="mini tl-rec" data-tl-rec="${pool}"></div>
+        ${ts.length ? ["same_game", "two_game"].map((k) => ts.filter((t) => t.kind === k).map(tlTicketHTML).join("")).join("")
+          : `<div class="card"><p class="set-note">${escapeHtml(x.note || "No pair on tonight’s board makes sense yet.")}</p></div>`}`;
+    }).join("")}`;
   revealChildren(host);
-  if (typeof syncParlayMode === "function") syncParlayMode();
-}
-
-/* One ticket, laid out the way §12 prints it: legs, then the correlation
-   that justifies the structure, then the clash screen, then the three
-   joints side by side, then the price it has to beat — and last the honest
-   case against it. `live` false means this is the closest miss on the
-   board, shown as a record of what was looked at rather than as a play. */
-function parlayTicket(t, live) {
-  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
-  return `<div class="card pz-ticket${live ? "" : " pz-miss"}">
-    <div class="card-head">
-      <div class="card-id"><div class="player">
-        <span class="pz-rank">#${t.rank}</span>
-        Type ${escapeHtml(t.parlay_type)} · ${t.legs.length} legs</div></div>
-      <div class="chips">
-        <span class="chip pz-g-${t.grade}">${
-          t.grade === "play" ? "clears at any plausible price"
-          : t.grade === "marginal" ? "clears at a good price · check yours"
-          : "does not clear"}</span>
-        <span class="chip stake">graded · 0.00u</span>
-        <button class="btn primary" data-parlay-slip="${escapeAttr(String(t.rank))}">Load into my slip</button>
-        <button class="btn ghost qb-share" data-parlay-card="${escapeAttr(String(t.rank))}"
-          >Share card</button>
-      </div>
-    </div>
-
-    <ol class="pz-legs">
-      ${t.legs.map((l) => `<li>
-        <span class="pz-leg-name">${escapeHtml(l.player || "")}</span>
-        <span class="pz-leg-mkt">${escapeHtml(l.side || "")} ${escapeHtml(String(l.line ?? ""))}
-          ${escapeHtml(l.market_label || l.market || "")}</span>
-        <span class="pz-leg-nums">${sign(l.odds)}${l.book ? ` · ${escapeHtml(l.book)}` : ""}
-          <i>·</i> p ${pct(l.p_final)} <i>·</i> Tier ${l.tier}</span>
-      </li>`).join("")}
-    </ol>
-
-    <div class="pz-sub">Correlation</div>
-    <ul class="pz-pairs">
-      ${t.pairs.map((p) => `<li>
-        <div class="pz-pair-head">
-          <span class="pz-pair-who">${escapeHtml(p.a || "")} ↔ ${escapeHtml(p.b || "")}</span>
-          <span class="pz-pair-rho">ρ ${p.rho >= 0 ? "+" : ""}${p.rho.toFixed(2)}
-            <i>→ priced ${p.rho_priced >= 0 ? "+" : ""}${p.rho_priced.toFixed(3)}</i></span>
-        </div>
-        <div class="pz-pair-why">${escapeHtml(p.mechanism || "")}</div>
-      </li>`).join("")}
-    </ul>
-    <div class="pz-fine">${t.pairs.some((p) => p.rho_measured)
-      ? `A ρ marked <b>measured</b> was counted on our own game history rather
-         than taken from the model doc, so it is priced at face value: the
-         humility clamp exists because a prior is a guess, and a counted
-         number has nothing to be humble about. `
-      : ""}The published ρ is the doc’s prior; the priced ρ is that prior after
-      the clamp this engine applies to every raw edge. Those magnitudes are
-      professional estimates, not measured constants, and pricing an estimate
-      at face value would invent edge out of a guess.</div>
-
-    <div class="pz-sub">Clash screen</div>
-    <div class="pz-clash">${icon("check", 12)} ${escapeHtml(t.clash_screen)}</div>
-
-    <div class="pz-sub">Joint probability</div>
-    <div class="metrics pz-joint">
-      <div class="metric"><div class="k">Independent product</div>
-        <div class="v">${pct(t.independent_joint)}</div></div>
-      <div class="metric primary"><div class="k">Conditional chain</div>
-        <div class="v">${pct(t.modeled_joint)}</div></div>
-      <div class="metric"><div class="k">Threshold</div>
-        <div class="v">${t.threshold_points.toFixed(1)} pts</div></div>
-    </div>
-    <div class="pz-fine">Never the product. §1.1: independence is a claim
-      about the world, and inside one game it is almost always false.</div>
-
-    <div class="pz-sub">Price</div>
-    <div class="metrics pz-price">
-      <div class="metric"><div class="k">Legs multiplied</div>
-        <div class="v">${sign(t.naive_product_american)}</div></div>
-      <div class="metric primary"><div class="k">You need at least</div>
-        <div class="v">${sign(t.required_american)}</div></div>
-      <div class="metric"><div class="k">What a book might pay</div>
-        <div class="v ${t.qualified ? "pos" : "neg"}">${sign(t.best_case_american)}</div>
-        <div class="pz-short">${t.shortfall_pct
-          ? `short by ${t.shortfall_pct}%`
-          : `to ${sign(t.likely_case_american)} at a stingy book`}</div></div>
-    </div>
-    <div class="pz-edge ${t.edge_at_ceiling_points > 0 ? "pos" : "neg"}">
-      At that ceiling this ticket is
-      <b>${t.edge_at_ceiling_points > 0 ? "+" : ""}${t.edge_at_ceiling_points} points</b>
-      ${t.edge_at_ceiling_points > 0
-        ? `of edge — still short of the ${t.threshold_points}-point bar.`
-        : `<b>behind</b> the price. Even at the most generous number a book
-           would plausibly offer, this loses money.`}
-      That figure is what tonight’s board is ranked on.</div>
-    <div class="pz-fine">Nobody publishes what they charge to combine legs, so
-      the two numbers above are a <b>band</b>, not a quote: this ticket is
-      measured against a book taking
-      ${(t.correlation_tax_best_case * 100).toFixed(0)}% and against one
-      taking ${(t.correlation_tax_worst_case * 100).toFixed(0)}%, versus the
-      4.3–4.8% a straight side costs. ${t.grade === "marginal"
-        ? `It clears the first and not the second — which makes this a question
-           about your book’s actual number rather than about the model.`
-        : t.grade === "play"
-        ? `It clears both, so the price is not what stands between you and this
-           ticket.` : ""}</div>
-
-    <div class="pz-sub">Dominance</div>
-    <div class="pz-dominance">These same legs bet separately are worth
-      <b>${(t.singles_alternative_ev * 100).toFixed(1)}%</b> in expectation
-      across ${t.legs.length} units${t.parlay_type === "A"
-        ? `, or <b>${(t.singles_alternative_same_stake * 100).toFixed(1)}%</b>
-           for the one unit this ticket risks` : ""}. A parlay has to beat
-      that by ${t.dominance_required}× to be worth the variance and the
-      single point of failure — if it only ties, <b>bet the singles</b>.</div>
-    ${t.singles_beat_it ? `<div class="pz-edge neg">
-      <b>The singles were the better bet here.</b> This ticket is shown
-      because it is the best-constructed one on the board, not because it
-      beat betting these legs separately.</div>` : ""}
-
-    <div class="pz-verdict-line">${escapeHtml(t.verdict)}</div>
-    <div class="pz-risk"><span class="pz-mark">${icon("warn", 12)}</span>
-      ${escapeHtml(t.risk)}</div>
-    <div class="pz-stake">Stake <b>0.00u</b> — graded, not staked.
-      At the required price an eighth-Kelly stake would have been
-      ${t.stake_if_promoted.toFixed(2)}u, capped at 1.0% of bankroll. That
-      number is tracked so promotion day has something to promote; it is not
-      a recommendation to bet it.</div>
-  </div>`;
-}
-
-/* A ticket that cleared all seven gates and lost only to §10.2's
-   one-per-slate cap is NOT the same animal as one that failed on merit.
-   These rendered identically — same row, same weight, the demoted one
-   reading a bare "clears" next to tickets that missed by 30%. The arbiter
-   already writes that ticket its own verdict naming the sport that took
-   the slot; nothing displayed it. */
-const pzDemoted = (t) => t.slate_play === false && t.grade !== "short";
-
-/* One summary line: the numbers the ranking is actually computed on, in
-   the order a reader compares them. Doubles as the <summary> of the
-   collapsible card below, so the row and the card can never disagree. */
-function parlayRunnerRow(t) {
-  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
-  return `<span class="pz-rank">#${t.rank}</span>
-    <span class="pz-run-legs">${t.legs.map((l) =>
-      `${escapeHtml(l.player || "")} <i>${escapeHtml(l.side || "")}
-       ${escapeHtml(String(l.line ?? ""))}
-       ${escapeHtml(l.market_label || l.market || "")}</i>`).join(" + ")}</span>
-    <span class="pz-run-num">Type ${escapeHtml(t.parlay_type)}</span>
-    <span class="pz-run-num">ρ ${t.pairs.map((p) =>
-      `${p.rho >= 0 ? "+" : ""}${p.rho.toFixed(2)}`).join(" ")}</span>
-    <span class="pz-run-num ${t.edge_at_ceiling_points > 0 ? "" : "neg"}">
-      ${sign(t.edge_at_ceiling_points)} pts</span>
-    <span class="pz-run-num">need ${sign(t.required_american)}</span>
-    <span class="pz-run-num">${t.shortfall_pct
-      ? `short ${t.shortfall_pct}%`
-      : pzDemoted(t) ? "cleared — capped" : "clears"}</span>`;
-}
-
-/* Ranks two and below, in full — but folded.
- *
- * Four full tickets stacked ran to six thousand pixels of near-identical
- * blocks, which buried the one that matters; that is why these were rows
- * for a while. Rows lost the other half of the point: the correlation, the
- * mechanism sentence, the clash screen and the dominance arithmetic are
- * the reason a construction is ranked where it is, and a line of numbers
- * cannot carry them.
- *
- * So every ticket now gets its whole card, behind a <details> whose summary
- * IS the old row. Open by default when the ticket CLEARED — tonight that is
- * the one the slate cap demoted, which a reader has an obvious reason to
- * inspect — and folded when it did not, because a ticket that loses money
- * at the most generous price a book would quote has earned a line, not a
- * screen. Native <details>: it survives with JS broken and it is keyboard
- * operable without writing either behaviour by hand. */
-function parlayRunnersUp(rows) {
-  if (!rows.length) return "";
-  return `<div class="pz-sub pz-runners-title">Also on the board</div>
-    <div class="pz-runners">
-      ${rows.map((t) => `
-      <details class="pz-runner${pzDemoted(t) ? " pz-demoted" : ""}"
-               ${t.grade !== "short" ? "open" : ""}>
-        <summary>${parlayRunnerRow(t)}</summary>
-        ${pzDemoted(t) && t.verdict
-          ? `<div class="pz-run-why">${escapeHtml(t.verdict)}</div>` : ""}
-        ${parlayTicket(t, t.qualified)}
-      </details>`).join("")}
-    </div>`;
-}
-
-/* The clash ledger. Every candidate that died, and the §3 type that killed
-   it. This is the part of the page worth reading on a night with no ticket:
-   it is the record of which of tonight's props cannot sit next to which,
-   and why — a bare count would teach nobody anything. */
-function parlayLedger(z) {
-  const rows = z.killed || [];
-  if (!rows.length) return "";
-  return `<div class="pz-sub pz-ledger-title">What was screened out, and why</div>
-    <ul class="pz-ledger">
-      ${rows.map((k) => `<li>
-        <div class="pz-kill-who">${escapeHtml(String(k.leg || ""))}</div>
-        <div class="pz-kill-why">${escapeHtml(k.reason || "")}</div>
-      </li>`).join("")}
-    </ul>`;
+  loadRecordOnce().then((rec) => TL_POOLS.forEach(([pool]) => {
+    const el = host.querySelector(`[data-tl-rec="${pool}"]`);
+    if (el) el.textContent = tlRecordLine(rec, pool);
+  }));
 }
 
 function longshotEmptyReason(mlb) {
@@ -12455,6 +12217,27 @@ function findProp(id) {
   if (exact) return exact;
   if (String(id).includes("|")) return null;
   return all.find((x) => pickSlug(x) === id) || null;
+}
+
+/* IS THIS A GAME ROW? Asked explicitly, because "has no player" stopped
+   being the answer on 2026-09-02. The likelihood board carries game rows
+   (likely.from_game_bet) and they DO have a `player` — the pick label,
+   "DET ML" — so an `r.player ? prop : game` branch files them as player
+   props. `kind` is stamped by the maker; an edge board's game card has no
+   `kind` and no `player`, and both are game rows. (Moved here from the
+   parlay slip when the slip left, 2026-10-31: the cards and the game page
+   still ask it.) */
+const isGameRow = (r) => !!(r && (r.kind === "game" || !r.player));
+
+/* BOTH LISTS. A FLIPPED game row — the side the same numbers say lands
+   more often, where the edge board backed the other one on price —
+   exists ONLY on the likelihood board, so a lookup that reads
+   `game_bets` alone returns nothing and its button does nothing at all.
+   Used by the share card and the game page (js/detail.js). */
+function findGameRow(id) {
+  const d = state.data || {};
+  return (d.game_bets || []).find((g) => gameBetId(g) === id)
+    || (d.most_likely || []).find((g) => g.kind === "game" && gameBetId(g) === id);
 }
 
 function openProp(id, opts = {}) {
@@ -15372,7 +15155,7 @@ const REC_ROOMS = [
     // Picks page and the performance panel was removed (Ethan's crossed-out
     // screenshots) — the home is the one Most Likely board and the reads.
     "likely-top", "scan-top",
-    "parlay-mode", "empty-slate"]],
+    "empty-slate"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
    ["gamebets-title", "gamebets"]],
@@ -23378,7 +23161,7 @@ function enhanceSectionSubs(root) {
    with no weather yet, a quiet alerts page — is still a dead end for a
    reader, and the doors are the same three pages. Added once per empty
    state (data-doors), never twice, never to a page off this list. */
-const EMPTY_DOOR_VIEWS = new Set(["tonight", "live", "edge", "likely", "longshots", "futures", "scanner",
+const EMPTY_DOOR_VIEWS = new Set(["tonight", "live", "edge", "likely", "longshots", "parlays", "futures", "scanner",
   "injuries", "weather", "standings", "trending", "players", "rosters", "alerts", "streak", "record",
   "zeno", "mybets", "bankroll", "lab", "intel", "fantasy", "ufc"]);
 function enhanceEmpties(root) {
@@ -23557,7 +23340,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -24000,6 +23783,9 @@ function _switchViewNow(name, push, dir) {
   // exists to catch.
   if (name === "likely") renderLikely();
   if (name === "tonight") renderTonight();
+  // The Parlays page (2026-10-31) is one of the pages OFFSCREEN_PAGES marks
+  // as drawn on every visit, so this line is what draws it from the menu.
+  if (name === "parlays") renderParlayPage();
   if (name === "rosters") renderRosters();
   if (name === "injuries") renderInjuries();
   if (name === "standings") renderStandings();
@@ -24588,151 +24374,6 @@ async function shareCard(r, btn) {
   exportCard(canvas, `${slugify(d.title) || "pick"}-qellysbook.png`,
              () => { if (btn) btn.textContent = was; });
 }
-
-/* THE PARLAY TICKET AS A PICTURE — the "per pick/parlay" half of the
-   share-card ask. A different drawing from the pick card because a
-   ticket IS a list: the legs stacked with their sides and prices, the
-   joint probability the chain actually models, and the price a book has
-   to beat — which is the ticket's whole argument, and the number that
-   makes the screenshot worth arguing with. No faces: two headshots at
-   this size are two thumbnails fighting, and the legs are the point. */
-async function shareParlayCanvas(t) {
-  const c = document.createElement("canvas");
-  c.width = CARD_W; c.height = CARD_H;
-  const x = c.getContext("2d");
-  if (!x) return null;
-  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; }
-  catch (e) { /* the fallback stack still draws */ }
-  cardStage(x);
-  const logo = await _cardImage("logo-qb.png", false);
-  if (logo) x.drawImage(logo, CARD_W - 142, 42, 96, 96);
-
-  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
-  const L = 64;
-  x.textAlign = "left";
-  x.textBaseline = "alphabetic";
-  x.letterSpacing = "3px";
-  x.fillStyle = "rgba(232,228,217,.55)";
-  x.font = cardFont(22, 600);
-  x.fillText("CORRELATION-PRICED — NEVER THE PRODUCT OF THE LEGS", L, 96);
-  x.letterSpacing = "0px";
-  x.fillStyle = "#F4F0E6";
-  x.font = cardSerif(58, 700);
-  x.fillText(`${t.legs.length}-leg same-game parlay`, L, 162);
-  x.fillStyle = CARD_BRAND;
-  x.fillRect(L + 2, 184, 76, 3);
-
-  // The legs. Four fit with air; a longer ticket lists four and says so.
-  // Each row is numbered and cut from the next by a hairline — a ticket
-  // is a LIST, and a list without rules is a paragraph.
-  const shown = t.legs.slice(0, 4);
-  shown.forEach((l, i) => {
-    const y = 244 + i * 56;
-    x.strokeStyle = "rgba(255,176,0,.5)";
-    x.lineWidth = 1.5;
-    x.beginPath();
-    x.arc(L + 14, y - 10, 15, 0, Math.PI * 2);
-    x.stroke();
-    x.fillStyle = "rgba(255,176,0,.85)";
-    x.font = cardFont(20, 700);
-    x.textAlign = "center";
-    x.fillText(String(i + 1), L + 14, y - 3);
-    x.textAlign = "left";
-    x.fillStyle = CARD_BRAND;
-    x.font = cardFont(29, 700);
-    x.fillText(String(l.player || "").slice(0, 22), L + 46, y);
-    x.fillStyle = CARD_INK;
-    x.font = cardFont(27, 400);
-    const pick = `${String(l.side || "").toUpperCase()} ${l.line ?? ""} ${
-      l.market_label || l.market || ""}`.trim();
-    x.fillText(pick.slice(0, 32), L + 420, y);
-    x.textAlign = "right";
-    x.font = cardFont(27, 700);
-    x.fillText(oddsTxt(l.odds), CARD_W - 64, y);
-    x.textAlign = "left";
-    if (i < shown.length - 1) {
-      x.strokeStyle = "rgba(232,228,217,.08)";
-      x.lineWidth = 1;
-      x.beginPath();
-      x.moveTo(L, y + 18.5);
-      x.lineTo(CARD_W - 64, y + 18.5);
-      x.stroke();
-    }
-  });
-  if (t.legs.length > shown.length) {
-    x.fillStyle = "rgba(232,228,217,.5)";
-    x.font = cardFont(22, 400);
-    x.fillText(`…and ${t.legs.length - shown.length} more`, L + 46, 244 + 4 * 56 - 14);
-  }
-
-  const facts = [
-    ["Joint prob", `${(t.modeled_joint * 100).toFixed(1)}%`],
-    ["Needs at least", sign(t.required_american)],
-  ];
-  // 458/504, not lower: the first draw put the joint prob at 546 and
-  // the footer claim at 566, and the two collided into one smudged line.
-  facts.forEach(([k, v], i) => {
-    const fx = L + i * 320;
-    if (i) {
-      x.strokeStyle = "rgba(232,228,217,.12)";
-      x.lineWidth = 1;
-      x.beginPath();
-      x.moveTo(fx - 52.5, 440);
-      x.lineTo(fx - 52.5, 510);
-      x.stroke();
-    }
-    x.letterSpacing = "2.5px";
-    x.fillStyle = "rgba(232,228,217,.42)";
-    x.font = cardFont(20, 600);
-    x.fillText(k.toUpperCase(), fx, 458);
-    x.letterSpacing = "0px";
-    // The price a book has to beat is the ticket's argument — it wears
-    // the brand color; the probability stays ink.
-    x.fillStyle = i ? CARD_BRAND : CARD_INK;
-    x.font = cardFont(42, 700);
-    x.fillText(v, fx, 504);
-  });
-
-  cardFooter(x);
-  return c;
-}
-
-async function shareParlay(t, btn) {
-  if (!t || !(t.legs || []).length) return;
-  const was = btn ? btn.textContent : "";
-  if (btn) btn.textContent = "Drawing…";
-  let canvas = null;
-  try { canvas = await shareParlayCanvas(t); } catch (e) { canvas = null; }
-  if (!canvas) {
-    if (btn) btn.textContent = was;
-    return tfToast("That card could not be drawn.");
-  }
-  exportCard(canvas, `parlay-qellysbook.png`,
-             () => { if (btn) btn.textContent = was; });
-}
-
-document.addEventListener("click", (e) => {
-  const b = e.target.closest && e.target.closest("[data-parlay-card]");
-  if (!b) return;
-  e.preventDefault();
-  const z = (state.data || {}).parlays || {};
-  const t = (z.tickets || []).find((x) => String(x.rank) === b.dataset.parlayCard);
-  if (t) shareParlay(t, b);
-});
-
-/* OUR PARLAY, IN YOUR SLIP (docs/IDEAS.md round three): the ticket's legs
-   replace what the slip held, each found on the board so it carries its
-   price and book, and the slip opens on them. */
-document.addEventListener("click", (e) => {
-  const b = e.target.closest && e.target.closest("[data-parlay-slip]");
-  const t = b && (((state.data || {}).parlays || {}).tickets || []).find((x) => String(x.rank) === b.dataset.parlaySlip);
-  if (!t) return;
-  _slip = { sport: "", date: "", legs: [] };
-  const n = t.legs.filter((l) => slipToggle(findSlipRow(l.player ? propId(l) : gameBetId(l)) || l)).length;
-  _slipOpen = n > 0;
-  slipRender();
-  tfToast(`${n} of ${t.legs.length} legs are in your slip.`);
-});
 
 /* The door from a pick to the man. Ethan's entity-pages list: "Every
    prop card links to one" — a prop card opens the prop page, and from
@@ -25479,21 +25120,6 @@ function initialView() {
     state.sport = h; applySport(); load(); switchView("recommended"); return;
   }
   if (SPORT_CODES.includes(h)) { switchView("recommended"); return; }
-  // The Parlay Zone page became Parlay Mode (2026-08-11), and the
-  // hashchange handler migrates old #parlays bookmarks — but a COLD
-  // load never fires hashchange, so the same branch has to live here
-  // too. Found by the preservation walk: deep-linking #parlays landed
-  // on Home with the mode still off. The key is a literal, not PZ_KEY:
-  // this runs during boot, before the new-look module's const at the
-  // end of the file has initialized — referencing it here is a TDZ
-  // ReferenceError that a try/catch would swallow into a silent no-op
-  // (which is exactly how the first version of this fix failed).
-  if (h === "parlays") {
-    try { localStorage.setItem("qb_pz", "1"); } catch (e) {}
-    switchView("recommended");
-    if (typeof syncParlayMode === "function") syncParlayMode();
-    return;
-  }
   // A tab this sport does not have must not be reachable by URL. CFB has
   // no roster feed, and #rosters would otherwise open a page whose own tab
   // is hidden — the nav and the content disagreeing about what exists.
@@ -25517,83 +25143,13 @@ function initialView() {
   urlBackToView();
 }
 
-/* ============================================================
-   THE PARLAY SLIP — build a ticket the way a sportsbook does
-   ============================================================
-   Ethan, 2026-08-25: "there also should be a way for players to select
-   props and put them in a parlay so they can parlay props together so
-   they can send it to there friends. we will calculate odds for the
-   parlays as well … they should show up how it works on sports books
-   … and they show up on the bottom."
-
-   The slip is LOCAL — the reader's own scratchpad, in localStorage,
-   holding the full leg (side, line, price) because it was read off a
-   board their own entitlement served. What LEAVES the device when a
-   ticket is sent to a friend is the pointer rule again: player and
-   market per leg, nothing priced — the recipient's slip re-prices the
-   legs off THEIR board. The combined price multiplies decimal odds,
-   which is exactly what a book does to an uncorrelated parlay; the
-   engine's correlation-priced SGP tickets are a different product and
-   keep their own page. */
-const SLIP_KEY = "qb_slip_v1";
-const SLIP_MAX = 3;   // the engine's own cap — Ethan, 2026-09-01: "3 legs"
-/* Hockey's slip is two legs (engine/parlays RULES["nhl"].slip_legs —
-   Ethan, 2026-10-03, "the parlay 2-leg mode"); every other board keeps 3. */
-const SLIP_MAX_BY_SPORT = { nhl: 2 };
-let _slip = null;
-let _slipOpen = false;
-
-function slipState() {
-  if (_slip) return _slip;
-  try { _slip = JSON.parse(localStorage.getItem(SLIP_KEY)); } catch (e) { _slip = null; }
-  if (!_slip || !Array.isArray(_slip.legs)) _slip = { sport: "", date: "", legs: [] };
-  return _slip;
-}
-
-function slipSave() {
-  try { localStorage.setItem(SLIP_KEY, JSON.stringify(_slip)); } catch (e) {}
-}
-
-/* Props AND game bets parlay (Ethan, 2026-08-25: "we need too be able
-   too parlays all props and picks together, not just player props. It
-   won't let me put the game prop in a parlay"). A prop leg is keyed by
-   player+market; a game leg by gameBetId — same id the share-card and
-   door handlers already use, so one row has one identity everywhere. */
-const slipLegKey = (l) =>
-  l.gid || `${slugify(l.player)}|${slugify(l.market)}`;
-
-/* IS THIS A GAME ROW? Asked explicitly, because "has no player" stopped
-   being the answer on 2026-09-02. The likelihood board now carries game
-   rows (likely.from_game_bet) and they DO have a `player` — the pick
-   label, "DET ML" — so every `r.player ? prop : game` branch quietly
-   filed them as player props and would have stored a leg naming a
-   player who does not exist. `kind` is stamped by the maker; an edge
-   board's game card has no `kind` and no `player`, and both are game
-   rows. */
-const isGameRow = (r) => !!(r && (r.kind === "game" || !r.player));
-
-const slipRowId = (r) => (isGameRow(r) ? gameBetId(r) : propId(r));
-
-/* BOTH LISTS. A FLIPPED game row — the side the same numbers say lands
-   more often, where the edge board backed the other one on price —
-   exists ONLY on the likelihood board, so a lookup that reads
-   `game_bets` alone returns nothing and its button does nothing at all.
-   That is the dead-control bug this codebase keeps rediscovering. */
-function findGameRow(id) {
-  const d = state.data || {};
-  return (d.game_bets || []).find((g) => gameBetId(g) === id)
-    || (d.most_likely || []).find((g) => g.kind === "game" && gameBetId(g) === id);
-}
-
-function findSlipRow(id) {
-  return findProp(id) || findGameRow(id) || findLikelyProp(id);
-}
-
-function slipHas(r) {
-  const key = isGameRow(r) ? gameBetId(r) : slipLegKey(r);
-  return slipState().legs.some((l) => slipLegKey(l) === key);
-}
-
+/* THE PARLAY SLIP RETIRED (Ethan, 2026-10-31: "get rid of the parlay
+   button and the parlay feature ... make the parlay feature an actual
+   button"). The + Parlay chips, the tray and its sharing are gone; the
+   Parlays page (renderParlayPage) is our own two-leg tickets. What the
+   slip's block also held and other pages read stays: a game bet's label,
+   the game-market words a shared leg is read with, and the board's
+   copy-the-picks text. */
 function gameBetSlipLabel(b) {
   if (b.pick_label || b.headline) return b.pick_label || b.headline;
   const t = typeof teamName === "function" ? teamName(b.team) : b.team;
@@ -25607,158 +25163,7 @@ function gameBetSlipLabel(b) {
 const GAME_MARKET_WORDS = { spread: "Spread", total: "Game total",
   team_total: "Team total", moneyline: "Moneyline" };
 
-function slipToggle(r) {
-  const s = slipState();
-  const key = isGameRow(r) ? gameBetId(r) : slipLegKey(r);
-  const i = s.legs.findIndex((l) => slipLegKey(l) === key);
-  if (i >= 0) {
-    s.legs.splice(i, 1);
-  } else {
-    if (s.legs.length && s.sport && s.sport !== state.sport) {
-      tfToast("The slip holds one board at a time — clear it to start another.");
-      return false;
-    }
-    const cap = SLIP_MAX_BY_SPORT[state.sport] || SLIP_MAX;
-    if (s.legs.length >= cap) {
-      tfToast(`${cap} legs is the ceiling — the same rule the model’s own tickets follow.`);
-      return false;
-    }
-    const kind = r.bet_type || r.market || "";
-    buzz("tap");                       // a leg landing, felt as well as seen
-    // `book` rides along for the text export: a price is only useful to
-    // key in if you know WHICH book was showing it. It is stored, never
-    // drawn on the panel — the slip is already dense enough.
-    s.legs.push(!isGameRow(r)
-      ? { player: r.player, market: r.market,
-          market_label: r.market_label || r.market,
-          side: r.side || "", line: r.line != null ? r.line : null,
-          odds: r.odds != null ? r.odds : null, team: r.team || "",
-          book: r.book || "",
-          // What the engine's clash rules key on (engine/parlays.game_key):
-          // the opponent and the date name the GAME, so two legs from one
-          // game can be told apart from two legs that merely share a club.
-          opponent: r.opponent || "", game_date: r.game_date || r.date || "" }
-      : { gid: gameBetId(r), label: gameBetSlipLabel(r),
-          matchup: r.matchup || `${r.away || ""} @ ${r.home || ""}`,
-          market: kind,
-          market_label: GAME_MARKET_WORDS[kind] || r.market_label || kind,
-          side: r.side || "", line: r.line != null ? r.line : null,
-          odds: r.odds != null ? r.odds : null, team: r.team || "",
-          book: r.book || "", bet_type: r.bet_type || "",
-          home: r.home || "", away: r.away || "",
-          game_date: r.game_date || r.date || "" });
-    if (!s.legs.length || s.legs.length === 1) _slipOpen = false;
-  }
-  s.sport = s.legs.length ? state.sport : "";
-  s.date = s.legs.length
-    ? (r.game_date || r.date || (state.data || {}).date || s.date || "") : "";
-  slipSave();
-  slipRender();
-  if (i < 0 && s.legs.length >= 2) slipCheck(key);
-  return true;
-}
 
-/* THE ENGINE'S RULES, ON THE READER'S OWN TICKET. Ethan, 2026-09-01,
-   closing the QA audit's open question: the slip obeys the same rule as
-   the model's tickets — three legs, conflicts detected and handled. The
-   leg is added at once (the tap must feel instant), then the ticket is
-   sent to /api/parlay/check, which runs every pair through the engine's
-   clash taxonomy. A pair the engine KILLS (same player twice, both sides
-   of one game, a duplicate) takes the new leg back off with the reason;
-   a merely correlated pair stays and is named, because the combined
-   price the panel prints assumes independence and the reader should
-   know when it is flattering them. A failed request changes nothing —
-   the cap and the both-sides guard already hold on the device. */
-async function slipCheck(addedKey) {
-  const s = slipState();
-  let got = null;
-  try {
-    const r = await fetch("/api/parlay/check", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport: s.sport, legs: s.legs }) });
-    if (r.ok) got = await r.json();
-  } catch (e) {}
-  if (!got) return;
-  if (got.ok === false) {
-    const cur = slipState();
-    const i = cur.legs.findIndex((l) => slipLegKey(l) === addedKey);
-    if (i >= 0) { cur.legs.splice(i, 1); slipSave(); slipRender(); }
-    tfToast(`Not added — ${got.reason || "the engine’s parlay rules refuse that pair"}.`);
-    return;
-  }
-  if ((got.warnings || []).length) {
-    tfToast(`Heads up — ${got.warnings[0].reason || "those legs are correlated"}; the combined price assumes they are not.`);
-  }
-}
-
-/* The slip's own game-script check (2026-09-24): two legs from one game
-   that need opposite games say so on the ticket, in the words the game
-   page uses. Legs carry their clubs (team/opponent, or home/away). */
-function slipScriptNote(legs) {
-  const clashes = scriptClashes(legs || []);
-  if (!clashes.length) return "";
-  return `<div class="slip-clash">${icon("warn", 14)} <span>${clashes.slice(0, 2).map(scriptClashLine).join(" ")}</span></div>`;
-}
-
-/* The book's arithmetic: decimal odds multiply, independence assumed —
-   which is what every book does to a cross-game ticket, and the slip
-   says so on its face rather than borrowing the SGP engine's authority. */
-function slipAmerican() {
-  const legs = slipState().legs.filter((l) => l.odds != null);
-  if (legs.length < 2) return null;
-  let dec = 1;
-  for (const l of legs) {
-    const d = mbDecimal(l.odds);
-    if (d == null) return null;
-    dec *= d;
-  }
-  // Even money (decimal 2.0) is spelled −100, matching the engine's
-  // decimal_to_american — Ethan's call, 2026-09-01.
-  return dec > 2 ? Math.round((dec - 1) * 100)
-                 : -Math.round(100 / (dec - 1));
-}
-
-function slipImplied() {
-  const legs = slipState().legs.filter((l) => l.odds != null);
-  if (legs.length < 2) return null;
-  let dec = 1;
-  for (const l of legs) { dec *= mbDecimal(l.odds) || 1; }
-  return 1 / dec;
-}
-
-function slipChip(r) {
-  // The per-card control. A chip, not a bare +: the guard that keeps
-  // inner controls from opening the card already knows .chip. Props and
-  // game bets alike — anything priced can be a leg.
-  if (!r || r.odds == null) return "";
-  if (isGameRow(r) ? !gameBetOpenable(r) : !r.player) return "";
-  const on = slipHas(r);
-  return `<button class="chip slip-chip${on ? " on" : ""}"
-    data-slip="${escapeAttr(slipRowId(r))}" type="button"
-    title="${on ? "Remove from your parlay slip" : "Add to your parlay slip"}"
-    >${on ? "On slip" : "+ Parlay"}</button>`;
-}
-
-/* TEXT TO KEY INTO YOUR OWN BOOK — and nothing more than that.
-
-   Ethan's constraint on this feature is absolute and it is the reason
-   the function is shaped this way: THIS SITE TAKES NO WAGERS. Not a
-   slip, not a "Place Bet", not a balance, no "To Win" figure. What
-   comes out of here is the identity of each pick, the number we saw and
-   the book we saw it at — the things a person would otherwise be
-   copying by hand off the board — plus the time the prices were read,
-   because a price without a timestamp invites somebody to key in a
-   stale one.
-
-   NOTHING IS CALCULATED HERE that is not already on the panel. The
-   combined price is the slip's own arithmetic, shown above the button
-   before it is copied; no stake enters, so no payout can be derived,
-   which is exactly the line the tests forbid crossing. */
-/* The same idea for the board's own list: the picks as text, so nobody
-   re-reads a screen to key six numbers into their book. Identity, the
-   price we saw, the book we saw it at, and WHEN — never a stake, never
-   a payout, because this site takes no wagers and the tests that forbid
-   a betting interface are not being bent for a convenience. */
 function picksExportText(picks) {
   if (!(picks || []).length) return "";
   const when = tzTime(Date.now());
@@ -25771,201 +25176,20 @@ function picksExportText(picks) {
           + `place anything. qellysbook.com does not take bets.`].join("\n");
 }
 
-function slipExportText() {
-  const s = slipState();
-  if (!s.legs.length) return "";
-  const when = tzTime(Date.now());
-  const lines = s.legs.map((l) => {
-    const who = l.player || l.label || "";
-    const what = l.player
-      ? `${String(l.side || "").toUpperCase()} ${l.line != null ? l.line : ""} `
-        + `${l.market_label || l.market}`
-      : `${l.market_label || l.market} \u00b7 ${l.matchup || ""}`;
-    // A PROXY LINE NEVER LEAVES AS A PRICE. It is our own recent-form
-    // baseline standing in until a book posts, and copied into a text
-    // somebody keys into their sportsbook it becomes exactly the fake
-    // number this site refuses to print (Ethan, 2026-08-26). The leg
-    // still travels — it is on the reader's slip — labelled for what it
-    // is instead of wearing a number nobody offered.
-    const proxy = String(l.book || "").toLowerCase() === "proxy";
-    const price = (l.odds == null || proxy)
-      ? "no book price yet"
-      : `${trueMinus(oddsTxt(l.odds))}${l.book ? ` (${l.book})` : ""}`;
-    return `\u2022 ${who} \u2014 ${what.replace(/\s+/g, " ").trim()}  `
-      + price;
-  });
-  // The combined price is only honest when every leg carries a real
-  // one — a product that includes a proxy is a made-up number wearing
-  // the authority of arithmetic.
-  const anyProxy = s.legs.some(
-    (l) => String(l.book || "").toLowerCase() === "proxy" || l.odds == null);
-  const combined = anyProxy ? null : slipAmerican();
-  const head = `${s.legs.length}-leg parlay`
-    + (combined == null ? "" : `, combined ${trueMinus(oddsTxt(combined))}`);
-  return [head, ...lines,
-          `Prices read at ${when} \u2014 confirm at your book before you `
-          + `place anything. qellysbook.com does not take bets.`].join("\n");
-}
-
-/* Empty the slip and close the tray: the Clear button, and a parlay that
-   has just gone to the feed (Ethan, 2026-10-07: the tray stayed up over
-   the post it had just made). */
-function slipReset() {
-  _slip = { sport: "", date: "", legs: [] };
-  _slipOpen = false;
-  slipSave(); slipRender(); renderAll();
-}
-function slipRender() {
-  const host = document.getElementById("qb-slip");
-  if (!host) return;
-  const s = slipState();
-  // `slip-on` for ask.css, where a :has() on the body used to ask.
-  document.body.classList.toggle("slip-on", !!s.legs.length);
-  if (!s.legs.length) { host.hidden = true; host.innerHTML = ""; return; }
-  host.hidden = false;
-  const combined = slipAmerican();
-  const imp = slipImplied();
-  const priceTxt = combined == null ? "add priced legs" : oddsTxt(combined);
-  if (!_slipOpen) {
-    host.innerHTML = `<button class="slip-bar" id="slip-expand" type="button"
-        aria-expanded="false">
-      <span class="slip-n">${s.legs.length}</span>
-      <b>Parlay slip</b>
-      <span class="slip-price">${escapeHtml(trueMinus(String(priceTxt)))}</span>
-      <span class="slip-open-hint">${icon("rising", 14)}</span>
-    </button>`;
-    return;
-  }
-  const legs = s.legs.map((l, i) => `<div class="slip-leg">
-      <span class="slip-leg-mark">${betMark(l, 24)}</span>
-      <span class="slip-leg-who"><b>${escapeHtml(l.player || l.label || "")}</b>
-        <span>${l.player
-          ? `${escapeHtml(String(l.side || "").toUpperCase())} ${l.line != null ? l.line : ""}
-             ${escapeHtml(l.market_label || l.market)}`
-          : `${escapeHtml(l.market_label || l.market)} · ${escapeHtml(l.matchup || "")}`}</span></span>
-      <span class="slip-leg-odds">${escapeHtml(trueMinus(oddsTxt(l.odds)))}</span>
-      <button class="slip-x" data-slip-rm="${i}" aria-label="Remove leg"
-        title="Remove">${icon("cross", 12)}</button>
-    </div>`).join("");
-  host.innerHTML = `<div class="slip-panel">
-    <div class="slip-head">
-      <b>Your parlay · ${s.legs.length} leg${s.legs.length === 1 ? "" : "s"}</b>
-      <button class="btn ghost slip-min" id="slip-collapse" type="button">Minimize</button>
-      <button class="btn ghost slip-min" id="slip-clear" type="button">Clear</button>
-    </div>
-    ${legs}
-    ${slipScriptNote(s.legs)}
-    <div class="slip-total">
-      <span>Combined <b>${escapeHtml(trueMinus(String(priceTxt)))}</b>${
-        imp != null ? ` · ${(imp * 100).toFixed(1)}% if the legs were independent` : ""}</span>
-      <span class="set-note">prices multiply as a book would — same-game
-        correlation is not priced here</span>
-    </div>
-    <div class="slip-send">
-      <button class="btn" id="slip-feed" type="button">Post to the feed</button>
-      <button class="btn ghost" id="slip-send" type="button">Send to a friend</button>
-      <button class="btn ghost" id="slip-copy" type="button"
-        title="Copy the legs as text, to key into your own book">Copy as text</button>
-      <div id="slip-send-slot"></div>
-    </div>
-  </div>`;
-}
-
-document.addEventListener("click", async (e) => {
-  const add = e.target.closest && e.target.closest("[data-slip]");
-  if (add) {
-    e.preventDefault();
-    const r = findSlipRow(add.dataset.slip);
-    if (r) slipToggle(r);
-    // The board rerenders on its own clock; this button answers now.
-    if (r) {
-      const on = slipHas(r);
-      add.classList.toggle("on", on);
-      add.textContent = on ? "On slip" : "+ Parlay";
-    }
-    return;
-  }
-  if (e.target.closest && e.target.closest("#slip-expand")) {
-    _slipOpen = true; slipRender(); return;
-  }
-  if (e.target.closest && e.target.closest("#slip-collapse")) {
-    _slipOpen = false; slipRender(); return;
-  }
+document.addEventListener("click", (e) => {
   const pc = e.target.closest && e.target.closest("#picks-copy");
-  if (pc) {
-    e.preventDefault();
-    copyPlainText(picksExportText(_picksForCopy), pc);
-    return;
-  }
-  const cp = e.target.closest && e.target.closest("#slip-copy");
-  if (cp) {
-    e.preventDefault();
-    copyPlainText(slipExportText(), cp);
-    return;
-  }
-  if (e.target.closest && e.target.closest("#slip-clear")) {
-    slipReset();
-    return;
-  }
-  const rm = e.target.closest && e.target.closest("[data-slip-rm]");
-  if (rm) {
-    e.preventDefault();
-    slipState().legs.splice(Number(rm.dataset.slipRm), 1);
-    if (!slipState().legs.length) { _slip.sport = ""; _slipOpen = false; }
-    slipSave(); slipRender();
-    return;
-  }
-  if (e.target.closest && e.target.closest("#slip-send")) {
-    const u = await acctWho();
-    if (!(u && u.signed_in)) { tfToast("Sign in to send parlays to friends."); return; }
-    const soc = await socFetch();
-    const slot = document.getElementById("slip-send-slot");
-    if (!slot) return;
-    const friends = (soc && soc.friends) || [];
-    slot.innerHTML = friends.length
-      ? `<input class="fr-note" maxlength="280" placeholder="Say why (optional)"
-           aria-label="Note to your friend">
-         <div class="fr-send-row">${friends.map((f) => `
-           <button class="btn ghost" data-parlay-to="${escapeAttr(String(f.id))}"
-             >${escapeHtml(f.name)}</button>`).join("")}</div>`
-      : `<p class="set-empty">No friends to send to yet — your invite link is
-         on the <a href="#account">Account page</a>.</p>`;
-    return;
-  }
-  const to = e.target.closest && e.target.closest("[data-parlay-to]");
-  if (to) {
-    e.preventDefault();
-    const s = slipState();
-    const note = (document.querySelector("#slip-send-slot .fr-note") || {}).value || "";
-    const was = to.textContent;
-    to.textContent = "Sending…";
-    try {
-      const res = await fetch("/api/social/send-parlay", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        // Identity only leaves the device — see engine/social.share_parlay.
-        // A game leg's identity is its MATCHUP, never its label: the
-        // label carries the line ("JAX Over 24"), and a line is content.
-        body: JSON.stringify({ to: Number(to.dataset.parlayTo),
-          sport: s.sport, date: s.date, note,
-          legs: s.legs.map((l) => ({ player: l.player || l.matchup || "",
-                                     market: l.market })) }),
-      });
-      const out = await res.json().catch(() => ({}));
-      to.textContent = res.ok ? (out.already ? "Already sent" : "Sent") : was;
-      if (!res.ok) tfToast(out.error || "That didn’t send.");
-    } catch (err) {
-      to.textContent = was;
-      tfToast("Could not reach the server.");
-    }
-  }
+  if (!pc) return;
+  e.preventDefault();
+  copyPlainText(picksExportText(_picksForCopy), pc);
 });
 
 /* THE FEED — profiles, posts, threads and the whale-tail Tail button —
    lives in js/social.js and css/social.css, loaded the first time The Feed
    opens (Ethan, 2026-10-07: "a full social feature … profiles for users").
    Loaded on first use like the chart library, so a reader who never opens
-   it downloads none of it. What stays here is the door: the loader, the
-   route, and the slip's "Post to the feed" button. */
+   it downloads none of it. What stays here is the door: the loader and the
+   route. (The slip's "Post to the feed" button left with the slip,
+   2026-10-31.) */
 let _socialLoading = null;
 function loadSocial() {
   if (window.QBSocial) return Promise.resolve(window.QBSocial);
@@ -26006,22 +25230,6 @@ function feedRoute(h) {
   return true;
 }
 
-document.addEventListener("click", async (e) => {
-  if (e.target.closest && e.target.closest("#slip-feed")) {
-    const u = await acctWho();
-    if (!(u && u.signed_in)) { tfToast("Sign in (free) to post to the feed."); return; }
-    const slot = document.getElementById("slip-send-slot");
-    const S = await loadSocial();
-    if (slot && S) S.slipPostStart(slot);
-    return;
-  }
-  const go = e.target.closest && e.target.closest("#slip-feed-go");
-  if (go) {
-    e.preventDefault();
-    const S = await loadSocial();
-    if (S) S.slipPost(go);
-  }
-});
 
 
 /* ============================================================
@@ -26095,7 +25303,7 @@ function msgShareRow(sh, sentSide) {
   // opens the prop page, the game-bet page or the player's charts.
   const doors = isParlay
     ? (sh.legs || []).map((l) =>
-        `<button class="chip slip-chip"${shareDoorAttrs(sh.sport, l.player,
+        `<button class="chip"${shareDoorAttrs(sh.sport, l.player,
           l.market)}>${escapeHtml(l.player)}</button>`).join("")
     : "";
   return `<div class="msg-row${!sentSide && !sh.seen ? " unread" : ""}">
@@ -27021,15 +26229,6 @@ function bind() {
       return;
     }
     if (h === state.view) return;
-    // The Parlay Zone page became Parlay Mode (2026-08-11) — an old
-    // #parlays bookmark turns the mode on and lands on the tickets.
-    if (h === "parlays") {
-      try { localStorage.setItem(PZ_KEY, "1"); } catch (e) {}
-      exitStandaloneMode();
-      switchView("recommended");
-      if (typeof syncParlayMode === "function") syncParlayMode();
-      return;
-    }
     // An IN-PAGE ANCHOR, not a view: `#team-form` and anything like
     // it. The target may sit inside a sub-tab panel that is display:none,
     // where the browser's own jump lands nowhere — so open the room, then
@@ -27287,107 +26486,6 @@ function renderGreeting() {
   const a = (typeof acctState === "function") ? acctState() : null;
   hi.textContent = a ? day + "," : "Welcome";
   nm.textContent = a ? a.name : "to the Book";
-}
-
-/* High Confidence Mode — a real filter with the journal's own bands:
-   ON shows A-grade picks only (quality >= 80) on the board and the Top
-   Picks strip. Persisted like the theme. */
-const HCM_KEY = "qb_hcm";
-
-function hcmOn() {
-  try { return localStorage.getItem(HCM_KEY) === "1"; } catch (e) { return false; }
-}
-
-function hcmPaint() {
-  const btn = document.getElementById("hcm-toggle");
-  if (!btn) return;
-  const on = hcmOn();
-  btn.setAttribute("aria-checked", on ? "true" : "false");
-  btn.classList.toggle("on", on);
-  const state = btn.querySelector(".sb-hcm-state");
-  if (state) state.textContent = on ? "On" : "Off";
-  paintFilterCount();
-}
-
-/* The Filters heading says how many are on, so a switch folded out of
-   sight can never be the silent reason picks are missing (audit item
-   10, 2026-09-23). Reads the same two stores the switches write. */
-function paintFilterCount() {
-  const el = document.getElementById("sb-filters-n");
-  if (!el) return;
-  let n = 0;
-  try { if (localStorage.getItem("qb_hcm") === "1") n++; } catch (e) {}
-  try { if (localStorage.getItem("qb_pz") === "1") n++; } catch (e) {}
-  el.hidden = !n;
-  el.textContent = n ? `${n} on` : "";
-}
-
-function initHcm() {
-  const btn = document.getElementById("hcm-toggle");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    try { localStorage.setItem(HCM_KEY, hcmOn() ? "0" : "1"); } catch (e) {}
-    hcmPaint();
-    /* The board it filters (passesFilters), not only the strip. This
-       called `renderCards`, the board's name before a redesign, behind a
-       typeof guard that hid its absence: the switch changed the Top
-       Picks strip and left the board under it unfiltered until the next
-       navigation (the site audit, 2026-09-24). */
-    if (state.data) renderAll();
-    renderTopPicks();
-  });
-  hcmPaint();
-}
-
-/* Parlay Mode — the render's second sidebar toggle, replacing the
-   Parlay Zone PAGE (Ethan, 2026-08-11: "ditch the parlay zone screen
-   but keep the same rules"). The rules did not move: the engine's
-   screen, the correlation pricing, the one-per-slate cap and the
-   Record-page journaling are exactly what they were — this is only
-   WHERE the tickets render (on Home, while the switch is on). */
-const PZ_KEY = "qb_pz";
-
-function pzOn() {
-  try { return localStorage.getItem(PZ_KEY) === "1"; } catch (e) { return false; }
-}
-
-function syncParlayMode() {
-  const wrap = document.getElementById("parlay-mode");
-  if (!wrap) return;
-  // Sports whose slates never carry a parlay screen (UFC's §9 refusal,
-  // the standalone markets) keep the section dark even with the switch
-  // on — an empty room with an explanation belongs to sports that COULD
-  // have tickets tonight.
-  const barred = (HIDDEN_VIEWS[state.sport] || []).includes("parlays");
-  wrap.hidden = barred || !pzOn();
-}
-
-function initPz() {
-  const btn = document.getElementById("pz-toggle");
-  if (!btn) return;
-  const paint = () => {
-    const on = pzOn();
-    btn.setAttribute("aria-checked", on ? "true" : "false");
-    btn.classList.toggle("on", on);
-    const s = btn.querySelector(".sb-hcm-state");
-    if (s) s.textContent = on ? "On" : "Off";
-    paintFilterCount();
-  };
-  btn.addEventListener("click", () => {
-    try { localStorage.setItem(PZ_KEY, pzOn() ? "0" : "1"); } catch (e) {}
-    paint();
-    syncParlayMode();
-    // Turning it on means "show me the tickets" — go where they are.
-    if (pzOn()) {
-      if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
-      if (state.view !== "recommended") switchView("recommended", true);
-      const wrap = document.getElementById("parlay-mode");
-      if (wrap && !wrap.hidden)
-        setTimeout(() => wrap.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    }
-  });
-  paint();
-  syncParlayMode();
 }
 
 /* The Top Picks strip RETIRED 2026-08-31. It compacted the same five
@@ -30425,7 +29523,7 @@ function tourOpen(step) {
 const SWIPE_MIN_X = 70, SWIPE_MAX_Y = 40, PTR_MIN = 72;
 //: The views that follow the sport chips. A detail page, the chat, the
 //: account page and the standalone modes are not boards.
-const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "edge", "scanner",
+const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "parlays", "edge", "scanner",
                      "futures", "injuries", "weather", "trending", "rosters", "players", "standings"];
 const BUZZ = { tap: [12], win: [30, 40, 30], loss: [70] };
 
@@ -30558,7 +29656,9 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
    Picks · Odds · Research · My Book, then Proof. Every destination
    the sheet carried before is still here, regrouped. */
 const MORE_GROUPS = [
-  ["Picks", ["view:likely", "view:longshots", "view:zeno", "view:feed"]],
+  // Parlays (2026-10-31, Ethan: "make the parlay feature an actual button"):
+  // after Long Shots, as in the sidebar.
+  ["Picks", ["view:likely", "view:longshots", "view:parlays", "view:zeno", "view:feed"]],
   ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures", "view:race"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
@@ -30653,37 +29753,12 @@ function moreSheetBuild() {
 
 /* THE DRAWER'S FOOTER, IN THE SHEET. On phones the sidebar no longer
    slides in (2026-09-22: two menus was the repeat Ethan photographed),
-   so the two switches and the social links that lived in its footer
-   would have had no phone at all. Each row here PROXIES the real
-   control — the switch is #hcm-toggle / #pz-toggle clicked through, the
-   link is #nav-ig / #nav-dc cloned with whatever href igMount gave it —
-   so there is still one place each is wired and one place each is
-   switched. Rebuilt on every open, so the state read is the state. */
+   so the social links that live in its footer would have had no phone at
+   all. Each PROXIES the real link — #nav-ig / #nav-dc cloned with whatever
+   href igMount gave it — so there is still one place each is wired.
+   Rebuilt on every open. (The footer's two switches, High Confidence and
+   Parlay Mode, left on 2026-10-31; their proxies went with them.) */
 function moreSheetFoot() {
-  const sw = document.getElementById("more-switches");
-  if (sw) {
-    sw.innerHTML = "";
-    ["hcm-toggle", "pz-toggle"].forEach((id) => {
-      const real = document.getElementById(id);
-      const words = real && real.closest(".sb-hcm");
-      if (!real || !words || words.hidden) return;
-      const on = real.getAttribute("aria-checked") === "true";
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "more-pill more-switch";
-      b.setAttribute("role", "switch");
-      b.setAttribute("aria-checked", on ? "true" : "false");
-      b.dataset.for = id;
-      const ico = words.querySelector("svg");
-      if (ico) b.appendChild(ico.cloneNode(true));
-      b.appendChild(document.createTextNode(((words.querySelector("b") || {}).textContent || "").trim()));
-      const st = document.createElement("i");
-      st.textContent = on ? "On" : "Off";
-      b.appendChild(st);
-      b.addEventListener("click", () => { real.click(); moreSheetFoot(); });
-      sw.appendChild(b);
-    });
-  }
   const so = document.getElementById("more-social");
   if (so) {
     so.innerHTML = "";
@@ -31511,8 +30586,6 @@ function buzzOnSettle(rows) {
 
 (function initNewLook() {
   renderGreeting();
-  initHcm();
-  initPz();
   initGamesControls();
   // The drawer opens from the hamburger at top left now, so the tab bar
   // no longer has to synthesise a click on a hidden button to reach it.
@@ -31602,7 +30675,6 @@ function buzzOnSettle(rows) {
     if (!(_acctUser && _acctUser.signed_in)) return;
     socFetch(true).then(msgBadge);
   }, 120000);
-  slipRender();
   tourMaybe();
   // The avatar chip: initials for a signed-in account, never a fake name.
   const acctBtn = document.getElementById("nav-acct");

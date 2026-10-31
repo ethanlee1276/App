@@ -8,7 +8,7 @@ horizontal-scroll bugs, no overflow, and no JS errors anywhere — but its
 most-tapped controls were far too small to hit one-handed:
 
     .sb-fold          279 x 13     the drawer's collapsible group heads
-    .sb-hcm-switch    271 x 22     the two rail switches
+    .sb-hcm-switch    271 x 22     the two rail switches (left 2026-10-31)
     .sportbar-in .sport-btn    27px   the league chips — how you change sport
     .sb-item                  ~38px drawer nav rows (Why Us / About live
                                     here since 2026-08-25)
@@ -118,9 +118,10 @@ def test_the_drawer_group_heads_are_thumb_sized():
     assert "padding: 15px 0" in r and "margin: -11px 0" in r, r
 
 
-def test_the_rail_switches_take_the_full_target():
-    r = _rule(PHONE, ".sb-hcm-switch {")
-    assert "min-height: 44px" in r, r
+def test_the_rail_switches_left_with_their_rule():
+    # High Confidence and Parlay Mode left on 2026-10-31; no 44px rule is
+    # kept for a control that no longer exists.
+    assert ".sb-hcm-switch" not in CSS
 
 
 def test_the_league_chips_take_the_full_target():
@@ -241,7 +242,6 @@ def test_the_touch_rules_stay_inside_the_phone_block():
     # these selectors also carry a base rule outside the media block, and
     # matching on the selector alone would call the base rule a leak.
     for sel in (".sb-fold { padding: 15px 0",
-                ".sb-hcm-switch { min-height: 44px",
                 ".sportbar-in .sport-btn { min-height: 44px",
                 ".sb-item { min-height: 36px"):
         assert sel in PHONE, f"{sel!r} is not in the phone block"

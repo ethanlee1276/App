@@ -2105,8 +2105,12 @@ def _ticket(t: dict, league: str, pool: str) -> dict:
                                                l.get("market_label") or l.get("market"),
                                                f"({l['odds']:+d})" if isinstance(l.get("odds"), int) else "")
                              if x not in (None, "")))
-    out = {"league": league, "pool": pool, "grade": t.get("grade"), "legs": legs}
-    for k, name in (("likely_case_american", "price"), ("modeled_joint", "model_chance")):
+    out = {"league": league, "pool": pool, "legs": legs}
+    # A two-leg ticket (engine/twoleg): its kind, the price the record
+    # grades it at, the chance both hit, why the legs belong together, and
+    # whether it is staked or tracked.
+    for k, name in (("kind_label", "kind"), ("price", "price"), ("joint", "model_chance"),
+                    ("why", "why"), ("staked", "staked")):
         if t.get(k) is not None:
             out[name] = t[k]
     return out
@@ -2143,8 +2147,9 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
     for s in _board_leagues(boards, sport, prefer):
         b = boards[s]
         if kind == "parlays":
-            for key, pool in (("parlays", "edge"), ("likely_parlays", "likely")):
-                block = b.get(key) or {}
+            tl = b.get("two_leg") if isinstance(b.get("two_leg"), dict) else {}
+            for pool in ("edge", "likely"):
+                block = tl.get(pool) or {}
                 for t in (block.get("tickets") if isinstance(block, dict) else None) or []:
                     if isinstance(t, dict):
                         rows.append((0, _ticket(t, s, pool)))

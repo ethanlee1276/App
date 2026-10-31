@@ -997,6 +997,105 @@ function recEraSection(er) {
    so. It is only the point below which a percentage is decoration. */
 const PARLAY_RATE_FLOOR = 10;
 
+/* TWO-LEG PARLAYS FROM OUR OWN PICKS (engine/twoleg, parlayledger
+   .report_twoleg, ledger._two_leg_backtest). Ethan, 2026-10-31: "see what
+   would have happened if we did parlay our past picks together and record
+   that and put those picks on the data page and also continue recording our
+   same-game parlays and same-game parlay X's". Each pool apart, Edge
+   parlays and Most Likely parlays, graded at one unit a ticket and never
+   blended with the singles. Under them, every graded day of the record
+   paired the way tonight's board pairs, next to the same picks bet singly:
+   a two-leg parlay does what its legs do, about twice, and this table is
+   where that shows. Below PARLAY_RATE_FLOOR a pool prints its record and
+   units, no rate. */
+const TL_KIND_WORD = { all: "All", same_game: "Same game", two_game: "Two games" };
+const TL_SPORT_ORDER = ["all", "nfl", "cfb", "nba", "mlb"];
+// Even money is spelled −100, as engine/parlays.decimal_to_american spells it.
+const tlAmerican = (dec) => (dec > 2 ? Math.round((dec - 1) * 100) : -Math.round(100 / (dec - 1)));
+const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
+
+function recTwoLegSection(tl) {
+  if (!tl || typeof tl !== "object") return "";
+  const pools = [["edge", "Edge parlays"], ["likely", "Most Likely parlays"]];
+  const btRows = (tl.backtest || {}).rows || [];
+  if (!pools.some(([p]) => (tl[p] || {}).graded || (tl[p] || {}).open) && !btRows.length) return "";
+  const tiles = pools.map(([p, name]) => {
+    const r = tl[p] || {};
+    if (!r.graded) {
+      return recTile(name, "none graded",
+        r.open ? `${r.open} open, graded the morning after` : "they journal with each night’s board");
+    }
+    const rate = r.graded >= PARLAY_RATE_FLOOR ? ` · ${fmtRoi(r.roi)}` : " · too few for a rate";
+    return recTile(name, `${r.wins}-${r.losses}`,
+      `${tlUnits(r.net_units)} at one unit a ticket${rate}${r.open ? ` · ${r.open} open` : ""}`,
+      { tone: r.graded >= PARLAY_RATE_FLOOR ? toneOf(r.net_units) : "" });
+  }).join("");
+  const stakedU = pools.reduce((s, [p]) => s + ((tl[p] || {}).staked_units || 0), 0);
+  const stakedNet = pools.reduce((s, [p]) => s + ((tl[p] || {}).staked_net || 0), 0);
+  const stakedTile = recTile("Staked parlays", stakedU ? tlUnits(stakedNet) : "none yet",
+    stakedU ? `on ${stakedU.toFixed(1)}u staked, half a unit a ticket`
+      : "a parlay is staked only when both its legs are");
+  const table = (pool, name) => {
+    const rows = btRows.filter((r) => r.pool === pool)
+      .sort((a, b) => (TL_SPORT_ORDER.indexOf(a.sport) - TL_SPORT_ORDER.indexOf(b.sport))
+        || (Object.keys(TL_KIND_WORD).indexOf(a.kind) - Object.keys(TL_KIND_WORD).indexOf(b.kind)));
+    if (!rows.length) return "";
+    return `<div class="section-title minor">If we had paired our past ${escapeHtml(name)} picks
+        <span class="sub">— one unit a parlay, against the same picks bet singly</span></div>
+      <div class="ev-scroll"><table class="agate tl-bt"><thead><tr><th>League</th><th>Kind</th>
+        <th class="num">Parlays</th><th class="num">Both hit</th><th class="num">ROI</th>
+        <th class="num">As singles</th><th class="num">Units</th></tr></thead><tbody>${rows.map((r) => `<tr${
+          r.kind === "all" ? ' class="tl-bt-all"' : ""}>
+        <td>${r.sport === "all" ? "All four" : escapeHtml(r.sport.toUpperCase())}</td>
+        <td>${escapeHtml(TL_KIND_WORD[r.kind] || r.kind)}</td>
+        <td class="num">${r.parlays}</td>
+        <td class="num">${pct0(r.win_rate)}</td>
+        <td class="num ${toneOf(r.roi)}">${fmtRoi(r.roi)}</td>
+        <td class="num ${toneOf(r.singles_roi)}">${fmtRoi(r.singles_roi)}</td>
+        <td class="num ${toneOf(r.units)}">${tlUnits(r.units)}</td></tr>`).join("")}</tbody></table></div>`;
+  };
+  const recent = pools.flatMap(([p, name]) => ((tl[p] || {}).recent || []).map((t) => ({ ...t, pool: name })))
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).slice(0, 12);
+  const rows = recent.map((t) => {
+    const pnl = t.pnl_units || 0;
+    const won = t.status === "won";
+    const legs = (t.legs || []).map((l) => {
+      const s = l.status === "won" ? "won" : l.status === "lost" ? "lost" : "push";
+      return `<span class="pl-leg ${s}"><span class="pl-mark">${
+        s === "won" ? icon("check") : s === "lost" ? icon("cross") : icon("dash")}</span>${
+        escapeHtml(l.player || "")} ${escapeHtml(l.side || "")} ${l.line ?? ""}
+        <span style="opacity:.6">${escapeHtml(marketWord(l.market))}</span></span>`;
+    }).join("");
+    return `<div class="rl-row has-legs ${won ? "won" : "lost"}">
+      <span class="rl-icon">${won ? icon("check") : icon("cross")}</span>
+      <span class="rl-date">${escapeHtml(t.date || "")}</span>
+      <span class="rl-main"><strong>${escapeHtml((t.sport || "").toUpperCase())} ${escapeHtml(t.pool)}</strong>
+        <span class="rl-bet">${escapeHtml(TL_KIND_WORD[t.kind] || "")}${t.staked ? " · staked" : " · tracked"}</span></span>
+      <span class="rl-proc"></span>
+      <span class="rl-odds">${t.price_dec > 1 ? american(tlAmerican(t.price_dec)) : "—"}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${tlUnits(pnl)}</span>
+      <span class="pl-legs">${legs}</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="section-title">Two-leg parlays — tracked apart
+      <span class="sub">— two of our Edge picks, or two of our Most Likely picks. Never mixed
+      into the record above.</span></div>
+    ${recDisclosure("How these are paired, priced and staked", `Each night the board pairs its
+      own picks: two from one game when they make sense together (teammates who rise
+      together, or one pick on each team), and two from different games. A pick is used
+      once per list. Every parlay is graded off its two picks’ own results, at one unit a
+      ticket so the ROI means something. Prices: two games at the books’ two prices
+      multiplied, 3% under that when the picks sit at different books; a same-game pair at
+      9.5% under the product, the middle of what books take off a same-game parlay. Real
+      money rides only when both legs are picks we stake, at half a unit; the rest are
+      tracked. The table under the tiles is what pairing every graded day of our past
+      picks this way would have done.`)}
+    <div class="stats rec-kpis">${tiles}${stakedTile}</div>
+    ${table("edge", "Edge")}${table("likely", "Most Likely")}
+    ${rows ? `<div class="card" style="padding:0;margin-top:12px">${rows}</div>` : ""}`;
+}
+
 function recParlaySection(pz) {
   if (!pz || (!pz.graded && !pz.open)) return "";
   const pr = pz.promotion || {};
@@ -1058,8 +1157,9 @@ function recParlaySection(pz) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title">Parlays — graded, never staked
-      <span class="sub">— on probation until 100 tickets clear the bar. Never
+    <div class="section-title">The old parlay screen — graded, never staked
+      <span class="sub">— retired on 2026-10-31 for the two-leg parlays above; its
+      tickets stay graded here. Never
       mixed into the record above.</span></div>
     ${recDisclosure("Why these stake nothing", `${escapeHtml(pr.note || "")}
       Every ticket here is graded at a flat one-unit notional so the ROI means
@@ -3563,7 +3663,8 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      receipts],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
-     (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
+     (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recTwoLegSection(d.two_leg))
+     + (scoped ? "" : recParlaySection(d.parlays))
      + (scoped ? "" : recStaleSection(d.stale_flags)) + (scoped ? "" : recFormSection(d.form_sampler))
      + (scoped ? "" : recLooseSection(d.loose_sampler))
      + (scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record))

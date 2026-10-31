@@ -84,14 +84,14 @@ def test_exactly_one_dotted_rule_keeps_a_full_pixel():
     assert not re.findall(BORDER + r"var\(--hairline\)\s+dotted", DECLS)
 
 
-def test_the_chevron_is_not_a_border_rule():
-    """1.6px on .pz-runner > summary::after draws a disclosure chevron out
-    of two borders. It is a glyph, and thinning it would thin the mark
-    rather than a divider."""
-    i = DECLS.index(".pz-runner > summary::after")
-    block = DECLS[i:DECLS.index("}", i)]
-    assert "1.6px" in block
-    assert "--hairline" not in block
+def test_the_chevron_drawn_from_borders_left_with_its_cards():
+    """1.6px on .pz-runner > summary::after drew a disclosure chevron out of
+    two borders, the one glyph exempt from the hairline. The old parlay
+    screen's folded tickets left on 2026-10-31 and the chevron with them, so
+    no border wider than a hairline is left on a top, right or bottom edge
+    except the accent stripes above."""
+    assert ".pz-runner" not in DECLS
+    assert not re.findall(BORDER + r"1\.6px", DECLS), "a border-drawn glyph is back: write down why"
 
 
 # --- it did not become a different change ------------------------------------

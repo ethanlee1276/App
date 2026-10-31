@@ -475,3 +475,5 @@
   border-radius: var(--radius-sm); border: var(--hairline) solid transparent;
   background: color-mix(in oklab, var(--warn) 10%, var(--panel)); font-size: var(--fs-sm); }
 .rec-offline .ic { color: var(--warn); flex: none; margin-top: 2px; }
+/* The two-leg backtest (recTwoLegSection): a league's "every pair" row is its total. */
+.tl-bt tr.tl-bt-all td { font-weight: 600; }

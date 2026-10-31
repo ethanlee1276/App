@@ -283,9 +283,6 @@ function renderGameBetPage(b) {
     <div class="pp-nav">
       <button class="btn-quiet gp-back" id="pp-back">${escapeHtml(detailBackLabel())}</button>
       <span class="pp-nav-right">
-        ${b.odds != null ? `<button class="btn ghost"
-          data-slip="${escapeAttr(gameBetId(b))}">${slipHas(b)
-            ? "On slip" : "+ Parlay"}</button>` : ""}
         <button class="btn ghost qb-share" data-card="${escapeAttr(gameBetId(b))}"
           >Share card</button>
       </span>
@@ -818,9 +815,6 @@ function renderPropPage() {
       </div>
       <div class="pp-actions">
         ${lk && lk.bet ? "" : betItHTML(lk || r, "btn primary")}
-        ${r.player && r.odds != null && !(lk && lk.bet) ? `<button class="btn ghost"
-          data-slip="${escapeAttr(propId(r))}">${slipHas(r)
-            ? "On slip" : "+ Parlay"}</button>` : ""}
         ${/* ONE SHARE, NOT THREE (the site audit, 2026-09-24): Send,
               Copy link and Share card sat side by side, six buttons across
               a 390px phone. Share opens the three together under the

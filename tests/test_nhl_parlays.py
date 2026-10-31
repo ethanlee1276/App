@@ -37,8 +37,11 @@ def test_a_hockey_slip_stops_at_two_and_nobody_elses_changes():
     assert out["ok"] is False and "2 legs is the ceiling" in out["reason"]
     assert P.check_ticket("ufc", [{"player": f"F{i}", "market": "moneyline"} for i in range(3)])["reason"] != \
         "2 legs is the ceiling"
+    # The page's own slip and its per-league cap left on 2026-10-31 (Ethan:
+    # "get rid of the parlay button and the parlay feature"); the checker
+    # above still holds a hockey ticket to two when Ask grades one.
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    assert "const SLIP_MAX_BY_SPORT = { nhl: 2 };" in js and "SLIP_MAX_BY_SPORT[state.sport] || SLIP_MAX" in js
+    assert "SLIP_MAX" not in js
 
 
 def test_one_goal_is_several_points_so_teammates_scoring_moves_together():
@@ -65,7 +68,7 @@ def test_the_anytime_scorer_is_not_a_compounding_leg_and_the_board_runs_the_scre
              recommended=True, grade="Play", book="fd", volatility="MED"),
         dict(leg("Draisaitl", "points", "EDM", "CGY"), line=1.5, odds=130, hit_prob=0.48, edge=0.05,
              recommended=True, grade="Play", book="fd", volatility="MED")], "game_bets": [], "games": []}
-    out = P.attach(slate, "nhl", state="normal")
+    out = P._screen_attach(slate, "nhl", state="normal")
     assert out["parlays"]["sport"] == "nhl" and "tickets" in out["parlays"]
     assert all(len(t.get("legs") or []) <= 2 for t in out["parlays"]["tickets"])
 

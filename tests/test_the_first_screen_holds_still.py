@@ -99,7 +99,8 @@ def test_no_style_rule_asks_the_whole_page_a_question():
         css = re.sub(r"/\*.*?\*/", "", READ("web", "css", name), flags=re.S)
         hit = re.search(r"(?:^|[\s,}>~+(])(html|body|:root)(?:[.#][\w-]+|\[[^\]]*\])*:has\(", css)
         assert not hit, (name, css[max(0, hit.start() - 40):hit.end() + 60] if hit else "")
-    assert 'document.body.classList.toggle("slip-on", !!s.legs.length);' in APP
+    # body.slip-on, the Ask slip's class, left with the slip (2026-10-31).
+    assert "slip-on" not in APP
     chat = READ("web", "js", "chat.js")
     assert chat.count("chatFabMark();") >= 4, "the chat bar's class follows the bar"
     at = APP.index("ONLY WHILE IT IS ON SCREEN")

@@ -28,7 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 with open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8") as f:
     HTML = f.read()
 
-SIDEBAR = HTML[HTML.index('class="sidebar"'):HTML.index('id="sb-hcm"')]
+SIDEBAR = HTML[HTML.index('class="sidebar"'):HTML.index('class="sb-foot"')]
 TIER1 = SIDEBAR[SIDEBAR.index('data-group="pages"'):SIDEBAR.index("sb-fold")]
 
 
@@ -45,7 +45,8 @@ def test_the_nightly_six_lead_and_nothing_else_does():
     # a fold on desktop: "move the ask qellys button … to be in a better
     # and more accessible spot".
     # Edge Picks joined it after Long Shots on 2026-09-26 — Ethan, 2026-09-26: "the edge bets can be its own menu or tab. We shouldn't show that on the main page anymore".
-    assert _labels(TIER1) == ["Dashboard", "Most Likely", "Ask Qellys", "Long Shots", "Edge Picks",
+    # Parlays joined it after Long Shots on 2026-10-31 — Ethan: "make the parlay feature an actual button".
+    assert _labels(TIER1) == ["Dashboard", "Most Likely", "Ask Qellys", "Long Shots", "Parlays", "Edge Picks",
                               "Live Now", "My Bets", "Record"], _labels(TIER1)
 
 

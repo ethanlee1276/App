@@ -10,8 +10,10 @@ A game goes two ways that move props — who is AHEAD and how many POINTS
 get scored — and each lean the site reads is one this repo measured
 (engine/corrfit.PRIORS). Picks are sorted into the four scripts they can
 win in; two picks that need opposite directions on one axis are a clash,
-named on the game page, on the Most Likely page, on the pick page and on
-the parlay slip.
+named on the game page, on the Most Likely page and on the pick page. (The
+parlay slip, the fourth place, left on 2026-10-31; the Parlays page pairs
+two picks from one game only when they rise together or stand on opposite
+teams without pulling apart, engine/twoleg.)
 """
 import json
 import re
@@ -70,7 +72,7 @@ def _run(expr):
     if not node:
         return None
     fns = [_fn(n) for n in ("scriptGameOf", "scriptNeed", "scriptPickLabel", "scriptScenarios", "scriptExpected",
-                            "scriptClashes", "scriptClashLine", "gameScriptsHTML", "slipScriptNote")]
+                            "scriptClashes", "scriptClashLine", "gameScriptsHTML")]
     prog = PRELUDE + "\n" + _consts() + "\n" + "\n".join(fns) + f"\nprocess.stdout.write(JSON.stringify({expr}));"
     out = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
@@ -121,13 +123,8 @@ def test_a_game_with_no_clash_says_so():
     assert "None of these need opposite games" in html and "Pull against each other" not in html
 
 
-def test_the_slip_names_a_clash_on_the_ticket():
-    legs = [dict(RUSH_U), dict(REC_U)]
-    note = _run("slipScriptNote(%s)" % json.dumps(legs))
-    if note is None:
-        return
-    assert 'class="slip-clash"' in note and "Josh Jacobs" in note and "Jayden Reed" in note
-    assert _run("slipScriptNote(%s)" % json.dumps([dict(ML), dict(REC_U)])) == ""
+def test_the_slips_clash_note_left_with_the_slip():
+    assert "function slipScriptNote" not in APP and ".slip-clash" not in CSS
 
 
 def test_every_surface_carries_it():
@@ -137,8 +134,7 @@ def test_every_surface_carries_it():
     assert '<div id="gp-sec-scripts">' in page
     assert "+ likelyScriptsHTML(rows)\n" in _fn("renderLikely")
     assert "scriptWhyItem(" in _fn("whyLikelyHTML") and "scriptWhyItem(b)" in _fn("whyGameHTML")
-    assert "${slipScriptNote(s.legs)}" in _fn("slipRender")
-    for sel in (".gs-card {", ".gs-scn.is-expected {", ".gs-chip {", ".gs-clash {", ".slip-clash {"):
+    for sel in (".gs-card {", ".gs-scn.is-expected {", ".gs-chip {", ".gs-clash {"):
         assert sel in CSS, sel
 
 

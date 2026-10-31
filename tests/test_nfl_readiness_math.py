@@ -307,10 +307,12 @@ def test_a_fourth_leg_is_refused_everywhere_the_engine_counts_legs():
     out = P.check_ticket("nfl", legs)
     assert out["ok"] is False and "3 legs is the ceiling" in out["reason"]
     assert P.check_ticket("nfl", legs[:3])["ok"] is True
+    # (The page's own slip, which held the same three, left on 2026-10-31;
+    # the Parlays page builds two-leg tickets only, engine/twoleg.)
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(here, "web", "js", "app.js"), encoding="utf-8") as fh:
         js = fh.read()
-    assert "const SLIP_MAX = 3;" in js
+    assert "SLIP_MAX" not in js
 
 
 # --- Conflict probes -----------------------------------------------------------------

@@ -29,7 +29,8 @@ CC = open(os.path.join(ROOT, "web", "css", "carrychart.css"), encoding="utf-8").
 SOCIAL = open(os.path.join(ROOT, "web", "css", "social.css"), encoding="utf-8").read()
 SECTION = CSS[CSS.index("GLASS FOR WHAT FLOATS"):]
 CODE = re.sub(r"/\*.*?\*/", "", SECTION.split("*/", 1)[1], flags=re.S)
-FLOATS = (".tf-toast", ".crash-note", ".slip-bar", '[id="ptr"]', ".slip-panel", ".pk-card", ".ffd-card",
+# (".slip-bar" and ".slip-panel" left with the parlay slip, 2026-10-31.)
+FLOATS = (".tf-toast", ".crash-note", '[id="ptr"]', ".pk-card", ".ffd-card",
           ".tour-card", ".a2hs-card", ".graph-tip")
 SHOTS = os.environ.get("QB_SHOTS_DIR", "")
 

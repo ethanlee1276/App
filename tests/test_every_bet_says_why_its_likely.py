@@ -133,15 +133,16 @@ def test_a_most_likely_pick_with_no_edge_prop_is_drawn_from_its_own_row():
     """Ethan, 2026-09-24, beside Player search on Malachi Fields: "fix it
     so it only pulls up the page with the 'why it's likely' and not the
     player search page". The door opens on the row's own id when the edge
-    board has no openable prop (tests/test_likely_rung_door.py); the page,
-    its address and the Parlay button all resolve that id to the row."""
+    board has no openable prop (tests/test_likely_rung_door.py); the page
+    and its address both resolve that id to the row. (The Parlay button, the
+    third, left with the slip on 2026-10-31.)"""
     prop = _fn("renderPropPage")
     assert "findProp(state.propId) || (state.propLikely ? findLikelyProp(state.propId) : null)" in prop
     op = _fn("openProp")
     assert "const lkRow = opts.likely ? findLikelyProp(id) : null;" in op, \
         "a /pick/<slug>/likely address, so a reload or a shared link lands on it"
     assert "(lkRow && likelyTarget(lkRow)) || findProp(id) || lkRow" in op
-    assert "findProp(id) || findGameRow(id) || findLikelyProp(id)" in _fn("findSlipRow")
+    assert "function findSlipRow" not in APP
     look = _fn("findLikelyProp")
     assert "propId(x) === id" in look and "pickSlug(x) === id" in look
 

@@ -264,7 +264,14 @@ APP_JS_BUDGET_KB = 290
 #: pre-rule Combined and Most Likely tiles stay for a record written before
 #: the rule (176 B of it); nothing else on the first page is dead. Told to
 #: Ethan.
-BOOT_BUDGET_KB = 382
+#: 382 -> 374 on 2026-10-31, DOWN, for Ethan's "get rid of the parlay button
+#: and the parlay feature" and "remove the high confidence button": Parlay
+#: Mode, the + Parlay card buttons, the do-it-yourself slip and its dock, the
+#: old screen's tickets and their share card, and High Confidence with its
+#: Filters fold left the first page. The Parlays page that replaced them is
+#: one small renderer (its Record section rides in js/record.js, loaded on
+#: first use). 390,941 -> 382,110 B; the budget keeps the saving.
+BOOT_BUDGET_KB = 374
 
 
 def _gz_trimmed(rel: str) -> int:

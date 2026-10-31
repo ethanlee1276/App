@@ -166,7 +166,7 @@ def test_attach_hangs_both_pools_on_the_slate():
     slate = _slate([_row("A Wideout", "receptions", 0.64),
                     _row("A QB", "pass_yds", 0.61, line=245.5)])
     slate.update(recommendations=[], game_bets=[])
-    P.attach(slate, "nfl")
+    P._screen_attach(slate, "nfl")
     assert slate["parlays"]["pool"] == "edge"
     assert slate["likely_parlays"]["pool"] == "likely"
     assert slate["likely_parlays"]["eligible_legs"] == 2
@@ -192,7 +192,7 @@ def test_one_pool_failing_does_not_blank_the_other():
 
     P.screen = boom
     try:
-        P.attach(slate, "nfl")
+        P._screen_attach(slate, "nfl")
     finally:
         P.screen = real
     assert calls == ["edge", "likely"], calls

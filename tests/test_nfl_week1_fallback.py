@@ -399,14 +399,15 @@ def test_the_fallback_publishes_the_shapes_the_page_expects():
 def test_the_panel_does_not_trust_the_payload_shape_either():
     """The producer was fixed, and this is the half that cannot be fixed
     anywhere else: a renderer that trusts a payload's shape will meet a
-    payload that lies about it again."""
-    i = APP.index("function renderParlays(")
+    payload that lies about it again. Since 2026-10-31 the panel is the
+    Parlays page (engine/twoleg's `two_leg`, renderParlayPage)."""
+    i = APP.index("function renderParlayPage(")
     body = APP[i:APP.index("\n}", i)]
-    assert 'typeof z !== "object"' in body and "Array.isArray(z)" in body, \
-        "an empty array is truthy, and this guard is what catches it"
-    # And the counts themselves never print a hole.
-    assert "z.considered == null && z.eligible_legs == null" in body, \
-        "the census can print 'Screened undefined candidate tickets' again"
+    assert 'typeof z !== "object"' in body and "!z.edge" in body, \
+        "an empty array is truthy, and this guard is what catches it: [] has no pools"
+    # And an empty pool never prints a hole.
+    assert 'x.note || "No pair on tonight’s board makes sense yet."' in body, \
+        "a pool with no tickets and no note would print 'undefined'"
 
 
 # --- what the board's own cards open onto -----------------------------------

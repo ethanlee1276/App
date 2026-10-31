@@ -11,8 +11,9 @@ showing under it. What these hold:
     iOS 26's own floating tab bars sit and still clear of the indicator,
     and 8px on a phone with a Home button, as before;
   * everything that rides above it (the page's last lines, the riding pill,
-    the slip, the game chat bar, the toasts, the karma notes, the plans
-    button) comes down by the same 20px, so each keeps its gap to the bar;
+    the game chat bar, the toasts, the karma notes, the plans button)
+    comes down by the same 20px, so each keeps its gap to the bar (the
+    parlay slip's dock rode here too until the slip left, 2026-10-31);
   * nothing moves anywhere else: a Safari tab keeps its bar flush with the
     bottom, and a computer has no bar.
 
@@ -35,7 +36,6 @@ RIDERS = (
                            "calc(96px + env(safe-area-inset-bottom) - var(--tb-drop)); }"),
     ("web/css/styles.css", "padding-bottom: calc(156px + env(safe-area-inset-bottom) - var(--tb-drop)); }"),
     ("web/css/styles.css", "bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }"),
-    ("web/css/styles.css", "#qb-slip { bottom: calc(58px + env(safe-area-inset-bottom) - var(--tb-drop)); }"),
     ("web/css/styles.css", "bottom: calc(100px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }"),
     ("web/css/chat.css", "bottom: calc(84px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }"),
     ("web/css/chat.css", "body.has-tray .gch-fab { bottom: calc(144px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }"),
@@ -92,7 +92,7 @@ PROBE = """(async () => {
            drop: getComputedStyle(ruler).bottom,
            foot: Math.round(innerHeight - tab.bottom), top: Math.round(innerHeight - tab.top),
            pad: Math.round(parseFloat(getComputedStyle(document.body).paddingBottom)),
-           tray: px(document.querySelector('.riding-tray')), slip: px(document.getElementById('qb-slip')),
+           tray: px(document.querySelector('.riding-tray')),
            toast: px(made.toast), crash: px(made.crash), chat: px(made.chat), notes: px(made.notes), dock: px(made.dock) };
 })()"""
 
@@ -155,7 +155,7 @@ def test_on_an_iphone_the_bar_sits_low_and_its_riders_with_it():
     assert app["foot"] == 22, f"the capsule's foot 22pt off the edge, clear of the indicator (8-13pt): {app}"
     assert app["top"] < 100, app
     # Each rider 20px lower than it was, so its gap to the bar is the same.
-    want = {"pad": 96 + 34 - 20, "tray": 98 + 34 - 20, "slip": 58 + 34 - 20, "toast": 100 + 34 - 20,
+    want = {"pad": 96 + 34 - 20, "tray": 98 + 34 - 20, "toast": 100 + 34 - 20,
             "crash": 100 + 34 - 20, "chat": 84 + 34 - 20, "notes": 96 + 34 - 20, "dock": 74 + 34 - 20}
     assert {k: app[k] for k in want} == want, app
     assert app["pad"] > app["top"] and app["tray"] > app["top"], "the page's end and the pill clear the bar"
@@ -163,7 +163,7 @@ def test_on_an_iphone_the_bar_sits_low_and_its_riders_with_it():
     assert old["drop"] == "0px" and old["foot"] == 8 and old["pad"] == 96, old
     tab = _measure(False, 34)                     # Safari: the bar flush with the bottom, as it was
     assert not tab["home"] and tab["drop"] == "0px" and tab["foot"] == 0, tab
-    assert (tab["slip"], tab["chat"], tab["notes"], tab["dock"]) == (58 + 34, 84 + 34, 96 + 34, 74 + 34), tab
+    assert (tab["chat"], tab["notes"], tab["dock"]) == (84 + 34, 96 + 34, 74 + 34), tab
 
 
 if __name__ == "__main__":

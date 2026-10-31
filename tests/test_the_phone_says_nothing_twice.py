@@ -147,22 +147,17 @@ def test_the_phone_has_one_menu_and_the_bar_loses_the_bell():
 
 
 def test_the_drawers_footer_rides_into_the_sheet_as_proxies():
-    """No control lost with the drawer: the two switches click the real
-    switch through and read its state back; the social links are the
-    real anchors cloned with the href igMount gave them, ids dropped so
-    the page keeps one of each."""
-    assert 'id="more-switches"' in HTML and 'id="more-social"' in HTML
+    """No control lost with the drawer: the social links are the real
+    anchors cloned with the href igMount gave them, ids dropped so the page
+    keeps one of each. (The footer's two switches, High Confidence and
+    Parlay Mode, left on 2026-10-31, and their proxies with them.)"""
+    assert 'id="more-social"' in HTML and 'id="more-switches"' not in HTML
     foot = _fn("moreSheetFoot")
-    assert '["hcm-toggle", "pz-toggle"].forEach' in foot
-    assert 'const on = real.getAttribute("aria-checked") === "true";' in foot, "the proxy's state is read from the switch, not kept"
-    assert 'b.setAttribute("aria-checked", on ? "true" : "false");' in foot
-    assert 'b.addEventListener("click", () => { real.click(); moreSheetFoot(); });' in foot, "the proxy must click the real switch and re-read"
-    assert 'if (!real || !words || words.hidden) return;' in foot, "a switch the sidebar hides is hidden here too"
+    assert "hcm-toggle" not in foot and ".more-switch" not in SHEET
     assert '["nav-ig", "nav-dc"].forEach' in foot
     assert 'if (!real || real.hidden) return;' in foot, "a link the server never sent stays hidden"
     assert 'a.removeAttribute("id");' in foot, "two elements with one id"
     assert "moreSheetFoot();" in _fn("moreSheetBuild"), "the footer is not rebuilt with the sheet"
-    assert '.more-switch[aria-checked="true"] i { color: var(--good); }' in SHEET
 
 
 if __name__ == "__main__":
