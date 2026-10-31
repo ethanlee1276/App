@@ -99,7 +99,7 @@ CLAIM_BANDS = ((0.80, 1.01, "80%+"), (0.70, 0.80, "70-80%"), (0.60, 0.70, "60-70
 TIER_UNITS = {"Top pick": 3.0, "Strong": 2.0, "Worth a look": 1.0}
 COLUMNS = ("id", "sport", "date", "player", "market", "side", "line", "book", "odds", "projection",
            "hit_prob", "edge", "grade", "stake_units", "status", "actual", "pnl_units",
-           "closing_line", "closing_odds", "category", "loss_cause")
+           "closing_line", "closing_odds", "category", "loss_cause", "game_day", "lead_min")
 
 
 def open_ledger(path) -> sqlite3.Connection:
@@ -206,6 +206,32 @@ def _week(b) -> str:
     return f"week of {(d - _dt.timedelta(days=d.weekday())).isoformat()}"
 
 
+def game_weekday(b) -> str:
+    """The day the game was played. Ethan's NFL calendar, 2026-10-31:
+    since the one board began (09-27) its Sundays went 827-676 for −24.4u
+    while its Thursdays and Mondays went 173-86 for +5.3u — the cut that
+    says whether that is the day, or something riding on it."""
+    import datetime as _dt
+    try:
+        return _dt.date.fromisoformat(str(b.get("game_day") or "")[:10]).strftime("%A")
+    except ValueError:
+        return "(no game day)"
+
+
+def taken_before(b) -> str:
+    """How long before the start the pick was taken (`lead_min`): before or
+    after the NFL's inactives (90 minutes out), the morning, the day before."""
+    try:
+        m = float(b.get("lead_min"))
+    except (TypeError, ValueError):
+        return "(not stamped)"
+    for edge, label in ((90, "under 90 minutes (inactives out)"), (180, "90 minutes to 3 hours"),
+                        (480, "3 to 8 hours"), (1440, "8 to 24 hours")):
+        if m < edge:
+            return label
+    return "a day or more"
+
+
 def covered(b) -> str:
     """Did the chance we showed reach what the price needs to break even?"""
     need = _implied(b["odds"])
@@ -249,6 +275,8 @@ def slices(bets: list) -> dict:
         "the close": close_verdict,
         "sportsbook": lambda b: (b["book"] or "").lower() or "(none)",
         "week": _week,
+        "game day": game_weekday,
+        "taken before the start": taken_before,
     }
     if any(b["category"] == "board" for b in bets):
         keys["tier"] = lambda b: b["grade"] or "(none)"

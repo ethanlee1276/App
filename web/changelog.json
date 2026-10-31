@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-31",
+      "kind": "model",
+      "title": "NFL Most Likely asks more of a pick",
+      "body": "On the NFL Most Likely board, player props and game lines now need a 60% chance, up from 55%. Touchdowns keep 55%. Our picks between 55% and 60% won about as often as we said, but at those prices that wasn’t enough to beat the book’s cut. Unders that the game script works against also come off: a passing or receiving under on a team expected to trail, an under in a projected shootout, and three more our graded record caught. Picks already posted stay up and are graded as usual."
+    },
+    {
+      "date": "2026-10-31",
       "kind": "fix",
       "title": "Under pressure counts three seasons",
       "body": "Clutch, reliability, comeback and choke now count this season and the two before it together, so a hot start can’t make a team 100% clutch off four close games. Each percentage shows the games behind it (“18 of 23”), and the record beside the team is the one those games add up to."

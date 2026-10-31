@@ -18,6 +18,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import os  # noqa: E402
+# THE SHARED BARS, NOT THE NFL'S TIGHTENED ONE. These fixtures were tuned
+# to MIN_PROB 0.55 (an NFL prop showing 58.8%) and test other rules; the
+# NFL's 60% bar and its holds (2026-10-31) have their own file,
+# tests/test_the_nfl_board_is_tightened.py.
+os.environ["QB_NFL_TIGHT"] = "off"
 from engine import ledger, likelycal as LC, likelyboard as LB     # noqa: E402
 
 _INS = ("INSERT INTO bets (ts, sport, date, game_day, team, player, market, side, line, odds, hit_prob, grade, "

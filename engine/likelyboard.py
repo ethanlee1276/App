@@ -197,6 +197,62 @@ def held_reason(r: dict, checks: dict) -> str | None:
     return f"held back: {proven}, and our matchup read leans the other way"
 TIER_LABEL = dict(TIERS)
 
+#: THE NFL BOARD, TIGHTENED (Ethan, 2026-10-31: "our NFL most likely bets
+#: are not doing well. So we need to tighten that up"). Two holds, NFL only,
+#: each read off the graded record, both off with QB_NFL_TIGHT=off
+#: (likely.tightened):
+#:
+#:   * A PROP OR GAME LINE UNDER 60%, on the number the page shows — after
+#:     the record's corrections and the price (`trust_price` keeps an NFL
+#:     pick at or under the books' fair chance, so a pick here under 60%
+#:     is one the books ALSO put under 60%). The list asks the same of its
+#:     own rows (likely.LANE_MIN_PROB, where the bands are). A touchdown
+#:     keeps its own bar.
+#:   * AN UNDER THE SCOUT CAUTIONS AGAINST, where the graded board has
+#:     shown unders like it hit far less than we said (board_learning,
+#:     2026-10-30, 1,925 settled NFL board picks; z = wins against the
+#:     wins we claimed):
+#:
+#:         flag               n    said    hit     z
+#:         dog_pass_under    49   61.8%   38.8%  −3.39   trailing teams throw
+#:         long_trip_under   83   60.6%   43.4%  −3.30
+#:         body_clock_under  46   62.7%   43.5%  −2.78
+#:         new_coach_under   53   61.0%   45.3%  −2.37
+#:         shootout_under   110   59.5%   50.0%  −2.07   shootouts score
+#:
+#:     Each hit under the books' own price too (39% against 55%, 43%
+#:     against 53%…), which is why the record's correction — that pulls a
+#:     pick toward its price and no further — could not fix them and its
+#:     held-out test came out flat: the price was not low enough either.
+#:     The flags and their thresholds were written before any of this was
+#:     measured (engine/scout.py). This is the 10-04 rule's shape: not a
+#:     pick taken off for losing, but one the football read says the
+#:     game will go against.
+#:
+#: A posted pick (`locked`) keeps its seat, as every posted pick does, and
+#: a reserve row (labelled, never staked) is the reserve's to show.
+NFL_TIGHT_BAR = 0.60
+NFL_UNDER_CAUTIONS = ("dog_pass_under", "long_trip_under", "body_clock_under",
+                      "new_coach_under", "shootout_under")
+
+
+def tightened_reason(r: dict, sport: str) -> str | None:
+    """Why the tightened NFL board holds this pick back, or None."""
+    from .likely import tightened
+    if sport != "nfl" or r.get("locked") or r.get("reserve") or not tightened(sport):
+        return None
+    prob = r.get("model_prob")
+    if lane_of(r) != "td" and prob is not None and float(prob) < NFL_TIGHT_BAR:
+        return (f"held back: our chance is {float(prob):.0%} — the NFL board asks "
+                f"{NFL_TIGHT_BAR:.0%} of a prop or a game line")
+    if _side(r) == "under":
+        hit = [c for c in (r.get("scout_flags") or ()) if c in NFL_UNDER_CAUTIONS]
+        if hit:
+            from . import scout as _sc
+            return (f"held back: {_sc.note(hit[0], sport)} — on our graded board, unders like "
+                    "this have hit far less often than we said")
+    return None
+
 
 def lane_of(r: dict) -> str:
     if r.get("kind") == "game":
@@ -818,6 +874,10 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         checks["market"], notes["market"] = market_check(r)
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
         why_held = held_reason(r, checks)
+        if not why_held:
+            why_held = tightened_reason(r, sport)
+            if why_held:
+                r["tight_hold"] = True
         if why_held:
             r.update({"lane": lane, "checks": checks, "check_notes": notes, "held_note": why_held,
                       "tier": "held", "tier_label": HELD_LABEL})
@@ -975,6 +1035,16 @@ def harmonize(result: dict) -> int:
     board = result.get("likely_board") or {}
     rows = [r for r in (board.get("rows") or []) + (board.get("held") or []) if isinstance(r, dict)]
     by = {key_of(r): r for r in rows}
+    # ONE BET, ONE VERDICT. A pick the tightened NFL board held back
+    # (`tightened_reason`) is not posted on the list either, so the list's
+    # staked book cannot take what the board refused — the list journals
+    # `most_likely` on its own, after this.
+    tight = {key_of(r) for r in board.get("held") or [] if isinstance(r, dict) and r.get("tight_hold")}
+    if tight and isinstance(result.get("most_likely"), list):
+        keep = [r for r in result["most_likely"]
+                if not (isinstance(r, dict) and not r.get("locked") and key_of(r) in tight)]
+        board["tightened_off_list"] = len(result["most_likely"]) - len(keep)
+        result["most_likely"] = keep
     n = 0
     for r in rows:
         w = matchup_warning(r)

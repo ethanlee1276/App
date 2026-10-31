@@ -1208,6 +1208,10 @@ def main() -> None:
     # and most likely picks into one big, just most likely pick area".
     try:
         from engine import likelyboard as _lb, ledger as _lb_ledger
+        from engine.likely import tightened as _lb_tight
+
+        def _lb_tightened():
+            return _lb_tight("nfl")
         try:
             _rec = _lb.record_table(_lb_ledger.connect(), "nfl")
         except Exception:                                    # noqa: BLE001
@@ -1217,6 +1221,13 @@ def main() -> None:
         _t = result["likely_board"]["tiers"]
         print(f"  Most Likely board: {len(result['likely_board']['rows'])} pick(s) — "
               f"{_t.get('top', 0)} top, {_t.get('strong', 0)} strong, {_t.get('look', 0)} worth a look")
+        # THE TIGHTENED NFL BOARD (likelyboard.tightened_reason, 2026-10-31),
+        # said every build so a switched-off or idle rule is visible.
+        _tight = [r for r in result["likely_board"].get("held") or [] if r.get("tight_hold")]
+        _bar = sum(1 for r in _tight if "asks 60%" in str(r.get("held_note")))
+        print(f"  NFL tightening {'on' if _lb_tightened() else 'OFF'}: {_bar} held under the 60% bar, "
+              f"{len(_tight) - _bar} under(s) the scout cautions against, "
+              f"{result['likely_board'].get('tightened_off_list', 0)} taken off the list")
         # THE PRICE ON THE BOARD (likelyboard.trust_price), said every build so
         # a rule that moves nothing can never pass for one that is working.
         _pt = result["likely_board"].get("price_trust") or {}

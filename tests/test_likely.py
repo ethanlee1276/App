@@ -24,6 +24,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# THE SHARED BARS, NOT THE NFL'S TIGHTENED ONE. These fixtures were tuned
+# to MIN_PROB 0.55 (an NFL prop showing 58.8%) and test other rules; the
+# NFL's 60% bar and its holds (2026-10-31) have their own file,
+# tests/test_the_nfl_board_is_tightened.py.
+os.environ["QB_NFL_TIGHT"] = "off"
 from engine import likely as K                               # noqa: E402
 from engine.yardagefit import display_prob            # noqa: E402
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)

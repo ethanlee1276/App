@@ -9305,6 +9305,48 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**IT. NFL Most Likely, tightened — and the audits that check it** (step
+306; you, 2026-10-31: "our NFL most likely bets are not doing well. So we
+need to tighten that up").
+
+What the public record said that day: the list's 1,479 graded NFL picks won
+61.3% at an average −172, which needs 63.2% (−13.6u, −3.9%). Our chances
+were honest (claimed 61.6%); the losses sat in the 45–60% band (662 picks,
+−6.8%) and in unders the scout warns about (an under on a team expected to
+trail hit 39% where we said 62%). And since the one board began on 09-27,
+its Sundays went 827–676 for −24.4u while Thursdays and Mondays went 173–86
+for +5.3u. What shipped, NFL only, nothing to run:
+
+- Props and game lines need 60% (touchdowns keep 55%), on the list and on
+  the board after its corrections.
+- Unders the scout cautions against come off: the team expected to trail,
+  a projected shootout, a long trip, a 10am body clock, a new head coach.
+- A pick the board holds comes off the list too, so the staked book can't
+  take it. A posted pick keeps its seat.
+
+Every NFL build log now has an "NFL tightening on: …" line. To turn it all
+off without a deploy:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_NFL_TIGHT off && sudo systemctl restart qellys
+```
+
+The audits, read-only, on every graded pick. Paste back all three files:
+the rule tester tries ten rules on weeks it never saw (two new: drop a
+weekday that lost, and the list's own picks only), the loss audit now cuts
+by the game's weekday and how long before kickoff each pick was taken, and
+the flag audit checks every scout flag on both halves of the season:
+
+```
+cd /srv/qellys && sudo -u qellys python3 likelyfit.py --sport nfl 2>&1 | tee /tmp/it_fit.txt; sudo -u qellys python3 likelyfit.py --sport nfl --book board 2>&1 | tee -a /tmp/it_fit.txt; sudo -u qellys python3 lossaudit.py --sport nfl 2>&1 | tee /tmp/it_loss.txt; sudo -u qellys python3 nflaudit.py 2>&1 | tee /tmp/it_flags.txt
+```
+
+After the next NFL build, the board as built (how many were held, and why):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IT 2>&1 | tee /tmp/it.txt
+```
+
 **IS. Your renewal day is the 1st** (step 305; you, 2026-10-31: "It will
 reset on the 1st which is tomorrow").
 

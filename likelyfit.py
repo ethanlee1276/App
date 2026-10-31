@@ -44,6 +44,14 @@ from; the earlier days choose, keeping at least 30 picks and 30% of them):
     side         overs only, or unders only
     late_only    taken within L minutes of start   L in 120 360 1440
     tier         (board only) Top only, or Top + Strong
+    day_cut      drop any game-day weekday that lost more than 5% on
+                 30+ earlier picks (2026-10-31: the NFL's Sundays since
+                 the one board began went −24.4u, its Thursdays and
+                 Mondays +5.3u — this asks whether that holds on days
+                 the cut never saw)
+    maker        the Most Likely list's own picks only, without the
+                 board's matchup, scenario and bold picks (2026-10-31:
+                 the board took a Sunday from about 70 picks to 300)
 
 A row a rule cannot judge (no edge, no consensus, no time to start) is
 kept, and the coverage is printed beside the rule.
@@ -58,7 +66,8 @@ THE BAR, WRITTEN BEFORE ANY RUN — the contract:
   * otherwise NOT PROVEN — not a soft pass. Wait for picks.
 
 Even at 99%, eight rules tried means one can pass by luck about one run
-in twenty-five. A rule is therefore applied to the board only after it PASSES on two runs
+in twenty-five (ten since day_cut and maker joined, 2026-10-31: about one
+in twenty). A rule is therefore applied to the board only after it PASSES on two runs
 at least two weeks apart, the second scored on days the first never saw.
 Changing these constants after seeing a run is fitting the bar.
 
@@ -67,6 +76,7 @@ Read-only: the ledger is opened read-only and nothing is written.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import random
 import re
@@ -88,6 +98,11 @@ BOOT = 2000
 SEED = 20261002
 SHELF_MIN_N = 30
 SHELF_CUT_ROI = -0.05
+#: A weekday cut removes whole days, the very unit the bootstrap resamples,
+#: so with a handful of those days on the later side it cannot see how far
+#: one of them can swing — the noise test passed a cut on four. It is
+#: judged only once the later days hold this many of every weekday it cuts.
+DAY_CUT_MIN_DAYS = 10
 #: The interval's ends (99%): see THE BAR above.
 LO_Q, HI_Q = 0.005, 0.995
 
@@ -109,6 +124,8 @@ WORDS = {
     "side": "{} only",
     "late_only": "taken within {} minutes of the start",
     "tier": "tiers: {}",
+    "day_cut": "drop games played on {}",
+    "maker": "the list's own picks only",
 }
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -133,7 +150,7 @@ def load(conn, sport: str | None = None, book: str = "likely") -> list[dict]:
     else:
         sql, args = L.books_sql(L.LIKELY_BOOKS + (L.BOARD_CATEGORY,))
     q = (f"SELECT sport, market, UPPER(COALESCE(side,'')) side, odds, hit_prob, edge, fair_consensus, "
-         f"status, grade, lead_min, game_day, date, ts FROM bets WHERE {sql} "
+         f"status, grade, lead_min, game_day, date, ts, category FROM bets WHERE {sql} "
          "AND status IN ('won','lost') AND stake_units > 0 AND odds IS NOT NULL")
     if sport:
         q += " AND LOWER(sport)=?"
@@ -153,6 +170,7 @@ def load(conn, sport: str | None = None, book: str = "likely") -> list[dict]:
             continue
         d = dict(r)
         d["ret"], d["day"] = ret, day
+        d["weekday"] = _dt.date.fromisoformat(day).strftime("%A")
         out.append(d)
     return out
 
@@ -191,12 +209,26 @@ def _rule(name, param, banned=None):
         return (lambda r: not r["grade"] or r["grade"] in param, lambda r: bool(r["grade"]))
     if name == "shelf_cut":
         return (lambda r: (r["sport"], r["market"], r["side"]) not in banned, lambda r: True)
+    if name == "day_cut":
+        return lambda r: r["weekday"] not in banned, lambda r: True
+    if name == "maker":
+        return (lambda r: r.get("category") != L.BOARD_CATEGORY, lambda r: r.get("category") is not None)
     raise KeyError(name)
 
 
 def _choose(name, train):
     """The setting the earlier days pick: best ROI keeping enough picks."""
     floor = max(MIN_KEEP, int(len(train) * MIN_KEEP_SHARE))
+    if name == "day_cut":
+        groups: dict = {}
+        for r in train:
+            groups.setdefault(r["weekday"], []).append(r)
+        banned = {k for k, v in groups.items() if len(v) >= SHELF_MIN_N and roi(v) < SHELF_CUT_ROI}
+        kept = [r for r in train if r["weekday"] not in banned]
+        return (banned, banned) if banned and len(kept) >= floor else (None, None)
+    if name == "maker":
+        kept = [r for r in train if r.get("category") != L.BOARD_CATEGORY]
+        return (True, None) if len(kept) >= floor and len(kept) < len(train) else (None, None)
     if name == "shelf_cut":
         groups: dict = {}
         for r in train:
@@ -245,7 +277,8 @@ def study(rows: list[dict]) -> dict:
     if len(test) < MIN_TEST:
         out["note"] = f"{len(test)} picks on the later days; {MIN_TEST} needed before a rule can be judged"
         return out
-    names = ["price_cap", "prob_floor", "edge_floor", "fair_floor", "shelf_cut", "side", "late_only"]
+    names = ["price_cap", "prob_floor", "edge_floor", "fair_floor", "shelf_cut", "side", "late_only",
+             "day_cut", "maker"]
     if any(r["grade"] for r in rows) and all(r["grade"] in ("Top pick", "Strong", "Worth a look", None, "")
                                              for r in rows):
         names.append("tier")
@@ -262,13 +295,22 @@ def study(rows: list[dict]) -> dict:
         diff = roi(kt) - roi(test) if kt else None
         verdict = ("PASSES" if lo is not None and lo > 0 and len(kt) >= MIN_TEST_KEPT
                    else "HURTS" if hi is not None and hi < 0 else "NOT PROVEN")
+        thin = ""
+        if name == "day_cut":
+            few = {wd: len({r["day"] for r in test if r["weekday"] == wd}) for wd in sorted(param)}
+            few = {wd: n for wd, n in few.items() if n < DAY_CUT_MIN_DAYS}
+            if few:
+                verdict = "NOT PROVEN"
+                thin = ("too few to judge: " + ", ".join(f"{n} {wd}{'s' if n != 1 else ''}" for wd, n in few.items())
+                        + f" on the later days, {DAY_CUT_MIN_DAYS} needed")
         shown = (", ".join(f"{s} {m} {sd.lower()}" for s, m, sd in sorted(param))
-                 if name == "shelf_cut" else " / ".join(param) if name == "tier" else param)
+                 if name == "shelf_cut" else " / ".join(param) if name == "tier"
+                 else ", ".join(sorted(param)) if name == "day_cut" else param)
         out["rules"].append({
             "rule": name, "setting": WORDS[name].format(shown),
             "train_kept": len([r for r in train if keep(r)]), "train_roi": roi([r for r in train if keep(r)]),
             "test_kept": len(kt), "test_roi": roi(kt), "test_all_roi": roi(test),
-            "diff": diff, "lo": lo, "hi": hi, "verdict": verdict,
+            "diff": diff, "lo": lo, "hi": hi, "verdict": verdict, "thin": thin,
             "coverage": sum(1 for r in rows if judged(r)) / len(rows)})
     return out
 
@@ -296,6 +338,8 @@ def report(label: str, res: dict) -> None:
         print(f"                later days: kept {r['test_kept']} of {res['test']}, {_pct(r['test_roi']).strip()}"
               f" against {_pct(r['test_all_roi']).strip()} — difference {_pct(r['diff']).strip()},"
               f" 99% {_pct(r['lo']).strip()} to {_pct(r['hi']).strip()}")
+        if r.get("thin"):
+            print(f"                {r['thin']}")
 
 
 def main(argv=None) -> int:

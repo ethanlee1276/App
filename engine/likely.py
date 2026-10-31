@@ -767,6 +767,53 @@ MIN_PROB = 0.55
 #: that needs its own number.
 SPORT_MIN_PROB: dict = {}
 
+#: A LEAGUE'S BAR PER SHELF, over MIN_PROB, on the standard pass only (the
+#: reserve's lower floor still fills a shelf that came out empty, labelled
+#: and never staked). Ethan, 2026-10-31: "our NFL most likely bets are not
+#: doing well. So we need to tighten that up ... we have so much bets and
+#: data behind us that we have made and won and lost to where we can
+#: adjust our filters."
+#:
+#: WHAT THE NFL RECORD SAID (record.json, 2026-10-31: the Most Likely
+#: list's 1,479 settled NFL picks, 61.3% won at an average −172 that needs
+#: 63.2%; −13.6u, −3.9%). The chance was honest — claimed 61.6%, hit
+#: 61.3% — and the loss sat in the bottom band, by the ledger's own bands
+#: (LIKELY_BANDS, fixed long before this was read):
+#:
+#:     band        n    claimed  hit     roi
+#:     45%-60%    662   55.8%   54.2%   −6.8%
+#:     60%-75%    792   66.0%   66.8%   −1.7%
+#:     75%+        25   76.6%   76.0%   +4.6%
+#:
+#: and the four worst markets live in it: carries (−10.5% on 111, claimed
+#: 56%, hit 51%), pass attempts (−12.1% on 79), completions (−9.2% on 78)
+#: and field goals (−13.9% on 28). The 09-06 argument for MIN_PROB is the
+#: same one a band higher: a pick a few points above its price cannot be
+#: bet into a vig, and the NFL's 55-60% picks were exactly that.
+#:
+#: TOUCHDOWNS KEEP THE SHARED BAR: the list's scorers went 27-7 at a
+#: claimed 61% (+19.2%), and a 55% scorer is not a weaker 60% prop.
+#: Off without a deploy: ``sudo ./deploy/setenv.sh QB_NFL_TIGHT off`` then
+#: ``sudo systemctl restart qellys`` (the board's NFL holds go with it —
+#: engine/likelyboard.tightened_reason).
+LANE_MIN_PROB: dict = {"nfl": {"prop": 0.60, "game": 0.60}}
+TIGHT_ENV = "QB_NFL_TIGHT"
+
+
+def tightened(sport: str) -> bool:
+    """Whether ``sport``'s tightened bars are in force (QB_NFL_TIGHT=off
+    turns them off; read at call time, so a restart is all it takes)."""
+    import os
+    if sport not in LANE_MIN_PROB:
+        return False
+    return os.environ.get(TIGHT_ENV, "").strip().lower() not in ("off", "0", "no", "false")
+
+
+def lane_floors(sport: str) -> dict:
+    """{shelf: bar} for the standard pass — {} when the league has none or
+    they are switched off."""
+    return dict(LANE_MIN_PROB.get(sport) or {}) if tightened(sport) else {}
+
 #: THE FLOOR WHEN THE ALTERNATIVE IS AN EMPTY PAGE. Ethan, 2026-09-08:
 #: "Also I don't want an empty boar either we need to have picks period."
 #:
@@ -2962,8 +3009,12 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # prices when none of them came out on the read's side.
     lean_props: dict = {}
 
-    def one_pass(floor, funnel, seen=None, why=None):
+    def one_pass(floor, funnel, seen=None, why=None, lanes=None):
         """Every maker, every row, at one floor. Returns the rows kept.
+
+        ``lanes`` raises the floor for a shelf ({"prop": 0.60}) — the
+        league's own bar (LANE_MIN_PROB), asked of the standard pass and
+        never of the reserve.
 
         Lifted out of `build` so the reserve can ask the same question
         with the same bar in every respect but one (see
@@ -2981,13 +3032,17 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         # Passing the set in is how that is guaranteed.
         seen = set() if seen is None else seen
 
+        def lane(kind: str):
+            bar = (lanes or {}).get(kind)
+            return floor if bar is None else max(_floor(floor), float(bar))
+
         def keep(got, kind: str, market_funnel: dict | None = None) -> bool:
             """The one gate. Every row passes through here or does not ship.
 
             ``market_funnel`` is the prop row's own market's tally, kept
             beside the kind's — the same verdict written twice, never a
             second judgement."""
-            no = admissible(got, floor=floor)
+            no = admissible(got, floor=lane(kind))
             if no:
                 _refuse(funnel[kind]["refused"], no)
                 if market_funnel is not None:
@@ -3042,7 +3097,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             if lean:
                 lean_props.setdefault((row.get("player") or "", row.get("team") or ""), []).append(row)
             got = from_prop(row, bettable, fits=fits, sport=sport,
-                            census=local, floor=floor, ladder=rungs,
+                            census=local, floor=lane("prop"), ladder=rungs,
                             prefer=prefer_for(row), lean=(lean or {}).get("side"))
             for no, n in local.items():
                 funnel["prop"]["refused"][no] = funnel["prop"]["refused"].get(no, 0) + n
@@ -3075,7 +3130,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         funnel["game"]["offered"] = len(game_bets or [])
         for row in game_bets or []:
             got = from_game_bet(row, sport=sport,
-                                census=funnel["game"]["refused"], floor=floor)
+                                census=funnel["game"]["refused"], floor=lane("game"))
             if got is None:
                 continue
             key = ("game", got["matchup"], got["market"], got["team"], got["side"])
@@ -3089,7 +3144,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         return out
 
     seated_keys: set = set()
-    out = one_pass(SPORT_MIN_PROB.get(sport), funnel, seated_keys, why_left)
+    out = one_pass(SPORT_MIN_PROB.get(sport), funnel, seated_keys, why_left, lanes=lane_floors(sport))
     # NO SHELF GOES BLANK. Ethan, 2026-09-08: "Also I don't want an empty
     # boar either we need to have picks period", and then, the night
     # before the opener: "We have barely any moneylines show and barley

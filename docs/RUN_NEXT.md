@@ -24,7 +24,33 @@ The check. The second line should say "renewal day set by QB_ODDS_RESET_DAY":
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IS 2>&1 | tee /tmp/is.txt
 ```
 
-## 2. Tomorrow (Nov 1), from mid-morning: the new month, and the real bill (steps IP, IQ)
+## 2. Any time today: the NFL Most Likely audits (step IT)
+
+The NFL Most Likely board is tightened from today: props and game lines
+need 60%, and unders the scout warns about come off. Nothing to run for
+that. These three read every graded NFL pick, change nothing, and say which
+cuts hold up on weeks they never saw, how Sundays compare with Thursdays and
+Mondays, and how long before kickoff the losers were taken. Paste back
+`/tmp/it_fit.txt`, `/tmp/it_loss.txt` and `/tmp/it_flags.txt`:
+
+```
+cd /srv/qellys && sudo -u qellys python3 likelyfit.py --sport nfl 2>&1 | tee /tmp/it_fit.txt; sudo -u qellys python3 likelyfit.py --sport nfl --book board 2>&1 | tee -a /tmp/it_fit.txt; sudo -u qellys python3 lossaudit.py --sport nfl 2>&1 | tee /tmp/it_loss.txt; sudo -u qellys python3 nflaudit.py 2>&1 | tee /tmp/it_flags.txt
+```
+
+After the next NFL build (Sunday morning at the latest), what the tightening
+held back:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IT 2>&1 | tee /tmp/it.txt
+```
+
+To undo the tightening without a deploy:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_NFL_TIGHT off && sudo systemctl restart qellys
+```
+
+## 3. Tomorrow (Nov 1), from mid-morning: the new month, and the real bill (steps IP, IQ)
 
 After the reset, the first odds pull reads the new balance and the plan
 re-plans November from it. These show the plan with tonight's line, which
@@ -36,7 +62,7 @@ books double every call):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IP IQ 2>&1 | tee /tmp/nov1.txt
 ```
 
-## 3. Tomorrow evening: the bill again, over a full day (step IQ)
+## 4. Tomorrow evening: the bill again, over a full day (step IQ)
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IQ 2>&1 | tee /tmp/iq.txt
