@@ -9341,7 +9341,23 @@ the flag audit checks every scout flag on both halves of the season:
 cd /srv/qellys && sudo -u qellys python3 likelyfit.py --sport nfl 2>&1 | tee /tmp/it_fit.txt; sudo -u qellys python3 likelyfit.py --sport nfl --book board 2>&1 | tee -a /tmp/it_fit.txt; sudo -u qellys python3 lossaudit.py --sport nfl 2>&1 | tee /tmp/it_loss.txt; sudo -u qellys python3 nflaudit.py 2>&1 | tee /tmp/it_flags.txt
 ```
 
-After the next NFL build, the board as built (how many were held, and why):
+After the next NFL build, the board as built (how many were held, and why),
+read-only:
+
+```
+cd /srv/qellys && date -u -r data/built/recommendations.json && sudo -u qellys python3 -c "
+import json
+from collections import Counter
+d = json.load(open('data/built/recommendations.json'))
+b = d.get('likely_board') or {}
+held = [r for r in b.get('held') or [] if r.get('tight_hold')]
+print(len(b.get('rows') or []), 'board picks;', len(held), 'held by the tightening;', b.get('tightened_off_list', 0), 'taken off the list')
+print(Counter('the 60% bar' if 'asks 60%' in str(r.get('held_note')) else 'a scout caution' for r in held))
+[print(' ', r.get('player'), r.get('market'), r.get('side'), r.get('line'), round(float(r.get('model_prob') or 0), 3), '-', r.get('held_note')) for r in held[:8]]
+"
+```
+
+The check in one go:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IT 2>&1 | tee /tmp/it.txt
