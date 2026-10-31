@@ -82,6 +82,20 @@ OPPOSITE_MIN_RHO = -0.05
 #: The price cuts (module docstring).
 SGP_CUT = 0.095
 TWO_BOOK_CUT = 0.03
+#: A SAME-GAME PAIR HAS TO EARN BACK THE SAME-GAME CUT. The book pays a
+#: same-game pair SGP_CUT under the product, so the link between the legs
+#: has to lift the chance both hit by at least as much (1 / (1 - 0.095),
+#: a 10.5% lift) or the pair is a worse bet than its price says. The box's
+#: first study run (2026-10-31, the real journal): football's Most Likely
+#: same-game pairs lost 11.7% over 86 while its two-game pairs made 29.6%
+#: over 85. Two heavy favourites on one game, linked only by the shared-pace
+#: floor (+0.10), lift the chance 1-3%; a quarterback and his own receiver
+#: (measured +0.64) lift it about 30%. The second kind stays.
+SG_MIN_LIFT = 1.0 / (1.0 - SGP_CUT)
+#: Bumped whenever the pairing or the backtest changes, so a backtest cached
+#: by the record export (ledger._two_leg_backtest) is never read across it.
+#: 2: the daily sports' games read from `period`, and the same-game lift rule.
+BACKTEST_VERSION = 2
 #: A staked parlay's size, in units.
 STAKE_UNITS = 0.5
 #: The journal's book for each pool (engine/parlayledger `source`).
@@ -213,10 +227,11 @@ def price(a: dict, b: dict, kind: str) -> tuple[float, float, str]:
     return naive, naive, "one book: the legs' prices multiplied"
 
 
-def pair(sport: str, a: dict, b: dict) -> dict | None:
+def pair(sport: str, a: dict, b: dict, min_lift: float | None = None) -> dict | None:
     """One candidate parlay, or None when the two legs do not make sense
-    together (the same player, a fight, a duplicate, or a same-team pair
-    that does not rise together)."""
+    together (the same player, a fight, a duplicate, a same-team pair that
+    does not rise together, or a same-game pair whose link cannot earn back
+    the same-game cut: `min_lift`, default SG_MIN_LIFT)."""
     from . import parlays as P
     if a["player"] == b["player"]:
         return None
@@ -235,6 +250,9 @@ def pair(sport: str, a: dict, b: dict) -> dict | None:
         if not same_team and rel.rho < OPPOSITE_MIN_RHO:
             return None
         joint = P.joint_two(a["p"], b["p"], max(-0.9, min(0.9, rel.rho)))
+        need = SG_MIN_LIFT if min_lift is None else min_lift
+        if joint < need * a["p"] * b["p"] - 1e-9:
+            return None
         kind, rho = SAME_GAME, round(rel.rho, 3)
         mech = plain(rel.mechanism)
         why = (f"Same game, same team — they rise together: {mech}" if same_team
@@ -253,11 +271,11 @@ def pair(sport: str, a: dict, b: dict) -> dict | None:
             "game_date": min(a.get("game_date") or "", b.get("game_date") or "") or a.get("game_date") or ""}
 
 
-def candidates(sport: str, legs: list[dict]) -> list[dict]:
+def candidates(sport: str, legs: list[dict], min_lift: float | None = None) -> list[dict]:
     """Every pair of legs that makes sense, both kinds."""
     out = []
     for a, b in itertools.combinations(legs, 2):
-        t = pair(sport, a, b)
+        t = pair(sport, a, b, min_lift)
         if t is not None:
             out.append(t)
     return out
@@ -386,7 +404,8 @@ def _grade(t: dict) -> float | None:
 
 
 def backtest(conn, since: str | None = None, games: dict | None = None,
-             per_kind: int = PER_KIND, until: str | None = None) -> dict:
+             per_kind: int = PER_KIND, until: str | None = None,
+             min_lift: float | None = None) -> dict:
     """Every graded day of the headline record, paired the way tonight's
     board is (`candidates` → `choose`), and graded off the legs' results.
 
@@ -434,7 +453,7 @@ def backtest(conn, since: str | None = None, games: dict | None = None,
         groups.setdefault((sp, r["day"], pool), []).append(leg)
     agg: dict = {}
     for (sp, _day, pool), legs in groups.items():
-        for t in choose(candidates(sp, legs), pool, per_kind):
+        for t in choose(candidates(sp, legs, min_lift), pool, per_kind):
             ret = _grade(t)
             if ret is None:
                 continue
@@ -461,6 +480,14 @@ def backtest(conn, since: str | None = None, games: dict | None = None,
                      "picks' own results at the parlay's price, one unit each.")}
 
 
+#: A game's day. The daily sports leave `date` empty, because their
+#: `period` already is the day (engine/db: "the daily sports do not have to
+#: backfill it"); football's period is a week, and its `date` is the kickoff.
+#: The first study run read `date` alone and found only football's 272 games,
+#: so an MLB or NBA pick on each team of one game was graded as two games.
+GAME_DAY = "COALESCE(date, period)"
+
+
 def schedule(hconn, since: str | None = None) -> dict:
     """{(sport, day, team): opponent} from the history database's games, for
     `backtest`. Empty when it cannot be read."""
@@ -468,13 +495,16 @@ def schedule(hconn, since: str | None = None) -> dict:
     if hconn is None:
         return out
     try:
-        q = "SELECT sport, date, home, away FROM games WHERE sport IN (%s)" % ",".join("?" * len(SPORTS))
+        q = (f"SELECT sport, {GAME_DAY} AS day, home, away FROM games WHERE sport IN (%s)"
+             % ",".join("?" * len(SPORTS)))
         args = list(SPORTS)
         if since:
-            q += " AND date >= ?"
+            q += f" AND {GAME_DAY} >= ?"
             args.append(since)
         for sp, day, home, away in hconn.execute(q, args):
             d = str(day or "")[:10]
+            if len(d) != 10 or d[4] != "-":
+                continue                                     # a week label, not a day
             out[(sp, d, home)] = away
             out[(sp, d, away)] = home
     except Exception:                                         # noqa: BLE001

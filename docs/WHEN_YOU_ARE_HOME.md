@@ -9305,6 +9305,38 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JE. Same-game parlays have to earn back the book's cut; the study reads every
+league's games** (step 317; your JD paste, 2026-10-31). Nothing to run for the
+change itself:
+
+- **What JD said** (two of each kind a day, since August): Edge parlays made
+  +3.4% over 162 (the same picks as singles −1.8%), +15.2% since 10-15, and
+  won in the NFL (+11.5%), college (+42.2%) and the NBA (+23.3%); MLB's lost
+  (−7.3%). Most Likely parlays lost 2.5% over 375: MLB −12.1% over 170 and
+  the NBA −12.0% over 34, against the NFL +17.1% and college +4.7%.
+- **The finding:** football's Most Likely same-game pairs lost 11.7% over 86,
+  while its two-game pairs made 29.6% over 85. A book pays a same-game parlay
+  about 9.5% under its two prices multiplied, and two heavy favourites in one
+  game, joined only by the shared pace (+0.10), lift the chance both hit by
+  1–3%. The pair pays less and doesn't hit more.
+- **Now:** a same-game pair posts only when the link between its legs lifts
+  the chance both hit by at least 10.5%, enough to win back the cut. A
+  quarterback and his own receiver (measured +0.64) lift it about 30% and
+  still post. A pick on each team never carries more than the pace link, so
+  those no longer post. Edge parlays, two of each kind, and the stake rule
+  are unchanged.
+- **A bug in the study:** it read only football's games (272). The NBA and
+  MLB keep a game's day in a different column, so a pick on each team of one
+  of their games was graded as two games. Fixed; the Record page's backtest
+  refreshes on its next export.
+
+After this is live, the study again (the same check as JD), the first run with
+every league's games and the new rule. Section 4 prints the old rule beside it:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JD 2>&1 | tee /tmp/jd.txt
+```
+
 **JD. Parlays: two legs from our picks, and what pairing the past would have
 done** (step 316; you, 2026-10-31: "get rid of the parlay button and the
 parlay feature ... make the parlay feature an actual button ... two-leg

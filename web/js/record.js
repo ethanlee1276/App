@@ -1082,9 +1082,9 @@ function recTwoLegSection(tl) {
       <span class="sub">— two of our Edge picks, or two of our Most Likely picks. Never mixed
       into the record above.</span></div>
     ${recDisclosure("How these are paired, priced and staked", `Each night the board pairs its
-      own picks: two from one game when they make sense together (teammates who rise
-      together, or one pick on each team), and two from different games. A pick is used
-      once per list. Every parlay is graded off its two picks’ own results, at one unit a
+      own picks: two from one game only when their link wins back what books take off a
+      same-game parlay (a quarterback and his own receiver, say), and two from different
+      games. A pick is used once per list. Every parlay is graded off its two picks’ own results, at one unit a
       ticket so the ROI means something. Prices: two games at the books’ two prices
       multiplied, 3% under that when the picks sit at different books; a same-game pair at
       9.5% under the product, the middle of what books take off a same-game parlay. Real

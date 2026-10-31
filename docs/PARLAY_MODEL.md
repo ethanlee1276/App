@@ -541,6 +541,15 @@ card buttons, the do-it-yourself slip and the old screen's tickets are gone.
 | Same game, one pick on each team | not killed or duplicate, ρ ≥ −0.05 | `joint_two` at ρ |
 | Two games | always | the product |
 
+**And a same-game pair has to earn back the same-game cut** (added after the box's first study
+run, 2026-10-31): the book pays it 9.5% under the product, so the link must lift the chance both
+hit by at least 1/(1 − 0.095), 10.5%, or the pair is a worse bet than its price says
+(`twoleg.SG_MIN_LIFT`). Two heavy favourites joined only by the shared-pace floor (+0.10) lift it
+1–3%; two near-even picks on that floor about 5%; a quarterback and his own receiver (measured
++0.64) about 30%. In practice one pick on each team never clears it: no opposite-team pairing in
+`relate` carries more than the floor. On the box's journal, football's Most Likely same-game pairs
+had lost 11.7% over 86 tickets while its two-game pairs made 29.6% over 85.
+
 Each pick is used once per pool, two tickets of each kind at most. Edge tickets rank by what
 they return at the price and only a positive return posts; Most Likely tickets rank by the
 chance both hit.
@@ -578,6 +587,17 @@ break even, and a pair of picks that pay the juice pays it twice. Ranking the pa
 helped here: the first pair of a day did better than the second and the third. That is why the
 stake follows the singles' rule and not the hit rate, and why the record keeps every ticket
 apart until it has enough to say.
+
+**What the box's journal said** (2026-10-31, step JD: the real journal, teams and the schedule,
+so same-game pairs counted). Two of each kind a day: Edge pairs +3.4% over 162 tickets (the same
+picks as singles −1.8%), +15.2% since 10-15, and positive in the NFL (+11.5%), college (+42.2%)
+and the NBA (+23.3%); MLB's lost (−7.3%), its ten same-game Edge pairs all of them. Most Likely
+pairs −2.5% over 375 (singles +0.6%): MLB −12.1% over 170 and the NBA −12.0% over 34, against
+the NFL +17.1% and college +4.7%. By kind, football's Most Likely same-game pairs −11.7% over 86
+and its two-game pairs +29.6% over 85, which is what the same-game rule above answers. That run
+read only football's games (272): the daily sports keep a game's day in `period`, not `date`, so
+an MLB or NBA pick on each team of one game was graded as two games. Fixed the same day
+(`twoleg.GAME_DAY`); the next run is the first with every league's games.
 
 ---
 

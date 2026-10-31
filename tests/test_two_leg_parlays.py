@@ -63,10 +63,26 @@ def test_two_teammates_that_rise_together_make_a_same_game_parlay():
     assert "rise together" in t["why"]
 
 
-def test_one_pick_on_each_team_is_a_same_game_parlay_and_other_games_are_two_game():
+def test_a_same_game_pair_has_to_earn_back_the_same_game_cut():
+    """The book pays a same-game pair 9.5% under the product, so the link
+    between the legs has to lift the chance both hit by 10.5% or more. One
+    pick on each team shares only the pace floor (+0.10): a 5% lift, a worse
+    bet than its price says. The box's first study run had football's Most
+    Likely same-game pairs at -11.7% over 86 against +29.6% for its two-game
+    pairs."""
     legs = {l["player"]: l for l in T.edge_legs(_board(), "nfl")}
-    t = T.pair("nfl", legs["Amon-Ra St. Brown"], legs["Justin Jefferson"])
-    assert t and t["kind"] == T.SAME_GAME and "one pick on each team" in t["why"]
+    assert abs(T.SG_MIN_LIFT - 1 / (1 - T.SGP_CUT)) < 1e-12
+    assert T.pair("nfl", legs["Amon-Ra St. Brown"], legs["Justin Jefferson"]) is None, \
+        "the pace floor alone cannot pay for the same-game cut"
+    old = T.pair("nfl", legs["Amon-Ra St. Brown"], legs["Justin Jefferson"], min_lift=1.0)
+    assert old and old["kind"] == T.SAME_GAME and "one pick on each team" in old["why"], \
+        "the old rule stays reachable, for the study's comparison"
+    qb = T.pair("nfl", legs["Jared Goff"], legs["Amon-Ra St. Brown"])
+    assert qb and qb["joint"] >= T.SG_MIN_LIFT * qb["independent"], "a quarterback and his receiver earn it back"
+
+
+def test_other_games_are_two_game_parlays_at_the_product():
+    legs = {l["player"]: l for l in T.edge_legs(_board(), "nfl")}
     x = T.pair("nfl", legs["Jared Goff"], legs["Josh Allen"])
     assert x and x["kind"] == T.TWO_GAME and x["joint"] == x["independent"]
     assert x["price_dec"] == x["naive_dec"], "one book: the prices multiplied"
@@ -214,6 +230,55 @@ def test_the_backtest_pairs_each_graded_day_and_grades_it():
     assert allrow["won"] == 0, "every pair holds one loser"
     assert allrow["roi"] == -1.0
     assert "paired the way tonight's board is" in bt["rule"]
+
+
+def test_the_schedule_reads_a_daily_sports_day_from_its_period():
+    """The daily sports leave `date` empty and keep the day in `period`
+    (engine/db). The first box run read `date` alone, found only football's
+    272 games, and graded an MLB or NBA pick on each team of one game as two
+    games."""
+    import sqlite3
+    h = sqlite3.connect(":memory:")
+    h.execute("CREATE TABLE games (sport TEXT, season INTEGER, period TEXT, game_id TEXT, "
+              "home TEXT, away TEXT, date TEXT)")
+    h.executemany("INSERT INTO games VALUES (?,?,?,?,?,?,?)", [
+        ("nba", 2026, "2026-10-25", "1", "BOS", "NYK", None),
+        ("nfl", 2026, "8", "2", "DET", "MIN", "2026-10-26"),
+        ("mlb", 2026, "2026-10-01", "3", "LAD", "SD", None),
+        ("cfb", 2026, "9", "4", "UGA", "FLA", None),
+        ("nba", 2026, "2026-07-01", "5", "LAL", "DEN", None),
+    ])
+    g = T.schedule(h, "2026-08-06")
+    assert g[("nba", "2026-10-25", "BOS")] == "NYK" and g[("nba", "2026-10-25", "NYK")] == "BOS"
+    assert g[("nfl", "2026-10-26", "MIN")] == "DET"
+    assert g[("mlb", "2026-10-01", "SD")] == "LAD"
+    assert not any(k[1] in ("8", "9") for k in g), "a week label is not a day"
+    assert ("nba", "2026-07-01", "LAL") not in g, "before the window"
+
+
+def test_the_study_prints_every_section_on_a_journal():
+    """tools/parlay_study.py, step JD on the box: it must run end to end."""
+    import contextlib
+    import importlib.util
+    import io
+    conn = _journal()
+    for i, (team, opp) in enumerate((("DET", "MIN"), ("BUF", "MIA"), ("KC", "LV"), ("SF", "LA"))):
+        conn.execute("INSERT INTO bets (ts, sport, date, game_day, player, team, market, side, line, book, odds,"
+                     " hit_prob, grade, stake_units, stake_dollars, status, pnl_units, category)"
+                     " VALUES ('t','nfl','2099-10-04','2099-10-04',?,?,'rec_yds','OVER',40.5,'DK',-200,0.8,"
+                     "'Likely',0.25,0,'won',0.125,'likely')", (f"P{i}", team))
+    conn.commit()
+    path = next(r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main")
+    spec = importlib.util.spec_from_file_location("parlay_study", os.path.join(ROOT, "tools", "parlay_study.py"))
+    study = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(study)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert study.main(["--db", path, "--since", "2099-01-01"]) == 0
+    text = out.getvalue()
+    for head in ("1. As the Record page shows it", "2. How many a day", "3. The two halves",
+                 "4. The same-game rule", "5. The parlays the board has journaled live"):
+        assert head in text, head
 
 
 def test_the_export_ships_the_parlays_and_the_backtest():

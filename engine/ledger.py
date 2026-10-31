@@ -10192,7 +10192,8 @@ def _two_leg_backtest(conn) -> dict:
     try:
         held = json.loads(cache.read_text(encoding="utf-8"))
         fresh = _time.time() - cache.stat().st_mtime < TWO_LEG_BACKTEST_TTL_S
-        if held.get("db") == dbfile and held.get("result") and (held.get("key") == key or fresh):
+        if (held.get("db") == dbfile and held.get("v") == twoleg.BACKTEST_VERSION and held.get("result")
+                and (held.get("key") == key or fresh)):
             return held["result"]
     except (OSError, ValueError, KeyError, TypeError):
         pass
@@ -10212,7 +10213,8 @@ def _two_leg_backtest(conn) -> dict:
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
         tmp = cache.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"db": dbfile, "key": key, "result": result}), encoding="utf-8")
+        tmp.write_text(json.dumps({"db": dbfile, "v": twoleg.BACKTEST_VERSION, "key": key, "result": result}),
+                       encoding="utf-8")
         tmp.replace(cache)
     except OSError:
         pass

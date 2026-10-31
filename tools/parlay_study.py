@@ -20,7 +20,10 @@ WHAT IT PRINTS:
      best one or two do better than three, the board should post fewer;
   3. the two halves of the record, either side of 2026-10-15 (the stake
      study's split): a pool that pays in one half only is not yet a finding;
-  4. the parlays the board has journaled live, graded so far.
+  4. the same-game rule: every same-game pair that makes sense (the first
+     run's rule) next to the pairs whose link earns back the same-game cut
+     (twoleg.SG_MIN_LIFT, since 2026-10-31);
+  5. the parlays the board has journaled live, graded so far.
 
 Read-only: it reads the journal and the history database's schedule (to
 tell one game's two sides from two games) and writes nothing.
@@ -90,9 +93,14 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     conn = ledger.connect(args.db) if args.db else ledger.connect()
     games = schedule(args.since)
+    per = {}
+    for (sp, _day, _team) in games:
+        per[sp] = per.get(sp, 0) + 1
+    split = ", ".join(f"{sp.upper()} {n // 2}" for sp, n in sorted(per.items()))
     print(f"Two-leg parlays from our past picks, since {args.since}. "
-          f"Schedule: {len(games) // 2 if games else 0} games "
-          f"({'one game told from two' if games else 'none read: only teammates count as one game'}).")
+          f"Schedule: {len(games) // 2 if games else 0} games"
+          + (f" ({split}): one game told from two." if games else
+             " (none read: only teammates count as one game)."))
     print("Graded at the parlay's price, one unit a parlay; 'singles' is the same picks bet singly.")
 
     bt = T.backtest(conn, since=args.since, games=games)
@@ -112,7 +120,14 @@ def main(argv=None) -> int:
         print(f"  {label}:")
         print("\n".join("  " + line for line in table(half, kinds=("all",))))
 
-    print("\n4. The parlays the board has journaled live:")
+    print(f"\n4. The same-game rule: the link has to lift the chance both hit {T.SG_MIN_LIFT - 1:.1%} to pay for")
+    print("   the book's same-game cut. Every same-game pair that makes sense (the first run's rule) beside it:")
+    old = T.backtest(conn, since=args.since, games=games, min_lift=1.0)
+    print("  every pair that makes sense:")
+    print("\n".join("  " + line for line in table(old, kinds=("all", T.SAME_GAME))))
+    print("  the link earns back the cut (what the board posts now): section 1 above.")
+
+    print("\n5. The parlays the board has journaled live:")
     try:
         from engine import parlayledger
         rep = parlayledger.report_twoleg(conn, recent=0)

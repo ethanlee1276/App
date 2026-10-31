@@ -6,9 +6,13 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-10-31 night: the Parlays page shipped (step JD, item 1),
-after your IZ, JA, JB and IX paste. Those are done:
+Last updated 2026-10-31 night, after your JD paste (the parlay study). Done:
 
+- **JD:** Edge parlays made +3.4% over 162, +15.2% since 10-15. Most Likely
+  parlays lost 2.5%, mostly MLB and same-game pairs; football's same-game
+  Most Likely pairs lost 11.7% while its two-game pairs made 29.6%. Same-game
+  pairs now have to earn back the book's cut (step JE), and the study's NBA
+  and MLB games are fixed, so item 1 runs it again.
 - **IZ:** the restated record is on the site. 1,405 staked, 769–636,
   +23.03u, +3.2% ROI, 7,557 tracked.
 - **JB:** college's price test can't run yet. Only 8 of 2,087 college picks
@@ -18,13 +22,11 @@ after your IZ, JA, JB and IX paste. Those are done:
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 2 checks it.
 
-## 1. Any time: the parlays, and what pairing our past picks would have done (step JD)
+## 1. Any time after this push: the parlay study again (steps JE, JD)
 
-Read-only. It checks the Parlays page is live, then pairs every graded day of
-the record the way tonight's board pairs (with the journal's teams, so the
-same-game pairs count too) and prints it by league, section and kind, one, two
-and three a day, the two halves of the record, and the live parlays so far.
-About 20 seconds:
+Read-only, about 3 minutes. The first run with every league's games (the NBA's
+and MLB's were missing) and the new same-game rule; section 4 shows the old
+rule beside it:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JD 2>&1 | tee /tmp/jd.txt
