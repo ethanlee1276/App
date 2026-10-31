@@ -48,8 +48,13 @@ PAYOUT = 100 / abs(ODDS)
 
 
 def _conn():
+    from engine import stakeplan
     conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
     ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    # Since 2026-10-31 a league's Most Likely book carries money only once the
+    # stake rule promotes it (engine/stakeplan); this file is about the
+    # breaker on a STAKED book, so its leagues start promoted.
+    stakeplan.store(conn, stakeplan.promoted("mlb", "nfl", "cfb", "nba"))
     return conn
 
 

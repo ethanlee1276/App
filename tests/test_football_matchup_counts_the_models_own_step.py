@@ -74,8 +74,10 @@ def test_no_lean_a_step_against_the_side_says_no_and_a_small_one_says_nothing():
     assert by["Kalif Raymond"]["checks"]["matchup"] is None
     assert by["Kalif Raymond"]["check_notes"]["matchup"].endswith("— not enough to call")
     assert by["Kalif Raymond"]["tier"] != "top", "nothing to call: tops out at Strong, as before"
-    under, _ = _board("nfl", [_rec("Jameson Williams", "rec_yds", 0.93)],
-                      [_ml("Jameson Williams", "rec_yds", side="under")])
+    # Receptions: a receiving-yards under is held on its own since 2026-10-31
+    # (tests/test_receiving_unders_are_held.py), and this is the matchup read.
+    under, _ = _board("nfl", [_rec("Jameson Williams", "receptions", 0.93)],
+                      [_ml("Jameson Williams", "receptions", side="under")])
     assert under["Jameson Williams"]["checks"]["matchup"] is True, "an under reads the step the other way"
 
 

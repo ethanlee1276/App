@@ -301,8 +301,11 @@ def test_the_per_league_nav_configuration_is_intact():
     # below states. NBA's exclusions grew "weather" on 2026-08-12 (an
     # indoor league can't have a weather page), and the equality form of
     # this assert read that as the Long Shots rule breaking.
+    # The NBA's Long Shots OPENED on 2026-10-31: its long-shot market is the
+    # first basket (engine/firstbasket, tests/test_first_basket.py), so the
+    # tab now has a board to show. Weather stays out — an indoor league.
     nba = [l for l in block.splitlines() if l.strip().startswith("nba:")]
-    assert nba and '"longshots"' in nba[0], "NBA's Long Shots exclusion is gone"
+    assert nba and '"weather"' in nba[0] and '"longshots"' not in nba[0], nba
     # Membership rather than the exact list: the WNBA also has no futures
     # board, and an equality check fails whenever an unrelated tab joins the
     # exclusion, which looks like this preservation rule breaking when it

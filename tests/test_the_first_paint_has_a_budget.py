@@ -255,7 +255,16 @@ APP_JS_BUDGET_KB = 290
 #: (FEATURES, 13.6 KB of text) moved to js/more.js with the page that draws
 #: it, which paid for the free Pick of the Day's page wiring and left the
 #: first visit 394,149 -> 389,157 B; the budget keeps the saving.
-BOOT_BUDGET_KB = 381
+#: 381 -> 382 on 2026-10-31, for three things Ethan asked for on boards the
+#: first page draws ("those bets need to show up on the long shot page";
+#: "update our current record on the site ... with the respected units"):
+#: every first-scorer board's unpriced games with our top three and the price
+#: that makes each a pick, one renderer for the NBA's first basket, and the
+#: record's tiles for the picks we stake (390,941 B, 797 over 381). The
+#: pre-rule Combined and Most Likely tiles stay for a record written before
+#: the rule (176 B of it); nothing else on the first page is dead. Told to
+#: Ethan.
+BOOT_BUDGET_KB = 382
 
 
 def _gz_trimmed(rel: str) -> int:

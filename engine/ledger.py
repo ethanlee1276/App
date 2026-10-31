@@ -1291,6 +1291,18 @@ def _stamp_team(conn, cur, r) -> None:
         conn.execute("UPDATE bets SET team=? WHERE id=?", (team, cur.lastrowid))
 
 
+def _edge_book(conn, sport, category: str) -> str:
+    """The book an Edge pick journals to. A LEAGUE THE STAKE RULE HAS STOPPED
+    (engine/stakeplan EDGE_STOP: 100 graded at z ≤ −2.0) journals on paper —
+    no dollars — until its Edge book climbs back above z −1.0. The staked
+    record reads the rule itself, so these rows carry no units there either."""
+    if category == "main":
+        from . import stakeplan as _stakeplan
+        if not _stakeplan.edge_staked(sport, _plan=stake_plan(conn)):
+            return "paper"
+    return category
+
+
 def log_recommendations(conn, result: dict, only_recommended: bool = True) -> int:
     """Insert open bets from a pipeline result dict. Stake dollars are sized
     from the current bankroll: stake_units × unit_pct% × bankroll."""
@@ -1315,14 +1327,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     paper = str(get_cfg(conn, "paper_mode") or "0") == "1"
     benched = is_benched(sport)
     category = book_for(sport, paper)
-    # A LEAGUE THE STAKE RULE HAS STOPPED (engine/stakeplan EDGE_STOP: 100
-    # graded at z ≤ −2.0) journals on paper — no dollars — until its Edge
-    # book climbs back above z −1.0. The staked record reads the rule
-    # itself, so these rows carry no units there either.
-    if category == "main":
-        from . import stakeplan as _stakeplan
-        if not _stakeplan.edge_staked(sport, _plan=stake_plan(conn)):
-            category = "paper"
+    category = _edge_book(conn, sport, category)
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     kick = _kickoff_map(result)
     n = 0

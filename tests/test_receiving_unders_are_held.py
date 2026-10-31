@@ -96,5 +96,7 @@ if __name__ == "__main__":
                 import traceback
                 print(f"FAIL  {name}: {type(exc).__name__}: {exc}")
                 traceback.print_exc()
-    print(f"{ran} passed, {fails} failed")
-    sys.exit(1 if fails else 0)
+    if fails:
+        print(f"{ran} passed, {fails} failed")
+        sys.exit(1)
+    print(f"\n{ran} tests passed.")

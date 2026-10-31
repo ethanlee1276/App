@@ -81,7 +81,8 @@ def test_the_page_shows_the_split_and_only_on_the_whole_record():
     assert ("const dAll = winO || scoped\n"
             "    ? { ...d, combined: null, zeno: null,\n"
             "        pooled_overall: winO ? null : src.pooled_overall,\n"
-            "        likely_overall: winO ? null : src.likely_overall } : d;") in APP
+            "        likely_overall: winO ? null : src.likely_overall,\n"
+            "        edge_board: winO ? null : src.edge_board } : d;") in APP
 
 
 if __name__ == "__main__":

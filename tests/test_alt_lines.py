@@ -108,9 +108,11 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     # "add both from my calls"); nineteen since 2026-10-14, with steals,
     # blocks and turnovers ("the ones we download but don't use"). The
     # WNBA kept its five.
-    for sport, price in (("nba", 19), ("wnba", 13)):
+    # Twenty since 2026-10-31: the NBA's first-basket market (its Long Shots,
+    # engine/firstbasket) rides every NBA event as a scorer market.
+    for sport, price in (("nba", 20), ("wnba", 13)):
         hoops = oa.SPORT_CONFIG[sport]
-        assert (len(hoops["markets"]) + len(hoops["alternates"]) + 3
+        assert (len(hoops["markets"]) + len(hoops.get("scorers") or {}) + len(hoops["alternates"]) + 3
                 == B.credits_per_event(sport) == B.EVENT_CREDITS[sport] == price), sport
     assert B.CREDITS_PER_EVENT == 8        # the generic price, for leagues without an entry
     # The lines lane spends the SPORT'S money (`budget_sport`), so it

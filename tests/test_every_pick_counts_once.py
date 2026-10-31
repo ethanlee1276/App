@@ -211,23 +211,28 @@ def _text(html):
 
 
 def test_the_record_page_draws_the_parts_beside_the_sum():
+    """Since 2026-10-31 (engine/stakeplan) the record leads with the picks we
+    stake; the Record page draws the parts beside it — Most Likely by its hit
+    rate against what its prices need, and the record as placed — and Home
+    keeps the one tile."""
     rec = {"min_graded": 30,
-           "likely_overall": {"settled": 520, "wins": 300, "losses": 220, "roi": -0.031, "net_units": -3.1},
+           "likely_overall": {"settled": 520, "wins": 300, "losses": 220, "roi": -0.031, "net_units": -3.1,
+                              "breakeven": 0.62, "avg_price": -162},
            "pooled_overall": {"settled": 612, "wins": 350, "losses": 262, "roi": 0.012, "net_units": 1.7}}
-    ov = {"settled": 92, "wins": 50, "losses": 42, "roi": 0.07, "net_units": 4.8}
+    ov = {"settled": 92, "wins": 50, "losses": 42, "roi": 0.07, "net_units": 4.8, "rule": "v4", "tracked": 520}
     body = _fn("recFloor") + _fn("sameTally") + _fn("recordRibbonsHTML")
     page = _node(body, "recordRibbonsHTML(a.rec, a.ov, [], { parts: true })", {"rec": rec, "ov": ov})
     home = _node(body, "recordRibbonsHTML(a.rec, a.ov, [])", {"rec": rec, "ov": ov})
     if page is None:
         print("  SKIP node not installed"); return
     t = _text(page)
-    a, b, c = (t.index("Edge picks · graded in public"), t.index("Most Likely · every pick once"),
-               t.index("Combined · edge + Most Likely boards"))
+    a, b, c = (t.index("Our record · the picks we stake"), t.index("Most Likely · tracked for its hit rate"),
+               t.index("As placed · before the Oct 31 stake rule"))
     assert a < b < c, t
     assert "300-220" in t and "350-262" in t and "50-42" in t, t
-    assert "edge +4.8u + Most Likely −3.1u" in t, t
-    assert "Most Likely · every pick once" not in _text(home), "Home keeps its tiles; the split rides the combined one"
-    assert "edge +4.8u + Most Likely −3.1u" in _text(home)
+    assert "520 Most Likely tracked, not staked" in t and "needs 62% at -162" in t, t
+    assert "Most Likely · tracked" not in _text(home) and "As placed" not in _text(home), \
+        "Home keeps the one tile"
 
 
 def test_zenos_tile_says_when_the_pikkit_count_was_taken():
@@ -244,7 +249,9 @@ def test_zenos_tile_says_when_the_pikkit_count_was_taken():
 def test_a_league_scope_drops_zenos_all_sports_tile_and_keeps_the_parts():
     rr = _fn("renderRecord")
     assert "? { ...d, combined: null, zeno: null," in rr
-    assert "likely_overall: winO ? null : src.likely_overall } : d;" in rr
+    assert "likely_overall: winO ? null : src.likely_overall," in rr
+    # …and the Edge board's own tile is the league's too (2026-10-31).
+    assert "edge_board: winO ? null : src.edge_board } : d;" in rr
     assert "s.likely_overall = s.pooled.likely || null;" in _fn("adoptPooledRecord")
 
 

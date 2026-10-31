@@ -8607,6 +8607,10 @@ function projBar(r) {
 }
 
 function confMeter(r) {
+  /* A first-scorer pick (engine/firsttd, engine/firstbasket) has no 0–10
+     confidence — its numbers are our chance and the price — so no meter,
+     rather than a card that cannot draw (2026-10-31). */
+  if (!Number.isFinite(Number(r.confidence)) || r.confidence == null) return "";
   const w = `${(r.confidence / 10) * 100}%`;
   /* No amber. Confidence is a NUMBER, and amber in this palette means a
      CONDITION is live or material — four amber confidence bars on one board
