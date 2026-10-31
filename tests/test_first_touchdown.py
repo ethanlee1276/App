@@ -89,6 +89,63 @@ def test_usage_comes_from_the_logs_this_season_and_last_at_half():
     assert before["Josh Jacobs"]["touch"] == 20 + 3 + 0.5 * 26, "a later week is not read early"
 
 
+def _box_team(c, team, opp, catches=True):
+    """Two college games as ESPN's box score files them: carries for the
+    backs and the quarterback, catches (and no targets) for the receivers."""
+    for period in ("2026-10-17", "2026-10-24"):
+        def put(player, **m):
+            for k, v in m.items():
+                c.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                          "position, home, market, value) VALUES ('cfb',2026,?,?,?,?,?,'',1,?,?)",
+                          (period, f"{team}-{period}", player, team, opp, k, v))
+        put(f"{team} Back", carries=18, rush_td=1)
+        put(f"{team} Back Two", carries=6, rush_td=0)
+        put(f"{team} Quarterback", carries=5, rush_td=0)
+        if catches:
+            put(f"{team} Wideout", receptions=7, rec_td=1, rec_yds=90)
+            put(f"{team} Slot", receptions=5, rec_td=0, rec_yds=55)
+            put(f"{team} Third", receptions=3, rec_td=0, rec_yds=30)
+            put(f"{team} Tight End", receptions=4, rec_td=1 if period.endswith("24") else 0, rec_yds=40)
+
+
+def test_a_box_score_receiver_reads_his_catches_when_it_has_no_targets():
+    """Ethan's 2026-10-31 paste: Duke's lead back 52% to score the game's
+    first touchdown, and every college top three a back or a quarterback."""
+    c = _hist()
+    _box_team(c, "DUKE", "BC")
+    _box_team(c, "BC", "DUKE")
+    u = F.team_usage(c, "cfb", 2026, "DUKE")
+    assert "DUKE Wideout" in u, "a receiver with catches is a candidate"
+    assert abs(u["DUKE Wideout"]["touch"] - 14 / F.CATCH_RATE["cfb"]) < 1e-9, "catches over the catch rate"
+    assert u["DUKE Back"]["touch"] == 36, "a back's carries are what they were"
+    rows = F.game_probs(u, F.team_usage(c, "cfb", 2026, "BC"), -27.5, "DUKE", "BC", "cfb")
+    back = next(r for r in rows if r["player"] == "DUKE Back")
+    assert back["prob"] < F.MAX_PROB, back
+    assert any(r["player"] == "DUKE Wideout" for r in rows[:4]), "the receivers are back in the top of the list"
+    # The read before: the receivers had no volume and fell off the list.
+    old = _hist()
+    _box_team(old, "DUKE", "BC", catches=False)
+    _box_team(old, "BC", "DUKE", catches=False)
+    was = F.game_probs(F.team_usage(old, "cfb", 2026, "DUKE"), F.team_usage(old, "cfb", 2026, "BC"),
+                       -27.5, "DUKE", "BC", "cfb")
+    assert was[0]["player"] == "DUKE Back" and was[0]["prob"] > 0.5, was[0]
+
+
+def test_a_real_target_count_is_never_replaced():
+    c = _hist()
+    _log(c, 2026, "001", "Puka Nacua", "LAR", targets=12, receptions=9, rec_td=1)
+    assert F.team_usage(c, "nfl", 2026, "LAR")["Puka Nacua"]["touch"] == 12, \
+        "targets at or above the catches are the real count"
+
+
+def test_no_chance_above_the_ceiling_is_a_pick():
+    rows = [{"player": "Hole In The Logs", "prob": 0.45, "odds": 300, "game": "A@B"},
+            {"player": "Real Read", "prob": 0.20, "odds": 600, "game": "C@D"}]
+    assert [r["player"] for r in F.pick([dict(r) for r in rows])] == ["Real Read"]
+    b = {"games": 0, "ours_games": 1, "beyond": 1}
+    assert "1 player(s) above 30%" in F.report(b)
+
+
 def test_every_chance_in_a_game_adds_to_the_offences_share():
     hu = {"A": {"touch": 50, "td": 2}, "B": {"touch": 50, "td": 2}}
     au = {"C": {"touch": 100, "td": 4}}

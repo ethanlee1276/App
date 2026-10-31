@@ -87,6 +87,27 @@ OURS_PER_GAME = 3
 #: (player_game_logs).
 TOUCH_MARKETS = ("carries", "targets")
 TD_MARKETS = ("rush_td", "rec_td")
+#: A BOX SCORE HAS CATCHES AND NO TARGETS (2026-10-31). College game logs
+#: come from ESPN's box scores until the play-by-play backfill lands
+#: (engine/sources/cfbdata, engine/boxsettle), and a college box score
+#: carries a receiver's catches but almost never his targets. Read on
+#: carries and targets alone, every receiver in those games had no volume
+#: at all, fell off the candidate list, and the backs and quarterbacks took
+#: every share: Duke's lead back read 52% to score the game's first
+#: touchdown against Boston College, where the research's top bucket is
+#: 14%, and every college top three on 2026-10-31 was a back or a
+#: quarterback. Where a game has catches but fewer targets than catches,
+#: its targets are read as catches over the league's catch rate (a catch is
+#: a target, so a real target count is never below the catches). Play-by-
+#: play rows and the NFL's, which count every target, are unchanged.
+REC_MARKET = "receptions"
+CATCH_RATE = {"nfl": 0.65, "cfb": 0.62}
+#: No chance above this is a pick. The research scored its chances on games
+#: it never saw up to its top bucket (said 14.2%, scored 15.7%); a number
+#: twice past that is a hole in the inputs, not a read, and a price long
+#: enough for it would look like an enormous edge. Shown, never picked; the
+#: build log counts them (`report`).
+MAX_PROB = 0.30
 
 #: COLLEGE (tools/cfb_first_td_study.py, cfbfastR's play-by-play, FBS
 #: against FBS, regular season; docs/FIRST_TD_RESEARCH.md):
@@ -163,23 +184,30 @@ def team_usage(conn, sport: str, season: int, team: str, before_period: str | No
     brings no old team's volume."""
     out: dict = {}
     q = ("SELECT season, period, player, market, value FROM player_game_logs "
-         "WHERE sport=? AND team=? AND season IN (?, ?) AND market IN (?,?,?,?)")
-    args = [sport, team, season, season - 1, *TOUCH_MARKETS, *TD_MARKETS]
+         "WHERE sport=? AND team=? AND season IN (?, ?) AND market IN (?,?,?,?,?)")
+    args = [sport, team, season, season - 1, *TOUCH_MARKETS, *TD_MARKETS, REC_MARKET]
+    # One game's line per player first, so a game with catches and no
+    # targets can be read whole (REC_MARKET).
+    lines: dict = {}
     for r in conn.execute(q, args):
         s, period, player, market, value = r[0], str(r[1]), r[2], r[3], r[4]
         if s == season and before_period is not None and period >= str(before_period):
             continue
+        g = lines.setdefault((player, s, period),
+                             {"carries": 0.0, "targets": 0.0, "receptions": 0.0, "td": 0.0})
+        g["td" if market in TD_MARKETS else market] += float(value or 0)
+    rate = CATCH_RATE.get(str(sport).lower(), CATCH_RATE["nfl"])
+    for (player, s, period), g in lines.items():
         w = 1.0 if s == season else LAST_SEASON
+        aimed = g["targets"] if g["targets"] >= g["receptions"] else g["receptions"] / rate
+        touch = g["carries"] + aimed
         d = out.setdefault(player, {"touch": 0.0, "td": 0.0, "games": set(), "used": set()})
-        v = float(value or 0) * w
-        if market in TOUCH_MARKETS:
-            d["touch"] += v
-            if s == season and v > 0:
-                d["used"].add(period)
-        else:
-            d["td"] += v
+        d["touch"] += touch * w
+        d["td"] += g["td"] * w
         if s == season:
             d["games"].add(period)
+            if touch > 0:
+                d["used"].add(period)
     team_games = sorted({g for d in out.values() for g in d["games"]})
     recent = set(team_games[-RECENT_GAMES:])
     if recent:
@@ -268,12 +296,15 @@ def why_empty(note: str = "") -> str:
     return WHY_LATER
 
 
-def pick(rows: list, per_game: int = PER_GAME, limit: int = LIMIT) -> list:
+def pick(rows: list, per_game: int = PER_GAME, limit: int = LIMIT,
+         max_prob: float | None = MAX_PROB) -> list:
     """The board: priced candidates our chance puts clearly above the price.
 
     ``rows`` carry ``prob``, ``odds`` (the best bettable price) and ``game``.
     Each gets ``ev`` and ``implied``; a pick clears MIN_PROB and MIN_EV inside
-    FIRST_TD_ODDS. Ranked by expected return — never by price — one a game."""
+    FIRST_TD_ODDS, and never above ``max_prob`` (MAX_PROB, the football
+    boards' guard; the first-basket board reads every shot off the box score
+    and passes None). Ranked by expected return — never by price — one a game."""
     cands = []
     for r in rows:
         try:
@@ -285,7 +316,7 @@ def pick(rows: list, per_game: int = PER_GAME, limit: int = LIMIT) -> list:
         r["ev"] = round(expected_return(p, odds), 4)
         if not (FIRST_TD_ODDS[0] <= odds <= FIRST_TD_ODDS[1]):
             continue
-        if p < MIN_PROB or r["ev"] < MIN_EV:
+        if p < MIN_PROB or (max_prob is not None and p > max_prob) or r["ev"] < MIN_EV:
             continue
         cands.append(r)
     cands.sort(key=lambda r: (-r["ev"], -r["prob"]))
@@ -450,7 +481,8 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
         r["priced"] = True
     ours.sort(key=lambda r: (str(r.get("game_kickoff") or ""), r["game"], -r["prob"]))
     out = {"rows": rows, "picks": picks, "games": n_games, "quoted": len(rows),
-           "ours": ours, "ours_games": ours_games}
+           "ours": ours, "ours_games": ours_games,
+           "beyond": sum(1 for r in rows + ours if float(r.get("prob") or 0) > MAX_PROB)}
     if not rows:
         out["why"] = why_empty(why)
     return out
@@ -460,6 +492,9 @@ def report(b: dict) -> str:
     """The build log's line."""
     unpriced = (f"; our top first scorers shown unpriced for {b['ours_games']} game(s)"
                 if b.get("ours_games") else "")
+    if b.get("beyond"):
+        unpriced += (f"; ⚠️ {b['beyond']} player(s) above {MAX_PROB:.0%}, past anything the research "
+                     "tested — never a pick; look at that team's game logs")
     if not b.get("games"):
         return f"  First touchdown: no first-touchdown prices on this pull{unpriced}"
     return (f"  First touchdown: {b['quoted']} quoted player(s) across {b['games']} game(s); "

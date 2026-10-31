@@ -122,6 +122,12 @@ def test_a_game_with_no_price_shows_our_first_scorers_and_the_price_that_would_m
     assert top["priced"] is False and top["need_odds"] >= FB.FIRST_BASKET_ODDS[0]
     assert b["why"] == FB.WHY_LATER
     assert FB.why_empty("the pacer held the pull: budget") == FB.WHY_BUDGET
+    # The box, 2026-10-31: no NBA prices bought all day, and the board said
+    # they post closer to tip-off.
+    assert FB.why_empty("matched 0 props across 0 events (cached)") == FB.WHY_BUDGET
+    assert FB.why_empty("no odds requested — engine ran with no bettable prices") == FB.WHY_BUDGET
+    assert FB.why_empty("matched 412 props across 7 events") == FB.WHY_LATER, \
+        "props bought and no first-basket price yet: it posts later"
 
 
 # --- grading ----------------------------------------------------------------------------

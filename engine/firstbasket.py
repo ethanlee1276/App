@@ -310,7 +310,9 @@ def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "") -
                              f"Our chance {p:.1%} against {imp:.1%} in the price ({ev:+.0%} expected return).",
                          ]})
     rows.sort(key=lambda r: -r["prob"])
-    picks = _ftd.pick([dict(r) for r in rows])
+    # No first-TD ceiling here: that guards a football board against a box
+    # score with no targets, and this one counts every shot.
+    picks = _ftd.pick([dict(r) for r in rows], max_prob=None)
     for r in picks:
         r["grade"] = LABEL
         r["edge"] = round(r["prob"] - r["implied"], 4)
@@ -331,9 +333,16 @@ WHY_LATER = ("First-basket prices post closer to tip-off. Below, who scores firs
              "numbers and the price that would make each one a pick.")
 
 
+#: Build notes that mean tonight's player prices were never bought: the
+#: pacer said so, or the build ran on a cache holding none of tonight's
+#: games (2026-10-31: "matched 0 props across 0 events (cached)", the
+#: October budget spent, and the board said the prices post later).
+NOT_BOUGHT = ("budget", "held", "capped at 0", "no odds requested", "matched 0 props", "across 0 events")
+
+
 def why_empty(note: str = "") -> str:
     n = str(note or "").lower()
-    if "budget" in n or "held" in n or "capped at 0" in n:
+    if any(k in n for k in NOT_BOUGHT):
         return WHY_BUDGET
     return WHY_LATER
 

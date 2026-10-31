@@ -176,6 +176,27 @@ be 10% longer than our chance says it should be.
 None of this touches the live board. Its usage comes from the app's own
 college player logs, which have their own careful parser.
 
+**A third, found on the live board (2026-10-31).** Until the play-by-play
+backfill lands, a college game's player logs come from ESPN's box score.
+A college box score carries a receiver's catches but almost never his
+targets. The board counts volume as carries plus targets, so in those games
+every receiver had no volume, fell off the candidate list, and the backs
+and quarterbacks took every share. Duke's lead back read 52% to score the
+game's first touchdown against Boston College, the second back 11%. Every
+top three that Saturday was a back or a quarterback, and no receiver
+appeared at all. The research's top bucket is 14%.
+
+- **The fix:** where a game has catches but fewer targets than catches, its
+  targets are read as catches over the league's catch rate (62% in college,
+  65% in the NFL). A catch is always a target, so a real target count is
+  never below the catches, and play-by-play rows and the NFL's are
+  unchanged (`firsttd.team_usage`).
+- **The same game shape after it:** the lead back reads 22%, the top
+  receiver 18%, the tight end 11%.
+- **The guard:** no chance above 30% is ever a pick (`firsttd.MAX_PROB`).
+  That's twice the research's top bucket, a hole in the inputs rather than
+  a read, and the build log counts any such player.
+
 **On the board and graded.**
 
 - Each college odds pull buys the first-touchdown market too (14 credits a

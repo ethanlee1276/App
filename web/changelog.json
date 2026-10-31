@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-10-31",
+      "kind": "fix",
+      "title": "College first touchdown counts the receivers again",
+      "body": "A college box score lists a receiver's catches but not his targets, and the first-touchdown board counted volume as carries plus targets, so receivers dropped off the list and the backs took every share: Duke's lead back read 52% to score the game's first touchdown, where the research's top bucket is 14%. A game with catches and no targets now reads its targets from the catches. On that game's shape the lead back reads 22% and the top receiver 18%, and no chance above 30% is ever a pick. The NBA's first-basket board now also says when the odds budget held tonight's prices, instead of saying they post later."
+    },
+    {
+      "date": "2026-10-31",
       "kind": "model",
       "title": "Edge picks longer than +130 carry no stake",
       "body": "Across every league, our Edge picks at +131 or longer hit 37.6% where the price itself said 41.1% and we said 42.9%, and the longer the price the wider the miss (+201 and up: 17.6% against 23.3%). That is the favourite-longshot bias: long prices pay less than their odds say. Those 293 picks lost 9.6 units; the picks at +100 to +130 made 23.8. Past +130 a pick still posts and is graded, on paper, and its card says Tracked \u00b7 no stake."

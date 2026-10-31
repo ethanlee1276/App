@@ -9305,6 +9305,38 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JC. College first touchdown counts the receivers again** (step 315; your
+IX paste, 2026-10-31, had Duke's Nate Sheppard at 52% to score the game's
+first touchdown, and every college top three a back or a quarterback).
+Nothing to run for the change itself:
+
+- A college box score lists a receiver's catches but not his targets, and
+  the board counted volume as carries plus targets. So in every box-score
+  game the receivers had no volume, fell off the list, and the backs took
+  every share. The research's top bucket is 14%.
+- **Now:** a game with catches and no targets reads its targets from the
+  catches (catches over a 62% catch rate). Play-by-play rows and the NFL's
+  already count every target and are unchanged. On the same game shape, the
+  lead back reads 22%, the top receiver 18%, the tight end 11%.
+- **The guard:** no chance above 30% is ever a pick, and the build log
+  counts any player above it.
+- **NBA:** the first-basket board said prices "post closer to tip-off" when
+  no NBA prices had been bought all day (the October budget). It now says
+  the budget held them. November's budget buys them tomorrow.
+- **Your JB:** college's price test says NOT YET, and it can't get there
+  soon. Only 8 of 2,087 college picks had a market chance at pick time,
+  because that needs three books quoting the same line and college props
+  rarely have them. The live cap reads the same floor, so it would barely
+  touch a college pick even if switched on. It stays off (no setenv).
+
+After the next college build (the board rebuilds through the evening), the
+board again. Receivers should be in each game's top three, and nobody's
+chance above 0.30:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh IX 2>&1 | tee /tmp/ix.txt
+```
+
 **JB. Receiving-yards unders held; college's price test** (step 314; you,
 2026-10-31: "keep diving deeper into our NFL edge and most likely bets and
 the college edge and most likely bets"). Nothing to run for the hold:
