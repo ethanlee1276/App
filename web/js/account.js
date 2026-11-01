@@ -3845,6 +3845,12 @@ function setListHTML() {
     setItem({ ico: "shield", title: "Privacy Policy", href: "privacy.html", chev: true }),
     setItem({ ico: "info", title: "Terms of Service", href: "terms.html", chev: true }),
   ]));
+  // The owner's Who's on now (engine/whoson): the site's own account alone.
+  if (inn && typeof _acctUser !== "undefined" && _acctUser && _acctUser.whoson) {
+    out.push(setGroup("The site’s own account", [
+      setItem({ ico: "people", title: "Who’s on now", sub: "Every page open on the site, live", href: "#whoson", chev: true }),
+    ]));
+  }
   if (inn) {
     out.push(setGroup("Your data", [
       // What the site keeps of your own time here (engine/activity), only while it keeps any.
@@ -3862,6 +3868,12 @@ function setListHTML() {
         ? [setItem({ tag: "label", ico: "trophy", title: "Show me on the closing-line leaderboard",
                      sub: "Your username and your average against the close, never a bet",
                      end: setSwitch(s.closeboard === "on", 'data-set-switch="closeboard"') })] : []),
+      // The owner's Who's on now (engine/whoson): on until a member says
+      // no, like the split, and the Privacy Policy's §2.13 says what it is.
+      ...(_pwStatus && _pwStatus.whoson_switch
+        ? [setItem({ tag: "label", ico: "people", title: "Show me in Who’s on now",
+                     sub: "The site’s owner sees your username and the page you have open, while you’re on",
+                     end: setSwitch(s.whoson !== "off", 'data-set-switch="whoson"') })] : []),
       setItem({ ico: "download", title: "Download my data", attrs: 'data-act="acctExport"' }),
       setItem({ ico: "search", title: "Clear search history", attrs: 'data-act="acctSearchClear"' }),
       setItem({ ico: "logout", title: "Sign out everywhere", sub: "Every device, this one too",
@@ -3940,7 +3952,8 @@ async function actFill(off) {
    every yes and no they gave us with the policy's date; the rows
    themselves are in Download my data. */
 const YD_KIND = { terms: "Terms and 21+", activity: "Keeping your activity", alerts: "Alerts",
-                  limits: "Limits", split: "The members' split", closeboard: "The closing-line leaderboard" };
+                  limits: "Limits", split: "The members' split", closeboard: "The closing-line leaderboard",
+                  whoson: "Who's on now" };
 async function ydFill() {
   const box = document.getElementById("set-yd");
   if (!box) return;

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-01",
+      "kind": "ship",
+      "title": "The Privacy Policy: Who's on now",
+      "body": "The site's owner now has a page, open to the site's own account and nobody else, that shows how many people are on the site right now and which of its pages they have open. Each open tab says which page it shows when that changes and about once a minute; the server keeps the latest for two and a half minutes, in memory, and never writes it down. Signed in, the page can show your username beside the page you have open: the Privacy Policy's new section 2.13 says exactly what, and Settings, Your data has a switch, \"Show me in Who's on now\", to stay off it and be counted without your name. An account made before 2 November is named only a week after we email it about the change, as the policy promises."
+    },
+    {
+      "date": "2026-11-01",
       "kind": "fix",
       "title": "Pages you are not looking at stop drawing in the background",
       "body": "Since 25 October four pages, Most Likely, Long Shots, Trending and Players, were drawn on every load and every 30-second refresh, whichever page was open: a rename for accessibility left the list that keeps hidden pages waiting pointing at names no longer on the page. They wait again, and draw the moment you open them. Home now draws its own sections first and the Edge and Live pages' after, a few at a time, and the stadium pictures and their bands are worked out once rather than once per card. On a mid-range phone the time a first screen keeps the page from answering a tap fell by about two fifths on Home, a third on Live and half on the Record, and a refresh no longer redraws pages nobody is looking at."

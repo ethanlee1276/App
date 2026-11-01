@@ -21,7 +21,7 @@
     
 
     <h1>Privacy Policy</h1>
-    <p class="legal-date">Last updated 29 October 2026</p>
+    <p class="legal-date">Last updated 1 November 2026</p>
 
     <h2>1. The short version</h2>
     <ul>
@@ -39,6 +39,11 @@
       <li><b>Only if you say yes</b>, we also keep a daily record of your own
         time on the site, to time your alerts and to count how the site is
         used (§2.10). Say no at any time and it is deleted.</li>
+      <li><b>While a page of the site is open</b>, the server knows which of
+        our pages it shows, for a couple of minutes and in memory only, so
+        the site’s owner can see how many people are on and where; signed in,
+        with your username, unless you turn that off (§2.13). It is never
+        written down.</li>
       <li><b>We never see your card details.</b> Stripe takes the payment
         on its own page; we hold a customer reference and a status.</li>
       <li><b>We do not sell or share your personal information</b>, and we
@@ -83,14 +88,14 @@
       <li><b>A record of each yes and no you give us</b> about your data or
         our messages — the 21+ and Terms confirmation, alerts turned on (which
         kinds) or off, a break from alerts or a limit you set, and keeping your
-        activity, the members' split and the leaderboard (§2.10–2.12) — with the date
+        activity, the members' split, the leaderboard and Who’s on now (§2.10–2.13) — with the date
         of this policy at the time, and when. A change of mind is a new line,
         never an edit, so the record says what you chose and what you were
         shown. It is in Download my data and deleted with your account.
         (<code>consent_log</code>)</li>
       <li><b>That we emailed you about a change to these documents, and
         when</b> — so it goes once, and so a change that would count you waits
-        a week after it (§2.11). (<code>policy_notices</code>)</li>
+        a week after it (§2.11, §2.13). (<code>policy_notices</code>)</li>
       <li><b>Session tokens, stored hashed</b>, with an expiry. The cookie
         in your browser is the only copy of the raw token; a stolen
         database does not yield a working session.
@@ -134,15 +139,17 @@
         team’s colours, what you told us you are here for and the books you
         bet at (the “Make it yours” card, or Settings; your books lead the
         Bet it sheet), a weekly limit, if you set one (Settings →
-        Limits), and whether you are counted in the members' split (§2.11)
-        and on the leaderboard (§2.12). (<code>user_data</code>, section
+        Limits), whether you are counted in the members' split (§2.11),
+        on the leaderboard (§2.12) and by name in Who’s on now (§2.13).
+        (<code>user_data</code>, section
         <code>settings</code>)</li>
     </ul>
     <p>Those five sections — <code>mybets</code>, <code>fantasy</code>,
       <code>bankroll</code>, <code>search</code>, <code>settings</code> — are
       the complete list of what the synced part of an account holds. It is
       the same list the code enforces (<code>accounts.SECTIONS</code>). The
-      features in §2.7–2.12 keep their own rows, each named there.</p>
+      features in §2.7–2.12 keep their own rows, each named there; §2.13
+      keeps none.</p>
 
     <h3>2.3 Subscription</h3>
     <ul>
@@ -505,6 +512,28 @@
       in §2.1; it reads the prices in §2.7. Turning it off takes you off at
       once.</p>
 
+    <h3 id="who-is-on">2.13 Who’s on now</h3>
+    <p>While a page of this site is open, it tells our server which of our
+      pages it shows (the page’s own name, such as “Most Likely”, and its
+      league, or which game on a game’s page) when that changes and about
+      once a minute while it is in front of you, and that it is leaving when
+      you close it, with a random number the tab makes up for itself and
+      forgets when it closes. The server keeps only the latest, in its
+      memory, for two and a half minutes. It is never written to a disk or a
+      database and does not outlive a restart. No address, no device, nothing
+      you click or type, nothing about other apps or sites.</p>
+    <p>One person sees it: the site’s owner, on a page only the site’s own
+      account can open, to see how many people are on the site and on which
+      pages and, if you are signed in, that you are on it, under your
+      username, with the page you have open and since when. If you would
+      rather not be named, turn off “Show me in Who’s on now” in Settings →
+      Your data: you are still counted, without your name, like a visitor.
+      Your choice is kept with your settings, with its line in the record in
+      §2.1. An account made before 2 November 2026 is named only from a week
+      after we email it about this change (one without an email address,
+      from 9 November 2026), as §13 promises; until then it is counted
+      without its name.</p>
+
     <h2>3. What we do NOT collect</h2>
     <ul>
       <li><b>Your sportsbook password</b>, or any betting-account
@@ -564,6 +593,10 @@
       <tr><td>The closing-line leaderboard (only if you turn it on)</td>
           <td>To show your closing-line numbers to other members (§2.12)</td>
           <td>Consent, withdrawn in My Bets or Settings</td></tr>
+      <tr><td>Who’s on now</td>
+          <td>To let the site’s owner see, right now, how many people are on
+            the site and on which pages, and which members (§2.13)</td>
+          <td>Legitimate interest; turn off being named in Settings</td></tr>
       <tr><td>When you were last here, and your plan</td>
           <td>To count, as totals, how many members are here often, slipping
             away or gone, with the monthly revenue in each group, for our own
@@ -697,6 +730,8 @@
         latest 500 between two people, until either account is deleted.</li>
       <li><b>Server logs</b> — a short rolling window for security and
         debugging.</li>
+      <li><b>Which page a tab has open</b> (§2.13) — two and a half minutes,
+        in the server’s memory, never on a disk.</li>
     </ul>
     <p><b>Backups outlive deletion, and we would rather say so.</b> The
       account database is included in a weekly encrypted backup — it has

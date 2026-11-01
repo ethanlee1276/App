@@ -22932,6 +22932,9 @@ function whyCalcParlay() {
 function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.js", "css/race.css", a); }
 // …and every league's Pick of the Day, free (js/potd.js; Ethan, 2026-10-30).
 function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage", "js/potd.js", "css/potd.css", a); }
+// The owner's Who's on now (engine/whoson): its own room, loaded on first
+// use; the server answers its data to the site's own account alone.
+function renderWhoson(...a) { return roomCall(renderWhoson, "renderWhoson", "js/whoson.js", "css/whoson.css", a); }
 
 // renderMethodology, renderChangelog and renderVerify are in js/more.js, loaded the
 // first time their page opens (loadRoom; 2026-10-29, to pay for the Pick of the
@@ -23471,7 +23474,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "whoson", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -23949,6 +23952,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "bankroll") renderBankrollExtras();
   if (name === "weather") renderWeather();
   if (name === "race") renderRace();
+  if (name === "whoson") renderWhoson();
   if (name === "potd") renderPotdPage();
   if (name === "alerts") renderAlerts();
   if (name === "messages") renderMessages();
@@ -26567,6 +26571,13 @@ requestAnimationFrame(() => document.documentElement.classList.remove("booting")
 // While the board is on its way: the date formatter, in a task of its own.
 setTimeout(warmDateFormat, 0);
 sharedSlipIn();
+// WHO'S ON NOW (engine/whoson): this tab's page, told from a file of its
+// own (js/here.js) once the first screen has long settled.
+setTimeout(() => {
+  const s = document.createElement("script");
+  s.src = "js/here.js";
+  document.head.appendChild(s);
+}, 4000);
 
 /* --- the true minus, applied where numbers stack --------------------------
    Every signed figure the site prints comes out of a template literal, and

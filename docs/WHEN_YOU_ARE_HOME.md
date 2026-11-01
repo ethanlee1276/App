@@ -9305,6 +9305,70 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JH. Who's on now: every page open on the site, for the Qellys Book account
+alone** (step 320; you, 2026-11-01: "add a feature ONLY AVALIBLE for my
+Qellys Book account on the site that lets me see all active users. It shows
+me all users and what page they are on").
+
+- **Where.** Signed in as Qellys_Book: Settings → The site's own account →
+  Who's on now (or qellysbook.com/#whoson). Members on, visitors, pages
+  open; then members by name with the page each has open (a game shows as
+  "KC @ DEN · live"), how long they've been on it and on the site, and when
+  they were last heard from; then every page with how many are on it. It
+  redraws every 10 seconds. Any other account is told the page isn't theirs,
+  and the server answers its data to them as if it didn't exist.
+- **What it keeps.** Each open tab says which of our pages it shows when that
+  changes and once a minute, and that it's leaving when it closes. The server
+  holds the latest for 2½ minutes in memory, never on a disk.
+- **Why names wait.** Your Privacy Policy said page counts "cannot say what
+  any one person did", and its §13 promises an email before a change that
+  affects members takes effect. So it has a new §2.13 (dated 1 November),
+  members have a "Show me in Who's on now" switch (Settings → Your data, on
+  until they turn it off, like the split), and a member is named only a week
+  after the notice email reached them; an account made from 2 November is
+  named at once, a phone-only one from 9 November. Until then everyone is
+  counted on the page they have open, without a name. Your own Qellys_Book
+  row shows by name from the start (it is you looking at yourself), so the
+  first time you open the page you should see yourself on "Who's on now".
+
+Arm the email (both changes named, so the 29 October one keeps going if it
+hasn't finished; 60 a day for both together, 10:00 to 20:00 Eastern):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_POLICY_NOTICE 2026-10-29,2026-11-01
+sudo systemctl restart qellys
+```
+
+Install the Caddy config that serves the new files trimmed (it validates
+first and keeps the old config if anything is wrong; until then they are
+served whole, which works):
+
+```
+cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+The check in one go, read-only (`1`, `1`, `True`, each notice's told and to
+go, `1`), then the email as a member gets it:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JH 2>&1 | tee /tmp/jh.txt
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-01
+```
+
+Which runs, one at a time:
+
+```
+curl -s https://qellysbook.com/privacy.html | grep -c 'id="who-is-on"'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function renderWhoson('
+curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('whoson_switch'))"
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
+sudo grep -cF '/js/whoson.js /css/whoson.css /js/here.js' /etc/caddy/Caddyfile
+```
+
+The App Store's privacy label already says Usage Data → Product Interaction,
+linked to the user, for analytics (step IC); this is the same kind of data,
+so nothing there changes.
+
 **JG. The disk filled on Sunday morning: what did it, and what can never do
 it again** (step 319; you, 2026-11-01: "the server is down and stale and
 won't let me log into my account"). Already done, by you, that morning:

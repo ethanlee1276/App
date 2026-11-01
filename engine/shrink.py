@@ -61,7 +61,10 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          # The game chat (2026-10-25), a room like the others.
          "js/chat.js", "css/chat.css",
          # Ask Qellys's chat room (2026-10-27).
-         "js/ask.js", "css/ask.css")
+         "js/ask.js", "css/ask.css",
+         # Who's on now (2026-11-01): the owner's page, and every tab's
+         # word of which page it shows (engine/whoson).
+         "js/whoson.js", "css/whoson.css", "js/here.js")
 
 #: HTML comments that are not commentary: `engine/routes.document` splices
 #: an entity's preview tags between these two markers, so they stay.

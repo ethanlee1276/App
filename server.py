@@ -1255,6 +1255,8 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/account/"):
             return self._account_get(
                 parsed.path[len("/api/account/"):].strip("/"))
+        if parsed.path in ("/api/owner/whoson", "/api/owner/whoson/"):
+            return self._whoson_get()
         if parsed.path.startswith("/api/board/"):
             return self._api_board(parsed.path[len("/api/board/"):].strip("/"))
         if parsed.path.startswith("/api/streak/"):
@@ -1580,6 +1582,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._event()
         if parsed.path in ("/api/activity", "/api/activity/"):
             return self._activity()
+        if parsed.path in ("/api/here", "/api/here/"):
+            return self._here()
         if parsed.path in ("/api/clienterror", "/api/clienterror/"):
             return self._client_error()
         if parsed.path.startswith("/api/push/"):
@@ -2757,6 +2761,55 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
         return self._send(204, b"", ".json")
 
+    def _here(self):
+        """A tab's page, for the owner's Who's on now (engine/whoson). 204
+        whatever happens, and nothing kept until the Privacy Policy's
+        section on it is there; a page never waits on or reacts to it."""
+        from engine import whoson as W
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 1000 else b""
+        if not W.policy_ready():
+            return self._send(204, b"", ".json")
+        if self._rate_limited(RATE_EVENT_PER_MIN, "here"):
+            return                                      # the limiter has answered 429
+        try:
+            got = json.loads(body or b"{}")
+        except ValueError:
+            got = None
+        if isinstance(got, dict):
+            if got.get("leave"):
+                W.leave(got.get("tab"))
+                return self._send(204, b"", ".json")
+            A = _acct()
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+            finally:
+                conn.close()
+            W.beat(got.get("tab"), who["id"] if who else None, got.get("view"), got.get("detail") or "")
+        return self._send(204, b"", ".json")
+
+    def _whoson_get(self):
+        """Who is on and which page: the site's own account (Qellys_Book)
+        or the owner token, and nobody else, to whom it does not exist."""
+        from engine import whoson as W
+        A = _acct()
+        conn = A.connect()
+        try:
+            if self.headers.get("X-Owner-Token") or self.headers.get("Authorization"):
+                if self._owner_refused():
+                    return
+            else:
+                who = self._account(conn)
+                if not (who and W.is_site_account(conn, who["id"])):
+                    return self._send(404, b'{"error":"unknown endpoint"}', ".json")
+            return self._send(200, json.dumps(W.snapshot(conn)).encode(), ".json")
+        finally:
+            conn.close()
+
     def _account(self, conn):
         """The signed-in account for this request, or None."""
         return _acct().session_user(conn, self._cookie(SESSION_COOKIE))
@@ -2793,6 +2846,11 @@ class Handler(BaseHTTPRequestHandler):
                     out["profile"] = SF.profile_of(conn, who["id"])
                     if not out["profile"]:
                         out["suggest_handle"] = SF.suggest_handle(conn, who["id"])
+                    # The owner's Who's on now (engine/whoson): its menu
+                    # entry, for the site's own account alone.
+                    from engine import whoson as W
+                    if W.is_site_account(conn, who["id"]):
+                        out["whoson"] = True
                 return self._send(200, json.dumps(out).encode(), ".json")
             if not who:
                 return self._send(401, b'{"error":"sign in first"}', ".json")
@@ -3151,6 +3209,11 @@ class Handler(BaseHTTPRequestHandler):
                 from engine import closeboard as CB
                 said = CB.changed(before, after)
                 if said and CS.record(conn, who["id"], "closeboard", said):
+                    conn.commit()
+                # Named in the owner's Who's on now, or not (engine/whoson).
+                from engine import whoson as W
+                said = W.changed(before, after)
+                if said and CS.record(conn, who["id"], "whoson", said):
                     conn.commit()
                 A.touch_session(conn, token)
                 return self._send(200, json.dumps(
@@ -5085,6 +5148,10 @@ class Handler(BaseHTTPRequestHandler):
             # its card and its Settings switch only while both locks are open.
             from engine import closeboard as CB
             out["closeboard_switch"] = CB.enabled()
+            # The owner's Who's on now (engine/whoson): its Settings switch
+            # once the Privacy Policy's section on it is live.
+            from engine import whoson as W
+            out["whoson_switch"] = W.policy_ready()
             out["activity"] = bool(who) and ACT.on_for(conn, who["id"])
             # NO PROMO CODES HERE. This endpoint is public — it renders
             # the plans page before anybody signs in — so anything in it
