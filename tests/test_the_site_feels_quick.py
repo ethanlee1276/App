@@ -101,8 +101,14 @@ def test_one_settle_pass_per_frame_replaces_the_document_wide_sweeps():
     assert "_settle.roots.add(t.parentElement || t);" in settled
     now = _fn("settleNow")
     assert "!all.some((o) => o !== el && o.contains(el))" in now, "a subtree inside another is swept once"
-    for call in ("enhanceSectionSubs(root);", "armSortable(root);", "watchWideTables(root);"):
+    for call in ("enhanceSectionSubs(root, true);", "armSortable(root);", "watchWideTables(root);"):
         assert call in now, call
+    # SU1 (2026-11-01): the bands once a settle, not once a root (Home's
+    # first load painted them 125 times), and each changed page named whole.
+    assert now.index("if (roots.length) paintVenueBands();") < now.index("for (const root of roots) {")
+    subs = _fn("enhanceSectionSubs")
+    assert "function enhanceSectionSubs(root, settling) {" in APP
+    assert subs.index("if (!settling) {") < subs.index("paintVenueBands();") < subs.index("wrapTables(root);")
     assert "_settle.obs.takeRecords();" in now, "the pass must not chase its own writes"
     # The sortable headers and the table fades lost their own observers.
     assert "armSortable(document), 120" not in APP
@@ -314,7 +320,7 @@ def test_an_off_screen_page_draws_when_opened_or_when_idle():
     got = _node(r"""
       const state = {};
       const views = { "view-recommended": true, "view-edge": false, "view-likely": false };
-      const hosts = { "edge-board": "view-edge", "likely": "view-likely", "home-thing": "view-recommended" };
+      const hosts = { "edge-board": "view-edge", "likely-board": "view-likely", "home-thing": "view-recommended" };
       const document = { getElementById: (id) => hosts[id] ? { closest: () => ({ id: hosts[id],
         classList: { contains: (c) => c === "active" && views[hosts[id]] } }) } : null };
       const DRAWN = [];
@@ -324,7 +330,7 @@ def test_an_off_screen_page_draws_when_opened_or_when_idle():
       """ + block + r"""
       drawOrDefer("home-thing", () => DRAWN.push("home"));
       drawOrDefer("edge-board", () => DRAWN.push("edge"));
-      drawOrDefer("likely", () => DRAWN.push("likely"), true);
+      drawOrDefer("likely-board", () => DRAWN.push("likely"), true);
       const first = DRAWN.slice();
       const stale = [..._stalePages.keys()];
       drawStale("edge");
@@ -339,6 +345,34 @@ def test_an_off_screen_page_draws_when_opened_or_when_idle():
     assert got["stale"] == ["edge-board"], "the visit-drawn page is skipped, not queued"
     assert got["opened"] == ["home", "edge"], "opening a stale page draws it"
     assert got["idle"][-1] == "edge-idle" and got["left"] == 0, "an idle moment draws what is left"
+
+
+def test_every_off_screen_page_names_a_host_on_its_own_page():
+    """SU1 (2026-11-01). A host the page does not have reads as "no page to
+    be off" and draws on every load: the Lighthouse pass of 2026-10-25
+    renamed four hosts (likely -> likely-board ...) and the list kept the
+    old names, so Most Likely, Long Shots, Trending and Players drew on
+    every load and every refresh, whatever page was up. Every host here is
+    an element on index.html, never a page's own name, inside the view of
+    the page it draws."""
+    import re
+    html = open(ROOT / "web" / "index.html", encoding="utf-8").read()
+    lines = html.split("\n")
+    starts = [(i, re.search(r'id="([^"]+)"', l).group(1)) for i, l in enumerate(lines) if '<section class="view' in l]
+    block = APP[APP.index("const OFFSCREEN_PAGES = ["):]
+    block = block[:block.index("];")]
+    pairs = re.findall(r'\["([\w-]+)", \(\) => (\w+)\(\)', block)
+    assert len(pairs) >= 10, pairs
+    page_of = {"renderTonight": "view-tonight", "renderEdgeBoard": "view-edge", "renderProps": "view-props",
+               "renderScanner": "view-scanner", "renderLongShots": "view-longshots",
+               "renderParlayPage": "view-parlays", "renderLikely": "view-likely",
+               "renderTrending": "view-trending", "renderPlayers": "view-players", "renderTools": "view-tools"}
+    for host, fn in pairs:
+        assert not host.startswith("view-"), f"{host}: a page's own name, never off screen"
+        at = [i for i, l in enumerate(lines) if f'id="{host}"' in l]
+        assert len(at) == 1, f"{fn}'s host {host!r} is not on the page (it would draw on every load)"
+        view = [v for (k, v) in starts if k <= at[0]][-1]
+        assert view == page_of.get(fn, view), f"{host} sits in {view}, not {page_of.get(fn)}"
 
 
 # --- the board's blocks, after another page ---------------------------------
@@ -358,6 +392,13 @@ def _board_hosts():
         at = next(i for i, l in enumerate(lines) if f'id="{host}"' in l)
         out[host] = [v for (k, v) in starts if k <= at][-1]
     return out, re.findall(r"=> \{ (\w+)\(\); \}\]", blocks)
+
+
+def _block_hosts():
+    """Each BOARD_BLOCKS entry's host, in order (one per block)."""
+    import re
+    j = APP.index("const BOARD_BLOCKS = [")
+    return re.findall(r'\["([\w-]+)", \(\) =>', APP[j:APP.index("];", j)])
 
 
 def test_the_board_blocks_live_on_three_pages_and_draw_once_each():
@@ -389,7 +430,7 @@ def test_another_page_draws_first_and_the_board_follows_in_short_tasks():
       const views = {};
       const view = (id) => ({ id, classList: { contains: (c) => c === "active" && !!views[id] } });
       const document = { getElementById: (id) => HOST_VIEW[id] ? { closest: () => view(HOST_VIEW[id]) }
-        : id === "likely" ? { closest: () => view("view-likely") } : null };
+        : id === "likely-board" ? { closest: () => view("view-likely") } : null };
       const realSetTimeout = globalThis.setTimeout.bind(globalThis);
       let TASK = 0, THROW = null;
       const setTimeout = (fn, ms) => realSetTimeout(() => { TASK++; fn(); }, ms);
@@ -430,7 +471,9 @@ def test_another_page_draws_first_and_the_board_follows_in_short_tasks():
     """)
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["home"] == names and got["homeLeft"] == 0, "Home on screen: every block, now, in order"
+    home = [n for n, h in zip(names, _block_hosts()) if hosts[h] == "view-recommended"]
+    assert got["home"] == home and got["homeLeft"] == len(names) - len(home), \
+        "Home on screen: its own blocks now, in order; the Edge and Live pages' after (SU1)"
     assert got["now"] == 0, "another page on screen: none of them in its load"
     assert got["later"] == names, "then every block once, in order, the second load replacing the first"
     assert got["tasks"] >= 5 and got["most"] <= 4, (got["tasks"], got["most"])
@@ -506,18 +549,26 @@ def test_a_narrow_screen_asks_for_the_phone_copy():
     src = APP[i:APP.index("\n};\n", i) + 4]
     got = _node(f"""
       const VENUE_ART_V = "v";
-      let NARROW = true;
-      const matchMedia = (q) => ({{ matches: NARROW && q === "(max-width: 900px)" }});
+      let NARROW = true, ASKED = 0, CHANGE = null;
+      const matchMedia = (q) => {{
+        ASKED++;
+        const mq = {{ get matches() {{ return NARROW && q === "(max-width: 900px)"; }},
+                     addEventListener: (k, f) => {{ if (k === "change") CHANGE = f; }} }};
+        return mq;
+      }};
       {src}
       const phone = [venueSrc("img/venues/variants/football-gold.jpg"), venueSrc("img/venues/ufc-hero.jpg")];
       NARROW = false;
+      if (CHANGE) CHANGE();
       const desk = [venueSrc("img/venues/variants/football-gold.jpg"), venueSrc("img/venues/ufc-hero.jpg")];
-      console.log(JSON.stringify({{ phone, desk }}));
+      console.log(JSON.stringify({{ phone, desk, asked: ASKED }}));
     """)
     if got is None:
         print("  SKIP node not installed"); return
     assert got["phone"] == ["img/venues/variants/football-gold@800.webp?v=v", "img/venues/ufc-hero@800.webp?v=v"]
-    assert got["desk"] == ["img/venues/variants/football-gold.webp?v=v", "img/venues/ufc-hero.jpg?v=v"]
+    assert got["desk"] == ["img/venues/variants/football-gold.webp?v=v", "img/venues/ufc-hero.jpg?v=v"], \
+        "a screen grown past 900 (a turn, a fold) takes the full copy: the change event keeps the answer true"
+    assert got["asked"] == 1, "asked once, never per picture (a fresh query mid-render restyles the page)"
 
 
 def test_a_card_asks_for_a_team_photo_only_when_one_ships():

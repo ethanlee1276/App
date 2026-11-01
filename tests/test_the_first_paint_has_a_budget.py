@@ -271,7 +271,15 @@ APP_JS_BUDGET_KB = 290
 #: Filters fold left the first page. The Parlays page that replaced them is
 #: one small renderer (its Record section rides in js/record.js, loaded on
 #: first use). 390,941 -> 382,110 B; the budget keeps the saving.
-BOOT_BUDGET_KB = 374
+#: 374 -> 375 on 2026-11-01, for Ethan's "splitting the startups": the
+#: board draws the page on screen first and the other pages' blocks after,
+#: the venue pictures ask their screen size once, and the settle pass paints
+#: the venue bands once (Home's first load at phone speed: 624 -> 273 ms of
+#: blocked time). 164 B gz of code, 40 B over 374 (382,849 -> 383,013 B);
+#: the two helpers the dependency map found unreferenced are both pinned by
+#: tests as documented rules, so nothing dead was left to pay for it. Told
+#: to Ethan.
+BOOT_BUDGET_KB = 375
 
 
 def _gz_trimmed(rel: str) -> int:

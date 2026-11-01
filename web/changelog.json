@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-01",
+      "kind": "fix",
+      "title": "Pages you are not looking at stop drawing in the background",
+      "body": "Since 25 October four pages, Most Likely, Long Shots, Trending and Players, were drawn on every load and every 30-second refresh, whichever page was open: a rename for accessibility left the list that keeps hidden pages waiting pointing at names no longer on the page. They wait again, and draw the moment you open them. Home now draws its own sections first and the Edge and Live pages' after, a few at a time, and the stadium pictures and their bands are worked out once rather than once per card. On a mid-range phone the time a first screen keeps the page from answering a tap fell by about two fifths on Home, a third on Live and half on the Record, and a refresh no longer redraws pages nobody is looking at."
+    },
+    {
+      "date": "2026-11-01",
       "kind": "ship",
       "title": "Every game page wears the two teams' colours",
       "body": "A game's page now sits on its two teams' colours, the away side's from the left and the home side's from the right, deepening to dark further down, in every sport and in either theme. The score is big across the top with each team's crest, name and record and the ball beside whoever has it. Football draws the field under it: the yard lines, each end zone in its team's colour, the drive so far, the line of scrimmage, the line to gain in yellow and the down and distance over it. Under that is the score by quarter (by period in hockey). Football's page has four tabs: Stats (the odds, team stats with a bar for each side, both box scores and the game's details; a finished game leads with its scoring plays and leaders), Play-By-Play (Call it, the drive tracker, the field picture and the win chance while the game is on, then every drive, newest first), Standings (both teams' divisions) and Our picks. Scroll past the score and a compact bar keeps the score, the clock, the field and the tabs at the top. The TV delay, the second screen and Hide the score are under the \u22ef button by the score."

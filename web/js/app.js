@@ -4205,7 +4205,16 @@ function talentWarnHTML(t) {
    finds it drawn already. Same renderers, same output; only the moment
    moved. The third field marks the two pages _switchViewNow redraws on
    every visit anyway (Tonight, Most Likely): off screen they are simply
-   skipped, since drawing them in the background would be thrown away. */
+   skipped, since drawing them in the background would be thrown away.
+
+   THE HOSTS' REAL NAMES (2026-11-01). The Lighthouse pass of 2026-10-25
+   renamed four of these hosts so no element shares a page's name
+   (likely -> likely-board, and Long Shots, Trending and Players the
+   same), and this list kept the old names. A name with no element on
+   the page reads as "no page to be off", so from then on all four drew
+   on every load and every 30-second refresh, whichever page was up:
+   Most Likely alone about 85 ms at phone speed each time. A test now
+   finds every host here on the page, inside its own view. */
 const OFFSCREEN_PAGES = [
   ["tonight-body", () => renderTonight(), true],
   ["edge-board", () => renderEdgeBoard()],
@@ -4213,11 +4222,11 @@ const OFFSCREEN_PAGES = [
   // The Scanner lives in a room (js/more.js) since 2026-10-29: drawn when
   // opened, never in the background, so no visit fetches the room unasked.
   ["scanner-body", () => renderScanner(), true],
-  ["longshots", () => renderLongShots()],
+  ["longshots-board", () => renderLongShots()],
   ["parlays-body", () => renderParlayPage(), true],
-  ["likely", () => renderLikely(), true],
-  ["trending", () => renderTrending()],
-  ["players", () => renderPlayers()],
+  ["likely-board", () => renderLikely(), true],
+  ["trending-board", () => renderTrending()],
+  ["players-board", () => renderPlayers()],
   // Drawn on every visit (_switchViewNow), and its bankroll simulation
   // is 2,000 runs: drawn in the background it was a 600 ms block at phone
   // speed on every load, for a page the visit redraws anyway.
@@ -4322,22 +4331,25 @@ let _boardTimer = null;
 //: answer a tap: a block or two at phone speed, most of them on a laptop.
 const BOARD_SLICE_MS = 12;
 
-function boardShown() {
-  return BOARD_BLOCKS.some(([id]) => {
-    const view = pageOfHost(id);
-    return !!view && (view.classList.contains("active") || view.classList.contains("pane-list"));
-  });
+function blockShown(id) {
+  const view = pageOfHost(id);
+  return !!view && (view.classList.contains("active") || view.classList.contains("pane-list"));
 }
 
+/* THE PAGE ON SCREEN FIRST, THE OTHERS AFTER (SU1, 2026-11-01). With Home
+   up, its own blocks draw now, in order, and the four that fill the Edge
+   and Live pages (their cards, best bets, stats, live picks: about 35 ms
+   at phone speed of the 105 in Home's first draw) follow a few per task,
+   the way every block follows another page's (FS4); opening either page
+   draws what is left first (drawStale). None of the four reads what a
+   Home block writes, and the grouping reads only Home. */
 function drawBoard() {
   clearTimeout(_boardTimer);
   _boardTimer = null;
-  if (boardShown()) {
-    _boardQueue = [];
-    BOARD_BLOCKS.forEach(([, draw]) => draw());
-    return;
-  }
-  _boardQueue = BOARD_BLOCKS.slice();
+  const now = [];
+  _boardQueue = [];
+  BOARD_BLOCKS.forEach((b) => (blockShown(b[0]) ? now : _boardQueue).push(b));
+  now.forEach(([, draw]) => draw());
   boardNext();
 }
 
@@ -7298,9 +7310,26 @@ const VENUE_ART_V = "20260907";
    renders the phone copy is 38-134 KB against 83-446 KB. A phone used to
    pull the full file for every card on the strip. */
 const VENUE_SMALL_MQ = "(max-width: 900px)";
+/* ASKED ONCE, KEPT CURRENT (SU1, 2026-11-01). Every venue picture on a
+   board asked matchMedia afresh, and a fresh query in the middle of a
+   render makes the browser bring the half-drawn page's styles up to date
+   to answer it: about 13 ms at phone speed across Home's first draw. The
+   query is made once, its answer kept, and the browser's own change event
+   keeps it true through a resize, a turn or a fold. */
+let _venueSmall = null;
+function venueSmall() {
+  if (_venueSmall !== null) return _venueSmall;
+  if (typeof matchMedia !== "function") return false;
+  const mq = matchMedia(VENUE_SMALL_MQ);
+  _venueSmall = mq.matches;
+  const sync = () => { _venueSmall = mq.matches; };
+  if (mq.addEventListener) mq.addEventListener("change", sync);
+  else if (mq.addListener) mq.addListener(sync);
+  return _venueSmall;
+}
 const venueSrc = (path) => {
   let p = String(path).replace(/(\/variants\/[^/?]+)\.jpg$/, "$1.webp");
-  if (typeof matchMedia === "function" && matchMedia(VENUE_SMALL_MQ).matches) {
+  if (venueSmall()) {
     p = p.replace(/(\/variants\/[^/?@]+|\/ufc-hero)\.(?:webp|jpg)$/, "$1@800.webp");
   }
   return `${p}?v=${VENUE_ART_V}`;
@@ -23210,9 +23239,16 @@ function paintVenueBands() {
   }
 }
 
-function enhanceSectionSubs(root) {
-  paintVenueBands();
-  markPageTitles(root);
+function enhanceSectionSubs(root, settling) {
+  /* ONCE A SETTLE, NOT ONCE A ROOT (SU1, 2026-11-01). settleNow paints the
+     four venue bands itself, once, and names each changed page whole, so
+     the pass it makes per changed root skips both: Home's first load
+     settled 129 roots and painted the bands 125 times (23 ms at phone
+     speed) for a picture that only changes with the league. */
+  if (!settling) {
+    paintVenueBands();
+    markPageTitles(root);
+  }
   wrapTables(root);
   enhanceDoors(root);
   (root || document).querySelectorAll(".section-title .sub").forEach((sub) => {
@@ -23390,13 +23426,15 @@ function settleNow() {
   const roots = all.filter((el) => el.isConnected
     && !all.some((o) => o !== el && o.contains(el)));
   const views = new Set();
+  if (roots.length) paintVenueBands();
   for (const root of roots) {
-    enhanceSectionSubs(root);
+    enhanceSectionSubs(root, true);
     armSortable(root);
     watchWideTables(root);
     mountCharts(root);
     const v = root.closest(".view");
     if (v) views.add(v);
+    else markPageTitles(root);          // above the pages (main, the body): the pages in it
   }
   // The page's name is decided per VIEW — the first real title in it —
   // so the view that changed is re-read whole, however small the change.
