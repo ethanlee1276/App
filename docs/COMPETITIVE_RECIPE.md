@@ -144,7 +144,7 @@ than bankroll management.
 | Park factors | HAVE | MLB pipeline |
 | MLB plate-umpire effects wired into props | HAVE | `engine/mlb/projection.py` — a wide zone lifts strikeouts, and it is named in the reason string |
 | nflverse / Statcast open data | HAVE | `engine/sources/nflverse.py`, `engine/mlb/ml.py` |
-| NFL officiating crew tendencies | MISSING | the study's largest named data gap |
+| NFL officiating crew tendencies | PARTIAL (2026-10-24) | `engine/nflrefs.py`, attached in `nfl_build.py` and worded in `engine/gamereport.py`. Context on the game report only: `refcheck.py` found no held-out predictive value against the closing total or spread (correlation -0.02 / -0.01 on 7,340 games), so it moves no number. Assignments are set by hand when no feed names the crew. |
 | NBA referee tendencies (FT-driven props) | MISSING | same |
 | UFC referee & judge assignments | MISSING | `PARKED` in `engine/coverage.py`: "no structured assignment feed" |
 | Travel / rest / altitude | PARTIAL | rest/travel built and rendered (`engine/fatigue.py`, wired into `pipeline.py`, `betting.py`, `losspatterns.py`); altitude is a static venue field (`engine/stadiums.py`), not a fatigue-specific adjustment |
