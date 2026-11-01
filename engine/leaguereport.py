@@ -184,16 +184,6 @@ def _starter(c: Ctx, t: str) -> dict:
     return p if isinstance(p, dict) and p.get("name") else {}
 
 
-def _sp_words(c: Ctx, t: str) -> str:
-    sp = _starter(c, t)
-    if not sp:
-        return f"{t}: to be announced"
-    bits = [b for b in (str(sp.get("throws") or "").upper()[:1],
-                        _f(sp.get("xera")) is not None and f"{float(sp['xera']):.2f} xERA",
-                        _f(sp.get("k_rate")) is not None and f"{_pct(sp['k_rate'])} K") if b]
-    return f"{sp['name']} ({t}{', ' + ', '.join(bits) if bits else ''})"
-
-
 def mlb_facts(c: Ctx) -> dict | None:
     g = c.g
     items = _facts_head(c, "First pitch")

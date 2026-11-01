@@ -395,6 +395,26 @@ def test_the_page_teases_every_league_in_its_own_words():
         assert "part of the subscription" in teaser
 
 
+def test_the_blunt_pitching_shorthand_is_gone_not_merely_unmounted():
+    """`_sp_words` wrote the mound line as "Wheeler (PHI, R, 3.05 xERA,
+    29% K)" — the wire-slip shorthand Ethan asked us off on 2026-10-22
+    ("we need to be more descriptive in the wording. It's very blunt").
+    `_sp_clause` replaced it that day and reads the same starter from the
+    same place, so the old one lost its last caller and sat there.
+
+    Pinned gone rather than left to be re-adopted: it takes the same
+    `(c, t)` and returns a string, so the next person writing a pitching
+    line can call it in one keystroke of autocomplete and quietly put the
+    blunt wording back on the page. Deleting it makes `_sp_clause` the
+    only way to say who is pitching."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "engine", "leaguereport.py"),
+        encoding="utf-8").read()
+    assert "_sp_words" not in src, \
+        "the superseded pitching shorthand is back; _sp_clause is the mound line"
+    assert "def _sp_clause" in src, "the mound line's only writer is gone"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
