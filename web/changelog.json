@@ -4,6 +4,12 @@
     {
       "date": "2026-11-01",
       "kind": "fix",
+      "title": "Every page starts faster on a phone",
+      "body": "While the app started, five small checks of the page's size and position (where to scroll, how tall the header is, which fonts to load, whether the screen is folded) each made the browser lay out the whole page before it was built, and then do it again once it was. They now wait for the first frame, when the page has been laid out once anyway. On a mid-range phone the time the page can't answer a tap while it loads fell by about 40% on Home, 30% on Most Likely and 20% on the Live page."
+    },
+    {
+      "date": "2026-11-01",
+      "kind": "fix",
       "title": "Opening on a page other than Home is quicker",
       "body": "Opened straight onto Most Likely, the Record or any page but Home (from a link, or the app reopening where you left it), the site used to draw all of Home first, out of sight, before the page you were looking at. That page now draws first, and Home follows in small pieces that never hold up a tap; open Home before they finish and it draws the rest at once. On a mid-range phone the time the page can't answer a tap fell by about 15% on Most Likely and 30% on the Record."
     },

@@ -36,7 +36,8 @@ def test_no_back_button_hard_codes_home():
 
 
 def test_the_return_point_is_the_page_left_for_the_detail():
-    assert "if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))\n    _boardReturn = { view: leaving, y: window.scrollY };" in APP
+    # The boot's own switch reads no geometry: its page is at the top (2026-11-01).
+    assert "if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))\n    _boardReturn = { view: leaving, y: booting ? 0 : window.scrollY };" in APP
 
 
 def test_back_names_and_goes_to_the_page():

@@ -23674,6 +23674,9 @@ function _landScroll(name, leaving) {
   } else if (back && _scrollMemo[name] != null) {
     y = _scrollMemo[name];
   }
+  // The boot's page is already at the top, and a scroll there would lay
+  // it out while it is still being built (_switchViewNow, 2026-11-01).
+  if (!y && document.documentElement.classList.contains("booting")) return;
   window.scrollTo({ top: y, behavior: "instant" });
   if (y > 0) {
     const landed = Date.now();
@@ -23760,10 +23763,17 @@ function _switchViewNow(name, push, dir) {
     setTimeout(renderLiveBoard, 0);
   // Captured BEFORE state.view moves: the offset belongs to the view
   // being left, and one line later there is no way to ask which that was.
+  // THE BOOT'S OWN SWITCH READS NO GEOMETRY (2026-11-01). Nothing has been
+  // shown or scrolled yet, and every read here and below — this offset,
+  // the tab underline, the landing scroll — made the browser lay out a
+  // page still being built, about 30 ms at phone speed inside the
+  // script's first task. The page opens at the top (scrollRestoration is
+  // manual) and the boot measures the underline on its first frame.
+  const booting = document.documentElement.classList.contains("booting");
   const leaving = state.view;
-  if (leaving) _scrollMemo[leaving] = window.scrollY;
+  if (leaving && !booting) _scrollMemo[leaving] = window.scrollY;
   if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))
-    _boardReturn = { view: leaving, y: window.scrollY };
+    _boardReturn = { view: leaving, y: booting ? 0 : window.scrollY };
   /* A DETAIL PAGE OPENED BY A TAP IS A NEW HISTORY ENTRY, so the phone's
      back-swipe returns to the page it was opened from. They replaced the
      entry before, which made the swipe skip the page you came from. The
@@ -23843,14 +23853,14 @@ function _switchViewNow(name, push, dir) {
     if (_teamState.team) {
       writeDetail(teamHref(_teamState.sport, _teamState.team, _teamState.vs), { view: "team" });
     }
-    moveIndicator();
+    if (!booting) moveIndicator();
     _landScroll(name, leaving);
     return;
   }
   if (name === "game") {
     renderGamePage();
     if (state.gameId) writeDetail(`#game/${encodeURIComponent(state.gameId)}`);
-    moveIndicator();
+    if (!booting) moveIndicator();
     _landScroll(name, leaving);
     return;
   }
@@ -23858,7 +23868,7 @@ function _switchViewNow(name, push, dir) {
     renderPbpPage();
     if (state.pbp && state.pbp.league && state.pbp.event)
       writeDetail(`#pbp/${encodeURIComponent(state.pbp.league)}/${encodeURIComponent(state.pbp.event)}`);
-    moveIndicator();
+    if (!booting) moveIndicator();
     _landScroll(name, leaving);
     return;
   }
@@ -23974,7 +23984,7 @@ function _switchViewNow(name, push, dir) {
   // page but left the header reading the tab you had just left, so the one
   // line telling you where you are was the one line that was wrong.
   syncMenuLabel();
-  moveIndicator();
+  if (!booting) moveIndicator();
   // LAST, on purpose. Several branches above render asynchronously, and
   // a page that grows after it has been scrolled keeps the offset it was
   // given — so the position has to be set once the switch is otherwise
@@ -26113,18 +26123,22 @@ function initHeaderTuck() {
   if (!bar) return;
   const touch = matchMedia(HEADER_TUCK_MQ);
   const open = matchMedia(UNFOLDED_MQ);
-  let last = Math.max(0, window.scrollY);
+  // The page opens at the top (scrollRestoration is manual): read here, at
+  // boot, the offset laid the page out before it was built (2026-11-01).
+  let last = 0;
   let height = 0;          // cached: reading it per frame forces layout
   let ticking = false;
 
   const measure = () => { height = bar.offsetHeight || 0; };
-  measure();
   // The header grows AFTER first paint — the freshness chip is display:none
   // until data lands, which is 11px. Measured once at startup, the clamp
   // was 11px short and the bar never fully cleared the screen. Watch it
-  // instead of trusting one reading.
+  // instead of trusting one reading. The observer's first report comes
+  // after the first layout, so the boot itself measures nothing.
   if (typeof ResizeObserver !== "undefined") {
     new ResizeObserver(measure).observe(bar);
+  } else {
+    measure();
   }
   // Rotating or resizing changes the header's height, so a stale offset
   // would leave it parked at the wrong place — start it from home instead.
@@ -26473,15 +26487,26 @@ initMobileMenu();
 initSidebarGrip();
 initMoreMenu();
 initHeaderTuck();
-initFoldSeams();
+// AFTER THE FIRST FRAME (2026-11-01): its media queries are the first
+// thing in the boot to ask the page's size, and asked while the page is
+// still being built they laid it all out early (36 ms at phone speed).
+// It only listens — for a fold, a turn, a resize — and nothing in the
+// first frame needs it.
+requestAnimationFrame(() => setTimeout(initFoldSeams, 0));
 requestAnimationFrame(moveIndicator);
 /* The tab labels are set in a web font. Measuring on the next frame reads
    the FALLBACK metrics, so the underline was drawn 114px wide under a 96px
    tab and stayed wrong until something else moved it. Re-measure once the
    real face has loaded. */
-if (document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(moveIndicator);
-}
+// Asked on the first frame, not here: reading `document.fonts.ready`
+// makes the browser style the page to learn which fonts it needs, and in
+// the boot's task that styled a page still being built (21 ms at phone
+// speed, 2026-11-01). The measurement itself waits for a frame too.
+requestAnimationFrame(() => {
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => requestAnimationFrame(moveIndicator));
+  }
+});
 // §9: the standing record is masthead chrome, not a page — it renders once
 // at boot and is independent of which view or sport is showing.
 renderStandingRecord();

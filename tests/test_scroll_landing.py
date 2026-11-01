@@ -118,7 +118,9 @@ def test_opening_a_detail_remembers_the_board_and_leaving_gives_it_back():
         "the offset belongs to the view being left, and one line later "
         "there is no way to ask which that was")
     i, j = body.index("const leaving"), body.index("state.view = name;")
-    assert "_boardReturn = { view: leaving, y: window.scrollY }" in body[i:j], (
+    # `booting ? 0 :` — the boot's own switch reads no geometry; the page
+    # is at the top then (2026-11-01).
+    assert "_boardReturn = { view: leaving, y: booting ? 0 : window.scrollY }" in body[i:j], (
         "the board position is captured after the view already moved")
     land = _fn(js, "_landScroll")
     assert "DETAIL_VIEWS.includes(leaving)" in land, (

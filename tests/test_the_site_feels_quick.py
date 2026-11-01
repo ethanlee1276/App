@@ -440,6 +440,35 @@ def test_another_page_draws_first_and_the_board_follows_in_short_tasks():
     assert got["errs"] == ["boom"], "and the error is reported, not swallowed"
 
 
+def test_the_boot_reads_no_geometry_before_its_first_frame():
+    """FS5 (2026-11-01). Every read of the page's geometry in the script's
+    first task made the browser lay out a page still being built, and the
+    boot did it five times: the first switch's scroll offset, its tab
+    underline and its landing scroll, the header's height, and two reads
+    of the page's size (the fold watcher's media queries, document.fonts).
+    On the likely view the first task fell from about 450 ms (traced) to
+    180, and every view's blocked time by a third or more."""
+    sw = _fn("_switchViewNow")
+    assert 'const booting = document.documentElement.classList.contains("booting");' in sw
+    assert "if (leaving && !booting) _scrollMemo[leaving] = window.scrollY;" in sw
+    assert "y: booting ? 0 : window.scrollY" in sw
+    assert sw.count("moveIndicator();") == sw.count("if (!booting) moveIndicator();") == 4, \
+        "the underline is measured on the boot's first frame, never in its switch"
+    land = _fn("_landScroll")
+    assert land.index('if (!y && document.documentElement.classList.contains("booting")) return;') \
+        < land.index("window.scrollTo(")
+    tuck = _fn("initHeaderTuck")
+    assert "let last = 0;" in tuck
+    i = tuck.index("new ResizeObserver(measure).observe(bar);")
+    assert "measure();" not in tuck[:i] and "} else {\n    measure();\n  }" in tuck[i:i + 80], \
+        "measured by the observer, after the first layout"
+    assert "\nrequestAnimationFrame(() => setTimeout(initFoldSeams, 0));\n" in APP
+    assert "\ninitFoldSeams();\n" not in APP
+    j = APP.index("requestAnimationFrame(() => {\n  if (document.fonts && document.fonts.ready) {")
+    assert "document.fonts.ready.then(() => requestAnimationFrame(moveIndicator));" in APP[j:j + 200]
+    assert "document.fonts.ready.then(moveIndicator)" not in APP, "the old boot-time read is gone"
+
+
 def test_the_date_formatter_is_built_while_the_board_is_on_its_way():
     at = APP.index("\nrenderQuickTools();\nload();\n")
     tail = APP[at:at + 400]

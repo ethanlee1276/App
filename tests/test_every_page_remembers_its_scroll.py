@@ -28,7 +28,9 @@ def _fn(name):
 
 def test_every_page_left_is_remembered():
     body = _fn("_switchViewNow")
-    assert "if (leaving) _scrollMemo[leaving] = window.scrollY;" in body
+    # Every page left after the boot: the boot's own switch has nothing
+    # to remember and reads no geometry (2026-11-01).
+    assert "if (leaving && !booting) _scrollMemo[leaving] = window.scrollY;" in body
 
 
 def test_a_back_restores_it_and_a_tab_tap_does_not():

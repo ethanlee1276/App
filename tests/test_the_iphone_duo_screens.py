@@ -109,7 +109,8 @@ def test_the_open_shell_comes_after_what_it_overrides():
 def test_the_script_treats_the_open_screen_as_the_desktop():
     assert "if (!touch.matches || open.matches ||" in APP, "the header stays put on the open screen"
     assert 'matchMedia("(max-width: 760px)").matches) && !unfolded();' in APP, "not a phone when open"
-    assert "\ninitFoldSeams();\n" in APP
+    # Started after the first frame (2026-11-01): it only listens.
+    assert "\nrequestAnimationFrame(() => setTimeout(initFoldSeams, 0));\n" in APP
     at = APP.index("function initFoldSeams()")
     body = APP[at:APP.index("\n}\n", at)]
     assert 'closeMobileMenu("the screen opened")' in body
