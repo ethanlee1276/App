@@ -494,6 +494,9 @@ def _until(page, ok, seconds=10, between=None):
         page.wait_for_timeout(150)
 
 
+SCREEN_H = 667
+
+
 def test_the_page_in_a_browser_at_a_phones_width():
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
@@ -515,7 +518,10 @@ def test_the_page_in_a_browser_at_a_phones_width():
             browser = pw.chromium.launch(**kw)
             try:
                 for theme in ("dark", "light"):
-                    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True,
+                    # A short phone's screen (an iPhone SE's 667 points): the
+                    # page's own tabs start below it however the page above
+                    # them has filled in, which the compact bar's check needs.
+                    ctx = browser.new_context(viewport={"width": 390, "height": SCREEN_H}, is_mobile=True, has_touch=True,
                                               service_workers="block")
                     page = ctx.new_page()
                     errors = []
@@ -535,7 +541,7 @@ def test_the_page_in_a_browser_at_a_phones_width():
                     g = page.evaluate(GEOM)
                     at = f"{theme}:"
                     assert g["view"] and g["body"], f"{at} the wash is on"
-                    assert g["washPos"] == "fixed" and g["wash"]["w"] >= 389 and g["wash"]["h"] >= 843, f"{at} it fills the screen: {g['wash']}"
+                    assert g["washPos"] == "fixed" and g["wash"]["w"] >= 389 and g["wash"]["h"] >= SCREEN_H - 1, f"{at} it fills the screen: {g['wash']}"
                     assert "linear-gradient" in g["washBg"], g["washBg"]
                     assert g["page"] <= 390, f"{at} the page scrolls sideways ({g['page']}px)"
                     assert g["field"] and g["field"]["w"] > 300, f"{at} the field is drawn across the page: {g['field']}"
@@ -544,6 +550,12 @@ def test_the_page_in_a_browser_at_a_phones_width():
                     rgb = [int(x) for x in re.findall(r"\d+", g["text"])[:3]]
                     assert min(rgb) >= 200, f"{at} white type on the wash, not the theme's ink: {g['text']}"
                     assert not g["compactOn"], f"{at} the bar waits for the score to leave"
+                    # The page's own tabs start below the screen, so the jump
+                    # below goes from under the screen to over it without
+                    # crossing it: the case the gate caught on 1 November,
+                    # when the bar's tabs never came (an observer of the
+                    # screen alone sees nothing change).
+                    assert g["tabRow"]["t"] > SCREEN_H, f"{at} the tabs start below the screen: {g['tabRow']}"
                     # Down past the page's own tabs, and again if anything above
                     # them (the chat's card, filled when chat.js lands) pushed
                     # them back into view: as a reader would keep scrolling.

@@ -5317,6 +5317,10 @@ function gpCompactHTML(d, league, lv, tabs, tab) {
         aria-selected="${k === tab}" data-pbp-tab="${k}" data-gp-jump>${label}</button>`).join("")}</div>
     </div></div>`;
 }
+/* How far below the screen the compact bar's two watchers count as in
+   (gpWire): further than any page here runs. */
+const GP_IN_BELOW = "100000px";
+
 function gpWire(host) {
   if (_gpObs) { _gpObs.disconnect(); _gpObs = null; }
   if (_gpTabsObs) { _gpTabsObs.disconnect(); _gpTabsObs = null; }
@@ -5329,18 +5333,25 @@ function gpWire(host) {
     bar.classList.toggle("on", on);
     bar.inert = !on;
   };
+  // Each watches one line across the top of the screen, and everything
+  // below that line counts as in (the root runs GP_IN_BELOW down past the
+  // screen): only gone up past it is out. Watching the screen alone, a
+  // jump from below it to above it in one go (the place a page puts back,
+  // a tab picked in the bar) never crosses anything, and nothing fires.
   if (typeof IntersectionObserver !== "undefined") {
     _gpObs = new IntersectionObserver((es) => {
       const e = es[es.length - 1];
-      set(!e.isIntersecting && e.boundingClientRect.bottom < 120);
-    }, { rootMargin: "-96px 0px 0px 0px" });
+      if (!e.boundingClientRect.height) return;        // the view is hidden: keep what it shows
+      set(!e.isIntersecting);
+    }, { rootMargin: `-96px 0px ${GP_IN_BELOW} 0px` });
     _gpObs.observe(hero);
     if (tabRow) {
       _gpTabsObs = new IntersectionObserver((es) => {
         const e = es[es.length - 1];
-        _gpTabsStuck = !e.isIntersecting && e.boundingClientRect.bottom < 160;
+        if (!e.boundingClientRect.height) return;
+        _gpTabsStuck = !e.isIntersecting;
         bar.classList.toggle("tabs-on", _gpTabsStuck);
-      }, { rootMargin: "-84px 0px 0px 0px" });
+      }, { rootMargin: `-84px 0px ${GP_IN_BELOW} 0px` });
       _gpTabsObs.observe(tabRow);
     }
   }
