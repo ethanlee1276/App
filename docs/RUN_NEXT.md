@@ -6,8 +6,13 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-10-31 night, after your second JD paste (the parlay
-study with every league's games). Done:
+Last updated 2026-11-01, after the disk filled (step JG). Done:
+
+- **The outage:** the weekly backup check filled the disk at 04:32 UTC and
+  left its copy behind. You deleted the leftovers, restarted the site
+  (back at 11:19 UTC) and fixed Backblaze's cap. The check, the pre-repair
+  copies and the low-disk warning are fixed in the code (step JG), and
+  item 0 below sees what's left.
 
 - **JD, second run:** JE's same-game rule made things worse (+8.99u over 418
   tickets with it, +12.80u over 511 without), so it's off. What held in both
@@ -25,6 +30,27 @@ study with every league's games). Done:
   tip records alone on games it never saw.
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 2 checks it.
+
+## 0. Today, half an hour after this push: the disk and the backups (step JG)
+
+Read-only. Old pre-repair copies prune on their own once this is live; this
+shows what's in the backup folders, how full the disk is, and the backup
+log:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JG 2>&1 | tee /tmp/jg.txt
+```
+
+And 1.4 GB you can clear now: /var/backups/qellys only holds backups from
+before October 4 (they go to /srv/qellys/backups now, and offsite):
+
+```
+sudo find /var/backups/qellys -type f -mtime +20 -print -delete
+```
+
+Tomorrow after 04:00 UTC, run the JG check again: the backup log's last
+lines should say "offsite copy updated" once Backblaze has cleared the old
+versions.
 
 ## 1. Any time after this push: the parlay study once more (steps JF, JD)
 

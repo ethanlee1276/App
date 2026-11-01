@@ -21,6 +21,18 @@ What is pinned here:
     the backups (not in /tmp) and deletes it whatever happens;
   * the test runner sweeps the sandboxes interrupted runs left behind;
   * the heartbeat carries the free space and the journal says when it is low.
+
+Incident 2026-11-01: the same "No space left on device" at 04:32 UTC, and
+the API down until 11:19. The weekly `backup.sh --check` (Sundays, 04:30
+UTC) restored history.db, 6.5 GB, into /tmp with 4.5 GB free, filled the
+disk, died in gunzip and left the half-written copy behind; a second one
+from an earlier Sunday sat beside it. And data/backups held 16 GB, most of
+it pre-repair copies of history.db that nothing ever deleted. Pinned too:
+  * the weekly check measures before it restores, keeps its scratch copy
+    beside the backups and leaves nothing behind however it ends;
+  * a pre-repair copy measures first and is refused without room;
+  * old pre-repair copies are pruned every cycle, the newest two kept;
+  * the low-disk warning comes while a copy of history.db still fits.
 """
 
 import inspect
@@ -165,13 +177,124 @@ def test_the_heartbeat_carries_the_free_space():
     import launch
     src = inspect.getsource(launch._write_heartbeat)
     assert '"disk_free_gb"' in src
-    assert launch.DISK_LOW_GB == 2.0
+    assert launch.DISK_LOW_GB == 8.0, "a warning has to come while history.db still fits"
     lines = []
     launch._disk_check(free_bytes=lambda p: int(1.5 * 1024 ** 3), say=lines.append)
     assert lines and "⚠️" in lines[0] and "1.5 GB" in lines[0], lines
     lines.clear()
     launch._disk_check(free_bytes=lambda p: 20 * 1024 ** 3, say=lines.append)
     assert lines == []
+
+
+def _check_tree(d: Path):
+    """deploy/backup.sh run from a copy in a tree of our own (the way
+    tests/test_backup_remote.py runs it), with one database and its own
+    backup folder and lock."""
+    import shutil
+    import sqlite3
+    tree, dest = d / "tree", d / "backups"
+    (tree / "deploy").mkdir(parents=True)
+    (tree / "data").mkdir()
+    dest.mkdir()
+    shutil.copy2(ROOT / "deploy" / "backup.sh", tree / "deploy" / "backup.sh")
+    c = sqlite3.connect(str(tree / "data" / "ledger.db"))
+    c.execute("CREATE TABLE t (x)"); c.execute("INSERT INTO t VALUES (1)"); c.commit(); c.close()
+    return tree, dest
+
+
+def _run_check(tree: Path, dest: Path, **env):
+    full = dict(os.environ, QB_BACKUP_DIR=str(dest), QB_BACKUP_LOCK=str(dest.parent / "lock"),
+                QB_ENV_FILE=str(dest.parent / "no-env"), **env)
+    full.pop("QB_BACKUP_REMOTE", None)
+    return subprocess.run(["bash", str(tree / "deploy" / "backup.sh"), "--check"],
+                          capture_output=True, text=True, cwd=str(tree), env=full, timeout=120)
+
+
+def test_the_weekly_check_measures_before_it_restores():
+    import gzip
+    with tempfile.TemporaryDirectory() as d:
+        tree, dest = _check_tree(Path(d))
+        with open(tree / "data" / "ledger.db", "rb") as fh, \
+                gzip.open(dest / "ledger-20261101T040001Z.db.gz", "wb") as gz:
+            gz.write(fh.read())
+        (dest / ".check-ledger-AbC123").write_text("left by a killed run")
+        # A floor no disk can keep: the restore must be skipped, loudly.
+        r = _run_check(tree, dest, QB_BACKUP_MEASURE_MB="0", QB_BACKUP_FLOOR_PCT="100")
+        assert "NOT CHECKED: ledger" in r.stdout, r.stdout + r.stderr
+        assert "ok: ledger" not in r.stdout
+        assert not list(dest.glob(".check-*")), "a killed run's scratch copy is swept"
+        # Room enough: restored, checked, and the scratch copy gone.
+        r = _run_check(tree, dest)
+        assert "ok: ledger" in r.stdout, r.stdout + r.stderr
+        assert not list(dest.glob(".check-*"))
+
+
+def test_a_restore_that_dies_leaves_nothing_behind():
+    with tempfile.TemporaryDirectory() as d:
+        tree, dest = _check_tree(Path(d))
+        (dest / "ledger-20261101T040001Z.db.gz").write_bytes(b"\x1f\x8b\x08\x00 not a whole archive")
+        r = _run_check(tree, dest)
+        assert r.returncode != 0 and "ok: ledger" not in r.stdout, r.stdout + r.stderr
+        assert not list(dest.glob(".check-*")), list(dest.iterdir())
+    src = (ROOT / "deploy" / "backup.sh").read_text()
+    assert 'tmp="$(mktemp)"' not in src, "the restore never goes to /tmp"
+    assert 'rm -f "$CHECK_TMP"' in src and "CHECK_TMP" in src.split("trap ", 1)[1].split("\n", 1)[0]
+
+
+def _repair_fixture(d: Path):
+    import importlib
+    import sqlite3
+    from engine import db as _db, ledger
+    launch = importlib.import_module("launch")
+    live = d / "ledger.db"
+    c = sqlite3.connect(live)
+    c.execute("CREATE TABLE t (x)"); c.execute("INSERT INTO t VALUES (1)"); c.commit(); c.close()
+    saved = (ledger.DEFAULT_DB, _db.DEFAULT_DB, launch.ROOT, launch.REPAIR_COPY_MEASURE_BYTES)
+    ledger.DEFAULT_DB, _db.DEFAULT_DB, launch.ROOT = live, d / "nohist.db", d
+    launch.REPAIR_COPY_MEASURE_BYTES = 0
+
+    def restore():
+        (ledger.DEFAULT_DB, _db.DEFAULT_DB, launch.ROOT, launch.REPAIR_COPY_MEASURE_BYTES) = saved
+    return launch, restore
+
+
+def test_a_repair_copy_is_refused_without_room():
+    gb = 1024 ** 3
+    with tempfile.TemporaryDirectory() as d:
+        launch, restore = _repair_fixture(Path(d))
+        try:
+            out = launch._backup_before_repair("test", disk=lambda p: (48 * gb, 43 * gb, 5 * gb))
+            assert out is None, "a copy that leaves under 15% free must be refused"
+            bdir = Path(d) / "data" / "backups"
+            assert not (bdir.exists() and list(bdir.glob("pre-*"))), "and nothing was written"
+            out = launch._backup_before_repair("test", disk=lambda p: (48 * gb, 20 * gb, 28 * gb))
+            assert out and out.name.startswith("pre-test-"), "with room it is taken"
+        finally:
+            restore()
+
+
+def test_old_pre_repair_copies_are_pruned_and_the_newest_two_kept():
+    import time as _t
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        now = _t.mktime(_t.strptime("20261101-120000", "%Y%m%d-%H%M%S"))
+        for name in ("pre-repair-20260801-000000", "pre-resize-unstaked-20261001-000000",
+                     "pre-void-unplayed-20261030-000000", "pre-repair-closes-20261031-000000"):
+            (base / name).mkdir()
+            (base / name / "history.db").write_bytes(b"h" * 1000)
+            (base / name / "ledger.db").write_bytes(b"l" * 10)
+        (base / "backup_2026-10-25.zip").write_bytes(b"z")
+        r = maintenance.prune_repair_copies(base, now=now)
+        left = sorted(str(p.relative_to(base)) for p in base.rglob("*") if p.is_file())
+        assert left == ["backup_2026-10-25.zip",
+                        "pre-repair-closes-20261031-000000/history.db",
+                        "pre-repair-closes-20261031-000000/ledger.db",
+                        "pre-resize-unstaked-20261001-000000/ledger.db",
+                        "pre-void-unplayed-20261030-000000/history.db",
+                        "pre-void-unplayed-20261030-000000/ledger.db"], left
+        assert r["removed"] == 2 and r["freed"] == 1000 + 1010, r
+    src = inspect.getsource(maintenance.run_if_due)
+    assert "prune_repair_copies()" in src, "pruned every cycle, not only when a repair runs"
 
 
 if __name__ == "__main__":

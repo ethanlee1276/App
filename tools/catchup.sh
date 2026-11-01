@@ -661,6 +661,14 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JG "The disk: what fills it, and the backups" 120 <<'SH'
+cd /srv/qellys && grep -c "prune_repair_copies()" engine/maintenance.py && grep -c "NOT CHECKED" deploy/backup.sh
+df -h / | tail -1
+sudo du -sh /srv/qellys/data/backups /srv/qellys/backups /var/backups/qellys 2>/dev/null
+sudo ls -lt /srv/qellys/data/backups | head -12
+sudo find /tmp -maxdepth 1 -name 'tmp.*' -type f -size +100M -ls
+sudo tail -8 /var/log/qellys-backup.log
+SH
 run JD "Parlays: two legs from our picks, and the past paired" 300 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function renderParlayPage('
 cd /srv/qellys && sudo -u qellys python3 tools/parlay_study.py

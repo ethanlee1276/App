@@ -9305,6 +9305,64 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JG. The disk filled on Sunday morning: what did it, and what can never do
+it again** (step 319; you, 2026-11-01: "the server is down and stale and
+won't let me log into my account"). Already done, by you, that morning:
+deleted the two leftover scratch files in /tmp, restarted the service (back
+at 11:19 UTC, 5.0 GB free), and set the Backblaze bucket to keep only the
+latest version of each file.
+
+- **What happened.** The weekly backup check (Sundays, 04:30 UTC, the
+  `backup.sh --check` line in root's crontab) restores each backup to prove
+  it works. It restored history.db, 6.5 GB, into /tmp with 4.5 GB free,
+  filled the disk at 04:32 UTC, died, and left its half-written copy behind
+  (a second one, from an earlier Sunday, sat beside it). From then every
+  write failed: the boards, the journal's housekeeping, and signing in,
+  which writes a session. The API answered 502 for seven hours.
+- **Why the disk was nearly full anyway.** data/backups held 16 GB, mostly
+  copies of history.db taken before journal repairs (`--repair-*`,
+  `--void-unplayed`, `--resize-unstaked`), uncompressed and never deleted;
+  plus the weekly zips. And the offsite copy had stopped: Backblaze's cap.
+- **What the code does now.** The weekly check measures the disk before
+  each restore and skips one that wouldn't leave 15% free ("NOT CHECKED"),
+  keeps its scratch copy beside the backups rather than in /tmp, and
+  deletes it however it ends. A pre-repair copy measures first and is
+  refused without room (the repair stops, as it always did without a
+  backup). Old pre-repair copies are pruned every cycle: the newest two
+  stay whole, older ones lose their history.db copy after 7 days and go
+  entirely after 60. The low-disk warning now comes at 8 GB free, not 2.
+
+After this is live, give it one cycle (about half an hour) for the prune to
+run, then the read-only check: what's in data/backups now, the disk, and the
+backup log's last lines:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JG 2>&1 | tee /tmp/jg.txt
+```
+
+Which runs, one at a time (the first line prints 1 and 1 once the fix is
+on the box):
+
+```
+cd /srv/qellys && grep -c "prune_repair_copies()" engine/maintenance.py && grep -c "NOT CHECKED" deploy/backup.sh
+df -h / | tail -1
+sudo du -sh /srv/qellys/data/backups /srv/qellys/backups /var/backups/qellys 2>/dev/null
+sudo ls -lt /srv/qellys/data/backups | head -12
+sudo find /tmp -maxdepth 1 -name 'tmp.*' -type f -size +100M -ls
+sudo tail -8 /var/log/qellys-backup.log
+```
+
+And 1.4 GB you can clear yourself: /var/backups/qellys is where the backups
+went until October 4 (they go to /srv/qellys/backups now, and offsite).
+Everything in it is a month old:
+
+```
+sudo find /var/backups/qellys -type f -mtime +20 -print -delete
+```
+
+Tomorrow after 04:00 UTC, the same JG check should show "offsite copy
+updated" in the backup log, once Backblaze has cleared the old versions.
+
 **JF. Same-game parlays are tracked, never staked; the lift rule is off**
 (step 318; your second JD paste, 2026-10-31). Nothing to run for the change
 itself:
@@ -15084,6 +15142,19 @@ ls -lhS /srv/qellys/data/backups | head
 
 Never delete a `.db` or `.db-wal` file. Old `backup_*.zip` files and
 `/tmp/qellys-tests-*` folders are safe to remove.
+
+**Again on 2026-11-01** (step JG): the weekly `backup.sh --check` restored
+history.db into /tmp with too little room and left the copy behind. Large
+`/tmp/tmp.*` files are always that check's leftovers and safe to remove:
+
+```
+sudo find /tmp -maxdepth 1 -name 'tmp.*' -type f -size +100M -print -delete
+```
+
+Where the backups live: /srv/qellys/backups (the nightly `backup.sh`,
+synced offsite to Backblaze), /srv/qellys/data/backups (the app's weekly
+`backup_*.zip` and the `pre-*` copies taken before journal repairs, pruned
+each cycle), and /var/backups/qellys (retired on 2026-10-04).
 
 ---
 

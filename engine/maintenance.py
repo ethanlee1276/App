@@ -184,6 +184,78 @@ def _backup_due(state: dict, today: _dt.date) -> bool:
 #: is one board build away from the outage of 2026-10-01.
 BACKUP_MARGIN_BYTES = 1024 ** 3
 
+#: PRE-REPAIR COPIES (launch._backup_before_repair). Every --apply that
+#: rewrites the journal first copies ledger.db AND history.db, uncompressed,
+#: into data/backups/pre-<what>-<stamp>/, and nothing ever deleted one: at
+#: 6.5 GB a history copy, they were the bulk of the 16 GB data/backups held
+#: when the disk filled on 2026-11-01. The newest REPAIR_COPIES_KEEP stay
+#: whole whatever their age. Beyond them, the history copy goes after
+#: REPAIR_HISTORY_DAYS (history.db is in the weekly zip and the nightly
+#: backup) and the rest after REPAIR_COPY_DAYS (the nightly ledger backups
+#: cover two weeks, offsite).
+REPAIR_COPIES_KEEP = 2
+REPAIR_HISTORY_DAYS = 7
+REPAIR_COPY_DAYS = 60
+
+
+def _repair_copy_epoch(p: Path) -> float:
+    """When a pre-repair copy was taken: the stamp in its name
+    (pre-<what>-YYYYmmdd-HHMMSS), else the folder's own time. The name,
+    because pruning the history copy out of a folder moves its mtime."""
+    import re
+    import time
+    m = re.search(r"(\d{8}-\d{6})$", p.name)
+    if m:
+        try:
+            return time.mktime(time.strptime(m.group(1), "%Y%m%d-%H%M%S"))
+        except (ValueError, OverflowError):
+            pass
+    return p.stat().st_mtime
+
+
+def _tree_bytes(p: Path) -> int:
+    total = 0
+    for f in p.rglob("*"):
+        try:
+            if f.is_file():
+                total += f.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def prune_repair_copies(backup_dir: Path | None = None, now: float | None = None,
+                        keep: int = REPAIR_COPIES_KEEP) -> dict:
+    """Old pre-repair copies out of data/backups (see REPAIR_COPIES_KEEP).
+    {"removed": n, "freed": bytes}; never raises."""
+    import shutil
+    import time
+    bdir = Path(backup_dir) if backup_dir else BACKUP_DIR
+    now = time.time() if now is None else now
+    out = {"removed": 0, "freed": 0}
+    try:
+        copies = sorted((p for p in bdir.glob("pre-*") if p.is_dir()), key=_repair_copy_epoch)
+    except OSError:
+        return out
+    for p in (copies[:-keep] if keep > 0 else copies):
+        try:
+            age_days = (now - _repair_copy_epoch(p)) / 86400
+            if age_days >= REPAIR_COPY_DAYS:
+                size = _tree_bytes(p)
+                shutil.rmtree(p, ignore_errors=True)
+                if not p.exists():
+                    out["removed"] += 1
+                    out["freed"] += size
+            elif age_days >= REPAIR_HISTORY_DAYS:
+                for h in sorted(p.glob("history.db*")):
+                    size = h.stat().st_size
+                    h.unlink(missing_ok=True)
+                    out["removed"] += 1
+                    out["freed"] += size
+        except OSError:
+            continue
+    return out
+
 
 def zipfile_testzip(zf):
     """The archive's read-back; a seam so a test can fail it."""
@@ -1746,6 +1818,15 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 f"{pr['freed'] / 1e6:,.0f} MB freed")
     except Exception as exc:                                  # noqa: BLE001
         log(f"  ⚠️  cache prune skipped: {exc}")
+    # And the old pre-repair copies, every cycle (a folder listing): six
+    # GB each, and kept forever until the disk filled (2026-11-01).
+    try:
+        rc = prune_repair_copies()
+        if rc["removed"]:
+            log(f"  backups: {rc['removed']} old pre-repair copy file(s) removed, "
+                f"{rc['freed'] / 1e9:,.1f} GB freed")
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  repair-copy prune skipped: {exc}")
     # And the phones' alerts, every cycle (throttled inside to one look in
     # five minutes): a board's picks going up, last night graded.
     _run_push(log)

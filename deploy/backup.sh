@@ -105,9 +105,13 @@ fi
 # copies that filled the disk were never pruned. Whatever this run is
 # holding raw is deleted on any exit.
 RAW=""
-trap '[[ -n "$RAW" ]] && rm -f "$RAW" "$RAW.gz.partial" 2>/dev/null; true' EXIT
+CHECK_TMP=""
+trap '[[ -n "$RAW" ]] && rm -f "$RAW" "$RAW.gz" "$RAW.gz.partial" 2>/dev/null; [[ -n "$CHECK_TMP" ]] && rm -f "$CHECK_TMP" 2>/dev/null; true' EXIT
 #: The share of the disk a backup must leave free after itself.
 FLOOR_PCT="${QB_BACKUP_FLOOR_PCT:-15}"
+# A database this big or bigger is measured against the disk before it is
+# copied or restored; the small ones are a few MB and never the risk.
+MEASURE_MB="${QB_BACKUP_MEASURE_MB:-200}"
 
 # OFFSITE IS THE PART THAT MATTERS. A backup on the same disk as the
 # database survives a mistake and not a dead server, and the dead server
@@ -216,7 +220,19 @@ if [[ "${1:-}" == "--check" ]]; then
   # of each database into a scratch file and asks SQLite whether it is
   # intact — which is the difference between having backups and being
   # able to recover.
+  #
+  # AND IT MUST NEVER BE WHAT FILLS THE DISK (2026-11-01). The weekly run
+  # at 04:30 UTC on a Sunday restored history.db (6.5 GB) into /tmp with
+  # 4.5 GB free, filled the disk, died in gunzip, and left the half-written
+  # copy where it was: seven hours of "No space left on device", the API
+  # answering 502, nobody able to sign in. A second leftover from an
+  # earlier Sunday was found beside it. So the restore measures first and
+  # skips a database the disk cannot hold with FLOOR_PCT still free; the
+  # scratch copy sits beside the backups, not in /tmp; a killed run's
+  # leftovers are swept here; and the trap above removes it however the
+  # run ends.
   fail=0
+  rm -f "$DEST"/.check-* 2>/dev/null || true
   for db in "${DBS[@]}"; do
     name="$(basename "$db" .db)"
     newest="$(ls -1t "$DEST/${name}-"*.db.gz 2>/dev/null | head -1 || true)"
@@ -228,12 +244,26 @@ if [[ "${1:-}" == "--check" ]]; then
     if [[ -z "$newest" ]]; then
       echo "MISSING: no backup of $name"; fail=1; continue
     fi
-    tmp="$(mktemp)"
-    gunzip -c "$newest" > "$tmp"
+    # The restore is the database's full size: the live file says how big,
+    # or six times the archive when there is no live file to ask.
+    size_mb=$(( $(stat -c %s "$ROOT/$db" 2>/dev/null || stat -f %z "$ROOT/$db" 2>/dev/null || echo 0) / 1048576 ))
+    if [[ "$size_mb" -le 0 ]]; then
+      size_mb=$(( $(stat -c %s "$newest" 2>/dev/null || stat -f %z "$newest") * 6 / 1048576 ))
+    fi
+    if [[ "$size_mb" -ge "$MEASURE_MB" ]]; then
+      free_mb=$(df -Pm "$DEST" | awk 'NR==2 {print $4}')
+      total_mb=$(df -Pm "$DEST" | awk 'NR==2 {print $2}')
+      if [[ $(( ${free_mb:-0} - size_mb )) -lt $(( ${total_mb:-0} * FLOOR_PCT / 100 )) ]]; then
+        echo "NOT CHECKED: $name — restoring it needs about ${size_mb} MB and only ${free_mb} MB is free (the disk keeps ${FLOOR_PCT}% free); free some space and run --check again"
+        continue
+      fi
+    fi
+    CHECK_TMP="$(mktemp "$DEST/.check-${name}-XXXXXX")"
+    gunzip -c "$newest" > "$CHECK_TMP"
     # THE LIVE FILE IS PASSED IN TOO, so the backup can be checked against
     # what it is supposed to be a copy OF. Absent when restoring on a
     # different box, which is fine and says so rather than failing.
-    if KEEP_HINT="$KEEP" python3 - "$tmp" "$ROOT/$db" <<'PYCHECK'
+    if KEEP_HINT="$KEEP" python3 - "$CHECK_TMP" "$ROOT/$db" <<'PYCHECK'
 import os
 import sqlite3
 import sys
@@ -310,7 +340,7 @@ PYCHECK
     else
       echo "CORRUPT OR EMPTY: $newest"; fail=1
     fi
-    rm -f "$tmp"
+    rm -f "$CHECK_TMP"; CHECK_TMP=""
   done
   # THE EVIDENCE FILES: each present file has a tarball that lists.
   for f in "${FILES[@]}"; do
@@ -351,7 +381,7 @@ for db in "${DBS[@]}"; do
   # raw copy needs its own size free on a disk that has filled before
   # (2026-10-01). Skipped, loudly, when it would not fit.
   size_mb=$(( $(stat -c %s "$ROOT/$db" 2>/dev/null || stat -f %z "$ROOT/$db") / 1048576 ))
-  if [[ "$size_mb" -ge 200 ]]; then
+  if [[ "$size_mb" -ge "$MEASURE_MB" ]]; then
     free_mb=$(df -Pm "$DEST" | awk 'NR==2 {print $4}')
     total_mb=$(df -Pm "$DEST" | awk 'NR==2 {print $2}')
     # Room for the raw copy and its gzip, AND the disk still FLOOR_PCT
@@ -376,7 +406,7 @@ d.close(); s.close()
 PY
   # The fastest gzip for the big one: its size is the cost that matters
   # on one core, and level 1 still shrinks a database by most of the way.
-  if [[ "$size_mb" -ge 200 ]]; then gzip -1 -f "$out"; else gzip -f "$out"; fi
+  if [[ "$size_mb" -ge "$MEASURE_MB" ]]; then gzip -1 -f "$out"; else gzip -f "$out"; fi
   rm -f "$out"; RAW=""
   echo "backed up: $db -> ${out}.gz ($(du -h "${out}.gz" | cut -f1))"
 done

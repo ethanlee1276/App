@@ -2692,7 +2692,16 @@ def repair_premature_cli(argv: list) -> None:
           "    python3 launch.py --settle all\n")
 
 
-def _backup_before_repair(what: str = "repair"):
+#: A pre-repair copy that would leave less than this share of the disk
+#: free is refused, and its caller stops (2026-11-01: the copy is 6.5 GB of
+#: history.db, and the disk had filled that morning). The same floor
+#: deploy/backup.sh keeps. Only a copy this big is measured; a fresh box's
+#: or a test's few KB never are.
+REPAIR_COPY_FLOOR_PCT = 15
+REPAIR_COPY_MEASURE_BYTES = 200 * 1024 ** 2
+
+
+def _backup_before_repair(what: str = "repair", disk=None):
     """Copy both databases somewhere safe. Returns the directory or None.
 
     EVERY `--apply` THAT REWRITES THE JOURNAL comes through here first
@@ -2704,12 +2713,36 @@ def _backup_before_repair(what: str = "repair"):
     WAL mode, and a copy of the main file alone can miss every write
     still sitting in the -wal beside it."""
     import sqlite3 as _sq
-    from engine import db as _db, ledger as _led
+    from engine import db as _db, ledger as _led, maintenance as _m
     try:
         stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        dest = ROOT / "data" / "backups" / f"pre-{what}-{stamp}"
+        base = ROOT / "data" / "backups"
+        # MEASURED FIRST, after the old copies are cleared (`disk`: a seam,
+        # shutil.disk_usage's (total, used, free)).
+        pr = _m.prune_repair_copies(base)
+        if pr["removed"]:
+            print(f"  old pre-repair copies: {pr['removed']} file(s) removed, "
+                  f"{pr['freed'] / 1e9:.1f} GB freed")
+        sources = [s for s in (Path(_led.DEFAULT_DB), Path(_db.DEFAULT_DB)) if s.is_file()]
+        need = 0
+        for s in sources:
+            need += s.stat().st_size
+            wal = s.with_name(s.name + "-wal")
+            if wal.is_file():
+                need += wal.stat().st_size
+        if need >= REPAIR_COPY_MEASURE_BYTES:
+            import shutil as _sh
+            probe = base if base.exists() else ROOT
+            total, _used, free = (disk or _sh.disk_usage)(probe)
+            if free - need < total * REPAIR_COPY_FLOOR_PCT / 100:
+                print(f"  backup refused: the copy needs {need / 1e9:.1f} GB and "
+                      f"{free / 1e9:.1f} GB is free; the disk keeps "
+                      f"{REPAIR_COPY_FLOOR_PCT}% free. Free some space first "
+                      "(docs/WHEN_YOU_ARE_HOME.md, \"Disk full\").")
+                return None
+        dest = base / f"pre-{what}-{stamp}"
         dest.mkdir(parents=True, exist_ok=True)
-        for src in (Path(_led.DEFAULT_DB), Path(_db.DEFAULT_DB)):
+        for src in sources:
             if src.is_file():
                 a, b = _sq.connect(str(src)), _sq.connect(str(dest / src.name))
                 try:
@@ -5056,8 +5089,10 @@ def _ping_healthcheck(swept: str, step_fail: dict) -> None:
 
 #: Below this many GB free on the data disk, every cycle says so in the
 #: journal. 2026-10-01: the disk filled, every build failed to write, and
-#: the only sign was the boards' age.
-DISK_LOW_GB = 2.0
+#: the only sign was the boards' age. 2.0 until 2026-11-01, when the disk
+#: sat at 4.5 GB free without a word and one 6.5 GB restore filled it: a
+#: warning has to come while a copy of history.db still fits.
+DISK_LOW_GB = 8.0
 
 
 def _disk_check(free_bytes=None, say=print) -> float | None:
