@@ -5737,6 +5737,13 @@ function trackerBetText(r) {
   }
   if (r.market === "team_total")
     return `${escapeHtml(teamName(r.player))} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
+  // A yes/no prop has no line (an anytime touchdown): "Jahmyr Gibbs Anytime
+  // TD", never "Jahmyr Gibbs yes null Anytime TD" (the game page's Our picks,
+  // 2026-11-01); its "no" says so.
+  if (r.line == null || r.line === "") {
+    const no = /^no$/i.test(String(r.side || ""));
+    return `${escapeHtml(r.player)}${no ? " not" : ""} ${escapeHtml(r.market_label)}`;
+  }
   return `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
 }
 
@@ -23799,6 +23806,8 @@ function _switchViewNow(name, push, dir) {
   // The pages that draw their own league row: the bar's steps aside under
   // 1280px (styles.css `body.own-league-row .sportbar`).
   document.body.classList.toggle("own-league-row", ["live", "tonight", "record"].includes(name));
+  // The game page's clubs' colours go with it (detail.js gpWashOn/gpWashOff).
+  if (name !== "pbp" && typeof gpWashOff === "function") gpWashOff();
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   paneSplit(name, leaving);

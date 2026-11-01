@@ -34,8 +34,16 @@ def test_every_game_page_leaves_the_card_a_slot_under_the_scoreboard():
     assert '<div class="gch-entry-slot"></div>' in hero[:hero.index('<div class="card pbp-parkcard">')]
     # Every game being watched; an old game's page has no room and no slot
     # (2026-10-30, engine/gamearchive; tests/test_every_game_has_a_page.py).
-    assert '${scoreboardHTML(d, league, k)}${d.archive ? "" : `<div class="gch-entry-slot"></div>`}' in JS("hoopscast.js")
-    assert '${scoreboardHTML(d, k)}<div class="gch-entry-slot"></div>' in JS("rinkcast.js")
+    # The line score sits with the score since 2026-11-01 (detail.js
+    # gpLineHTML, Ethan's Apple Sports screenshots); the slot is under both.
+    assert ('${scoreboardHTML(d, league, k)}${typeof gpLineHTML === "function" ? gpLineHTML(d, league, d.live || {}) : ""}'
+            '${d.archive ? "" : `<div class="gch-entry-slot"></div>`}') in JS("hoopscast.js")
+    assert ('${scoreboardHTML(d, k)}${typeof gpLineHTML === "function" ? gpLineHTML(d, "nhl", d.live || {}) : ""}'
+            '<div class="gch-entry-slot"></div>') in JS("rinkcast.js")
+    fb = det[det.index("function gpFootballHTML("):]
+    fb = fb[:fb.index("\n}\n")]
+    assert fb.index("${gpLineHTML(d, league, lv)}") < fb.index('<div class="gch-entry-slot"></div>') < fb.index("${pbpTabsHTML("), \
+        "football: under the score and its line, over the tabs"
     wire = det[det.index("  const wire = () => {"):]
     assert 'if (typeof chatEntryPaint === "function") chatEntryPaint();' in wire[:400], \
         "filled on every draw, whichever layout drew it (the arenas call the same wire)"

@@ -286,7 +286,8 @@ def test_the_game_page_draws_the_win_chance_across_the_game():
     assert 'e.kind === "atbat"' in fn, "baseball reads its at-bats"
     assert "Math.abs(Number(r.wpa) || 0) >= 15" in fn
     css = (ROOT / "web" / "css" / "detail.css").read_text()
-    assert ".pbp-wp-line" in css and "gradient" not in css[css.index(".pbp-wp {"):]
+    chart = css[css.index("svg.pbp-wp {"):]
+    assert ".pbp-wp-line" in css and "gradient" not in chart[:chart.index("}")], "the chart is a line, not a fill"
 
 
 def test_a_groundout_is_not_a_big_play():

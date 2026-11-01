@@ -123,7 +123,10 @@ def _run():
                     page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');}catch(e){}")
                     page.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#pbp/nfl/401", wait_until="load")
                     try:
-                        page.wait_for_function("() => !!document.querySelector('#pbp-body .gc-leaders')", timeout=20000)
+                        # Drawn: a final opens on its Stats (the leaders), a game being
+                        # played on its Play-By-Play (the last play) since 2026-11-01.
+                        page.wait_for_function("() => !!document.querySelector('#pbp-body .gc-leaders, #pbp-body .gc-last')",
+                                               timeout=20000)
                     except Exception:                               # noqa: BLE001
                         # What the page did draw, rather than a bare timeout.
                         raise AssertionError((state, page.evaluate(

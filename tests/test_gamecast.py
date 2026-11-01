@@ -228,7 +228,10 @@ def test_the_page_loads_the_gamecast_on_first_use_and_draws_its_tabs():
     assert 'let _pbpTab = "gamecast";' in APP
     assert ('const GC_TABS = [["gamecast", "Gamecast"], ["box", "Box score"], ["plays", "Play-by-play"],\n'
             '                 ["team", "Team stats"], ["odds", "Odds & picks"], ["injuries", "Injuries"]];') in APP
-    assert 'const pbpTabsFor = (league) => league === "mlb" ? PBP_TABS : GC_TABS;' in APP
+    # Football's own four since 2026-11-01 (detail.js GP_FB_TABS, Ethan's
+    # Apple Sports screenshots); the gamecast's tabs stay the other sports'.
+    assert 'const pbpTabsFor = (league) => league === "mlb" ? PBP_TABS : PBP_FOOTBALL.has(league) ? GP_FB_TABS : GC_TABS;' in APP
+    assert 'const GP_FB_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in APP
     loader = _fn("loadGamecast")
     assert 'css.href = "css/gamecast.css";' in loader and 'el.src = "js/gamecast.js";' in loader
     assert "if (window.QBGamecast) return Promise.resolve(window.QBGamecast);" in loader

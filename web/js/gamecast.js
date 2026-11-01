@@ -1604,6 +1604,10 @@
     zone,
     // The drive and the at-bat on the photographs (app.js pbpParkHTML).
     art,
+    // The football page's own rooms (detail.js, GP1): a final's record on
+    // its Stats tab (the scoring, the leaders); the live tracking on its
+    // Play-By-Play tab (the drive card, the last play, the whole game's chart).
+    scoring: scoringHTML, leaders: leadersHTML, driveCard: currentDriveHTML, lastPlay: lastPlayHTML, gameChart: gameChartHTML,
     // Exposed for the tests and for Ask: the readers, not the markup.
     spotWord, playerLine, leaderOf, currentDrive, newestPlay, lineFor, faceURL, driveRows, nextSnap,
   };

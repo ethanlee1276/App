@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-01",
+      "kind": "ship",
+      "title": "Every game page wears the two teams' colours",
+      "body": "A game's page now sits on its two teams' colours, the away side's from the left and the home side's from the right, deepening to dark further down, in every sport and in either theme. The score is big across the top with each team's crest, name and record and the ball beside whoever has it. Football draws the field under it: the yard lines, each end zone in its team's colour, the drive so far, the line of scrimmage, the line to gain in yellow and the down and distance over it. Under that is the score by quarter (by period in hockey). Football's page has four tabs: Stats (the odds, team stats with a bar for each side, both box scores and the game's details; a finished game leads with its scoring plays and leaders), Play-By-Play (Call it, the drive tracker, the field picture and the win chance while the game is on, then every drive, newest first), Standings (both teams' divisions) and Our picks. Scroll past the score and a compact bar keeps the score, the clock, the field and the tabs at the top. The TV delay, the second screen and Hide the score are under the \u22ef button by the score."
+    },
+    {
+      "date": "2026-11-01",
       "kind": "fix",
       "title": "Every page starts faster on a phone",
       "body": "While the app started, five small checks of the page's size and position (where to scroll, how tall the header is, which fonts to load, whether the screen is folded) each made the browser lay out the whole page before it was built, and then do it again once it was. They now wait for the first frame, when the page has been laid out once anyway. On a mid-range phone the time the page can't answer a tap while it loads fell by about 40% on Home, 30% on Most Likely and 20% on the Live page."

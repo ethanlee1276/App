@@ -867,7 +867,7 @@
   function pageHTML(d, league, ctx) {
     const k = facts(d, league, ctx);
     return `<div class="hc" data-league="${escapeAttr(league)}">
-      ${scoreboardHTML(d, league, k)}${d.archive ? "" : `<div class="gch-entry-slot"></div>`}${stageHTML(d, league, k)}${(ctx && ctx.callit) || ""}
+      ${scoreboardHTML(d, league, k)}${typeof gpLineHTML === "function" ? gpLineHTML(d, league, d.live || {}) : ""}${d.archive ? "" : `<div class="gch-entry-slot"></div>`}${stageHTML(d, league, k)}${(ctx && ctx.callit) || ""}
       <div class="hc-row">${playsCardHTML(d, league, k)}${statsCardHTML(d, league, k)}${oddsCardHTML(d, league, k)}</div></div>`;
   }
   function wire(host) {

@@ -625,20 +625,25 @@ def pbp_doc(league: str, g: dict, payload: dict,
             drive = None
         if drive:
             doc["drive"] = drive
-    # THE BASKETBALL PAGE'S HEADER (2026-10-15, Ethan's NBA render): the
-    # quarter-by-quarter line, the building, and the scorer's table —
-    # timeouts, team fouls, the bonus, the ball — where ESPN carries it.
+    # THE GAME'S HEADER (2026-10-15, Ethan's NBA render): the period-by-
+    # period line and the building, where ESPN carries them — every sport
+    # since 2026-11-01 (his Apple Sports screenshots of Vikings @ Lions put
+    # the quarter line under the score and the building under Game
+    # Information; the summary's header and game info have both for
+    # football and hockey too, read by the same two parsers). The scorer's
+    # table — timeouts, team fouls, the bonus, the ball — stays basketball's.
     # Each guarded on its own, each absent rather than empty.
+    header = [("linescores", lambda: espnplays.hoops_linescores(payload, league)),
+              ("venue", lambda: espnplays.hoops_venue(payload))]
     if league in espnplays.HOOPS:
-        for key, read in (("linescores", lambda: espnplays.hoops_linescores(payload, league)),
-                          ("venue", lambda: espnplays.hoops_venue(payload)),
-                          ("situation", lambda: espnplays.hoops_situation(payload, league))):
-            try:
-                got = read()
-            except Exception:                                # noqa: BLE001
-                continue
-            if got:
-                doc[key] = got
+        header.append(("situation", lambda: espnplays.hoops_situation(payload, league)))
+    for key, read in header:
+        try:
+            got = read()
+        except Exception:                                    # noqa: BLE001
+            continue
+        if got:
+            doc[key] = got
     return doc
 
 

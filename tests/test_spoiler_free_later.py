@@ -241,7 +241,10 @@ def test_in_a_browser_a_saved_game_is_veiled_and_its_card_says_so():
                 p.route("**/data/live_nfl.json*", mk(fast))
                 p.route("**/api/chat/room*", mk({"room": "nfl_401", "messages": [], "votes": {"home": 0, "away": 0}}))
                 p.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#pbp/nfl/401", wait_until="load")
-                p.wait_for_selector("[data-spoil]", timeout=20000)
+                # On the football page it is in the score's ⋯ menu (GP1, 2026-11-01).
+                p.wait_for_selector(".gp-more-btn", timeout=20000)
+                p.click(".gp-more-btn")
+                p.wait_for_selector("[data-spoil]", timeout=5000)
                 p.click("[data-spoil]")
                 p.wait_for_selector(".pbp-spoil", timeout=10000)
                 veil = p.inner_text("#pbp-body")
@@ -260,7 +263,7 @@ def test_in_a_browser_a_saved_game_is_veiled_and_its_card_says_so():
                 p.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#pbp/nfl/401", wait_until="load")
                 p.wait_for_selector("[data-spoil-show]", timeout=20000)
                 p.click("[data-spoil-show]")
-                p.wait_for_selector("[data-spoil]", timeout=10000)
+                p.wait_for_selector("[data-spoil]", state="attached", timeout=10000)
                 assert not p.query_selector(".pbp-spoil")
                 assert not errs, errs
             finally:
@@ -309,7 +312,9 @@ def test_in_a_browser_a_late_chat_never_lands_on_a_veiled_game():
                 p.route("**/api/chat/room*", mk({"room": "nfl_401", "messages": [], "votes": {"home": 0, "away": 0}}))
                 p.route("**/js/chat.js*", lambda r: held.append(r))
                 p.goto(f"http://127.0.0.1:{port}/index.html?sport=nfl#pbp/nfl/401", wait_until="load")
-                p.wait_for_selector("[data-spoil]", timeout=20000)
+                p.wait_for_selector(".gp-more-btn", timeout=20000)
+                p.click(".gp-more-btn")
+                p.wait_for_selector("[data-spoil]", timeout=5000)
                 for _ in range(100):
                     if held:
                         break

@@ -160,7 +160,7 @@ def test_what_espn_does_not_carry_is_absent_never_guessed():
     assert E.hoops_venue({"gameInfo": {"venue": {"fullName": "x" * 61}}}) == {}, "a name, never a sentence"
     nfl = B.pbp_doc("nfl", {**GAME, "home": "DAL", "away": "TB"}, {"drives": {"previous": [], "current": None}})
     for key in ("situation", "venue", "linescores"):
-        assert key not in nfl, f"{key} is basketball's"
+        assert key not in nfl, f"{key}: a summary without it gives a file without it"
 
 
 def test_a_header_block_that_breaks_costs_that_key_alone():

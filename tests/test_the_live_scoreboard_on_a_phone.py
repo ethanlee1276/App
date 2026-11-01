@@ -264,8 +264,10 @@ def test_the_scoreboards_in_a_browser_from_320_to_1280():
                                 assert s[part]["b"] <= g["watch"]["t"] + 0.5, f"{at}: the watch row is not under the {ha} {part}"
                             if name in whole and width >= 360:
                                 assert s["whole"], f"{at}: the {ha} name is cut"
+                        # On the clubs' colours (GP1, 2026-11-01) every board's crest
+                        # stands over its name at 46px on a phone.
                         if width == 390:
-                            assert all(round(s["crest"]["r"] - s["crest"]["l"]) == 36 for s in g["sides"].values()), at
+                            assert all(round(s["crest"]["r"] - s["crest"]["l"]) == 46 for s in g["sides"].values()), at
                         assert g["page"] <= width, f"{at}: the page scrolls sideways"
                         if league in ("nfl", "cfb", "mlb"):
                             w = page.evaluate("(() => { const h = document.querySelector('.pbp-hero');"
