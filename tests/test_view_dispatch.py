@@ -117,7 +117,9 @@ def test_the_off_screen_pages_are_drawn_when_opened():
     may not depend on a load happening to pass while it is showing."""
     body = _body("renderAll")
     assert "OFFSCREEN_PAGES.forEach(([host, draw, onVisit]) => drawOrDefer(host, draw, onVisit));" in body
-    assert "renderRecommended()" in body, "Home's own board is drawn on every load"
+    assert "drawBoard();" in body, "Home's own board is drawn on every load"
+    blocks = APP[APP.index("const BOARD_BLOCKS = ["):APP.index("];", APP.index("const BOARD_BLOCKS = ["))]
+    assert "renderRecommended()" in blocks, "by the board's blocks (drawBoard)"
     i = APP.index("const OFFSCREEN_PAGES = [")
     pages = APP[i:APP.index("];", i)]
     for fn in ("renderScanner", "renderTrending", "renderPlayers", "renderEdgeBoard",

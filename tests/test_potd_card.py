@@ -187,8 +187,14 @@ def test_the_card_is_drawn_and_drawn_first():
     assert 'id="potd-zone"' in HTML
     i = APP.index("function renderAll() {")
     body = APP[i:APP.index("\n}\n", i)]
-    assert "renderPickOfTheDay();" in body
-    assert body.index("renderPickOfTheDay();") < body.index("renderBestBets();")
+    assert "drawBoard();" in body
+    # The board's blocks, in the order they draw (BOARD_BLOCKS, drawBoard).
+    j = APP.index("const BOARD_BLOCKS = [")
+    blocks = APP[j:APP.index("];", j)]
+    assert blocks.index("renderPickOfTheDay()") < blocks.index("renderBestBets()")
+    assert blocks.index("renderPickOfTheDay()") == min(blocks.index(f"{fn}()") for fn in
+                                                       ("renderPickOfTheDay", "renderStats", "renderGames",
+                                                        "renderRecommended")), "the first block"
 
 
 # --- the record section ------------------------------------------------------

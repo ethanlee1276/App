@@ -323,7 +323,8 @@ def test_the_dashboard_carries_the_reads_of_every_game():
     row = APP[APP.index("function scanTopRowHTML("):]
     assert "scanDoor(x)" in row[:row.index("\n}\n")], "each row opens his pick or his page"
     assert '<div id="scan-top"></div>' in open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-    assert "  renderScanTop();" in APP
+    blocks = APP[APP.index("const BOARD_BLOCKS = ["):]
+    assert "renderScanTop();" in blocks[:blocks.index("];")], "drawn with the board's blocks (drawBoard)"
     # Its own class prefix: the first draft used `.st-row`/`.st-sub`, the
     # status page's, whose phone rule hid the team/usage line.
     assert 'class="st-' not in top + row[:row.index("\n}\n")]

@@ -341,6 +341,112 @@ def test_an_off_screen_page_draws_when_opened_or_when_idle():
     assert got["idle"][-1] == "edge-idle" and got["left"] == 0, "an idle moment draws what is left"
 
 
+# --- the board's blocks, after another page ---------------------------------
+def _board_hosts():
+    """{host id: view id} for every BOARD_BLOCKS host, read from index.html."""
+    import re
+    html = open(ROOT / "web" / "index.html", encoding="utf-8").read()
+    lines = html.split("\n")
+    starts = [(i, re.search(r'id="([^"]+)"', l).group(1)) for i, l in enumerate(lines) if '<section class="view' in l]
+    j = APP.index("const BOARD_BLOCKS = [")
+    blocks = APP[j:APP.index("];", j)]
+    out = {}
+    for host in re.findall(r'\["([\w-]+)", \(\) =>', blocks):
+        if host.startswith("view-"):
+            out[host] = host
+            continue
+        at = next(i for i, l in enumerate(lines) if f'id="{host}"' in l)
+        out[host] = [v for (k, v) in starts if k <= at][-1]
+    return out, re.findall(r"=> \{ (\w+)\(\); \}\]", blocks)
+
+
+def test_the_board_blocks_live_on_three_pages_and_draw_once_each():
+    """FS4 (2026-11-01). The list is what drawBoard defers, so every host
+    must be on the page it is judged by, and nothing may draw twice."""
+    hosts, names = _board_hosts()
+    assert len(names) >= 20 and len(set(names)) == len(names), names
+    assert set(hosts.values()) == {"view-recommended", "view-edge", "view-live"}, hosts
+    assert names[-1] == "groupRecommended", "the grouping reads what the others wrote: last"
+    body = _fn("renderAll")
+    assert "renderRail()" not in APP[APP.index("const BOARD_BLOCKS = ["):APP.index("let _boardQueue")], \
+        "the rail's live badges are on every page: drawn at once, never queued"
+    assert body.index("renderRail();") < body.index("drawBoard();") \
+        < body.index("OFFSCREEN_PAGES.forEach(([host, draw, onVisit]) => drawOrDefer(host, draw, onVisit));")
+    ds = _fn("drawStale")
+    assert ds.index("flushBoard();") < ds.index("for (const [id, draw] of [..._stalePages])"), \
+        "an opened board page draws what is queued before anything of its own"
+
+
+def test_another_page_draws_first_and_the_board_follows_in_short_tasks():
+    hosts, names = _board_hosts()
+    block = APP[APP.index("const OFFSCREEN_PAGES = ["):APP.index("function renderAll() {")]
+    stubs = "\n".join(
+        f"const {n} = () => {{ if (THROW === {n!r}) {{ THROW = null; throw new Error('boom'); }} "
+        f"DRAWN.push([{n!r}, TASK]); burn(4); }};" for n in names)
+    got = _node(r"""
+      const state = {};
+      const HOST_VIEW = """ + json.dumps(hosts) + r""";
+      const views = {};
+      const view = (id) => ({ id, classList: { contains: (c) => c === "active" && !!views[id] } });
+      const document = { getElementById: (id) => HOST_VIEW[id] ? { closest: () => view(HOST_VIEW[id]) }
+        : id === "likely" ? { closest: () => view("view-likely") } : null };
+      const realSetTimeout = globalThis.setTimeout.bind(globalThis);
+      let TASK = 0, THROW = null;
+      const setTimeout = (fn, ms) => realSetTimeout(() => { TASK++; fn(); }, ms);
+      const DRAWN = [], ERRS = [];
+      process.on("uncaughtException", (e) => ERRS.push(e.message));
+      const burn = (ms) => { const t = performance.now(); while (performance.now() - t < ms) {} };
+      const renderTonight = () => {}, renderEdgeBoard = () => {}, renderProps = () => {},
+            renderScanner = () => {}, renderLongShots = () => {}, renderParlayPage = () => {},
+            renderLikely = () => {}, renderTrending = () => {}, renderPlayers = () => {}, renderTools = () => {};
+      """ + stubs + block + r"""
+      const out = {};
+      views["view-recommended"] = true;                       // Home on screen: all now, in order
+      drawBoard();
+      out.home = DRAWN.map((d) => d[0]); out.homeLeft = _boardQueue.length;
+      DRAWN.length = 0;
+      views["view-recommended"] = false; views["view-likely"] = true;
+      drawBoard(); drawBoard();                               // another page; a second load lands first
+      out.now = DRAWN.length;
+      realSetTimeout(() => {
+        out.later = DRAWN.map((d) => d[0]);
+        const per = {}; DRAWN.forEach(([, t]) => { per[t] = (per[t] || 0) + 1; });
+        out.tasks = Object.keys(per).length; out.most = Math.max(...Object.values(per));
+        DRAWN.length = 0;
+        drawBoard();                                          // Home opened part-way through
+        realSetTimeout(() => {
+          out.before = DRAWN.length;
+          drawStale("recommended");
+          out.opened = DRAWN.map((d) => d[0]); out.openedLeft = _boardQueue.length;
+          DRAWN.length = 0;
+          THROW = """ + json.dumps(names[3]) + r""";
+          drawBoard();                                        // a block that throws, queued
+          realSetTimeout(() => {
+            out.thrown = DRAWN.map((d) => d[0]); out.errs = ERRS.slice();
+            console.log(JSON.stringify(out));
+          }, 1500);
+        }, 0);
+      }, 1500);
+    """)
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["home"] == names and got["homeLeft"] == 0, "Home on screen: every block, now, in order"
+    assert got["now"] == 0, "another page on screen: none of them in its load"
+    assert got["later"] == names, "then every block once, in order, the second load replacing the first"
+    assert got["tasks"] >= 5 and got["most"] <= 4, (got["tasks"], got["most"])
+    assert 1 <= got["before"] < len(names), got["before"]
+    assert got["opened"] == names and got["openedLeft"] == 0, "opening Home draws the rest, in order, first"
+    assert got["thrown"] == [n for n in names if n != names[3]], "the others still draw"
+    assert got["errs"] == ["boom"], "and the error is reported, not swallowed"
+
+
+def test_the_date_formatter_is_built_while_the_board_is_on_its_way():
+    at = APP.index("\nrenderQuickTools();\nload();\n")
+    tail = APP[at:at + 400]
+    assert tail.index('classList.remove("booting")') < tail.index("setTimeout(warmDateFormat, 0);")
+    assert 'formatGameDate("2026-01-01")' in _fn("warmDateFormat")
+
+
 # --- the renders --------------------------------------------------------------
 def test_every_render_has_a_phone_copy():
     # Pillow is the one non-stdlib package in this repo and it is not

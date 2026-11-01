@@ -279,8 +279,9 @@ def test_the_renderer_runs_before_the_room_grouping():
     """`groupRecommended` reads what the renderers wrote to decide which
     rooms exist. A host filled after it is sorted into no room."""
     src = _src("web", "js", "app.js")
-    assert (src.index("  renderLikelyTop();")
-            < src.index("  groupRecommended();"))
+    i = src.index("const BOARD_BLOCKS = [")
+    blocks = src[i:src.index("];", i)]
+    assert blocks.index("renderLikelyTop()") < blocks.index("groupRecommended()")
 
 
 def test_the_block_is_placed_in_the_boards_room():

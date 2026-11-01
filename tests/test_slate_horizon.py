@@ -53,8 +53,11 @@ def test_it_sits_with_the_strip_it_is_about():
 
 
 def test_it_runs_in_the_render_pass():
-    i = APP.index("  renderGames();")
-    assert "renderSlateHorizon();" in APP[i:i + 120]
+    """Right after the strip it annotates, in the board's blocks."""
+    i = APP.index("const BOARD_BLOCKS = [")
+    blocks = APP[i:APP.index("];", i)]
+    g = blocks.index("renderGames()")
+    assert "renderSlateHorizon()" in blocks[g:g + 120]
 
 
 def test_it_says_nothing_when_the_slate_is_now():

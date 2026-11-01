@@ -143,7 +143,8 @@ def test_the_recommended_board_carries_an_injury_watch():
     assert 'id="injury-watch"' in html
     js = app_js()
     assert "async function renderInjuryWatch" in js
-    assert "\n  renderInjuryWatch();" in js, "missing from the load() chain"
+    i = js.index("const BOARD_BLOCKS = [")
+    assert "renderInjuryWatch()" in js[i:js.index("];", i)], "missing from the board's blocks (drawBoard)"
     rooms = js[js.index("const REC_ROOMS"):]
     assert '"injury-watch"' in rooms[:rooms.index("];")], \
         "the block would float outside every room"

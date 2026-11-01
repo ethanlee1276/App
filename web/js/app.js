@@ -1737,6 +1737,14 @@ function formatGameDate(dateStr) {
   }
   return out;
 }
+/* The first date formatter a page builds loads the locale's data: 37 ms
+   at phone speed, and it used to land inside the board's first draw
+   (slateDateLabel). The boot asks for one date in a moment of its own
+   while the board is still on its way, and formatGameDate keeps the
+   formatter (and that date) for the life of the page. */
+function warmDateFormat() {
+  try { formatGameDate("2026-01-01"); } catch (e) { /* the first date drawn builds it */ }
+}
 function formatKickoff(kick) {
   if (!kick) return "";
   if (kick.includes("T")) {                       // ISO datetime (MLB first pitch)
@@ -4232,8 +4240,14 @@ function drawOrDefer(id, draw, onVisit) {
   _stalePages.set(id, draw);
 }
 
-/* The page being opened draws whatever of it is stale, before it shows. */
+/* The page being opened draws whatever of it is stale, before it shows —
+   the board's queued blocks first, all of them in order, if it is one of
+   theirs (drawBoard). */
 function drawStale(name) {
+  if (_boardQueue.length && _boardQueue.some(([id]) => {
+    const view = pageOfHost(id);
+    return view && view.id === `view-${name}`;
+  })) flushBoard();
   for (const [id, draw] of [..._stalePages]) {
     const view = pageOfHost(id);
     if (view && view.id === `view-${name}`) { _stalePages.delete(id); draw(); }
@@ -4256,6 +4270,100 @@ function idleStale() {
     try { draw(); } catch (e) { /* it draws again when its page is opened */ }
     idleStale();
   });
+}
+
+/* THE BOARD'S BLOCKS: Home's sections, and the few that draw into the Edge
+   and Live pages (the host beside each says where), in the order they have
+   always drawn. Drawn all at once whenever one of their pages is on
+   screen, which on most loads is Home.
+
+   ANOTHER PAGE FIRST (2026-11-01). Opened straight onto another page (a
+   link to #likely, the app reopened on its last tab), the load drew all
+   of these into hidden pages ahead of the page being read: on the likely
+   view, about 200 ms in one task at phone speed before its own rows, most
+   of the first screen's blocked time. Now that page draws first and these
+   follow a few per task (drawBoard), every task short; and opening one of
+   their pages before they are done draws whatever is left, in order,
+   before it shows (drawStale). Nothing outside these pages reads what
+   they draw. */
+const BOARD_BLOCKS = [
+  ["potd-zone", () => { renderPickOfTheDay(); }],
+  ["probation-note", () => { renderProbation(); }],
+  ["advisory-note", () => { renderAdvisories(); }],
+  ["talent-note", () => { renderTalent(); }],
+  ["stats", () => { renderStats(); }],                       // the Edge page
+  ["empty-slate", () => { renderEmptySlate(); }],
+  ["live-picks", () => { renderLivePicks(); }],              // the Live page
+  ["best-bets", () => { renderBestBets(); }],                // the Edge page
+  ["team-form", () => { renderTeamForm(); }],
+  ["games", () => { renderGames(); }],
+  ["slate-horizon", () => { renderSlateHorizon(); }],
+  ["top-picks", () => { renderTopPicks(); }],
+  ["view-recommended", () => { renderHomePerf(); }],         // its host is made on the fly
+  ["gamebets", () => { renderGameBets(); }],
+  ["incentive-watch", () => { renderIncentives(); }],
+  ["rest-watch", () => { renderRestWatch(); }],
+  ["injury-watch", () => { renderInjuryWatch(); }],
+  ["cards", () => { renderRecommended(); }],                 // the Edge page
+  // BEFORE groupRecommended, like every other board block: the grouping
+  // reads what the renderers wrote to decide which rooms exist, so a
+  // host filled after it would be sorted into no room at all.
+  ["likely-top", () => { renderLikelyTop(); }],
+  ["scan-top", () => { renderScanTop(); }],
+  ["quick-tools", () => { renderQuickTools(); }],
+  // AFTER the renderers, always. Which rooms exist is decided by what
+  // they just wrote — grouping first would judge every block empty and
+  // draw a single tab.
+  ["view-recommended", () => { groupRecommended(); }],
+];
+let _boardQueue = [];      // the blocks still to draw, in order
+let _boardTimer = null;
+//: How long one task of the queue may draw before it lets the page
+//: answer a tap: a block or two at phone speed, most of them on a laptop.
+const BOARD_SLICE_MS = 12;
+
+function boardShown() {
+  return BOARD_BLOCKS.some(([id]) => {
+    const view = pageOfHost(id);
+    return !!view && (view.classList.contains("active") || view.classList.contains("pane-list"));
+  });
+}
+
+function drawBoard() {
+  clearTimeout(_boardTimer);
+  _boardTimer = null;
+  if (boardShown()) {
+    _boardQueue = [];
+    BOARD_BLOCKS.forEach(([, draw]) => draw());
+    return;
+  }
+  _boardQueue = BOARD_BLOCKS.slice();
+  boardNext();
+}
+
+function boardNext() {
+  if (_boardTimer || !_boardQueue.length) return;
+  _boardTimer = setTimeout(() => {
+    _boardTimer = null;
+    const until = performance.now() + BOARD_SLICE_MS;
+    do drawBlock(_boardQueue.shift());
+    while (_boardQueue.length && performance.now() < until);
+    boardNext();
+  }, 0);
+}
+
+/* Everything still waiting, in order, now: one of their pages is opening. */
+function flushBoard() {
+  clearTimeout(_boardTimer);
+  _boardTimer = null;
+  const left = _boardQueue;
+  _boardQueue = [];
+  left.forEach(drawBlock);
+}
+
+/* A block that throws is reported, not swallowed, and the rest still draw. */
+function drawBlock(block) {
+  try { block[1](); } catch (e) { setTimeout(() => { throw e; }, 0); }
 }
 
 function renderAll() {
@@ -4283,35 +4391,12 @@ function renderAll() {
     renderDataSource(d);
     document.getElementById("slate-date").textContent = slateDateLabel(d);
   }
-  renderPickOfTheDay();
-  renderProbation();
-  renderAdvisories();
-  renderTalent();
-  renderStats();
-  renderEmptySlate();
-  renderLivePicks();
-  renderBestBets();
-  renderTeamForm();
-  renderGames();
-  renderSlateHorizon();
-  renderTopPicks();
-  renderHomePerf();
+  // The rail's live badges are on every page: drawn now, whatever is up.
   renderRail();
-  renderGameBets();
-  renderIncentives();
-  renderRestWatch();
-  renderInjuryWatch();
-  renderRecommended();
-  // BEFORE groupRecommended, like every other board block: the grouping
-  // reads what the renderers wrote to decide which rooms exist, so a
-  // host filled after it would be sorted into no room at all.
-  renderLikelyTop();
-  renderScanTop();
-  renderQuickTools();
-  // AFTER the renderers, always. Which rooms exist is decided by what
-  // they just wrote — grouping first would judge every block empty and
-  // draw a single tab.
-  groupRecommended();
+  // Home's sections, and the blocks that fill the Edge and Live pages:
+  // all of them now when one of those pages is up, else just after the
+  // page that is, a few at a time (BOARD_BLOCKS, drawBoard).
+  drawBoard();
   // Tonight owns its own host and is not one of the board's rooms, so it
   // draws after the grouping rather than between the board and it — a
   // call inserted in that gap reads as part of the sequence the grouping
@@ -26407,6 +26492,8 @@ renderQuickTools();
 load();
 // The first screen is drawn: lift the launch shimmer (boot.js `booting`).
 requestAnimationFrame(() => document.documentElement.classList.remove("booting"));
+// While the board is on its way: the date formatter, in a task of its own.
+setTimeout(warmDateFormat, 0);
 sharedSlipIn();
 
 /* --- the true minus, applied where numbers stack --------------------------

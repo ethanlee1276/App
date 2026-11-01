@@ -496,10 +496,16 @@ def test_the_rooms_are_rejudged_on_every_render_not_decided_once():
     # which is exactly the arrangement the contract wants, since the
     # grouping has to run after every renderer that fills a block. The
     # contract is that grouping comes LAST, so that is what is asserted.
-    main = js[js.index("  renderRecommended();"):]
-    at = main.index("  groupRecommended();")
-    for renderer in ("renderRecommended();", "renderLikelyTop();"):
-        assert main.index(f"  {renderer}") < at, renderer
+    # Since 2026-11-01 the board's blocks are a list drawn in order
+    # (BOARD_BLOCKS, drawBoard), so the order is read there.
+    i = js.index("const BOARD_BLOCKS = [")
+    main = js[i:js.index("];", i)]
+    at = main.index("groupRecommended()")
+    assert at == max(main.index(f"{fn}()") for fn in ("renderRecommended", "renderLikelyTop", "renderScanTop",
+                                                      "renderQuickTools", "renderGames", "groupRecommended")), \
+        "grouping comes last"
+    for renderer in ("renderRecommended()", "renderLikelyTop()"):
+        assert main.index(renderer) < at, renderer
     # THE BANKROLL PATH re-renders the board and must re-group with it.
     # The slider path did too, and was asserted here until 2026-09-14,
     # when the panel that drove it was removed (tests/test_slider_panel_retired.py).

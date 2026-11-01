@@ -77,8 +77,9 @@ def test_render_all_refuses_a_board_that_is_not_this_leagues():
     body = _fn("renderAll")
     assert "const _meta = SPORT_META[state.sport];" in body
     assert "if (_meta && _boardFor && _boardFor !== _meta.api) return;" in body
-    # Before the first section is drawn.
-    assert body.index("_boardFor !== _meta.api") < body.index("renderLivePicks();")
+    # Before the first section is drawn (the board's blocks, drawBoard).
+    assert body.index("_boardFor !== _meta.api") < body.index("drawBoard();")
+    assert body.index("_boardFor !== _meta.api") < body.index("renderRail();")
 
 
 def test_the_identity_guards_are_still_there():
