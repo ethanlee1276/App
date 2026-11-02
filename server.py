@@ -5350,8 +5350,11 @@ class Handler(BaseHTTPRequestHandler):
                 # Signed in, so we can say rather than advertise: somebody
                 # who has subscribed before does not get a second trial,
                 # and the plans page should not promise them one.
+                # ONE TRIAL PER PERSON (engine/trialguard): an address that
+                # has had one, on any account, deleted ones too, is offered none.
+                from engine import trialguard as TG
                 out["trial_eligible"] = not BI.has_subscribed_before(
-                    conn, who["id"])
+                    conn, who["id"]) and not TG.had_trial(conn, who["email"])
                 # A LAPSE THE WEBHOOK NEVER DELIVERED is heard about here:
                 # a read of Stripe when this row is due one (BI.refresh —
                 # hourly while entitled, each minute while walled, at once
@@ -5494,6 +5497,14 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 out = BI.reconcile_session(
                     conn, who["id"], str(body.get("session") or ""))
+                # Back from Checkout with a new trial: its card is looked at
+                # before the page draws (engine/trialguard).
+                try:
+                    from engine import trialguard as TG
+                    if TG.check(conn, who["id"]) == "refused":
+                        out.update(BI.status_for(conn, who["id"]))
+                except Exception:                            # noqa: BLE001 — the billing sweep looks again
+                    pass
             except BI.BillingUnavailable as exc:
                 # Not an error the customer can act on, and not a reason
                 # to lose their place: the webhook may still land.
@@ -5609,7 +5620,8 @@ class Handler(BaseHTTPRequestHandler):
                                      "Update card — that restarts the plan "
                                      "you have.",
                             "portal": True}).encode(), ".json")
-                    fresh = not BI.has_subscribed_before(conn, who["id"])
+                    from engine import trialguard as TG
+                    fresh = not BI.has_subscribed_before(conn, who["id"]) and not TG.had_trial(conn, who["email"])
                     trial = BI.trial_days_for(plan, fresh)
                     # A FRIEND'S CODE, $6.25 OFF THE FIRST PAYMENT
                     # (engine/referrals), decided here like the trial: from
@@ -5763,6 +5775,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps({"received": True, "gift": bool(made)}).encode(), ".json")
             event = BI.read_event(payload)
             applied = BI.apply_event(conn, event) if event else False
+            # A TRIAL JUST STARTED is looked at now (engine/trialguard): a
+            # card that has had one cancels it at Stripe, nothing charged.
+            # Never the reason the event is not acknowledged.
+            if applied:
+                try:
+                    from engine import trialguard as TG
+                    TG.after_event(conn, event)
+                except Exception:                            # noqa: BLE001 — the billing sweep looks again
+                    pass
             # 200 EVEN WHEN WE DID NOTHING. Stripe retries anything that is
             # not 2xx, so an event we do not act on must still be
             # acknowledged or it comes back forever.

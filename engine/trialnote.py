@@ -106,7 +106,8 @@ def message(period_end: float, plan: str | None, site: str,
         "over and your access pauses until you update your card on your account page.",
         "To cancel, open your account page and press Manage billing, then Cancel. "
         "Cancel before the trial ends and you are charged nothing; the trial's "
-        "access ends when you cancel, and the account cannot start another trial.",
+        "access ends when you cancel, and the account cannot start another trial "
+        "(one free trial per person, whatever the account).",
     ]
     foot = ("You are getting this because you started a free trial. It is the one reminder we send about it.\n"
             "This is analysis, not advice. No bets are taken here.")

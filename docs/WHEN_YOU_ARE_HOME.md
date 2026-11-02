@@ -9305,8 +9305,8 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
-**JI. A cancelled trial loses its access, a failed charge tells the member,
-and the Owner desk acts on accounts** (steps 326–328; you, 2026-11-02: "If
+**JI. A cancelled trial loses its access, one trial per person, a failed charge
+tells the member, and the Owner desk acts on accounts** (steps 326–329; you, 2026-11-02: "If
 someone cancels the trial … we take access from that account and we DO NOT
 offer a second trial", "send them on their third day to let them know that
 their trial will be canceled if they don't pay", "I also want more access and
@@ -9318,6 +9318,13 @@ stuff to be able to do to people's accounts").
   the account can never start another trial. A trial started before then
   keeps the rule it started under. The Terms (§5.3, dated 2 November) and
   everything that offers or reminds about the trial say so.
+- **One trial per person.** You, the same day: "we do not want people making
+  a new account and taking advantage of the trials". An email address that
+  has had a trial (any way it is written) is offered none on any account,
+  and a trial started with a card that has had one is cancelled at Stripe at
+  once, nothing charged. A one-way keyed fingerprint of each trial's address
+  and card is kept three years, after deletion too (Privacy Policy §2.3,
+  Terms §5.3).
 - **Day 3.** The day-before email and push (the trial's third day) now say a
   charge that does not go through ends the trial and pauses access.
 - **A failed charge.** The first charge after a trial, or a renewal, that
@@ -9334,7 +9341,7 @@ stuff to be able to do to people's accounts").
   card. The Privacy Policy has a new §2.14 (dated 2 November).
 
 Nothing to run. The check, read-only, any time after the push (`1`, `1`, `1`,
-the two numbers, `1`):
+`1`, the two numbers, `1`):
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JI 2>&1 | tee /tmp/ji.txt
@@ -9345,6 +9352,7 @@ Which runs, one at a time:
 ```
 curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 2 November 2026'
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="owner-tools"'
+curl -s https://qellysbook.com/privacy.html | grep -c 'id="one-trial"'
 curl -s https://qellysbook.com/js/owner.js | grep -c 'function oaInner('
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import billing as B, lifecycle as L; print(B.TRIAL_CANCEL_ENDS_ACCESS_FROM, L.FAIL_FRESH_S)"
 cd /srv/qellys && grep -c "_lc.payment_failed(conn)" launch.py

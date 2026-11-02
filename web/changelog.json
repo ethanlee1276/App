@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-02",
+      "kind": "fix",
+      "title": "One free trial per person, not per account",
+      "body": "A new account, or the same address after deleting the old one, used to start the free trial again. From today the trial is one per person: an email address that has had one is not offered another, whatever the account, and a trial started with a card that has already had one is cancelled at once, with nothing charged, and the account page says why. To keep to it we hold a one-way fingerprint of a trial's address and card, made with a secret key so neither can be read back, for three years — after an account is deleted too, which is the point. The Terms (§5.3), the Privacy Policy (§2.3), the plans card, the checkout and the trial's FAQ all say so."
+    },
+    {
+      "date": "2026-11-02",
       "kind": "ship",
       "title": "The Owner desk can find any account and act on it",
       "body": "The site's own account can now look up any account by email, username or number and see where it stands: how it signs in, its membership as its account page says it, whether it has had its free trial, its customer at Stripe, free access and suspension. From there it can give or end free access (a week to a year), sign the account out everywhere, suspend it (which signs it out and refuses every way back in, saying why) or lift that, reset a username that breaks the Terms, or delete the account after its email is typed. Suspend and delete wait while Stripe can still charge the account, and every step is written down where the desk shows it and in that member's Download my data. The Privacy Policy says all of it (§2.14)."

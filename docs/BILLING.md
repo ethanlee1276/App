@@ -252,7 +252,7 @@ Three mechanisms, because no single one covers it:
 |---|---|---|
 | **`max_redemptions`** (Stripe) | Any use past the cap, globally and permanently | Nothing — this is the hard one |
 | **`new`** → `first_time_transaction` (Stripe) | Anyone who has ever paid an invoice here | A brand-new customer, who has no history |
-| **One per account** (ours) | An account that already held a subscription | A new email address |
+| **One per account** (ours) | An account that already held a subscription | A new email address (but see one trial per person, below, for the trial itself) |
 
 Only the cap is unwalkable. A new account with a new card defeats both of
 the others, because at that point nothing distinguishes the person from a
@@ -422,6 +422,21 @@ table — one row per user, written the moment a purchase or trial completes
 resubscribe on day four" is a permanently free account. A lookup that
 throws returns `True`: refusing a trial costs a conversion, granting one
 to everybody costs the first month of every subscription on the site.
+
+**One per person (2026-11-02).** Ethan: "we do not want people making a
+new account and taking advantage of the trials." Per account left two ways
+round it: delete the account and sign up again with the same address, or
+make a new one. `engine/trialguard` keeps, for every trial started from 2
+November, a keyed one-way hash (HMAC with the site's own key, no account
+attached, three years) of the address — one mailbox however it is written:
+case, +tags, Gmail's dots — and of the card, by Stripe's card fingerprint.
+The plans page (`trial_eligible`) and the checkout (`fresh`) offer no trial
+to an address that has had one; a trial started with a card that has had
+one is cancelled at Stripe the moment we see it (the webhook, the return
+from Checkout, or the billing sweep), nothing charged, and the account page
+says why (`billing.TRIAL_REFUSED`). What it does not stop: a new address
+AND a new card together, which is a new customer as far as anything can
+tell. Terms §5.3 and Privacy Policy §2.3 say all of it.
 
 **Decided server-side, never from the request.** `_billing_post` computes
 `trial_days` from the database and passes it to `start_checkout`. A trial

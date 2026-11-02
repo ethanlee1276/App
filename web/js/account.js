@@ -1267,7 +1267,8 @@ function faqFor(status) {
   const pl = PLANS.find((p) => p.id === plan) || PLANS[0];
   return FAQ.map(([q, a]) => q === "Is there a free trial?"
     ? [q, `Yes \u2014 ${days} days, on the ${pl.name.toLowerCase()} plan ` +
-         `only, one per account. A card is taken at signup and is charged ` +
+         `only, one per person: an email address or a card that has had one, ` +
+         `on any account, cannot start another. A card is taken at signup and is charged ` +
          `$${pl.price} on day ${days + 1} unless you cancel first. ` +
          `Cancelling during the ${days} days costs nothing and takes one ` +
          `button on your account page; it ends the trial’s access at once, ` +
@@ -1637,7 +1638,8 @@ function paywallHTML(rec, status) {
         // against it. Terms §5.3 says the same thing at length.
         ? `Card required. Becomes $${pl.price} a month on day ${
             trialDays + 1} unless you cancel before then — one button on
-            your account page, which ends the trial’s access at once.`
+            your account page, which ends the trial’s access at once. One
+            free trial per person: a card or email that has had one can’t start another.`
         : escapeHtml(pl.cadence)}</div>
     </article>`;
   };

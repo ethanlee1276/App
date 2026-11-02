@@ -609,6 +609,13 @@ def entitled(status: str, period_end: float | None = None,
     return True
 
 
+#: The account page's sentence for a trial cancelled because its card had
+#: already had one (engine/trialguard).
+TRIAL_REFUSED = ("Free trial cancelled — this card has already had a free "
+                 "trial here, so nothing was charged. One free trial per "
+                 "person: a plan from here starts a paid membership.")
+
+
 def describe(status: str, period_end: float | None = None,
              cancel_at_end: bool = False, started_at: float | None = None) -> str:
     """A sentence for the page. Says what is true, including the awkward
@@ -1220,7 +1227,11 @@ def init(conn) -> None:
     # renewal), and the failure the member was last told about.
     for col, kind in (("cancel_at_end", "INTEGER"), ("checked_at", "REAL"),
                       ("event_at", "REAL"), ("trial_noted", "REAL"), ("started_at", "REAL"),
-                      ("failed_at", "REAL"), ("failed_from", "TEXT"), ("fail_noted", "REAL")):
+                      ("failed_at", "REAL"), ("failed_from", "TEXT"), ("fail_noted", "REAL"),
+                      # One trial per person (engine/trialguard, 2026-11-02):
+                      # when the trial's card was looked at, and when a trial
+                      # started with a card that had one was cancelled.
+                      ("card_checked", "REAL"), ("trial_refused", "REAL")):
         if col not in have:
             try:
                 conn.execute(f"ALTER TABLE subscriptions ADD COLUMN {col} {kind}")
@@ -1479,7 +1490,7 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     say = describe_with or describe
     row = conn.execute(
         "SELECT customer_id, subscription_id, status, period_end, plan, "
-        "cancel_at_end, started_at FROM subscriptions WHERE user_id=?",
+        "cancel_at_end, started_at, trial_refused FROM subscriptions WHERE user_id=?",
         (int(user_id),)).fetchone()
     if row is None:
         return {"status": "none", "entitled": False, "plan": None,
@@ -1493,6 +1504,10 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     # arguments; ours is also told when a cancelled trial began.
     note = (say(st, end, cancel, began) if cancel and say is describe
             else say(st, end, cancel) if cancel else say(st, end))
+    # A trial started with a card that had one (engine/trialguard): said
+    # as it is, while no plan has replaced it.
+    if row["trial_refused"] and str(st or "").lower() not in ENTITLED:
+        note = TRIAL_REFUSED
     return {"status": st, "period_end": end, "plan": plan,
             "plan_name": (PLANS[plan]["name"] if plan in PLANS else None),
             "entitled": entitled(st, end, cancel_at_end=cancel, started_at=began),

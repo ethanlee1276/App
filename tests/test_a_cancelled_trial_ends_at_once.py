@@ -154,8 +154,8 @@ def test_everything_that_offers_or_reminds_says_what_cancelling_does():
     assert "Last updated 2 November 2026" in terms
     flat = _flat(terms)
     assert "If you cancel during the trial, its access ends when you cancel" in flat, "Terms §5.3"
-    assert "The change of 2 November 2026" in flat and "a trial started earlier keeps the rule it started under" in flat
-    assert "One trial per account" in flat
+    assert "The changes of 2 November 2026" in flat and "a trial started earlier keeps the rule it started under" in flat
+    assert "One trial per person" in flat
 
 
 if __name__ == "__main__":

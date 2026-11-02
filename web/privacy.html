@@ -49,7 +49,9 @@
       <li><b>We do not sell or share your personal information</b>, and we
         never have. There is no advertising business here to sell it to.</li>
       <li>You can delete your account and everything attached to it from
-        the account panel, yourself, at any time.</li>
+        the account panel, yourself, at any time — all but a one-way
+        fingerprint of the email and card a free trial was started with, kept
+        so the same person cannot start a second one (§2.3).</li>
     </ul>
 
     <h2>2. What we collect, and exactly where it lives</h2>
@@ -164,8 +166,23 @@
         you about, so that notice goes once too; and, if a charge does not
         go through, when it failed, whether it was the trial’s first charge,
         and the failure we last told you about, so that notice goes once
-        for each failure.
+        for each failure; and, for a free trial, when we checked its card
+        against earlier trials and, if that card had already had one, when
+        we cancelled it.
         (<code>subscriptions</code>)</li>
+      <li id="one-trial"><b>One free trial per person.</b> When a free trial
+        starts (from 2 November 2026), we keep two one-way fingerprints: one
+        of the account’s email address (or phone number), written the same
+        however it is spelled — capitals, a +tag, a Gmail address’s dots —
+        and one of the card it was started with, from Stripe’s own card
+        fingerprint, which is not the card number. Each is made with a
+        secret key, so neither can be turned back into an address or a card,
+        and neither is tied to an account. We keep them for three years,
+        <b>after your account is deleted too</b> — that is their whole use:
+        an address that has had a trial is not offered another, and a trial
+        started with a card that has had one is cancelled at once, with
+        nothing charged. Nothing else reads them.
+        (<code>trial_marks</code>)</li>
       <li><b>Stripe event ids we have already processed</b>, so a repeated
         webhook cannot grant twice. (<code>billing_events</code>)</li>
       <li><b>A month you give.</b> If you buy a month for a friend, the gift
@@ -600,6 +617,9 @@
           <td>Receipts, a free trial about to charge, a charge that did not
             go through, renewal notices, service notices</td>
           <td>Performance of a contract</td></tr>
+      <tr><td>One-way fingerprints of a free trial’s email and card (§2.3)</td>
+          <td>One free trial per person: refusing a second to the same address or card</td>
+          <td>Legitimate interest (preventing the trial’s misuse)</td></tr>
       <tr><td>The owner looking up and acting on one account (§2.14)</td>
           <td>Support, sorting out a subscription, keeping the Terms</td>
           <td>Performance of a contract / legitimate interest</td></tr>
@@ -742,6 +762,8 @@
         where a payment record must be retained for tax or accounting
         purposes. Stripe keeps its own transaction records under its own
         retention rules.</li>
+      <li><b>A free trial’s one-way fingerprints</b> (§2.3) — three years
+        from the trial, whether or not the account is deleted.</li>
       <li><b>Sessions</b> — expire on their own, and are deleted when you
         sign out or change your password.</li>
       <li><b>Password reset links</b> — one hour, or until used, whichever
@@ -787,7 +809,8 @@
       <li><b>Correct it</b> — change your email or password from the
         account page;</li>
       <li><b>Delete it</b> — the account panel deletes your account and
-        everything attached to it. <b>You do not have to ask us</b>, and
+        everything attached to it, except a free trial’s one-way fingerprints
+        (§2.3). <b>You do not have to ask us</b>, and
         we do not put a retention flow in front of it;</li>
       <li><b>Export it</b> — <b>Download my data</b> on the account page
         gives you everything we hold, as JSON, immediately and without

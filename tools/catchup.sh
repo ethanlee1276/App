@@ -664,6 +664,7 @@ SH
 run JI "A cancelled trial, a failed charge, and the Owner desk's account tools" 60 <<'SH'
 curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 2 November 2026'
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="owner-tools"'
+curl -s https://qellysbook.com/privacy.html | grep -c 'id="one-trial"'
 curl -s https://qellysbook.com/js/owner.js | grep -c 'function oaInner('
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import billing as B, lifecycle as L; print(B.TRIAL_CANCEL_ENDS_ACCESS_FROM, L.FAIL_FRESH_S)"
 cd /srv/qellys && grep -c "_lc.payment_failed(conn)" launch.py

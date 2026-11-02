@@ -5328,6 +5328,10 @@ def _billing_sweeper() -> None:
                 try:
                     _bi.init(conn)
                     _bi.sweep(conn)
+                    # One trial per person (engine/trialguard): a new trial's
+                    # card, for any the webhook and the return trip missed.
+                    from engine import trialguard as _tg
+                    _tg.sweep(conn)
                     # Referral credits the webhook could not pay (engine/referrals).
                     _bi.settle_referrals(conn)
                     # The free trial's day-before email (engine/trialnote).

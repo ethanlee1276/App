@@ -248,7 +248,7 @@ def test_the_terms_describe_the_trial_in_full():
     for needed, why in (
             ("3-day", "the length"),
             ("monthly plan only", "which plan it applies to"),
-            ("One trial per account", "that it is not repeatable"),
+            ("One trial per person", "that it is not repeatable (per person since 2026-11-02, tests/test_one_trial_per_person)"),
             ("payment method is required", "that a card is taken"),
             ("charged automatically", "that it converts on its own"),
             ("$25", "what it converts to"),
