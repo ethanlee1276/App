@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-02",
+      "kind": "model",
+      "title": "Prices come from the ten books most people bet",
+      "body": "The board now reads prices from DraftKings, FanDuel, BetMGM, Caesars, Fanatics, theScore Bet, Hard Rock and BetRivers, with Pinnacle as the sharp price our fair odds are measured against. Bally Bet, betPARX, Fliff, Wind Creek and the Novig and ProphetX exchanges are no longer quoted: the odds feed charges for every ten books asked for, so seventeen cost every refresh twice. The same credits now buy twice the updates."
+    },
+    {
+      "date": "2026-11-02",
       "kind": "fix",
       "title": "A payment that does not go through keeps the site one more day",
       "body": "When a charge does not go through, the first after a free trial or a renewal, a member's access now stays on for one more day, 24 hours from the failed charge, and the account page, the email and the phone notice say until when. Update the card under Manage billing in that time and nothing pauses; if the payment has not gone through by then, access pauses until it does. The trial's day-before reminder says so too, and so does the Terms' §5.7."

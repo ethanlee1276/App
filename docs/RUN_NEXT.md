@@ -6,8 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-02 at 22:00 UTC, after you ran JK, JJ and JI (Done,
-below). Earlier that day the Owner desk was locked to the accounts you list
+Last updated 2026-11-02 evening, after the odds feed was cut to ten books
+(step JL: item 1b, tomorrow) and you ran JK, JJ and JI (Done, below).
+Earlier that day the Owner desk was locked to the accounts you list
 (step JK); a failed payment got one day's grace before access pauses, and
 Terms §5.7 was rewritten to say so, with the email it needs (step JJ); a
 cancelled trial lost its access, one trial per person, a failed charge
@@ -105,6 +106,21 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-02
 ```
 
+## 1b. Tomorrow evening, a day after this push: which books answered, and the bill (steps JL, IQ)
+
+You, 2026-11-02: "cut the books to 10". The feed bills every ten books a
+call names as one region, so seventeen made every call cost double. Now
+it's DraftKings, FanDuel, BetMGM, Caesars, Fanatics, Hard Rock, BetRivers,
+theScore Bet and Pinnacle (the sharp reference), and nothing to run: it
+takes effect when the site restarts with the new code. A day on, this
+shows which books answered (and which of theScore Bet's two keys is the
+live one), and the plan's "API's own bill" line, which should read about
+1.0× now:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JL IQ 2>&1 | tee /tmp/jl.txt
+```
+
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 
 Read-only, about 3 minutes. Section 1 is the board's rule now (every pair
@@ -160,13 +176,7 @@ the 17 books double every call):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IP IQ 2>&1 | tee /tmp/nov1.txt
 ```
 
-## 7. A day after item 6: the bill again, over a full day (step IQ)
-
-```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh IQ 2>&1 | tee /tmp/iq.txt
-```
-
-## 8. The next college game day (Nov 7), after its build: college's first touchdown, priced (step IX)
+## 7. The next college game day (Nov 7), after its build: college's first touchdown, priced (step IX)
 
 With November's budget the pull buys first-touchdown prices. The same
 check shows the picks against our chance, and the next morning how many

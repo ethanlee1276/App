@@ -332,60 +332,49 @@ NHL_TEAM_ABBR = {
     "Washington Capitals": "WSH", "Winnipeg Jets": "WPG",
 }
 
-# Default books to shop, matching the project vision. Keys are The Odds API's.
-# Pinnacle rides along as the SHARP REFERENCE — its de-vigged price is the
-# best free estimate of a bet's true probability, which is what the
-# sharp-anchor strategy prices soft books against. The API bills bookmakers
-# in groups of 10 as one region, so listing 10 costs the same as 8.
+# Default books to shop. Keys are The Odds API's. Pinnacle rides along as
+# the SHARP REFERENCE — its de-vigged price is the best free estimate of a
+# bet's true probability, which is what the sharp-anchor strategy prices
+# soft books against; it is never quoted as a ticket (SHARP_BOOKS below).
 #
-# ESPN BET became theScore Bet (PENN ended the ESPN deal; the rebrand
-# completed December 2025). The API's key for the renamed book couldn't be
-# confirmed from docs, so all three plausible keys are requested — unknown
-# bookmaker keys are ignored, and whichever answers gets the right title.
-#: THE BOOK LIST COSTS NOTHING TO LENGTHEN, which is why it is long.
-#: The API bills per MARKET per region (`oddsbudget`'s own header, after
-#: the 4-8x overspend that burned 19k of a 20k plan in a day), and
-#: `affordable_events` has no book term at all — the `bookmakers`
-#: parameter FILTERS a response we have already paid for. Ethan,
-#: 2026-09-15: "I just don't want too drain my 100k api credits
-#: immediately". Adding a book does not touch that meter; adding a pull
-#: window does, which is why one happened here and the other did not.
+#: TEN BOOKS, BECAUSE TEN IS ONE REGION'S PRICE. The API bills every call
+#: per MARKET per region, and when a call names its books (`bookmakers`)
+#: every ten of them count as one region — the rule client libraries copy
+#: from The Odds API's guide (BOOKS_PER_REGION). Seventeen were asked for
+#: from 2026-09-15 on the belief that a book list only FILTERS a response
+#: already paid for; on 2026-10-30 the API reported ~99,400 credits used in
+#: October against ~55,000 in our ledger, about the two regions seventeen
+#: books make. Ethan, 2026-11-02: "cut the books to 10. obv keep the main
+#: books everyone uses the draft kings and fanduel and thescore bet and mgm".
 #:
-#: MORE BOOKS IS TWO DIFFERENT WINS. It shops a better price on the side
-#: we take, and — the one that matters for the Pick of the Day — it
-#: makes a de-vigged CONSENSUS reachable more often
-#: (`odds.MIN_CONSENSUS_BOOKS` is 3). The MLB board on 2026-09-15 had no
-#: sharp and no market witness at all, so every row fell to the model
-#: tier and the selector could not take any of them.
+#: KEPT: the eight sportsbooks most US bettors use (DraftKings, FanDuel,
+#: BetMGM, Caesars, Fanatics, theScore Bet, Hard Rock, BetRivers) and
+#: Pinnacle. Eight books still clear `odds.MIN_CONSENSUS_BOOKS` (3) on
+#: nearly every market a de-vigged consensus needs.
+#: DROPPED: Bally Bet, betPARX, Fliff and Wind Creek (small, rarely the
+#: best price, rarely hang props), and the exchanges Novig and ProphetX,
+#: whose ladders the board already set aside as not the market's number
+#: (`odds.is_exchange`). The page still knows all of them by name
+#: (BOOK_TITLES, and app.js's BOOKS for Tail and Make it yours), so old
+#: tickets and picks that name one still read right.
 #:
-#: AN UNKNOWN KEY IS IGNORED by the API rather than erroring (see the
-#: note at `BOOK_TITLES` below), so a key that turns out not to exist
-#: costs a missing book and nothing else — check the real list with the
-#: PIN-3 block in docs/WHEN_YOU_ARE_HOME.md.
+#: THESCORE BET IS TWO KEYS. ESPN BET became theScore Bet (PENN ended the
+#: ESPN deal; the rebrand completed December 2025), and the API's key for
+#: the renamed book couldn't be confirmed from its docs, so the two
+#: plausible ones are asked for — an unknown key is ignored, not an error
+#: (the note at BOOK_TITLES). The runbook's step JL counts which key the
+#: cached payloads carry; the one that never answers can give its slot to
+#: another book.
 #:
-#: "FREE" IS IN QUESTION (2026-10-30). The API reported ~99,400 credits
-#: used in October against ~55,000 in the spend ledger, and client
-#: libraries' copies of The Odds API's guide say every ten bookmakers named
-#: count as one region — seventeen books, two regions, every call double.
-#: The ledger now books each call at the API's own figure
-#: (`x-requests-last`, `_request`) beside this module's estimate, so the
-#: plan's report says which it is (`oddsbudget.bill_line`).
+#: A LONGER LIST DOUBLES EVERY CALL, for every sport, and in a diff it
+#: looks like adding a word. tests/test_ten_books_cost_one_region.py holds
+#: the list at BOOKS_PER_REGION, and `_classify` counts the groups, so the
+#: ledger's estimate says so if the list ever grows again.
+BOOKS_PER_REGION = 10
 DEFAULT_BOOKS = [
     "draftkings", "fanduel", "betmgm", "williamhill_us",  # Caesars = William Hill US
-    "espnbet", "thescorebet", "thescore",
     "fanatics", "hardrockbet", "betrivers",
-    # MORE REGULATED US BOOKS, 2026-09-15. Free (see above), bettable, and
-    # each one is another chance the field reaches
-    # `odds.MIN_CONSENSUS_BOOKS` on a game where Pinnacle is silent.
-    "ballybet", "betparx", "fliff", "windcreek",
-    # THE TWO EXCHANGES, and they are here for a different reason than
-    # the rest. Novig and ProphetX are US-legal peer-to-peer venues:
-    # nobody takes the other side as a house, so their price carries no
-    # margin to strip — the same property that made Kalshi the top rung
-    # of the Pick of the Day's ladder (`engine/exchangefair`). If these
-    # keys resolve, they are candidates to feed that tier rather than
-    # merely the shop, and the check is block PIN-3.
-    "novig", "prophetx",
+    "espnbet", "thescorebet",                             # theScore Bet, under either key
     "pinnacle",
 ]
 # Pretty names for the UI / explanations.
@@ -742,15 +731,21 @@ class OddsAPIError(RuntimeError):
 def _classify(url: str, cache_name: str) -> tuple[str, str, int, str]:
     """(kind, sport, credits, detail) for one paid call.
 
-    Credits are the API's own billing rule — per market, per region — read off
-    the request that was actually sent, rather than an assumption about what a
-    build usually asks for. Historical calls carry a large multiplier that
+    Credits are the API's own billing rule — per market, per region, every
+    ten books named counting as a region — read off the request that was
+    actually sent, rather than an assumption about what a build usually asks
+    for. Historical calls carry a large multiplier that
     only the-odds-api's meter knows exactly; the constant is the measured
     figure from harvest_odds.py's own note.
     """
     q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
     markets = len([m for m in (q.get("markets") or [""])[0].split(",") if m])
     regions = len([r for r in (q.get("regions") or ["us"])[0].split(",") if r])
+    # A call that names its books is billed for them instead: every
+    # BOOKS_PER_REGION books count as one region (the note at DEFAULT_BOOKS).
+    books = len([b for b in (q.get("bookmakers") or [""])[0].split(",") if b])
+    if books:
+        regions = -(-books // BOOKS_PER_REGION)
     per = max(1, markets) * max(1, regions)
     hist = "/historical/" in url
     if "events" in cache_name and "event_" not in cache_name:

@@ -2,15 +2,17 @@
 
 Ethan, 2026-09-15: "all the us books your using and shit, is that able
 too be used for all sports if it makes sense and can save us api key
-credits?" They can, and they are — the book list is a filter on a
-response already paid for, so the seventeen books cost exactly what ten
-did. That left a question nobody could answer from the board: WHICH of
-the seventeen actually came back, and what does each one charge.
+credits?" They can, and they are — one book list for every sport. It was
+seventeen books then, on the belief that naming books only filters a
+response already paid for; the API bills every ten books named as a
+region, and since 2026-11-02 the list is ten (`oddsapi.DEFAULT_BOOKS`).
+Either way the question nobody could answer from the board was WHICH of
+them actually came back, and what does each one charge.
 
 NOTHING HERE COSTS A CREDIT. Every number is arithmetic on a payload the
 build already has in memory, in the same loop that already walks it
 (`oddsapi.apply_odds_to_slate` iterates `parse_event_h2h_by_book` and
-keeps one book out of seventeen).
+keeps one book out of the list).
 
 ────────────────────────────────────────────────────────────────────
 WHY THIS EXISTS RATHER THAN THE FEATURE IT WAS SUPPOSED TO BE
@@ -312,10 +314,10 @@ class Census:
         from .sources.oddsapi import BOOK_TITLES
         have = {b.strip().lower() for b in self.seen}
         # BY TITLE, DEDUPED, because the book list is keyed by API key and
-        # three of its keys — espnbet, thescorebet, thescore — are the
-        # same book renamed twice. Listing it three times would read as
-        # three missing books, and asking for all three aliases is the
-        # right thing to do (they cost nothing and one of them resolves).
+        # two of its keys — espnbet, thescorebet — are the same book under
+        # its old and new name. Listing it twice would read as two missing
+        # books, and asking for both is right until the box shows which one
+        # resolves (runbook step JL).
         out = set()
         for key in wanted or ():
             title = BOOK_TITLES.get(key, key)

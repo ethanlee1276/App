@@ -154,9 +154,12 @@ share of its need that covers, and today's need, ceiling and spend:
 * **Every call is booked at what the API billed** (its own
   `x-requests-last`), with our estimate beside it. The plan's printout
   says how far apart they are: `the API's own bill, last 24h: … (R×)`. In
-  October the API counted ~99,400 credits used against ~55,000 booked; the
-  17 books (billed as two regions if every ten count as one) are the likely
-  reason.
+  October the API counted ~99,400 credits used against ~55,000 booked: the
+  17 books, billed as two regions because every ten books named count as
+  one. So since 2 November the list is ten — DraftKings, FanDuel, BetMGM,
+  Caesars, Fanatics, theScore Bet, Hard Rock, BetRivers and Pinnacle (the
+  sharp reference) — one region's price, and our estimate counts every ten
+  books named as a region, so the two figures should now agree.
 
 ## What a league's day buys (the targets)
 

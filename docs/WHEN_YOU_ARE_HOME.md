@@ -9305,6 +9305,39 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JL. Ten books: one region's price** (step 333; you, 2026-11-02: "cut the
+books to 10. obv keep the main books everyone uses the draft kings and
+fanduel and thescore bet and mgm and shit like that").
+
+- **Why.** The odds feed bills every call per market per region, and a call
+  that names its books is billed one region for every ten of them. Asking
+  for seventeen made every call two regions: the API counted ~99,400
+  credits used in October against ~55,000 in our own ledger.
+- **What's asked for now:** DraftKings, FanDuel, BetMGM, Caesars, Fanatics,
+  Hard Rock, BetRivers, theScore Bet, and Pinnacle (the sharp price the
+  fair odds are measured against; never shown as a book to bet). Dropped:
+  Bally Bet, betPARX, Fliff, Wind Creek and the two exchanges, Novig and
+  ProphetX. Old tickets and picks that name one still read right.
+- **theScore Bet is asked for under two keys** (ESPN BET's old one and the
+  renamed book's), because the feed's docs didn't say which it uses. The
+  check below counts which one answers; the other can give its slot to
+  another book.
+- **The estimate counts the books too**, so the plan's "API's own bill"
+  line should read about 1.0× from a day after this is live (step IQ).
+
+Nothing to run: it takes effect when the site restarts with the new code.
+Read-only, a day after: which books answered, and which theScore key:
+
+```
+cd /srv/qellys && sudo -u qellys python3 tools/book_keys.py
+```
+
+And the bill against our estimate over that day (about 1.0× expected):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JL IQ 2>&1 | tee /tmp/jl.txt
+```
+
 **JK. Only your two accounts open the Owner desk** (step 331; you,
 2026-11-02: "my other accounts have access too the owners page too. Only the
 account with [your two addresses] should have access to that page").
