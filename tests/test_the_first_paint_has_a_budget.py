@@ -279,7 +279,14 @@ APP_JS_BUDGET_KB = 290
 #: the two helpers the dependency map found unreferenced are both pinned by
 #: tests as documented rules, so nothing dead was left to pay for it. Told
 #: to Ethan.
-BOOT_BUDGET_KB = 375
+#: 375 -> 376 on 2026-11-02, for Ethan's "after being on the site for a
+#: while, the headshots will disappear": a face that has loaded is drawn
+#: already up when the board redraws, and one that misses waits behind its
+#: helmet and is asked for again (visuals.js FACES COME BACK). 1,135 B gz of
+#: code in visuals.js, which draws every face on the first page
+#: (383,228 -> 384,374 B, 374 over 375). It cannot load later: a face that
+#: misses as the page opens is the case it exists for. Told to Ethan.
+BOOT_BUDGET_KB = 376
 
 
 def _gz_trimmed(rel: str) -> int:

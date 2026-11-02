@@ -216,7 +216,11 @@ def test_a_wrong_transform_falls_back_to_the_original_not_to_nothing():
     js = _js()
     i = js.index("function playerAvatar(")
     body = js[i:i + 1600]
-    assert "data-full" in body, "the original URL is not carried as a fallback"
+    # The face's attributes come from faceImg since FACES COME BACK
+    # (2026-11-02): the whole photo rides on the small one until it is used.
+    assert "faceImg(small, opts.headshot)" in body, "the avatar draws its face through faceImg"
+    j = js.index("function faceImg(")
+    assert "data-full" in js[j:j + 700], "the original URL is not carried as a fallback"
     # The swap itself lives in visuals.js's IMG_ERR.swapFull since the site
     # audit (2026-09-24, M-4); the avatar names it.
     assert '"swapFull"' in body, "no swap to the original"
@@ -275,7 +279,9 @@ def test_the_untransformed_espn_href_is_still_the_fallback():
     js = _js()
     i = js.index("function playerAvatar(")
     body = js[i:i + 1600]
-    assert "data-full" in body and '"swapFull"' in body       # IMG_ERR.swapFull, visuals.js
+    assert "faceImg(small, opts.headshot)" in body and '"swapFull"' in body   # IMG_ERR.swapFull, visuals.js
+    j = js.index("function faceImg(")
+    assert "data-full" in js[j:j + 700], "the raw href rides on the resized one (FACES COME BACK)"
 
 
 def test_a_cloudinary_face_still_takes_the_cloudinary_path():

@@ -47,6 +47,15 @@ def _fn(name):
     return APP[i:APP.index("\n}\n", i) + 2]
 
 
+VIS = (ROOT / "web" / "js" / "visuals.js").read_text(encoding="utf-8")
+
+
+def _vis_fn(name):
+    """A function from visuals.js, which the page loads just before app.js."""
+    i = VIS.index(f"function {name}(")
+    return VIS[i:VIS.index("\n}\n", i) + 2]
+
+
 def _node(js):
     node = shutil.which("node")
     if not node:
@@ -62,7 +71,9 @@ def _node(js):
       const leagueMark = (lg, n) => `<league ${n}>`, teamMark = (a, n) => `<team ${a} ${n}>`;
       const playerAvatar = (p, t, o) => `<avatar ${o.size}>`;
       const TEAM_SIDE_MARKETS = new Set(["moneyline", "spread", "team_total"]);
-    """
+      // The face's attributes (visuals.js FACES COME BACK), the real one.
+      const FACE_UP = new Set(), FACE_USE = new Map();
+    """ + _vis_fn("faceImg")
     prog = f"{stubs}\n{_fn('playerTileHTML')}\n{_fn('betMark')}\nconsole.log(JSON.stringify((() => {{ {js} }})()));"
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)
