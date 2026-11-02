@@ -26,6 +26,9 @@ JI). Before that, Who's on now became the desk's first card (step JH). Done:
   policy's owner-tools and one-trial sections, the Accounts card, the trial
   rule from 2 November 00:00 Eastern, and the failed-charge notice in the
   billing sweep.
+- **The trimmed files:** you put in the new Caddy config at 22:05 UTC, and
+  the Owner desk's and the notice bar's files are served trimmed. Its
+  "Unnecessary header_up" warnings are expected (the Caddyfile says why).
 
 - **The outage:** the weekly backup check filled the disk at 04:32 UTC and
   left its copy behind. You deleted the leftovers, restarted the site
@@ -71,7 +74,7 @@ The backup runs at 04:00 UTC: from the first run after Backblaze cleared
 the old versions, the backup log's last lines should say "offsite copy
 updated".
 
-## 1. An hour after the restart, or tomorrow: the notices went out; the trimmed files; alerts on your phone (steps JH, JJ)
+## 1. An hour after the restart, or tomorrow: the notices went out, and alerts on your phone (steps JH, JJ)
 
 The notices you armed (JJ, Done above) go out from the push loop between
 10:00 and 20:00 Eastern. Who's on now names a member a week after theirs
@@ -85,15 +88,6 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
 
 If both still read 0 told inside those hours, the restart didn't take:
 run `sudo systemctl restart qellys` once more.
-
-The Caddy config with the new files' trimmed copies — the Owner desk's
-(Who's on now included) and the notice bar's (it checks itself
-first and keeps the old one if anything is wrong; run it again if you ran it
-before 2 November):
-
-```
-cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
-```
 
 Not a command: on your phone, sign in to one of your two listed accounts
 and turn alerts on (the Alerts page). The Owner desk then pushes
