@@ -81,7 +81,7 @@ def test_the_terms_cover_every_section_a_paid_service_needs():
             ("refunds", ["Payments are not refundable"]),
             ("errors still refunded", ["charge made in error"]),
             ("the members' discord", ["Discord"]),
-            ("failed payment", ["renewal charge fails"]),
+            ("failed payment", ["If a charge does not go through"]),
             ("discount codes", ["creates no subscription"]),
             ("account rules", ["One person per account"]),
             ("acceptable use", ["scrape", "resell"]),

@@ -4,6 +4,12 @@
     {
       "date": "2026-11-02",
       "kind": "fix",
+      "title": "The Terms say what a failed payment does",
+      "body": "Terms §5.7 said a member whose renewal failed would not be cut off on the first failure, which the site stopped doing on 12 October. It now says what happens: when a charge does not go through, the first after a free trial or a renewal, access to members' features pauses at once and we tell you; Stripe tries the card again, and updating it under Manage billing opens the site again as soon as a payment succeeds; if it is still unpaid when the retries run out, the subscription is cancelled and nothing more is charged. For an account made before 3 November it takes effect 30 days after we email the account about it, and the Terms say what applies until then. The same email tells every member about the free trial's two new rules and the Privacy Policy's two new parts."
+    },
+    {
+      "date": "2026-11-02",
+      "kind": "fix",
       "title": "One free trial per person, not per account",
       "body": "A new account, or the same address after deleting the old one, used to start the free trial again. From today the trial is one per person: an email address that has had one is not offered another, whatever the account, and a trial started with a card that has already had one is cancelled at once, with nothing charged, and the account page says why. To keep to it we hold a one-way fingerprint of a trial's address and card, made with a secret key so neither can be read back, for three years — after an account is deleted too, which is the point. The Terms (§5.3), the Privacy Policy (§2.3), the plans card, the checkout and the trial's FAQ all say so."
     },

@@ -29,9 +29,16 @@ the change may count them (`may_count(..., notice=WHOSON)`): an account
 made after it, one emailed a week ago or more, or a phone sign-in a week
 after it was posted. No Terms change rides with it.
 
-ARMED BY NAME, ONE OR BOTH. QB_POLICY_NOTICE holds the changes to send,
-comma-separated ("2026-10-29,2026-11-01"); each goes to the accounts made
-before it, the older change first, out of one allowance a day.
+THE CHANGE OF 2 NOVEMBER 2026 (TRIALS): the Terms' §5.7, failed payments,
+written as the site has worked since 12 October (a charge that does not go
+through pauses access at once; Stripe cancels the subscription when its
+retries run out), which takes effect for an account made before 3 November
+30 days after its email; the same email tells them the free trial's two new
+rules (§5.3) and the Privacy Policy's §2.3 fingerprints and §2.14.
+
+ARMED BY NAME, ONE OR MORE. QB_POLICY_NOTICE holds the changes to send,
+comma-separated ("2026-10-29,2026-11-01,2026-11-02"); each goes to the
+accounts made before it, the older change first, out of one allowance a day.
 
 KEPT: one row per account told about each change, and when
 (`policy_notices`), named in the Privacy Policy, deleted with the account
@@ -73,8 +80,20 @@ WHOSON = "2026-11-01"
 WHOSON_SINCE = _dt.datetime(2026, 11, 2, tzinfo=ET).timestamp()
 #: A phone sign-in, a week after it was posted.
 WHOSON_PHONE_FROM = _dt.datetime(2026, 11, 9, tzinfo=ET).timestamp()
+#: The third change (Ethan, 2026-11-02, "do number one too"): the Terms'
+#: §5.7, failed payments, written as the site has worked since 12 October —
+#: a charge that does not go through pauses access at once, and Stripe
+#: cancels the subscription when its retries run out (Ethan: that setting
+#: "was already turned on"). For an account made before TRIALS_SINCE it takes
+#: effect TERMS_DAYS after this email; for one with no email address, on
+#: TRIALS_PHONE_FROM. The same email tells them the rest of 2 November: the
+#: free trial's two rules (§5.3, for trials started from that day) and the
+#: Privacy Policy's §2.3 fingerprints and §2.14 owner's look-up.
+TRIALS = "2026-11-02"
+TRIALS_SINCE = _dt.datetime(2026, 11, 3, tzinfo=ET).timestamp()
+TRIALS_PHONE_FROM = _dt.datetime(2026, 12, 2, tzinfo=ET).timestamp()
 #: Every change, oldest first: the order a pass sends them in.
-ORDER = (NOTICE, WHOSON)
+ORDER = (NOTICE, WHOSON, TRIALS)
 
 
 def ensure_tables(conn) -> None:
@@ -89,11 +108,11 @@ def armed(notice: str = NOTICE) -> bool:
 
 
 def _since(notice: str) -> float:
-    return WHOSON_SINCE if notice == WHOSON else SINCE
+    return {WHOSON: WHOSON_SINCE, TRIALS: TRIALS_SINCE}.get(notice, SINCE)
 
 
 def _phone_from(notice: str) -> float:
-    return WHOSON_PHONE_FROM if notice == WHOSON else PHONE_FROM
+    return {WHOSON: WHOSON_PHONE_FROM, TRIALS: TRIALS_PHONE_FROM}.get(notice, PHONE_FROM)
 
 
 def _real(email) -> bool:
@@ -125,6 +144,8 @@ def message(now: float, site: str = "https://qellysbook.com", notice: str = NOTI
     site = site.rstrip("/")
     if notice == WHOSON:
         return _whoson_message(now, site)
+    if notice == TRIALS:
+        return _trials_message(now, site)
     start, terms = _when(now + NOTICE_DAYS * 86400), _when(now + TERMS_DAYS * 86400)
     subject = "Changes to the Qellys Book Terms and Privacy Policy"
     points = [
@@ -173,6 +194,37 @@ def _whoson_message(now: float, site: str) -> tuple:
             + "".join(f"<li><b>{esc(h)}.</b> {esc(b)}</li>" for h, b in points)
             + f"</ul><p><a href=\"{site}/privacy.html#who-is-on\">The Privacy Policy</a></p><p>Questions, or to "
             "object: <a href=\"mailto:qellysbook@gmail.com\">qellysbook@gmail.com</a></p><p>Qellys Book</p>")
+    return subject, text, html
+
+
+def _trials_message(now: float, site: str) -> tuple:
+    terms = _when(now + TERMS_DAYS * 86400)
+    subject = "Changes to the Qellys Book Terms and Privacy Policy"
+    points = [
+        ("A payment that does not go through (Terms §5.7)", "If a charge does not go through, the first one after "
+         "a free trial or a renewal, your access to members' features pauses at once, and we tell you by email "
+         "and on your phone. Stripe tries the card again over the following days: update it under Manage billing "
+         "on your account page and access returns as soon as a payment succeeds. If it is still unpaid when "
+         "Stripe's retries run out, the subscription is cancelled and nothing further is charged. For your "
+         f"account this takes effect on {terms}, 30 days from this email."),
+        ("Free trials (Terms §5.3)", "Cancelling a free trial ends its access when you cancel, and there is one "
+         "free trial per person: an email address or a card that has had one cannot start another, on any "
+         "account. Both apply to trials started from 2 November 2026."),
+        ("The Privacy Policy", "To keep to one trial per person, we keep a one-way fingerprint of a free trial's "
+         "email address and card for three years, after an account is deleted too (§2.3). The site's owner can "
+         "look up one account at a time to answer a question, sort out a subscription or keep the Terms, and "
+         "every step taken on an account is written down (§2.14)."),
+    ]
+    text = ("We have updated the Qellys Book Terms of Service and Privacy Policy (2 November 2026). "
+            "What changes for you:\n\n" + "\n\n".join(f"* {h}. {b}" for h, b in points) +
+            f"\n\nThe Terms: {site}/terms.html\nThe Privacy Policy: {site}/privacy.html\n\n"
+            "Questions, or to object: qellysbook@gmail.com\n\nQellys Book\n")
+    esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")   # noqa: E731
+    html = ("<p>We have updated the Qellys Book Terms of Service and Privacy Policy (2 November 2026). "
+            "What changes for you:</p><ul>" + "".join(f"<li><b>{esc(h)}.</b> {esc(b)}</li>" for h, b in points) +
+            f"</ul><p><a href=\"{site}/terms.html\">The Terms</a> · <a href=\"{site}/privacy.html\">The Privacy "
+            "Policy</a></p><p>Questions, or to object: "
+            "<a href=\"mailto:qellysbook@gmail.com\">qellysbook@gmail.com</a></p><p>Qellys Book</p>")
     return subject, text, html
 
 

@@ -9305,6 +9305,46 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JJ. Terms §5.7 says what a failed payment does, and the email it needs**
+(step 330; you, 2026-11-02: "do number one too", and "cancel the subscription
+was already turned on").
+
+- **What changed.** §5.7 said "we do not cut you off on the first failure",
+  which the site stopped doing on 12 October (you: a failed payment "should
+  lock them too the paywall screen"). It now says a charge that does not go
+  through — the first after a trial, or a renewal — pauses access at once, we
+  tell the member, Stripe retries, and if it is still unpaid when the retries
+  run out the subscription is cancelled (your Stripe setting).
+- **Why an email.** The Terms (§15) promise 30 days' notice by email before a
+  change that affects a member. So for an account made before 3 November the
+  new §5.7 takes effect 30 days after its email (one with no address, on 2
+  December); until then the old wording applies to it, and the Terms say so.
+  The same email tells members the trial rules (§5.3) and the Privacy
+  Policy's two new parts (§2.3, §2.14).
+
+Arm it with the two earlier changes (nobody gets one twice; 60 emails a day
+for all of them together, 10:00 to 20:00 Eastern):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_POLICY_NOTICE 2026-10-29,2026-11-01,2026-11-02
+sudo systemctl restart qellys
+```
+
+The check, read-only (`1`, then each notice's told and to go), and the email
+as a member gets it:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JJ 2>&1 | tee /tmp/jj.txt
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-02
+```
+
+Which runs, one at a time:
+
+```
+curl -s https://qellysbook.com/terms.html | grep -c 'id="failed-payments"'
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
+```
+
 **JI. A cancelled trial loses its access, one trial per person, a failed charge
 tells the member, and the Owner desk acts on accounts** (steps 326–329; you, 2026-11-02: "If
 someone cancels the trial … we take access from that account and we DO NOT
