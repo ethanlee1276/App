@@ -81,10 +81,11 @@ WHOSON_SINCE = _dt.datetime(2026, 11, 2, tzinfo=ET).timestamp()
 #: A phone sign-in, a week after it was posted.
 WHOSON_PHONE_FROM = _dt.datetime(2026, 11, 9, tzinfo=ET).timestamp()
 #: The third change (Ethan, 2026-11-02, "do number one too"): the Terms'
-#: §5.7, failed payments, written as the site has worked since 12 October —
-#: a charge that does not go through pauses access at once, and Stripe
-#: cancels the subscription when its retries run out (Ethan: that setting
-#: "was already turned on"). For an account made before TRIALS_SINCE it takes
+#: §5.7, failed payments — a charge that does not go through keeps access
+#: one more day (Ethan: "we give them a 1 day grace period if the payment
+#: fails"), then pauses it until a payment clears, and Stripe cancels the
+#: subscription when its retries run out (Ethan: that setting "was already
+#: turned on"). For an account made before TRIALS_SINCE it takes
 #: effect TERMS_DAYS after this email; for one with no email address, on
 #: TRIALS_PHONE_FROM. The same email tells them the rest of 2 November: the
 #: free trial's two rules (§5.3, for trials started from that day) and the
@@ -202,9 +203,10 @@ def _trials_message(now: float, site: str) -> tuple:
     subject = "Changes to the Qellys Book Terms and Privacy Policy"
     points = [
         ("A payment that does not go through (Terms §5.7)", "If a charge does not go through, the first one after "
-         "a free trial or a renewal, your access to members' features pauses at once, and we tell you by email "
-         "and on your phone. Stripe tries the card again over the following days: update it under Manage billing "
-         "on your account page and access returns as soon as a payment succeeds. If it is still unpaid when "
+         "a free trial or a renewal, your access to members' features stays on for one more day, and we tell you "
+         "by email and on your phone. Update your card under Manage billing on your account page; if the payment "
+         "has not gone through by the end of that day, access pauses until it does. Stripe tries the card again "
+         "over the following days, and access returns as soon as a payment succeeds. If it is still unpaid when "
          "Stripe's retries run out, the subscription is cancelled and nothing further is charged. For your "
          f"account this takes effect on {terms}, 30 days from this email."),
         ("Free trials (Terms §5.3)", "Cancelling a free trial ends its access when you cancel, and there is one "

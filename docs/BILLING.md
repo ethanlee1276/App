@@ -604,7 +604,7 @@ somebody who has paid cannot sign in to prove it.
 | `active` | yes | |
 | `trialing` | yes | a trial is a deliberate grant |
 | `active`, cancelled to the period's end | yes, until that date | the days already paid for; the wall goes up on the second the date passes, without waiting for Stripe's closing webhook |
-| `past_due` | **no — walled at once** | Ethan, 2026-10-12: a failed payment "should lock them too the paywall screen". The paywall says the payment failed and its button opens Stripe's billing page, where the card is changed and the open invoice paid; the payment that clears lets them straight back in |
+| `past_due` | **for one day from the failure, then no** | Ethan, 2026-10-12: a failed payment "should lock them too the paywall screen"; 2026-11-02: "we give them a 1 day grace period if the payment fails". `GRACE_S` (24 hours) from `failed_at`, the moment the row moved into a failed state — never from a period's end, which Stripe moves forward paid or not. The account page says until when; the paywall then says the payment failed and its button opens Stripe's billing page, where the card is changed and the open invoice paid; the payment that clears lets them straight back in |
 | `canceled` | no | |
 | `unpaid` | no | Stripe has stopped retrying; paying the open invoice on the billing page starts it again |
 | `incomplete` | no | a Checkout that was never finished is not a subscription |

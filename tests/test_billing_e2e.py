@@ -300,8 +300,12 @@ def main():
                                  headers=_signed(failed))
         assert code == 200 and json.loads(body).get("applied") is True, body
         st = json.loads(srv.get("/api/billing/status", ck)[1])
-        assert st["status"] == "past_due" and st["entitled"] is False, st
-        step("a failed payment walls the account at once")
+        # A DAY OF GRACE (Ethan, 2026-11-02: "we give them a 1 day grace
+        # period if the payment fails"); the wall after it is
+        # tests/test_a_lapse_locks_the_paywall.
+        assert st["status"] == "past_due" and st["entitled"] is True, st
+        assert "Your access stays on until" in st["note"], st["note"]
+        step("a failed payment keeps the site one more day, and says until when")
 
         # The wall shows the plans again; buying one would start a second
         # subscription while Stripe retries the first. Refused before any

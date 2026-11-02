@@ -9353,9 +9353,11 @@ was already turned on").
 - **What changed.** §5.7 said "we do not cut you off on the first failure",
   which the site stopped doing on 12 October (you: a failed payment "should
   lock them too the paywall screen"). It now says a charge that does not go
-  through — the first after a trial, or a renewal — pauses access at once, we
-  tell the member, Stripe retries, and if it is still unpaid when the retries
-  run out the subscription is cancelled (your Stripe setting).
+  through — the first after a trial, or a renewal — keeps access one more day
+  (you, the same day: "we give them a 1 day grace period if the payment
+  fails"), then pauses it until a payment clears; we tell the member, Stripe
+  retries, and if it is still unpaid when the retries run out the
+  subscription is cancelled (your Stripe setting).
 - **Why an email.** The Terms (§15) promise 30 days' notice by email before a
   change that affects a member. So for an account made before 3 November the
   new §5.7 takes effect 30 days after its email (one with no address, on 2

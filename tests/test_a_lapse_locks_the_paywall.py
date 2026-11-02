@@ -130,7 +130,13 @@ def test_a_failed_payment_walls_and_the_payment_that_clears_lets_them_back():
     assert _apply(conn, "invoice.payment_failed",
                   {"customer": "cus_L1", "subscription": "sub_L1"}, now)
     st = B.status_for(conn, uid)
-    assert st["status"] == "past_due" and st["entitled"] is False, st
+    # One day of grace from the failure (Ethan, 2026-11-02), then the wall.
+    assert st["status"] == "past_due" and st["entitled"] is True, st
+    assert st["note"].startswith("Payment failed — update your card. Your access stays on until"), st["note"]
+    conn.execute("UPDATE subscriptions SET failed_at = ? WHERE user_id = ?", (now - B.GRACE_S - 60, uid))
+    conn.commit()
+    st = B.status_for(conn, uid)
+    assert st["entitled"] is False and st["note"].startswith("Payment failed — your access is paused"), st
     assert st["open"] is True, "a card Stripe is still retrying read as closed"
     assert st["plan"] == "monthly", "the failure blanked the plan"
     assert _apply(conn, "customer.subscription.updated", {
@@ -255,8 +261,9 @@ def test_refresh_hears_a_failed_card_and_then_the_fix():
     now = time.time()
     fetch, _ = _stub({"customer": "cus_L1", "status": "past_due"})
     assert B.refresh(conn, uid, now=now, fetch=fetch)
-    assert B.status_for(conn, uid)["entitled"] is False
-    # Walled: asked again after a minute, not an hour.
+    st = B.status_for(conn, uid)
+    assert st["status"] == "past_due" and st["entitled"] is True, "its day of grace, from the read that heard it"
+    # A failed card: asked again after a minute, not an hour.
     fetch, calls = _stub({"customer": "cus_L1", "status": "active"})
     assert B.refresh(conn, uid, now=now + 30, fetch=fetch) is False
     assert calls == []
@@ -345,7 +352,10 @@ def test_the_sweep_reads_the_rows_nobody_is_loading_pages_for():
     fetch, calls = _stub({"status": "past_due"})
     assert B.sweep(conn, now=now, fetch=fetch) == 1
     assert calls == ["sub_L1"], "the sweep asked about a cancelled plan"
-    assert B.status_for(conn, uid)["entitled"] is False
+    assert B.status_for(conn, uid)["status"] == "past_due", "the sweep heard the failed card"
+    conn.execute("UPDATE subscriptions SET failed_at = ? WHERE user_id = ?", (now - B.GRACE_S - 1, uid))
+    conn.commit()
+    assert B.status_for(conn, uid)["entitled"] is False, "walled once its day of grace is over"
     assert B.sweep(conn, now=now + 600, fetch=fetch) == 0, \
         "the sweep re-read a row it had just read"
     assert B.sweep(conn, now=now + B.SWEEP_EVERY_S + 1, fetch=fetch) == 1

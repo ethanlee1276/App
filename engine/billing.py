@@ -76,6 +76,14 @@ SIGNATURE_TOLERANCE = 300
 #: where the card is changed and the open invoice paid, and the payment
 #: that goes through lets them straight back in.
 ENTITLED = ("active", "trialing")
+#: A FAILED PAYMENT'S DAY OF GRACE (Ethan, 2026-11-02: "we give them a 1 day
+#: grace period if the payment fails"). `past_due` keeps paid access this long
+#: from the failure (`failed_at`, marked by apply_event on the move into a
+#: failed state), then walls until a payment clears. The rest of the 12
+#: October rule stands: no grace measured from a period's end, which Stripe
+#: moves forward whether or not it was paid. A row with no failure time (one
+#: from before the mark existed) has no grace.
+GRACE_S = 24 * 3600
 #: …and the ones that end it. `incomplete` is a Checkout that was never
 #: finished, which is not a subscription at all.
 NOT_ENTITLED = ("past_due", "canceled", "unpaid", "incomplete",
@@ -584,7 +592,7 @@ def verify_signature(raw_body: bytes, header: str, secret: str,
 # --- what a status means ------------------------------------------------------
 def entitled(status: str, period_end: float | None = None,
              now: float | None = None, cancel_at_end: bool = False,
-             started_at: float | None = None) -> bool:
+             started_at: float | None = None, failed_at: float | None = None) -> bool:
     """Whether this subscription state grants paid access right now.
 
     `cancel_at_end` is a subscription cancelled from Stripe's portal,
@@ -596,6 +604,12 @@ def entitled(status: str, period_end: float | None = None,
     began, which decides whether it started under that rule).
     """
     st = str(status or "none").lower()
+    if st == "past_due" and failed_at:
+        # The day of grace (GRACE_S), from the failure itself.
+        try:
+            return (time.time() if now is None else now) < float(failed_at) + GRACE_S
+        except (TypeError, ValueError):
+            return False
     if st in NOT_ENTITLED or st not in ENTITLED:
         return False
     if trial_cancel_walls(st, cancel_at_end, started_at):
@@ -616,8 +630,19 @@ TRIAL_REFUSED = ("Free trial cancelled — this card has already had a free "
                  "person: a plan from here starts a paid membership.")
 
 
+def grace_ends(failed_at) -> str:
+    """When a failed payment's day of grace ends, as the site says a time:
+    "Tue Nov 3, 4:15 PM ET"."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    end = _dt.datetime.fromtimestamp(float(failed_at) + GRACE_S, ZoneInfo("America/New_York"))
+    return (f"{end.strftime('%a %b')} {end.day}, {(end.hour + 11) % 12 + 1}:{end.minute:02d} "
+            f"{'AM' if end.hour < 12 else 'PM'} ET")
+
+
 def describe(status: str, period_end: float | None = None,
-             cancel_at_end: bool = False, started_at: float | None = None) -> str:
+             cancel_at_end: bool = False, started_at: float | None = None,
+             failed_at: float | None = None) -> str:
     """A sentence for the page. Says what is true, including the awkward
     cases — "payment failed" with what to do is more useful than
     "inactive"."""
@@ -643,6 +668,14 @@ def describe(status: str, period_end: float | None = None,
     if st == "trialing":
         return f"Free trial — ends {when}." if when else "Free trial."
     if st == "past_due":
+        try:
+            in_grace = bool(failed_at) and time.time() < float(failed_at) + GRACE_S
+        except (TypeError, ValueError):
+            in_grace = False
+        if in_grace:
+            return (f"Payment failed — update your card. Your access stays on "
+                    f"until {grace_ends(failed_at)}, then pauses until the "
+                    f"payment clears.")
         return ("Payment failed — your access is paused. Update your card "
                 "and the site opens again as soon as the payment clears.")
     if st == "canceled":
@@ -1490,7 +1523,7 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     say = describe_with or describe
     row = conn.execute(
         "SELECT customer_id, subscription_id, status, period_end, plan, "
-        "cancel_at_end, started_at, trial_refused FROM subscriptions WHERE user_id=?",
+        "cancel_at_end, started_at, trial_refused, failed_at FROM subscriptions WHERE user_id=?",
         (int(user_id),)).fetchone()
     if row is None:
         return {"status": "none", "entitled": False, "plan": None,
@@ -1502,15 +1535,18 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     began = row["started_at"] if "started_at" in row.keys() else None
     # A processor's own sentence (`describe_with`) takes the old three
     # arguments; ours is also told when a cancelled trial began.
+    failed = row["failed_at"]
     note = (say(st, end, cancel, began) if cancel and say is describe
             else say(st, end, cancel) if cancel else say(st, end))
+    if say is describe and str(st or "").lower() == "past_due":
+        note = describe(st, end, cancel, began, failed)
     # A trial started with a card that had one (engine/trialguard): said
     # as it is, while no plan has replaced it.
     if row["trial_refused"] and str(st or "").lower() not in ENTITLED:
         note = TRIAL_REFUSED
     return {"status": st, "period_end": end, "plan": plan,
             "plan_name": (PLANS[plan]["name"] if plan in PLANS else None),
-            "entitled": entitled(st, end, cancel_at_end=cancel, started_at=began),
+            "entitled": entitled(st, end, cancel_at_end=cancel, started_at=began, failed_at=failed),
             "note": note,
             "customer_id": row["customer_id"],
             # Not `live`: /api/billing/status already says `live` for

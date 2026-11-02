@@ -4,6 +4,12 @@
     {
       "date": "2026-11-02",
       "kind": "fix",
+      "title": "A payment that does not go through keeps the site one more day",
+      "body": "When a charge does not go through, the first after a free trial or a renewal, a member's access now stays on for one more day, 24 hours from the failed charge, and the account page, the email and the phone notice say until when. Update the card under Manage billing in that time and nothing pauses; if the payment has not gone through by then, access pauses until it does. The trial's day-before reminder says so too, and so does the Terms' §5.7."
+    },
+    {
+      "date": "2026-11-02",
+      "kind": "fix",
       "title": "The Owner desk opens for the owner's own accounts alone",
       "body": "The Owner desk (Who's on now, Accounts, money, reports, the notice to everybody) opened for the site's Qellys_Book account. It now opens for the accounts the owner lists on the server, by account rather than by address, since signing up does not prove an address, and for nobody else; every door to it on the server says the same, and the page shows its link only on the server's word. The site's problem alerts go to every listed account's phones, and a listed account cannot be suspended or deleted from the desk."
     },

@@ -84,8 +84,9 @@ desk's first card (Settings → The site's own account → Owner desk, or the
 row on that account's profile). It counts everybody
 now; it names a member only once the Privacy Policy's notice reached them a
 week ago (accounts made from 2 November, at once; your own account always),
-so arm that email. And the new Terms §5.7 (a failed payment pauses access at
-once; you, "do number one too") takes effect for an existing account 30 days
+so arm that email. And the new Terms §5.7 (a failed payment keeps access one
+more day, then pauses it; you, "do number one too" and "a 1 day grace
+period") takes effect for an existing account 30 days
 after its email (step JJ). All three changes are named, so the earlier ones
 keep going if they haven't finished; nobody gets one twice:
 

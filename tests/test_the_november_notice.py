@@ -66,7 +66,8 @@ def test_it_is_the_third_change_and_goes_to_older_accounts_with_an_address():
 def test_the_email_says_what_changes_and_when():
     subject, text, html = PN.message(NOON, "https://example.com/", notice=PN.TRIALS)
     assert subject == "Changes to the Qellys Book Terms and Privacy Policy"
-    assert "(2 November 2026)" in text and "your access to members' features pauses at once" in text
+    assert "(2 November 2026)" in text and "your access to members' features stays on for one more day" in text
+    assert "if the payment has not gone through by the end of that day, access pauses until it does" in text
     assert "If it is still unpaid when Stripe's retries run out, the subscription is cancelled" in text
     assert "For your account this takes effect on 4 December 2026, 30 days from this email." in text
     assert "one free trial per person: an email address or a card that has had one cannot start another" in text
@@ -80,7 +81,9 @@ def test_the_terms_carry_the_new_section_and_say_when_it_applies():
     flat = FLAT(terms)
     sec = flat[flat.index("5.7 Failed payments"):flat.index("5.8 The members’ Discord")]
     assert "If a charge does not go through — the first charge after a free trial, or a renewal — your access" in sec
-    assert "pauses at once" in sec and "the subscription is cancelled and nothing further is charged" in sec
+    assert "stays on for one more day (24 hours from the failed charge)" in sec
+    assert "if the payment has not gone through by the end of that day, access pauses until it does" in sec
+    assert "the subscription is cancelled and nothing further is charged" in sec
     assert "we do not cut you off" not in sec, "the old promise is gone from the section"
     note = flat[flat.index("When this version applies."):flat.index("1. Who we are")]
     assert "The same day’s change to §5.7" in note and "an account made from 3 November 2026" in note

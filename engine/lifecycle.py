@@ -137,36 +137,38 @@ def trial_push(conn, user_id, period_end: float, plan: str | None, now: float | 
     cents = (BI.PLANS.get(plan or "") or BI.PLANS["monthly"])["cents"]
     return PM.tell(conn, user_id, f"account:trial:{int(period_end)}", ACCOUNT_TOPIC,
                    f"Your free trial ends {_day(period_end)}",
-                   f"Then {_money(cents)} is charged to your card; if it does not go through, access pauses "
-                   "until you update the card. Cancel before then in your account — no charge, and "
+                   f"Then {_money(cents)} is charged to your card; if it does not go through, you have a day "
+                   "to update the card before access pauses. Cancel before then in your account — no charge, and "
                    "its access ends when you cancel.",
                    "/#account", ttl="account", now=now)
 
 
-def failed_words(plan: str | None, trial: bool) -> dict:
+def failed_words(plan: str | None, trial: bool, until: str | None = None) -> dict:
     """What a member is told when a charge fails: the push's title and body,
-    and the email's subject and paragraphs. No amount: a discount or a
-    referral's credit can make the charge differ from the plan's price, and
-    the account page shows the real one."""
+    and the email's subject and paragraphs. `until` is when the day of grace
+    ends (billing.GRACE_S, billing.grace_ends) while it runs; None once it
+    is over. No amount: a discount or a referral's credit can make the charge
+    differ from the plan's price, and the account page shows the real one."""
     from engine import billing as BI
     p = BI.PLANS.get(plan or "") or BI.PLANS[BI.TRIAL_PLAN]
+    state = (f"Your access stays on until {until}; after that it pauses until the payment goes through."
+             if until else "Your access is paused until the payment goes through.")
     fix = ("To keep your membership, open your account page, press Manage billing and update "
            "your card. The site opens again as soon as the payment clears.")
     if trial:
         title = "Your trial ended, and the charge did not go through"
         lead = (f"Your {BI.TRIAL_DAYS}-day free trial of Qellys Book has ended, and the first charge for "
-                f"the {p['name']} plan did not go through, so your access is paused.")
+                f"the {p['name']} plan did not go through. {state}")
         tail = ("If the card is not updated, the membership ends. This account has had its free "
                 "trial, so it cannot start another.")
     else:
         title = "Your payment did not go through"
-        lead = (f"The charge for your {p['name']} plan of Qellys Book did not go through, so your "
-                "access is paused.")
+        lead = f"The charge for your {p['name']} plan of Qellys Book did not go through. {state}"
         tail = "If the card is not updated, the membership ends."
-    return {"title": title,
-            "body": "Your access is paused. Update your card in your account (Manage billing) and it "
-                    "opens again as soon as the payment clears.",
-            "subject": title, "paras": [lead, fix, tail]}
+    body = (f"Update your card in your account (Manage billing) before {until}, when your access pauses."
+            if until else "Your access is paused. Update your card in your account (Manage billing) and it "
+                          "opens again as soon as the payment clears.")
+    return {"title": title, "body": body, "subject": title, "paras": [lead, fix, tail]}
 
 
 def payment_failed(conn, now: float | None = None, send=None, site: str | None = None, log=print) -> int:
@@ -199,7 +201,8 @@ def payment_failed(conn, now: float | None = None, send=None, site: str | None =
         send = mailer.send if mailer.configured() else None
     told = 0
     for uid, plan, failed_at, was, email in rows:
-        w = failed_words(plan, str(was or "") == "trialing")
+        grace = float(failed_at) + BI.GRACE_S > t
+        w = failed_words(plan, str(was or "") == "trialing", BI.grace_ends(failed_at) if grace else None)
         pushed = PM.tell(conn, uid, f"account:payfail:{int(failed_at)}", ACCOUNT_TOPIC, w["title"], w["body"],
                          "/#account", ttl="account", now=t)
         mailed = False

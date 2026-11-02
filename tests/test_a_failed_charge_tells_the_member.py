@@ -112,13 +112,13 @@ def test_the_third_day_notice_says_what_a_failed_charge_does():
         (to, subject, text, html), = box
         assert to == "trial@example.com" and subject == "Your free trial ends tomorrow"
         assert "charged $25.00 for the Monthly plan" in text
-        assert "If that charge does not go through, the trial is over and your access pauses until you " \
-               "update your card on your account page." in text
+        assert "If that charge does not go through, you have one day to update your card on your account " \
+               "page before your access pauses." in text
         assert "Cancel before the trial ends and you are charged nothing" in text and \
                "the account cannot start another trial" in text
         (_id, title, body, url), = _queued(conn, uid)
         assert title.startswith("Your free trial ends") and "$25 is charged to your card" in body
-        assert "if it does not go through, access pauses until you update the card" in body
+        assert "if it does not go through, you have a day to update the card before access pauses" in body
         assert "its access ends when you cancel" in body and len(body) <= 240 and url == "/#account"
 
 
@@ -132,20 +132,22 @@ def test_a_failed_first_charge_is_marked_and_told_once_by_phone_and_email():
             "SELECT status, failed_at, failed_from FROM subscriptions WHERE user_id = ?", (uid,)).fetchone()
         assert st == "past_due" and was == "trialing", (st, was)
         assert abs(failed_at - (NOW - 10 * 60)) < 1, "when Stripe made the event, not the second one"
-        assert BI.status_for(conn, uid)["entitled"] is False, "walled at once, as before"
+        assert BI.status_for(conn, uid)["entitled"] is True, "a day of grace from the failure"
         box = []
         assert LC.payment_failed(conn, now=NOW, send=lambda *a: box.append(a), site=SITE, log=QUIET) == 1
         (to, subject, text, html), = box
         assert to == "trial@example.com"
         assert subject == "Your trial ended, and the charge did not go through"
-        assert "has ended, and the first charge for the Monthly plan did not go through, so your access is paused." in text
+        assert "has ended, and the first charge for the Monthly plan did not go through. Your access stays on " \
+               f"until {BI.grace_ends(failed_at)}; after that it pauses until the payment goes through." in text
         assert "press Manage billing and update your card" in text and "opens again as soon as the payment clears" in text
         assert "If the card is not updated, the membership ends." in text and "cannot start another" in text
         assert "$" not in text, "no amount: a discount can make the charge differ from the price"
         assert f"{SITE}/#account" in text and f'href="{SITE}/#account"' in html
         (mid, title, body, url), = _queued(conn, uid)
         assert mid == f"account:payfail:{int(failed_at)}" and title == subject and url == "/#account"
-        assert body.startswith("Your access is paused.") and "Manage billing" in body
+        assert body == f"Update your card in your account (Manage billing) before {BI.grace_ends(failed_at)}, " \
+                       "when your access pauses.", body
         # Stripe repeats itself (a retry, the subscription event, our own read): never a second notice.
         _apply(conn, "invoice.payment_failed", {"customer": f"cus_{uid}", "subscription": f"sub_{uid}"}, at=NOW + HOUR)
         assert LC.payment_failed(conn, now=NOW + 2 * HOUR, send=lambda *a: box.append(a), site=SITE, log=QUIET) == 0
@@ -229,6 +231,21 @@ def test_a_failed_email_is_tried_again_and_nothing_reached_marks_nothing():
         assert conn.execute("SELECT fail_noted FROM subscriptions WHERE user_id = ?", (alone,)).fetchone()[0] is None
         assert LC.payment_failed(conn, now=NOW + 240, send=lambda *a: box.append(a), site=SITE, log=QUIET) == 1
         assert box[-1][0] == "alone@example.com", "the relay set later: the email goes then"
+
+
+def test_once_the_day_is_over_the_notice_says_access_is_paused():
+    from engine import lifecycle as L
+    w = L.failed_words("monthly", False, None)
+    assert "did not go through. Your access is paused until the payment goes through." in w["paras"][0]
+    assert w["body"].startswith("Your access is paused.")
+    with tempfile.TemporaryDirectory() as d:
+        conn = _db(d)
+        uid = _trialist(conn, "late@example.com", ends_in=-3 * DAY)
+        _fail(conn, uid, at=NOW - 2 * DAY)
+        box = []
+        assert LC.payment_failed(conn, now=NOW, send=lambda *a: box.append(a), site=SITE, log=QUIET) == 1
+        assert "Your access is paused until the payment goes through." in box[0][2], "the day already ran out"
+        assert BI.status_for(conn, uid)["entitled"] is False
 
 
 def test_the_billing_sweep_runs_it_and_the_policy_names_it():

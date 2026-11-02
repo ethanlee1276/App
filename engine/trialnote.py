@@ -102,8 +102,8 @@ def message(period_end: float, plan: str | None, site: str,
     paras = [
         f"Your {BI.TRIAL_DAYS}-day free trial of Qellys Book ends {full}.",
         f"Then your card is charged {price} for the {p['name']} plan, and {every} after that until you cancel.",
-        "To keep it, there is nothing to do. If that charge does not go through, the trial is "
-        "over and your access pauses until you update your card on your account page.",
+        "To keep it, there is nothing to do. If that charge does not go through, you have one day "
+        "to update your card on your account page before your access pauses.",
         "To cancel, open your account page and press Manage billing, then Cancel. "
         "Cancel before the trial ends and you are charged nothing; the trial's "
         "access ends when you cancel, and the account cannot start another trial "
