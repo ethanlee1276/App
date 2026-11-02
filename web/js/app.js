@@ -18798,8 +18798,8 @@ window.acctResetSave = async function (btn) {
     card.querySelectorAll(".acct-pw, .acct-pw2").forEach((i) => { i.value = ""; });
     _resetToken = "";
     _acctUser = { signed_in: true, email: body.email };
-    await acctMeAgain();
     pushRelink();
+    await acctMeAgain();
     _resetNote = "";
     _acctNote = "Password changed — you are signed in.";
     say(_acctNote);
@@ -18848,8 +18848,8 @@ window.acctAuth = async function (btn, mode) {
     const body = await r.json().catch(() => null);
     if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
     _acctUser = { signed_in: true, email: body.email };
-    await acctMeAgain();
     pushRelink();
+    await acctMeAgain();
     welcomeDone();
     // The typed password is not kept anywhere. What we hold now is a
     // session cookie this script cannot even read.

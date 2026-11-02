@@ -2762,8 +2762,8 @@ async function pkSignIn(card) {
       userHandle: r.userHandle ? pkB64(r.userHandle) : "" });
     // Signed in: the same steps a phone sign-in takes (phoneGo).
     _acctUser = { signed_in: true, email: out.email, phone: out.phone };
-    if (typeof acctMeAgain === "function") await acctMeAgain();
     if (typeof pushRelink === "function") pushRelink();
+    if (typeof acctMeAgain === "function") await acctMeAgain();
     welcomeDone();
     if (typeof a2hsArm === "function") a2hsArm();
     if (typeof pushAskArm === "function") pushAskArm();
@@ -3373,8 +3373,8 @@ async function phoneGo(card, mode) {
   // Signed in: the same steps an email sign-in takes (app.js acctAuth).
   _ph = { mode: "", sent: false, to: "" };
   _acctUser = { signed_in: true, email: out.email, phone: out.phone };
-  if (typeof acctMeAgain === "function") await acctMeAgain();
   if (typeof pushRelink === "function") pushRelink();
+  if (typeof acctMeAgain === "function") await acctMeAgain();
   welcomeDone();
   if (typeof pushAskArm === "function") pushAskArm();
   if (mode === "signup" && typeof dcMarkWelcome === "function") dcMarkWelcome();

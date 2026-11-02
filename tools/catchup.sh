@@ -663,7 +663,7 @@ curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
 run JH "Who's on now: the policy, the page, the notice and the trimmed files" 60 <<'SH'
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="who-is-on"'
-curl -s https://qellysbook.com/js/app.js | grep -c 'function renderWhoson('
+curl -s https://qellysbook.com/js/owner.js | grep -c 'function woFill('
 curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('whoson_switch'))"
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
 sudo grep -cF '/js/here.js /js/owner.js /css/owner.css /js/notice.js /css/notice.css' /etc/caddy/Caddyfile

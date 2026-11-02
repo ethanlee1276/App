@@ -9311,7 +9311,9 @@ Qellys Book account on the site that lets me see all active users. It shows
 me all users and what page they are on").
 
 - **Where.** Signed in as Qellys_Book: Settings → The site's own account →
-  Who's on now (or qellysbook.com/#whoson). Members on, visitors, pages
+  Owner desk (or the row on that account's own profile), whose first card it
+  has been since 2 November (you: "The Who's on and owners page should be one
+  page"; qellysbook.com/#whoson opens the desk). Members on, visitors, pages
   open; then members by name with the page each has open (a game shows as
   "KC @ DEN · live"), how long they've been on it and on the site, and when
   they were last heard from; then every page with how many are on it. It
@@ -9329,7 +9331,7 @@ me all users and what page they are on").
   named at once, a phone-only one from 9 November. Until then everyone is
   counted on the page they have open, without a name. Your own Qellys_Book
   row shows by name from the start (it is you looking at yourself), so the
-  first time you open the page you should see yourself on "Who's on now".
+  first time you open the desk you should see yourself on "Owner desk".
 
 Arm the email (both changes named, so the 29 October one keeps going if it
 hasn't finished; 60 a day for both together, 10:00 to 20:00 Eastern):
@@ -9359,7 +9361,7 @@ Which runs, one at a time:
 
 ```
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="who-is-on"'
-curl -s https://qellysbook.com/js/app.js | grep -c 'function renderWhoson('
+curl -s https://qellysbook.com/js/owner.js | grep -c 'function woFill('
 curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('whoson_switch'))"
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
 sudo grep -cF '/js/here.js /js/owner.js /css/owner.css /js/notice.js /css/notice.css' /etc/caddy/Caddyfile

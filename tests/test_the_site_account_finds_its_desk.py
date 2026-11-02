@@ -56,7 +56,7 @@ def test_every_sign_in_on_the_page_asks_who_this_is():
     assert len(sets) == 4, sets                     # a password, a reset link, a passkey, a texted code
     for name, at in sets:
         src = APP if name == "app.js" else ACCT
-        assert "acctMeAgain()" in src[at:at + 160], (name, src[at:at + 160])
+        assert "acctMeAgain()" in src[at:at + 260], (name, src[at:at + 260])    # after pushRelink, where there is one
     node = shutil.which("node")
     if not node:
         return

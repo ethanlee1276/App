@@ -6,7 +6,8 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-02, after the Owner desk (step JH). Done:
+Last updated 2026-11-02, after Who's on now became the Owner desk's first
+card (step JH; nothing new to run for it). Done:
 
 - **The outage:** the weekly backup check filled the disk at 04:32 UTC and
   left its copy behind. You deleted the leftovers, restarted the site
@@ -54,8 +55,9 @@ versions.
 
 ## 1. Any time: Who's on now, the notice it needs and its trimmed files (step JH)
 
-Your Qellys Book account's page of every page open on the site
-(Settings → The site's own account → Who's on now). It counts everybody
+Your Qellys Book account's view of every page open on the site, the Owner
+desk's first card (Settings → The site's own account → Owner desk, or the
+row on that account's profile). It counts everybody
 now; it names a member only once the Privacy Policy's notice reached them a
 week ago (accounts made from 2 November, at once; your own account always),
 so arm that email. Both changes are named so the 29 October one keeps going
@@ -66,8 +68,8 @@ cd /srv/qellys && sudo ./deploy/setenv.sh QB_POLICY_NOTICE 2026-10-29,2026-11-01
 sudo systemctl restart qellys
 ```
 
-The Caddy config with the new files' trimmed copies — Who's on now's and,
-since 2 November, the Owner desk's and the notice bar's (it checks itself
+The Caddy config with the new files' trimmed copies — the Owner desk's
+(Who's on now included) and the notice bar's (it checks itself
 first and keeps the old one if anything is wrong; run it again if you ran it
 before 2 November):
 
