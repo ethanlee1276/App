@@ -29,7 +29,9 @@ GROUPS = (
         ("sessions", "devices signed in"), ("passkeys", "passkeys"), ("passkey_users", "passkey handle"),
         ("passkey_challenges", "passkey sign-ins in flight"), ("password_resets", "reset links"),
         ("subscriptions", "membership"), ("code_redemptions", "codes redeemed"), ("code_attempts", "code tries"),
-        ("gift_codes", "gifts bought"), ("referral_codes", "your invite code"), ("referrals", "invites"))),
+        ("gift_codes", "gifts bought"), ("referral_codes", "your invite code"), ("referrals", "invites"),
+        # What the site's owner did to the account (engine/owneraccounts, Privacy Policy §2.14).
+        ("owner_grants", "free access from the site"), ("owner_actions", "steps the site took on your account"))),
     ("What you track", "until you delete it or the account; closing prices 90 days", (
         ("user_data", "synced sections (My Bets, settings, fantasy, bankroll, searches)"),
         ("bet_clv", "closing prices of your parlays' legs"), ("slip_alerts", "parlay alerts sent"),

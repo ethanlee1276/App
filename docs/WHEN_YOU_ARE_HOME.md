@@ -9305,6 +9305,51 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JI. A cancelled trial loses its access, a failed charge tells the member,
+and the Owner desk acts on accounts** (steps 326–328; you, 2026-11-02: "If
+someone cancels the trial … we take access from that account and we DO NOT
+offer a second trial", "send them on their third day to let them know that
+their trial will be canceled if they don't pay", "I also want more access and
+stuff to be able to do to people's accounts").
+
+- **A cancelled trial.** A trial started from 2 November that its member
+  cancels loses the member pages the moment we hear of it (Stripe's webhook or
+  our own read of Stripe); it keeps the free side, like any free account, and
+  the account can never start another trial. A trial started before then
+  keeps the rule it started under. The Terms (§5.3, dated 2 November) and
+  everything that offers or reminds about the trial say so.
+- **Day 3.** The day-before email and push (the trial's third day) now say a
+  charge that does not go through ends the trial and pauses access.
+- **A failed charge.** The first charge after a trial, or a renewal, that
+  does not go through is told to the member once, by push and email: access
+  is paused, Manage billing fixes it. The billing sweep sends it every 30
+  minutes (no command to run).
+- **Accounts on the Owner desk.** Find an account by email, username or
+  number; its card shows its membership, whether it has had its trial, its
+  Stripe customer (linked), free access and suspension. Its buttons give or
+  end free access (7 days to a year), sign it out everywhere, suspend it or
+  lift that, reset a username, or delete it (type its email). Suspend and
+  Delete are refused while Stripe can still charge the account; the site's own
+  account can't be suspended or deleted. Every step is written down on the
+  card. The Privacy Policy has a new §2.14 (dated 2 November).
+
+Nothing to run. The check, read-only, any time after the push (`1`, `1`, `1`,
+the two numbers, `1`):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JI 2>&1 | tee /tmp/ji.txt
+```
+
+Which runs, one at a time:
+
+```
+curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 2 November 2026'
+curl -s https://qellysbook.com/privacy.html | grep -c 'id="owner-tools"'
+curl -s https://qellysbook.com/js/owner.js | grep -c 'function oaInner('
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import billing as B, lifecycle as L; print(B.TRIAL_CANCEL_ENDS_ACCESS_FROM, L.FAIL_FRESH_S)"
+cd /srv/qellys && grep -c "_lc.payment_failed(conn)" launch.py
+```
+
 **JH. Who's on now: every page open on the site, for the Qellys Book account
 alone** (step 320; you, 2026-11-01: "add a feature ONLY AVALIBLE for my
 Qellys Book account on the site that lets me see all active users. It shows

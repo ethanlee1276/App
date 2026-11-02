@@ -312,6 +312,190 @@ async function odMod(b) {
   }
 }
 
+/* ACCOUNTS — find any account and act on it (engine/owneraccounts). Ethan,
+   2026-11-02: "I also want more access and stuff to be able to do to
+   people's accounts". The one card on the desk that names a member: search
+   by email, username or account number; an account's card says how it signs
+   in, where its membership stands (trial had or not, Stripe's customer
+   linked), free access and suspension; and its buttons give or end free
+   access, sign it out everywhere, suspend it or lift that, reset a username,
+   or delete it (typing its email). Suspend and delete are refused while
+   Stripe can still charge the account. Every action is written down: the
+   account's own lines on its card, and the latest on the card with no
+   account open. The card keeps its own state, so the desk's minute redraw
+   leaves a search and an open account where they were. */
+const OA_GRANTS = [[7, "7 days"], [30, "30 days"], [90, "90 days"], [180, "6 months"], [366, "A year"]];
+const OA_WORDS = { grant: "Gave free access", ungrant: "Ended free access", signout: "Signed out everywhere",
+  suspend: "Suspended", unsuspend: "Lifted the suspension", rename: "Reset the username", delete: "Deleted the account" };
+const OA_STATUS = { active: ["Paying", "good"], trialing: ["On a trial", "good"], past_due: ["Payment failed", "warn"],
+  unpaid: ["Unpaid", "warn"], canceled: ["Cancelled", "rest"], none: ["Free", "rest"], incomplete: ["Never finished", "rest"],
+  paused: ["Paused", "rest"] };
+const _oa = { q: "", list: null, card: null, recent: null, busy: false, said: "", armed: "" };
+let _oaArmTimer = null;
+
+const oaDay = (t) => (t ? new Date(Number(t) * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");
+function oaChip(st, entitled, suspended) {
+  if (suspended) return `<span class="od-pill warn">Suspended</span>`;
+  const [w, tone] = OA_STATUS[st] || [st || "Free", "rest"];
+  return `<span class="od-pill${tone === "good" ? "" : ` ${tone}`}">${escapeHtml(entitled && st === "none" ? "Free access" : w)}</span>`;
+}
+
+function oaRowHTML(a) {
+  return `<li><button type="button" class="oa-hit" data-oa-open="${Number(a.id) || 0}">
+    <span class="oa-hit-t"><b>${a.handle ? `@${escapeHtml(a.handle)}` : escapeHtml(a.who || `Account ${a.id}`)}</b>${
+      a.handle ? ` <span class="od-mute">${escapeHtml(a.who || "")}</span>` : ""}</span>
+    <span class="oa-hit-s">${oaChip(a.status, a.entitled, a.suspended)}<span class="od-mute">#${Number(a.id) || 0} · joined ${oaDay(a.joined)}</span></span>
+  </button></li>`;
+}
+
+function oaLogHTML(rows, withWho) {
+  if (!rows || !rows.length) return `<p class="od-note">Nothing done from the desk yet.</p>`;
+  return `<ul class="oa-log">${rows.map((r) => `<li><b>${escapeHtml(OA_WORDS[r.action] || r.action)}</b>${
+    withWho ? ` · ${r.gone ? `account ${Number(r.id) || 0} <span class="od-mute">(deleted)</span>`
+      : `<button type="button" class="oa-link" data-oa-open="${Number(r.id) || 0}">${escapeHtml(r.who || `account ${r.id}`)}</button>`}` : ""}${
+    r.detail ? ` <span class="od-mute">· ${escapeHtml(r.detail)}</span>` : ""}<span class="oa-log-at">${escapeHtml(oaDay(r.at))}</span></li>`).join("")}</ul>`;
+}
+
+function oaArmBtn(key, word, again, cls) {
+  const armed = _oa.armed === key;
+  return `<button type="button" class="btn${cls ? ` ${cls}` : ""}${armed ? " oa-armed" : ""}" data-oa-act="${key}" data-oa-arm="1">${
+    armed ? again : word}</button>`;
+}
+
+function oaCardHTML(c) {
+  const m = c.membership || {};
+  const [stWord] = OA_STATUS[m.status] || [m.status || "Free"];
+  const ends = m.period_end ? ` · ${m.cancel_at_end || m.status === "canceled" ? "ends" : "renews"} ${oaDay(m.period_end)}` : "";
+  const plan = `${escapeHtml(m.entitled || m.status !== "none" ? stWord : "No plan")}${m.plan_name ? ` · ${escapeHtml(m.plan_name)}` : ""}${
+    m.status === "none" ? "" : ends}`;
+  const grant = c.grant ? `Until ${oaDay(c.grant)}` : "None";
+  const codes = (c.codes && c.codes.codes || []).length ? `${c.codes.codes.length} redeemed${c.codes.active ? `, covered to ${oaDay(c.codes.granted_to)}` : ""}` : "None";
+  const blocked = m.charges ? `<p class="od-note">Suspend and Delete wait until Stripe can no longer charge this account: cancel its subscription on Stripe first${
+    c.stripe ? ` (<a href="${escapeAttr(c.stripe)}" target="_blank" rel="noopener">open the customer</a>)` : ""}.</p>` : "";
+  const acts = [
+    `<form class="oa-grant" id="oa-grant"><label for="oa-days" class="od-sr">How long</label><select id="oa-days">${
+      OA_GRANTS.map(([d, w]) => `<option value="${d}"${d === 30 ? " selected" : ""}>${w}</option>`).join("")}</select>
+      <button type="submit" class="btn">${c.grant ? "Change free access" : "Give free access"}</button></form>`,
+    c.grant ? oaArmBtn("ungrant", "End free access", "Tap again to end it", "ghost") : "",
+    oaArmBtn("signout", "Sign out everywhere", "Tap again to sign out", "ghost"),
+    c.handle ? oaArmBtn("rename", "Reset username", `Tap again: @member${c.id}`, "ghost") : "",
+    c.site_account ? "" : c.suspended ? oaArmBtn("unsuspend", "Lift the suspension", "Tap again to lift it", "ghost")
+      : m.charges ? "" : oaArmBtn("suspend", "Suspend", "Tap again to suspend", "oa-warn"),
+  ].filter(Boolean).join("");
+  const del = c.site_account || m.charges ? "" : `<details class="oa-del"><summary>Delete this account…</summary>
+    <form id="oa-delete" autocomplete="off"><p class="od-note">Everything goes: its bets, posts, chat, settings and membership record. It cannot be undone, and the same
+      ${c.phone_account ? "number" : "address"} could sign up again — Suspend keeps them out instead.</p>
+      <label for="oa-confirm" class="oa-lab">Type its ${c.phone_account ? "phone number" : "email"} to confirm</label>
+      <input id="oa-confirm" class="oa-input" type="text" inputmode="${c.phone_account ? "tel" : "email"}" placeholder="${escapeAttr(c.who || "")}">
+      <button type="submit" class="btn oa-danger">Delete for good</button></form></details>`;
+  return `<div class="oa-top"><button type="button" class="oa-link" data-oa-back="1">← ${_oa.list ? "Results" : "Back"}</button>
+      <span class="od-mute">#${Number(c.id) || 0}</span></div>
+    <h3 class="oa-name">${c.handle ? `@${escapeHtml(c.handle)}` : escapeHtml(c.who || "")}${c.verified ? ` <span class="od-pill">Verified</span>` : ""} ${
+      oaChip(m.status, m.entitled, !!c.suspended)}</h3>
+    <ul class="od-list">${odRow(c.phone_account ? "Phone" : "Email", escapeHtml(c.who || "—"))}${
+      c.name ? odRow("Display name", escapeHtml(c.name)) : ""}${
+      odRow("Joined", oaDay(c.joined))}${odRow("Last seen", c.seen ? oaDay(c.seen) : "Never")}${
+      odRow("Signs in with", escapeHtml((c.ways || []).join(", ") || "—"))}${
+      odRow("Signed in on", `${odN(c.sessions)} device${c.sessions === 1 ? "" : "s"} · ${odN(c.phones)} phone${c.phones === 1 ? "" : "s"} with alerts`)}${
+      odRow("Membership", plan, m.entitled ? "good" : "mute")}${
+      odRow("Free trial", m.trial_used ? "Had it — no second trial" : "Never had one", m.trial_used ? "mute" : "")}${
+      c.stripe ? odRow("Stripe", `<a href="${escapeAttr(c.stripe)}" target="_blank" rel="noopener">Open the customer</a>`) : ""}${
+      odRow("Free access from the desk", grant, c.grant ? "good" : "mute")}${odRow("Codes", codes, "mute")}${
+      c.comped ? odRow("Comp list", "On it — full access", "good") : ""}${
+      c.suspended ? odRow("Suspended", `Since ${oaDay(c.suspended)}`, "warn") : ""}</ul>
+    ${m.note ? `<p class="oa-says"><b>Its account page says</b> ${escapeHtml(m.note)}</p>` : ""}
+    <div class="oa-acts">${acts}</div>${blocked}${del}
+    <p class="od-note" id="oa-said" role="status">${escapeHtml(_oa.said || "")}</p>
+    <h4 class="wo-h">What the desk has done to it</h4>${oaLogHTML(c.log, false)}`;
+}
+
+function oaInner() {
+  const search = `<h2 class="od-h">Accounts</h2>
+    <form class="oa-find" id="oa-find" role="search" autocomplete="off">
+      <label for="oa-q" class="od-sr">Find an account</label>
+      <input id="oa-q" class="oa-input" type="search" enterkeyhint="search" value="${escapeAttr(_oa.q)}" placeholder="Email, username or account number">
+      <button type="submit" class="btn">Find</button></form>`;
+  if (_oa.card) return `${search}${oaCardHTML(_oa.card)}`;
+  const list = _oa.list == null ? "" : _oa.list.length ? `<ul class="oa-hits">${_oa.list.map(oaRowHTML).join("")}</ul>`
+    : `<p class="od-note">No account matches “${escapeHtml(_oa.q)}”.</p>`;
+  return `${search}${list}<p class="od-note" id="oa-said" role="status">${escapeHtml(_oa.said || "")}</p>
+    <h4 class="wo-h">Done from the desk lately</h4>${_oa.recent ? oaLogHTML(_oa.recent, true) : `<p class="od-note">Loading…</p>`}`;
+}
+
+function oaDraw() {
+  const host = document.getElementById("od-acct");
+  if (host) host.innerHTML = oaInner();
+}
+
+async function oaGet(qs) {
+  const r = await fetch(`/api/owner/accounts${qs}`, { credentials: "same-origin", cache: "no-store" });
+  const got = await r.json().catch(() => ({}));
+  return { ok: r.ok, got };
+}
+
+async function oaFind(q) {
+  _oa.q = String(q || "").trim();
+  _oa.card = null;
+  _oa.said = "";
+  try {
+    const { ok, got } = await oaGet(_oa.q ? `?q=${encodeURIComponent(_oa.q)}` : "");
+    if (!ok) { _oa.said = got.error || "That did not go through."; oaDraw(); return; }
+    _oa.list = _oa.q ? got.accounts || [] : null;
+    _oa.recent = got.recent || [];
+  } catch (e) {
+    _oa.said = "Could not reach the server.";
+  }
+  oaDraw();
+}
+
+async function oaOpen(id) {
+  _oa.said = "";
+  _oa.armed = "";
+  try {
+    const { ok, got } = await oaGet(`?id=${Number(id) || 0}`);
+    if (!ok) { _oa.said = got.error || "That did not go through."; oaDraw(); return; }
+    _oa.card = got.card;
+  } catch (e) {
+    _oa.said = "Could not reach the server.";
+  }
+  oaDraw();
+  const host = document.getElementById("od-acct");
+  if (host && host.scrollIntoView) host.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+async function oaAct(action, extra) {
+  if (!_oa.card || _oa.busy) return;
+  _oa.busy = true;
+  _oa.armed = "";
+  const id = _oa.card.id;
+  try {
+    const r = await fetch("/api/owner/account", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action, ...(extra || {}) }) });
+    const got = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      _oa.said = got.error || "That did not go through.";
+    } else if (got.deleted) {
+      _oa.card = null;
+      _oa.list = (_oa.list || []).filter((a) => a.id !== id);
+      _oa.said = `Account #${id} is deleted.`;
+      if (typeof tfToast === "function") tfToast("Deleted.");
+      oaFind(_oa.q);
+      return;
+    } else {
+      _oa.card = got.card || _oa.card;
+      _oa.said = `${OA_WORDS[action] || "Done"}.`;
+      if (_oa.list) _oa.list = _oa.list.map((a) => (a.id === id && got.card ? { ...a, handle: got.card.handle,
+        suspended: !!got.card.suspended, status: (got.card.membership || {}).status, entitled: !!(got.card.membership || {}).entitled } : a));
+      if (typeof tfToast === "function") tfToast(_oa.said);
+    }
+  } catch (e) {
+    _oa.said = "Could not reach the server.";
+  } finally {
+    _oa.busy = false;
+  }
+  oaDraw();
+}
+
 function odSwitchesHTML(sw, al) {
   if (!Array.isArray(sw)) return odCard("Switches", odErr(sw));
   // The desk's own alerts (engine/owneralerts) reach this account's phones.
@@ -355,17 +539,20 @@ function odHTML(d) {
   const waiting = !!(d.reports && d.reports.open_n);
   const reps = odReportsHTML(d.reports);
   return `${odNeedsHTML(d.needs)}<section class="od-card od-who" id="od-who" aria-label="Who’s on now">${odWhoInner(d.now)}</section>
+    <section class="od-card od-acct" id="od-acct" aria-label="Accounts">${oaInner()}</section>
     ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odMoneyHTML(d.money)}${odAccountsHTML(d.accounts)}
     ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches, d.alerts)}
     <p class="od-foot">Only this account can open this page. Who’s on now names only the members the Privacy Policy’s notice
-      has reached who left “Show me in Who’s on now” on; everything else here is a count or the business’s own number.</p>`;
+      has reached who left “Show me in Who’s on now” on, and Accounts shows one account at a time, for support and the Terms;
+      everything else here is a count or the business’s own number.</p>`;
 }
 
 async function odFill() {
   const host = document.getElementById("owner-body");
   if (!host || _odBusy) return;
-  // Never redraw over a notice being written.
-  const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest("#od-notice");
+  // Never redraw over a notice being written, or a search or delete being typed.
+  const typing = document.activeElement && document.activeElement.closest &&
+    document.activeElement.closest("#od-notice, #od-acct form, #od-acct details[open]");
   if (typing && _odLast) return;
   _odBusy = true;
   try {
@@ -407,6 +594,24 @@ async function odNotice(body) {
 }
 
 document.addEventListener("submit", (e) => {
+  const f = e.target;
+  if (f && f.id === "oa-find") {
+    e.preventDefault();
+    oaFind((document.getElementById("oa-q") || {}).value || "");
+    return;
+  }
+  if (f && f.id === "oa-grant") {
+    e.preventDefault();
+    oaAct("grant", { days: Number((document.getElementById("oa-days") || {}).value || 30) });
+    return;
+  }
+  if (f && f.id === "oa-delete") {
+    e.preventDefault();
+    const typed = ((document.getElementById("oa-confirm") || {}).value || "").trim();
+    if (!typed) { _oa.said = "Type the account’s email (or phone number) to delete it."; oaDraw(); return; }
+    oaAct("delete", { confirm: typed });
+    return;
+  }
   if (!e.target || e.target.id !== "od-notice") return;
   e.preventDefault();
   const text = (document.getElementById("od-text") || {}).value || "";
@@ -415,6 +620,24 @@ document.addEventListener("submit", (e) => {
              tone: (document.getElementById("od-tone") || {}).value || "info" });
 });
 document.addEventListener("click", (e) => {
+  const t = e.target && e.target.closest ? e.target : null;
+  const open = t && t.closest("[data-oa-open]");
+  if (open) { oaOpen(open.dataset.oaOpen); return; }
+  if (t && t.closest("[data-oa-back]")) { _oa.card = null; _oa.said = ""; _oa.armed = ""; oaDraw(); if (!_oa.recent) oaFind(_oa.q); return; }
+  const act = t && t.closest("[data-oa-act]");
+  if (act && !act.disabled) {
+    // Two taps: the first arms the button for a few seconds, the second acts.
+    const key = act.dataset.oaAct;
+    if (_oa.armed !== key) {
+      _oa.armed = key;
+      oaDraw();
+      clearTimeout(_oaArmTimer);
+      _oaArmTimer = setTimeout(() => { if (_oa.armed === key) { _oa.armed = ""; oaDraw(); } }, 4000);
+      return;
+    }
+    oaAct(key);
+    return;
+  }
   if (e.target && e.target.id === "od-clear") odNotice({ clear: true });
   const b = e.target && e.target.closest && e.target.closest("[data-od-mod]");
   if (b && !b.disabled) odMod(b);
@@ -441,4 +664,5 @@ function renderOwner() {
   odTick();
   woFill();
   woTick();
+  if (!_oa.recent && !_oa.card) oaFind(_oa.q);
 }

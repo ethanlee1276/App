@@ -6,8 +6,11 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-02, after Who's on now became the Owner desk's first
-card (step JH; nothing new to run for it). Done:
+Last updated 2026-11-02, after a cancelled trial lost its access, a failed
+charge started telling the member, and the Owner desk got its account tools
+(step JI: nothing to run; its read-only check is
+`cd /srv/qellys && nice -n 19 bash tools/catchup.sh JI 2>&1 | tee /tmp/ji.txt`).
+Before that, Who's on now became the desk's first card (step JH). Done:
 
 - **The outage:** the weekly backup check filled the disk at 04:32 UTC and
   left its copy behind. You deleted the leftovers, restarted the site

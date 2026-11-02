@@ -396,7 +396,10 @@ def _migrate(conn) -> None:
     for col, decl in (("age_confirmed", "INTEGER NOT NULL DEFAULT 0"),
                       ("terms_accepted_at", "REAL"),
                       # A phone account's number, E.164 (engine/smsverify).
-                      ("phone", "TEXT")):
+                      ("phone", "TEXT"),
+                      # When the site's owner suspended it (engine/owneraccounts):
+                      # its sessions are dead and every way in refuses it.
+                      ("suspended_at", "REAL")):
         if col not in have:
             # The read above is a fast path, not a lock. `once_per_db` is
             # a memo too, so on a box whose users table predates one of
@@ -547,6 +550,9 @@ def authenticate(conn, email, password, where: str | None = None) -> tuple[int, 
         _note_fail(key)
         return 403, {"error": "Wrong email or password."}
     _fails.pop(key, None)
+    # Said only to the right password: a wrong one learns nothing new.
+    if suspended(conn, row["id"]):
+        return 403, {"error": SUSPENDED_MSG, "suspended": True}
     conn.execute("UPDATE users SET last_seen=? WHERE id=?",
                  (time.time(), row["id"]))
     conn.commit()
@@ -739,16 +745,30 @@ def start_session(conn, user_id: int) -> str:
 
 
 def session_user(conn, token) -> dict | None:
-    """The account behind a token, or None. Expiry is enforced here."""
+    """The account behind a token, or None. Expiry is enforced here, and a
+    suspension (engine/owneraccounts): its sessions answer to nobody."""
     if not token:
         return None
     row = conn.execute(
-        "SELECT u.id, u.email, s.expires_at FROM sessions s "
+        "SELECT u.id, u.email, u.suspended_at, s.expires_at FROM sessions s "
         "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?",
         (_token_hash(token),)).fetchone()
-    if row is None or float(row["expires_at"]) < time.time():
+    if row is None or float(row["expires_at"]) < time.time() or row["suspended_at"]:
         return None
     return {"id": int(row["id"]), "email": row["email"]}
+
+
+#: What a suspended account is told at every way in (engine/owneraccounts).
+SUSPENDED_MSG = ("This account is suspended. If you think that is a mistake, "
+                 "write to qellysbook@gmail.com.")
+
+
+def suspended(conn, user_id) -> bool:
+    """Has the site's owner suspended this account?"""
+    if not user_id:
+        return False
+    row = conn.execute("SELECT suspended_at FROM users WHERE id=?", (int(user_id),)).fetchone()
+    return bool(row and row["suspended_at"])
 
 
 def touch_session(conn, token) -> None:
@@ -962,7 +982,10 @@ def delete_user(conn, user_id: int) -> None:
                   # (engine/policynotice).
                   "policy_notices",
                   # What they said yes and no to (engine/consent).
-                  "consent_log"):
+                  "consent_log",
+                  # Free access the site's owner gave (engine/owneraccounts).
+                  # The record of the owner's actions stays, by number only.
+                  "owner_grants"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     # A watch party they started stays for its friends, with them off it.
@@ -1169,6 +1192,20 @@ def export_user(conn, user_id: int) -> dict:
                                               "WHERE user_id=? ORDER BY created_at", (int(user_id),))]
         if rows:
             out["passkeys"] = rows
+    # What the site's owner did to the account (engine/owneraccounts): free
+    # access given and until when, a suspension, and the record's lines.
+    if "owner_grants" in have:
+        row = conn.execute("SELECT until, at FROM owner_grants WHERE user_id=?", (int(user_id),)).fetchone()
+        if row:
+            out["free_access_from_the_site"] = {"until": row["until"], "given_at": row["at"]}
+    sus = conn.execute("SELECT suspended_at FROM users WHERE id=?", (int(user_id),)).fetchone()
+    if sus and sus["suspended_at"]:
+        out["suspended_at"] = sus["suspended_at"]
+    if "owner_actions" in have:
+        rows = [dict(zip(("at", "action", "detail"), r)) for r in conn.execute(
+            "SELECT at, action, detail FROM owner_actions WHERE user_id=? ORDER BY at", (int(user_id),))]
+        if rows:
+            out["actions_the_site_took_on_your_account"] = rows
     # The two links exist or not; their values are keys, not data, and are
     # never exported (a copy of the file would open the calendar).
     for table, label in (("calendar_links", "calendar_link_made"), ("widget_links", "iphone_widget_on_since")):

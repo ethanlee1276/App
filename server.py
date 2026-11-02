@@ -1259,6 +1259,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._whoson_get()
         if parsed.path in ("/api/owner/desk", "/api/owner/desk/"):
             return self._owner_desk_get()
+        if parsed.path in ("/api/owner/accounts", "/api/owner/accounts/"):
+            return self._owner_accounts_get(parse_qs(parsed.query))
         if parsed.path.startswith("/api/board/"):
             return self._api_board(parsed.path[len("/api/board/"):].strip("/"))
         if parsed.path.startswith("/api/streak/"):
@@ -1590,6 +1592,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._owner_notice_post()
         if parsed.path in ("/api/owner/hide", "/api/owner/hide/"):
             return self._owner_hide_post()
+        if parsed.path in ("/api/owner/account", "/api/owner/account/"):
+            return self._owner_account_post()
         if parsed.path in ("/api/clienterror", "/api/clienterror/"):
             return self._client_error()
         if parsed.path.startswith("/api/push/"):
@@ -2895,6 +2899,67 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def _owner_accounts_get(self, q: dict):
+        """The desk's Accounts card (engine/owneraccounts): ``?q=`` finds
+        accounts by email, username or number; ``?id=`` is one account's
+        card; with neither, the record of the owner's recent actions."""
+        from engine import owneraccounts as OA
+        A = _acct()
+        conn = A.connect()
+        try:
+            if not self._site_door(conn):
+                return
+            OA.init(conn)
+            raw_id = (q.get("id") or [""])[0]
+            if raw_id:
+                try:
+                    got = OA.card(conn, int(raw_id))
+                except ValueError:
+                    got = None
+                if got is None:
+                    return self._send(404, b'{"error":"No such account."}', ".json")
+                return self._send(200, json.dumps({"card": got}).encode(), ".json")
+            term = (q.get("q") or [""])[0]
+            out = {"recent": OA.recent(conn)}
+            if term:
+                out["accounts"] = OA.find(conn, term)
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _owner_account_post(self):
+        """One action on one account from the desk (engine/owneraccounts):
+        {id, action, days?, confirm?}. A JSON body only: a form another site
+        could post carries no session cookie (SameSite=Lax) and is refused
+        here besides."""
+        from engine import owneraccounts as OA
+        ctype = str(self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 2000 else b""
+        A = _acct()
+        conn = A.connect()
+        try:
+            if not self._site_door(conn):
+                return
+            if ctype != "application/json":
+                return self._send(415, b'{"error":"send JSON"}', ".json")
+            try:
+                got = json.loads(body or b"{}")
+            except ValueError:
+                got = None
+            if not isinstance(got, dict):
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            code, out = OA.act(conn, got.get("id"), str(got.get("action") or ""),
+                               {"days": got.get("days"), "confirm": got.get("confirm")})
+            if code == 200:
+                _seclog("owner_action", str(got.get("action") or ""), self._client_ip(), status=200)
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
     def _account(self, conn):
         """The signed-in account for this request, or None."""
         return _acct().session_user(conn, self._cookie(SESSION_COOKIE))
@@ -3158,6 +3223,9 @@ class Handler(BaseHTTPRequestHandler):
                     made = ""
             who = {"id": out["id"], "email": out["email"]}
         _seclog("phone_verify", "ok", self._client_ip(), status=200)
+        if A.suspended(conn, who["id"]):
+            # The owner's suspension (engine/owneraccounts): every way in says so.
+            return self._send(403, json.dumps({"error": A.SUSPENDED_MSG, "suspended": True}).encode(), ".json")
         token = A.start_session(conn, who["id"])
         return self._send(200, json.dumps(
             {"signed_in": True, "email": who["email"], "phone": SV.say(phone),
@@ -3192,6 +3260,9 @@ class Handler(BaseHTTPRequestHandler):
                         status=code)
                 if code != 200:
                     return self._send(code, json.dumps(out).encode(), ".json")
+                if A.suspended(conn, out["id"]):
+                    return self._send(403, json.dumps({"error": A.SUSPENDED_MSG, "suspended": True}).encode(),
+                                      ".json")
                 token = A.start_session(conn, out["id"])
                 return self._send(200, json.dumps(
                     {"signed_in": True, "email": out["email"]}).encode(),
@@ -3839,6 +3910,9 @@ class Handler(BaseHTTPRequestHandler):
                     uid = PK.login(conn, body or {}, rp, origin)
                     row = conn.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
                     _seclog("passkey_login", "ok", self._client_ip(), status=200)
+                    if A.suspended(conn, uid):
+                        return self._send(403, json.dumps({"error": A.SUSPENDED_MSG, "suspended": True}).encode(),
+                                          ".json")
                     token = A.start_session(conn, uid)
                     em = row[0] if row else ""
                     label = self._passkey_label(conn, uid, em)
@@ -4656,6 +4730,14 @@ class Handler(BaseHTTPRequestHandler):
                 return True
         except Exception:                                    # noqa: BLE001
             pass
+        # FREE ACCESS THE OWNER GAVE from the desk (engine/owneraccounts),
+        # to a date, the same way in as a code; its own try for the same reason.
+        try:
+            from engine import owneraccounts as OA
+            if OA.granted(conn, who["id"]):
+                return True
+        except Exception:                                    # noqa: BLE001
+            pass
         try:
             BI.init(conn)
             st = BI.status_for(conn, who["id"])
@@ -5305,6 +5387,19 @@ class Handler(BaseHTTPRequestHandler):
                 out["codes"] = RD.describe(conn, who["id"])
                 if out["codes"]["active"]:
                     out["entitled"] = True
+                # Free access the owner gave from the desk (engine/owneraccounts),
+                # said on the account page when no plan already says it.
+                try:
+                    from engine import owneraccounts as OA
+                    _given = OA.granted(conn, who["id"])
+                except Exception:                            # noqa: BLE001
+                    _given = None
+                if _given:
+                    if not out.get("entitled"):
+                        out["note"] = ("Free access from Qellys Book until "
+                                       + time.strftime("%-d %b %Y", time.localtime(_given)) + ".")
+                    out["entitled"] = True
+                    out["granted_until"] = _given
                 # AND THE COMP LIST, which this endpoint did not know
                 # about. `_entitled` — the method that actually decides
                 # whether a full board goes out — checks `gate.comped`

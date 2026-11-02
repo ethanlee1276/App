@@ -279,6 +279,32 @@ want told to them rather than discovered.
 
 ---
 
+## The owner's hand on an account (2026-11-02)
+
+Ethan: "I also want more access and stuff to be able to do to people's
+accounts." The Owner desk's Accounts card (`js/owner.js` ACCOUNTS,
+`engine/owneraccounts.py`, server `/api/owner/accounts` and
+`/api/owner/account`, behind `_site_door`) finds an account by email,
+username or number and acts on it:
+
+| Action | What it does |
+|---|---|
+| Give free access | 1 to 366 days from now (`owner_grants`); `_entitled` and the billing status let it in, like a redeemed code |
+| End free access | deletes that row |
+| Sign out everywhere | `end_all_sessions` |
+| Suspend | `users.suspended_at`; sessions ended, phones unlinked, `session_user` answers None, and every way in (password, reset link, passkey, texted code) answers `SUSPENDED_MSG` |
+| Lift the suspension | clears it |
+| Reset username | `member<number>`, display name and bio cleared |
+| Delete | `delete_user`, after the account's email (or a phone account's number) is typed |
+
+Suspend and Delete are refused while Stripe can still charge the account
+(open there and not set to cancel, the member's own Delete rule), and for the
+site's own account. Every action is a row in `owner_actions` (kept a year, by
+account number; not deleted with the account, because a deletion is one of
+the things it records), shown on the account's card and on the desk, and in
+the member's Download my data while the account lives. A POST is JSON only.
+Privacy Policy §2.14.
+
 ## Where the code is
 
 | | |

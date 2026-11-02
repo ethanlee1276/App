@@ -149,7 +149,7 @@
       the complete list of what the synced part of an account holds. It is
       the same list the code enforces (<code>accounts.SECTIONS</code>). The
       features in §2.7–2.12 keep their own rows, each named there; §2.13
-      keeps none.</p>
+      keeps none; §2.14 names the two the site’s owner keeps.</p>
 
     <h3>2.3 Subscription</h3>
     <ul>
@@ -538,6 +538,28 @@
       from 9 November 2026), as §13 promises; until then it is counted
       without its name.</p>
 
+    <h3 id="owner-tools">2.14 When the site’s owner looks at your account</h3>
+    <p>The site’s owner can look up one account at a time — by its email,
+      username or account number — on a page only the site’s own account can
+      open, to answer a question you send us, to sort out a problem with a
+      subscription, or to keep the Terms (§7 and §14 of the Terms). It shows
+      what this policy already lists about the account: the email or phone
+      number, the username, when it joined and was last here, how it signs
+      in and on how many devices, where its membership stands (whether it
+      has had its free trial, and its customer at Stripe), codes redeemed,
+      and whether it is suspended. Never a password, a card or the contents
+      of your bets, messages or settings.</p>
+    <p>From that page the owner can give an account free access to a date
+      and end it (<code>owner_grants</code>), sign it out on every device,
+      suspend it — which signs it out, unlinks its phones’ alerts and refuses
+      every way back in until it is lifted (the date it was suspended, with
+      the account) — reset a username that breaks the Terms, or delete the
+      account the way your own Delete does. An account Stripe can still
+      charge is never suspended or deleted from there. Each step is written
+      down — what was done, to which account number, and when
+      (<code>owner_actions</code>) — so it can be checked; you see the steps
+      taken on yours in Download my data.</p>
+
     <h2>3. What we do NOT collect</h2>
     <ul>
       <li><b>Your sportsbook password</b>, or any betting-account
@@ -578,6 +600,9 @@
           <td>Receipts, a free trial about to charge, a charge that did not
             go through, renewal notices, service notices</td>
           <td>Performance of a contract</td></tr>
+      <tr><td>The owner looking up and acting on one account (§2.14)</td>
+          <td>Support, sorting out a subscription, keeping the Terms</td>
+          <td>Performance of a contract / legitimate interest</td></tr>
       <tr><td>Phone alerts, and the choices behind them</td>
           <td>To send the alerts you turned on, and to hold them for a break,
             a limit you set or the night</td>
@@ -736,6 +761,11 @@
         debugging.</li>
       <li><b>Which page a tab has open</b> (§2.13) — two and a half minutes,
         in the server’s memory, never on a disk.</li>
+      <li><b>Free access the owner gave, and a suspension</b> (§2.14) —
+        until it is ended or lifted, or the account is deleted. <b>The
+        record of what the owner did to an account</b> — one year; it names
+        the account by number only, and a deleted account’s number points to
+        nobody.</li>
     </ul>
     <p><b>Backups outlive deletion, and we would rather say so.</b> The
       account database is included in a weekly encrypted backup — it has

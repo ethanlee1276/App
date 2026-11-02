@@ -4,6 +4,12 @@
     {
       "date": "2026-11-02",
       "kind": "ship",
+      "title": "The Owner desk can find any account and act on it",
+      "body": "The site's own account can now look up any account by email, username or number and see where it stands: how it signs in, its membership as its account page says it, whether it has had its free trial, its customer at Stripe, free access and suspension. From there it can give or end free access (a week to a year), sign the account out everywhere, suspend it (which signs it out and refuses every way back in, saying why) or lift that, reset a username that breaks the Terms, or delete the account after its email is typed. Suspend and delete wait while Stripe can still charge the account, and every step is written down where the desk shows it and in that member's Download my data. The Privacy Policy says all of it (§2.14)."
+    },
+    {
+      "date": "2026-11-02",
+      "kind": "ship",
       "title": "A charge that does not go through tells you, once, and the trial's last-day notice says what happens",
       "body": "The day before a free trial turns into a charge (its third day), the email and the phone notice now say what happens if that charge does not go through: the trial is over and access pauses until the card is updated. And when a charge does fail — the first one after a trial, or a renewal — you hear once, on every phone signed in to your account and by email: access is paused, press Manage billing on your account page to update the card, and the site opens again as soon as the payment clears. The same failure is never told twice; a later one is told again."
     },
