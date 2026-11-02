@@ -6,7 +6,7 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-01, after Who's on now (step JH). Done:
+Last updated 2026-11-02, after the Owner desk (step JH). Done:
 
 - **The outage:** the weekly backup check filled the disk at 04:32 UTC and
   left its copy behind. You deleted the leftovers, restarted the site
@@ -74,6 +74,13 @@ before 2 November):
 ```
 cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
+
+Not a command: on your phone, sign in to the Qellys Book account and turn
+alerts on (the Alerts page). The Owner desk (Settings → Owner desk) then
+pushes that phone when the site needs you — a board that hasn't rebuilt on
+a day its league plays, grading stopped, the disk filling, a failed update,
+odds credits running low — once a day each, held through your quiet hours.
+The desk's Switches card says "On · 1 phone" once it's set.
 
 Then the read-only check (`1`, `1`, `True`, both notices' counts, `1`), and
 the email as a member gets it:

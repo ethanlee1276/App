@@ -352,11 +352,12 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
         except Exception:                                    # noqa: BLE001
             lconn = None
     try:
+        h = _section(health, t)
         return {"at": t, "day": _day(t), "now": _section(right_now, t), "accounts": _section(accounts, conn, t),
                 "money": _section(money, conn, t),
                 "picks": _section(picks, lconn, t) if lconn is not None else {"error": "the ledger is not readable"},
-                "health": _section(health, t), "community": _section(community, conn, t),
-                "reports": _section(reports, conn),
+                "health": h, "needs": _section(_needs, h, t), "alerts": _section(_alerts, conn),
+                "community": _section(community, conn, t), "reports": _section(reports, conn),
                 "switches": _section(switches), "notice": _section(_notice)}
     finally:
         if own and lconn is not None:
@@ -364,6 +365,22 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 lconn.close()
             except sqlite3.Error:
                 pass
+
+
+def _needs(h: dict, t: float) -> list:
+    """What needs the owner now: the same list engine/owneralerts pushes."""
+    from . import owneralerts as OA
+    return OA.problems(h, now=t)
+
+
+def _alerts(conn) -> dict:
+    """How many phones signed in to the site's account would hear those."""
+    from . import owneralerts as OA
+    from . import pushalerts as PA
+    uid = OA.site_account(conn)
+    if not uid or not _has(conn, "push_subs"):
+        return {"phones": 0}
+    return {"phones": int(PA.phones(conn, uid))}
 
 
 def _notice() -> dict:

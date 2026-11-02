@@ -10,6 +10,9 @@
    the two tools that change something for everybody: a notice across the
    top of every page (engine/sitenotice), and the reports queue — the feed's
    and the game chat's in one list, each with Hide / Keep it up / Restore.
+   What needs the owner (a stale board on a game day, grading stopped, the
+   disk filling…) heads the page, and engine/owneralerts pushes the same
+   list to this account's phones.
 
    Loaded the first time it opens (app.js roomCall). The server answers
    /api/owner/desk for the site's own account alone and, to anybody else, as
@@ -166,10 +169,23 @@ async function odMod(b) {
   }
 }
 
-function odSwitchesHTML(sw) {
+function odSwitchesHTML(sw, al) {
   if (!Array.isArray(sw)) return odCard("Switches", odErr(sw));
+  // The desk's own alerts (engine/owneralerts) reach this account's phones.
+  const n = al && !al.error ? Number(al.phones) || 0 : null;
+  const mine = n == null ? "" : odRow("Problems pushed to this account's phones",
+    n ? `On · ${odN(n)} phone${n === 1 ? "" : "s"}` : "No phone yet", n ? "good" : "warn");
   return odCard("Switches", `<ul class="od-list">${sw.map((s) => odRow(escapeHtml(s.name),
-    `${s.on ? "On" : "Off"}${s.note ? ` · ${escapeHtml(s.note)}` : ""}`, s.on ? "good" : "mute")).join("")}</ul>`);
+    `${s.on ? "On" : "Off"}${s.note ? ` · ${escapeHtml(s.note)}` : ""}`, s.on ? "good" : "mute")).join("")}${mine}</ul>${
+    n === 0 ? `<p class="od-note">Sign in to this account on your phone and turn alerts on (the Alerts page): a stale board, grading stopped, the disk filling, a failed update or odds credits running low then reach you, once a day each.</p>` : ""}`);
+}
+
+/* What needs the owner now — the same list engine/owneralerts pushes to this
+   account's phones, once a day each. Nothing to show when all is well. */
+function odNeedsHTML(needs) {
+  if (!Array.isArray(needs) || !needs.length) return "";
+  return `<section class="od-card od-needs" aria-label="Needs you"><h2 class="od-h">Needs you</h2><ul class="od-need-list">${
+    needs.map((p) => `<li><b>${escapeHtml(p.title || "")}</b><span>${escapeHtml(p.body || "")}</span></li>`).join("")}</ul></section>`;
 }
 
 /* The one tool that reaches everybody: a notice across the top of every page. */
@@ -195,9 +211,9 @@ function odHTML(d) {
   // Reports waiting go near the top; with none they sit beside the room.
   const waiting = !!(d.reports && d.reports.open_n);
   const reps = odReportsHTML(d.reports);
-  return `${odNowHTML(d.now)}<p class="od-door"><a href="#whoson">Who's on now, by name and page →</a></p>
+  return `${odNeedsHTML(d.needs)}${odNowHTML(d.now)}<p class="od-door"><a href="#whoson">Who's on now, by name and page →</a></p>
     ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odMoneyHTML(d.money)}${odAccountsHTML(d.accounts)}
-    ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches)}
+    ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches, d.alerts)}
     <p class="od-foot">Counts and the business's own numbers; nobody is named here. Only this account can open this page.</p>`;
 }
 

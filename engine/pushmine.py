@@ -106,7 +106,7 @@ HELD = ('watches', 'clutch', 'lineup', 'karma', 'mentions', 'away', 'lines', 'cl
 KEEP_PER_USER = 12
 KEEP_S = 24 * 3600
 _looked = {"watches": 0.0, "lineup": 0.0, "week": 0.0, "karma": 0.0, "pickem": 0.0, "away": 0.0, "news": 0.0,
-           "today": 0.0, "lifecycle": 0.0}
+           "today": 0.0, "lifecycle": 0.0, "owner": 0.0}
 #: Injury news (engine/newsalerts) looks this often; the boards change every half hour.
 NEWS_EVERY_S = 5 * 60
 #: Karma alerts' pass looks at most this often.
@@ -918,6 +918,16 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
             _looked["lifecycle"] = t
             from engine import lifecycle as _lc
             told += _lc.run(conn, now=t, web=Path(web), log=log)
+        # The site's own phones (engine/owneralerts): a board stale on a day
+        # its league plays, grading stopped, the disk filling, a failed
+        # update, odds credits running out — once a day each.
+        from engine import owneralerts as _oa
+        if t - _looked["owner"] >= _oa.OWNER_EVERY_S:
+            _looked["owner"] = t
+            try:
+                told += _oa.alerts_pass(conn, now=t, data_dir=Path(web) / "data")
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  owner alerts: {type(exc).__name__}: {exc}")
         # Remind me (engine/gamechat): games starting in ten minutes.
         from engine import gamechat as _gc
         try:
