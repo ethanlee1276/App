@@ -338,8 +338,11 @@
     const p = k.men[name] || {};
     const src = String(p.face || "");
     if (!/^https:\/\//.test(src)) return `<span class="rc-face">${icon("people", 14)}</span>`;
-    // A face that will not load goes, leaving the mark under it (visuals.js IMG_ERR).
-    return `<span class="rc-face">${icon("people", 14)}<img src="${escapeAttr(src)}" alt="" loading="lazy" decoding="async" width="${size}" height="${size}" data-onerr="remove"></span>`;
+    // A face that will not load waits out of sight with the mark under it,
+    // and comes back (visuals.js FACES COME BACK).
+    const attrs = typeof faceImg === "function" ? faceImg(src, src).attrs
+      : `src="${escapeAttr(src)}" loading="lazy" decoding="async"`;
+    return `<span class="rc-face">${icon("people", 14)}<img ${attrs} alt="" width="${size}" height="${size}" data-onerr="remove"></span>`;
   }
 
   /* ---------------- glyphs ---------------- */

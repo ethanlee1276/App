@@ -4,6 +4,12 @@
     {
       "date": "2026-11-02",
       "kind": "fix",
+      "title": "Players' faces stay put after the site has been open a while",
+      "body": "A headshot that failed to load once — a dropped connection as the phone woke up or changed networks — gave up for good and left the helmet or initials in its place until that card happened to be drawn again, and every refresh of a board (every 30 seconds on a live night) drew each face from scratch, the helmet showing until the photo arrived, which on an iPhone could mean never. A face that has loaded now stays up across refreshes, and one that misses waits behind the helmet and is asked for again: a few times on its own, then whenever the page comes back to the screen or the connection comes back."
+    },
+    {
+      "date": "2026-11-02",
+      "kind": "fix",
       "title": "The top of a game page is one wash of the two clubs' colours",
       "body": "On the open Duo (and a phone with the app on its home screen), the top of a game page showed a black block over the sidebar, a bright band behind the logo and a darker one behind the score, and the bar behind the logo changed shade as you scrolled. The strip under the clock, the site's bar and the score bar now paint the same picture of the two teams' colours, so the top runs on as one; where the sidebar stands beside the page the score bar fits its column, so its back button shows."
     },

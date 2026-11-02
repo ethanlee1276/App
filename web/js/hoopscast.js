@@ -313,6 +313,10 @@
     const src = G && G.faceURL ? G.faceURL(league, row || {}, faces || {}) : "";
     if (!src) return `<span class="hc-face">${icon("people", 14)}</span>`;
     const small = typeof facePreview === "function" ? facePreview(src, size || 40) : src;
+    // A face that misses waits and comes back (visuals.js FACES COME BACK).
+    if (typeof faceImg === "function") {
+      return `<span class="hc-face">${icon("people", 14)}<img ${faceImg(small, src).attrs} alt="" data-onerr="swapFull"></span>`;
+    }
     const fall = small !== src ? ` data-full="${escapeAttr(src)}" data-onerr="swapFull"` : "";
     return `<span class="hc-face">${icon("people", 14)}<img src="${escapeAttr(small)}" alt="" loading="lazy" decoding="async"${fall}></span>`;
   }

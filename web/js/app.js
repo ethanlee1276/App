@@ -4818,9 +4818,12 @@ function betMark(r, size = 30, tile = 0) {
    when it never does. */
 function playerTileHTML(r, w) {
   const lg = r.sport || state.sport, h = r.headshot || "", s = h && facePreview(h, w);
-  return `<span class="ptile" aria-hidden="true" style="--pw:${w}px;--ta:${escapeAttr(teamPrimaryIn(lg, r.team))}">${
+  // Drawn large at the top of its page: never lazy, and up at once when
+  // it has loaded this visit (visuals.js FACES COME BACK).
+  const f = s ? faceImg(s, h, { lazy: false }) : null;
+  return `<span class="ptile${f && f.up ? " art-on" : ""}" aria-hidden="true" style="--pw:${w}px;--ta:${escapeAttr(teamPrimaryIn(lg, r.team))}">${
     r.team ? `<i>${teamMarkIn(lg, r.team, Math.round(w * 0.8))}</i>` : ""}<b>${escapeHtml(initials(r.player || ""))}</b>${
-    s ? `<img alt="" decoding="async" src="${escapeAttr(s)}"${s !== h ? ` data-full="${escapeAttr(h)}"` : ""} data-onload="art-on" data-onerr="swapFull">` : ""}</span>`;
+    f ? `<img alt="" ${f.attrs} data-onload="art-on" data-onerr="swapFull">` : ""}</span>`;
 }
 
 /* One line on the board when the selection haircut is actually moving the

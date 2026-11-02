@@ -65,6 +65,10 @@
        twice the drawn size; the full file is the first fallback
        (swapFull), and only a second miss leaves the mark showing. */
     const small = typeof facePreview === "function" ? facePreview(src, 40) : src;
+    // A face that misses waits and comes back (visuals.js FACES COME BACK).
+    if (typeof faceImg === "function") {
+      return `<span class="gc-face">${icon("user", 16)}<img ${faceImg(small, src).attrs} alt="" data-onerr="swapFull"></span>`;
+    }
     const fall = small !== src ? ` data-full="${escapeAttr(src)}" data-onerr="swapFull"` : "";
     return `<span class="gc-face">${icon("user", 16)}<img src="${escapeAttr(small)}" alt="" loading="lazy" decoding="async"${fall}></span>`;
   }

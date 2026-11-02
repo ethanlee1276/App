@@ -41,12 +41,157 @@ function artOn(el, cls) {
    refuses inline script outright (server.py SECURITY_HEADERS, the Caddyfile).
    Registered here, before app.js, so no image the page draws can load or
    fail ahead of them. */
+/* FACES COME BACK (Ethan, 2026-11-02, the "Who could shine" list drawn in
+   helmets: "after being on the site for a while, the headshots will
+   disappear"). Two ways a face went for good:
+
+     * a miss was final. The small face failed, the whole one failed, and
+       the photo removed itself — gone until something redrew its card. A
+       connection that drops as the phone wakes or changes networks takes
+       every face it touches at once, and the board does not redraw a block
+       just because its pictures went.
+     * every redraw (the 30-second poll redraws the whole board) put a fresh
+       lazy image in each frame, the drawn mark showing until it loaded,
+       and iOS's lazy loader can leave such an image never asked for
+       (WebKit bug 237703): the mark then stays.
+
+   So a face that has loaded this visit is drawn already up on every redraw
+   (`faceImg`: its frame wears art-on, the image is eager — the browser has
+   it), and the URL that worked is the one used (the whole photo, when the
+   small one missed this visit). A face that misses waits out of sight with
+   the mark showing (`facePark`) and is asked for again when the connection
+   comes back, when the page comes back to the screen, and on a backoff.
+   After FACE_TRIES_MAX misses it rests: no more asks on a timer, so a face
+   that truly is not there stops costing requests, but one ask each time
+   the page comes back to the screen (a phone woken up, where the browser
+   need never have said it was offline), and the connection coming back
+   wipes the slate (`faceOnline`): misses while it was gone were the
+   outage's, not the photo's (a long one, a train, used to leave every face
+   it touched in a helmet until the board happened to redraw). Every FACE_SWEEP_MS, while the page is on screen, a
+   lazy face on screen that never started is nudged to load now. An image
+   with `data-face` is a face; every other image keeps its own rule. */
+const FACE_UP = new Set();          // URLs that have loaded this visit
+const FACE_USE = new Map();         // the small URL -> the URL that loaded instead
+const FACE_MISS = new Map();        // URL -> misses this visit
+const FACE_TRIES_MAX = 4;
+const FACE_BACKOFF_MS = [8000, 30000, 120000];
+const FACE_SWEEP_MS = 15000;
+let _faceTimer = null, _faceWatch = null;
+
+/* A face's <img> attributes: the URL that worked this visit (else the
+   small one, the whole one riding along for the first miss), eager and up
+   at once when it has loaded before. `up` is whether its frame starts with
+   art-on. `lazy: false` for a face drawn large at the top of a page. */
+function faceImg(small, full, opts = {}) {
+  const url = FACE_USE.get(small) || small;
+  const up = FACE_UP.has(url);
+  const lazy = opts.lazy !== false && !up;
+  const whole = url === small && full && full !== small ? ` data-full="${escapeAttr(full)}"` : "";
+  return { up, attrs: `src="${escapeAttr(url)}"${lazy ? ' loading="lazy"' : ""} decoding="async" data-face="${escapeAttr(small)}"${whole}` };
+}
+
+function faceUp(el) {
+  const src = el.getAttribute("src") || "";
+  if (!src) return;
+  FACE_UP.add(src);
+  FACE_MISS.delete(src);
+  const small = el.dataset.face;
+  if (small && src !== small) FACE_USE.set(small, src);   // the small one missed, the whole one did not
+  el.hidden = false;
+  faceWatchOn();
+}
+
+/* A face that missed: out of sight with the drawn mark showing, and asked
+   for again later — or, past FACE_TRIES_MAX misses, resting until the
+   connection comes back. */
+function facePark(el, url) {
+  const src = url || el.getAttribute("src") || "";
+  const n = (FACE_MISS.get(src) || 0) + 1;
+  FACE_MISS.set(src, n);
+  FACE_UP.delete(src);
+  const frame = el.parentNode;
+  if (frame && frame.classList) frame.classList.remove("art-on");
+  el.hidden = true;
+  if (n >= FACE_TRIES_MAX) { delete el.dataset.parked; el.dataset.rested = src; return; }
+  el.dataset.parked = src;
+  faceSoon(FACE_BACKOFF_MS[Math.min(n, FACE_BACKOFF_MS.length) - 1]);
+}
+
+/* The connection is back: the misses while it was gone do not count, and
+   every face waiting or resting is asked for — now, or when the page is
+   next on screen. */
+function faceOnline() {
+  FACE_MISS.clear();
+  faceRetry(true);
+}
+
+function faceSoon(ms) {
+  if (_faceTimer || typeof setTimeout === "undefined") return;   // one wake for every waiting face
+  _faceTimer = setTimeout(faceRetry, ms);
+}
+
+/* Every waiting face asked for again (`all`: the resting ones too), each
+   through a probe first: on its answer a fresh copy of the image takes its
+   place (from the cache now, so its load brings the frame up); on a miss
+   it waits again, longer, or rests. Not while the page is off screen or
+   offline: coming back asks at once. */
+function faceRetry(all) {
+  if (_faceTimer) { clearTimeout(_faceTimer); _faceTimer = null; }
+  if (typeof document === "undefined" || document.visibilityState === "hidden") return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  document.querySelectorAll(all === true ? "img[data-parked], img[data-rested]" : "img[data-parked]").forEach((el) => {
+    const url = el.dataset.parked || el.dataset.rested;
+    el.removeAttribute("data-parked");
+    el.removeAttribute("data-rested");
+    const probe = new Image();
+    probe.onload = () => {
+      if (!el.isConnected) return;
+      const fresh = el.cloneNode(false);
+      fresh.hidden = false;
+      fresh.removeAttribute("loading");
+      fresh.setAttribute("src", url);
+      el.replaceWith(fresh);
+    };
+    probe.onerror = () => { if (el.isConnected) facePark(el, url); };
+    probe.src = url;
+  });
+}
+
+/* On screen only (a face off screen, or in a hidden tab, has its turn when
+   it is shown): a lazy face that never finished is asked for now, and one
+   that finished broken without an error reaching us waits like any miss.
+   Read every box first, then change any: no layout between reads. */
+function faceSweep() {
+  if (typeof document === "undefined" || document.visibilityState === "hidden") return;
+  const below = (typeof innerHeight === "number" ? innerHeight : 800) + 400;
+  const nudge = [], broken = [];
+  document.querySelectorAll("img[data-face]").forEach((el) => {
+    if (el.hidden) return;
+    const r = el.getBoundingClientRect();
+    if (!r.width || r.bottom < -200 || r.top > below) return;
+    if (!el.complete) { if (el.loading === "lazy") nudge.push(el); }
+    else if (el.naturalWidth === 0 && el.getAttribute("src")) broken.push(el);
+  });
+  nudge.forEach((el) => { el.loading = "eager"; });
+  broken.forEach((el) => facePark(el));
+}
+
+/* Started by the first face that loads, so a script read outside a page
+   (the tests' node runs) never holds a timer open. */
+function faceWatchOn() {
+  if (_faceWatch || typeof setInterval === "undefined") return;
+  _faceWatch = setInterval(faceSweep, FACE_SWEEP_MS);
+}
+
 const IMG_ERR = {
-  remove: (el) => el.remove(),
+  // A face waits and comes back (FACES COME BACK); anything else goes.
+  remove: (el) => (el.dataset.face !== undefined ? facePark(el) : el.remove()),
   hide: (el) => { el.style.display = "none"; },
-  // A small headshot that failed tries the full-size one once, then goes.
+  // A small headshot that failed tries the full-size one once, then waits
+  // (a face) or goes (anything else).
   swapFull: (el) => {
     if (el.dataset.full) { el.src = el.dataset.full; el.removeAttribute("data-full"); }
+    else if (el.dataset.face !== undefined) facePark(el);
     else el.remove();
   },
   // The markup to show instead rides on the image (a venue mark).
@@ -59,12 +204,22 @@ if (typeof document !== "undefined") {
   document.addEventListener("load", (e) => {
     const el = e.target;
     if (el && el.dataset && el.dataset.onload) artOn(el, el.dataset.onload);
+    if (el && el.dataset && el.dataset.face !== undefined) faceUp(el);
   }, true);
   document.addEventListener("error", (e) => {
     const el = e.target;
     const fn = el && el.dataset && IMG_ERR[el.dataset.onerr];
     if (fn) fn(el);
   }, true);
+  // The connection back, the page back on screen: every waiting face is
+  // asked for at once, and the sweep looks again.
+  if (typeof addEventListener === "function") {
+    addEventListener("online", faceOnline);
+    addEventListener("pageshow", () => { faceRetry(true); faceSweep(); });
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") { faceRetry(true); faceSweep(); }
+  });
 }
 
 const DEFAULT_TEAM = { name: "", nick: "", primary: "#3a4668", secondary: "#8893b5", tertiary: "#dfe4f5" };
@@ -191,12 +346,12 @@ function playerAvatar(name, abbr, opts = {}) {
     /* Same rule as the team marks: a headshot is a CUT-OUT on transparent
        ground, so the drawn helmet showed through every real face. The
        drawing steps aside on load and the stack keeps a plain disc for the
-       face to sit on; on error the photo removes itself and the helmet is
-       back, which is the whole point of drawing one. */
-    return `<span class="avatar-stack" style="width:${size}px;height:${size}px">${inner}
-      <img class="avatar-photo" src="${escapeAttr(small)}" alt="" loading="lazy"
-           decoding="async"${small === opts.headshot ? ""
-             : ` data-full="${escapeAttr(opts.headshot)}"`}
+       face to sit on; on a miss the photo waits out of sight and the
+       helmet is back, which is the whole point of drawing one (FACES COME
+       BACK, above: a face loaded this visit is drawn already up). */
+    const f = faceImg(small, opts.headshot);
+    return `<span class="avatar-stack${f.up ? " art-on" : ""}" style="width:${size}px;height:${size}px">${inner}
+      <img class="avatar-photo" ${f.attrs} alt=""
            data-onload="art-on"
            data-onerr="${swap}"/></span>`;
   }
