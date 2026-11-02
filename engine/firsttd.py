@@ -563,3 +563,122 @@ def settle(lconn, plays_for=None) -> int:
     # Per week: `ledger.settle` keys on (player, market), so one call for
     # two weeks would grade last week's open bet with this week's result.
     return sum(L.settle(lconn, a, sport="nfl", date=d) for d, a in actuals.items())
+
+
+# --- grading off ESPN, the night of the game ------------------------------------
+# Ethan, 2026-11-01, with Malik Washington's first touchdown at +1800 on his
+# phone: "are we tracking the record for the longshot for nfl ... bc we
+# already are 1/2 so out roi and units should be up." It was tracked and
+# could not move: `settle` above reads the nflverse play-by-play, which
+# nflverse publishes overnight and the cache keeps a day, so a Sunday pick
+# sat open into Tuesday. ESPN's game summary lists the scoring plays the
+# moment a game is final — the same read that grades the college book
+# (sources/cfbdata.first_touchdown) — so it grades first, within one settle
+# pass (five minutes) of the final whistle. `settle` stays the backstop for
+# whatever this cannot say: a payload with no scoring plays, a scorer it
+# cannot name, a game of field goals, the playoffs.
+
+#: No NFL game has ended inside two and a half hours of its kickoff, so no
+#: summary is asked for before then.
+FINAL_AFTER_S = 150 * 60
+#: A game's summary is read again at most this often (a pass is 5 minutes).
+SUMMARY_TTL = 240
+
+
+def _epoch(iso) -> float | None:
+    """ESPN's kickoff stamp ("2026-11-01T18:00Z") as epoch seconds."""
+    import datetime as dt
+    s = str(iso or "").strip().replace("Z", "+00:00")
+    if not s:
+        return None
+    try:
+        d = dt.datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    return (d if d.tzinfo else d.replace(tzinfo=dt.timezone.utc)).timestamp()
+
+
+def summary_final(payload: dict) -> bool:
+    """Is the game in this ESPN summary over?"""
+    comp = (((payload or {}).get("header") or {}).get("competitions") or [{}])[0]
+    st = (comp.get("status") or {}).get("type") or {}
+    return bool(st.get("completed")) or st.get("state") == "post"
+
+
+def espn_verdict(payload: dict, player: str, team: str) -> float | None:
+    """1.0 when he scored the game's first touchdown, 0.0 when somebody else
+    did, None while this payload cannot say — the game is not final, it has
+    no scoring plays, no touchdown among them, or its scorer has no name on
+    his own side. ``team`` is the bet's, in our codes (ESPN's are mapped)."""
+    from .sources import cfbdata as C
+    from .sources.livescores import _abbr
+    if not payload or not summary_final(payload) or not (payload.get("scoringPlays") or []):
+        return None
+    ft = C.first_touchdown(payload)
+    if ft is None:
+        return None                 # field goals only, or plays unread: the file says which
+    side = _abbr(ft.get("team") or "")
+    if not side:
+        return None
+    if side != team:
+        return 0.0                  # the other side scored first, whoever it was
+    if not ft.get("player"):
+        return None                 # his own side, a scorer with no name: wait
+    return 1.0 if C._same_player(player, ft["player"]) else 0.0
+
+
+def settle_espn(lconn, week_games=None, summary=None, now: float | None = None) -> int:
+    """Grade every open NFL first-touchdown bet whose game ESPN calls final.
+
+    ``week_games(season, week)`` lists a regular-season week's games
+    ({game_id, home, away, kickoff}); ``summary(game_id)`` is one game's ESPN
+    summary. Both default to ESPN (sources/nflpreseason, sources/espnplays).
+    Returns how many bets it graded; the rest stay open for `settle`."""
+    import re
+    import time
+    from . import ledger as L
+    rows = lconn.execute("SELECT * FROM bets WHERE status='open' AND market='first_td' "
+                         "AND LOWER(sport)='nfl'").fetchall()
+    if not rows:
+        return 0
+    if week_games is None:
+        from .sources import nflpreseason as NP
+
+        def week_games(season, week):
+            return NP.parse_games(NP.fetch_scoreboard(season, NP.REGULAR, week), season)
+    if summary is None:
+        from .sources import espnplays as EP
+
+        def summary(game_id):
+            return EP.fetch_summary("nfl", game_id, ttl=SUMMARY_TTL)
+    t = time.time() if now is None else float(now)
+    weeks: dict = {}
+    for b in rows:
+        m = re.match(r"^(\d{4})-W(\d{1,2})$", str(b["date"] or ""))
+        team = b["team"] if "team" in b.keys() else None
+        # The regular season only: ESPN numbers the playoffs as their own
+        # weeks 1-5, and those bets wait for the file rather than a guess.
+        if m and team and 1 <= int(m.group(2)) <= 18:
+            weeks.setdefault((int(m.group(1)), int(m.group(2))), []).append(b)
+    actuals: dict = {}              # {bet date: {(player, "first_td"): 1.0 | 0.0}}
+    for (season, week), bets in weeks.items():
+        try:
+            games = list(week_games(season, week) or [])
+        except Exception:                                    # noqa: BLE001 — the file decides later
+            continue
+        read: dict = {}
+        for b in bets:
+            g = next((g for g in games if b["team"] in (g.get("home"), g.get("away"))), None)
+            kick = _epoch((g or {}).get("kickoff"))
+            if not g or not g.get("game_id") or kick is None or t - kick < FINAL_AFTER_S:
+                continue
+            gid = str(g["game_id"])
+            if gid not in read:
+                try:
+                    read[gid] = summary(gid)
+                except Exception:                            # noqa: BLE001 — try again next pass
+                    read[gid] = None
+            verdict = espn_verdict(read[gid], b["player"], b["team"])
+            if verdict is not None:
+                actuals.setdefault(b["date"], {})[(b["player"], "first_td")] = verdict
+    return sum(L.settle(lconn, a, sport="nfl", date=d) for d, a in actuals.items())

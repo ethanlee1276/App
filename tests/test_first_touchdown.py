@@ -218,6 +218,115 @@ def test_first_touchdown_bets_journal_and_grade_off_the_play_by_play():
     assert "first_td" in ledger.SETTLEABLE_LONGSHOTS and "first_td" in ledger.LONGSHOT_MARKETS
 
 
+# --- ESPN grades it the night of the game (Ethan, 2026-11-01: "we already are 1/2") ---
+def _espn(plays, state="post"):
+    return {"header": {"competitions": [{"status": {"type": {"state": state, "completed": state == "post"}}}]},
+            "scoringPlays": plays}
+
+
+def _sp(text, team, kind="Passing Touchdown", abbr="TD", period=1):
+    return {"type": {"text": kind}, "scoringType": {"abbreviation": abbr}, "text": text,
+            "period": {"number": period}, "team": {"abbreviation": team}}
+
+
+def _epoch(iso):
+    import datetime as dt
+    return dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+
+
+def test_a_first_touchdown_grades_off_espn_once_the_game_is_final():
+    lc = _ledger()
+    pick = lambda name, team: {"player": name, "team": team, "market": "first_td", "odds": 1800,  # noqa: E731
+                               "book": "FanDuel", "model_prob": 0.07, "edge": 0.2, "grade": "First TD"}
+    assert _journal(lc, 8, [pick("Malik Washington", "MIA"), pick("Stefon Diggs", "NE"),
+                            pick("Jahmyr Gibbs", "DET"), pick("Puka Nacua", "LA")]) == 4
+    games = [{"game_id": "401873034", "home": "MIA", "away": "NE", "kickoff": "2026-11-01T18:00Z"},
+             {"game_id": "401873030", "home": "DET", "away": "MIN", "kickoff": "2026-11-01T18:00Z"},
+             {"game_id": "401873032", "home": "LA", "away": "LAC", "kickoff": "2026-11-02T01:20Z"}]
+    summaries = {
+        "401873034": _espn([_sp("Jason Sanders 41 Yd Field Goal", "MIA", "Field Goal Good", "FG"),
+                            _sp("Malik Washington 5 Yd pass from Tua Tagovailoa (Jason Sanders Kick)", "MIA",
+                                period=2)]),
+        "401873030": _espn([_sp("Jahmyr Gibbs 3 Yd Run (Jake Bates Kick)", "DET", "Rushing Touchdown")],
+                           state="in"),
+    }
+    asked = []
+
+    def summary(gid):
+        asked.append(gid)
+        return summaries[gid]
+    n = F.settle_espn(lc, week_games=lambda s, w: games if (s, w) == (2026, 8) else [], summary=summary,
+                      now=_epoch("2026-11-01T22:00Z"))
+    assert n == 2, n
+    got = {r["player"]: (r["status"], r["pnl_units"]) for r in lc.execute("SELECT player, status, pnl_units FROM bets")}
+    assert got["Malik Washington"] == ("won", 1.8), got["Malik Washington"]
+    assert got["Stefon Diggs"][0] == "lost", "the other side scored first"
+    assert got["Jahmyr Gibbs"][0] == "open", "the game is still on: ESPN is not final"
+    assert got["Puka Nacua"][0] == "open", "the night game has not been on long enough to be over"
+    assert "401873032" not in asked, "no summary asked for before a game could have ended"
+    assert asked.count("401873034") == 1, "one read a game a pass, however many bets ride on it"
+
+
+def test_espn_waits_rather_than_guess():
+    W = F.espn_verdict
+    wash = _sp("Malik Washington 5 Yd pass from Tua Tagovailoa (Kick)", "MIA")
+    assert W(_espn([wash]), "Malik Washington", "MIA") == 1.0
+    assert W(_espn([wash], state="in"), "Malik Washington", "MIA") is None, "not final"
+    assert W(_espn([]), "Malik Washington", "MIA") is None, "ESPN leaves scoring plays off some payloads"
+    assert W(_espn([_sp("Jason Sanders 41 Yd Field Goal", "MIA", "Field Goal Good", "FG")]),
+             "Malik Washington", "MIA") is None, "field goals only: the file says whether anyone scored one"
+    # A pick-six by the other side loses him whoever ran it back, named or not.
+    pick6 = _sp("54 Yd Interception Return (Kick)", "NE", "Interception Return Touchdown")
+    assert W(_espn([pick6]), "Malik Washington", "MIA") == 0.0
+    # His own side's touchdown with no scorer read: he might be the returner, so it waits.
+    assert W(_espn([_sp("98 Yd Kickoff Return (Kick)", "MIA", "Kickoff Return Touchdown")]),
+             "Malik Washington", "MIA") is None
+    # A teammate scored first: lost. ESPN's own codes meet ours (WSH is WAS, LAR is LA).
+    assert W(_espn([_sp("De'Von Achane 12 Yd Run (Kick)", "MIA", "Rushing Touchdown")]),
+             "Malik Washington", "MIA") == 0.0
+    assert W(_espn([_sp("Terry McLaurin 20 Yd pass from Jayden Daniels (Kick)", "WSH")]),
+             "Terry McLaurin", "WAS") == 1.0
+    assert W(_espn([_sp("Puka Nacua 9 Yd pass from Matthew Stafford (Kick)", "LAR")]), "Puka Nacua", "LA") == 1.0
+
+
+def test_the_record_page_names_each_long_shot_and_lines_up_each_kind():
+    """Every settled long shot read "HR" (`b.market_label || "HR"`, a field
+    the export never sends), anytime touchdowns included; and the first
+    scorers' week sat pooled under 395 graded home runs."""
+    import shutil
+    import subprocess
+    js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
+    i, j = js.index("const LS_MARKET_ORDER"), js.index("function recLongshotSection(ls)")
+    body = js[j:js.index("\n}\n", j)]
+    assert 'marketWord(b.market || "home_runs")' in body and 'market_label || "HR"' not in body
+    assert "recLongshotMarkets(ls.by_market)" in body and "first touchdowns and first baskets" in body
+    if not shutil.which("node"):
+        return
+    harness = js[i:j] + """
+const marketWord = (k) => ({first_td: "First Touchdown", first_basket: "First Basket",
+  anytime_td: "Anytime TD", home_runs: "Home Runs"})[k] || k;
+const escapeHtml = (s) => String(s);
+const toneOf = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
+process.stdout.write(recLongshotMarkets({home_runs: {w: 58, l: 337, net_u: -5.06},
+  first_basket: {w: 0, l: 4, net_u: -0.4}, first_td: {w: 1, l: 1, net_u: 1.7}}) + "|" +
+  recLongshotMarkets({home_runs: {w: 1, l: 2, net_u: -0.1}}));
+"""
+    out = subprocess.run(["node", "-e", harness], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    many, one = out.stdout.split("|")
+    flat = " ".join(many.split())
+    assert flat.index("First Touchdown 1-1") < flat.index("First Basket 0-4") < flat.index("Home Runs 58-337"), flat
+    assert '<b class="pos">+1.70u</b>' in flat and '<b class="neg">-5.06u</b>' in flat
+    assert one == "", "one kind alone is the tiles' own record: no second line"
+
+
+def test_the_settle_pass_asks_espn_first_and_the_file_after():
+    src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    i = src.index("n_ftd += _ftd.settle_espn(lconn)")
+    assert i < src.index("n_ftd += _ftd.settle(lconn)", i), "ESPN first, the overnight file as the backstop"
+    assert "first-touchdown ESPN grade skipped" in src, "an ESPN failure never stops the file's grade"
+
+
 def test_the_board_joins_quotes_to_our_usage_and_prices_every_player():
     c = _hist()
     for p_, team, car, tgt, td in (("Jahmyr Gibbs", "DET", 15, 4, 1), ("Amon-Ra St. Brown", "DET", 0, 10, 1),

@@ -1551,6 +1551,25 @@ function recLikelyGameLines(lk, sp) {
     <div class="card" style="padding:0;margin-top:6px">${rows}</div>`;
 }
 
+/* EACH KIND OF LONG SHOT ITS OWN LINE (Ethan, 2026-11-01: "are we tracking
+   the record for the longshot for nfl and all other sports bc we already are
+   1/2"). The first-scorer picks that replaced the home-run and anytime-TD
+   boards on 31 October are a different bet with a different price; pooled
+   under 395 graded home runs their first week cannot be seen. Newest kind
+   first, each with its own record and units. */
+const LS_MARKET_ORDER = ["first_td", "first_basket", "anytime_td", "home_runs"];
+function recLongshotMarkets(bm) {
+  const keys = Object.keys(bm || {}).sort((a, b) =>
+    (LS_MARKET_ORDER.indexOf(a) + 99) % 99 - (LS_MARKET_ORDER.indexOf(b) + 99) % 99);
+  if (keys.length < 2) return "";
+  return `<div class="rec-ls-markets">${keys.map((k) => {
+    const m = bm[k] || {};
+    const u = Number(m.net_u) || 0;
+    return `<span class="chip">${escapeHtml(marketWord(k))} ${m.w || 0}-${m.l || 0}
+      <b class="${toneOf(u)}">${u >= 0 ? "+" : ""}${u.toFixed(2)}u</b></span>`;
+  }).join(" ")}</div>`;
+}
+
 function recLongshotSection(ls) {
   // Show whenever EITHER bucket has data — after the watchlist split the
   // picks record can be tiny while the calibration sample is huge.
@@ -1584,7 +1603,7 @@ function recLongshotSection(ls) {
       <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
       <span class="rl-date">${escapeHtml(b.date || "")}</span>
       <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
-        <span class="rl-bet">${escapeHtml(b.market_label || "HR")}</span></span>
+        <span class="rl-bet">${escapeHtml(marketWord(b.market || "home_runs"))}</span></span>
       <span class="rl-proc">${b.hit_prob != null ? `model ${(b.hit_prob * 100).toFixed(0)}%` : ""}</span>
       <span class="rl-odds">${american(b.odds)}</span>
       <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
@@ -1592,11 +1611,14 @@ function recLongshotSection(ls) {
   }).join("");
   return `
     <div class="section-title">Long Shots — tracked separately
-      <span class="sub">— home runs &amp; anytime TDs, with their own ROI. Never mixed
-      into the record above.</span></div>
+      <span class="sub">— first touchdowns and first baskets since 31 October, home runs
+      and anytime touchdowns before them, with their own ROI. Never mixed into the record
+      above.</span></div>
     ${recDisclosure("Why these are quarantined", `Only the board’s actual
-      PICKS — three per night at most — count toward this record, graded at a flat 0.1u
-      nominal stake with zero bankroll impact. The watchlist (every real-priced home run
+      PICKS — one a game at most — count toward this record, graded at a flat 0.1u
+      nominal stake with zero bankroll impact: a +1800 first touchdown that lands pays
+      +1.80u here. A first touchdown is graded off the game’s scoring plays minutes after
+      the final whistle. The watchlist (every real-priced home run
       on the slate, sometimes 100+ names) is tracked separately as a calibration sample
       and never enters this W-L: recommend a couple hundred homers a night and a handful
       always land, which proves nothing. These markets are long shots by nature, so even
@@ -1618,6 +1640,7 @@ function recLongshotSection(ls) {
                 ls.odds_range ? `range ${american(ls.odds_range[0])} to ${american(ls.odds_range[1])}`
                               : "accrues as picks settle")}
     </div>
+    ${recLongshotMarkets(ls.by_market)}
     ${Object.keys(ls.by_sport || {}).length > 1 ? `<div style="margin-top:8px">
       ${Object.entries(ls.by_sport).map(([s, d]) =>
         `<span class="chip">${escapeHtml(s.toUpperCase())} ${d.w}/${d.n}

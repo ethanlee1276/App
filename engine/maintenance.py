@@ -1142,9 +1142,17 @@ def settle_open(log=print, state_path: Path | None = None,
         settled = ledger.settle_from_history(lconn, hconn)
         # FIRST TOUCHDOWN (2026-10-31): no stat row says who scored first, so
         # these grade off the play-by-play's first scorer (engine/firsttd).
+        # ESPN's scoring plays first, the night of the game (2026-11-01: a
+        # Sunday hit sat open into Tuesday on the overnight file alone); the
+        # file for whatever ESPN cannot say.
         try:
             from . import firsttd as _ftd
-            n_ftd = _ftd.settle(lconn)
+            n_ftd = 0
+            try:
+                n_ftd += _ftd.settle_espn(lconn)
+            except Exception as exc:                         # noqa: BLE001
+                log(f"  ⚠️  first-touchdown ESPN grade skipped: {exc}")
+            n_ftd += _ftd.settle(lconn)
             if n_ftd:
                 log(f"  First-touchdown bets graded: {n_ftd}")
                 settled += n_ftd
