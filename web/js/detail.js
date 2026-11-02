@@ -5136,11 +5136,41 @@ function gpWashOn(league, d) {
   document.body.style.setProperty("--wh", home);
   view.classList.add("gp-on");
   document.body.classList.add("gp-on");
+  gpPin();
 }
 function gpWashOff() {
   const view = typeof document !== "undefined" && document.getElementById("view-pbp");
   if (view) view.classList.remove("gp-on");
   if (typeof document !== "undefined" && document.body) document.body.classList.remove("gp-on");
+  const top = typeof document !== "undefined" && document.querySelector(".topbar");
+  if (top) { top.style.removeProperty("--gp-x"); top.style.removeProperty("--gp-y"); }
+}
+/* ONE PICTURE ACROSS THE TOP (detail.css): the site's bar and the compact
+   score bar paint the wash's own screen-sized picture, pinned to the
+   screen's corner, so each needs to know where it sits on the screen.
+   Measured on every draw (gpWashOn, gpWire) and again when the screen or
+   the column changes size: the phone turned, the sidebar slid away. The
+   compact bar slides up and down, never sideways, so where it rests is its
+   row's sticky top. */
+let _gpPinRO = null;
+function gpPin() {
+  const view = document.getElementById("view-pbp");
+  if (!view || !view.classList.contains("gp-on")) return;
+  const at = (el, y) => {
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    el.style.setProperty("--gp-x", `${-Math.round(r.left)}px`);
+    el.style.setProperty("--gp-y", `${-Math.round(y)}px`);
+  };
+  const top = document.querySelector(".topbar");
+  if (top) at(top, 0);
+  const bar = view.querySelector(".gp-compact"), stick = view.querySelector(".gp-stick");
+  if (bar && stick) at(bar, parseFloat(getComputedStyle(stick).top) || 0);
+  if (!_gpPinRO && typeof ResizeObserver !== "undefined") {
+    _gpPinRO = new ResizeObserver(() => gpPin());
+    _gpPinRO.observe(view);
+    window.addEventListener("resize", gpPin);
+  }
 }
 
 // The bar's way back and the menu's three dots, drawn here: the icon set
@@ -5333,6 +5363,7 @@ function gpWire(host) {
     bar.classList.toggle("on", on);
     bar.inert = !on;
   };
+  gpPin();
   // Each watches one line across the top of the screen, and everything
   // below that line counts as in (the root runs GP_IN_BELOW down past the
   // screen): only gone up past it is out. Watching the screen alone, a

@@ -194,7 +194,8 @@ def test_the_page_is_dark_on_the_wash_in_either_theme_and_its_glass_never_blurs(
         assert f"  {tok}: " in scoped, f"{tok}: the light theme's value would reach the page on the wash"
     assert "backdrop-filter" not in _re.sub(r"/\*.*?\*/", "", GP_CSS, flags=_re.S), "no blur: it crashed his phone"
     assert "#view-pbp.gp-on .card { background-color: var(--gp-glass); background-image: none; box-shadow: none; }" in GP_CSS
-    assert "body.gp-on .topbar { background: var(--gp-wash); }" in GP_CSS, "the bar over the page wears its top"
+    assert "#view-pbp.gp-on > .gp-wash, body.gp-on .topbar, #view-pbp.gp-on .gp-compact," in GP_CSS, \
+        "the bar over the page wears its top: the wash's own picture (tests/test_the_top_of_the_game_page_is_one_picture.py)"
 
 
 # --- the line score ---------------------------------------------------------------
