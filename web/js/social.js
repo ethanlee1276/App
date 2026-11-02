@@ -209,6 +209,14 @@
     + (Number(p.lv) ? `<span class="fd-lv kr-lv kr-${escapeAttr(p.cls || "t1")}" title="Karma level ${Number(p.lv)}">${Number(p.lv)}</span>` : "")
     + (p.flair ? `<span class="fd-flair" aria-hidden="true">${escapeHtml(p.flair)}</span>` : "") : "");
   const isBoss = () => !!(F.me && F.me.founder);
+  /* The site's own account carries its desk on its own profile, beside Edit
+     profile (Ethan, 2026-11-02, on that profile: "it's not giving me access
+     to the page. It should give this account access"). The server's own
+     rule (engine/whoson.is_site_account: verified, the handle Qellys_Book),
+     or its word on the account (`whoson`); the desk itself answers that
+     account alone. */
+  const siteDesk = (p) => !!(p && p.verified && String(p.handle || "").toLowerCase() === "qellys_book")
+    || !!(typeof _acctUser !== "undefined" && _acctUser && _acctUser.whoson);
 
   function teamMap(sport) {
     const maps = { nfl: typeof TEAMS !== "undefined" ? TEAMS : null,
@@ -974,6 +982,8 @@
         ${p.bio ? `<p class="fd-prof-bio">${rich(p.bio)}</p>` : o.mine ? `<p class="fd-prof-bio dim">Add a bio — who you are, what you bet.</p>` : ""}
         <p class="fd-prof-meta">${abbr ? `<span>${teamLogo(abbr, lg, 18)}${escapeHtml(abbr)} · ${escapeHtml((lg || "").toUpperCase())}</span>` : ""}
           <span>${ico("cal", 14)} Joined ${escapeHtml(since(p.since))}</span></p>
+        ${o.mine && siteDesk(p) ? `<a class="fd-prof-desk" href="#owner">${ico("gauge", 18)}<span><b>Owner desk</b>
+          <small>Who’s on now, accounts, money, today’s picks, the site’s health</small></span>${ico("chevr", 14)}</a>` : ""}
         <div class="fd-pstats">${stat(recTxt, "Record")}${stat(units(rec.units), "Units", tone)}${stat(win, "Win %")}
           ${stat(big(p.followers), "Followers", "", "follows")}${stat(big(p.following_count), "Following", "", "following-list")}${stat(big(p.tails), "Tails")}</div>
         ${r30.n ? `<p class="fd-prof-30">Last 30 days <b>${r30.w}-${r30.l}${r30.p ? `-${r30.p}` : ""}</b> · ${units(r30.units)}${

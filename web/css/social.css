@@ -480,6 +480,13 @@ a.fd-slip:hover { border-color: transparent; }
 .fd-prof-body { padding: 0 20px 18px; }
 .fd-prof-top { position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: -52px; }
 .fd-prof-btns { position: relative; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-bottom: 6px; }
+/* The site's own account: its desk, a row under the profile (js/social.js siteDesk). */
+.fd-prof-desk { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; padding: 12px 14px; border-radius: var(--radius);
+  background: color-mix(in oklab, var(--brand) 14%, transparent); color: var(--text); text-decoration: none; }
+.fd-prof-desk > svg:first-child { flex: none; color: var(--brand); }
+.fd-prof-desk span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.fd-prof-desk small { color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.fd-prof-desk > svg:last-child { flex: none; color: var(--text-mute); }
 .fd-prof-name { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: var(--fs-2xl); font-weight: 800; line-height: var(--lh-tight); }
 .fd-prof-name .fd-ver { width: 19px; height: 19px; }
 .fd-prof-h { margin: 3px 0 0; color: var(--text-mute); font-size: var(--fs-md); }

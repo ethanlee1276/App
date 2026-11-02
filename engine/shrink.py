@@ -62,9 +62,9 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/chat.js", "css/chat.css",
          # Ask Qellys's chat room (2026-10-27).
          "js/ask.js", "css/ask.css",
-         # Who's on now (2026-11-01): the owner's page, and every tab's
-         # word of which page it shows (engine/whoson).
-         "js/whoson.js", "css/whoson.css", "js/here.js",
+         # Every tab's word of which page it shows (engine/whoson, 2026-11-01);
+         # Who's on now itself is a card on the owner's desk (2026-11-02).
+         "js/here.js",
          # The owner's desk and the notice to everybody (2026-11-02,
          # engine/ownerdesk, engine/sitenotice).
          "js/owner.js", "css/owner.css", "js/notice.js", "css/notice.css")

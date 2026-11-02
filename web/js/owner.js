@@ -14,10 +14,17 @@
    disk filling…) heads the page, and engine/owneralerts pushes the same
    list to this account's phones.
 
+   Who's on now is the desk's first card, under what needs the owner
+   (Ethan, the same day: "The Who's on and owners page should be one page").
+   It had its own page (js/whoson.js, 2026-11-01) and keeps its own, faster
+   clock here — WHO'S ON NOW, below.
+
    Loaded the first time it opens (app.js roomCall). The server answers
-   /api/owner/desk for the site's own account alone and, to anybody else, as
-   if it did not exist. Everything on it is a count or the business's own
-   number — nobody is named here. Redrawn every OD_EVERY_MS while open. */
+   /api/owner/desk and /api/owner/whoson for the site's own account alone
+   and, to anybody else, as if they did not exist. Who's on now names the
+   members the Privacy Policy's notice has reached who left "Show me in Who's
+   on now" on; everything else on the page is a count or the business's own
+   number. The rest of the desk is redrawn every OD_EVERY_MS while open. */
 
 const OD_EVERY_MS = 60000;
 let _odTimer = null;
@@ -52,6 +59,142 @@ function odNowHTML(now) {
   if (!now || now.error) return odErr(now);
   return `<div class="od-tiles">${odTile(odN(now.members), "Members on")}${odTile(odN(now.visitors), "Visitors")}${
     odTile(odN(now.pages), "Pages open")}</div>`;
+}
+
+/* WHO'S ON NOW (engine/whoson): everybody on the site this minute and the
+   page each has open, named where a member may be (engine/whoson.nameable:
+   the Privacy Policy's notice has reached them and they left "Show me in
+   Who's on now" on) and a number on their page where not. Its own clock,
+   WO_EVERY_MS, against the desk's minute: only this card is redrawn, so a
+   notice being written or the hidden reports left open are never touched.
+   Until its first answer the card shows the desk's own counts; an old
+   #whoson link opens this page (app.js ownerRoute). */
+const WO_EVERY_MS = 10000;
+let _woTimer = null;
+let _woBusy = false;
+let _woLast = null;                 // the last answer, kept across the desk's redraws
+let _woRefused = false;
+
+/* Our own pages by their view names. The menu's own words where it has a
+   button for the page, these where it does not or says it differently. */
+const WO_PAGES = {
+  recommended: "Home", likely: "Most Likely", longshots: "Long Shots", live: "Live", pbp: "Game",
+  game: "Game bet", prop: "Prop", record: "Record", mybets: "My Bets", account: "Account",
+  props: "Over / Under", edge: "Edge", parlays: "Parlays", potd: "Pick of the Day", ask: "Ask",
+  feed: "Social", messages: "Messages", alerts: "Alerts", fantasy: "Fantasy", owner: "Owner desk",
+  whoson: "Owner desk",             // a tab opened before the two were one page
+};
+const WO_LEAGUES = { nfl: "NFL", cfb: "College football", nba: "NBA", wnba: "WNBA", nhl: "NHL", mlb: "MLB",
+  ufc: "UFC", polymarket: "Polymarket", fantasy: "Fantasy" };
+
+function woPage(view) {
+  if (WO_PAGES[view]) return WO_PAGES[view];
+  const b = document.querySelector(`#sidebar button[data-view="${CSS.escape(view)}"]`);
+  const t = b && (b.querySelector(".sb-label") || b).textContent.replace(/\s+/g, " ").trim();
+  return t || (view.charAt(0).toUpperCase() + view.slice(1));
+}
+
+/* Where somebody is, in words: "KC @ DEN · live", "Most Likely · NFL". */
+function woWhere(x) {
+  const g = x.game;
+  if (g && g.away && g.home) {
+    const st = g.state === "live" ? "live" : g.state === "final" ? "final" : g.state === "pre" ? "before the game" : "";
+    return `${escapeHtml(g.away)} @ ${escapeHtml(g.home)}${st ? ` <span class="od-mute">· ${st}</span>` : ""}`;
+  }
+  const lg = WO_LEAGUES[String(x.detail || "").split("_")[0]];
+  return `${escapeHtml(woPage(x.view))}${lg ? ` <span class="od-mute">· ${escapeHtml(lg)}</span>` : ""}`;
+}
+
+function woAgo(s) {
+  s = Math.max(0, Math.round(Number(s) || 0));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+function woInitials(p) {
+  const src = String(p.name || p.handle || "?").replace(/[^A-Za-z0-9 ]/g, " ").trim();
+  return (src.split(/\s+/).slice(0, 2).map((w) => w[0]).join("") || "?").toUpperCase();
+}
+
+function woMemberHTML(m) {
+  const c = Math.abs(Number(m.color) || 0) % 8;
+  return `<li class="wo-row">
+    <span class="wo-av wo-c${c}" aria-hidden="true">${escapeHtml(woInitials(m))}</span>
+    <div class="wo-who">
+      <div class="wo-name">${m.name ? `${escapeHtml(m.name)} ` : ""}<span class="wo-handle">${m.handle
+        ? `@${escapeHtml(m.handle)}` : "no username yet"}</span></div>
+      <div class="wo-where">${woWhere(m)}</div>
+      <div class="wo-time">On this page ${woAgo(m.on_page_s)} · on the site ${woAgo(m.on_site_s)}${m.tabs > 1 ? ` · ${m.tabs} tabs` : ""}</div>
+    </div>
+    <span class="wo-seen" title="Last heard from">${woAgo(m.seen_s)} ago</span>
+  </li>`;
+}
+
+function woPageHTML(p) {
+  return `<tr><th scope="row">${woWhere(p)}</th><td>${p.members}</td><td>${p.visitors}</td></tr>`;
+}
+
+/* The card's inside from an answer: the counts, by name, every page open. */
+function woHTML(d) {
+  const at = typeof tzTime === "function" && d.at
+    ? tzTime(d.at * 1000, { hour: "numeric", minute: "2-digit", second: "2-digit" }) : "";
+  const named = (d.members || []).map(woMemberHTML).join("");
+  const unnamed = d.unnamed_members
+    ? `<p class="od-note">${d.unnamed_members} more member${d.unnamed_members === 1 ? "" : "s"} on, not shown by name:
+        the Privacy Policy’s notice has not reached them yet, or they turned off “Show me in Who’s on now”.</p>` : "";
+  const pages = (d.pages || []).map(woPageHTML).join("");
+  return `<h2 class="od-h">Who’s on now${at ? ` <span class="od-mute wo-at">${escapeHtml(at)}</span>` : ""}</h2>
+    <div class="od-tiles">${odTile(odN(d.members_total), "Members on")}${odTile(odN(d.visitors), "Visitors")}${
+      odTile(odN((d.pages || []).length), "Pages open")}</div>
+    <h3 class="wo-h">By name</h3>
+    ${named ? `<ul class="wo-list">${named}</ul>` : `<p class="od-note">Nobody to show by name right now.</p>`}
+    ${unnamed}
+    <h3 class="wo-h">Every page open</h3>
+    ${pages ? `<div class="tbl-scroll"><table class="od-tbl wo-tbl"><thead><tr><th scope="col">Page</th><th scope="col">Members</th>
+      <th scope="col">Visitors</th></tr></thead><tbody>${pages}</tbody></table></div>`
+      : `<p class="od-note">Nobody has a page open right now.</p>`}
+    <p class="od-note">A tab counts while it has said where it is in the last ${Math.round((d.window_s || 150) / 60 * 10) / 10} minutes.
+      Held in the server’s memory, never written down.</p>`;
+}
+
+/* The card's inside as it stands: the last answer, else the desk's counts. */
+function odWhoInner(now) {
+  if (_woLast) return woHTML(_woLast);
+  return `<h2 class="od-h">Who’s on now</h2>${odNowHTML(now)}<p class="od-note">${_woRefused
+    ? "The names and pages are only for the site’s own account."
+    : "Asking who is on, and where…"}</p>`;
+}
+
+async function woFill() {
+  if (_woBusy) return;
+  _woBusy = true;
+  try {
+    const r = await fetch("/api/owner/whoson", { credentials: "same-origin", cache: "no-store" });
+    if (r.status === 404 || r.status === 403 || r.status === 401) {
+      _woLast = null;
+      _woRefused = true;
+    } else if (r.ok) {
+      _woLast = await r.json();
+      _woRefused = false;
+    }
+    const card = document.getElementById("od-who");
+    if (card) card.innerHTML = odWhoInner(_odLast && _odLast.now);
+  } catch (e) {
+    /* The last answer stays up; the next tick asks again. */
+  } finally {
+    _woBusy = false;
+  }
+}
+
+function woTick() {
+  clearTimeout(_woTimer);
+  _woTimer = setTimeout(() => {
+    if (typeof state !== "undefined" && state.view !== "owner") return;
+    if (document.visibilityState !== "hidden") woFill();
+    woTick();
+  }, WO_EVERY_MS);
 }
 
 function odAccountsHTML(a) {
@@ -211,10 +354,11 @@ function odHTML(d) {
   // Reports waiting go near the top; with none they sit beside the room.
   const waiting = !!(d.reports && d.reports.open_n);
   const reps = odReportsHTML(d.reports);
-  return `${odNeedsHTML(d.needs)}${odNowHTML(d.now)}<p class="od-door"><a href="#whoson">Who's on now, by name and page →</a></p>
+  return `${odNeedsHTML(d.needs)}<section class="od-card od-who" id="od-who" aria-label="Who’s on now">${odWhoInner(d.now)}</section>
     ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odMoneyHTML(d.money)}${odAccountsHTML(d.accounts)}
     ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches, d.alerts)}
-    <p class="od-foot">Counts and the business's own numbers; nobody is named here. Only this account can open this page.</p>`;
+    <p class="od-foot">Only this account can open this page. Who’s on now names only the members the Privacy Policy’s notice
+      has reached who left “Show me in Who’s on now” on; everything else here is a count or the business’s own number.</p>`;
 }
 
 async function odFill() {
@@ -295,4 +439,6 @@ function renderOwner() {
   if (!host.firstChild) host.innerHTML = `<p class="empty">Opening the desk…</p>`;
   odFill();
   odTick();
+  woFill();
+  woTick();
 }

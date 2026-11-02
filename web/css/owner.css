@@ -8,7 +8,6 @@
 .od-tile.good b { color: var(--good); }
 .od-tile.warn b { color: var(--warn); }
 .od-tile.bad b { color: var(--bad); }
-.od-door { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); }
 .od-card { background: var(--panel); border-radius: var(--radius); padding: 14px; margin: 0 0 var(--sp-3); }
 .od-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--fs-md); margin: 0 0 10px; }
 .od-more { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
@@ -77,3 +76,30 @@
 .od-need-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .od-need-list li { display: grid; gap: 2px; font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .od-need-list li span { color: var(--text-dim); font-size: var(--fs-xs); }
+/* Who's on now, the desk's first card (js/owner.js WHO'S ON NOW): a row a
+   member, their own colour on the disc; the counts, notes and table are
+   the desk's own. */
+.wo-at { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; }
+.wo-h { font-size: var(--fs-sm); font-weight: 700; color: var(--text-dim); margin: 14px 0 4px; }
+.wo-list { list-style: none; margin: 0; padding: 0; }
+.wo-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: var(--hairline) solid var(--border-soft); }
+.wo-row:first-child { border-top: 0; }
+.wo-av { flex: none; width: 36px; height: 36px; border-radius: 999px; display: inline-flex; align-items: center;
+  justify-content: center; font-size: var(--fs-xs); font-weight: 800; color: var(--wo-tint);
+  background: color-mix(in srgb, var(--wo-tint) 18%, transparent); }
+.wo-c0 { --wo-tint: var(--brand); }
+.wo-c1 { --wo-tint: var(--good); }
+.wo-c2 { --wo-tint: var(--bad); }
+.wo-c3 { --wo-tint: var(--cyan); }
+.wo-c4 { --wo-tint: var(--plum); }
+.wo-c5 { --wo-tint: var(--warn); }
+.wo-c6 { --wo-tint: var(--brand-2); }
+.wo-c7 { --wo-tint: var(--text-mute); }
+.wo-who { flex: 1; min-width: 0; }
+.wo-name { font-weight: 700; overflow-wrap: anywhere; }
+.wo-handle { font-weight: 500; color: var(--text-mute); }
+.wo-where { margin-top: 2px; overflow-wrap: anywhere; font-size: var(--fs-sm); }
+.wo-time { font-size: var(--fs-xs); color: var(--text-mute); margin-top: 2px; }
+.wo-seen { flex: none; font-size: var(--fs-xs); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+/* A page's name may be long ("KC @ DEN · before the game"): it wraps, the counts do not. */
+.wo-tbl tbody th { white-space: normal; font-weight: 500; }

@@ -1,8 +1,9 @@
 """Who's on now: every page open on the site, for the site's own account
-alone (engine/whoson, js/here.js, js/whoson.js, the Privacy Policy's
-§2.13). Ethan, 2026-11-01: "add a feature ONLY AVALIBLE for my Qellys Book
-account on the site that lets me see all active users. It shows me all
-users and what page they are on."
+alone (engine/whoson, js/here.js, the owner's desk's first card in
+js/owner.js, the Privacy Policy's §2.13). Ethan, 2026-11-01: "add a feature
+ONLY AVALIBLE for my Qellys Book account on the site that lets me see all
+active users. It shows me all users and what page they are on." And
+2026-11-02: "The Who's on and owners page should be one page".
 
 What these hold:
 
@@ -16,8 +17,10 @@ What these hold:
     on the page they have open;
   * the policy says what the code does, and the notice that comes with the
     change says how to stay off;
-  * the tab's check-in waits for the first screen, and the owner page draws
-    what it is sent and refuses everybody else.
+  * the tab's check-in waits for the first screen, and the desk's card
+    draws what it is sent and refuses everybody else; Settings carries the
+    switch, the desk's row names the card, and an old #whoson link opens
+    the desk.
 
 Run directly: `python3 tests/test_whos_on_now.py`
 """
@@ -347,7 +350,7 @@ def test_the_tab_says_its_page_its_game_and_when_it_leaves():
 
 
 def test_the_owner_page_draws_what_it_is_sent_and_refuses_everybody_else():
-    js = READ("web", "js", "whoson.js")
+    js = READ("web", "js", "owner.js")
     snap = {"at": 1_793_600_000, "window_s": 150, "members_total": 3, "visitors": 2, "unnamed_members": 1,
             "members": [{"handle": "SharpSam", "name": "Sam <b>", "color": 3, "view": "pbp",
                          "detail": "nfl_401873033", "tabs": 2, "on_page_s": 240, "on_site_s": 1320, "seen_s": 12,
@@ -359,55 +362,70 @@ def test_the_owner_page_draws_what_it_is_sent_and_refuses_everybody_else():
             "pages": [{"view": "pbp", "detail": "nfl_401873033", "members": 2, "visitors": 0,
                        "game": {"away": "KC", "home": "DEN", "state": "live"}},
                       {"view": "recommended", "detail": "nfl", "members": 1, "visitors": 2}]}
+    desk = {"at": 1_793_600_000, "now": {"members": 3, "visitors": 2, "pages": 2}, "switches": [],
+            "alerts": {"phones": 1}, "notice": None}
     got = _node(r"""
-      const hosts = { "whoson-body": { innerHTML: "", firstChild: null, querySelector: () => null },
-                      "whoson-sub": { textContent: "" } };
+      const hosts = { "owner-body": { innerHTML: "", firstChild: null, querySelector: () => null },
+                      "owner-sub": { textContent: "" }, "od-who": { innerHTML: "" } };
       global.document = { getElementById: (id) => hosts[id] || null, querySelector: () => null,
-                          visibilityState: "visible" };
+                          visibilityState: "visible", addEventListener() {}, activeElement: null };
       global.CSS = { escape: (s) => s };
-      global.state = { view: "whoson" };
+      global.state = { view: "owner" };
       global.escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      global.escapeAttr = global.escapeHtml;
+      global.toneOf = () => "";
+      global.tzTime = () => "3:05:12 PM";
       global.setTimeout = () => 0; global.clearTimeout = () => {};
-      let answer = { status: 200, body: """ + json.dumps(snap) + r""" };
-      global.fetch = async (u) => ({ status: answer.status, json: async () => answer.body });
+      let who = { status: 200, body: """ + json.dumps(snap) + r""" };
+      const desk = """ + json.dumps(desk) + r""";
+      global.fetch = async (u) => (u.includes("/api/owner/whoson")
+        ? { status: who.status, ok: who.status === 200, json: async () => who.body }
+        : { status: 200, ok: true, json: async () => desk });
       """ + js + r"""
+      const tick = () => new Promise((r) => setImmediate(r));
       (async () => {
-        renderWhoson(); await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r));
-        const page = hosts["whoson-body"].innerHTML;
-        answer = { status: 404, body: {} }; _woBusy = false;
+        renderOwner(); for (let i = 0; i < 6; i++) await tick();
+        const page = hosts["owner-body"].innerHTML, card = hosts["od-who"].innerHTML;
+        who = { status: 404, body: {} }; _woBusy = false;
         await woFill();
-        console.log(JSON.stringify({ page, refused: hosts["whoson-body"].innerHTML }));
+        console.log(JSON.stringify({ page, card, refused: hosts["od-who"].innerHTML }));
       })();
     """)
     if got is None:
         print("  SKIP node not installed"); return
-    page = got["page"]
-    assert "@SharpSam" in page and "KC @ DEN" in page and "· live" in page, page[:600]
-    assert "Sam &lt;b&gt;" in page and "Sam <b>" not in page, "a name is escaped"
-    assert "On this page 4 min · on the site 22 min · 2 tabs" in page
-    assert "12 s ago" in page and "Most Likely" in page
-    assert "1 more member on, not shown by name" in page
-    for k in ("Members on", "Visitors", "Pages open"):
-        assert k in page, k
-    assert "wo-c3" in page, "the member's own colour"
-    assert "no username yet" in page and ">@<" not in page, "a member with no handle is said so, not a bare @"
+    page, card = got["page"], got["card"]
+    assert 'id="od-who"' in page and page.index('id="od-who"') < page.index("A notice to everybody"), \
+        "Who's on now is the desk's first card"
+    assert "@SharpSam" in card and "KC @ DEN" in card and "· live" in card, card[:600]
+    assert "Sam &lt;b&gt;" in card and "Sam <b>" not in card, "a name is escaped"
+    assert "On this page 4 min · on the site 22 min · 2 tabs" in card
+    assert "12 s ago" in card and "Most Likely" in card and "3:05:12 PM" in card
+    assert "1 more member on, not shown by name" in card
+    for k in ("Members on", "Visitors", "Pages open", "By name", "Every page open"):
+        assert k in card, k
+    assert "wo-c3" in card, "the member's own colour"
+    assert "no username yet" in card and ">@<" not in card, "a member with no handle is said so, not a bare @"
     assert "only for the site’s own account" in got["refused"]
+    assert "Members on" in got["refused"], "refused, the card keeps the desk's own counts"
 
 
-def test_settings_carry_the_switch_and_the_owner_row():
+def test_settings_carry_the_switch_and_the_desk_carries_the_page():
     acc = READ("web", "js", "account.js")
     i = acc.index('title: "Show me in Who’s on now"')
     row = acc[i - 400:i + 300]
     assert "_pwStatus.whoson_switch" in row and 's.whoson !== "off"' in row and 'data-set-switch="whoson"' in row
-    j = acc.index('title: "Who’s on now"')
-    assert "_acctUser.whoson" in acc[j - 400:j] and 'href: "#whoson"' in acc[j:j + 200]
+    # One owner page (2026-11-02): no row of its own; the desk's row names it.
+    assert 'href: "#whoson"' not in acc
+    j = acc.index('title: "Owner desk"')
+    assert "if (inn && u.whoson) {" in acc[j - 700:j] and "Who’s on now" in acc[j:j + 300]
     assert 'whoson: "Who\'s on now"' in acc, "named on Your data's list of choices"
     from engine import consent as CS
     assert "whoson" in CS.KINDS
     app = READ("web", "js", "app.js")
-    assert 'roomCall(renderWhoson, "renderWhoson", "js/whoson.js", "css/whoson.css", a)' in app
-    assert 'if (name === "whoson") renderWhoson();' in app and '"whoson"' in app[app.index("const VIEW_ORDER"):][:900]
-    assert 'id="view-whoson"' in READ("web", "index.html")
+    assert "renderWhoson" not in app and '"whoson"' not in app[app.index("const VIEW_ORDER"):][:900]
+    assert 'if (h !== "whoson") return false;' in app and app.count("if (ownerRoute(h)) return;") == 2
+    assert 'id="view-whoson"' not in READ("web", "index.html")
+    assert not (ROOT / "web" / "js" / "whoson.js").exists() and not (ROOT / "web" / "css" / "whoson.css").exists()
 
 
 if __name__ == "__main__":

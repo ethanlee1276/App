@@ -4,6 +4,12 @@
     {
       "date": "2026-11-02",
       "kind": "fix",
+      "title": "The site's own account always finds its desk, and Who's on now is part of it",
+      "body": "Signed in to the site's own account on the page itself (a password, a reset link, a passkey or a texted code), the page knew only the account's email until it was next loaded, so the owner's desk could be missing from Settings, and where it did show it sat at the very bottom, under Help. The page now asks who it is the moment a sign-in finishes; the desk heads that account's Settings and sits on its own profile beside Edit profile. Who's on now is no longer a page of its own: it is the desk's first card, still refreshed every ten seconds, and an old link to it opens the desk."
+    },
+    {
+      "date": "2026-11-02",
+      "kind": "fix",
       "title": "Players' faces stay put after the site has been open a while",
       "body": "A headshot that failed to load once — a dropped connection as the phone woke up or changed networks — gave up for good and left the helmet or initials in its place until that card happened to be drawn again, and every refresh of a board (every 30 seconds on a live night) drew each face from scratch, the helmet showing until the photo arrived, which on an iPhone could mean never. A face that has loaded now stays up across refreshes, and one that misses waits behind the helmet and is asked for again: a few times on its own, then whenever the page comes back to the screen or the connection comes back."
     },

@@ -18336,6 +18336,25 @@ async function acctWho(force) {
   return _acctUser;
 }
 
+/* SIGNED IN ON THE PAGE, NOT BY A LOAD (Ethan, 2026-11-02, signed in as the
+   site's own account: "it's not giving me access to the page. It should
+   give this account access"). A sign-in here — a password, a reset link, a
+   passkey, a texted code — set the account to the sign-in's own answer,
+   {signed_in, email}, and nothing else: no profile and no `whoson`, the
+   server's word that this is the site's own account, which is what puts the
+   owner's desk in Settings. They came only with the next page load. Now the
+   server is asked at once; a failed ask keeps what the sign-in said, and an
+   open Settings screen is drawn again from the answer. */
+async function acctMeAgain() {
+  try {
+    const r = await fetch("/api/account/me", { credentials: "same-origin", cache: "no-store" });
+    const me = r.ok ? await r.json() : null;
+    if (me && me.signed_in) _acctUser = me;
+  } catch (e) { /* the sign-in's own answer stands */ }
+  if (state.view === "account" && typeof setRepaint === "function") setRepaint();
+  return _acctUser;
+}
+
 async function acctSyncAccount() {
   try {
     const r = await fetch("/api/account/data", {
@@ -18779,6 +18798,7 @@ window.acctResetSave = async function (btn) {
     card.querySelectorAll(".acct-pw, .acct-pw2").forEach((i) => { i.value = ""; });
     _resetToken = "";
     _acctUser = { signed_in: true, email: body.email };
+    await acctMeAgain();
     pushRelink();
     _resetNote = "";
     _acctNote = "Password changed — you are signed in.";
@@ -18828,6 +18848,7 @@ window.acctAuth = async function (btn, mode) {
     const body = await r.json().catch(() => null);
     if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
     _acctUser = { signed_in: true, email: body.email };
+    await acctMeAgain();
     pushRelink();
     welcomeDone();
     // The typed password is not kept anywhere. What we hold now is a
@@ -22937,10 +22958,8 @@ function whyCalcParlay() {
 function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.js", "css/race.css", a); }
 // …and every league's Pick of the Day, free (js/potd.js; Ethan, 2026-10-30).
 function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage", "js/potd.js", "css/potd.css", a); }
-// The owner's Who's on now (engine/whoson): its own room, loaded on first
-// use; the server answers its data to the site's own account alone.
-function renderWhoson(...a) { return roomCall(renderWhoson, "renderWhoson", "js/whoson.js", "css/whoson.css", a); }
-// The owner's desk (js/owner.js, engine/ownerdesk): the site's own account alone.
+// The owner's desk (js/owner.js, engine/ownerdesk), Who's on now its first
+// card (engine/whoson): the site's own account alone.
 function renderOwner(...a) { return roomCall(renderOwner, "renderOwner", "js/owner.js", "css/owner.css", a); }
 
 // renderMethodology, renderChangelog and renderVerify are in js/more.js, loaded the
@@ -23481,7 +23500,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "whoson", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -23959,7 +23978,6 @@ function _switchViewNow(name, push, dir) {
   if (name === "bankroll") renderBankrollExtras();
   if (name === "weather") renderWeather();
   if (name === "race") renderRace();
-  if (name === "whoson") renderWhoson();
   if (name === "owner") renderOwner();
   if (name === "potd") renderPotdPage();
   if (name === "alerts") renderAlerts();
@@ -25268,6 +25286,7 @@ function initialView() {
   const h = (location.hash || "").replace("#", "");
   if (entityRoute(h)) return;
   if (feedRoute(h)) return;
+  if (ownerRoute(h)) return;
   // A league as a destination: /mlb, /cfb. This replaced the #nba
   // special case further down, which was the same idea from before
   // there was a table for it.
@@ -25374,6 +25393,17 @@ function renderFeed() {
 
 /* #feed/post/12, #feed/u/name — The Feed's own pages, kept in the address
    bar so back, forward and a shared link all land where they should. */
+/* ONE OWNER PAGE (Ethan, 2026-11-02: "The Who's on and owners page should
+   be one page"). Who's on now is the owner's desk's first card; a link to
+   its old page opens the desk, the address put right without a history
+   entry (urlBackToView says why). */
+function ownerRoute(h) {
+  if (h !== "whoson") return false;
+  try { history.replaceState({ view: "owner" }, "", "#owner"); } catch (e) { /* file:// */ }
+  switchView("owner");
+  return true;
+}
+
 function feedRoute(h) {
   if (h !== "feed" && !h.startsWith("feed/")) return false;
   // Switching views writes "#feed" into the address bar; social.js puts
@@ -26366,6 +26396,7 @@ function bind() {
     const h = (location.hash || "").replace("#", "");
     if (entityRoute(h)) return;
     if (feedRoute(h)) return;
+    if (ownerRoute(h)) return;
     if (SPORT_CODES.includes(h)) {
       if (h !== state.sport) { state.sport = h; applySport(); load(); }
       exitStandaloneMode();

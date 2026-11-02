@@ -2762,6 +2762,7 @@ async function pkSignIn(card) {
       userHandle: r.userHandle ? pkB64(r.userHandle) : "" });
     // Signed in: the same steps a phone sign-in takes (phoneGo).
     _acctUser = { signed_in: true, email: out.email, phone: out.phone };
+    if (typeof acctMeAgain === "function") await acctMeAgain();
     if (typeof pushRelink === "function") pushRelink();
     welcomeDone();
     if (typeof a2hsArm === "function") a2hsArm();
@@ -3372,6 +3373,7 @@ async function phoneGo(card, mode) {
   // Signed in: the same steps an email sign-in takes (app.js acctAuth).
   _ph = { mode: "", sent: false, to: "" };
   _acctUser = { signed_in: true, email: out.email, phone: out.phone };
+  if (typeof acctMeAgain === "function") await acctMeAgain();
   if (typeof pushRelink === "function") pushRelink();
   welcomeDone();
   if (typeof pushAskArm === "function") pushAskArm();
@@ -3779,6 +3781,17 @@ function setListHTML() {
   const s = settings();
   const u = _acctUser, inn = !!(u && u.signed_in);
   const out = [];
+  // THE SITE'S OWN ACCOUNT (engine/whoson.is_site_account, which the server
+  // answers as `whoson`): its desk heads the list. Ethan, 2026-11-02, on this
+  // account's Settings: "it's not giving me access to the page" — the rows
+  // sat at the very bottom, under Help. One row since the same day: Who's
+  // on now is the desk's first card ("should be one page").
+  if (inn && u.whoson) {
+    out.push(setGroup("The site’s own account", [
+      setItem({ ico: "gauge", tone: "gold", title: "Owner desk", href: "#owner", chev: true,
+                sub: "Who’s on now, accounts, money, today’s picks, the site’s health, reports, a notice to everybody" }),
+    ]));
+  }
   if (inn) {
     // A phone account (engine/smsverify) has a number, not an address, and
     // no password to change: it signs in by a texted code.
@@ -3845,14 +3858,6 @@ function setListHTML() {
     setItem({ ico: "shield", title: "Privacy Policy", href: "privacy.html", chev: true }),
     setItem({ ico: "info", title: "Terms of Service", href: "terms.html", chev: true }),
   ]));
-  // The owner's Who's on now (engine/whoson): the site's own account alone.
-  if (inn && typeof _acctUser !== "undefined" && _acctUser && _acctUser.whoson) {
-    out.push(setGroup("The site’s own account", [
-      // The owner's desk (js/owner.js): the business at a glance, and the notice to everybody.
-      setItem({ ico: "gauge", title: "Owner desk", sub: "Accounts, money, picks, the site’s health, a notice to everybody", href: "#owner", chev: true }),
-      setItem({ ico: "people", title: "Who’s on now", sub: "Every page open on the site, live", href: "#whoson", chev: true }),
-    ]));
-  }
   if (inn) {
     out.push(setGroup("Your data", [
       // What the site keeps of your own time here (engine/activity), only while it keeps any.

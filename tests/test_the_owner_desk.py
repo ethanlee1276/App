@@ -417,10 +417,10 @@ def test_the_notice_draws_as_text_and_loads_only_when_there_is_one():
     assert ('if (_pwStatus.notice || window.qbNotice) loadRoom("js/notice.js", "css/notice.css")'
             '.then(() => window.qbNotice && qbNotice(_pwStatus.notice));') in app
     assert 'function renderOwner(...a) { return roomCall(renderOwner, "renderOwner", "js/owner.js", "css/owner.css", a); }' in app
-    assert 'if (name === "owner") renderOwner();' in app and '"whoson", "owner", "discord"' in app
+    assert 'if (name === "owner") renderOwner();' in app and '"verify", "owner", "discord"' in app
     acct = READ("web", "js", "account.js")
     assert 'title: "Owner desk"' in acct and 'href: "#owner"' in acct
-    assert acct.index('title: "Owner desk"') > acct.index("_acctUser.whoson"), "inside the site account's own group"
+    assert acct.index('title: "Owner desk"') > acct.index("if (inn && u.whoson) {"), "inside the site account's own group"
     html = READ("web", "index.html")
     assert '<section class="view" id="view-owner">' in html and 'id="owner-body"' in html
 
