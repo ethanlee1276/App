@@ -6,15 +6,26 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-02, after the Owner desk was locked to the accounts you
-list (step JK: item 0b), a failed payment got one day's grace before access
-pauses, and Terms §5.7 was rewritten to say so, with the email it needs
-(step JJ: item 1's command now arms it).
-Before that a cancelled trial lost its access, one trial per person, a failed
-charge started telling the member, and the Owner desk got its account tools
-(step JI: nothing to run; its read-only check is
-`cd /srv/qellys && nice -n 19 bash tools/catchup.sh JI 2>&1 | tee /tmp/ji.txt`).
-Before that, Who's on now became the desk's first card (step JH). Done:
+Last updated 2026-11-02 at 22:00 UTC, after you ran JK, JJ and JI (Done,
+below). Earlier that day the Owner desk was locked to the accounts you list
+(step JK); a failed payment got one day's grace before access pauses, and
+Terms §5.7 was rewritten to say so, with the email it needs (step JJ); a
+cancelled trial lost its access, one trial per person, a failed charge
+started telling the member, and the Owner desk got its account tools (step
+JI). Before that, Who's on now became the desk's first card (step JH). Done:
+
+- **JK:** your two accounts are on the Owner desk's list, and nobody else
+  opens it (`python3 -m engine.siteowners list` shows who is on it).
+- **JJ:** you armed the notices,
+  `QB_POLICY_NOTICE 2026-10-29,2026-11-01,2026-11-02`, and restarted the
+  site at 21:58 UTC. 29 October's had gone to all 14 accounts with an
+  address; 1 and 2 November's had 14 each to go. They send between 10:00
+  and 20:00 Eastern, 60 a day at most, so both should finish that evening;
+  item 1 checks.
+- **JI:** every line as it should be — the Terms dated 2 November, the
+  policy's owner-tools and one-trial sections, the Accounts card, the trial
+  rule from 2 November 00:00 Eastern, and the failed-charge notice in the
+  billing sweep.
 
 - **The outage:** the weekly backup check filled the disk at 04:32 UTC and
   left its copy behind. You deleted the leftovers, restarted the site
@@ -39,7 +50,7 @@ Before that, Who's on now became the desk's first card (step JH). Done:
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 3 checks it.
 
-## 0. Today, half an hour after this push: the disk and the backups (step JG)
+## 0. Any time now: the disk and the backups (step JG)
 
 Read-only. Old pre-repair copies prune on their own once this is live; this
 shows what's in the backup folders, how full the disk is, and the backup
@@ -56,45 +67,24 @@ before October 4 (they go to /srv/qellys/backups now, and offsite):
 sudo find /var/backups/qellys -type f -mtime +20 -print -delete
 ```
 
-Tomorrow after 04:00 UTC, run the JG check again: the backup log's last
-lines should say "offsite copy updated" once Backblaze has cleared the old
-versions.
+The backup runs at 04:00 UTC: from the first run after Backblaze cleared
+the old versions, the backup log's last lines should say "offsite copy
+updated".
 
-## 0b. As soon as this is pushed: only your two accounts on the Owner desk (step JK)
+## 1. An hour after the restart, or tomorrow: the notices went out; the trimmed files; alerts on your phone (steps JH, JJ)
 
-You, 2026-11-02: only your two accounts should open the owners page. Until
-you run this, the Qellys_Book account opens it as before; from the moment
-you do, the accounts you name and nobody else. Your real addresses in place
-of these (they are typed on the box and never kept in the code):
-
-```
-cd /srv/qellys && sudo -u qellys python3 -m engine.siteowners add you@example.com other@example.com
-```
-
-It prints each account's username and the day it was made, to check they
-are yours. The read-only check (`1`, then the list):
+The notices you armed (JJ, Done above) go out from the push loop between
+10:00 and 20:00 Eastern. Who's on now names a member a week after theirs
+reached them, and the new Terms §5.7 takes effect for an existing account
+30 days after its email. An hour after the restart (or tomorrow after
+11:00 Eastern), both 1 and 2 November's should read 14 told, 0 to go:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JK 2>&1 | tee /tmp/jk.txt
+cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
 ```
 
-## 1. Any time: the notice emails — Who's on now, and 2 November's Terms — and the trimmed files (steps JH, JJ)
-
-Your view of every page open on the site, the Owner desk's first card
-(Settings → The site's own account → Owner desk, on the accounts you list
-in item 0b, or the row on their profiles). It counts everybody
-now; it names a member only once the Privacy Policy's notice reached them a
-week ago (accounts made from 2 November, at once; your own account always),
-so arm that email. And the new Terms §5.7 (a failed payment keeps access one
-more day, then pauses it; you, "do number one too" and "a 1 day grace
-period") takes effect for an existing account 30 days
-after its email (step JJ). All three changes are named, so the earlier ones
-keep going if they haven't finished; nobody gets one twice:
-
-```
-cd /srv/qellys && sudo ./deploy/setenv.sh QB_POLICY_NOTICE 2026-10-29,2026-11-01,2026-11-02
-sudo systemctl restart qellys
-```
+If both still read 0 told inside those hours, the restart didn't take:
+run `sudo systemctl restart qellys` once more.
 
 The Caddy config with the new files' trimmed copies — the Owner desk's
 (Who's on now included) and the notice bar's (it checks itself
@@ -105,20 +95,19 @@ before 2 November):
 cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
 
-Not a command: on your phone, sign in to one of the accounts you listed in
-item 0b and turn alerts on (the Alerts page). The Owner desk then pushes
+Not a command: on your phone, sign in to one of your two listed accounts
+and turn alerts on (the Alerts page). The Owner desk then pushes
 every listed account's phones when the site needs you — a board that hasn't rebuilt on
 a day its league plays, grading stopped, the disk filling, a failed update,
 odds credits running low — once a day each, held through your quiet hours.
 The desk's Switches card says "On · 1 phone" once it's set.
 
-Then the read-only check (`1`, `1`, `True`, both notices' counts, `1`), and
-the email as a member gets it:
+Then the read-only check (`1`, `1`, `True`, the notices' counts, `1`), and
+the two emails as a member gets them:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JH 2>&1 | tee /tmp/jh.txt
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-01
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JJ 2>&1 | tee /tmp/jj.txt
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-02
 ```
 
@@ -132,7 +121,7 @@ beside it. The header's commit should be this push's or later:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JD 2>&1 | tee /tmp/jd.txt
 ```
 
-## 3. Tonight, after the next college build: receivers are back (steps JC, IX)
+## 3. Any time now, after a college build: receivers are back (steps JC, IX)
 
 The college board rebuilds through the evening. After the next build, each
 game's top three should include receivers, and nobody's chance should be
@@ -142,7 +131,7 @@ above 0.30:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IX 2>&1 | tee /tmp/ix.txt
 ```
 
-## 4. Tomorrow after the morning NFL build: first touchdown, and what the tightening held (steps IU, IT)
+## 4. Any time now: the NFL's first touchdown, and what the tightening held (steps IU, IT)
 
 Sunday morning's odds pull buys the first-touchdown prices (November's
 budget is fresh). IU shows the board, each pick next to our chance and the
@@ -154,7 +143,7 @@ under, and a receiving-yards under):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IU IT 2>&1 | tee /tmp/sunday.txt
 ```
 
-## 5. Tomorrow evening, after the NBA build: first basket on Long Shots (step JA)
+## 5. Any evening now, after the NBA build: first basket on Long Shots (step JA)
 
 Tonight's NBA board had no prices at all: "matched 0 props across 0
 events", with October's budget spent. November's budget buys them, first
@@ -165,7 +154,7 @@ graded:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JA 2>&1 | tee /tmp/ja.txt
 ```
 
-## 6. Tomorrow (Nov 1), from mid-morning: the new month, and the real bill (steps IP, IQ)
+## 6. Any time now: the new month, and the real bill (steps IP, IQ)
 
 After the reset, the first odds pull reads the new balance and the plan
 re-plans November from it. These show the plan with tonight's line, which
@@ -177,7 +166,7 @@ the 17 books double every call):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IP IQ 2>&1 | tee /tmp/nov1.txt
 ```
 
-## 7. Tomorrow evening: the bill again, over a full day (step IQ)
+## 7. A day after item 6: the bill again, over a full day (step IQ)
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IQ 2>&1 | tee /tmp/iq.txt
