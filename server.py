@@ -4718,6 +4718,14 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if gate.comped(who.get("email")):
             return True
+        # The owner's free access (engine/owneraccounts), to a date. A broken
+        # lookup falls through: it costs a grant, never a subscriber.
+        try:
+            from engine import owneraccounts as OA
+            if OA.granted(conn, who["id"]):
+                return True
+        except Exception:                                    # noqa: BLE001
+            pass
         # A REDEEMED CODE IS AN ENTITLEMENT, checked before the processor
         # and independent of it. This is what lets the paywall be switched
         # on before Stripe is live: comp addresses and codes are then the
@@ -4727,14 +4735,6 @@ class Handler(BaseHTTPRequestHandler):
         try:
             _acct().once_per_db(RD.init)(conn)   # once per process (audit F-9)
             if RD.active(conn, who["id"]):
-                return True
-        except Exception:                                    # noqa: BLE001
-            pass
-        # FREE ACCESS THE OWNER GAVE from the desk (engine/owneraccounts),
-        # to a date, the same way in as a code; its own try for the same reason.
-        try:
-            from engine import owneraccounts as OA
-            if OA.granted(conn, who["id"]):
                 return True
         except Exception:                                    # noqa: BLE001
             pass

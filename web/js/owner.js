@@ -328,7 +328,7 @@ const OA_GRANTS = [[7, "7 days"], [30, "30 days"], [90, "90 days"], [180, "6 mon
 const OA_WORDS = { grant: "Gave free access", ungrant: "Ended free access", signout: "Signed out everywhere",
   suspend: "Suspended", unsuspend: "Lifted the suspension", rename: "Reset the username", delete: "Deleted the account" };
 const OA_STATUS = { active: ["Paying", "good"], trialing: ["On a trial", "good"], past_due: ["Payment failed", "warn"],
-  unpaid: ["Unpaid", "warn"], canceled: ["Cancelled", "rest"], none: ["Free", "rest"], incomplete: ["Never finished", "rest"],
+  unpaid: ["Unpaid", "warn"], canceled: ["Cancelled", "rest"], none: ["No plan", "rest"], incomplete: ["Never finished", "rest"],
   paused: ["Paused", "rest"] };
 const _oa = { q: "", list: null, card: null, recent: null, busy: false, said: "", armed: "" };
 let _oaArmTimer = null;
@@ -336,7 +336,7 @@ let _oaArmTimer = null;
 const oaDay = (t) => (t ? new Date(Number(t) * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—");
 function oaChip(st, entitled, suspended) {
   if (suspended) return `<span class="od-pill warn">Suspended</span>`;
-  const [w, tone] = OA_STATUS[st] || [st || "Free", "rest"];
+  const [w, tone] = OA_STATUS[st] || [st || "No plan", "rest"];
   return `<span class="od-pill${tone === "good" ? "" : ` ${tone}`}">${escapeHtml(entitled && st === "none" ? "Free access" : w)}</span>`;
 }
 
@@ -364,7 +364,7 @@ function oaArmBtn(key, word, again, cls) {
 
 function oaCardHTML(c) {
   const m = c.membership || {};
-  const [stWord] = OA_STATUS[m.status] || [m.status || "Free"];
+  const [stWord] = OA_STATUS[m.status] || [m.status || "No plan"];
   const ends = m.period_end ? ` · ${m.cancel_at_end || m.status === "canceled" ? "ends" : "renews"} ${oaDay(m.period_end)}` : "";
   const plan = `${escapeHtml(m.entitled || m.status !== "none" ? stWord : "No plan")}${m.plan_name ? ` · ${escapeHtml(m.plan_name)}` : ""}${
     m.status === "none" ? "" : ends}`;
