@@ -371,7 +371,7 @@ function oaCardHTML(c) {
   const grant = c.grant ? `Until ${oaDay(c.grant)}` : "None";
   const codes = (c.codes && c.codes.codes || []).length ? `${c.codes.codes.length} redeemed${c.codes.active ? `, covered to ${oaDay(c.codes.granted_to)}` : ""}` : "None";
   const blocked = m.charges ? `<p class="od-note">Suspend and Delete wait until Stripe can no longer charge this account: cancel its subscription on Stripe first${
-    c.stripe ? ` (<a href="${escapeAttr(c.stripe)}" target="_blank" rel="noopener">open the customer</a>)` : ""}.</p>` : "";
+    c.stripe ? ` (<a href="${safeHref(c.stripe)}" target="_blank" rel="noopener">open the customer</a>)` : ""}.</p>` : "";
   const acts = [
     `<form class="oa-grant" id="oa-grant"><label for="oa-days" class="od-sr">How long</label><select id="oa-days">${
       OA_GRANTS.map(([d, w]) => `<option value="${d}"${d === 30 ? " selected" : ""}>${w}</option>`).join("")}</select>
@@ -399,7 +399,7 @@ function oaCardHTML(c) {
       odRow("Signed in on", `${odN(c.sessions)} device${c.sessions === 1 ? "" : "s"} · ${odN(c.phones)} phone${c.phones === 1 ? "" : "s"} with alerts`)}${
       odRow("Membership", plan, m.entitled ? "good" : "mute")}${
       odRow("Free trial", m.trial_used ? "Had it — no second trial" : "Never had one", m.trial_used ? "mute" : "")}${
-      c.stripe ? odRow("Stripe", `<a href="${escapeAttr(c.stripe)}" target="_blank" rel="noopener">Open the customer</a>`) : ""}${
+      c.stripe ? odRow("Stripe", `<a href="${safeHref(c.stripe)}" target="_blank" rel="noopener">Open the customer</a>`) : ""}${
       odRow("Free access from the desk", grant, c.grant ? "good" : "mute")}${odRow("Codes", codes, "mute")}${
       c.comped ? odRow("Comp list", "On it — full access", "good") : ""}${
       c.suspended ? odRow("Suspended", `Since ${oaDay(c.suspended)}`, "warn") : ""}</ul>
