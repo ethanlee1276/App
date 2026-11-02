@@ -4,6 +4,12 @@
     {
       "date": "2026-11-02",
       "kind": "fix",
+      "title": "The Owner desk opens for the owner's own accounts alone",
+      "body": "The Owner desk (Who's on now, Accounts, money, reports, the notice to everybody) opened for the site's Qellys_Book account. It now opens for the accounts the owner lists on the server, by account rather than by address, since signing up does not prove an address, and for nobody else; every door to it on the server says the same, and the page shows its link only on the server's word. The site's problem alerts go to every listed account's phones, and a listed account cannot be suspended or deleted from the desk."
+    },
+    {
+      "date": "2026-11-02",
+      "kind": "fix",
       "title": "The Terms say what a failed payment does",
       "body": "Terms §5.7 said a member whose renewal failed would not be cut off on the first failure, which the site stopped doing on 12 October. It now says what happens: when a charge does not go through, the first after a free trial or a renewal, access to members' features pauses at once and we tell you; Stripe tries the card again, and updating it under Manage billing opens the site again as soon as a payment succeeds; if it is still unpaid when the retries run out, the subscription is cancelled and nothing more is charged. For an account made before 3 November it takes effect 30 days after we email the account about it, and the Terms say what applies until then. The same email tells every member about the free trial's two new rules and the Privacy Policy's two new parts."
     },

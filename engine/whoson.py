@@ -113,6 +113,11 @@ def clear() -> None:
         _TABS.clear()
 
 
+def _reads_the_desk(conn, user_id) -> bool:
+    from . import siteowners as SO
+    return SO.is_owner(conn, user_id)
+
+
 def is_site_account(conn, user_id) -> bool:
     """The verified Qellys_Book account, and no other."""
     if not user_id:
@@ -140,7 +145,7 @@ def nameable(conn, uids, now: float | None = None) -> set:
         if shown(settings):
             out.add(int(uid))
     for uid in uids:
-        if int(uid) not in out and is_site_account(conn, uid):
+        if int(uid) not in out and _reads_the_desk(conn, uid):
             out.add(int(uid))
             break                                   # there is one
     return out

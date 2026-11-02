@@ -6,7 +6,8 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-02, after Terms §5.7 was rewritten to say what a failed
+Last updated 2026-11-02, after the Owner desk was locked to the accounts you
+list (step JK: item 0b), and Terms §5.7 was rewritten to say what a failed
 payment does, with the email it needs (step JJ: item 1's command now arms it).
 Before that a cancelled trial lost its access, one trial per person, a failed
 charge started telling the member, and the Owner desk got its account tools
@@ -57,6 +58,24 @@ sudo find /var/backups/qellys -type f -mtime +20 -print -delete
 Tomorrow after 04:00 UTC, run the JG check again: the backup log's last
 lines should say "offsite copy updated" once Backblaze has cleared the old
 versions.
+
+## 0b. As soon as this is pushed: only your two accounts on the Owner desk (step JK)
+
+You, 2026-11-02: only your two accounts should open the owners page. Until
+you run this, the Qellys_Book account opens it as before; from the moment
+you do, the accounts you name and nobody else. Your real addresses in place
+of these (they are typed on the box and never kept in the code):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.siteowners add you@example.com other@example.com
+```
+
+It prints each account's username and the day it was made, to check they
+are yours. The read-only check (`1`, then the list):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JK 2>&1 | tee /tmp/jk.txt
+```
 
 ## 1. Any time: the notice emails — Who's on now, and 2 November's Terms — and the trimmed files (steps JH, JJ)
 

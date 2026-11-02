@@ -138,13 +138,18 @@ def alerts_pass(conn, now: float | None = None, health: dict | None = None, data
     from . import ownerdesk as OD
     from . import pushalerts as PA
     from . import pushmine as PM
+    from . import siteowners as SO
     t = time.time() if now is None else float(now)
-    uid = site_account(conn)
-    if not uid or not PM.asked(conn, uid, PA.ACCOUNT):
+    # The site's owners' phones (engine/siteowners: the listed accounts; until
+    # there are any, the verified Qellys_Book account's).
+    uids = [u for u in SO.desk_accounts(conn) if PM.asked(conn, u, PA.ACCOUNT)]
+    if not uids:
         return 0
     h = health if health is not None else OD.health(t)
     day = _eastern_day(t)
     told = 0
     for p in problems(h, data_dir, t):
-        told += bool(PM.tell(conn, uid, f"owner:{p['key']}:{day}", PA.ACCOUNT, p["title"], p["body"], "/#owner", now=t))
+        for uid in uids:
+            told += bool(PM.tell(conn, uid, f"owner:{p['key']}:{day}", PA.ACCOUNT, p["title"], p["body"],
+                                 "/#owner", now=t))
     return told

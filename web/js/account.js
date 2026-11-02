@@ -3784,8 +3784,8 @@ function setListHTML() {
   const s = settings();
   const u = _acctUser, inn = !!(u && u.signed_in);
   const out = [];
-  // THE SITE'S OWN ACCOUNT (engine/whoson.is_site_account, which the server
-  // answers as `whoson`): its desk heads the list. Ethan, 2026-11-02, on this
+  // THE SITE'S OWNERS (engine/siteowners — the accounts listed on the box,
+  // which the server answers as `whoson`): the desk heads the list. Ethan, 2026-11-02, on this
   // account's Settings: "it's not giving me access to the page" — the rows
   // sat at the very bottom, under Help. One row since the same day: Who's
   // on now is the desk's first card ("should be one page").

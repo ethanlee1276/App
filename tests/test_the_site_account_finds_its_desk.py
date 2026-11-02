@@ -102,9 +102,11 @@ def test_the_desk_heads_settings_and_the_profile_for_the_site_account():
     assert group.count("setItem(") == 1 and 'title: "Owner desk"' in group and 'href: "#owner"' in group
     assert "Who’s on now" in group, "the row names the card the old page became"
     assert 'href: "#whoson"' not in ACCT
-    # Its own profile: a row to the desk, by the server's own rule or its word.
-    assert 'p.verified && String(p.handle || "").toLowerCase() === "qellys_book"' in SOCIAL
-    assert "_acctUser && _acctUser.whoson" in SOCIAL
+    # Its own profile: a row to the desk, by the server's word alone since the
+    # owners' list (engine/siteowners, tests/test_only_the_owners_open_the_desk):
+    # never a handle the page could be fooled about.
+    assert "const siteDesk = () => !!(typeof _acctUser !== \"undefined\" && _acctUser && _acctUser.whoson);" in SOCIAL
+    assert '=== "qellys_book"' not in SOCIAL[SOCIAL.index("const siteDesk"):][:200]
     head = SOCIAL[SOCIAL.index("function profileHeaderHTML("):SOCIAL.index("function followsHTML(")]
     assert 'o.mine && siteDesk(p) ? `<a class="fd-prof-desk" href="#owner">' in head and "<b>Owner desk</b>" in head
     assert head.index("Joined ${") < head.index('class="fd-prof-desk"') < head.index('class="fd-pstats"')

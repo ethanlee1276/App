@@ -205,6 +205,7 @@ def card(conn, user_id, now: float | None = None) -> dict | None:
     sub = conn.execute("SELECT customer_id, started_at FROM subscriptions WHERE user_id = ?", (uid,)).fetchone()
     from . import redeem as RD
     from . import gate
+    from . import siteowners as SO
     from . import whoson as W
     try:
         RD.init(conn)
@@ -230,7 +231,7 @@ def card(conn, user_id, now: float | None = None) -> dict | None:
         "stripe": _stripe_link(sub["customer_id"] if sub else None),
         "codes": codes, "comped": gate.comped(u["email"]),
         "grant": grant, "suspended": u["suspended_at"],
-        "site_account": W.is_site_account(conn, uid),
+        "site_account": W.is_site_account(conn, uid) or uid in SO.owner_ids(conn),
         "log": log,
     }
 
@@ -255,8 +256,9 @@ def act(conn, user_id, action: str, args: dict | None = None, now: float | None 
     if not u:
         return 404, {"error": "No such account."}
     from . import whoson as W
-    if action in ("suspend", "delete") and W.is_site_account(conn, uid):
-        return 409, {"error": "That is the site’s own account — it cannot be suspended or deleted from its own desk."}
+    from . import siteowners as SO
+    if action in ("suspend", "delete") and (W.is_site_account(conn, uid) or uid in SO.owner_ids(conn)):
+        return 409, {"error": "That is one of the site’s own accounts — it cannot be suspended or deleted from the desk."}
     st = BI.status_for(conn, uid)
     if action in ("suspend", "delete") and charges(st):
         sub = conn.execute("SELECT customer_id FROM subscriptions WHERE user_id = ?", (uid,)).fetchone()

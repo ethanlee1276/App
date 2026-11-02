@@ -31,7 +31,8 @@ GROUPS = (
         ("subscriptions", "membership"), ("code_redemptions", "codes redeemed"), ("code_attempts", "code tries"),
         ("gift_codes", "gifts bought"), ("referral_codes", "your invite code"), ("referrals", "invites"),
         # What the site's owner did to the account (engine/owneraccounts, Privacy Policy §2.14).
-        ("owner_grants", "free access from the site"), ("owner_actions", "steps the site took on your account"))),
+        ("owner_grants", "free access from the site"), ("owner_actions", "steps the site took on your account"),
+        ("site_owners", "owner of the site (opens the Owner desk)"))),
     ("What you track", "until you delete it or the account; closing prices 90 days", (
         ("user_data", "synced sections (My Bets, settings, fantasy, bankroll, searches)"),
         ("bet_clv", "closing prices of your parlays' legs"), ("slip_alerts", "parlay alerts sent"),

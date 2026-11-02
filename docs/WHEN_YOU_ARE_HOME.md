@@ -9305,6 +9305,47 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JK. Only your two accounts open the Owner desk** (step 331; you,
+2026-11-02: "my other accounts have access too the owners page too. Only the
+account with [your two addresses] should have access to that page").
+
+- **What changed.** The desk, Who's on now, the notice, the reports and the
+  Accounts card open for the accounts on a list kept on the box
+  (`engine/siteowners`), and for nobody else — your Qellys_Book account
+  included only if it is on the list. Until the list has anybody on it, the
+  Qellys_Book account opens it as before, so nothing locks you out before you
+  run the command below. The site's problem alerts go to every listed
+  account's phones, and no listed account can be suspended or deleted from
+  the desk.
+- **By account, not by address.** Signing up does not prove an address, so
+  a list of addresses would let in whoever made an account with one of them
+  first. The command turns each address into its account once, and prints
+  the account's username and the day it was made so you can check it's
+  yours. An address with no account is refused. Your addresses are typed
+  on the box, never kept in the code (it is public).
+
+Put your two accounts on the list (your real addresses in place of these):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.siteowners add you@example.com other@example.com
+```
+
+Read-only, any time — who is on the list (it prints the addresses, so keep
+it to your own screen):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JK 2>&1 | tee /tmp/jk.txt
+```
+
+Which runs, one at a time:
+
+```
+curl -s https://qellysbook.com/js/social.js | grep -c 'const siteDesk = () =>'
+cd /srv/qellys && sudo -u qellys python3 -m engine.siteowners list
+```
+
+To take one off later: `cd /srv/qellys && sudo -u qellys python3 -m engine.siteowners remove other@example.com`.
+
 **JJ. Terms §5.7 says what a failed payment does, and the email it needs**
 (step 330; you, 2026-11-02: "do number one too", and "cancel the subscription
 was already turned on").

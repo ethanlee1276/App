@@ -215,8 +215,10 @@
      rule (engine/whoson.is_site_account: verified, the handle Qellys_Book),
      or its word on the account (`whoson`); the desk itself answers that
      account alone. */
-  const siteDesk = (p) => !!(p && p.verified && String(p.handle || "").toLowerCase() === "qellys_book")
-    || !!(typeof _acctUser !== "undefined" && _acctUser && _acctUser.whoson);
+  // The Owner desk's row on your own profile, for the site's owners alone:
+  // the server's word (/api/account/me `whoson`, engine/siteowners), never a
+  // handle the page could be fooled about.
+  const siteDesk = () => !!(typeof _acctUser !== "undefined" && _acctUser && _acctUser.whoson);
 
   function teamMap(sport) {
     const maps = { nfl: typeof TEAMS !== "undefined" ? TEAMS : null,

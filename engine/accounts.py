@@ -985,7 +985,9 @@ def delete_user(conn, user_id: int) -> None:
                   "consent_log",
                   # Free access the site's owner gave (engine/owneraccounts).
                   # The record of the owner's actions stays, by number only.
-                  "owner_grants"):
+                  "owner_grants",
+                  # On the list of the site's owners (engine/siteowners).
+                  "site_owners"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?", (int(user_id),))
     # A watch party they started stays for its friends, with them off it.

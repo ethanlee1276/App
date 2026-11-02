@@ -2814,21 +2814,23 @@ class Handler(BaseHTTPRequestHandler):
                     return
             else:
                 who = self._account(conn)
-                if not (who and W.is_site_account(conn, who["id"])):
+                from engine import siteowners as SO
+                if not (who and SO.is_owner(conn, who["id"])):
                     return self._send(404, b'{"error":"unknown endpoint"}', ".json")
             return self._send(200, json.dumps(W.snapshot(conn)).encode(), ".json")
         finally:
             conn.close()
 
     def _site_door(self, conn) -> bool:
-        """The owner's pages' door: the owner token, or the site's own account
-        signed in (engine/whoson.is_site_account). Anybody else is answered
-        as if the page did not exist. False after answering."""
-        from engine import whoson as W
+        """The owner's pages' door: the owner token, or one of the site's
+        owners signed in (engine/siteowners: the accounts listed on the box;
+        until there are any, the verified Qellys_Book account). Anybody else
+        is answered as if the page did not exist. False after answering."""
+        from engine import siteowners as SO
         if self.headers.get("X-Owner-Token") or self.headers.get("Authorization"):
             return not self._owner_refused()
         who = self._account(conn)
-        if who and W.is_site_account(conn, who["id"]):
+        if who and SO.is_owner(conn, who["id"]):
             return True
         self._send(404, b'{"error":"unknown endpoint"}', ".json")
         return False
@@ -2996,10 +2998,10 @@ class Handler(BaseHTTPRequestHandler):
                     out["profile"] = SF.profile_of(conn, who["id"])
                     if not out["profile"]:
                         out["suggest_handle"] = SF.suggest_handle(conn, who["id"])
-                    # The owner's Who's on now (engine/whoson): its menu
-                    # entry, for the site's own account alone.
-                    from engine import whoson as W
-                    if W.is_site_account(conn, who["id"]):
+                    # The Owner desk's menu entry, for the site's owners
+                    # alone (engine/siteowners).
+                    from engine import siteowners as SO
+                    if SO.is_owner(conn, who["id"]):
                         out["whoson"] = True
                 return self._send(200, json.dumps(out).encode(), ".json")
             if not who:

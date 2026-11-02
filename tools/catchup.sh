@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JK "Only the owners' accounts open the Owner desk" 30 <<'SH'
+curl -s https://qellysbook.com/js/social.js | grep -c 'const siteDesk = () =>'
+cd /srv/qellys && sudo -u qellys python3 -m engine.siteowners list
+SH
 run JJ "Terms §5.7 and the notice for 2 November's changes" 60 <<'SH'
 curl -s https://qellysbook.com/terms.html | grep -c 'id="failed-payments"'
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
