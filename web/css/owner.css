@@ -56,3 +56,18 @@
 /* Units by their sign (app.js toneOf). */
 .od-tbl td.pos { color: var(--good); }
 .od-tbl td.neg { color: var(--bad); }
+/* Reports to review: tinted rows, no lines (tests/test_no_hard_lines). */
+.od-count { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 800;
+  background: color-mix(in oklab, var(--warn) 20%, transparent); color: var(--warn); vertical-align: 2px; }
+.od-h .od-count { margin-right: auto; }
+.od-reps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.od-rep { padding: 10px 12px; border-radius: var(--radius-sm); background: color-mix(in oklab, var(--warn) 8%, transparent); }
+.od-rep.hid { background: color-mix(in oklab, var(--text) 5%, transparent); }
+.od-rep-t { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: var(--fs-xs); }
+.od-rep-t span { color: var(--text-mute); }
+.od-rep p { margin: 6px 0 8px; font-size: var(--fs-sm); line-height: var(--lh-snug); overflow-wrap: anywhere; white-space: pre-line; }
+.od-rep.hid p { color: var(--text-dim); }
+.od-rep-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.od-rep-acts .btn { padding: 6px 12px; font-size: var(--fs-sm); }
+.od-hid { margin-top: 10px; }
+.od-hid summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim); padding: 4px 0 8px; }

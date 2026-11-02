@@ -16,7 +16,10 @@ What these hold:
     account and nobody else (a 404 to everyone else, members included), and
     the notice rides on /api/billing/status for every page;
   * the desk page draws what it is sent, the notice draws as text, and both
-    load only when they are wanted (rooms; the notice only when there is one).
+    load only when they are wanted (rooms; the notice only when there is one);
+  * the reports queue puts the feed's and the game chat's reports in one list
+    (still up first, most reported first; the words, never who), and its
+    Hide / Keep it up / Restore answer the site's account and nobody else.
 
 Run directly: `python3 tests/test_the_owner_desk.py`
 """
@@ -148,6 +151,66 @@ def test_todays_picks_by_book_and_the_room():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def _reported_room(conn):
+    """A feed post with one report, a comment hidden by hand, and two chat
+    messages: one with two reports, one taken down by three."""
+    from engine import gamechat as GC
+    SF.ensure_tables(conn)
+    GC.ensure_tables(conn)
+    poster = _user(conn, "rposter@example.com", handle="RPoster")
+    readers = [_user(conn, f"reader{i}@example.com") for i in range(3)]
+    conn.execute("INSERT INTO feed_posts (user_id, sport, legs, caption, created_at) VALUES (?,?,?,?,?)",
+                 (poster, "nfl", "[]", "Lock of the <b>century</b>", NOW - 600))
+    post = conn.execute("SELECT MAX(id) FROM feed_posts").fetchone()[0]
+    conn.execute("INSERT INTO feed_comments (post_id, user_id, body, created_at, hidden) VALUES (?,?,?,?,1)",
+                 (post, poster, "a comment the founder hid", NOW - 500))
+    assert SF.report(conn, readers[0], "post", post, "spam")[0] == 200
+    for body in ("you all stink", "buy my picks at a link"):
+        conn.execute("INSERT INTO chat_msgs (room, user_id, body, created_at) VALUES (?,?,?,?)",
+                     ("nfl_401873033", poster, body, NOW - 300))
+    m1, m2 = [r[0] for r in conn.execute("SELECT id FROM chat_msgs ORDER BY id")]
+    for i, who in enumerate(readers):
+        if i < 2:
+            assert GC.report(conn, who, m1, "abuse", now=NOW)[0] == 200
+        assert GC.report(conn, who, m2, "spam", now=NOW)[0] == 200
+    conn.commit()
+    return {"post": post, "m1": m1, "m2": m2}
+
+
+def test_reports_from_the_feed_and_the_game_chat_in_one_queue():
+    d = Path(tempfile.mkdtemp())
+    conn = A.connect(str(d / "a.db"))
+    try:
+        ids = _reported_room(conn)
+        r = OD.reports(conn)
+        up = [(x["where"], x["kind"], x["id"], x["reports"]) for x in r["open"]]
+        assert up == [("chat", "message", ids["m1"], 2), ("feed", "post", ids["post"], 1)], up
+        assert r["open_n"] == 2 and r["hidden_n"] == 2, r
+        down = {(x["where"], x["kind"]) for x in r["hidden"]}
+        assert down == {("chat", "message"), ("feed", "comment")}, "three reports took one down; the founder hid the other"
+        chat = r["open"][0]
+        assert chat["game"] == "nfl/401873033" and chat["reasons"] == ["abuse"] and chat["text"] == "you all stink"
+        flat = json.dumps(r)
+        assert "rposter" not in flat.lower() and "example.com" not in flat, "the words, never who wrote or reported"
+        assert OD.community(conn, NOW)["reports_open"] == 2, "the room's count is the queue's"
+        # Hide the chat message; keep the post up, which clears its reports.
+        assert OD.moderate(conn, "chat", "message", ids["m1"], True)[0] == 200
+        assert OD.moderate(conn, "feed", "post", ids["post"], False)[0] == 200
+        r = OD.reports(conn)
+        assert r["open_n"] == 0 and OD.community(conn, NOW)["reports_open"] == 0, r["open"]
+        assert ids["post"] not in [x["id"] for x in r["hidden"] if x["kind"] == "post"], "kept up, off the queue"
+        # Restore the one three reports took down: back in its room, its reports gone.
+        assert OD.moderate(conn, "chat", "message", ids["m2"], False)[0] == 200
+        assert conn.execute("SELECT hidden FROM chat_msgs WHERE id=?", (ids["m2"],)).fetchone()[0] == 0
+        assert not conn.execute("SELECT 1 FROM chat_reports WHERE msg_id=?", (ids["m2"],)).fetchone()
+        assert OD.moderate(conn, "feed", "story", 1, True)[0] == 400
+        assert OD.moderate(conn, "chat", "message", "x", True)[0] == 400
+        assert OD.moderate(conn, "chat", "message", 99999, True)[0] == 404
+    finally:
+        conn.close()
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def test_a_league_with_no_games_is_resting_not_stale():
     from engine import bugscan as BS
     d = Path(tempfile.mkdtemp())
@@ -204,6 +267,18 @@ def _serve():
     return httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
 
 
+def _site(conn):
+    """The verified Qellys_Book account: made by whichever server test runs
+    first and shared after (the handle is one of a kind)."""
+    SF.ensure_tables(conn)
+    r = conn.execute("SELECT user_id FROM feed_profiles WHERE handle = ?", ("Qellys_Book",)).fetchone()
+    if r:
+        return int(r[0])
+    uid = _user(conn, "deskowner@example.com")
+    assert SF.claim(conn, "deskowner@example.com", "Qellys_Book", name="Qellys Book")[0] == 200
+    return uid
+
+
 def _call(base, path, body=None, cookie=""):
     req = urllib.request.Request(base + path, data=None if body is None else json.dumps(body).encode(),
                                  method="GET" if body is None else "POST",
@@ -218,8 +293,7 @@ def _call(base, path, body=None, cookie=""):
 
 def test_the_desk_and_the_notice_answer_the_site_account_and_nobody_else():
     conn = A.connect()
-    site = _user(conn, "deskowner@example.com")
-    assert SF.claim(conn, "deskowner@example.com", "Qellys_Book", name="Qellys Book")[0] == 200
+    site = _site(conn)
     fan = _user(conn, "deskfan@example.com", handle="DeskFan")
     site_c = f"qb_session={A.start_session(conn, site)}"
     fan_c = f"qb_session={A.start_session(conn, fan)}"
@@ -249,6 +323,36 @@ def test_the_desk_and_the_notice_answer_the_site_account_and_nobody_else():
         SN.clear()
 
 
+def test_the_reports_queue_answers_the_site_account_and_nobody_else():
+    conn = A.connect()
+    site = _site(conn)
+    ids = _reported_room(conn)
+    fan = _user(conn, "repfan@example.com", handle="RepFan")
+    site_c = f"qb_session={A.start_session(conn, site)}"
+    fan_c = f"qb_session={A.start_session(conn, fan)}"
+    conn.close()
+    httpd, base = _serve()
+    try:
+        hide = {"where": "chat", "kind": "message", "id": ids["m1"], "hidden": True}
+        for who in ("", fan_c):
+            assert _call(base, "/api/owner/hide", hide, who)[0] == 404, "no such door for anybody else"
+        code, desk = _call(base, "/api/owner/desk", cookie=site_c)
+        assert code == 200 and ids["m1"] in [x["id"] for x in desk["reports"]["open"] if x["where"] == "chat"]
+        assert _call(base, "/api/owner/hide", hide, site_c)[0] == 200
+        assert _call(base, "/api/owner/hide", {"where": "feed", "kind": "post", "id": ids["post"], "hidden": False},
+                     site_c)[0] == 200
+        desk = _call(base, "/api/owner/desk", cookie=site_c)[1]
+        still = [(x["where"], x["id"]) for x in desk["reports"]["open"]]
+        assert ("chat", ids["m1"]) not in still and ("feed", ids["post"]) not in still, still
+        conn = A.connect()
+        try:
+            assert conn.execute("SELECT hidden FROM chat_msgs WHERE id=?", (ids["m1"],)).fetchone()[0] == 1
+        finally:
+            conn.close()
+    finally:
+        httpd.shutdown()
+
+
 # --- the page ---------------------------------------------------------------------
 def test_the_desk_page_draws_what_it_is_sent():
     node = shutil.which("node")
@@ -271,7 +375,12 @@ def test_the_desk_page_draws_what_it_is_sent():
                          "odds": {"remaining": 41000, "used": 59000, "days_left": 28, "per_day": 1460},
                          "disk": {"free_gb": 31.2, "used_pct": 58.0}, "boards": {"nfl": 0.4, "nba": 5.0}},
               "community": {"posts_today": 9, "comments_today": 30, "chat_today": 210, "reports_open": 1, "push_phones": 44},
-              "switches": [{"name": "Who's on now", "on": True}], "notice": {"error": "x"}}
+              "switches": [{"name": "Who's on now", "on": True}], "notice": {"error": "x"},
+              "reports": {"open": [{"where": "chat", "kind": "message", "id": 7, "reports": 2, "reasons": ["abuse"],
+                                    "hidden": False, "text": "you <b>all</b> stink", "game": "nfl/401873033"}],
+                          "open_n": 1, "hidden_n": 1,
+                          "hidden": [{"where": "feed", "kind": "comment", "id": 3, "reports": 0, "reasons": [],
+                                      "hidden": True, "text": "hid by hand"}]}}
     stubs = """
       const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const escapeAttr = escapeHtml;
@@ -291,8 +400,13 @@ def test_the_desk_page_draws_what_it_is_sent():
     html = out.stdout
     for want in ("Members on", ">7<", "Paying", "$743", "A month, recurring", "Edge", "+0.85u", "2,779-1,961",
                  "Long Shots (their own record)", "Crashes, 24 h", "TypeError: x is undefined", "41,000 · 1,460 a day for 28 days",
-                 "31.2 GB free", "Reports waiting", "Who's on now", "Put it up", 'maxlength="200"', "NBA 5 h"):
+                 "31.2 GB free", "Reports waiting", "Who's on now", "Put it up", 'maxlength="200"', "NBA 5 h",
+                 # The reports queue: words escaped, a way to the game, the three buttons.
+                 "Reports to review", "Game-chat message", "2 reports · abuse", "you &lt;b&gt;all&lt;/b&gt; stink",
+                 'href="#pbp/nfl/401873033"', 'data-od-mod="1" data-where="chat" data-kind="message" data-id="7"',
+                 "Keep it up", "Restore", "hidden by hand", "Hidden from everybody · 1"):
         assert want in html, want
+    assert html.index("Reports to review") < html.index("Today's picks"), "reports waiting go near the top"
 
 
 def test_the_notice_draws_as_text_and_loads_only_when_there_is_one():

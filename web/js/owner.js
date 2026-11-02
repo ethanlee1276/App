@@ -7,8 +7,9 @@
    month's recurring revenue), today's picks by book and the record, the
    box's health (crashes, stale boards, the last update, the settle pass,
    odds credits, disk), the room (posts, chat, reports), the switches, and
-   the one tool that changes something for everybody: a notice across the top
-   of every page (engine/sitenotice).
+   the two tools that change something for everybody: a notice across the
+   top of every page (engine/sitenotice), and the reports queue — the feed's
+   and the game chat's in one list, each with Hide / Keep it up / Restore.
 
    Loaded the first time it opens (app.js roomCall). The server answers
    /api/owner/desk for the site's own account alone and, to anybody else, as
@@ -116,6 +117,55 @@ function odRoomHTML(c) {
     c.push_phones != null ? odRow("Phones with alerts on", odN(c.push_phones)) : ""}</ul>`, `<a class="od-more" href="#feed">Social →</a>`);
 }
 
+/* Reports to review: what readers flagged in the feed and the game chat, in
+   one queue (engine/ownerdesk.reports). Three reports hide a thing on their
+   own until somebody looks; Hide takes it down for everybody, Keep it up
+   clears its reports, Restore puts a hidden one back. The words and the
+   reasons, never who wrote or who reported. */
+const OD_KIND = { post: "Post", comment: "Comment", message: "Game-chat message" };
+let _odHidOpen = false;
+function odRepHTML(it) {
+  const btn = (hide, word, ghost) => `<button type="button" class="btn${ghost ? " ghost" : ""}" data-od-mod="${hide ? 1 : 0}" data-where="${
+    escapeAttr(it.where)}" data-kind="${escapeAttr(it.kind)}" data-id="${Number(it.id) || 0}">${word}</button>`;
+  const open = it.hidden ? "" : it.kind === "post" ? `<a class="od-more" href="#feed/post/${Number(it.id) || 0}">Open</a>`
+    : it.game ? `<a class="od-more" href="#pbp/${escapeAttr(it.game)}">The game</a>` : "";
+  const said = `${it.reports ? `${it.reports} report${it.reports === 1 ? "" : "s"}` : "hidden by hand"}${
+    (it.reasons || []).length ? ` · ${escapeHtml(it.reasons.join(", "))}` : ""}`;
+  return `<li class="od-rep${it.hidden ? " hid" : ""}"><div class="od-rep-t"><b>${OD_KIND[it.kind] || "Item"}</b><span>${said}</span></div>
+    <p>${escapeHtml(it.text || "") || `<span class="od-mute">(no words)</span>`}</p>
+    <div class="od-rep-acts">${it.hidden ? btn(false, "Restore", true) : `${btn(true, "Hide")}${btn(false, "Keep it up", true)}`}${open}</div></li>`;
+}
+
+function odReportsHTML(r) {
+  if (!r || r.error) return odCard("Reports to review", odErr(r));
+  const open = (r.open || []).map(odRepHTML).join("");
+  const hid = (r.hidden || []).map(odRepHTML).join("");
+  const more = (n, shown) => (n > shown ? `<p class="od-note">The ${shown} most reported of ${odN(n)}; the rest show as these clear.</p>` : "");
+  return odCard(`Reports to review${r.open_n ? ` <span class="od-count">${odN(r.open_n)}</span>` : ""}`,
+    `${open ? `<ul class="od-reps">${open}</ul>${more(r.open_n, (r.open || []).length)}`
+      : `<p class="od-note">Nothing waiting. Three reports take a post, comment or chat message down on their own until you look at it here.</p>`}
+    ${hid ? `<details class="od-hid"${_odHidOpen ? " open" : ""}><summary>Hidden from everybody · ${odN(r.hidden_n)}</summary><ul class="od-reps">${hid}</ul></details>` : ""}`);
+}
+
+async function odMod(b) {
+  b.disabled = true;
+  try {
+    const r = await fetch("/api/owner/hide", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ where: b.dataset.where, kind: b.dataset.kind, id: Number(b.dataset.id), hidden: b.dataset.odMod === "1" }) });
+    const got = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      b.disabled = false;
+      if (typeof tfToast === "function") tfToast(got.error || "That did not go through.");
+      return;
+    }
+    if (typeof tfToast === "function") tfToast(b.dataset.odMod === "1" ? "Hidden for everybody." : "Up, and its reports cleared.");
+    odFill();
+  } catch (e) {
+    b.disabled = false;
+  }
+}
+
 function odSwitchesHTML(sw) {
   if (!Array.isArray(sw)) return odCard("Switches", odErr(sw));
   return odCard("Switches", `<ul class="od-list">${sw.map((s) => odRow(escapeHtml(s.name),
@@ -142,9 +192,12 @@ function odNoticeHTML(n) {
 }
 
 function odHTML(d) {
+  // Reports waiting go near the top; with none they sit beside the room.
+  const waiting = !!(d.reports && d.reports.open_n);
+  const reps = odReportsHTML(d.reports);
   return `${odNowHTML(d.now)}<p class="od-door"><a href="#whoson">Who's on now, by name and page →</a></p>
-    ${odNoticeHTML(d.notice)}${odPicksHTML(d.picks)}${odMoneyHTML(d.money)}${odAccountsHTML(d.accounts)}
-    ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${odSwitchesHTML(d.switches)}
+    ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odMoneyHTML(d.money)}${odAccountsHTML(d.accounts)}
+    ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches)}
     <p class="od-foot">Counts and the business's own numbers; nobody is named here. Only this account can open this page.</p>`;
 }
 
@@ -203,7 +256,13 @@ document.addEventListener("submit", (e) => {
 });
 document.addEventListener("click", (e) => {
   if (e.target && e.target.id === "od-clear") odNotice({ clear: true });
+  const b = e.target && e.target.closest && e.target.closest("[data-od-mod]");
+  if (b && !b.disabled) odMod(b);
 });
+// The hidden list stays open across the minute's redraw.
+document.addEventListener("toggle", (e) => {
+  if (e.target && e.target.classList && e.target.classList.contains("od-hid")) _odHidOpen = e.target.open;
+}, true);
 
 function odTick() {
   clearTimeout(_odTimer);

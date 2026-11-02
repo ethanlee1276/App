@@ -238,15 +238,71 @@ def community(conn, now: float | None = None) -> dict:
     if _has(conn, "chat_msgs"):
         out["chat_today"] = conn.execute("SELECT COUNT(*) FROM chat_msgs WHERE created_at >= ?", (m,)).fetchone()[0]
     if _has(conn, "feed_reports"):
-        # A reported thing still up for everybody, reported in the last month.
+        # A reported post or comment that is still there and still up for
+        # everybody: what the Reports card below asks the owner to look at.
         q = ("SELECT COUNT(*) FROM (SELECT DISTINCT r.kind, r.item_id FROM feed_reports r "
              "LEFT JOIN feed_posts p ON r.kind='post' AND p.id=r.item_id "
              "LEFT JOIN feed_comments c ON r.kind='comment' AND c.id=r.item_id "
-             "WHERE r.created_at >= ? AND COALESCE(p.hidden, c.hidden, 0)=0)")
-        out["reports_open"] = conn.execute(q, (t - 30 * DAY_S,)).fetchone()[0]
+             "WHERE COALESCE(p.id, c.id) IS NOT NULL AND COALESCE(p.hidden, c.hidden, 0)=0)")
+        out["reports_open"] += conn.execute(q).fetchone()[0]
+    if _has(conn, "chat_reports") and _has(conn, "chat_msgs"):
+        # And a reported game-chat message still showing in its room.
+        out["reports_open"] += conn.execute(
+            "SELECT COUNT(DISTINCT r.msg_id) FROM chat_reports r JOIN chat_msgs m ON m.id=r.msg_id "
+            "WHERE m.hidden=0").fetchone()[0]
     if _has(conn, "push_subs"):
         out["push_phones"] = conn.execute("SELECT COUNT(*) FROM push_subs").fetchone()[0]
     return out
+
+
+# --- reports to review -------------------------------------------------------------
+#: How many of each list the desk carries (it is redrawn every minute).
+REPORTS_SHOWN = 25
+REPORT_TEXT = 240
+#: The two kinds of thing the owner can hide, by where they live.
+WHERES = ("feed", "chat")
+
+
+def reports(conn) -> dict:
+    """What readers flagged, the feed and the game chat in one queue, for the
+    desk's Hide / Keep it up / Restore (server.py `/api/owner/hide`).
+
+    Still up first, the most-reported first; then what is hidden (three
+    reports hide a thing on their own until somebody looks — engine/socialfeed
+    and engine/gamechat REPORTS_TO_HIDE — and the founder's menu hides some
+    by hand). The words and the reasons, never who wrote or who reported:
+    the decision is about what was said. Until now the game chat's queue had
+    no screen at all; only the feed's showed, on the founder's Account tab."""
+    from . import gamechat as GC
+    from . import socialfeed as SF
+    items = []
+    for it in SF.reported(conn):
+        items.append({"where": "feed", "kind": it["kind"], "id": it["id"], "reports": it["reports"],
+                      "reasons": it["reasons"], "hidden": it["hidden"], "text": it["text"][:REPORT_TEXT]})
+    for it in GC.reported(conn):
+        league, _, event = str(it.get("room") or "").partition("_")
+        items.append({"where": "chat", "kind": "message", "id": it["id"], "reports": it["reports"],
+                      "reasons": it["reasons"], "hidden": it["hidden"], "text": str(it["text"])[:REPORT_TEXT],
+                      "game": f"{league}/{event}" if league and event else ""})
+    up = sorted((x for x in items if not x["hidden"]), key=lambda x: (-x["reports"], -x["id"]))
+    down = [x for x in items if x["hidden"]]
+    return {"open": up[:REPORTS_SHOWN], "open_n": len(up), "hidden": down[:REPORTS_SHOWN], "hidden_n": len(down)}
+
+
+def moderate(conn, where, kind, item_id, hidden) -> tuple[int, dict]:
+    """Hide a reported thing for everybody, or keep it up / put it back (which
+    clears its reports), through the same switches the founder's tools use."""
+    from . import gamechat as GC
+    from . import socialfeed as SF
+    try:
+        item_id = int(item_id)
+    except (TypeError, ValueError):
+        return 400, {"error": "Which one?"}
+    if where == "chat":
+        return GC.set_hidden(conn, item_id, bool(hidden))
+    if where == "feed" and kind in ("post", "comment"):
+        return SF.set_hidden(conn, kind, item_id, bool(hidden))
+    return 400, {"error": "Unknown kind."}
 
 
 # --- the switches ---------------------------------------------------------------
@@ -300,6 +356,7 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 "money": _section(money, conn, t),
                 "picks": _section(picks, lconn, t) if lconn is not None else {"error": "the ledger is not readable"},
                 "health": _section(health, t), "community": _section(community, conn, t),
+                "reports": _section(reports, conn),
                 "switches": _section(switches), "notice": _section(_notice)}
     finally:
         if own and lconn is not None:

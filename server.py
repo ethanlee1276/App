@@ -1588,6 +1588,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._here()
         if parsed.path in ("/api/owner/notice", "/api/owner/notice/"):
             return self._owner_notice_post()
+        if parsed.path in ("/api/owner/hide", "/api/owner/hide/"):
+            return self._owner_hide_post()
         if parsed.path in ("/api/clienterror", "/api/clienterror/"):
             return self._client_error()
         if parsed.path.startswith("/api/push/"):
@@ -2865,6 +2867,33 @@ class Handler(BaseHTTPRequestHandler):
         code, out = (SN.clear() if got.get("clear")
                      else SN.post(got.get("text"), got.get("hours", 24), got.get("tone", "info")))
         return self._send(code, json.dumps(out).encode(), ".json")
+
+    def _owner_hide_post(self):
+        """The desk's Reports card (engine/ownerdesk.moderate): hide a reported
+        post, comment or chat message for everybody, or keep it up / put it
+        back, which clears its reports. {where: "feed"|"chat", kind, id, hidden}."""
+        from engine import ownerdesk as OD
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 2000 else b""
+        A = _acct()
+        conn = A.connect()
+        try:
+            if not self._site_door(conn):
+                return
+            try:
+                got = json.loads(body or b"{}")
+            except ValueError:
+                got = None
+            if not isinstance(got, dict):
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            code, out = OD.moderate(conn, str(got.get("where") or ""), str(got.get("kind") or ""),
+                                    got.get("id"), bool(got.get("hidden", True)))
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
 
     def _account(self, conn):
         """The signed-in account for this request, or None."""
