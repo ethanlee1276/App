@@ -240,17 +240,24 @@ def test_the_whole_purchase_lands_in_the_database_with_its_plan():
     assert st["entitled"] and st["plan"] == "sixmonth"
     assert st["plan_name"] == "6 months"
 
-    # A renewal failure walls them at once (Ethan, 2026-10-12) — and
-    # keeps the plan on the row, which the account page still names.
+    # A renewal failure keeps the site one more day (Ethan, 2026-11-02: "we
+    # give them a 1 day grace period if the payment fails"), measured from
+    # the failure, then walls until a payment clears — and keeps the plan
+    # on the row, which the account page still names.
     fail = billing.read_event({
         "type": "invoice.payment_failed",
         "data": {"object": {"customer": "cus_9", "subscription": "sub_9"}}})
     assert billing.apply_event(conn, fail)
     st = billing.status_for(conn, 9)
     assert st["status"] == "past_due"
-    assert not st["entitled"], "a failed payment left the site open"
+    assert st["entitled"] and "stays on until" in st["note"], "the failed payment's day of grace"
     assert st["plan"] == "sixmonth", \
         "an event carrying no plan blanked the term off the account page"
+    conn.execute("UPDATE subscriptions SET failed_at = failed_at - ? WHERE user_id = 9",
+                 (billing.GRACE_S + 60,))
+    st = billing.status_for(conn, 9)
+    assert not st["entitled"], "a failed payment left the site open after its day"
+    assert "access is paused" in st["note"]
 
     gone = billing.read_event({
         "type": "customer.subscription.deleted",
@@ -333,8 +340,10 @@ def test_a_null_paid_through_date_lets_a_cancelled_plan_run_on():
     the grace period": `past_due` kept access while the date was in the
     future, and a null cut the customer the instant a renewal failed.
     Ethan has since asked for a failed payment to wall the account at
-    once, so that grace is gone (reported to him as a changed pin) and
-    the date now carries a different job: a plan cancelled from Stripe's
+    once, so that grace is gone (reported to him as a changed pin); the
+    day of grace he asked for on 2026-11-02 runs from the failure itself
+    (billing.GRACE_S) and never reads this date. The date now carries a
+    different job: a plan cancelled from Stripe's
     portal runs to the end of the period paid for, and walls on the
     second that date passes — without waiting for Stripe's closing
     webhook. With the date null there is nothing to wall it at, and a
