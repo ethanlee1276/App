@@ -167,6 +167,24 @@ def test_a_play_with_no_spot_draws_no_path_and_a_quiet_moment_is_not_the_play():
     assert "data-gc-dv-replay" not in html, "nothing drawn, nothing to replay"
 
 
+def test_a_finished_drive_gives_way_to_the_side_with_the_ball():
+    """The drive on file ended in the punt; the ball is the other side's,
+    whose drive has not had a play: "0 plays, 0 yards, 0:00"."""
+    import json
+    doc = _doc(PUNT)
+    doc["drive"] = {"team": "TB", "plays": 5, "yards": 17, "elapsed": "2:48", "period": 2, "result": "Punt"}
+    # Then a TV timeout (nothing to a reader) and a team's own timeout (something).
+    doc["plays"] += [{"kind": "football", "id": "p10", "period": 2, "clock": "13:46", "team": "DAL", "event": "Official Timeout"},
+                     {"kind": "football", "id": "p11", "period": 2, "clock": "13:46", "team": "DAL", "event": "Timeout"}]
+    html = G._node(f"return QBGamecast.driveView({json.dumps(doc)}, 'nfl', {{}});")
+    if html is None:
+        return
+    head = html[html.index('class="gc-dv-head"'):html.index('class="gc-dv-end"')]
+    assert 'class="mark">DAL<' in head and "0 plays, 0 yards, 0:00" in _text(head), _text(head)
+    words = _text(html)
+    assert "Timeout" in words and "TV timeout" not in words, words
+
+
 def test_the_tab_leads_with_the_card_and_drops_the_repeats():
     i = DETAIL.index("function gpPlaysHTML(d, league, faces, boardGame, lastPlay, GC)")
     body = DETAIL[i:DETAIL.index("\n}\n", i)]

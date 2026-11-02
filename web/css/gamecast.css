@@ -402,7 +402,7 @@
 .gc-dv-headfill { fill: var(--text); }
 .gc-dv-x { stroke: var(--bad); stroke-width: 2.2; stroke-linecap: round; }
 .gc-dv-snap { fill: var(--text); opacity: .75; }
-.gc-dv-ball ellipse { fill: color-mix(in oklab, var(--warn) 45%, #5a2d12); stroke: var(--text); stroke-width: .8; }
+.gc-dv-ball ellipse { fill: color-mix(in oklab, var(--warn) 45%, oklch(0.33 0.07 50)); stroke: var(--text); stroke-width: .8; }
 /* The ball's spot: the offence's mark in a pin whose point sits on the line. */
 .gc-dv-pin { position: absolute; width: 34px; height: 34px; margin: -41px 0 0 -17px; display: grid; place-items: center;
   border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--panel);

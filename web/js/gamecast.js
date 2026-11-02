@@ -1383,10 +1383,14 @@
     const lv = d.live || {};
     if (lv.state !== "live" || !FOOTBALL.has(league)) return "";
     const p = newestPlay(d, league);
-    const dr = currentDrive(d);
+    let dr = currentDrive(d);
     if (!p && !dr) return "";
     _dvLast = { d, league, faces };
     const offense = lv.possession || (dr && dr.team) || (p && p.team) || "";
+    // A drive that has ended (a punt, a score, a turnover) is not the one on
+    // the field: the ball is the other side's now, and their drive has not
+    // had a play yet — "0 plays, 0 yards, 0:00", as the scoreboard has it.
+    if (dr && dr.result && offense && offense !== dr.team) dr = { team: offense, plays: 0, yards: 0, elapsed: "0:00", period: dr.period };
     const dir = offense === d.home ? 1 : offense === d.away ? -1 : 0;
     const nx = nextSnap(d, dir);
     const m = p ? dvPlay(d, p, true) : null;
@@ -1400,11 +1404,13 @@
     const tiles = (down || on) ? `<div class="gc-dv-tiles">${down ? `<div><span>Down</span><b>${esc(down)}</b></div>` : ""}${
       on ? `<div><span>Ball on</span><b>${esc(on)}</b></div>` : ""}</div>` : "";
     const pin = nx && offense ? `<span class="gc-dv-pin" style="${dvAt(nx.los, DV.lane)}" aria-hidden="true">${teamMarkIn(league, offense, 22)}</span>` : "";
-    // The play's words under where it ended, kept inside the card at either touchline.
+    // The play's words just under where it ended, on the turf above the
+    // yard numbers, kept inside the card at either touchline.
+    const tagT = DV.lane + 0.14;
     const tagU = m && m.to != null ? Math.max(-6, Math.min(106, m.to)) : 0;
-    const tagX = dvX(tagU, DV.lane + 0.27) / DV.w;
+    const tagX = dvX(tagU, tagT) / DV.w;
     const tag = m && m.to != null && m.label
-      ? `<span class="gc-dv-tag${m.tone ? ` ${m.tone}` : ""}${tagX < 0.2 ? " l" : tagX > 0.8 ? " r" : ""}${fly ? " late" : ""}" style="${dvAt(tagU, Math.min(0.97, DV.lane + 0.27))}">${esc(m.label)}</span>` : "";
+      ? `<span class="gc-dv-tag${m.tone ? ` ${m.tone}` : ""}${tagX < 0.2 ? " l" : tagX > 0.8 ? " r" : ""}${fly ? " late" : ""}" style="${dvAt(tagU, tagT)}">${esc(m.label)}</span>` : "";
     const head = dr
       ? `${teamMarkIn(league, dr.team, 30)}<div class="gc-dv-who"><div class="gc-k">Current drive</div><b>${esc(driveWords(dr))}</b></div>`
       : `${offense ? teamMarkIn(league, offense, 30) : ""}<div class="gc-dv-who"><div class="gc-k">On the field</div><b>${esc(teamNameIn(league, offense) || "")}</b></div>`;
@@ -1445,7 +1451,12 @@
           ${got.line ? `<span class="gc-chip-line">${got.line}</span>` : ""}</div></div>`;
     }).join("");
     const before = p.down ? `${esc(downWord(p))}${p.spot != null ? ` at ${esc(spotWord(d, p.spot))}` : ""}` : "";
-    const since = sinceSnap(d, p);
+    // The moments since it (a timeout, the quarter's end), less the ones that
+    // say nothing to a reader (a TV timeout: footballWords marks it quiet).
+    const foot = (d.plays || []).filter((r) => r && r.kind === "football");
+    const since = typeof footballWords === "function"
+      ? foot.slice(foot.indexOf(p) + 1).map((r) => footballWords(r, d)).filter((w) => !w.snap && !w.quiet).map((w) => w.title)
+      : [];
     return `<div class="gc-dv-last">
       <div class="gc-dv-lhead"><b class="gc-dv-kind">${esc(kind)}</b>
         <span class="gc-dv-lside">${winPct(d, league)}<span class="gc-dv-chip">Last play${when ? ` · ${esc(when)}` : ""}</span></span></div>
