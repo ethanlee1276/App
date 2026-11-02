@@ -66,8 +66,10 @@ cd /srv/qellys && sudo ./deploy/setenv.sh QB_POLICY_NOTICE 2026-10-29,2026-11-01
 sudo systemctl restart qellys
 ```
 
-The Caddy config with the new files' trimmed copies (it checks itself
-first and keeps the old one if anything is wrong):
+The Caddy config with the new files' trimmed copies — Who's on now's and,
+since 2 November, the Owner desk's and the notice bar's (it checks itself
+first and keeps the old one if anything is wrong; run it again if you ran it
+before 2 November):
 
 ```
 cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy

@@ -3848,6 +3848,8 @@ function setListHTML() {
   // The owner's Who's on now (engine/whoson): the site's own account alone.
   if (inn && typeof _acctUser !== "undefined" && _acctUser && _acctUser.whoson) {
     out.push(setGroup("The site’s own account", [
+      // The owner's desk (js/owner.js): the business at a glance, and the notice to everybody.
+      setItem({ ico: "gauge", title: "Owner desk", sub: "Accounts, money, picks, the site’s health, a notice to everybody", href: "#owner", chev: true }),
       setItem({ ico: "people", title: "Who’s on now", sub: "Every page open on the site, live", href: "#whoson", chev: true }),
     ]));
   }

@@ -64,7 +64,10 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/ask.js", "css/ask.css",
          # Who's on now (2026-11-01): the owner's page, and every tab's
          # word of which page it shows (engine/whoson).
-         "js/whoson.js", "css/whoson.css", "js/here.js")
+         "js/whoson.js", "css/whoson.css", "js/here.js",
+         # The owner's desk and the notice to everybody (2026-11-02,
+         # engine/ownerdesk, engine/sitenotice).
+         "js/owner.js", "css/owner.css", "js/notice.js", "css/notice.css")
 
 #: HTML comments that are not commentary: `engine/routes.document` splices
 #: an entity's preview tags between these two markers, so they stay.

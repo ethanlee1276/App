@@ -1,0 +1,58 @@
+/* THE OWNER'S DESK (js/owner.js) — loaded with it. Same tokens as the sheet. */
+.od-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+.od-tile { background: var(--panel); border-radius: var(--radius); padding: 12px 8px; text-align: center; min-width: 0; }
+.od-card .od-tile { background: color-mix(in oklab, var(--text) 5%, transparent); }
+.od-tile b { display: block; font-size: var(--fs-xl); font-weight: 800; font-variant-numeric: tabular-nums; line-height: var(--lh-tight);
+  overflow-wrap: anywhere; }
+.od-tile span { display: block; font-size: var(--fs-xs); color: var(--text-mute); margin-top: 3px; }
+.od-tile.good b { color: var(--good); }
+.od-tile.warn b { color: var(--warn); }
+.od-tile.bad b { color: var(--bad); }
+.od-door { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); }
+.od-card { background: var(--panel); border-radius: var(--radius); padding: 14px; margin: 0 0 var(--sp-3); }
+.od-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--fs-md); margin: 0 0 10px; }
+.od-more { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+.od-list { list-style: none; margin: 0; padding: 0; }
+.od-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0;
+  border-top: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm); }
+.od-list li:first-child { border-top: 0; }
+.od-list li span { color: var(--text-dim); min-width: 0; }
+.od-list li b { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.od-list li b.good { color: var(--good); }
+.od-list li b.warn { color: var(--warn); }
+.od-list li b.bad { color: var(--bad); }
+.od-list li b.mute { color: var(--text-mute); font-weight: 600; }
+.od-note { color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); margin: 8px 0 0; }
+.od-mute { color: var(--text-mute); }
+.od-mono { font-family: var(--font-mono); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.od-bars { display: flex; align-items: flex-end; gap: 3px; height: 54px; margin: 4px 0 8px; }
+.od-bars i { flex: 1; min-width: 0; border-radius: 4px 4px 2px 2px; background: color-mix(in oklab, var(--brand) 70%, transparent); }
+.od-bars i:last-child { background: var(--brand); }
+.od-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.od-tbl th, .od-tbl td { padding: 7px 4px; text-align: right; border-top: var(--hairline) solid var(--border-soft);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.od-tbl th:first-child { text-align: left; }
+.od-tbl thead th { border-top: 0; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 600; }
+.od-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.od-pill { padding: 3px 9px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700;
+  background: color-mix(in oklab, var(--good) 16%, transparent); color: var(--good); }
+.od-pill.warn { background: color-mix(in oklab, var(--warn) 18%, transparent); color: var(--warn); }
+.od-pill.rest { background: color-mix(in oklab, var(--text) 8%, transparent); color: var(--text-mute); }
+.od-crash { list-style: none; margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--bad) 9%, transparent); display: grid; gap: 4px; }
+.od-live { padding: 10px 12px; border-radius: var(--radius-sm); font-size: var(--fs-sm); line-height: var(--lh-snug);
+  background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.od-live.warn { background: color-mix(in oklab, var(--warn) 16%, transparent); }
+.od-live.good { background: color-mix(in oklab, var(--good) 15%, transparent); }
+.od-form { margin-top: 10px; }
+.od-form textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 58px; padding: 10px; font: inherit;
+  color: var(--text); background: color-mix(in oklab, var(--text) 7%, transparent); border: 0;
+  border-radius: var(--radius-sm); }
+.od-form-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+.od-form-row select { font: inherit; font-size: var(--fs-sm); padding: 8px; color: var(--text);
+  background: color-mix(in oklab, var(--text) 7%, var(--panel)); border: 0; border-radius: var(--radius-sm); }
+.od-foot { color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.od-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Units by their sign (app.js toneOf). */
+.od-tbl td.pos { color: var(--good); }
+.od-tbl td.neg { color: var(--bad); }

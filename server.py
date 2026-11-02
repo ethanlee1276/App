@@ -1257,6 +1257,8 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/account/"):].strip("/"))
         if parsed.path in ("/api/owner/whoson", "/api/owner/whoson/"):
             return self._whoson_get()
+        if parsed.path in ("/api/owner/desk", "/api/owner/desk/"):
+            return self._owner_desk_get()
         if parsed.path.startswith("/api/board/"):
             return self._api_board(parsed.path[len("/api/board/"):].strip("/"))
         if parsed.path.startswith("/api/streak/"):
@@ -1584,6 +1586,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._activity()
         if parsed.path in ("/api/here", "/api/here/"):
             return self._here()
+        if parsed.path in ("/api/owner/notice", "/api/owner/notice/"):
+            return self._owner_notice_post()
         if parsed.path in ("/api/clienterror", "/api/clienterror/"):
             return self._client_error()
         if parsed.path.startswith("/api/push/"):
@@ -2809,6 +2813,58 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(W.snapshot(conn)).encode(), ".json")
         finally:
             conn.close()
+
+    def _site_door(self, conn) -> bool:
+        """The owner's pages' door: the owner token, or the site's own account
+        signed in (engine/whoson.is_site_account). Anybody else is answered
+        as if the page did not exist. False after answering."""
+        from engine import whoson as W
+        if self.headers.get("X-Owner-Token") or self.headers.get("Authorization"):
+            return not self._owner_refused()
+        who = self._account(conn)
+        if who and W.is_site_account(conn, who["id"]):
+            return True
+        self._send(404, b'{"error":"unknown endpoint"}', ".json")
+        return False
+
+    def _owner_desk_get(self):
+        """The owner's desk (engine/ownerdesk): accounts, money, today's
+        picks, the box's health, the room and the switches, as counts."""
+        from engine import ownerdesk as OD
+        A = _acct()
+        conn = A.connect()
+        try:
+            if not self._site_door(conn):
+                return
+            return self._send(200, json.dumps(OD.desk(conn)).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _owner_notice_post(self):
+        """Stand a notice across the top of every page, or clear it
+        (engine/sitenotice): {text, hours, tone} or {clear: true}."""
+        from engine import sitenotice as SN
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 4000 else b""
+        A = _acct()
+        conn = A.connect()
+        try:
+            if not self._site_door(conn):
+                return
+        finally:
+            conn.close()
+        try:
+            got = json.loads(body or b"{}")
+        except ValueError:
+            got = None
+        if not isinstance(got, dict):
+            return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+        code, out = (SN.clear() if got.get("clear")
+                     else SN.post(got.get("text"), got.get("hours", 24), got.get("tone", "info")))
+        return self._send(code, json.dumps(out).encode(), ".json")
 
     def _account(self, conn):
         """The signed-in account for this request, or None."""
@@ -5152,6 +5208,10 @@ class Handler(BaseHTTPRequestHandler):
             # once the Privacy Policy's section on it is live.
             from engine import whoson as W
             out["whoson_switch"] = W.policy_ready()
+            # The owner's notice to everybody (engine/sitenotice), on the call
+            # every page already makes when it opens.
+            from engine import sitenotice as SN
+            out["notice"] = SN.current()
             out["activity"] = bool(who) and ACT.on_for(conn, who["id"])
             # NO PROMO CODES HERE. This endpoint is public — it renders
             # the plans page before anybody signs in — so anything in it

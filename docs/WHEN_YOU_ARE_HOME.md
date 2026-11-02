@@ -9362,7 +9362,7 @@ curl -s https://qellysbook.com/privacy.html | grep -c 'id="who-is-on"'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function renderWhoson('
 curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys; print(json.load(sys.stdin).get('whoson_switch'))"
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
-sudo grep -cF '/js/whoson.js /css/whoson.css /js/here.js' /etc/caddy/Caddyfile
+sudo grep -cF '/js/here.js /js/owner.js /css/owner.css /js/notice.js /css/notice.css' /etc/caddy/Caddyfile
 ```
 
 The App Store's privacy label already says Usage Data → Product Interaction,

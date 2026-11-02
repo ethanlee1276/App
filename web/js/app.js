@@ -19435,6 +19435,8 @@ async function paywallCheck(fresh) {
     anFlush();
     // Your own time here (js/activity.js): fetched only while the site keeps it for you.
     if (_pwStatus.activity) loadRoom("js/activity.js");
+    // The owner's notice to everybody (js/notice.js, engine/sitenotice): loaded only when there is one.
+    if (_pwStatus.notice || window.qbNotice) loadRoom("js/notice.js", "css/notice.css").then(() => window.qbNotice && qbNotice(_pwStatus.notice));
     igMount();
   } catch (e) { return document.body.classList.contains("walled"); }
   return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
@@ -22935,6 +22937,8 @@ function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage"
 // The owner's Who's on now (engine/whoson): its own room, loaded on first
 // use; the server answers its data to the site's own account alone.
 function renderWhoson(...a) { return roomCall(renderWhoson, "renderWhoson", "js/whoson.js", "css/whoson.css", a); }
+// The owner's desk (js/owner.js, engine/ownerdesk): the site's own account alone.
+function renderOwner(...a) { return roomCall(renderOwner, "renderOwner", "js/owner.js", "css/owner.css", a); }
 
 // renderMethodology, renderChangelog and renderVerify are in js/more.js, loaded the
 // first time their page opens (loadRoom; 2026-10-29, to pay for the Pick of the
@@ -23474,7 +23478,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "whoson", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "whoson", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -23953,6 +23957,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "weather") renderWeather();
   if (name === "race") renderRace();
   if (name === "whoson") renderWhoson();
+  if (name === "owner") renderOwner();
   if (name === "potd") renderPotdPage();
   if (name === "alerts") renderAlerts();
   if (name === "messages") renderMessages();
