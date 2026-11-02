@@ -622,24 +622,27 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                     page.route("**/data/pbp/mlb_777001.json*", serve(mlb))
                     page.route("**/data/live_mlb.json*", serve(mlb_strip))
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nfl/e9", wait_until="load")
-                    page.wait_for_selector(".gc-drive [data-gc-fd]", timeout=15000)
+                    page.wait_for_selector(".gc-dv [data-gc-dv-replay]", timeout=15000)
                     page.evaluate("document.querySelectorAll('#tour-overlay, .tour-pop').forEach((n) => n.remove())")
-                    # The card shows the one field that fits it.
-                    shown = page.evaluate("""[...document.querySelectorAll('.gc-drive .gc-fd-svg')]
-                        .filter((s) => getComputedStyle(s).display !== 'none').map((s) => s.classList.contains('narrow') ? 'narrow' : 'wide')""")
-                    assert shown == (["narrow"] if width < 600 else ["wide"]), shown
-                    assert page.evaluate("""[...document.querySelectorAll('.gc-drive .gc-fd-svg')]
-                        .find((s) => getComputedStyle(s).display !== 'none').getBoundingClientRect().height""") > 100
+                    # The drive card (2026-11-02): one field, the last play drawn on
+                    # it, and the offence's pin on the line, at every width.
+                    field = page.evaluate("""(() => { const s = document.querySelector('.gc-dv .gc-dv-svg').getBoundingClientRect();
+                        const pin = document.querySelector('.gc-dv .gc-dv-pin').getBoundingClientRect();
+                        return { h: s.height, w: s.width, pinIn: pin.left >= s.left - 2 && pin.right <= s.right + 2,
+                                 paths: document.querySelectorAll('.gc-dv .gc-dv-arc, .gc-dv .gc-dv-run, .gc-dv .gc-dv-ret').length }; })()""")
+                    assert field["h"] > 100 and field["pinIn"] and field["paths"] >= 1, field
                     # The drive on the photograph sits exactly on it, at every width.
                     page.wait_for_selector(".pbp-park [data-gc-art]", state="attached", timeout=5000)
                     boxes = page.evaluate("""(() => { const p = document.querySelector('.pbp-park');
                         const r = (e) => { const b = e.getBoundingClientRect(); return [b.x, b.y, b.width, b.height].map((v) => Math.round(v)); };
                         return [r(p.querySelector('.pbp-photo')), r(p.querySelector('[data-gc-art]'))]; })()""")
                     assert boxes[0] == boxes[1], boxes
-                    # Replay (the photograph's) draws both again, and both balls run.
+                    # Replay on the photograph runs its drive again; the card's own
+                    # Replay flies its last play again.
                     page.click(".pbp-park [data-gc-replay]")
-                    assert page.query_selector(".gc-drive .gc-fd-ball animateTransform"), "the card's ball runs again"
-                    assert page.query_selector(".pbp-park .gc-art-ball animateTransform"), "and the photograph's"
+                    assert page.query_selector(".pbp-park .gc-art-ball animateTransform"), "the photograph's ball runs again"
+                    page.click(".gc-dv [data-gc-dv-replay]")
+                    assert page.query_selector(".gc-dv .gc-dv-ball animateMotion"), "and the card's last play flies again"
                     page.click('.pbp-tab[data-pbp-tab="plays"]')
                     page.wait_for_selector(".gc-chart .gc-dc-row", state="attached", timeout=5000)
                     assert page.evaluate("""[...document.querySelectorAll('.gc-chart .gc-fd-svg')]

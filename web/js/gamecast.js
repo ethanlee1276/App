@@ -1161,6 +1161,310 @@
   //: Which side the team on the card was, for the play it is named on.
   const ROLE_WORD = { receiving: "receiving", punting: "punting", kicking: "kicking" };
 
+  /* ---------------- the drive, its field and the last play: one card ----------------
+     Ethan, 2026-11-01, with a screenshot of another app's live drive card:
+     "I also want our live play by play shit too look just like this. It's
+     cool too look at (ours) but it's still hard to understand exactly what's
+     happening in the game so we need to fix that and make it less confusing".
+
+     WHAT IT WAS. The drive card drew every snap of the drive as a bar on a
+     dark field, the photograph drew the drive again, a strip under it said
+     "Ball on" a third time, and the last play sat in a card of its own
+     further down: four pictures of one moment, none of them saying plainly
+     what had just happened. This card says it once, in the order a person
+     asks it:
+
+       * who has the ball and how the drive is going (plays, yards, time);
+       * the down, and where the ball is;
+       * the field: each end zone in its club's colour under its name, the
+         ball as the offence's mark on the line of scrimmage, the line to
+         gain in gold, and the LAST PLAY ONLY, drawn the way it happened — a
+         kick or a pass through the air as an arc, a run or a return along
+         the ground as an arrow — with what it came to in words at its end;
+       * that play in a sentence, our win chance, the people in it with
+         their game so far, and the down it was snapped on.
+
+     The photograph stays under it (Ethan's renders: "It's cool too look
+     at"), running the drive on its own clock as before.
+
+     THE ROW RULE STILL HOLDS: the site's own words from the file's numbers
+     (type, yards, spots, the names matched against the box score), never
+     anybody's sentence. Where a play ENDED is where the next snap is (the
+     scoreboard's own spot for the newest play), a touchdown in the end
+     zone, a field goal at the posts. A punt's or a kickoff's `yards` are
+     its RETURN (footballWords), so the kick came down that far beyond the
+     next snap. A play without a spot draws no path, never a guessed one. */
+  //: The field in the drawing's own units: the far edge narrower than the
+  //: near one, which is all the perspective a reader needs to see a field.
+  const DV = { w: 360, h: 164, top: 30, bot: 124, half0: 140, half1: 171, cx: 180, lane: 0.6 };
+  const dvX = (u, t) => DV.cx + ((u + 10) / 120 - 0.5) * 2 * (DV.half0 + (DV.half1 - DV.half0) * t);
+  const dvY = (t) => DV.top + (DV.bot - DV.top) * t;
+  const dvP = (u, t) => `${f1(dvX(u, t))} ${f1(dvY(t))}`;
+  const dvBand = (u0, u1) => `M${dvP(u0, 0)}L${dvP(u1, 0)}L${dvP(u1, 1)}L${dvP(u0, 1)}Z`;
+  //: Where something laid over the drawing sits, in the box's percentages.
+  const dvAt = (u, t) => `left:${f1(dvX(u, t) / DV.w * 100)}%;top:${f1(dvY(t) / DV.h * 100)}%`;
+  //: The play's name, by how the field draws it.
+  const DV_KIND = { fg: "Field goal", kick: "Punt", to: "Turnover", loss: "Sack", inc: "Incomplete pass",
+                    flag: "Penalty", pass: "Pass", run: "Run" };
+  //: The play last drawn (its ball flies once, when it is new), and what
+  //: the replay button redraws.
+  let _dvDrawn = "";
+  let _dvReplay = false;
+  let _dvLast = null;
+
+  /* The play as the field draws it: where it was snapped (`from`), where a
+     kick came down (`land`), where it ended (`to`), how (`air`, `ret`), and
+     its words. Null when the file holds no spot for it. */
+  function dvPlay(d, p, newest) {
+    if (!p || p.kind !== "football" || p.spot == null || !isFinite(Number(p.spot))) return null;
+    const dir = p.team === d.home ? 1 : p.team === d.away ? -1 : 0;
+    if (!dir) return null;
+    const e = String(p.event || ""), lv = d.live || {};
+    const from = ydClamp(Number(p.spot)), y = Math.round(Number(p.yards) || 0);
+    const next = (() => {
+      if (newest) {
+        const v = Number(lv.yard_line);
+        return lv.yard_line != null && isFinite(v) && v >= 0 && v <= 100 ? v : null;
+      }
+      const foot = (d.plays || []).filter((r) => r && r.kind === "football");
+      const n = foot.slice(foot.indexOf(p) + 1)
+        .find((r) => r.spot != null && isFinite(Number(r.spot)) && !NO_SNAP.test(String(r.event || "")));
+      return n ? ydClamp(Number(n.spot)) : null;
+    })();
+    const [k0] = snapKind(p);
+    const td = !!p.scoring && /touchdown/i.test(e);
+    const base = { from, land: null, air: false, ret: false, dir, tone: "" };
+    if (/kickoff|punt/i.test(e)) {
+      const kickoff = /kickoff/i.test(e);
+      // The kick, then the return to where the other side snapped next.
+      if (td) return { ...base, to: dir > 0 ? 0 : 100, air: true, label: "Returned for a TD", tone: "td" };
+      if (next == null) return { ...base, to: null, air: true, label: kickoff ? "Kickoff" : "Punt" };
+      const ret = Math.max(0, y);
+      const land = Math.max(-10, Math.min(110, next + dir * ret));
+      return { ...base, land, to: next, air: true, ret: ret > 0,
+               label: ret > 0 ? `${ret}-yd return` : kickoff ? "Kickoff" : `${Math.round(Math.abs(next - from))}-yd punt` };
+    }
+    if (/field goal/i.test(e)) {
+      const good = k0 === "fg";
+      const dist = (typeof footballWords === "function" ? footballWords(p, d).title : "").match(/(\d+) yds/);
+      return { ...base, to: dir > 0 ? 110 : -10, air: true, miss: !good, tone: good ? "good" : "bad",
+               label: good ? (dist ? `${dist[1]}-yd FG good` : "Field goal good") : "No good" };
+    }
+    // An interception or a fumble taken back the other way.
+    if (td && k0 === "to") return { ...base, to: dir > 0 ? 0 : 100, air: false, label: "Returned for a TD", tone: "td" };
+    if (td) return { ...base, to: dir > 0 ? 100 : 0, air: k0 === "pass", label: "Touchdown", tone: "td" };
+    if (k0 === "inc") return { ...base, to: ydClamp(from + dir * 9), air: true, inc: true, label: "Incomplete", tone: "mute" };
+    if (k0 === "to") return { ...base, to: next != null ? next : from, air: /interception/i.test(e), tone: "bad",
+                              label: /interception/i.test(e) ? "Intercepted" : "Fumble lost" };
+    if (k0 === "flag") return { ...base, to: next != null ? next : ydClamp(from + dir * y), flag: true, tone: "flag",
+                                label: y ? `Flag, ${y > 0 ? "+" : "−"}${Math.abs(y)} yds` : "Flag" };
+    // A gain ends where the next snap is when the two agree, else at its own yards.
+    const to = next != null && Math.abs((next - from) * dir - y) <= 3 ? next : ydClamp(from + dir * y);
+    const n = Math.round((to - from) * dir);
+    const label = k0 === "loss" ? (n ? `Sack, −${Math.abs(n)}` : "Sack")
+      : n > 0 ? `${n}-yd ${k0 === "pass" ? "catch" : "run"}` : n < 0 ? `Loss of ${Math.abs(n)}` : "No gain";
+    return { ...base, to, air: k0 === "pass", label, tone: k0 === "loss" || n < 0 ? "bad" : "" };
+  }
+
+  /* Who was on the play, by the box score's own groups: the passer is in
+     passing, the man who caught it in receiving, a punter in punting, the
+     man who brought it back in the returns. The order the names came in is
+     the order a sentence named them, which says nothing certain about who
+     did what. */
+  const inGroup = (d, team, group, name) => teamBox(d, team).some((g) => lower(g.name) === lower(group) && rowOf(g, name));
+  function dvCast(d, p) {
+    const names = (p.players || []).filter(Boolean);
+    const us = p.team, them = us === d.home ? d.away : us === d.away ? d.home : "";
+    const pick = (team, groups) => names.find((n) => groups.some((g) => inGroup(d, team, g, n))) || "";
+    const e = String(p.event || "");
+    if (/kickoff/i.test(e)) return { lead: pick(us, ["kicking"]) || names[0] || "", with: pick(them, ["kickReturns"]), role: ["kicking", "kickReturns"] };
+    if (/punt/i.test(e)) return { lead: pick(us, ["punting"]) || names[0] || "", with: pick(them, ["puntReturns"]), role: ["punting", "puntReturns"] };
+    if (/field goal|extra point/i.test(e)) return { lead: pick(us, ["kicking"]), with: "", role: ["kicking", ""] };
+    if (/interception/i.test(e)) return { lead: pick(us, ["passing"]), with: pick(them, ["interceptions", "defensive"]), role: ["passing", "defensive"] };
+    if (/sack/i.test(e)) return { lead: pick(us, ["passing"]), with: pick(them, ["defensive"]), role: ["passing", "defensive"] };
+    if (/pass|reception|incompl/i.test(e)) {
+      // A box score a beat behind the play still has the sentence's order:
+      // the thrower is named first, the man it was for after him.
+      const lead = pick(us, ["passing"]) || names[0] || "";
+      return { lead, with: pick(us, ["receiving"]) || names.find((n) => n !== lead) || "", role: ["passing", "receiving"] };
+    }
+    return { lead: pick(us, ["rushing", "receiving", "passing"]) || names[0] || "", with: "", role: ["rushing", ""] };
+  }
+
+  /* The play in a sentence, the site's own: who, what, how far, to where. */
+  function dvSentence(d, league, p, m, cast) {
+    const e = String(p.event || ""), y = Math.round(Number(p.yards) || 0);
+    const to = (v) => (v == null ? "" : ` to the ${spotWord(d, Math.max(0, Math.min(100, v)))}`);
+    const yd = (n) => `${Math.abs(n)} yard${Math.abs(n) === 1 ? "" : "s"}`;
+    const L = cast.lead, W = cast.with, club = `The ${teamNameIn(league, p.team) || p.team}`;
+    const end = m && m.to != null ? to(m.to) : "";
+    if (/kickoff|punt/i.test(e) && !/touchdown/i.test(e)) {
+      const kick = /kickoff/i.test(e) ? ["kicks off", "kick off"] : ["punts", "punt"];
+      const land = m && m.land != null ? (m.land < 0 || m.land > 100 ? " into the end zone" : to(m.land)) : "";
+      const back = m && m.ret ? `; ${W || "the return"} ${W ? "brings it back" : "comes back"} ${yd(y)}${end}` : "";
+      return `${L ? `${L} ${kick[0]}` : `${club} ${kick[1]}`}${land}${back}.`;
+    }
+    if (/field goal/i.test(e)) return `${L ? `${L}’s` : `${club}’`} ${m && m.label && /\d/.test(m.label) ? m.label.replace(" FG good", "-yard field goal is good").replace("-yd", "") : `field goal is ${m && m.miss ? "no good" : "good"}`}.`;
+    if (/touchdown/i.test(e) && /pass/i.test(e) && !/interception/i.test(e)) return `${L && W ? `${L} finds ${W}` : W || L || club} for a ${Math.abs(y)}-yard touchdown.`;
+    if (/touchdown/i.test(e) && !/interception|fumble|return/i.test(e)) return `${L || club} ${L ? "runs" : "run"} it in from ${Math.abs(y)} yard${Math.abs(y) === 1 ? "" : "s"} out.`;
+    if (/interception/i.test(e)) return `${L ? `${L}’s pass` : "The pass"} is intercepted${W ? ` by ${W}` : ""}${/touchdown/i.test(e) ? " and taken back for a touchdown" : ""}.`;
+    if (/sack/i.test(e)) return `${L || "The quarterback"} is sacked${W ? ` by ${W}` : ""}${y ? ` for a loss of ${yd(y)}` : ""}.`;
+    if (/incompl/i.test(e)) return `${L ? `${L}’s pass` : "The pass"}${W ? ` for ${W}` : ""} falls incomplete.`;
+    if (/pass|reception/i.test(e)) return `${L && W ? `${L} to ${W}` : W ? `${W} catches it` : "Pass complete"} for ${y ? yd(y) : "no gain"}${end}.`;
+    if (/rush|run|scramble/i.test(e)) return `${L ? `${L} runs` : "Run"} for ${y > 0 ? yd(y) : y < 0 ? `a loss of ${yd(y)}` : "no gain"}${end}.`;
+    return `${typeof footballWords === "function" ? footballWords(p, d).title : e}.`;
+  }
+
+  /* The field, drawn: turf, the two end zones in their clubs' colours under
+     their names, the yard lines and numbers, the goalposts, the line of
+     scrimmage and the line to gain, and the last play's path. */
+  function dvFieldSVG(d, league, m, nx, fly) {
+    const cols = fieldColours(d, league);
+    const T = DV.lane, y0 = dvY(T);
+    let lines = "", nums = "";
+    for (let u = 5; u < 100; u += 5) lines += `<path class="gc-dv-yl${u % 10 ? "" : " ten"}" d="M${dvP(u, 0)}L${dvP(u, 1)}"/>`;
+    for (let u = 10; u < 100; u += 10) nums += `<text class="gc-dv-num" x="${f1(dvX(u, 1))}" y="${f1(DV.bot + 15)}">${u > 50 ? 100 - u : u}</text>`;
+    nums += `<text class="gc-dv-num team" x="${f1(dvX(0, 1))}" y="${f1(DV.bot + 15)}">${esc(d.home)}</text>`
+      + `<text class="gc-dv-num team" x="${f1(dvX(100, 1))}" y="${f1(DV.bot + 15)}">${esc(d.away)}</text>`;
+    const ez = (side, u0) => {
+      const name = String(teamNameIn(league, d[side]) || d[side] || "").toUpperCase();
+      const cx = dvX(u0 + 5, 0.5), cy = dvY(0.5);
+      const fit = name.length > 8 ? ` textLength="82" lengthAdjust="spacingAndGlyphs"` : "";
+      return `<path class="gc-dv-ez" d="${dvBand(u0, u0 + 10)}"${cols[side] ? ` style="--tm:${cols[side]}"` : ""}/>`
+        + `<text class="gc-dv-ezt" x="${f1(cx)}" y="${f1(cy)}" transform="rotate(${side === "home" ? -90 : 90} ${f1(cx)} ${f1(cy)})"${fit}>${esc(name)}</text>`;
+    };
+    const post = (u) => {
+      const x = dvX(u, 0.42), yb = dvY(0.42);
+      return `M${f1(x)} ${f1(yb)}V${f1(yb - 13)}M${f1(x - 5)} ${f1(yb - 13)}H${f1(x + 5)}M${f1(x - 5)} ${f1(yb - 13)}V${f1(yb - 26)}M${f1(x + 5)} ${f1(yb - 13)}V${f1(yb - 26)}`;
+    };
+    let marks = "";
+    if (nx) {
+      marks += `<path class="gc-dv-los" d="M${dvP(nx.los, 0)}L${dvP(nx.los, 1)}"/>`;
+      if (nx.gain != null && !nx.goal) marks += `<path class="gc-dv-gain" d="M${dvP(nx.gain, 0)}L${dvP(nx.gain, 1)}"/>`;
+    }
+    let path = "", route = "";
+    if (m && m.to != null) {
+      const a = { x: dvX(m.from, T), y: y0 };
+      const arc = (u, lift) => {
+        const b = { x: dvX(u, T), y: y0 };
+        const h = Math.min(44, 9 + Math.abs(b.x - a.x) * 0.3) * (lift || 1);
+        return { b, q: `Q${f1((a.x + b.x) / 2)} ${f1(a.y - h * 2)} ${f1(b.x)} ${f1(b.y)}` };
+      };
+      const start = `M${f1(a.x)} ${f1(a.y)}`;
+      if (m.air && m.land != null) {
+        const k = arc(m.land), c = { x: dvX(m.to, T), y: y0 };
+        path = `<path class="gc-dv-arc" d="${start}${k.q}"/>`
+          + (m.ret ? `<path class="gc-dv-ret" d="M${f1(k.b.x)} ${f1(k.b.y)}L${f1(c.x)} ${f1(c.y)}" marker-end="url(#gc-dv-head)"/>` : "");
+        route = `${start}${k.q}${m.ret ? `L${f1(c.x)} ${f1(c.y)}` : ""}`;
+      } else if (m.air) {
+        const k = arc(m.to, m.inc ? 0.6 : 1);
+        path = `<path class="gc-dv-arc${m.inc ? " inc" : ""}" d="${start}${k.q}"${m.inc ? "" : ` marker-end="url(#gc-dv-head)"`}/>`
+          + (m.inc ? `<path class="gc-dv-x" d="M${f1(k.b.x - 4)} ${f1(k.b.y - 4)}l8 8m0 -8l-8 8"/>` : "");
+        route = `${start}${k.q}`;
+      } else if (m.to !== m.from) {
+        const b = { x: dvX(m.to, T), y: y0 };
+        path = `<path class="gc-dv-run${m.flag ? " flag" : ""}" d="${start}L${f1(b.x)} ${f1(b.y)}" marker-end="url(#gc-dv-head)"/>`;
+        route = `${start}L${f1(b.x)} ${f1(b.y)}`;
+      }
+      path += `<circle class="gc-dv-snap" cx="${f1(a.x)}" cy="${f1(a.y)}" r="2.6"/>`;
+      // The ball flies the play once, when it is new (or on Replay).
+      if (route && fly) path += `<g class="gc-dv-ball"><ellipse rx="4.4" ry="2.9"/><animateMotion dur="1.4s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".3 .1 .3 1" path="${route}"/></g>`;
+    }
+    const aria = `${d.away} at ${d.home}${nx ? `, ball on the ${spotWord(d, nx.los)}` : ""}${m ? `; last play: ${m.label}` : ""}`;
+    return `<svg class="gc-dv-svg" viewBox="0 0 ${DV.w} ${DV.h}" role="img" aria-label="${escapeAttr(aria)}">`
+      + `<defs><marker id="gc-dv-head" viewBox="0 0 8 8" refX="5" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">`
+      + `<path d="M0 0L8 4L0 8Z" class="gc-dv-headfill"/></marker></defs>`
+      + `<path class="gc-dv-turf" d="${dvBand(0, 100)}"/>${ez("home", -10)}${ez("away", 100)}${lines}`
+      + `<path class="gc-dv-goal" d="M${dvP(0, 0)}L${dvP(0, 1)}M${dvP(100, 0)}L${dvP(100, 1)}"/><path class="gc-dv-post" d="${post(-10)}${post(110)}"/>`
+      + `${marks}${path}${nums}</svg>`;
+  }
+
+  function driveViewHTML(d, league, faces) {
+    const lv = d.live || {};
+    if (lv.state !== "live" || !FOOTBALL.has(league)) return "";
+    const p = newestPlay(d, league);
+    const dr = currentDrive(d);
+    if (!p && !dr) return "";
+    _dvLast = { d, league, faces };
+    const offense = lv.possession || (dr && dr.team) || (p && p.team) || "";
+    const dir = offense === d.home ? 1 : offense === d.away ? -1 : 0;
+    const nx = nextSnap(d, dir);
+    const m = p ? dvPlay(d, p, true) : null;
+    const id = p ? String(p.id || `${p.period}|${p.clock}|${p.event}`) : "";
+    const fly = _dvReplay || (!!id && id !== _dvDrawn);
+    if (id) _dvDrawn = id;
+    // Down and ball on: the scoreboard's own words for the next snap.
+    const parts = /^(.*?)\s+at\s+(.+)$/.exec(String(lv.detail || ""));
+    const down = parts ? parts[1].trim() : "";
+    const on = parts ? parts[2].trim() : nx ? spotWord(d, nx.los) : "";
+    const tiles = (down || on) ? `<div class="gc-dv-tiles">${down ? `<div><span>Down</span><b>${esc(down)}</b></div>` : ""}${
+      on ? `<div><span>Ball on</span><b>${esc(on)}</b></div>` : ""}</div>` : "";
+    const pin = nx && offense ? `<span class="gc-dv-pin" style="${dvAt(nx.los, DV.lane)}" aria-hidden="true">${teamMarkIn(league, offense, 22)}</span>` : "";
+    // The play's words under where it ended, kept inside the card at either touchline.
+    const tagU = m && m.to != null ? Math.max(-6, Math.min(106, m.to)) : 0;
+    const tagX = dvX(tagU, DV.lane + 0.27) / DV.w;
+    const tag = m && m.to != null && m.label
+      ? `<span class="gc-dv-tag${m.tone ? ` ${m.tone}` : ""}${tagX < 0.2 ? " l" : tagX > 0.8 ? " r" : ""}${fly ? " late" : ""}" style="${dvAt(tagU, Math.min(0.97, DV.lane + 0.27))}">${esc(m.label)}</span>` : "";
+    const head = dr
+      ? `${teamMarkIn(league, dr.team, 30)}<div class="gc-dv-who"><div class="gc-k">Current drive</div><b>${esc(driveWords(dr))}</b></div>`
+      : `${offense ? teamMarkIn(league, offense, 30) : ""}<div class="gc-dv-who"><div class="gc-k">On the field</div><b>${esc(teamNameIn(league, offense) || "")}</b></div>`;
+    const rz = nx && dir && (dir > 0 ? nx.los >= 80 : nx.los <= 20) ? `<span class="gc-rz">Red zone</span>` : "";
+    const replay = m && m.to != null ? `<button type="button" class="gc-replay" data-gc-dv-replay aria-label="Replay the last play">${REPLAY}</button>` : "";
+    return `<div class="card gc-dv" data-gc-dv>
+      <div class="gc-dv-head">${head}<span class="gc-dv-end">${rz}${replay}</span></div>
+      ${tiles}
+      <div class="gc-dv-field">${dvFieldSVG(d, league, m, nx, fly)}${pin}${tag}</div>
+      ${p ? dvLastHTML(d, league, faces, p, m) : ""}</div>`;
+  }
+
+  /* The last play, under its drawing: its name, our win chance, the
+     sentence, the people in it with their game so far, the down it was
+     snapped on, and any moment since (a timeout, the quarter's end). */
+  function dvLastHTML(d, league, faces, p, m) {
+    const e = String(p.event || "");
+    const words = typeof footballWords === "function" ? footballWords(p, d) : { title: e, snap: true };
+    const kind = /kickoff/i.test(e) ? "Kickoff" : /touchdown/i.test(e) ? "Touchdown" : /interception/i.test(e) ? "Interception"
+      : /fumble/i.test(e) && p.turnover ? "Fumble" : /sack/i.test(e) ? "Sack" : /field goal/i.test(e) ? "Field goal"
+      : /extra point/i.test(e) ? "Extra point" : /punt/i.test(e) ? "Punt"
+      : words.snap ? (DV_KIND[snapKind(p)[0]] || words.title) : words.title;
+    const when = `${p.period ? `Q${p.period}` : ""}${p.clock ? ` ${typeof fbClock === "function" ? fbClock(p.clock) : p.clock}` : ""}`.trim();
+    const cast = dvCast(d, p);
+    const said = words.snap ? dvSentence(d, league, p, m, cast) : `${words.title}.`;
+    const groupLine = (name, group) => {
+      const g = group ? [...teamBox(d, d.away), ...teamBox(d, d.home)].find((x) => lower(x.name) === lower(group) && rowOf(x, name)) : null;
+      return g ? { line: lineFor(g, rowOf(g, name)), row: rowOf(g, name) } : playerLine(d, name, "any");
+    };
+    const people = [[cast.lead, cast.role[0]], [cast.with, cast.role[1]]].filter(([n]) => n);
+    const named = new Set(people.map(([n]) => n));
+    // Anybody else the play named, up to two in all, so a tackle has a face.
+    (p.players || []).filter((n) => n && !named.has(n)).slice(0, Math.max(0, 2 - people.length)).forEach((n) => people.push([n, ""]));
+    const chips = people.map(([name, group]) => {
+      const got = groupLine(name, group);
+      return `<div class="gc-chip">${faceHTML(league, got.row || { name }, faces)}
+        <div class="gc-chip-t"><b>${esc(name)}</b><span class="mini">${esc(teamOf(d, name) || "")}${got.row && got.row.pos ? `, ${esc(got.row.pos)}` : ""}</span>
+          ${got.line ? `<span class="gc-chip-line">${got.line}</span>` : ""}</div></div>`;
+    }).join("");
+    const before = p.down ? `${esc(downWord(p))}${p.spot != null ? ` at ${esc(spotWord(d, p.spot))}` : ""}` : "";
+    const since = sinceSnap(d, p);
+    return `<div class="gc-dv-last">
+      <div class="gc-dv-lhead"><b class="gc-dv-kind">${esc(kind)}</b>
+        <span class="gc-dv-lside">${winPct(d, league)}<span class="gc-dv-chip">Last play${when ? ` · ${esc(when)}` : ""}</span></span></div>
+      <p class="gc-dv-said">${esc(said)}</p>
+      ${chips ? `<div class="gc-chips">${chips}</div>` : ""}
+      ${before || since.length ? `<div class="gc-dv-before">${before ? `<span><i>Before the play</i> ${before}</span>` : ""}${
+        since.map((w) => `<span>${esc(w)}</span>`).join("")}</div>` : ""}</div>`;
+  }
+  // Replay: the same card again with the ball flying (the module's click; no inline handler).
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("click", (e) => {
+      const b = e.target && e.target.closest ? e.target.closest("[data-gc-dv-replay]") : null;
+      if (!b || !_dvLast) return;
+      _dvReplay = true;
+      swap("[data-gc-dv]", driveViewHTML(_dvLast.d, _dvLast.league, _dvLast.faces));
+      _dvReplay = false;
+    });
+  }
+
   /* ---------------- the game leaders ----------------
      ESPN's GAME LEADERS: five rows for football (passing, rushing,
      receiving, sacks, tackles), the away side's man on the left and the
@@ -1607,7 +1911,7 @@
     // The football page's own rooms (detail.js, GP1): a final's record on
     // its Stats tab (the scoring, the leaders); the live tracking on its
     // Play-By-Play tab (the drive card, the last play, the whole game's chart).
-    scoring: scoringHTML, leaders: leadersHTML, driveCard: currentDriveHTML, lastPlay: lastPlayHTML, gameChart: gameChartHTML,
+    scoring: scoringHTML, leaders: leadersHTML, driveCard: currentDriveHTML, lastPlay: lastPlayHTML, driveView: driveViewHTML, gameChart: gameChartHTML,
     // Exposed for the tests and for Ask: the readers, not the markup.
     spotWord, playerLine, leaderOf, currentDrive, newestPlay, lineFor, faceURL, driveRows, nextSnap,
   };

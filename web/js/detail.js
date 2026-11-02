@@ -5637,19 +5637,28 @@ function gpDrivesHTML(d, league) {
         ${playsHTML({ plays: rows, home: d.home, away: d.away, room: pbpRoom(d, league) }) || `<p class="rail-quiet">No plays yet.</p>`}</details>`;
   }).join("");
 }
+/* THE PLAY-BY-PLAY TAB, LIVE (Ethan, 2026-11-01, with another app's drive
+   card: "It's cool too look at (ours) but it's still hard to understand
+   exactly what's happening in the game so we need to fix that and make it
+   less confusing"). One card says what is happening (gamecast.js
+   driveViewHTML): the drive, the down, the ball on a field in the clubs'
+   colours with the last play drawn on it, and that play in words with the
+   people in it. It replaces the bar chart of the drive, the strip that
+   said "Ball on" again, and the Last play card of its own. Ethan's
+   photograph keeps its place under the win chance, running the drive on
+   his render as before. */
 function gpPlaysHTML(d, league, faces, boardGame, lastPlay, GC) {
   const lv = d.live || {};
   const live = lv.state === "live";
-  const view = live ? `<div class="card pbp-parkcard">${pbpParkHeadHTML(league, boardGame)}${
-    pbpParkHTML(d, league, boardGame, lastPlay)}${pbpSituationHTML(d, league, faces)}</div>` : "";
   const g = GC || {};
-  const drive = live && g.driveCard && g.newestPlay ? g.driveCard(d, league, g.newestPlay(d, league)) : "";
-  const last = live && g.lastPlay ? g.lastPlay(d, league, faces) : "";
+  const card = live && g.driveView ? g.driveView(d, league, faces) : "";
+  const view = live ? `<div class="card pbp-parkcard">${pbpParkHeadHTML(league, boardGame)}${
+    pbpParkHTML(d, league, boardGame, lastPlay)}</div>` : "";
   const chart = g.gameChart ? g.gameChart(d, league) : "";
   // The win chance and the room's own read of it beside the math (the chat's
   // vote line, pbpRoomLine), with the plays while the game is on.
   const win = live ? `${pbpWinChartHTML(d, league, boardGame)}${pbpModelWinProbHTML(d)}` : "";
-  return `${live ? pbpCallItHTML(d, league) : ""}${drive}${view}${last}${win}${chart}${gpDrivesHTML(d, league)}`;
+  return `${card}${live ? pbpCallItHTML(d, league) : ""}${win}${view}${chart}${gpDrivesHTML(d, league)}`;
 }
 
 /* ---------------- Standings ----------------

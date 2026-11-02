@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-02",
+      "kind": "ship",
+      "title": "A live football game's Play-By-Play says what just happened",
+      "body": "The tab now leads with one card: the drive in progress (plays, yards, time), the down and where the ball is, and a field with each end zone in its club's colour under its name, the offense's logo on the line of scrimmage, the line to gain in gold, and only the last play drawn on it. A pass or a kick flies as an arc, a run or a return goes along the ground as an arrow, and what it came to is written at its end (“16-yd return”, “12-yd catch”, “Touchdown”). Under the field the same play reads as a sentence in our own words, with our win chance, the players in it and their game so far, and the down it was snapped on. The bar chart of the whole drive, a second “Ball on” strip and the separate Last play card are gone; the stadium picture stays, under the win chance, and the replay button flies the last play again."
+    },
+    {
+      "date": "2026-11-02",
       "kind": "fix",
       "title": "A first-touchdown pick counts on the record minutes after the game ends",
       "body": "NFL first-touchdown Long Shots were graded off a public play-by-play file that arrives overnight, so a Sunday hit sat open into Tuesday and the Long Shots record did not move. They now grade off the game's own scoring plays within about five minutes of the final whistle, with the overnight file kept as the backstop for anything those cannot settle. On the Record page each kind of long shot now has its own line (first touchdowns, first baskets, and the home runs and anytime touchdowns before them), and every settled pick says which bet it was instead of “HR”."

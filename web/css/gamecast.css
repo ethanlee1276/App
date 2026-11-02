@@ -360,3 +360,77 @@
 .gc-art-old { opacity: .45; }
 /* Replay on the photograph's corner, over the sky. */
 .pbp-park > .gc-art-replay { position: absolute; top: 8px; right: 8px; z-index: 1; }
+
+/* THE DRIVE CARD (gamecast.js driveViewHTML, 2026-11-02; Ethan: "it's still
+   hard to understand exactly what's happening in the game"). The drive, the
+   down, the field in the two clubs' colours with only the last play drawn on
+   it, and that play in words with the people in it. */
+/* The end zones are the clubs' own colours in either theme, so their names
+   keep one light ink and the zones one dark shade (as on the photograph). */
+.gc-dv { padding: 14px 14px 12px; --dv-ink: oklch(0.97 0.01 270); --dv-shade: oklch(0.2 0.02 270); }
+.gc-dv-head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.gc-dv-who { flex: 1; min-width: 0; }
+.gc-dv-who b { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim); margin-top: 1px; }
+.gc-dv-end { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.gc-dv-tiles { display: flex; justify-content: center; margin: 12px 0 4px; }
+.gc-dv-tiles > div { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 24px; }
+.gc-dv-tiles > div + div { border-left: var(--hairline) solid var(--border-soft); }
+.gc-dv-tiles span { font-size: var(--fs-xs); color: var(--text-mute); }
+.gc-dv-tiles b { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The field: the drawing, with the offence's pin and the play's words laid
+   over it at the spots the drawing computed. */
+.gc-dv-field { position: relative; margin: 2px -6px 0; }
+.gc-dv-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.gc-dv-turf { fill: color-mix(in oklab, var(--text) 8%, var(--bg)); }
+.gc-dv-ez { fill: color-mix(in oklab, var(--tm, var(--text-mute)) 82%, var(--dv-shade)); }
+.gc-dv-ezt { fill: var(--dv-ink); font: 800 15px var(--font-display); letter-spacing: .07em; text-anchor: middle;
+  dominant-baseline: central; paint-order: stroke; stroke: color-mix(in oklab, var(--dv-shade) 40%, transparent); stroke-width: 2px; }
+.gc-dv-yl { stroke: color-mix(in oklab, var(--text) 12%, transparent); stroke-width: .8; }
+.gc-dv-yl.ten { stroke: color-mix(in oklab, var(--text) 24%, transparent); stroke-width: 1.1; }
+.gc-dv-goal { stroke: color-mix(in oklab, var(--text) 60%, transparent); stroke-width: 1.4; fill: none; }
+.gc-dv-post { stroke: var(--brand); stroke-width: 1.6; fill: none; stroke-linecap: round; }
+.gc-dv-los { stroke: var(--gc-los); stroke-width: 2; }
+.gc-dv-gain { stroke: var(--brand); stroke-width: 2.2; }
+.gc-dv-num { fill: var(--text-mute); font: 600 9px var(--font-sans); text-anchor: middle; }
+.gc-dv-num.team { font-weight: 800; fill: var(--text-dim); }
+/* Through the air dotted, along the ground solid; a flag dashed in amber. */
+.gc-dv-arc, .gc-dv-ret { fill: none; stroke: var(--text); stroke-width: 2.3; stroke-linecap: round; stroke-dasharray: .1 5.4; }
+.gc-dv-arc.inc { stroke: var(--text-mute); }
+.gc-dv-run { fill: none; stroke: var(--text); stroke-width: 2.6; stroke-linecap: round; }
+.gc-dv-run.flag { stroke: var(--warn); stroke-dasharray: 5 4; stroke-width: 2; }
+.gc-dv-headfill { fill: var(--text); }
+.gc-dv-x { stroke: var(--bad); stroke-width: 2.2; stroke-linecap: round; }
+.gc-dv-snap { fill: var(--text); opacity: .75; }
+.gc-dv-ball ellipse { fill: color-mix(in oklab, var(--warn) 45%, #5a2d12); stroke: var(--text); stroke-width: .8; }
+/* The ball's spot: the offence's mark in a pin whose point sits on the line. */
+.gc-dv-pin { position: absolute; width: 34px; height: 34px; margin: -41px 0 0 -17px; display: grid; place-items: center;
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--panel);
+  border: 2px solid var(--text); box-shadow: 0 4px 12px rgb(0 0 0 / .35); pointer-events: none; }
+.gc-dv-pin > * { transform: rotate(45deg); }
+.gc-dv-tag { position: absolute; transform: translateX(-50%); white-space: nowrap; padding: 3px 9px; border-radius: 8px;
+  background: color-mix(in oklab, var(--panel) 92%, transparent); border: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); font-weight: 700; box-shadow: 0 2px 8px rgb(0 0 0 / .25); pointer-events: none; }
+.gc-dv-tag.l { transform: translateX(-14%); }
+.gc-dv-tag.r { transform: translateX(-86%); }
+.gc-dv-tag.td { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+.gc-dv-tag.good { color: var(--good); }
+.gc-dv-tag.bad { color: var(--bad); }
+.gc-dv-tag.flag { color: var(--warn); }
+.gc-dv-tag.mute { color: var(--text-mute); }
+.gc-dv-tag.late { animation: gc-dv-in .35s 1.15s both; }
+@keyframes gc-dv-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gc-dv-tag.late { animation: none; } .gc-dv-ball { display: none; } }
+/* The last play, under its drawing. */
+.gc-dv-last { margin-top: 12px; padding: 12px; border-radius: var(--radius); background: color-mix(in oklab, var(--text) 5%, transparent); }
+.gc-dv-lhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.gc-dv-kind { font-size: var(--fs-lg); font-weight: 800; line-height: 1.2; }
+.gc-dv-lside { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.gc-dv-lside .gc-win { flex-direction: row; align-items: center; gap: 5px; }
+.gc-dv-lside .gc-win .gc-k { letter-spacing: .03em; }
+.gc-dv-chip { padding: 3px 9px; border-radius: 8px; font-size: var(--fs-xs); font-weight: 700; white-space: nowrap;
+  background: color-mix(in oklab, var(--text) 10%, transparent); }
+.gc-dv-said { margin: 8px 0 0; line-height: var(--lh-snug); color: var(--text-dim); }
+.gc-dv-last .gc-chips { margin-top: 10px; }
+.gc-dv-before { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: var(--fs-sm); color: var(--text-mute); }
+.gc-dv-before i { font-style: normal; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }

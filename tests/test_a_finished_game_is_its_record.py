@@ -84,7 +84,7 @@ def _doc(state):
 
 SEE = """() => { const q = (s) => document.querySelector(s), r = (e) => e && e.getBoundingClientRect();
   const fab = q('#gch-fab'), sb = q('#sidebar');
-  return { park: !!q('#pbp-body .pbp-parkcard'), last: !!q('#pbp-body .gc-last'), leaders: !!q('#pbp-body .gc-leaders'),
+  return { park: !!q('#pbp-body .pbp-parkcard'), last: !!q('#pbp-body .gc-dv-last'), leaders: !!q('#pbp-body .gc-leaders'),
            fab: fab && !fab.hidden && getComputedStyle(fab).display !== 'none'
              ? { bottom: Math.round(r(fab).bottom), left: Math.round(r(fab).left), right: Math.round(r(fab).right) } : null,
            sbRight: sb ? Math.round(r(sb).right) : null, h: innerHeight, w: innerWidth,
@@ -125,7 +125,7 @@ def _run():
                     try:
                         # Drawn: a final opens on its Stats (the leaders), a game being
                         # played on its Play-By-Play (the last play) since 2026-11-01.
-                        page.wait_for_function("() => !!document.querySelector('#pbp-body .gc-leaders, #pbp-body .gc-last')",
+                        page.wait_for_function("() => !!document.querySelector('#pbp-body .gc-leaders, #pbp-body .gc-dv-last')",
                                                timeout=20000)
                     except Exception:                               # noqa: BLE001
                         # What the page did draw, rather than a bare timeout.
