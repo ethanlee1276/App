@@ -209,15 +209,11 @@
     + (Number(p.lv) ? `<span class="fd-lv kr-lv kr-${escapeAttr(p.cls || "t1")}" title="Karma level ${Number(p.lv)}">${Number(p.lv)}</span>` : "")
     + (p.flair ? `<span class="fd-flair" aria-hidden="true">${escapeHtml(p.flair)}</span>` : "") : "");
   const isBoss = () => !!(F.me && F.me.founder);
-  /* The site's own account carries its desk on its own profile, beside Edit
-     profile (Ethan, 2026-11-02, on that profile: "it's not giving me access
-     to the page. It should give this account access"). The server's own
-     rule (engine/whoson.is_site_account: verified, the handle Qellys_Book),
-     or its word on the account (`whoson`); the desk itself answers that
-     account alone. */
-  // The Owner desk's row on your own profile, for the site's owners alone:
-  // the server's word (/api/account/me `whoson`, engine/siteowners), never a
-  // handle the page could be fooled about.
+  /* The Owner desk's row on your own profile, beside Edit profile (Ethan,
+     2026-11-02, on the site's own profile: "it's not giving me access to
+     the page"), for the site's owners alone: the accounts listed on the box
+     (engine/siteowners), which the server says as /api/account/me `whoson`
+     — never a handle the page could be fooled about. */
   const siteDesk = () => !!(typeof _acctUser !== "undefined" && _acctUser && _acctUser.whoson);
 
   function teamMap(sport) {

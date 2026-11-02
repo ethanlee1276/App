@@ -22962,7 +22962,7 @@ function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.j
 // …and every league's Pick of the Day, free (js/potd.js; Ethan, 2026-10-30).
 function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage", "js/potd.js", "css/potd.css", a); }
 // The owner's desk (js/owner.js, engine/ownerdesk), Who's on now its first
-// card (engine/whoson): the site's own account alone.
+// card (engine/whoson): the owners' listed accounts alone (engine/siteowners).
 function renderOwner(...a) { return roomCall(renderOwner, "renderOwner", "js/owner.js", "css/owner.css", a); }
 
 // renderMethodology, renderChangelog and renderVerify are in js/more.js, loaded the

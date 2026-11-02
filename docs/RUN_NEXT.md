@@ -7,8 +7,9 @@ off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
 Last updated 2026-11-02, after the Owner desk was locked to the accounts you
-list (step JK: item 0b), and Terms §5.7 was rewritten to say what a failed
-payment does, with the email it needs (step JJ: item 1's command now arms it).
+list (step JK: item 0b), a failed payment got one day's grace before access
+pauses, and Terms §5.7 was rewritten to say so, with the email it needs
+(step JJ: item 1's command now arms it).
 Before that a cancelled trial lost its access, one trial per person, a failed
 charge started telling the member, and the Owner desk got its account tools
 (step JI: nothing to run; its read-only check is
@@ -79,9 +80,9 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JK 2>&1 | tee /tmp/jk.txt
 
 ## 1. Any time: the notice emails — Who's on now, and 2 November's Terms — and the trimmed files (steps JH, JJ)
 
-Your Qellys Book account's view of every page open on the site, the Owner
-desk's first card (Settings → The site's own account → Owner desk, or the
-row on that account's profile). It counts everybody
+Your view of every page open on the site, the Owner desk's first card
+(Settings → The site's own account → Owner desk, on the accounts you list
+in item 0b, or the row on their profiles). It counts everybody
 now; it names a member only once the Privacy Policy's notice reached them a
 week ago (accounts made from 2 November, at once; your own account always),
 so arm that email. And the new Terms §5.7 (a failed payment keeps access one
@@ -104,9 +105,9 @@ before 2 November):
 cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
 
-Not a command: on your phone, sign in to the Qellys Book account and turn
-alerts on (the Alerts page). The Owner desk (Settings → Owner desk) then
-pushes that phone when the site needs you — a board that hasn't rebuilt on
+Not a command: on your phone, sign in to one of the accounts you listed in
+item 0b and turn alerts on (the Alerts page). The Owner desk then pushes
+every listed account's phones when the site needs you — a board that hasn't rebuilt on
 a day its league plays, grading stopped, the disk filling, a failed update,
 odds credits running low — once a day each, held through your quiet hours.
 The desk's Switches card says "On · 1 phone" once it's set.
