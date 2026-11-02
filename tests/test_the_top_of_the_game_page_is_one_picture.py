@@ -23,7 +23,7 @@ gpPin says where the two bars sit). These hold:
     and leaving the game takes the site bar's pins off;
   * where the sidebar is docked the score bar spans its column (it ran
     under the sidebar, back button and all, and off the other edge), and
-    its shadow falls below it, never beside it;
+    a short fade below it, never beside it, says where it ends;
   * the scroll-driven sheen that slides the site's bar's first layer
     (styles.css glass-drift) is off on this page: on it, that layer is the
     shade, so the bar's colours slid away from the rest as the page moved;
@@ -74,7 +74,10 @@ def test_one_rule_paints_every_surface_at_the_top():
     assert "--gp-shade:" not in view[:view.index("\n}\n")], "one shade, not two that could drift"
     assert "body.gp-on .topbar { border-bottom-color: transparent; animation: none; }" in CSS, \
         "no rule under the bar on the wash, and no sheen sliding its shade with the scroll"
-    assert "box-shadow: 0 18px 14px -14px rgba(0, 0, 0, .5);" in rule, "a shadow below the bar, never beside it"
+    assert "box-shadow: none;" in rule, "no shadow to halo its sides"
+    fade = CSS[CSS.index(".gp-compact::after {"):]
+    fade = fade[:fade.index("}")]
+    assert "top: 100%; height: 12px;" in fade and "left: 10px; right: 10px;" in fade, "a short fade below it, never beside it"
     docked = CSS[CSS.index("/* WHERE THE SIDEBAR STANDS BESIDE THE PAGE at those sizes"):]
     docked = docked[:docked.index("\n}\n")]
     assert "(pointer: coarse) and (min-width: 600px) and (max-width: 720px) and (min-height: 700px)," in docked, "the open Duo upright"
