@@ -88,6 +88,9 @@ GLYPHS = {
     ("carrychart.css", ".mb-hero-face .cc-face"), ("carrychart.css", ".cc-legend .dt.kk-x"),
     ("extras.css", ".xt-ring"),
     ("gamecast.css", ".gc-pz-n.b"), ("gamecast.css", ".gc-pz-key .b::before"),
+    # The live drive card's ball (2026-11-02): a map pin round the offence's
+    # mark, ringed like the marker it is — a picture of a spot, not a box.
+    ("gamecast.css", ".gc-dv-pin"),
     ("hoopscast.css", ".hc-key i.miss"),
     ("rinkcast.css", ".rc-puckmark"), ("rinkcast.css", ".rc-key-note i.miss"), ("rinkcast.css", ".rc-key-note i.block"),
     ("social.css", ".fd-card"), ("social.css", ".fd-tab"), ("social.css", ".fd-hero"),

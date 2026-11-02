@@ -409,11 +409,11 @@
   border: 2px solid var(--text); box-shadow: 0 4px 12px rgb(0 0 0 / .35); pointer-events: none; }
 .gc-dv-pin > * { transform: rotate(45deg); }
 .gc-dv-tag { position: absolute; transform: translateX(-50%); white-space: nowrap; padding: 3px 9px; border-radius: 8px;
-  background: color-mix(in oklab, var(--panel) 92%, transparent); border: var(--hairline) solid var(--border-soft);
-  font-size: var(--fs-sm); font-weight: 700; box-shadow: 0 2px 8px rgb(0 0 0 / .25); pointer-events: none; }
+  background: color-mix(in oklab, var(--panel) 94%, transparent);
+  font-size: var(--fs-sm); font-weight: 700; box-shadow: 0 2px 10px rgb(0 0 0 / .3); pointer-events: none; }
 .gc-dv-tag.l { transform: translateX(-14%); }
 .gc-dv-tag.r { transform: translateX(-86%); }
-.gc-dv-tag.td { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+.gc-dv-tag.td { background: var(--brand); color: var(--brand-ink); }
 .gc-dv-tag.good { color: var(--good); }
 .gc-dv-tag.bad { color: var(--bad); }
 .gc-dv-tag.flag { color: var(--warn); }

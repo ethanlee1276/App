@@ -31,7 +31,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 
-import test_gamecast as G                                         # noqa: E402
+
+class _Harness:
+    """test_gamecast's node harness, imported when a test first needs it
+    (a sibling test module is not imported at module scope: test_doctor)."""
+    def __getattr__(self, name):
+        import test_gamecast
+        return getattr(test_gamecast, name)
+
+
+G = _Harness()
 
 DETAIL = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
 GC = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
