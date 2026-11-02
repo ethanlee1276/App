@@ -116,7 +116,9 @@ def money(conn, now: float | None = None) -> dict:
     for st, end, plan, cae, started, updated in rows:
         status = str(st or "none").lower()
         out["statuses"][status] = out["statuses"].get(status, 0) + 1
-        live = B.entitled(status, end, t, bool(cae))
+        # A trial its member cancelled is walled at once (billing.trial_cancel_walls):
+        # not a trial on the desk any more, and not a member.
+        live = B.entitled(status, end, t, bool(cae), started)
         if status == "past_due":
             out["past_due"] += 1
         if live:

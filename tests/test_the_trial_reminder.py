@@ -180,7 +180,7 @@ def test_the_live_tab_line_while_the_trial_runs():
     soon = time.time() + 26 * HOUR
     out = _strip({"status": "trialing", "period_end": soon, "plan": "monthly"})
     assert '<a class="lvm-strip lvm-trial" href="#account">' in out
-    assert "Your free trial ends" in out and "Then $25 a month. Cancel before then and you pay nothing." in out
+    assert "Your free trial ends" in out and "Then $25 a month. Cancel before then and you pay nothing; its access ends when you cancel." in out
     assert _strip({"status": "trialing", "period_end": soon, "cancel_at_end": True}) == "", "gone once they cancel"
     assert _strip({"status": "active", "period_end": soon}) == ""
     assert _strip({"status": "trialing", "period_end": time.time() - 60}) == ""

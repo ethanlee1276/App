@@ -102,7 +102,8 @@ def message(period_end: float, plan: str | None, site: str,
         f"Then your card is charged {price} for the {p['name']} plan, and {every} after that until you cancel.",
         "To keep it, there is nothing to do.",
         "To cancel, open your account page and press Manage billing, then Cancel. "
-        "Cancel before the trial ends and you are charged nothing.",
+        "Cancel before the trial ends and you are charged nothing; the trial's "
+        "access ends when you cancel, and the account cannot start another trial.",
     ]
     foot = ("You are getting this because you started a free trial. It is the one reminder we send about it.\n"
             "This is analysis, not advice. No bets are taken here.")

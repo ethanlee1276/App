@@ -130,7 +130,7 @@ def trial_push(conn, user_id, period_end: float, plan: str | None, now: float | 
     cents = (BI.PLANS.get(plan or "") or BI.PLANS["monthly"])["cents"]
     return PM.tell(conn, user_id, f"account:trial:{int(period_end)}", ACCOUNT_TOPIC,
                    f"Your free trial ends {_day(period_end)}",
-                   f"Then {_money(cents)} is charged. Cancel any time before in your account — no charge if you do.",
+                   f"Then {_money(cents)} is charged. Cancel any time before in your account — no charge, and its access ends when you cancel.",
                    "/#account", ttl="account", now=now)
 
 

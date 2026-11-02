@@ -495,7 +495,7 @@ function lvmTrialHTML(s) {
   return `<a class="lvm-strip lvm-trial" href="#account">
     <span class="lvm-ic" aria-hidden="true">${icon("clock", 14)}</span>
     <span class="lvm-txt"><b>Your free trial ends ${chEsc(day)} at ${chEsc(clock)}</b>
-      <span>${chEsc(then)}Cancel before then and you pay nothing.</span></span>
+      <span>${chEsc(then)}Cancel before then and you pay nothing; its access ends when you cancel.</span></span>
     <span class="lvm-go">Manage</span></a>`;
 }
 

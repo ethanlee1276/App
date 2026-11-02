@@ -164,6 +164,35 @@ DEFAULT_PLAN = "monthly"
 TRIAL_DAYS = 3
 TRIAL_PLAN = "monthly"
 
+#: A CANCELLED TRIAL ENDS ITS ACCESS AT ONCE. Ethan, 2026-11-02, after a
+#: trial that was cancelled on Stripe's page and never charged: "If someone
+#: cancels the trial, there account needs to be deleted or we take access
+#: from that account and we DO NOT offer a second trial for that account".
+#: Access is taken, not the account: deleting it would also delete the
+#: subscription row that `has_subscribed_before` reads, and the same
+#: address could then sign up again and start a second trial — the one
+#: thing the rule is for. A trial set to cancel (Stripe's portal keeps it
+#: `trialing` with `cancel_at_period_end` until the trial ends, then ends it
+#: without a charge) is walled the moment we hear of it; the account keeps
+#: the free side of the site, and checkout still offers it no trial.
+#: For trials that STARTED from this moment — midnight Eastern, 2 November
+#: 2026 — because the Terms of 29 October (§5.3) promised a trial started
+#: under them "your access ends when the trial does"; those keep it. A row
+#: with no start recorded is read as new: the start arrives with Stripe's
+#: own `start_date`, and only a row from before that was kept lacks one.
+TRIAL_CANCEL_ENDS_ACCESS_FROM = 1793595600.0     # 2026-11-02T05:00:00Z
+
+
+def trial_cancel_walls(status: str, cancel_at_end: bool, started_at: float | None = None) -> bool:
+    """A trial its member has cancelled, under the rule that ends its access
+    at once (TRIAL_CANCEL_ENDS_ACCESS_FROM)."""
+    if str(status or "").lower() != "trialing" or not cancel_at_end:
+        return False
+    try:
+        return started_at is None or float(started_at) >= TRIAL_CANCEL_ENDS_ACCESS_FROM
+    except (TypeError, ValueError):
+        return True
+
 #: Checkout discount codes — a PERCENTAGE off a real subscription.
 #:
 #: WHY THESE LIVE AT STRIPE WHEN `engine/redeem.py` EXISTS.
@@ -547,17 +576,22 @@ def verify_signature(raw_body: bytes, header: str, secret: str,
 
 # --- what a status means ------------------------------------------------------
 def entitled(status: str, period_end: float | None = None,
-             now: float | None = None, cancel_at_end: bool = False) -> bool:
+             now: float | None = None, cancel_at_end: bool = False,
+             started_at: float | None = None) -> bool:
     """Whether this subscription state grants paid access right now.
 
     `cancel_at_end` is a subscription cancelled from Stripe's portal,
     which by default runs to the end of the period already paid for. It
     keeps those days, and the wall goes up on the second the period ends —
     without waiting for Stripe's closing webhook, which Bot Fight Mode can
-    eat (see `reconcile_session`).
+    eat (see `reconcile_session`). A TRIAL has paid for no days: cancelled,
+    it is walled at once (`trial_cancel_walls`; `started_at` is when it
+    began, which decides whether it started under that rule).
     """
     st = str(status or "none").lower()
     if st in NOT_ENTITLED or st not in ENTITLED:
+        return False
+    if trial_cancel_walls(st, cancel_at_end, started_at):
         return False
     if cancel_at_end and period_end:
         now = time.time() if now is None else now
@@ -569,7 +603,7 @@ def entitled(status: str, period_end: float | None = None,
 
 
 def describe(status: str, period_end: float | None = None,
-             cancel_at_end: bool = False) -> str:
+             cancel_at_end: bool = False, started_at: float | None = None) -> str:
     """A sentence for the page. Says what is true, including the awkward
     cases — "payment failed" with what to do is more useful than
     "inactive"."""
@@ -582,6 +616,10 @@ def describe(status: str, period_end: float | None = None,
             when = ""
     # The paywall shows these too (app.js pwLapseHTML, next to its Update
     # card button), so they name the fix without naming a page.
+    if trial_cancel_walls(st, cancel_at_end, started_at):
+        return ("Trial cancelled — nothing will be charged, and its access "
+                "ended when you cancelled. This account has had its free "
+                "trial: a plan from here starts a paid membership.")
     if cancel_at_end and when and st in ("active", "trialing"):
         ended = float(period_end) <= time.time()
         return (f"Cancelled — access {'ended' if ended else 'until'} {when}. "
@@ -1420,7 +1458,7 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     say = describe_with or describe
     row = conn.execute(
         "SELECT customer_id, subscription_id, status, period_end, plan, "
-        "cancel_at_end FROM subscriptions WHERE user_id=?",
+        "cancel_at_end, started_at FROM subscriptions WHERE user_id=?",
         (int(user_id),)).fetchone()
     if row is None:
         return {"status": "none", "entitled": False, "plan": None,
@@ -1429,10 +1467,15 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     st, end = row["status"], row["period_end"]
     plan = row["plan"] if "plan" in row.keys() else None
     cancel = bool(row["cancel_at_end"])
+    began = row["started_at"] if "started_at" in row.keys() else None
+    # A processor's own sentence (`describe_with`) takes the old three
+    # arguments; ours is also told when a cancelled trial began.
+    note = (say(st, end, cancel, began) if cancel and say is describe
+            else say(st, end, cancel) if cancel else say(st, end))
     return {"status": st, "period_end": end, "plan": plan,
             "plan_name": (PLANS[plan]["name"] if plan in PLANS else None),
-            "entitled": entitled(st, end, cancel_at_end=cancel),
-            "note": (say(st, end, cancel) if cancel else say(st, end)),
+            "entitled": entitled(st, end, cancel_at_end=cancel, started_at=began),
+            "note": note,
             "customer_id": row["customer_id"],
             # Not `live`: /api/billing/status already says `live` for
             # Stripe's live mode, and this dict is merged into it.
