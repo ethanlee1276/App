@@ -143,9 +143,9 @@ def _flat(html):
 
 def test_everything_that_offers_or_reminds_says_what_cancelling_does():
     acct = _read("web", "js", "account.js")
-    assert "which ends the trial's access at once" in acct, "the plans card, before the click"
-    assert "it ends the trial's access at once" in acct and "the account cannot start another trial" in acct, "the FAQ"
-    assert "trial's access ends when you cancel" in _flat(app_js()), "the checkout's note"
+    assert "which ends the trial’s access at once" in acct, "the plans card, before the click"
+    assert "it ends the trial’s access at once" in acct and "the account cannot start another trial" in acct, "the FAQ"
+    assert "trial’s access ends when you cancel" in _flat(app_js()), "the checkout's note"
     assert "its access ends when you cancel" in _read("web", "js", "chat.js"), "the Live tab's trial line"
     note = _read("engine", "trialnote.py")
     assert "access ends when you cancel" in note and "cannot start another trial" in note, "the reminder email"

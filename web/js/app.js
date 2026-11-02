@@ -19610,7 +19610,7 @@ function checkoutHTML() {
               rather than a giveaway, and it is the part these offers
               usually bury. Cancel any time in those ${tDays} days — one
               button on your account page — and nothing is charged; the
-              trial's access ends when you cancel.</p>`
+              trial’s access ends when you cancel.</p>`
               : ""}
             <p class="co-note" id="co-pay-note"></p>
             <p class="co-note">Your card is entered on Stripe’s own page,

@@ -1270,7 +1270,7 @@ function faqFor(status) {
          `only, one per account. A card is taken at signup and is charged ` +
          `$${pl.price} on day ${days + 1} unless you cancel first. ` +
          `Cancelling during the ${days} days costs nothing and takes one ` +
-         `button on your account page; it ends the trial's access at once, ` +
+         `button on your account page; it ends the trial’s access at once, ` +
          `and the account cannot start another trial. After that the ordinary policy ` +
          `applies: payments are not refundable, and cancelling keeps your ` +
          `access to the end of the period you have already paid for.`]
@@ -1637,7 +1637,7 @@ function paywallHTML(rec, status) {
         // against it. Terms §5.3 says the same thing at length.
         ? `Card required. Becomes $${pl.price} a month on day ${
             trialDays + 1} unless you cancel before then — one button on
-            your account page, which ends the trial's access at once.`
+            your account page, which ends the trial’s access at once.`
         : escapeHtml(pl.cadence)}</div>
     </article>`;
   };

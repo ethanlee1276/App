@@ -894,7 +894,7 @@ curl -s https://qellysbook.com/api/billing/status | python3 -c "import json,sys;
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
 SH
 run IB "The review's fixes, and the Privacy Policy and Terms brought up to date" 60 <<'SH'
-curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 29 October 2026'
+curl -s https://qellysbook.com/terms.html | grep -c 'To an account made after 29'
 curl -s https://qellysbook.com/terms.html | grep -c 'We remind you before a longer plan renews'
 curl -s https://qellysbook.com/privacy.html | grep -c '<code>slip_chance</code>'
 curl -s https://qellysbook.com/js/social.js | grep -c 'peek.status === 404'

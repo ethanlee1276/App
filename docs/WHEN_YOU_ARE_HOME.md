@@ -8407,7 +8407,7 @@ Read-only, any time; each of the first four prints `1` once this version
 is live, the last prints `21`:
 
 ```
-curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 29 October 2026'
+curl -s https://qellysbook.com/terms.html | grep -c 'To an account made after 29'
 curl -s https://qellysbook.com/terms.html | grep -c 'We remind you before a longer plan renews'
 curl -s https://qellysbook.com/privacy.html | grep -c '<code>slip_chance</code>'
 curl -s https://qellysbook.com/js/social.js | grep -c 'peek.status === 404'
