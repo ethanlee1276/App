@@ -88,6 +88,13 @@ NOT_ENTITLED = ("past_due", "canceled", "unpaid", "incomplete",
 #: side has lost track of. The fix for a failed card is Stripe's billing
 #: page, never a second subscription.
 OPEN = ("active", "trialing", "past_due", "unpaid")
+#: A CHARGE THAT FAILED: Stripe could not take the money (the trial's first
+#: charge or a renewal) and is retrying, or has stopped. `apply_event` marks
+#: the move into one of these (`failed_at`, and what the row was before,
+#: `failed_from`), and engine/lifecycle.payment_failed tells the member,
+#: once a failure (Ethan, 2026-11-02: tell them their trial "will be
+#: canceled if they don't pay").
+FAILED = ("past_due", "unpaid")
 #: Nothing further comes from Stripe about these. A cancelled subscription
 #: is never revived — coming back is a new Checkout, which arrives through
 #: the webhook or the return trip — and `none` is no subscription at all.
@@ -1208,8 +1215,12 @@ def init(conn) -> None:
     # And the trial reminder (engine/trialnote, 2026-10-26): the trial end
     # this row was last reminded about, so the day-before email goes once.
     # And when the subscription began (2026-10-28, the yearly offer).
+    # And a charge that failed (2026-11-02): when the row moved into a
+    # failed state, what it was before (a trial's first charge or a
+    # renewal), and the failure the member was last told about.
     for col, kind in (("cancel_at_end", "INTEGER"), ("checked_at", "REAL"),
-                      ("event_at", "REAL"), ("trial_noted", "REAL"), ("started_at", "REAL")):
+                      ("event_at", "REAL"), ("trial_noted", "REAL"), ("started_at", "REAL"),
+                      ("failed_at", "REAL"), ("failed_from", "TEXT"), ("fail_noted", "REAL")):
         if col not in have:
             try:
                 conn.execute(f"ALTER TABLE subscriptions ADD COLUMN {col} {kind}")
@@ -1309,6 +1320,16 @@ def apply_event(conn, event: dict) -> bool:
     if event.get("started_at"):
         conn.execute("UPDATE subscriptions SET started_at=? WHERE user_id=?",
                      (float(event["started_at"]), int(uid)))
+    # A CHARGE THAT FAILED, marked on the MOVE into a failed state — not on
+    # every read that finds it still failed — so one failure is told once
+    # (engine/lifecycle.payment_failed) and a renewal that fails after the
+    # card was fixed is a new one. When: Stripe's own time for the event,
+    # or the read that found it.
+    new_st = str(event.get("status") or "").lower()
+    old_st = str((was[0] if was else None) or "none").lower()
+    if new_st in FAILED and old_st not in FAILED:
+        conn.execute("UPDATE subscriptions SET failed_at=?, failed_from=? WHERE user_id=?",
+                     (float(at) if at is not None else time.time(), old_st, int(uid)))
     conn.commit()
     # A trial, a subscription, a conversion, a cancellation or a renewal,
     # counted (no account attached) when analytics is switched on; a no-op

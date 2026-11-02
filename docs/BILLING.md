@@ -605,6 +605,21 @@ Stripe keeps retrying the first. `/api/billing/checkout` answers 409 with
 `portal: true` for `past_due` and `unpaid`, and the page shows the
 sentence.
 
+**The member hears about it, once (2026-11-02).** Ethan asked that a
+trialist be told their trial "will be canceled if they don't pay".
+`apply_event` marks the MOVE into `past_due`/`unpaid` (`failed_at`, and
+`failed_from` — `trialing` for a trial's first charge), from the webhook or
+from our own read of Stripe alike; `lifecycle.payment_failed`, run by
+`_billing_sweeper` every 30 minutes, then tells the member on every
+signed-in phone and by email that access is paused and that Manage billing
+fixes it (`fail_noted` holds the failure last told, so Stripe repeating
+itself is never a second notice, and a renewal that fails after the card
+was fixed is). No amount in it: a discount or a referral's credit can make
+the charge differ from the plan's price. A failure older than three days
+(`FAIL_FRESH_S`) is left to the account page and the paywall. The trial's
+day-before email and push say beforehand that a charge that does not go
+through ends the trial and pauses access.
+
 **Hearing about a lapse when the webhook does not say.** The webhook is a
 request from Stripe's servers to ours, and Bot Fight Mode is the known way
 to lose one. A lost grant was already rescued by the return trip from

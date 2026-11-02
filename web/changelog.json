@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-02",
+      "kind": "ship",
+      "title": "A charge that does not go through tells you, once, and the trial's last-day notice says what happens",
+      "body": "The day before a free trial turns into a charge (its third day), the email and the phone notice now say what happens if that charge does not go through: the trial is over and access pauses until the card is updated. And when a charge does fail — the first one after a trial, or a renewal — you hear once, on every phone signed in to your account and by email: access is paused, press Manage billing on your account page to update the card, and the site opens again as soon as the payment clears. The same failure is never told twice; a later one is told again."
+    },
+    {
+      "date": "2026-11-02",
       "kind": "fix",
       "title": "Cancelling a free trial ends its access at once, and there is one trial per account",
       "body": "A trial cancelled on Stripe's page used to keep the members' pages until its three days were up. From today, cancelling a trial ends its access the moment we hear of it: nothing is charged, the account keeps the free side of the site, and it can never start another trial (checkout has always refused a second one, and the plans page stops offering it). The plans card, the checkout, the FAQ, the day-before reminder and the Live tab now say so before and during a trial, and so does the Terms' free-trial section (§5.3, dated 2 November 2026). A trial started before today keeps the rule it started under: access to the end of its three days."

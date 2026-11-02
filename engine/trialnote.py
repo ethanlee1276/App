@@ -6,8 +6,10 @@
 The trial (engine/billing TRIAL_DAYS, the monthly plan only) takes a card up
 front and charges it when the three days are up. The Terms say so in full
 (§5.3); this is the other half of saying it plainly. About a day before the
-charge, the member gets ONE email: when the trial ends, what is charged
-then, and the button that cancels it. It is about money they are about to
+charge — the trial's third day — the member gets ONE email: when the trial
+ends, what is charged then, that a charge that does not go through pauses
+access (and engine/lifecycle.payment_failed says so if it happens), and the
+button that cancels it. It is about money they are about to
 be charged, not a sales email, so it carries no unsubscribe — and it goes
 once per trial, which is what makes that fair.
 
@@ -100,7 +102,8 @@ def message(period_end: float, plan: str | None, site: str,
     paras = [
         f"Your {BI.TRIAL_DAYS}-day free trial of Qellys Book ends {full}.",
         f"Then your card is charged {price} for the {p['name']} plan, and {every} after that until you cancel.",
-        "To keep it, there is nothing to do.",
+        "To keep it, there is nothing to do. If that charge does not go through, the trial is "
+        "over and your access pauses until you update your card on your account page.",
         "To cancel, open your account page and press Manage billing, then Cancel. "
         "Cancel before the trial ends and you are charged nothing; the trial's "
         "access ends when you cancel, and the account cannot start another trial.",

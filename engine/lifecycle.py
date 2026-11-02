@@ -10,7 +10,9 @@ notice) — never instead of the phone.
 
 THE ACCOUNT TOPIC ("account"). Notices about the member's own money: a free
 trial turning into a charge tomorrow (engine/trialnote sends the email and
-this sends the push), a six-month or yearly plan renewing in RENEW_DAYS.
+this sends the push), a charge that did not go through (`payment_failed`,
+email and push, once a failure), a six-month or yearly plan renewing in
+RENEW_DAYS.
 Every phone signed in to the account wants it whatever its Alerts list
 says, the way a receipt reaches you (engine/pushalerts.ACCOUNT);
 it is never promotional, so a weekly limit does not silence it; a phone's
@@ -43,6 +45,7 @@ Standard library only.
 from __future__ import annotations
 
 import datetime as _dt
+import html as _html
 import json
 import os
 import sqlite3
@@ -67,6 +70,10 @@ ENV_RENEW_EMAIL = "QB_RENEW_EMAIL"
 PAYER_IDLE_DAYS = 5
 DORMANT_DAYS = 30
 WINBACK_DAYS = (3, 14, 30)
+#: A failed charge is told while it is news. One that failed longer ago
+#: than this (the service was down for days, say) is left to the account
+#: page and the paywall, which say the same thing in the same words.
+FAIL_FRESH_S = 3 * 86400
 #: The away alert's one a week, shared (engine/engagement.AWAY_EVERY_S).
 ONCE_A_WEEK_S = 7 * 86400
 #: A week's record is said once this many of the board's picks graded in it.
@@ -130,8 +137,102 @@ def trial_push(conn, user_id, period_end: float, plan: str | None, now: float | 
     cents = (BI.PLANS.get(plan or "") or BI.PLANS["monthly"])["cents"]
     return PM.tell(conn, user_id, f"account:trial:{int(period_end)}", ACCOUNT_TOPIC,
                    f"Your free trial ends {_day(period_end)}",
-                   f"Then {_money(cents)} is charged. Cancel any time before in your account — no charge, and its access ends when you cancel.",
+                   f"Then {_money(cents)} is charged to your card; if it does not go through, access pauses "
+                   "until you update the card. Cancel before then in your account — no charge, and "
+                   "its access ends when you cancel.",
                    "/#account", ttl="account", now=now)
+
+
+def failed_words(plan: str | None, trial: bool) -> dict:
+    """What a member is told when a charge fails: the push's title and body,
+    and the email's subject and paragraphs. No amount: a discount or a
+    referral's credit can make the charge differ from the plan's price, and
+    the account page shows the real one."""
+    from engine import billing as BI
+    p = BI.PLANS.get(plan or "") or BI.PLANS[BI.TRIAL_PLAN]
+    fix = ("To keep your membership, open your account page, press Manage billing and update "
+           "your card. The site opens again as soon as the payment clears.")
+    if trial:
+        title = "Your trial ended, and the charge did not go through"
+        lead = (f"Your {BI.TRIAL_DAYS}-day free trial of Qellys Book has ended, and the first charge for "
+                f"the {p['name']} plan did not go through, so your access is paused.")
+        tail = ("If the card is not updated, the membership ends. This account has had its free "
+                "trial, so it cannot start another.")
+    else:
+        title = "Your payment did not go through"
+        lead = (f"The charge for your {p['name']} plan of Qellys Book did not go through, so your "
+                "access is paused.")
+        tail = "If the card is not updated, the membership ends."
+    return {"title": title,
+            "body": "Your access is paused. Update your card in your account (Manage billing) and it "
+                    "opens again as soon as the payment clears.",
+            "subject": title, "paras": [lead, fix, tail]}
+
+
+def payment_failed(conn, now: float | None = None, send=None, site: str | None = None, log=print) -> int:
+    """A charge that did not go through — the trial's first, or a renewal —
+    told to the member once: on every phone signed in to the account, and
+    by email. The failure is marked by engine/billing.apply_event on the
+    move into `past_due` or `unpaid` (`failed_at`); `fail_noted` holds the
+    failure last told, so a renewal that fails after the card was fixed is
+    told again and the same failure never is. Marked once it reached them
+    by either; an email that fails is tried again next pass, the push is
+    not repeated (its id). How many were told.
+
+    Run by the billing sweep (launch._billing_sweeper, every 30 minutes,
+    beside the trial's reminder), not the push loop: that loop does nothing
+    while no phone is signed in anywhere, and one caller means one failure
+    can never be told twice by two loops at the same moment."""
+    from engine import billing as BI
+    from engine import pushmine as PM
+    from engine import smsverify as SV
+    BI.init(conn)
+    t = time.time() if now is None else float(now)
+    rows = conn.execute(
+        "SELECT s.user_id, s.plan, s.failed_at, s.failed_from, u.email FROM subscriptions s "
+        "JOIN users u ON u.id = s.user_id "
+        "WHERE s.status IN (?, ?) AND s.failed_at IS NOT NULL AND s.failed_at > ? "
+        "AND (s.fail_noted IS NULL OR s.fail_noted < s.failed_at)",
+        (*BI.FAILED, t - FAIL_FRESH_S)).fetchall()
+    if rows and send is None:
+        from engine import mailer
+        send = mailer.send if mailer.configured() else None
+    told = 0
+    for uid, plan, failed_at, was, email in rows:
+        w = failed_words(plan, str(was or "") == "trialing")
+        pushed = PM.tell(conn, uid, f"account:payfail:{int(failed_at)}", ACCOUNT_TOPIC, w["title"], w["body"],
+                         "/#account", ttl="account", now=t)
+        mailed = False
+        to = str(email or "").strip()
+        if send and to and not SV.is_placeholder(to):
+            link = f"{(site or _site()).rstrip('/')}/#account"
+            foot = ("You are getting this because a payment for your Qellys Book membership failed. "
+                    "We send it once for each failed payment.")
+            text = "\n\n".join(w["paras"]) + f"\n\nYour account page: {link}\n\n—\n{foot}\n"
+            esc = lambda x: _html.escape(str(x), quote=True)          # noqa: E731
+            html = ('<div style="background:#0b0906;color:#f5efe6;padding:26px;'
+                    'font-family:system-ui,-apple-system,sans-serif;max-width:600px">'
+                    '<p style="color:#e8b64c;font-weight:700;letter-spacing:.04em">QELLYS BOOK</p>'
+                    + "".join(f"<p>{esc(x)}</p>" for x in w["paras"])
+                    + f'<p><a href="{esc(link)}" style="color:#e8b64c">Open your account page</a></p>'
+                    '<hr style="border:0;border-top:1px solid #2a2622;margin:22px 0">'
+                    f'<p style="color:#8b8178;font-size:12px">{esc(foot)}</p></div>')
+            try:
+                send(to, w["subject"], text, html)
+                mailed = True
+            except Exception as exc:                          # noqa: BLE001 — the next pass tries again
+                # Not marked: the email is the notice in writing, tried again
+                # next pass; the push went once already, by its id.
+                log(f"failed-payment notice: one email failed ({type(exc).__name__})")
+                continue
+        # Marked once it reached them either way; an account with no address
+        # that no phone reached is marked too when a relay exists (nothing
+        # more will reach it), and the account page says it all the same.
+        if pushed or mailed or (send and (not to or SV.is_placeholder(to))):
+            conn.execute("UPDATE subscriptions SET fail_noted = ? WHERE user_id = ?", (failed_at, uid))
+            told += int(pushed or mailed)
+    conn.commit()
+    return told
 
 
 def renewals(conn, now: float | None = None, send=None, site: str | None = None, log=print) -> int:

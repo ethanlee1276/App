@@ -5333,6 +5333,9 @@ def _billing_sweeper() -> None:
                     # The free trial's day-before email (engine/trialnote).
                     from engine import trialnote as _tn
                     _tn.run(conn)
+                    # A charge that did not go through, told once (engine/lifecycle).
+                    from engine import lifecycle as _lc
+                    _lc.payment_failed(conn)
                 finally:
                     conn.close()
         except Exception:      # noqa: BLE001 — never let this stop the site

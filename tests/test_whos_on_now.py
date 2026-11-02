@@ -246,7 +246,7 @@ def test_the_endpoints_answer_the_site_account_and_nobody_else():
         c2.close()
         mine = [(x["kind"], x["choice"]) for x in log if x["kind"] == "whoson"]
         assert mine == [("whoson", "not shown by name in Who's on now")], log
-        assert all(x["policy"] == "2026-11-01" for x in log), "with the policy's date"
+        assert all(x["policy"] == CS.policy_version() >= "2026-11-01" for x in log), "with the policy's date"
     finally:
         httpd.shutdown()
         W.clear()
@@ -266,7 +266,9 @@ def test_the_policy_says_what_the_code_does():
     assert dt.datetime.fromtimestamp(PN.WHOSON_SINCE, PN.ET).date() == dt.date(2026, 11, 2)
     assert dt.datetime.fromtimestamp(PN.WHOSON_PHONE_FROM, PN.ET).date() == dt.date(2026, 11, 9)
     assert "(§2.13)" in html[:html.index("<h2>2.")], "the short version says it"
-    assert "Last updated 1 November 2026" in html
+    # Dated the day of this change or later (a later change moves the date).
+    said = re.search(r'class="legal-date">Last updated (\d{1,2} \w+ 2026)<', html)
+    assert said and dt.datetime.strptime(said.group(1), "%d %B %Y").date() >= dt.date(2026, 11, 1), said
     # Nothing it keeps is a table: the policy says so rather than naming one.
     assert "CREATE TABLE" not in READ("engine", "whoson.py")
 
