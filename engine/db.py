@@ -871,11 +871,61 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
 #: a lock rather than the fix.
 WRITE_CHUNK = 5000
 
+#: A pause BETWEEN one slice and the next (2026-11-03). Slicing alone did
+#: not do what the note above promises: the writer that just committed takes
+#: the lock straight back for its next slice within microseconds, while a
+#: writer waiting in SQLite's busy handler sleeps up to 100 ms between tries
+#: and almost never lands in the gap — so a long ingest still starved every
+#: other writer for its whole length. The college board died that way all
+#: morning, "database is locked" at this function's own executemany, 46
+#: seconds into each build. 150 ms is one busy-handler sleep and then some;
+#: a 200,000-row ingest pays six seconds for it.
+WRITE_YIELD_S = 0.15
 
-def _chunked(conn, sql: str, params: list) -> int:
-    """Run one bulk write in transactions of WRITE_CHUNK rows."""
+#: How many times a slice is tried again after SQLite's own 30-second busy
+#: timeout before the error reaches the caller: a build waits up to ninety
+#: seconds behind a writer rather than losing its board to the first thirty.
+WRITE_RETRIES = 2
+
+
+def _in_wal(conn) -> bool:
+    """Whether the file is in write-ahead-log mode. Asked only on the way to
+    a retry, so a write that went through never pays for it."""
+    try:
+        row = conn.execute("PRAGMA journal_mode").fetchone()
+        return str((row[0] if row else "") or "").lower() == "wal"
+    except sqlite3.DatabaseError:
+        return False
+
+
+def _chunked(conn, sql: str, params: list, sleep=None) -> int:
+    """Run one bulk write in transactions of WRITE_CHUNK rows, with a pause
+    between slices for any writer waiting its turn, and a slice that met a
+    lock tried again. Before it is tried again its transaction is ended:
+    SQLite waits out a lock only from a fresh transaction, and one that has
+    read the file fails a write at once ("database is locked", no wait at
+    all), so without that every retry fails in the same instant. Ending it
+    costs a caller nothing when the slice began it, nor in WAL mode (how
+    connect() opens the file), where a write that could not take the lock
+    holds no writes. Every writer here is an upsert, so a slice applied
+    twice lands once. "database table is locked" is another error (a
+    statement in this process in the way) and goes up at once."""
+    import time as _time
+    sleep = sleep or _time.sleep
     for i in range(0, len(params), WRITE_CHUNK):
-        conn.executemany(sql, params[i:i + WRITE_CHUNK])
+        if i:
+            sleep(WRITE_YIELD_S)
+        chunk = params[i:i + WRITE_CHUNK]
+        began = not conn.in_transaction
+        for attempt in range(WRITE_RETRIES + 1):
+            try:
+                conn.executemany(sql, chunk)
+                break
+            except sqlite3.OperationalError as exc:
+                if not str(exc).startswith("database is locked") or attempt == WRITE_RETRIES:
+                    raise
+                if began or _in_wal(conn):
+                    conn.rollback()
         conn.commit()
     return len(params)
 

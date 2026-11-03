@@ -4,6 +4,12 @@
     {
       "date": "2026-11-03",
       "kind": "fix",
+      "title": "The college board builds through a busy morning",
+      "body": "From about 8 a.m. on 3 November the college board stopped rebuilding: every build died waiting to store last week's results while the daily upkeep and the settling of bets wrote to the same file, and the page kept showing the last good board. A long write now pauses between its pieces so a waiting build gets its turn, a write that still finds the file busy waits and tries again, and the college build no longer needs that refresh to publish — results it could not store are stored by the next build."
+    },
+    {
+      "date": "2026-11-03",
+      "kind": "fix",
       "title": "College rosters open lighter",
       "body": "The college rosters — every school's players, 41,878 of them, which the Rosters page and the player search read whole — now carry a detail only when it says something. The file the page reads went from 13.3 MB to 5.6 MB, so it opens quicker on a phone; nothing on the page changes."
     },

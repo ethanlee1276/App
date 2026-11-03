@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import sqlite3
 from pathlib import Path
 
 from engine import gamebets, teamrates
@@ -1486,8 +1487,23 @@ def main() -> None:
     # letdown / lookahead reads. Both are keyless and cached for a day.
     history = cfbdata.load_range(_iso(day - datetime.timedelta(days=RESULT_WINDOW_DAYS)),
                                  _iso(day - datetime.timedelta(days=1)))
-    ingest_results(conn, [g for g in history if g["completed"]])
-    ingest_results(conn, [g for g in games if g["completed"]])
+    # A LOCKED HISTORY TABLE COSTS THE REFRESH, NOT THE BOARD (2026-11-03).
+    # These re-store results earlier builds and the settle pass already
+    # stored — idempotent upserts — and on 3 November a writer elsewhere
+    # holding the history file past every retry took the whole college
+    # board down with them, build after build, from 07:56. Named, so a day
+    # it happens reads differently from a quiet one; ended, so the build's
+    # later writes start from a fresh transaction (an open one that has
+    # read the file fails a write at once). Only a lock is excused.
+    try:
+        ingest_results(conn, [g for g in history if g["completed"]])
+        ingest_results(conn, [g for g in games if g["completed"]])
+    except sqlite3.OperationalError as exc:
+        if not str(exc).startswith("database is locked"):
+            raise
+        conn.rollback()
+        print(f"  ⚠️  CFB results not stored this build ({exc}) — the board "
+              f"builds on the history already stored.")
     # …and each finished game's close, from the lines this build has been
     # recording all season (engine/lineledger.closes_into_games): the
     # published closes stop at last season, so 2026 read zero.
