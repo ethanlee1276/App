@@ -96,7 +96,8 @@ def test_cfb_left_the_no_harness_dict():
 def test_the_build_calls_the_college_harness():
     with open(os.path.join(ROOT, "engine", "lab.py"), encoding="utf-8") as f:
         src = f.read()
-    assert 'sports["cfb"] = {"props": cfb_props(' in src
+    # build_sport's college branch since 2026-11-03 (one sport at a time).
+    assert 'blob = {"props": cfb_props(log=log, conn=hconn),' in src
 
 
 def test_the_card_does_not_dress_outcomes_as_real_closes():

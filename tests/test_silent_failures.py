@@ -243,6 +243,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # never read alike, and a side file must never cost the build its
         # board.
         "build",
+        # THE WEEKLY JOBS' STATUS FILE (engine/maintenance._record_job,
+        # 2026-11-03): a lost status line must never cost the reap it
+        # describes, and it returns None either way, so there is no value
+        # for a quiet day to be confused with. The reap's own journal lines
+        # still print.
+        "_record_job",
     }
 
     def broad(h):

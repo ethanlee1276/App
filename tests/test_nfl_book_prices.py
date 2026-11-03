@@ -475,7 +475,8 @@ def test_the_lab_actually_passes_the_closes_it_loads():
     assert "real_lines" in inspect.signature(
         B.backtest_from_stats).parameters
     assert "conn" in inspect.signature(lab.nfl_props).parameters
-    src = inspect.getsource(lab.build)
+    # Each sport is built by build_sport since 2026-11-03 (one at a time).
+    src = inspect.getsource(lab.build_sport)
     assert "nfl_props(log=log, conn=hconn)" in src
 
 
