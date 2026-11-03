@@ -102,6 +102,16 @@ def test_the_terms_list_them_dated_and_only_adding():
                  "standings, rosters, injury reports and game-day weather",
                  "the playoff races, as they stand (our chances in them are part of the paid analysis)"):
         assert want in sec, want
+    # Ethan, 2026-11-03, "4, yes" to bringing the list up to date: a team's
+    # page (open since this morning) and the Fantasy room (free since
+    # 2026-10-25, gate.PAID_KEYS_BY_FILE) were missing from it; what stays
+    # paid inside the room is named, so the list cannot be read as giving
+    # the scripts or the stat lines away.
+    for want in ("each team’s page with its season’s games",
+                 "the Fantasy room — lineups and their scores, start/sit help",
+                 "the game scripts, and the stat lines and touchdown chances behind the points, "
+                 "are part of the paid analysis"):
+        assert want in sec, want
 
 
 # --- in a browser ------------------------------------------------------------------
