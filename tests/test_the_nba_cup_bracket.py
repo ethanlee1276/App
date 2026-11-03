@@ -18,8 +18,12 @@ of them". What these hold:
     left, the champion every chance);
   * our line is on each game still to play, at home court but for the
     final, in a paid key; the public copy keeps the bracket whole;
-  * the build asks the scoreboard only for knockout nights that have come,
-    and keeps building two days past the final.
+  * a game's night is the scoreboard's once it lists the game — the NBA
+    sets which game is on which night — and until then a two-night round
+    names neither (the final its one); a game listed but not played is
+    never a result;
+  * the build reads every knockout night, the ones to come on the short
+    cache, and keeps building two days past the final.
 
 Run directly: `python3 tests/test_the_nba_cup_bracket.py`
 """
@@ -70,9 +74,9 @@ def test_the_eight_are_seeded_and_the_quarterfinals_are_at_the_higher_seed():
         q1, q2 = c["quarterfinals"]
         assert (q1["home"], q1["away"], q1["home_seed"], q1["away_seed"]) == (seeds[0], seeds[3], 1, 4)
         assert (q2["home"], q2["away"], q2["home_seed"], q2["away_seed"]) == (seeds[1], seeds[2], 2, 3)
-        assert q1["date"] == "2026-12-04" and q1["site"] == "home" and not q1["done"]
+        assert q1["date"] == "" and q1["site"] == "home" and not q1["done"], "no night claimed before the NBA sets it"
         assert c["semifinal"]["home"] is None and c["semifinal"]["from"] == [q1["id"], q2["id"]]
-    assert br["final"]["site"] == "Indianapolis" and br["champion"] is None
+    assert br["final"]["site"] == "Indianapolis" and br["final"]["date"] == "2026-12-11" and br["champion"] is None
     early = _built(through="2026-11-07", today="2026-11-08")
     assert not early["bracket"]["set"], "with group games left it is the bracket if it ended today"
 
@@ -119,6 +123,19 @@ def test_a_group_rematch_is_not_answered_by_the_group_game():
     assert ko == {}, "only the knockout nights are read"
 
 
+def test_a_listed_game_carries_its_night_and_is_no_result():
+    out = _built()
+    e = out["bracket"]["conferences"]["East"]
+    q1, q2 = e["quarterfinals"]
+    # The NBA puts the 2 v 3 game on the first night and the 1 v 4 on the second.
+    listed = [_ko(q2["home"], q2["away"], "2026-12-04", None, None), _ko(q1["home"], q1["away"], "2026-12-05", None, None)]
+    got = _built(listed)
+    g1, g2 = got["bracket"]["conferences"]["East"]["quarterfinals"]
+    assert (g1["date"], g2["date"]) == ("2026-12-05", "2026-12-04"), "the scoreboard's night, not the round's first"
+    assert not g1["done"] and g1["winner"] is None and got["chances"] == out["chances"], "a listed game is no result"
+    assert sorted(got["bracket_lines"]) == sorted(out["bracket_lines"]), "our line stays on a game still to play"
+
+
 def test_our_line_is_on_each_game_still_to_play_and_paid():
     out = _built()
     lines = out["bracket_lines"]
@@ -134,16 +151,18 @@ def test_our_line_is_on_each_game_still_to_play_and_paid():
     assert '"p_home"' not in json.dumps(pub)
 
 
-def test_the_build_asks_only_for_nights_that_have_come_and_runs_past_the_final():
+def test_the_build_reads_every_knockout_night_and_runs_past_the_final():
     from engine.sources import espnhoops
     asked = []
     real = espnhoops.load_day
-    espnhoops.load_day = lambda date, ttl=None, league="wnba": asked.append((date, league)) or []
+    espnhoops.load_day = lambda date, ttl=None, league="wnba": asked.append((date, ttl, league)) or []
     try:
         nbacup.load_knockouts(dt.date(2026, 12, 8))
     finally:
         espnhoops.load_day = real
-    assert asked == [("2026-12-04", "nba"), ("2026-12-05", "nba"), ("2026-12-08", "nba")], asked
+    soon = nbacup.FUTURE_TTL
+    assert asked == [("2026-12-04", None, "nba"), ("2026-12-05", None, "nba"), ("2026-12-08", None, "nba"),
+                     ("2026-12-09", soon, "nba"), ("2026-12-11", soon, "nba")], asked
     src = (ROOT / "engine" / "nbacup.py").read_text(encoding="utf-8")
     assert "games = load_window(day) + load_knockouts(day)" in src
     assert nbacup.AFTER_FINAL_DAYS == 2 and "hi = _dt.date.fromisoformat(KNOCKOUTS[\"final\"]) + _dt.timedelta(days=AFTER_FINAL_DAYS)" in src
@@ -177,6 +196,9 @@ def test_the_page_draws_the_bracket_with_our_line_for_a_member_only():
     free = _render(gate.redact(during, "nba_cup.json"))
     assert "If group play ended today" in free and "· our line " not in free and "member-lock" in free
     assert "our line on every knockout game" in free
+    assert '<span class="rc-host"> · ' not in html and '<span class="rc-host">· ' not in html, "no empty night"
+    assert "quarterfinals 2026-12-04 – 2026-12-05" in html and "semifinals 2026-12-08 – 2026-12-09" in html, \
+        "both nights of a two-night round"
     after = _built()
     html = _render(after)
     assert html.index("The knockout rounds") < html.index("The groups"), "once group play is over the bracket leads"

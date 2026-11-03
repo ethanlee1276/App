@@ -199,11 +199,15 @@ def bracket(seeds: dict, ko: dict, why: dict, names: dict, settled: bool) -> dic
     """The knockout rounds: each conference's quarterfinals (1 v 4, 2 v 3 at
     the higher seed) and semifinal (their winners, at the better seed's
     arena), the final in Indianapolis, every result ``ko`` holds, and the
-    champion. ``seeds`` is ``{"East": [four clubs, seed order], ...}``."""
+    champion. ``seeds`` is ``{"East": [four clubs, seed order], ...}``.
+    A game's night is the scoreboard's once it lists the game; until then a
+    round played over two nights names neither (the NBA sets which game is
+    on which night, and `nights` holds the round's two), the final its one."""
     def game(gid, rnd, home, away, hs_, as_, nights, site=""):
         known = ko.get(frozenset((home, away))) if home and away else None
         g = {"id": gid, "round": rnd, "home": home, "away": away, "home_seed": hs_, "away_seed": as_,
-             "date": (known or {}).get("date") or nights[0], "site": site or "home",
+             "date": (known or {}).get("date") or (nights[0] if len(nights) == 1 else ""),
+             "site": site or "home",
              "done": bool(known and known["done"]), "home_score": None, "away_score": None, "winner": None}
         if known and known["done"]:
             # The scoreboard's own home side, and its score with it.
@@ -465,17 +469,18 @@ def load_window(today: _dt.date) -> list:
 
 
 def load_knockouts(today: _dt.date) -> list:
-    """The knockout nights that have come, off the scoreboard (a night still
-    to come has no result to read, and its matchup is ours already)."""
+    """Every knockout night off the scoreboard: the nights that have come for
+    their results, the nights to come on FUTURE_TTL for the schedule — the
+    NBA sets which game is on which night once the round before it ends, and
+    the bracket shows each game's night once the scoreboard lists it. A game
+    still to play is never a result (`build` keeps only the finished)."""
     from .sources import espnhoops
     from .sources.fetch import DataUnavailable
     out = []
     for night in sorted({n for ns in KNOCKOUT_NIGHTS.values() for n in ns}):
         day = _dt.date.fromisoformat(night)
-        if day > today:
-            continue
         try:
-            got = espnhoops.load_day(night, league="nba")
+            got = espnhoops.load_day(night, ttl=FUTURE_TTL if day > today else None, league="nba")
         except (DataUnavailable, ValueError):
             got = []
         for g in got:

@@ -104,6 +104,9 @@ PLAYOFF_NIGHTS = {"first_round": ("2026-12-18", "2026-12-19"),
                   "final": ("2027-01-19",)}
 #: The race page is built until this day of the year after its season.
 PLAYOFF_END = (1, 25)
+#: How long a playoff night still to come is cached: its games' nights and
+#: bowls change rarely, and only once the round before is played.
+SCHEDULE_TTL = 6 * 3600
 
 
 def ccg_start(season: int) -> _dt.date:
@@ -722,17 +725,24 @@ def load_season(season: int, today: _dt.date) -> list:
 def load_postseason(season: int, today: _dt.date) -> list:
     """The days after selection day that have come, off the scoreboard: the
     last three on half an hour so a result lands within the hour, the rest
-    on a day's cache."""
+    on a day's cache. And, from selection day, the playoff nights still to
+    come on SCHEDULE_TTL: once the scoreboard lists a game, its night and
+    its bowl show on the bracket before it is played (a game still to play
+    is never a result, and `_split` leaves the postseason out of the race)."""
     from .sources import cfbdata
     lo = selection_day(season) + _dt.timedelta(days=1)
-    hi = min(today, _dt.date(season + 1, *PLAYOFF_END))
-    if hi < lo:
-        return []
-    near = max(lo, today - _dt.timedelta(days=3))
+    end = _dt.date(season + 1, *PLAYOFF_END)
+    hi = min(today, end)
     games = []
-    for a, b, ttl in ((lo, near - _dt.timedelta(days=1), 24 * 3600), (near, hi, 30 * 60)):
-        if a <= b:
-            games += cfbdata.load_range(a.isoformat(), b.isoformat(), ttl=ttl)
+    if lo <= hi:
+        near = max(lo, today - _dt.timedelta(days=3))
+        for a, b, ttl in ((lo, near - _dt.timedelta(days=1), 24 * 3600), (near, hi, 30 * 60)):
+            if a <= b:
+                games += cfbdata.load_range(a.isoformat(), b.isoformat(), ttl=ttl)
+    if today >= selection_day(season):
+        for night in sorted({n for ns in PLAYOFF_NIGHTS.values() for n in ns}):
+            if today < _dt.date.fromisoformat(night) <= end:
+                games += cfbdata.load_range(night, night, ttl=SCHEDULE_TTL)
     return games
 
 

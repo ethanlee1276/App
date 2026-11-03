@@ -20,6 +20,9 @@ results" — "do all of them". What these hold:
   * our line is on each game still to play and each team's chance to reach
     each round is played out with every result kept — both paid; the public
     copy keeps the bracket whole;
+  * a game's night and bowl are the scoreboard's once it lists the game —
+    the playoff nights still to come are read from selection day on — and a
+    game listed but not played is never a result;
   * the race is built into January (the season before's), the college build
     runs it on a quiet day too, and the scoreboard keeps each game's billing.
 
@@ -66,6 +69,11 @@ def _post(home, away, day, hs, as_, notes=""):
     return {"home": home, "away": away, "date": day, "season": 2026, "season_type": 3, "conference_game": False,
             "neutral_site": bool(notes), "completed": True, "state": "final", "home_score": hs, "away_score": as_,
             "notes": notes}
+
+
+def _listed(home, away, day, notes=""):
+    """A playoff game on the scoreboard before it is played."""
+    return dict(_post(home, away, day, None, None, notes), completed=False, state="pre")
 
 
 def _twelve():
@@ -156,6 +164,26 @@ def test_results_land_round_by_round_and_the_champion_is_crowned():
     assert out["chances"][s[1]]["title"] == 1.0 and out["bracket_lines"] == {}
 
 
+def test_a_listed_game_carries_its_night_and_bowl_and_is_no_result():
+    out = _built()
+    s = {x["seed"]: x["team"] for x in out["bracket"]["seeds"]}
+    listed = [_listed(s[5], s[12], "2026-12-19"), _listed(s[6], s[11], "2026-12-18"),
+              _listed(s[7], s[10], "2026-12-18"), _listed(s[8], s[9], "2026-12-19")]
+    got = _built(listed)
+    fr = got["bracket"]["first_round"]
+    assert [g["date"] for g in fr] == ["2026-12-19", "2026-12-18", "2026-12-18", "2026-12-19"]
+    assert not any(g["done"] or g["winner"] for g in fr) and got["chances"] == out["chances"], "no result"
+    assert sorted(got["bracket_lines"]) == ["fr1", "fr2", "fr3", "fr4"]
+    assert all(g["date"] == "" for g in out["bracket"]["first_round"]), "no night before the scoreboard lists it"
+    # Once the 8 v 9 game is played, the 1 seed's quarterfinal is listed in its bowl.
+    rose = "College Football Playoff Quarterfinal at the Rose Bowl Game Presented by Prudential"
+    got = _built([_post(s[8], s[9], "2026-12-19", 17, 14), _listed(s[1], s[8], "2027-01-01", rose)],
+                 today="2026-12-20")
+    q1 = got["bracket"]["quarterfinals"][0]
+    assert (q1["date"], q1["bowl"], q1["done"], q1["winner"]) == ("2027-01-01", "Rose Bowl Game", False, None)
+    assert "qf1" in got["bracket_lines"]
+
+
 def test_our_line_and_the_chances_are_paid_and_the_bracket_is_free():
     out = _built()
     lines = out["bracket_lines"]
@@ -189,6 +217,31 @@ def test_the_race_runs_into_january_and_on_quiet_days():
                                             {"homeAway": "away", "score": "20", "team": {"abbreviation": "ORE", "id": "2"}}]}]}]}
     row = cfbdata.parse_scoreboard(ev)[0]
     assert row["notes"] == "College Football Playoff Quarterfinal at the Rose Bowl Game" and row["season_type"] == 3
+
+
+def test_the_scoreboard_is_read_for_the_playoff_nights_still_to_come_from_selection_day():
+    from engine.sources import cfbdata
+    asked = []
+    real = cfbdata.load_range
+    cfbdata.load_range = lambda a, b, ttl=24 * 3600, conferences=None: asked.append((a, b, ttl)) or []
+    try:
+        cfprace.load_postseason(2026, dt.date(2026, 12, 5))
+        assert asked == [], "before selection day: nothing after it"
+        cfprace.load_postseason(2026, dt.date(2026, 12, 6))
+        soon = cfprace.SCHEDULE_TTL
+        nights = ["2026-12-18", "2026-12-19", "2026-12-31", "2027-01-01", "2027-01-08", "2027-01-09", "2027-01-19"]
+        assert asked == [(n, n, soon) for n in nights], asked
+        asked.clear()
+        cfprace.load_postseason(2026, dt.date(2026, 12, 20))
+        assert asked == [("2026-12-07", "2026-12-16", 24 * 3600), ("2026-12-17", "2026-12-20", 30 * 60)] + \
+            [(n, n, soon) for n in nights[2:]], asked
+        asked.clear()
+        cfprace.load_postseason(2026, dt.date(2027, 1, 20))
+        assert all(t != soon for _a, _b, t in asked), "the title game played, no night left to come"
+    finally:
+        cfbdata.load_range = real
+    race = (ROOT / "web" / "js" / "race.js").read_text(encoding="utf-8")
+    assert "the twelve the committee named. Our game model plays the playoff out" in race
 
 
 # --- on the page ---------------------------------------------------------------------

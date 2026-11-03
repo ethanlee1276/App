@@ -68,7 +68,9 @@ async function renderRace() {
     ? `— the groups, the differential tiebreaker and our chances, ${Number(d.sims || 0).toLocaleString()} tournaments played out.`
     : sport === "nfl"
       ? `— 14 teams, 7 a conference. Our ratings play the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`
-      : `— 12 teams. Our game model plays the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`;
+      : (d.bracket || {}).set
+        ? `— the twelve the committee named. Our game model plays the playoff out ${Number(d.sims || 0).toLocaleString()} times.`
+        : `— 12 teams. Our game model plays the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`;
   host.innerHTML = sport === "nba" ? cupHTML(d) : sport === "nfl" ? nflHTML(d) : cfpHTML(d);
 }
 
@@ -478,7 +480,7 @@ function cupGameHTML(d, g, tbd) {
   return `<div class="rc-match rc-ko${g.done ? " rc-done" : ""}">
     ${cupSide(d, g.home, g.home_seed, g.home_score, g.done ? g.winner === g.home : null, tbd[0])}
     ${cupSide(d, g.away, g.away_seed, g.away_score, g.done ? g.winner === g.away : null, tbd[1])}
-    <span class="rc-host">${escapeHtml(rcDay(g.date))} · ${escapeHtml(where)}${g.done ? " · final score" : ""}${
+    <span class="rc-host">${g.date ? `${escapeHtml(rcDay(g.date))} · ` : ""}${escapeHtml(where)}${g.done ? " · final score" : ""}${
       line && !g.done ? ` · our line ${escapeHtml(nm(g.home))} <b>${rcPct(line.p_home)}</b>` : ""}</span></div>`;
 }
 function cupBracketHTML(d) {
@@ -512,11 +514,14 @@ function cupHTML(d) {
   const set = !!((d.bracket || {}).set);
   const g = d.groups || {};
   const ko = d.knockouts || {};
+  // Each round's nights, both of a two-night round (the bracket's own).
+  const nights = (d.bracket || {}).nights || {};
+  const span = (k) => ((nights[k] || []).length ? nights[k] : [ko[k]]).filter(Boolean).map(rcDay).join(" – ");
   const win = d.window || [];
   const started = (d.played || 0) > 0;
   return `<p class="rc-note rc-lede">${started ? `${plural(d.played, "group game")} played, ${d.games_left} left` : "Group play has not started"}
-      · group nights ${escapeHtml(rcDay(win[0]))} – ${escapeHtml(rcDay(win[1]))} · quarterfinals ${escapeHtml(rcDay(ko.quarterfinals))}
-      and semifinals ${escapeHtml(rcDay(ko.semifinals))} at the better seed’s arena · the final ${escapeHtml(rcDay(ko.final))}, Indianapolis.</p>
+      · group nights ${escapeHtml(rcDay(win[0]))} – ${escapeHtml(rcDay(win[1]))} · quarterfinals ${escapeHtml(span("quarterfinals"))}
+      and semifinals ${escapeHtml(span("semifinals"))} at the better seed’s arena · the final ${escapeHtml(rcDay(ko.final))}, Indianapolis.</p>
     ${set ? cupBracketHTML(d) : ""}
     <div class="section-title">The groups
       <span class="sub">— each group’s winner goes through, and the best of the rest in each conference.</span></div>
