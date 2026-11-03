@@ -9518,7 +9518,7 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JI 2>&1 | tee /tmp/ji.txt
 Which runs, one at a time:
 
 ```
-curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 2 November 2026'
+curl -s https://qellysbook.com/terms.html | grep -c 'The changes of 2 November 2026'
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="owner-tools"'
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="one-trial"'
 curl -s https://qellysbook.com/js/owner.js | grep -c 'function oaInner('

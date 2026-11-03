@@ -83,8 +83,12 @@ def test_nothing_advertises_the_walled_pages_as_free():
     assert "record" in openable
     # The Fantasy room and My Bets opened on 2026-10-25 (Ethan: "the fantasy
     # room could probably be free"; My Bets free with an account), so
-    # they are no longer on this list — tests/test_the_free_tier.py.
-    for shut in ("standings", "rosters", "injuries", "bankroll"):
+    # they are no longer on this list — tests/test_the_free_tier.py. The
+    # standings, rosters and injuries opened on 2026-11-03 with the weather,
+    # a team's page and the races (the audit's "open the free side"): the
+    # sign-up's table, the plans' line and the Terms' §2 list now say so —
+    # tests/test_the_free_side_opens_the_facts.py.
+    for shut in ("bankroll", "props", "edge", "likely", "lab"):
         assert shut not in openable, (
             "%s is reachable unpaid; if that is deliberate this test needs "
             "updating, and so does whatever page says it is not" % shut)

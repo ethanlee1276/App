@@ -681,7 +681,7 @@ curl -s https://qellysbook.com/terms.html | grep -c 'id="failed-payments"'
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice status
 SH
 run JI "A cancelled trial, a failed charge, and the Owner desk's account tools" 60 <<'SH'
-curl -s https://qellysbook.com/terms.html | grep -c 'Last updated 2 November 2026'
+curl -s https://qellysbook.com/terms.html | grep -c 'The changes of 2 November 2026'
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="owner-tools"'
 curl -s https://qellysbook.com/privacy.html | grep -c 'id="one-trial"'
 curl -s https://qellysbook.com/js/owner.js | grep -c 'function oaInner('
