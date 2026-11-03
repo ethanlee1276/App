@@ -205,6 +205,55 @@ def test_the_tab_leads_with_the_card_and_drops_the_repeats():
     assert "driveView: driveViewHTML" in GC
 
 
+def _inside(quad, x, y):
+    """Is (x, y) inside a convex quadrilateral given corner by corner?"""
+    sign = 0
+    for (ax, ay), (bx, by) in zip(quad, quad[1:] + quad[:1]):
+        cross = (bx - ax) * (y - ay) - (by - ay) * (x - ax)
+        if cross:
+            if sign and (cross > 0) != (sign > 0):
+                return False
+            sign = cross
+    return True
+
+
+def test_each_name_is_painted_on_its_end_zone_and_stays_inside_it():
+    """Ethan, 2026-11-03, circling both end zones on his phone: "fix the
+    wording and make it look like it's apart of the in zones". The zone
+    leans with the field and the name stood bolt upright on its middle, so
+    its ends hung off the colour. Now the letters lie on the zone: the line
+    they sit on runs up its middle on the same slant, their height runs
+    across it the way the field's lines do (tops toward the end line), and
+    the name fits with room at both sidelines — a long one smaller first."""
+    html = _card(PUNT)
+    if html is None:
+        return
+    zones = re.findall(r'<g class="gc-dv-ezg"[^>]*><path class="gc-dv-ez" d="([^"]+)"/>'
+                       r'<text class="gc-dv-ezt" transform="matrix\(([^)]+)\)"( style="font-size:([\d.]+)px")?'
+                       r' textLength="([\d.]+)" lengthAdjust="spacingAndGlyphs">([^<]+)</text></g>', html)
+    assert [z[5] for z in zones] == ["COWBOYS", "BUCCANEERS"], zones
+    for (path, mat, _s, size, length, name), side in zip(zones, ("home", "away")):
+        pts = [tuple(map(float, p.split())) for p in re.findall(r"[ML]([\d.\-]+ [\d.\-]+)", path)]
+        assert len(pts) == 4, path
+        top = ((pts[0][0] + pts[1][0]) / 2, pts[0][1])
+        bot = ((pts[2][0] + pts[3][0]) / 2, pts[2][1])
+        a, b, c, d, e, f = map(float, mat.split())
+        run = (top[0] - bot[0], top[1] - bot[1]) if side == "home" else (bot[0] - top[0], bot[1] - top[1])
+        norm = (run[0] ** 2 + run[1] ** 2) ** 0.5
+        assert abs(a - run[0] / norm) < 0.01 and abs(b - run[1] / norm) < 0.01, ("on the zone's slant", name, mat)
+        assert (c, d) == ((1.0, 0.0) if side == "home" else (-1.0, 0.0)), ("tops toward the end line", name, mat)
+        assert abs(e - (top[0] + bot[0]) / 2) < 0.2 and abs(f - (top[1] + bot[1]) / 2) < 0.2, ("in the middle", name)
+        half, h = float(length) / 2, float(size or 17) * 0.4
+        for sgn in (-1, 1):
+            # Both ends of the name, and its letters' height either side of them.
+            x, y = e + sgn * half * a, f + sgn * half * b
+            for dx in (-h, h):
+                assert _inside(pts, x + dx, y), (name, "spills out of its end zone", (x + dx, y))
+        assert float(length) <= norm - 13.9, (name, "no room left at the sidelines")
+    assert zones[1][3] and float(zones[1][3]) < 17, "a long name is set smaller before it is squeezed"
+    assert "rotate(" not in "".join(re.findall(r'<text class="gc-dv-ezt"[^>]*>', html)), "never bolt upright"
+
+
 def test_the_card_is_styled_from_the_sheets_tokens_and_moves_only_when_asked():
     for cls in (".gc-dv {", ".gc-dv-tiles", ".gc-dv-ez {", ".gc-dv-ezt", ".gc-dv-pin {", ".gc-dv-tag {",
                 ".gc-dv-arc", ".gc-dv-run {", ".gc-dv-last {", ".gc-dv-said"):

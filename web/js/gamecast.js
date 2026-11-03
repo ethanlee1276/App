@@ -1201,6 +1201,12 @@
   //: The field in the drawing's own units: the far edge narrower than the
   //: near one, which is all the perspective a reader needs to see a field.
   const DV = { w: 360, h: 164, top: 30, bot: 124, half0: 140, half1: 171, cx: 180, lane: 0.6 };
+  //: An end zone's painted name (dvFieldSVG's `ez`): its size in the
+  //: drawing's units (gamecast.css's .gc-dv-ezt says the same), the width of
+  //: a capital with its spacing in ems, the room kept clear at each sideline,
+  //: the narrowest a long name is squeezed to before it is set smaller, and
+  //: the smallest it is set.
+  const EZ = { fs: 17, em: 0.78, pad: 7, squeeze: 0.8, minFs: 9 };
   const dvX = (u, t) => DV.cx + ((u + 10) / 120 - 0.5) * 2 * (DV.half0 + (DV.half1 - DV.half0) * t);
   const dvY = (t) => DV.top + (DV.bot - DV.top) * t;
   const dvP = (u, t) => `${f1(dvX(u, t))} ${f1(dvY(t))}`;
@@ -1330,12 +1336,29 @@
     for (let u = 10; u < 100; u += 10) nums += `<text class="gc-dv-num" x="${f1(dvX(u, 1))}" y="${f1(DV.bot + 15)}">${u > 50 ? 100 - u : u}</text>`;
     nums += `<text class="gc-dv-num team" x="${f1(dvX(0, 1))}" y="${f1(DV.bot + 15)}">${esc(d.home)}</text>`
       + `<text class="gc-dv-num team" x="${f1(dvX(100, 1))}" y="${f1(DV.bot + 15)}">${esc(d.away)}</text>`;
+    /* EACH CLUB'S NAME IS PAINTED IN ITS END ZONE (Ethan, 2026-11-03,
+       circling both on his phone: "fix the wording and make it look like
+       it's apart of the in zones"). The zone leans with the field — its
+       goal line is a yard line, drawn on the slant — and the name stood
+       bolt upright on the zone's middle, so its first letters hung off the
+       colour at one sideline and its last ones at the other. Now the
+       letters lie on the turf: the line they sit on runs up the zone's
+       middle on the same slant, their height runs across the zone the way
+       the field's own lines do, their tops toward the end line as a real
+       end zone's are, and the name is sized to stay inside the zone with
+       room at both sidelines (smaller, then narrower, for a long one). */
     const ez = (side, u0) => {
       const name = String(teamNameIn(league, d[side]) || d[side] || "").toUpperCase();
-      const cx = dvX(u0 + 5, 0.5), cy = dvY(0.5);
-      const fit = name.length > 8 ? ` textLength="82" lengthAdjust="spacingAndGlyphs"` : "";
-      return `<path class="gc-dv-ez" d="${dvBand(u0, u0 + 10)}"${cols[side] ? ` style="--tm:${cols[side]}"` : ""}/>`
-        + `<text class="gc-dv-ezt" x="${f1(cx)}" y="${f1(cy)}" transform="rotate(${side === "home" ? -90 : 90} ${f1(cx)} ${f1(cy)})"${fit}>${esc(name)}</text>`;
+      const home = side === "home", uc = u0 + 5;
+      const top = [dvX(uc, 0), dvY(0)], bot = [dvX(uc, 1), dvY(1)];
+      const [dx, dy] = home ? [top[0] - bot[0], top[1] - bot[1]] : [bot[0] - top[0], bot[1] - top[1]];
+      const len = Math.hypot(dx, dy), room = len - 2 * EZ.pad;
+      const wide = (fs) => name.length * EZ.em * fs;
+      const fs = wide(EZ.fs) * EZ.squeeze > room ? Math.max(EZ.minFs, room / (name.length * EZ.em * EZ.squeeze)) : EZ.fs;
+      const m = [dx / len, dy / len, home ? 1 : -1, 0, dvX(uc, 0.5), dvY(0.5)].map((v) => +v.toFixed(3));
+      return `<g class="gc-dv-ezg"${cols[side] ? ` style="--tm:${cols[side]}"` : ""}><path class="gc-dv-ez" d="${dvBand(u0, u0 + 10)}"/>`
+        + `<text class="gc-dv-ezt" transform="matrix(${m.join(" ")})"${fs !== EZ.fs ? ` style="font-size:${f1(fs)}px"` : ""}`
+        + ` textLength="${f1(Math.min(room, wide(fs)))}" lengthAdjust="spacingAndGlyphs">${esc(name)}</text></g>`;
     };
     const post = (u) => {
       const x = dvX(u, 0.42), yb = dvY(0.42);

@@ -631,6 +631,23 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                         return { h: s.height, w: s.width, pinIn: pin.left >= s.left - 2 && pin.right <= s.right + 2,
                                  paths: document.querySelectorAll('.gc-dv .gc-dv-arc, .gc-dv .gc-dv-run, .gc-dv .gc-dv-ret').length }; })()""")
                     assert field["h"] > 100 and field["pinIn"] and field["paths"] >= 1, field
+                    # Each club's name is painted inside its end zone, every
+                    # letter's box in the zone's colour (Ethan, 2026-11-03,
+                    # circling both: "make it look like it's apart of the in zones").
+                    zones = page.evaluate("""[...document.querySelectorAll('.gc-dv .gc-dv-ezg')].map((g) => {
+                        const zone = g.querySelector('.gc-dv-ez'), t = g.querySelector('.gc-dv-ezt');
+                        const m = t.transform.baseVal.consolidate().matrix, svg = t.ownerSVGElement;
+                        let out = 0;
+                        for (let i = 0; i < t.getNumberOfChars(); i++) {
+                          const r = t.getExtentOfChar(i);
+                          for (const [x, y] of [[r.x, r.y], [r.x + r.width, r.y], [r.x, r.y + r.height], [r.x + r.width, r.y + r.height]]) {
+                            const p = svg.createSVGPoint(); p.x = x; p.y = y;
+                            if (!zone.isPointInFill(p.matrixTransform(m))) out++;
+                          }
+                        }
+                        return { name: t.textContent, chars: t.getNumberOfChars(), out };
+                    })""")
+                    assert [z["name"] for z in zones] == ["COWBOYS", "BUCCANEERS"] and not any(z["out"] for z in zones), zones
                     # The drive on the photograph sits exactly on it, at every width.
                     page.wait_for_selector(".pbp-park [data-gc-art]", state="attached", timeout=5000)
                     boxes = page.evaluate("""(() => { const p = document.querySelector('.pbp-park');
