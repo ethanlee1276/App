@@ -954,6 +954,10 @@ NOT_A_BOARD_WRITER = {
                          "tests/test_the_bug_scan.py pins",
     "engine/pushalerts.py": "reads the boards through gate.board_source only to count picks "
                             "for an alert, and writes only its own data/push/ files",
+    "engine/firstlook.py": "READS the public copy of day_top_pick.json, again "
+                           "through gate.free_top_pick, for the sign-up's free "
+                           "pick; its only json.dump is to stdout (python3 -m "
+                           "engine.firstlook), which writes no file",
     "engine/askbot.py": "names every league's board so Ask can READ them "
                         "(the server resolves each through "
                         "gate.full_board_file); its only writes are its "
