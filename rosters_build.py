@@ -237,6 +237,43 @@ def _injury_board(sport: str) -> dict:
             if isinstance(r, dict) and r.get("player")}
 
 
+#: The leagues whose roster rows carry a field only when it says something
+#: (2026-11-03). College's file held 41,878 players across 492 schools at
+#: 13.3 MB, most of every row an empty status, a false flag or a null; the
+#: Rosters page and the player search parse all of it on the phone, and
+#: since 3 November a free account opens it too. Without the empties it is
+#: about 5.6 MB. Every reader takes a missing field as empty: the page
+#: tests flags by truth and numbers with `!= null`, and the Python readers
+#: use `.get` (tests/test_the_college_rosters_are_slim.py holds both).
+SLIM_SPORTS = ("cfb",)
+
+#: Kept on every row, empty or not: who, where, and what position.
+ALWAYS_KEPT = ("player", "team", "position")
+
+
+def _empty(v) -> bool:
+    """None, False or "" — never a 0, which is a value (a jersey, a rookie's
+    years of experience)."""
+    return v is None or v is False or (isinstance(v, str) and v == "")
+
+
+def slim_rows(blob: dict) -> dict:
+    """Each player row without its empty fields, and without a depth-chart
+    position that only repeats his position. In place; returns ``blob``."""
+    for team in (blob.get("teams") or {}).values():
+        if not isinstance(team, dict):
+            continue
+        rows = []
+        for p in team.get("players") or []:
+            if isinstance(p, dict):
+                p = {k: v for k, v in p.items() if k in ALWAYS_KEPT or not _empty(v)}
+                if p.get("depth_pos") == p.get("position"):
+                    p.pop("depth_pos", None)
+            rows.append(p)
+        team["players"] = rows
+    return blob
+
+
 def unavailable_payload(sport: str) -> dict:
     return {
         "sport": sport, "teams": {}, "team_count": 0, "player_count": 0,
@@ -272,6 +309,8 @@ def write(sport: str, out_dir: Path = OUT_DIR, today: str | None = None) -> dict
             blob["team_meta"] = cfbdata.parse_teams(cfbdata.fetch_teams())
         except Exception:                                     # noqa: BLE001
             blob["team_meta"] = {}
+    if sport in SLIM_SPORTS:
+        slim_rows(blob)
     # Atomic (audit F-12): a poll mid-write must never read half a file.
     dest = out_dir / f"rosters_{sport}.json"
     tmp = dest.with_suffix(dest.suffix + ".tmp")

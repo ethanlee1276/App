@@ -4,6 +4,12 @@
     {
       "date": "2026-11-03",
       "kind": "fix",
+      "title": "College rosters open lighter",
+      "body": "The college rosters — every school's players, 41,878 of them, which the Rosters page and the player search read whole — now carry a detail only when it says something. The file the page reads went from 13.3 MB to 5.6 MB, so it opens quicker on a phone; nothing on the page changes."
+    },
+    {
+      "date": "2026-11-03",
+      "kind": "fix",
       "title": "The Lab replays one sport at a time",
       "body": "The Lab — the members' page that replays our models over history they never saw — stopped updating on 29 September. Its weekly run replayed every sport and published only at the end, and once the NBA and WNBA replays and five new NFL markets joined it, the run outgrew its hour and was stopped each night with nothing saved. It now replays one sport at a time and publishes each as it finishes, with that sport's own date on the page; a sport that runs long goes to the back of the next night's line instead of holding up the rest."
     },
