@@ -89,7 +89,7 @@ def test_the_terms_carry_the_new_section_and_say_when_it_applies():
     assert "The same day’s change to §5.7" in note and "an account made from 3 November 2026" in note
     assert "on 2 December 2026" in note and "30 days after we email the account’s address about it" in note
     assert "Until then §5.7 applies to it as it read before: “If a renewal charge fails" in note
-    assert 'id="failed-payments"' in terms and "Last updated 2 November 2026" in terms
+    assert 'id="failed-payments"' in terms and "Last updated 3 November 2026" in terms
 
 
 def test_the_runbook_arms_it_with_the_other_two():

@@ -19180,9 +19180,9 @@ function brandMarkHTML(size = 28) {
    V-20). The paywall, Ask and the Why page each told a slightly different
    story ("No premium tier" on one, "Unlock the edge" on another); this is
    the story all three now tell. */
-const FREE_VS_PLAN = "Free: the Record — every pick graded, wins and losses — the Methodology and the "
-  + "Status page. The plan adds tonight’s picks and prices on every board, Ask Qellys, "
-  + "Zeno’s bets and the tools.";
+const FREE_VS_PLAN = "Free: the Record — every pick graded, wins and losses — every game live, the Pick of "
+  + "the Day in every league, and the standings, rosters, injuries, weather and playoff races. The plan adds "
+  + "tonight’s picks and prices on every board, our chances in the races, Ask Qellys, Zeno’s bets and the tools.";
 
 function freeVsPlanHTML(cls = "") {
   return `<p class="free-vs-plan${cls ? ` ${cls}` : ""}">${escapeHtml(FREE_VS_PLAN)}</p>`;
@@ -23590,7 +23590,18 @@ const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    // THE PICK OF THE DAY (Ethan, 2026-10-30: "make the picks
                    // of the day free. just the pick of the day"): every
                    // league's card, and a free account's Home (_switchViewNow).
-                   "potd"];
+                   "potd",
+                   // THE FACTS AROUND THE GAMES (2026-11-03; Ethan, on the
+                   // audit's "open the free side": "do all of them"). The
+                   // standings, rosters, injury reports and each game's
+                   // weather are facts — every file they read is free on
+                   // disk (engine/gate FREE_FILES; the weather rides each
+                   // game on the board, which the gate leaves whole) — and a
+                   // team's page is finished scorelines (server._team, never
+                   // gated). The races open with their facts, the seeds, the
+                   // field and the standings; our chances in them stay a
+                   // member's (gate.PAID_KEYS_BY_FILE), locked on the page.
+                   "standings", "rosters", "injuries", "weather", "team", "race"];
 
 /* The screens that ARE the wall — the plans, checkout, sign-up, a reset —
    are standalone pages with their own masthead, so the app's own chrome

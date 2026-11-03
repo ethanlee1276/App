@@ -65,7 +65,10 @@ def test_the_page_is_wired_where_every_page_is():
     sw = (WEB / "sw.js").read_text()
     assert '"/js/race.js", "/css/race.css"' in sw
     acct = (WEB / "js" / "account.js").read_text()
-    assert "  race: [" in acct, "a reader without a plan is told what the race page holds"
+    why = acct[acct.index("const PW_WHY = {"):acct.index("};", acct.index("const PW_WHY = {"))]
+    assert "race:" not in why, "open to a reader without a plan since 2026-11-03: the page's own lock says what is a member's"
+    wall = APP[APP.index("const WALL_OPEN = ["):APP.index("];", APP.index("const WALL_OPEN = ["))]
+    assert '"race"' in wall
 
 
 def test_the_row_is_named_for_its_league_and_quiet_elsewhere():

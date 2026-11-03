@@ -160,7 +160,14 @@ def test_the_pages_that_stay_open_are_named_once():
                           # pick and no members' half (gate.free_potd); a free
                           # account's Home lands on it, tab bar and all, in a
                           # browser (tests/test_the_pick_of_the_day_is_free).
-                          "potd"}, open_
+                          "potd",
+                          # The facts around the games (2026-11-03, the
+                          # audit's "open the free side"): every file they
+                          # read is free on disk and the races lock our
+                          # chances in place. Each opened as a free account in
+                          # a browser, tab bar there, not a wall screen
+                          # (tests/test_the_free_side_opens_the_facts.py).
+                          "standings", "rosters", "injuries", "weather", "team", "race"}, open_
 
 
 def test_every_open_page_is_a_real_view():

@@ -806,7 +806,13 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
                       "why", "about", "features", "methodology", "status", "alerts",
                       # 2026-10-30: the Pick of the Day, free; a free Home
                       # lands on it with the tab bar (test_the_pick_of_the_day_is_free).
-                      "potd"}, (
+                      "potd",
+                      # 2026-11-03: standings, rosters, injuries, weather, a
+                      # team's page and the races. Way back confirmed by
+                      # opening each as a free account in a browser: the tab
+                      # bar there, no wall screen, no lock on its menu entry
+                      # (test_the_free_side_opens_the_facts).
+                      "standings", "rosters", "injuries", "weather", "team", "race"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

@@ -2258,7 +2258,6 @@ const PW_WHY = {
   props: ["The props board is for members", "Every player prop we price, with our chance beside the book’s."],
   longshots: ["Long shots are for members", "The big prices our model still likes, every night."],
   futures: ["Futures are for members", "Season-long prices, with our number against the book’s."],
-  race: ["The races are for members", "Every NFL and college playoff contender’s and NBA Cup team’s chances, and the games that swing them."],
   alerts: ["Alerts are for members", "Line moves, injuries and your players on tonight’s board, on your phone."],
 };
 
@@ -2977,6 +2976,8 @@ const FL_ROWS = [
   // pick of the day"): the one pick, in every league — js/potd.js.
   ["The Pick of the Day, every league, with its record", 1],
   ["Every game live — scores, play-by-play and stats", 1],
+  // Open since 2026-11-03 (app.js WALL_OPEN): the facts around the games.
+  ["Standings, rosters, injuries, weather and the playoff races", 1],
   ["A chat for every game, a thread on every play", 1],
   ["Call it, and your players’ lines live", 1],
   ["Fantasy lineups and start/sit help, your bet tracker", 1],
