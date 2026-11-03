@@ -844,6 +844,9 @@ class _FakeProc:
 def test_a_finished_child_is_logged_once_with_its_tail(monkeypatch):
     import io
     with tempfile.TemporaryDirectory() as td:
+        # The outcome record (weekly_jobs.json) goes beside the pid files;
+        # never into this checkout's data/cache.
+        monkeypatch.setattr(maintenance, "_child_dir", lambda: Path(td))
         logp = Path(td) / "weekly_x.log"
         logp.write_text("line one\nline two\n")
         maintenance._CHILDREN.clear()
@@ -859,6 +862,7 @@ def test_a_finished_child_is_logged_once_with_its_tail(monkeypatch):
 def test_a_child_past_its_ceiling_is_cut_off(monkeypatch):
     import io
     with tempfile.TemporaryDirectory() as td:
+        monkeypatch.setattr(maintenance, "_child_dir", lambda: Path(td))
         logp = Path(td) / "weekly_y.log"
         logp.write_text("")
         maintenance._CHILDREN.clear()
@@ -873,6 +877,7 @@ def test_a_child_past_its_ceiling_is_cut_off(monkeypatch):
 
 def test_a_child_still_running_is_left_alone_and_not_started_twice(monkeypatch):
     import io
+    monkeypatch.setattr(maintenance, "_child_dir", lambda: Path(tempfile.mkdtemp()))
     maintenance._CHILDREN.clear()
     maintenance._CHILDREN["engine.deepfit"] = {"proc": _FakeProc(None), "started": 0.0,
                                                "log": Path("/nonexistent"), "fh": io.StringIO()}

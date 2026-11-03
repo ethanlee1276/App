@@ -29,6 +29,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -1480,6 +1481,83 @@ def _child_pid_path(module: str) -> Path:
     return _child_dir() / f"weekly_{module.rsplit('.', 1)[-1]}.pid"
 
 
+# THE OUTCOMES WHERE THEY CAN BE READ (2026-11-03). The Lab's page sat five
+# weeks old because its run was cut off or killed every night, and the only
+# record of that was a line in the journal and a log under data/cache —
+# both on the box, both needing someone at a keyboard. Each weekly job's
+# latest outcome is kept here and published in heartbeat.json
+# (launch._write_heartbeat): when it started, when it ended, how long, its
+# exit, whether it was cut off, and its last line, scrubbed.
+def _jobs_path() -> Path:
+    return _child_dir() / "weekly_jobs.json"
+
+
+#: Secrets as they appear in a log line: a query string (the odds key
+#: travels in its URLs), a bearer header, an address.
+_SECRET_RE = re.compile(r"(?i)\b(api[_-]?key|apikey|access[_-]?token|token|secret|password|passwd|key)=([^&\s'\"]+)")
+_BEARER_RE = re.compile(r"(?i)\bbearer\s+[\w.~+/-]+=*")
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+
+def scrub_public(text, limit: int = 200) -> str:
+    """A line fit for a PUBLIC file: no query-string secrets, no bearer
+    tokens, no email addresses (bugscan mails), and no longer than
+    ``limit``."""
+    s = str(text or "")
+    s = _SECRET_RE.sub(lambda m: f"{m.group(1)}=…", s)
+    s = _BEARER_RE.sub("Bearer …", s)
+    s = _EMAIL_RE.sub("…@…", s)
+    return s[:limit]
+
+
+def _iso(ts: float) -> str:
+    return _dt.datetime.fromtimestamp(ts).isoformat(timespec="seconds")
+
+
+def _record_job(module: str, **fields) -> None:
+    """Merge ``fields`` into the job's entry in weekly_jobs.json. A status
+    file, so a lost race between two writers costs one update, never the
+    file; never raises."""
+    try:
+        p = _jobs_path()
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+            d = d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            d = {}
+        entry = dict(d.get(module) or {})
+        entry.update({k: (scrub_public(v) if isinstance(v, str) else v) for k, v in fields.items()})
+        d[module] = entry
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(d, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, p)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def weekly_jobs_status() -> dict:
+    """Every weekly job's latest outcome, as `_record_job` kept it."""
+    try:
+        d = json.loads(_jobs_path().read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _last_line(lines) -> str:
+    return scrub_public(lines[-1].strip()) if lines else ""
+
+
+def _log_tail(module: str, n: int = 12) -> list[str]:
+    """The last ``n`` non-blank lines of a weekly job's log."""
+    try:
+        return [ln for ln in (_child_dir() / f"weekly_{module.rsplit('.', 1)[-1]}.log")
+                .read_text(encoding="utf-8").splitlines() if ln.strip()][-n:]
+    except OSError:
+        return []
+
+
 def _pid_runs(pid: int, module: str) -> bool:
     """Is ``pid`` alive and still this module (not a reused pid)?"""
     try:
@@ -1549,6 +1627,8 @@ def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
                                                        "started": _time.time()}), encoding="utf-8")
     except OSError:
         pass
+    _record_job(module, started=_iso(_time.time()), running=True, ended=None, minutes=None,
+                exit=None, cut_off=False, last="")
     return [f"{module}: started in the background (pid {proc.pid}), "
             f"output in {path.relative_to(ROOT)}"]
 
@@ -1562,12 +1642,14 @@ def reap_children(log=print, now: float | None = None) -> list[str]:
     for module, c in list(_CHILDREN.items()):
         proc = c["proc"]
         code = proc.poll()
+        cut = False
         if code is None and now - c["started"] > WEEKLY_JOB_TIMEOUT_S:
             try:
                 proc.kill()
             except Exception:  # noqa: BLE001
                 pass
             code = proc.wait() if hasattr(proc, "wait") else -9
+            cut = True
             out.append(f"⚠️  {module}: cut off after {WEEKLY_JOB_TIMEOUT_S}s")
         if code is None:
             continue
@@ -1584,6 +1666,8 @@ def reap_children(log=print, now: float | None = None) -> list[str]:
         out.append(f"{module}: finished in {mins:.0f} min with exit {code}"
                    + ("" if code == 0 else " ⚠️"))
         out.extend(f"  {ln}" for ln in tail)
+        _record_job(module, running=False, ended=_iso(now), minutes=round(mins),
+                    exit=code, cut_off=cut, last=_last_line(tail))
         del _CHILDREN[module]
         try:
             _child_pid_path(module).unlink()
@@ -1616,14 +1700,19 @@ def _reap_pid_files(now: float) -> list[str]:
             except OSError:
                 pass
             out.append(f"⚠️  {module}: cut off after {WEEKLY_JOB_TIMEOUT_S}s")
+            # The last line is where the hour ran out (the Lab names the
+            # sport it was replaying; python -u keeps it on disk).
+            _record_job(module, running=False, ended=_iso(now), minutes=round((now - started) / 60.0),
+                        exit=None, cut_off=True, last=_last_line(_log_tail(module)))
         else:
-            try:
-                tail = [ln for ln in (_child_dir() / f"weekly_{module.rsplit('.', 1)[-1]}.log")
-                        .read_text(encoding="utf-8").splitlines() if ln.strip()][-12:]
-            except OSError:
-                tail = []
+            tail = _log_tail(module)
             out.append(f"{module}: finished in about {(now - started) / 60.0:.0f} min")
             out.extend(f"  {ln}" for ln in tail)
+            # No exit code: an earlier process was its parent. The last
+            # line says how it ended — the job's own summary, or the step
+            # it was on when the kernel stopped it.
+            _record_job(module, running=False, ended=_iso(now), minutes=round((now - started) / 60.0),
+                        exit=None, cut_off=False, last=_last_line(tail))
         try:
             pf.unlink()
         except OSError:

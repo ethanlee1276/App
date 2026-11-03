@@ -6,8 +6,10 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after the NBA Cup and the College Football Playoff
-got their brackets (step JO: item 1e), the standings, rosters, injuries,
+Last updated 2026-11-03, after the Lab learned to finish in pieces and the
+heartbeat started saying why a weekly job or a build failed (step JP: item
+1f), the NBA Cup and the College Football Playoff got their brackets (step
+JO: item 1e), the standings, rosters, injuries,
 weather and races opened to free accounts (nothing to run), today's free
 pick started travelling — an alert you turn on, the sign-up and the plans, a
 share card (step JN: item 1d) — and the NFL got its playoff race (step JM:
@@ -166,6 +168,21 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JO 2>&1 | tee /tmp/jo.txt
 ```
 
 Before 6 December the college line reads `False [] None` — that's right.
+
+## 1f. The day after tomorrow: the Lab's first pieces, and why (step JP)
+
+The Lab's page has been stamped 29 September since then: its run built every
+sport and published only at the end, and was cut off each night at the
+hour. It now publishes each sport as it finishes, and the heartbeat carries
+each weekly job's outcome. Nothing to run; tomorrow's chores start it. This
+shows the Lab's outcome, any failing board's note, and each sport's date:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JP 2>&1 | tee /tmp/jp.txt
+```
+
+If the first line says `'cut_off': True` with a sport in `last`, that sport
+alone outgrows the hour — paste it and I will cut its replay down.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

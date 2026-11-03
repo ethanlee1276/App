@@ -9305,6 +9305,37 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JP. The Lab finishes in pieces, and the heartbeat says why** (step 340;
+the 30 October audit's "needs you 2": the Lab's page stamped 29 September).
+
+- **What was wrong.** The Lab built every sport in memory and published
+  only at the end. The NBA and WNBA replays joined it on 1 October and the
+  NFL gained five markets on 10 October; once the whole pass outgrew the
+  chores' one-hour ceiling it was cut off every night with nothing written,
+  and was due again the next night, from the start. That is the likeliest
+  reading of five weeks without a page; the heartbeat below now says it
+  plainly either way.
+- **Now.** One sport at a time, each published as it lands and dated by
+  its own replay. A run cut off keeps every sport it finished, and the
+  sport it was cut off in goes to the back of the next night's line, so one
+  slow replay never starves the rest. The Lab page shows each sport's date.
+- **The heartbeat** (the public heartbeat.json) now carries each weekly
+  job's last outcome: when it started and ended, minutes, exit, whether it
+  was cut off, and its last line, scrubbed of keys and addresses. For a run
+  cut off at the hour that line names the sport it was on. And a failed
+  build's note names the line of our code it died on: college sat two hours
+  on "database is locked" this morning, and the next one says which write
+  was waiting.
+
+Nothing to run: tomorrow's daily chores start the Lab. Read-only, the day
+after: the Lab's outcome and any failing board's note, then each sport's
+replay date:
+
+```
+curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('weekly', {}).get('lab')); print({k: v.get('note') for k, v in (d.get('boards') or {}).items() if not v.get('ok')})"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/backtest.json')); print(d['generated_at']); [print(k, v.get('replayed_at')) for k, v in d['sports'].items()]"
+```
+
 **JO. The two brackets: the NBA Cup's and the College Football Playoff's**
 (steps 338-339; you, 2026-11-03, on the audit's list: "do all of them").
 

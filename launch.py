@@ -151,8 +151,40 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
         print(f"  build failed: {' '.join(args[:2])} — exit "
               f"{proc.returncode}: {tail[:140]}")
     _LAST_BUILD_NOTE[0] = ("" if proc.returncode == 0
-                           else f"exit {proc.returncode}: {tail[:200]}")
+                           else _failure_note(proc.returncode, tail, out))
     return proc.returncode == 0, tail
+
+
+def _innermost_frame(out) -> str:
+    """WHERE a build died, not only what it said: the innermost traceback
+    frame in this checkout's own code — `engine/ledger.py:812 in journal` —
+    skipping the standard library's frames below it. "" when the output
+    holds no traceback."""
+    import re as _re
+    root = str(ROOT) + os.sep
+    for ln in reversed(out or []):
+        m = _re.match(r'\s*File "([^"]+)", line (\d+), in (\S+)', ln)
+        if not m:
+            continue
+        path = m.group(1)
+        if path.startswith(root):
+            rel = path[len(root):]
+        elif not os.path.isabs(path):
+            rel = path
+        else:
+            continue
+        return f"{rel}:{m.group(2)} in {m.group(3)}"
+    return ""
+
+
+def _failure_note(code: int, tail: str, out) -> str:
+    """The note a failed build leaves on its board in heartbeat.json — a
+    PUBLIC file, so scrubbed. With the frame it raised in (2026-11-03): the
+    college board sat two hours on "database is locked" with nothing to say
+    which write was waiting."""
+    from engine.maintenance import scrub_public
+    where = _innermost_frame(out)
+    return scrub_public(f"exit {code}: {tail[:200]}" + (f" (at {where})" if where else ""), limit=300)
 
 
 def _with_odds() -> bool:
@@ -5139,6 +5171,20 @@ def _disk_check(free_bytes=None, say=print) -> float | None:
     return gb
 
 
+def _weekly_jobs_public() -> dict:
+    """engine.maintenance's record of each weekly job, keyed by its short
+    name, the fields a reader needs and nothing else — scrubbed again on
+    the way out, because this goes to a public file."""
+    try:
+        from engine.maintenance import scrub_public, weekly_jobs_status
+        keep = ("started", "ended", "minutes", "exit", "cut_off", "running", "last")
+        return {str(module).rsplit(".", 1)[-1]: {k: (scrub_public(v) if isinstance(v, str) else v)
+                                                for k, v in e.items() if k in keep}
+                for module, e in weekly_jobs_status().items() if isinstance(e, dict)}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -5197,6 +5243,10 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # THE CHORES LANES: which step each is on, for how long, and —
             # past CHORES_STUCK_S — the line it is stuck on (2026-10-04).
             "chores": _chores_status(),
+            # THE WEEKLY JOBS' LAST OUTCOMES (2026-11-03): started, ended,
+            # minutes, exit, cut off, and the last line, scrubbed. The
+            # Lab's page sat five weeks old with the reason only on the box.
+            "weekly": _weekly_jobs_public(),
         }))
         os.replace(tmp, p)
     except OSError:
