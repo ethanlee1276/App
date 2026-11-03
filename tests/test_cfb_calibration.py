@@ -118,11 +118,15 @@ def test_a_college_market_with_no_logs_is_skipped_not_invented():
 
 def test_the_deep_refit_will_pick_college_up_by_itself():
     """`deepfit.sports_with_history` reads formfit's table, so adding
-    college there is what puts it in the weekly pass — no second list."""
+    college there is what puts it in the weekly pass — no second list.
+    Since 2026-11-03 the table is read in `_row_counts`, which the weekly
+    round reads too (and a sport the round's order does not name still
+    joins it: tests/test_the_deep_refit_finishes_in_pieces.py)."""
     from engine import deepfit
     import inspect
-    src = inspect.getsource(deepfit.sports_with_history)
-    assert "from formfit import SPORT_MARKETS" in src
+    assert "from formfit import SPORT_MARKETS" in inspect.getsource(deepfit._row_counts)
+    assert "_row_counts(db)" in inspect.getsource(deepfit.sports_with_history)
+    assert "rows = _row_counts(db)" in inspect.getsource(deepfit.run_round)
     assert deepfit.REFIT_ORDER == (("recency dial", "formfit.py"),
                                    ("player memory", "playerfit.py"),
                                    ("temperatures", "calibrate.py"))

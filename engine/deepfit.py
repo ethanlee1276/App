@@ -475,18 +475,22 @@ def due(path, today: _dt.date) -> bool:
 
 def round_pieces(state: dict, rows: dict) -> list[str]:
     """What a new round owes: every sport with history whose rows have grown
-    since its last full fit, and every extra (they read the same history)."""
+    since its last full fit, and every extra (they read the same history).
+
+    The sports are whatever `_row_counts` found — formfit's own table, the
+    one list (tests/test_cfb_calibration.py) — in PIECE_ORDER where it names
+    them and after them where it does not, so a sport added to the fitters'
+    table joins the round without a second list to remember."""
     done = state.get("pieces") or {}
+    rank = {p: i for i, p in enumerate(PIECE_ORDER)}
     out = []
-    for p in PIECE_ORDER:
-        if p in EXTRAS:
-            if rows:
-                out.append(p)
-        elif p in rows:
-            last = done.get(p) or {}
-            if last.get("done") and last.get("rows") == rows[p]:
-                continue
-            out.append(p)
+    for sp in sorted(rows, key=lambda s: (rank.get(s, len(PIECE_ORDER)), s)):
+        last = done.get(sp) or {}
+        if last.get("done") and last.get("rows") == rows[sp]:
+            continue
+        out.append(sp)
+    if rows:
+        out.extend(EXTRAS)
     return out
 
 

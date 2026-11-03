@@ -134,6 +134,10 @@ def test_what_a_new_round_owes():
     assert all(x in owed for x in D.EXTRAS), "every extra, every week"
     assert owed.index("td_scale") < owed.index("touchdowns") and owed[-1] == "ladder"
     assert D.round_pieces({}, {}) == [], "no history, nothing owed"
+    # A sport the fitters' own table gains joins the round with no second
+    # list to remember: after the named sports, before the extras.
+    grown = D.round_pieces({}, dict(ROWS, nhl=120_000))
+    assert "nhl" in grown and grown.index("nhl") > grown.index("wnba") and grown.index("nhl") < grown.index("yardage_mixture")
 
 
 def test_a_piece_waits_while_what_it_builds_on_is_owed():
