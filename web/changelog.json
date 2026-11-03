@@ -5,7 +5,7 @@
       "date": "2026-11-03",
       "kind": "fix",
       "title": "The college board builds through a busy morning",
-      "body": "From about 8 a.m. on 3 November the college board stopped rebuilding: every build died waiting to store last week's results while the daily upkeep and the settling of bets wrote to the same file, and the page kept showing the last good board. A long write now pauses between its pieces so a waiting build gets its turn, a write that still finds the file busy waits and tries again, and the college build no longer needs that refresh to publish — results it could not store are stored by the next build."
+      "body": "From about 8 a.m. on 3 November the college board stopped rebuilding: every build died waiting to store last week's results, and the page kept showing the last good board. The holder was the pass that settles bets every five minutes: once the official NFL stats for Monday night arrived, each pass locked the results file and kept it locked for minutes at a time. It now lets go before it fetches anything. A build that still finds the file busy waits and tries again, and the college build no longer needs that refresh to publish — results it could not store are stored by the next build."
     },
     {
       "date": "2026-11-03",

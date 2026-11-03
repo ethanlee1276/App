@@ -189,12 +189,13 @@ alone outgrows the hour — paste it and I will cut its replay down.
 
 The second line lists any board whose last build failed, and where. It
 should be `{}`. From 07:56 on 3 November the college board failed every
-build with `database is locked`, waiting to store last week's results while
-the daily chores and the settle pass wrote to the same file. Since this
-push a long write pauses between its pieces, a locked write is tried
-again, and a lock costs the college build only that refresh (its log says
-`CFB results not stored this build`). If `cfb` shows up there again, paste
-the line.
+build with `database is locked`, waiting to store last week's results. The
+holder was the settle pass, which runs every five minutes: once the
+official NFL file for Monday night landed, each pass locked the history
+file and kept it for minutes. It now lets go before it fetches anything,
+a locked write is tried again, and a lock costs the college build only
+that refresh (its log says `CFB results not stored this build`). If `cfb`
+shows up there again, paste the line.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

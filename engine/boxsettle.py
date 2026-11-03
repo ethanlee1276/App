@@ -358,9 +358,18 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
             res["purged"] += n
             continue
         need_ids.append(g)
+    # END THE PURGE'S TRANSACTION NOW, WHATEVER IT REMOVED (2026-11-03).
+    # A DELETE takes the history file's write lock even when it matches
+    # nothing, and this committed only when a row went. So once the
+    # official file had replaced a game's provisional rows, every later
+    # settle pass (one every five minutes while a prop on that game stayed
+    # open) took the lock here and kept it: through the box-score fetches
+    # below and the rest of the pass, minutes at a time, since nothing
+    # after this commits the history connection. The college board, which
+    # stores results as it builds, failed on "database is locked" behind
+    # it from 07:56 that morning.
+    hconn.commit()
     if not need_ids:
-        if res["purged"]:
-            hconn.commit()
         return res
     ids: dict = {}
     if fetch_rows is None:
@@ -391,6 +400,5 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
             continue
         res["rows"] += _db.upsert_player_logs(hconn, rows)
         res["games"] += 1
-    if res["rows"] or res["purged"]:
-        hconn.commit()
+    hconn.commit()
     return res

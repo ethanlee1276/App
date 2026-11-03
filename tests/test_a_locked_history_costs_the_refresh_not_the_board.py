@@ -4,11 +4,13 @@
 "sqlite3.OperationalError: database is locked", 46 seconds in (thirty of
 them SQLite's busy timeout), and its note — which names the frame since
 that morning — said where: engine/db.py in `_chunked`, the bulk upsert.
-Other writers on the same file (the daily chores, the settle pass) write in
-5,000-row slices, which was meant to let a waiting writer in between them;
-it did not, because the writer that just committed takes the lock straight
-back within microseconds while the waiter's busy handler sleeps up to 100
-ms between tries. What these hold:
+The holder was the settle pass, which kept the file in an open transaction
+for minutes (tests/test_the_settle_pass_lets_go_of_the_history_file.py).
+These hold the waiting side, so the next holder costs a build a wait and a
+refresh, never its board. Bulk writers write in 5,000-row slices, meant to
+let a waiting writer in between them, but the writer that just committed
+takes the lock straight back within microseconds while the waiter's busy
+handler sleeps up to 100 ms between tries. What these hold:
 
   * `_chunked` pauses between slices (not after the last), long enough for
     one busy-handler sleep to land in the gap;

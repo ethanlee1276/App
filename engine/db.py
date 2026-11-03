@@ -871,15 +871,17 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
 #: a lock rather than the fix.
 WRITE_CHUNK = 5000
 
-#: A pause BETWEEN one slice and the next (2026-11-03). Slicing alone did
-#: not do what the note above promises: the writer that just committed takes
-#: the lock straight back for its next slice within microseconds, while a
-#: writer waiting in SQLite's busy handler sleeps up to 100 ms between tries
-#: and almost never lands in the gap — so a long ingest still starved every
-#: other writer for its whole length. The college board died that way all
-#: morning, "database is locked" at this function's own executemany, 46
-#: seconds into each build. 150 ms is one busy-handler sleep and then some;
-#: a 200,000-row ingest pays six seconds for it.
+#: A pause BETWEEN one slice and the next (2026-11-03). Slicing alone does
+#: not quite do what the note above promises: the writer that just
+#: committed takes the lock straight back for its next slice within
+#: microseconds, while a writer waiting in SQLite's busy handler sleeps up
+#: to 100 ms between tries and rarely lands in the gap, so a long ingest can
+#: still starve every other writer for its whole length. 150 ms is one
+#: busy-handler sleep and then some; a 200,000-row ingest pays six seconds
+#: for it. The college board's "database is locked" of 3 November, at this
+#: function's executemany, turned out to have another holder — the settle
+#: pass's open transaction (engine/boxsettle.ingest_for_open) — and this
+#: closes the same failure's other road in.
 WRITE_YIELD_S = 0.15
 
 #: How many times a slice is tried again after SQLite's own 30-second busy
