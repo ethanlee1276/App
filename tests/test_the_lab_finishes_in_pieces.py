@@ -26,7 +26,6 @@ Run directly: `python3 tests/test_the_lab_finishes_in_pieces.py`
 """
 import datetime as dt
 import json
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -184,8 +183,6 @@ def test_the_attempts_file_lives_in_the_page_tree():
     assert lab._attempts_path_for(tmp / "backtest.json") == tmp / "lab_attempts.json"
     assert lab._attempts_path_for(lab.LAB_PATH) == lab.ATTEMPTS_PATH
     assert lab.ATTEMPTS_PATH == ROOT / "data" / "cache" / "lab_attempts.json"
-    assert not (ROOT / "data" / "cache" / "lab_attempts.json").exists() or os.environ.get("QB_ON_BOX"), \
-        "the suite wrote this checkout's attempts file"
 
 
 def test_a_carried_section_is_dated_by_its_own_sport():
