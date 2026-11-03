@@ -515,7 +515,10 @@ async function renderLab() {
     const cards = (props.markets || []).map((m) => labPropCard(m, d.basis_note)).join("");
     return `<div class="lab-sport">
       <div class="section-title">${sport.toUpperCase()}
-        ${props.season ? `<span class="sub">— ${props.season} season</span>` : ""}</div>
+        ${props.season || s.replayed_at ? `<span class="sub">— ${[props.season ? `${props.season} season` : "",
+          /* Each sport carries its own replay date since 2026-11-03: a run
+             publishes them one at a time (engine/lab.SPORT_ORDER). */
+          s.replayed_at ? `replayed ${escapeHtml(formatStamp(s.replayed_at))}` : ""].filter(Boolean).join(" · ")}</span>` : ""}</div>
       ${labCarried(props)}
       ${cards || `<p class="mini">Player props — ${escapeHtml(props.unavailable || "nothing replayed")}</p>`}
       <div class="mini" style="margin-top:10px;opacity:.75">Game lines (spread &amp; total),

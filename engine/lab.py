@@ -53,6 +53,20 @@ LAB_PATH = Path(__file__).resolve().parents[1] / "web" / "data" / "backtest.json
 #: the page current without spending an evening's compute every launch.
 LAB_EVERY_DAYS = 7
 
+#: The sports the Lab replays, in the order a run takes them when they are
+#: equally old. ONE SPORT AT A TIME, EACH PUBLISHED AS IT LANDS (2026-11-03):
+#: the page was stamped 2026-09-29 for five weeks because the run built
+#: every sport in memory and published only at the end. The NBA and WNBA
+#: replays joined it on 2026-10-01 and the NFL gained five markets on
+#: 10-10; once the whole pass outgrew the chores' one-hour ceiling
+#: (engine.maintenance.WEEKLY_JOB_TIMEOUT_S) it was cut off every night
+#: with nothing written, and was due again the next night, from the start.
+SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "wnba", "ufc")
+
+#: When the Lab last STARTED each sport, so a sport a run was cut off in
+#: goes to the back of the next run's line instead of blocking the rest.
+ATTEMPTS_PATH = Path(__file__).resolve().parents[1] / "data" / "cache" / "lab_attempts.json"
+
 #: MLB prop markets worth replaying. Home runs have their own dedicated
 #: harness (hr_backtest.py) because a rare event needs different bars.
 MLB_MARKETS = ("total_bases", "hits", "strikeouts")
@@ -533,49 +547,63 @@ def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
         hconn = _db.connect()
         close = True
     try:
-        sports: dict = {}
-        props = mlb_props(hconn, log=log)
-        sports["mlb"] = {"props": {"markets": props} if props else
-                         {"unavailable": "no ingested game logs deep enough "
-                                         "to replay yet"},
-                         "game_lines": game_lines(hconn, "mlb", log=log)}
-        sports["nfl"] = {"props": nfl_props(log=log, conn=hconn) if nfl else
-                         {"unavailable": "skipped"},
-                         "game_lines": game_lines(hconn, "nfl", log=log),
-                         # The usage ripple against the close — the
-                         # pricing half of Ethan's Pacheco question,
-                         # measured here weekly so the verdict lands on
-                         # the page without anyone running anything.
-                         "ripple": ripple_section(hconn, log=log) if nfl else
-                         {"unavailable": "skipped"}}
-        sports["cfb"] = {"props": cfb_props(log=log, conn=hconn),
-                         "game_lines": game_lines(hconn, "cfb", log=log)}
-        for sp in ("nba", "wnba"):
-            props = hoops_props(hconn, sp, log=log)
-            sports[sp] = {"props": {"markets": props} if props else
-                          {"unavailable": "no ingested game logs deep enough "
-                                          "to replay yet"},
-                          "game_lines": game_lines(hconn, sp, log=log)}
-        sports["ufc"] = {
-            "props": {"unavailable": NO_PROP_HARNESS["ufc"]},
-            "game_lines": {"unavailable": "a fight has no spread or total to "
-                                          "replay — the moneyline is the market"}}
-        return {
-            "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
-            "sports": sports,
-            "min_history": MIN_HISTORY,
-            "every_days": LAB_EVERY_DAYS,
-            # The caveat that must never be dropped in rendering: a naive
-            # basis measures skill against a trailing average, not an edge
-            # over a book, and the two get confused constantly.
-            "basis_note": ("A prop priced against a NAIVE baseline line "
-                           "measures predictive skill, not an edge over the "
-                           "market. Only book-priced rows speak to beating "
-                           "a sportsbook."),
-        }
+        sports = {sp: build_sport(sp, hconn, log=log, nfl=nfl) for sp in SPORT_ORDER}
+        return _page_shell(sports)
     finally:
         if close:
             hconn.close()
+
+
+def _page_shell(sports: dict) -> dict:
+    """The page around its sports: the stamp of this publish and the notes
+    every page carries."""
+    return {
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "sports": sports,
+        "min_history": MIN_HISTORY,
+        "every_days": LAB_EVERY_DAYS,
+        # The caveat that must never be dropped in rendering: a naive
+        # basis measures skill against a trailing average, not an edge
+        # over a book, and the two get confused constantly.
+        "basis_note": ("A prop priced against a NAIVE baseline line "
+                       "measures predictive skill, not an edge over the "
+                       "market. Only book-priced rows speak to beating "
+                       "a sportsbook."),
+    }
+
+
+def build_sport(sport: str, hconn, log=print, nfl: bool = True) -> dict:
+    """One sport's section of the page, stamped with when it was replayed
+    (``replayed_at``) — each sport carries its own date now that a run
+    publishes them one at a time."""
+    if sport == "mlb":
+        props = mlb_props(hconn, log=log)
+        blob = {"props": {"markets": props} if props else
+                {"unavailable": "no ingested game logs deep enough to replay yet"},
+                "game_lines": game_lines(hconn, "mlb", log=log)}
+    elif sport == "nfl":
+        blob = {"props": nfl_props(log=log, conn=hconn) if nfl else {"unavailable": "skipped"},
+                "game_lines": game_lines(hconn, "nfl", log=log),
+                # The usage ripple against the close — the pricing half of
+                # Ethan's Pacheco question, measured here weekly so the
+                # verdict lands on the page without anyone running anything.
+                "ripple": ripple_section(hconn, log=log) if nfl else {"unavailable": "skipped"}}
+    elif sport == "cfb":
+        blob = {"props": cfb_props(log=log, conn=hconn),
+                "game_lines": game_lines(hconn, "cfb", log=log)}
+    elif sport in ("nba", "wnba"):
+        props = hoops_props(hconn, sport, log=log)
+        blob = {"props": {"markets": props} if props else
+                {"unavailable": "no ingested game logs deep enough to replay yet"},
+                "game_lines": game_lines(hconn, sport, log=log)}
+    elif sport == "ufc":
+        blob = {"props": {"unavailable": NO_PROP_HARNESS["ufc"]},
+                "game_lines": {"unavailable": "a fight has no spread or total to "
+                                              "replay — the moneyline is the market"}}
+    else:
+        raise ValueError(f"the Lab replays no {sport!r}")
+    blob["replayed_at"] = _dt.datetime.now().isoformat(timespec="seconds")
+    return blob
 
 
 def replayed_sports(doc: dict) -> list[str]:
@@ -616,48 +644,167 @@ def _due(path: Path, today: _dt.date) -> bool:
     block, no sports — which this test would otherwise read as "measured
     nothing" and re-run the lab every night on a box whose private page
     is full.
+
+    PER SPORT (2026-11-03): owed when any sport is — see `due_sports`.
     """
     from . import gate
     try:
         doc = json.loads(Path(gate.board_source(path)).read_text())
-        prev = doc.get("generated_at") or ""
-        last = _dt.date.fromisoformat(prev[:10])
     except (OSError, ValueError, AttributeError):
         return True
-    if not replayed_sports(doc):
-        return True
-    return (today - last).days >= LAB_EVERY_DAYS
+    return bool(due_sports(doc if isinstance(doc, dict) else {}, today))
+
+
+def _date_of(stamp) -> _dt.date | None:
+    try:
+        return _dt.date.fromisoformat(str(stamp or "")[:10])
+    except ValueError:
+        return None
+
+
+def due_sports(doc: dict, today: _dt.date, attempts: dict | None = None) -> list[str]:
+    """The sports a run owes, in the order to take them.
+
+    A sport is owed when its own replay (``replayed_at``; a page written
+    before the stamps existed dates every sport by the page) is a week
+    old, or when the page does not carry it at all. A page that measured
+    nothing owes everything, whatever its date (see `_due`).
+
+    THE ORDER: oldest first by the later of its replay and the last time
+    a run STARTED it (``attempts``) — so a sport a run was cut off in goes
+    to the back of tomorrow's line, and one harness that cannot finish in
+    the hour never starves the rest."""
+    page = _date_of(doc.get("generated_at"))
+    sports = doc.get("sports") if isinstance(doc.get("sports"), dict) else {}
+    everything = page is None or not replayed_sports(doc)
+    owed = []
+    for sp in SPORT_ORDER:
+        blob = sports.get(sp)
+        if everything or not isinstance(blob, dict):
+            owed.append(sp)
+            continue
+        stamp = _date_of(blob.get("replayed_at")) or page
+        if (today - stamp).days >= LAB_EVERY_DAYS:
+            owed.append(sp)
+    attempts = attempts or {}
+    far = _dt.date.min
+
+    def age(sp):
+        blob = sports.get(sp) if isinstance(sports.get(sp), dict) else {}
+        done = (_date_of(blob.get("replayed_at")) or page or far) if blob else far
+        tried = _date_of(attempts.get(sp)) or far
+        return (max(done, tried), SPORT_ORDER.index(sp))
+    return sorted(owed, key=age)
+
+
+def _attempts_path_for(page: Path) -> Path:
+    """The attempts file IN THE PAGE'S OWN TREE — a page at
+    <tree>/web/data/backtest.json keeps it at <tree>/data/cache, a flat
+    one beside itself — so a run pointed at a scratch tree (the suite)
+    never writes into this checkout's data (see
+    tests/test_gate_foreign_tree.py for the same rule on the page)."""
+    page = Path(page)
+    if page.resolve() == LAB_PATH:
+        return ATTEMPTS_PATH
+    if page.parent.name == "data" and page.parent.parent.name == "web":
+        return page.parent.parent.parent / "data" / "cache" / "lab_attempts.json"
+    return page.with_name("lab_attempts.json")
+
+
+def _read_attempts(path: Path) -> dict:
+    try:
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _mark_attempt(path: Path, sport: str, today: _dt.date) -> None:
+    """Written BEFORE the sport's replay starts — a run cut off inside it
+    leaves the mark behind, which is the point."""
+    d = _read_attempts(path)
+    d[sport] = today.isoformat()
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(path).with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(d, sort_keys=True), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def merge_sport(previous: dict, sport: str, blob: dict) -> tuple[dict, list[str]]:
+    """The page with one sport replaced: every other sport kept as it was
+    — and DATED as it was, so a sport this run did not reach never borrows
+    the new page's stamp — and a section this sport could not measure
+    carried from its last measurement (`carry_forward`)."""
+    stamp = str(previous.get("generated_at") or "")
+    sports = {}
+    for sp, was in (previous.get("sports") or {}).items():
+        if isinstance(was, dict):
+            was = dict(was)
+            if not was.get("replayed_at") and stamp:
+                was["replayed_at"] = stamp
+        sports[sp] = was
+    one = {"generated_at": stamp, "sports": {sport: blob}}
+    kept = carry_forward(one, {"generated_at": stamp, "sports": sports})
+    sports[sport] = one["sports"][sport]
+    return _page_shell(sports), kept
 
 
 def run_if_due(hconn=None, log=print, path: Path | str | None = None,
                force: bool = False, today: _dt.date | None = None,
-               nfl: bool = True) -> str:
+               nfl: bool = True, attempts_path: Path | str | None = None,
+               build_one=None) -> str:
     """The automatic lane. Returns a status word rather than raising — the
-    settle pass must never fail because a backtest did."""
-    p = Path(path if path is not None else LAB_PATH)
-    today = today or _dt.date.today()
-    if not force and not _due(p, today):
-        return "already"
-    try:
-        out = build(hconn=hconn, log=log, nfl=nfl)
-    except Exception as exc:                       # noqa: BLE001
-        log(f"  lab: skipped — {exc}")
-        return "failed"
-    # THROUGH THE GATE. backtest.json is in gate.PAID_FILES — sealed in
-    # its entirety on the public path — and this wrote the whole thing
-    # there directly, so every weekly Lab run put the backtests back on
-    # the open web until the next `--seal`. It also never wrote the
-    # private copy, so `/api/board/backtest.json` had nothing to serve a
-    # subscriber: the Lab page only worked at all because the file was
-    # leaking. Third builder found doing this, after memes and fantasy.
+    settle pass must never fail because a backtest did.
+
+    ONE SPORT AT A TIME, EACH PUBLISHED AS IT LANDS (see SPORT_ORDER): a
+    run cut off at the chores' ceiling keeps every sport it finished, and
+    the next run picks up the rest. ``build_one`` is for tests."""
     from . import gate
-    kept = carry_forward(out, _previous_page(p))
-    gate.publish(out, p, p.name)
-    ran = len(replayed_sports(out))
-    log(f"  lab: replayed {ran} sport(s) → {p}"
-        + (f" (kept {', '.join(kept)} from the last run that measured "
-           f"them)" if kept else ""))
-    return "ok"
+    p = Path(path if path is not None else LAB_PATH)
+    ap = Path(attempts_path if attempts_path is not None else _attempts_path_for(p))
+    today = today or _dt.date.today()
+    page = _previous_page(p)
+    todo = list(SPORT_ORDER) if force else due_sports(page, today, _read_attempts(ap))
+    if not todo:
+        return "already"
+    build_one = build_one or build_sport
+    close = False
+    if hconn is None:
+        from . import db as _db
+        hconn = _db.connect()
+        close = True
+    done, failed = [], []
+    try:
+        for sport in todo:
+            _mark_attempt(ap, sport, today)
+            # The line the reaper keeps when a run is cut off: which sport
+            # the hour ran out in (python -u, so it is on disk at once).
+            log(f"  lab: replaying {sport} ({len(done) + len(failed) + 1} of {len(todo)})…")
+            try:
+                blob = build_one(sport, hconn, log=log, nfl=nfl)
+            except Exception as exc:               # noqa: BLE001
+                log(f"  lab: {sport} skipped — {type(exc).__name__}: {exc}")
+                failed.append(sport)
+                continue
+            # THROUGH THE GATE. backtest.json is in gate.PAID_FILES — sealed
+            # in its entirety on the public path — and this once wrote the
+            # whole thing there directly, so every weekly Lab run put the
+            # backtests back on the open web until the next `--seal`.
+            page, kept = merge_sport(page, sport, blob)
+            gate.publish(page, p, p.name)
+            done.append(sport)
+            log(f"  lab: {sport} replayed → {p}"
+                + (f" (kept {', '.join(kept)} from the last run that measured them)" if kept else ""))
+    finally:
+        if close:
+            hconn.close()
+    if not done:
+        return "failed"
+    log(f"  lab: replayed {', '.join(done)}" + (f"; {', '.join(failed)} failed" if failed else ""))
+    return "ok" if not failed else "partial"
 
 
 def _previous_page(public: Path) -> dict:
@@ -691,9 +838,12 @@ def carry_forward(out: dict, previous: dict) -> list[str]:
     """
     kept: list[str] = []
     prev_sports = previous.get("sports") or {}
-    stamp = str(previous.get("generated_at") or "")[:10]
+    page_stamp = str(previous.get("generated_at") or "")[:10]
     for sport, blob in (out.get("sports") or {}).items():
         was = prev_sports.get(sport) or {}
+        # The sport's own replay date where it has one (each sport is
+        # stamped since 2026-11-03), the page's before that.
+        stamp = str(was.get("replayed_at") or "")[:10] or page_stamp
         for section in ("props", "game_lines"):
             now_sec = blob.get(section) or {}
             old_sec = was.get(section) or {}

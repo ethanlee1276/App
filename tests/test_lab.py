@@ -191,8 +191,10 @@ def test_a_broken_harness_never_takes_the_settle_pass_down():
     # now falls back a real one. What is under test is that an exploding
     # connection cannot take the settle pass down, not how long a
     # walk-forward takes.
+    # "partial" since 2026-11-03: each sport is its own try, so the one
+    # that never touches the database (UFC) still lands.
     assert lab.run_if_due(hconn=_Exploding(), log=_quiet, path=p,
-                          nfl=False) in ("ok", "failed")
+                          nfl=False) in ("ok", "partial", "failed")
 
 
 def test_the_published_path_is_absolute():
@@ -271,7 +273,11 @@ _EMPTY_PAGE = {"sports": {
 _FULL_PAGE = {"sports": {
     "mlb": {"props": {"markets": [{"market": "total_bases", "n": 40}]},
             "game_lines": {"unavailable": "no harvested closing lines "
-                                          "stored for this sport"}}}}
+                                          "stored for this sport"}},
+    # Every sport the Lab replays is on a real page; a sport the page does
+    # not carry is owed (engine.lab.due_sports, 2026-11-03).
+    **{sp: {"props": {"unavailable": "nothing yet"}, "game_lines": {"unavailable": "nothing yet"}}
+       for sp in ("nfl", "cfb", "nba", "wnba", "ufc")}}}
 
 
 def _page(doc, today):
@@ -376,7 +382,8 @@ def test_the_lab_measures_the_usage_ripple_and_the_page_shows_the_verdict():
     out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
     assert out["sports"]["nfl"]["ripple"] == {"unavailable": "skipped"}
     import inspect
-    src = inspect.getsource(lab.build)
+    # Each sport is built by build_sport since 2026-11-03 (one at a time).
+    src = inspect.getsource(lab.build_sport)
     assert '"ripple": ripple_section(hconn, log=log) if nfl else' in src
 
     class _Exploding:
