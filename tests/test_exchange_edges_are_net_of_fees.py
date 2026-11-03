@@ -90,7 +90,11 @@ def test_the_weather_desk_is_net_too():
     from engine import kalshiweather as W
     src = inspect.getsource(W)
     assert "net_edge_pts" in src and "fee_bps" in src
-    assert "rec = liquid and net >= WX_MIN_EDGE_PTS" in src, "rec is decided on the net number"
+    # Since 2026-11-03 the gate is `would_rec` (graded in the paused
+    # desk's shadow record) and `rec` is that gate while not PAUSED; both
+    # still decide on the net number.
+    assert "would_rec = liquid and net >= WX_MIN_EDGE_PTS" in src, "rec is decided on the net number"
+    assert "rec = would_rec and not PAUSED" in src
 
 
 def test_the_pick_of_the_day_is_net_on_an_exchange_book():

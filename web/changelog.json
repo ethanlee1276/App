@@ -4,6 +4,12 @@
     {
       "date": "2026-11-03",
       "kind": "fix",
+      "title": "The weather desk is paused",
+      "body": "The prediction desk's weather calls claimed far more than they won: calls it rated at about 86% won about half the time. Until that is fixed it makes no calls, and its forecast board says it is paused. One cause is fixed already: the desk read each market's day from its closing time, which is in UTC, so an evening market could be priced against the next day's forecast; it now reads the day the market names. Out of sight, the desk keeps pricing and grading the calls it would have made, and it comes back only when those win about as often as they claim."
+    },
+    {
+      "date": "2026-11-03",
+      "kind": "fix",
       "title": "The models' weekly refit reaches every sport again",
       "body": "Once a week the models re-learn each sport from its whole history: how fast a player's form fades, each player's own correction, and how confident each market should be. That job ran every sport in one go, college first, and since 2 September it was stopped at its one-hour limit every week while still on MLB, so the NFL's deep refit last ran in late August. It now works in pieces, the NFL first, and picks up the next day where it stopped until every sport is done. A sport with no new games since its last refit, like MLB in the off-season, sits out. The nightly learning from each settled bet, the Most Likely board's own corrections and the losing-pattern blocks were checked the same day and were running."
     },

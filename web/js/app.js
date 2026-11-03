@@ -17361,7 +17361,13 @@ function renderWeather() {
     </div>`;
   };
   const deskWx = ((_railDeskCache || {}).weather || []);
-  const deskRows = deskWx.length ? `
+  // PAUSED (engine/kalshiweather.PAUSED): the desk publishes no rows and
+  // says why, so the page says it rather than drawing an empty board.
+  const deskPaused = (_railDeskCache || {}).weather_paused;
+  const deskRows = deskPaused ? `
+    <div class="section-title">The desk’s forecast board
+      <span class="sub">— paused</span></div>
+    <div class="card"><p class="muted" style="margin:0">${escapeHtml(deskPaused)}</p></div>` : deskWx.length ? `
     <div class="section-title">The desk’s forecast board
       <span class="sub">— NWS daily highs priced against Kalshi’s brackets. Rows that clear
       the 8-point bar are the desk’s paper recommendations.</span></div>

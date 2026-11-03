@@ -122,6 +122,16 @@ def test_bracket_probabilities_are_a_partition():
 
 
 def test_the_weather_board_prices_and_gates():
+    # The gate as it stands when the desk is NOT paused (kw.PAUSED, set
+    # 2026-11-03, is pinned by its own test below).
+    paused, kw.PAUSED = kw.PAUSED, ""
+    try:
+        _the_weather_board_prices_and_gates()
+    finally:
+        kw.PAUSED = paused
+
+
+def _the_weather_board_prices_and_gates():
     m = _mkt(ticker="KXHIGHNY-26AUG11-B78", title="Highest temperature in NYC",
              subtitle="78° to 79°", prob=0.20,
              close_time="2026-08-11T23:00:00Z")
@@ -135,7 +145,10 @@ def test_the_weather_board_prices_and_gates():
     assert r["edge_pts"] == 17.2 and r["rec"] and r["rec_side"] == "YES"
     # A market two-plus days out uses the wider sigma; four days out is
     # not priced at all — the forecast isn't good enough to claim an edge.
-    far = dict(m, close_time="2026-08-15T23:00:00Z")
+    # (The day comes from the ticker since 2026-11-03, so the far market
+    # carries its own date in its ticker, as every Kalshi daily does.)
+    far = dict(m, ticker="KXHIGHNY-26AUG15-B78",
+               close_time="2026-08-15T23:00:00Z")
     assert kw.weather_board({"KXHIGHNY": [far]},
                             {("KXHIGHNY", "2026-08-15"): 78.0},
                             today="2026-08-11") == []

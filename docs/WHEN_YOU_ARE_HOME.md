@@ -9305,6 +9305,54 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JR. The weather desk is paused, and a read-only check finds why** (step
+344; you, 2026-11-03: "1, yes" to hiding the weather picks).
+
+- **What was wrong.** The weather desk's own graded record: its NO calls
+  claimed about 86% and won about 52% over 3,173 settled paper bets, and
+  the ones it claimed in the 60s won 2%. A number that sure and that wrong
+  is worse than no number.
+- **Now.** Paused. The forecast board on the page says so, with the
+  reason, and the side rail shows no weather call. The desk still prices
+  every bracket and logs its forecast, and it keeps a shadow record of the
+  calls it would have made: graded from the same Kalshi results as the
+  journal, but never journaled, so none of it reaches the Record page or a
+  member.
+- **One cause, fixed already.** The desk took each market's day from its
+  closing time, which is in UTC. An evening market that closes after
+  midnight UTC read a day late, and the desk priced it against the next
+  day's forecast. It now takes the day from the ticker
+  (`KXHIGHNY-26NOV03-...`), as the journal already did.
+- **The check** reads the forecast log and the journal, read-only, and says
+  which it was. If the losses sit under "desk a day late", the date was the
+  cause and the fix is in. If "same day" also loses at what it claimed, the
+  desk's same-day spread (2°F) is too sharp, and the next step is fitting it
+  from the logged forecasts against the settled highs. The last section
+  grades the shadow calls since the pause, which is what un-pausing waits
+  on.
+- **Also fixed:** `python3 launch.py --desk` read the locked public copy of
+  the desk's file and printed zeros; it reads the full copy now, and says
+  when the weather desk is paused.
+
+Read-only, any time after this push is live: the first line reads the file
+a member is served (`paused:` with the reason, `weather rows: 0`), the
+second is the check:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/kalshi.json')); print('paused:', d.get('weather_paused')); print('weather rows:', len(d.get('weather') or []))"
+cd /srv/qellys && sudo -u qellys python3 -m engine.kalshiweather --audit
+```
+
+Un-pausing is one line in `engine/kalshiweather.py` (`PAUSED = ""`), and
+only once the shadow calls win about as often as they claim, over a few
+hundred graded.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JR 2>&1 | tee /tmp/jr.txt
+```
+
 **JQ. The models' weekly refit reaches every sport again** (step 343; you,
 2026-11-03: "make sure the models are learning from their wins and losses
 and adjusting the model and the way it selects picks").

@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after the models' weekly refit learned to finish
+Last updated 2026-11-03, after the weather desk was paused while a
+read-only check finds why its calls lost (step JR: item 1h), the models'
+weekly refit learned to finish
 in pieces and reach the NFL again (step JQ: item 1g), the college board
 learned to build through a
 busy history file and the college rosters file was cut from 13.3 MB to 5.6
@@ -214,6 +216,23 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ 2>&1 | tee /tmp/jq.txt
 
 If the first line says `'cut_off': True`, paste it: one piece outgrew the
 budget on its own and needs cutting down.
+
+## 1h. Any time after this push: the weather desk is paused, and why it lost (step JR)
+
+You, 2026-11-03: "1, yes" to hiding the weather picks. Its calls claimed
+about 86% and won about half. It now makes no calls: the page says it is
+paused, and it keeps grading the calls it would have made, out of sight.
+One cause is fixed already (it priced some evening markets against the
+next day's forecast). Read-only, about a minute: the first line should say
+`paused:` with the reason and `weather rows: 0`; the rest says whether the
+wrong day was the whole story or the same-day forecasts were too sure:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JR 2>&1 | tee /tmp/jr.txt
+```
+
+Paste it back. Its last section fills as the shadow calls settle; in a week
+or two it says whether the desk can come back.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

@@ -6689,6 +6689,14 @@ def show_desk() -> None:
     import json as _json
     from engine import ledger
     p = ROOT / "web" / "data" / "kalshi.json"
+    # THE FULL COPY (2026-11-03). kalshi.json is paid whole (gate.PAID_FILES),
+    # so the public path holds only a locked stub, and this probe read it:
+    # every count printed 0 on a box whose desk was live. The owner's probe
+    # reads what a member is served.
+    from engine import gate as _gate
+    full = _gate._full_dir_for(p) / p.name
+    if full.exists():
+        p = full
     if not p.exists():
         print("  no kalshi.json yet — run a refresh (pm_build.py) first")
         return
@@ -6709,6 +6717,10 @@ def show_desk() -> None:
         print("  sources — (built by pre-series code: rebuild with "
               "`python3 pm_build.py` to fetch the sports series directly)")
     wx = k.get("weather") or []
+    if k.get("weather_paused"):
+        # engine/kalshiweather.PAUSED: the desk publishes no rows while
+        # paused, and this says so rather than "weather rows 0".
+        print(f"  weather desk PAUSED — {k['weather_paused']}")
     print(f"  weather rows {len(wx)} · recommended "
           f"{sum(1 for r in wx if r.get('rec'))}")
     for r in (k.get("rows") or []):

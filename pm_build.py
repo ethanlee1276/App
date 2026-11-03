@@ -192,9 +192,19 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
                     highs[(series, d)] = mu
         weather_rows = kw.weather_board(by_series, highs, today=today)
         kw.log_forecasts(conn, weather_rows)
+        if kw.PAUSED:
+            # What it would have recommended, graded in the history db
+            # and never journaled: the un-pause's own measure.
+            kw.log_shadow(conn, weather_rows, made=today)
     except Exception as exc:                       # noqa: BLE001
         print(f"⚠️  weather desk skipped: {exc}")
-    out["weather"] = weather_rows[:20]
+    # PAUSED (engine/kalshiweather.PAUSED, 2026-11-03): every bracket is
+    # still priced and logged above, for the audit, but none is published
+    # or journaled (no row is a recommendation while paused); the page
+    # reads the reason instead of the rows.
+    out["weather"] = [] if kw.PAUSED else weather_rows[:20]
+    if kw.PAUSED:
+        out["weather_paused"] = kw.PAUSED
 
     # Journal what cleared the gates (flat paper stakes), then grade
     # whatever the exchange has since settled. On the LEDGER's own
@@ -213,12 +223,18 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
         try:
             logged = ledger.log_predmarket(lconn, recs)
             open_tk = ledger.open_predmarket_tickers(lconn)
+            # The paused weather desk's shadow picks ride the same pull
+            # (fetch_markets_by_tickers caches by batch number, so a
+            # second pull in one build would read this one's answer back).
+            have = set(open_tk)
+            shadow_tk = [t for t in kw.shadow_open(conn) if t not in have]
             results = {}
-            for m in kx.fetch_markets_by_tickers(open_tk):
+            for m in kx.fetch_markets_by_tickers(open_tk + shadow_tk):
                 res = (m.get("result") or "").lower()
                 if res in ("yes", "no"):
                     results[m.get("ticker", "")] = res
             settled = ledger.resolve_predmarket(lconn, results)
+            kw.settle_shadow(conn, results)
             rep = ledger.predmarket_report(lconn)
         finally:
             lconn.close()
