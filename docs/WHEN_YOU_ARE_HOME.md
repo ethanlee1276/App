@@ -9305,6 +9305,24 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JS. Fliff takes the tenth book's slot** (step 345; you, 2026-11-03:
+"fliff").
+
+- **Why.** JL's check on the box answered the open question: theScore Bet
+  prices under `espnbet`, and `thescorebet` never answered once, so the
+  tenth slot did nothing. It's Fliff's now. The list stays ten books, one
+  region's price, so the bill doesn't change.
+- **The page already knows Fliff** (its name, colours and logo), and old
+  tickets that say either of theScore Bet's two names still read right.
+
+Nothing to run: it takes effect when the site restarts with the new code.
+A day after, the same check as JL: Fliff should be in the "Answered" list
+and not under "Never answered" (it may only price some sports' games):
+
+```
+cd /srv/qellys && sudo -u qellys python3 tools/book_keys.py
+```
+
 **JR. The weather desk is paused, and a read-only check finds why** (step
 344; you, 2026-11-03: "1, yes" to hiding the weather picks).
 

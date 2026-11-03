@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "kind": "ship",
+      "title": "Fliff joins the books we compare",
+      "body": "Fliff's prices are now in the odds we compare, in the place of a second name for theScore Bet that the odds feed never answered to. Still ten books, so nothing else about the prices changes; a pick names Fliff when it has the best price."
+    },
+    {
+      "date": "2026-11-03",
       "kind": "fix",
       "title": "The weather desk is paused",
       "body": "The prediction desk's weather calls claimed far more than they won: calls it rated at about 86% won about half the time. Until that is fixed it makes no calls, and its forecast board says it is paused. One cause is fixed already: the desk read each market's day from its closing time, which is in UTC, so an evening market could be priced against the next day's forecast; it now reads the day the market names. Out of sight, the desk keeps pricing and grading the calls it would have made, and it comes back only when those win about as often as they claim."

@@ -63,7 +63,12 @@ def test_the_main_books_stay_and_pinnacle_is_the_reference():
         assert key in books, key
     assert books & {"espnbet", "thescorebet", "thescore"}, "theScore Bet is gone"
     assert "pinnacle" in books and oddsapi.SHARP_BOOKS == {"pinnacle"}
-    for gone in ("ballybet", "betparx", "fliff", "windcreek", "novig", "prophetx"):
+    # Step JL on the box, 2026-11-03: theScore Bet answers as `espnbet` and
+    # `thescorebet` never did, so its slot went to Fliff (Ethan: "fliff").
+    assert "espnbet" in books and "thescorebet" not in books
+    assert "fliff" in books
+    assert oddsapi.BOOK_TITLES.get("thescorebet") == "theScore Bet", "old tickets"
+    for gone in ("ballybet", "betparx", "windcreek", "novig", "prophetx"):
         assert gone not in books, gone
         assert oddsapi.BOOK_TITLES.get(gone), f"{gone}: old tickets still need its name"
 
@@ -74,7 +79,7 @@ def test_the_ledger_counts_every_ten_books_as_a_region():
     name = "odds_event_nba_e1_abcd1234.json"
     ten = ",".join(oddsapi.DEFAULT_BOOKS)
     assert oddsapi._classify(f"{URL}&bookmakers={ten}", name)[2] == 3, "three markets, ten books: one region"
-    seventeen = ten + ",ballybet,betparx,fliff,windcreek,novig,prophetx,thescore"
+    seventeen = ten + ",ballybet,betparx,thescorebet,windcreek,novig,prophetx,thescore"
     assert oddsapi._classify(f"{URL}&bookmakers={seventeen}", name)[2] == 6, "seventeen books: two regions"
     assert oddsapi._classify(URL, name)[2] == 3, "no books named: the regions asked for"
     body = inspect.getsource(oddsapi._classify)

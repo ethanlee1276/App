@@ -2,10 +2,12 @@
 
 The book list (engine/sources/oddsapi.DEFAULT_BOOKS) is ten since
 2026-11-02 — the most one region's price buys (Ethan: "cut the books to
-10"). theScore Bet is asked for under two keys, ESPN BET's old one and the
-renamed book's, because the API's docs did not say which it uses. This
+10"). theScore Bet was asked for under two keys, ESPN BET's old one and the
+renamed book's, because the API's docs did not say which it uses; this
 counts the bookmaker keys in the paid payloads cached over the last few
-days, so the key that never answers can give its slot to another book.
+days, and on 3 November it showed `espnbet` answering and `thescorebet`
+never, so that slot went to Fliff. It still names any book asked for that
+never answers (Fliff's first days included) and which theScore key is live.
 
 Read-only: no network, no credits. On the box:
 

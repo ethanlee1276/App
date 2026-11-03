@@ -157,9 +157,10 @@ share of its need that covers, and today's need, ceiling and spend:
   October the API counted ~99,400 credits used against ~55,000 booked: the
   17 books, billed as two regions because every ten books named count as
   one. So since 2 November the list is ten — DraftKings, FanDuel, BetMGM,
-  Caesars, Fanatics, theScore Bet, Hard Rock, BetRivers and Pinnacle (the
-  sharp reference) — one region's price, and our estimate counts every ten
-  books named as a region, so the two figures should now agree.
+  Caesars, Fanatics, theScore Bet, Hard Rock, BetRivers, Fliff (from 3
+  November, in the slot theScore Bet's unused second key held) and Pinnacle
+  (the sharp reference) — one region's price, and our estimate counts every
+  ten books named as a region, so the two figures should now agree.
 
 ## What a league's day buys (the targets)
 

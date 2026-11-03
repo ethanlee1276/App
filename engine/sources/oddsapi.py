@@ -348,23 +348,26 @@ NHL_TEAM_ABBR = {
 #: books everyone uses the draft kings and fanduel and thescore bet and mgm".
 #:
 #: KEPT: the eight sportsbooks most US bettors use (DraftKings, FanDuel,
-#: BetMGM, Caesars, Fanatics, theScore Bet, Hard Rock, BetRivers) and
-#: Pinnacle. Eight books still clear `odds.MIN_CONSENSUS_BOOKS` (3) on
-#: nearly every market a de-vigged consensus needs.
-#: DROPPED: Bally Bet, betPARX, Fliff and Wind Creek (small, rarely the
-#: best price, rarely hang props), and the exchanges Novig and ProphetX,
+#: BetMGM, Caesars, Fanatics, theScore Bet, Hard Rock, BetRivers), Fliff
+#: (since 2026-11-03, below) and Pinnacle. Nine books still clear
+#: `odds.MIN_CONSENSUS_BOOKS` (3) on nearly every market a de-vigged
+#: consensus needs.
+#: DROPPED: Bally Bet, betPARX and Wind Creek (small, rarely the best
+#: price, rarely hang props), and the exchanges Novig and ProphetX,
 #: whose ladders the board already set aside as not the market's number
 #: (`odds.is_exchange`). The page still knows all of them by name
 #: (BOOK_TITLES, and app.js's BOOKS for Tail and Make it yours), so old
 #: tickets and picks that name one still read right.
 #:
-#: THESCORE BET IS TWO KEYS. ESPN BET became theScore Bet (PENN ended the
-#: ESPN deal; the rebrand completed December 2025), and the API's key for
-#: the renamed book couldn't be confirmed from its docs, so the two
-#: plausible ones are asked for — an unknown key is ignored, not an error
-#: (the note at BOOK_TITLES). The runbook's step JL counts which key the
-#: cached payloads carry; the one that never answers can give its slot to
-#: another book.
+#: THESCORE BET ANSWERS AS `espnbet`. ESPN BET became theScore Bet (PENN
+#: ended the ESPN deal; the rebrand completed December 2025), and the API's
+#: key for the renamed book couldn't be confirmed from its docs, so both
+#: plausible keys were asked for from 2 November. The runbook's step JL
+#: counted the cached payloads on the box on 3 November: theScore Bet
+#: priced under `espnbet` and `thescorebet` never answered once. Its slot
+#: went to Fliff (Ethan, 2026-11-03: "fliff"). BOOK_TITLES keeps both of
+#: theScore's names, so an old ticket that says either still reads right,
+#: and tools/book_keys.py still says which key answers if that ever changes.
 #:
 #: A LONGER LIST DOUBLES EVERY CALL, for every sport, and in a diff it
 #: looks like adding a word. tests/test_ten_books_cost_one_region.py holds
@@ -374,7 +377,8 @@ BOOKS_PER_REGION = 10
 DEFAULT_BOOKS = [
     "draftkings", "fanduel", "betmgm", "williamhill_us",  # Caesars = William Hill US
     "fanatics", "hardrockbet", "betrivers",
-    "espnbet", "thescorebet",                             # theScore Bet, under either key
+    "espnbet",                                            # theScore Bet (its live key)
+    "fliff",                                              # thescorebet's slot, 2026-11-03
     "pinnacle",
 ]
 # Pretty names for the UI / explanations.

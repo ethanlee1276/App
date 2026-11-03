@@ -121,16 +121,17 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-
 cd /srv/qellys && sudo -u qellys python3 -m engine.policynotice preview 2026-11-02
 ```
 
-## 1b. Tomorrow evening, a day after this push: which books answered, and the bill (steps JL, IQ)
+## 1b. Tomorrow evening, a day after this push: which books answered, and the bill (steps JS, JL, IQ)
 
 You, 2026-11-02: "cut the books to 10". The feed bills every ten books a
 call names as one region, so seventeen made every call cost double. Now
 it's DraftKings, FanDuel, BetMGM, Caesars, Fanatics, Hard Rock, BetRivers,
-theScore Bet and Pinnacle (the sharp reference), and nothing to run: it
-takes effect when the site restarts with the new code. A day on, this
-shows which books answered (and which of theScore Bet's two keys is the
-live one), and the plan's "API's own bill" line, which should read about
-1.0× now:
+theScore Bet, Fliff and Pinnacle (the sharp reference). Your JL run
+showed theScore Bet answers as `espnbet` and its second key never did, so
+that slot is Fliff's (you, 2026-11-03: "fliff"; step JS). Nothing to run:
+it takes effect when the site restarts with the new code. A day on, this
+shows which books answered (Fliff should be among them), and the plan's
+"API's own bill" line, which should read about 1.0× now:
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JL IQ 2>&1 | tee /tmp/jl.txt
