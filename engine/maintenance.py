@@ -1823,6 +1823,26 @@ def _run_deep_refit(log) -> list[str]:
             + _spawn_module("engine.posspread", log) + _spawn_module("engine.cfb.lineup", log))
 
 
+def _continue_deep_refit(log) -> list[str]:
+    """The round's next run on a day that is not Wednesday: the deep
+    fitters alone, out of process. The scouts beside them on Wednesday are
+    weekly and stay there. Injectable for tests, like _run_deep_refit."""
+    return _spawn_module("engine.deepfit", log)
+
+
+def _deep_due(state_path, today) -> bool:
+    """Does this week's deep round still owe a run (engine/deepfit.due)?
+    Its state sits beside the chores' own, so a test's state path never
+    reads the box's round. Never raises: a question about a weekly job must
+    not cost the chores."""
+    try:
+        from . import deepfit
+        return deepfit.due(Path(state_path or STATE_PATH).parent / "deepfit_state.json", today)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  deep refit round unreadable ({type(exc).__name__}: {exc}) — waiting for Wednesday")
+        return False
+
+
 def _run_lab(log) -> list[str]:
     """The weekly backtest lab, out of process and detached."""
     return _spawn_module("engine.lab", log, args=("--auto",))
@@ -2800,6 +2820,23 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 _lc.close()
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  likely scoreboard skipped: {exc}")
+    # AND THE ROUND CONTINUES ON THE OTHER DAYS (2026-11-03). The weekly
+    # job is a round of pieces now (engine/deepfit, "THE WEEKLY JOB FINISHES
+    # IN PIECES"): Wednesday begins it, and a run stops itself inside the
+    # chores' hour. Until this, whatever did not fit in Wednesday's hour
+    # never ran at all, and the NFL, fourth in line, had not been
+    # deep-fitted since late August. On any other day the job is started
+    # again only while the round has pieces left, or when this week's never
+    # began; marked before it starts, like Wednesday's, and never the
+    # Wednesday-only scouts.
+    elif state.get("deep_attempted") != today.isoformat() and _deep_due(state_path, today):
+        state["deep_attempted"] = today.isoformat()
+        _save_state(state_path, state)
+        try:
+            for line in _continue_deep_refit(log):
+                log(f"  {line}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  deep refit (the round's next run) skipped: {exc}")
 
     # THE INVENTIONS, RE-MEASURED (engine/inventionfit). Ethan, 2026-10-22:
     # "Are all of our new data and changes being pushed to the most likely

@@ -661,6 +661,11 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JQ "The models' weekly refit reaches every sport again" 60 <<'SH'
+curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; print(json.load(sys.stdin).get('weekly', {}).get('deepfit'))"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/cache/deepfit_state.json')); print(d['round'], 'left:', d['left']); [print(k, v) for k, v in sorted(d['pieces'].items())]"
+curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; t=json.load(sys.stdin)['self_tuning']; [print(k, sorted({(e.get('sport'), (e.get('fitted') or '')[:10]) for e in t.get(k) or []})) for k in ('weights', 'players')]"
+SH
 run JP "The Lab finishes in pieces, and the heartbeat says why" 60 <<'SH'
 curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('weekly', {}).get('lab')); print({k: v.get('note') for k, v in (d.get('boards') or {}).items() if not v.get('ok')})"
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/backtest.json')); print(d['generated_at']); [print(k, v.get('replayed_at')) for k, v in d['sports'].items()]"

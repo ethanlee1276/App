@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after the college board learned to build through a
+Last updated 2026-11-03, after the models' weekly refit learned to finish
+in pieces and reach the NFL again (step JQ: item 1g), the college board
+learned to build through a
 busy history file and the college rosters file was cut from 13.3 MB to 5.6
 MB (nothing to run for either; item 1f's command shows the board), the Lab
 learned to finish in pieces and the
@@ -196,6 +198,22 @@ file and kept it for minutes. It now lets go before it fetches anything,
 a locked write is tried again, and a lock costs the college build only
 that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
+
+## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+The weekly deep refit, which re-learns each sport from its whole history,
+was cut off at the hour every Wednesday since 2 September, inside MLB, so
+the NFL's deep fits stopped in late August. It now runs as a round of
+pieces, NFL first, continued day by day until done. Nothing to run;
+tomorrow's chores begin it. On Thursday this shows the job's last line, the
+round (what is done, what is left) and the fitted dates:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ 2>&1 | tee /tmp/jq.txt
+```
+
+If the first line says `'cut_off': True`, paste it: one piece outgrew the
+budget on its own and needs cutting down.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

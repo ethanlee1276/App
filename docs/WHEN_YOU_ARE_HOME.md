@@ -9305,6 +9305,49 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JQ. The models' weekly refit reaches every sport again** (step 343; you,
+2026-11-03: "make sure the models are learning from their wins and losses
+and adjusting the model and the way it selects picks").
+
+- **What was wrong.** The deep refit is the weekly job that re-learns each
+  sport from its whole history: how fast form fades (the recency dial),
+  each player's correction, and each market's confidence (its temperature).
+  It ran every sport in one go on Wednesdays, college first, then MLB, the
+  NBA, the NFL and the WNBA, then the touchdown fits, the NFL props' fit
+  against real book lines and the conviction ladder. Since 2 September the
+  chores stop any weekly job at the hour, and the run died inside MLB every
+  week. The Record page's own dates showed it: the NFL's recency dial last
+  fitted 25 August and its player memory 29 August, while college's
+  (first in line) was fresh from 28 October. The nightly journal fitter
+  sets a market's first temperature only and leaves refits to this job, so
+  the NFL's per-market confidence had stopped moving too.
+- **Now.** A weekly round of pieces, one per sport and one per extra fit.
+  Wednesday begins it; each run stops itself inside 50 minutes, keeps
+  every piece it finished, and the next day carries on until the round is
+  done. A piece cut off goes to the back of the line. A sport whose history
+  has not grown since its last full fit sits the round out, so MLB and the
+  WNBA rest in their off-seasons. The NFL goes first.
+- **The rest of the learning, checked the same day and working:** the
+  selection haircut refit today (MLB and the NBA corrected, the NFL inside
+  the noise); the Most Likely board's record corrections refit today for
+  the NFL, the NHL and the NBA, and the picks it held back in the NFL and
+  college hit well under the chances they carried (the holds are right); the loss-pattern veto blocks
+  five losing slices of Edge picks; and the nightly journal fit refit at
+  10:14.
+
+Nothing to run: tomorrow's (Wednesday's) chores begin the first round.
+Read-only, on Thursday: the job's last outcome from the public heartbeat,
+then the round itself, then the NFL's fitted dates on the Record page:
+
+```
+curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; print(json.load(sys.stdin).get('weekly', {}).get('deepfit'))"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/cache/deepfit_state.json')); print(d['round'], 'left:', d['left']); [print(k, v) for k, v in sorted(d['pieces'].items())]"
+curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; t=json.load(sys.stdin)['self_tuning']; [print(k, sorted({(e.get('sport'), (e.get('fitted') or '')[:10]) for e in t.get(k) or []})) for k in ('weights', 'players')]"
+```
+
+A full refit by hand, every sport and extra in one go (it outlasts the
+chores' hour, so only ever by hand): `python3 -m engine.deepfit --all`.
+
 **JP. The Lab finishes in pieces, and the heartbeat says why** (step 340;
 the 30 October audit's "needs you 2": the Lab's page stamped 29 September).
 

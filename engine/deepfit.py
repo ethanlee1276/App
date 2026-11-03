@@ -34,6 +34,8 @@ Standard library only.
 
 from __future__ import annotations
 
+import datetime as _dt
+import json
 import os
 import subprocess
 import sys
@@ -63,6 +65,13 @@ TIMEOUT_S = 2700
 
 def sports_with_history(db: str = "data/history.db") -> list[str]:
     """Which supported sports actually have enough logs to fit."""
+    return list(_row_counts(db))
+
+
+def _row_counts(db: str = "data/history.db") -> dict:
+    """{sport: its player_game_logs rows} for every supported sport with
+    enough of them to fit, in sport order. The round reads the count as
+    "has anything new landed since this sport's last full fit"."""
     import sqlite3
     try:
         from formfit import SPORT_MARKETS          # noqa: PLC0415
@@ -71,16 +80,16 @@ def sports_with_history(db: str = "data/history.db") -> list[str]:
         from formfit import SPORT_MARKETS          # noqa: PLC0415
     path = db if os.path.isabs(db) else os.path.join(ROOT, db)
     if not os.path.isfile(path):
-        return []
+        return {}
     conn = sqlite3.connect(path)
     try:
-        out = []
+        out = {}
         for sport in sorted(SPORT_MARKETS):
             n = conn.execute(
                 "SELECT COUNT(*) FROM player_game_logs WHERE sport=?",
                 (sport,)).fetchone()[0]
             if n >= MIN_LOG_ROWS:
-                out.append(sport)
+                out[sport] = n
         return out
     finally:
         conn.close()
@@ -99,20 +108,40 @@ def refit_sport(sport: str, db: str = "data/history.db", say=None) -> list[str]:
     minutes on 2026-10-17 and was stopped, when the temperature fit on its
     own had taken 17 the run before.
     """
+    return _refit_sport(sport, db, say)[0]
+
+
+def _refit_sport(sport: str, db: str = "data/history.db", say=None,
+                 deadline: float | None = None) -> tuple[list[str], bool]:
+    """`refit_sport`, and whether all three fitters ran to an answer.
+
+    ``deadline`` (a time.monotonic() reading) bounds every fitter by what
+    is left of the weekly job's budget as well as by TIMEOUT_S, so a piece
+    stops itself before the chores' reaper stops the whole job. A fitter
+    cut off by either bound leaves the sport unfinished: the round keeps
+    it, and the next run tries it again."""
     import time as _time
     lines = []
+    finished = True
     note = say or (lambda _l: None)
     for label, script in REFIT_ORDER:
         cmd = [sys.executable, script, "--from-db", db, "--sport", sport]
         t0 = _time.monotonic()
-        note(f"  {sport} {label}: running {script} (up to {TIMEOUT_S // 60} min)…")
+        bound = TIMEOUT_S if deadline is None else min(TIMEOUT_S, deadline - t0)
+        if bound < 1:
+            lines.append(f"⚠️  {sport} {label}: no time left in this run — left for the next")
+            note(lines[-1])
+            finished = False
+            break
+        note(f"  {sport} {label}: running {script} (up to {bound / 60:.0f} min)…")
         try:
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True,
-                               text=True, timeout=TIMEOUT_S)
+                               text=True, timeout=bound)
         except subprocess.TimeoutExpired:
             lines.append(f"⚠️  {sport} {label}: still running after "
-                         f"{TIMEOUT_S}s — skipped")
+                         f"{bound:.0f}s — skipped")
             note(lines[-1])
+            finished = False
             continue
         note(f"  {sport} {label}: done in {_time.monotonic() - t0:.0f}s")
         if r.returncode != 0:
@@ -141,7 +170,7 @@ def refit_sport(sport: str, db: str = "data/history.db", say=None) -> list[str]:
         else:
             lines.append(f"deep refit: {sport} {label} — nothing adopted "
                          f"(the record did not beat the default)")
-    return lines
+    return lines, finished
 
 
 def refit_nfl_props(db: str = "data/history.db") -> list[str]:
@@ -343,12 +372,227 @@ def refit_all(db: str = "data/history.db") -> list[str]:
     return lines
 
 
+# --- THE WEEKLY JOB FINISHES IN PIECES (2026-11-03) ------------------------
+#
+# `refit_all` walked every sport and then the extras in one child, and the
+# chores' reaper kills a weekly child past the hour
+# (maintenance.WEEKLY_JOB_TIMEOUT_S, since 2026-09-02). College goes first
+# and finished; MLB's fits ran into the hour and the child died there, every
+# Wednesday, so the NFL (fourth), the WNBA, the touchdown fits, the NFL
+# props' refit against book lines and the conviction ladder stopped running.
+# On 3 November the Record page's own dates said so: the NFL's recency dial
+# last fitted 25 August and its player memory 29 August, MLB's dial
+# 1 September, college's memory 28 October. A cut-off child also printed
+# nothing, because `refit_all` returns its lines at the end. And the journal
+# fitter fits a market's FIRST temperature only, leaving refits to this job
+# (journalfit's docstring), so the NFL's temperatures had stopped moving too.
+#
+# So the weekly job is a ROUND of pieces (each sport's three fitters, and
+# each extra), begun every Wednesday and continued day by day until every
+# piece in it has run, each run stopping itself inside a budget under the
+# reaper's hour. A piece is marked attempted before it starts and done when
+# it finishes; the order is stalest first, so a piece that was cut off goes
+# to the back of the line instead of starving the rest. A sport whose
+# history has not grown since its last full fit is left out of the round:
+# refitting it would measure the same rows again (MLB and the WNBA out of
+# season). Every piece says when it starts and ends, flushed, so the
+# reaper's last line names where the time went.
+
+#: The round's state, beside the chores' own (maintenance.STATE_PATH).
+STATE_PATH = os.path.join(ROOT, "data", "cache", "deepfit_state.json")
+
+#: How long one run may work: under maintenance.WEEKLY_JOB_TIMEOUT_S (an
+#: hour), with room for the last piece to write its stores.
+DEEP_BUDGET_S = 50 * 60
+
+#: A piece is not started with less than this left, or less than a fifth
+#: over its own last running time, unless it is the first piece of a run.
+MIN_PIECE_LEFT_S = 5 * 60
+
+#: Every piece, in the order a round takes them when they are equally
+#: stale: the sports first (football leads in the autumn), then the extras
+#: in the order refit_all always ran them.
+PIECE_ORDER = ("nfl", "cfb", "nba", "mlb", "wnba",
+               "yardage_mixture", "td_scale", "touchdowns", "cfb_touchdowns",
+               "nfl_props", "ladder")
+
+#: A piece waits while a piece it builds on is still owed this round: the
+#: touchdown temperatures sit on the team-total exponent, and the NFL props'
+#: book-line fit must be the last word over the NFL's own temperatures.
+PREREQS = {"touchdowns": ("td_scale",), "cfb_touchdowns": ("td_scale",),
+           "nfl_props": ("nfl",)}
+
+
+def _ladder(db: str = "data/history.db") -> list[str]:
+    """The conviction ladder, as refit_all runs it."""
+    try:
+        from .ladder import refresh as _ladder_refresh
+        return list(_ladder_refresh())
+    except Exception as exc:                              # noqa: BLE001
+        return [f"⚠️  grade ladder skipped: {exc}"]
+
+
+#: The pieces that are not a sport, each taking the history path.
+EXTRAS = {"yardage_mixture": refit_yardage_mixture, "td_scale": refit_td_scale,
+          "touchdowns": refit_touchdowns, "cfb_touchdowns": refit_cfb_touchdowns,
+          "nfl_props": refit_nfl_props, "ladder": _ladder}
+
+
+def _read_state(path) -> dict:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            st = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return st if isinstance(st, dict) else {}
+
+
+def _write_state(path, st: dict) -> None:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(st, fh, indent=1, sort_keys=True)
+    os.replace(tmp, path)
+
+
+def round_start(today: _dt.date) -> _dt.date:
+    """The Wednesday a round belongs to: today's, or the last one."""
+    return today - _dt.timedelta(days=(today.weekday() - 2) % 7)
+
+
+def due(path, today: _dt.date) -> bool:
+    """Should the chores start the job on a day that is not Wednesday?
+    When this week's round still has pieces left, or this week's round never
+    began (a Wednesday the box was down). With no state at all it waits for
+    a Wednesday, as the first round always has."""
+    st = _read_state(path)
+    if not st:
+        return False
+    if st.get("left"):
+        return True
+    return str(st.get("round") or "") < round_start(today).isoformat()
+
+
+def round_pieces(state: dict, rows: dict) -> list[str]:
+    """What a new round owes: every sport with history whose rows have grown
+    since its last full fit, and every extra (they read the same history)."""
+    done = state.get("pieces") or {}
+    out = []
+    for p in PIECE_ORDER:
+        if p in EXTRAS:
+            if rows:
+                out.append(p)
+        elif p in rows:
+            last = done.get(p) or {}
+            if last.get("done") and last.get("rows") == rows[p]:
+                continue
+            out.append(p)
+    return out
+
+
+def _stalest_first(left: list[str], state: dict) -> list[str]:
+    pieces = state.get("pieces") or {}
+
+    def key(p):
+        e = pieces.get(p) or {}
+        return (max(str(e.get("done") or ""), str(e.get("attempted") or "")),
+                PIECE_ORDER.index(p) if p in PIECE_ORDER else len(PIECE_ORDER))
+    return sorted(left, key=key)
+
+
+def _run_piece(piece: str, db: str, deadline: float, say=None) -> tuple[list[str], bool]:
+    """One piece: (its log lines, whether it ran to an answer)."""
+    if piece in EXTRAS:
+        try:
+            return list(EXTRAS[piece](db) or []), True
+        except Exception as exc:                          # noqa: BLE001
+            return [f"⚠️  {piece} failed: {type(exc).__name__}: {exc}"], True
+    return _refit_sport(piece, db, say=say, deadline=deadline)
+
+
+def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | None = None,
+              budget_s: float = DEEP_BUDGET_S, clock=None, run_piece=None, say=None) -> list[str]:
+    """The weekly job: begin this week's round if it has not begun, then run
+    its pieces, stalest first, until the round is done or the budget is
+    spent. Returns every line it said."""
+    import time as _time
+    clock = clock or _time.monotonic
+    today = today or _dt.date.today()
+    path = state_path or STATE_PATH
+    run_piece = run_piece or _run_piece
+    out: list[str] = []
+
+    def emit(line: str) -> None:
+        out.append(line)
+        if say:
+            say(line)
+
+    rows = _row_counts(db)
+    if not rows:
+        emit("deep refit: no sport has enough ingested logs yet")
+        return out
+    st = _read_state(path)
+    pieces = st.setdefault("pieces", {})
+    start = round_start(today).isoformat()
+    if st.get("round") != start:
+        st["round"] = start
+        st["left"] = round_pieces(st, rows)
+        _write_state(path, st)
+        emit(f"deep refit: the round of {start} owes {len(st['left'])} piece(s): "
+             f"{', '.join(st['left']) or 'none'}")
+    left = list(st.get("left") or [])
+    deadline = clock() + budget_s
+    done_now: list[str] = []
+    while left:
+        # Chosen afresh after every piece: one that waited on another
+        # (PREREQS) may run as soon as that one is done.
+        runnable = [p for p in _stalest_first(left, st)
+                    if not any(q in left for q in PREREQS.get(p, ()))]
+        if not runnable:
+            break
+        p = runnable[0]
+        need = min(budget_s * 0.9, max(MIN_PIECE_LEFT_S,
+                                       1.2 * float((pieces.get(p) or {}).get("seconds") or 0)))
+        if done_now and deadline - clock() < need:
+            break
+        entry = pieces.setdefault(p, {})
+        entry["attempted"] = today.isoformat()
+        _write_state(path, st)
+        emit(f"deep refit: {p} — starting ({len(left)} left in this round)")
+        t0 = clock()
+        lines, finished = run_piece(p, db, deadline, say)
+        for ln in lines:
+            emit(f"  {ln}")
+        if not finished:
+            emit(f"deep refit: {p} did not finish in this run — it goes to the back of the line")
+            break
+        entry.update({"done": today.isoformat(), "seconds": round(clock() - t0),
+                      "rows": rows.get(p)})
+        left.remove(p)
+        st["left"] = left
+        _write_state(path, st)
+        done_now.append(p)
+    st["left"] = left
+    _write_state(path, st)
+    if left:
+        emit(f"deep refit: round of {start}: {', '.join(done_now) or 'nothing'} done this run; "
+             f"left for the next: {', '.join(left)}")
+    else:
+        emit(f"deep refit: round of {start} complete"
+             + (f" — {', '.join(done_now)} this run" if done_now else ""))
+    return out
+
+
 if __name__ == "__main__":                       # pragma: no cover
     # `python3 -m engine.deepfit nba` refits one sport and says each step as
-    # it goes; with no sport, every sport with history, as the weekly job.
-    if len(sys.argv) > 1:
+    # it goes; `--all` runs every sport and extra in one go (by hand only:
+    # it outlasts the chores' hour); with nothing, this week's round, as the
+    # chores start it.
+    if len(sys.argv) > 1 and sys.argv[1] == "--all":
+        for _line in refit_all():
+            print(_line, flush=True)
+    elif len(sys.argv) > 1:
         for _line in refit_sport(sys.argv[1].lower(), say=lambda l: print(l, flush=True)):
             print(_line, flush=True)
     else:
-        for _line in refit_all():
-            print(_line)
+        run_round(say=lambda l: print(l, flush=True))

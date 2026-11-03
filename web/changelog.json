@@ -4,6 +4,12 @@
     {
       "date": "2026-11-03",
       "kind": "fix",
+      "title": "The models' weekly refit reaches every sport again",
+      "body": "Once a week the models re-learn each sport from its whole history: how fast a player's form fades, each player's own correction, and how confident each market should be. That job ran every sport in one go, college first, and since 2 September it was stopped at its one-hour limit every week while still on MLB, so the NFL's deep refit last ran in late August. It now works in pieces, the NFL first, and picks up the next day where it stopped until every sport is done. A sport with no new games since its last refit, like MLB in the off-season, sits out. The nightly learning from each settled bet, the Most Likely board's own corrections and the losing-pattern blocks were checked the same day and were running."
+    },
+    {
+      "date": "2026-11-03",
+      "kind": "fix",
       "title": "The college board builds through a busy morning",
       "body": "From about 8 a.m. on 3 November the college board stopped rebuilding: every build died waiting to store last week's results, and the page kept showing the last good board. The holder was the pass that settles bets every five minutes: once the official NFL stats for Monday night arrived, each pass locked the results file and kept it locked for minutes at a time. It now lets go before it fetches anything. A build that still finds the file busy waits and tries again, and the college build no longer needs that refresh to publish — results it could not store are stored by the next build."
     },
