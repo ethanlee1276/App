@@ -37,7 +37,9 @@ MAX = 1_000_000
 #: away and morning lines, karma and pick'em nudges, their teams' kickoff,
 #: big moments, finals and close finishes.
 PROMO = ("posted", "settled", "watches", "away", "today", "karma", "pickem", "kickoff", "clutch", "finals",
-         "closegame")
+         "closegame",
+         # Today's free Pick of the Day is up (engine/pushalerts.potd_due).
+         "potd")
 
 
 def limit_of(settings) -> float:

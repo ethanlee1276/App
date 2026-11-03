@@ -125,8 +125,10 @@ def test_the_feed_is_the_widgets_own_numbers_plus_that_row():
         out = firstlook.build(Path(tempfile.mkdtemp()), conn=conn)
     finally:
         conn.close()
-    # And `proof` (2026-10-26): real counts of who is here, or None under their floors.
-    assert set(out) == {"record", "last_night", "tonight", "updated", "last", "proof"}, out
+    # And `proof` (2026-10-26): real counts of who is here, or None under their floors;
+    # and `free_pick` (2026-11-03): today's free Pick of the Day, the public file's.
+    assert set(out) == {"record", "last_night", "tonight", "updated", "last", "proof", "free_pick"}, out
+    assert out["free_pick"] is None, "no file, no pick"
     src = (ROOT / "engine" / "firstlook.py").read_text()
     assert "widgetfeed.build(web, today)" in src, "the counts are the widget's — a count, never a pick"
 
@@ -271,7 +273,8 @@ def test_with_the_wall_up_the_sign_up_has_no_way_past():
     let _acctUser = null, _pwStatus = {{ account_wall: true }}, _acctNote = "", _fl = null, _suNote = "";
     const escapeHtml = (s) => String(s), escapeAttr = escapeHtml, icon = () => "", iconMark = () => "";
     const brandMarkHTML = () => "", phoneDoorHTML = () => "", referralTyped = () => "", storeSells = () => true;
-    const acctFieldsHTML = (m, extra) => extra, flTonightHTML = () => "", flMembersHTML = () => "", flProofHTML = () => "";
+    const acctFieldsHTML = (m, extra) => extra, flTonightHTML = () => "", flMembersHTML = () => "", flProofHTML = () => "",
+          flFreeHTML = () => "";
     const suWhyHTML = () => "";
     const sessionStorage = {{ getItem: () => "#pbp/nfl/1" }}; const WALL_OPEN = ["pbp"]; const PLANS = [{{}}];
     {_fn(ACCOUNT, "wallWhyLine")}

@@ -2415,6 +2415,40 @@ def locked_potd_keys(conn, day: str) -> dict:
             for sport, pick in locked_potd_picks(conn, day).items()}
 
 
+def potd_results(conn, day: str) -> dict:
+    """``{sport: {"status", "units", "_key"}}`` — today's locked picks that
+    have been GRADED, read off the same first-of-the-journal-day row the lock
+    is (`locked_potd_picks`).
+
+    2026-11-03 (Ethan, on the audit's "the free Pick of the Day travels": a
+    share card with "result once settled"): the day's file says how its pick
+    went once it has, so the page and the picture a reader shares say it too.
+    The record is free; this is that record's newest row, beside its card.
+    ``_key`` is the lock's own tuple, so a caller matches a card to its row
+    the way the lock does, never a second derivation. {} on any trouble: a
+    result is a nicety, never worth the file.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT sport, player, market, side, line, status, pnl_units FROM bets "
+            "WHERE category=? AND substr(ts,1,10)=? ORDER BY ts",
+            (POTD_CATEGORY, str(day or "")[:10])).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return {}
+    out: dict = {}
+    seen: set = set()
+    for sport, player, market, side, line, status, pnl in rows:
+        sport = str(sport or "")
+        if not sport or sport in seen:
+            continue           # the FIRST of the day is the day's pick
+        seen.add(sport)
+        if status in ("won", "lost", "push"):
+            out[sport] = {"status": status, "units": round(float(pnl or 0), 2),
+                          "_key": (str(player or ""), str(market or ""), str(side or "").upper(),
+                                   None if line is None else float(line))}
+    return out
+
+
 def locked_potd_picks(conn, day: str, strict: bool = False) -> dict:
     """``{sport: card-shaped dict}`` — today’s LOCKED picks, read back.
 

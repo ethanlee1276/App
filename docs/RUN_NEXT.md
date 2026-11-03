@@ -6,8 +6,11 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-02 evening, after the odds feed was cut to ten books
-(step JL: item 1b, tomorrow) and you ran JK, JJ and JI (Done, below).
+Last updated 2026-11-03, after today's free pick started travelling — an
+alert you turn on, the sign-up and the plans, a share card (step JN: item
+1d) — and the NFL got its playoff race (step JM: item 1c). On 2 November the
+odds feed was cut to ten books (step JL: item 1b) and you ran JK, JJ and JI
+(Done, below).
 Earlier that day the Owner desk was locked to the accounts you list
 (step JK); a failed payment got one day's grace before access pauses, and
 Terms §5.7 was rewritten to say so, with the email it needs (step JJ); a
@@ -130,6 +133,23 @@ and each conference's seven if the season ended today:
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JM 2>&1 | tee /tmp/jm.txt
 ```
+
+## 1d. An hour after this push: today's free pick travels (step JN)
+
+The Pick of the Day page has a switch at the top, "Today's pick, as an
+alert" (also in Alerts), off until a reader turns it on: once a day, when
+the pick is up, the phone hears the league and the pick's record — never
+the pick on a lock screen. The sign-up and the plans now show today's free
+pick, and every pick on the page has a Share card button. Nothing to run;
+this shows the page has the switch, how many phones asked for the alert
+and whether today's went, and today's free pick as the sign-up reads it:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JN 2>&1 | tee /tmp/jn.txt
+```
+
+Not a command: turn the switch on on your own phone to see the alert
+arrive with tomorrow's pick.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

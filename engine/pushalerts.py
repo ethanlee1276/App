@@ -12,10 +12,16 @@ pick posts or settles" (docs/APP_STORES.md). Two kinds, each once:
             off the feed's settle_recap — the same line the site's anchor
             moment and the nightly email read (engine/digest.last_night), so
             the alert cannot disagree with the page it opens.
+  potd      today's free Pick of the Day is up (2026-11-03): "Today's free
+            pick is up — NBA · our one pick, free with its price." Once a
+            day, only to a phone that asked for it (the Pick of the Day
+            page's switch, or Alerts), only on a day the pick is a bet.
 
 WHAT TRAVELS. Counts and the public record, never a pick: the record is free
 by design, and a pick's name stays behind the wall (gate.PAID_KEYS) — an
 alert on a lock screen is the most public copy of the product there is.
+The Pick of the Day is free since 2026-10-30, and its alert still names
+only the league and the pick's record: the page it opens says the rest.
 
 HOW IT REACHES A PHONE (engine/webpush): an empty, signed knock; the phone's
 service worker then asks POST /api/push/latest what to say and shows it.
@@ -44,7 +50,16 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
 STATE = ROOT / "data" / "push" / "state.json"
 LATEST = ROOT / "data" / "push" / "latest.json"
-KINDS = ("posted", "settled")
+KINDS = ("posted", "settled", "potd")
+#: What a phone gets when it names no kinds: the two every phone has had.
+#: The Pick of the Day's is asked for, never assumed (Ethan, 2026-11-03,
+#: on the audit's "the free Pick of the Day travels": "an opt-in daily
+#: alert").
+DEFAULT_TOPICS = ("posted", "settled")
+#: The leagues the day's top pick can come from (engine/potd.TOP_PICK_LEAGUES),
+#: as an alert names them.
+POTD_LEAGUE = {"nfl": "NFL", "cfb": "College football", "mlb": "MLB", "nba": "NBA", "wnba": "WNBA",
+               "nhl": "NHL", "ufc": "UFC"}
 #: A member's own alerts (engine/pushmine): a phone signed in when it
 #: subscribed may ask for these too.
 PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions", "reminders", "pickem", "kickoff",
@@ -126,7 +141,7 @@ def _clean_list(raw, allowed) -> str:
     return ",".join(x for x in allowed if x in {str(i).strip().lower() for i in items})
 
 
-def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=KINDS, leagues=()) -> tuple[int, dict]:
+def subscribe(conn, endpoint: str, kind: str = "web", user_id=None, topics=DEFAULT_TOPICS, leagues=()) -> tuple[int, dict]:
     """Store (or update) a subscription. ``endpoint`` is the push service's
     URL for a browser, or the device token for the iOS shell."""
     ensure_tables(conn)
@@ -361,7 +376,44 @@ def due(state: dict, web: Path = WEB, today: _dt.date | None = None) -> list[dic
                         "title": f"Last night: {night['w']}–{night['l']}{push}, {'+' if u >= 0 else '−'}{abs(u):.1f}u",
                         "body": "Every pick graded at the price we took it. The record is free to read.",
                         "url": "/#record"})
+    pick = potd_due(sent, web, today)
+    if pick:
+        out.append(pick)
     return out
+
+
+def potd_due(sent, web: Path = WEB, today: _dt.date | None = None) -> dict | None:
+    """Today's free Pick of the Day is up — once a day, on a day it is a bet.
+
+    Off the PUBLIC copy of the day's top pick (web/data/day_top_pick.json,
+    through gate.free_top_pick again, so a box with the paywall off still
+    never announces a lean): the copy anyone may read, so the alert can say
+    nothing the free page does not. Its date is the box's day (Eastern), and
+    a file from yesterday is yesterday's pick, already announced or missed.
+
+    The league and the Pick of the Day's own record, never the pick: the
+    lock screen is the most public copy there is, and the tap is the point."""
+    today = today or _dt.date.today()
+    top = gate.free_top_pick(_load(Path(web) / "data" / "day_top_pick.json"))
+    day = str(top.get("date") or "")
+    pick = top.get("pick")
+    if not (isinstance(pick, dict) and pick) or day != today.isoformat() or f"potd:{day}" in set(sent or ()):
+        return None
+    sport = str(top.get("sport") or pick.get("sport") or "")
+    label = POTD_LEAGUE.get(sport, sport.upper() or "Today")
+    rec = (_load(Path(web) / "data" / "record.json").get("potd") or {})
+    try:
+        w, l, u = int(rec.get("wins") or 0), int(rec.get("losses") or 0), float(rec.get("net_units") or 0)
+        p = int(rec.get("pushes") or 0)
+    except (TypeError, ValueError, AttributeError):
+        w = l = p = 0
+        u = 0.0
+    so_far = (f"{w}–{l}{f'–{p}' if p else ''} so far, {'+' if u >= 0 else '−'}{abs(u):.1f}u."
+              if (w or l) else "Every one is graded in public.")
+    return {"id": f"potd:{day}", "kind": "potd", "league": "",
+            "title": "Today’s free pick is up",
+            "body": f"{label} · our one pick of the day, free with its price. {so_far}",
+            "url": "/#potd"}
 
 
 def merge_posted(posted: list) -> dict:
@@ -591,16 +643,23 @@ def main(argv=None) -> int:
     # looking must not make one (the catch-up script runs this).
     import sqlite3
     from engine import accounts
+    potd_n = None
     try:
         conn = sqlite3.connect(f"file:{accounts.DB_PATH}?mode=ro", uri=True)
         try:
             n = dict(conn.execute("SELECT kind, COUNT(*) FROM push_subs GROUP BY kind").fetchall())
+            potd_n = conn.execute("SELECT COUNT(*) FROM push_subs WHERE ',' || topics || ',' LIKE '%,potd,%'").fetchone()[0]
         finally:
             conn.close()
     except sqlite3.Error:
         n = {}
     print(f"Subscribed: {n.get('web', 0)} browser(s), {n.get('apns', 0)} iPhone app(s). "
           f"Apple key: {'set' if webpush.apns_config() else 'not set (docs/APP_STORES.md)'}.")
+    # Today's free pick (potd_due): who asked, and whether today's went.
+    today = _dt.date.today().isoformat()
+    said = f"potd:{today}" in set(_load(STATE).get("sent") or [])
+    print(f"Today's free pick: {potd_n if potd_n is not None else 0} phone(s) asked for it; "
+          f"today's {'was said' if said else 'not said yet (it goes when a pick is up, 09:00-23:00 Eastern)'}.")
     return 0
 
 

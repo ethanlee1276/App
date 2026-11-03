@@ -661,6 +661,11 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JN "Today's free pick travels" 60 <<'SH'
+curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdAlertHTML()'
+cd /srv/qellys && sudo -u qellys python3 -m engine.pushalerts
+curl -s https://qellysbook.com/api/firstlook | python3 -c "import json, sys; d = json.load(sys.stdin).get('free_pick') or {}; print(d.get('sport'), d.get('player'), d.get('odds'), d.get('record'))"
+SH
 run JM "The NFL playoff race" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nfl_race.json')); print(d['week'], d['games_left'], d['generated_at']); [print(c, [s['team'] for s in d['today'][c]['seeds']]) for c in ('AFC', 'NFC')]"
 SH

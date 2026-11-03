@@ -5029,6 +5029,9 @@ def _write_day_top_pick() -> None:
                 # settles nothing about what a Top Pick RECORD should
                 # count, and keeps both answers reachable.
                 ledger.record_top_pick_claim(lconn, top)
+                # HOW IT WENT, ONCE IT HAS (2026-11-03): each card's graded
+                # result, matched to its row by the lock's own key.
+                _attach_potd_results(top, ledger.potd_results(lconn, today))
         except Exception as exc:                              # noqa: BLE001
             print(f"  ⚠️  day top pick: today's locked picks are "
                   f"unreadable ({type(exc).__name__}: {exc}) — "
@@ -5053,6 +5056,30 @@ def _write_day_top_pick() -> None:
         _gate.publish(top, web / "day_top_pick.json", "day_top_pick.json")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  day top pick not written: {type(exc).__name__}: {exc}")
+
+
+def _attach_potd_results(top: dict, results: dict) -> None:
+    """A graded Pick of the Day says so on its card: ``result`` = {status,
+    units} on each league's card (and the day's top pick) whose pick is the
+    row the journal locked and has since graded. Matched on
+    `ledger.potd_row_key`, the lock's own derivation; a card showing a
+    different pick than its row gets nothing. Never raises."""
+    from engine import ledger as _ledger
+    if not isinstance(top, dict) or not results:
+        return
+
+    def _put(card, sport):
+        res = results.get(sport)
+        if isinstance(card, dict) and res and isinstance(card.get("pick"), dict):
+            try:
+                key = _ledger.potd_row_key(card["pick"])
+            except Exception:                                 # noqa: BLE001
+                key = None
+            if key is not None and tuple(key) == tuple(res["_key"]):
+                card["result"] = {"status": res["status"], "units": res["units"]}
+    for sport, card in (top.get("leagues") or {}).items():
+        _put(card, sport)
+    _put(top, str(top.get("sport") or ""))
 
 
 #: When the dead-man's switch was last told all is well (epoch seconds).

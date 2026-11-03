@@ -23,5 +23,20 @@
 .pd-door { justify-self: start; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); text-decoration: none; }
 .pd-door:hover { text-decoration: underline; }
 .pd-card .potd-betit { justify-self: start; }
+.pd-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* How it went (pdResultHTML), at the head's end. */
+.pd-res { margin-left: auto; padding: 2px 9px; border-radius: 999px; font-family: var(--font-mono); font-size: var(--fs-2xs);
+  font-weight: 800; color: var(--text-dim); background: color-mix(in oklab, var(--text-mute) 16%, transparent); }
+.pd-tag + .pd-res { margin-left: 0; }
+.pd-res.won { color: var(--good); background: color-mix(in oklab, var(--good) 16%, transparent); }
+.pd-res.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
 .pd-empty { color: var(--text-mute); font-size: var(--fs-md); }
 .pd-when { margin: 10px 0 12px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* Today's pick, as an alert (pdAlertHTML): one row, a switch at its end. */
+.pd-alert { display: flex; flex-direction: row; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 14px; color: var(--brand); }
+.pd-alert > svg { flex: none; }
+.pd-alert-t { flex: 1; min-width: 0; }
+.pd-alert-t b { display: block; color: var(--text); font-size: var(--fs-md); }
+.pd-alert-t small { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.pd-alert-t small b { display: inline; font-size: inherit; }
+.pd-alert .switch { flex: none; }

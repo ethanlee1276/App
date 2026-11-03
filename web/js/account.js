@@ -1699,7 +1699,7 @@ function paywallHTML(rec, status) {
       ${/* Tonight's picks, locked, with their counts (flTonightHTML) —
             drawn by pwTonight once the numbers are in, and only on a day
             with picks up. */""}
-      <div class="pw-fl"></div><div class="pw-caught" hidden></div>
+      <div class="pw-free"></div><div class="pw-fl"></div><div class="pw-caught" hidden></div>
       ${/* SPORTS FIRST (audit item 6, 2026-09-23): the lede sold three
             audiences at once — "bettors, fantasy players and market
             traders" — and the audit's question was which one this is.
@@ -2235,10 +2235,14 @@ async function pwCaught(host) {
   box.hidden = false;
 }
 
-/* Tonight's picks on the plans, the same locked cards as the sign-up's. */
+/* Tonight's picks on the plans, the same locked cards as the sign-up's,
+   and today's free pick above them (flFreeHTML) with the door to every
+   league's: the plans are reached from inside the site too. */
 function pwTonight(host) {
   flGet().then((fl) => {
     const slot = host.querySelector(".pw-fl");
+    const free = host.querySelector(".pw-free");
+    if (free && fl) free.innerHTML = flFreeHTML(fl, true);
     if (slot && fl && (fl.tonight || []).some((x) => Number(x.picks) > 0)) slot.innerHTML = flTonightHTML(fl);
   });
 }
@@ -3017,6 +3021,37 @@ function flLastHTML(fl) {
   </section>`;
 }
 
+/* TODAY'S FREE PICK (engine/firstlook.free_pick, 2026-11-03; Ethan, on the
+   audit's "the free Pick of the Day travels": "on sign-up and plans"): the
+   one pick a free account gets, shown before the account is made — the bet,
+   the price, whose fair it is, and the Pick of the Day's record, losses and
+   all. A day with no pick (none cleared the bar, the boards not built) draws
+   nothing; the table below still says the pick is free. */
+const FL_WITNESS = { exchange: "the exchange’s price", sharp: "the sharp book’s fair", market: "the market’s fair" };
+function flFreeHTML(fl, door) {
+  const fp = fl && fl.free_pick;
+  if (!fp || !fp.market) return "";
+  const sport = String(fp.sport || "");
+  const name = (SPORT_META[sport] || {}).name || LEAGUE_LABEL[sport] || sport.toUpperCase();
+  const price = fp.odds != null ? american(fp.odds) + (fp.book ? ` at ${escapeHtml(fp.book)}` : "") : "";
+  const vs = fp.opponent && fp.team ? `${teamNameIn(sport, fp.team)} vs ${teamNameIn(sport, fp.opponent)}` : "";
+  const fair = fp.fair_prob == null || fp.evidence === "model" ? ""
+    : `<b>${Math.round(fp.fair_prob * 100)}%</b> ${FL_WITNESS[fp.evidence] || "the market’s fair"}${
+        fp.price_implied != null ? ` · the price implies ${Math.round(fp.price_implied * 100)}%` : ""}`;
+  const r = fp.record;
+  const rec = r && (r.w + r.l) ? `Picks of the Day so far <b>${r.w}–${r.l}${r.p ? `–${r.p}` : ""}</b>
+      <span class="${r.units >= 0 ? "pos" : "neg"}">${r.units >= 0 ? "+" : "−"}${Math.abs(Number(r.units)).toFixed(1)}u</span>` : "";
+  return `<section class="fl-free" aria-labelledby="fl-free-h">
+    <div class="fl-free-top"><span class="fl-tag free">${iconMark("star", 12)}Free today</span>
+      <span id="fl-free-h">${escapeHtml(name)} · our Pick of the Day</span></div>
+    <b class="fl-free-bet">${potdBetText(fp, sport)}</b>
+    <span class="fl-free-sub">${[price, vs].filter(Boolean).join(" · ")}</span>
+    ${fair ? `<span class="fl-free-fair">${fair}</span>` : ""}
+    <p class="fl-free-note">${rec ? `${rec} · ` : ""}one pick a day in every league, free with an account${
+      door ? ` · <a href="#potd">every league’s →</a>` : ""}</p>
+  </section>`;
+}
+
 function flRecordHTML(fl) {
   const r = fl && fl.record;
   if (!r || !(r.w + r.l)) return "";
@@ -3111,6 +3146,7 @@ function signupHTML() {
     <p class="fsu-sub">Your free account opens every game, its chat, Call it and the Pick of the Day. Members get every pick.</p>
     <div class="fl-proof-host">${flProofHTML(_fl)}</div>
   </div>
+  <div class="fl-free-host">${flFreeHTML(_fl)}</div>
   <div class="fl-host">${flTonightHTML(_fl)}</div>
   <div class="card acct-card" id="su-form">
     <div class="card-head">
@@ -3177,8 +3213,10 @@ function flPaint(host) {
     const a = host.querySelector(".fl-host");
     const b = host.querySelector(".fl-more");
     const c = host.querySelector(".fl-proof-host");
+    const f = host.querySelector(".fl-free-host");
     if (a && fl) a.innerHTML = flTonightHTML(fl);
     if (c && fl) c.innerHTML = flProofHTML(fl);
+    if (f && fl) f.innerHTML = flFreeHTML(fl);
     if (b) b.innerHTML = flMembersHTML(fl, _pwStatus);
   });
   const form = host.querySelector("#su-form");

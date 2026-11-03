@@ -204,9 +204,11 @@ def test_it_reads_through_the_entitled_route():
     assert "data/day_top_pick" not in PAGE, "a member would be handed the stranger's copy"
 
 
-def _render(top, rec, walled):
+def _render(top, rec, walled, push="", saved=None):
     stubs = f"""
     const state = {{ sport: "nfl", view: "potd" }};
+    const pushKind = () => {json.dumps(push)}, pushSaved = () => ({json.dumps(saved)});
+    const setSwitch = (on, attrs) => `<button class="switch" role="switch" aria-checked="${{on}}" ${{attrs}}></button>`;
     const escapeHtml = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const escapeAttr = escapeHtml;
     const icon = () => "", iconMark = () => "";
@@ -269,6 +271,28 @@ def test_a_day_with_no_card_yet_says_so():
     assert "No league has named today’s pick yet" in html
 
 
+def test_the_page_offers_the_pick_as_an_alert_off_until_turned_on():
+    """2026-11-03, the audit's "the free Pick of the Day travels": one switch
+    under the lede, off until chosen (engine/pushalerts.potd_due sends it)."""
+    top = gate.redact(_top(), "day_top_pick.json")
+    off = _render(top, REC, True, push="web")
+    assert "Today’s pick, as an alert" in off and 'aria-checked="false" data-pd-alert' in off
+    assert "never the pick on your lock screen" in off
+    assert off.index("pd-alert") < off.index("pd-grid"), "under the lede, above the cards"
+    on = _render(top, REC, True, push="web", saved={"endpoint": "https://fcm.googleapis.com/x", "topics": ["potd"]})
+    assert 'aria-checked="true" data-pd-alert' in on and "On for this phone" in on
+    other = _render(top, REC, False, push="native", saved={"endpoint": "ab" * 32, "topics": ["posted", "settled"]})
+    assert 'aria-checked="false" data-pd-alert' in other, "other alerts on are not this one"
+    iphone = _render(top, REC, True, push="home-screen")
+    assert "Add to Home Screen" in iphone and "data-pd-alert" not in iphone
+    assert "pd-alert" not in _render(top, REC, True, push=""), "no row where this browser has no alerts"
+    wire = PAGE[PAGE.index("function pdAlertWire("):]
+    wire = wire[:wire.index("\n}\n")]
+    assert 'base.filter((t) => t !== "potd").concat(want ? ["potd"] : [])' in wire, "it joins what is on"
+    assert "pushRemember(await pushOn(topics, saved.leagues))" in wire and "await pushOff(saved)" in wire
+    assert "pdAlertWire(host);" in PAGE
+
+
 # --- in a browser ------------------------------------------------------------------------
 def _browser():
     from playwright.sync_api import sync_playwright
@@ -316,6 +340,12 @@ def _browser():
                         text: document.getElementById('potd-body').innerText,
                         cards: document.querySelectorAll('#potd-body .pd-card').length,
                         lock: !!document.querySelector('#potd-body .member-lock'),
+                        // The alert row (pdAlertHTML): one line, its switch at the end.
+                        alert: !!document.querySelector('#potd-body .pd-alert [data-pd-alert]'),
+                        alertRow: (() => { const a = document.querySelector('#potd-body .pd-alert'); if (!a) return null;
+                          const sw = a.querySelector('.switch').getBoundingClientRect(), t = a.querySelector('.pd-alert-t').getBoundingClientRect();
+                          return getComputedStyle(a).flexDirection === 'row' && sw.left >= t.right - 1 && sw.top < t.bottom; })(),
+                        shares: document.querySelectorAll('#potd-body .pd-share').length,
                         wide: document.documentElement.scrollWidth > window.innerWidth + 1})""")
                     ctx.close()
             finally:
@@ -338,6 +368,9 @@ def test_in_a_browser_a_free_home_opens_the_free_pick_and_a_member_sees_every_ca
     assert "Chiefs Moneyline" in free["text"] and "Best on the board" not in free["text"]
     assert not mem["walled"] and mem["view"] == "potd" and mem["cards"] == 3 and not mem["lock"], mem
     assert "Best on the board tonight" in mem["text"] and not mem["wide"]
+    for who in (free, mem):
+        assert who["alert"] and who["alertRow"], ("the alert row, on one line with its switch", who)
+        assert who["shares"] == 1, ("a Share card on the one card that is a bet", who)
 
 
 if __name__ == "__main__":

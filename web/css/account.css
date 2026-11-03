@@ -748,6 +748,24 @@
 .fsu-plan-note { margin: 0 0 10px; color: var(--brand-2); font-size: var(--fs-sm); font-weight: 700; }
 .fsu-plan-note:empty { display: none; }
 
+/* Today's free pick (flFreeHTML): the one pick a free account gets, above the
+   members' locked cards — the brand's edge on it, the way the Pick of the Day
+   page's lead card wears it. */
+.fl-free { display: grid; gap: 5px; margin: 0 0 12px; text-align: left; padding: 14px; border-radius: var(--radius-lg);
+  border: var(--hairline) solid transparent; background: var(--grad-card), var(--panel); box-shadow: var(--glow-gold); }
+.fl-free-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-mute); }
+.fl-tag.free { background: color-mix(in oklab, var(--good) 22%, var(--panel-2)); color: var(--good); }
+.fl-free-bet { color: var(--text); font-size: var(--fs-lg); line-height: var(--lh-snug); overflow-wrap: anywhere; }
+.fl-free-sub { color: var(--text-dim); font-size: var(--fs-sm); }
+.fl-free-fair { color: var(--text-mute); font-size: var(--fs-sm); }
+.fl-free-fair b { color: var(--text); }
+.fl-free-note { margin: 2px 0 0; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.fl-free-note b { font-family: var(--font-mono); color: var(--text); }
+.fl-free-note .pos { color: var(--good); font-family: var(--font-mono); font-weight: 800; }
+.fl-free-note .neg { color: var(--bad); font-family: var(--font-mono); font-weight: 800; }
+.fl-free-note a { color: var(--brand); font-weight: 700; text-decoration: none; white-space: nowrap; }
+.fl-free-host:empty, .pw-free:empty { display: none; }
+
 /* Tonight for members: a card a league, its rows locked. */
 .fl-tonight { display: grid; gap: 10px; margin: 0 0 16px; padding: 14px; border-radius: var(--radius-lg);
   border: var(--hairline) solid transparent; background: var(--grad-card), var(--panel); }
@@ -883,6 +901,10 @@
 .pw-why p { margin: 3px 0 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .pw-fl:empty { display: none; }
 .pw-fl { max-width: 560px; margin: 16px auto 0; text-align: left; }
+/* Today's free pick on the plans (pwTonight): the same column as tonight's
+   locked cards under it, read left to right like them. */
+.pw-free { max-width: 560px; margin: 18px auto 0; text-align: left; }
+.pw-free .fl-free { margin: 0; }
 
 /* Two ways in, at the top of the plans (pwDoorsHTML): the free account and
    the membership side by side, each with its own button. */

@@ -9305,6 +9305,37 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JN. Today's free pick travels** (step 336; you, 2026-11-03, on the
+audit's list: "do all of them").
+
+- **The alert.** "Today's pick, as an alert" at the top of the Pick of the
+  Day page (and a switch in Alerts), off until a reader turns it on. Once a
+  day, when the day's pick is up and is a bet, the phones that asked get
+  "Today's free pick is up — NBA · our one pick of the day, free with its
+  price. 31–22 so far, +6.4u." The league and the record, never the pick on
+  a lock screen; quiet hours, the day's cap, a pause and a weekly limit all
+  hold it like every other alert.
+- **The sign-up and the plans** show today's free pick (the public file's,
+  through /api/firstlook) with its price, whose fair it is and the Pick of
+  the Day's record.
+- **Share card.** Every pick on the Pick of the Day page draws as a picture:
+  the bet, the price at the book, the fair and the price's chance, and once
+  graded, Won or Lost with the units. The day's file now carries each
+  card's result once its row grades (matched on the lock's own key).
+
+Nothing to run. Read-only, after the restart: the page carries the switch,
+how many phones asked and whether today's went, and today's free pick as
+the sign-up reads it:
+
+```
+curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdAlertHTML()'
+cd /srv/qellys && sudo -u qellys python3 -m engine.pushalerts
+curl -s https://qellysbook.com/api/firstlook | python3 -c "import json, sys; d = json.load(sys.stdin).get('free_pick') or {}; print(d.get('sport'), d.get('player'), d.get('odds'), d.get('record'))"
+```
+
+To try it yourself: on your phone, open the Pick of the Day page and turn
+the switch on; the next day's pick reaches you between 9:00 and 23:00.
+
 **JM. The NFL playoff race** (step 335; you, 2026-11-03, on the audit's
 list: "do all of them").
 

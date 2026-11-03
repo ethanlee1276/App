@@ -4939,8 +4939,10 @@ function renderPushZone(note) {
                   end: setSwitch(on, `data-push-go="${on ? "off" : "on"}" aria-label="Alerts on this phone"`) }),
         box("posted", "Tonight’s picks are up"),
         box("settled", "Last night is graded"),
-      ], "A tap on your lock screen when tonight’s picks go up and when last night is graded. "
-        + "Counts and the record only — never a pick on a lock screen.")
+        // Off until chosen, here or on the Pick of the Day page (js/potd.js).
+        box("potd", "Today’s free Pick of the Day is up"),
+      ], "A tap on your lock screen when tonight’s picks go up, when last night is graded and, if you choose it, "
+        + "when today’s free Pick of the Day is up. Counts, the league and the record only — never a pick on a lock screen.")
       + setGroup("Yours", [
         box("watches", "My teams and players make the board (members see which)", !signedIn),
         box("bets", "My parlay: on, last leg, settled", !signedIn),

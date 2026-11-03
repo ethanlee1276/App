@@ -24417,7 +24417,8 @@ async function shareCardCanvas(d) {
     x.font = cardSerif(78, 700);
     x.textAlign = "center";
     x.textBaseline = "middle";
-    const initials = d.title.split(/\s+/).slice(0, 2)
+    // A team's card wears its abbreviation (the Pick of the Day's, pdShare).
+    const initials = d.initials || d.title.split(/\s+/).slice(0, 2)
       .map((w) => w[0] || "").join("").toUpperCase();
     x.fillText(initials || "QB", CX, CY + 6);
   }
@@ -24481,9 +24482,11 @@ async function shareCardCanvas(d) {
   // The model's own numbers across the card's full width, columns cut
   // by hairlines — a card with a price and no reasoning is a tout's
   // graphic, and this row is where the argument lives.
-  const facts = [["Model", d.proj], ["Hit", d.hit], ["Edge", d.edge]]
+  // A card may bring its own row (the Pick of the Day's: the fair, the
+  // price's chance and how it went, pdShare), each fact with its tone.
+  const facts = (d.facts || [["Model", d.proj], ["Hit", d.hit], ["Edge", d.edge]])
     .filter(([, v]) => v);
-  facts.forEach(([k, v], i) => {
+  facts.forEach(([k, v, tone], i) => {
     const fx = 64 + i * 250;
     if (i) {
       x.strokeStyle = "rgba(232,228,217,.12)";
@@ -24498,7 +24501,7 @@ async function shareCardCanvas(d) {
     x.font = cardFont(20, 600);
     x.fillText(k.toUpperCase(), fx, 474);
     x.letterSpacing = "0px";
-    x.fillStyle = k === "Edge"
+    x.fillStyle = tone === "good" ? CARD_GOOD : tone === "bad" ? CARD_BAD : k === "Edge"
       ? (v.startsWith("+") ? CARD_GOOD : CARD_BAD) : CARD_INK;
     x.font = cardFont(42, 700);
     x.fillText(v, fx, 520);

@@ -2640,7 +2640,7 @@ class Handler(BaseHTTPRequestHandler):
                 who = self._account(conn)
                 code, out = PA.subscribe(conn, endpoint, kind=str(body.get("kind") or "web"),
                                          user_id=(who or {}).get("id"),
-                                         topics=body.get("topics") or PA.KINDS, leagues=body.get("leagues") or ())
+                                         topics=body.get("topics") or PA.DEFAULT_TOPICS, leagues=body.get("leagues") or ())
                 # The kinds a member turned on, in the consent log (engine/consent).
                 if code == 200 and who and CS.record(conn, who["id"], "alerts", "on: " + ",".join(out.get("topics") or [])):
                     conn.commit()

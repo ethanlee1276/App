@@ -42,7 +42,62 @@ async function renderPotdPage() {
   const rec = await loadRecordOnce().catch(() => ({})) || {};
   if (state.view !== "potd") return;
   host.innerHTML = pdPageHTML(top || {}, rec, walled);
+  pdAlertWire(host);
+  pdShareWire(host, top || {}, rec);
   _pdTimer = setTimeout(() => { if (state.view === "potd") renderPotdPage(); }, PD_REFRESH_MS);
+}
+
+/* TELL THIS PHONE WHEN IT IS UP (2026-11-03; Ethan, on the audit's "the
+   free Pick of the Day travels": "an opt-in daily alert"). One switch, off
+   until it is turned on: an alert once a day when the day's pick goes up,
+   naming the league and the pick's record, never the pick
+   (engine/pushalerts.potd_due). It joins whatever else this phone has on
+   and turning it off leaves those as they were; Alerts lists it too. */
+function pdAlertOn() {
+  const saved = pushSaved() || {};
+  return !!(saved.endpoint && (saved.topics || []).includes("potd"));
+}
+function pdAlertHTML() {
+  const kind = pushKind();
+  if (!kind) return "";
+  if (kind === "home-screen") {
+    return `<p class="card pd-alert">${icon("bell", 14)}<span class="pd-alert-t"><b>Today’s pick, as an alert</b>
+      <small>On iPhone, Apple sends a site’s alerts only once it is on your Home Screen: tap Share, then <b>Add to Home Screen</b>, open it from there and turn this on.</small></span></p>`;
+  }
+  const on = pdAlertOn();
+  return `<div class="card pd-alert">${icon("bell", 14)}<span class="pd-alert-t"><b>Today’s pick, as an alert</b>
+      <small class="pd-alert-note" role="status">${on ? "On for this phone — once a day, when the pick goes up."
+        : "Once a day, when the pick goes up: the league and the record, never the pick on your lock screen."}</small></span>
+    ${setSwitch(on, `data-pd-alert aria-label="Today’s pick, as an alert"`)}</div>`;
+}
+function pdAlertWire(host) {
+  const el = host.querySelector("[data-pd-alert]");
+  if (!el) return;
+  el.addEventListener("click", async () => {
+    if (el.disabled) return;
+    const saved = pushSaved() || {};
+    const want = !pdAlertOn();
+    // This phone's kinds as they are, with this one added or taken out.
+    const base = saved.endpoint ? (saved.topics || []).concat(saved.mine || []) : [];
+    const topics = base.filter((t) => t !== "potd").concat(want ? ["potd"] : []);
+    const say = (msg) => { const n = host.querySelector(".pd-alert-note"); if (n) n.textContent = msg; };
+    el.disabled = true;
+    try {
+      if (!topics.length) {
+        await pushOff(saved);
+        try { localStorage.removeItem(PUSH_KEY); } catch (e) {}
+      } else {
+        pushRemember(await pushOn(topics, saved.leagues));
+      }
+      if (want) { track("push_on", "potd"); buzz("tap"); }
+      el.setAttribute("aria-checked", want ? "true" : "false");
+      say(want ? "On for this phone — once a day, when the pick goes up." : "Off. Any other alerts on this phone are as they were.");
+    } catch (err) {
+      say(err && err.message ? err.message : "That did not work — try again.");
+    } finally {
+      el.disabled = false;
+    }
+  });
 }
 
 // When the file was written, on the site's one clock (tzTime: the reader's
@@ -90,10 +145,82 @@ function pdBetHTML(card, sport) {
   const why = fair == null || pick.evidence === "model" ? ""
     : `<p class="pd-fair"><b>${fair}%</b> ${PD_WITNESS[pick.evidence] || "the market’s fair"}${
         theirs != null ? ` · this price implies ${theirs}%` : ""}</p>`;
+  // A graded pick has nothing left to bet; its card still shares.
   return `<div class="pd-bet"><span class="pick-id">${pdMark(pick, sport)}</span>
       <span class="pd-bet-t"><b>${potdBetText(pick, sport)}</b>
         <small>${[price, pays, vs].filter(Boolean).join(" · ")}</small></span></div>
-    ${why}${betItHTML(pick, "btn primary potd-betit")}`;
+    ${why}<div class="pd-acts">${card.result ? "" : betItHTML(pick, "btn primary potd-betit")}
+      <button type="button" class="btn ghost pd-share" data-pd-share="${escapeAttr(sport)}">Share card</button></div>`;
+}
+
+// How it went, once graded (launch._attach_potd_results puts it on the card).
+function pdResultHTML(res) {
+  if (!res || !["won", "lost", "push"].includes(res.status)) return "";
+  const u = Number(res.units || 0);
+  const word = res.status === "won" ? "Won" : res.status === "lost" ? "Lost" : "Push";
+  return `<span class="pd-res ${res.status}">${word}${res.status === "push" ? ""
+    : ` ${u >= 0 ? "+" : MINUS}${Math.abs(u).toFixed(2)}u`}</span>`;
+}
+
+/* THE PICK AS A PICTURE (2026-11-03; Ethan, on the audit's "the free Pick
+   of the Day travels": "a share card — pick, price, result once settled").
+   The site's own pick card (app.js shareCardCanvas, the one every board's
+   Share card draws): who, the bet, the price at the book, then the fair
+   and the price's chance — and once it has graded, how it went, win or
+   lose, in place of the record so far. The footer is the site's claim:
+   journaled at this price, graded in public. */
+function pdShareData(card, sport, rec) {
+  const pick = (card || {}).pick || {};
+  const plain = (html) => { const t = document.createElement("textarea"); t.innerHTML = String(html == null ? "" : html); return t.value; };
+  const m = String(pick.market || "");
+  const team = pick.team || pick.player || "";
+  const bet = plain(potdBetText(pick, sport));
+  const isTeam = ["moneyline", "spread", "team_total", "total"].includes(m) || (!pick.player && !!pick.team);
+  const who = m === "total"
+    ? (pick.opponent ? `${plain(teamNameIn(sport, team))} vs ${plain(teamNameIn(sport, pick.opponent))}` : bet)
+    : isTeam ? plain(teamNameIn(sport, team)) : String(pick.player || "");
+  const what = m === "total" ? bet : bet.startsWith(who) ? bet.slice(who.length).trim() || bet : bet;
+  const day = String(card.date || "").slice(0, 10);
+  const when = /^\d{4}-\d{2}-\d{2}$/.test(day)
+    ? new Date(`${day}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+  const facts = [];
+  if (pick.fair_prob != null && pick.evidence !== "model") facts.push(["Fair", `${Math.round(pick.fair_prob * 100)}%`]);
+  if (pick.price_implied != null) facts.push(["Implied", `${Math.round(pick.price_implied * 100)}%`]);
+  const res = card.result;
+  if (res && ["won", "lost", "push"].includes(res.status)) {
+    const u = Number(res.units || 0);
+    facts.push(["Result", res.status === "push" ? "Push"
+      : `${res.status === "won" ? "Won" : "Lost"} ${u >= 0 ? "+" : MINUS}${Math.abs(u).toFixed(2)}u`,
+      res.status === "won" ? "good" : res.status === "lost" ? "bad" : ""]);
+  } else {
+    const r = (((rec || {}).potd_by_sport) || {})[sport];
+    if (r && r.settled) facts.push(["Record", `${r.wins}–${r.losses}${r.pushes ? `–${r.pushes}` : ""}`]);
+  }
+  return {
+    title: who || bet, sub: [pdName(sport), "Pick of the Day", when].filter(Boolean).join(" · "),
+    pick: what, odds: `${oddsTxt(pick.odds)}${pick.book ? ` · ${pick.book}` : ""}`,
+    facts, headshot: isTeam ? "" : String(pick.headshot || ""),
+    initials: isTeam ? String(team).slice(0, 3).toUpperCase() : "",
+  };
+}
+async function pdShare(card, sport, rec, btn) {
+  const d = pdShareData(card, sport, rec);
+  const was = btn.textContent;
+  btn.textContent = "Drawing…";
+  let canvas = null;
+  try { canvas = await shareCardCanvas(d); } catch (e) { canvas = null; }
+  if (!canvas) {
+    btn.textContent = was;
+    return tfToast("That card could not be drawn.");
+  }
+  exportCard(canvas, `pick-of-the-day-${sport}-qellysbook.png`, () => { btn.textContent = was; });
+}
+function pdShareWire(host, top, rec) {
+  const leagues = (top && top.leagues) || {};
+  host.querySelectorAll("[data-pd-share]").forEach((b) => b.addEventListener("click", () => {
+    const card = leagues[b.dataset.pdShare];
+    if (card && pdIsBet(card)) pdShare(card, b.dataset.pdShare, rec, b);
+  }));
 }
 
 function pdCardHTML(sport, card, ctx) {
@@ -123,7 +250,7 @@ function pdCardHTML(sport, card, ctx) {
   const lead = sport === topSport && bet;
   return `<article class="card pd-card${lead ? " pd-lead" : ""}${bet ? " is-bet" : ""}">
     <header class="pd-head"><span class="pd-logo">${leagueMark(sport, 22)}</span>
-      <b>${escapeHtml(name)}</b>${lead ? `<span class="pd-tag">Top pick today</span>` : ""}</header>
+      <b>${escapeHtml(name)}</b>${lead ? `<span class="pd-tag">Top pick today</span>` : ""}${bet ? pdResultHTML(card.result) : ""}</header>
     ${body}
     ${tally || often ? `<p class="pd-rec">${[tally ? `${escapeHtml(name)} Picks of the Day: ${tally}` : "", often].filter(Boolean).join(" · ")}</p>` : ""}
     ${walled ? "" : `<a class="pd-door" href="#${escapeAttr(sport)}">Open the ${escapeHtml(name)} board →</a>`}
@@ -159,5 +286,5 @@ function pdPageHTML(top, rec, walled) {
   const when = pdWhen(top.generated_at);
   const lock = walled ? memberLockHTML("Everything else on the boards is for members",
     "Most Likely, the Edge picks, every prop and game line we price, Best Bets, the Pick of the Day tracked live with its chance to cash, and Ask Qellys open with a plan.") : "";
-  return lede + cards + when + lock;
+  return lede + pdAlertHTML() + cards + when + lock;
 }
