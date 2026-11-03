@@ -6,7 +6,10 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after the Lab learned to finish in pieces and the
+Last updated 2026-11-03, after the college board learned to build through a
+busy history file and the college rosters file was cut from 13.3 MB to 5.6
+MB (nothing to run for either; item 1f's command shows the board), the Lab
+learned to finish in pieces and the
 heartbeat started saying why a weekly job or a build failed (step JP: item
 1f), the NBA Cup and the College Football Playoff got their brackets (step
 JO: item 1e), the standings, rosters, injuries,
@@ -183,6 +186,15 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JP 2>&1 | tee /tmp/jp.txt
 
 If the first line says `'cut_off': True` with a sport in `last`, that sport
 alone outgrows the hour — paste it and I will cut its replay down.
+
+The second line lists any board whose last build failed, and where. It
+should be `{}`. From 07:56 on 3 November the college board failed every
+build with `database is locked`, waiting to store last week's results while
+the daily chores and the settle pass wrote to the same file. Since this
+push a long write pauses between its pieces, a locked write is tried
+again, and a lock costs the college build only that refresh (its log says
+`CFB results not stored this build`). If `cfb` shows up there again, paste
+the line.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 
