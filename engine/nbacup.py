@@ -30,6 +30,20 @@ winner drawn at our price, the differential zero. Our stand-in for the
 The standings and the field if group play ended now are facts, and free.
 The chances and every game left at our price are the model's, and paid
 (gate.PAID_KEYS_BY_FILE["nba_cup.json"]).
+
+THE KNOCKOUT BRACKET (`bracket`, 2026-11-03; Ethan, on the audit's "NBA Cup
+knockout bracket: the eight seeded, quarterfinals at the higher seed,
+semifinals and the final, our line on each game, results as they land, the
+champion": "do all of them"). Each conference's three group winners seeded
+1-3 by the order above and its wild card 4th; the quarterfinals 1 v 4 and
+2 v 3, the semifinal between their winners at the better seed's arena, the
+final in Indianapolis. While group play runs it is the bracket if group play
+ended today (`set` False); once every group game is in, it is the bracket.
+Each knockout game is read off the scoreboard on its nights, by the two clubs
+in it, so a result lands on the next build. The matchups, nights, scores and
+the champion are facts and free; our chance on each game still to play is
+the model's (`bracket_lines`, paid). The simulation keeps every knockout
+result already in.
 """
 
 from __future__ import annotations
@@ -52,6 +66,16 @@ SEASON = 2026
 GROUP_PLAY = ("2026-10-30", "2026-11-27")
 KNOCKOUTS = {"quarterfinals": "2026-12-04", "semifinals": "2026-12-08",
              "final": "2026-12-11"}
+#: Every night a round is played on (the quarterfinals and semifinals over
+#: two nights each, the final on one).
+KNOCKOUT_NIGHTS = {"quarterfinals": ("2026-12-04", "2026-12-05"),
+                   "semifinals": ("2026-12-08", "2026-12-09"),
+                   "final": ("2026-12-11",)}
+#: Where the final is played.
+FINAL_SITE = "Indianapolis"
+#: How long after the final the page keeps being built (a late result, the
+#: champion's line).
+AFTER_FINAL_DAYS = 2
 #: An NBA game's margin around the rating gap. The futures board turns the
 #: gap into a chance with a logistic of scale `futures.MARGIN_SCALE["nba"]`;
 #: a normal whose CDF matches it has a spread of about 1.7 of that scale.
@@ -147,6 +171,80 @@ def _rank(teams, w, l, pd, pf, net, games_between, rng, h2h=True) -> list:
     return out
 
 
+def knockout_games(games: list) -> dict:
+    """The knockout nights' games off the scoreboard: ``{frozenset((a, b)):
+    {date, home, away, done, home_score, away_score, winner}}``, by the two
+    clubs in each — a group pair can meet again in a quarterfinal (a
+    winner and its own group's wild card), so only the knockout nights are
+    read here, never the group window."""
+    from .divisions import canonical
+    nights = {n for ns in KNOCKOUT_NIGHTS.values() for n in ns}
+    out = {}
+    for g in games:
+        day = str(g.get("date") or g.get("kickoff") or "")[:10]
+        if day not in nights:
+            continue
+        h, a = canonical("nba", g.get("home", "")), canonical("nba", g.get("away", ""))
+        if not (group_of(h) and group_of(a)):
+            continue
+        done = bool(g.get("completed")) and g.get("home_score") is not None and g.get("away_score") is not None
+        hs, as_ = (g.get("home_score"), g.get("away_score")) if done else (None, None)
+        out[frozenset((h, a))] = {"date": day, "home": h, "away": a, "done": done,
+                                  "home_score": hs, "away_score": as_,
+                                  "winner": (h if float(hs) > float(as_) else a) if done else None}
+    return out
+
+
+def bracket(seeds: dict, ko: dict, why: dict, names: dict, settled: bool) -> dict:
+    """The knockout rounds: each conference's quarterfinals (1 v 4, 2 v 3 at
+    the higher seed) and semifinal (their winners, at the better seed's
+    arena), the final in Indianapolis, every result ``ko`` holds, and the
+    champion. ``seeds`` is ``{"East": [four clubs, seed order], ...}``."""
+    def game(gid, rnd, home, away, hs_, as_, nights, site=""):
+        known = ko.get(frozenset((home, away))) if home and away else None
+        g = {"id": gid, "round": rnd, "home": home, "away": away, "home_seed": hs_, "away_seed": as_,
+             "date": (known or {}).get("date") or nights[0], "site": site or "home",
+             "done": bool(known and known["done"]), "home_score": None, "away_score": None, "winner": None}
+        if known and known["done"]:
+            # The scoreboard's own home side, and its score with it.
+            flip = known["home"] != home
+            g["home_score"] = known["away_score"] if flip else known["home_score"]
+            g["away_score"] = known["home_score"] if flip else known["away_score"]
+            g["winner"] = known["winner"]
+        return g
+
+    out = {"set": bool(settled), "nights": {k: list(v) for k, v in KNOCKOUT_NIGHTS.items()},
+           "final_site": FINAL_SITE}
+    champs = {}
+    for conf in ("East", "West"):
+        s = list(seeds.get(conf) or [])
+        if len(s) < 4:
+            return {**out, "conferences": {}, "final": None, "champion": None}
+        qf = [game(f"{conf}-qf1", "quarterfinals", s[0], s[3], 1, 4, KNOCKOUT_NIGHTS["quarterfinals"]),
+              game(f"{conf}-qf2", "quarterfinals", s[1], s[2], 2, 3, KNOCKOUT_NIGHTS["quarterfinals"])]
+        w1, w2 = qf[0]["winner"], qf[1]["winner"]
+        seed_of = {t: i + 1 for i, t in enumerate(s)}
+        if w1 and w2:
+            hi_, lo_ = (w1, w2) if seed_of[w1] < seed_of[w2] else (w2, w1)
+            sf = game(f"{conf}-sf", "semifinals", hi_, lo_, seed_of[hi_], seed_of[lo_],
+                      KNOCKOUT_NIGHTS["semifinals"])
+        else:
+            sf = game(f"{conf}-sf", "semifinals", w1 if w1 and not w2 else None,
+                      w2 if w2 and not w1 else None, None, None, KNOCKOUT_NIGHTS["semifinals"])
+        sf["from"] = [qf[0]["id"], qf[1]["id"]]
+        champs[conf] = sf["winner"]
+        out.setdefault("conferences", {})[conf] = {
+            "seeds": [{"seed": i + 1, "team": t, "name": names.get(t, t), "why": why.get(t, "")}
+                      for i, t in enumerate(s)],
+            "quarterfinals": qf, "semifinal": sf}
+    final = game("final", "final", champs["East"], champs["West"], None, None, KNOCKOUT_NIGHTS["final"],
+                 site=FINAL_SITE)
+    final["from"] = ["East-sf", "West-sf"]
+    out["final"] = final
+    out["champion"] = final["winner"]
+    return out
+
+
 def build(games: list, ratings: dict, today: str, home_edge: float, scale: float,
           sims: int = SIMS, seed=None) -> dict:
     """The Cup: every group's table, the field if group play ended now, and
@@ -164,6 +262,9 @@ def build(games: list, ratings: dict, today: str, home_edge: float, scale: float
         return 0.0
     net = {t: rating(t) for t in teams}
     rows = cup_games(games)
+    # The knockout games already played: every simulation keeps them.
+    ko = knockout_games(games)
+    known = {pair: k["winner"] for pair, k in ko.items() if k["done"]}
     names = {}
     for r in rows:
         names.setdefault(r["home"], r["home_name"])
@@ -219,6 +320,8 @@ def build(games: list, ratings: dict, today: str, home_edge: float, scale: float
     cup = defaultdict(int)
 
     def play(h, a, neutral=False):
+        if frozenset((h, a)) in known:
+            return known[frozenset((h, a))]
         mu = net[h] - net[a] + (0.0 if neutral else home_edge)
         return h if rng.random() < _phi(mu / sd) else a
 
@@ -287,6 +390,28 @@ def build(games: list, ratings: dict, today: str, home_edge: float, scale: float
                           "margin": round(mu if t == h else -mu, 1)})
         remaining[t] = sched
     played = sum(1 for r in rows if r["done"])
+    # THE BRACKET: today's eight in seed order (each conference's group
+    # winners by the order without head-to-head, the wild card fourth), set
+    # once every group game is in, with every knockout result already read.
+    seeds_now, why = {}, {}
+    for conf in ("East", "West"):
+        gw = [t for g, t in winners.items() if conference(g) == conf]
+        seeds_now[conf] = _rank(gw, w0, l0, pd0, pf0, net, {}, rng, h2h=False) + [wild[conf]]
+    for g, t in winners.items():
+        why[t] = f"{g} winner"
+    for conf, t in wild.items():
+        why[t] = "Wild card"
+    br = bracket(seeds_now, ko, why, names, settled=bool(rows) and not left)
+    lines = {}
+    for conf in (br.get("conferences") or {}).values():
+        for g in conf["quarterfinals"] + [conf["semifinal"]]:
+            if g["home"] and g["away"] and not g["done"]:
+                mu = net[g["home"]] - net[g["away"]] + home_edge
+                lines[g["id"]] = {"p_home": round(_phi(mu / sd), 3), "margin": round(mu, 1)}
+    fin = br.get("final") or {}
+    if fin.get("home") and fin.get("away") and not fin.get("done"):
+        mu = net[fin["home"]] - net[fin["away"]]
+        lines["final"] = {"p_home": round(_phi(mu / sd), 3), "margin": round(mu, 1)}
     return {
         "sport": "nba", "season": SEASON, "date": today, "sims": sims,
         "window": list(GROUP_PLAY), "knockouts": KNOCKOUTS,
@@ -298,10 +423,14 @@ def build(games: list, ratings: dict, today: str, home_edge: float, scale: float
                                      "away_score", "ot")} for r in rows],
         "played": played, "games_left": len(left),
         "names": names,
+        # The knockout rounds: matchups, nights, scores, the champion — facts.
+        "bracket": br,
         # THE MODEL'S HALF — paid (gate.PAID_KEYS_BY_FILE["nba_cup.json"]).
         "chances": chances,
         "remaining": remaining,
         "swing": [],
+        # Our chance on each knockout game still to play — paid.
+        "bracket_lines": lines,
     }
 
 
@@ -335,6 +464,26 @@ def load_window(today: _dt.date) -> list:
     return out
 
 
+def load_knockouts(today: _dt.date) -> list:
+    """The knockout nights that have come, off the scoreboard (a night still
+    to come has no result to read, and its matchup is ours already)."""
+    from .sources import espnhoops
+    from .sources.fetch import DataUnavailable
+    out = []
+    for night in sorted({n for ns in KNOCKOUT_NIGHTS.values() for n in ns}):
+        day = _dt.date.fromisoformat(night)
+        if day > today:
+            continue
+        try:
+            got = espnhoops.load_day(night, league="nba")
+        except (DataUnavailable, ValueError):
+            got = []
+        for g in got:
+            g["date"] = night
+        out += got
+    return out
+
+
 def publish(conn, day: _dt.date, out_path: str = "web/data/nba_cup.json") -> str:
     """Build the Cup off the futures board's ratings and write it through the
     gate. Returns the build-log line. From a week before group play to the
@@ -342,10 +491,11 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/nba_cup.json") -> str
     from pathlib import Path
     from . import futures, futuresdata, gate
     lo = _dt.date.fromisoformat(GROUP_PLAY[0]) - _dt.timedelta(days=7)
-    if not (lo <= day <= _dt.date.fromisoformat(KNOCKOUTS["final"])):
+    hi = _dt.date.fromisoformat(KNOCKOUTS["final"]) + _dt.timedelta(days=AFTER_FINAL_DAYS)
+    if not (lo <= day <= hi):
         return "NBA Cup: not in the Cup window, not built"
     ratings, _prior, _n = futuresdata.blended_ratings(conn, "nba", SEASON)
-    games = load_window(day)
+    games = load_window(day) + load_knockouts(day)
     out = build(games, ratings, day.isoformat(), futures.HOME_EDGE["nba"],
                 futures.MARGIN_SCALE["nba"])
     out["generated_at"] = _dt.datetime.now().isoformat(timespec="seconds")
@@ -353,5 +503,6 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/nba_cup.json") -> str
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p, p.name)
     best = sorted(out["chances"].items(), key=lambda kv: -kv[1]["cup"])[:3]
+    champ = (out.get("bracket") or {}).get("champion")
     return (f"NBA Cup: {out['played']} group game(s) played, {out['games_left']} left — "
-            + ", ".join(f"{t} {c['cup']:.0%}" for t, c in best))
+            + (f"won by {champ}" if champ else ", ".join(f"{t} {c['cup']:.0%}" for t, c in best)))

@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JO "The two brackets: the NBA Cup's and the College Football Playoff's" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba_cup.json')); b=d['bracket']; print(b['set'], [s['team'] for c in ('East', 'West') for s in b['conferences'][c]['seeds']], b['champion'], sorted(d['bracket_lines']))"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/cfp_race.json')); b=d.get('bracket') or {}; print(bool(b), [s['team'] for s in b.get('seeds', [])], b.get('champion'))"
+SH
 run JN "Today's free pick travels" 60 <<'SH'
 curl -s https://qellysbook.com/js/potd.js | grep -c 'function pdAlertHTML()'
 cd /srv/qellys && sudo -u qellys python3 -m engine.pushalerts

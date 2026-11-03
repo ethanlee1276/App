@@ -9305,6 +9305,34 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JO. The two brackets: the NBA Cup's and the College Football Playoff's**
+(steps 338-339; you, 2026-11-03, on the audit's list: "do all of them").
+
+- **The NBA Cup** (the NBA's race page): the knockout rounds — each
+  conference's three group winners seeded 1-3 and its wild card 4th, the
+  quarterfinals at the higher seed, the semifinals at the better seed's
+  arena, the final in Indianapolis — scores as they land and the champion.
+  While group play runs (to 27 November) it is the bracket if it ended today.
+  Free; our line on each game left is a member's.
+- **The College Football Playoff** (college's race page): from selection
+  day, 6 December, the twelve the committee names off its final ranking and
+  the title games, every round, scores as they land (with each bowl's name),
+  the champion; our line on each game left and each team's chances, paid.
+  The twelve are named once, from a ranking dated selection day or later,
+  and kept in data/cfp_selection_2026.json — the polls after the bowls are
+  not the committee's. The college build now runs the race on quiet days in
+  season too, and builds it into January.
+
+Nothing to run. Read-only: after the next NBA build, the Cup's eight in
+seed order, whether group play is over, the champion and the games our line
+is on; and from 7 December, after a college build, whether the twelve are
+named and who they are:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba_cup.json')); b=d['bracket']; print(b['set'], [s['team'] for c in ('East', 'West') for s in b['conferences'][c]['seeds']], b['champion'], sorted(d['bracket_lines']))"
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/cfp_race.json')); b=d.get('bracket') or {}; print(bool(b), [s['team'] for s in b.get('seeds', [])], b.get('champion'))"
+```
+
 **JN. Today's free pick travels** (step 336; you, 2026-11-03, on the
 audit's list: "do all of them").
 

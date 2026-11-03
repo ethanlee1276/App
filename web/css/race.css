@@ -68,3 +68,18 @@
   .rc-row.rc-sw { grid-auto-columns: 74px; padding: 6px 0; }
   .rc-p { font-size: var(--fs-xs); }
 }
+/* The Cup's knockout rounds (cupBracketHTML): the score at each side's end,
+   the winner bold and the loser quieter, the champion on a card of its own. */
+.rc-ko .rc-side { grid-template-columns: 22px 20px minmax(0, 1fr) auto; }
+.rc-score { color: var(--text); font-size: var(--fs-sm); font-weight: 800; font-variant-numeric: tabular-nums; }
+.rc-won .rc-name, .rc-won .rc-score { color: var(--text); font-weight: 800; }
+.rc-lost .rc-name, .rc-lost .rc-score { color: var(--text-mute); font-weight: 600; }
+.rc-host b { color: var(--text); }
+.rc-conf-k { margin: 12px 0 6px; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; }
+.rc-champ { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; box-shadow: var(--glow-gold); }
+.rc-champ b { color: var(--text); font-size: var(--fs-lg); }
+/* The College Football Playoff's twelve (cfpPlayoffHTML): two columns where there is room. */
+.rc-twelve { columns: 2 220px; column-gap: 24px; }
+.rc-twelve li { break-inside: avoid; }
+.rc-twelve small { color: var(--text-mute); }

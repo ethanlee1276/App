@@ -1734,6 +1734,15 @@ def main() -> None:
             _write(out, args.out)
             print(f"CFB {args.date}: no games today (season running, last "
                   f"{last}). Wrote {args.out}")
+            # THE RACE ON A QUIET DAY TOO (2026-11-03): selection Sunday
+            # has no game, and a title game that ends after midnight leaves
+            # the next day empty — the bracket must still take both in.
+            # The ratings are this build's own, made above.
+            try:
+                from engine import cfprace as _race
+                print(f"  {_race.publish(ratings, fit, day, teams=teams, out_path=str(Path(args.out).with_name('cfp_race.json')))}")
+            except Exception as _rx:                          # noqa: BLE001
+                print(f"  ⚠️  playoff race skipped: {type(_rx).__name__}: {_rx}")
             return
         out.update(status="offseason",
                    note="No FBS games on this date, and none in the last "

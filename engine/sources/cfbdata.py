@@ -519,6 +519,11 @@ def parse_scoreboard(payload: dict,
             "detail": stype.get("shortDetail", ""),
             "venue": venue.get("fullName", ""),
             "indoor": bool(venue.get("indoor")),
+            # The event's own billing — "College Football Playoff
+            # Quarterfinal at the Rose Bowl" — which names a playoff game's
+            # round and bowl (engine/cfprace's bracket, 2026-11-03).
+            "notes": next((str(n.get("headline") or "") for n in comp.get("notes") or []
+                           if isinstance(n, dict) and n.get("headline")), ""),
             # NAMES BEFORE KEYS in the fallback. `abbr` may now be an
             # `espn:NNN` id for a side ESPN gave no abbreviation, which
             # is a fine lookup key and a poor thing to read on a card.

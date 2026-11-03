@@ -6,9 +6,12 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after today's free pick started travelling — an
-alert you turn on, the sign-up and the plans, a share card (step JN: item
-1d) — and the NFL got its playoff race (step JM: item 1c). On 2 November the
+Last updated 2026-11-03, after the NBA Cup and the College Football Playoff
+got their brackets (step JO: item 1e), the standings, rosters, injuries,
+weather and races opened to free accounts (nothing to run), today's free
+pick started travelling — an alert you turn on, the sign-up and the plans, a
+share card (step JN: item 1d) — and the NFL got its playoff race (step JM:
+item 1c). On 2 November the
 odds feed was cut to ten books (step JL: item 1b) and you ran JK, JJ and JI
 (Done, below).
 Earlier that day the Owner desk was locked to the accounts you list
@@ -150,6 +153,19 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JN 2>&1 | tee /tmp/jn.txt
 
 Not a command: turn the switch on on your own phone to see the alert
 arrive with tomorrow's pick.
+
+## 1e. After the next NBA build, and again from 7 December: the two brackets (step JO)
+
+The NBA Cup's page now draws the knockout bracket (the bracket if group
+play ended today until 27 November), and from selection day, 6 December,
+college's race page becomes the playoff bracket. Nothing to run; this
+shows the Cup's eight and, once the committee has named them, the twelve:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JO 2>&1 | tee /tmp/jo.txt
+```
+
+Before 6 December the college line reads `False [] None` — that's right.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

@@ -182,9 +182,77 @@ function cfpStandingsHTML(d) {
     </details>`).join("")}`;
 }
 
+/* THE PLAYOFF ITSELF, FROM SELECTION DAY (engine/cfprace.playoff_bracket,
+   2026-11-03; Ethan, on the audit's "College Football Playoff bracket after
+   selection day": "do all of them"). The twelve the committee named, every
+   round — the first round on the higher seed's campus, the quarterfinals
+   and on in the bowls — each score as it lands with the winner in bold, and
+   the champion on top. Our line on each game still to play and each team's
+   chance to reach each round are a member's (`bracket_lines`, `chances`). */
+function cfpKoSide(d, team, seed, score, won, tbd) {
+  if (!team) return `<div class="rc-side rc-empty"><span></span><span></span><span class="rc-name">${escapeHtml(tbd)}</span></div>`;
+  const s = ((d.bracket || {}).seeds || []).find((x) => x.team === team) || {};
+  return `<div class="rc-side${won === true ? " rc-won" : won === false ? " rc-lost" : ""}">${teamMarkIn("cfb", team, 22)}
+    <span class="rc-seed">${seed || ""}</span><b class="rc-name">${escapeHtml(s.name || team)}</b>
+    ${score != null ? `<span class="rc-score">${escapeHtml(String(score))}</span>` : ""}</div>`;
+}
+function cfpKoGameHTML(d, g, tbd) {
+  if (!g) return "";
+  const b = d.bracket || {};
+  const nm = (t) => ((b.seeds || []).find((x) => x.team === t) || {}).name || t;
+  const line = (d.bracket_lines || {})[g.id];
+  const where = g.neutral ? (g.bowl || "neutral site") : (g.home ? `at ${nm(g.home)}` : "at the higher seed");
+  return `<div class="rc-match rc-ko${g.done ? " rc-done" : ""}">
+    ${cfpKoSide(d, g.home, g.home_seed, g.home_score, g.done ? g.winner === g.home : null, tbd[0])}
+    ${cfpKoSide(d, g.away, g.away_seed, g.away_score, g.done ? g.winner === g.away : null, tbd[1])}
+    <span class="rc-host">${g.date ? `${escapeHtml(rcDay(g.date))} · ` : ""}${escapeHtml(where)}${g.done ? " · final score" : ""}${
+      line && !g.done ? ` · our line ${escapeHtml(nm(g.home))} <b>${rcPct(line.p_home)}</b>` : ""}</span></div>`;
+}
+function cfpPlayoffHTML(d, locked) {
+  const b = d.bracket || {};
+  const nights = b.nights || {};
+  const span = (k) => (nights[k] || []).map(rcDay).join(" – ");
+  const nm = (t) => ((b.seeds || []).find((x) => x.team === t) || {}).name || t;
+  const fr = b.first_round || [], qf = b.quarterfinals || [], sf = b.semifinals || [];
+  const frLabel = (id) => { const g = fr.find((x) => x.id === id); return g ? `Winner of ${g.home_seed} v ${g.away_seed}` : "To be decided"; };
+  const ch = d.chances || {};
+  const odds = locked ? memberLockHTML("Our chances are for members",
+      "Each team’s chance to reach the quarterfinals, the semifinals and the title game and to win it all — and our line on every playoff game still to play.")
+    : `<div class="section-title">Our chances
+        <span class="sub">— each of the twelve, to reach each round and to win it all, every result in kept.</span></div>
+      <div class="rc-card rc-flush">
+        <div class="rc-row rc-head"><span>Team</span><span>QF</span><span>Semis</span><span>Final</span><span>Title</span></div>
+        ${(b.seeds || []).slice().sort((x, y) => ((ch[y.team] || {}).title || 0) - ((ch[x.team] || {}).title || 0)).map((s) => {
+          const c = ch[s.team] || {};
+          return `<div class="rc-row"><span class="rc-who">${teamMarkIn("cfb", s.team, 20)}<span><b>${s.seed} ${escapeHtml(s.name || s.team)}</b></span></span>
+            <span class="rc-p">${rcPct(c.quarterfinals)}</span><span class="rc-p">${rcPct(c.semifinals)}</span>
+            <span class="rc-p">${rcPct(c.final)}</span><span class="rc-p rc-lead">${rcPct(c.title)}</span></div>`;
+        }).join("")}
+      </div>`;
+  return `${b.champion ? `<div class="rc-card rc-champ">${teamMarkIn("cfb", b.champion, 28)}<b>${escapeHtml(nm(b.champion))} win the national championship</b></div>` : ""}
+    <div class="section-title">The College Football Playoff
+      <span class="sub">— the twelve the committee named on selection day, seeded by its final ranking; the first round on the higher seed’s campus, the rest in the bowls.</span></div>
+    <div class="rc-card"><b>The twelve</b>
+      <ol class="rc-tb rc-twelve">${(b.seeds || []).map((s) => `<li>${escapeHtml(s.name || s.team)} <small>${escapeHtml(s.record || "")} · ${escapeHtml(s.bid || "")}</small></li>`).join("")}</ol></div>
+    <div class="rc-brk">
+      <div class="rc-col"><div class="rc-col-h">First round · ${escapeHtml(span("first_round"))}</div>
+        ${fr.map((g) => cfpKoGameHTML(d, g, ["", ""])).join("")}</div>
+      <div class="rc-col"><div class="rc-col-h">Quarterfinals · ${escapeHtml(span("quarterfinals"))}</div>
+        ${qf.map((g) => cfpKoGameHTML(d, g, ["", frLabel((g.from || [])[0])])).join("")}</div>
+      <div class="rc-col"><div class="rc-col-h">Semifinals · ${escapeHtml(span("semifinals"))}</div>
+        ${sf.map((g) => cfpKoGameHTML(d, g, ["Quarterfinal winner", "Quarterfinal winner"])).join("")}</div>
+      <div class="rc-col"><div class="rc-col-h">National championship · ${escapeHtml(span("final"))}</div>
+        ${cfpKoGameHTML(d, b.final, ["Semifinal winner", "Semifinal winner"])}</div>
+    </div>
+    ${odds}
+    ${cfpStandingsHTML(d)}
+    ${d.generated_at ? `<p class="rc-note">Built ${escapeHtml(String(d.generated_at).replace("T", " ").slice(0, 16))}.</p>` : ""}`;
+}
+
 function cfpHTML(d) {
   const locked = rcLocked(d);
   const a = d.assumptions || {};
+  if (d.bracket && d.bracket.set) return cfpPlayoffHTML(d, locked);
   return `${cfpBracketHTML(d)}
     ${locked ? memberLockHTML("Our chances are for members",
       "Every contender’s chance to make the twelve, earn a bye, win its conference and win it all — each game it has left at our price, and the games this week that swing the field.")
@@ -387,8 +455,61 @@ function cupOddsHTML(d) {
     </div>`;
 }
 
+/* THE KNOCKOUT ROUNDS (engine/nbacup.bracket, 2026-11-03; Ethan, on the
+   audit's "NBA Cup knockout bracket": "do all of them"). Each conference's
+   quarterfinals (1 v 4 and 2 v 3, at the higher seed) and its semifinal (the
+   winners, at the better seed's arena), then the final in Indianapolis —
+   the scores as they land, the winner of each game in bold, the champion
+   on top once there is one. While group play runs it is the bracket if it
+   ended today. Our line on each game still to play is a member's
+   (`bracket_lines`, emptied for anyone else). */
+function cupSide(d, team, seed, score, won, tbd) {
+  if (!team) return `<div class="rc-side rc-empty"><span></span><span></span><span class="rc-name">${escapeHtml(tbd)}</span></div>`;
+  return `<div class="rc-side${won === true ? " rc-won" : won === false ? " rc-lost" : ""}">${teamMarkIn("nba", team, 22)}
+    <span class="rc-seed">${seed || ""}</span><b class="rc-name">${escapeHtml(((d.names || {})[team]) || team)}</b>
+    ${score != null ? `<span class="rc-score">${escapeHtml(String(score))}</span>` : ""}</div>`;
+}
+function cupGameHTML(d, g, tbd) {
+  if (!g) return "";
+  const nm = (t) => ((d.names || {})[t]) || t;
+  const line = (d.bracket_lines || {})[g.id];
+  const where = g.site === "home" ? (g.home && g.away ? `at ${nm(g.home)}` : "at the better seed")
+    : `in ${g.site}`;
+  return `<div class="rc-match rc-ko${g.done ? " rc-done" : ""}">
+    ${cupSide(d, g.home, g.home_seed, g.home_score, g.done ? g.winner === g.home : null, tbd[0])}
+    ${cupSide(d, g.away, g.away_seed, g.away_score, g.done ? g.winner === g.away : null, tbd[1])}
+    <span class="rc-host">${escapeHtml(rcDay(g.date))} · ${escapeHtml(where)}${g.done ? " · final score" : ""}${
+      line && !g.done ? ` · our line ${escapeHtml(nm(g.home))} <b>${rcPct(line.p_home)}</b>` : ""}</span></div>`;
+}
+function cupBracketHTML(d) {
+  const b = d.bracket || {};
+  const confs = b.conferences || {};
+  if (!confs.East || !confs.West) return "";
+  const nights = b.nights || {};
+  const span = (k) => (nights[k] || []).map(rcDay).join(" – ");
+  const nm = (t) => ((d.names || {})[t]) || t;
+  const champ = b.champion;
+  return `<div class="section-title">${b.set ? "The knockout rounds" : "If group play ended today"}
+      <span class="sub">— ${b.set
+        ? "the eight, the quarterfinals at the higher seed, each semifinal at the better seed’s arena, the final in Indianapolis."
+        : "each conference’s group winners seeded by record, its wild card fourth; the quarterfinals at the higher seed."}</span></div>
+    ${champ ? `<div class="rc-card rc-champ">${teamMarkIn("nba", champ, 28)}<b>${escapeHtml(nm(champ))} win the NBA Cup</b></div>` : ""}
+    ${["East", "West"].map((c) => `<div class="rc-conf-k">${c}</div>
+      <div class="rc-brk">
+        <div class="rc-col"><div class="rc-col-h">Quarterfinals · ${escapeHtml(span("quarterfinals"))}</div>
+          ${confs[c].quarterfinals.map((g) => cupGameHTML(d, g, ["", ""])).join("")}</div>
+        <div class="rc-col"><div class="rc-col-h">Semifinal · ${escapeHtml(span("semifinals"))}</div>
+          ${cupGameHTML(d, confs[c].semifinal, ["Winner of 1 v 4", "Winner of 2 v 3"])}</div>
+      </div>`).join("")}
+    <div class="rc-conf-k">The final · ${escapeHtml(span("final"))}</div>
+    <div class="rc-brk">${cupGameHTML(d, b.final, ["East champion", "West champion"])}</div>`;
+}
+
 function cupHTML(d) {
   const locked = rcLocked(d);
+  // Once group play is over the bracket leads the page; before, it follows
+  // the groups as the bracket if group play ended today.
+  const set = !!((d.bracket || {}).set);
   const g = d.groups || {};
   const ko = d.knockouts || {};
   const win = d.window || [];
@@ -396,18 +517,20 @@ function cupHTML(d) {
   return `<p class="rc-note rc-lede">${started ? `${plural(d.played, "group game")} played, ${d.games_left} left` : "Group play has not started"}
       · group nights ${escapeHtml(rcDay(win[0]))} – ${escapeHtml(rcDay(win[1]))} · quarterfinals ${escapeHtml(rcDay(ko.quarterfinals))}
       and semifinals ${escapeHtml(rcDay(ko.semifinals))} at the better seed’s arena · the final ${escapeHtml(rcDay(ko.final))}, Indianapolis.</p>
+    ${set ? cupBracketHTML(d) : ""}
     <div class="section-title">The groups
       <span class="sub">— each group’s winner goes through, and the best of the rest in each conference.</span></div>
     <div class="rc-grid">${Object.entries(g).map(([name, rows]) => cupGroupHTML(name, rows, d, locked)).join("")}</div>
     <div class="section-title">The wild card race
       <span class="sub">— no head-to-head here: record, then point differential, then points.</span></div>
     <div class="rc-grid">${cupWildHTML(d)}</div>
+    ${set ? "" : cupBracketHTML(d)}
     <div class="rc-card"><b>How a tie is broken</b>
       <ol class="rc-tb">${(d.tiebreakers || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ol>
       <p class="rc-note">A group game that goes to overtime counts zero in the differential, so a team cannot run it up
         in extra time — and its overtime points count toward nothing.</p></div>
     ${locked ? memberLockHTML("Our chances are for members",
-      "Every team’s chance to win its group, take the wild card, reach the final and win the Cup — and every group game left at our price and margin.")
+      "Every team’s chance to win its group, take the wild card, reach the final and win the Cup — every group game left at our price and margin, and our line on every knockout game.")
       : cupOddsHTML(d)}
     ${d.generated_at ? `<p class="rc-note">Built ${escapeHtml(String(d.generated_at).replace("T", " ").slice(0, 16))}.</p>` : ""}`;
 }

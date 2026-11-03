@@ -39,8 +39,22 @@ champions. Free, like the poll it is read from. The chances, the schedules
 priced game by game and the swing games are the model's, and paid
 (gate.PAID_KEYS_BY_FILE).
 
+AFTER SELECTION DAY, THE BRACKET (2026-11-03; Ethan, on the audit's "College
+Football Playoff bracket after selection day: the twelve seeds, every round,
+our line, results": "do all of them"). On the Sunday after the title weekend
+the committee releases its final ranking: the twelve are then the four Power
+Four champions off the title games, the Group of Six's highest-ranked team,
+Notre Dame in its top twelve and the rest at large, seeded straight off that
+ranking (`select_field`). It is computed once, from a ranking dated selection
+day or later, and kept (data/cfp_selection_{season}.json) — the polls after
+the bowls are not the committee's. From then the page is the bracket: the
+first round at the higher seed, the quarterfinals and on in the bowls, every
+result read off the scoreboard by the two sides in it, the champion — facts,
+and free — with our line on each game still to play (`bracket_lines`) and
+each team's chance to reach each round and win it all (`chances`), paid.
+
 PURE BELOW `publish`: games, ratings and a clock in, a payload out — tested
-without a network (tests/test_the_playoff_race.py).
+without a network (tests/test_the_playoff_race.py, tests/test_the_cfp_bracket.py).
 """
 
 from __future__ import annotations
@@ -81,6 +95,15 @@ SWING_SHOWN = 8
 #: short side, is a finite run's noise (see the swing note in `build`).
 SWING_FLOOR = 0.03
 SWING_MIN_SIMS = 150
+#: The playoff's nights, 2026-27: the first round on the campuses of seeds
+#: 5-8, the quarterfinals in the New Year's bowls, the semifinals, and the
+#: title game.
+PLAYOFF_NIGHTS = {"first_round": ("2026-12-18", "2026-12-19"),
+                  "quarterfinals": ("2026-12-31", "2027-01-01"),
+                  "semifinals": ("2027-01-08", "2027-01-09"),
+                  "final": ("2027-01-19",)}
+#: The race page is built until this day of the year after its season.
+PLAYOFF_END = (1, 25)
 
 
 def ccg_start(season: int) -> _dt.date:
@@ -88,6 +111,17 @@ def ccg_start(season: int) -> _dt.date:
     December (Dec 3, 2026; the games are the Friday and Saturday)."""
     d = _dt.date(int(season), 12, 1)
     return d + _dt.timedelta(days=(3 - d.weekday()) % 7)
+
+
+def selection_day(season: int) -> _dt.date:
+    """The Sunday the committee releases its final ranking and the twelve:
+    the day after the title weekend (Dec 6, 2026)."""
+    return ccg_start(season) + _dt.timedelta(days=3)
+
+
+def season_of(day: _dt.date) -> int:
+    """The season a date belongs to: January's playoff is the season before's."""
+    return day.year if day.month >= 7 else day.year - 1
 
 
 def _phi(x: float) -> float:
@@ -174,9 +208,11 @@ def _split(games: list, season: int) -> tuple:
 
 def build(games: list, ratings: dict, hfa: float, sd: float, today: str,
           ranks: dict | None = None, poll: dict | None = None,
-          teams: dict | None = None, sims: int = SIMS, seed=None) -> dict:
+          teams: dict | None = None, sims: int = SIMS, seed=None, selection: list | None = None) -> dict:
     """The race: the bracket if it started today, every contender's chances,
-    their games left at our price, and the coming games that move it most."""
+    their games left at our price, and the coming games that move it most.
+    With ``selection`` — the twelve selection day named (`select_field`) —
+    the bracket itself, every result in, our line and each team's chances."""
     rng = random.Random(seed)
     seasons = [g.get("season") for g in games if isinstance(g.get("season"), int)]
     season = Counter(seasons).most_common(1)[0][0] if seasons else int(today[:4])
@@ -418,7 +454,7 @@ def build(games: list, ratings: dict, hfa: float, sd: float, today: str,
                       "swing": round(total, 3), "moves": moves[:4]})
     swing.sort(key=lambda s: -s["swing"])
 
-    return {
+    out = {
         "sport": "cfb", "season": season, "date": today, "sims": sims,
         "poll": poll or {"name": "the poll on the scoreboard", "kind": "scoreboard"},
         "format": {"field": FIELD, "byes": BYES, "auto": list(P4) + ["Group of Six"],
@@ -434,7 +470,180 @@ def build(games: list, ratings: dict, hfa: float, sd: float, today: str,
         "chances": chances,
         "remaining": remaining,
         "swing": swing[:SWING_SHOWN],
+        "bracket": None,
+        "bracket_lines": {},
     }
+    if selection:
+        # SELECTION DAY HAS BEEN: the bracket, and the model's half is the
+        # playoff's — our line on each game left, each team's chances.
+        br = playoff_bracket(selection, playoff_games(games, season))
+        out["bracket"] = br
+        out["bracket_lines"], out["chances"] = playoff_odds(br, opp_net, hfa, sd, sims, rng)
+        out["remaining"], out["swing"] = {}, []
+    return out
+
+
+def _final(g: dict) -> bool:
+    return bool(g.get("completed")) and g.get("home_score") is not None and g.get("away_score") is not None
+
+
+def champions(games: list, season: int) -> dict:
+    """{conference: champion} off the title games that are final."""
+    confs = team_conferences(games)
+    out = {}
+    for g in _split(games, season)[2]:
+        c = confs.get(g["home"])
+        if _final(g) and c in P4 + G6 and confs.get(g["away"]) == c and g.get("conference_game"):
+            out[c] = g["home"] if float(g["home_score"]) > float(g["away_score"]) else g["away"]
+    return out
+
+
+def select_field(games: list, ranks: dict, season: int, teams: dict | None = None) -> list | None:
+    """The twelve on selection day, or None while a Power Four champion is
+    still to be crowned: the four champions, the Group of Six's
+    highest-ranked team, Notre Dame in the top twelve, the rest at large,
+    seeded 1-12 straight off the committee's final ranking. Each seed
+    ``{seed, team, name, rank, record, conference, bid}``."""
+    confs = team_conferences(games)
+    champs = champions(games, season)
+    if any(c not in champs for c in P4):
+        return None
+    played, _left, titles = _split(games, season)
+    w, l = Counter(), Counter()
+    for g in played + [t for t in titles if _final(t)]:
+        hw = float(g["home_score"]) > float(g["away_score"])
+        w[g["home"] if hw else g["away"]] += 1
+        l[g["away"] if hw else g["home"]] += 1
+
+    def rk(t):
+        return ranks.get(t) or 99
+
+    def name(t):
+        info = (teams or {}).get(t) or {}
+        return info.get("nick") or info.get("name") or t
+    fbs = [t for t, c in confs.items() if _fbs(c)]
+    pool = sorted(fbs, key=lambda t: (rk(t), -(w[t] - l[t]), t))
+    field, why = [], {}
+    for c in P4:
+        field.append(champs[c])
+        why[champs[c]] = f"{c} champion"
+    g6 = next((t for t in pool if confs.get(t) in G6), None)
+    if g6 is not None and g6 not in field:
+        field.append(g6)
+        why[g6] = "Group of Six's best"
+    if NOTRE_DAME in fbs and rk(NOTRE_DAME) <= FIELD and NOTRE_DAME not in field:
+        field.append(NOTRE_DAME)
+        why[NOTRE_DAME] = "Notre Dame, top 12"
+    for t in pool:
+        if len(field) >= FIELD:
+            break
+        if t not in field and ranks.get(t):
+            field.append(t)
+            why.setdefault(t, "at large")
+    if len(field) < FIELD:
+        return None
+    seeds = sorted(field, key=lambda t: (rk(t), -(w[t] - l[t]), t))
+    return [{"seed": s, "team": t, "name": name(t), "rank": ranks.get(t), "record": _record(w[t], l[t]),
+             "conference": confs.get(t, ""), "bid": why.get(t, "at large")} for s, t in enumerate(seeds, 1)]
+
+
+def playoff_games(games: list, season: int) -> dict:
+    """The games after selection day, by the two sides in each: ``{pair:
+    {date, home, away, done, home_score, away_score, winner, bowl}}``. Two
+    playoff teams meet after selection day only in the playoff."""
+    lo = selection_day(season).isoformat()
+    out = {}
+    for g in games:
+        day = str(g.get("date") or "")[:10]
+        if day <= lo or not g.get("home") or not g.get("away"):
+            continue
+        done = _final(g)
+        notes = str(g.get("notes") or "")
+        bowl = notes.split(" at the ")[-1].split(" Presented by ")[0] if " at the " in notes else ""
+        out[frozenset((g["home"], g["away"]))] = {
+            "date": day, "home": g["home"], "away": g["away"], "done": done,
+            "home_score": g.get("home_score") if done else None, "away_score": g.get("away_score") if done else None,
+            "winner": ((g["home"] if float(g["home_score"]) > float(g["away_score"]) else g["away"]) if done else None),
+            "bowl": bowl}
+    return out
+
+
+def playoff_bracket(seeds: list, post: dict) -> dict:
+    """Every round from the twelve: the first round at the higher seed, each
+    bye seed against its first-round game's winner, the semifinals and the
+    title game in the bowls, each result ``post`` holds, and the champion."""
+    team = {s["seed"]: s["team"] for s in seeds}
+    seed_of = {s["team"]: s["seed"] for s in seeds}
+
+    def game(gid, rnd, a, b, neutral, frm):
+        if a and b and seed_of[b] < seed_of[a]:
+            a, b = b, a
+        known = post.get(frozenset((a, b))) if a and b else None
+        g = {"id": gid, "round": rnd, "home": a, "away": b, "home_seed": seed_of.get(a), "away_seed": seed_of.get(b),
+             "neutral": neutral, "date": (known or {}).get("date", ""), "bowl": (known or {}).get("bowl", ""),
+             "done": bool(known and known["done"]), "home_score": None, "away_score": None, "winner": None,
+             "from": frm}
+        if known and known["done"]:
+            flip = known["home"] != a
+            g["home_score"] = known["away_score"] if flip else known["home_score"]
+            g["away_score"] = known["home_score"] if flip else known["away_score"]
+            g["winner"] = known["winner"]
+        return g
+    fr = [game(f"fr{k + 1}", "first_round", team[a], team[b], False, [])
+          for k, (a, b) in enumerate(FIRST_ROUND)]
+    qf = [game(f"qf{k + 1}", "quarterfinals", team[s], fr[j]["winner"], True, [fr[j]["id"]])
+          for k, (s, j) in enumerate(QUARTERS)]
+    sf = [game(f"sf{k + 1}", "semifinals", qf[x]["winner"], qf[y]["winner"], True, [qf[x]["id"], qf[y]["id"]])
+          for k, (x, y) in enumerate(SEMIS)]
+    fin = game("final", "final", sf[0]["winner"], sf[1]["winner"], True, ["sf1", "sf2"])
+    return {"set": True, "seeds": seeds, "nights": {k: list(v) for k, v in PLAYOFF_NIGHTS.items()},
+            "first_round": fr, "quarterfinals": qf, "semifinals": sf, "final": fin, "champion": fin["winner"]}
+
+
+def playoff_odds(br: dict, net_of, hfa: float, sd: float, sims: int, rng) -> tuple:
+    """Our line on each game still to play, and each team's chance to reach
+    each round and win it, every result in kept."""
+    lines = {}
+    for rnd in ("first_round", "quarterfinals", "semifinals"):
+        for g in br[rnd]:
+            if g["home"] and g["away"] and not g["done"]:
+                lines[g["id"]] = {"p_home": round(win_prob(net_of(g["home"]), net_of(g["away"]), hfa, sd,
+                                                           g["neutral"]), 3)}
+    fin = br["final"]
+    if fin["home"] and fin["away"] and not fin["done"]:
+        lines["final"] = {"p_home": round(win_prob(net_of(fin["home"]), net_of(fin["away"]), hfa, sd, True), 3)}
+    reach = defaultdict(lambda: Counter())
+
+    def play(g, a, b):
+        if g["done"]:
+            return g["winner"]
+        p = win_prob(net_of(a), net_of(b), hfa, sd, g["neutral"])
+        return a if rng.random() < p else b
+    teams = [s["team"] for s in br["seeds"]]
+    for _ in range(sims):
+        fw = [play(g, g["home"], g["away"]) for g in br["first_round"]]
+        qw = []
+        for k, (s, j) in enumerate(QUARTERS):
+            g = br["quarterfinals"][k]
+            a, b = g["home"], fw[j]
+            reach[a]["quarterfinals"] += 1
+            reach[b]["quarterfinals"] += 1
+            qw.append(play(g, a, b))
+        sw = []
+        for k, (x, y) in enumerate(SEMIS):
+            a, b = qw[x], qw[y]
+            reach[a]["semifinals"] += 1
+            reach[b]["semifinals"] += 1
+            g = br["semifinals"][k]
+            sw.append(g["winner"] if g["done"] else play({"done": False, "neutral": True}, a, b))
+        for t in sw:
+            reach[t]["final"] += 1
+        fin = br["final"]
+        champ = fin["winner"] if fin["done"] else play({"done": False, "neutral": True}, sw[0], sw[1])
+        reach[champ]["title"] += 1
+    chances = {t: {k: round(reach[t][k] / sims, 3) for k in ("quarterfinals", "semifinals", "final", "title")}
+               for t in teams}
+    return lines, chances
 
 
 def _leaders(fbs, conf_of, cw0, cl0, net, ranks, conf):
@@ -510,6 +719,58 @@ def load_season(season: int, today: _dt.date) -> list:
     return games
 
 
+def load_postseason(season: int, today: _dt.date) -> list:
+    """The days after selection day that have come, off the scoreboard: the
+    last three on half an hour so a result lands within the hour, the rest
+    on a day's cache."""
+    from .sources import cfbdata
+    lo = selection_day(season) + _dt.timedelta(days=1)
+    hi = min(today, _dt.date(season + 1, *PLAYOFF_END))
+    if hi < lo:
+        return []
+    near = max(lo, today - _dt.timedelta(days=3))
+    games = []
+    for a, b, ttl in ((lo, near - _dt.timedelta(days=1), 24 * 3600), (near, hi, 30 * 60)):
+        if a <= b:
+            games += cfbdata.load_range(a.isoformat(), b.isoformat(), ttl=ttl)
+    return games
+
+
+#: Where selection day's twelve are kept: the polls after the bowls are not
+#: the committee's, so the field is computed once and read back after.
+SELECTION_FILE = "data/cfp_selection_{season}.json"
+
+
+def selected(season: int, day: _dt.date, games: list, ranks: dict, poll: dict | None,
+             teams: dict | None = None, path: str | None = None) -> list | None:
+    """The twelve, once selection day has come: read back when kept;
+    otherwise named from a committee ranking dated selection day or later
+    with all four Power Four champions crowned, and kept. None before."""
+    import json
+    import os
+    from pathlib import Path
+    if day < selection_day(season):
+        return None
+    p = Path(path or Path(__file__).resolve().parents[1] / SELECTION_FILE.format(season=season))
+    try:
+        got = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(got, dict) and len(got.get("seeds") or []) == FIELD:
+            return got["seeds"]
+    except (OSError, ValueError):
+        pass
+    poll = poll or {}
+    if poll.get("kind") != "cfp" or str(poll.get("date") or "") < selection_day(season).isoformat():
+        return None
+    field = select_field(games, ranks or {}, season, teams)
+    if field:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"season": season, "ranking": poll.get("name"), "ranking_date": poll.get("date"),
+                                   "seeds": field}, indent=1), encoding="utf-8")
+        os.replace(tmp, p)
+    return field
+
+
 def publish(ratings: dict, fit, day: _dt.date, teams: dict | None = None,
             out_path: str = "web/data/cfp_race.json") -> str:
     """Build the race off the board's own ratings and write it through the
@@ -518,10 +779,10 @@ def publish(ratings: dict, fit, day: _dt.date, teams: dict | None = None,
     from pathlib import Path
     from . import gate
     from .sources import cfbdata
-    season = day.year
-    if not (_dt.date(season, 9, 1) <= day <= ccg_start(season) + _dt.timedelta(days=3)):
+    season = season_of(day)
+    if not (_dt.date(season, 9, 1) <= day <= _dt.date(season + 1, *PLAYOFF_END)):
         return "playoff race: out of season, not built"
-    games = load_season(season, day)
+    games = load_season(season, day) + load_postseason(season, day)
     if not games:
         return "playoff race: no games read off the scoreboard, not built"
     poll = None
@@ -534,12 +795,18 @@ def publish(ratings: dict, fit, day: _dt.date, teams: dict | None = None,
     if not ranks:
         ranks = current_ranks(games, day.isoformat())
         poll = {"name": "the poll on the scoreboard", "kind": "scoreboard"}
+    twelve = selected(season, day, games, ranks, poll, teams)
     out = build(games, ratings, float(fit.home_field), float(fit.margin_sd),
-                day.isoformat(), ranks=ranks, poll=poll, teams=teams)
+                day.isoformat(), ranks=ranks, poll=poll, teams=teams, selection=twelve)
     out["generated_at"] = _dt.datetime.now().isoformat(timespec="seconds")
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p, p.name)
+    if out.get("bracket"):
+        br = out["bracket"]
+        done = sum(1 for r in ("first_round", "quarterfinals", "semifinals") for g in br[r] if g["done"])
+        return (f"playoff bracket: {done + int(br['final']['done'])} of 11 games played"
+                + (f" — {br['champion']} the champion" if br.get("champion") else ""))
     top = ", ".join(f"{r['team']} {out['chances'][r['team']]['playoff']:.0%}"
                     for r in out["teams"][:4] if r["team"] in out["chances"])
     return (f"playoff race: {len(out['teams'])} contenders over {out['games_left']} "

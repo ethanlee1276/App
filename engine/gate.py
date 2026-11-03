@@ -287,8 +287,10 @@ PAID_KEYS_BY_FILE = {
     # poll and the scoreboard, and free; every number our model put on them
     # — the chances, each game left at our price, the games that swing it —
     # is the model's output, as the futures boards are.
-    "cfp_race.json": ("chances", "remaining", "swing"),
-    "nba_cup.json": ("chances", "remaining", "swing"),
+    # …and, from selection day, our line on each playoff game (2026-11-03).
+    "cfp_race.json": ("chances", "remaining", "swing", "bracket_lines"),
+    # …and our line on each knockout game still to play (2026-11-03).
+    "nba_cup.json": ("chances", "remaining", "swing", "bracket_lines"),
     # The NFL's playoff race (engine/nflrace, 2026-11-03): the standings and
     # the seeds if it ended today are facts off the results, free; the
     # chances, the games left at our price and the swing games are ours.
