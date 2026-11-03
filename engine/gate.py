@@ -289,6 +289,10 @@ PAID_KEYS_BY_FILE = {
     # is the model's output, as the futures boards are.
     "cfp_race.json": ("chances", "remaining", "swing"),
     "nba_cup.json": ("chances", "remaining", "swing"),
+    # The NFL's playoff race (engine/nflrace, 2026-11-03): the standings and
+    # the seeds if it ended today are facts off the results, free; the
+    # chances, the games left at our price and the swing games are ours.
+    "nfl_race.json": ("chances", "remaining", "swing"),
 }
 
 
@@ -465,9 +469,9 @@ KNOWN_BOARDS = (
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
     "record.json", "record_head.json", "injuries.json", "news.json", "fantasy.json",
     "memecoins.json",
-    # The two races, written by cfb_build and nba_build (engine/cfprace,
-    # engine/nbacup). Mixed: see MIXED_FILES.
-    "cfp_race.json", "nba_cup.json",
+    # The races, written by cfb_build, nba_build and nfl_build
+    # (engine/cfprace, engine/nbacup, engine/nflrace). Mixed: see MIXED_FILES.
+    "cfp_race.json", "nba_cup.json", "nfl_race.json",
     # Zeno's bets, written beside record.json by ledger.export_json and on
     # every owner post (engine/zeno.publish_tickets). Paid whole.
     "zeno.json",
@@ -508,9 +512,9 @@ MIXED_FILES = (
     # `ranks` are ordinary words and a global entry would strip them off
     # any future board that happened to use the name.
     "fantasy.json", "memecoins.json",
-    # The College Football Playoff race and the NBA Cup: free standings, a
-    # paid model half (PAID_KEYS_BY_FILE).
-    "cfp_race.json", "nba_cup.json",
+    # The College Football Playoff race, the NBA Cup and the NFL's race:
+    # free standings, a paid model half (PAID_KEYS_BY_FILE).
+    "cfp_race.json", "nba_cup.json", "nfl_race.json",
     # The day's top pick and every league's Pick of the Day: free picks,
     # members' leans and best bets (`free_top_pick`).
     "day_top_pick.json",

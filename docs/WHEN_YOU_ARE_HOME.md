@@ -9305,6 +9305,27 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JM. The NFL playoff race** (step 335; you, 2026-11-03, on the audit's
+list: "do all of them").
+
+- **What it is.** A race page for the NFL, beside college football's and
+  the NBA Cup (the Playoff race row on the NFL's menu). Free: the seven
+  seeds a conference if the season ended today, the clubs in the hunt, and
+  the eight divisions in tiebreaker order. Members: each club's chance at
+  the playoffs, the division, the 1 seed and the Super Bowl, its games left
+  at our price, and the week's games that swing the field.
+- **How.** The NFL build plays the rest of the season 10,000 times on the
+  Futures page's ratings (engine/nflrace) and writes `nfl_race.json`; ties
+  in the standings go by head-to-head, division and conference record, then
+  our rating.
+
+Nothing to run: the next NFL build writes it. Read-only, after that build —
+the week, games left, when it was built, and each conference's seven:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nfl_race.json')); print(d['week'], d['games_left'], d['generated_at']); [print(c, [s['team'] for s in d['today'][c]['seeds']]) for c in ('AFC', 'NFC')]"
+```
+
 **JL. Ten books: one region's price** (step 333; you, 2026-11-02: "cut the
 books to 10. obv keep the main books everyone uses the draft kings and
 fanduel and thescore bet and mgm and shit like that").

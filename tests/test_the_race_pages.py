@@ -1,7 +1,8 @@
-"""The race pages: college football's playoff race and the NBA Cup.
+"""The race pages: the NFL's and college football's playoff races and the NBA Cup.
 
 Ethan, 2026-10-29: "do all 3" — the second and third of which were the
-playoff race and the Cup tracker. One page a league (js/race.js, loaded the
+playoff race and the Cup tracker; and 2026-11-03, the NFL's: "do all of
+them". One page a league (js/race.js, loaded the
 first time it opens), named for its league in the menu, and quiet for every
 league that has no race.
 
@@ -43,6 +44,15 @@ def _fixtures():
     return cfp, cup
 
 
+def _nfl():
+    import test_the_nfl_playoff_race as N
+    from engine import nflrace
+    out = nflrace.build(N._season(), {t: (i % 9) - 4.0 for i, t in enumerate(N.TEAMS)}, "2026-10-15",
+                        season=2026, sims=800, seed_=2)
+    out["generated_at"] = "2026-11-03T18:00:00"
+    return out
+
+
 # --- the wiring --------------------------------------------------------------------
 def test_the_page_is_wired_where_every_page_is():
     assert 'data-view="race"' in HTML and '<span class="sb-race">Playoff race</span>' in HTML
@@ -61,19 +71,20 @@ def test_the_page_is_wired_where_every_page_is():
 def test_the_row_is_named_for_its_league_and_quiet_elsewhere():
     assert '.sb-race").forEach((el) => { el.textContent = state.sport === "nba" ? "NBA Cup" : "Playoff race"; });' in APP
     hidden = APP[APP.index("const HIDDEN_VIEWS = {"):APP.index("\n};", APP.index("const HIDDEN_VIEWS = {"))]
-    for sport in ("nfl", "mlb", "wnba", "nhl", "ufc", "polymarket", "fantasy"):
+    for sport in ("mlb", "wnba", "nhl", "ufc", "polymarket", "fantasy"):
         line = next(ln for ln in hidden.splitlines() if ln.strip().startswith(f"{sport}:")
                     or f" {sport}: [" in ln)
         assert '"race"' in line, sport
     for sport in ("nba", "cfb"):
         line = next(ln for ln in hidden.splitlines() if ln.strip().startswith(f"{sport}:"))
         assert '"race"' not in line, sport
+    assert "  nfl: [], mlb: [\"race\"]," in hidden, "the NFL's race is open (2026-11-03)"
 
 
 def test_it_reads_through_the_entitled_route():
-    assert 'const RACE_FILES = { cfb: "cfp_race.json", nba: "nba_cup.json" };' in RACE
+    assert 'const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json" };' in RACE
     assert "const res = await paidFetch(name);" in RACE
-    assert "data/cfp_race" not in RACE and "data/nba_cup" not in RACE
+    assert "data/cfp_race" not in RACE and "data/nba_cup" not in RACE and "data/nfl_race" not in RACE
 
 
 # --- what each reader sees ----------------------------------------------------------
@@ -123,6 +134,23 @@ def test_a_reader_without_a_plan_sees_the_facts_and_the_lock():
     assert "Group games left, at our price" not in html
 
 
+def test_the_nfl_race_for_a_member_and_for_a_reader_without_a_plan():
+    d = _nfl()
+    html = _render("nflHTML", d)
+    assert "If the season ended today" in html and "The race" in html and "The divisions" in html
+    assert "member-lock" not in html and "In the hunt:" in html
+    top = d["teams"][0]["team"]
+    c = d["chances"][top]["playoffs"]
+    assert (f"{round(c * 100)}%" if 0.005 <= c <= 0.995 else ">99%") in html
+    if d["swing"]:
+        assert "The games that swing it" in html
+    pub = gate.redact(d, "nfl_race.json")
+    html = _render("nflHTML", pub)
+    assert "If the season ended today" in html and "The divisions" in html
+    assert "member-lock" in html and "Our chances are for members" in html
+    assert "The games that swing it" not in html and "<span>No. 1</span>" not in html
+
+
 def test_before_group_play_no_one_leads_the_cup():
     """At 0-0 the order is our rating's; the night before group play the
     page tagged a leader in every group and a wild-card holder anyway."""
@@ -143,6 +171,7 @@ def _browser():
     from playwright.sync_api import sync_playwright
     import rendercheck
     cfp, cup = _fixtures()
+    nfl = _nfl()
     srv, port = rendercheck._serve()
     got, errs = {}, []
     try:
@@ -152,7 +181,8 @@ def _browser():
                 kw["executable_path"] = "/opt/pw-browsers/chromium"
             browser = pw.chromium.launch(**kw)
             try:
-                for sport, name, payload in (("cfb", "cfp_race.json", cfp), ("nba", "nba_cup.json", cup)):
+                for sport, name, payload in (("cfb", "cfp_race.json", cfp), ("nba", "nba_cup.json", cup),
+                                             ("nfl", "nfl_race.json", nfl)):
                     for who in ("member", "free"):
                         ctx = browser.new_context(viewport={"width": 390, "height": 844}, service_workers="block",
                                                   is_mobile=True, has_touch=True)
@@ -182,6 +212,10 @@ def _browser():
     return got, errs
 
 
+def nfl_swing():
+    return bool(_nfl()["swing"])
+
+
 def test_in_a_browser_both_pages_draw_at_a_phones_width():
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("skip: set QB_BROWSER_TESTS=1")
@@ -195,6 +229,8 @@ def test_in_a_browser_both_pages_draw_at_a_phones_width():
         assert g["lock"] == (who == "free"), (sport, who)
     assert "IF IT STARTED TODAY" in got[("cfb", "member")]["text"].upper()
     assert "THE GROUPS" in got[("nba", "free")]["text"].upper()
+    assert "IF THE SEASON ENDED TODAY" in got[("nfl", "free")]["text"].upper()
+    assert "THE GAMES THAT SWING IT" in got[("nfl", "member")]["text"].upper() or not nfl_swing()
 
 
 if __name__ == "__main__":

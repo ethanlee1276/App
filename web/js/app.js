@@ -499,8 +499,9 @@ const HIDDEN_VIEWS = {
   // Most Likely) and no futures pull yet; every rink is indoors.
   nhl: ["longshots", "futures", "weather", "race", "parlays"],
   cfb: [],
-  // The race page is college football's playoff and the NBA Cup (js/race.js).
-  nfl: ["race"], mlb: ["race"],
+  // The race page is the NFL's and college football's playoffs and the NBA
+  // Cup (js/race.js); the NFL's opened 2026-11-03 (engine/nflrace).
+  nfl: [], mlb: ["race"],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -679,7 +680,7 @@ function applyNavLeagues() {
  * because no weather feed covers college venues. One sentence for both
  * would have to be vague enough to be useless. These mirror the comments
  * already sitting on HIDDEN_VIEWS above. */
-const RACE_WHY = "the race pages are college football’s playoff and the NBA Cup";
+const RACE_WHY = "the race pages are the NFL’s and college football’s playoffs and the NBA Cup";
 const HIDDEN_WHY = {
   // The "likely" reasons LEFT both hoops entries 2026-08-31 — the claim
   // "basketball prices neither" went stale when nba_build started
@@ -710,7 +711,7 @@ const HIDDEN_WHY = {
   // engine/cfb/props.py shipped. College has nothing left to explain
   // away here.
   cfb: {},
-  nfl: { race: RACE_WHY }, mlb: { race: RACE_WHY },
+  nfl: {}, mlb: { race: RACE_WHY },
 };
 
 const SPORT_LABEL = { nfl: "the NFL", mlb: "MLB", nba: "the NBA",

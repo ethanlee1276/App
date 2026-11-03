@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "kind": "ship",
+      "title": "The NFL playoff race",
+      "body": "The NFL now has a playoff race page, beside college football's and the NBA Cup. Free for everyone: the seven seeds in each conference if the season ended today (the four division leaders first, then the wild cards), the clubs in the hunt and how far back they are, and all eight divisions in tiebreaker order. For members: every club's chance to make the playoffs, win its division, take the 1 seed and win the Super Bowl, each game it has left at our price, and the week's games that swing the field most, with each club's chance either way. The rest of the season is played out 10,000 times on the same ratings as the Futures page."
+    },
+    {
+      "date": "2026-11-03",
       "kind": "fix",
       "title": "Each team's name is painted in its end zone",
       "body": "On a live football game's Play-By-Play field, each team's name now lies inside its end zone, slanted with the field the way paint on the turf would be, with the tops of the letters toward the end line. It used to stand straight up while the end zone leaned, so its first and last letters hung off the colour. A long name is set smaller so it still fits."

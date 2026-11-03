@@ -1682,6 +1682,17 @@ def main() -> None:
             print(lightboard.report(gate.board_source(args.out), _lfull))
         except Exception as _lexc:                            # noqa: BLE001
             print(f"⚠️  Light board skipped: {_lexc}")
+        # THE PLAYOFF RACE (engine/nflrace; Ethan, 2026-11-03: "do all of
+        # them"), off the futures board's ratings and the season's schedule.
+        # Its own file and its own failure line: a race that cannot be run
+        # never costs the board.
+        try:
+            import datetime as _rdt
+            from pathlib import Path as _RPath
+            from engine import nflrace as _race
+            print(f"  {_race.publish(_rdt.date.today(), out_path=str(_RPath(args.out).with_name('nfl_race.json')))}")
+        except Exception as _rx:                              # noqa: BLE001
+            print(f"  ⚠️  NFL playoff race skipped: {type(_rx).__name__}: {_rx}")
 
     # Learning engine: journal real-priced picks; settle any whose results
     # have been ingested since. Proxy lines are never journaled.

@@ -121,6 +121,16 @@ live one), and the plan's "API's own bill" line, which should read about
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JL IQ 2>&1 | tee /tmp/jl.txt
 ```
 
+## 1c. After the next NFL build: the NFL playoff race (step JM)
+
+The NFL now has a race page (the Playoff race row on its menu). The next
+NFL build writes it; this shows the week, the games left, when it was built
+and each conference's seven if the season ended today:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JM 2>&1 | tee /tmp/jm.txt
+```
+
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 
 Read-only, about 3 minutes. Section 1 is the board's rule now (every pair
