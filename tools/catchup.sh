@@ -661,6 +661,14 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JT "The weekly backup zip, and what is left to clear" 60 <<'SH'
+cd /srv/qellys && grep -c "ITS OWN LEFTOVERS GO FIRST" engine/maintenance.py
+df -h / | tail -1
+sudo ls -la /srv/qellys/data/backups /srv/qellys/data/backups/pre-repair-closes-20261006-225314
+sudo ls -la /srv/qellys/backups | grep history
+sudo grep -E "history.db|offsite copy updated|FAILED" /var/log/qellys-backup.log | tail -6
+curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; print(json.load(sys.stdin).get('weekly', {}).get('backupzip'))"
+SH
 run JR "The weather desk is paused, and why it lost" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/kalshi.json')); print('paused:', d.get('weather_paused')); print('weather rows:', len(d.get('weather') or []))"
 cd /srv/qellys && sudo -u qellys python3 -m engine.kalshiweather --audit

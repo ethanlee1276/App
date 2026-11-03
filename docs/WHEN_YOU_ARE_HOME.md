@@ -9305,6 +9305,64 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JT. The weekly backup zip runs again, and what is safe to clear** (step
+349; your JG output, 2026-11-03: no weekly zip since 8 October).
+
+- **What happened.** The weekly zip copied history.db (6.5 GB) and
+  compressed it, and that outgrew the hour the chores give a weekly job.
+  On 15 October it was cut off mid-write, and a cut-off job leaves its
+  files where they are: the half-written `backup_2026-10-15.zip.tmp` you
+  deleted, and very likely a hidden raw copy of history.db,
+  `.scratch-2026-10-15.db`, about 6 GB (a plain `ls -l` doesn't show a
+  name that starts with a dot; that is most of the 16 GB `du` counted). On
+  22 and 29 October the zip measured the disk with those leftovers on it,
+  refused, and so never reached the step that deletes them.
+- **Now.** It deletes its own leftovers before it measures, and it leaves
+  history.db to the nightly backup, which already keeps three copies and
+  sends them offsite (the weekly zip never went offsite). The weekly zip
+  keeps the small files that can't be rebuilt, two of them only it has
+  (the UFC dossiers and the device profiles), and takes about a minute.
+  The next one is due Wednesday.
+- **And the nightly's history.db copy needs room too:** it skips history.db
+  unless the copy fits with 15% of the disk still free afterwards, which at
+  6 GB free it doesn't. The cleanup below should give it room.
+
+Read-only, after tonight's 04:00 UTC backup: the backup log should end in
+`offsite copy updated`; the listing shows the hidden files and the
+pre-repair folder; the nightly's history copies; last night's history line:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JT 2>&1 | tee /tmp/jt.txt
+```
+
+The same checks one by one:
+
+```
+cd /srv/qellys && grep -c "ITS OWN LEFTOVERS GO FIRST" engine/maintenance.py
+df -h / | tail -1
+sudo ls -la /srv/qellys/data/backups /srv/qellys/data/backups/pre-repair-closes-20261006-225314
+sudo ls -la /srv/qellys/backups | grep history
+sudo grep -E "history.db|offsite copy updated|FAILED" /var/log/qellys-backup.log | tail -6
+curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; print(json.load(sys.stdin).get('weekly', {}).get('backupzip'))"
+```
+
+**The cleanup: only once the log says `offsite copy updated`.** Each line
+deletes a copy that something newer covers: the scratch file is the cut-off
+run's leftover (the next zip would delete it anyway); the 6 October
+pre-repair folder's history.db is a month old, behind the 8 October zip and
+the nightly's copies (its ledger.db stays, for undoing that repair); and
+the two September zips are behind the 8 October one, which stays. About
+13 GB back, if the scratch file is there:
+
+```
+sudo rm -f /srv/qellys/data/backups/.scratch-*.db
+sudo rm -f /srv/qellys/data/backups/pre-repair-closes-20261006-225314/history.db
+sudo rm -f /srv/qellys/data/backups/backup_2026-09-20.zip /srv/qellys/data/backups/backup_2026-09-27.zip
+df -h / | tail -1
+```
+
+The next night's log should then say `backed up: data/history.db`.
+
 **JS. Fliff takes the tenth book's slot** (step 345; you, 2026-11-03:
 "fliff").
 

@@ -154,6 +154,45 @@ def test_a_failed_backup_leaves_nothing_behind():
     assert "finally" in src
 
 
+def test_a_killed_runs_leftovers_are_swept_before_the_disk_is_measured():
+    """15 October: the zip was cut off at the hour mid-write, and its archive
+    and its raw scratch copy of history.db stayed. On the 22nd and the 29th
+    the check measured the disk WITH them on it and refused, so they stayed
+    for the next week's check to refuse on. The sweep comes first now."""
+    import sqlite3
+    with tempfile.TemporaryDirectory() as d:
+        root, bdir = Path(d) / "root", Path(d) / "backups"
+        (root / "data").mkdir(parents=True)
+        c = sqlite3.connect(str(root / "data" / "ledger.db"))
+        c.execute("CREATE TABLE t (x)"); c.commit(); c.close()
+        bdir.mkdir()
+        left = [bdir / "backup_2026-10-15.zip.tmp", bdir / ".scratch-2026-10-15.db"]
+        for p in left:
+            p.write_bytes(b"x" * 4096)
+        # The disk is only roomy once the leftovers are gone.
+        roomy = lambda _p: 10 if any(q.exists() for q in left) else 10 ** 12  # noqa: E731
+        state = {}
+        maintenance._maybe_backup(state, maintenance._dt.date(2026, 10, 22), print,
+                                  root=root, backup_dir=bdir, free_bytes=roomy)
+        assert not any(p.exists() for p in left)
+        assert [p.name for p in bdir.glob("backup_*.zip")] == ["backup_2026-10-22.zip"]
+        assert state["last_backup"] == "2026-10-22"
+
+
+def test_the_weekly_zip_leaves_history_to_the_nightly():
+    """6.5 GB of history.db outgrew the weekly jobs' hour; the nightly
+    already copies it (three kept, offsite), and still does."""
+    assert "data/history.db" not in maintenance.BACKUP_FILES
+    for rel in ("data/ledger.db", "data/accounts.db", "data/ufc_dossiers.json",
+                "data/cache/line_history.jsonl"):
+        assert rel in maintenance.BACKUP_FILES, rel
+    nightly = (ROOT / "deploy" / "backup.sh").read_text(encoding="utf-8")
+    assert 'DBS+=("data/history.db")' in nightly
+    src = inspect.getsource(maintenance._maybe_backup)
+    assert src.index('glob("*.zip.tmp")') < src.index("free = (free_bytes or _free_bytes)"), \
+        "the sweep comes before the measurement"
+
+
 def test_the_runner_sweeps_old_sandboxes():
     src = (ROOT / "run_tests.py").read_text()
     assert "def sweep_stale_sandboxes" in src

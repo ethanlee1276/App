@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after the weather desk was paused while a
+Last updated 2026-11-03, after the weekly backup zip was fixed and a cleanup
+written for after tonight's backup (step JT: item 0), Fliff took the tenth
+book's slot (step JS: item 1b), the weather desk was paused while a
 read-only check finds why its calls lost (step JR: item 1h), the models'
 weekly refit learned to finish
 in pieces and reach the NFL again (step JQ: item 1g), the college board
@@ -69,26 +71,34 @@ JI). Before that, Who's on now became the desk's first card (step JH). Done:
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 3 checks it.
 
-## 0. Any time now: the disk and the backups (step JG)
+## 0. Tomorrow, after the 04:00 UTC backup: offsite works, then clear about 13 GB (steps JT, JG)
 
-Read-only. Old pre-repair copies prune on their own once this is live; this
-shows what's in the backup folders, how full the disk is, and the backup
-log:
-
-```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JG 2>&1 | tee /tmp/jg.txt
-```
-
-And 1.4 GB you can clear now: /var/backups/qellys only holds backups from
-before October 4 (they go to /srv/qellys/backups now, and offsite):
+You fixed Backblaze's cap and lifecycle and deleted the October 15
+leftover. Why there's been no weekly zip since 8 October: the 15 October
+run was cut off at the chores' one-hour limit while copying history.db,
+its leftovers stayed, and the next two runs refused for lack of room
+without clearing them. Fixed (step JT): it clears its own leftovers first
+and leaves history.db to the nightly backup, which keeps three copies and
+sends them offsite. Read-only first; the backup log should end with
+`offsite copy updated`:
 
 ```
-sudo find /var/backups/qellys -type f -mtime +20 -print -delete
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JT 2>&1 | tee /tmp/jt.txt
 ```
 
-The backup runs at 04:00 UTC: from the first run after Backblaze cleared
-the old versions, the backup log's last lines should say "offsite copy
-updated".
+Then, **only if it says `offsite copy updated`**, the cleanup. These are
+copies something newer covers (step JT says what each one is):
+
+```
+sudo rm -f /srv/qellys/data/backups/.scratch-*.db
+sudo rm -f /srv/qellys/data/backups/pre-repair-closes-20261006-225314/history.db
+sudo rm -f /srv/qellys/data/backups/backup_2026-09-20.zip /srv/qellys/data/backups/backup_2026-09-27.zip
+df -h / | tail -1
+```
+
+Paste back both. Right now the nightly skips history.db because the disk
+is too full for its copy; after this, the next night's log should say
+`backed up: data/history.db`.
 
 ## 1. An hour after the restart, or tomorrow: the notices went out, and alerts on your phone (steps JH, JJ)
 

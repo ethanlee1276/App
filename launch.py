@@ -6261,7 +6261,9 @@ def preflight() -> None:
         elif age > 2 * _every:
             print(f"{bad} Backups: newest is {age} DAYS old ({newest.name}) — "
                   f"they run weekly with maintenance, so this old means the "
-                  f"refresh loop is not running. Check: systemctl status qellys")
+                  f"refresh loop is not running or the zip itself failed: the "
+                  f"heartbeat's weekly backupzip line says which. Check: "
+                  f"systemctl status qellys")
         elif age > _every:
             print(f"{warn} Backups: newest is {age} days old ({newest.name}) — "
                   f"one weekly cycle has been missed")

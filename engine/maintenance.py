@@ -127,7 +127,19 @@ BACKUP_KEEP = 6
 # costs other people their records and leaves us charging cards we can no
 # longer match to accounts. It was omitted at first only because the file
 # did not exist when this list was written.
-BACKUP_FILES = ("data/history.db", "data/ledger.db", "data/accounts.db",
+#
+# history.db LEFT THIS LIST 2026-11-03. It is 6.5 GB, and copying and
+# deflating it outgrew the chores' one-hour ceiling for weekly jobs: on
+# 15 October the zip was cut off mid-write (reap_children's killpg skips
+# every `finally`), and its half-written archive and its raw scratch copy
+# of history.db stayed in data/backups. The next two runs measured the
+# disk with those leftovers on it and refused, so no weekly zip was made
+# after 8 October. The nightly deploy/backup.sh already copies history.db
+# (three kept, gzipped, and synced offsite, which this zip never was), so
+# the weekly zip keeps the small irreplaceable files, two of which the
+# nightly does not have (the UFC dossiers and the device profiles), and
+# finishes in a minute.
+BACKUP_FILES = ("data/ledger.db", "data/accounts.db",
                 "data/cache/line_history.jsonl", "data/ufc_dossiers.json")
 #: Directories backed up whole, newest-state, non-recursively. The
 #: pre-account profiles are one JSON file per device name, so there is no
@@ -191,9 +203,9 @@ BACKUP_MARGIN_BYTES = 1024 ** 3
 #: 6.5 GB a history copy, they were the bulk of the 16 GB data/backups held
 #: when the disk filled on 2026-11-01. The newest REPAIR_COPIES_KEEP stay
 #: whole whatever their age. Beyond them, the history copy goes after
-#: REPAIR_HISTORY_DAYS (history.db is in the weekly zip and the nightly
-#: backup) and the rest after REPAIR_COPY_DAYS (the nightly ledger backups
-#: cover two weeks, offsite).
+#: REPAIR_HISTORY_DAYS (history.db is in the nightly backup, offsite; it
+#: left the weekly zip on 2026-11-03, see BACKUP_FILES) and the rest after
+#: REPAIR_COPY_DAYS (the nightly ledger backups cover two weeks, offsite).
 REPAIR_COPIES_KEEP = 2
 REPAIR_HISTORY_DAYS = 7
 REPAIR_COPY_DAYS = 60
@@ -302,6 +314,14 @@ def _maybe_backup(state: dict, today: _dt.date, log,
     import zipfile
     root = root or ROOT
     backup_dir = backup_dir or BACKUP_DIR
+    # ITS OWN LEFTOVERS GO FIRST, THEN THE DISK IS MEASURED (2026-11-03).
+    # The sweep used to come after the measurement, so a killed run's
+    # archive and scratch copy counted against the room it measured: on
+    # 22 and 29 October the 15th's leftovers made the check refuse, and
+    # the refusal kept them there for the next week's check to refuse on.
+    if backup_dir.is_dir():
+        for stale in list(backup_dir.glob("*.zip.tmp")) + list(backup_dir.glob(".scratch-*")):
+            stale.unlink(missing_ok=True)
     sources = _backup_sources(root)
     total = sum(src.stat().st_size for src in sources)
     biggest = max((src.stat().st_size for src in sources if src.suffix == ".db"), default=0)
@@ -313,8 +333,6 @@ def _maybe_backup(state: dict, today: _dt.date, log,
             f"{need / 1e9:.1f} GB — free some space (data/backups keeps "
             f"{BACKUP_KEEP} archives)")
     backup_dir.mkdir(parents=True, exist_ok=True)
-    for stale in list(backup_dir.glob("*.zip.tmp")) + list(backup_dir.glob(".scratch-*")):
-        stale.unlink(missing_ok=True)
     out = backup_dir / f"backup_{today.isoformat()}.zip"
     part = out.with_suffix(".zip.tmp")
     scratch = backup_dir / f".scratch-{today.isoformat()}.db"

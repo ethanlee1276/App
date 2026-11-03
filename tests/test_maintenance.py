@@ -263,9 +263,12 @@ def test_weekly_backup_zips_and_prunes(monkeypatch):
     import zipfile
     tmp = Path(tempfile.mkdtemp())
     (tmp / "data" / "cache").mkdir(parents=True)
-    db = sqlite3.connect(str(tmp / "data" / "history.db"))
+    db = sqlite3.connect(str(tmp / "data" / "ledger.db"))
     db.execute("CREATE TABLE t (x)"); db.execute("INSERT INTO t VALUES (42)")
     db.commit(); db.close()
+    # history.db is the nightly's since 2026-11-03 (BACKUP_FILES says why):
+    # present on disk, and not in the weekly zip.
+    sqlite3.connect(str(tmp / "data" / "history.db")).close()
     (tmp / "data" / "cache" / "line_history.jsonl").write_text('{"ts": 1}\n')
 
     backups = tmp / "data" / "backups"
@@ -277,11 +280,12 @@ def test_weekly_backup_zips_and_prunes(monkeypatch):
     zips = list(backups.glob("backup_*.zip"))
     assert len(zips) == 1 and state["last_backup"] == "2026-07-26"
     names = zipfile.ZipFile(zips[0]).namelist()
-    assert "data/history.db" in names
+    assert "data/ledger.db" in names
+    assert "data/history.db" not in names, "the nightly copies history.db"
     assert "data/cache/line_history.jsonl" in names
     # The zipped DB is a valid sqlite copy, not a torn file.
     import io
-    raw = zipfile.ZipFile(zips[0]).read("data/history.db")
+    raw = zipfile.ZipFile(zips[0]).read("data/ledger.db")
     probe = tmp / "probe.db"; probe.write_bytes(raw)
     assert sqlite3.connect(str(probe)).execute("SELECT x FROM t").fetchone()[0] == 42
 
