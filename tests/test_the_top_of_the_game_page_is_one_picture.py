@@ -35,6 +35,9 @@ gpPin says where the two bars sit). These hold:
 
 Run directly: `python3 tests/test_the_top_of_the_game_page_is_one_picture.py`
 """
+
+from __future__ import annotations
+
 import io
 import json
 import os

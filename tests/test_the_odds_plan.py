@@ -35,6 +35,9 @@ Offline; every file the plan reads is a temporary one.
 
 Run directly: `python3 tests/test_the_odds_plan.py`
 """
+
+from __future__ import annotations
+
 import datetime as dt
 import json
 import os

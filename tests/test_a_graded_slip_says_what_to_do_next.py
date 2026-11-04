@@ -29,6 +29,9 @@ What is pinned, offline, on fixtures:
     player-games honestly (a no-catch game is a zero; a two-point try is no
     stat) and scores four arms.
 """
+
+from __future__ import annotations
+
 import itertools
 import json
 import math

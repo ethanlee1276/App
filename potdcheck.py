@@ -23,6 +23,8 @@ line per league, journal then card:
 Writes nothing.
 """
 
+from __future__ import annotations
+
 import argparse
 import datetime as _dt
 import json

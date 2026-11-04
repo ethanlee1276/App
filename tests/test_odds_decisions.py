@@ -147,7 +147,11 @@ def test_a_full_college_pull_is_only_offered_inside_the_player_window():
     # already kicked off does not count; garbage kickoffs do not crash it.
     assert "_tonight_until(now)" in gate, "and only tonight's games (the tonight rule)"
     ns: dict = {}
-    exec("import time\n" + _fn(LAUNCH, "_tonight_until") + gate, ns)   # noqa: S102
+    # The module's own lazy annotations come with the functions lifted out
+    # of it: on Python 3.9 `float | None` is evaluated at definition time
+    # without them, and the lifted copy raised TypeError before it ran.
+    exec("from __future__ import annotations\nimport time\n"            # noqa: S102
+         + _fn(LAUNCH, "_tonight_until") + gate, ns)
     fn = ns["_cfb_player_pull_possible"]
     now = 1_800_000_000.0
     sat = now + 4 * 86400

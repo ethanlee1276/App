@@ -12,6 +12,8 @@ the reader types, and says what the book keeps. Offline; no network.
     python3 tests/test_a_cash_out_is_held_to_our_number.py
 """
 
+from __future__ import annotations
+
 import json
 import os
 import shutil

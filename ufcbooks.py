@@ -27,6 +27,8 @@ CHANGED: the ledger is opened read-only, the store is only read, and every
 grade stays as it is.
 """
 
+from __future__ import annotations
+
 import datetime as _dt
 import json
 import sqlite3

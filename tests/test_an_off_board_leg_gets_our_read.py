@@ -29,6 +29,9 @@ What is pinned, offline, on a history database built here:
     one that leaves the ticket worse, never for a game under way;
   * THE PAGE (js/slip.js): the read's tag, a refusal said, the better legs.
 """
+
+from __future__ import annotations
+
 import contextlib
 import datetime as dt
 import io

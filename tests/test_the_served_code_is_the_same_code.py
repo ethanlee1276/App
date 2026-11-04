@@ -49,13 +49,24 @@ def _typescript():
     except Exception:                                               # noqa: BLE001
         return node, None
     path = os.path.join(root, "typescript")
-    return node, (path if os.path.isdir(path) else None)
+    if not os.path.isdir(path):
+        return node, None
+    # A folder is not a module: GitHub's Ubuntu 24.04 image has one under
+    # `npm root -g` that node cannot load (MODULE_NOT_FOUND), and the proof
+    # then failed on the machine instead of on the code. Loading it is the
+    # check; one that will not load is skipped like one that is missing.
+    try:
+        ok = subprocess.run([node, "-e", f"require({json.dumps(path)})"],
+                            capture_output=True, text=True, timeout=60).returncode == 0
+    except Exception:                                               # noqa: BLE001
+        ok = False
+    return node, (path if ok else None)
 
 
 def test_every_shipped_script_is_the_same_program_trimmed():
     node, ts = _typescript()
     if not ts:
-        print("  SKIP node or typescript not installed")
+        print("  SKIP node or typescript not installed (or typescript will not load)")
         return
     d = Path(tempfile.mkdtemp())
     for rel in shrink.FILES:

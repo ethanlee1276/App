@@ -100,8 +100,14 @@ def test_parsing_alone_would_have_made_this_worse():
     3.11+ that accepts the ISO WEEK form and returns a real date in the
     WRONG YEAR with no error, so a parse-only guard would have converted
     the football journal's labels into December days and buried the bug
-    under a plausible number. The shape check is what is load-bearing."""
-    assert datetime.date.fromisoformat(WEEK).year == 2025
+    under a plausible number. The shape check is what is load-bearing.
+    (3.9 and 3.10 refuse the week form with a ValueError instead, which is
+    why the trap only shows on the newer Pythons the box runs.)"""
+    try:
+        parsed = datetime.date.fromisoformat(WEEK)
+    except ValueError:
+        parsed = None                     # Python 3.9 and 3.10
+    assert parsed is None or parsed.year == 2025, parsed
     assert prereg._is_day(WEEK) is False
     assert prereg._is_day(DAY) is True
 

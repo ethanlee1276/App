@@ -24,6 +24,9 @@ What these hold:
 
 Run directly: `python3 tests/test_push_alerts.py`
 """
+
+from __future__ import annotations
+
 import datetime as dt
 import json
 import os
