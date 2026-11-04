@@ -115,9 +115,10 @@ def test_the_edge_card_carries_them_and_most_likely_rereads_them():
     board = (ROOT / "engine" / "likelyboard.py").read_text()
     i = board.index("THE NBA SCOUT'S READ")
     assert 'if sport == "nba":' in board[i:i + 900] and "_nsc.annotate(" in board[i:i + 900]
-    js = (ROOT / "web" / "js" / "app.js").read_text()
-    i = js.index("function cardHTML(r)")
-    assert "r.scout_notes" in js[i:i + 700], "the Edge card draws them"
+    assert [x for x in r["reasons"] if x.startswith("Scout: ")] == [f"Scout: {t}" for t in r["scout_notes"]], \
+        "the Edge card draws them as reasons"
+    assert '"reasons": [x for x in (row.get("reasons") or []) if not str(x).startswith("Scout: ")]' in likely, \
+        "a Most Likely row drops the Edge side's scout lines and reads its own"
     build = (ROOT / "nba_build.py").read_text()
     assert '"scout_ctx": (scout_context(' in build and 'if args.league == "nba" else None' in build, \
         "the NBA only: the WNBA was not measured"

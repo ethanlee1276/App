@@ -1936,7 +1936,9 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         # stake.
         "bettable": bool(bettable(market)),
         "rank_auc": rank_auc(sport, market),
-        "reasons": row.get("reasons") or [],
+        # The Edge card's "Scout: ..." reasons are for ITS side; this row reads
+        # its own (likelyboard, engine/nba/scout) and draws them under "Why?".
+        "reasons": [x for x in (row.get("reasons") or []) if not str(x).startswith("Scout: ")],
         # What the defence gives up to his position (engine/defensevs).
         "matchup_card": row.get("matchup_card"),
         "qb_card": row.get("qb_card"),

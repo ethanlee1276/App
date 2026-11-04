@@ -9425,11 +9425,8 @@ function scriptCardHTML(r) {
 }
 
 function cardHTML(r) {
-  /* THE NBA SCOUT'S READ (engine/nba/scout): the spots two seasons measured
-     to still go wrong after our number, under the reasons, said plainly. */
   const reasons = (r.reasons || []).map(
-    (x, i) => reasonLI(x, (r.reason_tiers || [])[i])).join("")
-    + (r.scout_notes || []).map((t) => `<li class="neg">Scout: ${escapeHtml(t)}</li>`).join("");
+    (x, i) => reasonLI(x, (r.reason_tiers || [])[i])).join("");
   const corr = (r.correlations || []).map((c) =>
     `<div class="warning" style="border-color:var(--cyan)">${iconMark("tag")}${escapeHtml(c)}</div>`).join("");
   const warnings = (r.warnings || []).map((w) => `<div class="warning">${icon('warn')} ${escapeHtml(w)}</div>`).join("");

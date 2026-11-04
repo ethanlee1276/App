@@ -752,6 +752,9 @@ def shared_recommendations(props: list[dict],
         # wrong after our number, for this card's side. Moves nothing.
         from .scout import read as _scout_read
         scout_flags, scout_notes = _scout_read(prop.get("scout_ctx"), r["market"], r["side"], r["line"])
+        # On the Edge card as reasons, "Scout: ..." (Most Likely drops these and
+        # reads its own for the side it takes: likely.from_prop).
+        reasons += [f"Scout: {t}" for t in scout_notes]
         out.append({
             "player": r["player"], "team": r.get("team", ""),
             "opponent": r.get("opponent", ""),
