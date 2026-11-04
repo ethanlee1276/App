@@ -219,6 +219,27 @@ def _trim(repo, clear=False) -> str:
 #: app too old to say restarts at once, as before.
 SWEEP_STATE = ("data", "cache", "sweep.json")
 RESTART_WANT = ("data", "cache", "restart_wanted.json")
+#: AND FOR A WEEKLY JOB IN PROGRESS (2026-11-04). The weekly jobs — the deep
+#: refit, the Lab, board learning, the scouts (engine/maintenance
+#: `_spawn_module`) — run as detached children of the unit, and a restart
+#: kills everything in the unit's cgroup, detached or not. On Wednesday
+#: 2026-11-04 two afternoon pushes killed the Lab 85 minutes in, board
+#: learning at 92, and the deep refit two minutes into its round; each was
+#: then owed another day. The app keeps a pid file per running job
+#: (data/cache/weekly_<name>.pid); while one is alive the restart waits, up
+#: to WEEKLY_WAIT_MAX_S from the pull: a job's own ceiling
+#: (maintenance.WEEKLY_JOB_TIMEOUT_S, an hour) and a margin. It leaves
+#: RESTART_PENDING, NOT RESTART_WANT: the boards keep sweeping (held for an
+#: hour, every board's picks would come off the page), while the app starts
+#: no new deep refit or Lab run (`maintenance.updater_waiting`), so the wait
+#: ends when the running job does. Then the board sweep, as above, on its
+#: own clock.
+WEEKLY_PIDS = ("data", "cache")
+RESTART_PENDING = ("data", "cache", "restart_pending.json")
+WEEKLY_WAIT_MAX_S = 70 * 60
+#: A pid file older than this is a job past its ceiling the app has not
+#: reaped yet, or a leftover: not waited on.
+WEEKLY_STALE_S = 75 * 60
 #: The longest new code waits for a restart, counted from the first run
 #: that pulled it. Past it the unit restarts mid-sweep, as it always did.
 RESTART_WAIT_MAX_S = 45 * 60
@@ -307,11 +328,89 @@ def _sweep_running(repo, now):
     return ran, serving
 
 
+def _weekly_running(repo, now):
+    """``(job name, seconds it has run)`` for the longest-running weekly job
+    still alive (`WEEKLY_PIDS`), or None: no pid file, a dead pid, a pid
+    since reused by another program, or a file past WEEKLY_STALE_S."""
+    import glob
+    best = None
+    for pf in sorted(glob.glob(os.path.join(repo, *WEEKLY_PIDS, "weekly_*.pid"))):
+        d = _read_json(pf)
+        if not d:
+            continue
+        try:
+            pid, started = int(d.get("pid")), float(d.get("started"))
+        except (TypeError, ValueError):
+            continue
+        module = str(d.get("module") or "")
+        ran = now - started
+        if ran < 0 or ran > WEEKLY_STALE_S or not _pid_alive(pid):
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                cmd = fh.read().replace(b"\0", b" ").decode("utf-8", "replace")
+            if module and module not in cmd:
+                continue                   # the pid now belongs to something else
+        except OSError:
+            pass                           # no /proc to ask: the live pid stands
+        name = module.rsplit(".", 1)[-1] or os.path.basename(pf)
+        if best is None or ran > best[1]:
+            best = (name, ran)
+    return best
+
+
+def _clear_requests(repo):
+    for parts in (RESTART_WANT, RESTART_PENDING):
+        try:
+            os.remove(os.path.join(repo, *parts))
+        except OSError:
+            pass
+
+
 def _restart_or_wait(repo, service, before, after, wanted, stray, trim):
     """Restart into ``after`` now, or leave a request and wait for the
-    sweep in progress. Records what it did. Never raises."""
+    weekly job or the sweep in progress. Records what it did. Never raises."""
     now = time.time()
     want_path = os.path.join(repo, *RESTART_WANT)
+    pend_path = os.path.join(repo, *RESTART_PENDING)
+    pulled = f"pulled {before}..{after}" if before != after else f"{after}, pulled earlier,"
+    # A WEEKLY JOB FIRST, on the clock of the first pull, and without
+    # holding the sweeps (WEEKLY_WAIT_MAX_S).
+    pending = _read_json(pend_path)
+    try:
+        first = float((pending or wanted or {}).get("since") or now)
+    except (TypeError, ValueError):
+        first = now
+    try:
+        job = _weekly_running(repo, now)
+    except Exception:                                          # noqa: BLE001
+        job = None
+    if job is not None and now - first < WEEKLY_WAIT_MAX_S:
+        try:
+            os.makedirs(os.path.dirname(pend_path), exist_ok=True)
+            tmp = pend_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump({"commit": after, "since": round(first), "at": round(now), "job": job[0]}, fh)
+            os.replace(tmp, pend_path)
+            os.chmod(pend_path, 0o644)
+            # A sweep hold an earlier run left is lifted: the boards keep
+            # sweeping while the job finishes.
+            try:
+                os.remove(want_path)
+            except OSError:
+                pass
+            _record(repo, True, f"{pulled} — the restart waits for the weekly {job[0]} in progress "
+                                f"({job[1] / 60:.0f} min in; waited {(now - first) / 60:.0f} of "
+                                f"{WEEKLY_WAIT_MAX_S // 60} min); the boards keep sweeping" + stray + trim)
+            return
+        except OSError:
+            pass                       # cannot leave the note: go on to the sweep
+    try:
+        os.remove(pend_path)
+    except OSError:
+        pass
+    # THEN THE BOARD SWEEP, on its own clock from the first run that waited
+    # for one.
     try:
         since = float((wanted or {}).get("since") or now)
     except (TypeError, ValueError):
@@ -320,7 +419,6 @@ def _restart_or_wait(repo, service, before, after, wanted, stray, trim):
         ran, _serving = _sweep_running(repo, now)
     except Exception:                                          # noqa: BLE001
         ran = None
-    pulled = f"pulled {before}..{after}" if before != after else f"{after}, pulled earlier,"
     if ran is not None and now - since < RESTART_WAIT_MAX_S:
         try:
             os.makedirs(os.path.dirname(want_path), exist_ok=True)
@@ -336,12 +434,11 @@ def _restart_or_wait(repo, service, before, after, wanted, stray, trim):
         except OSError:
             pass                       # cannot leave the request: restart now
     waited = f" after waiting {(now - since) / 60:.0f} min for the board sweep" if now - since >= 60 else ""
+    if not waited and now - first >= 60:
+        waited = f" after waiting {(now - first) / 60:.0f} min"
     try:
         subprocess.run(("systemctl", "restart", service), check=True, timeout=120)
-        try:
-            os.remove(want_path)
-        except OSError:
-            pass
+        _clear_requests(repo)
         _record(repo, True, f"{pulled} and restarted {service}{waited}" + stray + trim)
     except Exception as exc:                                  # noqa: BLE001
         _record(repo, False, f"{pulled} but the restart failed: {exc}")
@@ -412,23 +509,22 @@ def main() -> int:
     # app is already serving it (it restarted on its own meanwhile).
     want_path = os.path.join(repo, *RESTART_WANT)
     wanted = _read_json(want_path)
-    if wanted and after == before:
+    # Either request says a restart is owed: the sweep's, or a weekly job's.
+    owed = wanted or _read_json(os.path.join(repo, *RESTART_PENDING))
+    if owed and after == before:
         try:
             serving = _sweep_running(repo, time.time())[1]
         except Exception:                                      # noqa: BLE001
             serving = ""
         if _same_commit(serving, after):
-            try:
-                os.remove(want_path)
-            except OSError:
-                pass
-            wanted = None
-    if after == before and not wanted:
+            _clear_requests(repo)
+            wanted = owed = None
+    if after == before and not owed:
         _record(repo, True, "up to date" + stray + trim)
         return 0
-    # Code pulled earlier and still waiting (`wanted`) restarts whatever
+    # Code pulled earlier and still waiting (`owed`) restarts whatever
     # this pull carried; on its own, a docs-only pull does not.
-    if not wanted and not _needs_restart(repo, before, after):
+    if not owed and not _needs_restart(repo, before, after):
         _record(repo, True, f"pulled {before}..{after} — docs and tests only, nothing the "
                             "site runs: no restart" + stray + trim)
         return 0

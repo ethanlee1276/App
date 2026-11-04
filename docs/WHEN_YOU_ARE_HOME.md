@@ -9305,6 +9305,25 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**KA. A deploy waits for the weekly jobs instead of killing them** (step
+368; nothing to run). Wednesday 4 November's weekly jobs were killed by
+two of my afternoon pushes: each push that changes code restarts the site,
+and a restart stops every job the site started, however detached. The Lab
+was 85 minutes into MLB, board learning 92 minutes in (it had refitted
+college and the NHL), and the deep refit two minutes into its round; the
+heartbeat showed each ended with no exit, at 16:59 and 17:30 UTC, the two
+restarts. Nothing was lost for good: the deep refit's round and the Lab's
+sports carry over, and both pick up tomorrow on their own (items 1f and 1g).
+
+The updater now waits for a weekly job in progress the way it waits for
+a board sweep: while one runs, the new code is pulled and the restart
+holds (up to 70 minutes from the push, a job's own hour and a margin),
+the boards keep sweeping meanwhile, and no new deep refit or Lab run
+starts until the restart lands; one held back that way starts right
+after it, the same day. Its line in the updater's note reads `the restart
+waits for the weekly lab in progress (... min in; waited ... of 70 min);
+the boards keep sweeping`.
+
 **JZ. The NBA board reads the rotation, and a scout says what still goes
 wrong** (steps 360 to 366; you, 2026-11-04: "I want to make sure we're all
 ready to go for NBA. I don't know much about NBA, so I want to make sure

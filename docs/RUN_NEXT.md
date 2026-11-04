@@ -6,7 +6,8 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after the NBA board learned to read the rotation
+Last updated 2026-11-04, after a deploy learned to wait for the weekly jobs
+instead of killing them (step KA: items 1f and 1g), the NBA board learned to read the rotation
 (a man's first games back, a role that jumped, a regular's return) and a
 scout started naming the spots that still go wrong (step JZ: item 1k), the
 NBA lab put points and threes on shot
@@ -239,6 +240,14 @@ Before 6 December the college line reads `False [] None` — that's right.
 
 ## 1f. The day after tomorrow: the Lab's first pieces, and why (step JP)
 
+**Wednesday's run was killed by my pushes, not by the hour** (step KA): it
+was 85 minutes into MLB, the first sport, when a push restarted the site at
+16:59 UTC. MLB goes to the back of tomorrow's line, so the other five
+sports go first and publish as they finish. A push no longer stops a job
+in progress. Still, MLB alone ran past 85 minutes, so when its turn comes
+it will likely be cut off at the hour; the check below says so, and that
+is the line to paste.
+
 The Lab's page has been stamped 29 September since then: its run built every
 sport and published only at the end, and was cut off each night at the
 hour. It now publishes each sport as it finishes, and the heartbeat carries
@@ -263,6 +272,11 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**Wednesday's round was killed two minutes in by my push at 17:30 UTC**
+(step KA), on its first piece of twelve (`yardage_mixture`); the NFL's fits
+still read 25 August. The round carries over: tomorrow's chores continue it,
+and a push no longer stops it part-way. The check below is the same.
 
 The weekly deep refit, which re-learns each sport from its whole history,
 was cut off at the hour every Wednesday since 2 September, inside MLB, so

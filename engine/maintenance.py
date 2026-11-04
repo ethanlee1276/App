@@ -1419,10 +1419,13 @@ def settle_open(log=print, state_path: Path | None = None,
                 # and out of process.
                 if lab._due(Path(lab.LAB_PATH), today) \
                         and state.get("lab_attempted") != today.isoformat():
-                    state["lab_attempted"] = today.isoformat()
-                    _save_state(state_path, state)
-                    for line in _run_lab(log):
-                        log(f"  {line}")
+                    if updater_waiting():
+                        _hold(state, state_path, "lab", today, log)
+                    else:
+                        state["lab_attempted"] = today.isoformat()
+                        _save_state(state_path, state)
+                        for line in _run_lab(log):
+                            log(f"  {line}")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  backtest lab skipped: {exc}")
         # `record_dirty`: a build journaled and left the export to this lane.
@@ -1474,6 +1477,84 @@ def _catch_up_start(hconn, sport: str, yesterday: _dt.date) -> _dt.date:
 #: was measured in minutes per season on the droplet; an hour is room,
 #: not a target, and a job that needs more than that is a job to split.
 WEEKLY_JOB_TIMEOUT_S = 3600
+
+#: THE UPDATER WAITS FOR A WEEKLY JOB (deploy/autoupdate.py RESTART_PENDING,
+#: 2026-11-04). A restart kills every weekly child in the unit, so the box's
+#: updater now holds a restart while one runs and leaves this note; while it
+#: is fresh no new deep refit or Lab run starts here (`_hold`), so the wait
+#: ends when the running job does, and `launch_held` starts what was held
+#: the moment the restart lands. Past the TTL the note is an updater that
+#: died, and jobs start as before.
+RESTART_PENDING_NAME = "restart_pending.json"
+RESTART_PENDING_TTL_S = 80 * 60
+
+
+def updater_waiting(now: float | None = None) -> str:
+    """The commit the box's updater holds a restart for while a weekly job
+    finishes, or "" — no note, an unreadable one, or one past
+    RESTART_PENDING_TTL_S. Never raises."""
+    import time as _time
+    try:
+        d = json.loads((_child_dir() / RESTART_PENDING_NAME).read_text(encoding="utf-8"))
+        commit = str(d.get("commit") or "").strip()
+        since = float(d.get("since") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return ""
+    if not commit or (_time.time() if now is None else now) - since > RESTART_PENDING_TTL_S:
+        return ""
+    return commit
+
+
+def _hold(state: dict, state_path, job: str, today: _dt.date, log) -> None:
+    """Hold ``job`` ("deep" or "lab") for `launch_held`: its day's attempt is
+    not spent, so it starts once the restart lands rather than tomorrow."""
+    held = dict(state.get("held") or {})
+    held[job] = today.isoformat()
+    state["held"] = held
+    _save_state(state_path, state)
+    log(f"  {'deep refit' if job == 'deep' else 'the Lab'}: held — the box's updater restarts into "
+        f"new code once the weekly job in progress ends; it starts right after")
+
+
+def launch_held(state_path=None, today: _dt.date | None = None, log=print,
+                deep=None, deep_next=None, lab_run=None) -> list[str]:
+    """Start the weekly jobs `_hold` kept back, once the updater has stopped
+    waiting: the same day's only (a later day's own schedule takes it), each
+    once, its attempt marked first as the chores mark it. Every cycle, from
+    `run_if_due`. The runners are injectable for tests. Never raises."""
+    out: list[str] = []
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR) and not (deep or deep_next or lab_run):
+        return out                     # a sandbox never starts a real fitter
+    try:
+        if updater_waiting():
+            return out
+        state_path = state_path or STATE_PATH
+        today = today or _dt.date.today()
+        state = _load_state(state_path)
+        held = dict(state.get("held") or {})
+        if not held:
+            return out
+        day = today.isoformat()
+        start = []
+        for job, when in held.items():
+            key = "deep_attempted" if job == "deep" else "lab_attempted"
+            if when == day and job in ("deep", "lab") and state.get(key) != day:
+                state[key] = day
+                start.append(job)
+        state["held"] = {}
+        _save_state(state_path, state)
+        for job in start:
+            if job == "deep":
+                runner = (deep or _run_deep_refit) if today.weekday() == 2 else (deep_next or _continue_deep_refit)
+            else:
+                runner = lab_run or _run_lab
+            for line in runner(log):
+                out.append(line)
+                log(f"  {line}")
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  held weekly jobs not started: {exc}")
+    return out
 
 #: The weekly children this process has started and not yet reaped:
 #: ``{module: {"proc", "started", "log"}}``. Module-level on purpose —
@@ -1972,6 +2053,9 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         # failed) starts its fill this cycle, not with tomorrow's. Asked
         # only here, so it never reads a season beside the chores' read.
         fill_charts_if_owed(log, today=today)
+        # A deep refit or Lab run held back while the updater waited
+        # (`_hold`) starts once the restart has landed, not tomorrow.
+        launch_held(state_path, today, log)
         return False
     # ONE RUNNER AT A TIME (audit 2026-09-30, F-8). The startup thread and
     # the refresher both call this at boot — every autoupdate restart — and
@@ -2681,13 +2765,19 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         # of it. And the fitters run in a CHILD process (below), so if
         # the box cannot afford them the child is what the kernel
         # takes, and the site keeps serving.
-        state["deep_attempted"] = today.isoformat()
-        _save_state(state_path, state)
-        try:
-            for line in _run_deep_refit(log):
-                log(f"  {line}")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  deep refit skipped: {exc}")
+        if updater_waiting():
+            # Not into a restart (deploy/autoupdate.py waits for the weekly
+            # job in progress): held, and started the moment it lands
+            # (`launch_held`), the same day, its attempt not spent.
+            _hold(state, state_path, "deep", today, log)
+        else:
+            state["deep_attempted"] = today.isoformat()
+            _save_state(state_path, state)
+            try:
+                for line in _run_deep_refit(log):
+                    log(f"  {line}")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  deep refit skipped: {exc}")
         # #77, answered on the box that can: does the market shrink help
         # or hurt the top of the likelihood board? The replay says the
         # top still underclaims after the fitted temperature (top-1 60.0%
@@ -2848,13 +2938,16 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
     # began; marked before it starts, like Wednesday's, and never the
     # Wednesday-only scouts.
     elif state.get("deep_attempted") != today.isoformat() and _deep_due(state_path, today):
-        state["deep_attempted"] = today.isoformat()
-        _save_state(state_path, state)
-        try:
-            for line in _continue_deep_refit(log):
-                log(f"  {line}")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  deep refit (the round's next run) skipped: {exc}")
+        if updater_waiting():
+            _hold(state, state_path, "deep", today, log)
+        else:
+            state["deep_attempted"] = today.isoformat()
+            _save_state(state_path, state)
+            try:
+                for line in _continue_deep_refit(log):
+                    log(f"  {line}")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  deep refit (the round's next run) skipped: {exc}")
 
     # THE INVENTIONS, RE-MEASURED (engine/inventionfit). Ethan, 2026-10-22:
     # "Are all of our new data and changes being pushed to the most likely
