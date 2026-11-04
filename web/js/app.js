@@ -11603,7 +11603,7 @@ function firstOursHTML(rows) {
     g.rows.push(r);
   });
   const row = (r) => `<div class="ls-row drow hd-row hd-edge">
-    <span class="pick-id">${playerAvatar(r.player, r.team, { size: 30 })}</span>
+    <span class="pick-id">${playerAvatar(r.player, r.team, { size: 30, headshot: r.headshot })}</span>
     <span class="hd-what"><b>${escapeHtml(r.player)}</b>
       <span>${escapeHtml(teamName(r.team))} · ${pct(r.prob)} by our numbers</span></span>
     <span class="hd-state"><span class="hd-num"><span class="hd-o">${r.need_odds ? `${oddsTxt(r.need_odds)} or longer` : "—"}</span>

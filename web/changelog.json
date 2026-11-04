@@ -4,6 +4,12 @@
     {
       "date": "2026-11-04",
       "kind": "fix",
+      "title": "Long Shots show the players' faces again",
+      "body": "Since Long Shots became first-scorer picks (first touchdown for the NFL and college, first basket for the NBA), every card drew the player's initials: the first-scorer price list carries no photo, and the old board had taken its faces from the prop rows. Each board now gives those picks, and the lists of who scores first, the photo the same player's other props carry, or the sport's stored one; a name two photos claim is settled by the team or left as initials, never somebody else's face."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "fix",
       "title": "Basketball's Most Likely picks are on the page again",
       "body": "The NBA board built its Most Likely picks every day, and they were recorded and graded, but the page showed none of them. A check meant to hide a pick built on a broken number read a missing number as a claim of 0%, and NBA and NHL picks carry no such number, so every one was hidden. A missing number is now no claim, as the engine always read it, and the page lets through exactly the picks the engine posts. If a board ever has picks the page cannot show, the page now says so instead of saying the slate had nothing priced."
     },

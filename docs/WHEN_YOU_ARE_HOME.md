@@ -9305,6 +9305,37 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JX. Long Shots wear their players' faces again** (step 352; you,
+2026-11-04, NBA Long Shots with Achiuwa and Wiggins drawn as initials:
+"Also the long shot page is missing headshots for every sport").
+
+- **Why.** Since 31 October, Long Shots has been first-scorer picks: first
+  touchdown for the NFL and college, first basket for the NBA. Those boards
+  come off the first-scorer price list and the play files, and neither has a
+  photo. The old board was built from the prop rows, which carry the photo.
+  So every card, every "who scores first" row and every "our numbers" row
+  drew initials.
+- **Now.** Each build gives every first-scorer row the photo its player's
+  other props already carry on the same board. A player with no other row
+  gets the sport's stored photo (the same ones the rosters and search use).
+  A name two photos claim is settled by the team, or left as initials.
+  Never somebody else's face. The "our numbers" list on the page also draws
+  the photo now; it used to ignore one.
+
+Nothing to run: the next build of each board after this commit carries the
+faces. Read-only, after the next NBA build (how many first-basket rows have
+a face; the second number is all of them):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba.json')); r=(d.get('first_basket') or {}).get('rows') or []; print(sum(1 for x in r if x.get('headshot')), 'of', len(r))"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JX 2>&1 | tee /tmp/jx.txt
+```
+
 **JW. NBA Most Likely shows on the page again, and where the month's
 credits went** (steps 350 and 351; you, 2026-11-04: "we've already ran
 through almost 10,000 credits ... Seems like we'll run out pretty soon.

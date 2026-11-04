@@ -661,6 +661,9 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JX "Long Shots wear their players' faces again" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba.json')); r=(d.get('first_basket') or {}).get('rows') or []; print(sum(1 for x in r if x.get('headshot')), 'of', len(r))"
+SH
 run JW "NBA Most Likely on the page, and where the month's credits went" 120 <<'SH'
 curl -s https://qellysbook.com/js/app.js | grep -c 'function rawBarExempt('
 cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan --month

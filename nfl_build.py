@@ -1148,6 +1148,10 @@ def main() -> None:
         result["first_td"] = _ft
         result["long_shots"] = _ft["picks"]
         print(_ftd.report(_ft))
+        # THEIR FACES (engine/boardfaces): the first-scorer price list has no
+        # photo, so every Long Shots card drew initials (Ethan, 2026-11-04).
+        from engine import boardfaces as _bfaces
+        print(f"  First-TD faces: {_bfaces.fill(result, 'nfl')} row(s) given a photo")
     except Exception as _fexc:                                # noqa: BLE001
         print(f"  ⚠️  first-touchdown board skipped: {_fexc}")
         result["long_shots"] = []

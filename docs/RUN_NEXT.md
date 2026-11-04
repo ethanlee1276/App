@@ -8,7 +8,7 @@ every command already lives (the letters below are its steps).
 
 Last updated 2026-11-04, after NBA Most Likely came back on the page and
 the plan started saying where the month's credits went (step JW: item
-00), and on 2026-11-03 after Most Likely learned by market and side too
+00), and Long Shots got its faces back (step JX: item 00), and on 2026-11-03 after Most Likely learned by market and side too
 (step JV: item 1h2), Caesars got its backup-book test (step JU:
 item 1i), the weekly backup zip was fixed and a cleanup
 written for after tonight's backup (step JT: item 0), Fliff took the tenth
@@ -105,6 +105,16 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW 2>&1 | tee /tmp/jw.txt
 
 Paste it back. "on its pace ✓" is what to expect; "AHEAD" means the day
 lines show where.
+
+**Long Shots faces (step JX).** Every Long Shots card drew initials since it
+became first-scorer picks: the first-scorer price list has no photo. Each
+build now gives those rows the photo the player's other props carry, or the
+sport's stored one. Nothing to run; after the next NBA build this says how
+many first-basket rows have a face:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JX 2>&1 | tee /tmp/jx.txt
+```
 
 ## 0. Tomorrow, after the 04:00 UTC backup: offsite works, then clear about 13 GB (steps JT, JG)
 

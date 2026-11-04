@@ -1564,6 +1564,11 @@ def main() -> None:
                     out["first_basket"] = _fb
                     out["long_shots"] = _fb["picks"]
                     print(_fbk.report(_fb))
+                    # Their faces (engine/boardfaces): the first-basket price
+                    # list has no photo (Ethan, 2026-11-04, Achiuwa and
+                    # Wiggins drawn as initials).
+                    from engine import boardfaces as _bfaces
+                    print(f"  First-basket faces: {_bfaces.fill(out, args.league, conn)} row(s) given a photo")
                 except Exception as _fbx:                     # noqa: BLE001
                     print(f"  ⚠️  first-basket board skipped: {_fbx}")
             out["board_guide"] = _hboards.guide(args.league)

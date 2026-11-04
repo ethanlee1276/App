@@ -2404,6 +2404,9 @@ def main() -> None:
                 out["first_td"] = _ft
                 out["long_shots"] = _ft["picks"]
                 print(_ftd.report(_ft))
+                # Their faces (engine/boardfaces), as the NFL's.
+                from engine import boardfaces as _bfaces
+                print(f"  First-TD faces: {_bfaces.fill(out, 'cfb', conn)} row(s) given a photo")
             except Exception as _ftx:                         # noqa: BLE001
                 out["long_shots"] = []
                 print(f"  ⚠️  first touchdown skipped: {_ftx}")
