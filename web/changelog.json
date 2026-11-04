@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-04",
+      "kind": "model",
+      "title": "NBA: the chances on Most Likely's alternate lines say what they land",
+      "body": "Most Likely picks from each player's alternate lines (15+ points, 20+, 25+), well away from his main line. The correction the board learns from its own replays was measured only near the main line and then applied to every alternate line too, where it was the wrong size: on two seasons of replayed games, alternate lines it put at 72-86% landed about 90%, so fewer NBA picks cleared Most Likely's tiers than should have and the chances shown sold them short. The alternate lines now get their own correction, measured on alternate lines one and one and a half curve-widths either side of the projection. Fitted on half the games and tested on the other half, those chances land on what they say (PRA lines shown at 91% landed 91%), and every market's alternate lines price at least as well as before. The main line keeps its own correction. The weekly refit fits the new one; until it has, every line prices as it did."
+    },
+    {
+      "date": "2026-11-04",
       "kind": "fix",
       "title": "NFL: the teammate-out numbers come out the same on every computer",
       "body": "When a teammate at his position is ruled out, the NFL board moves a player's number by a multiplier measured on four seasons. Re-running that measurement on a newer Python gave a slightly different answer (a running back's rushing behind a back just ruled out: 1.103 instead of the 1.102 that shipped), because Python 3.12 changed how it adds decimals and two games whose form landed exactly on the measurement's floor fell a hair under it and were dropped. The sums are exact now and a game on the floor counts, so the measurement gives one answer everywhere. The numbers that shipped were right. The version that ranks the depth chart by snap share, which the board uses when it has snap counts, had gone stale since Cincinnati's backs were added in October and was measured again: thirteen multipliers, none moving more than 0.006."

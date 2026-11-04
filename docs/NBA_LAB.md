@@ -441,8 +441,60 @@ about that, measured on the replica with `calibrate.fit` itself:
   calibration (0.2217) by a wide margin, which is why the switch is worth
   making before this is fixed.
 
+### Fixed: the alternate rungs carry their own correction *(11-04)*
+
+The walk now prices every game twice: at its practice line, as before,
+and raw at the rungs Most Likely lives on, the half-point lines one and
+one and a half curve-widths either side of his projection (the board's
+own width, whichever spread is on; `hoopsreplay.ladder_lines`). The
+weekly refit's temperature fit (calibrate.py) fits those rungs as their
+own key, `<market>@ladder`, beside the market's own, with the same
+fitter (`calibrate.fit`: a temperature or a curve, whichever wins its
+held-out slice) and the same 200-sample floor. A rung on the board is
+priced through it (`pipeline.rung_probs`); the main line keeps the
+market's key, and a rung with no ladder key takes its market's
+correction exactly as before (`calibrate.ladder_key`).
+
+Measured with that production fitter on the replica (the walk's 30,000
+most recent games a market and their 49,000-120,000 rungs; each half's
+games fit both keys and the other half is judged; Brier on the rungs
+against no correction at all; first half fitting / second half fitting):
+
+| Market | The market's own key on the rungs | The ladder key on the rungs | Rungs called 70%+: said / landed, own key → ladder key |
+|---|---|---|---|
+| Points | +15.0% worse (T 1.56) / level (T 1.00) | **1.6% / 2.6% better** | 78.7 / 90.2 → 89.1 / 89.9 |
+| Rebounds | +1.6% (T 1.12) / level | **0.7% / 0.3%** | 86.3 / 90.6 → 90.6 / 90.8 |
+| Assists | +5.3% (T 1.26) / +4.3% (T 1.20) | **1.3%** / level | 81.4 / 89.9 → 90.4 / 90.0 |
+| Threes | level / level (T 1.00) | **0.9% / 0.5%** | 85.8 / 88.2 → 88.6 / 88.1 |
+| PRA | +7.4% (T 1.32) / +11.5% (T 1.46) | **2.2% / 1.7%** | 82.9 / 90.6 → 91.0 / 91.1 |
+| Points + rebounds | +7.8% (T 1.34) / +7.8% (T 1.36) | **2.0% / 2.2%** | 82.6 / 90.4 → 90.5 / 90.7 |
+| Points + assists | **+64% (a curve)** / +13.1% (T 1.54) | **2.5% / 2.5%** | 71.5 / 89.5 → 90.4 / 90.4 |
+| Rebounds + assists | **+53% (a curve)** / +5.0% (T 1.24) | **1.9% / 2.6%** | 72.3 / 94.9 → 91.1 / 91.1 |
+| Turnovers | +0.2% / +1.1% (T 1.08) | **1.6% / 1.5%** | 84.1 / 88.4 → 88.6 / 88.4 |
+| Steals | level | 0.1% / 0.1% | 87.4 / 88.1 → 88.5 / 88.0 |
+| Blocks | level | level / 0.2% | 86.1 / 86.4 → 87.5 / 85.8 |
+
+The near-line correction made the ladder worse in 14 of the 22 fits; the
+ladder key made it better in 20 and left it level in the other two. Two
+of the near-line fits chose a curve, and a curve learned near 50% has
+nothing to say about 85%: on points + assists it flattened the ladder so
+far that half the rungs the raw model called 70%+ fell under 70%
+(rebounds + assists: three in four), and the rest claimed 71.5% while
+landing 89.5%. That is Most Likely's NBA board in one line: picks that
+land about 90% shown as 72-86% chances, so too few clear a tier and fewer
+still reach its top. Read the other way, the ladder key is the wrong
+correction at the line itself (worse there than the market's own in 17
+of the 22 fits, by up to 6.1%), which is why the main line keeps its key.
+Steals and blocks barely move either way.
+
+Nothing to run: the next weekly refit fits both keys (runbook KF), and
+until it has, every rung prices exactly as it did.
+
 ## Next
 
+- Done 2026-11-04 (runbook KF): the alternate rungs carry their own
+  correction, fitted at the rungs by the weekly refit (above); the main
+  line keeps the market's.
 - Done 2026-11-04 (runbook KD): rebounds, assists, steals, blocks and
   turnovers are read past his last twenty games (above), checked on the
   box's own seasons every week.

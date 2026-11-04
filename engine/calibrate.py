@@ -897,6 +897,40 @@ def temperature_for(sport: str, market: str, path: Path | str = DEFAULT_PATH) ->
     return correction_for(sport, market, path)[0]
 
 
+#: The suffix of a market's ALTERNATE-LADDER key: ``nba:pts@ladder``.
+#:
+#: THE WALK PRICES EACH GAME AT ONE LINE, a half point under his recent
+#: average — near the projection — and the temperature fitted there was
+#: applied to every rung of the ladder too, where Most Likely prices. On
+#: the walk's 30,000 most recent games a market over the lab's two NBA
+#: seasons (each half fitting, the other judged; docs/NBA_LAB.md, "Fixed:
+#: the alternate rungs carry their own correction") that near-line fit
+#: made the rungs worse in 14 of 22 fits, by 64% where it chose a curve
+#: (points + assists), and its rungs called 70%+ said 72-86% and landed
+#: about 90%. Fitted at the rungs themselves, a curve-width and a curve-
+#: width and a half either side, the correction made them better in 20 and
+#: left them level in 2, and those rungs landed on what they said (PRA:
+#: 91.0% said, 91.1% landed). `hoopsreplay.walk` prices those rungs
+#: (``ladder_pairs``); calibrate.py fits them under this key.
+LADDER = "@ladder"
+
+
+def ladder_key(sport: str, market: str, path: Path | str | None = None) -> str:
+    """The market name a RUNG of the alternate ladder is calibrated under:
+    ``<market>@ladder`` when that key is stored, the market itself when not.
+
+    Looked up EXPLICITLY rather than through `correction_for`, which falls
+    back to the sport-wide key for a market it does not know: a rung with
+    no ladder fit must take its own market's correction, exactly as it did
+    before the ladder key existed, not the sport's."""
+    global _cache
+    if not _enabled:
+        return market
+    if _cache is None:
+        _cache = load(DEFAULT_PATH if path is None else path)
+    return market + LADDER if f"{sport}:{market}{LADDER}" in _cache else market
+
+
 def reset_cache() -> None:
     """Drop the cached calibration file (used by tests and after refitting)."""
     global _curves

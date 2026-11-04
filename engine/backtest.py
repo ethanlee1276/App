@@ -166,6 +166,13 @@ class BacktestReport:
     # (predicted probability, 0/1 outcome) for every decided prop — the input
     # the calibration fitter needs (pushes excluded).
     pairs: list = field(default_factory=list)
+    #: The same, priced at alternate-ladder lines away from the projection
+    #: (the basketball walk only: `hoopsreplay.walk`, one and one and a half
+    #: curve-widths either side). ``pairs`` are priced at a practice line a
+    #: half point under his recent average, near the projection, and a
+    #: temperature fitted there is not the one the ladder's rungs need —
+    #: `calibrate.py` fits these as their own key (``<market>@ladder``).
+    ladder_pairs: list = field(default_factory=list)
     # How many props were priced against a real harvested book line rather than
     # the naive baseline. ROI only means "would this have beaten the book" to
     # the extent this is high, so it's reported rather than left implicit.

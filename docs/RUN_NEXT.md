@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after every NBA rate started reading past a
+Last updated 2026-11-04, after the NBA's alternate lines got their own
+correction (step KF: nothing to run, item 1l shows it once the weekly refit
+has fitted it), every NBA rate started reading past a
 player's last twenty games, checked on the box's seasons every week by
 itself (step KD: nothing to run, item 1k), the NBA's three waiting checks started
 running themselves in the weekly refit (step KC: items 1j and 1k need
@@ -419,6 +421,22 @@ weekly refit checks it on the box's own seasons and turns it off if they
 disagree. For a read by hand, `bash tools/catchup.sh KD`. Record page → What it learned → NBA shows each flag once fifteen
 graded picks carry one; a flag moves a number only once the record proves
 it on games the fit never saw.
+
+## 1l. After the NBA's piece of the weekly refit: the alternate lines' own correction (step KF)
+
+Nothing to run first. Most Likely's NBA alternate lines (15+, 20+, 25+
+points) were priced with a correction measured near the main line, which
+undersold them: on two seasons replayed, lines it called 72-86% landed
+about 90%. They get their own correction now, fitted at the alternate
+lines by the weekly refit (item 1g's round fits it with the NBA). Once
+that round has done the NBA, this lists the NBA's corrections; the new
+ones end `@ladder`, one for each market, beside the market's own:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KF 2>&1 | tee /tmp/kf.txt
+```
+
+If no line ends `@ladder` after the round has done the NBA, paste it back.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

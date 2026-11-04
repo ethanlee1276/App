@@ -9324,6 +9324,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KF. The NBA's alternate lines get their own correction** (step 379;
+nothing to run; you, 2026-11-04: "We want to make our NBA model as
+proficient as possible ... I want you to just do it"). Most Likely prices
+each player's alternate lines (15+, 20+, 25+ points), away from his main
+line. The correction the weekly refit learns was measured at one line a
+game near his projection and applied to every alternate line as well,
+where it was the wrong size: on two seasons replayed, the alternate lines
+it called 70%+ said 72-86% and landed about 90%, and for points + assists
+and rebounds + assists, where the fit chose a curve, it made those lines
+53-64% worse than no correction at all (docs/NBA_LAB.md, "Fixed: the
+alternate rungs carry their own correction"). The refit now prices each
+game at four alternate lines too (one and one and a half curve-widths
+either side of the projection) and fits those as their own correction,
+`nba:<market>@ladder`; the board prices every alternate line through it
+and the main line through the market's own. Held out, it was better on
+the alternate lines in 20 of 22 fits and level in the other two, and its
+70%+ lines landed on what they said (PRA: 91.0% said, 91.1% landed).
+
+The NBA's piece of the weekly refit (item 1g) fits it with the rest; until
+it has, every line prices exactly as before. Once it has, this lists the
+NBA's corrections, the new ones ending `@ladder` (the temperature, `curve`
+where a curve won, how many games or rungs it was fitted on, the date):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import calibrate as c; d = json.load(open(c.DEFAULT_PATH)); [print(k, v.get('temperature'), 'curve' if v.get('curve') else '', v.get('samples'), v.get('fitted_at')) for k, v in sorted(d.items()) if k.startswith('nba:')]"
+```
+
 **KE. The NFL teammate-out numbers are the same on every Python** (step
 380; nothing to run). When a teammate at his position is ruled out, the NFL
 board moves a player's number by a multiplier measured on 2022-2025

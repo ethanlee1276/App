@@ -650,8 +650,12 @@ def rung_probs(stat: str, proj: float, alts: list, w: float,
     toward, whatever the other books hang there (`prob.sharp_fair`, the
     same rule as the main line).
     """
-    from ..calibrate import calibrated
+    from ..calibrate import calibrated, ladder_key
     from .prob import implied_mean
+    # THE LADDER'S OWN TEMPERATURE (2026-11-04): a rung is priced through
+    # `<stat>@ladder` when the walk has fitted one, the stat's own key
+    # otherwise — see `calibrate.LADDER`. The main line keeps the stat's.
+    rung_market = ladder_key(tune.key, stat)
     quotes: dict = {}                                       # key -> (line, over, under)
     for ln in alts or []:
         try:
@@ -677,7 +681,7 @@ def rung_probs(stat: str, proj: float, alts: list, w: float,
             mkt_mean = None
     out: dict = {}
     for key, (line, over, under) in quotes.items():
-        p_model = calibrated(tune.key, stat, p_over(stat, proj, line, tune))
+        p_model = calibrated(tune.key, rung_market, p_over(stat, proj, line, tune))
         sharp = sharp_fair(stat, line, [s_ for s_ in sharp_alts or []
                                         if _same_line(s_, line)], tune) if sharp_alts else None
         if sharp is not None:

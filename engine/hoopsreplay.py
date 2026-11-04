@@ -113,6 +113,27 @@ def histories(conn, sport: str, seasons: list | None = None) -> dict:
     return out
 
 
+#: Where the walk prices the alternate ladder (`walk`'s ``ladder_pairs``),
+#: in curve-widths from the projection: one and one and a half either side,
+#: where Most Likely's rungs live. See `calibrate.LADDER`.
+LADDER_WIDTHS = (-1.5, -1.0, 1.0, 1.5)
+
+
+def ladder_lines(market: str, proj: float, tune) -> list:
+    """The half-point rungs ``LADDER_WIDTHS`` curve-widths (the board's own
+    `sd_for`, whichever spread is on) either side of the projection,
+    distinct and none below 0.5 — a low count's rungs can coincide."""
+    from .nba.prob import sd_for
+    sd = sd_for(market, proj, tune)
+    out = []
+    for k in LADDER_WIDTHS:
+        v = proj + k * sd
+        ln = math.floor(v) + 0.5 if v > 0.5 else 0.5
+        if ln not in out:
+            out.append(ln)
+    return out
+
+
 def _naive_line(prior: list) -> float:
     """The practice line where no closing line was stored: a half point
     just under his recent average (between one under it and the average).
@@ -295,6 +316,11 @@ def walk(entries: list, market: str, sport: str = "nba",
     ``raw_prob`` keeps the untempered number the temperature fit learns on.
     Oldest first, so `calibrate.bake_off`'s held-out slice is the latest.
 
+    THE LADDER TOO (2026-11-04): each game is also priced, raw, at the
+    rungs `ladder_lines` names, and the report carries those as
+    ``ladder_pairs`` (P(over), did it land), oldest first — the pairs
+    calibrate.py fits the rungs' own temperature on (`calibrate.LADDER`).
+
     The memory hooks are logwalk's: ``player_adjust(name)`` stands in for
     the store (1.0 = no memory), and ``player_record(name, projected,
     actual)`` gets the projection before that multiplier. ``form_weights``
@@ -304,7 +330,7 @@ def walk(entries: list, market: str, sport: str = "nba",
     from .nba.pipeline import project
     from .nba.prob import p_over
     tune = tune or _tune(sport)
-    settled = []
+    settled, ladder = [], []
     for _day, player, n, i in _todo(entries, MIN_HISTORY if min_history is None else min_history, cap):
         minutes, values, starter = _window(entries[n], i, market)
         if len(values) < 3:
@@ -329,6 +355,8 @@ def walk(entries: list, market: str, sport: str = "nba",
             player_record(player, proj / (mult or 1.0), actual)
         raw = p_over(market, proj, line, tune)
         over = calibrated(tune.key, market, raw)
+        for rung in ladder_lines(market, proj, tune):
+            ladder.append((p_over(market, proj, rung, tune), 1 if actual > rung else 0))
         side = "OVER" if over >= 0.5 else "UNDER"
         settled.append(SettledProp(
             player=player, market=market, line=line, odds=-110,
@@ -338,6 +366,7 @@ def walk(entries: list, market: str, sport: str = "nba",
             side=side, basis="naive"))
     report = evaluate(settled)
     report.total_priced = len(settled)
+    report.ladder_pairs = ladder
     return report
 
 

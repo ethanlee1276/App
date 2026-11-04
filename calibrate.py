@@ -161,6 +161,26 @@ def main() -> None:
                 print(f"  {'':16} ⚠️  fit hit the edge of the search range — treat "
                       f"this market's model as unreliable, not merely miscalibrated")
         fitted[f"{sport}:{market}"] = c
+        # THE LADDER'S OWN KEY (2026-11-04, basketball): the walk priced
+        # each game at rungs a curve-width and a half either side as well
+        # (`hoopsreplay.walk`'s ladder_pairs), and those fit the
+        # temperature the board's alternate rungs use — see
+        # `calibrate.LADDER`. Stored only past the same sample floor: a
+        # rung with no ladder key takes its market's own correction, and
+        # an under-sampled fit would otherwise replace that with nothing.
+        # A fit that finds no correction worth making IS stored: it says
+        # the rungs price best raw, which is not what the near-line
+        # temperature would do to them.
+        ladder = getattr(_report, "ladder_pairs", None) or []
+        if len(ladder) >= args.min_samples:
+            lc = cal.fit(ladder, sport=sport, market=market + cal.LADDER,
+                         min_samples=args.min_samples)
+            lc.basis = cal.BASIS_HISTORY
+            lc.fitted_at = c.fitted_at
+            print(f"  {'':16} alternate rungs: {lc.samples:>6} priced   "
+                  f"Brier {lc.brier_before:.4f} → {lc.brier_after:.4f}   "
+                  f"T = {lc.temperature}  bias = {lc.intercept:+.2f}")
+            fitted[f"{sport}:{market}{cal.LADDER}"] = lc
 
     if not fitted:
         print("\nNothing fitted. Ingest history first, e.g.:\n"

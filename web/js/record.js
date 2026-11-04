@@ -2035,7 +2035,7 @@ function recSelfTuningSection(st, sport) {
   const rows = markets.map((m) => `
     <div class="rec-row">
       <span class="chip">${escapeHtml((m.sport || "").toUpperCase())}</span>
-      <span style="flex:1;min-width:120px">${escapeHtml(m.market)}</span>
+      <span style="flex:1;min-width:120px">${escapeHtml(String(m.market || "").replace(/@ladder$/, " · alternate lines"))}</span>
       <span style="font-variant-numeric:tabular-nums" title="Temperature: >1 pulls probabilities toward 50% (the model ran hot), <1 pushes them out (it ran shy)">T ${(m.temperature ?? 1).toFixed(2)}</span>
       <span style="color:${tone(m)}">${escapeHtml(m.reading || "")}</span>
       <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${(m.samples ?? 0).toLocaleString()}</span>
