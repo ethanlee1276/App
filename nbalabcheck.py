@@ -22,13 +22,15 @@ projections land from what happened (RMSE) and how good the chances were
 harvested closing line, with their record and return.
 
 THE BRIER IS READ ON HALF-POINT LINES ONLY (2026-11-04). The replay's own
-line, where no closing line was stored, is his recent average rounded, and
-half the time a whole number. A rebound or assist count lands exactly on a
+line, where no closing line was stored, was his recent average rounded, a
+whole number half the time. A rebound or assist count lands exactly on a
 whole number about one time in five, the push is dropped from the score,
 and the board's chance never counts a push (a real prop line is a half
-point). On the lab's two seasons replayed this way, that alone made the
+point). On the lab's two seasons replayed that way, that alone made the
 spread look 2.5% worse for rebounds and assists on whole-number lines and
-about even on half-point ones. A closing line is scored on its own too.
+about even on half-point ones. The replay's line is always a half point
+now (`hoopsreplay._naive_line`); the filter stays for any closing line
+that is whole. A closing line is scored on its own too.
 
 THE LADDER (Most Likely's kind of bet). Near the line is only half of it:
 Most Likely bets overs on lines well under a player, where one CV per stat

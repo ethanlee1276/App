@@ -343,6 +343,11 @@ Paste it back. It ends with `shooting: projections closer in N of 5
 markets` and either `spread: ready for the refit` or `spread: not yet` and
 why. If ready, step JY has the refit and then the switch, in that order.
 
+Also fixed, nothing to run: the NBA's corrections leaned to the over on
+rebounds, assists and threes (about 4 points, worse than none) because the
+weekly refit practised on whole-number lines where those push. It practises
+on half points now; Wednesday's refit picks it up.
+
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 
 Read-only, about 3 minutes. Section 1 is the board's rule now (every pair

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-04",
+      "kind": "fix",
+      "title": "Basketball's corrections stop leaning to the over on rebounds, assists and threes",
+      "body": "Each week the NBA board re-learns how far to trust its own chances by replaying every game at a practice line: the player's recent average, rounded. Half the time that was a whole number, and a rebound or assist total lands exactly on a whole number about one time in five. Those pushes were left out, but the chance being corrected never allowed for them, so the correction learned that overs hit more often than they do. Checked on a full season it had never seen, it made rebound, assist and three-point overs about four points likelier than they hit, worse than no correction at all. The practice line is now always a half point, like the lines books post, and on the same season the corrected chances land within one to two points. It reaches the board with the next weekly refit."
+    },
+    {
+      "date": "2026-11-04",
       "kind": "model",
       "title": "NBA points and threes read a player's shot volume, not his hot streak",
       "body": "The NBA board projected points and threes from the last twenty games' makes. A three-point percentage over the hundred or so threes a starter takes in twenty games swings five points either way on luck alone, so a hot shooter's over looked like an edge the market had already discounted. Points and threes now come from his attempts a minute, which are his role, at his shooting percentages over his last sixty games pulled toward the league's. Points+rebounds, points+assists and PRA move only through their points. Measured on a full season of NBA games it had never seen, the projections landed closer for threes (1.7%), points (1.0%) and the three points combos (0.6 to 0.9%). Each pick's breakdown shows it as its own step, \"Shooting, luck taken out\"."

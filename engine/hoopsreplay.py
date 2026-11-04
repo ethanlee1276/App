@@ -46,6 +46,8 @@ Standard library only; reads the tables the ingest already fills.
 
 from __future__ import annotations
 
+import math
+
 from .backtest import SettledProp, evaluate, BacktestReport
 from .hoops import COMBOS, COUNTS, carried
 
@@ -112,8 +114,24 @@ def histories(conn, sport: str, seasons: list | None = None) -> dict:
 
 
 def _naive_line(prior: list) -> float:
+    """The practice line where no closing line was stored: a half point
+    just under his recent average (between one under it and the average).
+
+    ALWAYS A HALF POINT (2026-11-04, docs/NBA_LAB.md). It used to be the
+    average rounded to a half and lowered by one half, a whole number half
+    the time. A rebound or assist count lands exactly on a whole number
+    about one time in five; the push is dropped from the fit, and the
+    chance being fitted never counted it, so on those lines overs looked
+    to hit far more than said (rebounds 54.5% against 43.7%). The NBA's
+    stored corrections are fitted on this walk, and they learned that
+    lean: fitted on 2024-25 and judged on 2025-26 at half-point lines (the
+    lines a book posts), they made rebound, assist and three overs about
+    4 points likelier than they hit, worse than no correction at all.
+    Fitted on half-point lines: within 1-2 points, and a better Brier in
+    five of the eight markets (points and PRA unchanged). Same centring
+    as before, about half a point under his average."""
     base = sum(prior) / len(prior)
-    return max(0.5, round(base * 2) / 2.0 - 0.5)
+    return max(0.5, math.floor(base - 0.5) + 0.5)
 
 
 def _quotes(conn, sport: str, market: str) -> dict:

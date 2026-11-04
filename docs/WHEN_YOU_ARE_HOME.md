@@ -9335,6 +9335,13 @@ and resources for nfl").
   over 1 to 4% better in all seven markets, and no worse near the line. It
   is OFF (`QB_NBA_SPREAD`): the stored calibration was fitted on the old
   spread, and could stretch the new one a second time.
+- **Fixed: the NBA's corrections leaned to the over.** The weekly refit
+  learns them by replaying every game at a practice line that was a whole
+  number half the time, where rebounds and assists push one time in five.
+  Held out on a full season, the corrections made rebound, assist and three
+  overs about 4 points likelier than they hit, worse than none. The line is
+  always a half point now. Nothing to run: Wednesday's refit picks it up,
+  and so does the refit below.
 - **Measured, not built:** a player's own record with and without a teammate
   who sits (too noisy), the referees, back-to-backs and home or away on the
   rate, last five over last twenty, rebound chances, and the opponent per
@@ -9342,7 +9349,7 @@ and resources for nfl").
 
 Read-only (it replays every stored NBA game through the board with each
 change off and then on, six times over, at the spreads the board really
-uses; it writes nothing). Eight minutes on two seasons in the build session,
+uses; it writes nothing). Seven minutes on two seasons in the build session,
 so perhaps half an hour on the box. On its own, safe from a dropped
 connection:
 

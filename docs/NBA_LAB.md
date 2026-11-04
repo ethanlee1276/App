@@ -96,10 +96,10 @@ code does the same, the two seasons were loaded into a copy of the box's
 replay (`engine/hoopsreplay`: its projection, minutes model, clamp and
 gates), at the spreads the build fits from those logs (points 0.720,
 rebounds 0.697, assists 0.891, PRA 0.588). No calibration was stored
-there, so its two reads are the raw one. About eight minutes.
+there, so its two reads are the raw one. About seven minutes.
 
-- **Shooting:** projections closer in 5 of 5 markets (points 6.426 →
-  6.396, threes 1.387 → 1.377, PRA 8.135 → 8.114), and the Brier lower in
+- **Shooting:** projections closer in 5 of 5 markets (points 6.422 →
+  6.393, threes 1.398 → 1.387, PRA 8.140 → 8.120), and the Brier lower in
   all five. Smaller than the lab's 1.0-1.7% because the board's projection
   carries its minutes guess, which the lab held fixed to judge the rate.
 - **The spread, near the line:** Brier lower in 6 of 7 markets on
@@ -160,15 +160,52 @@ The same honesty the NFL's refusals get:
   teammates have shot hot): 0.17%. Small, and it needs the floor data on the
   box. Parked.
 
+## The calibration, fitted near the line and applied everywhere
+
+The NBA's stored corrections are fitted by the deep refit on the fitters'
+walk: every game priced at one line, his recent average rounded. Two things
+about that, measured on the replica with `calibrate.fit` itself:
+
+- **Half those lines are whole numbers**, where a count pushes and the
+  chance never counted the push. On them, rebound overs hit 54.5% where the
+  chance said 43.7% (assists: 55.4% against 40.2%); on half-point lines
+  53.8% against 52.7%. The fit takes in both, and its lean toward the over
+  roughly doubles: rebounds +0.18 where half-point lines alone say +0.08,
+  assists +0.22 against +0.14 (log-odds; +0.1 is about 2.5 points at 50%).
+  Held out (fitted on 2024-25, judged on 2025-26 at half-point lines), the
+  correction fitted the old way was worse than none for rebounds (Brier
+  0.2411 against 0.2399 raw), assists (0.2399 against 0.2397) and threes
+  (0.2123 against 0.2103), saying rebound overs 56.6% that hit 52.6%.
+  Fitted on half-point lines: 0.2396, 0.2385 and 0.2107, rebound overs
+  53.9%; better than the old fit in rebounds, assists, threes, steals and
+  turnovers, level in points and PRA, 0.0001 worse in blocks. **Fixed
+  (`hoopsreplay._naive_line`): the practice line is always a half point**,
+  and the next weekly refit fits on it.
+- **The temperature is fitted near the line and applied to every line.**
+  Near the line the model is over-confident (a projection's gap from his
+  recent average is part noise), and the fit pulls every chance toward 50%:
+  T = 1.76 for points, 1.68 for PRA on today's spread. On Most Likely's
+  kind of over that is the wrong way. Today's spread plus its own fitted
+  temperature takes the points ladder's Brier from 0.2113 to 0.2217. With
+  the new spread its refit's temperature (1.40) takes 0.2045 to 0.2069:
+  the overs it called 85.8% (hit 85.4%) come out 83.7% and hit 91.3%.
+  Even so, new spread and refit (0.2069) beat today's spread and
+  calibration (0.2217) by a wide margin, which is why the switch is worth
+  making before this is fixed.
+
 ## Next
 
 - Run `nbalabcheck.py` on the box (runbook JY). Then switch the spread on
   with an NBA refit, if its last line says `spread: ready for the refit`.
-- The fitters' walk (`hoopsreplay.walk`), which the NBA's temperatures are
-  fitted on, uses the same whole-number lines: a push is dropped there too,
-  and the chance it is fitted to never counted one. A half-point naive line
-  would fit the temperatures on lines a book actually posts. It changes
-  every NBA and WNBA calibration, so it gets measured first.
+  Its "through today's stored calibration" ladder lines show the second
+  point above on the box's own corrections.
+- The football walk (`logwalk._naive_line`) uses the same whole-number
+  line, so the NFL and college count markets (receptions, attempts,
+  completions) likely carry the same lean. Football has its own fits and
+  its own rules; measure it there before changing it.
+- A correction for Most Likely's lines that is not the near-the-line one:
+  the walk priced at the ladder's lines too, or a correction that knows
+  how far the line is from his projection.
 - The Lab's weekly replay prices with the inherited spreads, not the ones
   the board uses; handing it `hoops_fit`'s would make its NBA numbers the
   board's.

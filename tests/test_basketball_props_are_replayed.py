@@ -62,6 +62,29 @@ def test_every_market_is_priced_and_graded():
     assert all(n > 50 for n in got.values()), got
 
 
+def test_the_practice_line_is_a_half_point_a_book_would_post():
+    """A rebound or assist count lands on a whole number about one time in
+    five. The practice line used to be whole half the time: the push was
+    dropped from the fit, the chance being fitted never counted it, and
+    the NBA's stored corrections learned to lean to the over — held out on
+    a full season, rebound, assist and three overs 4 points likelier than
+    they hit (docs/NBA_LAB.md). Always a half point now, just under his
+    average, in the fitters' walk and in the replay alike."""
+    for avg in (0.2, 1.0, 1.4, 3.0, 7.3, 7.5, 8.0, 22.4):
+        line = hr._naive_line([avg])
+        assert line % 1 == 0.5, (avg, line)
+        assert line == 0.5 or avg - 1 < line <= avg, (avg, line)
+    c = _db()
+    hist = hr.histories(c, "nba")
+    rep = hr.walk(hr._entries(hist, "reb"), "reb", "nba")
+    assert rep.settled and all(s.line % 1 == 0.5 for s in rep.settled)
+    counts_ = [s for s in rep.settled if float(s.actual).is_integer()]
+    assert counts_ and all(s.over_hit is not None for s in counts_), \
+        "a count never pushes on a half-point line (this fixture also stores tenths)"
+    settled, counts = hr.settled_props(hist, "reb", "nba", {})
+    assert counts["naive"] and all(s.line % 1 == 0.5 for s in settled if s.basis == "naive")
+
+
 def test_the_replay_never_sees_the_game_it_prices():
     """Change game i (and everything after it) and the price for game i
     must not move — the definition of walk-forward."""
