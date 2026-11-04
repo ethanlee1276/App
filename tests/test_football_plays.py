@@ -247,10 +247,52 @@ def test_only_live_football_games_are_fetched():
         return _payload()
     games = _games()
     note = _with_fetch(fn, games)
-    assert asked == ["e0", "e1"], asked
+    # WHICH games, not in what order: the summaries are fetched
+    # SUMMARY_WORKERS at a time on threads, so the order the CALLS land in
+    # is the scheduler's (a busy runner can start e1 first). The RESULTS
+    # come back in the games' order (`pool.map`), which is what the next
+    # lines read: e0's own drive on e0's card.
+    assert sorted(asked) == ["e0", "e1"], asked
     assert games[0]["plays"] and games[0]["drive"]["team"] == "BAMA"
     assert "plays" not in games[-1] and "drive" not in games[-1]
     assert "2 of 2 live game(s)" in note, note
+
+
+def test_a_paused_or_dropped_fetch_holds_no_thread():
+    """THE HANG (2026-11-04). `_summaries` yielded from inside one open
+    ThreadPoolExecutor, and `attach_plays` always left it paused there. On
+    a night one feed failed, the raised payload tied the caller's frame
+    into a reference cycle, the garbage collector closed the generator
+    later on a thread that was starting up, and on Python 3.9-3.12 that
+    thread then waited on itself (threading's shutdown lock): this file
+    hung for the runner's whole limit on GitHub's 3.12 job and twice here
+    on 3.9, and on the box the live-score pass sat stuck until the
+    launcher's 180-second limit killed it. A paused generator, and one a
+    dead feed leaves behind, now hold no thread."""
+    import threading
+    real = E.fetch_summary
+    before = {t.ident for t in threading.enumerate()}
+
+    def extra():
+        return [t.name for t in threading.enumerate() if t.ident not in before and t.is_alive()]
+    try:
+        E.fetch_summary = lambda league, eid, ttl=30: _payload()
+        gen = B._summaries("cfb", _games(n_live=6, n_other=0))
+        assert next(gen) is not None              # paused mid-batch, as attach_plays leaves it
+        assert not extra(), f"a pool's threads are open while it waits: {extra()}"
+        gen.close()
+
+        def dead(league, eid, ttl=30):
+            if eid == "e0":
+                raise RuntimeError("ESPN refused")
+            return _payload()
+        E.fetch_summary = dead
+        games = _games(n_live=6, n_other=0)
+        note = B.attach_plays(games, "cfb")
+        assert "1 feed(s) unreachable" in note and games[1]["plays"], note
+        assert not extra(), f"the dead feed's night left threads behind: {extra()}"
+    finally:
+        E.fetch_summary = real
 
 
 def test_a_league_with_no_source_is_left_alone_with_a_note():

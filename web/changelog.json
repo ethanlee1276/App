@@ -4,6 +4,12 @@
     {
       "date": "2026-11-04",
       "kind": "fix",
+      "title": "Live scores keep moving on a night a game's feed fails",
+      "body": "The live pass reads each game's play-by-play four at a time. On a night one game's feed failed, the half-finished read could be cleaned up later on a thread that was just starting, and on the Python the site runs that thread waited on itself: the live scores and play rows sat still until the three-minute limit on each pass gave up on it, instead of moving every twelve seconds. Each batch of four now finishes and closes before its results are used, so nothing is left open to wait on. The same hang is what turned the code's own checks red on GitHub's Python 3.12 run."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "fix",
       "title": "Long Shots show the players' faces again",
       "body": "Since Long Shots became first-scorer picks (first touchdown for the NFL and college, first basket for the NBA), every card drew the player's initials: the first-scorer price list carries no photo, and the old board had taken its faces from the prop rows. Each board now gives those picks, and the lists of who scores first, the photo the same player's other props carry, or the sport's stored one; a name two photos claim is settled by the team or left as initials, never somebody else's face."
     },

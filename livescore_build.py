@@ -358,6 +358,25 @@ def _summaries(league: str, games: list[dict]):
     counts a failure against that game alone, exactly as it did when it
     called `fetch_summary` itself. A batch is fetched together and handed
     over before the next batch starts, so memory holds one batch.
+
+    NO POOL IS OPEN WHILE IT WAITS (2026-11-04). It used to yield from
+    inside one `with ThreadPoolExecutor` for the whole slate, and
+    `attach_plays` takes exactly one summary per game, so it always left
+    this generator paused inside that block. On a night one feed failed,
+    the raised payload tied the caller's frame into a reference cycle,
+    so the paused generator outlived the call and was closed later by the
+    garbage collector — on whatever thread tripped it. When that was a
+    new thread starting up (Python 3.9-3.12 run the collector there while
+    holding `threading`'s shutdown lock), closing the pool joined its
+    threads, and the join needed that same lock: the thread waited on
+    itself and the caller waited on the thread, for good. GitHub's 3.12
+    run and two 3.9 runs here hung on tests/test_football_plays.py for
+    the runner's whole 15-minute limit; on the box the live-score pass
+    would sit stuck until the launcher's 180-second limit killed it
+    (`launch._run_build`), so a night with a dead feed could hold the
+    live scores still for minutes at a time instead of twelve seconds.
+    Each batch now gets its own pool, closed before anything is handed
+    over, so a generator paused or dropped at any point holds no thread.
     """
     from concurrent.futures import ThreadPoolExecutor
     from engine.sources import espnplays
@@ -372,11 +391,14 @@ def _summaries(league: str, games: list[dict]):
         for g in games:
             yield one(g)
         return
-    with ThreadPoolExecutor(max_workers=min(SUMMARY_WORKERS, len(games))) as pool:
-        for i in range(0, len(games), SUMMARY_WORKERS):
-            batch = list(pool.map(one, games[i:i + SUMMARY_WORKERS]))
-            while batch:
-                yield batch.pop(0)
+    for i in range(0, len(games), SUMMARY_WORKERS):
+        part = games[i:i + SUMMARY_WORKERS]
+        with ThreadPoolExecutor(max_workers=len(part)) as pool:
+            batch = list(pool.map(one, part))
+        # The pool is shut and its threads joined HERE, before the first
+        # yield: nothing below can leave one open.
+        while batch:
+            yield batch.pop(0)
 
 
 def attach_plays(games: list[dict], league: str,

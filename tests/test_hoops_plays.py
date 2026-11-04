@@ -267,7 +267,10 @@ def test_live_hoops_games_are_fetched_and_carry_plays_but_no_drive():
         return _payload()
     games = _games()
     note = _with_fetch(fn, games)
-    assert asked == [("wnba", "e0"), ("wnba", "e1")], asked
+    # Which games, not in what order: the fetch runs on threads, so the
+    # calls land in the scheduler's order; the results in the games'
+    # (tests/test_football_plays.py says the same).
+    assert sorted(asked) == [("wnba", "e0"), ("wnba", "e1")], asked
     assert len(games[0]["plays"]) == B.PLAYS_PER_GAME
     assert games[0]["plays"][-1]["kind"] == "hoops"
     assert "drive" not in games[0], "basketball has no drive line"
