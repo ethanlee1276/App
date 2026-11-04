@@ -88,15 +88,23 @@ def board_faces(result: dict) -> tuple[dict, dict]:
 
 
 def stored_faces(sport: str, conn=None) -> dict:
-    """{normalised name: photo} from the sport's stored photos, or {}."""
+    """{normalised name: photo} from the sport's stored photos, or {}. A
+    connection it had to open itself it closes."""
+    own = None
     try:
         from . import rosters
         if conn is None:
             from . import db
-            conn = db.connect()
+            conn = own = db.connect()
         return rosters.face_map(conn, sport) or {}
     except Exception:                                        # noqa: BLE001
         return {}
+    finally:
+        if own is not None:
+            try:
+                own.close()
+            except Exception:                                # noqa: BLE001
+                pass
 
 
 def fill(result: dict, sport: str, conn=None, stored: dict | None = None) -> int:
