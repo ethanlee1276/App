@@ -23,6 +23,8 @@ from pathlib import Path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ["QB_MODELS_DIR"] = tempfile.mkdtemp()
+os.environ.pop("QB_LIKELY_CAL", None)
+os.environ.pop("QB_LIKELY_CTX", None)                   # the stores live in the sandbox above
 
 from engine import db, lineledger                                     # noqa: E402
 from engine import ledger as LG                                       # noqa: E402
