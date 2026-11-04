@@ -185,6 +185,7 @@ def _node(js):
       {_const("LIKELY_HEAVIEST_PRICE")}
       var pct = (v) => Math.round(Number(v) * 100) + "%";
       {_fn("shrinkArtefact")}
+      {_fn("rawBarExempt")}
       {_fn("showableLikelyRow")}
       {_fn("likelyOwnReadTile")}
       console.log(JSON.stringify((() => {{ {js} }})()));

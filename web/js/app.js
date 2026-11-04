@@ -1031,12 +1031,24 @@ function leagueBadge(sport) {
    de-vigged number) ride on every prop row, so this asks exactly what
    `betting.temper_edge` asked and needs no keyword to match.
 
-   Mirrors engine/betting.MAX_CREDIBLE_EDGE — pinned equal by test. */
+   Mirrors engine/betting.MAX_CREDIBLE_EDGE — pinned equal by test.
+
+   NO CLAIM IS NOT A CLAIM OF 0% (2026-11-04). `Number(null)` is 0, and 0
+   is finite, so a row whose pre-shrink claim was missing — every NBA and
+   NHL pick: their pipelines hand the board no `raw_prob`, and the file
+   says `null` — read as the model saying 0%, sat 58 points from the
+   book, and was hidden as an artefact. Ethan, that morning: "we still
+   don't have any most likely picks showing on the NBA page or the most
+   likely page", over a board carrying 92 of them, journaled and graded
+   every day. The engine has always read a missing claim as no claim
+   (`likely.engine_credible`: "raw is None … return True"); so does this. */
 const MAX_CREDIBLE_EDGE = 0.10;
 
 function shrinkArtefact(r) {
-  const raw = Number((r || {}).raw_prob);
-  const fair = Number((r || {}).fair_prob);
+  const rv = (r || {}).raw_prob, fv = (r || {}).fair_prob;
+  if (rv == null || fv == null || rv === "" || fv === "") return false;
+  const raw = Number(rv);
+  const fair = Number(fv);
   if (!Number.isFinite(raw) || !Number.isFinite(fair)) return false;
   return Math.abs(raw - fair) > MAX_CREDIBLE_EDGE;
 }
@@ -10094,6 +10106,16 @@ function renderQuickTools() {
    are chalk, and a -140 under is a bet. Ethan, 2026-09-02: "all I see
    us is doing overs, but we have no unders." */
 const LIKELY_HEAVIEST_PRICE = -250;
+/* The rows `likely.engine_credible` lets past the raw-claim bar, in its
+   words: ranked on the market's number; a rung priced from the sharp
+   pair or anchored on the market's centre; a real find. Pinned to the
+   engine's own answers by tests/test_basketball_most_likely_reaches_the_page.py. */
+function rawBarExempt(r) {
+  const x = r || {};
+  if (x.prob_source === "market") return true;
+  if (x.rung === "alt" && (x.prob_source === "sharp" || x.prob_source === "anchored")) return true;
+  return !!x.bold;
+}
 function showableLikelyRow(r) {
   // A LOCKED PICK IS NEVER HIDDEN (engine/likely.hard_exit, 2026-09-25):
   // it went up, and it stays shown as posted until its game — the price
@@ -10107,7 +10129,14 @@ function showableLikelyRow(r) {
   // book's and whose model disagreement is measured to carry nothing
   // (likely.engine_credible, 2026-09-08). The raw number stays on the
   // row for the Model tile; it is not a reason to hide the row.
-  if ((r || {}).prob_source !== "market"
+  // …NOR ON THE ENGINE'S OTHER TWO EXEMPTIONS (2026-11-04), which this
+  // gate never copied: a RUNG priced from the sharp book's pair or the
+  // market's centre (its claim is not the main line's raw model — that
+  // claim is what the anchor set aside), and a REAL FIND (engine/
+  // boldcheck), which stands past the credibility bars by design. The
+  // engine posted them; a gate that exists for stale files must not take
+  // down what today's engine meant to show.
+  if (!rawBarExempt(r)
       && shrinkArtefact({ raw_prob: (r || {}).engine_raw_prob,
                           fair_prob: (r || {}).fair_prob })) return false;
   const odds = (r || {}).odds;
@@ -10198,6 +10227,30 @@ function likelyRefusedNote(census, shown) {
 function capWipeoutNote() {
   return ((state.data || {}).cap_notes || [])
     .find((n) => String(n || "").startsWith("NO BETS FUNDED")) || "";
+}
+
+/* PICKS ON THE BOARD, NONE ON THE PAGE (2026-11-04). The NBA board carried
+   92 picks, journaled and graded every day, and this page drew none of them
+   (`shrinkArtefact` read a missing claim as a 0% claim) — while the empty
+   state above blamed the slate: "no row could be priced". That is the wrong
+   half of the story, and it hid the fault from the one reader who could
+   have reported it. A board that HAS picks the page did not draw says so:
+   their games are under way (they are on Live), or this page held them
+   back, which is ours to fix and not a quiet night. "" when the board has
+   no pick at all, and the census sentence stands. */
+function likelyHiddenWhy(d) {
+  const ml = ((d || {}).most_likely || []).filter(Boolean);
+  if (!ml.length) return "";
+  const started = ml.filter((r) => rowStarted(r)).length;
+  const one = ml.length === 1;
+  if (started === ml.length) {
+    return `Tonight’s ${plural(ml.length, "pick")} ${one ? "is" : "are"} under way, so ${one ? "it has" : "they have"}
+      come off the board — the Live tab follows ${one ? "it" : "them"} to the final.`;
+  }
+  const held = ml.length - started;
+  return `Tonight’s board has ${plural(ml.length, "pick")}, and this page could not show
+    ${held === ml.length ? (one ? "it" : "any of them") : `${held} of them`}${started ? ` (${started} more under way)` : ""}.
+    That is a fault on our side, not a quiet slate — refresh in a minute, and tell us if they stay hidden.`;
 }
 
 function likelyEmptyWhy(census, d) {
@@ -10372,7 +10425,9 @@ function renderLikelyTop() {
                       .filter((r) => !likelyDropped(r))).slice(0, LIKELY_TOP_N) }))
     .filter((sh) => sh.rows.length);
   const dropped = (state.data.most_likely || []).filter(showableLikelyRow).filter((r) => !rowStarted(r)).filter(likelyDropped);
-  if (!shelves.length && !dropped.length) {
+  // The one board draws its own best picks below, shelves or none: a board
+  // whose picks sit on no shelf still has picks to show.
+  if (!shelves.length && !dropped.length && !(oneBoardOn() && oneBoardRows().length)) {
     /* A sport that HAS a likelihood board deserves a one-line reason on
        the home page, not a section that silently ceases to exist. The
        tell is `likely_census` — every likelihood-capable build ships it
@@ -10387,7 +10442,7 @@ function renderLikelyTop() {
       <div class="section-title">Qellys’ top picks
         <span class="sub">— who’s most likely to hit</span>
       </div>
-      <div class="ls-note">${likelyEmptyWhy(state.data.likely_census, state.data)}</div>`;
+      <div class="ls-note">${likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)}</div>`;
     revealChildren(host);
     return;
   }
@@ -10456,9 +10511,10 @@ function renderLikely() {
   const dropped = shown.filter(likelyDropped);
   if (!shown.length) {
     host.innerHTML = "";
+    const hiddenWhy = likelyHiddenWhy(state.data);
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
-      <div class="es-title">Nothing to rank yet</div>
-      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census, state.data)}</div>${boardEmptyFacts()}${boardEmptyDoors("likely")}</div>`;
+      <div class="es-title">${hiddenWhy ? "No pick to show right now" : "Nothing to rank yet"}</div>
+      <div class="es-sub">${hiddenWhy || likelyEmptyWhy(state.data.likely_census, state.data)}</div>${boardEmptyFacts()}${boardEmptyDoors("likely")}</div>`;
     bindEmptyDoors(note);
     return;
   }
