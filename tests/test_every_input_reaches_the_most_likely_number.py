@@ -71,18 +71,41 @@ def test_the_fitter_recovers_a_known_boost():
     assert got["n"] == 8 and 1.9 < got["mult"] < 2.1, got
 
 
+def _cached(name):
+    """{season: rows} for 2022-2025 from data/cache, None when none is cached
+    (the gate's sandbox), and a loud failure when only some are: a partial
+    cache would measure a different rule and call it the shipped one."""
+    path = os.path.join(ROOT, "data", "cache", name + "_{}.csv")
+    have = [s for s in (2022, 2023, 2024, 2025) if os.path.exists(path.format(s))]
+    if not have:
+        return None
+    assert len(have) == 4, f"data/cache holds {name} for {have} only: fetch the rest before trusting this check"
+    out = {}
+    for s in have:
+        with open(path.format(s), newline="") as fh:
+            out[s] = list(csv.DictReader(fh))
+    return out
+
+
 def test_what_ships_is_what_the_rule_says_on_the_box_scores():
-    path = os.path.join(ROOT, "data", "cache", "player_stats_{}.csv")
-    if not all(os.path.exists(path.format(s)) for s in (2022, 2023, 2024, 2025)):
+    # One answer on every Python since 2026-11-04 (engine/statmath math.fsum,
+    # engine/matefit.below_floor): this held on 3.11 and failed on 3.12+.
+    seasons = _cached("player_stats")
+    if seasons is None:
         print("  SKIP box scores not in data/cache")
         return
-    seasons = {}
-    for s in (2022, 2023, 2024, 2025):
-        with open(path.format(s), newline="") as fh:
-            seasons[s] = list(csv.DictReader(fh))
     rule = F.shipped(F.measure(F.samples(seasons)))
     assert {k: round(v, 3) for k, v in rule.items()} == T.EFFECT, "re-run `python3 matefit.py` and ship what it says"
     assert not [k for k in T.EFFECT if k[0] == ANYTIME_TD], "touchdowns behind an absence measured too noisy"
+    # The depth order on snap share, what the board uses when the build has
+    # snap counts: unchecked until 2026-11-04, and stale by then.
+    snaps = _cached("snap_counts")
+    if snaps is None:
+        print("  SKIP snap counts not in data/cache")
+        return
+    rule = F.shipped(F.measure(F.samples(seasons, snaps)))
+    assert {k: round(v, 3) for k, v in rule.items()} == T.EFFECT_SNAPS, \
+        "re-run `python3 matefit.py --snaps` and ship what it says"
 
 
 def _prop(player, pos, market, team="KC"):

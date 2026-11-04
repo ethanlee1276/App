@@ -9324,6 +9324,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KE. The NFL teammate-out numbers are the same on every Python** (step
+380; nothing to run). When a teammate at his position is ruled out, the NFL
+board moves a player's number by a multiplier measured on 2022-2025
+(`python3 matefit.py`). Re-run on Python 3.12, which the box runs, it gave a
+running back's rushing behind a back just ruled out as 1.103, where 1.102
+shipped: 3.12 changed how floats are added, and two games whose form blend
+lands exactly on the measurement's floor (15 yards) fell a hair under it
+and were dropped. The sums are exact now (`math.fsum`) and a blend on the
+floor counts, so every Python from 3.9 to 3.13 gives the same numbers, and
+they are the ones that shipped. The snap-ranked table the board uses when
+it has snap counts (`python3 matefit.py --snaps`) had gone stale since the
+backs fix of 12 October and was measured again: thirteen multipliers, none
+moving more than 0.006. Both are now checked against the box scores
+whenever they are cached.
+
 **KD. Every NBA rate reads past his last twenty games** (step 377;
 nothing to run; you, 2026-11-04: "We want to make our NBA model as
 proficient as possible ... I want you to just do it"). The board read every

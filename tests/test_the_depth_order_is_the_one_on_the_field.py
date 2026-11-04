@@ -80,10 +80,12 @@ def test_the_starter_out_lifts_the_man_behind_him_by_the_snap_measurement():
 
 def test_the_snap_table_is_what_the_measurement_shipped():
     """Every entry clears qbfit.shipped's rule on the snap-ranked run; the
-    headline cells are pinned so a refit that moves them is seen."""
-    assert T.EFFECT_SNAPS[("rec_yds", "TE", "above_new")] == 1.747
-    assert T.EFFECT_SNAPS[("receptions", "TE", "above_new")] == 1.568
-    assert T.EFFECT_SNAPS[("rush_yds", "RB", "above_new")] == 1.662
+    headline cells are pinned so a refit that moves them is seen. Moved
+    2026-11-04 by the refit that gives one answer on every Python
+    (engine/teammates.EFFECT_SNAPS: 1.747, 1.568, 1.662 before)."""
+    assert T.EFFECT_SNAPS[("rec_yds", "TE", "above_new")] == 1.749
+    assert T.EFFECT_SNAPS[("receptions", "TE", "above_new")] == 1.569
+    assert T.EFFECT_SNAPS[("rush_yds", "RB", "above_new")] == 1.657
     assert all(v > 1.0 for v in T.EFFECT_SNAPS.values())
     fit = open(os.path.join(ROOT, "matefit.py"), encoding="utf-8").read()
     assert "--snaps" in fit and "--early" in fit and "EFFECT_SNAPS" in fit

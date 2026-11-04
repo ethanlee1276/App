@@ -32,12 +32,20 @@ def prob_over_discrete(line: float, mu: float, sigma: float) -> float:
     return prob_over(line, mu, sigma)
 
 
+# ONE ANSWER ON EVERY PYTHON (2026-11-04). Python 3.12 changed the built-in
+# sum() of floats to a compensated algorithm, so the same weighted mean came
+# out an ulp apart on 3.11 and 3.12 — and the NFL teammate fit
+# (engine/matefit), which keeps a game only when the form blend clears a
+# floor, kept two games on one and dropped them on the other: the shipped
+# multipliers could not be reproduced on the box's Python. math.fsum is the
+# correctly rounded sum on every version (3.9 to 3.13), so these give the
+# same bits everywhere.
 def weighted_mean(pairs: Sequence[tuple[float, float]]) -> float:
     """Weighted mean of (value, weight) pairs. Ignores zero total weight."""
-    total_w = sum(w for _, w in pairs)
+    total_w = math.fsum(w for _, w in pairs)
     if total_w <= 0:
         return 0.0
-    return sum(v * w for v, w in pairs) / total_w
+    return math.fsum(v * w for v, w in pairs) / total_w
 
 
 def sample_std(values: Sequence[float]) -> float:
@@ -45,8 +53,8 @@ def sample_std(values: Sequence[float]) -> float:
     n = len(values)
     if n < 2:
         return 0.0
-    mean = sum(values) / n
-    var = sum((v - mean) ** 2 for v in values) / (n - 1)
+    mean = math.fsum(values) / n
+    var = math.fsum((v - mean) ** 2 for v in values) / (n - 1)
     return math.sqrt(var)
 
 

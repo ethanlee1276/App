@@ -8,6 +8,7 @@ trend so the explanation can say "heating up" or "cooling off".
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -132,7 +133,8 @@ class FormResult:
 
 
 def _avg(values: list[float]) -> Optional[float]:
-    return sum(values) / len(values) if values else None
+    # math.fsum: the same bits on every Python (engine/statmath, 2026-11-04).
+    return math.fsum(values) / len(values) if values else None
 
 
 def compute_form(

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-04",
+      "kind": "fix",
+      "title": "NFL: the teammate-out numbers come out the same on every computer",
+      "body": "When a teammate at his position is ruled out, the NFL board moves a player's number by a multiplier measured on four seasons. Re-running that measurement on a newer Python gave a slightly different answer (a running back's rushing behind a back just ruled out: 1.103 instead of the 1.102 that shipped), because Python 3.12 changed how it adds decimals and two games whose form landed exactly on the measurement's floor fell a hair under it and were dropped. The sums are exact now and a game on the floor counts, so the measurement gives one answer everywhere. The numbers that shipped were right. The version that ranks the depth chart by snap share, which the board uses when it has snap counts, had gone stale since Cincinnati's backs were added in October and was measured again: thirteen multipliers, none moving more than 0.006."
+    },
+    {
+      "date": "2026-11-04",
       "kind": "model",
       "title": "NBA: rebounds, assists, steals, blocks and turnovers read past a player's last twenty games",
       "body": "The NBA board read each player's rate a minute from his last twenty games only. For the rare stats that is a small sample (about fifteen steals for a guard), so one hot or cold fortnight moved his number as much as a real change. Now his older games (his last sixty, any club) and the league's rate for his role join the twenty's. On two full seasons of the league's own box scores, each judged on the one it never saw: steals 4.5% closer, turnovers 3.3%, blocks 2.7-4.0%, rebounds 2.0-3.2%, assists 1.6-2.4%, and the chances 0.5-1.5% better in every one of them on the board's own replay. A guard with no blocks in twenty games no longer has the under called a certainty. Points and threes stay as they were: read the same way they came out no better as chances. What moves: the projection, and so every pick, of every NBA rebounds, assists, steals, blocks, turnovers and rebounds-plus-assists prop, and the rebounds and assists inside points-plus-rebounds, points-plus-assists and PRA; the pick shows the step \"Rate, read past his last twenty\". The box checks it on its own seasons every week and turns it off if they disagree."

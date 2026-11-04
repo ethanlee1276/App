@@ -99,8 +99,11 @@ def test_adams_with_nacua_back_is_read_off_his_games_with_nacua():
     assert card["missed"] == [2, 3] and card["applied"] == round(mult, 3)
     assert card["headline"] == "Puka Nacua back at WR — 2 of his 4 games this season came without him"
     assert why.startswith("Teammate back: Puka Nacua back at WR") and f"×{mult:.2f}" in why
+    # The two multipliers it quotes are the table's (refitted 2026-11-04: ×1.10
+    # and ×1.22 before, ×1.11 and ×1.22 since).
     assert card["note"] == ("Measured over four seasons: a WR's games without a teammate ahead of him run high "
-                            f"(×1.10 and ×1.22), so those games are counted at that much less — applied (×{mult:.2f})")
+                            f"(×{eff[('rec_yds', 'WR', 'above_cont')]:.2f} and ×{eff[('rec_yds', 'WR', 'above_new')]:.2f}), "
+                            f"so those games are counted at that much less — applied (×{mult:.2f})")
 
 
 def test_nobody_back_nothing_moves_and_the_returning_man_himself_is_untouched():

@@ -28,6 +28,7 @@ standard errors from 1.0 and three seasons of four. Standard library only.
 """
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 
 from .qbfit import measure, shipped   # noqa: F401  (same measurement, same rule)
@@ -45,8 +46,21 @@ MARKETS = {
 FIRST_WEEK = 4
 MIN_GAMES = 3
 TOP = 3
+#: A form blend this close to a market's floor IS on it (2026-11-04). Latavius
+#: Murray's 8, 22 and 15 rushing yards average exactly 15 in every window, and
+#: the blend of them came out 15.0 on Python 3.11 and 14.999999999999998 on
+#: 3.12, which changed how floats are added: one Python kept the game, the
+#: other dropped it, and the shipped multipliers could not be reproduced on
+#: the box. The rule drops only a blend BELOW the floor.
+FLOOR_TOL = 1e-9
 #: Snap-file position spellings that mean one of GROUPS.
 POS_ALIASES = {"HB": "RB"}
+
+
+def below_floor(e: float, floor: float) -> bool:
+    """The sample rule's floor: a blend under the market's floor (or none at
+    all) is no sample; one ON it is, whatever the last bit (FLOOR_TOL)."""
+    return e <= 0 or e < floor - FLOOR_TOL
 
 
 def _f(r: dict, k: str) -> float:
@@ -129,7 +143,9 @@ def ranked(games: dict, team: str, pos: str, week: int,
         prev = [w for w in g if w < week]
         if len(prev) < need:
             continue
-        out.append((name, sum(volume(g[w], pos) for w in prev) / len(prev), len(prev), max(prev)))
+        # math.fsum: snap shares are floats, and a sum that differs in its last
+        # bit between Pythons can reorder two men with the same volume.
+        out.append((name, math.fsum(volume(g[w], pos) for w in prev) / len(prev), len(prev), max(prev)))
     out.sort(key=lambda x: -x[1])
     return out[:TOP]
 
@@ -178,7 +194,7 @@ def samples(seasons: dict, snaps: dict | None = None) -> list[dict]:
                             logs = [GameLog(week=len(vals) - j, opponent="", value=v)
                                     for j, v in enumerate(reversed(vals))]
                             e = compute_form(logs, sum(vals) / len(vals), None).mean
-                            if e < floor or e <= 0:
+                            if below_floor(e, floor):
                                 continue
                             out.append({"season": season, "m": m, "g": pos, "e": e,
                                         "y": sum(_f(g[wk], c) for c in cols), "tier": case})
@@ -256,7 +272,7 @@ def early_samples(seasons: dict, weeks=(2, 3)) -> list[dict]:
                             logs = [GameLog(week=len(vals) - j, opponent="", value=v)
                                     for j, v in enumerate(reversed(vals))]
                             e = compute_form(logs, sum(vals) / len(vals), None).mean
-                            if e < floor or e <= 0:
+                            if below_floor(e, floor):
                                 continue
                             out.append({"season": season, "m": m, "g": pos, "e": e,
                                         "y": sum(_f(g[wk], c) for c in cols), "tier": case})
@@ -358,7 +374,7 @@ def cross_samples(seasons: dict) -> list[dict]:
                             logs = [GameLog(week=len(vals) - j, opponent="", value=v)
                                     for j, v in enumerate(reversed(vals))]
                             e = compute_form(logs, sum(vals) / len(vals), None).mean
-                            if e < floor or e <= 0:
+                            if below_floor(e, floor):
                                 continue
                             out.append({"season": season, "m": m, "g": pos, "e": e,
                                         "y": sum(_f(g[wk], c) for c in cols), "tier": case})
@@ -510,7 +526,7 @@ def back_samples(seasons: dict, snaps: dict, table: dict) -> list[dict]:
                                 continue          # touchdowns behind a lineup change are shown, never priced
                             vals = [sum(_f(g[w], c) for c in cols) for w in mine]
                             e = form(vals)
-                            if e < floor or e <= 0:
+                            if below_floor(e, floor):
                                 continue
                             ea = form(deflated(vals, mine, cases, table, m, pos))
                             out.append({"season": season, "m": m, "g": pos, "e": e, "ea": ea,

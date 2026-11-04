@@ -56,21 +56,31 @@ EFFECT = {
 }
 #: THE SAME, WITH THE DEPTH ORDER RANKED ON SNAP SHARE — what the board
 #: uses whenever the build has snap counts (engine/matefit.volume). Filled
-#: from `python3 matefit.py --snaps` below.
+#: from `python3 matefit.py --snaps`.
+#:
+#: REFITTED 2026-11-04, on 2022-2025, and the same on every Python 3.9 to
+#: 3.13. The 09-27 fit could not be reproduced any more: the snap file's
+#: "HB" became a back on 10-12 (Cincinnati's backs joined the depth order),
+#: and on Python 3.12+ a form blend landing exactly on a market's floor fell
+#: an ulp under it and its game was dropped (engine/statmath: math.fsum;
+#: engine/matefit.below_floor). The same thirteen cells ship; none moved
+#: more than .006 (rushing behind a back just ruled out ahead of him 1.662
+#: to 1.657, the most). EFFECT above was already right on every Python and
+#: is unchanged.
 EFFECT_SNAPS = {
-    ("rec_yds", "TE", "above_new"): 1.747,       # ± .248  n 37
-    ("rec_yds", "WR", "above_cont"): 1.105,      # ± .048  n 355
-    ("rec_yds", "WR", "above_new"): 1.222,       # ± .087  n 185
-    ("receptions", "RB", "above_new"): 1.657,    # ± .163  n 44
-    ("receptions", "RB", "below_new"): 1.157,
-    ("receptions", "TE", "above_cont"): 1.231,   # ± .085  n 93
-    ("receptions", "TE", "above_new"): 1.568,    # ± .205  n 41
-    ("receptions", "WR", "above_cont"): 1.094,   # ± .036  n 345
-    ("receptions", "WR", "above_new"): 1.193,    # ± .068  n 178
-    ("rush_yds", "RB", "above_cont"): 1.372,     # ± .082  n 221
-    ("rush_yds", "RB", "above_new"): 1.662,      # ± .162  n 95
-    ("rush_yds", "RB", "below_cont"): 1.096,     # ± .033  n 598
-    ("rush_yds", "RB", "below_new"): 1.142,      # ± .046  n 325
+    ("rec_yds", "TE", "above_new"): 1.749,       # ± .248  n 37
+    ("rec_yds", "WR", "above_cont"): 1.108,      # ± .048  n 353
+    ("rec_yds", "WR", "above_new"): 1.221,       # ± .087  n 185
+    ("receptions", "RB", "above_new"): 1.651,    # ± .163  n 44
+    ("receptions", "RB", "below_new"): 1.158,    # ± .050  n 261
+    ("receptions", "TE", "above_cont"): 1.232,   # ± .085  n 93
+    ("receptions", "TE", "above_new"): 1.569,    # ± .205  n 41
+    ("receptions", "WR", "above_cont"): 1.096,   # ± .036  n 343
+    ("receptions", "WR", "above_new"): 1.192,    # ± .068  n 178
+    ("rush_yds", "RB", "above_cont"): 1.372,     # ± .081  n 220
+    ("rush_yds", "RB", "above_new"): 1.657,      # ± .162  n 95
+    ("rush_yds", "RB", "below_cont"): 1.093,     # ± .033  n 601
+    ("rush_yds", "RB", "below_new"): 1.144,      # ± .046  n 330
 }
 #: The words for each case, on the card.
 CASE_WORDS = {"above_new": "just ruled out ahead of him", "above_cont": "out ahead of him",

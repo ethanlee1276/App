@@ -181,14 +181,17 @@ def samples(seasons: dict) -> list[dict]:
 
 def measure(pts: list[dict]) -> dict:
     """{(market, group, tier): {"mult", "se", "n", "per": {season: mult}}} against games with the usual starter."""
-    base_by: dict = defaultdict(lambda: [0.0, 0.0])
-    base_s: dict = defaultdict(lambda: [0.0, 0.0])
+    ys: dict = defaultdict(list)
+    es: dict = defaultdict(list)
     for p in pts:
         if p["tier"] is None:
-            base_by[(p["m"], p["g"])][0] += p["y"]
-            base_by[(p["m"], p["g"])][1] += p["e"]
-            base_s[(p["m"], p["g"], p["season"])][0] += p["y"]
-            base_s[(p["m"], p["g"], p["season"])][1] += p["e"]
+            for k in ((p["m"], p["g"]), (p["m"], p["g"], p["season"])):
+                ys[k].append(p["y"])
+                es[k].append(p["e"])
+    base_by: dict = defaultdict(lambda: [0.0, 0.0])
+    base_s: dict = defaultdict(lambda: [0.0, 0.0])
+    for k in ys:
+        (base_by if len(k) == 2 else base_s)[k] = [math.fsum(ys[k]), math.fsum(es[k])]
     out = {}
     for key in sorted({(p["m"], p["g"], p["tier"]) for p in pts if p["tier"]}):
         m, g, _tier = key
@@ -197,16 +200,18 @@ def measure(pts: list[dict]) -> dict:
         if not be or not by or len(on) < 2:
             continue
         base = by / be
-        mult = (sum(p["y"] for p in on) / sum(p["e"] for p in on)) / base
+        # math.fsum throughout: the same multiplier on every Python (3.12
+        # changed the built-in sum of floats; engine/statmath, 2026-11-04).
+        mult = (math.fsum(p["y"] for p in on) / math.fsum(p["e"] for p in on)) / base
         rr = [p["y"] / p["e"] for p in on if p["e"] > 0]
-        mu = sum(rr) / len(rr)
-        se = math.sqrt(sum((x - mu) ** 2 for x in rr) / (len(rr) - 1)) / math.sqrt(len(rr)) / base
+        mu = math.fsum(rr) / len(rr)
+        se = math.sqrt(math.fsum((x - mu) ** 2 for x in rr) / (len(rr) - 1)) / math.sqrt(len(rr)) / base
         per = {}
         for s in sorted({p["season"] for p in on}):
             o = [p for p in on if p["season"] == s]
             sy, se_ = base_s[(m, g, s)]
-            if o and se_ and sy and sum(p["e"] for p in o):
-                per[s] = round((sum(p["y"] for p in o) / sum(p["e"] for p in o)) / (sy / se_), 3)
+            if o and se_ and sy and math.fsum(p["e"] for p in o):
+                per[s] = round((math.fsum(p["y"] for p in o) / math.fsum(p["e"] for p in o)) / (sy / se_), 3)
         out[key] = {"mult": round(mult, 3), "se": round(se, 3), "n": len(on), "per": per}
     return out
 
