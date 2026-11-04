@@ -23,6 +23,7 @@ The only place a ceiling means anything is before the thread is created.
 
 import json
 import os
+import select
 import socket
 import subprocess
 import sys
@@ -169,6 +170,22 @@ def _wait_for_code(get, want, seconds):
     return code
 
 
+def _hold(port):
+    """A caller that sends half a request and waits: one slot, held."""
+    s = socket.create_connection(("127.0.0.1", port), timeout=5)
+    s.sendall(b"GET /api/billing/status HTTP/1.1\r\n")
+    return s
+
+
+def _answered(s) -> bool:
+    """True once the server has said anything to a holder (its 503, a
+    close, a reset): that holder no longer holds a slot."""
+    try:
+        return bool(select.select([s], [], [], 0)[0])
+    except (OSError, ValueError):
+        return True
+
+
 def test_a_full_server_sheds_instead_of_growing():
     """The behaviour, measured. Slots are filled with connections that are
     opened and left hanging; the next caller must get a 503 rather than a
@@ -205,16 +222,37 @@ def test_a_full_server_sheds_instead_of_growing():
         # Occupy every slot with a connection that sends a partial request
         # and then sits there, which is what a slow phone on a train looks
         # like to a server.
-        held = []
-        for _ in range(4):
-            s = socket.create_connection(("127.0.0.1", port), timeout=5)
-            s.sendall(b"GET /api/billing/status HTTP/1.1\r\n")
-            held.append(s)
-
-        code = _wait_for_code(get, 503, 20)
+        #
+        # A HOLDER CAN BE TURNED AWAY ITSELF, and then it holds nothing.
+        # The client has its 200 as soon as the body is written; the
+        # server's thread releases its slot a moment later, after the
+        # close. On a busy machine the four holders can arrive inside that
+        # moment: three take slots, the fourth gets the 503, and once the
+        # straggler lets go one slot stays free for the whole wait — every
+        # caller gets a 200 and the assertion blames the ceiling (CI,
+        # Python 3.12, 2026-11-04: "got 200 for 20s"). So the holders are
+        # checked before each call: one the server has already answered
+        # (the 503 and a close are waiting on it) is replaced. A ceiling
+        # that does nothing turns none of them away and still fails.
+        held, opened, turned_away = [], 0, 0
+        code = None
+        end = time.time() + 30
+        while time.time() < end:
+            for s in [s for s in held if _answered(s)]:
+                held.remove(s)
+                turned_away += 1
+                s.close()
+            while len(held) < 4:
+                held.append(_hold(port))
+                opened += 1
+            code = get(6)
+            if code == 503:
+                break
+            time.sleep(0.1)
         assert code == 503, (
-            "expected a 503 when every slot is held, got %r for 20s — the "
-            "ceiling is not doing anything" % code)
+            "expected a 503 when every slot is held, got %r for 30s (%d "
+            "holders opened, %d turned away) — the ceiling is not doing "
+            "anything" % (code, opened, turned_away))
 
         # And the refusal is a retryable one that says so.
         for s in held:
@@ -236,6 +274,25 @@ def test_a_full_server_sheds_instead_of_growing():
             os.unlink("/tmp/qb-shed-%d.db" % port)
         except OSError:
             pass
+
+
+def test_a_holder_the_server_has_answered_is_told_apart():
+    """The full-server test replaces the holders the ceiling turned away,
+    so it has to tell them from the ones still waiting on the server."""
+    a, b = socket.socketpair()
+    try:
+        assert not _answered(a), "a holder nobody has answered still holds its slot"
+        b.sendall(b"HTTP/1.0 503 Service Unavailable\r\n")
+        assert _answered(a), "a holder with the 503 waiting on it holds nothing"
+    finally:
+        a.close()
+        b.close()
+    c, d = socket.socketpair()
+    d.close()
+    try:
+        assert _answered(c), "a holder the server closed holds nothing"
+    finally:
+        c.close()
 
 
 def test_the_wait_gives_up_and_says_what_it_saw():
