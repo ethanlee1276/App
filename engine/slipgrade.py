@@ -528,15 +528,16 @@ def _scorer(board: dict, leg: dict):
     return None
 
 
-def _honest(league: str, p: float, side: str, odds) -> float:
+def _honest(league: str, p: float, side: str, odds, market: str | None = None) -> float:
     """A chance the Most Likely list did not seat, held to that list's own
     record (engine/likelycal): pulled toward the price by as much as the
-    list's picks on this side have earned in the journal, and only ever
-    lowered. No fitted record, or no price: the number stands."""
+    list's picks on this side (and on this market, where the record is kept
+    by market) have earned in the journal, and only ever lowered. No fitted
+    record, or no price: the number stands."""
     try:
         from . import likelycal as LC
         groups = ((LC.load().get(league) or {}).get("groups") or {})
-        g = LC.k_for(groups, f"list|{LC.side_of(side)}")
+        g = LC.k_for(groups, f"list|{LC.side_of(side)}", market)
         q = LC.price_chance(odds)
         if not g or q is None or float(g["k"]) >= 1.0:
             return p
@@ -571,7 +572,7 @@ def _off_board(boards: dict, leg: dict):
         p = prob_at_line(row, leg["market"], side, leg["line"])
     if p is not None:
         row["raw_prob"] = round(p, 4)
-        p = _honest(league, p, side, leg["odds"])
+        p = _honest(league, p, side, leg["odds"], leg.get("market"))
         try:
             row["read_checks"] = SR.checks(row, boards.get(league), league, p)
         except Exception as exc:                                   # noqa: BLE001
@@ -637,7 +638,7 @@ def price_leg(boards: dict, leg: dict, read: bool = True) -> dict:
                             and str(r.get("side") or "").lower() == leg["side"])
                     price = r.get("odds") if main else None
                     if p is not None:
-                        p = _honest(league, p, leg["side"], leg["odds"] or price)
+                        p = _honest(league, p, leg["side"], leg["odds"] or price, leg.get("market"))
                     got = (float("nan") if p is None else p, price, "prop", r)
         if got is not None:
             prob, price, found, row = got
@@ -1682,7 +1683,7 @@ def better_number(leg: dict, index: dict | None, boards: dict | None = None) -> 
         kind, p = at[q_line]
         if p is None:
             return None
-        return p if kind == "seat" else _honest(league, p, side, odds)
+        return p if kind == "seat" else _honest(league, p, side, odds, market)
 
     best = None
     for q_line, book, over, under in e.get("quotes") or []:

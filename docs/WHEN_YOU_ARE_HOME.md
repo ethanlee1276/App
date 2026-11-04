@@ -9305,6 +9305,42 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JV. Most Likely learns by market and side too** (step 348; you,
+2026-11-03: "2, yes").
+
+- **Why.** The record's correction grouped picks by where they came from
+  (the list, the matchup picks, the bold ones) and by side. A side can be
+  honest as a whole while one market inside it over-claims: college
+  receiving-yards unders hit 50% where we said 70%, NFL tight-end unders 46%
+  against 59%.
+- **Now.** A maker's side on one market is its own group once it has 40
+  graded picks (`list · under · rec_yds`), and the rest of that side is
+  fitted on what's left, so an honest market isn't dragged down by a bad one.
+  It's kept only when it beats both the raw chance and the old grouping on
+  games it wasn't fitted on (the same test as before); otherwise the old
+  grouping stands. Your rule holds: a chance is only ever lowered, the tier
+  follows it, and no pick comes off the board for its record alone.
+- **Where it shows.** The pick's note says which group moved it ("Most
+  Likely list on the under on receiving yards have hit 50% of 120 where we
+  said 70%..."), and the Record page's "What it corrected by itself" lists
+  the market groups. The slip grader and the scout's correction read the
+  same groups.
+
+Nothing to run: the nightly board learning refits it after each settle.
+Read-only, any time (`--dry-run` saves nothing; the "by market too" line
+says whether the market level was kept):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nfl --dry-run
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport cfb --dry-run
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JV 2>&1 | tee /tmp/jv.txt
+```
+
 **JU. Caesars tried as a backup sharp book, with every book beside it**
 (step 347; you, 2026-11-03: "5, yes", test it first and change nothing
 unless it wins).

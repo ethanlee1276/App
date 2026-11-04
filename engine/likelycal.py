@@ -43,6 +43,19 @@ every pick are saved to the store the board reads on its next build. Fail
 → nothing is saved and the board keeps its own numbers. The record keeps
 the board's raw chance beside the shown one (`raw_prob`), so the next fit
 reads the raw claim and never compounds its own correction.
+
+BY MARKET TOO (Ethan, 2026-11-03, "2, yes"). A maker's side is a wide
+group: the record's own cuts found college receiving-yards unders hitting
+50% where we said 70% inside a list whose unders as a whole did far better.
+So a maker's side on one market (``list|under|rec_yds``) is a group of its
+own once it has MIN_GROUP settled picks, fitted on those picks; the rest of
+the maker's side is fitted on what the market groups leave. It is kept
+only if it earns it, on the same held-out folds: the market-level
+correction must beat the raw chance at the bottom of its 95% interval, and,
+where the maker-level one passes too, must beat THAT at the bottom of its
+interval. Otherwise the maker-level fit is what is saved, as before. The
+rule is Ethan's either way: a chance is only ever lowered, and a pick is
+never taken off the board for its record.
 """
 from __future__ import annotations
 
@@ -142,8 +155,13 @@ def _row(r, source):
     if q is None:
         return None
     return {"group": f"{source}|{side_of(r['side'])}", "p": float(r["p"]), "q": q,
-            "won": bool(r["won"]),
+            "won": bool(r["won"]), "market": market_of(r.get("market")),
             "game": f"{r['day']}|{r.get('team') or r['player']}"}
+
+
+def market_of(market) -> str:
+    """A market's key as the groups write it: lower case, no spaces."""
+    return str(market or "").strip().lower().replace(" ", "_")
 
 
 # --- the fit ----------------------------------------------------------------
@@ -152,36 +170,60 @@ def _row(r, source):
 BOTH = "both"
 
 
-def k_for(groups: dict, group: str) -> dict | None:
-    """The fitted group a pick reads: its maker on its side, else — when
-    that side has too few settled picks to fit — its maker on both sides.
+def k_for(groups: dict, group: str, market: str | None = None) -> dict | None:
+    """The fitted group a pick reads: its maker on its side on its market
+    (when the market level was saved, see the module's BY MARKET TOO),
+    else its maker on its side, else — when that side has too few settled
+    picks to fit — its maker on both sides.
 
     Added 2026-10-04 after the box's run: the bold picks went 13-20 on
     unders and 17-25 on overs while claiming 71-74%, and neither side alone
     reached MIN_GROUP inside a training fold, so the held-out test never
     saw a bold correction at all. Same bar, same held-out test; the group
     is just the maker when the side cannot carry one."""
-    return groups.get(group) or groups.get(f"{group.split('|')[0]}|{BOTH}")
+    m = market_of(market) if market else ""
+    return ((m and groups.get(f"{group}|{m}")) or groups.get(group)
+            or groups.get(f"{group.split('|')[0]}|{BOTH}"))
 
 
-def fit_groups(rows: list[dict]) -> dict:
+def _fit_one(rs: list[dict]) -> dict:
+    best = min(K_GRID, key=lambda k: sum(_ll(shrink(x["p"], x["q"], k), x["won"]) for x in rs))
+    return {"k": best, "n": len(rs),
+            "hit": round(sum(x["won"] for x in rs) / len(rs), 4),
+            "claimed": round(sum(x["p"] for x in rs) / len(rs), 4),
+            "price": round(sum(x["q"] for x in rs) / len(rs), 4)}
+
+
+def fit_groups(rows: list[dict], by_market: bool = False) -> dict:
     """{group: {"k", "n", "hit", "claimed", "price"}} for groups of
     MIN_GROUP or more; smaller groups are left alone (absent). Each maker
     is also fitted on both sides together (``maker|both``), read only where
-    its side has no fit of its own."""
+    its side has no fit of its own.
+
+    ``by_market``: a maker's side on one market (``maker|side|market``)
+    with MIN_GROUP picks is fitted on its own picks, and the maker-level
+    groups on the picks no market group took, so each pick is fitted in
+    exactly the group it reads (`k_for`)."""
+    out = {}
+    rest = rows
+    if by_market:
+        mk: dict = {}
+        for r in rows:
+            if r.get("market"):
+                mk.setdefault(f"{r['group']}|{r['market']}", []).append(r)
+        taken = set()
+        for g, rs in mk.items():
+            if len(rs) >= MIN_GROUP:
+                out[g] = _fit_one(rs)
+                taken.update(id(x) for x in rs)
+        rest = [r for r in rows if id(r) not in taken]
     by: dict = {}
-    for r in rows:
+    for r in rest:
         by.setdefault(r["group"], []).append(r)
         by.setdefault(f"{r['group'].split('|')[0]}|{BOTH}", []).append(r)
-    out = {}
     for g, rs in by.items():
-        if len(rs) < MIN_GROUP:
-            continue
-        best = min(K_GRID, key=lambda k: sum(_ll(shrink(x["p"], x["q"], k), x["won"]) for x in rs))
-        out[g] = {"k": best, "n": len(rs),
-                  "hit": round(sum(x["won"] for x in rs) / len(rs), 4),
-                  "claimed": round(sum(x["p"] for x in rs) / len(rs), 4),
-                  "price": round(sum(x["q"] for x in rs) / len(rs), 4)}
+        if len(rs) >= MIN_GROUP:
+            out[g] = _fit_one(rs)
     return out
 
 
@@ -195,37 +237,67 @@ def held_out(rows: list[dict], folds=FOLDS, seed=SEED) -> dict:
     for f in range(folds):
         train = [r for r in rows if fold_of[r["game"]] != f]
         ks = fit_groups(train)
+        km = fit_groups(train, by_market=True)
         for r in rows:
             if fold_of[r["game"]] != f:
                 continue
             k = (k_for(ks, r["group"]) or {}).get("k", 1.0)
+            k2 = (k_for(km, r["group"], r.get("market")) or {}).get("k", 1.0)
             raw, adj = _ll(r["p"], r["won"]), _ll(shrink(r["p"], r["q"], k), r["won"])
-            cell = per_game.setdefault(r["game"], [0.0, 0.0, 0])
+            adj2 = _ll(shrink(r["p"], r["q"], k2), r["won"])
+            cell = per_game.setdefault(r["game"], [0.0, 0.0, 0, 0.0])
             cell[0] += raw
             cell[1] += adj
             cell[2] += 1
+            cell[3] += adj2
     cells = list(per_game.values())
     n = sum(c[2] for c in cells)
     if not n:
         return {"n": 0}
     gain = (sum(c[0] for c in cells) - sum(c[1] for c in cells)) / n
-    boots = []
+    # One set of draws for all three comparisons: the maker level against
+    # the raw chance (the bar as it always was), and the market level
+    # against the raw chance and against the maker level.
+    boots, b_raw, b_mk = [], [], []
     for _ in range(BOOT):
         pick = [cells[rng.randrange(len(cells))] for _ in cells]
         m = sum(c[2] for c in pick)
         boots.append((sum(c[0] for c in pick) - sum(c[1] for c in pick)) / m if m else 0.0)
-    boots.sort()
+        b_raw.append((sum(c[0] for c in pick) - sum(c[3] for c in pick)) / m if m else 0.0)
+        b_mk.append((sum(c[1] for c in pick) - sum(c[3] for c in pick)) / m if m else 0.0)
+    for b in (boots, b_raw, b_mk):
+        b.sort()
+    lo_i, hi_i = int(0.025 * BOOT), int(0.975 * BOOT) - 1
+    market = {"corrected": round(sum(c[3] for c in cells) / n, 4),
+              "gain_vs_raw": round((sum(c[0] for c in cells) - sum(c[3] for c in cells)) / n, 5),
+              "lo_vs_raw": round(b_raw[lo_i], 5),
+              "gain": round((sum(c[1] for c in cells) - sum(c[3] for c in cells)) / n, 5),
+              "lo": round(b_mk[lo_i], 5), "hi": round(b_mk[hi_i], 5)}
     return {"n": n, "games": len(cells), "raw": round(sum(c[0] for c in cells) / n, 4),
             "corrected": round(sum(c[1] for c in cells) / n, 4), "gain": round(gain, 5),
-            "lo": round(boots[int(0.025 * BOOT)], 5), "hi": round(boots[int(0.975 * BOOT) - 1], 5)}
+            "lo": round(boots[lo_i], 5), "hi": round(boots[hi_i], 5), "market": market}
+
+
+def choose_level(ho: dict) -> tuple[bool, bool]:
+    """``(passed, by_market)`` from a held-out report: the maker level
+    passes on the bar as it always was; the market level passes against the
+    raw chance and, where the maker level passes too, against that, each at
+    the bottom of its 95% interval."""
+    if not ho.get("n"):
+        return False, False
+    maker_ok = ho.get("lo", 0) > 0
+    mk = ho.get("market") or {}
+    market_ok = mk.get("lo_vs_raw", 0) > 0 and (not maker_ok or mk.get("lo", 0) > 0)
+    return bool(maker_ok or market_ok), bool(market_ok)
 
 
 def fit(conn, sport: str) -> dict:
     rows = journal_rows(conn, sport)
     ho = held_out(rows) if rows else {"n": 0}
-    groups = fit_groups(rows)
-    passed = bool(ho.get("n") and ho.get("lo", 0) > 0)
+    passed, by_market = choose_level(ho)
+    groups = fit_groups(rows, by_market=by_market)
     return {"sport": sport, "n": len(rows), "held_out": ho, "groups": groups, "passed": passed,
+            "by_market": by_market,
             "fitted_at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")}
 
 
@@ -244,6 +316,7 @@ def save(res: dict, path=None) -> None:
     store = load(p)
     store[res["sport"]] = {"groups": {g: {"k": v["k"], "n": v["n"], "hit": v["hit"], "claimed": v["claimed"]}
                                       for g, v in res["groups"].items()},
+                           "by_market": bool(res.get("by_market")),
                            "held_out": res["held_out"], "fitted_at": res["fitted_at"]}
     tmp = p.with_suffix(p.suffix + ".tmp")
     tmp.write_text(json.dumps(store, indent=1), encoding="utf-8")
@@ -259,7 +332,10 @@ def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
     for r in rows:
         if r.get("model_prob") is None:
             continue
-        g = k_for(groups, f"{source_of_row(r)}|{side_of(r.get('side'))}")
+        src = source_of_row(r)
+        side = side_of(r.get("side"))
+        market = market_of(r.get("market"))
+        g = k_for(groups, f"{src}|{side}", market)
         q = price_chance(r.get("odds"))
         if not g or q is None or g["k"] >= 1.0:
             continue
@@ -269,9 +345,11 @@ def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
             continue
         r["board_raw_prob"] = raw
         r["model_prob"] = adj
-        src = source_of_row(r)
-        side = side_of(r.get("side"))
-        on = f"on the {side}" if groups.get(f"{src}|{side}") else "(overs and unders together)"
+        if market and groups.get(f"{src}|{side}|{market}") is g:
+            from .livepicks import market_label
+            on = f"on the {side} on {market_label(market, sport).lower()}"
+        else:
+            on = f"on the {side}" if groups.get(f"{src}|{side}") else "(overs and unders together)"
         r["cal_note"] = (f"{SOURCE_WORDS.get(src, src)} {on} have hit "
                          f"{g['hit']:.0%} of {g['n']} where we said {g['claimed']:.0%}, so this shows "
                          f"{adj:.0%} (our raw number was {raw:.0%})")
@@ -284,15 +362,21 @@ def _report(res: dict) -> None:
     ho = res["held_out"]
     print(f"\n=== {res['sport'].upper()}: {res['n']} settled picks the correction can learn from")
     for g, v in sorted(res["groups"].items(), key=lambda kv: -kv[1]["n"]):
-        src, side = g.split("|")
+        src, side, *mkt = g.split("|")
         what = "left alone" if v["k"] >= 1.0 else f"pulled {1 - v['k']:.0%} of the way to the price"
-        print(f"    {SOURCE_WORDS.get(src, src):28} {side:5}  n {v['n']:4}  said {v['claimed']:.0%}  "
-              f"price {v['price']:.0%}  hit {v['hit']:.0%}  → {what}")
+        print(f"    {SOURCE_WORDS.get(src, src):28} {side:5} {(mkt[0] if mkt else ''):12} n {v['n']:4}  "
+              f"said {v['claimed']:.0%}  price {v['price']:.0%}  hit {v['hit']:.0%}  → {what}")
     if not ho.get("n"):
         print("    nothing to judge yet.")
         return
     print(f"    held out (5 folds by game, {ho['games']} games): log loss {ho['raw']} raw → "
           f"{ho['corrected']} corrected; gain {ho['gain']:+.4f}, 95% {ho['lo']:+.4f} to {ho['hi']:+.4f}")
+    mk = ho.get("market") or {}
+    if mk:
+        print(f"    by market too: {mk['corrected']} held out; against the maker level "
+              f"{mk['gain']:+.4f}, 95% {mk['lo']:+.4f} to {mk['hi']:+.4f} → "
+              + ("kept: the board reads each market's own record"
+                 if res.get("by_market") else "not kept: the maker level stands"))
     print("    PASSES — " + ("saved; the board reads it on its next build." if res["passed"] else "")
           if res["passed"] else "    NOT PROVEN — nothing saved; the board keeps its own numbers.")
 

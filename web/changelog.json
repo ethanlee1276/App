@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "kind": "fix",
+      "title": "Most Likely learns from each market's record",
+      "body": "Most Likely's chances are corrected by their own graded record, and until now that record was read by where a pick came from and which side it took. A side can be honest as a whole while one market inside it claims too much: college receiving-yards unders hit about half the time where we said 70%. Now a market with enough graded picks is corrected on its own record, the rest are left as they were, and it is kept only when it predicts better on games it was not fitted on. A correction only ever lowers a chance and the tier follows it; no pick is taken off the board for its record alone."
+    },
+    {
+      "date": "2026-11-03",
       "kind": "ship",
       "title": "Fliff joins the books we compare",
       "body": "Fliff's prices are now in the odds we compare, in the place of a second name for theScore Bet that the odds feed never answered to. Still ten books, so nothing else about the prices changes; a pick names Fliff when it has the best price."

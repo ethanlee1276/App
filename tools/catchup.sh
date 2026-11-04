@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JV "Most Likely learns by market and side too" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nfl --dry-run
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport cfb --dry-run
+SH
 run JT "The weekly backup zip, and what is left to clear" 60 <<'SH'
 cd /srv/qellys && grep -c "ITS OWN LEFTOVERS GO FIRST" engine/maintenance.py
 df -h / | tail -1

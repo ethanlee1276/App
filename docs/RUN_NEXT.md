@@ -6,7 +6,8 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after Caesars got its backup-book test (step JU:
+Last updated 2026-11-03, after Most Likely learned by market and side too
+(step JV: item 1h2), Caesars got its backup-book test (step JU:
 item 1i), the weekly backup zip was fixed and a cleanup
 written for after tonight's backup (step JT: item 0), Fliff took the tenth
 book's slot (step JS: item 1b), the weather desk was paused while a
@@ -245,6 +246,21 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JR 2>&1 | tee /tmp/jr.txt
 
 Paste it back. Its last section fills as the shadow calls settle; in a week
 or two it says whether the desk can come back.
+
+## 1h2. Any time after this push: Most Likely learns by market and side (step JV)
+
+You, 2026-11-03: "2, yes". A market that over-claims inside an honest side
+(college receiving-yards unders, NFL tight-end unders) is now its own group
+in the record's correction, kept only when it beats the old grouping on
+games it wasn't fitted on. It refits by itself every night; this shows what
+it would keep today, saving nothing:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JV 2>&1 | tee /tmp/jv.txt
+```
+
+Each league ends with a "by market too" line: `kept` or `not kept: the
+maker level stands`.
 
 ## 1i. A quiet evening: Caesars tried as a backup sharp book (step JU)
 

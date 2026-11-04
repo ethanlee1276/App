@@ -437,7 +437,9 @@ def _cal_base(r: dict, q: float, cal: dict) -> float:
     """What the board shows once likelycal has run — the number this
     correction is stacked on, so the two never correct the same loss twice."""
     from .likelycal import k_for, side_of
-    g = k_for(cal, f"{maker(r.get('sources'))}|{side_of(r.get('side'))}") or {}
+    # The market too: where the record's correction is kept by market
+    # (likelycal, BY MARKET TOO), the board shows that group's number.
+    g = k_for(cal, f"{maker(r.get('sources'))}|{side_of(r.get('side'))}", r.get("market")) or {}
     k = g.get("k", 1.0)
     return float(r["p"]) if k >= 1.0 else shrink(float(r["p"]), q, k)
 

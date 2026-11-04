@@ -2218,7 +2218,7 @@ function recBoardLearningSection(bl, sport) {
     const moved = Object.entries(cal.groups || {}).filter(([, g]) => (g.k ?? 1) < 1);
     const corrected = cal.passed
       ? (moved.length
-        ? moved.map(([g, v]) => `<div class="rec-note">${escapeHtml(g.replace("|", " · "))}: hit ${pct(v.hit)} of ${v.n} where we said ${pct(v.claimed)} — now pulled ${Math.round((1 - v.k) * 100)}% of the way to the price</div>`).join("")
+        ? moved.map(([g, v]) => `<div class="rec-note">${escapeHtml(g.split("|").join(" · "))}: hit ${pct(v.hit)} of ${v.n} where we said ${pct(v.claimed)} — now pulled ${Math.round((1 - v.k) * 100)}% of the way to the price</div>`).join("")
         : `<div class="rec-note">The record backs every group’s numbers as they are — nothing pulled.</div>`)
       : `<div class="rec-note">No correction proven yet on games the fit never saw — the board shows its own numbers.</div>`;
     const h = e.held || {};
