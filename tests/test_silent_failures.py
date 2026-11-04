@@ -258,6 +258,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # (tests/test_long_shots_wear_their_faces). A photo must never
         # cost the build its board.
         "fill", "stored_faces",
+        # engine/maintenance: a held deep refit or Lab run that cannot be
+        # started prints "⚠️  held weekly jobs not started: <error>" in the
+        # chores' log; a day with nothing held prints nothing
+        # (tests/test_the_deploy_waits_for_a_weekly_job). A weekly job must
+        # never cost the chores their day.
+        "launch_held",
     }
 
     def broad(h):
