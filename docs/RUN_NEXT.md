@@ -6,7 +6,8 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after the weekly backup zip was fixed and a cleanup
+Last updated 2026-11-03, after Caesars got its backup-book test (step JU:
+item 1i), the weekly backup zip was fixed and a cleanup
 written for after tonight's backup (step JT: item 0), Fliff took the tenth
 book's slot (step JS: item 1b), the weather desk was paused while a
 read-only check finds why its calls lost (step JR: item 1h), the models'
@@ -244,6 +245,21 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JR 2>&1 | tee /tmp/jr.txt
 
 Paste it back. Its last section fills as the shadow calls settle; in a week
 or two it says whether the desk can come back.
+
+## 1i. A quiet evening: Caesars tried as a backup sharp book (step JU)
+
+You, 2026-11-03: "5, yes". Pinnacle's prop prices were never stored, so
+this tries every stored book in Pinnacle's place on every stored pre-game
+prop price with a result, and grades the bets each would have made.
+Caesars has to make money in that role, call results better than the other
+books' average, and beat every other book at it. Read-only, a few minutes:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU 2>&1 | tee /tmp/ju.txt
+```
+
+Paste it back. Each sport ends with `holds` or `does not hold` and why.
+Nothing changes on the boards either way; a `holds` comes back to you.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

@@ -1203,5 +1203,8 @@ SH
 run DG "The carry projections, every running back's game" 1500 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 carrycheck.py
 SH
+run JU "Caesars tried as a backup sharp book, every book beside it" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.anchortest
+SH
 
 echo "===== done in $((SECONDS / 60)) min"

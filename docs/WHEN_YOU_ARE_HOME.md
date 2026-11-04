@@ -9305,6 +9305,45 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JU. Caesars tried as a backup sharp book, with every book beside it**
+(step 347; you, 2026-11-03: "5, yes", test it first and change nothing
+unless it wins).
+
+- **What it asks.** Pinnacle is the one book the boards treat as the fair
+  price: its price with the book's cut taken out, against the best price at
+  a book you can bet, is a bet when the gap is 2% to 15%. Where Pinnacle
+  hangs no price there is no such bet. Caesars measured among the most
+  accurate books against the closing line, so the question is whether it
+  can stand in.
+- **What the box can answer.** Pinnacle's prop prices were never stored (we
+  keep only the books you can bet), so this can't put Caesars beside
+  Pinnacle on the same props. It does the next best thing: every stored
+  book in turn plays Pinnacle's part, on every stored pre-game prop price
+  that has a result, and the bets each one would have made are graded.
+- **The bar, written before the first run.** In a sport, Caesars "holds"
+  only with at least 200 bets, a profit with t of 2 or more (counted by
+  day, since one day's props share games), a price that calls the result
+  better than the other books' average (log loss, t of 2 or more), and no
+  other book with 200 bets doing better in the same role. Read-only:
+  nothing on the boards changes either way.
+
+Read-only, a few minutes, best on a quiet evening (it reads every stored
+prop price; one sport: add its name, like `nba`):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.anchortest
+```
+
+Paste it back. If a sport says `holds`, wiring Caesars in as the backup
+there changes how the board prices, so that's yours to approve. If it
+doesn't hold anywhere, Pinnacle stays the only reference, as now.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU 2>&1 | tee /tmp/ju.txt
+```
+
 **JT. The weekly backup zip runs again, and what is safe to clear** (step
 349; your JG output, 2026-11-03: no weekly zip since 8 October).
 
