@@ -9323,8 +9323,8 @@ page or the most likely page").
   and the page never did: a ladder rung priced from the sharp book or the
   market, and a real find. And if the board ever has picks the page doesn't
   show, the empty box says so ("Tonight's board has 92 picks, and this page
-  could not show any of them") instead of blaming the slate. That was what
-  you were seeing, so you'd have spotted it at once.
+  could not show them. That's our fault, not a quiet slate") instead of
+  blaming the slate. With that message you'd have spotted this at once.
 - **Credits: nothing ran away.** 100,000 a month is 3,333 a day, and the
   plan is built to spend nearly all of it, because credits left at the
   renewal expire. It keeps back the 500 reserve and a 5% buffer. The days
