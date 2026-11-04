@@ -4,6 +4,12 @@
     {
       "date": "2026-11-04",
       "kind": "model",
+      "title": "NBA: rebounds, assists, steals, blocks and turnovers read past a player's last twenty games",
+      "body": "The NBA board read each player's rate a minute from his last twenty games only. For the rare stats that is a small sample (about fifteen steals for a guard), so one hot or cold fortnight moved his number as much as a real change. Now his older games (his last sixty, any club) and the league's rate for his role join the twenty's. On two full seasons of the league's own box scores, each judged on the one it never saw: steals 4.5% closer, turnovers 3.3%, blocks 2.7-4.0%, rebounds 2.0-3.2%, assists 1.6-2.4%, and the chances 0.5-1.5% better in every one of them on the board's own replay. A guard with no blocks in twenty games no longer has the under called a certainty. Points and threes stay as they were: read the same way they came out no better as chances. What moves: the projection, and so every pick, of every NBA rebounds, assists, steals, blocks, turnovers and rebounds-plus-assists prop, and the rebounds and assists inside points-plus-rebounds, points-plus-assists and PRA; the pick shows the step \"Rate, read past his last twenty\". The box checks it on its own seasons every week and turns it off if they disagree."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "model",
       "title": "NBA: when a regular sits, his minutes go to the bench, not the stars",
       "body": "When a regular is ruled out, the board's teammate-out step hands his minutes to the rest of the rotation. It used to share them in proportion to each man's own minutes, so the stars took the most. Measured on two full seasons, each judged on the one it never saw, the minutes really go to the men with room to play more: the bench and the back of the rotation, while a star near his ceiling gains little. Shared that way, a teammate's minutes land 6-8% closer and his points 1-2% closer in those games than shared by minutes, and 10-12% and 3.5% closer than with no step at all. What moves: the projected minutes, and so every prop, of the teammates of a ruled-out regular; it switches on by itself once the server's own weekly check holds on its stored games."
     },

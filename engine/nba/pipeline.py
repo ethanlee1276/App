@@ -150,8 +150,23 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # prop carries no shot read, the market holds no points or threes, or
     # the league was not measured (the WNBA).
     from .shooting import projection_mult as _shoot_mult
+    from . import rates as _rates
     shoot_m, shoot_note = _shoot_mult(stat, rate, prop.get("shooting"), tune.key)
-    proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m * shoot_m, 2)
+    # RATES, READ PAST HIS LAST TWENTY (engine/nba/rates, 2026-11-04): his
+    # older games and his role's league rate join the twenty's for rebounds,
+    # assists, steals, blocks and turnovers, and the rebounds and assists in
+    # every combo. Measured on two full seasons, each held out: steals 4.5%,
+    # turnovers 3.3%, blocks 2.7-4.0%, rebounds 2.0-3.2%, assists 1.6-2.4%
+    # closer. 1.0 when the prop carries no read (a slip leg, the WNBA) or the
+    # switch is off.
+    _rread = prop.get("rates")
+    rates_m, rates_note = _rates.projection_mult(stat, rate * shoot_m, _rread, tune.key)
+    # A twenty that never once recorded the stat has a rate of nothing, which
+    # no multiplier lifts: the read past them stands in as the rate itself.
+    _lifted, _lift_note = _rates.lift_zero(stat, _rread, tune.key) if rate <= 0 else (None, "")
+    if _lifted:
+        rate, rates_m, rates_note = _lifted, 1.0, _lift_note
+    proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m * shoot_m * rates_m, 2)
     # THE WALK FROM BASE TO FINAL (engine/chain), as the NFL's and MLB's
     # projections publish it: the pick page draws it, and the one board's
     # matchup check reads its measured Matchup step (engine/likelyboard).
@@ -167,9 +182,10 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
         _chain.step("rest", lay_m, lay_note or ""),
         _chain.step("matchup", dvp_m, prop.get("dvp_note") or "") if read_matchup else None,
         _chain.step("shooting", shoot_m, shoot_note) if shoot_m != 1.0 else None,
+        _chain.step("rates", rates_m, rates_note) if rates_m != 1.0 else None,
     ], proj, rate_per_min=round(rate, 4), minutes=proj_min)
     context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note"),
-                                 shoot_note, prop.get("lineup_note")) if n]
+                                 shoot_note, rates_note, prop.get("lineup_note")) if n]
     if base_list is not minutes:
         context_notes.append(f"Minutes read from his {len(base_list)} games this season, "
                              f"not last season's end (measured: they read closer)")

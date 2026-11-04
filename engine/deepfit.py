@@ -437,15 +437,21 @@ MIN_PIECE_LEFT_S = 5 * 60
 #: minutes a fresh absence opens (its held-out verdict saved, which the board
 #: reads only when it holds), and the spread that follows the projection
 #: (its verdict filed; the NBA's refit then fits on it and only then throws
-#: the switch — engine/nba/switches). Each script and its arguments.
+#: the switch — engine/nba/switches). A fourth joined the same day: the
+#: rates read past his last twenty games, on or off by the box's own
+#: seasons (`nbarates.py`). Each script and its arguments.
 NBA_CHECKS = {"nba_rules": ("nbarules.py", ("--save",)),
               "nba_vacancy": ("nbavacancy.py", ("nba", "--heldout", "--save")),
+              # The rates read past his last twenty games (engine/nba/rates,
+              # 2026-11-04): on or off by the box's own seasons, as the rules.
+              "nba_rates": ("nbarates.py", ("--save",)),
               "nba_spread": ("nbalabcheck.py", ("--part", "spread", "--save-verdict"))}
 #: The time a check is given before its own first run has said how long it
 #: takes: the spread's replay reads every stored NBA game four times over and
 #: prices a ladder twice (the lab's two seasons took seven minutes on a fast
 #: machine; the box is one niced vCPU beside the boards).
-NBA_CHECK_GUESS_S = {"nba_rules": 10 * 60, "nba_vacancy": 10 * 60, "nba_spread": 35 * 60}
+NBA_CHECK_GUESS_S = {"nba_rules": 10 * 60, "nba_vacancy": 10 * 60, "nba_rates": 10 * 60,
+                     "nba_spread": 35 * 60}
 
 #: Every piece, in the order a round takes them when they are equally
 #: stale: the sports first (football leads in the autumn; the NBA's checks

@@ -18,14 +18,18 @@ the change by hand. The weekly deep refit now runs each check itself
   * ``rotation``  nbarules.py --save records whether the three rules still
                   hold on the box's own seasons; ``on`` follows at once (the
                   rules are on unless the box's seasons say otherwise).
+  * ``rates``     nbarates.py --save (2026-11-04) records whether the rates
+                  read past his last twenty games (engine/nba/rates) still
+                  come out closer on the box's own seasons; ``on`` follows
+                  at once, as the rotation's does.
   * the vacancy keeps its own store (engine/nba/vacancy, `nbavacancy.py
     --heldout --save`), which the board already reads only when it holds.
 
-AN ENVIRONMENT VARIABLE STILL WINS: ``QB_NBA_SPREAD`` and ``QB_NBA_ROTATION``
-set to anything decide outright, and the refit never fits against them —
+AN ENVIRONMENT VARIABLE STILL WINS: ``QB_NBA_SPREAD``, ``QB_NBA_ROTATION`` and
+``QB_NBA_RATES`` set to anything decide outright, and the refit never fits against them —
 the off-switch a person can always reach. Unset, the box's own verdict
-decides; with no verdict on file, the spread is off and the rules are on,
-as they were.
+decides; with no verdict on file, the spread is off and the rules and the
+rates are on, as they were.
 
 Standard library only.
 """
@@ -37,9 +41,11 @@ import os
 
 STORE = "nba_switches.json"
 #: The environment variable that overrides each switch.
-ENV = {"spread": "QB_NBA_SPREAD", "rotation": "QB_NBA_ROTATION"}
-#: Each switch with no verdict on file, as the board ran before the checks.
-DEFAULT = {"spread": False, "rotation": True}
+ENV = {"spread": "QB_NBA_SPREAD", "rotation": "QB_NBA_ROTATION", "rates": "QB_NBA_RATES"}
+#: Each switch with no verdict on file, as the board ran before the checks
+#: (the rates read past the twenty, engine/nba/rates, on from the day it
+#: was measured).
+DEFAULT = {"spread": False, "rotation": True, "rates": True}
 #: What an environment variable says "off" with.
 OFF_WORDS = ("0", "off", "false", "no")
 

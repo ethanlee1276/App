@@ -121,7 +121,7 @@ def test_the_cut_off_piece_goes_to_the_back_and_the_next_run_finishes_the_round(
         lines = _round(tmp, THU, clock, run_piece)
         assert ran[-2:] == ["nba_rules", "nba"], (
             "the piece the hour ran out in waits behind the rest, and the NBA's fitters wait for it", ran)
-        assert ran[:3] == ["nba_vacancy", "nba_spread", "mlb"], ran
+        assert ran[:4] == ["nba_vacancy", "nba_rates", "nba_spread", "mlb"], ran
         assert _state(tmp)["left"] == [] and not D.due(tmp / "deepfit_state.json", THU)
         assert lines[-1].startswith("deep refit: round of 2026-11-04 complete"), lines[-1]
     finally:

@@ -1357,6 +1357,20 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  shooting read skipped: {exc}")
             _shoot_long, _shoot_lg = {}, {}
+        # RATES, READ PAST HIS LAST TWENTY (engine/nba/rates, measured
+        # 2026-11-04): every priced player's last 60 games, any club, so each
+        # rate carries his older games and his role's league rate — one read.
+        _rate_long = {}
+        try:
+            from engine.nba import rates as _rates
+            if args.league in _rates.LEAGUES and _rates.enabled():
+                _rate_long = _rates.longrun(conn, args.league,
+                                            {pp.player for pp in slate.props if pp.player in hist})
+                print(f"Rates read: {len(_rate_long)} player(s) with their last "
+                      f"{_rates.LONG_GAMES} games")
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  rates read skipped: {exc}")
+            _rate_long = {}
         # THE ROTATION'S NEWS (engine/nba/minutes; measured 2026-11-04): who
         # missed what, from the logs above. A man the books price tonight
         # who missed his club's last two or more is a returning regular
@@ -1449,6 +1463,10 @@ def main() -> None:
                 "shooting": (_shooting.bundle(h.get("games") or [], _shoot_long.get(prop.player),
                                               _shoot_lg)
                              if _shoot_long or _shoot_lg else None),
+                # His older games past those twenty and his role (engine/nba/rates).
+                "rates": (_rates.bundle(h.get("games") or [], h.get("dates") or [],
+                                        _rate_long.get(prop.player), bool(h["starter"]))
+                          if _rate_long else None),
                 "spread": spread, "is_favorite": fav,
                 # What his history's games carried (`history_context`).
                 "margins": h.get("margins"), "rests": h.get("rests"),

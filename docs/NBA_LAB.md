@@ -305,6 +305,61 @@ reads the rule it was fitted under); the weekly deep refit refits it (runbook
 KC). A regular's return still takes its minutes back by base minutes, as
 that rule was measured.
 
+## Twenty games is not enough for a rate
+
+The board reads every per-minute rate from his last twenty games for the
+club. Twenty games is about 600 minutes for a starter: some 20 blocks for
+a forward, 15 steals for a guard, so a hot or cold fortnight moves the
+number as much as a real change does. The read now goes past the twenty
+(`engine/nba/rates`): his older games (his last sixty, any club) join it at
+a weight a minute, and some minutes of the league's rate for his role
+(starter or bench) are added, so a man with a thin twenty leans on what a
+man like him does:
+
+    rate = (V20 + w x V_old + kappa x league) / (M20 + w x M_old + kappa)
+
+Fitted on one season and judged on the other, both ways (every player-game
+of 10+ minutes with 5+ earlier games for his club, 40,327 of them; his rate
+times the minutes he played):
+
+| Stat | w, kappa (both seasons) | Squared error, 2024-25 / 2025-26 held out | Through the board's minutes (priced rows) | Thin twenty (under 400 min) |
+|---|---|---|---|---|
+| Steals | 0.75, 400 min | **+4.5% / +4.4%** | +3.3% / +3.3% | +6.7-7.3% |
+| Turnovers | 0.3, 100 | **+3.3% / +3.4%** | +2.3% / +2.4% | +5.9-6.2% |
+| Blocks | 0.5, 100 | **+2.7% / +4.0%** | +2.2% / +3.3% | +3.2-5.6% |
+| Rebounds | 0.5, 25 | **+2.0% / +3.2%** | +1.3% / +2.1% | +2.9-5.7% |
+| Assists | 0.3, 25 | **+1.6% / +2.4%** | +1.0% / +1.7% | +2.8-4.9% |
+| Rebounds + assists | (the two parts) | +1.9% / +2.8% | +1.1% / +1.8% | |
+
+How far back to read was chosen the same way (40, 60 or 82 games: 60, the
+shooting read's own reach). AS CHANCES, through the fitters' own walk (the
+board's projection priced at a half point under his last eight games'
+average, Brier with a temperature fitted on one half of the games and
+judged on the other): steals 0.7-1.3% better, blocks 1.1-1.5%, turnovers
+0.9-1.2%, rebounds 0.7%, assists 0.6%, rebounds + assists 0.5%, PRA and
+points + rebounds 0.1%, points + assists 0.0%, and as much with the
+temperature fitted before the change as after it, so the board gains from
+its first build, not only once the weekly refit has run.
+
+A twenty that never once recorded the stat (a guard's blocks) had a rate
+of nothing, and the board called the under a certainty; it now takes the
+read past the twenty as its rate (`rates.lift_zero`).
+
+POINTS AND THREES ARE LEFT ALONE. Read the same way (his shots a game past
+the twenty, the makes as the shooting read has them), points landed 0.8% /
+1.4% closer as a number and 0.1% WORSE as a chance, after a refit as well;
+threes moved 0.3%. The shooting read (above) keeps them. The combos'
+points stay the shooting read's, their rebounds and assists are read past
+the twenty.
+
+On the box: on by itself (`QB_NBA_RATES`; the heartbeat's
+`nba_switches.rates`), and the weekly deep refit asks the box's own stored
+seasons the same question every week before the NBA's fitters
+(`nbarates.py --save`, runbook KD): if a season big enough disagrees about
+any of the five stats, it turns itself off. On the lab's seasons that check
+reads rebounds +2.1% / +2.4%, assists +1.7% / +1.8%, steals +4.6% / +3.7%,
+blocks +2.6% / +3.2%, turnovers +3.4% / +2.8%: HOLDS.
+
 ## Measured, and not built
 
 The same honesty the NFL's refusals get:
@@ -336,6 +391,22 @@ The same honesty the NFL's refusals get:
 - **Teammates' shooting luck, for assists** (his assists regress when his
   teammates have shot hot): 0.17%. Small, and it needs the floor data on the
   box. Parked.
+- **The absent man's shots to the stars** (2026-11-04). With his minutes
+  shared by room (above), the stars' points in fresh-absence games are
+  already right: the top third of teammates by share of the club's points
+  runs -0.00 a game against the board, the bottom third +0.23. Handing his
+  share of each stat to the teammates who play, in proportion to their own
+  share raised to a power (the power and the amount fitted on one season,
+  judged on the other): points +0.33% / +0.18%, assists +0.36% / +0.18%,
+  rebounds and threes nothing, and the best power was 0 or 1 (equal shares
+  or a flat bump), never "to the stars". Too small to move a number.
+- **The other club short-handed** (2026-11-04). The opponent's fresh
+  absences (its absent minutes, or the absent men's share of the stat, or of
+  steals and blocks) as a step on every player's number, on top of a defence
+  read: our players did slightly WORSE against a short-handed club in every
+  market. That is the game script: a short-handed opponent makes a bigger
+  favourite and a blowout, which the board's own spread prices and the lab
+  held neutral. Under 0.35% everywhere. Not built.
 
 ## The calibration, fitted near the line and applied everywhere
 
@@ -372,6 +443,9 @@ about that, measured on the replica with `calibrate.fit` itself:
 
 ## Next
 
+- Done 2026-11-04 (runbook KD): rebounds, assists, steals, blocks and
+  turnovers are read past his last twenty games (above), checked on the
+  box's own seasons every week.
 - Done 2026-11-04 (runbook KC): the box runs `nbavacancy.py nba --heldout
   --save` (the teammate-out minutes) and `nbarules.py --save` (the
   rotation's rules on its own seasons) itself, every week, right before the

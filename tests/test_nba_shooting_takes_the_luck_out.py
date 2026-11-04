@@ -161,7 +161,14 @@ def test_the_build_the_replay_and_the_fitters_hand_it_the_same_read():
     pts = db.hoops_entries(conn, "nba", "pts")
     reb = db.hoops_entries(conn, "nba", "reb")
     assert pts and "games" in pts[0] and pts[0]["games"][0].get("fg3a") == 7.0
-    assert reb and "games" not in reb[0], "only where the read moves a market"
+    # Rebounds carry their games too since 2026-11-04: the rates read past
+    # his last twenty games (engine/nba/rates) is made of them.
+    assert reb and reb[0]["games"][0].get("reb") == 5.0 and "fg3m" not in reb[0]["games"][0], \
+        "only the columns a read uses"
+    wn = [(*r[:1], *r[1:]) for r in rows]
+    conn.executemany("INSERT INTO player_game_logs VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                     [("wnba", *r[1:]) for r in wn])
+    assert "games" not in db.hoops_entries(conn, "wnba", "reb")[0], "only where a read moves a market"
 
 
 if __name__ == "__main__":

@@ -59,6 +59,9 @@ STEP_LABELS = {
     # Basketball's points and threes from shot volume at his long-run
     # percentages, not his recent makes (engine/nba/shooting, 2026-11-04).
     "shooting": "Shooting, luck taken out",
+    # Basketball's rates read past his last twenty games: his older games and
+    # his role's league rate in them (engine/nba/rates, 2026-11-04).
+    "rates": "Rate, read past his last twenty",
 }
 
 #: Where the multiplying starts.

@@ -173,6 +173,26 @@ def _shooting(e: dict, i: int, sport: str, market: str):
     return SH.bundle(recent, longrun)
 
 
+def _rates(e: dict, i: int, sport: str):
+    """The rates read for game ``i`` as the live build makes it (`nba_build`:
+    his twenty games before it, and his last LONG_GAMES), or None — off or
+    unmeasured for this league (engine/nba/rates)."""
+    from .nba import rates as RT
+    if sport not in RT.LEAGUES or not RT.enabled():
+        return None
+    games, dates = e.get("games") or [], e.get("dates") or []
+    if not games or len(dates) != len(games):
+        return None
+    lo = max(0, i - WINDOW)
+    recent = games[lo:i][::-1]
+    far = max(0, i - RT.LONG_GAMES)
+    longrun = [(d, g) for d, g in zip(dates[far:i], games[far:i])
+               if float((g or {}).get("min") or 0.0) > 0][::-1]
+    starters = e.get("starters") or []
+    starter = bool(starters[i - 1]) if 0 < i <= len(starters) else False
+    return RT.bundle(recent, dates[lo:i][::-1], longrun, starter)
+
+
 def _todo(entries: list, min_history: int, cap: int) -> list:
     """Every gradeable game, ``(day, player, entry index, game index)``,
     oldest first and capped to the most recent ``cap``: a game with a
@@ -240,7 +260,8 @@ def settled_props(hist: dict, market: str, sport: str = "nba",
                 "values": values, "line": line, "over_odds": over,
                 "under_odds": under, "is_starter": starter,
                 "spread": 0.0, "rest": "1day", "book": "replay",
-                "shooting": _shooting(entries[n], i, sport, market)}
+                "shooting": _shooting(entries[n], i, sport, market),
+                "rates": _rates(entries[n], i, sport)}
         try:
             out = evaluate_prop(prop, tune)
         except Exception:                                    # noqa: BLE001
@@ -293,7 +314,8 @@ def walk(entries: list, market: str, sport: str = "nba",
         mult = float(player_adjust(player)) if player_adjust else None
         prop = {"player": player, "market": market, "minutes": minutes, "values": values,
                 "is_starter": starter, "spread": 0.0, "rest": "1day",
-                "shooting": _shooting(entries[n], i, sport, market)}
+                "shooting": _shooting(entries[n], i, sport, market),
+                "rates": _rates(entries[n], i, sport)}
         if mult is not None:
             prop["player_mult"] = mult
         try:

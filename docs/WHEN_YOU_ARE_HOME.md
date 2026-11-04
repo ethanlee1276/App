@@ -9324,6 +9324,49 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KD. Every NBA rate reads past his last twenty games** (step 377;
+nothing to run; you, 2026-11-04: "We want to make our NBA model as
+proficient as possible ... I want you to just do it"). The board read every
+player's rebounds, assists, steals, blocks and turnovers a minute from his
+last twenty games only. Twenty games is a small sample for the rare stats:
+some 15 steals for a guard, so one hot fortnight moved the number as much
+as a real change. Now his older games (his last sixty, any club) and the
+league's rate for his role join the twenty's, so a hot or cold fortnight
+is pulled toward what he usually does, and a man with a thin twenty leans
+on what a man like him does. On two full seasons of the league's own box
+scores, each held out (docs/NBA_LAB.md, "Twenty games is not enough for a
+rate"): steals 4.5% closer, turnovers 3.3%, blocks 2.7-4.0%, rebounds
+2.0-3.2%, assists 1.6-2.4%; as chances on the board's own replay, 0.5-1.5%
+better in every one of them, from the first build. A guard with no blocks
+in twenty games no longer has the under called a certainty. Points and
+threes stay as the shooting read has them (read this way they came out no
+better as chances).
+
+It is on now, and the weekly deep refit checks it on the box's own seasons
+right before the NBA's refit (`nbarates.py --save`): if a season big
+enough disagrees about any of the five stats, it turns itself off. The
+heartbeat's `nba_switches.rates` says where it stands. `QB_NBA_RATES=0` in
+the service's environment turns it off whatever the check says. For a read
+by hand whenever you want one (read-only, about a minute):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KD 2>&1 | tee /tmp/kd.txt
+```
+
+which runs the check itself:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbarates.py
+```
+
+It ends `HOLDS — the board keeps it.` or `DOES NOT HOLD:` and the stats and
+seasons that did not.
+
+Also measured the same day, and not built: when a regular sits, his shots
+do not go to the stars once his minutes go to the bench (the stars' points
+were already right), and a short-handed opponent does not lift our
+players (the spread already prices the blowout).
+
 **KC. The NBA's waiting checks run themselves** (step 373; nothing to
 run; you, 2026-11-04: "I don't want to have to specifically ask you for
 certain tools ... I want you to just do it"). Three NBA changes the lab

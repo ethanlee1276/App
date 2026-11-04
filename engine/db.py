@@ -1535,6 +1535,13 @@ def hoops_entries(conn, sport: str, market: str, min_games: int = 8,
     shots = sport in _SH.LEAGUES and market in _SH.MOVED
     if shots:
         want = want + tuple(k for k in _SH.SHOT_KEYS + ("pts",) if k not in want)
+    # And the columns the rates read past his last twenty games is made of
+    # (engine/nba/rates, 2026-11-04), for every market it moves.
+    from .nba import rates as _RT
+    reads = sport in _RT.LEAGUES and market in _RT.PARTS
+    if reads:
+        want = want + tuple(k for k in _RT.KEYS if k not in want)
+        shots = True
     q = ("SELECT player, season, period, team, opponent, home, position, market, value "
          "FROM player_game_logs WHERE sport=? AND market IN (%s)" % ",".join("?" * len(want)))
     args: list = [sport, *want]

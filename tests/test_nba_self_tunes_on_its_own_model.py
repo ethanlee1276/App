@@ -122,12 +122,18 @@ def test_each_game_is_priced_off_the_twenty_before_it_as_the_build_hands_them():
     h = nba_build.player_history(before, {"BOS"})["Guard One"]
     assert h["starter"] is False and 0.0 in h["minutes"] and len(h["minutes"]) == 20
     assert len(h["stl"]) == 5, "games 24-28 carried steals"
+    # The rates read past his last twenty games (engine/nba/rates) as the
+    # build hands it: his twenty, and his last sixty any club before the day.
+    from engine.nba import rates as RT
+    rread = RT.bundle(h["games"], h["dates"], RT.longrun(before, "nba", ["Guard One"]).get("Guard One"),
+                      bool(h["starter"]))
     for market in ("pts", "pts_reb", "pra", "stl", "blk"):
         entries = logwalk.load_entries(full, "nba", market, min_games=6)
         rep = hoopsreplay.walk(entries, market, tune=hoops.NBA, cap=1, player_adjust=lambda _n: 1.0)
         want = pipeline.project({"player": "Guard One", "market": market, "minutes": h["minutes"],
                                  "values": h[market], "is_starter": bool(h["starter"]),
-                                 "spread": 0.0, "rest": "1day", "player_mult": 1.0}, hoops.NBA)
+                                 "spread": 0.0, "rest": "1day", "player_mult": 1.0,
+                                 "rates": rread}, hoops.NBA)
         assert len(rep.settled) == 1, market
         assert rep.settled[0].projection == want["projection"], (market, rep.settled[0].projection, want)
         assert rep.settled[0].actual == entries[0]["values"][-1]

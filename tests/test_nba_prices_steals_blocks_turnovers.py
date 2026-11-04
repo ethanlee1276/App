@@ -298,7 +298,14 @@ def _hist(stl_from):
 
 def test_the_replay_reads_only_the_games_that_carried_the_count():
     assert set(COUNTS) <= set(hoopsreplay.MARKETS)
-    settled, counts = hoopsreplay.settled_props(_hist(12), "stl", min_history=8)
+    # The window's own arithmetic, without the read past the twenty
+    # (engine/nba/rates, 2026-11-04), which would pull three steals a game
+    # off three games toward the league's (its own tests hold that).
+    os.environ["QB_NBA_RATES"] = "0"
+    try:
+        settled, counts = hoopsreplay.settled_props(_hist(12), "stl", min_history=8)
+    finally:
+        os.environ.pop("QB_NBA_RATES", None)
     # Games 12-14 have fewer than three stored before them and are skipped;
     # every game after is priced off steals that are all threes — never off
     # the twelve games with no row read as zeros.

@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after the NBA's three waiting checks started
+Last updated 2026-11-04, after every NBA rate started reading past a
+player's last twenty games, checked on the box's seasons every week by
+itself (step KD: nothing to run, item 1k), the NBA's three waiting checks started
 running themselves in the weekly refit (step KC: items 1j and 1k need
 nothing from you now), the NBA's graded record started grading the
 scout's flags and the NBA build started keeping each game's spread and
@@ -407,7 +409,14 @@ The second part should end `HOLDS — the board keeps all three.` If it says
 
 Nothing to run for the next part (step KB): the board learning that grades
 the NFL's flags on our own picks now grades the NBA's too, every few hours
-by itself. Record page → What it learned → NBA shows each flag once fifteen
+by itself.
+
+Nothing to run for this one either (step KD): rebounds, assists, steals,
+blocks and turnovers now read past a player's last twenty games (steals
+4.5% closer on two held-out seasons, blocks 2.7-4.0%, turnovers 3.3%,
+rebounds 2.0-3.2%, assists 1.6-2.4%), on from the next build, and the
+weekly refit checks it on the box's own seasons and turns it off if they
+disagree. For a read by hand, `bash tools/catchup.sh KD`. Record page → What it learned → NBA shows each flag once fifteen
 graded picks carry one; a flag moves a number only once the record proves
 it on games the fit never saw.
 

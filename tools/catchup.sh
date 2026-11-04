@@ -1224,5 +1224,8 @@ run JZ "NBA: the teammate-out minutes held out, and the rotation's three rules o
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbarules.py
 SH
+run KD "NBA: the rates read past the last twenty games, on the box's seasons" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbarates.py
+SH
 
 echo "===== done in $((SECONDS / 60)) min"
