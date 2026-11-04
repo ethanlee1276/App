@@ -223,7 +223,7 @@ def test_a_play_that_lost_yards_draws_no_flight():
     got = _node("""
       const sack = pbpPlaySVG({kind: "football", event: "Sack", yards: -7, down: 3, distance: 15});
       const gain = pbpPlaySVG({kind: "football", event: "Rush", yards: 7, down: 1, distance: 10});
-      const markY = (s) => +(s.match(/<circle cx="[\d.]+" cy="([\d.]+)"/) || [])[1];
+      const markY = (s) => +(s.match(/<circle cx="[\\d.]+" cy="([\\d.]+)"/) || [])[1];
       console.log(JSON.stringify({
         sackPath: /<path /.test(sack), gainPath: /<path /.test(gain),
         sackSaysLoss: sack.includes("loss of 7 yds"), sackHasMark: /<circle /.test(sack),
@@ -271,8 +271,8 @@ def _strip(yard, poss="", home="DET", away="CHI"):
     return _node("""
       const d = {home: %r, away: %r, live: {%s possession: %r}};
       const s = pbpFieldPosHTML(d);
-      const ball = (s.match(/<circle cx="([\d.]+)"/) || [])[1];
-      const arrow = (s.match(/<path d="M([\d.]+) 16 L([\d.]+) 12.6/) || []).slice(1);
+      const ball = (s.match(/<circle cx="([\\d.]+)"/) || [])[1];
+      const arrow = (s.match(/<path d="M([\\d.]+) 16 L([\\d.]+) 12.6/) || []).slice(1);
       console.log(JSON.stringify({empty: s === "", ball: ball ? +ball : null,
         arrow: arrow.length ? {tip: +arrow[0], base: +arrow[1]} : null}));"""
       % (home, away, "" if yard is None else f"yard_line: {yard},", poss))
@@ -285,8 +285,8 @@ def _strip2(js):
       const g = {home: "LOU", away: "MISS"};
       const read = (s) => {
         if (s === "") return {empty: true};
-        const dot = Number((s.match(/<circle cx="([\d.]+)"/) || [])[1]);
-        const tip = (s.match(/<path d="M([\d.]+) 16/) || [])[1];
+        const dot = Number((s.match(/<circle cx="([\\d.]+)"/) || [])[1]);
+        const tip = (s.match(/<path d="M([\\d.]+) 16/) || [])[1];
         return {cap: (s.match(/pbp-fpos-cap">([^<]*)</) || [])[1],
                 x: dot,
                 dir: tip === undefined ? 0 : Math.sign(Number(tip) - dot)};

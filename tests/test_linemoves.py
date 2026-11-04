@@ -523,7 +523,7 @@ def test_the_installer_prints_commands_that_act_on_what_it_installed():
     assert 'exec bash "$REPO/tools/${SCRIPT}.sh"' in sh, "--now still hardcoded"
     assert 'logs/${SCRIPT}-' in sh, "the log path is still one runner's"
     assert '$MODE--remove' in sh and '$MODE--now' in sh, "commands lose the mode"
-    assert 'logs/nightly-\$(date' not in sh
+    assert 'logs/nightly-\\$(date' not in sh
 
 
 def test_the_watch_announces_its_next_check_rather_than_sleeping_silently():

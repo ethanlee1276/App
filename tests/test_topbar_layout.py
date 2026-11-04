@@ -55,7 +55,7 @@ def _code():
 def _media(width):
     """The whole `@media (max-width: Npx)` block, brace-matched.
 
-    A non-greedy `.*?\n\}` stops at the first nested rule's closing
+    A non-greedy `.*?\n\\}` stops at the first nested rule's closing
     brace, which is three lines in — so the first draft of this file
     searched roughly one selector and concluded the rest was missing."""
     decls = _decls()

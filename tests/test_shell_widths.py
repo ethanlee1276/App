@@ -44,7 +44,7 @@ def test_both_widths_are_tokens():
 def test_they_are_declared_where_the_census_can_see_them():
     """The first draft put both on one line in a `:root` of their own,
     4,500 lines into the file. test_chroma's token census reads
-    declarations with `^\s*--name:` — one per line — so to it they were
+    declarations with `^\\s*--name:` — one per line — so to it they were
     referenced and never defined, which is the shape of the bug that
     census exists to catch (a token deleted while rules still use it).
 
