@@ -120,13 +120,15 @@ there, so its two reads are the raw one. About seven minutes.
   the board prices with `hoops_fit`'s (0.72). The fitters' walk already
   used the fitted ones. The replay takes a `tune` now, and the check hands
   it the board's; the Lab's weekly replay still uses the defaults (next).
-- **Half the replay's lines are whole numbers.** With no closing line
-  stored, the line is his recent average rounded, and a whole number half
-  the time. A rebound or assist count lands on a whole number about one
-  time in five (758 of 4,442 rebound lines), the push is dropped from the
-  score, and the board's chance never counted a push. On those lines alone
-  the new spread looked 2.5% worse for rebounds and assists; on half-point
-  lines it was level. The check scores half-point lines only.
+- **Half the replay's lines were whole numbers.** With no closing line
+  stored, the line was his recent average rounded, a whole number half the
+  time. A rebound or assist count lands on a whole number about one time
+  in five (758 of 4,442 rebound lines), the push is dropped from the score,
+  and the board's chance never counted a push. On those lines alone the new
+  spread looked 2.5% worse for rebounds and assists; on half-point lines it
+  was level. The check scores half-point lines only, and the replay's line
+  is always a half point now (the same fix as the calibration's, below).
+  Rerun that way the verdict is the same: ready for the refit.
 
 ## Measured, and not built
 
