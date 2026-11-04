@@ -84,9 +84,10 @@ def test_the_pipeline_multiplies_it_in():
     import os as _os
     root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
     src = open(_os.path.join(root, "engine", "nba", "pipeline.py"), encoding="utf-8").read()
-    # The shooting read (engine/nba/shooting, 2026-11-04) multiplies in
-    # beside it; the defence's factor is still one of the product's terms.
-    assert "proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m * shoot_m, 2)" in src
+    # The shooting read (engine/nba/shooting, 2026-11-04) and the rates read
+    # past the twenty (engine/nba/rates, the same day) multiply in beside it;
+    # the defence's factor is still one of the product's terms.
+    assert "proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m * shoot_m * rates_m, 2)" in src
     build = open(_os.path.join(root, "nba_build.py"), encoding="utf-8").read()
     assert '"dvp_mult": _dm, "dvp_note": _dn,' in build
 
