@@ -116,6 +116,46 @@ def test_every_build_runs_it_and_the_page_draws_it_on_all_three_lists():
     assert "headshot: r.headshot" in fn("firstOursHTML"), "the our-numbers rows drew initials whatever they carried"
 
 
+def _say(fn):
+    """Run `fn` with stdout captured. Returns (value, printed)."""
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        value = fn()
+    return value, buf.getvalue()
+
+
+def _blow_up(*_a, **_k):
+    raise RuntimeError("the photo table is gone")
+
+
+def test_a_failure_says_so_and_a_quiet_board_says_nothing():
+    """`fill`'s 0 is also what a board whose rows all have faces answers,
+    and `stored_faces`'s {} what a sport with no stored photos answers
+    (tests/test_silent_failures). Each failure names itself in the build
+    log, the build still gets its board, and a quiet run prints nothing."""
+    from engine import rosters
+    real_bf, real_fm = BF.board_faces, rosters.face_map
+    try:
+        BF.board_faces = _blow_up
+        n, said = _say(lambda: BF.fill(_nba_board(), "nba", stored={}))
+        assert n == 0, "a failure still returns a count; the build carries on"
+        assert "Long Shots faces skipped" in said and "nba" in said and "RuntimeError" in said, said
+        BF.board_faces = real_bf
+
+        rosters.face_map = _blow_up
+        got, said = _say(lambda: BF.stored_faces("cfb", conn=object()))
+        assert got == {} and "stored photos unreadable" in said and "cfb" in said and "RuntimeError" in said, said
+        rosters.face_map = lambda conn, sport: {}
+        got, said = _say(lambda: BF.stored_faces("cfb", conn=object()))
+        assert got == {} and not said.strip(), f"an empty store complained: {said!r}"
+    finally:
+        BF.board_faces, rosters.face_map = real_bf, real_fm
+    _n, said = _say(lambda: BF.fill(_nba_board(), "nba", stored={}))
+    assert not said.strip(), f"a working fill complained: {said!r}"
+
+
 def test_the_runbook_and_the_catchup_check_it():
     line = ("cd /srv/qellys && sudo -u qellys python3 -c \"import json; d=json.load(open('data/built/nba.json')); "
             "r=(d.get('first_basket') or {}).get('rows') or []; print(sum(1 for x in r if x.get('headshot')), 'of', len(r))\"")

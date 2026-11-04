@@ -89,7 +89,11 @@ def board_faces(result: dict) -> tuple[dict, dict]:
 
 def stored_faces(sport: str, conn=None) -> dict:
     """{normalised name: photo} from the sport's stored photos, or {}. A
-    connection it had to open itself it closes."""
+    connection it had to open itself it closes.
+
+    Its {} on failure is also what a sport with no stored photos answers,
+    so a failure prints "stored photos unreadable (<sport>, <error>)" and
+    an empty store prints nothing (tests/test_silent_failures)."""
     own = None
     try:
         from . import rosters
@@ -97,7 +101,9 @@ def stored_faces(sport: str, conn=None) -> dict:
             from . import db
             conn = own = db.connect()
         return rosters.face_map(conn, sport) or {}
-    except Exception:                                        # noqa: BLE001
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️  Long Shots faces: stored photos unreadable ({sport}, "
+              f"{type(exc).__name__}: {exc})")
         return {}
     finally:
         if own is not None:
@@ -112,6 +118,10 @@ def fill(result: dict, sport: str, conn=None, stored: dict | None = None) -> int
 
     ``stored``: the sport's stored photos, when the caller has them (tests);
     read off `rosters.face_map` otherwise, and only if a row still needs one.
+
+    Its 0 on failure is also what a board whose rows all have faces
+    answers, so a failure prints "Long Shots faces skipped (<sport>,
+    <error>)"; a quiet board prints nothing (tests/test_silent_failures).
     """
     try:
         by_team, by_name = board_faces(result)
@@ -137,5 +147,6 @@ def fill(result: dict, sport: str, conn=None, stored: dict | None = None) -> int
                 r["headshot"] = url
                 n += 1
         return n
-    except Exception:                                        # noqa: BLE001
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️  Long Shots faces skipped ({sport}, {type(exc).__name__}: {exc})")
         return 0

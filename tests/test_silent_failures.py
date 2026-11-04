@@ -249,6 +249,15 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # for a quiet day to be confused with. The reap's own journal lines
         # still print.
         "_record_job",
+        # THE LONG SHOTS FACES (engine/boardfaces, 2026-11-04), caught by
+        # this sweep the hour they were written. `fill`'s 0 is also what a
+        # board whose rows all have faces answers, and `stored_faces`'s {}
+        # what a sport with no stored photos answers, so each failure
+        # prints its own "⚠️ Long Shots faces …" line naming the sport and
+        # the error; a quiet board prints nothing
+        # (tests/test_long_shots_wear_their_faces). A photo must never
+        # cost the build its board.
+        "fill", "stored_faces",
     }
 
     def broad(h):
