@@ -256,7 +256,19 @@ def main(argv=None) -> int:
     finally:
         playerfit.mult_for = keep
     for line in report(res, k_vac):
+        if "--save" in argv and line.startswith("Read-only"):
+            continue                                  # it files a verdict below
         print(line)
+    if "--save" in argv:
+        # The weekly deep refit runs it this way: the rules follow the box's
+        # own seasons at once (engine/nba/switches), on or off. A season too
+        # thin to judge leaves the switch as it was.
+        ok, why = verdict(res)
+        if why == ["no season has enough games a rule touches to judge"]:
+            print("rotation verdict not filed: no season has enough games a rule touches")
+        else:
+            from engine.nba import switches
+            print(f"rotation verdict filed: {switches.record_check('rotation', ok, '; '.join(why[:6]) or 'holds in every season judged', follow=True)}")
     return 0
 
 

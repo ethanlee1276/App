@@ -255,6 +255,9 @@ def _ready(near_raw: dict, ladder_raw: dict) -> tuple[bool, str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--part", choices=("all", "shooting", "spread"), default="all")
+    ap.add_argument("--save-verdict", action="store_true",
+                    help="file the spread's verdict for the NBA refit to act on (engine/nba/switches); "
+                         "the weekly deep refit runs it this way")
     args = ap.parse_args(argv)
     from engine import calibrate
     from engine.db import connect
@@ -305,6 +308,12 @@ def main(argv=None) -> int:
                             f"{sum(1 for _, h in lad_raw.values() if h)} of {len(lad_raw)} raw")
             ready, why = _ready(near_raw, lad_raw)
             verdicts.append(("spread: ready for the refit — " if ready else "spread: not yet — ") + why)
+            if args.save_verdict:
+                # The verdict only: the switch follows once the NBA refit has
+                # fitted its calibration on it (engine/deepfit, the runbook's
+                # order — the refit and then the switch).
+                from engine.nba import switches
+                verdicts.append(f"spread verdict filed: {switches.record_check('spread', ready, why)}")
         print("\n" + "\n".join(verdicts))
         return 0
     finally:

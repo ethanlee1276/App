@@ -94,13 +94,15 @@ def test_a_run_cut_off_part_way_keeps_every_piece_it_finished():
             raise AssertionError("the stand-in was meant to be cut off")
         except _Killed:
             pass
-        assert ran == ["nfl", "cfb", "nba"], "football first, then the rest, stalest first"
+        assert ran == ["nfl", "cfb", "nba_rules"], \
+            "football first, then the NBA's own checks right before its fitters, stalest first"
         st = _state(tmp)
         assert st["round"] == "2026-11-04"
         assert st["pieces"]["nfl"]["done"] == "2026-11-04" and st["pieces"]["cfb"]["done"] == "2026-11-04"
         assert st["pieces"]["nfl"]["rows"] == ROWS["nfl"], "what the fit read, to judge the next round by"
-        assert "done" not in st["pieces"]["nba"] and st["pieces"]["nba"]["attempted"] == "2026-11-04"
-        assert "nfl" not in st["left"] and "cfb" not in st["left"] and "nba" in st["left"]
+        assert "done" not in st["pieces"]["nba_rules"] and st["pieces"]["nba_rules"]["attempted"] == "2026-11-04"
+        assert "nfl" not in st["left"] and "cfb" not in st["left"]
+        assert "nba_rules" in st["left"] and "nba" in st["left"]
         assert D.due(tmp / "deepfit_state.json", THU), "a round with pieces left owes the next day a run"
     finally:
         D._row_counts = keep
@@ -117,8 +119,9 @@ def test_the_cut_off_piece_goes_to_the_back_and_the_next_run_finishes_the_round(
             pass
         run_piece, ran = _pieces(clock)
         lines = _round(tmp, THU, clock, run_piece)
-        assert ran[-1] == "nba", ("the piece the hour ran out in waits behind the rest", ran)
-        assert ran[:3] == ["mlb", "wnba", "yardage_mixture"], ran
+        assert ran[-2:] == ["nba_rules", "nba"], (
+            "the piece the hour ran out in waits behind the rest, and the NBA's fitters wait for it", ran)
+        assert ran[:3] == ["nba_vacancy", "nba_spread", "mlb"], ran
         assert _state(tmp)["left"] == [] and not D.due(tmp / "deepfit_state.json", THU)
         assert lines[-1].startswith("deep refit: round of 2026-11-04 complete"), lines[-1]
     finally:

@@ -72,10 +72,12 @@ def break_even(odds: int) -> float:
 
 
 def spread_on() -> bool:
-    """The projection-following spread (`hoops.LeagueTuning.sd_power`) is
-    read only with ``QB_NBA_SPREAD=1``: the stored calibration curves were
-    fit on the one-CV spread, so it goes on with an NBA refit."""
-    return os.environ.get("QB_NBA_SPREAD", "0").strip() in ("1", "on", "true", "yes")
+    """The projection-following spread (`hoops.LeagueTuning.sd_power`): the
+    stored calibration curves were fit on the one-CV spread, so it goes on
+    with an NBA refit. ``QB_NBA_SPREAD`` decides when the box sets it; else
+    the box's own check and refit do (engine/nba/switches)."""
+    from .switches import is_on
+    return is_on("spread")
 
 
 def _power_sd(stat: str, mean: float, tune: LeagueTuning):

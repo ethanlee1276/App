@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after the NBA's graded record started grading the
+Last updated 2026-11-04, after the NBA's three waiting checks started
+running themselves in the weekly refit (step KC: items 1j and 1k need
+nothing from you now), the NBA's graded record started grading the
 scout's flags and the NBA build started keeping each game's spread and
 total (step KB: nothing to run, item 1k), a deploy learned to wait for the weekly jobs
 instead of killing them (step KA: items 1f and 1g), the NBA board learned to read the rotation
@@ -341,7 +343,12 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU 2>&1 | tee /tmp/ju.txt
 Paste it back. Each sport ends with `holds` or `does not hold` and why.
 Nothing changes on the boards either way; a `holds` comes back to you.
 
-## 1j. A quiet evening: the NBA's two changes, replayed on the box (step JY)
+## 1j. Nothing to run any more: the NBA's two changes, replayed on the box (step JY)
+
+The box runs this itself now, every week, inside the deep refit (step KC):
+the spread's verdict is filed, the NBA's refit fits on it, and only then
+is the spread switched on. The heartbeat's `nba_switches` says where it
+stands. The command below is still there for a read whenever you want one.
 
 You, 2026-11-04: "work on the nba most likely and edge bets ... find and
 invent more tools and data". Two full seasons of the NBA's own play-by-play,
@@ -367,7 +374,12 @@ rebounds, assists and threes (about 4 points, worse than none) because the
 weekly refit practised on whole-number lines where those push. It practises
 on half points now; Wednesday's refit picks it up.
 
-## 1k. A quiet evening: the teammate-out minutes, and the rotation's three rules (step JZ)
+## 1k. Nothing to run any more: the teammate-out minutes, and the rotation's three rules (step JZ)
+
+The box runs these itself now, every week, right before the NBA's refit
+(step KC): the teammate-out minutes switch on when their held-out test
+holds on the box's own seasons, and the rotation's rules stay on unless
+those seasons say otherwise. The commands below are still there for a read.
 
 You, 2026-11-04: "I want to make sure we're all ready to go for NBA ...
 picking the right bets, reading the right scripts, picking the right

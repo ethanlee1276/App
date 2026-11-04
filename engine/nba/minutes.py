@@ -196,11 +196,11 @@ RETURN_MISSED = 2
 
 
 def rotation_on() -> bool:
-    """The three rules' switch: on unless ``QB_NBA_ROTATION`` says 0 / off —
-    for the box, if its own seasons (nbarules.py) ever disagree with the
-    lab's."""
-    import os
-    return str(os.environ.get("QB_NBA_ROTATION", "1")).strip().lower() not in ("0", "off", "false", "no")
+    """The three rules' switch: ``QB_NBA_ROTATION`` decides when the box sets
+    it; else the box's own seasons do (nbarules.py, run by the weekly
+    refit: engine/nba/switches); with no verdict on file, on."""
+    from .switches import is_on
+    return is_on("rotation")
 
 
 def role_jump(base: float | None, minutes, tune: LeagueTuning = NBA) -> float | None:

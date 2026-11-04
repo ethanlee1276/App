@@ -273,7 +273,8 @@ verdicts (`scout.VERDICT`):
 against the replica of the two seasons: k 0.30 fitted on the other season
 both ways, minutes 5.8% / 5.3% closer and points 2.7% / 2.5% in fresh-absence
 games: HOLDS. The board fills the slot only once the box saves its own
-verdict (runbook JZ), and it is the largest NBA change still waiting.
+verdict: the weekly deep refit runs that check itself since 4 November
+(runbook KC), and the slot fills the week its test holds on the box.
 
 ## Measured, and not built
 
@@ -342,9 +343,10 @@ about that, measured on the replica with `calibrate.fit` itself:
 
 ## Next
 
-- Runbook JZ: `nbavacancy.py --heldout` then `--save` if it holds (the
-  teammate-out minutes), and `nbarules.py` (the rotation's rules on the
-  box's own seasons).
+- Done 2026-11-04 (runbook KC): the box runs `nbavacancy.py nba --heldout
+  --save` (the teammate-out minutes) and `nbarules.py --save` (the
+  rotation's rules on its own seasons) itself, every week, right before the
+  NBA's refit; the switches follow the verdicts (`engine/nba/switches`).
 - A teammate sitting still costs unders 3% after the vacancy: the minutes
   go somewhere specific (his backup, the next man in his position) and the
   shots to the stars, where the vacancy shares both by base minutes. The
@@ -370,8 +372,10 @@ about that, measured on the replica with `calibrate.fit` itself:
   board is left alone. Raising a claim the record says is too low is a
   different correction with its own bar, and two weeks is too little to
   set one.
-- Run `nbalabcheck.py` on the box (runbook JY). Then switch the spread on
-  with an NBA refit, if its last line says `spread: ready for the refit`.
+- Done 2026-11-04 (runbook KC): the box runs `nbalabcheck.py --part spread
+  --save-verdict` itself every week; on `spread: ready for the refit` the
+  NBA's refit fits its calibration with the spread on and only then throws
+  the switch, the order runbook JY gave.
   Its "through today's stored calibration" ladder lines show the second
   point above on the box's own corrections.
 - The football walk (`logwalk._naive_line`) uses the same whole-number

@@ -9324,6 +9324,31 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KC. The NBA's waiting checks run themselves** (step 373; nothing to
+run; you, 2026-11-04: "I don't want to have to specifically ask you for
+certain tools ... I want you to just do it"). Three NBA changes the lab
+measured were waiting on commands for you to type (steps JY and JZ): the
+spread that follows the projection (it fixes Most Likely saying 62% on
+picks that hit 66%), the minutes a sitting regular opens to his
+teammates, and the rotation's three rules. The weekly deep refit now
+runs all three checks itself, right before the NBA's own refit, with the
+same bars the commands printed:
+
+- the rotation's rules stay on, or go off, by the box's own seasons
+  (`nbarules.py --save`);
+- the teammate-out minutes switch on when their held-out test holds on the
+  box's seasons (`nbavacancy.py nba --heldout --save`, as step JZ said);
+- the spread's verdict is filed (`nbalabcheck.py --part spread
+  --save-verdict`); the NBA's refit then fits its calibration on it, and
+  only after that refit runs clean is the spread switched on, the order
+  step JY gave.
+
+The heartbeat shows where each stands (`nba_switches`: on or off, the
+verdict and its date). A setting on the box still decides first:
+`QB_NBA_SPREAD=0` or `QB_NBA_ROTATION=0` in the service's environment
+turns either off whatever the checks say, and the refit then fits on that.
+Steps JY and JZ still work by hand for a read whenever you want one.
+
 **KB. The NBA's graded record grades the scout's flags** (step 367;
 nothing to run). The six NBA warnings on the cards were measured on two
 seasons of box scores. The record-learning that already grades the NFL's

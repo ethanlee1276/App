@@ -5185,6 +5185,26 @@ def _weekly_jobs_public() -> dict:
         return {}
 
 
+def _nba_switches_public() -> dict:
+    """The NBA's switches as the box's own checks left them (engine/nba/
+    switches, engine/nba/vacancy), each with what it reads now — the
+    environment's setting first — and its last verdict and date. No words
+    from the checks: they stay in the weekly job's log."""
+    try:
+        from engine.nba import switches
+        from engine.nba.vacancy import verdict as _vacancy
+        out = {}
+        for name in ("spread", "rotation"):
+            e = switches.entry(name)
+            out[name] = {"on": switches.is_on(name), "set_on_box": switches.env_says(name) is not None,
+                         **{k: e.get(k) for k in ("verdict", "checked", "since") if e.get(k) is not None}}
+        v = _vacancy("nba")
+        out["vacancy"] = {"holds": bool(v.get("holds")), **({"k": v.get("k")} if v.get("holds") else {})}
+        return out
+    except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
+        return {}
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -5247,6 +5267,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # minutes, exit, cut off, and the last line, scrubbed. The
             # Lab's page sat five weeks old with the reason only on the box.
             "weekly": _weekly_jobs_public(),
+            # THE NBA'S SWITCHES (2026-11-04): what the box's own checks
+            # decided, and when — so "is the new spread on yet" is a glance.
+            "nba_switches": _nba_switches_public(),
         }))
         os.replace(tmp, p)
     except OSError:

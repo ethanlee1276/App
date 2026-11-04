@@ -4,6 +4,12 @@
     {
       "date": "2026-11-04",
       "kind": "ship",
+      "title": "The NBA board switches on its own measured improvements",
+      "body": "Three NBA changes our lab measured on two full seasons were waiting for someone to run a check on the server: a spread that follows each player's projection (it fixes Most Likely calling picks 62% that have hit 66%), the minutes a sitting regular opens up for his teammates, and the rotation's rules for a player's first games back, a jump in his minutes and a regular's return. The server now runs all three checks itself every week, against the same bars, on its own stored games, right before the NBA's weekly refit. A change switches on only when its check passes, and the spread only after the refit has fitted its probabilities to it; a check that stops passing switches it back off."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "ship",
       "title": "The NBA's own graded picks now grade the scout's warnings",
       "body": "The six NBA warnings on the cards were measured on two seasons of box scores. From today the site also checks them against its own NBA picks, every few hours, the way it already does for the NFL and college: for each settled Most Likely pick it rebuilds the situation the pick was taken in (who sat, who came back, his rest and recent games, the game's spread and total) and compares how often picks carrying each warning hit with how often we said they would. A warning lowers a chance only once our own record proves, on games the check never saw, that picks carrying it come in under their claim; until then nothing moves. The Record page's \"What it learned\" shows each warning's record under the NBA once fifteen graded picks carry it. The NBA board also keeps each game's spread and total as it prices them now, so the shootout and blowout warnings can be graded from today on."
     },

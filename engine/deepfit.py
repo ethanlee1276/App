@@ -123,7 +123,21 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
     import time as _time
     lines = []
     finished = True
+    clean = True
     note = say or (lambda _l: None)
+    # THE NBA FITS ON WHAT ITS OWN CHECK DECIDED (engine/nba/switches): the
+    # spread its verdict asks for, so the calibration is fitted on the board
+    # as it will price — and the switch is thrown only after this refit has
+    # run clean, the runbook's order. A setting on the box decides outright:
+    # then there is no target, and the fitters read the box's setting.
+    env = None
+    if sport == "nba":
+        from .nba import switches
+        want = switches.target("spread")
+        if want is not None:
+            env = dict(os.environ, QB_NBA_SPREAD="1" if want else "0")
+            lines.append(f"deep refit: nba fits with the spread that follows the projection "
+                         f"{'ON' if want else 'OFF'}, as the box's own check asks")
     for label, script in REFIT_ORDER:
         cmd = [sys.executable, script, "--from-db", db, "--sport", sport]
         t0 = _time.monotonic()
@@ -136,7 +150,7 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
         note(f"  {sport} {label}: running {script} (up to {bound / 60:.0f} min)…")
         try:
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True,
-                               text=True, timeout=bound)
+                               text=True, timeout=bound, env=env)
         except subprocess.TimeoutExpired:
             lines.append(f"⚠️  {sport} {label}: still running after "
                          f"{bound:.0f}s — skipped")
@@ -148,6 +162,7 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
             tail = ((r.stderr or r.stdout or "").strip().splitlines()
                     or ["no output"])[-1]
             lines.append(f"⚠️  {sport} {label} failed: {tail}")
+            clean = False
             continue
         # A fit the sport's board has nothing for (formfit.NO_DIAL: the
         # basketball projection has no recency dial) says so, not "nothing
@@ -170,6 +185,10 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
         else:
             lines.append(f"deep refit: {sport} {label} — nothing adopted "
                          f"(the record did not beat the default)")
+    if env is not None and finished and clean:
+        thrown = switches.apply_target("spread")
+        if thrown:
+            lines.append(thrown)
     return lines, finished
 
 
@@ -409,18 +428,39 @@ DEEP_BUDGET_S = 50 * 60
 #: over its own last running time, unless it is the first piece of a run.
 MIN_PIECE_LEFT_S = 5 * 60
 
+#: THE NBA'S OWN CHECKS (2026-11-04; Ethan: "I don't want to have to
+#: specifically ask you for certain tools ... I want you to just do it").
+#: Three changes the NBA lab measured waited on a command typed on the box
+#: (runbook JY and JZ). Each is a piece of the round now, run before the
+#: NBA's fitters so its calibration is fitted on the board as it will price:
+#: the rotation's three rules (on or off by the box's own seasons), the
+#: minutes a fresh absence opens (its held-out verdict saved, which the board
+#: reads only when it holds), and the spread that follows the projection
+#: (its verdict filed; the NBA's refit then fits on it and only then throws
+#: the switch — engine/nba/switches). Each script and its arguments.
+NBA_CHECKS = {"nba_rules": ("nbarules.py", ("--save",)),
+              "nba_vacancy": ("nbavacancy.py", ("nba", "--heldout", "--save")),
+              "nba_spread": ("nbalabcheck.py", ("--part", "spread", "--save-verdict"))}
+#: The time a check is given before its own first run has said how long it
+#: takes: the spread's replay reads every stored NBA game four times over and
+#: prices a ladder twice (the lab's two seasons took seven minutes on a fast
+#: machine; the box is one niced vCPU beside the boards).
+NBA_CHECK_GUESS_S = {"nba_rules": 10 * 60, "nba_vacancy": 10 * 60, "nba_spread": 35 * 60}
+
 #: Every piece, in the order a round takes them when they are equally
-#: stale: the sports first (football leads in the autumn), then the extras
-#: in the order refit_all always ran them.
-PIECE_ORDER = ("nfl", "cfb", "nba", "mlb", "wnba",
+#: stale: the sports first (football leads in the autumn; the NBA's checks
+#: right before its fitters), then the extras in the order refit_all always
+#: ran them.
+PIECE_ORDER = ("nfl", "cfb", *NBA_CHECKS, "nba", "mlb", "wnba",
                "yardage_mixture", "td_scale", "touchdowns", "cfb_touchdowns",
                "nfl_props", "ladder")
 
 #: A piece waits while a piece it builds on is still owed this round: the
-#: touchdown temperatures sit on the team-total exponent, and the NFL props'
-#: book-line fit must be the last word over the NFL's own temperatures.
+#: touchdown temperatures sit on the team-total exponent, the NFL props'
+#: book-line fit must be the last word over the NFL's own temperatures, and
+#: the NBA's fitters fit on what the NBA's checks decided.
 PREREQS = {"touchdowns": ("td_scale",), "cfb_touchdowns": ("td_scale",),
-           "nfl_props": ("nfl",)}
+           "nfl_props": ("nfl",), "nba": tuple(NBA_CHECKS)}
 
 
 def _ladder(db: str = "data/history.db") -> list[str]:
@@ -489,9 +529,30 @@ def round_pieces(state: dict, rows: dict) -> list[str]:
         if last.get("done") and last.get("rows") == rows[sp]:
             continue
         out.append(sp)
+    if "nba" in out:
+        # The NBA's checks come with its fitters, right before them.
+        i = out.index("nba")
+        out[i:i] = list(NBA_CHECKS)
     if rows:
         out.extend(EXTRAS)
     return out
+
+
+def _late_checks(st: dict, start: str) -> bool:
+    """A round already under way when the NBA's checks joined (4 November
+    2026) still owes them before its NBA fitters, so the switches do not
+    wait a week. True when the round's list changed."""
+    left = st.get("left") or []
+    if "nba" not in left:
+        return False
+    pieces = st.get("pieces") or {}
+    missing = [c for c in NBA_CHECKS
+               if c not in left and str((pieces.get(c) or {}).get("done") or "") < start]
+    if not missing:
+        return False
+    i = left.index("nba")
+    st["left"] = left[:i] + missing + left[i:]
+    return True
 
 
 def _stalest_first(left: list[str], state: dict) -> list[str]:
@@ -504,8 +565,40 @@ def _stalest_first(left: list[str], state: dict) -> list[str]:
     return sorted(left, key=key)
 
 
+def _run_check(piece: str, deadline: float | None = None, say=None) -> tuple[list[str], bool]:
+    """One of the NBA's checks, as a child like the fitters: (its lines,
+    whether it ran to an answer). Bounded by what is left of the run; a
+    check that has not answered in time stays owed. Only its verdict lines
+    come back — the tables are for a person running it by hand."""
+    import time as _time
+    script, args = NBA_CHECKS[piece]
+    note = say or (lambda _l: None)
+    t0 = _time.monotonic()
+    bound = TIMEOUT_S if deadline is None else min(TIMEOUT_S, deadline - t0)
+    if bound < 1:
+        return [f"⚠️  {piece}: no time left in this run — left for the next"], False
+    note(f"  {piece}: running {script} (up to {bound / 60:.0f} min)…")
+    try:
+        r = subprocess.run([sys.executable, script, *args], cwd=ROOT, capture_output=True,
+                           text=True, timeout=bound)
+    except subprocess.TimeoutExpired:
+        return [f"⚠️  {piece}: still running after {bound:.0f}s — left for the next run"], False
+    note(f"  {piece}: done in {_time.monotonic() - t0:.0f}s")
+    out = (r.stdout or "").splitlines()
+    if r.returncode != 0:
+        tail = ((r.stderr or r.stdout or "").strip().splitlines() or ["no output"])[-1]
+        return [f"⚠️  {piece} failed: {tail}"], True
+    keep = [ln.strip() for ln in out
+            if any(w in ln for w in ("HOLDS", "DOES NOT HOLD", "verdict filed", "verdict not filed",
+                                     "saved:", "spread: ready", "spread: not yet", "No NBA logs",
+                                     "No nba logs"))]
+    return [f"{piece}: {ln}" for ln in keep] or [f"{piece}: ran (no verdict line printed)"], True
+
+
 def _run_piece(piece: str, db: str, deadline: float, say=None) -> tuple[list[str], bool]:
     """One piece: (its log lines, whether it ran to an answer)."""
+    if piece in NBA_CHECKS:
+        return _run_check(piece, deadline, say)
     if piece in EXTRAS:
         try:
             return list(EXTRAS[piece](db) or []), True
@@ -544,6 +637,10 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         _write_state(path, st)
         emit(f"deep refit: the round of {start} owes {len(st['left'])} piece(s): "
              f"{', '.join(st['left']) or 'none'}")
+    elif _late_checks(st, start):
+        _write_state(path, st)
+        emit(f"deep refit: the NBA's own checks join this round before its fitters: "
+             f"{', '.join(st['left'])}")
     left = list(st.get("left") or [])
     deadline = clock() + budget_s
     done_now: list[str] = []
@@ -555,8 +652,8 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         if not runnable:
             break
         p = runnable[0]
-        need = min(budget_s * 0.9, max(MIN_PIECE_LEFT_S,
-                                       1.2 * float((pieces.get(p) or {}).get("seconds") or 0)))
+        took = float((pieces.get(p) or {}).get("seconds") or 0) or float(NBA_CHECK_GUESS_S.get(p, 0))
+        need = min(budget_s * 0.9, max(MIN_PIECE_LEFT_S, 1.2 * took))
         if done_now and deadline - clock() < need:
             break
         entry = pieces.setdefault(p, {})
