@@ -75,7 +75,8 @@ def test_a_combo_moves_only_its_points_part():
     m_pra, _ = SH.projection_mult("pra", pra_rate, read)
     assert abs(m_pts - s["pts"] / s["pts_raw"]) < 1e-3
     assert abs(m_pra - (pra_rate - s["pts_raw"] + s["pts"]) / pra_rate) < 1e-3
-    assert abs(m_pra - 1) < abs(m_pts - 1), "the combo moves less: only points moved"
+    # Measured: points move 0.084, PRA 0.0545 (points are 65% of his PRA).
+    assert abs(m_pra - 1) < abs(m_pts - 1) * 0.8, "the combo moves less: only points moved"
 
 
 def test_the_read_stays_out_where_it_was_not_measured_or_cannot_be_read():

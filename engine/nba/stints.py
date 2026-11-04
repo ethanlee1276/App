@@ -325,7 +325,6 @@ def rebuild(actions: list) -> dict:
         starts = quarter_starters(acts, period, team_of)
         for t in (home, away):
             inferred = starts.get(t, [])
-            carried = floor.get(t, [])
             # Quarter 1 has nothing carried. Later quarters carry the floor
             # through the between-quarter subs, which come first in the
             # quarter's actions; the inference checks it once they are in.
